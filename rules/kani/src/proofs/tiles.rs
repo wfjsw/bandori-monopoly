@@ -44,6 +44,21 @@ fn symbolic_settle_world(player: i32) -> World {
     w
 }
 
+
+/// Call the unmodified `On::Settle` body of a tile rule via its `CardDef`,
+/// skipping `invoke::find`'s linear scan of the whole registry (that scan is
+/// an unwind cliff under CBMC). The function pointer is the same unmodified
+/// guest body.
+fn call_settle(def: &card_sdk::CardDef, player: i32) {
+    for on in def.on.iter() {
+        if let card_sdk::On::Settle(_, _, f) = on {
+            invoke::unwrap_done(f(player));
+            return;
+        }
+    }
+    panic!("no On::Settle on {}", def.id);
+}
+
 fn any_seat() -> i32 {
     let p: i32 = kani::any();
     kani::assume(p >= 0 && p < 2);
@@ -63,7 +78,7 @@ fn effects() -> ([Effect; world::MAX_LOG], usize) {
 
 /// IFF: settling 江户川乐器店 draws exactly one hand card for the settler.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 pub fn edogawa_settle_draw_one_iff() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
@@ -73,7 +88,7 @@ pub fn edogawa_settle_draw_one_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::hook("tile:edogawa", "Settle", "", player));
+    call_settle(&rules_tiles::edogawa::EDOGAWA, player);
 
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
@@ -99,13 +114,13 @@ pub fn edogawa_settle_draw_one_iff() {
 
 /// MUTANT: a wrong spec that wants two cards. Must be distinguishable.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn edogawa_settle_mutant_two_cards() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("tile:edogawa", "Settle", "", player));
+    call_settle(&rules_tiles::edogawa::EDOGAWA, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -116,13 +131,13 @@ pub fn edogawa_settle_mutant_two_cards() {
 
 /// MUTANT: a wrong spec that attributes the draw to another seat.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn edogawa_settle_mutant_wrong_player() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("tile:edogawa", "Settle", "", player));
+    call_settle(&rules_tiles::edogawa::EDOGAWA, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -138,7 +153,7 @@ pub fn edogawa_settle_mutant_wrong_player() {
 
 /// IFF: settling CiRCLE draws exactly one hand card for the settler.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 pub fn circle_settle_draw_one_iff() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
@@ -148,7 +163,7 @@ pub fn circle_settle_draw_one_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::hook("tile:circle", "Settle", "", player));
+    call_settle(&rules_tiles::circle::CIRCLE, player);
 
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
@@ -172,13 +187,13 @@ pub fn circle_settle_draw_one_iff() {
 
 /// MUTANT: two cards.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn circle_settle_mutant_two_cards() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("tile:circle", "Settle", "", player));
+    call_settle(&rules_tiles::circle::CIRCLE, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -189,13 +204,13 @@ pub fn circle_settle_mutant_two_cards() {
 
 /// MUTANT: wrong player.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn circle_settle_mutant_wrong_player() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("tile:circle", "Settle", "", player));
+    call_settle(&rules_tiles::circle::CIRCLE, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -215,7 +230,7 @@ pub fn circle_settle_mutant_wrong_player() {
 
 /// IFF (observable half): settling the cafe / 流星堂 draws exactly one hand card.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 pub fn event_settle_draw_one_iff() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
@@ -225,7 +240,7 @@ pub fn event_settle_draw_one_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::hook("tile:event", "Settle", "", player));
+    call_settle(&rules_tiles::event::EVENT, player);
 
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
@@ -249,13 +264,13 @@ pub fn event_settle_draw_one_iff() {
 
 /// MUTANT: two cards.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn event_settle_mutant_two_cards() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("tile:event", "Settle", "", player));
+    call_settle(&rules_tiles::event::EVENT, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -266,13 +281,13 @@ pub fn event_settle_mutant_two_cards() {
 
 /// MUTANT: wrong player.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn event_settle_mutant_wrong_player() {
     let player = any_seat();
     let w = symbolic_settle_world(player);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("tile:event", "Settle", "", player));
+    call_settle(&rules_tiles::event::EVENT, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(

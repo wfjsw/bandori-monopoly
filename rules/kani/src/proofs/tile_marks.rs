@@ -24,6 +24,20 @@ use crate::invoke;
 use crate::spec::tile_marks as spec;
 use crate::world::{self, Effect, Mark, World, MAX_PLAYERS};
 
+
+/// Call the unmodified `on_land` body of `mark:cp` via its `CardDef` (no
+/// registry scan — see `proofs::tiles::call_settle`).
+fn call_mark_cp_land(player: i32) {
+    let def = rules_tile_marks::MARK_CP;
+    for on in def.on.iter() {
+        if let card_sdk::On::Hook(_, _, _, f) = on {
+            invoke::unwrap_done(f(player));
+            return;
+        }
+    }
+    panic!("no On::Hook on mark:cp");
+}
+
 fn any_seat() -> i32 {
     let p: i32 = kani::any();
     kani::assume(p >= 0 && p < 2);
@@ -64,7 +78,7 @@ fn symbolic_cp_world(settler: i32, tile: i32) -> World {
 /// The shipped `mark:cp` SettleBody guard (`lands_on_cp`), invoked through the
 /// registry so we evaluate the real predicate, not a restated one.
 fn mark_cp_guard(player: i32) -> bool {
-    let card = invoke::find("mark:cp").expect("mark:cp is in the registry");
+    let card = rules_tile_marks::MARK_CP;
     for on in card.on.iter() {
         if let card_sdk::On::Hook(_, _, Some(g), _) = on {
             return g(player);
@@ -86,7 +100,7 @@ fn mark_cp_guard(player: i32) -> bool {
 /// never admit while `mark_src_at` is stubbed). The full three-write book
 /// shape is `spec::mark_cp_land_effects_book` and stays BLOCKED-HOST.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 pub fn mark_cp_land_gain_iff() {
     let settler = any_seat();
     let tile: i32 = kani::any();
@@ -98,7 +112,7 @@ pub fn mark_cp_land_gain_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::hook("mark:cp", "Hook", "SettleBody", settler));
+    call_mark_cp_land(settler);
 
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
@@ -129,7 +143,7 @@ pub fn mark_cp_land_gain_iff() {
 
 /// MUTANT: the reference wants 900. Must be distinguishable.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn mark_cp_land_mutant_900() {
     let settler = any_seat();
@@ -137,7 +151,7 @@ pub fn mark_cp_land_mutant_900() {
     kani::assume(tile >= 0 && tile < 60);
     let w = symbolic_cp_world(settler, tile);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("mark:cp", "Hook", "SettleBody", settler));
+    call_mark_cp_land(settler);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -148,7 +162,7 @@ pub fn mark_cp_land_mutant_900() {
 
 /// MUTANT: the reference pays another seat.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(48)]
 #[kani::should_panic]
 pub fn mark_cp_land_mutant_wrong_seat() {
     let settler = any_seat();
@@ -156,7 +170,7 @@ pub fn mark_cp_land_mutant_wrong_seat() {
     kani::assume(tile >= 0 && tile < 60);
     let w = symbolic_cp_world(settler, tile);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("mark:cp", "Hook", "SettleBody", settler));
+    call_mark_cp_land(settler);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
