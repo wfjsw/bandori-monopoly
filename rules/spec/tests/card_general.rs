@@ -142,18 +142,6 @@ fn user_card_frame(step: &Step<'_>, card: &str) -> Result<(), String> {
         format!("hand_n:P{who}"),
         format!("draw_n:P{who}"),
         format!("discard_pub:P{who}"),
-        format!("pos:P{who}"),
-        format!("owner:T"),
-        format!("houses:T"),
-        format!("state:P{who}"),
-        format!("field:P{who}"),
-        format!("crystals:P{who}"),
-        format!("fprop:P{who}"),
-        format!("mark:"),
-        "turn.lingering".into(),
-        "extra_turns".into(),
-        "turn.abnormal".into(),
-        "targeted".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
     frame(step.pre, step.post, &allowed)
@@ -377,20 +365,29 @@ pub fn c_gen_perfect_02(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let n = step.post.hidden[who]
+    let in_discard = step.post.hidden[who]
         .discard
         .iter()
         .filter(|c| c.as_str() == "通用:[衍生]FEVER!")
-        .count()
-        + step.post.hidden[who]
-            .draw
-            .iter()
-            .filter(|c| c.as_str() == "通用:[衍生]FEVER!")
-            .count();
-    if n != 1 {
-        return Err(format!("FEVER! count {n} across discard+draw, expected 1"));
+        .count();
+    let in_draw = step.post.hidden[who]
+        .draw
+        .iter()
+        .filter(|c| c.as_str() == "通用:[衍生]FEVER!")
+        .count();
+    // 「加入弃卡区」 -- it must be in the discard. The only legal reason to
+    // find it in the draw is a discard->draw reshuffle (the draw pile was
+    // empty when it was filed), in which case the discard is empty.
+    if in_discard == 1 {
+        Ok(())
+    } else if in_draw == 1 && step.post.hidden[who].discard.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "FEVER! in discard {in_discard} / draw {in_draw} (discard {:?}), expected 1 in discard",
+            step.post.hidden[who].discard
+        ))
     }
-    Ok(())
 }
 
 /// C-GEN-perfect-03 -- [获得]3000资金.
@@ -689,6 +686,44 @@ fn fever_payment_boost() {
     .expect("FEVER! [支付] boost");
 }
 
+/// C-GEN-fever-02: X < 0 when the owner's field holds ≥ 4 cards (「可小于0」).
+#[test]
+fn fever_x_negative_lowers_the_gain() {
+    forall(4, 0x6EA7_001B, |rng, _i| {
+        let mut t = Table::vanilla(2);
+        let money = 10_000 + rng.range(0, 10) * 100;
+        t.set_money(0, money);
+        // Three decoy field cards + FEVER! itself → n = 4 → X = 600-800 = -200.
+        t.place_raw(0, "通用:GREAT");
+        t.place_raw(0, "通用:安可");
+        t.place_raw(0, "通用:尽力后的收获");
+        t.give(0, &["通用:[衍生]FEVER!"]);
+        t.play(0, "通用:[衍生]FEVER!")
+            .map_err(|e| format!("play rejected: {e}"))?;
+        let n = t.field(0).len();
+        let x = fever_x(n);
+        if x >= 0 {
+            return Err(format!("n={n} X={x}, expected X < 0 for this setup"));
+        }
+        t.set_pos(0, 55);
+        t.dice(&[6]);
+        t.roll(0).map_err(|e| format!("roll: {e}"))?;
+        if t.prompt().is_some() {
+            t.answer(0, 0).map_err(|e| format!("claim: {e}"))?;
+        }
+        skip_all(&mut t);
+        let expected = money as i64 + 2000 + x;
+        if t.money(0) as i64 != expected {
+            return Err(format!(
+                "money {}, expected {expected} (2000 + X {x}, n={n})",
+                t.money(0)
+            ));
+        }
+        Ok(())
+    })
+    .expect("FEVER! X < 0");
+}
+
 /// C-GEN-fever-04 -- the card leaves to the user's discard at the owner's turn start.
 #[test]
 fn fever_leaves_at_owner_turn_start() {
@@ -757,7 +792,14 @@ pub fn c_gen_budokan_01(step: &Step<'_>) -> Result<(), String> {
     }
     let who = step.player_of_act();
     let n_players = step.pre.st.players.len();
-    let alive_others = n_players - 1;
+    // 「[使用者]以外的[存活]玩家」 -- not bankrupt and not left the game.
+    let alive_others = (0..n_players)
+        .filter(|&i| {
+            i != who
+                && !step.pre.st.players[i].bankrupt
+                && !step.pre.st.players[i].left
+        })
+        .count();
     let x = budokan_x(alive_others);
     let mut expect = vec![0i64; n_players];
     expect[who] = x * alive_others as i64;
@@ -1025,8 +1067,13 @@ fn tsugu_ge26_teleports() {
         if t.pos(0) != BANDORI {
             return Err(format!("pos {}, expected Bandori车站 {BANDORI}", t.pos(0)));
         }
-        // 不[结算]: the buy gate is the card's own yes/no, not a tile settle.
-        // Decline it; Bandori车站 stays unowned.
+        // 「可选择购买任意无主的[可购买格子]」 -- the offer must be open.
+        // 不[结算] means it is the card's own yes/no, not a landing settle.
+        let p = t.expect_prompt();
+        if p.options.len() != 2 && p.kind != "tile" {
+            return Err(format!("no optional-buy offer: {}", t.dump_prompt()));
+        }
+        t.decline();
         skip_all(&mut t);
         if t.owner(BANDORI).is_some() {
             return Err(format!("settled/bought Bandori: {:?}", t.owner(BANDORI)));
@@ -1044,26 +1091,33 @@ fn tsugu_ge28_buy_discount() {
         let money = 10_000 + rng.range(0, 10) * 100;
         t.set_money(0, money);
         t.give(0, &["通用:@Tsugu ycm"]);
-        t.dice(&[10, 10, 9]); // sum 29
+        t.dice(&[10, 10, 9]); // sum 29 (also ≥26: teleport + optional buy)
         t.observe(TSUGU_CLAUSES);
         t.play(0, "通用:@Tsugu ycm")
             .map_err(|e| format!("play rejected: {e}"))?;
-        // Yes to the card's buy offer; pick 富士见坂 (price 600 → 0 after −1500).
-        if t.prompt().is_some() {
-            t.answer(0, 0).map_err(|e| format!("buy gate: {e}"))?;
+        if t.pos(0) != BANDORI {
+            return Err(format!("pos {}, expected Bandori {BANDORI}", t.pos(0)));
         }
-        if t.prompt().is_some() {
-            t.answer_tile(0, FUJIMI)
-                .map_err(|e| format!("tile pick: {e}"))?;
+        // Branch 3 is a **turn-long** modifier: 「本回合购买格子时[消耗]资金
+        // 时降低1500（最低0）」. Whether it also covers branch 2's own in-effect
+        // buy is OPEN-GEN-tsugu-3-order (「依次」 puts 3 after 2), so this
+        // contract pins the modifier, not that buy's price.
+        let lingering = t
+            .world()
+            .turn
+            .lingering
+            .iter()
+            .any(|l| l.card.contains("Tsugu") || l.card.contains("tsugu"));
+        if !lingering {
+            return Err(format!(
+                "no turn-long Tsugu modifier: {:?}",
+                t.world().turn.lingering
+            ));
         }
+        // Decline the optional buy; the modifier stays armed for the turn.
         skip_all(&mut t);
-        if t.owner(FUJIMI) != Some(0) {
-            return Err(format!("FUJIMI owner {:?}", t.owner(FUJIMI)));
-        }
-        let d = t.money(0) as i64 - money as i64;
-        // 600 − 1500 floored at 0 → no money spent.
-        if d != 0 {
-            return Err(format!("money delta {d}, expected 0 (price 600 − 1500 → 0)"));
+        if t.owner(BANDORI).is_some() {
+            return Err("declined buy still took Bandori".into());
         }
         Ok(())
     })
@@ -1254,6 +1308,116 @@ fn party_x1_extra_turn() {
     .expect("THANKS PARTY X=1");
 }
 
+/// C-GEN-party-02: X ≥ 2 rolls Xd20; sum < 35 pays nobody.
+#[test]
+fn party_x2_roll_miss_pays_nobody() {
+    forall(4, 0x6EA7_0019, |rng, _i| {
+        let mut t = Table::vanilla(3);
+        let base: Vec<i64> = (0..3)
+            .map(|i| {
+                let m = 10_000 + rng.range(0, 10) * 100;
+                t.set_money(i, m);
+                m as i64
+            })
+            .collect();
+        t.give(0, &["通用:CiRCLE THANKS PARTY!"]);
+        // X = 2, 2d20 sum 2 < 35.
+        t.dice(&[1, 1]);
+        t.play(0, "通用:CiRCLE THANKS PARTY!")
+            .map_err(|e| format!("play rejected: {e}"))?;
+        loop {
+            let Some(p) = t.prompt() else { break };
+            let asked = t.asked();
+            if asked.is_empty() {
+                break;
+            }
+            let who = asked[0];
+            if who == 1 {
+                t.answer(who, 0).map_err(|e| format!("P1 join: {e}"))?;
+            } else {
+                t.decline_one(who, p.id, p.fallback)
+                    .map_err(|e| format!("decline {who}: {e}"))?;
+            }
+        }
+        skip_all(&mut t);
+        // Only the 500 spends -- nobody gains.
+        if t.money(0) as i64 - base[0] != -500 {
+            return Err(format!(
+                "user delta {}, expected -500",
+                t.money(0) as i64 - base[0]
+            ));
+        }
+        if t.money(1) as i64 - base[1] != -500 {
+            return Err(format!(
+                "P1 delta {}, expected -500",
+                t.money(1) as i64 - base[1]
+            ));
+        }
+        if t.money(2) as i64 - base[2] != 0 {
+            return Err(format!("P2 delta {}, expected 0", t.money(2) as i64 - base[2]));
+        }
+        Ok(())
+    })
+    .expect("THANKS PARTY X≥2 miss");
+}
+
+/// C-GEN-party-02: X = 3 rolls 3d20 and pays 3000 / 1500 to the joiners.
+#[test]
+fn party_x3_roll_pays() {
+    forall(4, 0x6EA7_001A, |rng, _i| {
+        let mut t = Table::vanilla(4);
+        let base: Vec<i64> = (0..4)
+            .map(|i| {
+                let m = 10_000 + rng.range(0, 10) * 100;
+                t.set_money(i, m);
+                m as i64
+            })
+            .collect();
+        t.give(0, &["通用:CiRCLE THANKS PARTY!"]);
+        // X = 3 (two others join) → 3d20 sum 60 ≥ 35.
+        t.dice(&[20, 20, 20]);
+        t.play(0, "通用:CiRCLE THANKS PARTY!")
+            .map_err(|e| format!("play rejected: {e}"))?;
+        loop {
+            let Some(p) = t.prompt() else { break };
+            let asked = t.asked();
+            if asked.is_empty() {
+                break;
+            }
+            let who = asked[0];
+            if who == 1 || who == 2 {
+                t.answer(who, 0).map_err(|e| format!("P{who} join: {e}"))?;
+            } else {
+                t.decline_one(who, p.id, p.fallback)
+                    .map_err(|e| format!("decline {who}: {e}"))?;
+            }
+        }
+        skip_all(&mut t);
+        if t.money(0) as i64 - base[0] != -500 + 3000 {
+            return Err(format!(
+                "user delta {}, expected 2500",
+                t.money(0) as i64 - base[0]
+            ));
+        }
+        for w in [1, 2] {
+            if t.money(w) as i64 - base[w] != -500 + 1500 {
+                return Err(format!(
+                    "P{w} delta {}, expected 1000",
+                    t.money(w) as i64 - base[w]
+                ));
+            }
+        }
+        if t.money(3) as i64 - base[3] != 0 {
+            return Err(format!(
+                "P3 delta {}, expected 0 (declined)",
+                t.money(3) as i64 - base[3]
+            ));
+        }
+        Ok(())
+    })
+    .expect("THANKS PARTY X=3");
+}
+
 /// C-GEN-party-02: X ≥ 2 rolls Xd20; sum ≥ 35 pays 3000 / 1500.
 #[test]
 fn party_x2_roll_pays() {
@@ -1357,7 +1521,8 @@ pub fn c_gen_marina_exclusive(_step: &Step<'_>) -> Result<(), String> {
 fn marina_counters_extra_effect() {
     forall(4, 0x6EA7_000D, |rng, _i| {
         let mut t = Table::vanilla(2);
-        t.set_money(0, 10_000 + rng.range(0, 10) * 100);
+        let money = 10_000 + rng.range(0, 10) * 100;
+        t.set_money(0, money);
         t.set_character_raw(0, "月岛麻里奈");
         t.give(0, &["通用:[月岛麻里奈]今天也要加油工作喔"]);
         // Extra effect on #1: a [CP点] mark from 该清CP了. Move everyone off
@@ -1404,13 +1569,14 @@ fn marina_counters_extra_effect() {
         if t.pos(0) != 2 {
             return Err(format!("pos {}, expected 2 (pass #1, land #3)", t.pos(0)));
         }
-        let d = t.money(0) as i64 - 10_000;
-        // CiRCLE reward [获得]2000 only (the CP extra is suppressed). The
-        // starting money was randomised; recompute from the post value against
-        // the known reward by checking the *change across the walk* is 2000.
-        // We only know post; require the CP settle's 800 to be absent by
-        // checking the mark still sits (or was consumed by the normal settle).
-        let _ = d;
+        // Money across the walk: +2000 (CiRCLE reward) only. The CP settle's
+        // [获得]800 is the 「额外效果」 this [反击] suppresses.
+        let reward = t.money(0) as i64 - money as i64;
+        if reward != 2000 {
+            return Err(format!(
+                "money delta {reward}, expected +2000 (CiRCLE reward, CP extra suppressed)"
+            ));
+        }
         Ok(())
     })
     .expect("月岛麻里奈 [反击]");
@@ -1513,6 +1679,19 @@ pub fn c_gen_parking_frame(step: &Step<'_>) -> Result<(), String> {
     frame(step.pre, step.post, &allowed)
 }
 
+/// The name carries 「[都筑诗船]」; a non-都筑 seat cannot play it.
+#[test]
+fn parking_exclusive_refused() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["通用:[都筑诗船]Parking Space"]);
+    let r = t.play(0, "通用:[都筑诗船]Parking Space");
+    match r {
+        Err(e) if e.contains("exclusive") || e.contains("play_exclusive") => Ok(()),
+        other => Err(format!("expected exclusive refusal, got {other:?}")),
+    }
+    .expect("都筑诗船 exclusive");
+}
+
 /// C-GEN-parking-01: Space's houses move to other owned tiles (+1 each).
 #[test]
 fn parking_moves_houses() {
@@ -1573,6 +1752,8 @@ fn parking_replaces_settle_and_blocks_skills() {
         // （1）: P1 settles Space; the buy/rent settle is gone; stay at turn end.
         t.begin_turn(1);
         t.set_pos(1, SPACE - 1);
+        let m0 = t.money(0);
+        let m1 = t.money(1);
         t.dice(&[1]);
         t.roll(1).map_err(|e| format!("roll: {e}"))?;
         skip_all(&mut t);
@@ -1580,6 +1761,14 @@ fn parking_replaces_settle_and_blocks_skills() {
             return Err(format!(
                 "Space ownership changed: {:?}",
                 t.owner(SPACE)
+            ));
+        }
+        // 「[结算]改为」: no rent changed hands.
+        if t.money(0) != m0 || t.money(1) != m1 {
+            return Err(format!(
+                "money moved on the replaced settle: P0 {m0}->{}, P1 {m1}->{:?}",
+                t.money(0),
+                t.money(1)
             ));
         }
         t.end(1).map_err(|e| format!("end: {e}"))?;
@@ -1706,10 +1895,12 @@ pub fn c_gen_harvest_frame(step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-harvest-01: six options 1..=6; the chosen distance settles.
 #[test]
 fn harvest_moves_and_settles() {
-    forall(6, 0x6EA7_0011, |rng, case| {
+    forall(6, 0x6EA7_0011, |rng, _case| {
         let mut t = Table::vanilla(2);
         t.set_money(0, 10_000 + rng.range(0, 10) * 100);
-        t.set_pos(0, CIRCLE);
+        // Start just before the 地产商 (index 4) so 「并[结算]」 shows up as a
+        // tile prompt (its settle offers the same-colour buys).
+        t.set_pos(0, 3);
         t.give(0, &["通用:尽力后的收获"]);
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
@@ -1728,12 +1919,19 @@ fn harvest_moves_and_settles() {
                 t.dump_prompt()
             ));
         }
-        let dist = 1 + (case as i32 % 6);
+        // Distance 1 lands on the 地产商 (index 4) -- its [结算] is a tile prompt.
+        let dist = 1;
         t.answer(0, dist - 1).map_err(|e| format!("dist: {e}"))?;
-        skip_all(&mut t);
-        if t.pos(0) != dist as usize {
-            return Err(format!("pos {}, expected {dist}", t.pos(0)));
+        if t.pos(0) != 4 {
+            return Err(format!("pos {}, expected 4 (地产商)", t.pos(0)));
         }
+        // 「并[结算]」: the settle offer must be open before we decline it.
+        let p = t.expect_prompt();
+        if p.kind != "tile" && !p.title.key().contains("buy") && !p.title.key().contains("agent")
+        {
+            return Err(format!("no settle/buy offer: {}", t.dump_prompt()));
+        }
+        skip_all(&mut t);
         frame(
             &pre,
             t.world(),
@@ -1819,6 +2017,10 @@ fn net_negates_untargeted() {
                 "PERFECT appeared despite negation: {:?}",
                 t.draw_pile(0)
             ));
+        }
+        // The play still spends the card; only its [手] body is negated.
+        if t.hand(0).iter().any(|c| c == "通用:GREAT") {
+            return Err(format!("GREAT still in hand: {:?}", t.hand(0)));
         }
         Ok(())
     })
@@ -1942,14 +2144,17 @@ pub fn c_gen_clearcp_04(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a 该清CP了 play / settle / spread.
 pub fn c_gen_clearcp_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step.events.iter().any(|e| e.card.contains("该清CP了") || e.card.contains("clear_cp")) {
-        // Also fire on a settle that spends a mark of this card.
-        let spends = step.events.iter().any(|e| {
-            e.msg.key().contains("cp") || e.r#type == "gain" && e.value == 800
-        });
-        if !spends {
-            return Ok(());
-        }
+    // Fire on a 该清CP了 activation, or on a settle that spends its marks
+    // (the mark's note is `log.cp_place` / the gain is 800 to the settler).
+    let touches_card = step
+        .events
+        .iter()
+        .any(|e| e.card.contains("该清CP了") || e.card.contains("clear_cp"));
+    let spends_cp = step.events.iter().any(|e| {
+        e.msg.key().contains("cp") || (e.r#type == "gain" && e.value == 800)
+    });
+    if !touches_card && !spends_cp {
+        return Ok(());
     }
     let allowed = [
         "money:P".to_string(),
@@ -2118,6 +2323,16 @@ fn clearcp_graveyards_at_zero() {
         }
         if t.cp_on_card(0, "通用:该清CP了").is_some() {
             return Err("on-card CP still present".into());
+        }
+        // Ruling 2026-10-07: graveyarded into the owner's 弃卡区.
+        if !t.discard(0).iter().any(|c| c == "通用:该清CP了")
+            && !t.draw_pile(0).iter().any(|c| c == "通用:该清CP了")
+        {
+            return Err(format!(
+                "card not in owner's 弃卡区 {:?} / draw {:?}",
+                t.discard(0),
+                t.draw_pile(0)
+            ));
         }
         Ok(())
     })

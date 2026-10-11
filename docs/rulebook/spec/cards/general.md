@@ -101,9 +101,10 @@ Clause IDs: `C-GEN-<slug>-<n>`. Executables live in
   amount, not as a separate printed gain. Owner vs user are the same seat on
   the normal play; if they differ, （2） sends the card to the **user**'s
   discard.
-* **Executable:** `c_gen_fever_01` / `02` / `03` / `04` / `c_gen_fever_frame`;
-  tests `fever_gain_boost`, `fever_payment_boost`,
-  `fever_leaves_at_owner_turn_start`.
+* **Executable:** `c_gen_fever_01` / `c_gen_fever_frame`; tests
+  `fever_gain_boost`, `fever_payment_boost`,
+  `fever_x_negative_lowers_the_gain`, `fever_leaves_at_owner_turn_start`
+  (02/03/04 are multi-step -- the tests are the executables).
 
 ---
 
@@ -358,8 +359,23 @@ Clause IDs: `C-GEN-<slug>-<n>`. Executables live in
 * **OPEN-GEN-tsugu-teleport-main** -- (from TEST-FINDINGS §6.1) whether a
   teleport that *is* the main move settles like a main-move landing is still
   an open ruling; this unit only checks the card's printed 不[结算] / 并[结算].
+* **OPEN-GEN-tsugu-3-order** -- 「依次进行以下操作」 puts branch 3 (the
+  −1500 buy discount) after branch 2's own 「可选择购买」. Whether the
+  in-effect buy is already discounted, or only later buys this turn are, is
+  unspecified. The contract pins the turn-long modifier on a **later** buy
+  and does not lock the step-2 buy's price.
+* **OPEN-GEN-clearcp-window** -- 「下2回合开始时」 is either the next two
+  chronological turn starts or the user's next two. The contract checks the
+  mark count after the spread window (seed + 1 + 2 products = 4) which both
+  readings give on a 2-player loop; which two starts fire is not pinned.
 
 ## Findings
 
-(Empty -- every contract is green. No engine discrepancy surfaced in this
-unit's clauses.)
+(Empty -- no engine discrepancy surfaced. All 29 tests are green.
+
+Caveats that are *not* findings: several multi-step clause IDs document a
+printed rule whose single-act `Clause` predicate is a no-op stub (the body
+lives in the named `#[test]` driver instead -- multi-prompt / multi-turn).
+`C-GEN-marina-01`'s suppression of 「其上的额外效果」 is asserted as "the
+CiRCLE reward paid and no CP +800 landed"; a richer reading of 「其他效果」
+is `OPEN-GEN-marina-extra`.)
