@@ -13,4 +13,6 @@ Report the branch and worktree path when delivering the work. Run the checks
 appropriate to the change from that worktree.
 
 Offload (only) complex implementations to subagents, with comprehensive 
-instructions, guidance, and in-progress assistance.
+instructions, guidance, and in-progress assistance. The main agent should 
+periodically check on the subagent's progress. After subagent completed, 
+the main agent should verify the subagent's work, and clean up temporary files.
