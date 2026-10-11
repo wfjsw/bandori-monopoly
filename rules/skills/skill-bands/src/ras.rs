@@ -59,11 +59,7 @@ fn at_turn_start_reset(player_id: i32) -> card_sdk::Asked {
 /// remembered livehouse. Derived scan (docs/GUARDS.md §4.2).
 fn still_on_remembered(player_id: i32) -> bool {
     let t = state::get(player_id, ON_HOUSE);
-    t >= 0
-        && ctx::player_pos(player_id) == t
-        && ctx::owned_tiles(player_id)
-            .into_iter()
-            .any(|u| ctx::is_live_house_for(player_id, u))
+    t >= 0 && ctx::player_pos(player_id) == t
 }
 
 /// （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
