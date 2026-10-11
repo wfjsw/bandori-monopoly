@@ -363,13 +363,19 @@ pub fn aya_haruka_01_mutant_two_cards() {
 }
 ```
 
-**Pilot status:** `aya_haruka_01_empty_discard` **SUCCESSFUL** (~125 s) on the
-general world. The all-picks / mutant harnesses use strategy (a): a frozen
-2-card discard of distinct interned ids + a symbolic pick index, plus a
-1-byte interned-str facade under `cfg(kani)` so `ids.contains(&String)`
-degrades to a 1-byte compare (see `rules/card-sdk/src/ctx.rs` `cards_in`).
-If a harness is still **blocked**, that is a CBMC cliff, not evidence against
-the card.
+**Pilot status (general world):**
+- `aya_haruka_01_empty_discard` **SUCCESSFUL** (~194 s, post-invoke reachable)
+- `aya_haruka_01_prompt_all_picks_iff` **TIMEOUT** (1200 s) — `Vec<String>::contains` still memcmp-unrolls on the non-empty path
+- `aya_haruka_01_mutant_two_cards` **TIMEOUT** (600 s) — same cliff
+
+Strategy (a)+(e): frozen 2-card discard of distinct interned ids; pick
+unrolled as two concrete worlds. Under `cfg(kani)`, `cards_in` returns a
+1-byte interned-str facade (`rules/card-sdk/src/ctx.rs`) and `invoke::find`
+returns the `CardDef` directly (a 200+ entry iterator scan never returned
+under CBMC — that made earlier "SUCCESS" vacuous; fixed by reachability
+bisect). Still blocked: heap `String` length stays symbolic so `memcmp` in
+the unmodified `ids.contains` path unrolls to 30+. A still-blocked prompt is
+a CBMC cliff, not evidence against the card.
 
 ---
 

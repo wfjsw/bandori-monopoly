@@ -87,7 +87,9 @@ fn fail_unknown_idx(idx: usize) -> ! {
 /// Linear scan of [`RULESET`] for `id`. `None` when unknown.
 ///
 /// **Not for Kani** — O(n) `memcmp` over long CJK ids is a CBMC cliff.
-/// Use [`by_idx`] + `card_id!` in proofs.
+/// Use [`by_idx`] + `card_id!` in proofs. (The temporary `AYA_LONGING`
+/// fast-path hack from the prompt unit is gone: the const-index table is
+/// the general solution.)
 pub fn find(id: &str) -> Option<&'static card_sdk::CardDef> {
     for band in RULESET {
         for card in band.iter() {
