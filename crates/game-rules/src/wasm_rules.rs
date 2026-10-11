@@ -2479,6 +2479,11 @@ impl<M: CardModules> RulesBridge<M> {
         // through the code-order merge in [`Self::commit_after`]).
         let mut announced: std::collections::BTreeSet<i32> = Default::default();
         let mut activation_id = cx.activation.last().copied().unwrap_or(-1);
+        // The header **this** drive posted (the 「效果适用」 event it must
+        // complete with 「（无事发生）」). Distinct from `activation_id`, which
+        // is the parent for body lines and starts as the *outer* activation.
+        // `-1` when the drive is silent or posts no header (tile settle).
+        let mut own_activation = -1i32;
         // Set at body entry when the entry is silent (`CardDef::silent`); the
         // commit pass then checks the run produced no visible effect (the
         // flag must not hide a real one). `Cell` so the `announce` closure can
@@ -2560,15 +2565,12 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
                 if id >= 0 {
-                    // Body lines and `after.parent` group under **this**
-                    // drive's header (the 「效果适用」 event), not the outer
-                    // activation. Without this a top-level hook's children
-                    // stay parentless and commit_after cannot stamp
-                    // 「（无事发生）」 on the header.
+                    // Body lines group under **this** drive's header.
                     w.parent = id;
-                    if activation_id < 0 {
-                        activation_id = id;
+                    if own_activation < 0 {
+                        own_activation = id;
                     }
+                    activation_id = id;
                     unsafe { (*cx_ptr).activation.push(id) };
                 }
             };
@@ -2638,7 +2640,7 @@ impl<M: CardModules> RulesBridge<M> {
                     if answers.is_empty() {
                         let mut after = after;
                         posted_ids = std::mem::take(&mut after.posted);
-                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get());
+                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), own_activation);
                     }
                     // Recover the learn pass's write-through log so the commit
                     // pass replaces those lines instead of appending duplicates.
@@ -2710,7 +2712,7 @@ impl<M: CardModules> RulesBridge<M> {
                         Ok(Outcome::Done(after2)) => {
                             let mut after2 = after2;
                             posted_ids = std::mem::take(&mut after2.posted);
-                            return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get());
+                            return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get(), own_activation);
                         }
                         // The commit pass must not pause: the learn pass
                         // already answered everything. Anything else is a
@@ -2720,7 +2722,7 @@ impl<M: CardModules> RulesBridge<M> {
                         _ => {
                             let mut after = after;
                             posted_ids = std::mem::take(&mut after.posted);
-                            return self.commit_after(cx, after, call, card_id, trigger, silent_body.get());
+                            return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), own_activation);
                         }
                     }
                 }
@@ -3345,6 +3347,7 @@ impl<M: CardModules> RulesBridge<M> {
         card_id: &str,
         trigger: &mut Trigger,
         silent: bool,
+        activation_id: i32,
     ) -> Flow<i32> {
             let mut after = after;
             if silent {
@@ -3360,10 +3363,13 @@ impl<M: CardModules> RulesBridge<M> {
             after.world.recent = cx.world().recent.clone();
             after.world.next_event = after.world.next_event.max(cx.world().next_event);
             after.world.walk_flush = cx.world().walk_flush.clone();
-            let activation_id = after.parent;
+            let activation_id = activation_id;
             // Complete the activation: 「无事发生」 when nothing followed.
-            // A silent drive created no header of its own -- `after.parent` is
-            // the *outer* activation and must not be completed here.
+            // `activation_id` is the header this drive posted (the local from
+            // `drive_inner_body`), not `after.parent` -- the learn-pass Run's
+            // `parent` can still be the outer activation. A silent drive
+            // created no header (`activation_id` stays at the outer / -1) and
+            // must not complete one.
             if activation_id >= 0 && !silent {
                 let children = cx.child_event_count(activation_id, activation_id);
                 let results = if children == 0 {

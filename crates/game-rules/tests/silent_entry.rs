@@ -151,3 +151,23 @@ fn manifest_carries_the_silent_flag() {
     assert!(info.on[1].silent, "the bookkeeping hook is silent");
     assert!(!info.on[2].silent, "the sibling hook announces");
 }
+/// Shipped declare-cap / bookkeeping entries must be silent so they never
+/// flash. Checked by entry index against the CardDef tables.
+#[test]
+fn shipped_declare_cap_entries_are_silent() {
+    let r = rules();
+    // (card id, entry index) -- the fire-pot / bounds declaration entry.
+    for (id, entry) in [
+        ("skill:和奏瑞依:一次又一次竭尽全力", 0),
+        ("skill:花园多惠:花园警察，出警！", 0),
+        ("skill:宇田川巴:豚骨酱油拉面大姐", 1),
+    ] {
+        let idx = r.ruleset().card(id).unwrap_or_else(|| panic!("{id} loaded"));
+        let info = &r.ruleset().cards()[idx as usize];
+        assert!(
+            info.on[entry].silent,
+            "{id} entry {entry} must be silent, got {:?}",
+            info.on.get(entry).map(|o| o.silent)
+        );
+    }
+}
