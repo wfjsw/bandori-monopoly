@@ -22,6 +22,10 @@ pub const DEST_FIELD: i32 = 2;
 pub const CARD_POPIPA: &str = "PPP:Popipa";
 pub const CARD_PIPOPA: &str = "PPP:[衍生]Pipopa";
 pub const CARD_POPIPAPAPIPOPA: &str = "PPP:[衍生]Popipapapipopa";
+pub const CARD_BANG_DREAM: &str = "PPP:Bang Dream!";
+pub const CARD_AUCTION_OFF: &str = "PPP:[衍生]拍卖撤下来了";
+pub const CARD_STAR_BEAT: &str = "PPP:STAR BEAT!";
+pub const CARD_DOOR: &str = "PPP:Tomorrow's Door";
 
 pub fn interned(name: &str) -> NameId {
     intern::intern(name)
@@ -315,6 +319,327 @@ pub fn band_01c_cash_ok(effects: &[Effect], player: i32, crystal_key: u16) -> bo
             Effect::AddCounter { owner: p, key: k, n } if p == player && k == crystal_key && n == -2
         )
         && matches!(effects[1], Effect::GainMoney { player: p, n } if p == player && n == 2000)
+}
+
+// ===========================================================================
+// C-PPP-bang-dream-02
+// 「然后[传送]至任意[使用者]拥有的格子且可选择盖房」
+// Effect: the user is [传送] to a tile they own. 「可选择盖房」 is optional.
+// Frame: the user's pos (and optionally a house) plus the played-card zones.
+// ===========================================================================
+
+/// Post-pos must equal the picked owned-tile index. Any pick among the
+/// player's owned tiles is legal (「任意」).
+pub fn bang_dream_02_pos_is_owned(pos: i32, owned: &[i32], n_owned: usize) -> bool {
+    let mut i = 0;
+    while i < n_owned {
+        if owned[i] == pos {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Exactly one Teleport on this leg (the optional house is a separate
+/// prompt and is not required).
+pub fn bang_dream_02_log_ok(effects: &[Effect], player: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::Teleport { player: p, .. } if p == player)
+}
+
+/// Mutant: reference wants a GainMoney(1) side-effect the book does not name.
+pub fn bang_dream_02_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
+    effects.len() == 2
+        && matches!(effects[0], Effect::Teleport { player: p, .. } if p == player)
+        && matches!(effects[1], Effect::GainMoney { player: p, n } if p == player && n == 1)
+}
+
+// ===========================================================================
+// C-PPP-popipapapipopa-c2
+// 「消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。」
+// Effect: spending k crystals reduces the money movement by 150*k,
+//         floored at 0; those k crystals are removed.
+// ===========================================================================
+
+/// Post pay_amount after spending `k` crystals on a spend of `amount`.
+pub fn popipapapipopa_c2_amount_after(amount: i32, k: i32) -> i32 {
+    (amount - 150 * k).max(0)
+}
+
+/// True iff the log is exactly "crystals -k then pay-amount rewrite".
+/// `k == 0` is the decline branch: empty log.
+pub fn popipapapipopa_c2_log_ok(
+    effects: &[Effect],
+    owner: i32,
+    key: u16,
+    k: i32,
+    expected_to: i32,
+) -> bool {
+    if k <= 0 {
+        return effects.is_empty();
+    }
+    effects.len() == 2
+        && matches!(
+            effects[0],
+            Effect::AddCounter { owner: o, key: kk, n } if o == owner && kk == key && n == -k
+        )
+        && matches!(effects[1], Effect::SetPayAmount { to } if to == expected_to)
+}
+
+/// Mutant: reference wants a 150-per-crystal cut but floors at 1 (not 0).
+pub fn popipapapipopa_c2_amount_after_mutant(amount: i32, k: i32) -> i32 {
+    (amount - 150 * k).max(1)
+}
+
+// ===========================================================================
+// C-PPP-auction-off-01
+// 「此卡加入手牌时将此卡放置在自身场上」
+// Trigger: this card enters a hand.
+// Effect: it is immediately placed on that player's field.
+// ===========================================================================
+
+/// Mutant: reference wants placement on the discard instead of the field.
+pub fn auction_off_01_effects_ok_mutant(effects: &[Effect], player: i32, this_slot: u8) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::PlaceCard {
+                player: p,
+                dest: DEST_BANISHED,
+                card
+            } if p == player && card == this_slot
+        )
+}
+
+// ===========================================================================
+// C-PPP-auction-off-c1
+// 「此卡拥有者火罐上限加1」
+// Effect: max(火罐) = baseline + 1 while the card is present.
+// (Host models the continuous +1 as a one-shot `add_fire_max` at placement.)
+// ===========================================================================
+
+pub fn auction_off_c1_fire_max_after(pre: i32) -> i32 {
+    pre + 1
+}
+
+// ===========================================================================
+// C-PPP-star-beat-01
+// 「[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的格子上
+//   进行一次盖房，随后减少1层”」
+// Effect: the user gains 1 layer of that status.
+// Engine key: `star_beat.layers` (the book does not name a key).
+// ===========================================================================
+
+pub const STAR_BEAT_LAYERS_KEY: &str = "star_beat.layers";
+
+pub fn star_beat_01_layers_after(pre: i32) -> i32 {
+    pre + 1
+}
+
+/// Mutant: reference wants +2 layers.
+pub fn star_beat_01_layers_after_mutant(pre: i32) -> i32 {
+    pre + 2
+}
+
+// ===========================================================================
+// C-PPP-door-01
+// 「此卡指定的序列（从前往后）为“流星堂”，“花咲川女子学院”，“Space”，
+//   “Live House Galaxy”，“武道馆”，“RiNG 1”，“RiNG 2”，“RiNG 3”，“RiNG 4”，
+//   “大阪中之岛公园”」
+// Pure sequence definition. Board indices are 0-based slots of TILE_NAMES.
+// ===========================================================================
+
+/// The printed sequence, as 0-based board slots (`ir_fill::TILE_NAMES`).
+/// 流星堂=45, 花咲川女子学院=9, Space=42, Live House Galaxy=50,
+/// 武道馆=40, RiNG 1=8, RiNG 2=16, RiNG 3=36, RiNG 4=53,
+/// 大阪中之岛公园=24.
+pub const DOOR_SEQUENCE: [i32; 10] = [45, 9, 42, 50, 40, 8, 16, 36, 53, 24];
+
+/// Ordered names, for a human-readable const check.
+pub const DOOR_SEQUENCE_NAMES: [&str; 10] = [
+    "流星堂",
+    "花咲川女子学院",
+    "Space",
+    "Live House Galaxy",
+    "武道馆",
+    "RiNG 1",
+    "RiNG 2",
+    "RiNG 3",
+    "RiNG 4",
+    "大阪中之岛公园",
+];
+
+/// Every entry of the sequence exists on the board under the printed name.
+pub fn door_sequence_names_on_board() -> bool {
+    let mut i = 0;
+    while i < 10 {
+        let want = DOOR_SEQUENCE_NAMES[i];
+        let mut found = false;
+        let mut t = 0;
+        while t < 60 {
+            if crate::ir_fill::TILE_NAMES[t].1 == want
+                && crate::ir_fill::TILE_NAMES[t].0 == DOOR_SEQUENCE[i]
+            {
+                found = true;
+            }
+            t += 1;
+        }
+        if !found {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Mutant: reference wants a 9-entry sequence (drop the last stop).
+pub const DOOR_SEQUENCE_MUTANT_LEN: usize = 9;
+
+// ===========================================================================
+// C-PPP-wait-aoki-01
+// 「将此卡放置在[使用者]的[场地]。」
+// Effect: the card is on the user's field (not in hand/draw/discard).
+// OPEN-场上: 「[场地]」 is the player's field.
+// ===========================================================================
+
+pub const CARD_WAIT_AOKI: &str = "PPP:（有咲）等等等一下";
+
+pub fn wait_aoki_01_effects_ok(effects: &[Effect], player: i32, this_slot: u8) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::PlaceCard {
+                player: p,
+                dest: DEST_FIELD,
+                card
+            } if p == player && card == this_slot
+        )
+}
+
+/// Mutant: reference wants the card on the discard instead of the field.
+pub fn wait_aoki_01_effects_ok_mutant(effects: &[Effect], player: i32, this_slot: u8) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::PlaceCard {
+                player: p,
+                dest: DEST_BANISHED,
+                card
+            } if p == player && card == this_slot
+        )
+}
+
+// ===========================================================================
+// C-PPP-random-star-01
+// 「将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”
+//   放置在卡组底端」
+// (a) this card on the owner's field;
+// (b) discard + hand shuffled into the draw pile (multiset union) —
+//     BLOCKED-HOST: `Op::shuffle_into_deck` is a silent 0;
+// (c) exactly one `PPP:[衍生]拍卖撤下来了` at the draw-pile bottom.
+// ===========================================================================
+
+pub const CARD_RANDOM_STAR: &str = "PPP:仓库里的Random Star";
+pub const CARD_AUCTION_OFF_NAME: &str = "PPP:[衍生]拍卖撤下来了";
+
+/// Place + deck-bottom insert, exactly. The sweep leg is separate
+/// (BLOCKED-HOST) and is not asserted here.
+pub fn random_star_01_effects_ok(
+    effects: &[Effect],
+    player: i32,
+    this_slot: u8,
+    auction_slot: u8,
+) -> bool {
+    // PlaceCard(this) is the only typed effect the host models on this body
+    // (`add_to_deck_at` is a pile mutation with no Effect arm).
+    if effects.len() != 1 {
+        return false;
+    }
+    let _ = auction_slot;
+    matches!(
+        effects[0],
+        Effect::PlaceCard {
+            player: p,
+            dest: DEST_FIELD,
+            card
+        } if p == player && card == this_slot
+    )
+}
+
+/// Post: one new auction card at the deck bottom (last element of the
+/// top-first pile).
+pub fn random_star_01_deck_bottom_ok(deck_n: i32, last_card: u16, auction_id: u16) -> bool {
+    deck_n >= 1 && last_card == auction_id
+}
+
+/// Mutant: reference wants two auction cards on the deck bottom.
+pub fn random_star_01_deck_bottom_ok_mutant(
+    deck_n: i32,
+    last_two_equal: bool,
+    auction_id: u16,
+    last_card: u16,
+) -> bool {
+    deck_n >= 2 && last_two_equal && last_card == auction_id
+}
+
+// ===========================================================================
+// C-PPP-star-beat-03 (sticker leg)
+// 「1. 获得2个星星贴纸，本回合的主要移动改为[传送]到(45×…) mod 60格并结算」
+// Stickers +2 on option 1. The teleport/settle is PROTOCOL-LEVEL (`card_move`).
+// ===========================================================================
+
+pub const TOK_STAR_STICKER: &str = "星星贴纸";
+
+pub fn star_beat_03_stickers_ok(
+    effects: &[Effect],
+    player: i32,
+    key: u16,
+    picked_teleport: bool,
+) -> bool {
+    if picked_teleport {
+        effects.iter().any(|e| {
+            matches!(e, Effect::AddToken { player: p, key: k, n }
+                if *p == player && *k == key && *n == 2)
+        })
+    } else {
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::AddToken { player: p, key: k, .. } if *p == player && *k == key))
+    }
+}
+
+/// Destination formula: `(45 * (F + 1)) mod 60` where `F` counts living
+/// players whose money decimal form contains the digit 5.
+pub fn star_beat_03_dest(f: i32) -> i32 {
+    (45 * (f + 1)).rem_euclid(60)
+}
+
+/// Number of living players whose money contains digit 5.
+pub fn money_has_digit5(x: i32) -> bool {
+    let mut v = x.unsigned_abs();
+    if v == 0 {
+        return false;
+    }
+    while v > 0 {
+        if v % 10 == 5 {
+            return true;
+        }
+        v /= 10;
+    }
+    false
+}
+
+pub fn count_f(money: &[i32; 4], out: &[bool; 4], n: i32) -> i32 {
+    let mut f = 0;
+    let mut p = 0;
+    while p < n as usize && p < 4 {
+        if !out[p] && money_has_digit5(money[p]) {
+            f += 1;
+        }
+        p += 1;
+    }
+    f
 }
 
 // ---------------------------------------------------------------------------
