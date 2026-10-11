@@ -642,6 +642,108 @@ pub fn count_f(money: &[i32; 4], out: &[bool; 4], n: i32) -> i32 {
     f
 }
 
+// ===========================================================================
+// C-PPP-returns-c4
+// 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。」
+// Effect: the owner's 星星贴纸 rises by exactly 1 after a 通用 [手] body.
+// Engine finding (ppp.md): LESS — the sticker is never granted in the
+// integration test. Under Kani the residual guard reads `trigger::cards()`,
+// and `Op::trig_cards` is a hard 0 — BLOCKED-HOST.
+// ===========================================================================
+
+pub const CARD_RETURNS: &str = "PPP:Returns";
+
+pub fn returns_c4_effects_ok(effects: &[Effect], player: i32, key: u16) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::AddToken { player: p, key: k, n } if p == player && k == key && n == 1
+        )
+}
+
+/// Mutant: reference wants +2 stickers.
+pub fn returns_c4_effects_ok_mutant(effects: &[Effect], player: i32, key: u16) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::AddToken { player: p, key: k, n } if p == player && k == key && n == 2
+        )
+}
+
+// ===========================================================================
+// C-PPP-maze-01
+// 「位于“流星堂”前后5格内时，可打出此卡」
+// Play legality: absolute distance ≤ 5 from 流星堂 (OPEN: 「前后5格内」 read
+// as the same circular distance as 「献给远方的你」). Outside that the play
+// is refused. `tile_named('流星堂')` is -1 under the Kani host body path
+// (BLOCKED-HOST: `Op::tile_named` only resolves 江户川乐器店), so the
+// range gate is skipped and only `cant_move` remains.
+// ===========================================================================
+
+pub const TILE_RYUSEIDO: i32 = 45; // 0-based board slot of 「流星堂」
+
+/// Circular absolute distance on a 60-tile ring.
+pub fn abs_dist(a: i32, b: i32) -> i32 {
+    let n = 60;
+    let d = (a - b).rem_euclid(n);
+    d.min(n - d)
+}
+
+pub fn maze_01_playable(pos: i32) -> bool {
+    abs_dist(pos, TILE_RYUSEIDO) <= 5
+}
+
+// ===========================================================================
+// C-PPP-far-away-01
+// 「[传送]至任意与[使用者]绝对距离最远的玩家的格子并[结算]」
+// The teleport+settle is a `card_move` plan (PROTOCOL stub). Spec pins the
+// destination: a tile occupied by a player at maximum circular distance.
+// OPEN: ties among equally-far players are a free pick (「任意」).
+// ===========================================================================
+
+pub fn far_away_01_dest_is_farthest(
+    dest: i32,
+    me_pos: i32,
+    other_pos: &[i32],
+    n_others: usize,
+) -> bool {
+    if n_others == 0 {
+        return false;
+    }
+    let mut best = -1;
+    let mut i = 0;
+    while i < n_others {
+        let d = abs_dist(me_pos, other_pos[i]);
+        if d > best {
+            best = d;
+        }
+        i += 1;
+    }
+    let mut j = 0;
+    while j < n_others {
+        if abs_dist(me_pos, other_pos[j]) == best && other_pos[j] == dest {
+            return true;
+        }
+        j += 1;
+    }
+    false
+}
+
+// ===========================================================================
+// C-PPP-name-sky-01 / C-PPP-everyone-01
+// 「将此卡放置在山吹面包房」 / 「将此卡放置在“星之鼓动山丘”上。」
+// Bodies call `ctx::tile_named(<name>)` then `place_card_on`. The Kani host
+// `Op::tile_named` returns -1 for every name except 江户川乐器店, so the
+// placement tile is -1 rather than the printed board slot. BLOCKED-HOST.
+// Board slots (0-based): 山吹面包房=48, 星之鼓动山丘=44.
+// ===========================================================================
+
+pub const TILE_YAMABUKI: i32 = 48;
+pub const TILE_HILL: i32 = 44;
+
+pub const CARD_NAME_SKY: &str = "PPP:（沙绫）总有一天要给这片天空命名";
+pub const CARD_EVERYONE: &str = "PPP:（香澄）大家我都喜欢哦";
+
 // ---------------------------------------------------------------------------
 // Tiny helpers
 // ---------------------------------------------------------------------------

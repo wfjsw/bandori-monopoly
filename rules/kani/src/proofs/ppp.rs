@@ -978,3 +978,149 @@ pub fn star_beat_03_mutant_one_sticker() {
         "mutant: card must not match the +1 sticker spec"
     );
 }
+
+// ===========================================================================
+// C-PPP-returns-c4
+// 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。」
+// BLOCKED-HOST: the residual `on_played_is_general` reads `trigger::cards()`,
+// and `Op::trig_cards` is a hard 0 under the Kani host. The body itself
+// (`add_tok(+1)`) is correct; the engine integration finding LESS (ppp.md)
+// is a separate seam. This harness shows the residual rejects ⇒ no sticker.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn returns_c4_blocked_residual_noop() {
+    let w = symbolic_play_world();
+    let player = w.trig_player;
+    let tok = crate::intern::intern(spec::ppp::TOK_STAR_STICKER);
+    let pre_tok = w.key_get(player, tok);
+
+    let _pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+
+    // CardPlayed hook with the residual gate. Host `trig_cards` is 0, so the
+    // residual `on_played_is_general` is false and the body must not run.
+    invoke::unwrap_done(invoke::hook_only(
+        spec::ppp::CARD_RETURNS,
+        "CardPlayed",
+        player,
+    ));
+
+    let post_tok = world::with_world(|ww| ww.key_get(player, tok));
+    let (logbuf, log_n) = log_slice();
+    assert!(
+        post_tok == pre_tok,
+        "returns-c4 (blocked): residual rejects ⇒ no sticker"
+    );
+    let _ = logbuf;
+    assert!(log_n == 0, "returns-c4 (blocked): empty effect log");
+}
+
+// ===========================================================================
+// C-PPP-maze-01
+// 「位于“流星堂”前后5格内时，可打出此卡」
+// Pure distance predicate. The body's `tile_named('流星堂')` is -1 under the
+// Kani host (BLOCKED-HOST), so the in-body range gate is skipped; this
+// harness pins the book's ≤5 reading.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn maze_01_distance_predicate() {
+    let pos: i32 = kani::any();
+    kani::assume((0..60).contains(&pos));
+    let d = spec::ppp::abs_dist(pos, spec::ppp::TILE_RYUSEIDO);
+    kani::cover!(d == 0, "on 流星堂");
+    kani::cover!(d == 5, "exactly 5 away (inside)");
+    kani::cover!(d == 6, "6 away (outside)");
+    assert!(
+        spec::ppp::maze_01_playable(pos) == (d <= 5),
+        "maze-01: playable iff absolute distance ≤ 5"
+    );
+    // Mutant shape: a ≤4 reading is distinguishable at d==5.
+    assert!(
+        !(d == 5 && spec::ppp::maze_01_playable(pos) == (d <= 4)),
+        "maze-01: the ≤4 mutant disagrees at distance 5"
+    );
+}
+
+// ===========================================================================
+// C-PPP-name-sky-01 / C-PPP-everyone-01
+// 「将此卡放置在山吹面包房」 / 「将此卡放置在“星之鼓动山丘”上。」
+// BLOCKED-HOST: `ctx::tile_named` returns -1 for every name except
+// 江户川乐器店, so `place_card_on` lands on tile -1 rather than the printed
+// slot. The body is correct; the host name table is incomplete.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn name_sky_01_blocked_tile_named() {
+    let w = symbolic_play_world();
+    let player = w.trig_player;
+    let _pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::play(spec::ppp::CARD_NAME_SKY, player));
+    let tile = world::with_world(|ww| {
+        if ww.field_n == 0 {
+            -999
+        } else {
+            ww.field[ww.field_n as usize - 1].tile
+        }
+    });
+    // Book wants 山吹面包房 (slot 48). Host `tile_named` yields -1.
+    assert!(
+        tile == spec::ppp::TILE_YAMABUKI,
+        "name-sky-01: card must sit on 山吹面包房 (slot 48)"
+    );
+}
+
+#[kani::proof]
+#[kani::unwind(24)]
+#[kani::should_panic]
+pub fn name_sky_01_mutant_hill() {
+    // Mutant: reference wants the card on 星之鼓动山丘 instead.
+    let w = symbolic_play_world();
+    let player = w.trig_player;
+    world::reset_world(w);
+    invoke::unwrap_done(invoke::play(spec::ppp::CARD_NAME_SKY, player));
+    let tile = world::with_world(|ww| {
+        if ww.field_n == 0 {
+            -999
+        } else {
+            ww.field[ww.field_n as usize - 1].tile
+        }
+    });
+    assert!(
+        tile == spec::ppp::TILE_HILL,
+        "mutant: card must not match the hill spec"
+    );
+}
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn everyone_01_blocked_tile_named() {
+    let w = symbolic_play_world();
+    let player = w.trig_player;
+    let _pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::play(spec::ppp::CARD_EVERYONE, player));
+    let tile = world::with_world(|ww| {
+        if ww.field_n == 0 {
+            -999
+        } else {
+            ww.field[ww.field_n as usize - 1].tile
+        }
+    });
+    // Book wants 星之鼓动山丘 (slot 44). Host `tile_named` yields -1.
+    assert!(
+        tile == spec::ppp::TILE_HILL,
+        "everyone-01: card must sit on 星之鼓动山丘 (slot 44)"
+    );
+}
