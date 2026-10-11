@@ -1341,14 +1341,19 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: align docs to `0 = none`. **Confirmed.**
 
 ## HOST-12 — stale purchase-surface comments
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-12 …`) —
+  "P0: stubs" dropped (HOST-06 rewrote the arms); "One `HostRequest::Quote`"
+  dropped from `ctx.rs` / `docs/PURCHASE.md` (HOST-07); the hostfns comment
+  that justified a native quote is gone (HOST-07 routes through the hook-aware
+  path).
 - **kind**: stale
 - **class**: D
 - **severity**: low
 - **suggested batch**: docs / comments
-- **locations**
-  - `wasm_rules.rs:2247-2249` "v40 purchase surface. P0: stubs" — arms are implemented
-  - `ctx.rs:2445` + `docs/PURCHASE.md:110` "One `HostRequest::Quote`" — no such variant
-  - `hostfns.rs:1614` documents native quote as acceptable because "commit re-quotes" — that *violates* the stated `quote == charge` contract (see HOST-07)
+- **locations** (cleaned)
+  - `wasm_rules.rs` — "v40 purchase surface. P0: stubs"
+  - `ctx.rs` + `docs/PURCHASE.md` — "One `HostRequest::Quote`"
+  - `hostfns.rs` — "commit re-quotes" justification for a native quote
 
 ## HOST-13 — `HostRequest::AgentOffer` drops `agent`
 - **kind**: ABI defect
