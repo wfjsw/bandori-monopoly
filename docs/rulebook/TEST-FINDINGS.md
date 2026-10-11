@@ -1255,3 +1255,18 @@ High-severity class-A window items. 9 tests un-ignored, green twice.
 * **Expectation / drive changes (l04):** restore OPS after Anon Tokyo consumes
   the main move before playing 武道馆 (the scenario is a staged board, not a
   full turn).
+
+## WINDOW-02 follow-up (2026-10-11, `backlog-windows-a`)
+
+* **c13 (engine):** a `DESIGNATES` play is one [反击] timing (CROSS-TESTS C13).
+  `effect::hits` falls back to the static `DESIGNATES` list when the effects
+  list is empty (the [反击] window is before the body). The offer scan, probe
+  and body dispatch share one Effect-on-DESIGNATES-play entry lookup
+  (`counteracts_to_play` / `counteract_entry`), so 宣战布告 is declared on the
+  play and its 500 lands. Un-ignored `c13_riot_and_war_declaration`.
+  Narrow to `DESIGNATES` plays only -- a blanket Effect-on-Card match broke the
+  `rb_chain` ring-order fixtures (TEST:probe is Effect-only and must not answer
+  a non-DESIGNATES play).
+* **l01 open:** five-link war -- E (网络链接异常) should cancel A's designation
+  (P0 pays nothing to P1) and P2 should still pay X. Currently both wars charge
+  and P2 skips X. Ignore reason updated.

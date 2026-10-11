@@ -432,23 +432,26 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **was**: play refused with `err.play_phase`.
 
 ## WINDOW-02 — R.I.O.T. + 宣战布告 same timing loses the 500 payment
-- **status**: **open** (2026-10-11 batch: c13 hands/draws land, the 500 still does not).
-  Nested `ctx::transfer` inside the counter body returns 0 (no `log.pay`); the
-  draw after it still runs. Effect-kind counters are offered on the per-payment
-  `effect` windows rather than as one timing on the play -- still investigating
-  whether the nested transfer is cancelled by the re-entrancy / `settles_for`
-  path or by the per-payment window shape. l01's ring order (ask order started
-  at seat 2, not the initial user) is the same family.
+- **status**: **partially fixed** (2026-10-11, `backlog-windows-a`) — a
+  `DESIGNATES` play is one [反击] timing (CROSS-TESTS C13): its `Effect`
+  counters also answer the play's own `card` raise. `effect::hits` falls back
+  to the static `DESIGNATES` list when the effects list is empty. The offer
+  scan, probe and **body dispatch** all use the same Effect-on-DESIGNATES-play
+  entry lookup, so 宣战布告 is declared on the play and its 500 lands.
+  `c13_riot_and_war_declaration` un-ignored, green.
+- **still open**: `l01_counter_war_five_links_deep` — in the five-link war,
+  E (网络链接异常) should cancel A's designation (P0 pays nothing to P1) and P2
+  should still pay X. Currently both wars charge and P2 skips X.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (war declaration is a whole-table event)
 - **suggested batch**: counteraction windows / payment pipeline
 - **locations**
-  - `rules/tests/tests/cross_chain.rs` `c13_riot_and_war_declaration` (P0 ends 12000, want 11500)
-  - `rules/tests/tests/cross_long.rs` `l01_counter_war_five_links_deep` (ring skips P1; 宣战布告 never offered; nothing settles)
+  - `rules/tests/tests/cross_chain.rs` `c13_riot_and_war_declaration` (un-ignored, green)
+  - `rules/tests/tests/cross_long.rs` `l01_counter_war_five_links_deep` (still ignored)
+  - `crates/game-rules/src/host.rs` `counteracts_to_play` / `counteract_entry`, `rules/card-sdk/src/ctx.rs` `effect::hits`
 - **rulebook**: R.I.O.T. / 宣战布告 — 500 payment and the war ring offers.
-- **current**: 500 missing; l01's ring start is wrong.
-- **expected**: payment lands; every eligible seat is offered.
+- **was**: 500 missing; war never declared on the play's timing.
 
 ## WINDOW-03 — EXIST redirect / 「造成影响」 latch is at declaration, not settlement
 - **kind**: rulebook divergence
@@ -1605,9 +1608,10 @@ Do these in order; each batch should be a PR that does not share files with the 
 2. **high-A engine bugs — movement** (MOVE-01, MOVE-02, MOVE-04, SKILL-08, SKILL-09, TILE-04, TILE-05)
    - Unblocks the most ignored `cross_move` tests. Files: `game-core/engine/{play,ops,move_ctx}.rs`, `skill-characters/{rana_parking,kaoru_prince}.rs`.
 3. ~~**high-A counteraction windows** (CH-02, CH-03, CH-04 play-as-counter, CH-06, WINDOW-01, WINDOW-02)~~
-   - **fixed 2026-10-11** (`backlog-windows-a`): CH-02, CH-03, CH-04, WINDOW-01.
+   - **fixed 2026-10-11** (`backlog-windows-a`): CH-02, CH-03, CH-04, WINDOW-01,
+     WINDOW-02 c13 (one-timing Effect on a DESIGNATES play).
    - CH-06 reclassified **B** (needs CH-05 nested PlayCtx for 真奈's join retarget).
-   - WINDOW-02 remains (500 payment + l01 ring order).
+   - WINDOW-02 l01 remains (five-link war: E should cancel A's designation).
 4. **high-A money** (MONEY-03 Repaint shaped half, CRYSTAL-03 crimson_soul 500 timing, SETTLE-02 CRYCHIC 6-hand block, SETTLE-03 Sakiko absorb)
 5. **high-A host ABI: reply sentinels + quote==charge** (HOST-06, HOST-07, HOST-08 `set_no_build`)
    - Files: `crates/game-rules/src/{wasm_rules,hostfns,native_shims}.rs`, `rules/card-sdk/src/ctx.rs`. Do not share a PR with card bodies.
