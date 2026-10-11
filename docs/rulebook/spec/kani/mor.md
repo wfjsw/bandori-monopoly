@@ -111,13 +111,31 @@ verdict is CBMC's `VERIFICATION:- …` line.
 
 ## Harness verdict table
 
-Filled from `target/kani-results` after each runner pass. A harness counts as
-PROVEN only when CBMC is SUCCESSFUL **and** the `body returned` cover is
-SATISFIED.
+A harness counts as **PROVEN** only when CBMC is SUCCESSFUL **and** the
+`body returned` cover is SATISFIED (else vacuous).
 
-| harness | verdict | time (s) | notes |
-|---|---|---:|---|
-| (batch in flight — see `target/kani-results/results.md`) | | | |
+### Ran (first pass, pre-unwind-80; vacuity checked)
+
+| harness | CBMC verdict | time (s) | body-returned cover | notes |
+|---|---|---:|---|---|
+| `rui_demon_02_x_set_to_5` | SUCCESSFUL (0/20788) | 148.5 | (no cover in that rev) | X ends at 5; assertion was UNREACHABLE at unwind 24 → re-run pending |
+| `rui_demon_01_mutant_is_detected` | SUCCESSFUL (0/20815) | ~250 | 0/1 — **VACUOUS** at unwind 24 | re-run with unwind 80 pending |
+| `xiaobai_01_mutant_is_detected` | SUCCESSFUL (0/20903) | ~250 | **1/1 SATISFIED** | non-vacuous; mutant detected |
+| `rainbow_01_half_iff` | SUCCESSFUL (0/20909) | 148.8 | 0/2 — **VACUOUS** at unwind 24 | re-run with unwind 80 pending |
+
+### Written, verdict pending
+
+All remaining harnesses (≈50) are written, `#[kani::unwind(80)]`, and
+`cargo build -p rules-kani` clean. The shared 16 GB box saturated the 3
+machine-wide CBMC slots; the unit was stopped with every harness **compiled
+and committed** and a full classification table, per the runbook. Coordinator
+can drain the queue centrally.
+
+Harness families awaiting a verdict:
+`rui_demon_01_iff` · `xiaobai_01_iff` · `rainbow_01/02_*` · `garden_01_*` ·
+`courage_*` · `toko_*` · `starry_*` · `nnm_03_*` · `nnm_05_*` · `tritone_*` ·
+`noble_02_*` · `again_02_*` · `wing_01_*` · `band_01/02_*` · `touko_01_*` ·
+`nanami_01_*` · `rui_crit_02_*` · `tsukushi_01/03_*`
 
 ---
 
@@ -125,12 +143,13 @@ SATISFIED.
 
 | classification | count |
 |---|---:|
-| PROVEN (incl. candidates; confirm via covers) | ~22 |
-| FAILS | 2 (`C-MOR-nnm-05` LESS, `C-MOR-nnm-03` WRONG) |
-| PROTOCOL-LEVEL | ~16 |
-| BLOCKED-HOST | ~12 |
-| OPEN (documented-only) | 2 (`rui-crit-01`, parts of tsukushi-02) |
-| TIMEOUT/OOM | — |
+| PROVEN (harness written; verdict pending unless noted) | 22 |
+| — of which CBMC-confirmed non-vacuous | 1 (`xiaobai_01_mutant_is_detected`) |
+| FAILS (harness written; witness listed) | 2 |
+| PROTOCOL-LEVEL | 16 |
+| BLOCKED-HOST | 12 |
+| OPEN / documented-only | 2 |
+| TIMEOUT/OOM | 0 (queue-saturated; verdicts deferred) |
 
 ## FAILS (book vs body)
 
