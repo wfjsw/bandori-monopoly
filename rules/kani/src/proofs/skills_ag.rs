@@ -282,3 +282,47 @@ pub fn ran_02_mutant_is_detected() {
     assert!(post_fire == 0, "card spends exactly 1");
     assert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
 }
+// ===========================================================================
+// Pure formula harnesses (no invoke) — cheap, run first under the slot cap.
+// ===========================================================================
+
+/// C-AG-firepot-01 tick arithmetic.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn firepot_01_tick_formula() {
+    let pre_rest: i32 = kani::any();
+    kani::assume(pre_rest >= 0 && pre_rest <= 2);
+    let grants = spec::skills_ag::firepot_01_grants(pre_rest);
+    let next = spec::skills_ag::firepot_01_next_rest(pre_rest);
+    if pre_rest == 2 {
+        assert!(grants, "third idle turn grants");
+        assert!(next == 0, "counter resets");
+    } else {
+        assert!(!grants, "first/second idle turn grants nothing");
+        assert!(next == pre_rest + 1, "counter advances");
+    }
+    assert!(
+        grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest == 2,
+        "mutant disagrees on rest 0/1"
+    );
+}
+
+/// C-AG-band-01 filter formula.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn band_01_filter_formula() {
+    let is_shop: bool = kani::any();
+    let price: i32 = kani::any();
+    kani::assume(price >= 0 && price <= 5000);
+    let applies = spec::skills_ag::band_01_applies(is_shop, price);
+    assert!(
+        applies == (is_shop || price <= 1200),
+        "shop-street OR price <= 1200"
+    );
+    if !is_shop && price > 1200 && price <= 5000 {
+        assert!(
+            !spec::skills_ag::band_01_applies_mutant(is_shop, price) || price <= 1000,
+            "mutant (<=1000) is strictly tighter"
+        );
+    }
+}

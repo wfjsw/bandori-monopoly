@@ -887,3 +887,85 @@ pub fn one_of_us_01_place_iff() {
         "C-AG-one-of-us-01: the card must be placed on the user's field"
     );
 }
+// ===========================================================================
+// Pure formula harnesses (no invoke) — cheap, run first under the slot cap.
+// ===========================================================================
+
+/// C-AG-colors-01: the >6 wrap is identity on a real 1d6 face.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn colors_01_wrap_formula() {
+    let raw: i32 = kani::any();
+    kani::assume(raw >= 1 && raw <= 6);
+    assert!(
+        spec::ag::colors_01_wrap(raw) == raw,
+        "C-AG-colors-01: wrap is identity on 1d6"
+    );
+}
+
+/// C-AG-half-speed-04 formula: ceil10(amount/2) on a symbolic positive amount.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn half_speed_04_amount_formula() {
+    let amount: i32 = kani::any();
+    kani::assume(amount >= 1 && amount <= 10_000);
+    let half = spec::ag::half_speed_04_amount_ceil10(amount);
+    assert!(half >= (amount + 1) / 2, "ceil10(half) >= true half");
+    assert!(half % 10 == 0, "ceil10 lands on a multiple of 10");
+    assert!(half <= (amount + 1) / 2 + 9, "ceil10 overshoots by < 10");
+    if amount % 20 == 0 {
+        assert!(
+            half == spec::ag::half_speed_04_amount_even(amount),
+            "even 10-multiples halve exactly"
+        );
+    }
+    assert!(
+        half != spec::ag::half_speed_04_amount_mutant(amount),
+        "mutant +1 disagrees"
+    );
+}
+
+/// C-AG-glory-02/03 formula: floor half of a non-negative base price.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn glory_half_formula() {
+    let base: i32 = kani::any();
+    kani::assume(base >= 0 && base <= 10_000);
+    let h = spec::ag::glory_half(base);
+    assert!(h == base / 2, "floor half");
+    assert!(h * 2 <= base && h * 2 + 2 > base, "floor-half bounds");
+    if base % 2 == 0 {
+        assert!(h * 2 == base, "even bases split exactly");
+    }
+}
+
+/// C-AG-soul-02 formula: amount = max(pre-1000, 0).
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn soul_02_amount_formula() {
+    let amount: i32 = kani::any();
+    kani::assume(amount >= 0 && amount <= 10_000);
+    let to = spec::ag::soul_02_amount(amount);
+    assert!(to == (amount - 1000).max(0), "max(pre-1000, 0)");
+    assert!(to != spec::ag::soul_02_amount_mutant(amount), "mutant disagrees");
+}
+
+/// C-AG-sky-02 formula: n*600 for n >= 3.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn sky_02_amount_formula() {
+    let n: i32 = kani::any();
+    kani::assume(n >= 3 && n <= 8);
+    let effects = [Effect::GainMoney {
+        player: 0,
+        n: n * 600,
+    }];
+    assert!(
+        spec::ag::sky_02_log_ok(&effects, 0, n),
+        "n*600 matches the gain leg"
+    );
+    assert!(
+        !spec::ag::sky_02_log_ok_mutant(&effects, 0, n),
+        "n*601 does not"
+    );
+}
