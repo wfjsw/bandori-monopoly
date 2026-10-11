@@ -1743,6 +1743,7 @@ dependencies = [
 name = "ruleset-tests"
 version = "0.1.0"
 dependencies = [
+ "card-sdk",
  "game-core",
  "game-rules",
  "serde_json",
