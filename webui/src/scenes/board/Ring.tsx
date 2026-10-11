@@ -112,7 +112,7 @@ function shortMarkName(title: string): string {
   const t = plain(title).trim();
   if (!t) return "";
   const chars = [...t];
-  if (isWideCh(chars[0]!)) return chars.slice(0, 4).join("");
+  if (isWideCh(chars[0]!)) return chars.slice(0, 6).join("");
   const words = t.split(/\s+/);
   // Dotted initials: every piece is one letter plus punctuation.
   if (words.length > 1 && words.every((w) => /^[A-Za-z0-9][.'’-]?$/.test(w))) {

@@ -67,7 +67,7 @@
   width: 100%;
   /* Bottom gutter: room for the owner strip / mortgage band / marks row so
      they never sit on the caption. */
-  padding: calc(var(--u) * 0.1) calc(var(--u) * 0.12) calc(var(--u) * 2.4);
+  padding: calc(var(--u) * 2.2) calc(var(--u) * 0.12) calc(var(--u) * 1.1);
   display: flex;
   flex-direction: column;
   pointer-events: none;
@@ -171,7 +171,7 @@
    so text does not run under them. */
 .houses {
   position: absolute;
-  top: calc(var(--u, 12px) * 1.55);
+  top: calc(var(--u, 12px) * 3.3);
   left: calc(var(--u, 12px) * 0.16);
   display: flex;
   gap: 1px;
@@ -198,7 +198,7 @@
 .marksAside {
   left: auto;
   right: calc(var(--u, 12px) * 0.16);
-  top: calc(var(--u, 12px) * 1.55);
+  top: calc(var(--u, 12px) * 3.3);
   bottom: auto;
 }
 .marks .mark { pointer-events: auto; cursor: help; box-shadow: 0 0 0 1px #fff; min-width: 0; flex: 0 1 auto; }
@@ -228,31 +228,36 @@
    Stacks upward; a third-and-beyond is a +N chip on the last ribbon. */
 .desig {
   position: absolute;
-  left: calc(var(--u, 12px) * 0.12);
-  right: calc(var(--u, 12px) * 0.12);
-  bottom: calc(var(--u, 12px) * 0.38);
-  z-index: 5;
+  left: 0;
+  right: 0;
+  top: calc(var(--u, 12px) * 1.5);
+  z-index: 6;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   gap: 1px;
   min-width: 0;
   pointer-events: none;
 }
 .markDesignate {
+  display: block;
   width: 100%;
   box-sizing: border-box;
-  height: calc(var(--u, 12px) * 1.2);
-  padding: 0 calc(var(--u, 12px) * 0.28);
-  border-radius: calc(var(--u, 12px) * 0.22);
-  font-size: calc(var(--u, 12px) * 0.78);
-  font-weight: 700;
-  line-height: calc(var(--u, 12px) * 1.2);
+  /* Floor at ~13px so the card name stays readable at the 1366 cell even
+     when --u scales down; still grows with the wide board. */
+  height: max(16px, calc(var(--u, 12px) * 1.65));
+  padding: 0 max(4px, calc(var(--u, 12px) * 0.28));
+  border-radius: 0 0 max(3px, calc(var(--u, 12px) * 0.2)) max(3px, calc(var(--u, 12px) * 0.2));
+  font-size: max(12px, calc(var(--u, 12px) * 1.1));
+  font-weight: 800;
+  line-height: max(16px, calc(var(--u, 12px) * 1.65));
+  letter-spacing: 0.01em;
   color: #fff;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85), 0 1px 2px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.92), 0 2px 4px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
   cursor: help;
 }
