@@ -152,3 +152,25 @@ fn no_shipped_outcome_renders_an_internal_key_as_text() {
     }
     check_events(&t.events_since(mark), "shipped-game");
 }
+/// The name helpers must produce nested Msg, never a Text arg for a known key.
+#[test]
+fn name_helpers_never_text_a_known_key() {
+    use game_rules::{counter_name, mark_kind_name, state_key_name};
+    let mut bad = Vec::new();
+    for m in [
+        counter_name("crystals"),
+        counter_name("cp"),
+        state_key_name("handLimit"),
+        state_key_name("stay"),
+        state_key_name("skillState"),
+        mark_kind_name("mark:cp"),
+        mark_kind_name("skillBlock"),
+    ] {
+        walk_msg(&m, "helper", &mut bad);
+    }
+    assert!(bad.is_empty(), "helpers leaked internal keys as Text: {bad:?}");
+    // Known keys resolve to their own i18n names.
+    assert_eq!(counter_name("crystals").key(), "log.counter.crystals");
+    assert_eq!(state_key_name("handLimit").key(), "log.state.hand_limit");
+    assert_eq!(mark_kind_name("mark:cp").key(), "log.mark.cp");
+}
