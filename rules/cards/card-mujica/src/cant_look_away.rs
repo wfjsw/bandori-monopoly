@@ -4,7 +4,7 @@
 //! > 无法将视线移开：
 //! >  使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动
 //!
-//! force-move everyone who [反击]'d you this turn 1-4 tiles with settle.
+//! force-move the player who [反击]'d you this turn 1-4 tiles with settle.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -14,8 +14,16 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
         On::Play("", None, play),
+        // 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- the timing is
+        // a counter used *against you*. The engine's counter link carries
+        // `target` = the countered seat and `actor` = the counter's declarer
+        // (see `build_round`), so `target == owner && actor != owner` is exactly
+        // 「有玩家对你使用[反击]」. `Counteracted` is the named wire kind; the
+        // round on a counter also presents it as the counter's own `card` /
+        // `skillUsed` kind (a counter to a counter is answered there), so both
+        // selectors are declared.
         On::Counteract(
-            &[ChainKind::Counteracted],
+            &[ChainKind::Counteracted, ChainKind::Card, ChainKind::SkillUsed],
             "target == owner && actor != owner",
             None,
             counteract,
@@ -27,7 +35,9 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
 fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- C#
     // `t.Kind == "counteracted" && t.Target == seat && t.Seat != seat`.
-    trigger::kind() == TriggerKind::Counteracted
+    (trigger::kind() == TriggerKind::Counteracted
+        || trigger::kind() == TriggerKind::Card
+        || trigger::kind() == TriggerKind::SkillUsed)
         && trigger::target() == player_id
         && trigger::player_id() != player_id
 }
@@ -47,52 +57,57 @@ fn run(player_id: i32) -> card_sdk::Asked {
     // `H._counteractedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
     // TODO(规则书)[judgement](ABI): the counteraction history (C# `H._counteractedAgainst`)?; `ctx::turn_key()`
     //   the clause under-specifies -- see the note above it
-    // covers the `turn == H.TurnKey` half of the filter, but the list itself
-    // cannot be built without the history. We still walk the ordinary player list
-    // so the prompts below are exercised.
-    let counteractors: alloc::vec::Vec<i32> = ctx::others(player_id);
-    for p in counteractors {
-        // 规则书: 「向你选择的方向强制移动1~4以内的任意步数」
-        // C# `H.AskNumber(i, ..., 1, 4, ...)` (an AskPick over the range).
-        let n = ctx::ask_number(
-            player_id,
-            &Msg::new(key!("cant_look_away_title")),
-            &Msg::new(key!("cant_look_away_steps")).player_id("who", p),
-            1,
-            4,
-        )?;
-        let forward = ctx::ask_pick(
-            player_id,
-            &Msg::new(key!("cant_look_away_dir_title")),
-            &Msg::new(key!("cant_look_away_dir_ask")),
-            &[
-                Msg::new(key!("cant_look_away_forward")),
-                Msg::new(key!("cant_look_away_backward")),
-            ],
-        )? == 0;
-        // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk(p,
-        // forward ? n : -n, resolve: true, ...)` (MatchHost.cs:5708) builds
-        // `MoveCtx { Steps = n, Reverse = !forward, Resolve = true,
-        // Forced = true }`. The MoveCtx shape maps onto `ctx::plan::*`.
-        ctx::plan::set_steps(n);
-        ctx::plan::set_reverse(!forward);
-        ctx::plan::set_resolve(true);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("cant_look_away_ordered"))
-                .player_id("who", p)
-                .i("n", n as i64),
-        );
-        // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- run the shaped walk
-        // now (C# `H.ForceWalk`, MatchHost.cs:23453-23480, through the move
-        // plan).
-        ctx::card_move(p);
+    // covers the `turn == H.TurnKey` half of the filter, but the full list
+    // cannot be built without the history (ABI-04). The immediate clause
+    // 「在有玩家对你使用[反击]后立即使用」 names the player who just countered
+    // -- that is `trigger::player_id()` of the link this counter answers --
+    // so the forced move lands on them now. Walking every other seat would
+    // move players who never countered.
+    let counter_user = trigger::player_id();
+    if counter_user < 0 || counter_user == player_id {
+        return Ok(());
     }
+    if ctx::player_out(counter_user) {
+        return Ok(());
+    }
+    // 规则书: 「向你选择的方向强制移动1~4以内的任意步数」
+    // C# `H.AskNumber(i, ..., 1, 4, ...)` (an AskPick over the range).
+    let n = ctx::ask_number(
+        player_id,
+        &Msg::new(key!("cant_look_away_title")),
+        &Msg::new(key!("cant_look_away_steps")).player_id("who", counter_user),
+        1,
+        4,
+    )?;
+    let forward = ctx::ask_pick(
+        player_id,
+        &Msg::new(key!("cant_look_away_dir_title")),
+        &Msg::new(key!("cant_look_away_dir_ask")),
+        &[
+            Msg::new(key!("cant_look_away_forward")),
+            Msg::new(key!("cant_look_away_backward")),
+        ],
+    )? == 0;
+    // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk(p,
+    // forward ? n : -n, resolve: true, ...)` (MatchHost.cs:5708) builds
+    // `MoveCtx { Steps = n, Reverse = !forward, Resolve = true,
+    // Forced = true }`. The MoveCtx shape maps onto `ctx::plan::*`.
+    ctx::plan::set_steps(n);
+    ctx::plan::set_reverse(!forward);
+    ctx::plan::set_resolve(true);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("cant_look_away_ordered"))
+            .player_id("who", counter_user)
+            .i("n", n as i64),
+    );
+    // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- run the shaped walk
+    // now (C# `H.ForceWalk`, MatchHost.cs:23453-23480, through the move
+    // plan).
+    ctx::card_move(counter_user);
     // 规则书: 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」
     // -- `card_move` runs `MainMoveAs` (MatchHost.cs:23102-23120), which sets
     // `_turnCtx.MainMoved` when the walked player is the turn player, so a
-    // self walk on one's own turn consumes the main move. (The C# `Counteractors`
-    // list is others-only, so the clause is vacuous there; the bookkeeping is
-    // right either way.)
+    // self walk on one's own turn consumes the main move.
     Ok(())
 }
