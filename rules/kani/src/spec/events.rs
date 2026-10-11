@@ -329,3 +329,326 @@ pub fn front_or_back_share_total_ok(gains: &[(i32, i32)], winners: &[i32]) -> bo
     let expected_total = 1000 - (1000 % n);
     total == expected_total && gains.len() == winners.len()
 }
+// ===========================================================================
+// E-front-or-back — mutants / share legs (append)
+// ===========================================================================
+
+/// Mutant: the 500 / 1000 amounts swapped (equal→1000, share→500).
+pub fn front_or_back_mutant_swapped_equal_amount() -> i32 {
+    1000
+}
+pub fn front_or_back_mutant_swapped_share_total() -> i32 {
+    500
+}
+
+/// Share legs after the host's `pay_total` shaping record: the first `PayTo`
+/// of the full 1000 from the bank is a PROTOCOL artifact of the model (the
+/// real pipeline only shapes); the remaining `pay_leg`s are the book's
+/// 「分摊」 transfer. Returns the leg gains as `(player, n)`.
+pub fn front_or_back_share_legs(effects: &[Effect], winners: &[i32]) -> Vec<(i32, i32)> {
+    let mut out = Vec::new();
+    if winners.is_empty() {
+        return out;
+    }
+    let each = 1000 / winners.len() as i32;
+    let mut skipped = false;
+    for e in effects {
+        if let Effect::PayTo { from, to, n } = e {
+            // Drop the first full-total shaping record from the bank.
+            if !skipped && *from < 0 && *n == 1000 {
+                skipped = true;
+                continue;
+            }
+            if *from < 0 && winners.contains(to) && *n == each {
+                out.push((*to, *n));
+            }
+        }
+    }
+    out
+}
+
+// ===========================================================================
+// E-ex-quest-01 — EX任务挑战
+// 「抽出此卡的玩家投掷1d4并记录结果和26相加为X，然后所有玩家各自投掷3d20，
+// 结果至少为X的玩家可选择更换角色皮肤（技能相同）」
+//
+// Cosmetics have no match-state seam (E-ex-quest-02 cannot test).
+// ===========================================================================
+
+/// The card is a one-shot that moves no money / pos / marks — only dice.
+pub fn ex_quest_01_no_state_effects(effects: &[Effect]) -> bool {
+    effects.is_empty()
+}
+
+// ===========================================================================
+// E-habinel-01 — 前往哈比内尔王国旅游
+// 「每个玩家获得X层[除外]，…X=1d2（每个玩家独立投掷1d2）」
+// Destination 微笑号 is BLOCKED-HOST(tile_named) — `to` is -1 under Kani.
+// E-habinel-02 turn-start tick is engine status machinery (PROTOCOL-LEVEL).
+// E-habinel-03 timing is OPEN-habinel-end.
+// ===========================================================================
+
+/// One `GiveExile` per living player with `n ∈ 1..=2`, destination `to`
+/// (the book's 微笑号; -1 under the Kani tile_named stub).
+pub fn habinel_01_exiles_ok(effects: &[Effect], players: &[i32], to: i32) -> bool {
+    if effects.len() != players.len() {
+        return false;
+    }
+    for (e, &p) in effects.iter().zip(players.iter()) {
+        match e {
+            Effect::GiveExile {
+                player: q,
+                n,
+                to: t,
+            } => {
+                if *q != p || *n < 1 || *n > 2 || *t != to {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+// ===========================================================================
+// E-never-ends-01 — 一切不会结束
+// 「抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层…[除外]。」
+// BLOCKED-HOST(tile_named:RiNG N) — the body early-returns; under Kani this
+// is always a no-op. The book effect is NOT proven.
+// ===========================================================================
+
+/// Under the tile_named stub the body is a no-op: empty effect log.
+pub fn never_ends_01_noop(effects: &[Effect]) -> bool {
+    effects.is_empty()
+}
+
+// ===========================================================================
+// E-chart-rush-01 / 02 — 冲榜
+// 「所有人失去所有[火罐]并且投掷Xd20，X为失去的指示物数量加一，点数最高的人
+// 获得2000资金或抽一张卡，点数第二的人获得1500资金，点数第三的人获得1000资金，
+// 点数第四的人获得500资金（如果两个人点数相同则同时获得较高的那一档，例：获得
+// 奖励名次为1，2，2，4）」
+// OPEN-chart-rush-or / OPEN-chart-rush-tie.
+// ===========================================================================
+
+/// Competition rank: 1 + how many faces are strictly higher.
+pub fn chart_rush_rank(faces: &[i32], me: i32) -> i32 {
+    1 + faces.iter().filter(|&&g| g > me).count() as i32
+}
+
+/// Purse for a rank (rank 1 is the OPEN-or choice; `money` pins the 2000 leg).
+pub fn chart_rush_purse(rank: i32) -> i32 {
+    match rank {
+        1 => 2000,
+        2 => 1500,
+        3 => 1000,
+        4 => 500,
+        _ => 0,
+    }
+}
+
+/// All living players' fire pots are gone after the body.
+pub fn chart_rush_fire_spent(post_fire: &[i32], n: i32) -> bool {
+    (0..n as usize).all(|p| post_fire[p] == 0)
+}
+
+/// Mutant: rank-1 money purse off-by-one.
+pub fn chart_rush_purse_mutant(rank: i32) -> i32 {
+    if rank == 1 {
+        2000 + 1
+    } else {
+        chart_rush_purse(rank)
+    }
+}
+
+// ===========================================================================
+// E-marina-box-02 — 麻里奈小姐的礼物箱
+// 「所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次1d10
+// （不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金。」
+// OPEN-marina-who (passer) / OPEN-marina-default (default decline).
+// E-marina-box-01 expiry counts drawer turns via `set_prop` (no-op under
+// Kani) — PROTOCOL-LEVEL.
+// ===========================================================================
+
+/// Decline: no money moves.
+pub fn marina_box_02_decline_ok(effects: &[Effect]) -> bool {
+    effects.is_empty()
+}
+
+/// Accept: the passer pays 500; a 1d10 face ≥ 6 also credits them 1200.
+/// Face is not visible in the log — the accept leg is `(PayMoney 500)` or
+/// `(PayMoney 500, GainMoney 1200)`.
+pub fn marina_box_02_accept_ok(effects: &[Effect], who: i32) -> bool {
+    match effects.len() {
+        1 => matches!(
+            effects[0],
+            Effect::PayMoney { player, n } if player == who && n == 500
+        ),
+        2 => {
+            matches!(effects[0], Effect::PayMoney { player, n } if player == who && n == 500)
+                && matches!(
+                    effects[1],
+                    Effect::GainMoney { player, n } if player == who && n == 1200
+                )
+        }
+        _ => false,
+    }
+}
+
+/// Mutant: pays 500 even on decline.
+pub fn marina_box_02_decline_mutant(effects: &[Effect]) -> bool {
+    !effects.is_empty()
+}
+
+// ===========================================================================
+// Shared activation / expiry shapes (active events)
+// ===========================================================================
+
+/// Activation keep: dest is Field and the body moved no money / pos.
+pub fn activation_keep_only(dest: i32, effects: &[Effect]) -> bool {
+    dest == 2 && effects.is_empty()
+}
+
+/// Permanent keep (no expiry clause): dest is Field; nothing else is required
+/// beyond the body's own modeled side effects.
+pub fn permanent_keep(dest: i32) -> bool {
+    dest == 2
+}
+
+// ===========================================================================
+// E-embers-01 / 03 — 火种燃尽之后会怎么样呢？
+// 「（1）将此卡的复制品放置于所有玩家所在格子上…触发结算时，格子上每有一张
+// 此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡
+// 的复制品。」
+// E-embers-02 front/back spread is a follow-up. E-embers-04 clear is
+// BLOCKED-HOST(remove_marks stub + give_exile does not set EXILE).
+// ===========================================================================
+
+/// One `PlaceMark` per living player (on that player's tile).
+pub fn embers_01_marks_ok(effects: &[Effect], tiles: &[i32]) -> bool {
+    if effects.len() != tiles.len() {
+        return false;
+    }
+    for (e, &t) in effects.iter().zip(tiles.iter()) {
+        match e {
+            Effect::PlaceMark { tile, .. } => {
+                if *tile != t {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Settle: the settler pays `10 * n_copies` (PayMoney).
+pub fn embers_03_settle_ok(effects: &[Effect], who: i32, copies: i32) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::PayMoney { player, n } if player == who && n == copies * 10 && copies > 0
+        )
+}
+
+// ===========================================================================
+// E-lost-chase / E-end-it-all / E-bear-cookie — derived push / banish
+// `event_deck_push` / `event_banish` are PROTOCOL stubs (return 0, no world
+// mutation). The body calls them correctly; the clause is unprovable.
+// ===========================================================================
+
+/// E-bear-cookie-01: a derived 冲榜 sits on the event-deck top. Unprovable
+/// under the stub — the predicate names the book's postcondition.
+pub fn bear_cookie_01_deck_top_is_chart_rush(deck_top: Option<u16>, chart_rush_id: u16) -> bool {
+    deck_top == Some(chart_rush_id)
+}
+
+/// E-end-it-all-01: the drawer picks 3 non-derived events and the card stays.
+/// The banish is a stub; `picks == 3` is the determined ask-count.
+pub fn end_it_all_01_picked_three(picks: usize) -> bool {
+    picks == 3
+}
+
+// ===========================================================================
+// E-lulu / E-school-time / E-kizuna — pay / exile legs
+// 「如果选择[传送]需支付500资金」 / 「获得1层[除外]」
+// Destinations 快餐店 / 周边学区 are BLOCKED-HOST(tile_named); Kizuna's dest
+// is `roll mod 60` and is modeled.
+// ===========================================================================
+
+/// Lulu accept: the chooser pays exactly 500 (Teleport dest is BLOCKED-HOST).
+pub fn lulu_01_pay_ok(effects: &[Effect], who: i32, dest: i32) -> bool {
+    effects.len() == 2
+        && matches!(
+            effects[0],
+            Effect::PayMoney { player, n } if player == who && n == 500
+        )
+        && matches!(
+            effects[1],
+            Effect::Teleport { player, tile } if player == who && tile == dest
+        )
+}
+
+/// School-time / kizuna: one `GiveExile` of 1 per living player.
+pub fn exile_one_each(effects: &[Effect], players: &[i32]) -> bool {
+    if effects.len() < players.len() {
+        return false;
+    }
+    // Teleports (if any) come first per player in some bodies; match the
+    // GiveExile multiset exactly against `players`.
+    let mut got = Vec::new();
+    for e in effects {
+        if let Effect::GiveExile {
+            player, n, to, ..
+        } = e
+        {
+            if *n != 1 || *to != -1 {
+                return false;
+            }
+            got.push(*player);
+        }
+    }
+    got.len() == players.len() && players.iter().all(|p| got.contains(p))
+}
+
+/// Kizuna: everyone teleports to `face % 60` and gains 1 exile (X = 0 when
+/// no song cards are in any deck — OPEN-kizuna-song).
+pub fn kizuna_01_ok(effects: &[Effect], players: &[i32], dest: i32) -> bool {
+    if effects.len() != players.len() * 2 {
+        return false;
+    }
+    for (i, &p) in players.iter().enumerate() {
+        let a = &effects[i * 2];
+        let b = &effects[i * 2 + 1];
+        if !matches!(a, Effect::Teleport { player, tile } if *player == p && *tile == dest) {
+            return false;
+        }
+        if !matches!(b, Effect::GiveExile { player, n, to } if *player == p && *n == 1 && *to == -1)
+        {
+            return false;
+        }
+    }
+    true
+}
+
+// ===========================================================================
+// E-pool-bug-03 — 卡池BUG build veto
+// 「此卡在场时不可在造价1500及以上的格子上加盖房屋。」
+// `set_cancelled` is modeled.
+// ===========================================================================
+
+/// The BuildBefore hook cancelled the build.
+pub fn pool_bug_03_cancelled(cancelled: bool) -> bool {
+    cancelled
+}
+
+// ===========================================================================
+// E-fix-note — 修复公告 (set_build_discount is a PROTOCOL stub)
+// ===========================================================================
+
+/// Activation keep + designated tiles recorded (props are a no-op under Kani;
+/// only keep is determined here).
+pub fn fix_note_01_keep(dest: i32) -> bool {
+    dest == 2
+}
