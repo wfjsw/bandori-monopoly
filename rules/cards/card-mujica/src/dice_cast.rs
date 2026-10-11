@@ -50,7 +50,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Using this card *as* a [反击] against someone else. The played card's own
+/// follow-up also reaches this entry (unguarded, see
+/// `a_played_cards_own_counteract_runs_once`); that is the same activation as
+/// `play` and must not re-cast -- and must not arm the no-counteract lock
+/// before the play's own [反击] window (「此卡可以被反击」).
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    if trigger::player_id() == player_id {
+        return Ok(());
+    }
     cast(player_id);
     Ok(())
 }
