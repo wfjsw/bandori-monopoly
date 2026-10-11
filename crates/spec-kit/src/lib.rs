@@ -141,6 +141,34 @@ impl Step<'_> {
         self.events.iter().map(event_key).collect()
     }
 
+    /// Did this step's **engine act** play `card`? Reads the act's
+    /// [`NetMessage`] (`act == "play"` + `card`), not the event stream --
+    /// frame predicates must key on engine boundaries (the act), never on a
+    /// presentation event (a `"card"` activation / 「效果适用」 header), so a
+    /// lazy header cannot move the marker into a different act's window.
+    pub fn act_is_play(&self, card: &str) -> bool {
+        match self.act {
+            StepAct::Act { msg, .. } => msg.act == "play" && msg.card == card,
+            _ => false,
+        }
+    }
+
+    /// Did this step's engine act answer a prompt (not a decline)?
+    pub fn act_is_answer(&self) -> bool {
+        matches!(self.act, StepAct::Answer { .. })
+    }
+
+    /// Did this step's engine act name `card` (play / counteract / any act
+    /// whose [`NetMessage::card`] is `card`)? Engine-level; never reads the
+    /// event stream.
+    pub fn act_is_card(&self, card: &str) -> bool {
+        match self.act {
+            StepAct::Act { msg, .. } => msg.card == card,
+            StepAct::Answer { cards, .. } => cards.iter().any(|c| c == card),
+            _ => false,
+        }
+    }
+
     /// Money of player `i` before the input.
     pub fn pre_money(&self, i: usize) -> i32 {
         self.pre.st.players.get(i).map(|p| p.money).unwrap_or(0)

@@ -115,11 +115,11 @@ fn skip_all(t: &mut Table) {
     }
 }
 
-/// Did this step activate `card` (play or bare activation)?
+/// Did this step activate `card` (play or bare activation)? Keyed on the
+/// **engine act** (the play input), never on the `"card"` presentation
+/// event -- a lazy header must not move the frame window.
 fn activated(step: &Step<'_>, card: &str) -> bool {
-    step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == card && (e.kind == "play" || e.kind.is_empty())
-    })
+    step.act_is_play(card)
 }
 
 /// Money delta of `who` across the step.
@@ -574,7 +574,7 @@ pub fn c_gen_fever_04(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a FEVER! play / leave.
 pub fn c_gen_fever_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step.events.iter().any(|e| e.card == "通用:[衍生]FEVER!") {
+    if !step.act_is_card("通用:[衍生]FEVER!") {
         return Ok(());
     }
     let allowed = [
@@ -978,7 +978,7 @@ pub fn c_gen_tsugu_04(_step: &Step<'_>) -> Result<(), String> {
 /// Executable frame for a Tsugu play (teleport / buy / gain all land in one
 /// act or the answers that finish it).
 pub fn c_gen_tsugu_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step.events.iter().any(|e| e.card == "通用:@Tsugu ycm") {
+    if !step.act_is_card("通用:@Tsugu ycm") {
         return Ok(());
     }
     let who = step.player_of_act();
@@ -1228,10 +1228,7 @@ pub fn c_gen_party_03(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a THANKS PARTY play.
 pub fn c_gen_party_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step
-        .events
-        .iter()
-        .any(|e| e.card == "通用:CiRCLE THANKS PARTY!")
+    if !step.act_is_card("通用:CiRCLE THANKS PARTY!")
     {
         return Ok(());
     }
@@ -1651,10 +1648,7 @@ pub fn c_gen_parking_03(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a Parking Space play.
 pub fn c_gen_parking_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step
-        .events
-        .iter()
-        .any(|e| e.card == "通用:[都筑诗船]Parking Space")
+    if !step.act_is_card("通用:[都筑诗船]Parking Space")
     {
         return Ok(());
     }
@@ -1868,11 +1862,9 @@ pub fn c_gen_harvest_01(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a harvest play.
 pub fn c_gen_harvest_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step
-        .events
-        .iter()
-        .any(|e| e.card == "通用:尽力后的收获")
-    {
+    // Keyed on the engine act (the play input), never on the `"card"`
+    // presentation event -- a lazy header must not move the frame window.
+    if !step.act_is_play("通用:尽力后的收获") {
         return Ok(());
     }
     let who = step.player_of_act();
@@ -2362,10 +2354,7 @@ pub fn c_gen_rain_01(_step: &Step<'_>) -> Result<(), String> {
 
 /// Executable frame for a rain play.
 pub fn c_gen_rain_frame(step: &Step<'_>) -> Result<(), String> {
-    if !step
-        .events
-        .iter()
-        .any(|e| e.card == "通用:雨啊，快点来吧")
+    if !step.act_is_card("通用:雨啊，快点来吧")
     {
         return Ok(());
     }

@@ -25,11 +25,11 @@ use rules_spec::{forall, frame, Clause, Step, Table};
 
 // ---------------------------------------------------------------- helpers
 
-/// Card is the act's subject (a `play` of `CARD`, or a bare activation).
+/// Card is the act's subject -- keyed on the **engine act** (the play
+/// input), never on the `"card"` presentation event. A lazy header must not
+/// move the frame window into a later act.
 fn played(step: &Step<'_>, card: &str) -> bool {
-    step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == card && (e.kind == "play" || e.kind.is_empty())
-    })
+    step.act_is_play(card)
 }
 
 /// Decline every open prompt (setup drain).

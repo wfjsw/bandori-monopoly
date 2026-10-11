@@ -47,10 +47,8 @@ fn skip_all(t: &mut Table) {
 /// * **Frame:** the two money slots and the user's card zones.
 /// * **Executable:** this fn.
 fn declaration_consumes_the_card(step: &Step<'_>) -> Result<(), String> {
-    let played = step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == "AG:宣战布告" && (e.kind == "play" || e.kind == "counter")
-    });
-    if !played {
+    // Keyed on the engine act, not the `"card"` presentation event.
+    if !step.act_is_card("AG:宣战布告") {
         return Ok(());
     }
     // 「打出」 a non-[持续] hand card: it must leave the hand (rulebook-doc.md:126).

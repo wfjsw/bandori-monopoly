@@ -2395,11 +2395,11 @@ impl<M: CardModules> RulesBridge<M> {
             }
             _ => Msg::default(),
         };
-        // Ruling 2a: the header is lazy. Buffer it (with the field `uid` for
-        // the slot pulse); `flush_header` posts it immediately before the
-        // drive's first visible outcome. A drive that ends with nothing
-        // visible posts no header at all (a declined optional prompt leaves
-        // no trace).
+        // Ruling 2a: the header is lazy for **every** entry kind. It is
+        // buffered (with the field `uid` for the slot pulse) and posted
+        // immediately before the drive's first visible outcome; a drive that
+        // ends with nothing visible (a declined optional prompt, a
+        // bookkeeping write) posts no header at all.
         w.pending_header = Some(PendingHeader {
             kind: kind.to_string(),
             owner,

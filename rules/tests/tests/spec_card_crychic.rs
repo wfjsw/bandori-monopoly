@@ -14,12 +14,8 @@ use rules_spec::{forall, frame, Clause, Step, Table};
 
 /// Did this step activate `card` as a hand play / bare activation?
 fn played(step: &Step<'_>, card: &str) -> bool {
-    step.events.iter().any(|e| {
-        e.r#type == "card"
-            && e.card == card
-            && (e.kind == "play" || e.kind.is_empty())
-            && !e.negated
-    })
+    // Keyed on the engine act, not the `"card"` presentation event.
+    step.act_is_play(card)
 }
 
 /// Drain every open prompt with its fallback (setup / after-act tidy).

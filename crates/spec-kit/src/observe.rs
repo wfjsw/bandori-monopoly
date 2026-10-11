@@ -43,6 +43,16 @@ impl Observed {
 /// Perform `act` on `m`, run `settle` (the caller's rest loop), then check
 /// `clauses` over the whole transition.
 ///
+/// **Frames are delimited by engine-level boundaries** -- the act and its
+/// settle -- never by a presentation event (`"card"` activation, 「效果适用」
+/// header position, `flash` flag, `results` lines). A prompting drive spans
+/// two acts (the act that opens the prompt, the answer that continues it);
+/// frame predicates must key on [`Step::act`] / [`Step::act_is_play`] /
+/// [`Step::act_is_card`] (the engine input), not on scanning `step.events`
+/// for a card activation. Presentation events may move (lazy headers, flash
+/// elision) without changing the frame partition.
+///
+
 /// * `pre` is a clone of [`Match::world`] taken **before** the input. `World`
 ///   clones share the event tail by refcount, so this is cheap.
 /// * The event mark is the newest event id before the input; the window is

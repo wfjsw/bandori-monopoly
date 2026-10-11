@@ -178,12 +178,9 @@ pub fn c_ras_change_the_world_charge(_step: &Step<'_>) -> Result<(), String> {
 pub fn change_the_world_frame(step: &Step<'_>) -> Result<(), String> {
     // Frame the *play* only (hand → field). Later windows (the 3d20 walk,
     // the charge) move pos / crystals and are their own clauses.
-    let played = step.events.iter().any(|e| {
-        e.r#type == "card"
-            && e.card == "RAS:Change the world"
-            && (e.kind == "play" || e.kind.is_empty())
-    });
-    if !played || step.post_prompt_open {
+    // Keyed on the engine act (the play input), never on the `"card"`
+    // presentation event -- a lazy header must not move the frame window.
+    if !step.act_is_play("RAS:Change the world") || step.post_prompt_open {
         return Ok(());
     }
     let who = step.player_of_act();

@@ -300,7 +300,7 @@ fn black_birthday_contract() {
 ///   「前方」. OPEN-触发结算 is not involved here.
 /// * **Executable:** [`rain_stay_layers`].
 fn rain_stay_layers(step: &Step<'_>) -> Result<(), String> {
-    let played = step.events.iter().any(|e| e.r#type == "card" && e.card == RAIN);
+    let played = step.act_is_card(RAIN);
     if !played {
         return Ok(());
     }
@@ -336,7 +336,7 @@ fn rain_stay_layers(step: &Step<'_>) -> Result<(), String> {
 
 /// C-MUJICA-心の雨-02 -- roll `<=12` -> 1 stay; `<=3` -> **2** stay (not 1+2).
 fn rain_stay_amount(step: &Step<'_>) -> Result<(), String> {
-    let played = step.events.iter().any(|e| e.r#type == "card" && e.card == RAIN);
+    let played = step.act_is_card(RAIN);
     if !played {
         return Ok(());
     }
@@ -392,7 +392,7 @@ fn rain_stay_amount(step: &Step<'_>) -> Result<(), String> {
 
 /// C-MUJICA-心の雨-03 -- nobody gained [停留] -> user +1 [晕眩] and +1000.
 fn rain_miss_self_stun(step: &Step<'_>) -> Result<(), String> {
-    let played = step.events.iter().any(|e| e.r#type == "card" && e.card == RAIN);
+    let played = step.act_is_card(RAIN);
     if !played {
         return Ok(());
     }
