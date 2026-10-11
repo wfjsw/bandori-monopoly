@@ -241,12 +241,18 @@ run_one() {
 
   if [[ $exit_code -eq 124 || $exit_code -eq 137 ]]; then
     verdict="TIMEOUT"
-  elif grep -q 'unmodeled host op' "$log" 2>/dev/null; then
-    verdict="UNMODELED"
   elif grep -qi 'VERIFICATION:- SUCCESSFUL' "$log" 2>/dev/null; then
+    # A CBMC verdict line always wins: the host's `unmodeled host op` assert
+    # string is compiled into every rules-kani binary and shows up in the
+    # check list of every run, so it is NOT evidence of an unmodeled op.
     verdict="SUCCESSFUL"
   elif grep -qi 'VERIFICATION:- FAILED' "$log" 2>/dev/null; then
-    verdict="FAILED"
+    # UNMODELED only when the failing check IS the unmodeled-op assertion.
+    if grep -qE 'Failed Checks:.*unmodeled host op' "$log" 2>/dev/null; then
+      verdict="UNMODELED"
+    else
+      verdict="FAILED"
+    fi
   elif [[ $exit_code -eq 0 ]]; then
     # Some kani versions only print CHECKS; accept exit 0 as successful
     # only when the log does not claim a failure.
