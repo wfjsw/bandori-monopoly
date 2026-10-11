@@ -401,7 +401,7 @@ impl Run {
             who,
             Msg::new(mk)
                 .player_id("who", who)
-                .text("key", key)
+                .msg("key", crate::trigger_why::state_key_name(key))
                 .i("value", now as i64)
                 .i("from", was as i64),
         );
@@ -959,7 +959,7 @@ impl CardWorld for Run {
                 who,
                 Msg::new("log.outcome.counter")
                     .card("card", self.current_card.clone())
-                    .text("name", name.to_string())
+                    .msg("name", crate::trigger_why::counter_name(name))
                     .i("value", now - was),
             );
         }
@@ -976,7 +976,7 @@ impl CardWorld for Run {
                 who,
                 Msg::new("log.outcome.counter")
                     .card("card", self.current_card.clone())
-                    .text("name", name.to_string())
+                    .msg("name", crate::trigger_why::counter_name(name))
                     .i("value", now - was),
             );
         }
@@ -1131,7 +1131,7 @@ impl CardWorld for Run {
                 who,
                 Msg::new("log.outcome.mark_remove")
                     .tile("tile", tile)
-                    .text("kind", String::new())
+                    .msg("kind", crate::trigger_why::mark_kind_name(""))
                     .i("n", got.abs() as i64),
             );
         }
@@ -1276,7 +1276,7 @@ impl CardWorld for Run {
             let cap = s.map(|p| p.fire_max()).unwrap_or(0);
             let fire = s.map(|p| p.fire()).unwrap_or(0);
             let msg = Msg::new("log.gain_fire")
-                .text("who", s.map(|p| p.player.clone()).unwrap_or_default())
+                .player_id("who", player_id)
                 .i("n", got as i64)
                 .msg("why", why)
                 .i("fire", fire as i64)

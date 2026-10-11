@@ -216,7 +216,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         // raise point still says what it is until it gets a phrase.
         other => Msg::new("log.why.generic")
             .player_id("who", who)
-            .text("kind", other.as_str()),
+            .msg("kind", kind_name(other.as_str())),
     }
 }
 
@@ -234,12 +234,51 @@ pub fn counteract_reason(answered_card: &str, answered: &Trigger) -> Msg {
     }
 }
 
-/// A named on-card counter, as its rulebook bracket. Unknown names keep their
-/// wire spelling so a card-declared counter still shows something.
-fn counter_name(name: &str) -> Msg {
+/// A named on-card counter, as its rulebook bracket. Unknown names become a
+/// nested `log.counter.other` so the wire spelling is still quoted -- never a
+/// raw `Text` arg (those are for player-entered names only).
+pub fn counter_name(name: &str) -> Msg {
     match name {
-        "crystals" => Msg::new("log.counter.crystals"),
-        "cp" => Msg::new("log.counter.cp"),
+        "crystals" | card_sdk::abi::counter::CRYSTALS => Msg::new("log.counter.crystals"),
+        "cp" | card_sdk::abi::counter::CP => Msg::new("log.counter.cp"),
         other => Msg::new("log.counter.other").text("name", other),
     }
+}
+
+/// A trigger-kind wire name, for the generic why fallback. Never raw.
+fn kind_name(kind: &str) -> Msg {
+    Msg::new("log.kind.wire").text("name", kind)
+}
+
+/// A rulebook-visible state key, as its display phrase. Scratch keys never
+/// reach here (`outcome_state` filters them out).
+pub fn state_key_name(key: &str) -> Msg {
+    match key {
+        card_sdk::abi::state_key::HAND_LIMIT => Msg::new("log.state.hand_limit"),
+        card_sdk::abi::state_key::FIRE => Msg::new("log.state.fire"),
+        card_sdk::abi::state_key::STAY => Msg::new("log.state.stay"),
+        card_sdk::abi::state_key::STUN | card_sdk::abi::state_key::STUN_START => {
+            Msg::new("log.state.stun")
+        }
+        card_sdk::abi::state_key::EXILE
+        | card_sdk::abi::state_key::EXILE_TO
+        | card_sdk::abi::state_key::EXILE_MAIN => Msg::new("log.state.exile"),
+        card_sdk::abi::state_key::NO_HAND => Msg::new("log.state.no_hand"),
+        card_sdk::abi::state_key::UNSTOPPABLE => Msg::new("log.state.unstoppable"),
+        card_sdk::abi::state_key::START_HAND => Msg::new("log.state.start_hand"),
+        card_sdk::abi::state_key::SKILL_STATE => Msg::new("log.state.skill_state"),
+        other => Msg::new("log.state.other").text("name", other),
+    }
+}
+
+/// A tile-mark kind. The kind string **is** the i18n key (one mechanism,
+/// shared with the designation work): `mark:cp`, `mark:designate`,
+/// `skillBlock`, `ember`, or a card's own display name (怪盗标记). The view
+/// resolves known keys and falls back to the literal, so a raw key never
+/// reaches the player as a `Text` arg. Empty kind becomes `log.mark.none`.
+pub fn mark_kind_name(kind: &str) -> Msg {
+    if kind.is_empty() {
+        return Msg::new("log.mark.none");
+    }
+    Msg::new(kind)
 }
