@@ -703,13 +703,8 @@ impl Match {
             {
                 let live_skip = self.world.st.skip_move;
                 let main_moved = self.world.turn.main_moved;
-                let over_hand = self
-                    .world
-                    .hidden
-                    .get(ti)
-                    .map(|h| h.hand.len() as i32)
-                    .unwrap_or(0)
-                    > st.players.get(ti).map(|p| p.hand_limit()).unwrap_or(5);
+                let held = self.world.hidden.get(ti).map_or(0, |h| h.hand.len());
+                let over_hand = st.players.get(ti).is_some_and(|p| p.over_hand(held));
                 let my_turn = st.turn == ti as i32;
                 let owes_roll = st.step == stage::OPS && !live_skip && !main_moved;
                 st.can_roll_here = my_turn
@@ -2319,7 +2314,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
                 return Some(Msg::new("err.moving"));
             }
             if cx.over_hand(i) {
-                return Some(Msg::new("err.over_hand").i("limit", cx.w.st.players[i].hand_limit() as i64));
+                return Some(Msg::new("err.over_hand").i("limit", i64::from(cx.w.st.players[i].hand_limit().unwrap_or_default())));
             }
             None
         }

@@ -2,11 +2,12 @@
 // popups.
 
 import { D } from "../../core/data";
+import { overHand } from "../../core/hand";
 import type { CharacterData, Command, MatchPlayer, MatchState, MatchView } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { toast } from "../../ui/Toast";
 import { fmtMsg } from "../../i18n/msg";
-import { namesOf, stateOf } from "../../core/names";
+import { namesOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
 
 const FALLBACK_COLORS = ["#ED4E76", "#6BBAF1", "#F6B21E", "#4CC38A", "#C97DFC", "#EE5E4A", "#3EC1C9", "#E05CCF", "#8BBF2A", "#7C8796"];
@@ -45,7 +46,7 @@ export function model(v: MatchView): Model {
     charOf,
     colorOf: (i) => charOf(i)?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length],
     nameOf: (i) => (i === v.playerId && i >= 0 ? tr("common.you") : namesOf(S).playerId(i)),
-    overHand: v.hand.length > (stateOf(me, "handLimit") || 5),
+    overHand: overHand(me, v.hand.length),
   };
 }
 

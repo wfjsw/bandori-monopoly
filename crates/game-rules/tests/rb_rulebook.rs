@@ -144,7 +144,7 @@ fn gf02_mulligan_is_offered_once_then_gone() {
 #[test]
 fn gf03_hand_limit_is_five_and_overdraw_discards_down() {
     let mut t = Table::vanilla(2);
-    assert_eq!(t.p(0).hand_limit(), 5, "base hand limit is 5");
+    assert_eq!(t.p(0).hand_limit(), Some(5), "base hand limit is 5");
     t.set_hand(
         0,
         &[

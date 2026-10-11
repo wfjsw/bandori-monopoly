@@ -71,7 +71,7 @@ fn json_defaults_match_csharp_initializers() {
     assert!(!s.active());
 
     let player_id: MatchPlayer = serde_json::from_str(r#"{"bankrupt":true}"#).unwrap();
-    assert_eq!((player_id.hand_limit(), player_id.exile_to()), (5, -1));
+    assert_eq!((player_id.hand_limit(), player_id.exile_to()), (Some(5), -1));
     assert!(player_id.out());
 
     let e: MatchEvent = serde_json::from_str(r#"{"id":7,"type":"dice"}"#).unwrap();

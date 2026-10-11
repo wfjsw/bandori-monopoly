@@ -688,7 +688,7 @@ fn guide_hand_limit_and_turn_end_crystal() {
     t.give_play(0, "PP:练习生解密指南").unwrap();
     drain(&mut t);
     assert!(t.on_field(0, "PP:练习生解密指南"), "{:?}", t.field_ids(0));
-    assert_eq!(t.p(0).hand_limit(), 4, "handLimit 5-1");
+    assert_eq!(t.p(0).hand_limit(), Some(4), "handLimit 5-1");
     assert_eq!(
         t.crystals(0, "PP:练习生解密指南").unwrap_or(0),
         2,
@@ -1062,7 +1062,7 @@ fn expect_reduces_hand_limit() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "PP:不要背负期待").unwrap();
     drain(&mut t);
-    assert_eq!(t.p(0).hand_limit(), 4);
+    assert_eq!(t.p(0).hand_limit(), Some(4));
 }
 
 /// 规则书: 「（2）[拥有者]不可盖房且手卡上限数量减1。」(梦在前方)
@@ -1070,7 +1070,7 @@ fn expect_reduces_hand_limit() {
 fn dream_ahead_reduces_hand_limit() {
     let mut t = Table::vanilla(2);
     t.place_raw(0, "PP:梦在前方，结彩当下");
-    assert_eq!(t.p(0).hand_limit(), 4);
+    assert_eq!(t.p(0).hand_limit(), Some(4));
 }
 
 /// 规则书: 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」(初次演出事故)

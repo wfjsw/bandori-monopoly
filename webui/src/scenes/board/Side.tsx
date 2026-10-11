@@ -1,6 +1,7 @@
 // Compact turn controls at the bottom left; the Hand is docked below the map.
 
 import { useRef, useState, type CSSProperties } from "react";
+import { handLimit } from "../../core/hand";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle, cardText } from "../../core/data";
@@ -26,7 +27,7 @@ import { movementControl } from "./turnFlow";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
-import { namesOf, stateOf } from "../../core/names";
+import { namesOf } from "../../core/names";
 
 export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Animator }) {
   const auto = useAutoplay(sess);
@@ -154,7 +155,6 @@ function SkillStack({ m, sess, peek, unpeek }: {
   };
   return (
     <div className={s.skillStack}>
-      <div className={s.skillHead}>{tr("board.skillCards", { n: slots.length })}</div>
       <div className={s.skillRow}>
         {slots.map((a) => {
           const usable = a.enabled && !auto && !sess.readOnly && !sheet.open;
@@ -243,7 +243,7 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   // A raised sheet owns the band above the bar -- the fan stays down behind it.
   const dock = useDockRaise({ blocked: sheet.raised });
   const S = m.S;
-  const limit = stateOf(m.me, "handLimit") || 5;
+  const limit = handLimit(m.me);
   const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy && !auto;
   // Hovering a card lifts it and feeds the standing card panel.
   const peekCard = (id: string, note: string, text?: string) => {
@@ -270,13 +270,13 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
-  // Left skill stack: its width is reserved out of the fan's budget so the two
-  // never collide. `--skill-stack-w` pads the fan's centring box; `spread`
-  // tightens the fan's own slot step to whatever is left of the centre column.
+  // Left skill stack: the fan stays centred on the column regardless; its
+  // spread reserves the stack's width on *both* sides, so a wide hand tightens
+  // symmetrically and never runs under the stack.
   const skillN = skillSlots(m).length;
   const skillStep = skillN > 1 ? Math.min(SKILL_STEP, (240 - SKILL_CARD_W) / (skillN - 1)) : SKILL_STEP;
   const skillW = skillN ? SKILL_CARD_W + (skillN - 1) * skillStep + SKILL_FAN_GAP : 0;
-  const fanSpread = Math.min(660, Math.max(0, BOARD_MID - skillW - 120));
+  const fanSpread = Math.min(660, Math.max(0, BOARD_MID - 2 * skillW - 120));
   // The preview is `pointer-events: none` (it sits above the hand, not under
   // the cursor), so a long card text is scrolled from the hovered card:
   // the wheel over the dock (fan or skill stack), or PgUp/PgDn/↑/↓ while a
@@ -316,7 +316,7 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
         className={s.dock}
         data-state={dock.raised ? "raised" : "retracted"}
         data-sheet={sheet.open && !sheet.raised ? "down" : "up"}
-        style={{ ["--skill-stack-w" as string]: `${skillW}px`, ["--skill-step" as string]: `${skillStep}px` }}
+        style={{ ["--skill-step" as string]: `${skillStep}px` }}
         ref={dockRef}
         {...dock.hover}
       >
@@ -345,7 +345,7 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
           ))}
         </div>
         <div className={s.bar}>
-          <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit })}</PanelTab>
+          <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit ?? "∞" })}</PanelTab>
           <span className={cx(s.handHint, m.overHand && s.warn)}>{m.overHand ? tr("board.overHand") : canPlay ? tr("board.canPlay") : tr("board.tapCard")}</span>
           {/* Your draw pile, at the head of the hand it feeds (it used to sit in
               the board centre). Hover lists what is left; click opens the cards. */}

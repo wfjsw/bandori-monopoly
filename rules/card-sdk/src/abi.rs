@@ -373,6 +373,10 @@ pub mod state_key {
     pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit.
     pub const HAND_LIMIT: &str = "handLimit";
+    /// The [`HAND_LIMIT`] value meaning 「手牌数没有上限」 (no limit). The
+    /// key is an `i32` on the wire; the host reads this value as "no limit"
+    /// (`MatchPlayer::hand_limit` -> `None`), never as a count.
+    pub const NO_HAND_LIMIT: i32 = i32::MAX;
     /// The authoritative opening hand size (default 2; effects may lower it,
     /// minimum 0). Written at the before-match-start point, read by the opening
     /// draw. Replaces the old ignored `startHandMinus` slot.

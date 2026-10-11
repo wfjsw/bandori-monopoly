@@ -165,8 +165,9 @@
    below the hand (`--fan-a`), the outer ones lower and tilted outward, the
    centre one highest (`--fan-y`). The spread adapts to the hand size through
    `--fan-slot` (the step between card centres), so 1-10 cards read the same.
-   `--skill-stack-w` (set by Hand) is the left reserve for the skill stack: the
-   fan recentres in what remains and never runs under the stack. Retracted by
+   The fan stays centred on the column whatever the skill stack holds; Hand
+   narrows its spread instead (reserving the stack's width on both sides), so
+   it never runs under the stack. Retracted by
    default (`translateY` drops all but the top `--hand-peek` of the arc -- the
    highest, centre card -- behind the bar); the raised state slides the whole
    row up. The fan itself is click-through -- only the cards' own boxes capture
@@ -177,7 +178,6 @@
   display: flex;
   justify-content: center;
   align-items: stretch;
-  padding-left: var(--skill-stack-w, 0px);
   pointer-events: none;
   transform: translateY(calc(100% - var(--hand-peek) - var(--fan-rise, 0px)));
   transition: transform var(--dur-slow) var(--ease-sheet);
@@ -382,10 +382,10 @@
 }
 
 /* The skill stack: the player's pressable skills as a dense horizontal row on
-   the left of the hand fan, rising and retracts with it (only its header peeks
-   while down). Straight -- no arc -- and overlapped tighter than the fan so
+   the left of the hand fan, rising and retracting with it (the cards' top strip
+   peeks while down). Straight -- no arc -- and overlapped tighter than the fan so
    1-4 cards read as one short strip. Hover lifts a card to the top of the
-   stack; the fan's left reserve (`--skill-stack-w`) keeps the two apart. */
+   stack; the fan's narrowed spread (Hand) keeps the two apart. */
 .skillStack {
   position: absolute;
   left: 0;
@@ -399,20 +399,6 @@
 }
 .dock[data-state="raised"] .skillStack {
   transform: translateY(0);
-}
-.skillHead {
-  flex: none;
-  pointer-events: auto;
-  align-self: flex-start;
-  padding: 3px 10px;
-  border-radius: var(--r-md) var(--r-md) 0 0;
-  background: var(--panel);
-  border: 1.5px solid var(--line);
-  border-bottom: none;
-  color: var(--sub);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 .skillRow {
   display: flex;

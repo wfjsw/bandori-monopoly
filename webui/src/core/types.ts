@@ -73,6 +73,9 @@ export interface FieldCard {
    *  their own fields). Serde-defaulted `{}` on older frames. */
   counters: Record<string, number>;
   faceDown: boolean;
+  /** Continuous numeric props on the instance (e.g. `handLimitDelta`,
+   *  「手卡上限数量减1」). Serde-defaulted `{}`. */
+  props?: Record<string, number>;
   /** This instance is a band skill (`skill:<band>:<skill>`); its `crystals` are the band-card pool. */
   bandSkill?: boolean;
   note: Msg;

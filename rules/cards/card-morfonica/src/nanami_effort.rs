@@ -161,7 +161,11 @@ fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
     // itself, so lift it for the draw and put it back (the limit is keyed state,
     // which is what `NoLimitFx` was an attachment for).
     let cap = ctx::state::get(player_id, card_sdk::abi::state_key::HAND_LIMIT);
-    ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, i32::MAX);
+    ctx::state::set(
+        player_id,
+        card_sdk::abi::state_key::HAND_LIMIT,
+        card_sdk::abi::state_key::NO_HAND_LIMIT,
+    );
     ctx::draw(player_id, x)?;
     ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, cap);
     // 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C#

@@ -45,7 +45,7 @@ fn in_lock(player_id: i32) -> bool {
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // （1）「你的手牌数没有上限」 -- the engine's hand cap is the `handLimit` key.
-    state::set(player_id, state_key::HAND_LIMIT, i32::MAX);
+    state::set(player_id, state_key::HAND_LIMIT, state_key::NO_HAND_LIMIT);
     state::set(player_id, SEEN, ctx::hand_size(player_id));
     Ok(())
 }

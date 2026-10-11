@@ -365,6 +365,10 @@ pub mod key {
     pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit (base 5; effects may cut or lift it).
     pub const HAND_LIMIT: &str = "handLimit";
+    /// The [`HAND_LIMIT`] value meaning 「手牌数没有上限」. Mirrors
+    /// `card_sdk::abi::state_key::NO_HAND_LIMIT`; [`MatchPlayer::hand_limit`]
+    /// turns it into `None`.
+    pub const NO_HAND_LIMIT: i32 = i32::MAX;
     /// The authoritative opening hand size (default 2; effects may lower it,
     /// minimum 0). Written at the before-match-start point and read by the
     /// opening draw. Mirrors `card_sdk::abi::state_key::START_HAND`.
@@ -815,14 +819,25 @@ impl MatchPlayer {
 
     /// Hand size limit: the `handLimit` state (base 5, cards may cut or lift
     /// it) plus every placed card's continuous `prop::HAND_LIMIT_DELTA`
-    /// (「手卡上限数量减1」).
-    pub fn hand_limit(&self) -> i32 {
+    /// (「手卡上限数量减1」). `None` is 「手牌数没有上限」
+    /// ([`key::NO_HAND_LIMIT`]); no delta brings a lifted limit back.
+    pub fn hand_limit(&self) -> Option<i32> {
+        let base = self.state_get(key::HAND_LIMIT);
+        if base == key::NO_HAND_LIMIT {
+            return None;
+        }
         let field: i32 = self
             .field
             .iter()
             .map(|f| f.props.get(prop::HAND_LIMIT_DELTA).copied().unwrap_or(0))
             .sum();
-        self.state_get(key::HAND_LIMIT) + field
+        Some(base.saturating_add(field))
+    }
+
+    /// Holding `held` cards puts this player over the hand limit.
+    pub fn over_hand(&self, held: usize) -> bool {
+        self.hand_limit()
+            .is_some_and(|limit| held > usize::try_from(limit).unwrap_or(0))
     }
 
     pub fn skill_state(&self) -> i32 {

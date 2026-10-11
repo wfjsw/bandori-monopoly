@@ -4176,8 +4176,7 @@ impl Cx<'_> {
     /// The player's own `handLimit` state (cards
     /// can raise or cut it), not the base constant.
     pub(crate) fn over_hand(&self, i: usize) -> bool {
-        let limit = self.w.st.players[i].hand_limit();
-        self.w.hidden[i].hand.len() as i32 > limit
+        self.w.st.players[i].over_hand(self.w.hidden[i].hand.len())
     }
 
     /// From the top of the pile; reshuffle the discard pile when empty.
@@ -4272,7 +4271,7 @@ impl Cx<'_> {
         if hooks && got > 0 {
             let over = self.over_hand(i).then(|| {
                 Msg::new("log.part.over_hand")
-                    .i("limit", self.w.st.players[i].hand_limit() as i64)
+                    .i("limit", i64::from(self.w.st.players[i].hand_limit().unwrap_or_default()))
             });
             self.w
                 .log(
@@ -4313,7 +4312,7 @@ impl Cx<'_> {
             h.hand.remove(k);
         }
         h.discard.push(card.to_string());
-        let limit = self.w.st.players[i].hand_limit() as i64;
+        let limit = i64::from(self.w.st.players[i].hand_limit().unwrap_or_default());
         self.w
             .log(
                 "discard",

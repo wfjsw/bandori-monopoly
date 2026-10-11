@@ -864,8 +864,12 @@ impl World {
             got += 1;
         }
         if got > 0 {
-            let over = (self.hidden[i].hand.len() > self.st.players[i].hand_limit() as usize)
-                .then(|| Msg::new("log.part.over_hand").i("limit", self.st.players[i].hand_limit()));
+            let over = self.st.players[i]
+                .over_hand(self.hidden[i].hand.len())
+                .then(|| {
+                    Msg::new("log.part.over_hand")
+                        .i("limit", self.st.players[i].hand_limit().unwrap_or_default())
+                });
             self.log(
                 "draw",
                 player_id,

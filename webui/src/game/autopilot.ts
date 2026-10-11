@@ -19,7 +19,8 @@
 // order), and return an ordered candidate list so a refused command is marked
 // tried and the next one is attempted instead of looping.
 
-import type { Command, MatchPrompt, MatchPlayer, MatchState, MatchView, TileData } from "../core/types";
+import type { Command, MatchPrompt, MatchState, MatchView, TileData } from "../core/types";
+import { overHand } from "../core/hand.ts";
 
 // ---------------------------------------------------------------- policy knobs
 // `bot` mirrors crates/game-core/src/engine/ai.rs. Keep the two in sync.
@@ -244,10 +245,8 @@ export const mortgageValue = (tiles: TileData[], t: number) => Math.floor(tiles[
 /** `RedeemCost` -- 60% of the land price (matches `model.ts`). */
 export const redeemCost = (tiles: TileData[], t: number) => Math.round(tiles[t].price * 0.6);
 
-/** `HandLimitOf` / `OverHand` -- the player's own `handLimit` state. */
-export function handLimit(me: MatchPlayer): number {
-  return me.state?.handLimit?.value || 5;
-}
+/** The player's hand limit (`core/hand.ts`; `null` = no limit). */
+export { handLimit } from "../core/hand.ts";
 
 /** `BuyableHere` -- after a main move onto unowned land, in 结束. */
 export function buyableHere(S: MatchState, tiles: TileData[], me: number, i: number): boolean {
@@ -887,7 +886,7 @@ export function plan(view: MatchView, ctx: AutopilotCtx, mode: PolicyName): Comm
   if (S.busy) return [];
 
   // 5. Over the hand limit: discard first (legal on any turn).
-  if (view.hand.length > handLimit(mine)) return policy.discard(view, ctx);
+  if (overHand(mine, view.hand.length)) return policy.discard(view, ctx);
 
   // 6. Turn input: only on my turn (rolling is the one exception -- `S.roller`
   //    may be someone else rolling for the turn player).

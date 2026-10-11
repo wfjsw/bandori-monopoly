@@ -458,9 +458,8 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
     let me = player_id.max(0) as usize;
     // Over the hand limit: `end` is refused (`err.over_hand`) until the hand
     // is down to the limit -- `ai_step`'s discard branch.
-    let limit = st.players.get(me).map(|p| p.hand_limit()).unwrap_or(5);
     let hand = &view.hand;
-    if hand.len() as i32 > limit {
+    if st.players.get(me).is_some_and(|p| p.over_hand(hand.len())) {
         if let Some(c) = hand.first() {
             return NetMessage {
                 act: "discard".into(),
@@ -556,9 +555,8 @@ pub fn heuristic_message_with(
     // Turn surface. Same order as `heuristic_message_view`; hand is only
     // needed for the over-hand discard branch.
     let me = player_id.max(0) as usize;
-    let limit = st.players.get(me).map(|p| p.hand_limit()).unwrap_or(5);
     let (hand_len, first) = fork.hand_len_first(member);
-    if hand_len as i32 > limit {
+    if st.players.get(me).is_some_and(|p| p.over_hand(hand_len)) {
         if let Some(c) = first {
             return NetMessage {
                 act: "discard".into(),

@@ -716,9 +716,8 @@ fn crychic_band_skill_hand_limit_none() {
         decline_q(&mut t);
     }
     // 规则书: 「你的手牌数没有上限」
-    // The hand limit should be very high (or no limit).
-    let limit = t.p(0).hand_limit();
-    assert!(limit >= 20 || limit <= 0, "hand limit is open-ended: {limit}");
+    assert_eq!(t.p(0).hand_limit(), None, "no hand limit");
+    assert!(!t.p(0).over_hand(99), "no hand count is over an absent limit");
 }
 
 #[test]

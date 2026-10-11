@@ -37,7 +37,7 @@ export const SHEET_STRIP = 60;
 export const FIELD_PEEK = 60;
 /** Hand fan peek above the bottom edge (Side `.fan`). */
 export const HAND_PEEK = 30;
-/** Skill-stack header peek (Side `.skillStack`). */
+/** Skill-stack peek: the top strip of the skill cards while the hand is retracted (Side `.skillStack`). */
 export const SKILL_PEEK = 28;
 /** Skill-stack card face width (Side `.skillCard`, Card `tile`). */
 export const SKILL_CARD_W = 96;
