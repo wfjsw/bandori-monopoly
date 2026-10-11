@@ -18,11 +18,13 @@ Classification: PROVEN | FAILS | PROTOCOL-LEVEL | BLOCKED-HOST | OPEN | TIMEOUT/
 
 | classification | card clauses | skill clauses | total |
 |---|---:|---:|---:|
-| PROVEN | 7 | 2 | 9 |
+| PROVEN (harness SUCCESSFUL) | 1 | 0 | 1 |
+| PROVEN-LEAF (harness written; verdict pending / sub-cap) | 2 | 2 | 4 |
 | FAILS | 0 | 0 | 0 |
+| TIMEOUT/OOM (harness written, CBMC cliff) | 2 | 0 | 2 |
 | PROTOCOL-LEVEL | 30 | 5 | 35 |
 | BLOCKED-HOST | 8 | 3 | 11 |
-| OPEN (text undefined; only what the text pins is proved) | 5 | 2 | 7 |
+| OPEN (text undefined; only what the text pins is proved) | 7 | 2 | 9 |
 | **total** | **50** | **12** | **62** |
 
 Rows can carry both an OPEN tag and a classification of the pinned part; the
@@ -80,8 +82,8 @@ PROTOCOL-LEVEL, never a silent zero.
 | ID | book quote (short) | class | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | C-RAS-riot-01 | 「[反击] 当你被其他人的卡效果影响时」 | PROTOCOL-LEVEL | — | — | [反击] window is engine chain | — |
-| C-RAS-riot-02 | 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡」 | **PROVEN** | `riot_02_03_cycle_iff` | see results | body leaf proved over `hand_resonance` hands | — |
-| C-RAS-riot-03 | 「你额外抽1张卡」 | **PROVEN** | `riot_02_03_cycle_iff`, `riot_03_extra_draw_mutant_is_detected` | see results | same leaf; mutant detects missing extra draw | — |
+| C-RAS-riot-02 | 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡」 | TIMEOUT/OOM | `riot_02_03_cycle_iff` | TIMEOUT 900s | body leaf written; CBMC stuck on `Vec` drop from `ctx::cards_in` | — |
+| C-RAS-riot-03 | 「你额外抽1张卡」 | TIMEOUT/OOM | `riot_02_03_cycle_iff`, `riot_03_extra_draw_mutant_is_detected` | pending | same leaf; mutant written | — |
 
 ### RAS:Repaint — 3 clauses
 
@@ -97,7 +99,7 @@ PROTOCOL-LEVEL, never a silent zero.
 |---|---|---|---|---|---|---|
 | C-RAS-unstoppable-card-01 | 「投掷1d6…传送至白雪学园…CHUCHU的公寓」 | BLOCKED-HOST | — | — | `tile_named` cannot resolve the six destinations; `plan::set_teleport_to` is a stub | OPEN-unstoppable-mod |
 | C-RAS-unstoppable-card-02 | 「本次传送不触发结算，视为你的主要移动」 | PROTOCOL-LEVEL | — | — | move-plan `set_resolve(false)` + `card_move` | — |
-| C-RAS-unstoppable-card-03 | 「若骰点为1-3获得2000资金，若为4-6则获得1000资金」 | **PROVEN** | `unstoppable_card_03_money_iff`, `…_noop_when_out`, `…_mutant_is_detected` | see results | money half is fully observable (`GainMoney`) | OPEN-unstoppable-mod (face 6) |
+| C-RAS-unstoppable-card-03 | 「若骰点为1-3获得2000资金，若为4-6则获得1000资金」 | **PROVEN** | `unstoppable_card_03_money_iff`, `…_noop_when_out`, `…_mutant_is_detected` | SUCCESSFUL 122s / 104s / 116s | money half is fully observable (`GainMoney`) | OPEN-unstoppable-mod (face 6) |
 
 ### RAS:成为最强 — 3 clauses
 
@@ -152,7 +154,7 @@ PROTOCOL-LEVEL, never a silent zero.
 
 | ID | book quote (short) | class | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-RAS-pareo-01 | 「获得2个PAREO标记」 | **PROVEN** (sub-cap) + BLOCKED-HOST (cap) | `pareo_01_marks_iff`, `pareo_01_marks_mutant_is_detected` | see results | +2 marks is exact when pre ≤ 1; `add_held` ignores max=3 | — |
+| C-RAS-pareo-01 | 「获得2个PAREO标记」 | PROVEN-LEAF (sub-cap) + BLOCKED-HOST (cap) | `pareo_01_marks_iff`, `pareo_01_marks_mutant_is_detected` | written, pending | +2 marks is exact when pre ≤ 1; `add_held` ignores max=3 | — |
 | C-RAS-pareo-02 | 「视为你的房屋总数增加」 | PROTOCOL-LEVEL | — | — | listener offer (鳰原令王那 (2)) is a cross-skill hook | — |
 | C-RAS-pareo-03 | 「可选择移除任意你拥有的格子上的一层房屋」 | PROTOCOL-LEVEL | — | — | optional prompt + `add_house` is covered only in the full play; isolated as declined in the mark proof | — |
 
@@ -183,7 +185,7 @@ PROTOCOL-LEVEL, never a silent zero.
 
 | ID | book quote (short) | class | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-RAS-rio-01 | 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」 | **PROVEN** (leaf +1) + BLOCKED-HOST (cap) | `rio_01_fire_gain_leaf` | see results | body requests +1 `GainFire`; cap 「上限1」 needs `gain_fire` clamp + `state_set` MAX field | — |
+| C-RAS-rio-01 | 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」 | PROVEN-LEAF (leaf +1) + BLOCKED-HOST (cap) | `rio_01_fire_gain_leaf` | written, pending | body requests +1 `GainFire`; cap 「上限1」 needs `gain_fire` clamp + `state_set` MAX field | — |
 | C-RAS-rio-02 | 「进行任意掷骰后，可选择使用一个[火罐]再投一次」 | BLOCKED-HOST / PROTOCOL-LEVEL | — | — | `trig_move_roll` unmodeled (KANI-COVERAGE); reroll chain | — |
 
 ### 朝日六花 — 瞄准目标
@@ -197,7 +199,7 @@ PROTOCOL-LEVEL, never a silent zero.
 
 | ID | book quote (short) | class | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-RAS-masking-01 | 「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]（初始0，上限2）」 | **PROVEN** (leaf +1) + BLOCKED-HOST (cap) | `masking_01_fire_gain_leaf`, `fire_pass_gain_mutant_is_detected` | see results | body requests +1 `GainFire`; cap needs host clamp | — |
+| C-RAS-masking-01 | 「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]（初始0，上限2）」 | PROVEN-LEAF (leaf +1) + BLOCKED-HOST (cap) | `masking_01_fire_gain_leaf`, `fire_pass_gain_mutant_is_detected` | written, pending | body requests +1 `GainFire`; cap needs host clamp | — |
 | C-RAS-masking-02 | 「移动阶段前可使用X个[火罐]…额外添加Xd10」 | PROTOCOL-LEVEL | — | — | `spend_fire` + `plan::add_extra_dice` (stub) | — |
 
 ### 鳰原令王那 — 梦幻可爱♪女仆
@@ -232,16 +234,23 @@ Filled from `tools/kani/run.sh --unit ras` / `--unit skills_ras`
 
 | harness | unit | verdict | time (s) | notes |
 |---|---|---|---:|---|
-| `unstoppable_card_03_money_iff` | ras | (pending) | | iff: GainMoney 2000/1000 by face |
-| `unstoppable_card_03_money_noop_when_out` | ras | (pending) | | out player: empty log, frame |
-| `unstoppable_card_03_money_mutant_is_detected` | ras | (pending) | | 1100 ≠ 1000 |
-| `riot_02_03_cycle_iff` | ras | (pending) | | discard-all + redraw h (+1 holder) |
-| `riot_03_extra_draw_mutant_is_detected` | ras | (pending) | | no-extra-draw disagrees |
-| `pareo_01_marks_iff` | ras | (pending) | | +2 PAREO, pre ≤ 1 |
-| `pareo_01_marks_mutant_is_detected` | ras | (pending) | | +3 ≠ +2 |
-| `masking_01_fire_gain_leaf` | skills_ras | (pending) | | +1 GainFire leaf |
-| `rio_01_fire_gain_leaf` | skills_ras | (pending) | | +1 GainFire leaf |
-| `fire_pass_gain_mutant_is_detected` | skills_ras | (pending) | | +2 ≠ +1 |
+| `unstoppable_card_03_money_iff` | ras | **SUCCESSFUL** | 122 | `VERIFICATION:- SUCCESSFUL`. Runner label `UNMODELED` is a false positive: the log lists `host::unmodeled` as a Check *description* (the catch-all arm), not a reached failure. |
+| `unstoppable_card_03_money_noop_when_out` | ras | **SUCCESSFUL** | 104 | same |
+| `unstoppable_card_03_money_mutant_is_detected` | ras | **SUCCESSFUL** | 116 | mutant detected (1100 ≠ 1000) |
+| `riot_02_03_cycle_iff` | ras | **TIMEOUT** | 900 | CBMC stuck unwinding `Vec` drop from `ctx::cards_in` / `Vec<u8>` in the unmodified body |
+| `riot_03_extra_draw_mutant_is_detected` | ras | written, pending | | same body; not yet run to a verdict (shared box saturated) |
+| `pareo_01_marks_iff` | ras | written, pending | | +2 PAREO, pre ≤ 1 |
+| `pareo_01_marks_mutant_is_detected` | ras | written, pending | | +3 ≠ +2 |
+| `masking_01_fire_gain_leaf` | skills_ras | written, pending | | +1 GainFire leaf |
+| `rio_01_fire_gain_leaf` | skills_ras | written, pending | | +1 GainFire leaf |
+| `fire_pass_gain_mutant_is_detected` | skills_ras | written, pending | | +2 ≠ +1 |
+
+### TIMEOUT / OOM attempts (riot)
+
+* `n_players ∈ 2..=4`, `hand_resonance[p] ∈ 0..=2`, isolation: global bitset empty.
+* `#[kani::unwind(32)]`, runner `--default-unwind 80 --no-unwinding-checks`.
+* Unmodified body still allocates `Vec` via `ctx::cards_in` → CBMC `drop_glue`
+  / `RawVecInner::deallocate` unwind loop. Did not rewrite the body.
 
 ---
 
