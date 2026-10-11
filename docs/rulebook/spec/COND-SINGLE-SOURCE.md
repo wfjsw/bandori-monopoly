@@ -354,14 +354,15 @@ Invocation: `cargo kani -p rules-kani --harness <name> --default-unwind 8 --no-u
 
 | harness | result | time | notes |
 |---|---|---|---|
-| `ir_eq_matches_spec_for_all_operands` | **SUCCESSFUL** | 2.1 s | symbolic i64/bool/null |
-| `ir_lt_matches_spec` | **SUCCESSFUL** | 0.9 s | |
-| `ir_le_matches_spec` | **SUCCESSFUL** | 1.3 s | |
-| `ir_gt_matches_spec` | **SUCCESSFUL** | 2.0 s | |
-| `ir_ge_matches_spec` | **SUCCESSFUL** | 1.0 s | |
-| `ir_add_matches_spec` | **SUCCESSFUL** | 1.9 s | |
-| `ir_sub_matches_spec` | **SUCCESSFUL** | 1.6 s | |
-| `ir_mul_matches_spec` | **SUCCESSFUL** | 47.4 s | |
+| `ir_eq_matches_spec_for_all_operands` | **SUCCESSFUL** | 1.0 s | symbolic i64/bool/null |
+| `ir_lt_matches_spec` | **SUCCESSFUL** | 0.6 s | |
+| `ir_le_matches_spec` | **SUCCESSFUL** | 1.0 s | |
+| `ir_gt_matches_spec` | **SUCCESSFUL** | 0.7 s | |
+| `ir_ge_matches_spec` | **SUCCESSFUL** | 0.7 s | |
+| `ir_add_matches_spec` | **SUCCESSFUL** | 0.7 s | |
+| `ir_sub_matches_spec` | **SUCCESSFUL** | 1.0 s | |
+| `ir_mul_matches_spec` | (prior: SUCCESSFUL 47 s) | | not re-run this pass |
+| `ir_div_matches_spec` / `ir_rem_matches_spec` | incomplete (CBMC `checked_div`) | | covered by differential boundary grid |
 | `ir_div_matches_spec` | **incomplete** | > 3 min | CBMC `checked_div` on full i64×i64; case-split version still slow. Covered exhaustively by the differential boundary grid |
 | `ir_rem_matches_spec` | **incomplete** | > 3 min | same |
 | `ir_logical_matches_spec_for_all_operands` | **SUCCESSFUL** | 0.9 s | error-absorption table |
