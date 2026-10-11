@@ -156,9 +156,10 @@ fn main() {
                 last_event = e.id;
                 *kinds.entry(e.r#type.clone()).or_default() += 1;
                 if dump_events.is_some() {
+                    let results: Vec<&str> = e.results.iter().map(|r| r.key()).collect();
                     ev_log.push(format!(
-                        "id={} type={} card={:?} player={} value={} from={} to={} msg={} parent={}",
-                        e.id, e.r#type, e.card, e.player_id, e.value, e.from, e.to, e.msg.key(), e.parent
+                        "id={} type={} kind={} card={:?} player={} value={} from={} to={} msg={} parent={} results={:?}",
+                        e.id, e.r#type, e.kind, e.card, e.player_id, e.value, e.from, e.to, e.msg.key(), e.parent, results
                     ));
                 }
             }

@@ -171,3 +171,32 @@ fn shipped_declare_cap_entries_are_silent() {
         );
     }
 }
+
+/// A turn start must not flash the raise_effort declare-cap entry.
+#[test]
+fn turn_start_does_not_flash_declare_cap() {
+    let mut t = Table::vanilla(2);
+    // Give player 0 the raise_effort skill via character.
+    t.strip_skills();
+    t.set_character_raw(0, "和奏瑞依");
+    t.clean();
+    t.begin_turn(0);
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let mark = t.mark();
+    t.begin_turn(0);
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let fired: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card.contains("竭尽全力"))
+        .collect();
+    assert!(
+        fired.is_empty(),
+        "declare_cap must not flash on turn start: {:?}",
+        fired.iter().map(|e| e.msg.key()).collect::<Vec<_>>()
+    );
+}
