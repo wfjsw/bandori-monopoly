@@ -25,19 +25,39 @@ crates/spec-kit/                 GENERIC (root workspace member). No game vocabu
 rules/spec/                      GAME-SPECIFIC crate `rules-spec`. Root workspace
                                  member, host-only (like rules/cond). NOT in the
                                  rules/ wasm workspace (its members list is explicit).
+                                 Library + clause tables only; the integration
+                                 tests live in `rules/tests` (see below).
   src/lib.rs                       re-exports spec-kit; data/ruleset loading (../../dist)
   src/table.rs                     Table harness (adapted from game-rules tests/common)
   src/fuzz.rs                      arrange + drive (adapted from game-rules tests/fuzz)
   src/global/<area>.rs             CLAUSES, one file per area (units 1-8 own these)
-  tests/global_soak.rs             one #[test] per area: fuzz soak + per-act clause check
-  tests/example_card.rs            worked per-card contract (the template for units 9-21)
-  tests/g_<area>.rs                (unit-owned) scripted scenarios for an area
-  tests/card_<group>.rs            (unit-owned) card / skill / event contracts
+
+rules/tests/                     crate `ruleset-tests`. Co-locates the spec
+                                 regression tests with the pre-existing
+                                 black-box rulebook tests (ag.rs, pp.rs, ...).
+  tests/spec_global_soak.rs             one #[test] per area: fuzz soak + per-act clause check
+  tests/spec_example_card.rs            worked per-card contract (the template for units 9-21)
+  tests/spec_g_<area>.rs                (unit-owned) scripted scenarios for an area
+  tests/spec_card_<group>.rs            (unit-owned) card / skill / event contracts
+  tests/spec_events.rs                  event contracts
+  tests/<area>.rs, tests/common/, ...   pre-existing black-box rulebook tests
 
 docs/rulebook/spec/                this README + the clause docs
   global/<area>.md                 one doc per area (units 1-8 own these)
   cards/<group>.md                 (unit-owned) card / skill / event contracts
 ```
+
+## Regression tests vs formal layer
+
+The `rules/tests/tests/spec_*.rs` files are **regression tests**: they drive
+the real engine and turn each rulebook clause into a plain pass/fail check.
+They are the executable half of the spec docs in this directory.
+
+The **formal** layer is machine-checked Kani proofs over the same
+`rules/spec` library and clause tables (see `docs/rulebook/spec/KANI.md`,
+planned). Kani reuses the harness and `CLAUSES` slices; it does not replace
+these regression tests. Keep both: red regression tests for engine
+discrepancies, Kani proofs for the properties that hold over all inputs.
 
 `crates/game-rules/tests` stays untouched. Moving the existing `rb_*` suite
 into `rules/spec` is a separate follow-up.
@@ -104,11 +124,11 @@ A discrepancy is a **plain failing test**.
 5. Undefined or ambiguous text ([共鸣], [触发结算], 分摊, ...) gets an
    `OPEN-<ID>` entry. Specify only what the text determines. Don't invent.
 
-`tests/global_soak.rs` picks `CLAUSES` up automatically -- never edit it.
+`rules/tests/tests/spec_global_soak.rs` picks `CLAUSES` up automatically -- never edit it.
 
 ## How to write a card contract
 
-See `rules/spec/tests/example_card.rs` (the `通用:10次招募（1回限定）`
+See `rules/tests/tests/spec_example_card.rs` (the `通用:10次招募（1回限定）`
 template). Shape:
 
 1. Quote the card text in the test header and in `docs/rulebook/spec/cards/<group>.md`.
@@ -118,7 +138,7 @@ template). Shape:
 4. Drive **one** transition (`t.play`, `t.skill`, ...).
 5. Assert exact numbers, then `frame(pre, post, allowed_prefixes)`.
 
-A card unit owns `rules/spec/tests/card_<group>.rs` +
+A card unit owns `rules/tests/tests/spec_card_<group>.rs` +
 `docs/rulebook/spec/cards/<group>.md`. Group membership for skills comes from
 the `band` field in `data/characters.json`.
 
@@ -133,12 +153,12 @@ export CARGO_TARGET_DIR=/home/monopoly/spec-target-<k>   # k = unit# mod 3
 export CARGO_BUILD_JOBS=8
 
 # 3. Your target.
-cargo test -p rules-spec --test <your test file>
-cargo test -p rules-spec --test global_soak <area>       # global units
-FUZZ_ITERS=300 cargo test -p rules-spec --test global_soak <area>
+cargo test -p ruleset-tests --test spec_<your test file>
+cargo test -p ruleset-tests --test spec_global_soak <area>       # global units
+FUZZ_ITERS=300 cargo test -p ruleset-tests --test spec_global_soak <area>
 
 # 4. Nothing else broken.
-cargo test -p rules-spec --no-run
+cargo test -p ruleset-tests --no-run
 cargo build -p game-rules
 ```
 

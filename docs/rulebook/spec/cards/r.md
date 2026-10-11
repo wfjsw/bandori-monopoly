@@ -1,6 +1,6 @@
 # C-R -- Roselia (Group R)
 
-Unit 11 owns this file and `rules/spec/tests/card_r.rs`. Scope: all 16 `R:`
+Unit 11 owns this file and `rules/tests/tests/spec_card_r.rs`. Scope: all 16 `R:`
 entries in `docs/rulebook/cards.json`, the skills of every Roselia character in
 `data/characters.json` (`band == "Roselia"`), and the Roselia band skill in
 `data/bands.json`.

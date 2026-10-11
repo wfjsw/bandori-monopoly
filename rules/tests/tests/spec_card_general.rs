@@ -1,6 +1,6 @@
 //! Per-card contracts for the 通用 (general) group -- 14 cards.
 //!
-//! Template: `rules/spec/tests/example_card.rs` (which owns
+//! Template: `rules/tests/tests/spec_example_card.rs` (which owns
 //! `通用:10次招募（1回限定）`; this file does **not** re-test it). The doc
 //! entry for that card lives in `docs/rulebook/spec/cards/general.md` and
 //! cross-references the example's executable.

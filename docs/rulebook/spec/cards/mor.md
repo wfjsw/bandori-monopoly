@@ -1,6 +1,6 @@
 # C-MOR -- Morfonica (Mor)
 
-Unit 14 owns this file and `rules/spec/tests/card_mor.rs`. Scope: the 15
+Unit 14 owns this file and `rules/tests/tests/spec_card_mor.rs`. Scope: the 15
 `Mor:` cards in `docs/rulebook/cards.json`, the skills of every Morfonica
 character in `data/characters.json` (`band == "Morfonica"`), and the band
 skill in `data/bands.json`.

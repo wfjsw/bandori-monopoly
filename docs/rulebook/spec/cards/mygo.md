@@ -1,6 +1,6 @@
 # C-MYGO -- MyGO!!!!! cards, character skills, band skill
 
-Unit 16 owns this file and `rules/spec/tests/card_mygo.rs`. All 15 `MyGO:*`
+Unit 16 owns this file and `rules/tests/tests/spec_card_mygo.rs`. All 15 `MyGO:*`
 entries in `docs/rulebook/cards.json`, the five `MyGO!!!!!` character skills
 in `data/characters.json`, and the band skill in `data/bands.json`.
 

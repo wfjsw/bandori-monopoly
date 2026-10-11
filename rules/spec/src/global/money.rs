@@ -1141,7 +1141,7 @@ pub fn g_money_12(step: &Step<'_>) -> Result<(), String> {
 ///   window rewrites. OPEN-支付阶段7 (where row 7 sits) does not change this
 ///   order.
 /// * **Executable:** scenario `pay_stages_add_before_halve` in
-///   `rules/spec/tests/g_money.rs` (a per-act clause cannot see the declared
+///   `rules/tests/tests/spec_g_money.rs` (a per-act clause cannot see the declared
 ///   figure once standing effects have scaled it). [`g_money_13`] only
 ///   checks the chain identity on half-charge markers.
 const G_MONEY_13: Clause = Clause::new(

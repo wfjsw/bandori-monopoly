@@ -49,7 +49,7 @@ Primary quotes:
 * **Condition:** `P` could not cover the expense even after 抵押.
 * **Effect:** in `post`, `P.money == 0` (「将所有资金[消耗]或[支付]…」). The
   amount handed to the causing effect's target is the `bankrupt` event's
-  `value`; exact legs are checked in `tests/g_bankrupt.rs`
+  `value`; exact legs are checked in `tests/spec_g_bankrupt.rs`
   (`bankrupt_pays_out_to_the_creditor`, `bankrupt_without_creditor_consumes_the_funds`).
 * **Frame:** n/a (read of `money`).
 * **Rulings & OPEN:** 「可折现的资产」 is not defined as a set -- OPEN-可折现资产.

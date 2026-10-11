@@ -1,6 +1,6 @@
 # C-RAS -- RAISE A SUILEN (15 cards + 5 character skills + band skill)
 
-Unit C-RAS owns this file and `rules/spec/tests/card_ras.rs`.
+Unit C-RAS owns this file and `rules/tests/tests/spec_card_ras.rs`.
 
 Sources (precedence): live sheet (`docs/rulebook/cards.json`,
 `data/characters.json` `text` / `data/bands.json` `text`) >

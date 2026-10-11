@@ -1,6 +1,6 @@
 # C-MUJICA -- Ave Mujica (Group Mujica)
 
-Unit 17 owns this file and `rules/spec/tests/card_mujica.rs`. Clause IDs are
+Unit 17 owns this file and `rules/tests/tests/spec_card_mujica.rs`. Clause IDs are
 `C-MUJICA-<slug>-<n>`.
 
 Sources: live sheet (`docs/rulebook/cards.json` `Mujica:*`, the five
@@ -707,7 +707,7 @@ scope.)
 ## Findings
 
 Genuine engine-vs-book discrepancies. Each is a plain failing test in
-`rules/spec/tests/card_mujica.rs`. No `#[ignore]`, no allowlist.
+`rules/tests/tests/spec_card_mujica.rs`. No `#[ignore]`, no allowlist.
 
 * **C-MUJICA-团技能-01** (`band_state2_pay_is_150_only_on_self`) -- book says
   状态2 [支付]/[收取] is 1.5x **on the user's side only**

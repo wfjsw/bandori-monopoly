@@ -1,6 +1,6 @@
 # C-HHW -- Hello, Happy World! (15 cards + 5 character skills + 1 band skill)
 
-Unit 13 owns this file and `rules/spec/tests/card_hhw.rs`. Clause IDs are
+Unit 13 owns this file and `rules/tests/tests/spec_card_hhw.rs`. Clause IDs are
 `C-HHW-<slug>-<n>`.
 
 Sources (precedence): live sheet (`docs/rulebook/cards.json`,

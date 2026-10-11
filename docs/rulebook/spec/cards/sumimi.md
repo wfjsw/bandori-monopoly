@@ -1,6 +1,6 @@
 # C-SUMIMI -- Sumimi 卡 / 角色技能 / 乐队技能
 
-Unit `c-sumimi` owns this file and `rules/spec/tests/card_sumimi.rs`.
+Unit `c-sumimi` owns this file and `rules/tests/tests/spec_card_sumimi.rs`.
 
 Sources (precedence): live sheet (`docs/rulebook/cards.json`,
 `data/characters.json` `text`, `data/bands.json` `text`) >
