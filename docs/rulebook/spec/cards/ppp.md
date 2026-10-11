@@ -138,7 +138,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** 「团卡」 is the band-skill instance. OPEN-乐队卡 is about
   the undefined 「乐队卡」 class and does not cover this. Which band is borrowed
   is a player choice (prompt) and is not asserted.
-* **Executable:** test `returns_placed_and_borrows_band` (vanilla table with
+* **Executable:** not in this suite (see Coverage): `returns_placed_and_borrows_band` (vanilla table with
   Returns forced into the opening draw via `with_opening_draw` is not yet a
   public Table API on `rules_spec`; the field placement is checked when the
   card is already on field and a second surviving seat's band is bound).
@@ -171,7 +171,7 @@ Token / vocabulary notes used by the clauses:
 * **Frame:** the borrowed band instance and its crystals.
 * **Rulings & OPEN:** 「所有[奇迹水晶]」 is the crystals on the borrowed
   instance only.
-* **Executable:** test `returns_turn_start_borrow_prompt` (the turn start
+* **Executable:** not in this suite (see Coverage): `returns_turn_start_borrow_prompt` (the turn start
   opens a prompt; answering a different band replaces the instance).
 
 ### C-PPP-returns-c3
@@ -247,7 +247,7 @@ Token / vocabulary notes used by the clauses:
   two printed options (sticker+teleport vs Nd10 walk).
 * **Frame:** stage / prompt bookkeeping.
 * **Rulings & OPEN:** none.
-* **Executable:** test `star_beat_offers_two_options` (prompt after play).
+* **Executable:** not in this suite (see Coverage): `star_beat_offers_two_options` (prompt after play).
 
 ### C-PPP-star-beat-03
 
@@ -350,7 +350,7 @@ Token / vocabulary notes used by the clauses:
   surcharge **amount** (`houses × 100`) is determinate and is what the
   clause pins; the co-owned-hill trigger is not asserted.
 * **Executable:** doc-only for the co-owned-hill case. The amount formula is
-  checked in test `door_surcharge_amount` when the settle tile is an
+  checked in not in this suite (see Coverage): `door_surcharge_amount` when the settle tile is an
   ordinary owner-owned tile (not the hill).
 
 ---
@@ -458,7 +458,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** the 「（如果有，然后失去540资金）」 parenthetical is
   read as: the 540 loss is part of this same removal (it fires when the
   Random Star was present and is removed).
-* **Executable:** test `auction_off_removes_random_star_and_loses_540`.
+* **Executable:** not in this suite (see Coverage): `auction_off_removes_random_star_and_loses_540`.
 
 ### C-PPP-auction-off-c1
 
@@ -535,7 +535,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** OPEN-强制停下 is truncated in the global book; the
   clause only pins "stops on 流星堂 and settles", not the truncated
   remainder.
-* **Executable:** test `random_star_force_stop` (2 stickers, pass the tile,
+* **Executable:** not in this suite (see Coverage): `random_star_force_stop` (2 stickers, pass the tile,
   accept the force-stop).
 
 ---
@@ -640,7 +640,7 @@ Token / vocabulary notes used by the clauses:
 * **Frame:** that tile's house count.
 * **Rulings & OPEN:** 「可盖房」 = the tile allows a further house under the
   global build caps; not re-specified here.
-* **Executable:** test `far_away_optional_house` (decline the build prompt;
+* **Executable:** not in this suite (see Coverage): `far_away_optional_house` (decline the build prompt;
   house counts unchanged -- the optional branch that *builds* is a choice,
   so the contract pins the offer, not a forced build).
 
@@ -701,7 +701,7 @@ Token / vocabulary notes used by the clauses:
   houses / owner.
 * **Rulings & OPEN:** 「不[消耗]资金」 = the purchase price is 0, not a
   rebate after paying.
-* **Executable:** test `maze_buy_is_free_and_strips_houses` (unowned
+* **Executable:** not in this suite (see Coverage): `maze_buy_is_free_and_strips_houses` (unowned
   buyable tile with houses arranged; buy; money unchanged, houses 0).
 
 ### C-PPP-maze-04
@@ -715,7 +715,7 @@ Token / vocabulary notes used by the clauses:
 * **Frame:** user `pos` / money.
 * **Rulings & OPEN:** OPEN-强制停下 -- only "stops there and pays 6000" is
   pinned.
-* **Executable:** test `maze_pass_ryuseido_force_stops_and_pays` (loaded
+* **Executable:** not in this suite (see Coverage): `maze_pass_ryuseido_force_stops_and_pays` (loaded
   d10 that crosses 流星堂).
 
 ---
@@ -767,7 +767,7 @@ Token / vocabulary notes used by the clauses:
 * **Frame:** user's field / played-card zones.
 * **Rulings & OPEN:** OPEN-场上 -- 「[场地]」 is the player's field, the same
   「游玩区域」 other cards name.
-* **Executable:** test `wait_aoki_places_on_field`.
+* **Executable:** not in this suite (see Coverage): `wait_aoki_places_on_field`.
 
 ### C-PPP-wait-aoki-c1
 
@@ -782,7 +782,7 @@ Token / vocabulary notes used by the clauses:
   causation. The clause specifies only what is determinate: a settle that
   is not this card's own activation. Causation edges among other cards are
   not inventoried here (OPEN-wait-causality).
-* **Executable:** test `wait_aoki_crystal_on_foreign_settle` (a plain
+* **Executable:** not in this suite (see Coverage): `wait_aoki_crystal_on_foreign_settle` (a plain
   money-moving act that is not this card).
 
 ### C-PPP-wait-aoki-c2
@@ -804,7 +804,7 @@ Token / vocabulary notes used by the clauses:
 * **Executable:** doc-only for the deferral -- arranging a deferred event
   card plus a turn-start resolve requires the event-unit's fixtures and is
   out of this unit's card set. Crystal spend of exactly 3 is checked in
-  `wait_aoki_c2_spend_three` when a trigger is driven.
+  not in this suite (see Coverage): `wait_aoki_c2_spend_three` when a trigger is driven.
 
 ---
 
@@ -844,12 +844,10 @@ Token / vocabulary notes used by the clauses:
   equals the rolled sum (the book's 「投掷结果的格子」 -- a 3d20 sum is
   3..60, and the board is 60 tiles).
 * **Frame:** the user's fire pot; the card's tile.
-* **Rulings & OPEN:** 「投掷结果的格子」 is read as the tile at board index
-  = the dice sum (1-based 「#N格」 would be `sum-1`; the phrase 「投掷结果的
-  格子」 without a `#` is the index form used by STAR BEAT's `mod 60`
-  formula). Recorded here so a later sheet correction flips one test, not
-  two.
-* **Executable:** test `name_sky_pass_grants_fire_and_relocates` (loaded
+* **Rulings & OPEN:** 「投掷结果的格子」 is read as 「#S格」 where `S` is
+  the 3d20 sum, i.e. board index `S-1` (the same 1-based reading as
+  「#1，#16，#31，#46」). A sum of 60 is `#60格` = index 59.
+* **Executable:** not in this suite (see Coverage): `name_sky_pass_grants_fire_and_relocates` (loaded
   3d20; assert the card's tile after the turn end).
 
 ---
@@ -937,7 +935,7 @@ Token / vocabulary notes used by the clauses:
   (OPEN-half-rent). TEST-FINDINGS §6 #4 records the engine's stacking with
   another half-pay as ¼; the clause pins only "half of the original rent",
   not the stacking policy. Only even rents are asserted.
-* **Executable:** test `everyone_halves_rent` (even base rent).
+* **Executable:** not in this suite (see Coverage): `everyone_halves_rent` (even base rent).
 
 ---
 
@@ -958,7 +956,7 @@ Token / vocabulary notes used by the clauses:
 * **Effect:** 香澄's [火罐] rises by exactly 1, never past 1; initial 0.
 * **Frame:** the fire counter.
 * **Rulings & OPEN:** none.
-* **Executable:** `c_ppp_kasumi_skill_01` / test `kasumi_fire_on_hill_settle`.
+* **Executable:** test `kasumi_fire_on_hill_settle`.
 
 ### C-PPP-kasumi-skill-02
 
@@ -994,9 +992,11 @@ Token / vocabulary notes used by the clauses:
 * **Effect:** one [多惠兔子] mark is placed on that tile. If the tile is
   星空齿科, no rabbit is placed.
 * **Frame:** the mark's tile.
-* **Rulings & OPEN:** the 3d20 sum is the tile index (same reading as
-  C-PPP-name-sky-02).
-* **Executable:** test `megumi_rabbit_on_circle_reward` (loaded 3d20 away
+* **Rulings & OPEN:** the 3d20 sum `S` is the printed 「#S格」, i.e. board
+  index `S-1` (1-based, same as 「#1，#16，#31，#46」). A sum of 60 is
+  `#60格` = index 59. (STAR BEAT's `mod 60` formula is a 0-based index
+  because it is written as a raw number, not a `#N` label.)
+* **Executable:** not in this suite (see Coverage): `megumi_rabbit_on_circle_reward` (loaded 3d20 away
   from 星空齿科).
 
 ### C-PPP-megumi-skill-01b
@@ -1010,7 +1010,7 @@ Token / vocabulary notes used by the clauses:
   [火罐] (cap 4).
 * **Frame:** the tile's marks / the user's fire counter.
 * **Rulings & OPEN:** 「等量」 = one pot per rabbit removed.
-* **Executable:** test `megumi_rabbits_become_fire` (two rabbits on the
+* **Executable:** not in this suite (see Coverage): `megumi_rabbits_become_fire` (two rabbits on the
   passed tile; +2 fire, marks gone).
 
 ### C-PPP-megumi-skill-02
@@ -1027,7 +1027,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** this is a [反击] -- see the global counteract area for
   window order. The book does not say what happens if 多惠 is the user
   (「其他玩家」 excludes self).
-* **Executable:** test `megumi_counteract_negates_for_4_fire` (a [手] play
+* **Executable:** not in this suite (see Coverage): `megumi_counteract_negates_for_4_fire` (a [手] play
   from another seat; accept the counteract prompt). The money split is
   asserted exactly.
 
@@ -1054,7 +1054,7 @@ Token / vocabulary notes used by the clauses:
   (the tiles sharing Live House's colour), not only the Live House tile
   itself. The exact colour set lives in `data/board.json` `group` and is
   not re-printed here.
-* **Executable:** test `rimi_fire_after_livehouse_pass` (pass a Live House
+* **Executable:** not in this suite (see Coverage): `rimi_fire_after_livehouse_pass` (pass a Live House
   colour tile this turn; turn end; +1 fire).
 
 ### C-PPP-rimi-skill-02
@@ -1096,7 +1096,7 @@ Token / vocabulary notes used by the clauses:
 * **Frame:** both players' money / 沙绫's tokens and fire.
 * **Rulings & OPEN:** the saaya标记 is a player token named `saaya`
   (engine vocabulary; the book's spelling is 「saaya标记」).
-* **Executable:** test `saaya_offer_on_big_spend` (accept the optional
+* **Executable:** not in this suite (see Coverage): `saaya_offer_on_big_spend` (accept the optional
   window; assert +200 / token 1 / fire +1).
 
 ### C-PPP-saaya-skill-01b
@@ -1113,7 +1113,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** 「下一个可购买格子」 -- next in the clockwise main-move
   direction, first tile that is buyable. The 1d10 reduction die is a second
   die rolled at the same time as the movement dice.
-* **Executable:** test `saaya_mark_reduces_roll` (mark 1, loaded dice;
+* **Executable:** not in this suite (see Coverage): `saaya_mark_reduces_roll` (mark 1, loaded dice;
   assert mark 0 and the reduced walk).
 
 ### C-PPP-saaya-skill-02
@@ -1127,7 +1127,7 @@ Token / vocabulary notes used by the clauses:
   floored at 0.
 * **Frame:** the spend amount / fire count.
 * **Rulings & OPEN:** same floor as Popipapapipopa (2); no rounding.
-* **Executable:** test `saaya_fire_reduces_spend` (5 fire, spend ≥ 5000).
+* **Executable:** not in this suite (see Coverage): `saaya_fire_reduces_spend` (5 fire, spend ≥ 5000).
 
 ---
 
@@ -1149,7 +1149,7 @@ Token / vocabulary notes used by the clauses:
 * **Effect:** [火罐] +1 (cap 2; initial 0).
 * **Frame:** the fire counter.
 * **Rulings & OPEN:** none.
-* **Executable:** test `aoki_fire_on_other_ryuseido_draw` (another seat's
+* **Executable:** not in this suite (see Coverage): `aoki_fire_on_other_ryuseido_draw` (another seat's
   流星堂 event draw; +1 fire).
 
 ### C-PPP-aoki-skill-02
@@ -1166,7 +1166,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** 「视为在流星堂抽取」 -- the draw is attributed to
   流星堂 for every listener keyed on that tile (including (01) for other
   seats).
-* **Executable:** test `aoki_extra_event_at_turn_end` (main move past
+* **Executable:** not in this suite (see Coverage): `aoki_extra_event_at_turn_end` (main move past
   流星堂, end elsewhere; turn end; one event drawn + fire +1).
 
 ### C-PPP-aoki-skill-03
@@ -1236,7 +1236,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** the once-per-turn gate is on 「使用此卡[奇迹水晶]的
   效果」 -- both the draw and the cash branch share the one-per-turn budget.
 * **Executable:** test `band_crystals_for_cash` and
-  `band_crystals_for_draw` (2 crystals; press twice -- the second must not
+  not in this suite (see Coverage): `band_crystals_for_draw` (2 crystals; press twice -- the second must not
   fire).
 
 ### C-PPP-band-02
@@ -1251,7 +1251,7 @@ Token / vocabulary notes used by the clauses:
 * **Frame:** the reward window is empty.
 * **Rulings & OPEN:** the global settle area defines what a [CiRCLE奖励] is;
   this clause only forbids granting it.
-* **Executable:** test `band_no_circle_reward` (land on CiRCLE; no reward
+* **Executable:** not in this suite (see Coverage): `band_no_circle_reward` (land on CiRCLE; no reward
   prompt / no money-or-draw grant).
 
 ### C-PPP-band-03a
@@ -1267,7 +1267,7 @@ Token / vocabulary notes used by the clauses:
 * **Rulings & OPEN:** 「视为同时拥有」 is co-ownership for settle and
   mortgage purposes. How rent splits across co-owners is (3)'s 分摊 clause
   (OPEN-分摊).
-* **Executable:** test `band_hill_co_owned` (a PPP seat can mortgage the
+* **Executable:** not in this suite (see Coverage): `band_hill_co_owned` (a PPP seat can mortgage the
   hill).
 
 ### C-PPP-band-03b
@@ -1284,7 +1284,7 @@ Token / vocabulary notes used by the clauses:
   remainder?). The clause specifies only "the payees are exactly the
   unmortgaged PPP characters"; the split amounts are **not** asserted.
 * **Executable:** doc-only for the split amounts. The payee *set* is
-  checked in `band_hill_split_payees` (pay goes only to unmortgaged PPP
+  checked in not in this suite (see Coverage): `band_hill_split_payees` (pay goes only to unmortgaged PPP
   seats).
 
 ### C-PPP-band-03c
@@ -1300,7 +1300,7 @@ Token / vocabulary notes used by the clauses:
 * **Frame:** the buy attempt is refused (or the hill's owner stays).
 * **Rulings & OPEN:** 「抵押双倍支付购买」 is the force-buy path of 基础[结算]
   (global settle area). 「正常购买」 is the ordinary buy.
-* **Executable:** test `band_hill_not_buyable_while_ppp_alive` (a non-PPP
+* **Executable:** not in this suite (see Coverage): `band_hill_not_buyable_while_ppp_alive` (a non-PPP
   seat's buy of the hill is refused).
 
 ### C-PPP-band-04
@@ -1347,16 +1347,48 @@ Token / vocabulary notes used by the clauses:
   购物中心 (distance 29 as well, but not an agent). Test:
   `rimi_skill_teleports_to_farthest_agent`.
 
-## Coverage notes (untestable clauses)
+## Coverage notes (clauses without a dedicated `card_ppp.rs` contract)
+
+Armed in `rules/spec/tests/card_ppp.rs`: Popipa, Pipopa, Bang Dream!,
+better-sound, signpost, caught, far-away, STAR BEAT (both options),
+Popipapapipopa (pass + spend), Random Star (1), name-sky (1), chocolate,
+everyone (place + force-stop), kasumi skill (1)(2), rimi skill (2),
+aoki skill (3), band (1a)(1b)(1c)(4), Returns (c4), door (1)(2), auction
+(c1), maze (1)(2).
+
+Not armed here (the quote is specified above; the reason is one of these:
+setup seam, another unit's window, or OPEN):
 
 * **C-PPP-returns-01** -- deck-construction size; outside every observed
   transition the Table can drive.
-* **C-PPP-returns-c3** -- the borrowed-band sticker tax is a cost on another
-  skill's press body; not an independent forall.
-* **C-PPP-star-beat-01** -- the status's engine key is not named in the
-  book; a predicate would invent vocabulary.
-* **C-PPP-auction-off-c2** -- 「不受任何其他效果影响」 needs a named second
-  effect to observe the skip.
-* **C-PPP-wait-aoki-c2** deferral -- needs an event-card fixture window
-  (unit 21's domain).
-* **C-PPP-band-03b** split amounts -- OPEN-分摊.
+* **C-PPP-returns-02** -- game-start placement is exercised as the fixture
+  for `returns_sticker_after_general` (the card must be on field), but the
+  borrowed-band pick is not asserted.
+* **C-PPP-returns-c2 / c3** -- the borrow prompt and the borrowed-skill
+  sticker tax live on another skill's press body.
+* **C-PPP-star-beat-01** -- the status key is not named in the book; the
+  +1 layer is only a frame allowance.
+* **C-PPP-door-03** -- surcharge amount and the co-owned-hill trigger
+  (TEST-FINDINGS §6 #6 / OPEN-door-hill).
+* **C-PPP-auction-off-01 / 02 / c2** -- hand-add [特] needs a hooked draw
+  (the `give` seam skips it); the turn-start Random Star sweep and
+  「不受任何其他效果影响」 need a named second effect.
+* **C-PPP-random-star-02** -- OPEN-强制停下.
+* **C-PPP-maze-03 / 04** -- free-buy + demolish and the 流星堂 force-stop
+  need a multi-step walk + buy window; OPEN-强制停下 on (04).
+* **C-PPP-wait-aoki-01 / c1 / c2** -- [场地] placement is arrange-seam
+  only; 「非因为此卡导致」 is OPEN-wait-causality; the deferral needs an
+  event-card fixture (unit 21).
+* **C-PPP-name-sky-02** -- the turn-end 3d20 relocation.
+* **C-PPP-everyone-c2** -- OPEN-half-rent.
+* **C-PPP-megumi-skill-01a / 01b / 02** -- CiRCLE-reward rabbit placement,
+  rabbit→fire, and the 4-fire [反击] need a reward/counteract window.
+* **C-PPP-rimi-skill-01** -- turn-end fire after a Live House pass.
+* **C-PPP-saaya-skill-01a / 01b / 02** -- the optional offer, the saaya
+  mark roll reduction, and the 5-fire spend reduction.
+* **C-PPP-aoki-skill-01 / 02** -- another seat's 流星堂 event draw and the
+  turn-end extra event.
+* **C-PPP-band-01c** once-per-turn gate (the second press) and the draw
+  branch.
+* **C-PPP-band-02 / 03a / 03b / 03c** -- CiRCLE-reward lockout, hill
+  co-ownership / mortgage, OPEN-分摊 payee set, and the buy lockout.

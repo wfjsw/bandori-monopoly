@@ -492,18 +492,20 @@ pub fn c_ppp_caught_01(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
+    let from = step.pre.st.players[who].pos as usize;
     let dest = step.post.st.players[who].pos as usize;
-    let candidates: Vec<usize> = (0..step.pre.st.players.len())
+    // 「你前方一名玩家」 -- strictly clockwise-ahead of the pre-move seat.
+    let ahead = (0..step.pre.st.players.len())
         .filter(|&i| i != who)
         .map(|i| step.pre.st.players[i].pos as usize)
-        .collect();
-    if !candidates.contains(&dest)
-        && !(0..step.post.st.players.len())
-            .filter(|&i| i != who)
-            .any(|i| step.post.st.players[i].pos as usize == dest)
-    {
+        .filter(|&p| {
+            let off = (p + 60 - from) % 60;
+            off != 0
+        })
+        .collect::<Vec<_>>();
+    if !ahead.contains(&dest) {
         return Err(format!(
-            "mover landed on {dest}, not any other player's tile {candidates:?}"
+            "mover {from} landed on {dest}, not a strictly-ahead player's tile {ahead:?}"
         ));
     }
     Ok(())
@@ -769,8 +771,17 @@ fn popipapapipopa_crystal_reduces_spend() {
         t.set_pos(0, tile.wrapping_sub(2) % 60);
         t.dice(&[2]);
         t.roll(0).unwrap();
+        // The pay window is a `choice` whose options are `ask.intOption`
+        // n = 0..=crystals (spend n of them).
         if t.prompt().is_some() {
-            if let Some(k_idx) = t.option(POPIPAPAPIPOPA).or_else(|| t.option("奇迹水晶")) {
+            let dump = t.dump_prompt();
+            if dump.contains("intOption") {
+                // Options are n = 0..=max, max ≤ crystals and ≤ floor(pay/150).
+                let p = t.expect_prompt();
+                let max = (p.options.len().saturating_sub(1)) as i32;
+                let spend = k.min(max);
+                t.answer(0, spend).unwrap();
+            } else if let Some(k_idx) = t.option(POPIPAPAPIPOPA).or_else(|| t.option("奇迹水晶")) {
                 t.answer(0, k_idx).unwrap();
             } else {
                 t.decline();
@@ -780,8 +791,14 @@ fn popipapapipopa_crystal_reduces_spend() {
 
         let spent = crystals0 - t.crystals(0, POPIPAPAPIPOPA).unwrap_or(0);
         let paid = money0 - t.money(0);
-        if spent > 0 {
-            let expect_pay = (120 - 150 * spent).max(0);
+        if spent == 0 {
+            return Err(format!(
+                "crystal spend not offered/taken on a pay of Space rent                  (C-PPP-popipapapipopa-c2); prompt window empty?"
+            ));
+        }
+        {
+            // Space with 1 house: base rent is rent[1] = 400 (board.json).
+            let expect_pay = (400 - 150 * spent).max(0);
             if paid != expect_pay {
                 return Err(format!(
                     "paid {paid} after spending {spent} crystals, expected {expect_pay} (C-PPP-popipapapipopa-c2)"
@@ -995,13 +1012,17 @@ fn everyone_lands_on_hill_and_forces_stop() {
                 t.recent_keys(10)
             ));
         }
+        // 「将此卡放入[使用者]弃卡区」 -- the discard is the named zone. A
+        // reshuffle in the same window may later sweep it into the draw; that
+        // is acceptable only when a `log.reshuffle` is also in the window.
         let in_discard = t.discard(0).iter().any(|c| c == EVERYONE);
         let in_draw = t.draw_pile(0).iter().any(|c| c == EVERYONE);
+        let reshuffled = t.recent_keys(20).iter().any(|k| k.contains("reshuffle"));
         let on_field = t.field(0).iter().any(|f| f.card == EVERYONE)
             || t.world().st.board_field.iter().any(|f| f.card == EVERYONE);
-        if !in_discard && !in_draw {
+        if !in_discard && !(in_draw && reshuffled) {
             return Err(format!(
-                "card not in discard/draw (C-PPP-everyone-c1): discard={:?} hand={:?} draw={:?} field={:?} pos1={}",
+                "card not in 弃卡区 (C-PPP-everyone-c1): discard={:?} hand={:?} draw={:?} field={:?} pos1={}",
                 t.discard(0),
                 t.hand(0),
                 t.draw_pile(0),
@@ -1240,17 +1261,30 @@ fn band_stickers_for_crystal() {
     let crystals0 = t.crystals(0, BAND).unwrap_or(0);
     let sid = t.skill_id(0, "星之鼓动");
     t.skill(0, &sid).unwrap();
-    if t.prompt().is_some() {
-        if let Some(k) = t.option("奇迹水晶").or_else(|| t.option("水晶")) {
-            t.answer(0, k).unwrap();
-        } else {
-            t.decline();
+    // 「随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]」 -- the spend is
+    // optional (「可使用」). Walk every ask.yes the press opens; the pin is
+    // that taking them spends exactly 2 stickers for exactly 1 crystal.
+    let mut answered = 0;
+    for _ in 0..6 {
+        if t.prompt().is_none() {
+            break;
         }
+        t.answer(0, 0).unwrap();
+        answered += 1;
     }
     skip_all(&mut t);
     if t.token(0, STICKER) == 2 {
-        // Optional spend not taken -- the quote allows it. Require the offer
-        // by checking the press was legal (it was, or `skill` would Err).
+        // Nothing was spent. The conversion must at least have been
+        // offered (a prompt) -- otherwise the press silently ignored the
+        // 2 stickers we held.
+        if answered == 0 {
+            panic!(
+                "no sticker->crystal conversion offered on the band press \
+                 (C-PPP-band-01b); stickers still 2"
+            );
+        }
+        // Prompt opened but the spend was declined / not taken. The quote
+        // allows the decline; stop here.
         return;
     }
     if t.token(0, STICKER) != 0 {
@@ -1278,21 +1312,52 @@ fn band_crystals_for_cash() {
     let sid = t.skill_id(0, "星之鼓动");
     let money0 = t.money(0);
     t.skill(0, &sid).unwrap();
-    if t.prompt().is_some() {
-        if let Some(k) = t.option("2000").or_else(|| t.option("资金")) {
-            t.answer(0, k).unwrap();
-        } else {
-            t.decline();
+    // Chained asks: yes to the sticker->crystal (if any), then yes to the
+    // crystal->cash/draw, then pick the cash branch. Walk every prompt and
+    // prefer the cash option whenever one is named.
+    if t.prompt().is_none() {
+        panic!(
+            "no crystal->cash/draw conversion offered on the band press \
+             (C-PPP-band-01c)"
+        );
+    }
+    let mut took_cash = false;
+    for _ in 0..6 {
+        if t.prompt().is_none() {
+            break;
         }
+        if let Some(k) = t
+            .option("2000")
+            .or_else(|| t.option("资金"))
+            .or_else(|| t.option("cash"))
+        {
+            t.answer(0, k).unwrap();
+            took_cash = true;
+            break;
+        }
+        if let Some(k) = t.option("opt_cash").or_else(|| t.option("cash")) {
+            t.answer(0, k).unwrap();
+            took_cash = true;
+            break;
+        }
+        // ask.yes first, then the cash/draw pick.
+        t.answer(0, 0).unwrap();
     }
     skip_all(&mut t);
     let cashed = t.money(0) - money0;
-    if cashed == 0 {
-        // Optional -- declined. The press itself must have been legal.
+    if took_cash && cashed != 2000 {
+        panic!("cash delta {cashed}, expected 2000 (C-PPP-band-01c)");
+    }
+    if !took_cash && cashed == 0 {
+        // Took the draw branch or declined every ask. The press must at
+        // least have opened a conversion window (checked above).
         return;
     }
-    if cashed != 2000 {
-        panic!("cash delta {cashed}, expected 2000 (C-PPP-band-01c)");
+    if t.crystals(0, BAND).unwrap_or(0) != 0 {
+        panic!(
+            "band crystals {}, expected 0 after spending 2 (C-PPP-band-01c)",
+            t.crystals(0, BAND).unwrap_or(0)
+        );
     }
     if t.crystals(0, BAND).unwrap_or(0) != 0 {
         panic!(
@@ -1369,9 +1434,15 @@ fn returns_neutralises_band_build_lock() {
     t.set_pos(0, SPACE.wrapping_sub(3) % 60);
     t.dice(&[3]);
     t.roll(0).unwrap();
+    // Returns 「无效[拥有者]Poppin' Party团卡的（4）效果」 -- the band (4)
+    // build ban must not apply. The companion
+    // `band_no_build_on_main_settle` pins the ban without Returns; here the
+    // roll onto an owned empty tile must at least settle legally (band (4)
+    // would forbid the build path on a main-move settle).
+    if t.houses(SPACE) != 0 {
+        panic!("arranged houses moved before any build: {}", t.houses(SPACE));
+    }
     skip_all(&mut t);
-    // No assertion beyond "the act is legal" -- the unblocking is the
-    // contrast with `band_no_build_on_main_settle`.
 }
 
 // =====================================================================
@@ -1424,19 +1495,13 @@ fn door_walks_the_sequence() {
     let mut t = Table::vanilla(2);
     t.give_play(0, DOOR).unwrap();
     skip_all(&mut t);
+    // `tile < 0` means the user's play area (not a board tile).
     let read_tile = |t: &Table| -> Option<usize> {
         t.field(0)
             .iter()
+            .chain(t.world().st.board_field.iter())
             .find(|f| f.card == DOOR)
-            .map(|f| f.tile as usize)
-            .or_else(|| {
-                t.world()
-                    .st
-                    .board_field
-                    .iter()
-                    .find(|f| f.card == DOOR)
-                    .map(|f| f.tile as usize)
-            })
+            .and_then(|f| if f.tile >= 0 { Some(f.tile as usize) } else { None })
     };
     let seq = door_sequence();
     let mut expect = seq[0];
@@ -1460,6 +1525,25 @@ fn door_walks_the_sequence() {
                 expect
             ),
         }
+    }
+    // 「如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」
+    t.begin_turn(0);
+    let cur = read_tile(&t).unwrap_or(OSAKA);
+    t.set_pos(0, cur.wrapping_sub(3) % 60);
+    t.dice(&[5]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    if read_tile(&t).is_some() {
+        panic!(
+            "door still on a tile {:?} after passing 大阪中之岛公园              (C-PPP-door-02: must move to the user's play area)",
+            read_tile(&t)
+        );
+    }
+    if !t.field(0).iter().any(|f| f.card == DOOR) {
+        panic!(
+            "door not in the user's play area (C-PPP-door-02): {:?}",
+            t.field_ids(0)
+        );
     }
 }
 
