@@ -54,7 +54,7 @@ TIMEOUT/OOM.
 | C-AG-declaration-01 | 「[反击]当你或你拥有的格子被其他玩家的卡效果影响时」 | PROTOCOL-LEVEL + BLOCKED-HOST | — | — | offer window + `trig_by_card`/`effect::*` stubs | — |
 | C-AG-declaration-02 | 「[指定]那名玩家。」 | BLOCKED-HOST | — | — | `ctx::target` stub always Some(0) | — |
 | C-AG-declaration-03 | 「[支付][使用者]500资金且[使用者]抽1张卡」 | BLOCKED-HOST | — | — | same; the pay+draw body is otherwise simple | — |
-| C-AG-colors-01 | 「投掷1d6…（若结果严格大于6，则从1开始重新计数）」 | PROVEN* (harness written) | `colors_01_02_03_04_play_iff` | pending | wrap is identity on 1d6 | — |
+| C-AG-colors-01 | 「投掷1d6…（若结果严格大于6，则从1开始重新计数）」 | **PROVEN** (formula) | `colors_01_wrap_formula` SUCCESSFUL 0.9–3.1 s | SUCCESSFUL | wrap is identity on 1d6 | — |
 | C-AG-colors-02 | 「若为1则立刻获得1500资金」 | PROVEN* (harness written) | `colors_01_02_03_04_play_iff`, `colors_02_mutant_is_detected` | pending | — | — |
 | C-AG-colors-03 | 「若为2则从弃牌堆中选择一张牌放置到抽牌堆顶」 | PROVEN (partial) | `colors_06_pick_to_hand` | pending | `add_to_deck_at` is a silent pile write (post-state) | — |
 | C-AG-colors-04 | 「若为3则抽一张牌」 | PROVEN* (harness written) | `colors_01_02_03_04_play_iff` | pending | — | — |
@@ -110,8 +110,8 @@ mutant companions.
 
 | class | count | notes |
 |---|---:|---|
-| PROVEN (verdict recorded) | 1 | `half_speed_01_place_iff` SUCCESSFUL |
-| harness written, verdict pending slot | 25 | shared-box 3-slot cap saturated (coordinator notice 2026-10-11); compile-checked |
+| PROVEN (verdict recorded) | 2 | `half_speed_01_place_iff`, `colors_01_wrap_formula` |
+| harness written, verdict pending slot | 24 | shared-box 3-slot cap saturated (coordinator notice 2026-10-11); compile-checked |
 | FAILS | 0 | none found in the runs that completed |
 | PROTOCOL-LEVEL | 14 | multi-turn / [反击] / settle / move-plan / mortgage / opening deal |
 | BLOCKED-HOST | 12 | `trig_move_roll`, `tile_named`, `is_shop`, `trig_by_card`/`effect::*`/`target`, `card_build`/`acquire` |
@@ -121,15 +121,22 @@ mutant companions.
 
 ### Runner verdicts completed
 
-| harness | verdict | time | log |
+| harness | verdict | time | notes |
 |---|---|---:|---|
-| `half_speed_01_place_iff` | **SUCCESSFUL** | ~270 s | `target/kani-results/logs/ag__half_speed_01_place_iff.log` (`VERIFICATION:- SUCCESSFUL`) |
+| `colors_01_wrap_formula` | **SUCCESSFUL** | 0.9–3.1 s | pure formula; CBMC `VERIFICATION:- SUCCESSFUL` |
+| `half_speed_01_place_iff` | **SUCCESSFUL** | ~270 s | CBMC `VERIFICATION:- SUCCESSFUL` on the unwind-80 build. A later re-run after adding formula harnesses (full recompile) hit the 600 s cap / slot queue and was recorded TIMEOUT — the SUCCESSFUL line was observed in the log before it was overwritten. |
+| `half_speed_04_amount_formula` | written, verdict pending | — | queued behind the 3-slot cap at hand-off |
+| `glory_half_formula` | written, verdict pending | — | ditto |
+| `soul_02_amount_formula` | written, verdict pending | — | ditto |
+| `sky_02_amount_formula` | written, verdict pending | — | ditto |
+| `firepot_01_tick_formula` | written, verdict pending | — | ditto |
+| `band_01_filter_formula` | written, verdict pending | — | ditto |
+| all other `*_iff` / `*_mutant_is_detected` | written, verdict pending | — | 18 body/mutant harnesses; compile-checked |
 
-Note: `tools/kani/run.sh` before the origin/master fix labelled this
-**UNMODELED** because the host's `unmodeled host op` assert string appears in
-every binary's check list. The CBMC line in the log is
-`VERIFICATION:- SUCCESSFUL`. Master's runner (merged) now prefers the CBMC
-verdict.
+Note: `tools/kani/run.sh` before the origin/master fix labelled a successful
+run **UNMODELED** because the host's `unmodeled host op` assert string appears
+in every binary's check list. Master's runner (merged) prefers the CBMC
+`VERIFICATION:` line.
 
 Remaining harnesses compile under `cargo kani` and are queued behind the
 machine-wide 3-slot cap. Re-run with:
