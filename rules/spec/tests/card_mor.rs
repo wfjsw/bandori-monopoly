@@ -403,15 +403,23 @@ pub fn c_mor_wing_roll(step: &Step<'_>) -> Result<(), String> {
 /// C-MOR-starry-01 -- pay X*1000, place with X crystals.
 pub fn c_mor_starry_place(step: &Step<'_>) -> Result<(), String> {
     // The play itself leaves the X prompt open; the placement resolves on
-    // the answer step. Either window is fine -- pin the post-state.
-    let named = step.events.iter().any(|e| e.card == STARRY && !e.negated)
-        || step
-            .post
-            .st
-            .players
-            .iter()
-            .any(|p| p.field.iter().any(|f| f.card == STARRY));
-    if !named {
+    // the answer step. Fire only on the placement window (card newly on the
+    // field, or a STARRY event this step) -- not on every later step while
+    // the card sits there.
+    let pre_on_field = step
+        .pre
+        .st
+        .players
+        .iter()
+        .any(|p| p.field.iter().any(|f| f.card == STARRY));
+    let post_on_field = step
+        .post
+        .st
+        .players
+        .iter()
+        .any(|p| p.field.iter().any(|f| f.card == STARRY));
+    let newly_placed = !pre_on_field && post_on_field;
+    if !newly_placed {
         return Ok(());
     }
     // Only when the card is now placed and the user paid for it.

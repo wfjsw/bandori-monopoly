@@ -999,7 +999,7 @@ Source: `data/bands.json#Morfonica`.
 
 ## Findings
 
-* **C-MOR-nnm-05** (genuine, stays failing): 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」
+* **LESS (C-MOR-nnm-05)** -- genuine, stays failing: 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」
   -- spending the last crystal via the (3) press leaves the card on the
   field with 0 crystals. The press itself (C-MOR-nnm-04) does remove the
   crystal; the empty-card discard does not run.
