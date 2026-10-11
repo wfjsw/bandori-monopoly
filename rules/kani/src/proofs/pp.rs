@@ -682,7 +682,7 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
         };
         ww.field_n = 1;
     });
-    invoke::unwrap_done(invoke::hook_only("PP:[若宫伊芙]属于我的武士道！", "Drew", me));
+    invoke::unwrap_done(invoke::entry("PP:[若宫伊芙]属于我的武士道！", 1, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
         cry == spec::eve_bushido_04_crystals(pre),
@@ -715,7 +715,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
         };
         ww.field_n = 1;
     });
-    invoke::unwrap_done(invoke::hook_only("PP:[若宫伊芙]属于我的武士道！", "Drew", me));
+    invoke::unwrap_done(invoke::entry("PP:[若宫伊芙]属于我的武士道！", 1, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(cry == pre, "C-PP-eve-bushido-04: zero-value draw is a no-op");
 }
@@ -790,7 +790,7 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
         };
         ww.field_n = 1;
     });
-    invoke::unwrap_done(invoke::hook_only("PP:梦在前方，结彩当下", "Drew", me));
+    invoke::unwrap_done(invoke::entry("PP:梦在前方，结彩当下", 2, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
         cry == spec::dream_ahead_01_crystals(pre),
@@ -1039,7 +1039,7 @@ pub fn first_accident_02_blocks_pp_skill_2_iff() {
 
     // 2) 丸山彩 (2) must refuse
     let pre_amount2 = world::with_world(|ww| ww.pay_amount);
-    invoke::unwrap_done(invoke::hook_only("skill:丸山彩:With~", "PayTotalAdd", me));
+    invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 1, me)  /* Hook PayTotalAdd */);
     let post = world::snapshot();
     assert!(
         post.pay_amount == pre_amount2,
