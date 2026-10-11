@@ -183,44 +183,59 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **capability if B needed**: move-tag hook for 「因任何原因/包括你的技能」 self-abnormal; teleport-as-main-move raises `Effect` + `AbKind::Teleport`.
 
 ## CH-02 — 花园多惠 (2) cancel window never opens
+- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — the bound skill declared
+  `On::Counteract` but lacked `COUNTERACT_FROM_FIELD`, so `declare_one` never
+  offered it. Added that prop plus `COUNTERACT_GROUP` (one cancel per activation;
+  the skill stays in play and the seat keeps the floor). The redundant `ask_yes`
+  confirm is gone — the [反击] window's play-vs-skip is the 「你可以使用」 choice.
+  Tests: `counteract_offered` matches `ask.counteract.skill`; `prompt_refers`
+  reads an `ask_yes` question from the title/text.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high
 - **suggested batch**: counteraction windows
 - **locations**
-  - `rules/tests/tests/cross_chain.rs:1092` `c24_hanae_cancels_a_hand_effect`
-  - `rules/tests/tests/cross_chain.rs:1126` `c25_hanae_vs_skill_main`
-  - `rules/tests/tests/cross_long.rs:413` `l05_one_skill_several_counteractions`
-  - `crates/game-core/src/engine/play.rs:759` (comment: cancelled trigger / press negated)
+  - `rules/tests/tests/cross_chain.rs` `c24_hanae_cancels_a_hand_effect`, `c25_hanae_vs_skill_main` (un-ignored, green twice)
+  - `rules/tests/tests/cross_long.rs` `l05_one_skill_several_counteractions` (un-ignored, green twice)
+  - `rules/skills/skill-characters/src/tae_police.rs`
 - **rulebook**: 花园多惠 (2) — cancel a hand effect / skill use (「取消」 window).
-- **current**: card resolves normally; no cancel window.
-- **expected**: a cancel [反击] window opens for the targeted hand effect / skill use, and the effect is cancelled on success.
+- **was**: card resolves normally; no cancel window.
 
 ## CH-03 — 骰子已经掷下 is placed twice and does not shut counter windows
+- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — `can_counteract_now`
+  honours the well-known state key `noCounteractTurn` (the latch owner is exempt
+  「其他」; field counteractions stay a separate path, the clause names
+  「从手牌中」). A turn-key placement latch replaces the uid-based `is_placed`
+  check (a hand play has `current_uid = -1`, so play + the own-counteract
+  follow-up double-placed).
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high
 - **suggested batch**: counteraction windows
 - **locations**
-  - `rules/tests/tests/cross_chain.rs:678` `c14_dice_cast_shuts_windows`
-  - `rules/tests/tests/gap_window.rs:111` `g18_shut_window_blocks_the_negate_one` (also names 网络链接异常 drop-one residue)
-  - `rules/cards/card-mujica/src/dice_cast.rs:55,85` (「（此卡可以被反击）」 / lock timing)
+  - `rules/tests/tests/cross_chain.rs` `c14_dice_cast_shuts_windows` (un-ignored, green twice; asserts single placement)
+  - `rules/tests/tests/gap_window.rs` `g18_shut_window_blocks_the_negate_one` (un-ignored, green twice)
+  - `rules/cards/card-mujica/src/dice_cast.rs`, `crates/game-rules/src/wasm_rules.rs` `can_counteract_now`
 - **rulebook**: 骰子已经掷下 — place the lock and shut further [反击] windows for that timing.
-- **current**: placed twice; windows stay open (网络链接异常 can still drop a 武道馆 target).
-- **expected**: one placement; remaining counter windows for that timing are closed.
+- **was**: placed twice; windows stay open.
 
 ## CH-04 — 无法将视线移开 cannot be played as a counter and does not force the move
+- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — the card only declared
+  `ChainKind::Counteracted`, which the engine never raises; it now also declares
+  `Card`/`SkillUsed` with `target == owner && actor != owner` (the counter link's
+  `target` is the countered seat, `actor` the declarer). Force-move lands on
+  `trigger::player_id` of the answered link (the immediate 「有玩家对你使用[反击]
+  后」); the full-turn history (ABI-04) stays a separate hole.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high
 - **suggested batch**: counteraction windows
 - **locations**
-  - `rules/tests/tests/cross_chain.rs:743` `c16_cannot_look_away_answers_a_counter` (`does not force the counter-user to move`)
-  - `rules/tests/tests/cross_long.rs:336` `l04_forced_move_into_remote_settle` (`err.play_phase`)
-  - `rules/cards/card-mujica/src/cant_look_away.rs:48` (counteraction history ABI hole — see ABI-04; the play-as-counter half is separate)
+  - `rules/tests/tests/cross_chain.rs` `c16_cannot_look_away_answers_a_counter` (un-ignored, green twice)
+  - `rules/tests/tests/cross_long.rs` `l04_forced_move_into_remote_settle` (un-ignored, green twice)
+  - `rules/cards/card-mujica/src/cant_look_away.rs`
 - **rulebook**: 无法将视线移开 — usable as a [反击]; forces the counter-user to move.
-- **current**: `err.play_phase` when played as the counter; even when it runs, the forced move does not happen.
-- **expected**: legal as a [反击] response; the target is forced to move as stated.
+- **was**: `err.play_phase` when played as the counter; forced move did not happen.
 
 ## CH-05 — nested [反击] copy machinery (play-history / nested PlayCtx)
 - **kind**: ABI defect
@@ -236,18 +251,25 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: copy the latest eligible play and nest a full Play/Counteract run with forwarded Tags/Extreme/Doubled.
 - **capability**: `play-history query` + `nested PlayCtx` (cross-card identity + counteraction mode).
 
-## CH-06 — 网络链接异常 still drops the whole multi-target card in join fixtures
+## CH-06 — 网络链接异常 still drops the wrong designation in join fixtures
+- **status**: **reclassified B** (2026-10-11) — the per-pair cancel itself works
+  (`c05` green). What `g19` still needs is 真奈's nested join window: 「此时场上
+  其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家
+  自身的效果改为你」. That is CH-05's `nested PlayCtx` (the joiner's self-targeted
+  cancel must be retargeted to 真奈's user). Without the nested window, P3's
+  网络链接异常 plays in the outer ring and cancels P3's own designation (P3
+  exempt, P0 pays) instead of P0's via 「改为你」.
 - **kind**: implementation bug
-- **class**: A
+- **class**: B (capability: nested PlayCtx / join retarget — see CH-05)
 - **severity**: high
-- **suggested batch**: counteraction windows
+- **suggested batch**: host ABI: counteraction windows
 - **locations**
-  - `rules/tests/tests/gap_window.rs:145` `g19_manas_join_window_lets_a_third_party_drop_one`
-  - `rules/tests/tests/cross_chain.rs:264` (test body of `c05_…` still describes the old whole-card negate; **D**: the ignore on `c05_cancels_one_designation_of_four` was already removed)
-  - ABI already landed: `ctx::designations` / `ctx::cancel_designation` / `designation_cancelled` (TEST-FINDINGS §3)
-- **rulebook**: sheet cancels **one** designation (「取消一个指定」 / 「改为你」), the rest of the play's designations land.
-- **current**: when 真奈's join window is open, the whole 武道馆 is negated (everyone keeps 10000) instead of dropping only P0's designation.
-- **expected**: per-pair cancel only.
+  - `rules/tests/tests/gap_window.rs` `g19_manas_join_window_lets_a_third_party_drop_one` (still ignored)
+  - `rules/cards/card-sumimi/src/mana_champion.rs` (nested half is TODO)
+  - ABI already landed: `ctx::designations` / `ctx::cancel_designation` / `designation_cancelled`
+- **rulebook**: sheet cancels **one** designation (「取消一个指定」 / 「改为你」).
+- **current**: without the join, P3's cancel drops P3's own designation.
+- **expected**: under the join, P3's self-targeted cancel drops P0's (真奈's user); P2/P3 still pay.
 
 ## CH-07 — 「视为此卡未生效」 has no observer
 - **kind**: rulebook divergence + ABI defect
@@ -395,27 +417,37 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: stays on the passed player are absorbed / cancelled as the clause says.
 
 ## WINDOW-01 — Welcome to Ave Mujica's World (1) cannot be played (`err.play_phase`)
-- **kind**: implementation bug
+- **status**: **fixed** (2026-10-11, `backlog-windows-a`) — **test bug**. `err.play_phase`
+  was the harness leaving a turn-start skill hook prompt open (若叶睦 / 丰川祥子
+  `ask_yes` at `TurnStartBefore`), so the match was `busy` and `cant_play`
+  refused the play. Drain after `begin_turn`. The card itself was always playable.
+- **kind**: test-harness drive
 - **class**: A
 - **severity**: high
-- **suggested batch**: HostRequest handlers / counteraction windows
+- **suggested batch**: counteraction windows
 - **locations**
-  - `rules/tests/tests/cross_chain.rs:1207` `c27_welcome_state_switch`
+  - `rules/tests/tests/cross_chain.rs` `c27_welcome_state_switch` (un-ignored, green twice)
   - `rules/cards/card-mujica/src/welcome_mujica.rs:31` (（1） 「若指定了不存在状态2的玩家则无效果」 reading — C, see CH-08)
 - **rulebook**: 「转换任意一名玩家的状态」 (状态1 ↔ 状态2).
-- **current**: play is refused with `err.play_phase`.
-- **expected**: playable in its window.
+- **was**: play refused with `err.play_phase`.
 
 ## WINDOW-02 — R.I.O.T. + 宣战布告 same timing loses the 500 payment
+- **status**: **open** (2026-10-11 batch: c13 hands/draws land, the 500 still does not).
+  Nested `ctx::transfer` inside the counter body returns 0 (no `log.pay`); the
+  draw after it still runs. Effect-kind counters are offered on the per-payment
+  `effect` windows rather than as one timing on the play -- still investigating
+  whether the nested transfer is cancelled by the re-entrancy / `settles_for`
+  path or by the per-payment window shape. l01's ring order (ask order started
+  at seat 2, not the initial user) is the same family.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (war declaration is a whole-table event)
 - **suggested batch**: counteraction windows / payment pipeline
 - **locations**
-  - `rules/tests/tests/cross_chain.rs:638` `c13_riot_and_war_declaration` (P0 ends 12000, want 11500)
-  - `rules/tests/tests/cross_long.rs:105` `l01_counter_war_five_links_deep` (ring skips P1; 宣战布告 never offered; nothing settles)
+  - `rules/tests/tests/cross_chain.rs` `c13_riot_and_war_declaration` (P0 ends 12000, want 11500)
+  - `rules/tests/tests/cross_long.rs` `l01_counter_war_five_links_deep` (ring skips P1; 宣战布告 never offered; nothing settles)
 - **rulebook**: R.I.O.T. / 宣战布告 — 500 payment and the war ring offers.
-- **current**: 500 missing; in a 4-player war the ring skips P1 and nothing settles.
+- **current**: 500 missing; l01's ring start is wrong.
 - **expected**: payment lands; every eligible seat is offered.
 
 ## WINDOW-03 — EXIST redirect / 「造成影响」 latch is at declaration, not settlement
@@ -1572,8 +1604,10 @@ Do these in order; each batch should be a PR that does not share files with the 
    - Unblocks `ckpt_equiv`, long bot games, server `spawn_blocking` workers (~2 MiB), and the browser host stack. Preferred fix: queue nested `card_settle_at` jobs and pump them iteratively (also unroll `flush_deferred` → `start` → `execute`). Stopgap: `MAX_SETTLE_DEPTH`. Then re-check SETTLE-01 (笑容大游行). Files: `crates/game-core/src/engine/{play,mod}.rs`, `crates/game-rules/src/wasm_rules.rs` (`HostRequest::SettleAt`).
 2. **high-A engine bugs — movement** (MOVE-01, MOVE-02, MOVE-04, SKILL-08, SKILL-09, TILE-04, TILE-05)
    - Unblocks the most ignored `cross_move` tests. Files: `game-core/engine/{play,ops,move_ctx}.rs`, `skill-characters/{rana_parking,kaoru_prince}.rs`.
-3. **high-A counteraction windows** (CH-02, CH-03, CH-04 play-as-counter, CH-06, WINDOW-01, WINDOW-02)
-   - Files: `game-rules/src/wasm_rules.rs` chain, `card-mujica/*`, `card-roselia` Hanae.
+3. ~~**high-A counteraction windows** (CH-02, CH-03, CH-04 play-as-counter, CH-06, WINDOW-01, WINDOW-02)~~
+   - **fixed 2026-10-11** (`backlog-windows-a`): CH-02, CH-03, CH-04, WINDOW-01.
+   - CH-06 reclassified **B** (needs CH-05 nested PlayCtx for 真奈's join retarget).
+   - WINDOW-02 remains (500 payment + l01 ring order).
 4. **high-A money** (MONEY-03 Repaint shaped half, CRYSTAL-03 crimson_soul 500 timing, SETTLE-02 CRYCHIC 6-hand block, SETTLE-03 Sakiko absorb)
 5. **high-A host ABI: reply sentinels + quote==charge** (HOST-06, HOST-07, HOST-08 `set_no_build`)
    - Files: `crates/game-rules/src/{wasm_rules,hostfns,native_shims}.rs`, `rules/card-sdk/src/ctx.rs`. Do not share a PR with card bodies.

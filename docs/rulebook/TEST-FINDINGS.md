@@ -1211,3 +1211,47 @@ or A/B items that need a wider surface than this batch:
   stand-in; t24 played Parking Space on the wrong turn and read stay before
   `TurnEndAfter`. Bodies already matched the green 香澄 / g15 shapes.
   Owned-Space Parking Space × Rana body-replace order is C-Q43.
+
+## Counteraction-window batch (2026-10-11, `backlog-windows-a`)
+
+High-severity class-A window items. 9 tests un-ignored, green twice.
+
+* **CH-02 (engine + card):** 花园多惠 (2) `On::Counteract` lacked
+  `COUNTERACT_FROM_FIELD`, so the bound skill was never offered. Added that
+  prop plus `COUNTERACT_GROUP` (one cancel per activation; the skill stays in
+  play and the seat keeps the floor). Dropped the body's `ask_yes` — the
+  [反击] window's play-vs-skip *is* the 「你可以使用」 choice.
+  Un-ignored: `c24_hanae_cancels_a_hand_effect`, `c25_hanae_vs_skill_main`,
+  `l05_one_skill_several_counteractions`.
+* **CH-02 (test harness):** `counteract_offered` now matches the field-skill
+  label `ask.counteract.skill`; `prompt_refers` reads an `ask_yes` question
+  from the title/text (options are bare `ask.yes`/`ask.no`).
+* **CH-03 (engine + card):** `can_counteract_now` honours `noCounteractTurn`
+  (骰子已经掷下 「本回合内所有其他玩家无法从手牌中使用[反击]」). The latch
+  owner is exempt; field counteractions stay a separate path. A turn-key
+  placement latch replaces uid-based `is_placed` (a hand play has
+  `current_uid = -1`, so play + the own-counteract follow-up double-placed).
+  Un-ignored: `c14_dice_cast_shuts_windows` (asserts single placement),
+  `g18_shut_window_blocks_the_negate_one`.
+* **CH-04 (engine + card):** a counter link's `target` is the answered seat
+  (the `counteracted` timing of 「有玩家对你使用[反击]后」); 无法将视线移开
+  declares `Card`/`SkillUsed` as well as `Counteracted`, with
+  `target == owner && actor != owner`. Force-move lands on
+  `trigger::player_id` of the answered link. Un-ignored:
+  `c16_cannot_look_away_answers_a_counter`, `l04_forced_move_into_remote_settle`.
+* **CH-06 reclassified B:** per-pair cancel works (`c05` green). `g19` needs
+  真奈's nested join window (CH-05 `nested PlayCtx`) so the joiner's
+  self-targeted cancel is retargeted 「改为你」 to 真奈's user.
+* **WINDOW-01 (test bug):** `err.play_phase` was a turn-start skill hook
+  prompt left open (若叶睦 / 丰川祥子 `ask_yes` at `TurnStartBefore`), so the
+  match was busy. Drain after `begin_turn`. Un-ignored:
+  `c27_welcome_state_switch`.
+* **WINDOW-02 open:** `c13` hands/draws land (the counter body's draw runs)
+  but the nested `ctx::transfer` returns 0 (no `log.pay`). `l01`'s ring start
+  is wrong. Still ignored.
+* **Expectation change (c16):** X = 2000 ÷ 「[使用者]以外的[存活]玩家数量」
+  向上取整10. A 2-player table has divisor 1; the old `2000 / 2` assumed a
+  3-player table. Same rule as the green `c17` (3 players, divisor 2).
+* **Expectation / drive changes (l04):** restore OPS after Anon Tokyo consumes
+  the main move before playing 武道馆 (the scenario is a staged board, not a
+  full turn).
