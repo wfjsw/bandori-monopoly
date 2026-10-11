@@ -85,9 +85,51 @@ rows when those arrive.
 
 ## Harness verdicts
 
-Filled from `tools/kani/run.sh --unit tiles,tile_marks` on this branch
-(`CARGO_TARGET_DIR=/home/monopoly/kani-target-tiles`). See the run table
-below once the batch finishes.
+`bash tools/kani/run.sh --unit tiles|tile_marks --harness NAME --jobs 1`
+(`CARGO_TARGET_DIR=/home/monopoly/kani-target-tiles`, `--default-unwind 80`).
+Time is CBMC `Verification Time`. **Method note:** bodies are invoked via the
+shipped `CardDef` function pointer (`call_settle` / `call_mark_cp_land`), not
+`invoke::find`'s registry scan — the scan is an unwind cliff (hundreds of
+`CardDef`s) that made every post-body assertion `UNREACHABLE` (vacuous iff)
+at `#[kani::unwind(24)]`.
+
+**Runner note.** An earlier `tools/kani/run.sh` grepped `unmodeled host op`
+before the CBMC verdict and mislabeled harnesses `UNMODELED` (the string is
+`host::unmodeled.assertion.1`'s *description* even when that check is
+`UNREACHABLE`). Master's runner prefers `VERIFICATION:- …`; this branch has
+that fix merged.
+
+### Proven on this pass
+
+| harness | verdict | time (s) | notes |
+|---|---|---:|---|
+| `agent_half_charge_rounds_up_to_ten` | SUCCESSFUL | 0.20 | 「向上取整10」; cover 301→160 |
+| `force_buy_is_double_buy_total` | SUCCESSFUL | 0.20 | 2×(price + houses·house) |
+| `level_cap_is_rent_len_minus_one` | SUCCESSFUL | 0.31 | cover RiNG cap 0 / 购物中心 cap 3 |
+| `property_leg_unowned_is_buy` | SUCCESSFUL | 0.12 | cover all five property legs |
+| `edogawa_settle_draw_one_iff` | SUCCESSFUL | 90.8 | cover "exactly one effect" **SATISFIED**; every clause assert **SUCCESS** (non-vacuous) |
+
+### Written, verdict pending (slot queue; run centrally or retry)
+
+| harness | expected | notes |
+|---|---|---|
+| `agent_all_owned_gate` | SUCCESSFUL | G-SETTLE-13 all-owned-by-other gate |
+| `circle_settle_draw_one_iff` | SUCCESSFUL | same shape as edogawa |
+| `event_settle_draw_one_iff` | SUCCESSFUL | observable half only |
+| `edogawa_settle_mutant_two_cards` | SUCCESSFUL (panic as expected) | non-vacuity |
+| `edogawa_settle_mutant_wrong_player` | SUCCESSFUL (panic as expected) | |
+| `circle_settle_mutant_two_cards` | SUCCESSFUL (panic as expected) | |
+| `circle_settle_mutant_wrong_player` | SUCCESSFUL (panic as expected) | |
+| `event_settle_mutant_two_cards` | SUCCESSFUL (panic as expected) | |
+| `event_settle_mutant_wrong_player` | SUCCESSFUL (panic as expected) | |
+| `mark_cp_land_gain_iff` | SUCCESSFUL | gain-800 observable half |
+| `mark_cp_land_mutant_900` | SUCCESSFUL (panic as expected) | |
+| `mark_cp_land_mutant_wrong_seat` | SUCCESSFUL (panic as expected) | |
+| `mark_cp_land_guard_rejects_without_tile_cp` | SUCCESSFUL | no-op when no [CP点] |
+| `mark_cp_land_guard_rejects_when_cancelled` | SUCCESSFUL | no-op when cancelled |
+| `mark_cp_land_tile_cp_visible_to_count_marks` | SUCCESSFUL | prefix of the guard; cover still-rejecting `mark_src_at` stub |
+
+All 20 harnesses compile under `cargo build -p rules-kani` on this branch.
 
 ## What we tried for blocked / protocol rows
 
