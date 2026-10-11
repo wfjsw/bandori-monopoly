@@ -18,7 +18,15 @@ use crate::want_human::SLOT_X;
 pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:（灯）内心的呐喊",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], "actor != owner && move.main && card.placed", None, pull),
+        // 规则书（3）: 「你位于此卡前后5格内时可在时机合适时消耗1火罐…」 -- the
+        // offer exists only within 5 of this card and with a fire to spend.
+        // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
+        On::Hook(
+            &[card_sdk::abi::HookKind::SettleBefore],
+            "actor != owner && move.main && card.placed && fire(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
+            None,
+            pull,
+        ),
         On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(empty_piles), shuffle_in),
         On::Play("", None, tomori_inner_shout),
     ],
@@ -95,17 +103,14 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
 
 /// （3）: when another player's main-move endpoint is within 5 of this card's
 /// tile and the owner has 1 fire, pull them onto the card's tile with no settle.
+/// （3）: applicability is the entry's condition (`fire(owner) >= 1 &&`
+/// `dist(pos(actor), card.tile) <= 5`); the ask is the 「可」 opt-in. Spend
+/// after accept is a cost, not an applicability check.
 fn pull(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
     let Some(card_tile) = ctx::self_tile() else {
         return Ok(());
     };
-    if card_tile < 0 || ctx::dist(ctx::player_pos(mover), card_tile) > 5 {
-        return Ok(());
-    }
-    if ctx::fire(player_id) < 1 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tomori_inner_shout_title")),

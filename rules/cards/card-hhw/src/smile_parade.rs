@@ -18,7 +18,16 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
     "HHW:笑容大游行",
     &[
         On::Hook(&[card_sdk::abi::HookKind::SettleBody], card_sdk::pre::MINE, None, settle_instead),
-        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], "actor == owner && card.placed", None, move_after),
+        // 规则书（2）: 「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」
+        // -- the offer exists only while this card sits on 弦卷集团 and the
+        // settle has an endpoint to move it to. CEL: `card.tile` / `tile_named`
+        // / `tile.id`.
+        On::Hook(
+            &[card_sdk::abi::HookKind::SettleAfter],
+            "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0",
+            None,
+            move_after,
+        ),
         On::Counteract(
             &[ChainKind::Pass],
             "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null",
@@ -129,16 +138,10 @@ fn settle_instead(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上并移除其上
 /// 全部奇迹水晶」.
+/// （2）: applicability is the entry's condition (`card.tile ==
+/// tile_named('弦卷集团') && tile.id >= 0`); the ask is the 「可」 opt-in.
 fn move_after(player_id: i32) -> card_sdk::Asked {
-    let group = ctx::tile_named("弦卷集团");
-    let here = ctx::self_tile().unwrap_or(-1);
-    if group < 0 || here != group {
-        return Ok(());
-    }
     let to = ctx::trigger::tile();
-    if to < 0 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("smile_parade_title")),

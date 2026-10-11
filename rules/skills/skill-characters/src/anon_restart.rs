@@ -11,8 +11,8 @@
 //! after the effect landed. The two kinds the clause names are `Stay` and
 //! `Teleport`; the trigger carries which one in `abnormal_kind()`.
 
-use card_sdk::abi::{state_key, AbKind, HookKind};
-use card_sdk::ctx::{self, state, trigger};
+use card_sdk::abi::{AbKind, HookKind};
+use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANON_RESTART: CardDef = CardDef::new(
@@ -20,7 +20,15 @@ pub const ANON_RESTART: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::Abnormal], card_sdk::pre::MINE, None, on_abnormal),
+        // （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐」 --
+        // the offer exists only for those two abnormal kinds and with two
+        // pots to spend. Kind is a residual (`AbKind` match); fire is CEL.
+        On::Hook(
+            &[HookKind::Abnormal],
+            "actor == owner && fire(owner) >= 2",
+            Some(stay_or_teleport),
+            on_abnormal,
+        ),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
@@ -41,18 +49,19 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`on_abnormal`]: the abnormal kind is [停留] or [传送].
+/// `AbKind` is not a CEL atom (the wire value lives in `value`).
+fn stay_or_teleport(_player_id: i32) -> bool {
+    matches!(
+        trigger::abnormal_kind(),
+        Some(AbKind::Stay | AbKind::Teleport)
+    )
+}
+
 /// （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐，抽一张卡」.
+/// Applicability is `fire(owner) >= 2` + `stay_or_teleport`; spend after
+/// accept is a cost, not an applicability check.
 fn on_abnormal(player_id: i32) -> card_sdk::Asked {
-    let kind = match trigger::abnormal_kind() {
-        Some(k) => k,
-        None => return Ok(()),
-    };
-    if !matches!(kind, AbKind::Stay | AbKind::Teleport) {
-        return Ok(());
-    }
-    if state::get(player_id, state_key::FIRE) < 2 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("anon_restart_title")),

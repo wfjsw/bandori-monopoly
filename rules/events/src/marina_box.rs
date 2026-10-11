@@ -20,10 +20,16 @@ pub const MARINA_BOX: CardDef = CardDef::new(
     "event:麻里奈小姐的礼物箱",
     &[
         On::Play("", None, play),
-        // 「所有玩家[经过]CiRCLE时」 -- the tile is the condition now (the
-        // body-top `!is_circle` early-out). The `always` guard is deleted: it
-        // prefetched every pass of every tile for a no-op.
-        On::Hook(&[HookKind::PassTile], "is_circle(tile.id)", None, on_pass),
+        // 「所有玩家[经过]CiRCLE时可[消耗]一次500资金」 -- the tile and the
+        // spendability are the condition now (body-top early-outs). The
+        // `always` guard is deleted: it prefetched every pass of every tile
+        // for a no-op.
+        On::Hook(
+            &[HookKind::PassTile],
+            "is_circle(tile.id) && actor >= 0 && money(actor) >= 500",
+            None,
+            on_pass,
+        ),
         On::Hook(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
@@ -46,19 +52,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金」
 /// -- the passer is asked whether to spend; only a 「yes」 pays 500 and rolls.
 /// The CiRCLE tile is the entry's condition (`is_circle(tile.id)`).
+/// Applicability is the entry's condition (`money(actor) >= 500`); the ask is
+/// the 「可」 opt-in.
 fn on_pass(_player_id: i32) -> card_sdk::Asked {
     let who = trigger::player_id();
-    if who < 0 {
-        return Ok(());
-    }
     // 「可[消耗]一次500资金」 -- optional, a player decision. The ask is the
     // missing `passTile` prompt surface filled in: the passer is prompted here.
     // 「可」 means the spend is opt-in, so 「不消耗」 is the default (the choice
     // prompt's fallback is index 0). The two behaviour tests answer 「消耗」
     // explicitly; `drain()` (fallback) therefore declines.
-    if ctx::money_of(who) < 500 {
-        return Ok(());
-    }
     let pay = ctx::ask_pick(
         who,
         &Msg::new("log.event.marina_box_title"),

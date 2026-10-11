@@ -18,9 +18,18 @@ pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
     &[
         On::Counteract(&[ChainKind::Paid], "", Some(can_counteract), counteract),
-        On::AtEnd("", None, check),
+        // Latch clear is bookkeeping (always runs when the turn-end check was
+        // scheduled). Split from the offer so a non-applicable offer can skip
+        // its body without also skipping the clear.
+        On::AtEnd("", None, clear_armed),
+        // 规则书[特]: 「此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家
+        // 支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在
+        // 可购买的此类格子，则可选择…」 -- the offer exists only when every
+        // clause of that 「如果」 holds. Derived scans, residual.
+        On::AtEnd("", Some(revive_applies), check),
     ],
-);
+)
+.silent(&[1]);
 
 const ID: &str = "RAS:游击演出";
 
@@ -125,29 +134,41 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Latch clear (bookkeeping): the turn-end check has run.
+fn clear_armed(player_id: i32) -> card_sdk::Asked {
+    ctx::set_slot(player_id, SLOT_ARMED, 0);
+    Ok(())
+}
+
+/// Residual guard for [`check`]: every 「如果」 clause of the revive offer.
+///
+/// 规则书[特]:
+/// > 此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金
+/// > 且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子，则可选择
+/// > 将此卡置于场上…
+///
+/// 「本回合的[结算]向其他玩家支付了至少1000资金」 -- C#
+/// `H._turnCtx.PaidInSettle`. 「你不拥有任何可盖房的live house格子」 /
+/// 「场上已不存在可购买的此类格子」 -- derived tile scans. None of these
+/// are CEL (`paid_in_settle` / `lh_buildable` / discard contents).
+fn revive_applies(player_id: i32) -> bool {
+    if ctx::paid_in_settle() < 1000 {
+        return false;
+    }
+    if ctx::owned_tiles(player_id).into_iter().any(lh_buildable) {
+        return false;
+    }
+    if (0..ctx::tile_count()).any(|t| lh_buildable(t) && ctx::tile_owner(t) < 0) {
+        return false;
+    }
+    !ctx::owned_tiles(player_id).is_empty() && ctx::discard_count(player_id, ID) > 0
+}
+
 /// C# `CardGuerrilla.Check` -- at turn end, offer to revive the card from the
 /// discard as a fake Live House over the player's most expensive deed.
+/// Applicability is `revive_applies`.
 fn check(player_id: i32) -> card_sdk::Asked {
-    ctx::set_slot(player_id, SLOT_ARMED, 0);
-    // 规则书[特]: 「此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金
-    // 且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子」
-    // 规则书[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- C#
-    // `H._turnCtx.PaidInSettle`, the turn's running settle-to-others total.
-    if ctx::paid_in_settle() < 1000 {
-        return Ok(());
-    }
-    // 「你不拥有任何可盖房的live house格子」 -- owns no buildable Live House.
-    if ctx::owned_tiles(player_id).into_iter().any(lh_buildable) {
-        return Ok(());
-    }
-    // 「且场上已不存在可购买的此类格子」 -- no unowned buildable Live House.
-    if (0..ctx::tile_count()).any(|t| lh_buildable(t) && ctx::tile_owner(t) < 0) {
-        return Ok(());
-    }
     let mine = ctx::owned_tiles(player_id);
-    if mine.is_empty() || ctx::discard_count(player_id, ID) <= 0 {
-        return Ok(());
-    }
     // 「则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子」
     if !ctx::ask_yes(
         player_id,

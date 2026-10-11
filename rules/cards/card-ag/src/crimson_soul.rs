@@ -30,7 +30,16 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // is no `money >= 500` play gate -- an unaffordable in-body payment
         // takes the Q1 shortfall path. C# `CardCrimsonSoul.WhyNot` had one.
         On::Play("", None, play),
-        On::Hook(&[HookKind::PayChoose], "", Some(pay_choose_guard), pay_choose),
+        // 规则书[持续]（1）: 「[拥有者]因导致的[消耗]或[支付]时可选择移除此卡的
+        // 1个[奇迹水晶]」 -- the offer is to *remove a crystal*, so it exists
+        // only with a crystal on the card and a positive amount to cut.
+        // Fully expressible (actor / placed / value / card.counter) -- G4.
+        On::Hook(
+            &[HookKind::PayChoose],
+            "actor == owner && card.placed && value > 0 && card.counter('crystals') > 0",
+            None,
+            pay_choose,
+        ),
         On::Hook(&[HookKind::SkillUsed], "", Some(skill_used_guard), skill_used),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
@@ -75,17 +84,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 规则书[持续]（1）: 「[拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次
 /// [消耗]或[支付]金额减少1000」 -- C# `CardCrimsonSoul.PayChoose` / `Use`:
 /// the owner is about to pay -> may spend 1 crystal for −1,000 (0 floor).
-/// Pure guard for [`pay_choose`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn pay_choose_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
-}
-
+/// Applicability is the entry's condition.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
-    if amount <= 0 || ctx::crystals() <= 0 {
-        return Ok(());
-    }
     // C# `H.AskYes(Seat, CardName, "要付 …：移除 1 个 [奇迹水晶] 让这次 −1,000 吗？…", r, p.amount >= 800)`.
     let to = trigger::target();
     let ask = if to >= 0 && to != player_id {

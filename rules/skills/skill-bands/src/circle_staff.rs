@@ -17,7 +17,15 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
     // 「在你打出的"通用"卡生效时」 -- the pre-effect `card` hook, not the
     // post-effect `cardPlayed`: `set_play_doubled` has to land before the
     // card's body reads `ctx::n`.
-    &[On::Hook(&[HookKind::Card], card_sdk::pre::MINE, None, on_played)],
+    // 「在你打出的"通用"卡生效时，可额外弃一张牌」 -- the offer exists only
+    // for a 通用 card and with something to discard. Prefix is a residual
+    // (string match on the played id); hand size is CEL.
+    &[On::Hook(
+        &[HookKind::Card],
+        "actor == owner && hand(owner) >= 1",
+        Some(is_general_card),
+        on_played,
+    )],
 )
     .legacy(&[(0, legacy_mine)]);
 
@@ -25,19 +33,22 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
+/// Residual guard for [`on_played`]: the played card is a 通用 one (a card's
+/// band is the prefix of its id). String match, outside the CEL schema.
+fn is_general_card(_player_id: i32) -> bool {
+    ctx::trigger::cards()
+        .into_iter()
+        .next()
+        .is_some_and(|id| id.starts_with("G:") || id.starts_with("通用"))
+}
+
 /// （2）「在你打出的"通用"卡生效时，可额外弃一张牌，将打出的那张卡[手]效果中的
 /// 一个数字变为两倍」.
+/// Applicability is `hand(owner) >= 1` + `is_general_card`.
 fn on_played(player_id: i32) -> card_sdk::Asked {
     let Some(id) = ctx::trigger::cards().into_iter().next() else {
         return Ok(());
     };
-    // 「"通用"卡」 -- the general pool, by the card's own prefix.
-    if !id.starts_with("G:") && !id.starts_with("通用") {
-        return Ok(());
-    }
-    if ctx::hand_size(player_id) < 1 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("circle_staff_title")),

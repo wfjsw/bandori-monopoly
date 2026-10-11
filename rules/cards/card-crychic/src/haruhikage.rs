@@ -33,7 +33,15 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             None,
             counteract
         ),
-        On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
+        // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000，可选择…」 -- the
+        // offer exists only at that asset threshold. `assets_of` is a derived
+        // list (money + land + houses), residual (docs/GUARDS.md §4.2).
+        On::Hook(
+            &[HookKind::Drawn],
+            "trigger_card == card.id",
+            Some(assets_ready),
+            on_drawn,
+        ),
     ],
 )
 .legacy(&[(1, legacy_can_counteract)]);
@@ -100,17 +108,18 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`on_drawn`]: 「若抽到此卡时你的总资产大于等于20000」.
+/// C# `H.AssetsOf(seat) >= 20000`. Derived scan (money + land + houses),
+/// outside the CEL schema (docs/GUARDS.md §4.2).
+fn assets_ready(player_id: i32) -> bool {
+    assets_of(player_id) >= 20000
+}
+
 /// 规则书（1）[特]: 「若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，
 /// 依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- C#
 /// `CardHaruhikage.Drawn` -> `Special`.
+/// Applicability is `assets_ready`; the ask is the 「可选择」 opt-in.
 fn on_drawn(player_id: i32) -> card_sdk::Asked {
-    // `trigger_card == card.id` owns "this card was drawn"; the kind list
-    // owns `Drawn`. 「若抽到此卡时你的总资产大于等于20000」 is a derived-list
-    // residual (assets = money + land) and stays.
-    // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000」 -- C# `H.AssetsOf(seat) < 20000`.
-    if assets_of(player_id) < 20000 {
-        return Ok(());
-    }
     // 规则书（1）: 「可选择使其直接从抽牌堆打出」 -- C# `H.AskYes(..., aiYes: true)`.
     let yes = ctx::ask_yes(
         player_id,
