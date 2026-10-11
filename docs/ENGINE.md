@@ -265,7 +265,7 @@ counteraction may redirect the payee -- and the affordability / raise-funds /
 bankruptcy path applies exactly as to any other payment (规则书 L16 「当玩家
 无法支付某笔支出时（包括抵押）」). Only the **net balance effect** is zero when
 the pair settles: the debit and the credit cancel. Pinned by
-`rb_money::self_payment_*`.
+`money::self_payment_*`.
 
 ### Effect ordering (the lookup-group key)
 
@@ -400,7 +400,7 @@ own writes: 壱雫空 「清除场上所有[停留]与[眩晕]效果」 then has
 and a payer the body just un-stunned is still blocked by `can_pay` on the live
 world. Two earlier attempts failed -- *persisting* all keys double-counts
 additive writes (the body replays from the top), and persisting only clears
-breaks `rb_general::parking_replaces_settle_with_stay`.
+breaks `general::parking_replaces_settle_with_stay`.
 
 The design that works is a **merged view that is not persisted**
 (`cx.rs::overlay_guest_state` / `restore_guests_to`). At the `NeedHost`
@@ -662,7 +662,7 @@ content does):
 | fire-up, one real run | 608 µs | 574 µs |
 | fire-up, full-run breakdown | 496 µs | 416 µs |
 
-(Fire-up is `cargo test -p game-rules --test ruleset fire_up`, medians of 5 runs
+(Fire-up is `cargo test -p ruleset-tests --test ruleset fire_up`, medians of 5 runs
 each; the old fixed 256 KiB static arena was BSS and cost no file bytes, so the
 file-size change is only the new code. Wall-clock on this machine is noisy and the
 ranges overlap; the deterministic win is 256 KiB less memory eagerly allocated per

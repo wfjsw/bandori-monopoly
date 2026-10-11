@@ -27,23 +27,23 @@ pub struct KnownFinding {
 pub const KNOWN_FINDINGS: &[KnownFinding] = &[
     KnownFinding {
         signature: "money: player delta",
-        points_at: "rb_fuzz_found::money_ledger_gap",
+        points_at: "fuzz_found::money_ledger_gap",
     },
     KnownFinding {
         signature: "unknown card id",
-        points_at: "rb_fuzz_found::unknown_card_id",
+        points_at: "fuzz_found::unknown_card_id",
     },
     KnownFinding {
         signature: "card_trap",
-        points_at: "rb_fuzz_found::card_trap_reachable",
+        points_at: "fuzz_found::card_trap_reachable",
     },
     KnownFinding {
         signature: "settle: the match did not come to rest",
-        points_at: "rb_fuzz_found::settle_loop_stuck",
+        points_at: "fuzz_found::settle_loop_stuck",
     },
     KnownFinding {
         signature: "world_mut while a routine is pending",
-        points_at: "rb_fuzz_found::settle_loop_stuck",
+        points_at: "fuzz_found::settle_loop_stuck",
     },
 ];
 

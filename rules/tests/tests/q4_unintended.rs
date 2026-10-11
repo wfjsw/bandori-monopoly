@@ -154,7 +154,7 @@ fn q4_unintended_interactions() {
     }
     s.filter_known();
     // The default run reports, it does not fail: every confirmed finding is
-    // filed in `rb_unintended_found.rs` as an `#[ignore = "DISCREPANCY: …"]`
+    // filed in `unintended_found.rs` as an `#[ignore = "DISCREPANCY: …"]`
     // test. Assert only that the harness itself ran.
     assert!(!s.lines.is_empty(), "q4 sweep produced no report");
 }

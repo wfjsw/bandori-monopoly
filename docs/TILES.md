@@ -36,7 +36,7 @@ placed by `bind_skills`); tiles are not. That asymmetry is what this doc
 removes. It also removes the field stand-ins and `slot` scratch that cards use
 today to remember per-tile facts (Anon Tokyo's `anon_tokyo_link_<tile>` slots,
 Change the world's `change_world_turn`, studio_storm's placement note) --
-cross-test cases `t01`–`t05` in `crates/game-rules/tests/rb_cross_tiles.rs` are
+cross-test cases `t01`–`t05` in `rules/tests/tests/cross_tiles.rs` are
 `#[ignore]`d on exactly that gap.
 
 The rulebook decides *what*; the C# port is not a spec.
@@ -336,7 +336,7 @@ with `player_id = -1`.
 | 练习室里的风暴 | `place_card_on` + slot + `rent_factor` | **attaches a remote-settle rule instance to its tile**; the (4-X)/4 scale is that instance's prop |
 | Change the world | `place_card_on` + `change_world_turn` slot + `pay_factor` | **attaches a surcharge instance to its tile**; the 50×(y+1)×n term is its props |
 
-The `rb_cross_tiles.rs` cases this un-ignores (migration legitimately fixes
+The `cross_tiles.rs` cases this un-ignores (migration legitimately fixes
 them -- the assertions stay as written): `t01_anon_tokyo_link`,
 `t02_anon_link_plus_fire_bird`, `t03_anon_link_plus_repaint`,
 `t05_one_of_us_shares`. `t04` and `t11` stay `#[ignore]` (they are `RULING:`,
@@ -396,7 +396,7 @@ it would use).
 
 | measure | value |
 |---|---|
-| `cargo test -p game-rules --test ruleset -- --nocapture fire_up`, one real run | **703.6 µs** ×100 |
+| `cargo test -p ruleset-tests --test ruleset -- --nocapture fire_up`, one real run | **703.6 µs** ×100 |
 | same, `fire_up_breakdown` full run | **619.6 µs**/call |
 | `cargo run -p game-core --release --example sim -- 50 4 200` | **278.5 ms/game** (13.92 s / 50 games, avg 196.4 rounds) |
 
@@ -448,7 +448,7 @@ One kind at a time, in the plan's order. After **each** step:
 node tools/build-ruleset.mjs
 cargo test -p game-core
 cargo test -p game-rules --no-fail-fast
-cargo test -p game-rules --test fuzz_interactions
+cargo test -p ruleset-tests --test fuzz_interactions
 python tools/i18n/check.py        # 4 pre-existing problems
 python tools/rulebook/check.py
 ```
@@ -538,7 +538,7 @@ Concretely still short:
   (`prop::RENT_FACTOR` / `PAY_FACTOR`) is read in the same stage for a card
   that retunes a tile. TODO(规则书): whether a settle-scoped scale should be a
   placed marker carrying a `payMul` hook instead.
-* **`rb_cross_tiles.rs`'s `t01`–`t05` and `t11` stay `#[ignore]`d** -- they are
+* **`cross_tiles.rs`'s `t01`–`t05` and `t11` stay `#[ignore]`d** -- they are
   the card-side gaps (Anon Tokyo's link, ONE OF US, the Fire bird ordering
   ruling) that the card migrations of step 7 still owe.
 
@@ -566,13 +566,13 @@ runs was the combined `cargo test -p game-core -p game-rules` run:
 **696 passed / 0 failed / 85 ignored** (as of the Phase 2 steps, 2026-10-06
 -- the tree has grown since; see
 [TEST-FINDINGS.md](rulebook/TEST-FINDINGS.md) §Status). Per-step runs
-exclude the concurrent agent's in-flight `rb_gap_*.rs` targets (one of which
+exclude the concurrent agent's in-flight `gap_*.rs` targets (one of which
 does not compile against `CardRules`); the rest of the suite is the gate and
 is unchanged at every step.
 
 | step | build-ruleset | game-core | game-rules | fuzz | i18n | rulebook | notes |
 |---|---|---|---|---|---|---|---|
-| baseline | ok | 44 / 0 / 1 | 648 / 0 / 84 (excl. rb_gap) | 8 / 0 / 1 | 4 pre-existing | 0 | fire_up 703.6 µs; sim 278.5 ms/game |
+| baseline | ok | 44 / 0 / 1 | 648 / 0 / 84 (excl. gap_*) | 8 / 0 / 1 | 4 pre-existing | 0 | fire_up 703.6 µs; sim 278.5 ms/game |
 | 1 edogawa | ok (251 rules) | 44 / 0 / 1 | 648 / 0 / 84 | 8 / 0 / 1 | 4 pre-existing | 0 | `On::Settle` + `bind_tiles` + `settle_tile`; ABI v31, SAVE_VERSION 3 |
 | 2 event | ok (252) | 44 / 0 / 1 | 648 / 0 / 84 | 8 / 0 / 1 | 4 pre-existing | 0 | `ctx::draw_event` primitive added |
 | 3 circle | ok (254) | 44 / 0 / 1 | 648 / 0 / 84 | 8 / 0 / 1 | 4 pre-existing | 0 | landing draw only; the [经过] reward stays on the walk |
@@ -584,10 +584,10 @@ is unchanged at every step.
 | 9 Phase 3 (engine-fix batch) | ok (256) | 44 / 0 / 1 | green, intentional ignores only | 9 / 0 / 0 | 0 | 0 | ABI v32; sim **262.0 ms/game** (baseline 262.0), event counts identical (rent 19,612 / build 4,641 / buy 2,908 / forcebuy 415 / circle money 5,915 / agent half rent 4,221) |
 
 Step 9 removed `#[ignore]` from nine ruling tests the migration fixed:
-`rb_ras`'s eight `hey_kids_*` (the settle-body chain link + the user ruling
+`ras`'s eight `hey_kids_*` (the settle-body chain link + the user ruling
 that it fires on **another** player's rent settle) and
-`rb_mujica`'s `saki_move_halves_settlement_payments` (the `payMul`-stage
-halving). No assertion was weakened. `rb_mujica`'s other two 「支付减半」
+`mujica`'s `saki_move_halves_settlement_payments` (the `payMul`-stage
+halving). No assertion was weakened. `mujica`'s other two 「支付减半」
 ruling tests stay `#[ignore]`d: `saki_move_halves_a_door_surcharge_rent` has a
 setup that cannot reach the hill it names (a 3-tile move from tile 12), and
 `saki_move_halves_a_forced_stop_and_pay` expects 140 where both 祥，移动 and
