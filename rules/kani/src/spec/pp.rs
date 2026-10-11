@@ -601,7 +601,7 @@ pub fn same_dream_02_money_mutant(up: i32) -> i32 {
 }
 
 pub fn dream_ahead_03_extra_mutant(owned_fans: i32, x: i32) -> i32 {
-    owned_fans * x + (x * 30).min(301)
+    owned_fans * x + (x * 30).min(300) + 1
 }
 
 pub fn guide_01_crystals_mutant(up: i32, down: i32) -> i32 {

@@ -50,8 +50,8 @@ pub fn aya_with_01_five_fans_iff() {
     let mut w = symbolic_skill_world();
     let me = any_player_in(&w);
     // Pin the owner as a Pastel✽Palettes character so the hook's guard admits.
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes");
-    w.character_id[me as usize] = crate::intern::intern("丸山彩");
+    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.character_id[me as usize] = crate::intern::intern("丸山彩").0;
     let pre_pos = w.fans_pos[me as usize];
     world::reset_world(w);
 
@@ -95,7 +95,7 @@ pub fn aya_with_01_five_fans_iff() {
     invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 0, me)  /* Hook DeckAtGameStart */);
     let post = world::snapshot();
     assert!(
-        post.fans_pos[me as usize] == spec::char_start_five_fans(pre_pos),
+        post.fans_pos[me as usize] == spec::skills_pp::char_start_five_fans(pre_pos),
         "C-PP-aya-with-01: exactly +5 positive fans"
     );
     let (logbuf, log_n) = world::with_world(|ww| (ww.log, ww.log_n));
@@ -109,7 +109,7 @@ pub fn aya_with_01_five_fans_iff() {
                 player: p,
                 key,
                 n,
-            } if *p == me && *key == crate::intern::intern(FANS_UP) => Some(*n),
+            } if *p == me && *key == crate::intern::intern(FANS_UP).0 => Some(*n),
             _ => None,
         })
         .sum();
@@ -125,13 +125,13 @@ pub fn aya_with_01_five_fans_iff() {
 pub fn aya_with_01_mutant_is_detected() {
     let mut w = symbolic_skill_world();
     let me = any_player_in(&w);
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes");
+    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre_pos = w.fans_pos[me as usize];
     world::reset_world(w);
     invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 0, me)  /* Hook DeckAtGameStart */);
     let post = world::snapshot();
     assert!(
-        post.fans_pos[me as usize] != spec::char_start_five_fans_mutant(pre_pos),
+        post.fans_pos[me as usize] != spec::skills_pp::char_start_five_fans_mutant(pre_pos),
         "mutant: card must not match +4"
     );
 }
@@ -148,7 +148,7 @@ pub fn aya_with_01_mutant_is_detected() {
 pub fn aya_with_02_pay_discount_iff() {
     let mut w = symbolic_skill_world();
     let me = any_player_in(&w);
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes");
+    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let up = w.fans_pos[me as usize];
     let pre_amount = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 5_000);
@@ -163,10 +163,10 @@ pub fn aya_with_02_pay_discount_iff() {
     kani::cover!(y > 0, "chose some Y");
     kani::cover!(y == 0, "declined (Y = 0)");
     assert!(
-        spec::aya_with_02_y_ok(y, up),
+        spec::skills_pp::aya_with_02_y_ok(y, up),
         "C-PP-aya-with-02: Y in 0..=up"
     );
-    let expected = spec::aya_with_02_amount(pre_amount, y);
+    let expected = spec::skills_pp::aya_with_02_amount(pre_amount, y);
     assert!(
         post.pay_amount == expected,
         "C-PP-aya-with-02: pay amount = max(pre - Y*100, 0)"
@@ -183,7 +183,7 @@ pub fn aya_with_02_pay_discount_iff() {
 pub fn aya_with_02_mutant_is_detected() {
     let mut w = symbolic_skill_world();
     let me = any_player_in(&w);
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes");
+    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let up = w.fans_pos[me as usize];
     kani::assume(up >= 1);
     let pre_amount = kani::any();
@@ -197,7 +197,7 @@ pub fn aya_with_02_mutant_is_detected() {
     let y = up - post.fans_pos[me as usize];
     if y >= 1 {
         assert!(
-            post.pay_amount != spec::aya_with_02_amount_mutant(pre_amount, y),
+            post.pay_amount != spec::skills_pp::aya_with_02_amount_mutant(pre_amount, y),
             "mutant: card must not use Y*99"
         );
     }
@@ -217,7 +217,7 @@ pub fn band_idol_02_overflow_formula() {
     let down: i32 = kani::any();
     kani::assume(x >= 0 && x <= 30);
     kani::assume(down >= 0 && down <= 20);
-    let over = spec::band_idol_02_overflow(x, down);
+    let over = spec::skills_pp::band_idol_02_overflow(x, down);
     kani::cover!(x > down, "overflow applies");
     kani::cover!(x <= down, "no overflow");
     if x > down {
@@ -225,7 +225,7 @@ pub fn band_idol_02_overflow_formula() {
     } else {
         assert!(over == 0, "no overflow when X <= down");
     }
-    let m = spec::band_idol_02_overflow_mutant(x, down);
+    let m = spec::skills_pp::band_idol_02_overflow_mutant(x, down);
     if x > down && (x - down) < 10 {
         assert!(m != over, "mutant cap 11 vs 10");
     }
@@ -239,7 +239,7 @@ pub fn band_idol_02_overflow_formula() {
 pub fn band_idol_02_body_never_overflows() {
     let mut w = symbolic_skill_world();
     let me = any_player_in(&w);
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes");
+    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let down = w.fans_neg[me as usize];
     kani::assume(down >= 1);
     world::reset_world(w);
@@ -267,7 +267,7 @@ pub fn band_idol_02_body_never_overflows() {
 pub fn band_idol_04_tick_iff() {
     let mut w = symbolic_skill_world();
     let me = any_player_in(&w);
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes");
+    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre = kani::any();
     kani::assume(pre >= 0 && pre <= 10);
     // crystals of the running instance live on the named CRYSTALS key of
@@ -284,8 +284,8 @@ pub fn band_idol_04_tick_iff() {
     kani::cover!(cry == pre + 1, "option declined (just +1)");
     kani::cover!(cry == pre + 1 - 5, "option taken (+1 -5)");
     assert!(
-        cry == spec::band_idol_04_crystals_after_tick(pre)
-            || cry == spec::band_idol_04_crystals_after_spend(pre),
+        cry == spec::skills_pp::band_idol_04_crystals_after_tick(pre)
+            || cry == spec::skills_pp::band_idol_04_crystals_after_spend(pre),
         "C-PP-band-idol-04: +1, optionally -5 and draw 1"
     );
 }
@@ -299,8 +299,8 @@ pub fn band_idol_04_tick_iff() {
 #[kani::unwind(8)]
 pub fn hina_lottery_02_borrow_map() {
     let roll: i32 = kani::any();
-    kani::assume(spec::hina_lottery_02_roll_ok(roll));
-    let b = spec::hina_lottery_02_borrow(roll);
+    kani::assume(spec::skills_pp::hina_lottery_02_roll_ok(roll));
+    let b = spec::skills_pp::hina_lottery_02_borrow(roll);
     match roll {
         1 => assert!(b == 0, "1 -> 丸山彩"),
         2 => assert!(b == 1, "2 -> 白鹭千圣"),
@@ -321,12 +321,12 @@ pub fn maya_dawn_02_watch_formula() {
     let deck: i32 = kani::any();
     kani::assume(y >= 0 && y <= 10);
     kani::assume(deck >= 0 && deck <= 8);
-    let watch = spec::maya_dawn_02_watch(y, deck);
+    let watch = spec::skills_pp::maya_dawn_02_watch(y, deck);
     assert!(
         watch == (y + 1).min(deck),
         "C-PP-maya-dawn-02: watch min(Y+1, deck)"
     );
-    assert!(spec::maya_dawn_02_hand_n() == 1, "exactly one card joins the hand");
+    assert!(spec::skills_pp::maya_dawn_02_hand_n() == 1, "exactly one card joins the hand");
 }
 
 // ===========================================================================
@@ -339,11 +339,11 @@ pub fn maya_dawn_02_watch_formula() {
 pub fn eve_unify_02_extra_dice_formula() {
     let y: i32 = kani::any();
     kani::assume(y >= 0 && y <= 6);
-    let n = spec::eve_unify_02_extra_dice(y);
+    let n = spec::skills_pp::eve_unify_02_extra_dice(y);
     assert!(n == y, "C-PP-eve-unify-02: +Yd4");
     let sum: i32 = kani::any();
     kani::assume(sum >= 0 && sum <= 24);
-    if spec::eve_unify_02_extra_sum_ok(sum, y) {
+    if spec::skills_pp::eve_unify_02_extra_sum_ok(sum, y) {
         assert!(sum >= y && sum <= 4 * y, "Yd4 sum range");
     }
 }
@@ -362,11 +362,11 @@ pub fn chisato_frank_02_formula() {
     kani::assume(y >= 0 && y <= 20);
     kani::assume(up >= 0 && up <= 20);
     assert!(
-        spec::chisato_frank_02_amount(pre, y) == pre + y * 100,
+        spec::skills_pp::chisato_frank_02_amount(pre, y) == pre + y * 100,
         "receive += Y*100"
     );
     assert!(
-        spec::chisato_frank_02_flip_pos(up, y) == up.min(y),
+        spec::skills_pp::chisato_frank_02_flip_pos(up, y) == up.min(y),
         "flip min(Y, up) positives reverse"
     );
 }
@@ -380,14 +380,14 @@ pub fn chisato_frank_02_formula() {
 pub fn band_idol_01_start_grant_iff() {
     let mut w = symbolic_skill_world();
     let me = any_player_in(&w);
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes");
+    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     // Place the band card so `placed_cards` finds it (first copy).
     world::reset_world(w);
     // The body requires the card on someone's field. Place it via the host.
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
-            card: crate::intern::intern("skill:Pastel✽Palettes:与偶像一起"),
+            card: crate::intern::intern("skill:Pastel✽Palettes:与偶像一起").0,
             player: me,
             tile: 0,
             face_down: false,
@@ -403,7 +403,7 @@ pub fn band_idol_01_start_grant_iff() {
     let post_down = world::with_world(|ww| ww.fans_neg);
     for p in 0..MAX_PLAYERS {
         let is_pp = world::with_world(|ww| {
-            ww.band_id[p] == crate::intern::intern("Pastel✽Palettes")
+            ww.band_id[p] == crate::intern::intern("Pastel✽Palettes").0
         });
         if is_pp || p >= world::with_world(|ww| ww.n_players) as usize {
             assert!(
@@ -429,7 +429,7 @@ pub fn band_idol_01_start_grant_iff() {
 pub fn band_idol_03_no_reward_formula() {
     let empty: [Effect; 0] = [];
     assert!(
-        spec::band_idol_03_no_reward(&empty),
+        spec::skills_pp::band_idol_03_no_reward(&empty),
         "empty reward log is the required shape"
     );
 }

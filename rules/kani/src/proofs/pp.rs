@@ -21,11 +21,11 @@ const FANS_UP: &str = "P✽P粉丝(正)";
 const FANS_DOWN: &str = "P✽P粉丝(反)";
 
 fn tok_pos() -> u16 {
-    crate::intern::intern(FANS_UP)
+    crate::intern::intern(FANS_UP).0
 }
 
 fn tok_neg() -> u16 {
-    crate::intern::intern(FANS_DOWN)
+    crate::intern::intern(FANS_DOWN).0
 }
 
 /// Symbolic play world: 2..=4 players, bounded money/fans, no [共鸣] in hand.
@@ -67,7 +67,7 @@ fn band_crystals_of(p: i32) -> i32 {
     world::with_world(|w| w.band_crystals[p as usize])
 }
 
-fn card_crystals_of_player(p: i32, key: u16) -> i32 {
+fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
     world::with_world(|w| w.key_get(p, key))
 }
 
@@ -101,7 +101,7 @@ pub fn same_dream_01_band_plus_3_iff() {
     // step 1
     let band = band_crystals_of(user);
     assert!(
-        band == spec::same_dream_01_band_after(pre_band),
+        band == spec::pp::same_dream_01_band_after(pre_band),
         "C-PP-same-dream-01: band pool must rise by exactly 3"
     );
     kani::cover!(pre_up > 0, "step 2 has positives to flip");
@@ -126,7 +126,7 @@ pub fn same_dream_01_band_plus_3_iff() {
         })
         .sum();
     assert!(
-        gained == spec::same_dream_02_money(pre_up),
+        gained == spec::pp::same_dream_02_money(pre_up),
         "C-PP-same-dream-02: gain = flipped * 100"
     );
 
@@ -174,7 +174,7 @@ pub fn same_dream_02_money_mutant_is_detected() {
         })
         .sum();
     assert!(
-        gained != spec::same_dream_02_money_mutant(pre_up),
+        gained != spec::pp::same_dream_02_money_mutant(pre_up),
         "mutant: card must not match up*101"
     );
 }
@@ -219,7 +219,7 @@ pub fn title_idol_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::play("PP:TITLE IDOL", user));
     let band = band_crystals_of(user);
     assert!(
-        band != spec::title_idol_01_band_after_mutant(pre_band),
+        band != spec::pp::title_idol_01_band_after_mutant(pre_band),
         "mutant: card must not match +3"
     );
 }
@@ -243,7 +243,7 @@ pub fn seeyou_01_gate_iff() {
     world::reset_world(w);
 
     // The gate is `up <= down` when the player holds no 共鸣.
-    let allowed = spec::seeyou_01_gate_ok(up, down);
+    let allowed = spec::pp::seeyou_01_gate_ok(up, down);
     kani::cover!(allowed, "gate admits (up <= down)");
     kani::cover!(!allowed, "gate rejects (up > down)");
 
@@ -261,7 +261,7 @@ pub fn seeyou_01_gate_iff() {
     // beyond the [手] effect (separately proved in seeyou_03).
     invoke::unwrap_done(invoke::play("PP:[衍生]明天见", user));
     let post = world::snapshot();
-    let (ex, nx) = spec::seeyou_03_post(up, down);
+    let (ex, nx) = spec::pp::seeyou_03_post(up, down);
     assert!(
         post.fans_pos[user as usize] == ex && post.fans_neg[user as usize] == nx,
         "C-PP-seeyou-03: flip min(owned, down) reverse positive"
@@ -281,12 +281,12 @@ pub fn seeyou_03_flip_iff() {
     let user = any_player_in(&w);
     let up = w.fans_pos[user as usize];
     let down = w.fans_neg[user as usize];
-    kani::assume(spec::seeyou_01_gate_ok(up, down));
+    kani::assume(spec::pp::seeyou_01_gate_ok(up, down));
     world::reset_world(w);
     invoke::unwrap_done(invoke::play("PP:[衍生]明天见", user));
     let post = world::snapshot();
-    let flip = spec::seeyou_03_flip(up, down);
-    let (ex_up, ex_down) = spec::seeyou_03_post(up, down);
+    let flip = spec::pp::seeyou_03_flip(up, down);
+    let (ex_up, ex_down) = spec::pp::seeyou_03_post(up, down);
     kani::cover!(flip > 0, "some reverse fans flip");
     kani::cover!(flip == 0, "nothing to flip");
     kani::cover!(down > up + down, "impossible");
@@ -311,7 +311,7 @@ pub fn seeyou_03_mutant_is_detected() {
     let user = any_player_in(&w);
     let up = w.fans_pos[user as usize];
     let down = w.fans_neg[user as usize];
-    kani::assume(spec::seeyou_01_gate_ok(up, down));
+    kani::assume(spec::pp::seeyou_01_gate_ok(up, down));
     // Reachable disagreement needs owned < down, i.e. up == 0 and down > 0,
     // or more generally up + down < down is impossible; use up==0, down>=2
     // so min(owned,down)=down is fine but mutant == down as well...
@@ -325,7 +325,7 @@ pub fn seeyou_03_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play("PP:[衍生]明天见", user));
     let post = world::snapshot();
-    let flip = spec::seeyou_03_flip(up, down);
+    let flip = spec::pp::seeyou_03_flip(up, down);
     // Detect an off-by-one high: card flips `flip`, mutant wants `flip + 1`.
     assert!(
         post.fans_pos[user as usize] != up + flip + 1,
@@ -350,8 +350,8 @@ pub fn together_01_x_formula_iff() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play("PP:有你与我在这里共度", user));
     let post = world::snapshot();
-    let flip = spec::together_01_flip(up, down);
-    let x = spec::together_01_x(up, down);
+    let flip = spec::pp::together_01_flip(up, down);
+    let x = spec::pp::together_01_x(up, down);
     kani::cover!(up < down, "bonus branch (up < down)");
     kani::cover!(up >= down, "base X = 5");
     kani::cover!(flip == 0, "nothing to flip");
@@ -362,7 +362,7 @@ pub fn together_01_x_formula_iff() {
     );
     // The formula itself
     let expect_x = if up < down {
-        5 + spec::ceil_half(down - up)
+        5 + spec::pp::ceil_half(down - up)
     } else {
         5
     };
@@ -379,12 +379,12 @@ pub fn together_01_mutant_is_detected() {
     let down = w.fans_neg[user as usize];
     // Need up < down and ceil_half(down-up) != 1
     kani::assume(up < down);
-    kani::assume(spec::ceil_half(down - up) != 1);
+    kani::assume(spec::pp::ceil_half(down - up) != 1);
     world::reset_world(w);
     invoke::unwrap_done(invoke::play("PP:有你与我在这里共度", user));
     let post = world::snapshot();
     let real = post.fans_pos[user as usize] - up;
-    let mutant_flip = spec::together_01_x_mutant(up, down).min(down).max(0);
+    let mutant_flip = spec::pp::together_01_x_mutant(up, down).min(down).max(0);
     assert!(
         real != mutant_flip,
         "mutant: card must not match the +1 bonus"
@@ -415,12 +415,12 @@ pub fn guide_01_band_and_crystals_iff() {
     invoke::unwrap_done(invoke::play("PP:练习生解密指南", user));
     let band = band_crystals_of(user);
     assert!(
-        band == spec::guide_01_band_after(pre_band),
+        band == spec::pp::guide_01_band_after(pre_band),
         "C-PP-guide-01: band pool +3"
     );
     // Card crystals = owned / 3 via `set_crystals` (counter on trig_player).
     let cry = card_crystals_of_player(user, crate::intern::intern(CRYSTALS));
-    let expect = spec::guide_01_crystals(up, down);
+    let expect = spec::pp::guide_01_crystals(up, down);
     kani::cover!(expect > 0, "places some crystals");
     kani::cover!(expect == 0, "owned < 3 places none");
     assert!(
@@ -449,7 +449,7 @@ pub fn guide_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::play("PP:练习生解密指南", user));
     let cry = card_crystals_of_player(user, crate::intern::intern(CRYSTALS));
     assert!(
-        cry != spec::guide_01_crystals_mutant(up, down),
+        cry != spec::pp::guide_01_crystals_mutant(up, down),
         "mutant: card must not round up"
     );
 }
@@ -487,7 +487,7 @@ pub fn eve_bushido_01_gain_iff() {
     );
     let sum = gained / 60;
     assert!(
-        spec::eve_bushido_01_sum_ok(sum) || gained == 0,
+        spec::pp::eve_bushido_01_sum_ok(sum) || gained == 0,
         "C-PP-eve-bushido-01: 12d4 sum in 12..=48 (or host returned 0)"
     );
     let placed = world::with_world(|ww| {
@@ -515,7 +515,7 @@ pub fn no_expect_02_place_deck_draw_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
-        spec::no_expect_02_effects_ok(effects, user),
+        spec::pp::no_expect_02_effects_ok(effects, user),
         "C-PP-no-expect-02: place on field + draw 1"
     );
     let deck_n = world::with_world(|ww| ww.deck_n);
@@ -542,7 +542,7 @@ pub fn first_accident_01_place_deck_draw_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
-        spec::first_accident_01_effects_ok(effects, user),
+        spec::pp::first_accident_01_effects_ok(effects, user),
         "C-PP-first-accident-01: place on field + draw 1"
     );
     let deck_n = world::with_world(|ww| ww.deck_n);
@@ -566,8 +566,8 @@ pub fn maya_inf_02_crystal_formula() {
     // Pure formula obligations (the hook body is a second harness below).
     let pre: i32 = kani::any();
     kani::assume(pre >= 0 && pre <= 8);
-    let post = spec::maya_inf_02_card_crystals(pre);
-    let band = spec::maya_inf_02_band_bump(pre);
+    let post = spec::pp::maya_inf_02_card_crystals(pre);
+    let band = spec::pp::maya_inf_02_band_bump(pre);
     kani::cover!(pre < 4, "under the cap: +1 crystal");
     kani::cover!(pre >= 4, "at the cap: clear and bump band");
     if pre < 4 {
@@ -576,7 +576,7 @@ pub fn maya_inf_02_crystal_formula() {
         assert!(post == 0 && band == 1, "at-cap leg");
     }
     // MUTANT distinguishability (pure)
-    let m = spec::maya_inf_02_card_crystals_mutant(pre);
+    let m = spec::pp::maya_inf_02_card_crystals_mutant(pre);
     if pre >= 4 {
         assert!(m != post, "mutant leaves one crystal behind");
     }
@@ -594,16 +594,17 @@ pub fn dream_ahead_03_formula() {
     kani::assume(fans >= 0 && fans <= 40);
     let x: i32 = kani::any();
     kani::assume(x >= 0 && x <= 8);
-    let extra = spec::dream_ahead_03_extra(fans, x);
+    let extra = spec::pp::dream_ahead_03_extra(fans, x);
     assert!(
         extra == fans * x + (x * 30).min(300),
         "C-PP-dream-ahead-03: owned*X + MIN(X*30, 300)"
     );
-    let m = spec::dream_ahead_03_extra_mutant(fans, x);
+    let m = spec::pp::dream_ahead_03_extra_mutant(fans, x);
     kani::cover!(x >= 1 && x * 30 <= 300, "MIN is X*30");
     kani::cover!(x * 30 > 300, "MIN is 300");
-    if x >= 1 {
-        assert!(m != extra, "mutant: 301 vs 300 cap");
+    // Mutant is off-by-one high on the whole extra; it always disagrees.
+    if x >= 1 || fans >= 1 {
+        assert!(m != extra, "mutant: extra+1 must disagree");
     }
 }
 
@@ -616,11 +617,11 @@ pub fn dream_ahead_03_formula() {
 pub fn eve_bushido_05_payment_formula() {
     let a: i32 = kani::any();
     let b: i32 = kani::any();
-    kani::assume(spec::eve_bushido_05_rolls_ok(a, b));
+    kani::assume(spec::pp::eve_bushido_05_rolls_ok(a, b));
     let houses: i32 = kani::any();
     kani::assume(houses >= 0 && houses <= 5);
     let echo: bool = kani::any();
-    let pay = spec::eve_bushido_05_payment(a, b, houses, echo);
+    let pay = spec::pp::eve_bushido_05_payment(a, b, houses, echo);
     kani::cover!(a == b, "tie: no payment");
     kani::cover!(a != b && !echo, "no echo: (houses+1)*100");
     kani::cover!(a != b && echo, "echo: |diff|*50");
@@ -642,9 +643,9 @@ pub fn eve_bushido_05_payment_formula() {
 pub fn shine_again_01_formula() {
     let price: i32 = kani::any();
     kani::assume(price >= 0 && price <= 10_000);
-    let money = spec::shine_again_01_money(price);
+    let money = spec::pp::shine_again_01_money(price);
     assert!(money == price / 5, "price/5");
-    assert!(spec::shine_again_01_fan() == 1, "exactly 1 positive fan");
+    assert!(spec::pp::shine_again_01_fan() == 1, "exactly 1 positive fan");
 }
 // ===========================================================================
 // C-PP-eve-bushido-04
@@ -672,7 +673,7 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
-            card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！"),
+            card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！").0,
             player: me,
             tile: 0,
             face_down: false,
@@ -685,7 +686,7 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
     invoke::unwrap_done(invoke::entry("PP:[若宫伊芙]属于我的武士道！", 1, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
-        cry == spec::eve_bushido_04_crystals(pre),
+        cry == spec::pp::eve_bushido_04_crystals(pre),
         "C-PP-eve-bushido-04: +1 crystal (pre < 3 region)"
     );
 }
@@ -705,7 +706,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
-            card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！"),
+            card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！").0,
             player: me,
             tile: 0,
             face_down: false,
@@ -739,7 +740,7 @@ pub fn guide_04_turn_end_crystal_iff() {
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
-            card: crate::intern::intern("PP:练习生解密指南"),
+            card: crate::intern::intern("PP:练习生解密指南").0,
             player: me,
             tile: 0,
             face_down: false,
@@ -752,7 +753,7 @@ pub fn guide_04_turn_end_crystal_iff() {
     invoke::unwrap_done(invoke::hook_only("PP:练习生解密指南", "TurnEnd", me));
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
-        cry == spec::guide_04_crystals(pre),
+        cry == spec::pp::guide_04_crystals(pre),
         "C-PP-guide-04: +1 crystal at turn end (pre < 5 region)"
     );
 }
@@ -780,7 +781,7 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
-            card: crate::intern::intern("PP:梦在前方，结彩当下"),
+            card: crate::intern::intern("PP:梦在前方，结彩当下").0,
             player: me,
             tile: 0,
             face_down: false,
@@ -793,12 +794,12 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
     invoke::unwrap_done(invoke::entry("PP:梦在前方，结彩当下", 2, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
-        cry == spec::dream_ahead_01_crystals(pre),
+        cry == spec::pp::dream_ahead_01_crystals(pre),
         "C-PP-dream-ahead-01: +1 crystal (pre < 5 region)"
     );
     let x = world::with_world(|ww| ww.key_get(me, crate::intern::intern("dreamAhead.X")));
     assert!(
-        x == 0 || x == spec::dream_ahead_01_overflow(pre),
+        x == 0 || x == spec::pp::dream_ahead_01_overflow(pre),
         "C-PP-dream-ahead-01: overflow only when pre >= 5"
     );
 }
@@ -867,7 +868,7 @@ pub fn jennifer_01_place_other_iff() {
         o
     });
     assert!(
-        spec::jennifer_01_place_ok(owner, user),
+        spec::pp::jennifer_01_place_ok(owner, user),
         "C-PP-jennifer-01: card sits on another player's field"
     );
 }
@@ -898,7 +899,7 @@ pub fn ranger_01_02_steps_by_count_iff() {
             ww.next_uid += 1;
             ww.field[ww.field_n as usize] = world::FieldCard {
                 uid,
-                card: crate::intern::intern("PP:[标题偶像]"),
+                card: crate::intern::intern("PP:[标题偶像]").0,
                 player: user,
                 tile: 0,
                 face_down: false,
@@ -918,11 +919,11 @@ pub fn ranger_01_02_steps_by_count_iff() {
     kani::cover!(count >= 3, "count >= 3: band +3");
     kani::cover!(count < 3, "count < 3: no band bump");
     assert!(
-        post_money == pre_money + spec::ranger_01_money(count),
+        post_money == pre_money + spec::pp::ranger_01_money(count),
         "C-PP-ranger-01: +500 iff count >= 1"
     );
     assert!(
-        band == pre_band + spec::ranger_02_band(count),
+        band == pre_band + spec::pp::ranger_02_band(count),
         "C-PP-ranger-02: band +3 iff count >= 3"
     );
 }
@@ -949,7 +950,7 @@ pub fn flower_01_place_on_tile_iff() {
     invoke::unwrap_done(invoke::play("PP:可爱又强壮的花朵", user));
     let band = band_crystals_of(user);
     assert!(
-        band == spec::flower_01_band_after(pre_band),
+        band == spec::pp::flower_01_band_after(pre_band),
         "C-PP-flower-01: band pool +2"
     );
     let (tile, owner) = world::with_world(|ww| {
@@ -966,7 +967,7 @@ pub fn flower_01_place_on_tile_iff() {
         (t, o)
     });
     assert!(
-        spec::flower_01_tile_ok(tile, owner, user),
+        spec::pp::flower_01_tile_ok(tile, owner, user),
         "C-PP-flower-01: card sits on a user-owned tile"
     );
 }
@@ -1000,7 +1001,7 @@ pub fn chisato_mask_01_total_iff() {
     // The quote pins 2000; if the body uses a different split or total this
     // fails. Split among payers is OPEN — we only check the total.
     assert!(
-        sum == spec::chisato_mask_01_total() || sum == 0,
+        sum == spec::pp::chisato_mask_01_total() || sum == 0,
         "C-PP-chisato-mask-01: others collectively pay the user exactly 2000 (or host model did not settle)"
     );
     let placed = world::with_world(|ww| {
@@ -1077,7 +1078,7 @@ pub fn shine_again_01_rescue_iff() {
     world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
-            card: crate::intern::intern("PP:再次闪耀"),
+            card: crate::intern::intern("PP:再次闪耀").0,
             player: me,
             tile: 3,
             face_down: false,
@@ -1108,7 +1109,7 @@ pub fn shine_again_01_rescue_iff() {
     // money leg must match.
     if post_fans == pre_fans + 1 {
         assert!(
-            gained == spec::shine_again_01_money(price) || gained == 0,
+            gained == spec::pp::shine_again_01_money(price) || gained == 0,
             "C-PP-shine-again-01: money leg is price/5 when the rescue runs"
         );
     }
