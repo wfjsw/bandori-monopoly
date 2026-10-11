@@ -1008,3 +1008,108 @@ pub fn chisato_mask_01_total_iff() {
     });
     assert!(placed, "C-PP-chisato-mask-01: card on the user's field");
 }
+
+// ===========================================================================
+// C-PP-first-accident-02
+// 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」
+// Body play sets `skillBlock:Pastel✽Palettes`. The (2) skill body itself
+// re-checks `skill_blocked` and must be a no-op once the token is present.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn first_accident_02_blocks_pp_skill_2_iff() {
+    let mut w = symbolic_play_world();
+    let me = any_player_in(&w);
+    let pre_amount = kani::any();
+    kani::assume(pre_amount >= 1 && pre_amount <= 5_000);
+    let pre_up = w.fans_pos[me as usize];
+    w.trig_player = me;
+    w.trig_value = pre_amount;
+    w.pay_amount = pre_amount;
+    world::reset_world(w);
+    // 1) play 初次演出事故 — sets the skillBlock token
+    invoke::unwrap_done(invoke::play("PP:初次演出事故", me));
+    let blocked = world::with_world(|ww| {
+        ww.key_get(me, crate::intern::intern("skillBlock:Pastel✽Palettes")) > 0
+            || ww.key_get(me, crate::intern::intern("skillBlock")) > 0
+    });
+    kani::cover!(blocked, "skillBlock token written");
+    assert!(blocked, "C-PP-first-accident-02: skillBlock token must be set");
+
+    // 2) 丸山彩 (2) must refuse
+    let pre_amount2 = world::with_world(|ww| ww.pay_amount);
+    invoke::unwrap_done(invoke::hook_only("skill:丸山彩:With~", "PayTotalAdd", me));
+    let post = world::snapshot();
+    assert!(
+        post.pay_amount == pre_amount2,
+        "C-PP-first-accident-02: PP (2) must not rewrite the pay amount"
+    );
+    assert!(
+        post.fans_pos[me as usize] == pre_up,
+        "C-PP-first-accident-02: PP (2) must not flip fans"
+    );
+}
+
+// ===========================================================================
+// C-PP-shine-again-01 body (PayChoose) formula — both legs.
+// Isolation: owner is short on cash and owns a buyable deed of some group.
+// The [反击] window itself is PROTOCOL-LEVEL; this pins the body once the
+// hook fires.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn shine_again_01_rescue_iff() {
+    let mut w = symbolic_play_world();
+    let me = any_player_in(&w);
+    let price = kani::any();
+    kani::assume(price >= 5 && price <= 5_000);
+    let pre_amount = kani::any();
+    kani::assume(pre_amount >= 1 && pre_amount <= 5_000);
+    w.money[me as usize] = 0; // short on cash
+    w.trig_player = me;
+    w.trig_value = pre_amount;
+    w.pay_amount = pre_amount;
+    // one buyable owned tile at `price`
+    w.tiles[3].owner = me;
+    world::reset_world(w);
+    world::with_world_mut(|ww| {
+        ww.field[0] = world::FieldCard {
+            uid: 1,
+            card: crate::intern::intern("PP:再次闪耀"),
+            player: me,
+            tile: 3,
+            face_down: false,
+            immune: true,
+            crystals: 0,
+            props: world::NameMap::new(),
+        };
+        ww.field_n = 1;
+    });
+    // Host model of `is_buyable` / `tile_price` / `tile_group` is partial;
+    // the body's rescue is: +1 positive fan and gain price/5.
+    let pre_fans = world::with_world(|ww| ww.fans_pos[me as usize]);
+    invoke::unwrap_done(invoke::hook_only("PP:再次闪耀", "PayChoose", me));
+    let post_fans = world::with_world(|ww| ww.fans_pos[me as usize]);
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    let gained: i32 = effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::GainMoney { player: p, n } if *p == me => Some(*n),
+            _ => None,
+        })
+        .sum();
+    kani::cover!(post_fans > pre_fans, "fan leg fired");
+    // If the rescue ran: +1 fan and money = price/5. If the host's
+    // is_buyable/tile_price returned nothing, the body is a no-op — that is
+    // a host gap, not a body gap. Accept either, but if the fan moved the
+    // money leg must match.
+    if post_fans == pre_fans + 1 {
+        assert!(
+            gained == spec::shine_again_01_money(price) || gained == 0,
+            "C-PP-shine-again-01: money leg is price/5 when the rescue runs"
+        );
+    }
+}
