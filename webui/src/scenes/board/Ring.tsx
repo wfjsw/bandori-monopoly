@@ -13,7 +13,7 @@ import type { Model } from "./model";
 import { showEventPile } from "./Popups";
 import s from "./Ring.module.css";
 import { t as tr } from "../../i18n/t";
-import { fmtMsg } from "../../i18n/msg";
+import { fmtMsg, type Msg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 
 /** The TTS board (mod 3506424344, object 53c41e / Lua `pathXY`): 60 tiles on a
@@ -356,61 +356,76 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
             const owner = S.owners[i] ?? -1;
             const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, pick.has(i) && s.pickable);
             const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
-            const marks = (S.marks ?? []).filter((x) => x.tile === i).slice(0, 3);
+            const tileMarks = S.marks ?? [];
+            const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
+            const marks = tileMarks.filter((x) => x.tile === i && x.category !== "designate").slice(0, 3);
             const embers = S.embers?.[i] ?? 0;
             const quote = m.v.tileQuotes?.[i] ?? null;
             const quoteTipLine = quote ? quoteTip(quote) : t.price > 0 ? `${tr("deed.price")} ${t.price}` : "";
+            const markTip = (x: { category: string; owner: number; card: string; note?: Msg | null; count: number; kind: string }) => {
+              const cp = x.category === "cp";
+              const des = x.category === "designate";
+              const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
+              const title = cp
+                ? (x.count > 1 ? `${tr("board.markCp")} ×${x.count}` : tr("board.markCp"))
+                : des
+                  ? (x.count > 1 ? `${cardTitle(x.card)} ×${x.count}` : cardTitle(x.card))
+                  : (x.count > 1 ? `${kindLabel} ×${x.count}` : kindLabel);
+              const lines = [
+                des
+                  ? x.owner >= 0 ? tr("board.markDesignate", { who: m.nameOf(x.owner) }) : ""
+                  : !cp && x.owner >= 0 ? tr("board.markOwner", { who: m.nameOf(x.owner) }) : "",
+                x.card && !des ? tr("board.markFrom", { card: cardTitle(x.card) }) : "",
+                x.note ? fmtMsg(x.note, namesOf(S)) : "",
+              ];
+              return { title, lines };
+            };
             const extras = (
               <>
                 <div className={s.houses}>{Array.from({ length: Math.min(S.houses[i] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
-                <div className={s.marks}>
-                  {marks.map((x) => {
-                    // [CP点] is its own tile-mark category: neutral (no seat owns
-                    // one), labelled 「CP点」, and its popup has no 「放置者」.
-                    // [指定] is a designation: a pill of the designating card's
-                    // short name in the designating seat's colour.
-                    const cp = x.category === "cp";
-                    const des = x.category === "designate";
-                    const desTitle = des ? cardTitle(x.card) : "";
-                    // A player mark's `kind` is a display name or an i18n key
-                    // (`cards:…`); never show the raw key.
-                    const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
-                    const title = cp
-                      ? (x.count > 1 ? `${tr("board.markCp")} ×${x.count}` : tr("board.markCp"))
-                      : des
-                        ? (x.count > 1 ? `${desTitle} ×${x.count}` : desTitle)
-                        : (x.count > 1 ? `${kindLabel} ×${x.count}` : kindLabel);
-                    const desInk = des && x.owner >= 0 && isLight(m.colorOf(x.owner)) ? "#17221e" : undefined;
-                    return (
-                      <span
-                        key={x.uid}
-                        className={cx(s.mark, cp && s.cp, des && s.markDesignate)}
-                        style={
-                          cp
-                            ? undefined
-                            : {
-                                background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)",
-                                ...(desInk ? { color: desInk } : {}),
-                              }
-                        }
-                        onMouseEnter={(e) => showTip(e, title, [
-                          // 「指定者」 names a designation's designating seat,
-                          // 「放置者」 a player mark's placer; a [CP点] has none.
-                          des
-                            ? x.owner >= 0 ? tr("board.markDesignate", { who: m.nameOf(x.owner) }) : ""
-                            : !cp && x.owner >= 0 ? tr("board.markOwner", { who: m.nameOf(x.owner) }) : "",
-                          // The tip title already carries the designating card.
-                          x.card && !des ? tr("board.markFrom", { card: cardTitle(x.card) }) : "",
-                          x.note ? fmtMsg(x.note, namesOf(S)) : "",
-                        ])}
-                        onMouseLeave={hideTip}
-                      >{cp ? "CP" : des ? shortMarkName(desTitle) : (kindLabel.trim()[0] ?? "•")}</span>
-                    );
-                  })}
-                  {embers > 0 && (
-                    <span className={cx(s.mark, s.ember)} onMouseEnter={(e) => showTip(e, tr("board.embers", { n: embers }), [])} onMouseLeave={hideTip}>{embers}</span>
-                  )}
-                </div>
+                {designations.length > 0 && (
+                  <div className={s.desig}>
+                    {designations.slice(0, 2).map((x) => {
+                      const { title, lines } = markTip(x);
+                      const ink = x.owner >= 0 && isLight(m.colorOf(x.owner)) ? s.lightInk : undefined;
+                      return (
+                        <span
+                          key={x.uid}
+                          className={cx(s.markDesignate, ink)}
+                          style={{ background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
+                          onMouseEnter={(e) => showTip(e, title, lines)}
+                          onMouseLeave={hideTip}
+                        >{shortMarkName(cardTitle(x.card))}</span>
+                      );
+                    })}
+                    {designations.length > 2 && (
+                      <span className={s.desigMore}>+{designations.length - 2}</span>
+                    )}
+                  </div>
+                )}
+                {(marks.length > 0 || embers > 0) && (
+                  <div className={cx(s.marks, designations.length > 0 && s.marksAside)}>
+                    {marks.map((x) => {
+                      // [CP点] is its own tile-mark category: neutral (no seat owns
+                      // one), labelled 「CP点」, and its popup has no 「放置者」.
+                      const cp = x.category === "cp";
+                      const { title, lines } = markTip(x);
+                      const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
+                      return (
+                        <span
+                          key={x.uid}
+                          className={cx(s.mark, cp && s.cp)}
+                          style={cp ? undefined : { background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
+                          onMouseEnter={(e) => showTip(e, title, lines)}
+                          onMouseLeave={hideTip}
+                        >{cp ? "CP" : (kindLabel.trim()[0] ?? "•")}</span>
+                      );
+                    })}
+                    {embers > 0 && (
+                      <span className={cx(s.mark, s.ember)} onMouseEnter={(e) => showTip(e, tr("board.embers", { n: embers }), [])} onMouseLeave={hideTip}>{embers}</span>
+                    )}
+                  </div>
+                )}
               </>
             );
             return (
