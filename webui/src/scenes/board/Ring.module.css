@@ -178,17 +178,22 @@
   pointer-events: none;
 }
 .houses img { width: calc(var(--u, 12px) * 1.05); height: calc(var(--u, 12px) * 1.05); }
-/* Marks share the bottom gutter with the owner strip -- never the name. */
+/* Marks share the bottom gutter with the owner strip -- never the name. The
+   row is width-capped (left + right) so a wide [指定] pill cannot spill past
+   the cell; children shrink and ellipsise instead. */
 .marks {
   position: absolute;
   left: calc(var(--u, 12px) * 0.16);
+  right: calc(var(--u, 12px) * 0.16);
   bottom: calc(var(--u, 12px) * 0.42);
   z-index: 4;
   display: flex;
   gap: 1px;
+  min-width: 0;
+  overflow: hidden;
   pointer-events: none;
 }
-.marks .mark { pointer-events: auto; cursor: help; box-shadow: 0 0 0 1px #fff; }
+.marks .mark { pointer-events: auto; cursor: help; box-shadow: 0 0 0 1px #fff; min-width: 0; flex: 0 1 auto; }
 .mark {
   width: calc(var(--u, 12px) * 1.15);
   height: calc(var(--u, 12px) * 1.15);
@@ -208,6 +213,21 @@
   font-size: calc(var(--u, 12px) * 0.58);
   font-weight: 700;
   letter-spacing: -0.2px;
+}
+/* [指定] designation: a short pill of the designating card's name (JS already
+   cuts to a Latin word / a few CJK chars; the ellipsis is the backstop) in the
+   designating seat's colour -- a rounded rect, apart from the CP gold square
+   and the player mark's circle. */
+.markDesignate {
+  width: auto;
+  max-width: calc(var(--u, 12px) * 3.2);
+  padding: 0 calc(var(--u, 12px) * 0.22);
+  border-radius: var(--r-pill);
+  font-size: calc(var(--u, 12px) * 0.58);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ember { background: var(--tag-red); }
 

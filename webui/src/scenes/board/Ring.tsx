@@ -68,21 +68,25 @@ export interface RollControl {
 /** What a hovered tile marker says, and where (the wrap's own pixel space). */
 interface MarkTip { x: number; y: number; title: string; lines: string[] }
 
+/** Wide (fullwidth / CJK) glyph? Shared by the name metrics and the [指定]
+ *  short-label cut. */
+function isWideCh(ch: string): boolean {
+  const c = ch.codePointAt(0) ?? 0;
+  return (
+    (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) ||
+    (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) ||
+    (c >= 0xfe30 && c <= 0xfe6f) || (c >= 0xff00 && c <= 0xff60) ||
+    (c >= 0xffe0 && c <= 0xffe6)
+  );
+}
+
 /** Rough advance width in half-CJK units: fullwidth glyphs count 2, others 1.
  *  Used to pick a name size tier and to balance the two name lines -- Latin
  *  `DUB MUSIC EXPERIMENT` and CJK 「瑟罗希亚国际学校」 both need the small end
  *  even though `.length` differs. */
 function textUnits(s: string): number {
   let n = 0;
-  for (const ch of s) {
-    const c = ch.codePointAt(0) ?? 0;
-    const wide =
-      (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) ||
-      (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) ||
-      (c >= 0xfe30 && c <= 0xfe6f) || (c >= 0xff00 && c <= 0xff60) ||
-      (c >= 0xffe0 && c <= 0xffe6);
-    n += wide ? 2 : 1;
-  }
+  for (const ch of s) n += isWideCh(ch) ? 2 : 1;
   return n;
 }
 
@@ -95,15 +99,28 @@ const NAME_SUFFIX = /^(?:女子)?(?:学院|大学|中学|学园|高中|学校|�
 function estWidth(s: string, font: number): number {
   let w = 0;
   for (const ch of s) {
-    const c = ch.codePointAt(0) ?? 0;
-    const wide =
-      (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) ||
-      (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) ||
-      (c >= 0xfe30 && c <= 0xfe6f) || (c >= 0xff00 && c <= 0xff60) ||
-      (c >= 0xffe0 && c <= 0xffe6);
-    w += wide ? font : ch === " " ? font * 0.3 : font * 0.64;
+    w += isWideCh(ch) ? font : ch === " " ? font * 0.3 : font * 0.64;
   }
   return w;
+}
+
+/** Compact on-tile label for a [指定] pill: the designating card's short name.
+ *  Latin-led names keep the first word (dotted initials like 「R. I. O. T.」
+ *  keep up to four pieces); CJK-led names keep the first 2–4 characters. The
+ *  pill's CSS ellipsis is the backstop for a long Latin word. */
+function shortMarkName(title: string): string {
+  const t = plain(title).trim();
+  if (!t) return "";
+  const chars = [...t];
+  if (isWideCh(chars[0]!)) return chars.slice(0, 4).join("");
+  const words = t.split(/\s+/);
+  // Dotted initials: every piece is one letter plus punctuation.
+  if (words.length > 1 && words.every((w) => /^[A-Za-z0-9][.'’-]?$/.test(w))) {
+    return words.slice(0, 4).join(" ");
+  }
+  // Latin-led, including a mixed tail (「Sumimi不会解散哦」 → 「Sumimi」).
+  const word = words[0]!;
+  return /^[A-Za-z0-9@#][A-Za-z0-9@#.'’+-]*/.exec(word)?.[0] ?? chars.slice(0, 4).join("");
 }
 
 /**
@@ -350,23 +367,41 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
                   {marks.map((x) => {
                     // [CP点] is its own tile-mark category: neutral (no seat owns
                     // one), labelled 「CP点」, and its popup has no 「放置者」.
+                    // [指定] is a designation: a pill of the designating card's
+                    // short name in the designating seat's colour.
                     const cp = x.category === "cp";
+                    const des = x.category === "designate";
+                    const desTitle = des ? cardTitle(x.card) : "";
                     const title = cp
                       ? (x.count > 1 ? `${tr("board.markCp")} ×${x.count}` : tr("board.markCp"))
-                      : (x.count > 1 ? `${x.kind} ×${x.count}` : x.kind);
+                      : des
+                        ? (x.count > 1 ? `${desTitle} ×${x.count}` : desTitle)
+                        : (x.count > 1 ? `${x.kind} ×${x.count}` : x.kind);
+                    const desInk = des && x.owner >= 0 && isLight(m.colorOf(x.owner)) ? "#17221e" : undefined;
                     return (
                       <span
                         key={x.uid}
-                        className={cx(s.mark, cp && s.cp)}
-                        style={cp ? undefined : { background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
+                        className={cx(s.mark, cp && s.cp, des && s.markDesignate)}
+                        style={
+                          cp
+                            ? undefined
+                            : {
+                                background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)",
+                                ...(desInk ? { color: desInk } : {}),
+                              }
+                        }
                         onMouseEnter={(e) => showTip(e, title, [
-                          // 「放置者」 is a player mark's only; a [CP点] has no owner.
-                          !cp && x.owner >= 0 ? tr("board.markOwner", { who: m.nameOf(x.owner) }) : "",
-                          x.card ? tr("board.markFrom", { card: cardTitle(x.card) }) : "",
+                          // 「指定者」 names a designation's designating seat,
+                          // 「放置者」 a player mark's placer; a [CP点] has none.
+                          des
+                            ? x.owner >= 0 ? tr("board.markDesignate", { who: m.nameOf(x.owner) }) : ""
+                            : !cp && x.owner >= 0 ? tr("board.markOwner", { who: m.nameOf(x.owner) }) : "",
+                          // The tip title already carries the designating card.
+                          x.card && !des ? tr("board.markFrom", { card: cardTitle(x.card) }) : "",
                           x.note ? fmtMsg(x.note, namesOf(S)) : "",
                         ])}
                         onMouseLeave={hideTip}
-                      >{cp ? "CP" : x.kind.slice(0, 1)}</span>
+                      >{cp ? "CP" : des ? shortMarkName(desTitle) : x.kind.slice(0, 1)}</span>
                     );
                   })}
                   {embers > 0 && (
