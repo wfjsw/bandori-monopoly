@@ -1,8 +1,8 @@
 # C-GEN -- 通用 (general cards)
 
-Unit 20 / `c-general` owns this file and `rules/spec/tests/card_general.rs`.
+Unit 20 / `c-general` owns this file and `rules/tests/tests/spec_card_general.rs`.
 `通用:10次招募（1回限定）` is covered by the shared template
-`rules/spec/tests/example_card.rs` (do not edit); its clause is listed here
+`rules/tests/tests/spec_example_card.rs` (do not edit); its clause is listed here
 with that executable.
 
 Sources: live sheet (`docs/rulebook/cards.json`, keys `通用:*`) >
@@ -10,7 +10,7 @@ Sources: live sheet (`docs/rulebook/cards.json`, keys `通用:*`) >
 TEST-FINDINGS §6 rulings unless superseded by newer sheet text.
 
 Clause IDs: `C-GEN-<slug>-<n>`. Executables live in
-`rules/spec/tests/card_general.rs` unless noted.
+`rules/tests/tests/spec_card_general.rs` unless noted.
 
 ---
 
@@ -28,7 +28,7 @@ Clause IDs: `C-GEN-<slug>-<n>`. Executables live in
 * **Rulings & OPEN:** 「1回限定」 is not defined in the rulebook body and the
   card carries no [限] tag -- see `OPEN-GEN-recruit-once`. The contract covers
   only the printed [手] body.
-* **Executable:** `rules/spec/tests/example_card.rs`
+* **Executable:** `rules/tests/tests/spec_example_card.rs`
   (`g_general_10draw_money`, `ten_draw_contract`). Clause id there is
   `C-GENERAL-10次招募-01` (the template's own naming); it is the executable for
   this entry.

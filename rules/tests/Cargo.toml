@@ -12,3 +12,5 @@ game-core = { path = "../../crates/game-core" }
 game-rules = { path = "../../crates/game-rules" }
 card-sdk = { workspace = true }
 serde_json = { workspace = true }
+rules-spec = { path = "../spec" }
+spec-kit = { path = "../../crates/spec-kit" }

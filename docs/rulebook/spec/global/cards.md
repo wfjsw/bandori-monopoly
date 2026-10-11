@@ -33,7 +33,7 @@ mulligans only rearrange it.
   transition as the draw that overflowed. Mid-mulligan / mid-pick hands that
   a prompt is still holding are not `post` of an *answered* act.
 * **Executable:** `rules_spec::global::cards::g_cards_01`
-  (soak + `tests/g_cards.rs::g_cards_01_*`).
+  (soak + `tests/spec_g_cards.rs::g_cards_01_*`).
 
 ---
 
@@ -56,7 +56,7 @@ mulligans only rearrange it.
   Windows that create or [移除] a card are out of scope here (G-CARDS-03 and
   the scenario tests own those, with the exact card named).
 * **Executable:** `rules_spec::global::cards::g_cards_02`
-  (`tests/g_cards.rs::g_cards_02_pure_draw_conserves_the_pile_multiset`).
+  (`tests/spec_g_cards.rs::g_cards_02_pure_draw_conserves_the_pile_multiset`).
   **Not armed on the soak** (see the note in `cards.rs`): a "pure" draw
   window still runs `drawn` / `drew` hooks that may legally create cards, so
   the multiset is not conserved across a fuzz draw even though the book's
@@ -81,9 +81,9 @@ mulligans only rearrange it.
 * **Frame:** n/a (read of that card's zone).
 * **Rulings & OPEN:** a negated play still leaves the hand. [持续] cards are
   the contrapositive: they stay on the 场地 / tile
-  (`tests/g_cards.rs::g_cards_03_continuous_play_stays_on_the_field`).
+  (`tests/spec_g_cards.rs::g_cards_03_continuous_play_stays_on_the_field`).
 * **Executable:** `rules_spec::global::cards::g_cards_03`
-  (soak + `tests/g_cards.rs::g_cards_03_non_continuous_play_goes_to_discard`).
+  (soak + `tests/spec_g_cards.rs::g_cards_03_non_continuous_play_goes_to_discard`).
 
 ---
 
@@ -101,7 +101,7 @@ mulligans only rearrange it.
 * **Rulings & OPEN:** the engine also refills after a discard that finds the
   draw already empty; that still satisfies 「当抽卡区抽光时」.
 * **Executable:** `rules_spec::global::cards::g_cards_04`
-  (soak + `tests/g_cards.rs::g_cards_04_*`).
+  (soak + `tests/spec_g_cards.rs::g_cards_04_*`).
 
 ---
 
@@ -121,7 +121,7 @@ mulligans only rearrange it.
 * **Rulings & OPEN:** a card tagged both [手] and [反击] is still a [手] play
   when pressed via `Act(play)`.
 * **Executable:** `rules_spec::global::cards::g_cards_05`
-  (soak + `tests/g_cards.rs::g_cards_05_*`).
+  (soak + `tests/spec_g_cards.rs::g_cards_05_*`).
 
 ---
 
@@ -139,7 +139,7 @@ mulligans only rearrange it.
 * **Rulings & OPEN:** see OPEN-CARDS-LIMIT-X below. The soak half of this
   clause never *demands* a refusal; the Anon Tokyo scenario pins X.
 * **Executable:** `rules_spec::global::cards::g_cards_06`
-  (soak + `tests/g_cards.rs::g_cards_06_limit_gate_anon_tokyo`).
+  (soak + `tests/spec_g_cards.rs::g_cards_06_limit_gate_anon_tokyo`).
 
 ---
 
@@ -157,7 +157,7 @@ mulligans only rearrange it.
   refuses it; `deck::clean` drops it).
 * **Frame:** n/a.
 * **Rulings & OPEN:** none.
-* **Executable:** `tests/g_cards.rs::g_cards_07_derived_cards_never_in_starting_deck`
+* **Executable:** `tests/spec_g_cards.rs::g_cards_07_derived_cards_never_in_starting_deck`
   (+ the observational twin `g_cards_08_opening_piles_are_ten_distinct_non_derived`).
 
 ---
@@ -176,7 +176,7 @@ mulligans only rearrange it.
 * **Rulings & OPEN:** 「不能重复」 is read as distinct card names (the engine's
   `deck::clean` is a `HashSet` over ids, then `take(SIZE)`).
 * **Executable:**
-  `tests/g_cards.rs::g_cards_08_starting_deck_is_ten_distinct` +
+  `tests/spec_g_cards.rs::g_cards_08_starting_deck_is_ten_distinct` +
   `g_cards_08_opening_piles_are_ten_distinct_non_derived`.
 
 ---
@@ -195,7 +195,7 @@ mulligans only rearrange it.
 * **Frame:** n/a.
 * **Rulings & OPEN:** effects may lower the opening hand
   (`deckBeforeGame` / 「初始手牌减1」); the book's baseline is 2.
-* **Executable:** `tests/g_cards.rs::g_cards_09_opening_draw_is_two`.
+* **Executable:** `tests/spec_g_cards.rs::g_cards_09_opening_draw_is_two`.
 
 ---
 
@@ -214,7 +214,7 @@ mulligans only rearrange it.
 * **Frame:** n/a.
 * **Rulings & OPEN:** 「全部洗回」 is the whole hand, not a subset. The redraw
   is 2 (the same `startHand` the deal used).
-* **Executable:** `tests/g_cards.rs::g_cards_10_mulligan_keep_is_quiet_and_once`
+* **Executable:** `tests/spec_g_cards.rs::g_cards_10_mulligan_keep_is_quiet_and_once`
   + `g_cards_10_mulligan_redraws_two_exactly_once`
   (local helper `open_at_mulligan` -- the `Table` constructor auto-answers
   the prompt).
@@ -236,7 +236,7 @@ mulligans only rearrange it.
 * **Rulings & OPEN:** 「公开」 is the public log + the `eventTop` /
   `event_active` views.
 * **Executable:** `rules_spec::global::cards::g_cards_11`
-  (soak + `tests/g_cards.rs::g_cards_11_*`).
+  (soak + `tests/spec_g_cards.rs::g_cards_11_*`).
 
 ---
 
@@ -254,7 +254,7 @@ mulligans only rearrange it.
 * **Frame:** n/a.
 * **Rulings & OPEN:** derived events are 「永久移除」 rather than recycled.
 * **Executable:** `rules_spec::global::cards::g_cards_12`
-  (soak + `tests/g_cards.rs::g_cards_11_clause_over_a_controlled_event_draw`).
+  (soak + `tests/spec_g_cards.rs::g_cards_11_clause_over_a_controlled_event_draw`).
 
 ---
 
@@ -275,7 +275,7 @@ mulligans only rearrange it.
   「如果没有事件可抽取」 is the empty pile. This clause only pins *when* a
   reshuffle is legal.
 * **Executable:** `rules_spec::global::cards::g_cards_13`
-  (soak + `tests/g_cards.rs::g_cards_13_event_discard_reshuffles_only_when_pile_empty`).
+  (soak + `tests/spec_g_cards.rs::g_cards_13_event_discard_reshuffles_only_when_pile_empty`).
 
 ---
 

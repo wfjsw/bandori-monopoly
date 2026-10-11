@@ -1,6 +1,6 @@
 # C-AG -- Afterglow cards, character skills, band skill
 
-Unit 12 owns this file and `rules/spec/tests/card_ag.rs`. Sources, in
+Unit 12 owns this file and `rules/tests/tests/spec_card_ag.rs`. Sources, in
 precedence order: live sheet (`docs/rulebook/cards.json`, `data/characters.json`
 `text`, `data/bands.json` `text`) > `docs/rulebook/rulebook-doc.md`.
 `rulebook.txt` is not authoritative. TEST-FINDINGS §6 rulings apply unless a
@@ -10,7 +10,7 @@ Scope: all 15 `AG:` cards in `cards.json`, the five Afterglow character skills
 (`band == "Afterglow"` in `data/characters.json`), and the Afterglow band skill
 in `data/bands.json`.
 
-Clause IDs are `C-AG-<slug>-<n>`. Doc and `rules/spec/tests/card_ag.rs` share
+Clause IDs are `C-AG-<slug>-<n>`. Doc and `rules/tests/tests/spec_card_ag.rs` share
 the same IDs. A discrepancy is a plain failing test; a clause that cannot be
 tested says why. Ambiguous text gets an `OPEN-*` entry -- meaning is never
 invented.

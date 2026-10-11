@@ -1,6 +1,6 @@
 # CRYCHIC -- cards, character skills, band skill
 
-Unit `c-crychic`. Owns `rules/spec/tests/card_crychic.rs` and this file.
+Unit `c-crychic`. Owns `rules/tests/tests/spec_card_crychic.rs` and this file.
 
 Sources, in precedence order (see `docs/rulebook/spec/README.md`):
 

@@ -41,7 +41,7 @@
 //!    Trigger / Condition / Effect / Frame / Rulings & OPEN / Executable.
 //!    The doc ID and the code ID are the same string.
 //! 2. Add the `Clause` to the area's `CLAUSES` slice in `rules/spec/src/global/`
-//!    (or to a card contract in `rules/spec/tests/card_*.rs`).
+//!    (or to a card contract in `rules/tests/tests/spec_card_*.rs`).
 //! 3. The `check` closure/fn must follow from the quote alone. Never encode
 //!    observed engine behaviour.
 

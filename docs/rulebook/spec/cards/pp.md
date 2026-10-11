@@ -1,6 +1,6 @@
 # C-PP -- Pastel✽Palettes
 
-Unit C-PP owns this file and `rules/spec/tests/card_pp.rs`. Clause IDs
+Unit C-PP owns this file and `rules/tests/tests/spec_card_pp.rs`. Clause IDs
 `C-PP-<slug>-<n>`.
 
 Sources: live sheet (`docs/rulebook/cards.json` keys `PP:*`,
@@ -673,7 +673,7 @@ Shared (1) on every PP character:
 
 * **OPEN-共鸣** -- [共鸣] is undefined in the book body. The engine offers a
   resonance window; clauses that read 「如果[共鸣]」 only pin the accepted
-  branch. `rules/spec/tests/card_pp.rs` uses `accept_echo`.
+  branch. `rules/tests/tests/spec_card_pp.rs` uses `accept_echo`.
 * **OPEN-分摊** -- 分摊 is undefined. Only collective totals are specified.
 * **OPEN-乐队卡** -- 「Pastel✽Palettes乐队卡」 is named, not defined as a class.
   This unit writes the band-skill field card's `crystals` as that pool.

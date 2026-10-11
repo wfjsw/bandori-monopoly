@@ -33,7 +33,7 @@ index, wrapping at 60.
   the tile) is the zero-step case; whether [经过] also fires there is OPEN
   (see OPEN-经过-0步) -- 行动阶段 13 names only [重叠].
 * **Executable:** `rules_spec::global::movement::g_move_01`.
-* **Scenario:** `tests/g_move.rs::g_move_01_pos_stays_on_the_board`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_01_pos_stays_on_the_board`.
 
 ---
 
@@ -58,7 +58,7 @@ index, wrapping at 60.
   the quote does not cap the length at 20.
 * **Executable:** `rules_spec::global::movement::g_move_02` (plus
   `segment_path`).
-* **Scenario:** `tests/g_move.rs::g_move_02_path_excludes_start_includes_end`,
+* **Scenario:** `tests/spec_g_move.rs::g_move_02_path_excludes_start_includes_end`,
   `g_move_02_path_wraps_the_board`.
 
 ---
@@ -81,7 +81,7 @@ index, wrapping at 60.
   that tile) also fires [经过] is OPEN -- see OPEN-经过-0步. Recompute when a
   [经过] changes the destination is `G-MOVE-04` (scenario).
 * **Executable:** `rules_spec::global::movement::g_move_03`.
-* **Scenario:** `tests/g_move.rs::g_move_03_end_settles_start_does_not`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_03_end_settles_start_does_not`.
 
 ---
 
@@ -110,7 +110,7 @@ index, wrapping at 60.
   changed the destination」 without naming the rewriting card). The
   determined part of the LOCK text (the settle runs at 旭汤澡堂) is pinned
   by the scenario; the mid-walk recompute has no sheet-card instance.
-* **Scenario:** `tests/g_move.rs::g_move_04_pass_rewrites_the_end_before_settle`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_04_pass_rewrites_the_end_before_settle`.
 
 ---
 
@@ -133,7 +133,7 @@ index, wrapping at 60.
   item 1) and is not checked here.
 * **Executable:** `rules_spec::global::movement::g_move_05` (plus
   `move_path`).
-* **Scenario:** `tests/g_move.rs::g_move_05_teleport_path_is_only_the_end`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_05_teleport_path_is_only_the_end`.
 
 ---
 
@@ -156,7 +156,7 @@ index, wrapping at 60.
   「iff」 -- no reward when 移动起点 == CiRCLE -- is checked when the window
   is clean and the step starts a move (not a prompt-answer continuation).
 * **Executable:** `rules_spec::global::movement::g_move_06`.
-* **Scenario:** `tests/g_move.rs::g_move_06_reward_iff_pass_and_start_not_circle`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_06_reward_iff_pass_and_start_not_circle`.
 
 ---
 
@@ -179,7 +179,7 @@ index, wrapping at 60.
   a base-1d20 violation. A `roll` that became a [传送] logs `teleport`, not
   `roll`. The 「base is 1d20」 shape is scenario-tested with loaded dice.
 * **Executable:** `rules_spec::global::movement::g_move_07`.
-* **Scenario:** `tests/g_move.rs::g_move_07_main_move_is_1d20_clockwise`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_07_main_move_is_1d20_clockwise`.
 
 ---
 
@@ -200,7 +200,7 @@ index, wrapping at 60.
   [主要移动] effects wins; only that the second is 无效. A card that 「视为
   主要移动」 after one already ran is that second effect.
 * **Executable:** `rules_spec::global::movement::g_move_08`.
-* **Scenario:** `tests/g_move.rs::g_move_08_second_main_move_does_nothing`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_08_second_main_move_does_nothing`.
 
 ---
 
@@ -224,7 +224,7 @@ index, wrapping at 60.
   that a card suppressed from one that never ran without naming the card;
   the determined parts (settle follows the default move; a 「不[结算]」
   move settles to nothing) are pinned by the scenario.
-* **Scenario:** `tests/g_move.rs::g_move_09_settle_follows_the_main_move`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_09_settle_follows_the_main_move`.
 
 ---
 
@@ -244,7 +244,7 @@ index, wrapping at 60.
 * **Rulings & OPEN:** the number of `overlap` legs is one per other player on
   the tile. The book's example is 要乐奈 (3) 「你与其他玩家重合时」.
 * **Executable:** `rules_spec::global::movement::g_move_10`.
-* **Scenario:** `tests/g_move.rs::g_move_10_overlap_at_the_end_tile`.
+* **Scenario:** `tests/spec_g_move.rs::g_move_10_overlap_at_the_end_tile`.
 
 ---
 
@@ -269,7 +269,7 @@ index, wrapping at 60.
   lines; only the observable tail is ordered here. [强制停下] is truncated
   -- OPEN-强制停下 -- and is not part of this ordering.
 * **Executable:** `rules_spec::global::movement::g_move_11`.
-* **Scenario:** `tests/g_move.rs::g_move_11_walk_then_overlap_then_settle`,
+* **Scenario:** `tests/spec_g_move.rs::g_move_11_walk_then_overlap_then_settle`,
   `g_move_11_circle_reward_sits_between_walk_and_settle`.
 
 ---

@@ -222,7 +222,7 @@ start) that is not named in the book -- see G-STATUS-01.
 
 ## Scenario tests
 
-`rules/spec/tests/g_status.rs` drives clean arranged scenarios (no clearing
+`rules/tests/tests/spec_g_status.rs` drives clean arranged scenarios (no clearing
 cards in the window) for the exact decay timings, the stun skip, the exile
 return [传送], and the [不可阻挡] prohibitions.
 

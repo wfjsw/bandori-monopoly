@@ -1756,7 +1756,9 @@ dependencies = [
  "card-sdk",
  "game-core",
  "game-rules",
+ "rules-spec",
  "serde_json",
+ "spec-kit",
 ]
 
 [[package]]

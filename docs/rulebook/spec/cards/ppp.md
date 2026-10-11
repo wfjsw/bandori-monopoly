@@ -1,6 +1,6 @@
 # C-PPP -- Poppin' Party cards, character skills, band skill
 
-Unit 10 owns this file and `rules/spec/tests/card_ppp.rs`. Every clause of
+Unit 10 owns this file and `rules/tests/tests/spec_card_ppp.rs`. Every clause of
 every PPP entry is listed; a clause that cannot be driven from a legal setup
 says why under **Executable**.
 

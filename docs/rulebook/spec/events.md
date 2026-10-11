@@ -1,6 +1,6 @@
 # E-Events -- 事件卡
 
-Unit E-Events owns this file and `rules/spec/tests/events.rs`. Clause IDs
+Unit E-Events owns this file and `rules/tests/tests/spec_events.rs`. Clause IDs
 `E-<slug>-<n>`.
 
 Sources: live sheet (`data/events.json`) > `docs/rulebook/rulebook-doc.md`

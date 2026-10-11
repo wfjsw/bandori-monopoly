@@ -12,5 +12,3 @@ game-core = { path = "../../crates/game-core" }
 game-rules = { path = "../../crates/game-rules" }
 spec-kit = { path = "../../crates/spec-kit" }
 serde_json = { workspace = true }
-
-[dev-dependencies]
