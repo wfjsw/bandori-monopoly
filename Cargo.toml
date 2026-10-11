@@ -14,6 +14,7 @@ members = [
     "crates/rules-worker",
     "crates/server",
     "crates/web-glue",
+    "rules/kani",
 ]
 # The guest side (cards compiled to wasm32) is a separate workspace: rules/
 # It shares only the ABI crate (`rules/card-sdk`, constants + types, no imports

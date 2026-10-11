@@ -1,0 +1,28 @@
+[package]
+name = "rules-kani"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Kani formal-verification pilot: symbolic host backend + proof harnesses over unmodified card bodies."
+publish = false
+
+# Host-only. Lives under rules/ for discoverability but is a ROOT workspace
+# member and is deliberately NOT listed in rules/Cargo.toml (the wasm guest
+# workspace). Run proofs from the repo root: `cargo kani -p rules-kani`.
+
+[dependencies]
+card-sdk = { workspace = true, features = ["guest"] }
+# Unmodified card bodies under proof. Same crates `rules-native` links.
+card-pp = { path = "../cards/card-pp" }
+card-ppp = { path = "../cards/card-ppp" }
+card-mygo = { path = "../cards/card-mygo" }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde = { workspace = true }
+
+# The `kani` crate is injected by `cargo kani` / kani-compiler from the Kani
+# sysroot (`~/.kani/kani-<ver>/lib/libkani.rlib`). It is NOT the crates.io
+# placeholder `kani = 0.0.1`. Do not add a crates.io dependency.
+
+[package.metadata.kani]
+# Unwinding: card bodies use bounded Vec loops (discard pick, player_count<=4).
+# 24 is the pilot default; raise per-harness with #[kani::unwind] if CBMC asks.

@@ -36,6 +36,10 @@ use alloc::vec::Vec;
 pub mod abi;
 pub mod msg;
 
+/// Kani-only host-import dispatch (see module docs).
+#[cfg(kani)]
+pub mod kani_host;
+
 /// Native-only: how guest buffers cross the ABI on a 64-bit build (wasm32 uses
 /// real 32-bit pointers; see the module docs).
 #[cfg(not(target_arch = "wasm32"))]

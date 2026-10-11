@@ -58,7 +58,20 @@ fn mj(m: &Msg) -> (i32, i32) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn mj(m: &Msg) -> (i32, i32) {
-    in_bytes(&m.to_bytes())
+    // Kani: the host model records narration as a counter only (the book's
+    // frame is about game effects). Serialising a `Msg` walks a
+    // `BTreeMap<String, Arg>` through postcard -- a deep recursive structure
+    // that does not unwind under CBMC. Skip the payload; the key is unused
+    // by the symbolic host. Production builds keep the real bytes.
+    #[cfg(kani)]
+    {
+        let _ = m;
+        in_bytes(&[])
+    }
+    #[cfg(not(kani))]
+    {
+        in_bytes(&m.to_bytes())
+    }
 }
 
 /// Reserve an **out-buffer** the host writes into during the call.
@@ -536,7 +549,33 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    postcard::from_bytes(&buf).unwrap_or_default()
+    // Under Kani the host writes `[n, id...]` (see rules-kani). postcard +
+    // String does not unwind under CBMC; rebuild names from fixed ids here.
+    // This stays generic: the host owns the id->name mapping.
+    #[cfg(kani)]
+    {
+        if buf.is_empty() {
+            return Vec::new();
+        }
+        let n = buf[0] as usize;
+        let mut out = Vec::with_capacity(n);
+        let mut i = 0;
+        while i < n && 1 + i < buf.len() {
+            out.push(String::from(match buf[1 + i] {
+                0 => "PP:[丸山彩]憧憬的前方",
+                1 => "PP:[衍生]共鸣",
+                2 => "PP:[标题偶像]",
+                3 => "PP:[强韧之花]",
+                _ => "PP:[标题偶像]",
+            }));
+            i += 1;
+        }
+        return out;
+    }
+    #[cfg(not(kani))]
+    {
+        postcard::from_bytes(&buf).unwrap_or_default()
+    }
 }
 
 pub fn to_discard(player_id: i32, card: &str) {

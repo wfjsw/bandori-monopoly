@@ -13,9 +13,11 @@
 //! ctx::log(player, &Msg::new(key!("placed")).tile("tile", t));
 //! ```
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(kani)))]
 use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(target_arch = "wasm32", kani))]
+use alloc::{boxed::Box, string::String, vec::Vec};
+#[cfg(all(not(target_arch = "wasm32"), not(kani)))]
 use std::collections::BTreeMap;
 
 use serde::Serialize;
@@ -55,12 +57,19 @@ pub enum Arg {
 }
 
 /// A message by key with typed arguments.
+///
+/// Under `cfg(kani)` the argument map is a unit: the symbolic host records
+/// narration as a counter only (the book's frame is about game effects), and
+/// dropping a `BTreeMap<String, Arg>` does not unwind under CBMC. Builder
+/// methods still exist so card bodies compile unmodified.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(not(all(feature = "guest", target_arch = "wasm32")), derive(Deserialize))]
 pub struct Msg {
     pub k: String,
-    /// Always present: postcard is not self-describing, so a skipped field
-    /// would truncate the stream for the host.
+    /// Always present on the wire: postcard is not self-describing.
+    #[cfg(kani)]
+    pub a: (),
+    #[cfg(not(kani))]
     pub a: BTreeMap<String, Arg>,
 }
 
@@ -78,12 +87,21 @@ impl Msg {
     pub fn new(key: &str) -> Self {
         Self {
             k: key.into(),
+            #[cfg(kani)]
+            a: (),
+            #[cfg(not(kani))]
             a: BTreeMap::new(),
         }
     }
 
+    #[cfg(not(kani))]
     fn with(mut self, name: &str, arg: Arg) -> Self {
         self.a.insert(name.into(), arg);
+        self
+    }
+
+    #[cfg(kani)]
+    fn with(self, _name: &str, _arg: Arg) -> Self {
         self
     }
 
@@ -125,12 +143,19 @@ impl Msg {
     /// The host wire form (`postcard`). Cannot fail on these types; the
     /// fallback keeps a malformed log from trapping the card.
     pub fn to_bytes(&self) -> Vec<u8> {
-        // Fixed scratch instead of `to_allocvec`: messages are a key plus a
-        // handful of args, and this keeps the growth machinery out of the guest.
-        let mut buf = [0u8; 1024];
-        match postcard::to_slice(self, &mut buf) {
-            Ok(written) => written.to_vec(),
-            Err(_) => Vec::new(),
+        #[cfg(kani)]
+        {
+            Vec::new()
+        }
+        #[cfg(not(kani))]
+        {
+            // Fixed scratch instead of `to_allocvec`: messages are a key plus a
+            // handful of args, and this keeps the growth machinery out of the guest.
+            let mut buf = [0u8; 1024];
+            match postcard::to_slice(self, &mut buf) {
+                Ok(written) => written.to_vec(),
+                Err(_) => Vec::new(),
+            }
         }
     }
 }
