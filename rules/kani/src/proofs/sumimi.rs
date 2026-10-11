@@ -472,3 +472,63 @@ pub fn twoinone_01b_mutant_is_detected() {
     }
     assert!(!saw_wrong, "mutant: fire is not set to 初始+1");
 }
+// ===========================================================================
+// Cheap pure-formula harnesses (spec math, no host invoke) — run these first.
+// ===========================================================================
+
+/// C-SUMIMI-idolband money formula.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn idolband_money_formula() {
+    let pre: i32 = kani::any();
+    kani::assume(pre >= 0 && pre <= 10_000);
+    let post = spec::sumimi::idolband_post_money(pre);
+    if pre >= 3000 {
+        assert!(post == pre, "no-effect region keeps money");
+    } else {
+        assert!(post == 3000, "under-3000 region sets exactly 3000");
+    }
+    let wrong = spec::sumimi::idolband_post_money_mutant(pre);
+    if pre < 3000 {
+        assert!(wrong == 2999 && post != wrong, "mutant 2999 is distinguishable");
+    }
+    kani::cover!(pre < 3000, "under 3000");
+    kani::cover!(pre >= 3000, "at/over 3000");
+}
+
+/// C-SUMIMI-mana-01 / hina-01 fire formula under the hold cap.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn pass_circle_fire_formula() {
+    let pre_fire: i32 = kani::any();
+    kani::assume(pre_fire >= 0 && pre_fire <= 8);
+    let cap = spec::sumimi::FIRE_CAP_SUMIMI;
+    let post = spec::sumimi::pass_circle_fire_post(pre_fire, cap);
+    if pre_fire < cap {
+        assert!(post == pre_fire + 1, "under cap: +1");
+    } else {
+        assert!(post == pre_fire, "at cap: no-op (global hold-cap)");
+    }
+    let wrong = spec::sumimi::pass_circle_fire_post_mutant(pre_fire, cap);
+    assert!(post != wrong, "mutant +2 / past-cap is distinguishable");
+    kani::cover!(pre_fire < cap, "under cap");
+    kani::cover!(pre_fire >= cap, "at cap");
+}
+
+/// C-SUMIMI-band-02 rent-bonus formula.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn band_02_rent_bonus_formula() {
+    let pre_amount: i32 = kani::any();
+    kani::assume(pre_amount >= 0 && pre_amount <= 10_000);
+    let crystals: i32 = kani::any();
+    kani::assume(crystals >= 0 && crystals <= 8);
+    let post = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
+    assert!(post == pre_amount + crystals * 100, "bonus is +100 per crystal");
+    let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, crystals);
+    if crystals != 1 {
+        assert!(post != wrong, "mutant +100-total distinguishable when c != 1");
+    }
+    kani::cover!(crystals == 0, "c=0");
+    kani::cover!(crystals >= 2, "c>=2");
+}
