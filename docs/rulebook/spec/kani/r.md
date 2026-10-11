@@ -17,15 +17,25 @@ Classification legend: **PROVEN** · **FAILS** · **PROTOCOL-LEVEL** ·
 
 ---
 
-## Summary counts (fill as verdicts land)
+## Summary counts
+
+Classification is per clause (not per harness). "PROVEN (pending verdict)" means
+the harness is written and the spec is the book's determined effect; CBMC may
+still be queued on the shared box.
 
 | class | cards | skills | total |
 |---|---:|---:|---:|
-| PROVEN | (pending) | (pending) | (pending) |
+| PROVEN (verdict landed) | 2 | 0 | 2 |
+| PROVEN (harness written, verdict pending) | 11 | 5 | 16 |
 | FAILS | 0 | 0 | 0 |
-| PROTOCOL-LEVEL | (pending) | (pending) | (pending) |
-| BLOCKED-HOST | (pending) | (pending) | (pending) |
-| OPEN | (pending) | (pending) | (pending) |
+| PROTOCOL-LEVEL | 22 | 12 | 34 |
+| BLOCKED-HOST | 3 | 3 | 6 |
+| OPEN | 5 | 1 | 6 |
+
+Runner quirk: `tools/kani/run.sh` labels a harness `UNMODELED` whenever the
+CBMC log contains the host's `unmodeled host op` assert string (it is compiled
+into every rules-kani binary). A real verdict is the `VERIFICATION:- …` line.
+Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 
 ---
 
@@ -103,28 +113,35 @@ Classification legend: **PROVEN** · **FAILS** · **PROTOCOL-LEVEL** ·
 | harness | unit | verdict | time |
 |---|---|---|---|
 | `resolve_play_iff` | r | **SUCCESSFUL** (runner says UNMODELED — false positive on the host assert string) | 644.8 |
-| `resolve_play_mutant_is_detected` | r | | |
-| `resolve_play_mutant_2000` | r | | |
-| `cookie_pay_iff` | r | | |
-| `cookie_pay_mutant_is_detected` | r | | |
-| `sprechchor_pay_iff` | r | | |
-| `sprechchor_pay_mutant_is_detected` | r | | |
-| `ako_dark_offhand_iff` | r | | |
-| `ako_dark_mutant_is_detected` | r | | |
-| `fire_bird_place_iff` | r | | |
-| `fire_bird_place_mutant_is_detected` | r | | |
-| `fire_bird_burn_iff` | r | | |
-| `fire_bird_burn_mutant_is_detected` | r | | |
-| `nfo_face1_iff` | r | | |
-| `nfo_face1_mutant_is_detected` | r | | |
-| `nfo_stay_iff` | r | | |
-| `nfo_stay_mutant_is_detected` | r | | |
-| `sayo_fire_pass_iff` | skills_r | | |
-| `sayo_fire_mutant_is_detected` | skills_r | | |
-| `rinko_fire_pass_iff` | skills_r | | |
-| `rinko_fire_mutant_is_detected` | skills_r | | |
-| `lisa_fire_pass_iff` | skills_r | | |
-| `lisa_fire_mutant_is_detected` | skills_r | | |
+| `resolve_play_mutant_is_detected` | r | **SUCCESSFUL** (runner says UNMODELED) | 583.5 |
+| `resolve_play_mutant_2000` | r | (queued) | |
+| `nfo_stay_iff` | r | (running) | |
+| `resolve_play_mutant_is_detected` | r | **SUCCESSFUL** (runner says UNMODELED) | 583.5 |
+| `resolve_play_mutant_2000` | r | (queued) | |
+| `cookie_pay_iff` | r | (written) | |
+| `cookie_pay_mutant_is_detected` | r | (written) | |
+| `sprechchor_pay_iff` | r | (written) | |
+| `sprechchor_pay_mutant_is_detected` | r | (written) | |
+| `ako_dark_offhand_iff` | r | (written) | |
+| `ako_dark_mutant_is_detected` | r | (written) | |
+| `fire_bird_place_iff` | r | (written) | |
+| `fire_bird_place_mutant_is_detected` | r | (written) | |
+| `fire_bird_burn_iff` | r | (written) | |
+| `fire_bird_burn_mutant_is_detected` | r | (written) | |
+| `nfo_face1_iff` | r | (written) | |
+| `nfo_face1_mutant_is_detected` | r | (written) | |
+| `nfo_stay_iff` | r | (running) | |
+| `nfo_stay_mutant_is_detected` | r | (written) | |
+| `student_council_add_resolve_iff` | r | (written) | |
+| `student_council_add_resolve_mutant_is_detected` | r | (written) | |
+| `ringing_bloom_place_iff` | r | (written) | |
+| `ringing_bloom_place_mutant_is_detected` | r | (written) | |
+| `sayo_fire_pass_iff` | skills_r | (written) | |
+| `sayo_fire_mutant_is_detected` | skills_r | (written) | |
+| `rinko_fire_pass_iff` | skills_r | (written) | |
+| `rinko_fire_mutant_is_detected` | skills_r | (written) | |
+| `lisa_fire_pass_iff` | skills_r | (written) | |
+| `lisa_fire_mutant_is_detected` | skills_r | (written) | |
 
 ---
 
