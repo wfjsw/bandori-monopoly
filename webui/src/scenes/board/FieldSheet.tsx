@@ -30,7 +30,7 @@ export function rowSpread(n: number): Record<string, string> {
   return { "--row-slot": `${slot.toFixed(1)}px` };
 }
 
-export function FieldSheet({ m }: { m: Model }) {
+export function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: number } | null }) {
   const S = m.S;
   const names = namesOf(S);
   const dock = useDockRaise();
@@ -42,7 +42,7 @@ export function FieldSheet({ m }: { m: Model }) {
   const total = rows.reduce((a, [, f]) => a + f.length, 0) + events.length;
   if (!total) return null;
   return (
-    <div className={cx(s.sheet, dock.raised && s.up)} {...dock.hover}>
+    <div className={cx(s.sheet, (dock.raised || !!pulse) && s.up)} {...dock.hover}>
       <div className={s.row} style={rowSpread(total) as CSSProperties}>
         {rows.flatMap(([i, f]) => f.map((fc) => {
           // The frame takes the owner's colour (`fc.owner`), not the field it
@@ -56,7 +56,7 @@ export function FieldSheet({ m }: { m: Model }) {
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
           return (
-            <div key={fc.uid} className={s.slot} style={{ ["--own" as string]: m.colorOf(owner) }}>
+            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse)} style={{ ["--own" as string]: m.colorOf(owner) }}>
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (

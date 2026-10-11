@@ -61,6 +61,25 @@
   filter: var(--peek-lift);
 }
 
+/* 「效果适用」 on a field card: the slot slides out of the row toward the board
+   and blinks with a light halo, like Master Duel's activated card. */
+.pulse {
+  z-index: 3;
+  animation: pulse-out 1.1s ease-in-out both;
+}
+.pulse .card {
+  animation: pulse-glow 0.5s ease-in-out 0.25s 1;
+}
+@keyframes pulse-out {
+  0% { transform: translateY(0) scale(1); }
+  20%, 85% { transform: translateY(46px) scale(1.18); }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes pulse-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.45); box-shadow: 0 0 0 3px #fff, 0 0 18px 6px var(--own, #fff), 0 0 34px 10px rgba(255, 255, 255, 0.7); }
+}
+
 /* The face itself: a clear border in the owner's colour, readable whether the
    row is retracted or down. Scoped under `.slot` so it outranks the shared
    face's own shadow / background. */
@@ -163,5 +182,9 @@
   .row,
   .slot {
     transition: none;
+  }
+  .pulse,
+  .pulse .card {
+    animation: none;
   }
 }
