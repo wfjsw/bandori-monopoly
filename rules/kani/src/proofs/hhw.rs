@@ -63,11 +63,11 @@ pub fn kkr_pay_10000_iff() {
 
     kani::cover!(pre_money == 10_000, "exact 10000 on hand");
     assert!(
-        spec::kkr_01_log_ok(effects, player),
+        spec::hhw::kkr_01_log_ok(effects, player),
         "C-HHW-kkr-01: PayMoney(player, 10000) is in the log"
     );
     assert!(
-        spec::kkr_01_post_ok(&pre, &post, player),
+        spec::hhw::kkr_01_post_ok(&pre, &post, player),
         "C-HHW-kkr-01: money falls by exactly 10000"
     );
     assert!(post.pos == pre.pos, "frame: pos");
@@ -131,7 +131,7 @@ pub fn kkr_mutant_pay_1000() {
     invoke::unwrap_done(invoke::play("HHW:（kkr）前往笑容集结的地方！", player));
     let post = world::snapshot();
     assert!(
-        post.money[player as usize] == pre.money[player as usize] - spec::kkr_01_amount_mutant(),
+        post.money[player as usize] == pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
         "mutant: card must not pay only 1000"
     );
 }
@@ -148,7 +148,7 @@ pub fn kkr_mutant_is_detected() {
     invoke::unwrap_done(invoke::play("HHW:（kkr）前往笑容集结的地方！", player));
     let post = world::snapshot();
     assert!(
-        post.money[player as usize] != pre.money[player as usize] - spec::kkr_01_amount_mutant(),
+        post.money[player as usize] != pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
         "mutant -1000 must disagree with the card's -10000"
     );
 }
@@ -185,7 +185,7 @@ pub fn athletic_place_three_crystals_iff() {
     let crystals = world::with_world(|w| w.key_get(player, crate::intern::intern("crystals")));
     kani::cover!(crystals == 3, "crystals == 3");
     assert!(
-        crystals == spec::athletic_01_crystals(),
+        crystals == spec::hhw::athletic_01_crystals(),
         "C-HHW-athletic-01: exactly 3 crystals"
     );
     assert!(post.money == pre.money, "frame: money");
@@ -229,12 +229,12 @@ pub fn athletic_turn_end_decay_iff() {
     let crystals = world::with_world(|w| w.key_get(player, crate::intern::intern("crystals")));
     kani::cover!(crystals == 2, "decayed to 2");
     assert!(
-        crystals == spec::athletic_02_after_decay(pre_crystals),
+        crystals == spec::hhw::athletic_02_after_decay(pre_crystals),
         "C-HHW-athletic-02: crystals fall by exactly 1"
     );
     // At 2 the card stays on the field (「为0时」 is the discard trigger).
     assert!(
-        !spec::athletic_02_discard_ok(effects),
+        !spec::hhw::athletic_02_discard_ok(effects),
         "C-HHW-athletic-02: non-zero count does not discard"
     );
     assert!(post.money == pre.money, "frame: money");
@@ -362,7 +362,7 @@ pub fn believe_cost_800_iff() {
     let effects = &logbuf[..log_n];
 
     assert!(
-        spec::believe_02_log_ok(effects, player),
+        spec::hhw::believe_02_log_ok(effects, player),
         "C-HHW-believe-02: PayMoney(player, 800) is in the log"
     );
     assert!(
@@ -383,15 +383,16 @@ pub fn believe_discard_one_iff() {
         world::snapshot()
     };
     invoke::unwrap_done(invoke::play("HHW:因为我一直相信着你", player));
+    let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
     assert!(
-        spec::believe_03_log_ok(effects, player),
+        spec::hhw::believe_03_log_ok(effects, player),
         "C-HHW-believe-03: exactly one DiscardFromHand"
     );
     assert!(
-        spec::believe_04_log_ok(effects, player),
+        spec::hhw::believe_04_log_ok(effects, player),
         "C-HHW-believe-04: two deck→hand transfers"
     );
     assert!(post.pos == pre.pos, "frame: pos");
@@ -408,7 +409,7 @@ pub fn believe_mutant_is_detected() {
     invoke::unwrap_done(invoke::play("HHW:因为我一直相信着你", player));
     let post = world::snapshot();
     assert!(
-        post.money[player as usize] != pre_money - spec::believe_02_amount_paid_mutant(pre_money),
+        post.money[player as usize] != pre_money - spec::hhw::believe_02_amount_paid_mutant(pre_money),
         "mutant cost 80 must disagree with the card's 800"
     );
 }
@@ -458,7 +459,7 @@ pub fn backstage_pays_1000_per_discard_iff() {
         "C-HHW-backstage-01: at most two flips"
     );
     assert!(
-        post.money[player as usize] == pre.money[player as usize] + spec::backstage_02_gain(flipped),
+        post.money[player as usize] == pre.money[player as usize] + spec::hhw::backstage_02_gain(flipped),
         "C-HHW-backstage-02: money rises by exactly 1000 per flip"
     );
     assert!(post.pos == pre.pos, "frame: pos");
@@ -486,7 +487,7 @@ pub fn backstage_mutant_is_detected() {
     }
     assert!(
         post.money[player as usize]
-            != pre.money[player as usize] + spec::backstage_02_gain_mutant(flipped),
+            != pre.money[player as usize] + spec::hhw::backstage_02_gain_mutant(flipped),
         "mutant 500-per-flip must disagree"
     );
 }
@@ -547,7 +548,7 @@ pub fn balloon_mutant_is_detected() {
     // Spec unit check: dest(r) vs dest_mutant(r) differ for r=0 (wrap).
     let r = 0;
     assert!(
-        spec::balloon_02_dest(r) != spec::balloon_02_dest_mutant(r),
+        spec::hhw::balloon_02_dest(r) != spec::hhw::balloon_02_dest_mutant(r),
         "mutant raw-result dest disagrees on the mod-60 wrap"
     );
 }
@@ -582,7 +583,7 @@ pub fn hagumi_over_60_gains_and_draws_iff() {
 
     // Over-60 branch (when a pick landed there): GainMoney(1000)+Draw(1).
     // ≤60 branch: PlaceMark (and no money). Cover both shapes.
-    let over = spec::hagumi_02_over_60_log_ok(effects, player);
+    let over = spec::hhw::hagumi_02_over_60_log_ok(effects, player);
     let has_mark = effects
         .iter()
         .any(|e| matches!(e, Effect::PlaceMark { .. }));
@@ -621,5 +622,5 @@ pub fn hhw_smoke_cover() {
 
 #[allow(dead_code)]
 fn _touch(s: &Snapshot) {
-    let _ = (s.log_n, spec::log_empty(&[]), TriggerOverlay::default());
+    let _ = (s.log_n, spec::hhw::log_empty(&[]), TriggerOverlay::default());
 }

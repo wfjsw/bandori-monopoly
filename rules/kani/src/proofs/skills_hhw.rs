@@ -48,7 +48,7 @@ pub fn kokoro_01_opening_1000_iff() {
 
     let gid = crate::guard_id!("slot('skill.kasumiGroup.start') == 0");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, -1, &ov);
+    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, -1i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (latch still 0)");
     if !admitted {
@@ -71,11 +71,11 @@ pub fn kokoro_01_opening_1000_iff() {
 
     kani::cover!(pre.money[owner as usize] == 0, "pre money 0");
     assert!(
-        spec::kokoro_01_log_ok(effects, owner),
+        spec::skills_hhw::kokoro_01_log_ok(effects, owner),
         "C-HHW-kokoro-01: log is the latch + GainMoney(1000)"
     );
     assert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::kokoro_01_amount(),
+        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount(),
         "C-HHW-kokoro-01: money rises by exactly 1000"
     );
     assert!(post.pos == pre.pos, "frame: pos");
@@ -98,7 +98,7 @@ pub fn kokoro_01_mutant_500() {
     invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "", owner));
     let post = world::snapshot();
     assert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::kokoro_01_amount_mutant(),
+        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
         "mutant: card must not match +500"
     );
 }
@@ -116,7 +116,7 @@ pub fn kokoro_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "", owner));
     let post = world::snapshot();
     assert!(
-        post.money[owner as usize] != pre.money[owner as usize] + spec::kokoro_01_amount_mutant(),
+        post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
         "mutant +500 must disagree with the card"
     );
 }
@@ -131,7 +131,7 @@ pub fn kokoro_01_noop_when_latch_set() {
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 1);
     let gid = crate::guard_id!("slot('skill.kasumiGroup.start') == 0");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, -1, &ov);
+    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, -1i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(!admitted, "guard rejects (latch already set)");
     assert!(!admitted, "latch=1 must reject the once-only grant");
@@ -153,7 +153,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
 
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, CIRCLE, &ov);
+    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, CIRCLE as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (own pass of CiRCLE)");
     kani::cover!(!admitted, "guard rejects");
@@ -171,11 +171,11 @@ pub fn kokoro_02_circle_pass_1500_iff() {
     let effects = &logbuf[..log_n];
 
     assert!(
-        spec::kokoro_02_log_ok(effects, owner),
+        spec::skills_hhw::kokoro_02_log_ok(effects, owner),
         "C-HHW-kokoro-02: log is exactly GainMoney(1500)"
     );
     assert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::kokoro_02_amount(),
+        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount(),
         "C-HHW-kokoro-02: money rises by exactly 1500 extra"
     );
     assert!(post.pos == pre.pos, "frame: pos");
@@ -191,7 +191,7 @@ pub fn kokoro_02_noop_non_circle() {
     let w = symbolic_pass_world(owner, 5);
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, 5, &ov);
+    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, 5i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(!admitted, "guard rejects non-CiRCLE");
     assert!(!admitted, "non-CiRCLE pass must not admit the extra 1500");
@@ -210,7 +210,7 @@ pub fn kokoro_02_mutant_2000() {
     invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "Pass", owner));
     let post = world::snapshot();
     assert!(
-        post.money[owner as usize] == pre.money[owner as usize] + spec::kokoro_02_amount_mutant(),
+        post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
         "mutant: card must not match +2000"
     );
 }
@@ -227,7 +227,7 @@ pub fn kokoro_02_mutant_is_detected() {
     invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "Pass", owner));
     let post = world::snapshot();
     assert!(
-        post.money[owner as usize] != pre.money[owner as usize] + spec::kokoro_02_amount_mutant(),
+        post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
         "mutant +2000 must disagree"
     );
 }
@@ -252,7 +252,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
 
     let gid = crate::guard_id!("actor == owner && tile.id == tile_named('弦卷集团')");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, TSUZUMI_GROUP, &ov);
+    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, TSUZUMI_GROUP as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (own pass of 弦卷集团)");
     if !admitted {
@@ -272,10 +272,10 @@ pub fn misaki_skill_01_pass_fire_iff() {
     kani::cover!(pre_fire == 0, "pre fire 0");
     kani::cover!(pre_fire == 1, "pre fire 1 (clamp path)");
     assert!(
-        spec::misaki_skill_01_log_ok(effects, owner),
+        spec::skills_hhw::misaki_skill_01_log_ok(effects, owner),
         "C-HHW-misaki-skill-01: log is GainFire(+2) (+ latch)"
     );
-    let expected = spec::misaki_skill_01_gain(pre_fire);
+    let expected = spec::skills_hhw::misaki_skill_01_gain(pre_fire);
     assert!(
         post.fire[owner as usize] == expected,
         "C-HHW-misaki-skill-01: fire rises by +2, capped at 2"
@@ -292,7 +292,7 @@ pub fn misaki_skill_01_noop_other_tile() {
     let w = symbolic_pass_world(owner, CIRCLE);
     let gid = crate::guard_id!("actor == owner && tile.id == tile_named('弦卷集团')");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, CIRCLE, &ov);
+    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, CIRCLE as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(!admitted, "guard rejects non-弦卷集团");
     assert!(!admitted);
@@ -309,7 +309,7 @@ pub fn misaki_skill_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::hook("skill:奥泽美咲:另一个我", "Hook", "Pass", owner));
     let post = world::snapshot();
     assert!(
-        post.fire[owner as usize] != spec::misaki_skill_01_gain_mutant(pre_fire),
+        post.fire[owner as usize] != spec::skills_hhw::misaki_skill_01_gain_mutant(pre_fire),
         "mutant +1 must disagree with the card's +2"
     );
 }
@@ -347,8 +347,8 @@ pub fn kaoru_01_pot_arm_iff() {
     // Book: +1 火罐, cap 7, when no mark exists. The body's mark-existence
     // check is a residual guard; with no marks planted in the world this is
     // the pot arm.
-    if spec::kaoru_01_pot_log_ok(effects, owner) {
-        let expected = spec::kaoru_01_pot_gain(pre_fire);
+    if spec::skills_hhw::kaoru_01_pot_log_ok(effects, owner) {
+        let expected = spec::skills_hhw::kaoru_01_pot_gain(pre_fire);
         assert!(
             post.fire[owner as usize] == expected,
             "C-HHW-kaoru-01: pot arm gains +1 capped at 7"
@@ -377,7 +377,7 @@ pub fn kaoru_01_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
-        !spec::kaoru_01_pot_log_ok_mutant(effects, owner),
+        !spec::skills_hhw::kaoru_01_pot_log_ok_mutant(effects, owner),
         "mutant both-arms must not match a single pot grant"
     );
     assert!(post.fire[owner as usize] <= 1, "still at most +1");
@@ -416,7 +416,7 @@ pub fn band_01_declined_is_noop() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
-        spec::band_01_declined_log_ok(effects),
+        spec::skills_hhw::band_01_declined_log_ok(effects),
         "C-HHW-band-01: decline produces no effects"
     );
     assert!(post.pay_amount == pre_amount, "decline leaves the amount");
@@ -460,7 +460,7 @@ pub fn band_01_accepted_doubles_iff() {
     for e in effects {
         match e {
             Effect::SetPayAmount { to } => {
-                ok_amount = *to == spec::band_01_amount(pre_amount);
+                ok_amount = *to == spec::skills_hhw::band_01_amount(pre_amount);
             }
             Effect::AddCounter {
                 owner: o,
@@ -476,7 +476,7 @@ pub fn band_01_accepted_doubles_iff() {
     assert!(ok_amount, "C-HHW-band-01: amount becomes 2×");
     assert!(ok_crystal, "C-HHW-band-01: band card gains exactly 1 crystal");
     assert!(
-        post.pay_amount == spec::band_01_amount(pre_amount),
+        post.pay_amount == spec::skills_hhw::band_01_amount(pre_amount),
         "C-HHW-band-01: post pay_amount is double"
     );
     assert!(post.money == pre.money, "frame: money");
@@ -504,7 +504,7 @@ pub fn band_01_mutant_is_detected() {
     ));
     let post = world::snapshot();
     assert!(
-        post.pay_amount != spec::band_01_amount_mutant(pre_amount),
+        post.pay_amount != spec::skills_hhw::band_01_amount_mutant(pre_amount),
         "mutant triple-pay must disagree with the card's double"
     );
 }

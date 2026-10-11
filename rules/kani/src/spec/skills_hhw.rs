@@ -11,6 +11,7 @@ use crate::world::Effect;
 // (specs live in `spec::hhw`; re-exported here for the skills unit table)
 // ===========================================================================
 pub use crate::spec::hhw::{
+    band_01_accepted_log_ok, band_01_amount, band_01_amount_mutant, band_01_declined_log_ok,
     kokoro_01_amount, kokoro_01_amount_mutant, kokoro_01_log_ok, kokoro_02_amount,
     kokoro_02_amount_mutant, kokoro_02_log_ok, misaki_skill_01_cap, misaki_skill_01_gain,
     misaki_skill_01_gain_mutant, misaki_skill_01_log_ok,
