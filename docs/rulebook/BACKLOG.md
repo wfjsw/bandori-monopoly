@@ -1271,18 +1271,24 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: same `CardRules::buy_quote` / `quote_for` the engine uses. **Confirmed.**
 
 ## HOST-08 — `plan::set_no_build` / `plan::set_build_anywhere` trap on native, unregistered on wasm
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-08 …`) —
+  both have host bodies on native and wasm. `set_no_build(on)` folds into
+  `set_can_build(!on)` (`World::set_no_build`, one plan flag). `set_build_anywhere`
+  is a new `MovePlan.build_anywhere` flag that lifts `why_not_build`'s
+  landing-only check. Registered in the `host.rs` linker beside `set_no_buy` /
+  `set_can_build`; `native_shims` ops call the hostfns. ABI v53. Test:
+  `game-core` `move_ctx::tests::no_build_folds_into_can_build`.
 - **kind**: ABI defect
-- **class**: A (`set_no_build`) / B (`set_build_anywhere`)
+- **class**: A
 - **severity**: medium (latent; no current caller in `card_all.wasm`)
 - **suggested batch**: host ABI: plan flags
 - **locations**
-  - guest wrappers `rules/card-sdk/src/ctx.rs:1670-1676`; imports `rules/card-sdk/src/ctx/sys.rs:494-497`
-  - **not** registered in `crates/game-rules/src/host.rs` linker (gap vs `set_no_buy` / `set_can_build`)
-  - native `crates/game-rules/src/native_shims.rs:1261-1268`, `:3223-3231` — `Err(HostErr::trap("set_no_build: no host body yet"))`
-  - intent already documented `crates/game-rules/src/world.rs:971`: "`no_build` -- folded into `can_build = false`; one flag is enough"
-  - live flag `crates/game-core/src/engine/move_ctx.rs:160-164` `can_build`; enforced `play.rs:2656-2657`
-- **current**: calling either API traps on native; on wasm a module that keeps the import fails to instantiate
-- **expected**: `set_no_build(true)` ≡ `set_can_build(false)`; `set_build_anywhere` needs a new plan capability (builds are landing-only today)
+  - guest wrappers `rules/card-sdk/src/ctx.rs` `plan::set_no_build` / `set_build_anywhere`; imports `rules/card-sdk/src/ctx/sys.rs`
+  - registered in `crates/game-rules/src/host.rs` linker (was a gap vs `set_no_buy` / `set_can_build`)
+  - native `crates/game-rules/src/native_shims.rs` — host bodies (was a trap)
+  - `World::set_no_build` / `set_build_anywhere` (`engine/ops.rs`); `MovePlan.build_anywhere` (`state.rs`); enforced `play.rs` `why_not_build`
+- **was**: calling either API trapped on native; on wasm a module that kept the import failed to instantiate
+- **expected**: `set_no_build(true)` ≡ `set_can_build(false)`; `set_build_anywhere` opens builds past the landing-only rule. **Confirmed.**
 
 ## HOST-09 — `set_bonus` dead guest import + native trap
 - **kind**: ABI defect (dead surface)

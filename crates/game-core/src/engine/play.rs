@@ -2809,14 +2809,18 @@ impl Cx<'_> {
         if !self.data.tiles.get(t).is_some_and(|x| x.is_buyable()) || st.owners[t] != i as i32 {
             return Some(Msg::new("err.build_not_on_own"));
         }
-        if st.turn == i as i32
+        // Landing-only unless the move opened builds past it
+        // (`plan::set_build_anywhere`, HOST-08).
+        if !st.plan.build_anywhere
+            && st.turn == i as i32
             && self.playing()
             && st.step == stage::END
             && (st.landed != t as i32 || st.bought)
         {
             return Some(Msg::new("err.build_only_settling"));
         }
-        // The move said this landing cannot be built on (`can_build = false`).
+        // The move said this landing cannot be built on (`can_build = false`,
+        // or `plan::set_no_build` which folds into it -- HOST-08).
         if !st.plan.can_build {
             return Some(Msg::new("err.build_denied"));
         }

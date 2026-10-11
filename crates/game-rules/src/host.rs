@@ -4273,6 +4273,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "set_no_build",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_no_build(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_build_anywhere",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_build_anywhere(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "set_kind",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_kind(&mut c, v).map_err(HostErr::into_err)

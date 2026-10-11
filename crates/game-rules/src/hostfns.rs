@@ -2351,6 +2351,18 @@ pub fn set_can_build<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
     Ok(())
 }
 
+/// HOST-08: `set_no_build(on)` ≡ `set_can_build(!on)` -- one plan flag.
+pub fn set_no_build<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
+        c.st_mut().w().set_no_build(v != 0);
+    Ok(())
+}
+
+/// HOST-08: this move may build away from the landing.
+pub fn set_build_anywhere<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
+        c.st_mut().w().set_build_anywhere(v != 0);
+    Ok(())
+}
+
 pub fn set_settle_as_agent<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
         c.st_mut().w().set_settle_as_agent(v != 0);
     Ok(())

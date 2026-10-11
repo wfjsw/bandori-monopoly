@@ -145,6 +145,16 @@ impl World {
     pub fn set_can_build(&mut self, on: bool) {
         self.turn.plan.can_build = on;
     }
+    /// `ctx::plan::set_no_build` (HOST-08): folded into `can_build = !on` --
+    /// one flag is enough (`world.rs`).
+    pub fn set_no_build(&mut self, on: bool) {
+        self.turn.plan.can_build = !on;
+    }
+    /// `ctx::plan::set_build_anywhere` (HOST-08): this move may build away
+    /// from the landing.
+    pub fn set_build_anywhere(&mut self, on: bool) {
+        self.turn.plan.build_anywhere = on;
+    }
     /// Settle on another player's behalf.
     pub fn set_settle_as_agent(&mut self, on: bool) {
         self.turn.plan.settle_as_agent = on;

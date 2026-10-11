@@ -1789,6 +1789,12 @@ impl CardWorld for Run {
     fn set_can_build(&mut self, v: bool) {
         self.world.set_can_build(v);
     }
+    fn set_no_build(&mut self, v: bool) {
+        self.world.set_no_build(v);
+    }
+    fn set_build_anywhere(&mut self, v: bool) {
+        self.world.set_build_anywhere(v);
+    }
     fn set_settle_as_agent(&mut self, v: bool) {
         self.world.set_settle_as_agent(v);
     }

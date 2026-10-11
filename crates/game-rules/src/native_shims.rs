@@ -1259,12 +1259,12 @@ impl<C: crate::host::HostCtx> HostOps for C {
         Ok(0)
     }
     fn op_set_no_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        let _ = a;
-        Err(HostErr::trap("set_no_build: no host body yet"))
+        crate::hostfns::set_no_build(self, a[0])?;
+        Ok(0)
     }
     fn op_set_build_anywhere(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        let _ = a;
-        Err(HostErr::trap("set_build_anywhere: no host body yet"))
+        crate::hostfns::set_build_anywhere(self, a[0])?;
+        Ok(0)
     }
     fn op_set_kind(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_kind(self, a[0])?;
@@ -3221,14 +3221,18 @@ pub unsafe extern "C-unwind" fn bandori_set_no_buy(on: i32) {
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_set_no_build(on: i32) {
-    let _ = [on, 0, 0, 0, 0, 0];
-    abort_host(HostErr::trap("set_no_build: no host body yet"))
+    with_host(|h| match h.op_set_no_build([on, 0, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_set_build_anywhere(on: i32) {
-    let _ = [on, 0, 0, 0, 0, 0];
-    abort_host(HostErr::trap("set_build_anywhere: no host body yet"))
+    with_host(|h| match h.op_set_build_anywhere([on, 0, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
 }
 
 #[no_mangle]

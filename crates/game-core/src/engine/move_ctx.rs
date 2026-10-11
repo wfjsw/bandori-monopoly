@@ -158,10 +158,14 @@ pub struct MoveCtx {
     /// Settle on another player's behalf.
     pub settle_as_agent: bool,
     /// Whether this move can build on the tile it lands on. `false` is the
-    /// "no build" case -- one flag, not two. Not "anywhere" either way: a build
-    /// is refused anywhere but where the move settled, and this speaks only to
-    /// the landing.
+    /// "no build" case (`ctx::plan::set_no_build` folds into this, HOST-08) --
+    /// one flag, not two.
     pub can_build: bool,
+    /// Whether this move may build away from the landing
+    /// (`ctx::plan::set_build_anywhere`, HOST-08). `false` keeps the
+    /// landing-only rule; `true` lifts `why_not_build`'s "only where the move
+    /// settled" check.
+    pub build_anywhere: bool,
     /// A queued second walk, in steps (the follow-up walk once the first
     /// settles).
     pub more_steps: i32,
@@ -232,6 +236,7 @@ impl Default for MoveCtx {
             rent_factor: 1.0,
             settle_as_agent: false,
             can_build: true,
+            build_anywhere: false,
             more_steps: 0,
             no_buy: false,
             cancelled: false,
@@ -308,6 +313,7 @@ impl MoveCtx {
             started: self.start >= 0,
             reach: self.path.clone(),
             can_build: self.can_build,
+            build_anywhere: self.build_anywhere,
         }
     }
 }
@@ -315,6 +321,25 @@ impl MoveCtx {
 #[cfg(test)]
 mod tests {
     use super::MoveCtx;
+
+    /// HOST-08: `set_no_build` folds into `can_build = !on`; `build_anywhere`
+    /// is its own plan flag (landing-only when false).
+    #[test]
+    fn no_build_folds_into_can_build() {
+        let mut w = crate::engine::world::World::new(
+            crate::state::MatchState::default(),
+            2,
+            crate::rng::Rng::new(1),
+        );
+        w.set_no_build(true);
+        assert!(!w.turn.plan.can_build, "set_no_build(true) => can_build=false");
+        w.set_no_build(false);
+        assert!(w.turn.plan.can_build, "set_no_build(false) => can_build=true");
+        w.set_build_anywhere(true);
+        assert!(w.turn.plan.build_anywhere);
+        w.set_build_anywhere(false);
+        assert!(!w.turn.plan.build_anywhere);
+    }
 
     #[test]
     fn set_steps_keeps_the_sign_of_a_reverse_walk() {

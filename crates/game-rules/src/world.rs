@@ -1065,8 +1065,16 @@ pub trait CardWorld: Clone + 'static {
     fn set_pay_factor(&mut self, _v: i32) {}
     /// Scale rent paid for this walk, same units.
     fn set_rent_factor(&mut self, _v: i32) {}
-    /// May build away from the landing.
+    /// May this move build where it lands. `set_no_build` is the inverse
+    /// fold (HOST-08).
     fn set_can_build(&mut self, _v: bool) {}
+    /// The landing cannot be built on. Folded into `set_can_build(!on)` --
+    /// one flag is enough. HOST-08.
+    fn set_no_build(&mut self, v: bool) {
+        self.set_can_build(!v);
+    }
+    /// May build away from the landing (`plan.build_anywhere`). HOST-08.
+    fn set_build_anywhere(&mut self, _v: bool) {}
     /// Settle this walk as if landing on the 「地产商」.
     fn set_settle_as_agent(&mut self, _v: bool) {}
     /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record a follower of the

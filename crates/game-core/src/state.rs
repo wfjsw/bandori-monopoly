@@ -26,6 +26,10 @@ pub struct MovePlan {
     /// Carried here so the build gate at step 3 can still read it -- the live
     /// `MoveCtx` is gone by then.
     pub can_build: bool,
+    /// Whether this move may build away from the landing
+    /// (`MoveCtx::build_anywhere`, HOST-08). Lifts `why_not_build`'s
+    /// landing-only check.
+    pub build_anywhere: bool,
 }
 
 impl MovePlan {
