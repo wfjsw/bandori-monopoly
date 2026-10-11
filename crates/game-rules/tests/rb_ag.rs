@@ -774,6 +774,33 @@ fn band_free_house_on_shop_street_buy() {
     assert_eq!(t.houses(YAMABUKI), 1);
 }
 
+// HOST-06: 「自动免费在上面加盖一栋房子」 only when the house lands. A
+// refused `card_build` (`why_not_build_on` -- here 梦在前方's 「[拥有者]不可
+// 盖房」) must not log the free house, and must not pretend one was added.
+// Before HOST-06 the guest's `card_build -> bool` was a constant `true`, so
+// the log fired anyway.
+#[test]
+fn band_free_house_skipped_when_build_refused() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "skill:Afterglow:商店街的宠儿");
+    // 梦在前方 stamps `prop::NO_BUILD` on its owner's field -- the same
+    // veto the build step reads (`why_not_build_on`).
+    t.place_raw(0, "PP:梦在前方，结彩当下");
+    t.set_pos(0, FUJIMI - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    t.buy(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.owner(FUJIMI), Some(0), "the buy itself still lands");
+    assert_eq!(t.houses(FUJIMI), 0, "no free house when the build is refused");
+    let keys = t.recent_keys(16);
+    assert!(
+        !keys.iter().any(|k| k.contains("afterglow_free_house")),
+        "must not log a free house on a refused build: {keys:?}"
+    );
+}
+
 // =====================================================================
 // Interactions
 // =====================================================================

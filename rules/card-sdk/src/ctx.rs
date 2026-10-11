@@ -2434,6 +2434,8 @@ pub fn can_build_on(player_id: i32, tile: i32) -> bool {
 
 /// Buy `tile` now (the 「必须购买」 clauses).
 /// Kept as the P0 alias of [`buy`] with [`crate::abi::BuyKind::Card`].
+/// `true` only when the deed actually changed hands (HOST-06 / ABI v53):
+/// `false` on `BuyGate` / `buyBefore` cancel, already owned, unpaid quote or money.
 pub fn card_buy(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_buy(player_id, tile) != 0 }
 }
@@ -2442,8 +2444,9 @@ pub fn card_buy(player_id: i32, tile: i32) -> bool {
 /// charged for each tile in `tiles`, and may they buy it at all?
 ///
 /// Returns a postcard `Vec<(price, eligible)>` parallel to `tiles`
-/// (`price = -1` when the tile is not buyable at all). One `HostRequest::Quote`
-/// for the whole batch.
+/// (`price = -1` when the tile is not buyable at all). The figure is the
+/// same hook-aware quote [`buy`] charges (`BuyGate` / `BuyAdd` / `BuyMul` /
+/// `BuySet`), so quote == charge (HOST-07 / ABI v53).
 pub fn buy_quotes(player_id: i32, kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> {
     let cap = 4096;
     let (op, scratch) = out_buf(cap as usize);
@@ -2475,19 +2478,21 @@ pub fn ai_agent_choice(player_id: i32, tiles: &[i32]) -> i32 {
 /// Buy `tile` as `kind` (`docs/PURCHASE.md`). Replaces [`card_buy`] for new
 /// call sites; `kind` selects the pipeline shape (Land / Agent / Card run the
 /// money pipeline, Force / Acquire name the owner as payee, Auction is the
-/// direct win).
+/// direct win). `true` only when the deed actually changed hands (HOST-06).
 pub fn buy(player_id: i32, tile: i32, kind: i32) -> bool {
     unsafe { sys::buy(player_id, tile, kind) != 0 }
 }
 
 /// 「收购」 -- take `tile` from `from` at `price`: pipeline pay, then assign →
-/// `bought` → `buyAfter` (`docs/PURCHASE.md`).
+/// `bought` → `buyAfter` (`docs/PURCHASE.md`). `true` only when the deed
+/// actually changed hands (HOST-06).
 pub fn acquire(player_id: i32, from: i32, tile: i32, price: i32) -> bool {
     unsafe { sys::acquire(player_id, from, tile, price) != 0 }
 }
 
 /// The agent offer's chosen branch: buy (`kind = 0`) or build (`kind = 1`)
-/// `tile` from the `agent` tile's colour set.
+/// `tile` from the `agent` tile's colour set. `true` only when that branch
+/// actually committed (HOST-06).
 pub fn agent_offer(player_id: i32, agent: i32, tile: i32, kind: i32) -> bool {
     unsafe { sys::agent_offer(player_id, agent, tile, kind) != 0 }
 }
@@ -2509,7 +2514,8 @@ pub fn card_immune(player_id: i32, card: &str) -> bool {
     unsafe { sys::card_immune(player_id, cp, cl) != 0 }
 }
 
-/// Mortgage one of the player's deeds.
+/// Mortgage one of the player's deeds. `true` only when the deed actually
+/// went onto mortgage (HOST-06).
 pub fn card_mortgage(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_mortgage(player_id, tile) != 0 }
 }
@@ -2623,6 +2629,8 @@ pub fn card_crystals(player_id: i32, card: &str) -> i32 {
 }
 
 /// Pay `tile`'s build cost and raise one house.
+/// `true` only when a house was added (HOST-06): `false` on
+/// `why_not_build_on` / `buildBefore` cancel / unpaid cost / max houses.
 pub fn card_build(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_build(player_id, tile) != 0 }
 }

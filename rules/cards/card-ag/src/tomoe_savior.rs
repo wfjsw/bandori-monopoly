@@ -96,13 +96,16 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // the player has -- and `f.Bought(i, t)` then runs over the Fx chain, so
     // 「购买」 hooks (Afterglow's free house on a cheap/shop-street deed, ...)
     // hear a buy caused by this card.
-    ctx::acquire(player_id, from, t, price);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("tomoe_savior_bought"))
-            .tile("tile", t)
-            .player_id("from", from)
-            .player_id("who", player_id),
-    );
+    // HOST-06: `acquire` answers whether the deed actually changed hands.
+    // A refused acquire (`BuyGate` / unpaid) must not log one.
+    if ctx::acquire(player_id, from, t, price) {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("tomoe_savior_bought"))
+                .tile("tile", t)
+                .player_id("from", from)
+                .player_id("who", player_id),
+        );
+    }
     Ok(())
 }

@@ -120,14 +120,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
                 // 规则书（2）: 「购买」 -- C# `H.BuyRoutine(i, rt.index)`.
                 // C# also defaults the prompt to the most expensive free tile
                 // (`free.OrderByDescending(price).First()`).
-                ctx::card_buy(player_id, tile);
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("tsugu_buy"))
-                        .player_id("who", player_id)
-                        .tile("tile", tile)
-                        .n("price", ctx::buy_price(tile) as i64),
-                );
+                // HOST-06: `card_buy` answers whether the deed actually changed
+                // hands. A refused buy (`BuyGate` / unpaid) must not log one.
+                if ctx::card_buy(player_id, tile) {
+                    ctx::log(
+                        player_id,
+                        &Msg::new(key!("tsugu_buy"))
+                            .player_id("who", player_id)
+                            .tile("tile", tile)
+                            .n("price", ctx::buy_price(tile) as i64),
+                    );
+                }
             }
         }
     }

@@ -2718,25 +2718,26 @@ impl<M: CardModules> RulesBridge<M> {
             tile,
             kind,
         } => {
-            cx.card_buy(player_id.max(0) as usize, tile.max(0) as usize, kind)?;
-            return Ok(1);
+            // HOST-06: the guest's `-> bool` is the real outcome (0 = the
+            // engine no-op'd: `BuyGate` / `buyBefore` cancel, already owned,
+            // unpaid quote, unpaid money).
+            let did = cx.card_buy(player_id.max(0) as usize, tile.max(0) as usize, kind)?;
+            return Ok(did as i32);
         }
-        // v40 purchase surface. P0: stubs; engine-side dispatch lands
-        // with P1 (property buy) / P2 (agent) / P3 (force & acquire) /
-        // P5 (linger).
+        // v40 purchase surface (`docs/PURCHASE.md`).
         HostRequest::Acquire {
             player_id,
             from,
             tile,
             price,
         } => {
-            cx.card_acquire(
+            let did = cx.card_acquire(
                 player_id.max(0) as usize,
                 from.max(0) as usize,
                 tile.max(0) as usize,
                 price,
             )?;
-            return Ok(1);
+            return Ok(did as i32);
         }
         HostRequest::AgentOffer {
             player_id,
@@ -2750,18 +2751,14 @@ impl<M: CardModules> RulesBridge<M> {
             // re-checks the tile's current state so a commit-pass re-run of
             // the body -- whose options list the just-committed effect already
             // reshaped -- cannot double-act (the answer is in the log, so this
-            // arm does not re-execute).
+            // arm does not re-execute). HOST-06: answers the branch outcome.
             let p = player_id.max(0) as usize;
             let t = tile.max(0) as usize;
-            match kind {
-                1 => {
-                    cx.card_build(p, t)?;
-                }
-                _ => {
-                    cx.card_buy(p, t, 1)?; // `BuyKind::Agent`
-                }
-            }
-            return Ok(1);
+            let did = match kind {
+                1 => cx.card_build(p, t)?,
+                _ => cx.card_buy(p, t, 1)?, // `BuyKind::Agent`
+            };
+            return Ok(did as i32);
         }
         HostRequest::Linger {
             player_id,
@@ -2779,8 +2776,10 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(1);
         }
         HostRequest::Build { player_id, tile } => {
-            cx.card_build(player_id.max(0) as usize, tile.max(0) as usize)?;
-            return Ok(1);
+            // HOST-06: 1 = a house was added; 0 = `why_not_build_on` /
+            // `buildBefore` cancel / unpaid cost / max houses.
+            let did = cx.card_build(player_id.max(0) as usize, tile.max(0) as usize)?;
+            return Ok(did as i32);
         }
         HostRequest::OfferBuild { player_id, tiles } => {
             let tiles: Vec<usize> = tiles
@@ -2788,12 +2787,12 @@ impl<M: CardModules> RulesBridge<M> {
                 .filter(|&t| t >= 0)
                 .map(|t| t as usize)
                 .collect();
-            cx.card_offer_build(player_id.max(0) as usize, &tiles, card_id)?;
-            return Ok(1);
+            let did = cx.card_offer_build(player_id.max(0) as usize, &tiles, card_id)?;
+            return Ok(did as i32);
         }
         HostRequest::Mortgage { player_id, tile } => {
-            cx.card_mortgage(player_id.max(0) as usize, tile.max(0) as usize)?;
-            return Ok(1);
+            let did = cx.card_mortgage(player_id.max(0) as usize, tile.max(0) as usize)?;
+            return Ok(did as i32);
         }
         HostRequest::DrawEvent { player_id } => {
             cx.card_draw_event(player_id.max(0) as usize)?;
@@ -2847,12 +2846,13 @@ impl<M: CardModules> RulesBridge<M> {
         // routine (tomoe_savior). The `bought` hook chain runs over the
         // field; `by_card` is the run's player.
         HostRequest::RaiseBought { player_id, tile } => {
-            cx.card_raise_bought(
+            // HOST-06: 1 = the hand-over landed.
+            let did = cx.card_raise_bought(
                 player_id.max(0) as usize,
                 tile.max(0) as usize,
                 call.player_id().max(0) as usize,
             )?;
-            return Ok(1);
+            return Ok(did as i32);
         }
         // Guest-raised trigger points (`ctx::raise`): `circleAffected` from
         // `tile:circle` and kin. The kind is the wire name

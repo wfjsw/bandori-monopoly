@@ -1215,19 +1215,34 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 
 ## HOST-06 — HostRequest purchase replies always `1` (guest `bool` is a lie)
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-06 …`) — `buy` /
+  `build` / `mortgage` / `card_buy` / `card_build` / `card_acquire` /
+  `card_mortgage` / `card_offer_build` / `card_raise_bought` now return
+  `Flow<bool>` (`true` = the deed/house/mortgage actually committed), and the
+  matching `apply_host_request` arms answer `did as i32` instead of `Ok(1)`.
+  Guest callers that logged a buy on the old lie are gated on the real outcome
+  (`tsugu_ycm`'s `tsugu_buy`, `tomoe_savior`'s `tomoe_savior_bought`);
+  `dream_ahead` (spend 3 crystals only on success) and `afterglow` (log the
+  free house only on success) already checked the bool and are now truthful.
+  ABI v52 → **v53** (return-value meaning). Tests: `rb_ag.rs`
+  `band_free_house_skipped_when_build_refused` (NO_BUILD vetoes the free
+  house, no `afterglow_free_house` log), `rb_general.rs`
+  `tsugu_buy_gate_refused_does_not_log_a_buy` (Poppin' hill `BuyGate` refuses
+  the deed, no `tsugu_buy` log). `DrawEvent` / `PayRent` / `OfferBuy` /
+  `OfferForceBuy` / `OfferBuildOne` still answer `1`: their guest wrappers are
+  `asked()` (prompt sentinel), not a purchase bool.
 - **kind**: ABI defect
 - **class**: A
 - **severity**: high (common play with buy/build hooks)
 - **suggested batch**: HostRequest handlers / out-sentinel answers
 - **locations**
-  - `crates/game-rules/src/wasm_rules.rs:2239-2343` — `Buy` / `Acquire` / `AgentOffer` / `Build` / `OfferBuild` / `Mortgage` / `DrawEvent` / `PayRent` / `OfferBuy` / `OfferForceBuy` / `OfferBuildOne` / `RaiseBought` all `return Ok(1);` unconditionally
-  - `crates/game-core/src/engine/play.rs` `card_buy` / `card_acquire` / `card_build` / `buy` / `build` — `Flow<()>`; failure is a silent `Ok(())`
+  - `crates/game-rules/src/wasm_rules.rs` `apply_host_request` — `Buy` / `Acquire` / `AgentOffer` / `Build` / `OfferBuild` / `Mortgage` / `RaiseBought` now answer the real outcome
+  - `crates/game-core/src/engine/play.rs` `card_buy` / `card_acquire` / `card_build` / `buy` / `build` / `mortgage` — `Flow<bool>`
   - consumers that trust the reply: `rules/cards/card-pp/src/dream_ahead.rs:193` (`if !ctx::card_buy(...) { return; }`), `rules/skills/skill-bands/src/afterglow.rs:34` (`if ctx::card_build(...) { log free house }`)
-- **ABI contract**: `rules/card-sdk/src/ctx.rs:2437` `pub fn card_buy(...) -> bool`, `:2479` `pub fn buy(...) -> bool`
-- **current**: every purchase HostRequest resumes as `true` (`!= 0` on answer `1`)
-- **expected**: `0` when the engine no-op'd (BuyGate cancel, already owned, `buyBefore` cancel, payment unpaid, `why_not_build_on`, `buildBefore` cancel, max houses)
-- **impact**: `dream_ahead` still spends 3 crystals and logs "bought" after a refused buy; `afterglow` always logs a free house even when `card_build` refused
-- **fix sketch**: make `card_buy`/`card_build`/`card_acquire` return success (or inspect post-state: owner changed / houses+1) and encode that in `apply_host_request`
+- **ABI contract**: `rules/card-sdk/src/ctx.rs` `card_buy` / `buy` / `card_build` / `acquire` `-> bool` = the real outcome (ABI v53)
+- **was**: every purchase HostRequest resumed as `true` (`!= 0` on answer `1`)
+- **expected**: `0` when the engine no-op'd (BuyGate cancel, already owned, `buyBefore` cancel, payment unpaid, `why_not_build_on`, `buildBefore` cancel, max houses). **Confirmed.**
+- **impact was**: `dream_ahead` spent 3 crystals and logged "bought" after a refused buy; `afterglow` always logged a free house even when `card_build` refused; `tsugu_ycm` / `tomoe_savior` logged a buy on a refused commit
 
 ## HOST-07 — `ctx::buy_quotes` is not the hook-aware quote; ignores `player_id`/`kind`
 - **kind**: ABI defect

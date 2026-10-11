@@ -866,9 +866,11 @@ impl Cx<'_> {
     /// engine's own: a card that says 「必须购买」 has already decided the tile is
     /// buyable. `kind` is a [`purchase::BuyKind`] as `i32` (the legacy
     /// `card_buy` passes `BuyKind::Card`).
-    pub fn card_buy(&mut self, player_id: usize, tile: usize, kind: i32) -> Flow<()> {
+    /// `true` when the deed actually changed hands. HOST-06: the guest's
+    /// `ctx::card_buy`/`buy` `-> bool` is this outcome, not a constant.
+    pub fn card_buy(&mut self, player_id: usize, tile: usize, kind: i32) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         let kind = purchase::BuyKind::from_i32(kind).unwrap_or(purchase::BuyKind::Card);
         self.buy(player_id, tile, kind)
@@ -899,13 +901,16 @@ impl Cx<'_> {
     ///
     /// `by` is the cause (stamped as `by_card`, 「购买」 hooks key 「来自你以外」
     /// on it).
-    pub fn card_raise_bought(&mut self, player_id: usize, tile: usize, by: usize) -> Flow<()> {
+    /// `true` when the hand-over landed (the player is in play and the tile
+    /// exists). HOST-06: the guest's `ctx::raise_bought` `-> bool` is this.
+    pub fn card_raise_bought(&mut self, player_id: usize, tile: usize, by: usize) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
-        if tile < self.w.st.owners.len() {
-            self.w.st.owners[tile] = player_id as i32;
+        if tile >= self.w.st.owners.len() {
+            return Ok(false);
         }
+        self.w.st.owners[tile] = player_id as i32;
         if tile < self.w.st.mortgaged.len() {
             self.w.st.mortgaged[tile] = false;
         }
@@ -917,7 +922,7 @@ impl Cx<'_> {
         t.tile = tile as i32;
         t.by_card = Some(by as i32);
         self.raise(t)?;
-        Ok(())
+        Ok(true)
     }
 
     /// `ctx::linger` (`docs/PURCHASE.md` P5) -- bind the running card's own def
@@ -950,12 +955,13 @@ impl Cx<'_> {
     /// `set_owner` + `raise_bought` pair (tomoe_savior's port target).
     /// TODO(规则书) ruling 8: 巴's 「常规收购价一半」 base is undecided; the
     /// caller passes the price.
-    pub fn card_acquire(&mut self, player_id: usize, from: usize, tile: usize, price: i32) -> Flow<()> {
+    /// `true` when the deed actually changed hands. HOST-06.
+    pub fn card_acquire(&mut self, player_id: usize, from: usize, tile: usize, price: i32) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         if self.w.st.owners.get(tile).copied().unwrap_or(-1) != from as i32 {
-            return Ok(());
+            return Ok(false);
         }
         // `BuyGate` -- the same gate every other buy kind runs.
         let gate = raise!(
@@ -966,7 +972,7 @@ impl Cx<'_> {
             @b TriggerBuy::new(purchase::BuyKind::Acquire, from as i32, price)
         )?;
         if gate.is_cancelled() {
-            return Ok(());
+            return Ok(false);
         }
         let price = price.max(0);
         if price > 0 {
@@ -983,7 +989,7 @@ impl Cx<'_> {
             );
             let paid = self.money(p)?;
             if !paid.paid {
-                return Ok(());
+                return Ok(false);
             }
         }
         // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
@@ -1024,18 +1030,19 @@ impl Cx<'_> {
         t.tile = tile as i32;
         t.buy = Some(TriggerBuy::new(purchase::BuyKind::Acquire, from as i32, price));
         self.raise(t)?;
-        Ok(())
+        Ok(true)
     }
 
     /// Pay the tile's build cost and raise one house. Refuses
     /// (with the engine's own reason) when the tile cannot take a house.
-    pub fn card_build(&mut self, player_id: usize, tile: usize) -> Flow<()> {
+    /// `true` when a house was added. HOST-06.
+    pub fn card_build(&mut self, player_id: usize, tile: usize) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         if let Some(why) = self.why_not_build_on(player_id, tile) {
             self.w.log("text", player_id as i32, why);
-            return Ok(());
+            return Ok(false);
         }
         self.build(player_id, tile)
     }
@@ -1043,9 +1050,12 @@ impl Cx<'_> {
     /// Prompt to build on one of `tiles`, then build there.
     /// `why` names the effect (shown on the prompt). Skips silently when nothing
     /// in the list can take a house.
-    pub fn card_offer_build(&mut self, player_id: usize, tiles: &[usize], why: &str) -> Flow<()> {
+    /// Prompt to build on one of `tiles`, then build there.
+    /// `why` names the effect (shown on the prompt). Skips silently when nothing
+    /// in the list can take a house. `true` when a house was added. HOST-06.
+    pub fn card_offer_build(&mut self, player_id: usize, tiles: &[usize], why: &str) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         let options: Vec<usize> = tiles
             .iter()
@@ -1056,7 +1066,7 @@ impl Cx<'_> {
             })
             .collect();
         if options.is_empty() {
-            return Ok(());
+            return Ok(false);
         }
         let mut labels = Vec::with_capacity(options.len());
         for &t in &options {
@@ -1079,7 +1089,7 @@ impl Cx<'_> {
         );
         let pick = self.ask(ask)?.of(player_id);
         let Some(&t) = usize::try_from(pick).ok().and_then(|p| options.get(p)) else {
-            return Ok(());
+            return Ok(false);
         };
         self.build(player_id, t)
     }
@@ -1087,14 +1097,14 @@ impl Cx<'_> {
     /// Mortgage one of the player's deeds, forced by a
     /// card effect. This is not a user asking while a card is busy (`asking`),
     /// so the "busy" refusal does not apply; the ownership/validity gates still
-    /// do.
-    pub fn card_mortgage(&mut self, player_id: usize, tile: usize) -> Flow<()> {
+    /// do. `true` when the deed went onto mortgage. HOST-06.
+    pub fn card_mortgage(&mut self, player_id: usize, tile: usize) -> Flow<bool> {
         if self.out(player_id) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         if let Some(why) = self.why_not_mortgage(player_id, tile as i32, false) {
             self.w.log("text", player_id as i32, why);
-            return Ok(());
+            return Ok(false);
         }
         self.mortgage(player_id, tile, None)
     }
@@ -2841,7 +2851,10 @@ impl Cx<'_> {
     }
 
     /// Run a purchase of tile `t` for player `i` at this [`purchase::BuyKind`].
-    pub(crate) fn buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind) -> Flow<()> {
+    /// `true` when the deed actually changed hands (HOST-06: every refusal
+    /// path -- `BuyGate` / `buyBefore` cancel, already owned, unpaid quote,
+    /// unpaid money -- is `false`).
+    pub(crate) fn buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind) -> Flow<bool> {
         // `BuyGate` -- may this player buy this tile at all? Every kind, Force
         // included (Poppin's hill lock covers 「不可被抵押双倍支付购买」).
         let gate = raise!(
@@ -2852,7 +2865,7 @@ impl Cx<'_> {
             @b TriggerBuy::new(kind, -1, 0)
         )?;
         if gate.is_cancelled() {
-            return Ok(());
+            return Ok(false);
         }
         // rana_parking's 「该次传送不可进行地契购买」 (`docs/PURCHASE.md`) -- the
         // plan's no-buy flag is a **native** gate on the ordinary Land offer,
@@ -2860,20 +2873,20 @@ impl Cx<'_> {
         // also bars a card-driven (`BuyKind::Card`) buy is undecided; today it
         // does not, matching the flag being about the turn's own landing.
         if kind == purchase::BuyKind::Land && self.w.turn.plan.no_buy {
-            return Ok(());
+            return Ok(false);
         }
         // `buyBefore` -- before any guard, so it is a real pre-hook (fires even
         // on the no-op/already-owned path). A hook that claims it with
         // `set_cancelled` vetoes the buy outright (Poppin's hill lock).
         let bt = raise!(self, "buyBefore", i, tile = t as i32)?;
         if bt.is_cancelled() {
-            return Ok(());
+            return Ok(false);
         }
         if self.out(i) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         if self.w.st.owners[t] >= 0 {
-            return Ok(());
+            return Ok(false);
         }
         // The quoted price (the rules crate's `buy_quote`, re-quoted here at
         // commit so quote == charge). For `StubRules` this is the plain
@@ -2881,7 +2894,7 @@ impl Cx<'_> {
         // top of it in the rules crate.
         let quote = self.buy_quote_for(i, t, kind);
         if quote.price < 0 {
-            return Ok(());
+            return Ok(false);
         }
         let mut price = quote.price.max(0);
         let houses = self.w.st.houses[t];
@@ -2895,7 +2908,7 @@ impl Cx<'_> {
             p.text = Some(Msg::new("log.paid_for").player_id("who", i).tile("tile", t));
             let paid = self.money(p)?;
             if !paid.paid {
-                return Ok(());
+                return Ok(false);
             }
             price = paid.loss;
         }
@@ -2944,20 +2957,22 @@ impl Cx<'_> {
         raise!(self, "bought", i, tile = t as i32)?;
         // `buyAfter` -- the deed has changed hands.
         raise!(self, "buyAfter", i, tile = t as i32)?;
-        Ok(())
+        Ok(true)
     }
 
     /// Pay the tile's build cost and raise one house.
-    pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<()> {
+    /// `true` when a house was added (HOST-06: `buildBefore` cancel, unpaid
+    /// cost, not-owned and max-houses refunds are `false`).
+    pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
         // `buildBefore` -- before any guard or payment, so it is a real pre-hook.
         // A hook that claims it with `set_cancelled` vetoes the build outright
         // (卡池BUG 「不可在造价1500及以上的格子上加盖房屋」).
         let bt = raise!(self, "buildBefore", i, tile = t as i32)?;
         if bt.is_cancelled() {
-            return Ok(());
+            return Ok(false);
         }
         if self.out(i) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         let mut cost = self.build_cost(t);
         // 「加盖房屋时半价」 / 「本回合加盖房屋变为免费」 -- the rate is a value
@@ -2993,7 +3008,7 @@ impl Cx<'_> {
             );
             let paid = self.money(p)?;
             if !paid.paid {
-                return Ok(());
+                return Ok(false);
             }
             cost = paid.loss;
         }
@@ -3015,7 +3030,7 @@ impl Cx<'_> {
                         .n("cost", cost),
                 );
             }
-            return Ok(());
+            return Ok(false);
         }
         self.w.st.houses[t] += 1;
         let h = self.w.st.houses[t];
@@ -3039,7 +3054,7 @@ impl Cx<'_> {
         // `buildAfter` -- only after the house actually commits (not on the
         // refund path above).
         raise!(self, "buildAfter", i, tile = t as i32)?;
-        Ok(())
+        Ok(true)
     }
 
     /// Why this deed cannot be mortgaged, or `None` when it can.
@@ -3137,19 +3152,21 @@ impl Cx<'_> {
     }
 
     /// Mortgage one of the player's deeds.
-    pub(crate) fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<()> {
+    /// `true` when the deed actually went onto mortgage (HOST-06).
+    pub(crate) fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<bool> {
         // `mortgageBefore` -- fires before any guard, so it is a real pre-hook
         // (a counteraction can block the mortgage). The post half below only fires
         // when the mortgage actually applied.
         raise!(self, "mortgageBefore", i, tile = t as i32)?;
         if self.out(i) || !self.playing() {
-            return Ok(());
+            return Ok(false);
         }
         if self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
             self.do_mortgage(i, t, why);
             raise!(self, "mortgage", i, tile = t as i32)?;
+            return Ok(true);
         }
-        Ok(())
+        Ok(false)
     }
 
     /// Pay the redeem cost and lift the mortgage.

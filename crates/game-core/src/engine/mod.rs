@@ -2184,13 +2184,14 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
                 }
                 "buy" => {
                     cx.w.st.bought = true;
-                    cx.buy(i, pos, purchase::BuyKind::Land)
+                    cx.buy(i, pos, purchase::BuyKind::Land).map(|_| ())
                 }
                 "build" => {
                     cx.w.st.built = true;
-                    cx.build(i, pos)
+                    cx.build(i, pos).map(|_| ())
                 }
-                "mortgage" => cx.mortgage(i, m.value as usize, None),
+                "mortgage" => cx.mortgage(i, m.value as usize, None).map(|_| ()),
+
                 "redeem" => {
                     cx.redeem(i, m.value as usize);
                     Ok(())

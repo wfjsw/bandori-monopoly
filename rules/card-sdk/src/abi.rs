@@ -316,7 +316,21 @@ use alloc::{string::String, vec::Vec};
 ///      carried so the host's 「效果适用」 line can name which clause of a
 ///      multi-entry card ran. `CardDef::labels` fills it; `None` = unlabelled.
 ///      No host-function change; SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 52;
+/// v53: **purchase replies tell the truth** (HOST-06). `card_buy` / `buy` /
+///      `acquire` / `agent_offer` / `card_build` / `card_offer_build` /
+///      `card_mortgage` / `raise_bought` answer `1` only when the engine
+///      actually committed (deed assigned / house raised / deed mortgaged /
+///      hand-over landed) and `0` on every refusal (`BuyGate` / `buyBefore` /
+///      `buildBefore` cancel, already owned, unpaid quote or money,
+///      `why_not_build_on`, max houses). They used to answer `1`
+///      unconditionally. `buy_quotes` (HOST-07) is the same hook-aware quote
+///      `buy` charges (`BuyGate` / `BuyAdd` / `BuyMul` / `BuySet`), no longer
+///      the native land+houses figure. `plan::set_no_build` /
+///      `plan::set_build_anywhere` (HOST-08) have host bodies: `set_no_build`
+///      is `set_can_build(false)` on the move being planned, and
+///      `set_build_anywhere` opens builds past the landing-only rule. No wire
+///      shape change; SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 53;
 
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.

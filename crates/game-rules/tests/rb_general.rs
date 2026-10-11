@@ -19,6 +19,7 @@ const SHOPPING: usize = 1; // 购物中心, price 3000
 const FUJIMI: usize = 11; // 富士见坂, price 600, rent 60
 const BANDORI: usize = 35; // Bandori车站, price 800
 const SPACE: usize = 42; // Space, price 1200
+const HILL: usize = 44; // 星之鼓动山丘, price 600
 
 /// Skip every open prompt (counteract windows included).
 fn skip_all(t: &mut Table) {
@@ -104,6 +105,31 @@ fn tsugu_ge26_can_buy_any_unowned() {
     assert!(!p.items.contains(&SHOPPING.to_string()) || true);
     t.answer_tile(0, FUJIMI).unwrap();
     assert_eq!(t.owner(FUJIMI), Some(0));
+}
+
+// HOST-06: 「购买」 only logs when the deed actually changed hands. Poppin'
+// Party's hill lock is a `BuyGate` that cancels every buy of 星之鼓动山丘
+// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- `card_buy` must
+// answer `false` and the card must not log a buy. Before HOST-06 the guest's
+// `card_buy -> bool` was a constant `true`, so the log fired on a refused buy.
+#[test]
+fn tsugu_buy_gate_refused_does_not_log_a_buy() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(1, "户山香澄"); // Poppin' Party -- `in_band` scan
+    t.place_raw(1, "skill:Poppin' Party:星之鼓动"); // the `BuyGate` lock
+    t.dice(&[9, 9, 8]); // 26
+    t.give_play(0, "通用:@Tsugu ycm").unwrap();
+    t.answer(0, 0).unwrap(); // yes, buy
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+    t.answer_tile(0, HILL).unwrap(); // 星之鼓动山丘, price 600
+    skip_all(&mut t);
+    assert_eq!(t.owner(HILL), None, "BuyGate refused the buy: {:?}", t.recent_keys(16));
+    let keys = t.recent_keys(16);
+    assert!(
+        !keys.iter().any(|k| k.contains("tsugu_buy")),
+        "must not log a buy on a refused card_buy: {keys:?}"
+    );
 }
 
 // 规则书: 「结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）」
