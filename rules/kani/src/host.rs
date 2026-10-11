@@ -38,10 +38,11 @@ fn name_eq(handle: i32, len: i32, expected: &str) -> bool {
     if b.len() != e.len() || b.len() > 64 {
         return false;
     }
+    let n = b.len();
     let mut i = 0usize;
     let mut ok = true;
-    while i < 64 {
-        if i < b.len() && b[i] != e[i] {
+    while i < n {
+        if b[i] != e[i] {
             ok = false;
         }
         i += 1;
