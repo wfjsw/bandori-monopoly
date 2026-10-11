@@ -208,7 +208,7 @@ fi
 # (several agents run proofs at once; CBMC peaks at several GB each and the box
 # has 16 GB). A slot is an flock on $KANI_SLOT_DIR/slotN held for the harness's
 # lifetime; the per-harness timeout starts only after the slot is acquired.
-KANI_GLOBAL_SLOTS="${KANI_GLOBAL_SLOTS:-3}"
+KANI_GLOBAL_SLOTS="${KANI_GLOBAL_SLOTS:-2}"
 KANI_SLOT_DIR="${KANI_SLOT_DIR:-$HOME/.kani-slots}"
 mkdir -p "$KANI_SLOT_DIR"
 
