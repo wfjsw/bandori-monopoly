@@ -407,3 +407,316 @@ pub fn toko_swap_effects_ok(
 pub fn noble_02_mark_ok(effects: &[Effect], tile: i32) -> bool {
     effects.iter().any(|e| matches!(e, Effect::PlaceMark { tile: t, .. } if *t == tile))
 }
+// ===========================================================================
+// C-MOR-courage-03 post  `Mor:勇气展翅高飞之时`
+// 「结果对应序号格子的所有者向你支付…」 -- unowned branch: nobody pays.
+// Host note: `is_agent` / `tile_price` / `buy_price` use 1-based
+// `board::tile_slot` while the body passes the 0-based roll index; and
+// `buy_price` returns land price only (houses ignored). courage-01/02 are
+// BLOCKED-HOST on those ops. courage-03 is the empty-effect branch, which
+// holds whenever the agent check does not misfire (see proofs isolation).
+// ===========================================================================
+
+/// Unowned / self-owned / owner-out: no money moves; effect log empty.
+pub fn courage_03_post_ok(post: &Snapshot, pre: &Snapshot) -> bool {
+    post.money == pre.money
+}
+
+// ===========================================================================
+// C-MOR-toko-swap-01 no-pair no-op  `Mor:（toko）`
+// 「选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换…」
+// When no such pair exists the body logs and returns; the effect log is empty.
+// ===========================================================================
+
+/// No swappable pair: the play produces no effects (the cant_play gate would
+/// also refuse; the body itself early-returns with a narration only).
+pub fn toko_no_pair_ok(effects: &[Effect]) -> bool {
+    effects.is_empty()
+}
+
+// ===========================================================================
+// C-MOR-starry-01 / -02 / -05 / -06  `Mor:蝴蝶飞舞的星月夜`
+// 「（1）支付X次1000的的资金，将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
+// 「此卡没有[奇迹水晶]时加入弃牌堆」
+// 「（2）…此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]。」
+// 「（3）此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金。」
+// OPEN-X: the book gives no range; the engine offers 1..=5.
+// 「场地中央」 is not a board slot; the card is a field card of the user.
+// ===========================================================================
+
+/// X ∈ 1..=max, `max = clamp(money/1000, 1, 5)` (engine offer; OPEN-X).
+pub fn starry_01_x_in_range(x: i32, money: i32) -> bool {
+    let max = (money / 1000).clamp(1, 5);
+    (1..=max).contains(&x)
+}
+
+/// The user pays `X × 1000`.
+pub fn starry_01_amount(x: i32) -> i32 {
+    x * 1000
+}
+
+/// Exactly three effects in order: PayMoney(user, 1000·X), PlaceCard(user,
+/// Field), AddCounter(user, crystals, X). `set_dest(Field)` is folded into
+/// the PlaceCard dest (2 = Dest::Field). Counter owner is the trigger seat
+/// (the play's player under a normal play).
+pub fn starry_01_effects_ok(
+    effects: &[Effect],
+    player: i32,
+    x: i32,
+) -> bool {
+    if effects.len() != 3 {
+        return false;
+    }
+    matches!(
+        effects[0],
+        Effect::PayMoney { player: p, n } if p == player && n == 1000 * x
+    ) && matches!(
+        effects[1],
+        Effect::PlaceCard { player: p, dest, .. } if p == player && dest == 2
+    ) && matches!(
+        effects[2],
+        Effect::AddCounter { owner, n, .. } if owner == player && n == x
+    )
+}
+
+/// Post money: the pay floors at 0.
+pub fn starry_01_post_ok(post: &Snapshot, pre: &Snapshot, player: i32, x: i32) -> bool {
+    let p = player as usize;
+    post.money[p] == (pre.money[p] - 1000 * x).max(0)
+}
+
+/// MUTANT of the pay amount: off-by-one high.
+pub fn starry_01_amount_mutant(x: i32) -> i32 {
+    x * 1000 + 1
+}
+
+/// starry-06: every crystal removal pays the owner `1000 · removed`.
+/// Exactly one `GainMoney` (the empty-discard dest write is not an effect).
+pub fn starry_06_effects_ok(effects: &[Effect], owner: i32, removed: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::GainMoney { player, n } if player == owner && n == 1000 * removed)
+}
+
+/// MUTANT of the payout: 500 per crystal.
+pub fn starry_06_effects_ok_mutant(effects: &[Effect], owner: i32, removed: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::GainMoney { player, n } if player == owner && n == 500 * removed)
+}
+
+/// starry-02: empty crystals → the card is sent to the discard. Under Kani the
+/// body only writes `dest = Graveyard` (0); the engine's post-body unplace is
+/// outside the effect log. Pin: dest becomes 0 and (with -06) the gain ran.
+pub fn starry_02_dest_is_graveyard(dest: i32) -> bool {
+    dest == 0
+}
+
+/// starry-05: owner passes CiRCLE → one crystal is removed.
+/// Exactly one `AddCounter(owner, n: -1)`.
+pub fn starry_05_effects_ok(effects: &[Effect], owner: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::AddCounter { owner: o, n, .. } if o == owner && n == -1)
+}
+
+// ===========================================================================
+// C-MOR-nnm-02 / -03 / -04 / -05  `Mor:（NNM）稍微努力了一下`
+// 「弃置手中x枚角色标记，发动以下效果中的一个」
+// 「（1）抽x张卡（可超过上限），回合结束后将手牌弃置到五张」
+// 「（2）获得x次经过CiRCLE时的资金奖励」
+// 「（3）将此卡放置在场上并放置x个奇迹水晶…」
+// 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」
+// OPEN-角色标记 / OPEN-多分支选择.
+// Sheet 2026-10-06 新卡组卡 G7 rewords (2) from 「x*2000资金」 to x times the
+// current CiRCLE money reward (Morfonica cycle 1000/1500/2000).
+// ===========================================================================
+
+/// nnm-02: the user draws x cards. The end-of-turn discard-down is a
+/// separate AtEnd entry (PROTOCOL-LEVEL scheduling).
+pub fn nnm_02_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
+    effects.len() == 1 && matches!(effects[0], Effect::Draw { player: p, n } if p == player && n == x)
+}
+
+/// nnm-03 clause pin: x times the *current* CiRCLE money reward.
+pub fn nnm_03_amount(x: i32, reward: i32) -> i32 {
+    x * reward
+}
+
+/// nnm-03 as the body hard-codes it (TODO(规则书) in the source): x * 2000.
+pub fn nnm_03_amount_body(x: i32) -> i32 {
+    x * 2000
+}
+
+/// Exactly one `GainMoney(player, amount)`.
+pub fn nnm_03_effects_ok(effects: &[Effect], player: i32, amount: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == amount)
+}
+
+/// nnm-04: the card is placed with x crystals.
+/// PlaceCard(user, Field) + AddCounter(user, crystals, x).
+pub fn nnm_04_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
+    if effects.len() != 2 {
+        return false;
+    }
+    matches!(
+        effects[0],
+        Effect::PlaceCard { player: p, dest, .. } if p == player && dest == 2
+    ) && matches!(
+        effects[1],
+        Effect::AddCounter { owner, n, .. } if owner == player && n == x
+    )
+}
+
+/// nnm-05 book pin: when the crystal count hits 0 the card is put into the
+/// discard. The engine's discard is `set_dest(Graveyard)` (+ unplace); under
+/// Kani the dest write is the observable. `true` when the body requested it.
+pub fn nnm_05_wants_discard(dest: i32) -> bool {
+    dest == 0
+}
+
+/// nnm-05 FAILS(LESS) witness predicate: empty crystals leave the card on
+/// the field — no `UnplaceCard` and dest unchanged by this body.
+pub fn nnm_05_body_leaves_card(effects: &[Effect], dest: i32, pre_dest: i32) -> bool {
+    !effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. })) && dest == pre_dest
+}
+
+// ===========================================================================
+// C-MOR-tritone-01 / -02  `Mor:迷茫之蝶们的三全音`
+// 「[反击] 任意时刻当你将要失去或支付资金时打出此卡，立刻获得此次失去的资金金额，
+//  此卡放置在场上，三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金」
+// OPEN-三全音收款人: the payee of the payback is not named (bank vs original
+// payee). The clause pins the amount and the discard, not the payee.
+// ===========================================================================
+
+/// tritone-01 body effects (counteraction window is PROTOCOL-LEVEL; this is
+/// the admitted body): GainMoney(user, amount), PlaceCard(user, Field),
+/// SetState(user, tritone_owed, amount). `set_crystals(3)` is a counter write
+/// with **no** effect-log entry under the Kani host.
+pub fn tritone_01_effects_ok(effects: &[Effect], player: i32, amount: i32) -> bool {
+    if effects.len() != 3 {
+        return false;
+    }
+    matches!(
+        effects[0],
+        Effect::GainMoney { player: p, n } if p == player && n == amount
+    ) && matches!(
+        effects[1],
+        Effect::PlaceCard { player: p, dest, .. } if p == player && dest == 2
+    ) && matches!(
+        effects[2],
+        Effect::SetState { player: p, n, .. } if p == player && n == amount
+    )
+}
+
+/// After the body the card holds exactly 3 crystals (the counter write).
+pub fn tritone_01_crystals_ok(crystals: i32) -> bool {
+    crystals == 3
+}
+
+/// tritone-02 single turn-end tick. `pre_crystals` is the count before the
+/// tick; one crystal is removed. While any remain the tick is decay-only
+/// (exactly `AddCounter(owner, -1)`). When the count hits 0 the card is
+/// discarded (`dest = Graveyard`) and the owner pays back `owed`.
+/// OPEN-三全音收款人: the body `pay`s (bank); the clause pins the amount only.
+pub fn tritone_02_tick_effects_ok(
+    effects: &[Effect],
+    owner: i32,
+    pre_crystals: i32,
+    owed: i32,
+) -> bool {
+    if pre_crystals > 1 {
+        return effects.len() == 1
+            && matches!(effects[0], Effect::AddCounter { owner: o, n, .. } if o == owner && n == -1);
+    }
+    if effects.len() != 2 {
+        return false;
+    }
+    matches!(
+        effects[0],
+        Effect::AddCounter { owner: o, n, .. } if o == owner && n == -1
+    ) && matches!(
+        effects[1],
+        Effect::PayMoney { player, n } if player == owner && n == owed
+    )
+}
+
+/// MUTANT of the tick payback: pays owed+1.
+pub fn tritone_02_tick_effects_ok_mutant(
+    effects: &[Effect],
+    owner: i32,
+    pre_crystals: i32,
+    owed: i32,
+) -> bool {
+    if pre_crystals > 1 {
+        return false;
+    }
+    effects.len() == 2
+        && matches!(
+            effects[1],
+            Effect::PayMoney { player, n } if player == owner && n == owed + 1
+        )
+}
+
+// ===========================================================================
+// C-MOR-noble-01 / -02  `Mor:高贵的微蓝`
+// 「当你位于一块地契价值大于等于2200的地块时，可以打出此卡」
+// 「如果此地块属于你：1.立刻进行一次触发结算。2.在该地块上放置一个标记…」
+// OPEN-触发结算: the forced settle is not defined; only the mark is pinned.
+// Host note: `tile_price(pos)` uses 1-based `board::tile_slot` while `pos` is
+// 0-based — noble-01's price gate is BLOCKED-HOST.
+// ===========================================================================
+
+/// noble-01 gate: deed (land) price ≥ 2200.
+pub fn noble_01_gate_ok(price: i32) -> bool {
+    price >= 2200
+}
+
+/// noble-02, tile not yours: no effects (the body logs and returns).
+pub fn noble_02_not_yours_ok(effects: &[Effect]) -> bool {
+    effects.is_empty()
+}
+
+/// noble-02, tile is yours: only the mark leg (forced settle is
+/// OPEN-触发结算 / a `card_settle_at` protocol stub).
+pub fn noble_02_effects_ok(effects: &[Effect], tile: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::PlaceMark { tile: t, .. } if t == tile)
+}
+
+// ===========================================================================
+// C-MOR-again-02  `Mor:再次牵起手来` [持续]
+// 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区。」
+// The [反击] window of -01 is PROTOCOL-LEVEL. This is the PayAt hook body.
+// OPEN-取消范围: one-sided on the owner (the clause pins the owner's side).
+// ===========================================================================
+
+/// Cancel the pending payment (`SetPayAmount { to: 0 }`) and send the card to
+/// the discard (`dest = Graveyard`; the unplace is engine post). Exactly one
+/// effect: the pay-amount rewrite to 0.
+pub fn again_02_effects_ok(effects: &[Effect]) -> bool {
+    effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == 0)
+}
+
+/// MUTANT: cancels to 1, not 0.
+pub fn again_02_effects_ok_mutant(effects: &[Effect]) -> bool {
+    effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == 1)
+}
+
+// ===========================================================================
+// C-MOR-wing-01  `Mor:纯真振翅`
+// 「传送到移动方向20格后（不触发结算）」
+// OPEN-移动方向: 「移动方向」 is the turn's planned direction. Host note:
+// `plan::dir()` (`Op::move_dir`) is a protocol stub that returns 0, so the
+// teleport lands on the current tile — BLOCKED-HOST on `Op::move_dir`.
+// The follow-on roll (wing-02) is engine scheduling (PROTOCOL-LEVEL).
+// ===========================================================================
+
+/// Destination = `pos + 20·dir` on the 60-tile ring.
+pub fn wing_01_dest(pos: i32, dir: i32) -> i32 {
+    (pos + 20 * dir).rem_euclid(60)
+}
+
+/// Exactly one effect: `Teleport(user, dest)`. No settle / no money.
+pub fn wing_01_effects_ok(effects: &[Effect], player: i32, dest: i32) -> bool {
+    effects.len() == 1
+        && matches!(effects[0], Effect::Teleport { player: p, tile } if p == player && tile == dest)
+}
