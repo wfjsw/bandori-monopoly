@@ -2559,8 +2559,16 @@ impl<M: CardModules> RulesBridge<M> {
                     w.silent_body = true;
                 }
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
-                if id >= 0 && activation_id < 0 {
-                    activation_id = id;
+                if id >= 0 {
+                    // Body lines and `after.parent` group under **this**
+                    // drive's header (the 「效果适用」 event), not the outer
+                    // activation. Without this a top-level hook's children
+                    // stay parentless and commit_after cannot stamp
+                    // 「（无事发生）」 on the header.
+                    w.parent = id;
+                    if activation_id < 0 {
+                        activation_id = id;
+                    }
                     unsafe { (*cx_ptr).activation.push(id) };
                 }
             };
@@ -3354,7 +3362,9 @@ impl<M: CardModules> RulesBridge<M> {
             after.world.walk_flush = cx.world().walk_flush.clone();
             let activation_id = after.parent;
             // Complete the activation: 「无事发生」 when nothing followed.
-            if activation_id >= 0 {
+            // A silent drive created no header of its own -- `after.parent` is
+            // the *outer* activation and must not be completed here.
+            if activation_id >= 0 && !silent {
                 let children = cx.child_event_count(activation_id, activation_id);
                 let results = if children == 0 {
                     vec![Msg::new("log.effect_nothing")]

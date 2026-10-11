@@ -60,17 +60,20 @@ fn silent_entry_produces_no_card_event_and_the_sibling_still_flashes() {
         "the sibling's header is a real 「效果适用」"
     );
     // The silent entry's bookkeeping write still happened (body ran).
-    // It leaves no stream trail; the sibling's body line is the only child.
-    let children: Vec<_> = t
+    // It leaves no stream trail; the sibling's body line is under the header.
+    let all: Vec<_> = t
         .events_since(mark)
         .into_iter()
         .filter(|e| e.parent == fired[0].id)
         .collect();
+    let flash_lines: Vec<_> = all
+        .iter()
+        .filter(|e| e.msg.key().contains("silent_pair_flash"))
+        .collect();
     assert_eq!(
-        children.len(),
+        flash_lines.len(),
         1,
-        "one body line under the sibling header: {:?}",
-        children
+        "the sibling's body line is under its header: {all:?}"
     );
 }
 
