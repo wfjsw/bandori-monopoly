@@ -1517,6 +1517,8 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.arisa.passedStation",
     // `uika_imprisoned` 1d6 bonus count (`state::set(player_id, BONUS, n)`).
     "skill.uikaImprisoned.bonus",
+    // `star_beat` banked build layers (`ctx::inc_slot(player_id, "star_beat.layers", ±1)`).
+    "star_beat.layers",
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read

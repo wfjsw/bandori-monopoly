@@ -29,7 +29,16 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // [共鸣] branch (2) is offered from the `PayChoose` hook below, not as a
         // second `Play` entry (its `is_placed` gate was blocking this play).
         On::Play("", None, shine_again),
-        On::Hook(&[HookKind::PayChoose], "actor == owner && card.placed && value > 0", None, pay_choose),
+        // 规则书[持续]（1）: 「[拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡
+        // 未记录且[拥有者]拥有同色地契的颜色」 -- the offer exists only while
+        // short on cash and with an unrecorded owned colour to name. The money
+        // shortfall is CEL; the colour scan is residual.
+        On::Hook(
+            &[HookKind::PayChoose],
+            "actor == owner && card.placed && value > 0 && money(owner) < value",
+            Some(has_unrecorded_color),
+            pay_choose,
+        ),
         // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
@@ -80,17 +89,17 @@ fn unrecorded_owned_colors(player_id: i32) -> Vec<i32> {
     out
 }
 
+/// Residual guard for [`pay_choose`]: an unrecorded owned colour exists.
+/// Derived scan (owned groups minus the recorded bitset).
+fn has_unrecorded_color(player_id: i32) -> bool {
+    !unrecorded_owned_colors(player_id).is_empty()
+}
+
 /// C# `CardShineAgain.PayChoose` -- while the owner cannot cover a payment,
 /// record a colour and take that colour's top deed price / 5 plus a fan.
+/// Applicability is `money(owner) < value` + `has_unrecorded_color`.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-    // 规则书[持续]（1）: 「当前资金不够时」 -- C# `Me.money >= p.amount` refuses.
-    if ctx::money_of(player_id) >= trigger::value() {
-        return Ok(());
-    }
     let colors = unrecorded_owned_colors(player_id);
-    if colors.is_empty() {
-        return Ok(());
-    }
     // 规则书[持续]（1）: 「记录一个此卡未记录且[拥有者]拥有同色地契的颜色」
     let mut options: Vec<Msg> = Vec::new();
     for &g in &colors {

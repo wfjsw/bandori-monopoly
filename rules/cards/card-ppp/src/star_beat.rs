@@ -14,7 +14,16 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], card_sdk::pre::MINE, None, after_settle),
+        // 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房」 --
+        // the offer exists only with a layer banked and a buildable owned
+        // tile within 5. Layer is CEL (`slot`); the near-buildable scan is
+        // residual (owned ∩ dist ≤ 5 ∩ can_build_on).
+        On::Hook(
+            &[card_sdk::abi::HookKind::SettleAfter],
+            "actor == owner && slot('star_beat.layers') > 0",
+            Some(has_near_buildable),
+            after_settle,
+        ),
         On::Play("", Some(cant_play), play),
     ],
 )
@@ -106,19 +115,24 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」.
-fn after_settle(player_id: i32) -> card_sdk::Asked {
-    if ctx::slot(player_id, "star_beat.layers") <= 0 {
-        return Ok(());
-    }
+/// Owned tiles within 5 the player can build on -- the offer's destinations.
+fn near_buildable(player_id: i32) -> alloc::vec::Vec<i32> {
     let pos = ctx::player_pos(player_id);
-    let pool: alloc::vec::Vec<i32> = ctx::owned_tiles(player_id)
+    ctx::owned_tiles(player_id)
         .into_iter()
         .filter(|&t| ctx::dist(pos, t) <= 5 && ctx::can_build_on(player_id, t))
-        .collect();
-    if pool.is_empty() {
-        return Ok(());
-    }
+        .collect()
+}
+
+/// Residual guard for [`after_settle`]: at least one such tile exists.
+fn has_near_buildable(player_id: i32) -> bool {
+    !near_buildable(player_id).is_empty()
+}
+
+/// 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」.
+/// Applicability is the entry's condition + `has_near_buildable`.
+fn after_settle(player_id: i32) -> card_sdk::Asked {
+    let pool = near_buildable(player_id);
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("star_beat_title")),

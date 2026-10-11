@@ -24,10 +24,13 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
         On::Play("", None, play),
+        // 规则书（1）: 「你经过育美标记时可在那格强制停下」 -- the offer exists
+        // only when one of this player's 育美标记 sits on the tile. Mark count
+        // is a derived scan, residual (docs/GUARDS.md §4.2).
         On::Hook(
             &[HookKind::PassTile],
             "actor == owner && card.placed && move.kind != Teleport && tile.id >= 0",
-            None,
+            Some(has_mark_here),
             hook,
         ),
         On::Counteract(
@@ -110,15 +113,15 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
 }
 
 /// C# `HagumiMarkFx.PassTile` / `Stop` (MatchHost.cs:4314-4384).
+/// Residual guard for [`hook`]: one of this player's 育美标记 is on the tile.
+/// C# `H.CountMarks(t, "育美标记", Seat) > 0`.
+fn has_mark_here(player_id: i32) -> bool {
+    ctx::count_marks(trigger::tile(), &mark_filter(player_id)) > 0
+}
+
+/// Applicability is the entry's condition + `has_mark_here`.
 fn hook(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && card.placed && move.kind != Teleport && tile.id >= 0`
-    // is the pre. C# `H.CountMarks(t, "育美标记", Seat) <= 0` -- no mark on
-    // this tile -- is a derived-list residual.
     let t = trigger::tile();
-    // C# `H.CountMarks(t, "育美标记", Seat) <= 0` -- no mark on this tile.
-    if ctx::count_marks(t, &mark_filter(player_id)) <= 0 {
-        return Ok(());
-    }
     // 规则书（1）: 「可在那格强制停下并获得2000资金」 -- C# `Stop`:
     // `H.AskYes(..., aiYes: true)` then `m.Stopped = true` (behind
     // `H.AbnormalGate`), remove the mark, `H.GainR(Seat, 2000, ...)`.
