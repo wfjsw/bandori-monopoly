@@ -332,13 +332,30 @@ pub fn blue_rose_rich(n_live: i32, n_other: i32) -> bool {
     n_live >= n_other && n_live > 0
 }
 
-/// 20% of the sum of those tiles' printed prices (integer pin).
+/// 20% of the sum of those tiles' printed prices (integer pin only).
+/// OPEN-ROUND10: the book does not say how to round; the executable contract
+/// pins the integer case (`sum * 20` divisible by 100). Off that case the
+/// predicate returns `None`-like `-1` and callers must not assert.
 pub fn blue_rose_payout(prices: &[i32]) -> i32 {
     let mut sum: i64 = 0;
     for &p in prices {
         sum += p as i64;
     }
-    ((sum * 20) / 100) as i32
+    if (sum * 20) % 100 == 0 {
+        ((sum * 20) / 100) as i32
+    } else {
+        -1 // rounding open
+    }
+}
+
+/// The body's own rounding (`CeilTo(sum * 0.2, 10)`) is engine-side and is
+/// NOT the spec when the book's 20% is non-integral. Kept for the mutant only.
+pub fn blue_rose_payout_ceil10(prices: &[i32]) -> i32 {
+    let mut sum: i64 = 0;
+    for &p in prices {
+        sum += p as i64;
+    }
+    (((sum + 49) / 50) * 10) as i32
 }
 
 /// Exactly one GainMoney of the 20% payout.
@@ -474,6 +491,13 @@ pub fn student_council_add_resolve_ok(
     post_resolve_in_deck: i32,
 ) -> bool {
     post_deck_n == pre_deck_n + 1 && post_resolve_in_deck == pre_resolve_in_deck + 1
+}
+
+/// The insert is unconditional on the optional placement branch (r.md ruling).
+/// Body-local observable: `add_to_deck` of one `R:[衍生] 觉悟` (silent write
+/// under the current host — no effect-log entry).
+pub fn student_council_add_resolve_delta(pre_deck_n: i32, post_deck_n: i32) -> bool {
+    post_deck_n == pre_deck_n + 1
 }
 
 // ===========================================================================

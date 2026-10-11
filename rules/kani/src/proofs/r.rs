@@ -541,3 +541,66 @@ pub fn nfo_stay_mutant_is_detected() {
         "mutant: stay is not 2 layers"
     );
 }
+
+// ===========================================================================
+// C-R-学生会的检查-02 -- add one `R:[衍生] 觉悟` to the draw pile
+// 「向抽牌堆中加入一张"觉悟"」
+// Isolation: no owned deed with a house build cost, so the optional
+// placement branch is not offered (the insert is unconditional).
+// ===========================================================================
+
+/// IFF: the draw pile gains exactly one `R:[衍生] 觉悟`.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn student_council_add_resolve_iff() {
+    let mut w = base_world();
+    let player = w.trig_player;
+    // Isolation: no owned tiles (so `spots` is empty and the body returns
+    // after the insert). Also keep the discard empty so nothing else fires.
+    for t in 0..60 {
+        w.tiles[t].owner = -1;
+    }
+    let pre_deck_n = w.deck_n as i32;
+    w.deck_n = 0;
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::counteract("R:学生会的检查", player));
+    let post = world::snapshot();
+    let post_deck_n = world::with_world(|ww| ww.deck_n as i32);
+
+    kani::cover!(post_deck_n == 1, "one card in deck");
+    assert!(
+        spec::student_council_add_resolve_delta(pre_deck_n, post_deck_n),
+        "C-R-学生会的检查-02: deck gains exactly one 觉悟"
+    );
+    let _ = pre;
+    let _ = post;
+    // No effect-log entry: `add_to_deck` is a silent pile write.
+    let (logbuf, log_n) = effects_of();
+    let _ = slice_of(logbuf, log_n);
+    assert!(log_n == 0, "C-R-学生会的检查-02: insert is not an effect-log row");
+}
+
+/// MUTANT companion: the deck must not grow by 2.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn student_council_add_resolve_mutant_is_detected() {
+    let mut w = base_world();
+    let player = w.trig_player;
+    for t in 0..60 {
+        w.tiles[t].owner = -1;
+    }
+    w.deck_n = 0;
+    let _pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::counteract("R:学生会的检查", player));
+    let post_deck_n = world::with_world(|ww| ww.deck_n as i32);
+    assert!(
+        post_deck_n != 2,
+        "mutant: deck did not grow by 2"
+    );
+}
