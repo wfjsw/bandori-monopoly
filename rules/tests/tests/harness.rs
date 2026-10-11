@@ -1,5 +1,5 @@
 //! The rulebook harness itself (`tests/common`): setup, loaded dice, turn
-//! control. If these fail, every `rb_*` result is suspect.
+//! control. If these fail, every game-suite result is suspect.
 
 mod common;
 use common::*;
@@ -55,7 +55,7 @@ fn begin_turn_and_end_pass_the_turn() {
 #[test]
 fn a_counter_window_is_offered_to_a_human_holding_a_counter() {
     // Every player is human, so holding an eligible [反击] card opens a
-    // window. (Which card answers what is the rb_* files' business; this only
+    // window. (Which card answers what is the per-group files' business; this only
     // proves the harness surfaces the window and can answer it.)
     let mut t = Table::vanilla(2);
     t.give(1, &["AG:宣战布告"]);

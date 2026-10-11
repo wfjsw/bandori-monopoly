@@ -492,7 +492,7 @@ fn t11_fire_bird_plus_hhw_double() {
 // 规则书: 学生会的检查: 「支付那格一层房屋的建造价格一半将此卡放于那个格子上…
 // 下一个经过且移动终点不在此格的你以外的玩家强制停下并触发结算…地租价格为原价格一半」.
 // The card is a SettleBefore [反击], not a free [手] play -- drive the window
-// like `student_council_check_adds_juewu_not_ya` (rb_general).
+// like `student_council_check_adds_juewu_not_ya` (general).
 #[test]
 fn t12_student_council_check() {
     let mut t = Table::vanilla(2);

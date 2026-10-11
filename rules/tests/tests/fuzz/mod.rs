@@ -14,7 +14,7 @@ use rng::Rng;
 
 /// The signature of a known finding: a short substring of the failure text.
 /// Entries point at the `#[ignore = "DISCREPANCY: …"]` test in
-/// `tests/rb_fuzz_found.rs` that holds the minimal repro.
+/// `rules/tests/tests/fuzz_found.rs` that holds the minimal repro.
 pub struct KnownFinding {
     pub signature: &'static str,
     pub points_at: &'static str,
@@ -27,23 +27,23 @@ pub struct KnownFinding {
 pub const KNOWN_FINDINGS: &[KnownFinding] = &[
     KnownFinding {
         signature: "money: player delta",
-        points_at: "rb_fuzz_found::money_ledger_gap",
+        points_at: "fuzz_found::money_ledger_gap",
     },
     KnownFinding {
         signature: "unknown card id",
-        points_at: "rb_fuzz_found::unknown_card_id",
+        points_at: "fuzz_found::unknown_card_id",
     },
     KnownFinding {
         signature: "card_trap",
-        points_at: "rb_fuzz_found::card_trap_reachable",
+        points_at: "fuzz_found::card_trap_reachable",
     },
     KnownFinding {
         signature: "settle: the match did not come to rest",
-        points_at: "rb_fuzz_found::settle_loop_stuck",
+        points_at: "fuzz_found::settle_loop_stuck",
     },
     KnownFinding {
         signature: "world_mut while a routine is pending",
-        points_at: "rb_fuzz_found::settle_loop_stuck",
+        points_at: "fuzz_found::settle_loop_stuck",
     },
 ];
 
@@ -76,7 +76,7 @@ impl Finding {
              \x20   // {repro}\n\
              \x20   let mut t = common::Table::with_seed(&[\"户山香澄\", \"花园多惠\"], {seed});\n\
              \x20   // Re-derive the failing run:\n\
-             \x20   //   FUZZ_ITERS={iters} cargo test -p game-rules --test fuzz_interactions -- --nocapture\n\
+             \x20   //   FUZZ_ITERS={iters} cargo test -p ruleset-tests --test fuzz_interactions -- --nocapture\n\
              \x20   let mut rng = fuzz::rng::Rng::new({seed} ^ 0xA5A5);\n\
              \x20   let tr = fuzz::drive::drive(&mut t, &mut rng, {iters}, fuzz::drive::AnswerMode::Free).unwrap();\n\
              \x20   // {what}\n\
