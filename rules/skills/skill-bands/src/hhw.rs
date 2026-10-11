@@ -24,26 +24,50 @@ const SAVED: &str = "skill.hhw.saved";
 pub const HHW: CardDef = CardDef::new(
     "skill:Hello, Happy World!:传播笑容",
     &[
-        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, None, on_pay_choose),
-        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, None, after_pay),
-        On::Hook(&[HookKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
+        // （1）「向他人的格子付款时」 -- another player, a rent. The
+        // recorded-player / crystals scans stay residual (dynamic keys).
+        On::Hook(
+            &[HookKind::PayChoose],
+            "actor == owner && target >= 0 && target != owner && pay_is_rent",
+            None,
+            on_pay_choose,
+        ),
+        // （2） a recorded player's rent collection, with a crystal to spend.
+        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, Some(after_pay_applies), after_pay),
+        // （3） a recorded amount to spend down.
+        On::Hook(&[HookKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
+
+/// Residual guard for [`after_pay`]: a recorded player collected a rent and
+/// this card has a crystal to spend. Dynamic keys (`skill.hhw.*`), not CEL.
+fn after_pay_applies(player_id: i32) -> bool {
+    let who = state::get(player_id, WHO);
+    let who2 = state::get(player_id, WHO2);
+    if who < 0 && who2 < 0 {
+        return false;
+    }
+    let from = ctx::trigger::player_id();
+    if from != who && from != who2 {
+        return false;
+    }
+    ctx::trigger::pay_is_rent() && ctx::crystals() >= 1
+}
+
+/// Residual guard for [`before_build`]: something recorded to spend.
+fn has_saved(player_id: i32) -> bool {
+    state::get(player_id, SAVED) > 0
+}
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
 /// （1）「向他人的格子付款时可选择支付双倍价格」.
+/// Applicability is the entry's condition; the ask is the 「可」 opt-in.
 fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
     let to = ctx::trigger::target();
-    if to < 0 || to == player_id {
-        return Ok(());
-    }
-    if !ctx::trigger::pay_is_rent() {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("hhw_title")),
@@ -66,22 +90,6 @@ fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
 /// （2）「被记录的玩家的格子产生收款时，移除此卡的一个奇迹水晶，记录该次收款的
 /// 价格（可累加）」.
 fn after_pay(player_id: i32) -> card_sdk::Asked {
-    let who = state::get(player_id, WHO);
-    let who2 = state::get(player_id, WHO2);
-    if who < 0 && who2 < 0 {
-        return Ok(());
-    }
-    // The recorded player collected a rent.
-    let from = ctx::trigger::player_id();
-    if from != who && from != who2 {
-        return Ok(());
-    }
-    if !ctx::trigger::pay_is_rent() {
-        return Ok(());
-    }
-    if ctx::crystals() < 1 {
-        return Ok(());
-    }
     ctx::add_crystals(-1, i32::MAX)?;
     let v = ctx::trigger::value();
     state::set(player_id, SAVED, state::get(player_id, SAVED) + v);
@@ -92,9 +100,6 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
 /// （3）「你进行盖房时，可从盖房花费中减去所记录的数字，然后将记录数字归零」.
 fn before_build(player_id: i32) -> card_sdk::Asked {
     let saved = state::get(player_id, SAVED);
-    if saved <= 0 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("hhw_title")),

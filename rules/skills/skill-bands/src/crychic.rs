@@ -26,7 +26,10 @@ pub const CRYCHIC: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         On::Hook(&[HookKind::Drawn], card_sdk::pre::MINE, None, on_drawn),
-        On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, None, at_turn_end),
+        // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
+        // empty. The body used to re-check and return early -- a flash per
+        // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
+        On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
         On::Hook(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
         On::Hook(&[HookKind::CircleAffected], "", Some(in_lock), force_card),
         On::Play("", Some(can_transform), transform_now),
@@ -77,10 +80,13 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「你的回合结束时，若你的抽牌堆与弃牌堆中都没有卡…」.
+/// Residual guard for [`at_turn_end`]: both piles are empty (the 「当此卡
+/// 移除时」 precondition). Derived scan, not CEL (docs/GUARDS.md §4.2).
+fn decks_empty(player_id: i32) -> bool {
+    ctx::deck_count(player_id) == 0 && ctx::discard_size(player_id) == 0
+}
+
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
-    if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
-        return Ok(());
-    }
     ctx::log(player_id, &Msg::new(key!("crychic_empty")));
     // 「当此卡移除时，你获得X*500资金」
     // TODO(规则书)（3）: 「当此卡移除时」 is a removal-time clause and should fire

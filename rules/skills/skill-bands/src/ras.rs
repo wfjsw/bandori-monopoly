@@ -23,25 +23,52 @@ const ON_HOUSE: &str = "skill.ras.onHouse";
 pub const RAS: CardDef = CardDef::new(
     "skill:RAISE A SUILEN:UNSTOPPABLE",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        // Turn-start bookkeeping: clear the per-turn latch and drop a stale
+        // landing memory. Silent -- the player never sees this as a clause.
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start_reset),
         On::Hook(&[HookKind::Abnormal], card_sdk::pre::MINE, None, on_abnormal),
         On::Hook(&[HookKind::Settle], card_sdk::pre::MINE, None, on_settle),
+        // （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
+        // The remembered-tile scan is a derived read (docs/GUARDS.md §4.2).
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            card_sdk::pre::MINE,
+            Some(still_on_remembered),
+            at_turn_start_offer,
+        ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[2]);
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0, 2]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-fn at_turn_start(player_id: i32) -> card_sdk::Asked {
+/// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
+/// landing memory when the player has moved off it.
+fn at_turn_start_reset(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, TAKEN, 0);
-    // （2）「若你的下回合开始时仍在那个格子上」
     let t = state::get(player_id, ON_HOUSE);
-    if t < 0 || ctx::player_pos(player_id) != t {
+    if t >= 0 && ctx::player_pos(player_id) != t {
         state::set(player_id, ON_HOUSE, -1);
-        return Ok(());
     }
+    Ok(())
+}
+
+/// Residual guard for the （2） teleport offer: still standing on the
+/// remembered livehouse. Derived scan (docs/GUARDS.md §4.2).
+fn still_on_remembered(player_id: i32) -> bool {
+    let t = state::get(player_id, ON_HOUSE);
+    t >= 0
+        && ctx::player_pos(player_id) == t
+        && ctx::owned_tiles(player_id)
+            .into_iter()
+            .any(|u| ctx::is_live_house_for(player_id, u))
+}
+
+/// （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
+fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
+    let t = state::get(player_id, ON_HOUSE);
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("ras_title")),
