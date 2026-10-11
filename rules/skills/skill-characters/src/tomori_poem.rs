@@ -34,7 +34,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
         // (dynamic). `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
         On::Hook(
             &[HookKind::SettleBefore],
-            "tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5",
+            "tile.id >= 0 && actor != owner",
             Some(before_settle_applies),
             before_settle,
         ),
@@ -66,11 +66,18 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`before_settle`]: the pot-cost split and the fire
-/// balance. The (2)/(3) arm is kept exactly as the body had it (a dynamic
-/// `turn_player` compare plus the live fire count) -- `tile.id >= 0 &&
-/// actor != owner && dist(tile.id, pos(owner)) <= 5` is the `pre`.
+/// Residual guard for [`before_settle`]: the landing is within five tiles of
+/// the owner, and the pot-cost / fire-balance split holds.
+///
+/// The `dist` scan is live board geometry (docs/GUARDS.md §4.2); it stays out
+/// of the CEL `pre` so the host and the IR fill cannot disagree on
+/// `dist(tile.id, pos(owner))`. The (2)/(3) arm is kept exactly as the body
+/// had it (a dynamic `turn_player` compare plus the live fire count).
 fn before_settle_applies(player_id: i32) -> bool {
+    let landing = ctx::trigger::tile();
+    if landing < 0 || ctx::dist(landing, ctx::player_pos(player_id)) > 5 {
+        return false;
+    }
     let mover = ctx::trigger::player_id();
     let cost = if mover == ctx::turn_player() {
         // （3） is this player's own landing near someone else.

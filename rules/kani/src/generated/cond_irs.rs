@@ -3314,9 +3314,9 @@ pub static G_00a0_408f0aebed7ca878: GuardIr = GuardIr {
     id: 160,
 };
 
-/// `tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5`
+/// `tile.id >= 0 && actor != owner`
 /// id = 161
-pub static G_00a1_60f669e9e8fec389_NODES: &[Node] = &[
+pub static G_00a1_3d9b31a273045d1f_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ge, payload: 0, a: 0, b: 1, c: 0 },
@@ -3324,17 +3324,10 @@ pub static G_00a1_60f669e9e8fec389_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
-    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Call, payload: 14, a: 8, b: 1, c: 0 },
-    Node { kind: Kind::Call, payload: 27, a: 7, b: 2, c: 0 },
-    Node { kind: Kind::ConstInt, payload: 5, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Le, payload: 0, a: 10, b: 11, c: 0 },
-    Node { kind: Kind::And, payload: 0, a: 6, b: 12, c: 0 },
 ];
-pub static G_00a1_60f669e9e8fec389: GuardIr = GuardIr {
-    src: "tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5",
-    program: Program { nodes: G_00a1_60f669e9e8fec389_NODES, root: 13 },
+pub static G_00a1_3d9b31a273045d1f: GuardIr = GuardIr {
+    src: "tile.id >= 0 && actor != owner",
+    program: Program { nodes: G_00a1_3d9b31a273045d1f_NODES, root: 6 },
     id: 161,
 };
 
@@ -3564,7 +3557,7 @@ pub static BY_ID: &[&GuardIr] = &[
     &G_009e_ffb131a0f64d037b,
     &G_009f_1e25469f92cf19d4,
     &G_00a0_408f0aebed7ca878,
-    &G_00a1_60f669e9e8fec389,
+    &G_00a1_3d9b31a273045d1f,
     &G_00a2_6d05a83b40f7f686,
     &G_00a3_d4a3a2ffc770af91,
     &G_00a4_7784ddb8db1ca08f,
@@ -3743,7 +3736,7 @@ macro_rules! guard_id {
     ("target == owner && effect.has(Abnormal) && slot('lastWalk') > 0") => { 158usize };
     ("target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1") => { 159usize };
     ("tile.id == tile_named('星之鼓动山丘')") => { 160usize };
-    ("tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5") => { 161usize };
+    ("tile.id >= 0 && actor != owner") => { 161usize };
     ("tok('PAREO标记') >= 1") => { 162usize };
     ("trigger_card == card.id") => { 163usize };
     ("turn_player == owner") => { 164usize };

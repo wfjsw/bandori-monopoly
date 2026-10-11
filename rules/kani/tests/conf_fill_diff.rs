@@ -1033,6 +1033,16 @@ fn all_fixtures() -> Vec<Fixture> {
     ]
 }
 
+
+/// Index of a guard by its source string. Not a hardcoded id: this branch
+/// adds guards, which shifts the generated table's indices.
+fn guard_index(src: &str) -> usize {
+    BY_ID
+        .iter()
+        .position(|g| g.src == src)
+        .unwrap_or_else(|| panic!("guard not in the generated table: {src:?}"))
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -1041,7 +1051,7 @@ fn all_fixtures() -> Vec<Fixture> {
 /// whose `src` field is that string, for every entry.
 #[test]
 fn guard_ids_are_stable() {
-    assert_eq!(GUARD_COUNT, 139, "generated table size");
+    assert_eq!(GUARD_COUNT, BY_ID.len(), "generated table size matches the table");
     for (i, g) in BY_ID.iter().enumerate() {
         assert_eq!(g.id, i, "GuardIr.id must equal BY_ID index for {src:?}", src = g.src);
         assert_eq!(
@@ -1058,15 +1068,15 @@ fn guard_ids_are_stable() {
         );
     }
     // Compile-time macro agrees on a sample of every shape class.
-    assert_eq!(rules_kani::guard_id!("actor == owner && value > 0"), 84);
-    assert_eq!(rules_kani::guard_id!("false"), 113);
+    assert_eq!(rules_kani::guard_id!("actor == owner && value > 0"), guard_index("actor == owner && value > 0"));
+    assert_eq!(rules_kani::guard_id!("false"), guard_index("false"));
     assert_eq!(
         rules_kani::guard_id!(
             "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"
         ),
-        37
+        guard_index("actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0")
     );
-    assert_eq!(rules_kani::guard_id!("card.placed"), 90);
+    assert_eq!(rules_kani::guard_id!("card.placed"), guard_index("card.placed"));
 }
 
 /// The differential: every fixture × every seat × all 139 guards.
@@ -1086,7 +1096,7 @@ fn fill_window_vs_ir_fill_agree_on_every_guard() {
             .map(|f| f.n_players as usize * GUARD_COUNT)
             .sum::<usize>()
     );
-    // 2+2+2+4+2+4+2+4 = 22 seats × 139 guards = 3058 comparisons.
+    // 2+2+2+4+2+4+2+4 = seats × guards = comparisons.
     eprintln!(
         "conf_fill_diff: {} fixtures × {} guards on {} seats = {} comparisons",
         fixtures.len(),
@@ -1111,7 +1121,7 @@ fn fixtures_flip_the_guards_they_target() {
 
     let f1 = fx_aya_poorest_value();
     assert!(prod_eval(aya, &f1, 0), "fixture 1: aya guard should hold");
-    assert!(ir_eval(84, &f1, 0), "fixture 1: IR aya guard should hold");
+    assert!(ir_eval(guard_index(aya), &f1, 0), "fixture 1: IR aya guard should hold");
 
     let f2 = fx_aya_value_zero_richest();
     assert!(!prod_eval(aya, &f2, 0), "fixture 2: value==0 → aya false");
@@ -1122,25 +1132,25 @@ fn fixtures_flip_the_guards_they_target() {
     let mut f3b = f3.clone();
     f3b.trig.tile = 0;
     assert!(prod_eval(is_circle, &f3b, 0));
-    assert!(ir_eval(42, &f3b, 0));
+    assert!(ir_eval(guard_index(is_circle), &f3b, 0));
 
     let f5 = fx_chain_pay_move();
     assert!(prod_eval(chain_pay, &f5, 0), "chain Pay present");
-    assert!(ir_eval(37, &f5, 0));
+    assert!(ir_eval(guard_index(chain_pay), &f5, 0));
     let mut f5b = f5.clone();
     f5b.trig.chain.clear();
     assert!(!prod_eval(chain_pay, &f5b, 0), "chain Pay absent");
 
     let f4 = fx_fans_tok();
     assert!(prod_eval(fans, &f4, 0), "seat 0 has fans");
-    assert!(ir_eval(138, &f4, 0));
+    assert!(ir_eval(guard_index(fans), &f4, 0));
     assert!(!prod_eval(fans, &f4, 2), "seat 2 has no fans");
-    assert!(!ir_eval(138, &f4, 2));
+    assert!(!ir_eval(guard_index(fans), &f4, 2));
 
     let f6 = fx_no_chain_abnormal();
     assert!(!prod_eval(placed, &f6, 0), "not placed");
     assert!(prod_eval(band, &f6, 0), "Pastel✽Palettes band");
-    assert!(ir_eval(87, &f6, 0));
+    assert!(ir_eval(guard_index(band), &f6, 0));
 }
 
 /// Per-fixture names, so a failure names the world immediately.
