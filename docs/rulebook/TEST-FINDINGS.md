@@ -879,6 +879,33 @@ load while the module-instantiation and world-clone counts stay put.
 
 ---
 
+## Host-ABI batch (2026-10-11, ABI v53)
+
+`backlog-host-abi-a`: HOST-06..12 + TOOL-01.
+
+* **HOST-06** — purchase HostRequest arms answer the real outcome
+  (`Flow<bool>` on `buy` / `build` / `mortgage` / `card_*`). Guest logs that
+  claimed a buy are gated on it (`tsugu_ycm`, `tomoe_savior`); `dream_ahead`
+  (crystals only on success) and `afterglow` (free-house log only on success)
+  already checked the bool. Tests: `rb_ag::band_free_house_skipped_when_build_refused`,
+  `rb_general::tsugu_buy_gate_refused_does_not_log_a_buy`.
+* **HOST-07** — `ctx::buy_quotes` is the hook-aware quote (`CardRules::buy_quote`
+  via `Run::buy_quotes` / `purchase::quote_for`), quote == charge. Still a
+  query. Test: `rb_general::agent_quote_carries_the_tsugu_buy_add`.
+* **HOST-08** — `plan::set_no_build` folds into `can_build = !on`;
+  `plan::set_build_anywhere` writes `MovePlan.build_anywhere` and lifts the
+  landing-only build check. Both backends wired. Test:
+  `game-core::move_ctx::tests::no_build_folds_into_can_build`.
+* **HOST-09..12** — dead `set_bonus` import deleted; five dead linker names
+  dropped; `roll_source` doc aligned to `0 = none`; stale purchase comments
+  cleaned.
+* **TOOL-01** — `root_parallel::early_stop_stops_no_later_than_the_full_budget_search`
+  de-flaked (iteration cap, not wall clock).
+
+No new `#[ignore]` / DISCREPANCY rows: the batch is ABI-surface, not a
+rulebook-text divergence. dream_ahead (4)'s crystal-vs-buy order on a refused
+buy is unchanged (spend only on success) and not reopened as C.
+
 ## Pipeline-audit batch (2026-10-07)
 
 Nine new black-box tests for the decided `PIPELINE-AUDIT` items (see
