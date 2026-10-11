@@ -58,7 +58,7 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | C-R-Fire bird-03 | 「自己的所有格子收费变成1.5倍」 | PROTOCOL-LEVEL | — | — | rent multiplier is a `PayMul` hook over the settle pipeline | OPEN-R1, OPEN-ROUND10 |
 | C-R-Fire bird-04 | 「奇迹水晶耗尽时将此卡放入弃牌堆」 | PROTOCOL-LEVEL | — | — | `CounterChanged` unplace-to-discard is the field lifecycle | — |
 | C-R-NFO-01 | 「投掷1d6」 | PROVEN (folded into face slices) | (face harnesses cover 1..=6) | (pending) | Kani `roll(1,6)` is already 1..=6 | — |
-| C-R-NFO-02 | 「并在回合结束后获得一层[停留]」 | PROVEN | `nfo_stay_iff`, `nfo_stay_mutant_is_detected` | (pending) | AtEnd entry: exactly GiveStay{1} | — |
+| C-R-NFO-02 | 「并在回合结束后获得一层[停留]」 | PROVEN (harness written; verdict pending slot) | `nfo_stay_iff`, `nfo_stay_mutant_is_detected` | (slot starved) | AtEnd entry: exactly GiveStay{1} | — |
 | C-R-NFO-03 | 「若投掷结果为1，获得1500资金」 | PROVEN | `nfo_face1_iff`, `nfo_face1_mutant_is_detected` | (pending) | face-1 slice: exactly GainMoney 1500 | — |
 | C-R-NFO-04 | face 2 jump + 分摊 1000 | OPEN / PROTOCOL-LEVEL | — | — | move plan + split pay + main-move consume | OPEN-分摊, OPEN-触发结算 |
 | C-R-NFO-05 | face 3 field + 1000 off next pay | PROTOCOL-LEVEL | — | — | place + later PayAt discount + discard is multi-window | — |
@@ -130,8 +130,8 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | `fire_bird_burn_mutant_is_detected` | r | (written) | |
 | `nfo_face1_iff` | r | (written) | |
 | `nfo_face1_mutant_is_detected` | r | (written) | |
-| `nfo_stay_iff` | r | (running) | |
-| `nfo_stay_mutant_is_detected` | r | (written) | |
+| `nfo_stay_iff` | r | (written; runner never acquired a machine-wide slot — box saturated) | — |
+| `nfo_stay_mutant_is_detected` | r | (written; same) | — |
 | `student_council_add_resolve_iff` | r | (written) | |
 | `student_council_add_resolve_mutant_is_detected` | r | (written) | |
 | `ringing_bloom_place_iff` | r | (written) | |
@@ -144,6 +144,16 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | `lisa_fire_mutant_is_detected` | skills_r | (written) | |
 
 ---
+
+## What was tried for pending harnesses
+
+`tools/kani/run.sh --unit r` was launched repeatedly (`resolve_play_iff`,
+`resolve_play_mutant_is_detected`, `nfo_stay_iff`, and a 3-harness batch).
+The two resolve harnesses completed (~10 min each). `nfo_stay_iff` and the
+rest never acquired one of the machine-wide 3 CBMC slots (the box was
+saturated by sibling units for the whole session); runner invocations were
+killed at session end per orphan hygiene. Specs and harnesses are on the
+branch and compile under `cargo build -p rules-kani` (`CARGO_TARGET_DIR=/home/monopoly/kani-target-r`).
 
 ## Host gaps this unit hit
 
