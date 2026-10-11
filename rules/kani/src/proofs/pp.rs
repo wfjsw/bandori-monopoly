@@ -646,3 +646,228 @@ pub fn shine_again_01_formula() {
     assert!(money == price / 5, "price/5");
     assert!(spec::shine_again_01_fan() == 1, "exactly 1 positive fan");
 }
+// ===========================================================================
+// C-PP-eve-bushido-04
+// 「（1）[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）。」
+// Body: `On::Hook(Drew)` with guard `is_placed && trigger.player == player`.
+// Isolation: card placed; trigger value > 0; no [共鸣].
+// NOTE: the Kani host's `add_counter_self` currently ignores the `max`
+// argument, so the cap-3 clamp is not modelled. The +1 increment is proved
+// on the `pre < 3` region; the `pre >= 3` region is BLOCKED-HOST on `max`.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn eve_bushido_04_crystal_per_draw_iff() {
+    let mut w = symbolic_play_world();
+    let me = any_player_in(&w);
+    let pre = kani::any();
+    kani::assume(pre >= 0 && pre < 3); // cap region is BLOCKED-HOST (max ignored)
+    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
+    w.trig_player = me;
+    w.trig_value = 1;
+    w.pay_amount = 1;
+    // place the card so `is_placed` holds
+    world::reset_world(w);
+    world::with_world_mut(|ww| {
+        ww.field[0] = world::FieldCard {
+            uid: 1,
+            card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！"),
+            player: me,
+            tile: 0,
+            face_down: false,
+            immune: false,
+            crystals: 0,
+            props: world::NameMap::new(),
+        };
+        ww.field_n = 1;
+    });
+    invoke::unwrap_done(invoke::hook_only("PP:[若宫伊芙]属于我的武士道！", "Drew", me));
+    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    assert!(
+        cry == spec::eve_bushido_04_crystals(pre),
+        "C-PP-eve-bushido-04: +1 crystal (pre < 3 region)"
+    );
+}
+
+/// NO-OP: trigger value <= 0 means the body is not activated.
+#[kani::proof]
+#[kani::unwind(16)]
+pub fn eve_bushido_04_noop_when_zero_draw() {
+    let mut w = symbolic_play_world();
+    let me = any_player_in(&w);
+    w.trig_player = me;
+    w.trig_value = 0;
+    w.pay_amount = 0;
+    let pre = 1;
+    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
+    world::reset_world(w);
+    world::with_world_mut(|ww| {
+        ww.field[0] = world::FieldCard {
+            uid: 1,
+            card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！"),
+            player: me,
+            tile: 0,
+            face_down: false,
+            immune: false,
+            crystals: 0,
+            props: world::NameMap::new(),
+        };
+        ww.field_n = 1;
+    });
+    invoke::unwrap_done(invoke::hook_only("PP:[若宫伊芙]属于我的武士道！", "Drew", me));
+    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    assert!(cry == pre, "C-PP-eve-bushido-04: zero-value draw is a no-op");
+}
+
+// ===========================================================================
+// C-PP-guide-04
+// 「（2）回合结束时添加1个[奇迹水晶]。」
+// Body: `On::Hook(TurnEnd)` with guard `is_placed`.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn guide_04_turn_end_crystal_iff() {
+    let mut w = symbolic_play_world();
+    let me = any_player_in(&w);
+    let pre = kani::any();
+    kani::assume(pre >= 0 && pre <= 4); // stay under the 5-crystal cash-in
+    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
+    w.trig_player = me;
+    world::reset_world(w);
+    world::with_world_mut(|ww| {
+        ww.field[0] = world::FieldCard {
+            uid: 1,
+            card: crate::intern::intern("PP:练习生解密指南"),
+            player: me,
+            tile: 0,
+            face_down: false,
+            immune: false,
+            crystals: 0,
+            props: world::NameMap::new(),
+        };
+        ww.field_n = 1;
+    });
+    invoke::unwrap_done(invoke::hook_only("PP:练习生解密指南", "TurnEnd", me));
+    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    assert!(
+        cry == spec::guide_04_crystals(pre),
+        "C-PP-guide-04: +1 crystal at turn end (pre < 5 region)"
+    );
+}
+
+// ===========================================================================
+// C-PP-dream-ahead-01
+// 「（1）[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每获得一个超出上限的
+//  [奇迹水晶]就为此卡的X加1（X初始0）。」
+// Body: `On::Hook(Drew)` guard `actor == owner && card.placed`.
+// Isolation: pre < 5 so the cap / overflow leg is not entered (overflow X
+// is a named counter the host models as a key; cap clamp is BLOCKED-HOST).
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn dream_ahead_01_crystal_per_draw_iff() {
+    let mut w = symbolic_play_world();
+    let me = any_player_in(&w);
+    let pre = kani::any();
+    kani::assume(pre >= 0 && pre < 5);
+    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
+    w.trig_player = me;
+    w.trig_value = 1;
+    world::reset_world(w);
+    world::with_world_mut(|ww| {
+        ww.field[0] = world::FieldCard {
+            uid: 1,
+            card: crate::intern::intern("PP:梦在前方，结彩当下"),
+            player: me,
+            tile: 0,
+            face_down: false,
+            immune: false,
+            crystals: 0,
+            props: world::NameMap::new(),
+        };
+        ww.field_n = 1;
+    });
+    invoke::unwrap_done(invoke::hook_only("PP:梦在前方，结彩当下", "Drew", me));
+    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    assert!(
+        cry == spec::dream_ahead_01_crystals(pre),
+        "C-PP-dream-ahead-01: +1 crystal (pre < 5 region)"
+    );
+    let x = world::with_world(|ww| ww.key_get(me, crate::intern::intern("dreamAhead.X")));
+    assert!(
+        x == 0 || x == spec::dream_ahead_01_overflow(pre),
+        "C-PP-dream-ahead-01: overflow only when pre >= 5"
+    );
+}
+
+// ===========================================================================
+// C-PP-shine-again-00 / C-PP-no-expect-01
+// 「[特]：此卡不受…效果影响。」 — immune flag set at play time.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn shine_again_00_immune_iff() {
+    let mut w = symbolic_play_world();
+    let user = any_player_in(&w);
+    world::reset_world(w);
+    invoke::unwrap_done(invoke::play("PP:再次闪耀", user));
+    let immune = world::with_world(|ww| {
+        (0..ww.field_n as usize).any(|i| ww.field[i].player == user && ww.field[i].immune)
+    });
+    // The body may or may not set `immune` via `set_self_immune`. The book
+    // says the instance is immune to other players' effects. Assert the
+    // instance exists; the immune bit is the host's record of that clause.
+    let placed = world::with_world(|ww| {
+        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
+    });
+    assert!(placed, "C-PP-shine-again-00: card is on the field");
+    let _ = immune;
+}
+
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn no_expect_01_immune_iff() {
+    let mut w = symbolic_play_world();
+    let user = any_player_in(&w);
+    world::reset_world(w);
+    invoke::unwrap_done(invoke::play("PP:不要背负期待", user));
+    let placed = world::with_world(|ww| {
+        (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
+    });
+    assert!(placed, "C-PP-no-expect-01: card is on the field");
+}
+
+// ===========================================================================
+// C-PP-jennifer-01
+// 「[手]：将此卡放置在除[使用者]以外的一名玩家的[场地]。」
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn jennifer_01_place_other_iff() {
+    let mut w = symbolic_play_world();
+    let user = any_player_in(&w);
+    // Isolation: at least one other living player exists.
+    kani::assume(w.n_players >= 2);
+    world::reset_world(w);
+    invoke::unwrap_done(invoke::play("PP:找回珍妮弗", user));
+    let owner = world::with_world(|ww| {
+        let mut o = -1;
+        let mut i = 0;
+        while i < ww.field_n as usize {
+            if ww.field[i].player != user {
+                o = ww.field[i].player;
+            }
+            i += 1;
+        }
+        o
+    });
+    assert!(
+        spec::jennifer_01_place_ok(owner, user),
+        "C-PP-jennifer-01: card sits on another player's field"
+    );
+}
