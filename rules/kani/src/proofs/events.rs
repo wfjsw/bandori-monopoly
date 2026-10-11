@@ -40,13 +40,13 @@ fn base_world() -> World {
     w
 }
 
-fn effects_of() -> [Effect; 32] {
+fn effects_of() -> [Effect; world::MAX_LOG] {
     world::with_world(|w| w.log)
 }
 fn log_n_of() -> usize {
     world::with_world(|w| w.log_n)
 }
-fn effects_slice(buf: &[Effect; 32], n: usize) -> &[Effect] {
+fn effects_slice(buf: &[Effect; world::MAX_LOG], n: usize) -> &[Effect] {
     &buf[..n]
 }
 
@@ -111,9 +111,9 @@ pub fn duobang_01_02_two_player_iff() {
             );
             // Spec shape helper (same reading as the body / OPEN-duobang-tie).
             let faces = [(0i32, 0i32), (1, 0)]; // faces unknown; amount pin above
-            let _ = spec::duobang_expected_paytos(&faces);
-            let _ = spec::duobang_each_mutant(18, 16);
-            assert!(spec::duobang_sheet_example_is_100(), "spec: sheet example pins 100");
+            let _ = spec::events::duobang_expected_paytos(&faces);
+            let _ = spec::events::duobang_each_mutant(18, 16);
+            assert!(spec::events::duobang_sheet_example_is_100(), "spec: sheet example pins 100");
         }
         _ => panic!("E-duobang: only PayTo effects are legal"),
     }
@@ -143,7 +143,7 @@ pub fn duobang_01_mutant_is_detected() {
         assert!(*n != *n + 50, "mutant off-by-one must not match the card");
         let _ = pre;
         let _ = post;
-        let _ = spec::duobang_each_mutant(18, 16);
+        let _ = spec::events::duobang_each_mutant(18, 16);
     } else {
         // Tie path: the mutant's fixed extra 50 is also unmatched (empty ≠
         // one transfer of 50).
@@ -204,7 +204,7 @@ pub fn tears_01_same_colour_next_pays_700() {
     // Pair (0,1): share ⇒ 1 pays 0, 700. Pair (1,0): share ⇒ 0 pays 1, 700.
     let expected = [(1i32, 0i32, 700i32), (0, 1, 700)];
     assert!(
-        spec::log_is_paytos(effects, &expected),
+        spec::events::log_is_paytos(effects, &expected),
         "E-tears-01: both directions 700 on a shared colour"
     );
     // Money: net zero over the pair, each leg 700.
@@ -234,7 +234,7 @@ pub fn tears_02_different_colour_current_pays_300() {
     let expected = [(0i32, 1i32, 300i32), (1, 0, 300)];
     kani::cover!(n_log == 2, "two adjacent pairs");
     assert!(
-        spec::log_is_paytos(effects, &expected),
+        spec::events::log_is_paytos(effects, &expected),
         "E-tears-02: both directions 300 without a shared colour"
     );
     assert!(
@@ -258,7 +258,7 @@ pub fn tears_mutant_is_detected() {
     let effects = effects_slice(&logbuf, n_log);
     // Mutant wants 300 on a shared colour (the E-tears-02 amount).
     let mutant = [(1i32, 0i32, 300i32), (0, 1, 300)];
-    let matches_mutant = spec::log_is_paytos(effects, &mutant);
+    let matches_mutant = spec::events::log_is_paytos(effects, &mutant);
     assert!(!matches_mutant, "mutant 300-on-share must not match the card");
 }
 
@@ -305,7 +305,7 @@ pub fn pico_swap_01_rotates_positions() {
     let expected = [(0i32, 20i32), (1, 30), (2, 10)];
     kani::cover!(n_log == 3, "three teleports in the ring");
     assert!(
-        spec::log_is_teleports(effects, &expected),
+        spec::events::log_is_teleports(effects, &expected),
         "E-pico-swap-01: rotate onto the next ring member's pre-position"
     );
     assert!(post.pos[0] == 20 && post.pos[1] == 30 && post.pos[2] == 10, "post positions");
@@ -332,7 +332,7 @@ pub fn pico_swap_02_skips_exiled_players() {
     let expected = [(0i32, 30i32), (2, 10)];
     kani::cover!(n_log == 2, "exiled seat skipped");
     assert!(
-        spec::log_is_teleports(effects, &expected),
+        spec::events::log_is_teleports(effects, &expected),
         "E-pico-swap-02: exiled player skipped and not a destination source"
     );
     assert!(post.pos[0] == 30 && post.pos[1] == 20 && post.pos[2] == 10, "post");
@@ -385,7 +385,7 @@ pub fn moca_01_activation_keeps_the_card() {
     let effects = effects_slice(&logbuf, n_log);
 
     assert!(
-        spec::moca_activation_dest_is_field(dest),
+        spec::events::moca_activation_dest_is_field(dest),
         "E-moca-01 activation: 「放置于场地中央」 keeps the card (dest=Field)"
     );
     // No money / pos / hand movement on activation.
@@ -410,7 +410,7 @@ pub fn moca_02_expiry_tick_files_away() {
     let effects = effects_slice(&logbuf, n_log);
     let key = intern::intern("Forbidden Moca");
     assert!(
-        spec::moca_expiry_log_ok(effects, key),
+        spec::events::moca_expiry_log_ok(effects, key),
         "E-moca-02: expiry tick logs exactly EventExpire"
     );
 }
@@ -451,7 +451,7 @@ pub fn aao_01_activation_keeps_the_card() {
     let post = world::snapshot();
     let dest = world::with_world(|w| w.dest);
     assert!(
-        spec::aao_activation_dest_is_field(dest),
+        spec::events::aao_activation_dest_is_field(dest),
         "E-aao-01 activation: keep (dest=Field)"
     );
     assert!(post.money == pre.money && post.pos == pre.pos, "frame");
@@ -469,7 +469,7 @@ pub fn aao_01_expiry_tick_files_away() {
     let effects = effects_slice(&logbuf, n_log);
     let key = intern::intern("A！A！O！");
     assert!(
-        spec::log_is_expire(effects, key),
+        spec::events::log_is_expire(effects, key),
         "E-aao-01: expiry tick logs EventExpire"
     );
 }
@@ -490,7 +490,7 @@ pub fn aao_02_hand_veto_is_armed() {
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
     assert!(
-        spec::aao_hand_veto_armed(dest, effects),
+        spec::events::aao_hand_veto_armed(dest, effects),
         "E-aao-02: book says 「不能使用卡牌的[手]效果」 while up — body arms no veto"
     );
 }
