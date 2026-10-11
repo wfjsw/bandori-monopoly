@@ -45,3 +45,4 @@ pub mod money_shave;
 pub mod teleport;
 pub mod prompt;
 pub mod wrong_guard;
+pub mod hostops_smoke;

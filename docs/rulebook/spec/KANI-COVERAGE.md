@@ -1,6 +1,6 @@
 # Kani host-op coverage (cards / skills / events / tiles / marks)
 
-Generated 2026-10-11 from:
+Generated 2026-10-11 (HOST-OPS pass) from:
 
 * **op usage** — `ctx::` paths grepped from each guest source under
   `rules/cards`, `rules/skills`, `rules/events`, `rules/tiles`, `rules/tile_marks`
@@ -23,12 +23,12 @@ needs their real semantics is **PROTOCOL-LEVEL** — see `KANI.md` §6 and
 
 | kind | fully modeled | total | blocked |
 |---|---:|---:|---:|
-| card | 174 | 183 | 9 |
-| skill | 51 | 66 | 15 |
+| card | 183 | 183 | 0 |
+| skill | 66 | 66 | 0 |
 | event | 28 | 28 | 0 |
 | tile | 6 | 6 | 0 |
 | mark | 1 | 1 | 0 |
-| **all** | **260** | **284** | **24** |
+| **all** | **284** | **284** | **0** |
 
 ### By unit
 
@@ -38,41 +38,41 @@ needs their real semantics is **PROTOCOL-LEVEL** — see `KANI.md` §6 and
 | `crychic` | 15 | 15 | 0 |
 | `events` | 28 | 28 | 0 |
 | `general` | 14 | 14 | 0 |
-| `hhw` | 12 | 15 | 3 |
+| `hhw` | 15 | 15 | 0 |
 | `mor` | 15 | 15 | 0 |
 | `mujica` | 15 | 15 | 0 |
-| `mygo` | 14 | 15 | 1 |
+| `mygo` | 15 | 15 | 0 |
 | `pp` | 19 | 19 | 0 |
 | `ppp` | 17 | 17 | 0 |
-| `r` | 15 | 17 | 2 |
+| `r` | 17 | 17 | 0 |
 | `ras` | 15 | 15 | 0 |
-| `skills_bands` | 10 | 12 | 2 |
-| `skills_characters` | 41 | 54 | 13 |
-| `sumimi` | 8 | 11 | 3 |
+| `skills_bands` | 12 | 12 | 0 |
+| `skills_characters` | 54 | 54 | 0 |
+| `sumimi` | 11 | 11 | 0 |
 | `tile_marks` | 1 | 1 | 0 |
 | `tiles` | 6 | 6 | 0 |
 
 ### Unmodeled ops that actually appear in guest bodies
 
-| unmodeled `Op` | rows blocked |
-|---|---:|
-| `rent_of` | 9 |
-| `trig_move_roll` | 8 |
-| `tile_at` | 2 |
-| `trig_move_main` | 2 |
-| `trig_move_remaining` | 2 |
-| `trig_price` | 1 |
+**None.** The 2026-10-11 HOST-OPS pass modeled the full previous fall-through
+list:
 
-Full host fall-through list (19 ops, not all used by guests):
-`rent_of`, `tile_at`, `set_tile_at`,
-`trig_price`, `trig_seller`, `trig_buy_kind`,
-`trig_roll_source`, `trig_move_kind`, `trig_move_resolve`, `trig_move_tag`,
-`trig_move_main`, `trig_move_dir`, `trig_move_remaining`, `trig_move_from`,
-`trig_move_total`, `trig_move_roll`,
-`trig_deal_owner`, `trig_deal_houses`, `trig_deal_mortgaged`.
+| `Op` | model source (faithful to) |
+|---|---|
+| `rent_of` | `WorldOps::rent_of` + `purchase::table_rent` (RiNG = `price`) |
+| `tile_at` / `set_tile_at` | `WorldOps::tile_at` / `set_tile_at` (field instance) |
+| `trig_price`, `trig_seller`, `trig_buy_kind` | `TriggerBuy` (hostfns 1886–1900) |
+| `trig_deal_owner`, `trig_deal_houses`, `trig_deal_mortgaged` | `TriggerBuy::deal_*` |
+| `trig_move_kind/resolve/tag/main/dir/remaining/from/total/roll` | `TriggerMove` sentinels (hostfns 1830–1880); `trig_move_main` is `Trigger::main` |
+| `trig_roll_source` | `RollSource::as_i32` |
+| `trig_pay_is_rent` | `TriggerPay::is_rent` |
 
-Add a `dispatch` arm (or a loud `unmodeled`) in `rules/kani/src/host.rs` when
-unblocking; never paper over with a silent `0`.
+Full host fall-through list: **empty** (every `Op` variant has an explicit arm).
+Protocol stubs (structure-only, return 0) remain for engine-scheduling
+surfaces — offers / buy / build windows, multi-turn settle, `pay_rent`,
+`card_*` purchase commands, `msg_*`. A clause that needs their *real*
+scheduling semantics is still **PROTOCOL-LEVEL** (KANI.md §6). Do not fake it
+with a silent zero on a surface the proof needs.
 
 ## Full table
 
@@ -116,12 +116,12 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `hhw` | `HHW:出发！后台之旅！` | `add_to_deck_at,ask_card,ask_yes,cards_in,deck_count,discard_size,gain,log,take_card,to_discard` | yes | — |
 | `hhw` | `HHW:因为我一直相信着你` | `add_to_deck_at,add_to_hand,ask_card,ask_player,cards_in,discard_from_hand,log,others,pay,take_card` | yes | — |
 | `hhw` | `HHW:微笑巡逻队` | `add_house,build_cost,can_build_on,card_offer_build,houses_of,is_buyable,log,money_of,mortgaged_of,owned_tiles,roll,tile_count` | yes | — |
-| `hhw` | `HHW:梦幻的回礼` | `add_band_crystals,ask_tile,can_pay,log,mortgaged_of,player_out,rent_of,state::set,tile_count,tile_owner,transfer` | no | `rent_of` |
+| `hhw` | `HHW:梦幻的回礼` | `add_band_crystals,ask_tile,can_pay,log,mortgaged_of,player_out,rent_of,state::set,tile_count,tile_owner,transfer` | yes | — |
 | `hhw` | `HHW:热气球演出` | `ask_tile,cant_move,card_move,log,plan::set_kind,plan::set_resolve,plan::set_teleport_to,roll_ask,tile_count` | yes | — |
-| `hhw` | `HHW:爱心义演` | `find_card,is_circle,log,place_card,plan::set_extra_steps,prop,set_dest,set_prop,tile_at,tile_owner,turn_key` | no | `tile_at` |
+| `hhw` | `HHW:爱心义演` | `find_card,is_circle,log,place_card,plan::set_extra_steps,prop,set_dest,set_prop,tile_at,tile_owner,turn_key` | yes | — |
 | `hhw` | `HHW:笑容大游行` | `add_crystals,ask_yes,card_settle_at,crystals,decay,log,place_card,plan::set_settle_as_agent,self_tile,set_crystals,set_dest,set_self_tile,tile_named,trigger::player_id,trigger::set_cancelled,trigger::tile` | yes | — |
 | `hhw` | `HHW:运动的天赋` | `crystals,decay,do_move_roll,gain,is_placed,log,place_card,plan::set_min_roll,player_out,set_crystals,set_dest,set_slot,slot` | yes | — |
-| `hhw` | `HHW:黑衣人的补给` | `bump_mark,count_marks,field_instances,log,place_card_on,place_mark,self_uid,tile_at,tile_named,trigger::tile,unplace_at` | no | `tile_at` |
+| `hhw` | `HHW:黑衣人的补给` | `bump_mark,count_marks,field_instances,log,place_card_on,place_mark,self_uid,tile_at,tile_named,trigger::tile,unplace_at` | yes | — |
 | `hhw` | `HHW:（kkr）前往笑容集结的地方！` | `log,pay,place_card_on,placed_tile,player_count,self_tile,set_dest,tile_named,transfer` | yes | — |
 | `hhw` | `HHW:（美咲）` | `ask_player,card_move,fire,log,others,plan::set_kind,plan::set_resolve,plan::set_teleport_to,player_out,player_pos,players_on,spend_fire,tile_count,tile_forward,transfer` | yes | — |
 | `hhw` | `HHW:（育美）` | `ask_tile,ask_yes,count_marks,draw,gain,gains_this_turn,gate,is_placed,log,place_card,place_mark,plan::set_stop_at,remove_marks,roll,self_uid,set_dest,tile_count` | yes | — |
@@ -157,7 +157,7 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `mujica` | `Mujica:（海铃）` | `add_band_skill,band_skills,draw,log,others,place_card,player_count,player_out,set_dest,set_slot,slot,unplace_at,unplace_self` | yes | — |
 | `mujica` | `Mujica:（睦/mortis）表演的本能` | `log` | yes | — |
 | `mujica` | `Mujica:（祥子）斩断留恋，忘却一切` | `ask_card,ask_tile,cant_move,card_mortgage,card_move,cards_in,discard_from_hand,hand_size,is_buyable,is_ring,log,mortgaged_of,owned_tiles,plan::set_kind,plan::set_resolve,plan::set_teleport_to,tile_count,tile_owner,tile_price` | yes | — |
-| `mygo` | `MyGO:[千早爱音]Anon Tokyo` | `ask_tile,cant_move,card_move,count_marks,is_buyable,is_placed,log,pay,place_card,place_mark,plan::set_reverse,plan::set_steps,player_pos,rent_of,self_uid,set_dest,set_slot,slot,target_tile,tile_count,tile_forward,tile_owner,tile_price` | no | `rent_of` |
+| `mygo` | `MyGO:[千早爱音]Anon Tokyo` | `ask_tile,cant_move,card_move,count_marks,is_buyable,is_placed,log,pay,place_card,place_mark,plan::set_reverse,plan::set_steps,player_pos,rent_of,self_uid,set_dest,set_slot,slot,target_tile,tile_count,tile_forward,tile_owner,tile_price` | yes | — |
 | `mygo` | `MyGO:即使迷茫着` | `card_move,effect::hits,hand_size,is_placed,log,place_card,plan::set_resolve,plan::set_steps,send_to_dest,set_dest` | yes | — |
 | `mygo` | `MyGO:哪怕这旅程没有终点` | `decay,gain,log,place_card_on,player_pos,set_crystals,set_dest,turn_main_steps` | yes | — |
 | `mygo` | `MyGO:壱雫空` | `gain,give_stay,give_stun,log,player_count,player_out,slot,state::get,state::set,stay_of,stun_of,transfer` | yes | — |
@@ -214,8 +214,8 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `r` | `R:[衍生] 压` | `gain` | yes | — |
 | `r` | `R:[衍生] 觉悟` | `gain,set_dest` | yes | — |
 | `r` | `R:live前的准备` | `gate,log,plan::set_resolve,plan::set_stop_at,tile_named` | yes | — |
-| `r` | `R:向着顶点` | `add_house,ask_tile,ask_yes,build_cost,can_pay,card_move,houses_of,is_buyable,is_color,log,money_of,mortgaged_of,pay,plan::set_resolve,plan::set_steps,player_pos,rent_of,state::get,stay_of,stun_of,tile_count,tile_forward,tile_owner` | no | `rent_of` |
-| `r` | `R:学生会的检查` | `add_to_deck,ask_tile,ask_yes,build_cost,dist,gain,gate,linger,log,owned_tiles,pay,place_card_on,plan::set_rent_factor,plan::set_resolve,plan::set_stop_at,player_pos,rent_of,self_tile,set_dest,set_prop,set_slot,slot` | no | `rent_of` |
+| `r` | `R:向着顶点` | `add_house,ask_tile,ask_yes,build_cost,can_pay,card_move,houses_of,is_buyable,is_color,log,money_of,mortgaged_of,pay,plan::set_resolve,plan::set_steps,player_pos,rent_of,state::get,stay_of,stun_of,tile_count,tile_forward,tile_owner` | yes | — |
+| `r` | `R:学生会的检查` | `add_to_deck,ask_tile,ask_yes,build_cost,dist,gain,gate,linger,log,owned_tiles,pay,place_card_on,plan::set_rent_factor,plan::set_resolve,plan::set_stop_at,player_pos,rent_of,self_tile,set_dest,set_prop,set_slot,slot` | yes | — |
 | `r` | `R:必然的联系（莉莎）` | `ask_player,log,place_card_at,player_pos,players_on,set_dest,target` | yes | — |
 | `r` | `R:曲奇时间` | `discard_size,gain,log,shuffle_into_deck` | yes | — |
 | `r` | `R:蓝玫瑰的骄傲` | `cant_move,card_move,gain,is_buyable,is_color,log,owned_count,owned_tiles,plan::set_kind,plan::set_resolve,plan::set_teleport_to,player_pos,tile_count,tile_forward,tile_named,tile_owner,tile_price` | yes | — |
@@ -244,12 +244,12 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `sumimi` | `Sumimi:#L12` | `add_crystals,add_to_hand,ask_card,cards_in,crystals,is_placed,log,place_card,set_dest,take_card` | yes | — |
 | `sumimi` | `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` | `at_turn_end,cant_move,gain_fire,log,place_card,plan::set_start,set_dest,tile_named` | yes | — |
 | `sumimi` | `Sumimi:Here the world` | `add_crystals,add_to_hand,draw,log,place_card,player_out,set_crystals,set_dest,set_slot,slot,take_from_hand` | yes | — |
-| `sumimi` | `Sumimi:Sumimi不会解散哦` | `ask_tile,cant_move,card_move,log,money_of,mortgaged_of,plan::set_kind,plan::set_resolve,plan::set_teleport_to,player_out,player_pos,rent_of,state::get,tile_count,tile_owner` | no | `rent_of` |
+| `sumimi` | `Sumimi:Sumimi不会解散哦` | `ask_tile,cant_move,card_move,log,money_of,mortgaged_of,plan::set_kind,plan::set_resolve,plan::set_teleport_to,player_out,player_pos,rent_of,state::get,tile_count,tile_owner` | yes | — |
 | `sumimi` | `Sumimi:Sumimi是二人一体的` | `character_is,find_card,log,place_card,state::set,state::set_bounds,unplace_at` | yes | — |
-| `sumimi` | `Sumimi:Sweet Escape` | `ask_tile,buy_price,cant_move,card_buy,card_move,houses_of,is_buyable,log,money_of,mortgaged_of,plan::set_kind,plan::set_resolve,plan::set_teleport_to,player_pos,rent_of,ring_multiplier,tile_count,tile_group,tile_named,tile_owner,tile_price` | no | `rent_of` |
+| `sumimi` | `Sumimi:Sweet Escape` | `ask_tile,buy_price,cant_move,card_buy,card_move,houses_of,is_buyable,log,money_of,mortgaged_of,plan::set_kind,plan::set_resolve,plan::set_teleport_to,player_pos,rent_of,ring_multiplier,tile_count,tile_group,tile_named,tile_owner,tile_price` | yes | — |
 | `sumimi` | `Sumimi:一人两个甜甜圈` | `ask_tile,ask_yes,card_move,gain,gain_fire,give_exile,log,place_card,plan::set_kind,plan::set_resolve,plan::set_teleport_to,player_out,player_pos,set_dest,set_slot,slot,teleport_to,tile_count` | yes | — |
 | `sumimi` | `Sumimi:兼顾偶像与乐队` | `gain,log,money_of,state::get` | yes | — |
-| `sumimi` | `Sumimi:现在她是Sumimi的小初啦` | `gain,houses_of,is_buyable,player_pos,rent_of,ring_multiplier,tile_price` | no | `rent_of` |
+| `sumimi` | `Sumimi:现在她是Sumimi的小初啦` | `gain,houses_of,is_buyable,player_pos,rent_of,ring_multiplier,tile_price` | yes | — |
 | `sumimi` | `Sumimi:（真奈）歌唱大赛5连冠` | `draw,effect::hits,log` | yes | — |
 | `events` | `event:A！A！O！` | `at_next_turn_end,log,set_prop` | yes | — |
 | `events` | `event:EX任务挑战` | `log` | yes | — |
@@ -288,12 +288,12 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `skills_bands` | `skill:Morfonica:振翅高飞的练习曲` | `draw,gain,log,trigger::player_id,trigger::set_cancelled,trigger::target,trigger::value` | yes | — |
 | `skills_bands` | `skill:MyGO!!!!!:迷途之星` | `add_crystals,ask_pick,card_move,crystals,draw,log,roll,skill_blocked,teleport_to,tile_count,trigger::player_id,turn_player` | yes | — |
 | `skills_bands` | `skill:Pastel✽Palettes:与偶像一起` | `add_crystals,add_tok,ask_number,ask_yes,crystals,draw,in_band,log,placed_cards,player_count,player_out,set_prop,skill_blocked,tok,trigger::player_id` | yes | — |
-| `skills_bands` | `skill:Poppin' Party:星之鼓动` | `add_counter_at,add_crystals,add_tok,ask_pick,ask_yes,counter_at,crystals,draw,find_card,gain,in_band,is_circle,log,mortgaged_of,others,pay_leg,pay_total,player_count,player_out,set_prop,skill_blocked,tile_named,tok,trigger::move_is_main,trigger::player_id,trigger::set_cancelled,trigger::set_pay_amount,trigger::set_reason,trigger::tile,trigger::value` | no | `trig_move_main` |
+| `skills_bands` | `skill:Poppin' Party:星之鼓动` | `add_counter_at,add_crystals,add_tok,ask_pick,ask_yes,counter_at,crystals,draw,find_card,gain,in_band,is_circle,log,mortgaged_of,others,pay_leg,pay_total,player_count,player_out,set_prop,skill_blocked,tile_named,tok,trigger::move_is_main,trigger::player_id,trigger::set_cancelled,trigger::set_pay_amount,trigger::set_reason,trigger::tile,trigger::value` | yes | — |
 | `skills_bands` | `skill:RAISE A SUILEN:UNSTOPPABLE` | `ask_yes,is_live_house_for,log,owned_tiles,player_pos,trigger::by_card,trigger::player_id,trigger::set_cancelled,trigger::tile` | yes | — |
-| `skills_bands` | `skill:Roselia:对音乐的纯粹` | `is_live_house_for,log,owned_tiles,set_tile_prop,tile_group,trigger::player_id,trigger::price,trigger::set_price,trigger::tile` | no | `trig_price` |
+| `skills_bands` | `skill:Roselia:对音乐的纯粹` | `is_live_house_for,log,owned_tiles,set_tile_prop,tile_group,trigger::player_id,trigger::price,trigger::set_price,trigger::tile` | yes | — |
 | `skills_bands` | `skill:Sumimi:人气偶像组合` | `add_crystals,crystals,log,trigger::player_id,trigger::set_pay_amount,trigger::target,trigger::value` | yes | — |
 | `skills_characters` | `skill:三角初华:Imprisoned XII` | `ask_yes,log,plan::set_extra_steps,players_on,roll,tile_named,transfer,trigger::player_id,trigger::tile` | yes | — |
-| `skills_characters` | `skill:三角初华（Sumimi）:成为偶像` | `ask_pick,ask_yes,bump_mark,count_marks,gain_fire,is_color,log,place_mark,self_uid,spend_fire,tile_count,tile_group,tile_named,transfer,trigger::move_remaining,trigger::player_id,trigger::tile` | no | `trig_move_remaining` |
+| `skills_characters` | `skill:三角初华（Sumimi）:成为偶像` | `ask_pick,ask_yes,bump_mark,count_marks,gain_fire,is_color,log,place_mark,self_uid,spend_fire,tile_count,tile_group,tile_named,transfer,trigger::move_remaining,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:上原绯玛丽:大家一起迈出新的一步` | `ask_pick,gain_fire,in_band,log,skill_blocked,spend_fire,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:丰川祥子:请把你们的人生交给我` | `ask_yes,cards_in,discard_from_hand,gain,gain_fire,give_stay,give_stun,log,play_card,players_on,stay_of,stun_of,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？` | `ask_yes,dist,gain_fire,log,plan::set_kind,plan::set_teleport_to,player_pos,spend_fire,tile_count,transfer,trigger::player_id,trigger::tile` | yes | — |
@@ -306,45 +306,45 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 | `skills_characters` | `skill:八潮瑠唯:正论暴击` | `effect,log,roll,trigger::player_id,trigger::set_pay_amount,trigger::target,trigger::value` | yes | — |
 | `skills_characters` | `skill:冰川日菜:日菜抽中的大奖` | `add_tok,find_card,in_band,log,place_card,player_count,player_out,roll,trigger::player_id,unplace_at` | yes | — |
 | `skills_characters` | `skill:冰川纱夜:踏上荆棘之路的觉悟` | `gain_fire,log,player_count,player_out,skill_blocked,spend_fire,trigger::player_id,turn_key` | yes | — |
-| `skills_characters` | `skill:凑友希那:来练习吧` | `ask_yes,gain_fire,gate,is_circle,is_ring,log,plan::set_stop_at,player_pos,set_owner,set_prop,spend_fire,teleport_to,tile_named,trigger::move_remaining,trigger::player_id,trigger::tile` | no | `trig_move_remaining` |
+| `skills_characters` | `skill:凑友希那:来练习吧` | `ask_yes,gain_fire,gate,is_circle,is_ring,log,plan::set_stop_at,player_pos,set_owner,set_prop,spend_fire,teleport_to,tile_named,trigger::move_remaining,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:北泽育美:全垒打！` | `add_tok,ask_yes,bump_mark,count_marks,log,place_mark,self_uid,tile_named,tok,transfer,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:千早爱音:重新开始` | `ask_yes,draw,gain_fire,spend_fire,trigger::player_id` | yes | — |
-| `skills_characters` | `skill:和奏瑞依:一次又一次竭尽全力` | `ask_pick,ask_yes,do_move_roll_ask,fixed_roll,gain_fire,log,spend_fire,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::value` | no | `trig_move_roll` |
+| `skills_characters` | `skill:和奏瑞依:一次又一次竭尽全力` | `ask_pick,ask_yes,do_move_roll_ask,fixed_roll,gain_fire,log,spend_fire,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::value` | yes | — |
 | `skills_characters` | `skill:大和麻弥:朝阳照耀的片刻` | `add_to_deck,add_to_hand,add_tok,ask_number,ask_pick,cards_in,in_band,log,place_card,player_count,player_out,take_card,tok,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:奥泽美咲:另一个我` | `ask_yes,gain_fire,give_exile,log,skill_blocked,spend_fire,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:宇田川亚子:对帅气的憧憬` | `add_to_hand,ask_pick,ask_yes,cards_in,field_instances,is_face_down_at,log,pay,place_card,set_dest,set_face_down_at,take_card,to_discard,trigger::player_id,unplace_at` | yes | — |
 | `skills_characters` | `skill:宇田川巴:豚骨酱油拉面大姐` | `dist,gain_fire,in_band,log,player_pos,skill_blocked,spend_fire,tile_named,tile_steps_ahead,trigger::player_id` | yes | — |
-| `skills_characters` | `skill:山吹沙绫:焕然一新的天空中` | `add_tok,ask_yes,gain,gain_fire,is_buyable,log,plan::set_kind,plan::set_teleport_to,player_out,player_pos,roll,spend_fire,tile_count,tok,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::set_pay_amount,trigger::value` | no | `trig_move_roll` |
-| `skills_characters` | `skill:市谷有咲:盆栽爱好者` | `add_band_crystals,ask_yes,draw,gain_fire,log,player_pos,set_slot,slot,spend_fire,tile_named,trigger::move_is_main,trigger::player_id` | no | `trig_move_main` |
+| `skills_characters` | `skill:山吹沙绫:焕然一新的天空中` | `add_tok,ask_yes,gain,gain_fire,is_buyable,log,plan::set_kind,plan::set_teleport_to,player_out,player_pos,roll,spend_fire,tile_count,tok,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::set_pay_amount,trigger::value` | yes | — |
+| `skills_characters` | `skill:市谷有咲:盆栽爱好者` | `add_band_crystals,ask_yes,draw,gain_fire,log,player_pos,set_slot,slot,spend_fire,tile_named,trigger::move_is_main,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:广町七深:这是很普通的事吧？` | `add_tok,ask_pick,ask_yes,gain_fire,log,play_card,player_count,player_out,skill_blocked,spend_fire,tok,tok_names,trigger::cards,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:弦卷心:弦卷集团` | `gain` | yes | — |
 | `skills_characters` | `skill:户山香澄:非凡之星` | `ask_pick,card_move,gain_fire,owned_tiles,skill_blocked,spend_fire,tile_named,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:月岛麻里奈:礼物还有好多好多哟` | `ask_yes,gain,roll,transfer,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:朝日六花:瞄准目标` | `is_buyable,is_live_house_for,log,owned_tiles,set_tile_prop,tile_group,tile_named,tile_owner,trigger::player_id,trigger::tile` | yes | — |
-| `skills_characters` | `skill:松原花音:真正的迷子` | `do_move_roll,log,teleport_to,tile_named,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::value` | no | `trig_move_roll` |
-| `skills_characters` | `skill:桐谷透子:天上天下，唯我独尊` | `ask_pick,gain_fire,log,owned_tiles,player_out,players_on,rent_of,skill_blocked,spend_fire,tile_count,transfer,trigger::player_id` | no | `rent_of` |
+| `skills_characters` | `skill:松原花音:真正的迷子` | `do_move_roll,log,teleport_to,tile_named,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::value` | yes | — |
+| `skills_characters` | `skill:桐谷透子:天上天下，唯我独尊` | `ask_pick,gain_fire,log,owned_tiles,player_out,players_on,rent_of,skill_blocked,spend_fire,tile_count,transfer,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:椎名立希:决定练习日的会议` | `add_counter_at,ask_pick,field_instances,gain_fire,log,skill_blocked,spend_fire,trigger::player_id` | yes | — |
-| `skills_characters` | `skill:椎名立希（CRYCHIC）:克服劣等感` | `ask_yes,do_move_roll,log,trigger::move_roll,trigger::player_id,trigger::set_move_roll` | no | `trig_move_roll` |
+| `skills_characters` | `skill:椎名立希（CRYCHIC）:克服劣等感` | `ask_yes,do_move_roll,log,trigger::move_roll,trigger::player_id,trigger::set_move_roll` | yes | — |
 | `skills_characters` | `skill:濑田薰:梦幻的王子殿下` | `ask_pick,bump_mark,count_marks,dist,gain_fire,log,owned_tiles,place_mark,plan::set_start,player_count,player_out,player_pos,self_uid,skill_blocked,spend_fire,tile_count,tile_named` | yes | — |
 | `skills_characters` | `skill:牛込里美:里美的决心` | `ask_pick,card_move,card_offer_build,dist,gain_fire,is_buyable,is_live_house_for,player_pos,skill_blocked,spend_fire,tile_count,trigger::player_id,trigger::tile,turn_player` | yes | — |
 | `skills_characters` | `skill:珠手知由:天才制作人` | `log,set_build_cost_pct,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:白金燐子:即使1cm也要前进` | `ask_number,gain_fire,log,set_fixed_roll,skill_blocked,spend_fire,state::TURN_END,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:白鹭千圣:保持坦率的你` | `add_tok,ask_number,in_band,log,place_card,player_count,player_out,skill_blocked,tok,trigger::set_pay_amount,trigger::value` | yes | — |
 | `skills_characters` | `skill:祐天寺若麦:大主播喵梦亲` | `field_instances,gain_fire,is_face_down_at,is_immune_at,log,set_face_down_at,set_immune_at,trigger::player_id,trigger::set_pay_amount,trigger::value` | yes | — |
-| `skills_characters` | `skill:纯田真奈:甜甜圈爱好者` | `ask_yes,buy_price,gain_fire,log,pay,rent_of,spend_fire,state::TURN_END,tile_named,tile_owner,transfer,trigger::set_pay_amount,trigger::tile,trigger::value` | no | `rent_of` |
+| `skills_characters` | `skill:纯田真奈:甜甜圈爱好者` | `ask_yes,buy_price,gain_fire,log,pay,rent_of,spend_fire,state::TURN_END,tile_named,tile_owner,transfer,trigger::set_pay_amount,trigger::tile,trigger::value` | yes | — |
 | `skills_characters` | `skill:美竹兰:叛逆的红挑染` | `gain_fire,in_band,log,set_prop,skill_blocked,spend_fire,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:羽泽鸫:伟大的平凡` | `at_turn_end,gain_fire,in_band,log,set_prop,skill_blocked,spend_fire,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:花园多惠:花园警察，出警！` | `ask_yes,count_marks,gain,gain_fire,is_placed,log,place_mark,player_out,remove_marks,roll,self_uid,spend_fire,tile_count,tile_named,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:若叶睦:天生的演员` | `ask_yes,draw,hand_size,log,trigger::player_id` | yes | — |
-| `skills_characters` | `skill:若叶睦（CRYCHIC）:精致的人偶` | `ask_pick,gain_fire,log,player_count,player_out,set_fixed_roll,skill_blocked,spend_fire,trigger::move_roll,trigger::player_id,trigger::value` | no | `trig_move_roll` |
-| `skills_characters` | `skill:若宫伊芙:天下统一` | `add_tok,ask_number,fixed_roll,in_band,log,place_card,player_count,player_out,roll,skill_blocked,tok,trigger::move_roll,trigger::set_move_roll,trigger::value` | no | `trig_move_roll` |
+| `skills_characters` | `skill:若叶睦（CRYCHIC）:精致的人偶` | `ask_pick,gain_fire,log,player_count,player_out,set_fixed_roll,skill_blocked,spend_fire,trigger::move_roll,trigger::player_id,trigger::value` | yes | — |
+| `skills_characters` | `skill:若宫伊芙:天下统一` | `add_tok,ask_number,fixed_roll,in_band,log,place_card,player_count,player_out,roll,skill_blocked,tok,trigger::move_roll,trigger::set_move_roll,trigger::value` | yes | — |
 | `skills_characters` | `skill:要乐奈:投币式停车场的猫` | `add_tok,ask_yes,card_move,draw,gain,gain_fire,is_circle,is_ring,log,move_units,place_mark,self_uid,skill_blocked,spend_fire,tile_named,tile_owner,tok,transfer,trigger::player_id,trigger::target,trigger::tile` | yes | — |
-| `skills_characters` | `skill:都筑诗船:尽力了吗` | `ask_pick,build_cost,card_settle_at,gain,gain_fire,log,player_count,player_out,player_pos,roll,set_owner,skill_blocked,slot,spend_fire,state::TURN_END,tile_named,tile_owner,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::set_pay_amount,trigger::tile,trigger::value` | no | `trig_move_roll` |
+| `skills_characters` | `skill:都筑诗船:尽力了吗` | `ask_pick,build_cost,card_settle_at,gain,gain_fire,log,player_count,player_out,player_pos,roll,set_owner,skill_blocked,slot,spend_fire,state::TURN_END,tile_named,tile_owner,trigger::move_roll,trigger::player_id,trigger::set_move_roll,trigger::set_pay_amount,trigger::tile,trigger::value` | yes | — |
 | `skills_characters` | `skill:长崎素世:通透的颜色` | `ask_yes,gain_fire,log,set_tile_prop,spend_fire,tile_group,trigger::player_id,trigger::tile` | yes | — |
 | `skills_characters` | `skill:长崎素世（CRYCHIC）:雨中祈晴` | `ask_yes,log,trigger::player_id,trigger::set_pay_amount,trigger::tile` | yes | — |
 | `skills_characters` | `skill:青叶摩卡:我行我素` | `ask_yes,gain_fire,in_band,log,player_pos,spend_fire,teleport_to,trigger::player_id` | yes | — |
 | `skills_characters` | `skill:高松灯:诗超绊` | `ask_yes,card_settle_at,dist,gain_fire,gate,give_stay,is_placed,log,player_pos,roll,spend_fire,teleport_to,trigger::player_id,trigger::tile,turn_player` | yes | — |
-| `skills_characters` | `skill:高松灯（CRYCHIC）:跌跌撞撞...` | `before_turn_end,card_settle_at,gain_fire,give_stay,log,player_pos,skill_blocked,spend_fire,state::add,state::get,trigger::move_roll,trigger::player_id,trigger::value` | no | `trig_move_roll` |
+| `skills_characters` | `skill:高松灯（CRYCHIC）:跌跌撞撞...` | `before_turn_end,card_settle_at,gain_fire,give_stay,log,player_pos,skill_blocked,spend_fire,state::add,state::get,trigger::move_roll,trigger::player_id,trigger::value` | yes | — |
 | `skills_characters` | `skill:鳰原令王那:梦幻可爱♪女仆` | `add_tok,ask_yes,build_cost,houses_of,in_band,log,owned_tiles,pay_leg,pay_total,player_count,player_out,trigger::player_id` | yes | — |
 | `tiles` | `tile:agent` | `agent_offer,ai_agent_choice,ask_tiles,build_cost,buy_quotes,can_build_on,can_pay,houses_of,is_buyable,is_color,log,pay_rent,self_tile,tile_count,tile_group,tile_owner` | yes | — |
 | `tiles` | `tile:circle` | `ask_pick,draw,exile_of,field_instances,gain_typed,is_circle,log,player_pos,prop_at,raise,self_tile,set_tile_prop,stun_of,tile_prop` | yes | — |
