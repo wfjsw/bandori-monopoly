@@ -332,15 +332,48 @@ use alloc::{string::String, vec::Vec};
 ///      surface removed: the `set_bonus` import (HOST-09) and five unused
 ///      host linker names (HOST-10). No wire shape change for live imports;
 ///      SAVE_VERSION unchanged.
-/// v54: `ManifestOn::silent` -- a bookkeeping entry that runs its body but
-///      posts **no** activation flash and **no** 「效果适用」 header (the
-///      `declare_cap` / `set_bounds` / initial-value class: a mechanical
-///      declaration the player never sees as a clause firing). `CardDef::silent`
-///      fills it from a list of entry indices; `false` = announce as before.
-///      The body still runs the full category → pre → guard layering; nested
-///      activations from a silent body announce normally. No host-function
-///      change; SAVE_VERSION unchanged.
+/// v54: `ManifestOn::presentation` -- how an entry shows up in the log.
+///      `Visible` (default) flashes and writes a 「效果适用」 header.
+///      `Silent` (`CardDef::silent`) is bookkeeping: runs its body, posts no
+///      flash and no header (declare_cap / set_bounds / initial values /
+///      latch clears). `QuietWhenEmpty` (`CardDef::quiet_when_empty`) runs
+///      normally but **retracts** its header when the body produced nothing
+///      visible (no children, no logs): the clause applied and changed
+///      nothing (capped gain, 「已满」), so the player never sees a flash.
+///      If the body produced anything, or the drive halted for a prompt (the
+///      header is already on the stream), it behaves like `Visible`.
+///      Nested activations announce normally. No host-function change;
+///      SAVE_VERSION unchanged.
 pub const ABI_VERSION: i32 = 54;
+
+/// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Presentation {
+    /// Flash + 「效果适用」 header (the default).
+    Visible = 0,
+    /// Bookkeeping: no flash, no header. `CardDef::silent`.
+    Silent = 1,
+    /// Flash only if the body produced something visible.
+    /// `CardDef::quiet_when_empty`.
+    QuietWhenEmpty = 2,
+}
+
+impl Presentation {
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::Silent,
+            2 => Self::QuietWhenEmpty,
+            _ => Self::Visible,
+        }
+    }
+}
+
+impl Default for Presentation {
+    fn default() -> Self {
+        Self::Visible
+    }
+}
 
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.
@@ -2155,13 +2188,10 @@ pub struct ManifestOn {
     /// `None` = unlabelled (the line shows just the card name). v52.
     #[serde(default)]
     pub label: Option<String>,
-    /// Bookkeeping entry (`CardDef::silent`): runs its body but posts no
-    /// activation flash and no 「效果适用」 header. For declarations and resets
-    /// the player never sees as a clause firing (`declare_cap` / `set_bounds` /
-    /// initial values / latch clears). A silent entry that pays/moves/etc. is a
-    /// bug -- the flag must not hide a real effect. v53.
+    /// How this entry presents itself (`CardDef::silent` /
+    /// `CardDef::quiet_when_empty`). See [`Presentation`]. v54.
     #[serde(default)]
-    pub silent: bool,
+    pub presentation: Presentation,
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).

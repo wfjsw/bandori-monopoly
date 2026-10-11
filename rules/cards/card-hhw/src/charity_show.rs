@@ -11,7 +11,7 @@
 //! stand-in and files it to the discard pile at the owner's turn end (C#
 //! `CharityFx.TurnEndAfter` -> `H.RemoveExtra(this)`).
 
-use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -33,15 +33,26 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
     "HHW:爱心义演",
     &[
         On::Play("", None, play),
-        // `card.placed && actor == owner` is uniform across the three kinds;
-        // per-kind clauses (the turn-key latch, the pay target, the walk shape,
-        // the first-pass marker) stay in the arms below.
+        // 规则书: 「本回合中向其他玩家支付时你的付款减半」 -- only payments to
+        // other players, only on the armed turn (`charity.turn`). The turn-key
+        // latch is an instance prop (residual).
         On::Hook(
-            &[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile],
-            "card.placed && actor == owner",
-            None,
-            hook,
+            &[HookKind::PayMul],
+            "card.placed && actor == owner && target >= 0 && target != owner && value > 0",
+            Some(pay_applies),
+            pay_mul,
         ),
+        // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
+        // -- a dice (main) walk step onto a tile that counts as yours, first
+        // time this turn. `mine` / the first-pass marker are residual.
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0",
+            Some(pass_applies),
+            pass_tile,
+        ),
+        // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
+        On::Hook(&[HookKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
     ],
 );
 
@@ -89,101 +100,86 @@ fn mine(player_id: i32, t: i32) -> bool {
     false
 }
 
-/// C# `CharityFx.PassTile` / `CharityFx.PayMul` / `CharityFx.TurnEndAfter`
-/// (MatchHost.cs:4211-4231, `H._turnCtx.HalfPayToOthers` applied in `SettleFactor`).
-fn hook(player_id: i32) -> card_sdk::Asked {
-    // `card.placed && actor == owner` is the pre.
-    match trigger::kind() {
-        // 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- C#
-        // `SettleFactor`: `p.amount = CeilTo(p.amount / 2.0, 10)` for any
-        // pay-to-other of the armed player. The `PayMul` pass (after `PayAdd`,
-        // before `PayChoose`) rewrites the amount via `set_pay_amount`.
-        TriggerKind::PayMul => {
-            if ctx::prop(PROP_TURN) != ctx::turn_key() {
-                return Ok(());
-            }
-            // C# `HalfPayToOthers` only halves payments *to other players*
-            // (`p.to >= 0 && p.to != Player`); a bank payment is untouched.
-            // (`actor == owner` is the pre.)
-            let to = trigger::target();
-            if to < 0 || to == player_id {
-                return Ok(());
-            }
-            let amount = trigger::value();
-            if amount <= 0 {
-                return Ok(());
-            }
-            // `CeilTo(amount / 2.0, 10)` -- half, rounded up to a multiple of 10.
-            let half = (amount as i64 + 1) / 2;
-            let half = ((half + 9) / 10) * 10;
-            let half = half.clamp(0, i32::MAX as i64) as i32;
-            trigger::set_pay_amount(half);
-            ctx::log(
-                player_id,
-                &Msg::new(key!("charity_show_pay"))
-                    .player_id("who", player_id)
-                    .n("from", amount as i64)
-                    .n("to", half as i64),
-            );
-        }
-        // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
-        // -- C# `CharityFx.PassTile` (MatchHost.cs:4211-4222).
-        TriggerKind::PassTile => {
-            if ctx::prop(PROP_TURN) != ctx::turn_key() {
-                return Ok(());
-            }
-            // C# `m.Seat != Seat` -- `actor == owner` is the pre.
-            // C# `m.Teleport || m.TeleportWalk` -- not a teleport.
-            if trigger::move_kind() == Some(MoveKind::Teleport) {
-                return Ok(());
-            }
-            // C# `m.Steps >= 0` (not a dice move) -- the rule scopes this to
-            // 「掷骰移动」. `move_is_main()` is the turn's main roll-and-move.
-            if !trigger::move_is_main() {
-                return Ok(());
-            }
-            let t = trigger::tile();
-            if t < 0 || !mine(player_id, t) {
-                return Ok(());
-            }
-            // C# `Seen.Add(t)` -- only the first pass of each tile counts
-            // (the prop holds the turn key that first saw it).
-            let key = alloc::format!("charity.seen.{t}");
-            if ctx::prop(&key) == ctx::turn_key() {
-                return Ok(());
-            }
-            ctx::set_prop(&key, ctx::turn_key());
-            ctx::log(
-                player_id,
-                &Msg::new(key!("charity_show_pass"))
-                    .player_id("who", player_id)
-                    .tile("tile", t),
-            );
-            // 规则书: 「使你的总移动数+2」 -- C# `m.ExtraSteps += 2` mid-walk.
-            // The walk loop bound is `steps + m.ExtraSteps`, re-read each
-            // step (play.rs). `set_extra_steps` assigns, so keep a running
-            // count on the instance and write the sum.
-            let mut extra = ctx::prop(PROP_EXTRA);
-            if extra < 0 {
-                extra = 0;
-            }
-            extra += 2;
-            ctx::set_prop(PROP_EXTRA, extra);
-            ctx::plan::set_extra_steps(extra);
-            // TODO(规则书)[judgement]: the walk reads `m.extra_steps` off the in-flight
-            //   the clause under-specifies -- see the note above it
-            //   `Move` clone, while `set_extra_steps` writes
-            //   `TurnCtx::plan.extra_steps` -- the two are not yet synced
-            //   mid-walk, so the +2 may not extend an in-flight walk until the
-            //   engine mirrors plan writes onto the live move.
-        }
-        // 规则书: 「打出此卡的回合内」 -- C# `CharityFx.TurnEndAfter` (`turn ==
-        // Player` -> `H.RemoveExtra(this)`): both effects end with the turn.
-        TriggerKind::TurnEndAfter => {
-            ctx::set_prop(PROP_TURN, 0);
-            ctx::set_dest(ctx::Dest::Graveyard);
-        }
-        _ => {}
+/// Residual guard for [`pay_mul`]: the turn-key latch (`charity.turn` is the
+/// turn the effects were armed for).
+fn pay_applies(player_id: i32) -> bool {
+    ctx::prop(PROP_TURN) == ctx::turn_key()
+}
+
+/// 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- C#
+/// `SettleFactor`: `p.amount = CeilTo(p.amount / 2.0, 10)`. `target >= 0 &&
+/// target != owner && value > 0` is the pre; [`pay_applies`] is the residual.
+fn pay_mul(player_id: i32) -> card_sdk::Asked {
+    let amount = trigger::value();
+    // `CeilTo(amount / 2.0, 10)` -- half, rounded up to a multiple of 10.
+    let half = (amount as i64 + 1) / 2;
+    let half = ((half + 9) / 10) * 10;
+    let half = half.clamp(0, i32::MAX as i64) as i32;
+    trigger::set_pay_amount(half);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("charity_show_pay"))
+            .player_id("who", player_id)
+            .n("from", amount as i64)
+            .n("to", half as i64),
+    );
+    Ok(())
+}
+
+/// Residual guard for [`pass_tile`]: the turn-key latch, the tile counts as
+/// yours, and it has not been seen this turn. `mine` is a derived lookup
+/// (tile owner + the Kokoro CiRCLE claim); the first-pass marker is a
+/// dynamic key (docs/GUARDS.md §4.2).
+fn pass_applies(player_id: i32) -> bool {
+    if ctx::prop(PROP_TURN) != ctx::turn_key() {
+        return false;
     }
+    let t = trigger::tile();
+    if t < 0 || !mine(player_id, t) {
+        return false;
+    }
+    let key = alloc::format!("charity.seen.{t}");
+    ctx::prop(&key) != ctx::turn_key()
+}
+
+/// 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
+/// -- C# `CharityFx.PassTile`. Applicability is the `pre` + [`pass_applies`].
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    let t = trigger::tile();
+    // C# `Seen.Add(t)` -- only the first pass of each tile counts
+    // (the prop holds the turn key that first saw it).
+    let key = alloc::format!("charity.seen.{t}");
+    ctx::set_prop(&key, ctx::turn_key());
+    ctx::log(
+        player_id,
+        &Msg::new(key!("charity_show_pass"))
+            .player_id("who", player_id)
+            .tile("tile", t),
+    );
+    // 规则书: 「使你的总移动数+2」 -- C# `m.ExtraSteps += 2` mid-walk.
+    // The walk loop bound is `steps + m.ExtraSteps`, re-read each
+    // step (play.rs). `set_extra_steps` assigns, so keep a running
+    // count on the instance and write the sum.
+    let mut extra = ctx::prop(PROP_EXTRA);
+    if extra < 0 {
+        extra = 0;
+    }
+    extra += 2;
+    ctx::set_prop(PROP_EXTRA, extra);
+    ctx::plan::set_extra_steps(extra);
+    // TODO(规则书)[judgement]: the walk reads `m.extra_steps` off the in-flight
+    //   the clause under-specifies -- see the note above it
+    //   `Move` clone, while `set_extra_steps` writes
+    //   `TurnCtx::plan.extra_steps` -- the two are not yet synced
+    //   mid-walk, so the +2 may not extend an in-flight walk until the
+    //   engine mirrors plan writes onto the live move.
+    Ok(())
+}
+
+/// 规则书: 「打出此卡的回合内」 -- C# `CharityFx.TurnEndAfter`: both effects
+/// end with the turn.
+fn turn_end_after(player_id: i32) -> card_sdk::Asked {
+    ctx::set_prop(PROP_TURN, 0);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

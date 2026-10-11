@@ -147,10 +147,71 @@ fn manifest_carries_the_silent_flag() {
     let r = rules();
     let idx = r.ruleset().card("TEST:silentPair").expect("silentPair loaded");
     let info = &r.ruleset().cards()[idx as usize];
-    assert!(!info.on[0].silent, "the Play entry announces");
-    assert!(info.on[1].silent, "the bookkeeping hook is silent");
-    assert!(!info.on[2].silent, "the sibling hook announces");
+    assert_eq!(info.on[0].presentation, card_sdk::abi::Presentation::Visible, "the Play entry announces");
+    assert_eq!(info.on[1].presentation, card_sdk::abi::Presentation::Silent, "the bookkeeping hook is silent");
+    assert_eq!(info.on[2].presentation, card_sdk::abi::Presentation::Visible, "the sibling hook announces");
 }
 
 // Shipped-card silent-entry checks live in `rules/tests/tests/silent_shipped.rs`
 // (the game suite). This file is engine-universal (TEST:* fixtures only).
+
+/// QuietWhenEmpty: a body that produced nothing visible has its header
+/// retracted (no `"card"` event, no 「效果适用」, no 「（无事发生）」).
+#[test]
+fn quiet_when_empty_retracts_a_no_op_header() {
+    let mut t = Table::vanilla(2);
+    let mark = place_and_land(&mut t, "TEST:silentQuiet");
+    // Entry 1 (settle hook, scratch-only body) must not appear.
+    // Entry 2 (turn-end log) is a different drive; this landing is entry 1.
+    let fired = activations_since(&t, mark, "TEST:silentQuiet");
+    assert!(
+        fired.is_empty(),
+        "a no-op QuietWhenEmpty body must not leave a header: {:?}",
+        t.recent_keys(25)
+    );
+}
+
+/// QuietWhenEmpty still flashes when the body produced something visible.
+#[test]
+fn quiet_when_empty_keeps_a_header_when_the_body_logged() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:silentQuiet").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    t.end(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let fired: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:silentQuiet")
+        .collect();
+    assert_eq!(
+        fired.len(),
+        1,
+        "a logging QuietWhenEmpty body keeps its header: {}",
+        t.recent_keys(25).join(", ")
+    );
+    assert_eq!(fired[0].msg.key(), "log.effect_applied");
+}
+
+
+#[test]
+fn quiet_presentation_is_in_the_manifest() {
+    let r = rules();
+    let idx = r.ruleset().card("TEST:silentQuiet").expect("loaded");
+    let info = &r.ruleset().cards()[idx as usize];
+    assert_eq!(info.on[1].presentation, card_sdk::abi::Presentation::QuietWhenEmpty, "entry 1");
+    assert_eq!(info.on[2].presentation, card_sdk::abi::Presentation::QuietWhenEmpty, "entry 2");
+}

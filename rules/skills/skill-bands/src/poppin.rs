@@ -96,7 +96,10 @@ fn legacy_mine(player_id: i32) -> bool {
 fn before_settle_applies(player_id: i32) -> bool {
     let actor = ctx::trigger::player_id();
     if actor == player_id {
-        return true;
+        // Own settle: only a CiRCLE pass (the （2） veto re-arm) or a main-move
+        // settle (the （4） build veto). Anything else is a no-op body.
+        return ctx::is_circle(ctx::trigger::tile())
+            || (ctx::trigger::move_is_main() && !returns_neutralises_skill4(player_id));
     }
     let hill = ctx::tile_named("星之鼓动山丘");
     if hill < 0 || ctx::trigger::tile() != hill {

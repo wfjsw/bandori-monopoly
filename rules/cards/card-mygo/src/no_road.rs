@@ -11,7 +11,16 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::PayAdd], "", Some(|player_id| ctx::is_placed()), redirect),
+        // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- only while
+        // the exile lasts, only for this player's own tile rent, and only with a
+        // live partner. `pay_is_rent` / `target` / `slot` are the §4.2 schema;
+        // `is_placed` and the exile count stay residual (dynamic).
+        On::Hook(
+            &[card_sdk::abi::HookKind::PayAdd],
+            "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
+            Some(redirect_applies),
+            redirect,
+        ),
         On::Play("", Some(cant_play), no_road),
     ],
 );
@@ -101,22 +110,17 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`redirect`]: the live exile count. `turn_snap` is the
+/// turn-start snapshot and is stale for a layer granted mid-turn.
+fn redirect_applies(player_id: i32) -> bool {
+    ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) > 0
+}
+
 /// 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
-/// `NoRoadFx.RedirectReceiver`. The exile layer count is the **live** one
-/// (`state_key::EXILE`); `turn_snap` is the turn-start snapshot and is stale
-/// for a layer granted mid-turn.
+/// `NoRoadFx.RedirectReceiver`. Applicability is the `pre` +
+/// [`redirect_applies`]; this side only reroutes the pay target.
 fn redirect(player_id: i32) -> card_sdk::Asked {
-    if ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) <= 0 {
-        return Ok(());
-    }
     let who = ctx::slot(player_id, "noRoad.who");
-    if who < 0 || who == player_id {
-        return Ok(());
-    }
-    // This player's own tile collected a rent -- hand it to `who`.
-    if !ctx::trigger::pay_is_rent() || ctx::trigger::target() != player_id {
-        return Ok(());
-    }
     ctx::trigger::set_pay_target(who);
     ctx::log(
         player_id,

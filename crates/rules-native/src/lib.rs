@@ -118,7 +118,7 @@ impl NativeRulesHandle {
                             .iter()
                             .find(|(e, _)| *e == ei as i32)
                             .map(|(_, l)| String::from(*l)),
-                        silent: card.is_silent(ei as i32),
+                        presentation: card.presentation(ei as i32),
                     })
                     .collect();
                 // Same bitset the sandbox builds (): trigger

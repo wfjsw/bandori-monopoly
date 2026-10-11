@@ -23,9 +23,17 @@ pub const ROSELIA: CardDef = CardDef::new(
     &[
         // （2）/（1）'s 「购买价格减半」 is the buy price's `BuyMul` stage
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
-        On::Hook(&[HookKind::BuyMul], card_sdk::pre::MINE, None, half_price),
-        On::Hook(&[HookKind::Bought], "actor == owner && slot('skill.roselia.first') == 0", None, on_bought),
-        On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
+        // The Live-House / one-shot split is residual (`is_live_house_for` is a
+        // per-player colour, not CEL's tile-kind `is_live_house`).
+        On::Hook(&[HookKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
+        // （1）'s one-shot marker: a real buy of a non-Live-House tile.
+        On::Hook(
+            &[HookKind::Bought],
+            "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
+            Some(on_bought_applies),
+            on_bought,
+        ),
+        On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", Some(at_turn_start_applies), at_turn_start),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[1]);
@@ -34,54 +42,57 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-/// （2）「购买任何Live House格子的地契时购买价格减半」, and （1）'s one-shot.
-///
-/// `BuyMul` is the × stage (`docs/PURCHASE.md`), so the hook halves the running
-/// price the previous stages produced.
-fn half_price(player_id: i32) -> card_sdk::Asked {
+/// Residual guard for [`half_price`]: a Live House (always halves) or the
+/// first not-yet-taken non-Live-House buy. `is_live_house_for` is a
+/// per-player colour (docs/GUARDS.md §4.2).
+fn half_price_applies(player_id: i32) -> bool {
     let t = ctx::trigger::tile();
-    if t < 0 {
-        return Ok(());
-    }
     if ctx::is_live_house_for(player_id, t) {
-        // （2） -- always, for a Live House.
-        ctx::trigger::set_price(ctx::trigger::price() / 2);
-        return Ok(());
+        return true;
     }
-    // （1）「本局游戏购买的第一个非Live House格子购买价格减半」
-    if state::get(player_id, DONE) != 0 {
-        return Ok(());
-    }
+    state::get(player_id, DONE) == 0
+}
+
+/// （2）「购买任何Live House格子的地契时购买价格减半」, and （1）'s one-shot.
+/// Applicability is [`half_price_applies`]; this side only halves.
+fn half_price(player_id: i32) -> card_sdk::Asked {
     ctx::trigger::set_price(ctx::trigger::price() / 2);
     Ok(())
 }
 
+/// Residual guard for [`on_bought`]: the tile is a real non-Live-House buy
+/// (`tile_group` is a derived read).
+fn on_bought_applies(player_id: i32) -> bool {
+    ctx::tile_group(ctx::trigger::tile()) != LIVE
+}
+
 fn on_bought(player_id: i32) -> card_sdk::Asked {
-    let t = ctx::trigger::tile();
-    if t < 0 || ctx::tile_group(t) == LIVE {
-        return Ok(());
-    }
     state::set(player_id, DONE, 1);
     Ok(())
 }
 
-/// （1）「在你拥有任意初始Live House格子前，那个格子对你视为Live House」 --
-/// restated each turn while the condition holds.
-fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    
+/// Residual guard for [`at_turn_start`]: still no initial Live House and the
+/// recolour has not already been claimed. Derived scans (docs/GUARDS.md §4.2).
+fn at_turn_start_applies(player_id: i32) -> bool {
     if ctx::owned_tiles(player_id)
         .into_iter()
         .any(|t| ctx::tile_group(t) == LIVE)
     {
-        return Ok(());
+        return false;
     }
     // The recoloured tile is the one this skill half-priced; find it by the
     // extra-colour claim the same way the colour cards do.
     for t in ctx::owned_tiles(player_id) {
         if ctx::is_live_house_for(player_id, t) {
-            return Ok(());
+            return false;
         }
     }
+    true
+}
+
+/// （1）「在你拥有任意初始Live House格子前，那个格子对你视为Live House」 --
+/// restated each turn while [`at_turn_start_applies`] holds.
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if let Some(t) = ctx::owned_tiles(player_id).into_iter().next() {
         // 「那个格子对你视为Live House」 -- the `colorFor:<player_id>` tile prop
         // on the tile's board instance.

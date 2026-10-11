@@ -18,8 +18,22 @@ const TAKEN: &str = "skill.morfonica.moneyTaken";
 pub const MORFONICA: CardDef = CardDef::new(
     "skill:Morfonica:振翅高飞的练习曲",
     &[
-        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, None, after_pay),
-        On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle),
+        // （1）「一次性失去2000以上资金」 -- the size and direction of the pay
+        // are the condition (`value` / `target`, docs/GUARDS.md §4.2).
+        On::Hook(
+            &[HookKind::PayAfter],
+            "actor == owner && value >= 2000 && target != owner",
+            None,
+            after_pay,
+        ),
+        // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
+        // half of the CiRCLE pick.
+        On::Hook(
+            &[HookKind::CircleAffected],
+            "actor == owner && value == 0",
+            None,
+            on_circle,
+        ),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
@@ -28,15 +42,9 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-/// （1）「当你一次性失去2000以上资金时，抽一张卡」.
+/// （1）「当你一次性失去2000以上资金时，抽一张卡」. Applicability is the `pre`;
+/// this side only draws.
 fn after_pay(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::value() < 2000 {
-        return Ok(());
-    }
-    // Only a *loss* counts -- `payAfter` on a payment out of this player.
-    if ctx::trigger::target() == player_id {
-        return Ok(());
-    }
     ctx::draw(player_id, 1)?;
     ctx::log(
         player_id,
@@ -46,11 +54,8 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「[CiRCLE奖励]选择[获得]资金时…设资金量为1000，1500，2000的循环」 --
-/// `t.value == 0` is the money option.
+/// `value == 0` is the money option (the `pre`).
 fn on_circle(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::value() != card_sdk::abi::REWARD_MONEY {
-        return Ok(());
-    }
     let n = state::get(player_id, TAKEN) % 3;
     state::set(player_id, TAKEN, state::get(player_id, TAKEN) + 1);
     let amount = match n {

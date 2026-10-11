@@ -129,8 +129,13 @@ pub struct CardDef {
     /// Entry indices that are **bookkeeping**: they run their body but post no
     /// activation flash and no 「效果适用」 header. For declarations and resets
     /// the player never sees as a clause firing (`declare_cap` / `set_bounds` /
-    /// initial values / latch clears). Fills [`abi::ManifestOn::silent`].
+    /// initial values / latch clears). Fills [`abi::Presentation::Silent`].
     pub silent: &'static [i32],
+    /// Entry indices that flash only when their body produced something
+    /// visible (`abi::Presentation::QuietWhenEmpty`). For clauses that apply
+    /// and change nothing (capped gain, 「已满」) -- the player does not need
+    /// a flash for a no-op. A body that logs / pays / moves still flashes.
+    pub quiet_when_empty: &'static [i32],
 }
 
 impl CardDef {
@@ -142,6 +147,7 @@ impl CardDef {
             legacy: &[],
             labels: &[],
             silent: &[],
+            quiet_when_empty: &[],
         }
     }
 
@@ -155,6 +161,7 @@ impl CardDef {
             legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
         }
     }
 
@@ -169,6 +176,7 @@ impl CardDef {
             legacy: self.legacy,
             labels,
             silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
         }
     }
 
@@ -195,7 +203,45 @@ impl CardDef {
             legacy: self.legacy,
             labels: self.labels,
             silent: entries,
+            quiet_when_empty: self.quiet_when_empty,
         }
+    }
+
+    /// Mark these entry indices **quiet when empty**: the entry runs normally
+    /// but its 「效果适用」 header is retracted when the body produced nothing
+    /// visible (no children, no logs). Use for clauses that apply and change
+    /// nothing -- a gain already at its cap, 「已满」, a set that writes the
+    /// same value. A body that logs / pays / moves still flashes. Do **not**
+    /// use for an opt-in the player can decline (「放弃」 is information).
+    pub const fn quiet_when_empty(self, entries: &'static [i32]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            legacy: self.legacy,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: entries,
+        }
+    }
+
+    /// How entry `index` presents itself in the log.
+    pub const fn presentation(&self, index: i32) -> crate::abi::Presentation {
+        let mut i = 0;
+        while i < self.silent.len() {
+            if self.silent[i] == index {
+                return crate::abi::Presentation::Silent;
+            }
+            i += 1;
+        }
+        let mut i = 0;
+        while i < self.quiet_when_empty.len() {
+            if self.quiet_when_empty[i] == index {
+                return crate::abi::Presentation::QuietWhenEmpty;
+            }
+            i += 1;
+        }
+        crate::abi::Presentation::Visible
     }
 
     /// Keep the pre-migration guard of entry `entry` as `legacy` for the G3
@@ -210,11 +256,12 @@ impl CardDef {
             legacy,
             labels: self.labels,
             silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
         }
     }
 
-    /// Is entry `index` marked silent? The manifest builder and the host both
-    /// ask here, so the two cannot disagree.
+    /// Is entry `index` marked silent? (See [`Self::presentation`] for the
+    /// full three-way presentation.)
     pub const fn is_silent(&self, index: i32) -> bool {
         let mut i = 0;
         while i < self.silent.len() {

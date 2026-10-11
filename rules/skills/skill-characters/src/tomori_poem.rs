@@ -29,7 +29,15 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_ring(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::SettleBefore], "", None, before_settle),
+        // （2）/（3） applicability: someone else's landing within five tiles of
+        // this player. The pot-cost split and the fire balance stay residual
+        // (dynamic). `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
+        On::Hook(
+            &[HookKind::SettleBefore],
+            "tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5",
+            Some(before_settle_applies),
+            before_settle,
+        ),
         On::Hook(&[HookKind::PayMul], "", Some(half), on_pay),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
@@ -58,31 +66,36 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2） and （3） -- the landing is within five tiles of the other party, and a
-/// pot buys a teleport onto their square before the settle.
-fn before_settle(player_id: i32) -> card_sdk::Asked {
+/// Residual guard for [`before_settle`]: the pot-cost split and the fire
+/// balance. The (2)/(3) arm is kept exactly as the body had it (a dynamic
+/// `turn_player` compare plus the live fire count) -- `tile.id >= 0 &&
+/// actor != owner && dist(tile.id, pos(owner)) <= 5` is the `pre`.
+fn before_settle_applies(player_id: i32) -> bool {
     let mover = ctx::trigger::player_id();
-    let landing = ctx::trigger::tile();
-    if landing < 0 || mover == player_id {
-        return Ok(());
-    }
-    // 「[移动终点]位于…前后5格内」
-    if ctx::dist(landing, ctx::player_pos(player_id)) > 5 {
-        return Ok(());
-    }
-    let (cost, theirs) = if mover == ctx::turn_player() {
+    let cost = if mover == ctx::turn_player() {
         // （3） is this player's own landing near someone else.
-        if ctx::trigger::player_id() != player_id {
-            return Ok(());
+        if mover != player_id {
+            return false;
         }
-        (1, ctx::player_pos(player_id))
+        1
     } else {
         // （2） is someone else's landing near this player.
+        4
+    };
+    state::get(player_id, state_key::FIRE) >= cost
+}
+
+/// （2） and （3） -- the landing is within five tiles of the other party, and a
+/// pot buys a teleport onto their square before the settle.
+/// Applicability is the `pre` + [`before_settle_applies`]; this side only
+/// spends the pot and teleports.
+fn before_settle(player_id: i32) -> card_sdk::Asked {
+    let mover = ctx::trigger::player_id();
+    let (cost, theirs) = if mover == ctx::turn_player() {
+        (1, ctx::player_pos(player_id))
+    } else {
         (4, ctx::player_pos(player_id))
     };
-    if state::get(player_id, state_key::FIRE) < cost {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tomori_poem_title")),

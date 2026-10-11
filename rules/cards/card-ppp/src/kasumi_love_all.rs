@@ -19,9 +19,12 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
         On::Play("", None, play),
         // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时」 -- a
         // still-walking (non-teleport) pass by someone other than the owner.
+        // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家
+        // 在此卡所在格子[强制停下]」 -- the body only acts on a step onto this
+        // card's own tile (`card.tile`, docs/GUARDS.md §4.2).
         On::Hook(
             &[HookKind::PassTile],
-            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport",
+            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0",
             None,
             pass_tile,
         ),
@@ -55,13 +58,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 此次[结算]如果[支付]地租则地租只算作原本的一半。」
 /// -- C# `CardKasumiLoveAll.PassTile` -> `Stop`.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `card.placed && actor != owner && move.remaining > 0 &&
-    // move.kind != Teleport` is the pre; `self_tile` is a derived lookup (the
-    // tile this card is bound to).
+    // `… && tile.id == card.tile` is the pre.
     let tile = ctx::self_tile().unwrap_or(-1);
-    if tile < 0 || trigger::tile() != tile {
-        return Ok(());
-    }
     // 规则书[持续]: 「[强制停下]」 is an abnormal movement effect -- it passes
     // the C# `H.WithCard(User, H.AbnormalGate(a))` gate so [反击] cards (安可)
     // get their window. `ctx::gate` returns false when the effect is guarded,

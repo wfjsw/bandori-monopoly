@@ -19,14 +19,27 @@ pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
         On::Play("", None, miracle),
-        On::Hook(&[HookKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed", None, before_build),
+        On::Hook(&[HookKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0", None, before_build),
         On::Hook(&[HookKind::BuildAfter], "actor == owner && card.counter('crystals') >= 1 && card.placed", None, after_build),
         // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
-        // counts, not only the end-tile [重叠].
-        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed", None, pass_player),
+        // counts, not only the end-tile [重叠]. Bookkeeping (the running mask)
+        // is silent; the reward is the visible entry.
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && card.placed && players_on(tile.id, owner) > 0",
+            Some(record_pass_applies),
+            record_pass,
+        ),
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && card.placed",
+            Some(all_others_passed),
+            pass_player,
+        ),
     ],
-);
+)
+.silent(&[3]);
 
 const ID: &str = "MyGO:难以复刻的奇迹";
 
@@ -58,9 +71,6 @@ fn miracle(player_id: i32) -> card_sdk::Asked {
 /// `CardMiracle.BuildCost` returns 0 while a crystal remains.
 fn before_build(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
-    if t < 0 {
-        return Ok(());
-    }
     ctx::set_build_discount(ctx::build_cost(t), 1);
     Ok(())
 }
@@ -72,31 +82,50 @@ fn after_build(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardMiracle.PassSeat` -- remember each player [经过], and when every
-/// other player has been passed once, collect the closest rival's purse.
-/// 规则书（2）: 「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12
-/// (`SETTLE-STAGES.md` §4 M4): every player standing on a tile the move steps
-/// onto counts as [经过], mid-route and at the endpoint alike.
-fn pass_player(player_id: i32) -> card_sdk::Asked {
-    // C# `HashSet<int> _passed` over `H.Others(Seat)`; a slot bitset stands in.
+/// Residual guard for [`record_pass`]: this step actually adds a new
+/// [经过] bit. Derived scan over the running mask (docs/GUARDS.md §4.2).
+fn record_pass_applies(player_id: i32) -> bool {
+    let key = "miracle_passed";
+    let mask = ctx::slot(player_id, key);
+    for other in ctx::players_on(trigger::tile(), player_id) {
+        if other < 0 {
+            continue;
+        }
+        if mask & (1i32 << other) == 0 {
+            return true;
+        }
+    }
+    false
+}
+
+/// C# `CardMiracle.PassSeat` bookkeeping: remember each player [经过].
+/// Silent -- the player never sees the running mask.
+fn record_pass(player_id: i32) -> card_sdk::Asked {
     let key = "miracle_passed";
     let mut mask = ctx::slot(player_id, key);
     for other in ctx::players_on(trigger::tile(), player_id) {
         if other < 0 {
             continue;
         }
-        let bit = 1i32 << other;
-        mask |= bit;
-    }
-    if mask == ctx::slot(player_id, key) {
-        return Ok(());
+        mask |= 1i32 << other;
     }
     ctx::set_slot(player_id, key, mask);
+    Ok(())
+}
+
+/// Residual guard for the reward: every other player has been passed once.
+/// Derived scan over the running mask (docs/GUARDS.md §4.2).
+fn all_others_passed(player_id: i32) -> bool {
+    let mask = ctx::slot(player_id, "miracle_passed");
     let others = ctx::others(player_id);
     let all = others.iter().fold(0i32, |m, &o| m | (1i32 << o));
-    if all == 0 || mask & all != all {
-        return Ok(());
-    }
+    all != 0 && mask & all == all
+}
+
+/// C# `CardMiracle.PassSeat` -- when every other player has been passed once,
+/// collect the closest rival's purse. Applicability is [`all_others_passed`].
+fn pass_player(player_id: i32) -> card_sdk::Asked {
+    let others = ctx::others(player_id);
     // 规则书（2）: 「获得相当于场上奇迹水晶数与你最相近的玩家资金后三位的资金，然后此卡
     // 进入弃牌堆。」 -- C# `Reward()`: `mine = PlacedOf(Player).Sum(Crystals) +
     // BandCrystals(Player)`. Band-card crystals live on the band skill's own

@@ -1164,6 +1164,40 @@ fn silent_pay_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// QuietWhenEmpty (`CardDef::quiet_when_empty`): the entry runs but its header
+/// is retracted when the body produced nothing visible.
+/// * entry 1 (`TEST.quiet.noop`) — body writes scratch state only → retracted.
+/// * entry 2 (`TEST.quiet.log`) — body logs → keeps its header.
+const SILENT_QUIET: CardDef = CardDef::new(
+    "TEST:silentQuiet",
+    &[
+        On::Play("", None, silent_quiet_place),
+        On::Hook(&[HookKind::Settle], "", Some(silent_hook_yes), quiet_noop),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, quiet_log),
+    ],
+)
+.quiet_when_empty(&[1, 2]);
+
+fn silent_quiet_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:silentQuiet", &Msg::new(key!("silent_quiet_note")));
+    Ok(())
+}
+
+fn quiet_noop(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.quiet.noop", 1);
+    Ok(())
+}
+
+fn quiet_log(player_id: i32) -> card_sdk::Asked {
+    if ctx::state::get(player_id, "TEST.quiet.said") != 0 {
+        return Ok(());
+    }
+    ctx::state::set(player_id, "TEST.quiet.said", 1);
+    ctx::log(player_id, &Msg::new(key!("quiet_log_line")));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1171,5 +1205,5 @@ card_sdk::bandori_ruleset!(&[
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
-    SILENT_PAIR, SILENT_NEST, SILENT_PAY
+    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET
 ]);

@@ -19,10 +19,11 @@ fn shipped_declare_cap_entries_are_silent() {
     ] {
         let idx = r.ruleset().card(id).unwrap_or_else(|| panic!("{id} loaded"));
         let info = &r.ruleset().cards()[idx as usize];
-        assert!(
-            info.on[entry].silent,
+        assert_eq!(
+            info.on[entry].presentation,
+            card_sdk::abi::Presentation::Silent,
             "{id} entry {entry} must be silent, got {:?}",
-            info.on.get(entry).map(|o| o.silent)
+            info.on.get(entry).map(|o| o.presentation)
         );
     }
 }

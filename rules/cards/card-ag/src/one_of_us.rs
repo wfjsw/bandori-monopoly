@@ -16,16 +16,32 @@ pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::BeforeOut], "card.placed && slot('one_of_us_partner') > 0", None, before_out),
+        // 规则书: 「当其中一方破产时」 -- the leaver is one of the pair.
+        On::Hook(
+            &[HookKind::BeforeOut],
+            "card.placed && slot('one_of_us_partner') > 0 && (actor == owner || actor == slot('one_of_us_partner') - 1)",
+            None,
+            before_out,
+        ),
         // 「先在地契原主人方结算完成，之后被分享方资金直接增加」 -- the settle
         // runs to completion at the original owner (`tileResolved`, the
         // 「结算完成时」 terminal, `SETTLE-STAGES.md` §4 M5) and only then does
         // the partner's share land. `PayAfter` just measures the rent income
         // the settle produced; the split is the terminal's job.
         On::Hook(&[HookKind::PayAfter], "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0", Some(measure_rent_guard), measure_rent),
-        On::Hook(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, share_at_resolved),
+        // The split only speaks when a designated deed produced income.
+        // Runs before the silent consume below so it can read the measured rent.
+        On::Hook(
+            &[HookKind::TileResolved],
+            "card.placed && slot('one_of_us_partner') > 0",
+            Some(share_at_resolved_applies),
+            share_at_resolved,
+        ),
+        // Consume the measured rent every resolve (silent bookkeeping) so a
+        // skipped split cannot leak into a later settle.
+        On::Hook(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, clear_measured_rent),
     ],
-).silent(&[2]);
+).silent(&[2, 4]);
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.
@@ -191,29 +207,41 @@ fn measure_rent(owner: i32) -> card_sdk::Asked {
 /// owner's side has already settled; now the partner's half lands. Fires even
 /// when the settle was cancelled (complete-as-nothing) -- with no recorded
 /// income there is nothing to split.
+/// Residual guard for [`share_at_resolved`]: a designated deed produced
+/// income worth splitting. Derived lookups (`designated`, the live tile
+/// owner) -- docs/GUARDS.md §4.2.
+fn share_at_resolved_applies(owner: i32) -> bool {
+    let partner = ctx::slot(owner, "one_of_us_partner") - 1;
+    let income = ctx::slot(owner, "one_of_us_rent");
+    if income <= 0 || income / 2 <= 0 {
+        return false;
+    }
+    if !designated(trigger::tile()) {
+        return false;
+    }
+    let owner_of_tile = ctx::tile_owner(trigger::tile());
+    owner_of_tile >= 0 && owner_of_tile != partner
+}
+
+/// Silent bookkeeping: consume the measured rent so a skipped split cannot
+/// leak into a later settle.
+fn clear_measured_rent(owner: i32) -> card_sdk::Asked {
+    ctx::set_slot(owner, "one_of_us_rent", 0);
+    Ok(())
+}
+
 fn share_at_resolved(owner: i32) -> card_sdk::Asked {
     let partner = ctx::slot(owner, "one_of_us_partner") - 1;
     let income = ctx::slot(owner, "one_of_us_rent");
-    ctx::set_slot(owner, "one_of_us_rent", 0);
-    if income <= 0 {
-        return Ok(());
-    }
-    if !designated(trigger::tile()) {
-        return Ok(());
-    }
+    // Applicability is [`share_at_resolved_applies`]; the tally is consumed
+    // by [`clear_measured_rent`] (a silent entry that always runs).
     // 「触发结算收益平分」 -- half the settle income to the partner. The
     // settle has already paid the owner in full (「先在地契原主人方结算完成」);
     // this is the partner's share, moving owner -> partner (the C# note: "P0
-    // gets half from P1").
+    // gets half from P1"). Applicability is [`share_at_resolved_applies`].
     let half = income / 2;
-    if half <= 0 {
-        return Ok(());
-    }
     let tile = trigger::tile();
     let owner_of_tile = ctx::tile_owner(tile);
-    if owner_of_tile < 0 || owner_of_tile == partner {
-        return Ok(());
-    }
     // TODO(规则书)[judgement]: 「不受其他任何效果影响」 -- see the note in `play`.
     ctx::transfer(
         owner_of_tile,
@@ -238,13 +266,9 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
 /// deeds on the card.)
 fn before_out(owner: i32) -> card_sdk::Asked {
     // `owner` is the card's player; `trigger::player_id()` is the player leaving (C#
-    // `BeforeOut(int player_id)`).
+    // `BeforeOut(int player_id)`). `actor == owner || actor == partner` is the pre.
     let partner = ctx::slot(owner, "one_of_us_partner") - 1;
     let out = trigger::player_id();
-    // C# `player_id != Player && player_id != Partner` -> return.
-    if out != owner && out != partner {
-        return Ok(());
-    }
     let survivor = if out == owner { partner } else { owner };
     // C# `if (H.Out(num) && num != player_id) return Ok(());`.
     if ctx::player_out(survivor) && survivor != out {

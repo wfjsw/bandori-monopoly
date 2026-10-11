@@ -247,6 +247,12 @@ pub struct Run {
     /// no outcome lines for its state / plan writes either (the flag hides
     /// the whole presentation, and the body must be pure bookkeeping).
     silent_body: bool,
+    /// This run's entry is `QuietWhenEmpty`: retract the header at commit if
+    /// the body produced nothing visible.
+    quiet_when_empty: bool,
+    /// This run halted for a prompt (the header is already on the stream and
+    /// must not be retracted).
+    prompted: bool,
     /// The `"card"` activation event id this run groups under (`-1` = none).
     /// Every write-through event carries it, so the log nests the outcome
     /// under the header.
@@ -324,7 +330,9 @@ impl Run {
         negated: bool,
         uid: i32,
     ) -> i32 {
-        self.logged = self.logged.saturating_add(1);
+        // The header is not a body line: `logged` counts narration/outcome
+        // lines the body posted, and a QuietWhenEmpty drive whose body was
+        // silent must see 0 here so it can retract.
         if let Some(live) = self.live {
             let cx = unsafe { &mut *live };
             let parent = self.parent;
@@ -2279,8 +2287,9 @@ impl<M: CardModules> RulesBridge<M> {
             return -1;
         }
         // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
-        // and no 「效果适用」 header. See the method doc.
-        if self.entry_silent(card_id, entry) {
+        // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
+        // the header is retracted at commit if the body produced nothing.
+        if self.entry_presentation(card_id, entry) == card_sdk::abi::Presentation::Silent {
             return -1;
         }
         use game_core::state::card_trigger;
@@ -2363,19 +2372,19 @@ impl<M: CardModules> RulesBridge<M> {
             .unwrap_or_default()
     }
 
-    /// Is `card_id`'s `entry` marked silent (`CardDef::silent`) -- bookkeeping
-    /// that runs but never flashes? `false` when the card or entry is unknown
-    /// (announce as before; a missing manifest entry cannot lie about silence).
-    fn entry_silent(&self, card_id: &str, entry: i32) -> bool {
+    /// How `card_id`'s `entry` presents itself (`CardDef::silent` /
+    /// `CardDef::quiet_when_empty`). `Visible` when the card or entry is
+    /// unknown (announce as before).
+    fn entry_presentation(&self, card_id: &str, entry: i32) -> card_sdk::abi::Presentation {
         let Some(idx) = self.ruleset.card(card_id) else {
-            return false;
+            return card_sdk::abi::Presentation::Visible;
         };
         self.ruleset
             .cards()
             .get(idx as usize)
             .and_then(|c| c.on.get(entry.max(0) as usize))
-            .map(|o| o.silent)
-            .unwrap_or(false)
+            .map(|o| o.presentation)
+            .unwrap_or_default()
     }
 
     /// Run one effect to completion, prompting through the engine as needed.
@@ -2489,6 +2498,8 @@ impl<M: CardModules> RulesBridge<M> {
         // flag must not hide a real one). `Cell` so the `announce` closure can
         // share it (same shape as the raw `cx_ptr` write-through).
         let silent_body = std::cell::Cell::new(false);
+        let quiet_when_empty = std::cell::Cell::new(false);
+        let mut prompted = false;
         let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
@@ -2525,6 +2536,8 @@ impl<M: CardModules> RulesBridge<M> {
                 log_idx: 0,
                 logged: 0,
                 silent_body: false,
+            quiet_when_empty: false,
+            prompted: false,
                 parent: activation_id,
             };
             run.world.skip_log = true;
@@ -2559,9 +2572,13 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 w.parent = activation_id;
                 w.live = Some(cx_ptr as *mut Cx<'static>);
-                if self.entry_silent(card_id, entry) {
+                let pres = self.entry_presentation(card_id, entry);
+                if pres == card_sdk::abi::Presentation::Silent {
                     silent_body.set(true);
                     w.silent_body = true;
+                }
+                if pres == card_sdk::abi::Presentation::QuietWhenEmpty {
+                    quiet_when_empty.set(true);
                 }
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
                 if id >= 0 {
@@ -2640,7 +2657,8 @@ impl<M: CardModules> RulesBridge<M> {
                     if answers.is_empty() {
                         let mut after = after;
                         posted_ids = std::mem::take(&mut after.posted);
-                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), own_activation);
+                        after.prompted = prompted;
+                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
                     }
                     // Recover the learn pass's write-through log so the commit
                     // pass replaces those lines instead of appending duplicates.
@@ -2681,6 +2699,8 @@ impl<M: CardModules> RulesBridge<M> {
                         log_idx: 0,
                         logged: 0,
                         silent_body: false,
+            quiet_when_empty: false,
+            prompted: false,
                         parent: activation_id,
                     };
                     let mut announce = |w: &mut crate::Run, _entry: i32| {
@@ -2712,7 +2732,8 @@ impl<M: CardModules> RulesBridge<M> {
                         Ok(Outcome::Done(after2)) => {
                             let mut after2 = after2;
                             posted_ids = std::mem::take(&mut after2.posted);
-                            return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get(), own_activation);
+                            after2.prompted = prompted;
+                            return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
                         }
                         // The commit pass must not pause: the learn pass
                         // already answered everything. Anything else is a
@@ -2722,7 +2743,8 @@ impl<M: CardModules> RulesBridge<M> {
                         _ => {
                             let mut after = after;
                             posted_ids = std::mem::take(&mut after.posted);
-                            return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), own_activation);
+                            after.prompted = prompted;
+                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
                         }
                     }
                 }
@@ -2737,6 +2759,10 @@ impl<M: CardModules> RulesBridge<M> {
                     // announcement. Without this the first pass leaves an
                     // orphan 「效果适用」 with no children and no
                     // 「（无事发生）」 -- the EMPTY bucket in the acceptance dump.
+                    // A prompt means the header is already on the stream --
+                    // a QuietWhenEmpty entry keeps it (retraction is only for
+                    // drives that never showed anything).
+                    prompted = true;
                     let reply = match cx.ask(ask) {
                         Ok(r) => r,
                         Err(e) => {
@@ -3362,6 +3388,7 @@ impl<M: CardModules> RulesBridge<M> {
         card_id: &str,
         trigger: &mut Trigger,
         silent: bool,
+        quiet_when_empty: bool,
         activation_id: i32,
     ) -> Flow<i32> {
             let mut after = after;
@@ -3397,14 +3424,31 @@ impl<M: CardModules> RulesBridge<M> {
             };
             if header >= 0 {
                 let children = cx.child_event_count(header, header);
-                let results = if children == 0 {
-                    vec![Msg::new("log.effect_nothing")]
+                // QuietWhenEmpty + nothing visible + no prompt: retract the
+                // header entirely (no flash, no 「效果适用」, no
+                // 「（无事发生）」). A prompt already showed it to the client.
+                let body_empty = after.logged == 0
+                    && after.paid_log.is_empty()
+                    && after.draw_log.is_empty()
+                    && after.discard_log.is_empty()
+                    && after.reshuffle_log.is_empty()
+                    && after.house_log.is_empty()
+                    && after.exile_log.is_empty()
+                    && after.fire_spent_log.is_empty();
+                if quiet_when_empty && body_empty && !after.prompted {
+                    cx.drop_events(&[header]);
+                    after.world.recent = cx.world().recent.clone();
+                    cx.activation.retain(|&id| id != header);
                 } else {
-                    Vec::new()
-                };
-                cx.set_event_results(header, results);
-                after.world.recent = cx.world().recent.clone();
-                cx.activation.retain(|&id| id != header);
+                    let results = if children == 0 {
+                        vec![Msg::new("log.effect_nothing")]
+                    } else {
+                        Vec::new()
+                    };
+                    cx.set_event_results(header, results);
+                    after.world.recent = cx.world().recent.clone();
+                    cx.activation.retain(|&id| id != header);
+                }
             }
             after.world.skip_log = false;
             after.world.stub = Default::default();
@@ -4957,6 +5001,8 @@ impl<M: CardModules> RulesBridge<M> {
             log_idx: 0,
             logged: 0,
             silent_body: false,
+            quiet_when_empty: false,
+            prompted: false,
             parent: -1,
         }
     }
@@ -5174,6 +5220,8 @@ impl<M: CardModules> RulesBridge<M> {
                 log_idx: 0,
                 logged: 0,
                 silent_body: false,
+            quiet_when_empty: false,
+            prompted: false,
                 parent: -1,
             };
             let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
@@ -6996,6 +7044,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             log_idx: 0,
             logged: 0,
             silent_body: false,
+            quiet_when_empty: false,
+            prompted: false,
             parent: -1,
         };
         self.ruleset
@@ -7079,6 +7129,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             log_idx: 0,
             logged: 0,
             silent_body: false,
+            quiet_when_empty: false,
+            prompted: false,
             parent: -1,
         };
         q.tiles
