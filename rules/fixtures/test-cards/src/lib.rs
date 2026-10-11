@@ -1198,6 +1198,32 @@ fn quiet_log(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Ruling 2a: an optional prompt that is declined leaves no header, no flash,
+/// no log. The lazy header only posts when a visible outcome follows.
+const SILENT_ASK: CardDef = CardDef::new(
+    "TEST:silentAsk",
+    &[
+        On::Play("", None, silent_ask_place),
+        On::Hook(&[HookKind::Settle], "", Some(silent_hook_yes), silent_ask_body),
+    ],
+);
+
+fn silent_ask_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:silentAsk", &Msg::new(key!("silent_ask_note")));
+    Ok(())
+}
+
+/// Optional offer: decline = no trace; accept = one log line (so the header
+/// appears).
+fn silent_ask_body(player_id: i32) -> card_sdk::Asked {
+    if !ctx::ask_yes(player_id, &Msg::new(key!("silent_ask_title")), &Msg::new(key!("silent_ask_text")))? {
+        return Ok(());
+    }
+    ctx::log(player_id, &Msg::new(key!("silent_ask_taken")));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1205,5 +1231,5 @@ card_sdk::bandori_ruleset!(&[
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
-    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET
+    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK
 ]);

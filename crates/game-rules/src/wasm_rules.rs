@@ -84,6 +84,21 @@ fn props_of(
     props.get(id).cloned().unwrap_or_default()
 }
 
+/// A buffered 「效果适用」 header, posted lazily (Ruling 2a) just before the
+/// drive's first visible outcome.
+#[derive(Clone)]
+pub struct PendingHeader {
+    kind: String,
+    owner: i32,
+    msg: Msg,
+    card: String,
+    target: i32,
+    tile: i32,
+    /// Field instance (`FieldCard.uid`) for the slot pulse; -1 when the card
+    /// is not on a field (hand play, skill, event).
+    uid: i32,
+}
+
 /// One run of a card module against a copy of the match world.
 /// Dest fates the module returns via `set_dest` (see [`DEST_GRAVEYARD`] /
 /// [`DEST_FIELD`] / [`DEST_UNSET`]).
@@ -250,6 +265,17 @@ pub struct Run {
     /// This run's entry is `QuietWhenEmpty`: retract the header at commit if
     /// the body produced nothing visible.
     quiet_when_empty: bool,
+    /// Ruling 2a: the 「效果适用」 header is **lazy** -- buffered here at body
+    /// entry and posted only immediately before the drive's first visible
+    /// outcome. A drive that ends with nothing visible (a declined optional
+    /// prompt, a bookkeeping write) posts no header at all. `None` once
+    /// flushed or when the entry is silent (nothing to post).
+    pending_header: Option<PendingHeader>,
+    /// The header this run flushed (Ruling 2a), or -1 if none was posted
+    /// (silent / nothing visible). `commit_after` completes this one only.
+    own_activation: i32,
+    /// What the body produced (for the flash-scope classification).
+    /// ...
     /// This run halted for a prompt (the header is already on the stream and
     /// must not be retracted).
     prompted: bool,
@@ -287,8 +313,25 @@ impl Run {
         self.post_log_value(kind, player_id, msg, card, 0)
     }
 
+    /// Post the buffered 「效果适用」 header (Ruling 2a) just before the
+    /// drive's first visible outcome. Returns the header's event id, or the
+    /// current parent when there is nothing pending (silent / already
+    /// flushed).
+    fn flush_header(&mut self) -> i32 {
+        let Some(h) = self.pending_header.take() else {
+            return self.parent;
+        };
+        let id = self.post_card(&h.kind, h.owner, h.msg, &h.card, h.target, h.tile, false, h.uid);
+        self.parent = id;
+        self.own_activation = id;
+        id
+    }
+
     fn post_log_value(&mut self, kind: &str, player_id: i32, msg: Msg, card: &str, value: i32) {
         self.logged = self.logged.saturating_add(1);
+        // Ruling 2a: the header goes just before the drive's first visible
+        // outcome (this line).
+        self.flush_header();
         if let Some(live) = self.live {
             let cx = unsafe { &mut *live };
             let parent = self.parent;
@@ -2352,11 +2395,24 @@ impl<M: CardModules> RulesBridge<M> {
             }
             _ => Msg::default(),
         };
-        // Write-through: the header posts to the live stream at body entry,
-        // so it precedes every host-effect and body line this run causes.
-        // A multi-pass re-run's header replaces the first post in place.
-        w.post_card(kind, owner, msg, cid, target, tile, false, uid)
+        // Ruling 2a: the header is lazy. Buffer it (with the field `uid` for
+        // the slot pulse); `flush_header` posts it immediately before the
+        // drive's first visible outcome. A drive that ends with nothing
+        // visible posts no header at all (a declined optional prompt leaves
+        // no trace).
+        w.pending_header = Some(PendingHeader {
+            kind: kind.to_string(),
+            owner,
+            msg,
+            card: cid.to_string(),
+            target,
+            tile,
+            uid,
+        });
+        // Parent for body lines is set when the header flushes.
+        -1
     }
+
 
     /// The manifest label of `card_id`'s `entry` (「（1）」 / 「（2）」), or `""`.
     fn entry_label(&self, card_id: &str, call: Call, entry: i32) -> String {
@@ -2500,6 +2556,10 @@ impl<M: CardModules> RulesBridge<M> {
         let silent_body = std::cell::Cell::new(false);
         let quiet_when_empty = std::cell::Cell::new(false);
         let mut prompted = false;
+        // Ruling 2a: the lazy header survives across passes (learn + commit
+        // run share one buffer; a pause must not drop it).
+        let mut saved_header: Option<PendingHeader> = None;
+        let mut flushed_header: i32 = -1;
         let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
@@ -2537,6 +2597,8 @@ impl<M: CardModules> RulesBridge<M> {
                 logged: 0,
                 silent_body: false,
             quiet_when_empty: false,
+            pending_header: None,
+                own_activation: -1,
             prompted: false,
                 parent: activation_id,
             };
@@ -2560,11 +2622,20 @@ impl<M: CardModules> RulesBridge<M> {
             let cx_ptr = cx as *mut Cx<'_>;
             let mut announce = |w: &mut crate::Run, entry: i32| {
                 if !announced.insert(entry) {
-                    // A multi-pass re-run: the first pass already announced
-                    // this entry. Consume the header's replace-log slot so the
-                    // body's first line does not overwrite the header.
-                    w.parent = activation_id;
+                    // A multi-pass re-run. The learn pass either flushed the
+                    // lazy header (own_activation >= 0 -- adopt it as the
+                    // parent so body lines group under it) or never got a
+                    // visible outcome (restore the buffer for this pass).
+                    w.parent = if flushed_header >= 0 {
+                        flushed_header
+                    } else {
+                        activation_id
+                    };
+                    w.own_activation = flushed_header;
                     w.live = Some(cx_ptr as *mut Cx<'static>);
+                    if flushed_header < 0 && w.pending_header.is_none() {
+                        w.pending_header = saved_header.clone();
+                    }
                     if w.log_idx < w.posted.len() {
                         w.log_idx += 1;
                     }
@@ -2590,6 +2661,9 @@ impl<M: CardModules> RulesBridge<M> {
                     quiet_when_empty.set(false);
                 }
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
+                if w.pending_header.is_some() {
+                    saved_header = w.pending_header.clone();
+                }
                 if id >= 0 {
                     // Body lines group under **this** drive's header.
                     w.parent = id;
@@ -2666,6 +2740,7 @@ impl<M: CardModules> RulesBridge<M> {
                     if answers.is_empty() {
                         let mut after = after;
                         posted_ids = std::mem::take(&mut after.posted);
+                        flushed_header = after.own_activation;
                         after.prompted = prompted;
                         return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
                     }
@@ -2709,6 +2784,8 @@ impl<M: CardModules> RulesBridge<M> {
                         logged: 0,
                         silent_body: false,
             quiet_when_empty: false,
+            pending_header: None,
+                own_activation: -1,
             prompted: false,
                         parent: activation_id,
                     };
@@ -2741,6 +2818,7 @@ impl<M: CardModules> RulesBridge<M> {
                         Ok(Outcome::Done(after2)) => {
                             let mut after2 = after2;
                             posted_ids = std::mem::take(&mut after2.posted);
+                            flushed_header = after2.own_activation;
                             after2.prompted = prompted;
                             return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
                         }
@@ -2752,6 +2830,7 @@ impl<M: CardModules> RulesBridge<M> {
                         _ => {
                             let mut after = after;
                             posted_ids = std::mem::take(&mut after.posted);
+                            flushed_header = after.own_activation;
                             after.prompted = prompted;
                         return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
                         }
@@ -2890,6 +2969,13 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                     let req_is_visible = visible_host_request(&req);
+                    // Ruling 2a: a host effect is a visible outcome -- flush
+                    // the lazy header before it lands, then carry its id
+                    // across the re-run.
+                    run.flush_header();
+                    if run.own_activation >= 0 {
+                        flushed_header = run.own_activation;
+                    }
                     let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
                     // Debug guard: a silent entry must not produce a visible
                     // effect through the host either (`ctx::gain` and kin are
@@ -3550,12 +3636,13 @@ impl<M: CardModules> RulesBridge<M> {
             // non-silent one) and must stamp it; a fully silent drive has no
             // header of its own (`activation_id` stays -1) and must not
             // complete the outer one.
-            let header = if activation_id >= 0 {
-                activation_id
-            } else if !silent {
-                after.parent
+            // Ruling 2a: the header this drive flushed (or -1 if nothing
+            // visible was produced -- a declined optional prompt, a
+            // bookkeeping write). Never complete the outer activation.
+            let header = if after.own_activation >= 0 {
+                after.own_activation
             } else {
-                -1
+                activation_id
             };
             if header >= 0 {
                 let children = cx.child_event_count(header, header);
@@ -5146,6 +5233,8 @@ impl<M: CardModules> RulesBridge<M> {
             logged: 0,
             silent_body: false,
             quiet_when_empty: false,
+            pending_header: None,
+                own_activation: -1,
             prompted: false,
             parent: -1,
         }
@@ -5365,6 +5454,8 @@ impl<M: CardModules> RulesBridge<M> {
                 logged: 0,
                 silent_body: false,
             quiet_when_empty: false,
+            pending_header: None,
+                own_activation: -1,
             prompted: false,
                 parent: -1,
             };
@@ -7189,6 +7280,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             logged: 0,
             silent_body: false,
             quiet_when_empty: false,
+            pending_header: None,
+                own_activation: -1,
             prompted: false,
             parent: -1,
         };
@@ -7274,6 +7367,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             logged: 0,
             silent_body: false,
             quiet_when_empty: false,
+            pending_header: None,
+                own_activation: -1,
             prompted: false,
             parent: -1,
         };

@@ -272,3 +272,72 @@ fn cross_player_activation_flashes() {
         fired[0]
     );
 }
+
+/// Ruling 2a: a declined optional prompt leaves no header, no flash, no log.
+/// The lazy header only posts when a visible outcome follows.
+#[test]
+fn declined_optional_prompt_leaves_no_trace() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:silentAsk").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    // Decline the optional offer.
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let fired = activations_since(&t, mark, "TEST:silentAsk");
+    assert!(
+        fired.is_empty(),
+        "a declined optional prompt must leave no header: {}",
+        t.recent_keys(25).join(", ")
+    );
+    assert!(
+        !t.events_since(mark).iter().any(|e| e.msg.key().contains("silent_ask")),
+        "no log line either: {}",
+        t.recent_keys(25).join(", ")
+    );
+}
+
+/// Ruling 2a: an accepted optional prompt posts the header before its effect.
+#[test]
+fn accepted_optional_prompt_keeps_the_header() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:silentAsk").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    // Accept the optional offer (the yes option).
+    if t.prompt().is_some() {
+        let n = t.asked().len();
+        assert!(n >= 1, "the offer must be asked: {}", t.dump_prompt());
+        t.answer(0, 0).unwrap_or_else(|_| t.answer_one(0).unwrap());
+    }
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let fired = activations_since(&t, mark, "TEST:silentAsk");
+    assert_eq!(
+        fired.len(),
+        1,
+        "an accepted offer keeps its header: {}",
+        t.recent_keys(25).join(", ")
+    );
+    assert!(
+        t.events_since(mark).iter().any(|e| e.msg.key().contains("silent_ask_taken")),
+        "the effect line is present: {}",
+        t.recent_keys(25).join(", ")
+    );
+}
