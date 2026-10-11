@@ -122,7 +122,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | FAILS | 2 | 0 | 1 | 3 |
 | PROTOCOL-LEVEL | 18 | 9 | 2 | 29 |
 | BLOCKED-HOST | 3 | 0 | 0 | 3 |
-| OPEN (fragment proved) | (cross-cutting; see OPEN column) | | | 8 open questions |
+| OPEN (fragment proved) | (cross-cutting; see OPEN column) | written | pending | 8 open questions |
 
 Notes on the counts:
 * A clause can be both PROVEN (for the determinate fragment) and carry an
@@ -151,52 +151,85 @@ Harnesses owned by this unit (34):
 
 | harness | obligation | verdict | time (s) |
 |---|---|---|---:|
-| `uika_state1_roll_is_10_plus_d10` | C-MUJICA-初华技能-01 iff | | |
-| `uika_state1_move_mutant_is_detected` | mutant 9+d10 | | |
-| `nyamu_pay_raise_uses_new_pot_count` | C-MUJICA-若麦技能-01 iff | | |
-| `nyamu_pay_raise_mutant_is_detected` | mutant old pot count | | |
-| `sakiko_fire_cap_is_three` | C-MUJICA-祥子技能-02 arith | | |
-| `umiri_fire_cap_is_four` | C-MUJICA-海铃技能-02 arith | | |
-| `umiri_deed_pay_and_draw_arithmetic` | C-MUJICA-海铃技能-03 arith | | |
-| `mutsumi_state2_gate_is_hand_exactly_5` | C-MUJICA-睦技能-01 gate | | |
-| `band_halve_pay_amount` | C-MUJICA-团技能-03 arith | | |
-| `band_starts_in_state1` | C-MUJICA-团技能-00 | | |
-| `band_state2_pay_is_150_only_on_self` | C-MUJICA-团技能-01 one-sided | | |
-| `band_state2_bend_hook_rewrites_amount` | C-MUJICA-团技能-01 PayMul | | |
-| `band_state2_bend_mutant_is_detected` | mutant no-rewrite | | |
+| `uika_state1_roll_is_10_plus_d10` | C-MUJICA-初华技能-01 iff | written | pending |
+| `uika_state1_move_mutant_is_detected` | mutant 9+d10 | written | pending |
+| `nyamu_pay_raise_uses_new_pot_count` | C-MUJICA-若麦技能-01 iff | written | pending |
+| `nyamu_pay_raise_mutant_is_detected` | mutant old pot count | written | pending |
+| `sakiko_fire_cap_is_three` | C-MUJICA-祥子技能-02 arith | written | pending |
+| `umiri_fire_cap_is_four` | C-MUJICA-海铃技能-02 arith | written | pending |
+| `umiri_deed_pay_and_draw_arithmetic` | C-MUJICA-海铃技能-03 arith | written | pending |
+| `mutsumi_state2_gate_is_hand_exactly_5` | C-MUJICA-睦技能-01 gate | written | pending |
+| `band_halve_pay_amount` | C-MUJICA-团技能-03 arith | written | pending |
+| `band_starts_in_state1` | C-MUJICA-团技能-00 | written | pending |
+| `band_state2_pay_is_150_only_on_self` | C-MUJICA-团技能-01 one-sided | written | pending |
+| `band_state2_bend_hook_rewrites_amount` | C-MUJICA-团技能-01 PayMul | written | pending |
+| `band_state2_bend_mutant_is_detected` | mutant no-rewrite | written | pending |
 
 ### mujica (21)
 
 | harness | obligation | verdict | time (s) |
 |---|---|---|---:|
-| `black_bday_low_pays_800_iff` | C-MUJICA-黑色生日-01 | | |
-| `black_bday_high_pays_400_iff` | C-MUJICA-黑色生日-02 | | |
-| `black_bday_low_mutant_is_detected` | mutant 801 | | |
-| `black_bday_low_mutant_panics` | mutant should_panic | | |
-| `heart_rain_stay_layers_iff` | C-MUJICA-心の雨-02 | | |
-| `heart_rain_stay_layers_mutant_is_detected` | mutant 3 layers | | |
-| `heart_rain_fallback_stun_and_money_iff` | C-MUJICA-心の雨-03 | | |
-| `heart_rain_in_window_roll_stay_iff` | C-MUJICA-心の雨-01/02 | | |
-| `dice_cast_places_on_own_field_iff` | C-MUJICA-骰子-01 | | |
-| `dice_cast_mutant_extra_money_is_detected` | mutant extra money | | |
-| `sparkler_places_two_crystals_iff` | C-MUJICA-花火-01 | | |
-| `sparkler_crystal_count_mutant_is_detected` | mutant 3 crystals | | |
-| `sparkler_last_crystal_stun_two_iff` | C-MUJICA-花火-03 body | | |
-| `sparkler_last_crystal_mutant_is_detected` | mutant 1 stun | | |
-| `doll_garden_pay_amount_iff` | C-MUJICA-人偶的箱庭-01 pay | | |
-| `doll_garden_pay_amount_mutant_is_detected` | mutant +10 | | |
-| `welcome_toggle_arithmetic_iff` | C-MUJICA-欢迎-02 arith | | |
-| `welcome_no_state2_mutant_is_detected` | mutant forced toggle | | |
-| `nyamu_places_on_field_iff` | C-MUJICA-喵梦-01 | | |
-| `umiri_places_on_next_actors_field_iff` | C-MUJICA-海铃-01 | | |
-| `mortis_nothing_to_copy_is_inert` | C-MUJICA-睦-01 inert | | |
-| `saki_move_dest_is_three_tiles` | C-MUJICA-祥移动-01 arith | | |
-| `saki_move_dest_mutant_is_detected` | mutant 4 tiles | | |
-| `saki_move_halve_pay_amount` | C-MUJICA-祥移动-03 arith | | |
+| `black_bday_low_pays_800_iff` | C-MUJICA-黑色生日-01 | written | pending |
+| `black_bday_high_pays_400_iff` | C-MUJICA-黑色生日-02 | written | pending |
+| `black_bday_low_mutant_is_detected` | mutant 801 | written | pending |
+| `black_bday_low_mutant_panics` | mutant should_panic | written | pending |
+| `heart_rain_stay_layers_iff` | C-MUJICA-心の雨-02 | written | pending |
+| `heart_rain_stay_layers_mutant_is_detected` | mutant 3 layers | written | pending |
+| `heart_rain_fallback_stun_and_money_iff` | C-MUJICA-心の雨-03 | written | pending |
+| `heart_rain_in_window_roll_stay_iff` | C-MUJICA-心の雨-01/02 | written | pending |
+| `dice_cast_places_on_own_field_iff` | C-MUJICA-骰子-01 | written | pending |
+| `dice_cast_mutant_extra_money_is_detected` | mutant extra money | written | pending |
+| `sparkler_places_two_crystals_iff` | C-MUJICA-花火-01 | written | pending |
+| `sparkler_crystal_count_mutant_is_detected` | mutant 3 crystals | written | pending |
+| `sparkler_last_crystal_stun_two_iff` | C-MUJICA-花火-03 body | written | pending |
+| `sparkler_last_crystal_mutant_is_detected` | mutant 1 stun | written | pending |
+| `doll_garden_pay_amount_iff` | C-MUJICA-人偶的箱庭-01 pay | written | pending |
+| `doll_garden_pay_amount_mutant_is_detected` | mutant +10 | written | pending |
+| `welcome_toggle_arithmetic_iff` | C-MUJICA-欢迎-02 arith | written | pending |
+| `welcome_no_state2_mutant_is_detected` | mutant forced toggle | written | pending |
+| `nyamu_places_on_field_iff` | C-MUJICA-喵梦-01 | written | pending |
+| `umiri_places_on_next_actors_field_iff` | C-MUJICA-海铃-01 | written | pending |
+| `mortis_nothing_to_copy_is_inert` | C-MUJICA-睦-01 inert | written | pending |
+| `saki_move_dest_is_three_tiles` | C-MUJICA-祥移动-01 arith | written | pending |
+| `saki_move_dest_mutant_is_detected` | mutant 4 tiles | written | pending |
+| `saki_move_halve_pay_amount` | C-MUJICA-祥移动-03 arith | written | pending |
+
+### Verdict status (honest)
+
+All 37 harnesses are **written and compiling** under
+`cargo build -p rules-kani`. Verdicts are **pending** the machine-wide
+Kani slot queue (box hit 150+ `run.sh` waiters / 0 free RAM; cap 3).
+
+What was attempted:
+1. First `tools/kani/run.sh --unit skills_mujica … --timeout 300 --jobs 2`
+   queued and was replaced before a slot opened (300 s too tight for the
+   cold `cargo kani` compile).
+2. Second run at `--timeout 900 --jobs 1` acquired a slot and compiled
+   under `cfg(kani)`, exposing `E0382 use of moved value: w.n_players` in
+   `heart_rain_in_window_roll_stay_iff` (native `cargo build` does not
+   compile `#[kani::proof]` bodies the same way). **Fixed** — `n` is now
+   read from `pre.n_players` before `reset_world` moves `w`.
+3. Third run (post-fix) is still waiting on a slot as of hand-off.
+   Earlier `FAILED` rows in `target/kani-results/results.md` are that
+   compile error, **not** proof disagreements.
+
+Per the coordinator notice: harnesses that could not be run to a verdict
+are reported here as **written, verdict pending**; the coordinator will
+run them centrally. Run command when slots free up:
+
+```sh
+export CARGO_TARGET_DIR=/home/monopoly/kani-target-mujica CARGO_BUILD_JOBS=4
+cd /home/monopoly/kani-mujica-wt
+bash tools/kani/run.sh --unit skills_mujica --unit mujica --jobs 1 --timeout 900
+```
+
+Cheapest-first order already encoded in the unit (pure arith → money /
+place / stay / stun bodies → hooks).
 
 ### TIMEOUT / OOM notes
 
-First attempt used `--timeout 300` and was killed before acquiring a
-machine-wide slot (box had 20+ concurrent CBMC from sibling units). Requeued
-at `--timeout 900`, `--jobs 1`. Record any harness that still times out
-after the cold `cargo kani` compile of `kani-target-mujica`.
+* Cold `cargo kani` compile of `kani-target-mujica` needs >300 s on this
+  box when other CBMC jobs are live — use `--timeout 900`.
+* Prompt-heavy bodies (doll_garden move branch, crystal_swap picks,
+  welcome designate) are PROTOCOL-LEVEL / BLOCKED-HOST rather than run,
+  so this unit has no 15–40 min prompt cliff in the current harness set.
