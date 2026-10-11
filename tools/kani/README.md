@@ -15,6 +15,7 @@ tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out
 | `--unit NAME` | all | proofs module stem (`pp`, `ppp`, `money_shave`, `skills_bands`, …). Repeatable or comma-separated. |
 | `--harness NAME` | all | exact harness fn name. Repeatable. |
 | `--jobs N` / `JOBS` | `4` | concurrent harnesses (box: 24 cores / 16 GB; CBMC uses several GB each). |
+| `KANI_GLOBAL_SLOTS` | `3` | machine-wide cap across ALL run.sh invocations (flock slots in `$KANI_SLOT_DIR`, default `~/.kani-slots`); always run proofs through run.sh so they count against it. |
 | `--timeout SEC` / `TIMEOUT` | `900` | wall-clock per harness. |
 | `--out DIR` | `target/kani-results` | JSON + markdown + per-harness logs. |
 | `--unwind N` | `80` | passed as `--default-unwind` (with `--no-unwinding-checks`). |
