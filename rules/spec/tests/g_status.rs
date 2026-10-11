@@ -13,11 +13,11 @@ use game_core::engine::World;
 use game_core::msg::Msg;
 use game_core::state::MatchEvent;
 use rules_spec::global::status::{
-    g_status_01, verify_exile_return, verify_exile_turn_start, verify_layers_nonneg,
+    MoneyGate, verify_exile_return, verify_exile_turn_start, verify_layers_nonneg,
     verify_main_move_skipped, verify_no_money_status, verify_stay_turn_end,
     verify_stun_turn_end, verify_unstoppable, ABNORMAL_MOVE_EFFECTS, CLAUSES,
 };
-use rules_spec::{frame, snapshot, Table};
+use rules_spec::{frame, Table};
 
 // ---------------------------------------------------------------------------
 // drivers / helpers
@@ -101,10 +101,8 @@ fn empty_worlds(n: usize) -> (World, World) {
 /// Write a layer count **raw** (bypass `state_set`'s floor-at-0 so a mutant
 /// can carry a negative).
 fn set_layer(w: &mut World, who: usize, key: &str, v: i32) {
-    use game_core::state::StateVar;
     let e = w.st.players[who].state.entry(key.to_string()).or_default();
     e.value = v;
-    let _ = StateVar::default();
 }
 
 fn set_money(w: &mut World, who: usize, v: i32) {
@@ -217,12 +215,7 @@ fn stay_decays_one_layer_at_end_of_own_turn() {
             pre_layers - 1
         );
         // Exact frame: only P0's stay may move on a pure decay.
-        let allowed = ["state:P0:stay"];
-        let _ = frame(&pre, &post, &allowed).map_err(|e| {
-            // Turn bookkeeping is filtered by `is_bookkeeping`; any leftover
-            // money/pos/hand change is a MORE finding.
-            panic!("G-STATUS-03 frame: {e}");
-        });
+        frame(&pre, &post, &["state:P0:stay"]).expect("G-STATUS-03 frame");
     }
 }
 
@@ -244,13 +237,20 @@ fn stay_decay_is_noop_off_its_tick() {
     let (mut pre, _) = empty_worlds(2);
     set_layer(&mut pre, 0, "stay", 3);
     let post = pre.clone();
-    // Quiet window with no turn-end mark.
+    // Quiet window with no turn-end mark: unchanged is accepted.
     let events: [MatchEvent; 0] = [];
     verify_stay_turn_end(&pre, &post, &events, 0).expect("no-op when condition false");
     assert_eq!(
         post.st.players[0].state_get("stay"),
         3,
         "G-STATUS-03: stay must be unchanged off its tick"
+    );
+    // LESS/WRONG: a shrink off the tick must be rejected.
+    let mut shrank = post.clone();
+    set_layer(&mut shrank, 0, "stay", 0);
+    assert!(
+        verify_stay_turn_end(&pre, &shrank, &events, 0).is_err(),
+        "G-STATUS-03: reject a decay that fires off its tick"
     );
 }
 
@@ -297,17 +297,14 @@ fn stay_decay_verifier_rejects_mutants() {
     let fr = frame(&pre, &more, &["state:P0:stay"]);
     assert!(fr.is_err(), "G-STATUS-03 frame: reject unrelated money move");
 
-    // MORE: extra grant line in a quiet window (counted as a grant).
+    // A grant line makes the window non-quiet: exact -1 no longer applies
+    // (`give_stay(p, 2)` logs one line for two layers).
     let mut ev2 = events.clone();
     ev2.push(grant_event("stay", 0));
-    // A grant line makes the window non-quiet; the exact -1 no longer applies.
-    // The stacking direction is still checked: post must not exceed pre+g.
-    let mut stacked = post.clone();
-    set_layer(&mut stacked, 0, "stay", 4);
-    assert!(
-        verify_stay_turn_end(&pre, &stacked, &ev2, 0).is_err(),
-        "G-STATUS-03: reject over-stacking past the grant line"
-    );
+    let mut with_grant = post.clone();
+    set_layer(&mut with_grant, 0, "stay", 3);
+    verify_stay_turn_end(&pre, &with_grant, &ev2, 0)
+        .expect("grant window is not an exact-decay window");
 }
 
 // ---------------------------------------------------------------------------
@@ -336,7 +333,8 @@ fn stun_decays_one_layer_and_skips_turn() {
             1,
             "G-STATUS-05: stunned player's turn should auto-skip (row 4)"
         );
-        let _ = frame(&pre, &post, &["state:P1:stun", "state:P1:stunStart"]);
+        frame(&pre, &post, &["state:P1:stun", "state:P1:stunStart", "pos:P0"])
+            .expect("G-STATUS-05 frame");
     }
 }
 
@@ -425,12 +423,12 @@ fn stun_money_verifier_rejects_mutants() {
     // or a blocked window. Here we build the book-compliant shape: no money
     // leg involving the stunned seat.
     let quiet: [MatchEvent; 0] = [];
-    verify_no_money_status(&pre, &post, &quiet, 1, true, false).expect("quiet is fine");
+    verify_no_money_status(&pre, &post, &quiet, 1, MoneyGate::Stun).expect("quiet is fine");
 
     // MORE / WRONG: a rent leg that moved the stunned payee.
     set_money(&mut post, 1, 760);
     assert!(
-        verify_no_money_status(&pre, &post, &events, 1, true, false).is_err(),
+        verify_no_money_status(&pre, &post, &events, 1, MoneyGate::Stun).is_err(),
         "G-STATUS-04: reject a rent landing on a stunned payee"
     );
 
@@ -440,13 +438,17 @@ fn stun_money_verifier_rejects_mutants() {
     set_money(&mut post2, 1, -760);
     set_money(&mut post2, 0, 760);
     assert!(
-        verify_no_money_status(&pre, &post2, &pay, 1, true, false).is_err(),
+        verify_no_money_status(&pre, &post2, &pay, 1, MoneyGate::Stun).is_err(),
         "G-STATUS-04: reject a pay by a stunned payer"
     );
 
-    // Condition false: un-stunned seat may receive.
+    // Condition false: an un-stunned pre is a no-op for this gate.
+    let (mut free, _) = empty_worlds(2);
+    set_money(&mut free, 1, 0);
+    let mut free_post = free.clone();
+    set_money(&mut free_post, 1, 760);
     assert!(
-        verify_no_money_status(&pre, &post, &events, 1, false, false).is_ok(),
+        verify_no_money_status(&free, &free_post, &events, 1, MoneyGate::Stun).is_ok(),
         "G-STATUS-04: no-op when not stunned"
     );
 }
@@ -473,7 +475,8 @@ fn exile_decays_one_layer_before_turn_start() {
             "G-STATUS-07: [除外] {pre_layers} -> {got} before the owner's turn start (want {})",
             pre_layers - 1
         );
-        let _ = frame(&pre, &post, &["state:P1:exile", "state:P1:exileTo"]);
+        frame(&pre, &post, &["state:P1:exile", "state:P1:exileTo", "pos:P0"])
+            .expect("G-STATUS-07 frame");
     }
 }
 
@@ -495,11 +498,12 @@ fn exile_expiry_teleports_to_named_tile() {
         "G-STATUS-08: pawn landed on the named return tile"
     );
     // Frame: only the exile keys and the pawn's pos.
-    let _ = frame(
+    frame(
         &pre,
         &post,
-        &["state:P1:exile", "state:P1:exileTo", "pos:P1"],
-    );
+        &["state:P1:exile", "state:P1:exileTo", "pos:P1", "pos:P0"],
+    )
+    .expect("G-STATUS-08 frame");
 }
 
 /// Mutants on [除外] turn-start decay + no re-acquire.
@@ -623,7 +627,7 @@ fn cannot_move_roll_verifier_rejects_mutants() {
     set_layer(&mut pre, 0, "stay", 1);
     pre.st.skip_move = true;
     set_pos(&mut pre, 0, 4);
-    let mut post = pre.clone();
+    let post = pre.clone();
     // Compliant: stays put, no settle.
     let events: [MatchEvent; 0] = [];
     verify_main_move_skipped(&pre, &post, &events, 0, true).expect("compliant skip");
@@ -683,7 +687,7 @@ fn unstoppable_verifier_rejects_mutants() {
     let mut pre = empty_worlds(2).0;
     set_layer(&mut pre, 0, "unstoppable", 1);
     set_layer(&mut pre, 0, "stun", 1);
-    let mut post = pre.clone();
+    let post = pre.clone();
     // Compliant: no new layers (decay is a separate clause).
     let events: [MatchEvent; 0] = [];
     verify_unstoppable(&pre, &post, &events, 0).expect("compliant quiet");
@@ -714,7 +718,7 @@ fn unstoppable_verifier_rejects_mutants() {
     );
 
     // Condition false: not unstoppable -- a grant is fine for this clause.
-    let mut free = empty_worlds(2).0;
+    let free = empty_worlds(2).0;
     assert!(
         verify_unstoppable(&free, &free.clone(), &ev, 0).is_ok(),
         "G-STATUS-09: no-op when not unstoppable"
@@ -783,9 +787,9 @@ fn stun_owner_cannot_receive_rent() {
 
 /// [晕眩] in force at the roll must not walk.
 ///
-/// **Genuine discrepancy (stays failing).** Classification: **LESS** -- the
-/// book's 「[移动终点]视为当前所在格子且不[结算]」 is not enforced (the move
-/// happens at all). Also **WRONG** if a walk runs: the destination is wrong.
+/// **Genuine discrepancy (stays failing).** Classification: **WRONG** (also
+/// **MORE**) -- the destination is not the current tile, and the move+settle
+/// run at all (the book forbids both). Matches status.md § Findings.
 #[test]
 fn stun_in_force_at_roll_does_not_walk() {
     let mut t = Table::vanilla(3);
@@ -818,19 +822,20 @@ fn exile_money_verifier_rejects_mutants() {
     set_money(&mut post, 1, 760);
     let events = vec![money_event("rent", 0, 1, 760)];
 
-    verify_no_money_status(&pre, &post, &events, 1, false, true)
+    verify_no_money_status(&pre, &post, &events, 1, MoneyGate::Exile)
         .expect_err("reject rent to an exiled payee");
 
     // Condition false: not exiled -- the same leg is a no-op for this clause.
+    let (mut free, _) = empty_worlds(2);
+    set_money(&mut free, 1, 0);
+    let mut free_post = free.clone();
+    set_money(&mut free_post, 1, 760);
     assert!(
-        verify_no_money_status(&pre, &post, &events, 1, false, false).is_ok(),
+        verify_no_money_status(&free, &free_post, &events, 1, MoneyGate::Exile).is_ok(),
         "G-STATUS-06: no-op when not exiled"
     );
 
     // Compliant: blocked window (no leg) or unchanged money.
     let quiet: [MatchEvent; 0] = [];
-    let mut still = pre.clone();
-    verify_no_money_status(&pre, &still, &quiet, 1, false, true).expect("quiet ok");
-    set_money(&mut still, 1, 0);
-    let _ = still;
+    verify_no_money_status(&pre, &pre.clone(), &quiet, 1, MoneyGate::Exile).expect("quiet ok");
 }

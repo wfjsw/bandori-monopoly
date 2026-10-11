@@ -237,54 +237,7 @@ fn skip_money_window(events: &[MatchEvent]) -> bool {
         .any(|e| e.r#type == "bankrupt" || e.r#type == "auction")
 }
 
-/// 「无法收付款」 for a player who is stunned / exiled in `pre`.
-fn no_money_with(
-    step: &Step<'_>,
-    i: usize,
-    pre_stunned: bool,
-    pre_exiled: bool,
-    why: &str,
-) -> Result<(), String> {
-    if !pre_stunned && !pre_exiled {
-        return Ok(());
-    }
-    if skip_money_window(step.events) {
-        return Ok(());
-    }
-    for e in step.events {
-        if !is_money_leg(e) {
-            continue;
-        }
-        let amount = e.value as i64;
-        if amount == 0 {
-            continue;
-        }
-        for s in [e.player_id, e.other] {
-            if s < 0 || s as usize != i {
-                continue;
-            }
-            // OPEN-晕眩-自得 (TEST-FINDINGS §6.9) is only about a card's own
-            // 「获得」 to the player that same body just stunned/exiled. A
-            // `gain` in a window that also granted the status is that shape;
-            // a `pay` / `rent` is not.
-            if e.r#type == "gain"
-                && (grants(step.events, i, STUN) > 0 || grants(step.events, i, EXILE) > 0)
-            {
-                continue;
-            }
-            let side = if e.player_id == i as i32 && e.r#type != "gain" {
-                "payer"
-            } else {
-                "payee"
-            };
-            return Err(format!(
-                "{why}: player {i} {side} on a {} leg of {amount} while stunned/exiled",
-                e.r#type
-            ));
-        }
-    }
-    Ok(())
-}
+
 
 // ---------------------------------------------------------------------------
 // G-STATUS-01 -- layer counts
@@ -352,10 +305,10 @@ const G_STATUS_02: Clause = Clause::new(
 
 /// Executable form of [`G_STATUS_02`].
 ///
-/// Only fires when the engine already holds the skip latch (`skip_move`):
-/// that is the "this turn's [主要移动] is owed and must not land" case. A
-/// [停留] gained *mid-turn* does not raise the latch (TEST-FINDINGS §6 /
-/// glossary 51, OPEN-停留-中途) and is left alone here.
+/// Fires when the player is [无法移动] and either (a) the engine holds the
+/// skip latch (`skip_move`), or (b) the status is [晕眩] / [除外] (present
+/// tense, even mid-运营). A [停留] gained *mid-turn* does not raise the latch
+/// (TEST-FINDINGS §6 / glossary 51, OPEN-停留-中途) and is left alone here.
 pub fn g_status_02(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     let is_roll = matches!(step.act, StepAct::Act { msg, .. } if msg.act == "roll");
@@ -453,7 +406,9 @@ pub fn g_status_04(step: &Step<'_>) -> Result<(), String> {
     }
     for i in 0..step.pre.st.players.len() {
         let pre_stunned = stun_layers(step.pre, i) > 0;
-        verify_no_money_status(step.pre, step.post, step.events, i, pre_stunned, false)?;
+        if pre_stunned {
+            verify_no_money_status(step.pre, step.post, step.events, i, MoneyGate::Stun)?;
+        }
     }
     Ok(())
 }
@@ -544,7 +499,9 @@ pub fn g_status_06(step: &Step<'_>) -> Result<(), String> {
     }
     for i in 0..step.pre.st.players.len() {
         let pre_exiled = layers(step.pre, i, EXILE) > 0;
-        verify_no_money_status(step.pre, step.post, step.events, i, false, pre_exiled)?;
+        if pre_exiled {
+            verify_no_money_status(step.pre, step.post, step.events, i, MoneyGate::Exile)?;
+        }
     }
     Ok(())
 }
@@ -775,7 +732,13 @@ pub fn verify_main_move_skipped(
     }
     for e in events {
         let k = msg_key(e);
-        if k == "settle" || k == "settle_after" || k == "landed" || k.starts_with("land") {
+        if k.starts_with("land")
+            || k.starts_with("settle")
+            || k == "settle"
+            || k == "settleAfter"
+            || k == "settleBefore"
+            || k == "settleBody"
+        {
             return Err(format!(
                 "G-STATUS-02: player {who} is [无法移动] but the move settled ({k})"
             ));
@@ -791,17 +754,22 @@ pub fn verify_stay_turn_end(pre: &World, post: &World, events: &[MatchEvent], wh
     let after = layers(post, who, STAY);
     let g = grants(events, who, STAY);
     if !turn_ended(events, who) {
-        // Condition false: the decay must be a no-op (no shrink from this rule).
-        return Ok(());
-    }
-    if status_cleared(events) || busy_window(events) || g > 0 {
-        if after > before + g {
+        // Condition false: this rule must be a no-op on the counter. A shrink
+        // here would be a decay firing off its tick (LESS/WRONG).
+        if after < before && g == 0 && !status_cleared(events) {
             return Err(format!(
-                "G-STATUS-03: player {who} [停留] stacked over turn end ({before} -> {after}, grant-lines {g})"
+                "G-STATUS-03: player {who} [停留] shrank off its tick ({before} -> {after})"
             ));
         }
         return Ok(());
     }
+    if status_cleared(events) || busy_window(events) || g > 0 {
+        // `g` is a grant *line* count, not a layer total (`give_stay(p, 2)`
+        // logs once). Do not invent a bound from it. Exact decay is the
+        // quiet-window case below; the clean scenarios pin multi-layer grants.
+        return Ok(());
+    }
+    // 「玩家的每回合结束时移除一层」 -- exactly one layer off, floor 0.
     let expected = (before - 1).max(0);
     if after != expected {
         return Err(format!(
@@ -813,16 +781,30 @@ pub fn verify_stay_turn_end(pre: &World, post: &World, events: &[MatchEvent], wh
 
 /// G-STATUS-04 / 06 money half: no pay/rent/gain/lose leg to or from a
 /// stunned / exiled seat (per-leg amount, not net).
+/// Which status's 「无法收付款」 gate a caller is checking.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MoneyGate {
+    /// [晕眩] (`stun` / `stunStart`).
+    Stun,
+    /// [除外] (`exile`).
+    Exile,
+}
+
 pub fn verify_no_money_status(
     pre: &World,
     post: &World,
     events: &[MatchEvent],
     who: usize,
-    stunned: bool,
-    exiled: bool,
+    gate: MoneyGate,
 ) -> Result<(), String> {
+    // The gate is derived from `pre` -- the caller cannot hide a leg by
+    // passing a false flag.
+    let gated = match gate {
+        MoneyGate::Stun => stun_layers(pre, who) > 0,
+        MoneyGate::Exile => layers(pre, who, EXILE) > 0,
+    };
     let _ = post;
-    if !stunned && !exiled {
+    if !gated {
         return Ok(());
     }
     if skip_money_window(events) {
@@ -850,8 +832,12 @@ pub fn verify_no_money_status(
             } else {
                 "payee"
             };
+            let id = match gate {
+                MoneyGate::Stun => "G-STATUS-04",
+                MoneyGate::Exile => "G-STATUS-06",
+            };
             return Err(format!(
-                "G-STATUS-04/06: player {who} {side} on a {} leg of {amount} while stunned/exiled",
+                "{id}: player {who} {side} on a {} leg of {amount} while gated",
                 e.r#type
             ));
         }
