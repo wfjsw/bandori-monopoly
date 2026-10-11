@@ -162,9 +162,9 @@ pub static G_0006_990313d36affd264: GuardIr = GuardIr {
     id: 6,
 };
 
-/// `actor != owner && move.main && card.placed`
+/// `actor != owner && move.main && card.placed && fire(owner) >= 1 && dist(pos(actor), card.tile) <= 5`
 /// id = 7
-pub static G_0007_c3bf2d64737c1732_NODES: &[Node] = &[
+pub static G_0007_84a444a548d63bd9_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -172,16 +172,47 @@ pub static G_0007_c3bf2d64737c1732_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 11, a: 7, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 8, b: 9, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 14, a: 11, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 42, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 27, a: 11, b: 2, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 5, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Le, payload: 0, a: 14, b: 15, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 10, b: 16, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 6, b: 17, c: 0 },
 ];
-pub static G_0007_c3bf2d64737c1732: GuardIr = GuardIr {
-    src: "actor != owner && move.main && card.placed",
-    program: Program { nodes: G_0007_c3bf2d64737c1732_NODES, root: 6 },
+pub static G_0007_84a444a548d63bd9: GuardIr = GuardIr {
+    src: "actor != owner && move.main && card.placed && fire(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
+    program: Program { nodes: G_0007_84a444a548d63bd9_NODES, root: 18 },
     id: 7,
 };
 
-/// `actor != owner && move.remaining > 0`
+/// `actor != owner && move.main && tile.id >= 0`
 /// id = 8
-pub static G_0008_56ea891dda26aefe_NODES: &[Node] = &[
+pub static G_0008_fbddf1b80b62f165_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 22, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 7, c: 0 },
+];
+pub static G_0008_fbddf1b80b62f165: GuardIr = GuardIr {
+    src: "actor != owner && move.main && tile.id >= 0",
+    program: Program { nodes: G_0008_fbddf1b80b62f165_NODES, root: 8 },
+    id: 8,
+};
+
+/// `actor != owner && move.remaining > 0`
+/// id = 9
+pub static G_0009_56ea891dda26aefe_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -190,15 +221,33 @@ pub static G_0008_56ea891dda26aefe_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_0008_56ea891dda26aefe: GuardIr = GuardIr {
+pub static G_0009_56ea891dda26aefe: GuardIr = GuardIr {
     src: "actor != owner && move.remaining > 0",
-    program: Program { nodes: G_0008_56ea891dda26aefe_NODES, root: 6 },
-    id: 8,
+    program: Program { nodes: G_0009_56ea891dda26aefe_NODES, root: 6 },
+    id: 9,
+};
+
+/// `actor != owner && slot('skillState') != 2`
+/// id = 10
+pub static G_000a_a668eb45e4062d2c_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 5275723767935477323, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+];
+pub static G_000a_a668eb45e4062d2c: GuardIr = GuardIr {
+    src: "actor != owner && slot('skillState') != 2",
+    program: Program { nodes: G_000a_a668eb45e4062d2c_NODES, root: 7 },
+    id: 10,
 };
 
 /// `actor != owner && tile.id == owner.pos`
-/// id = 9
-pub static G_0009_ed89392e1efd4ba7_NODES: &[Node] = &[
+/// id = 11
+pub static G_000b_ed89392e1efd4ba7_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -207,15 +256,15 @@ pub static G_0009_ed89392e1efd4ba7_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_0009_ed89392e1efd4ba7: GuardIr = GuardIr {
+pub static G_000b_ed89392e1efd4ba7: GuardIr = GuardIr {
     src: "actor != owner && tile.id == owner.pos",
-    program: Program { nodes: G_0009_ed89392e1efd4ba7_NODES, root: 6 },
-    id: 9,
+    program: Program { nodes: G_000b_ed89392e1efd4ba7_NODES, root: 6 },
+    id: 11,
 };
 
 /// `actor != owner && tile.id == owner.pos && fire(owner) >= 1 && move.remaining > 0`
-/// id = 10
-pub static G_000a_eb149f3a4622b65a_NODES: &[Node] = &[
+/// id = 12
+pub static G_000c_eb149f3a4622b65a_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -233,15 +282,15 @@ pub static G_000a_eb149f3a4622b65a_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 10, b: 13, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 14, c: 0 },
 ];
-pub static G_000a_eb149f3a4622b65a: GuardIr = GuardIr {
+pub static G_000c_eb149f3a4622b65a: GuardIr = GuardIr {
     src: "actor != owner && tile.id == owner.pos && fire(owner) >= 1 && move.remaining > 0",
-    program: Program { nodes: G_000a_eb149f3a4622b65a_NODES, root: 15 },
-    id: 10,
+    program: Program { nodes: G_000c_eb149f3a4622b65a_NODES, root: 15 },
+    id: 12,
 };
 
 /// `actor != owner && tile.id == tile_named('流星堂')`
-/// id = 11
-pub static G_000b_ca0e24f304d8fdfd_NODES: &[Node] = &[
+/// id = 13
+pub static G_000d_ca0e24f304d8fdfd_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -251,15 +300,15 @@ pub static G_000b_ca0e24f304d8fdfd_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_000b_ca0e24f304d8fdfd: GuardIr = GuardIr {
+pub static G_000d_ca0e24f304d8fdfd: GuardIr = GuardIr {
     src: "actor != owner && tile.id == tile_named('流星堂')",
-    program: Program { nodes: G_000b_ca0e24f304d8fdfd_NODES, root: 7 },
-    id: 11,
+    program: Program { nodes: G_000d_ca0e24f304d8fdfd_NODES, root: 7 },
+    id: 13,
 };
 
 /// `actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0`
-/// id = 12
-pub static G_000c_69988b75e22589e8_NODES: &[Node] = &[
+/// id = 14
+pub static G_000e_69988b75e22589e8_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -280,15 +329,15 @@ pub static G_000c_69988b75e22589e8_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 13, b: 16, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 10, b: 17, c: 0 },
 ];
-pub static G_000c_69988b75e22589e8: GuardIr = GuardIr {
+pub static G_000e_69988b75e22589e8: GuardIr = GuardIr {
     src: "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
-    program: Program { nodes: G_000c_69988b75e22589e8_NODES, root: 18 },
-    id: 12,
+    program: Program { nodes: G_000e_69988b75e22589e8_NODES, root: 18 },
+    id: 14,
 };
 
 /// `actor != owner && tile.owner == owner && value > 0`
-/// id = 13
-pub static G_000d_331b38cb778fe582_NODES: &[Node] = &[
+/// id = 15
+pub static G_000f_331b38cb778fe582_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -301,15 +350,37 @@ pub static G_000d_331b38cb778fe582_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 7, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 9, c: 0 },
 ];
-pub static G_000d_331b38cb778fe582: GuardIr = GuardIr {
+pub static G_000f_331b38cb778fe582: GuardIr = GuardIr {
     src: "actor != owner && tile.owner == owner && value > 0",
-    program: Program { nodes: G_000d_331b38cb778fe582_NODES, root: 10 },
-    id: 13,
+    program: Program { nodes: G_000f_331b38cb778fe582_NODES, root: 10 },
+    id: 15,
+};
+
+/// `actor != owner && trigger_card != 0 && fire(owner) >= 1`
+/// id = 16
+pub static G_0010_656af0607921128a_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 12, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 3, b: 4, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 11, a: 7, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 8, b: 9, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 6, b: 10, c: 0 },
+];
+pub static G_0010_656af0607921128a: GuardIr = GuardIr {
+    src: "actor != owner && trigger_card != 0 && fire(owner) >= 1",
+    program: Program { nodes: G_0010_656af0607921128a_NODES, root: 11 },
+    id: 16,
 };
 
 /// `actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key`
-/// id = 14
-pub static G_000e_4537190ba0ddd48d_NODES: &[Node] = &[
+/// id = 17
+pub static G_0011_4537190ba0ddd48d_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -323,28 +394,28 @@ pub static G_000e_4537190ba0ddd48d_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 8, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 10, c: 0 },
 ];
-pub static G_000e_4537190ba0ddd48d: GuardIr = GuardIr {
+pub static G_0011_4537190ba0ddd48d: GuardIr = GuardIr {
     src: "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key",
-    program: Program { nodes: G_000e_4537190ba0ddd48d_NODES, root: 11 },
-    id: 14,
+    program: Program { nodes: G_0011_4537190ba0ddd48d_NODES, root: 11 },
+    id: 17,
 };
 
 /// `actor == owner`
-/// id = 15
-pub static G_000f_35c45b14c0fc4e13_NODES: &[Node] = &[
+/// id = 18
+pub static G_0012_35c45b14c0fc4e13_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_000f_35c45b14c0fc4e13: GuardIr = GuardIr {
+pub static G_0012_35c45b14c0fc4e13: GuardIr = GuardIr {
     src: "actor == owner",
-    program: Program { nodes: G_000f_35c45b14c0fc4e13_NODES, root: 2 },
-    id: 15,
+    program: Program { nodes: G_0012_35c45b14c0fc4e13_NODES, root: 2 },
+    id: 18,
 };
 
 /// `actor == owner && (character_is(owner, "三角初华（Sumimi）") || character_is(owner, "纯田真奈"))`
-/// id = 16
-pub static G_0010_eb58e90051f55abe_NODES: &[Node] = &[
+/// id = 19
+pub static G_0013_eb58e90051f55abe_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -357,15 +428,15 @@ pub static G_0010_eb58e90051f55abe_NODES: &[Node] = &[
     Node { kind: Kind::Or, payload: 0, a: 5, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 9, c: 0 },
 ];
-pub static G_0010_eb58e90051f55abe: GuardIr = GuardIr {
+pub static G_0013_eb58e90051f55abe: GuardIr = GuardIr {
     src: "actor == owner && (character_is(owner, \"三角初华（Sumimi）\") || character_is(owner, \"纯田真奈\"))",
-    program: Program { nodes: G_0010_eb58e90051f55abe_NODES, root: 10 },
-    id: 16,
+    program: Program { nodes: G_0013_eb58e90051f55abe_NODES, root: 10 },
+    id: 19,
 };
 
 /// `actor == owner && (move.roll != null || value >= 0)`
-/// id = 17
-pub static G_0011_7bc76dfcb4d6546b_NODES: &[Node] = &[
+/// id = 20
+pub static G_0014_7bc76dfcb4d6546b_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -378,15 +449,15 @@ pub static G_0011_7bc76dfcb4d6546b_NODES: &[Node] = &[
     Node { kind: Kind::Or, payload: 0, a: 5, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 9, c: 0 },
 ];
-pub static G_0011_7bc76dfcb4d6546b: GuardIr = GuardIr {
+pub static G_0014_7bc76dfcb4d6546b: GuardIr = GuardIr {
     src: "actor == owner && (move.roll != null || value >= 0)",
-    program: Program { nodes: G_0011_7bc76dfcb4d6546b_NODES, root: 10 },
-    id: 17,
+    program: Program { nodes: G_0014_7bc76dfcb4d6546b_NODES, root: 10 },
+    id: 20,
 };
 
 /// `actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)`
-/// id = 18
-pub static G_0012_0311a266fbbba544_NODES: &[Node] = &[
+/// id = 21
+pub static G_0015_0311a266fbbba544_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -407,15 +478,43 @@ pub static G_0012_0311a266fbbba544_NODES: &[Node] = &[
     Node { kind: Kind::Or, payload: 0, a: 9, b: 16, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 17, c: 0 },
 ];
-pub static G_0012_0311a266fbbba544: GuardIr = GuardIr {
+pub static G_0015_0311a266fbbba544: GuardIr = GuardIr {
     src: "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
-    program: Program { nodes: G_0012_0311a266fbbba544_NODES, root: 18 },
-    id: 18,
+    program: Program { nodes: G_0015_0311a266fbbba544_NODES, root: 18 },
+    id: 21,
+};
+
+/// `actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))`
+/// id = 22
+pub static G_0016_5828ea254abb1e66_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -9047555350229739144, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 5, a: 4, b: 1, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 3, b: 5, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -4385068317775618232, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 5, a: 8, b: 1, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 7, b: 9, c: 0 },
+    Node { kind: Kind::Or, payload: 0, a: 6, b: 10, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -8183972177384476017, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 5, a: 13, b: 1, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 12, b: 14, c: 0 },
+    Node { kind: Kind::Or, payload: 0, a: 11, b: 15, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 16, c: 0 },
+];
+pub static G_0016_5828ea254abb1e66: GuardIr = GuardIr {
+    src: "actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))",
+    program: Program { nodes: G_0016_5828ea254abb1e66_NODES, root: 17 },
+    id: 22,
 };
 
 /// `actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))`
-/// id = 19
-pub static G_0013_214959a693bf147e_NODES: &[Node] = &[
+/// id = 23
+pub static G_0017_214959a693bf147e_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -430,15 +529,15 @@ pub static G_0013_214959a693bf147e_NODES: &[Node] = &[
     Node { kind: Kind::Or, payload: 0, a: 6, b: 10, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 11, c: 0 },
 ];
-pub static G_0013_214959a693bf147e: GuardIr = GuardIr {
+pub static G_0017_214959a693bf147e: GuardIr = GuardIr {
     src: "actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))",
-    program: Program { nodes: G_0013_214959a693bf147e_NODES, root: 12 },
-    id: 19,
+    program: Program { nodes: G_0017_214959a693bf147e_NODES, root: 12 },
+    id: 23,
 };
 
 /// `actor == owner && by >= 0 && by != owner`
-/// id = 20
-pub static G_0014_ac4e92e7f30be493_NODES: &[Node] = &[
+/// id = 24
+pub static G_0018_ac4e92e7f30be493_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -451,33 +550,15 @@ pub static G_0014_ac4e92e7f30be493_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 7, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 9, c: 0 },
 ];
-pub static G_0014_ac4e92e7f30be493: GuardIr = GuardIr {
+pub static G_0018_ac4e92e7f30be493: GuardIr = GuardIr {
     src: "actor == owner && by >= 0 && by != owner",
-    program: Program { nodes: G_0014_ac4e92e7f30be493_NODES, root: 10 },
-    id: 20,
-};
-
-/// `actor == owner && card.counter('crystals') >= 1`
-/// id = 21
-pub static G_0015_cffc68a298a15f21_NODES: &[Node] = &[
-    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
-    Node { kind: Kind::ConstInt, payload: 8773857897715966414, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Call, payload: 3, a: 3, b: 1, c: 0 },
-    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
-    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
-];
-pub static G_0015_cffc68a298a15f21: GuardIr = GuardIr {
-    src: "actor == owner && card.counter('crystals') >= 1",
-    program: Program { nodes: G_0015_cffc68a298a15f21_NODES, root: 7 },
-    id: 21,
+    program: Program { nodes: G_0018_ac4e92e7f30be493_NODES, root: 10 },
+    id: 24,
 };
 
 /// `actor == owner && card.counter('crystals') >= 1 && card.placed`
-/// id = 22
-pub static G_0016_01b66a9ed66a1b36_NODES: &[Node] = &[
+/// id = 25
+pub static G_0019_01b66a9ed66a1b36_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -489,30 +570,76 @@ pub static G_0016_01b66a9ed66a1b36_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 8, c: 0 },
 ];
-pub static G_0016_01b66a9ed66a1b36: GuardIr = GuardIr {
+pub static G_0019_01b66a9ed66a1b36: GuardIr = GuardIr {
     src: "actor == owner && card.counter('crystals') >= 1 && card.placed",
-    program: Program { nodes: G_0016_01b66a9ed66a1b36_NODES, root: 9 },
-    id: 22,
+    program: Program { nodes: G_0019_01b66a9ed66a1b36_NODES, root: 9 },
+    id: 25,
+};
+
+/// `actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0`
+/// id = 26
+pub static G_001a_18d54ba8269a1dc2_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 8773857897715966414, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 3, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 8, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 12, c: 0 },
+];
+pub static G_001a_18d54ba8269a1dc2: GuardIr = GuardIr {
+    src: "actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0",
+    program: Program { nodes: G_001a_18d54ba8269a1dc2_NODES, root: 13 },
+    id: 26,
+};
+
+/// `actor == owner && card.counter('crystals') >= 1 && value > 0`
+/// id = 27
+pub static G_001b_0498e07e959f657c_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 8773857897715966414, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 3, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+    Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 8, b: 9, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 10, c: 0 },
+];
+pub static G_001b_0498e07e959f657c: GuardIr = GuardIr {
+    src: "actor == owner && card.counter('crystals') >= 1 && value > 0",
+    program: Program { nodes: G_001b_0498e07e959f657c_NODES, root: 11 },
+    id: 27,
 };
 
 /// `actor == owner && card.placed`
-/// id = 23
-pub static G_0017_a3c23af24fb6286c_NODES: &[Node] = &[
+/// id = 28
+pub static G_001c_a3c23af24fb6286c_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
 ];
-pub static G_0017_a3c23af24fb6286c: GuardIr = GuardIr {
+pub static G_001c_a3c23af24fb6286c: GuardIr = GuardIr {
     src: "actor == owner && card.placed",
-    program: Program { nodes: G_0017_a3c23af24fb6286c_NODES, root: 4 },
-    id: 23,
+    program: Program { nodes: G_001c_a3c23af24fb6286c_NODES, root: 4 },
+    id: 28,
 };
 
 /// `actor == owner && card.placed && card.counter('crystals') <= 0`
-/// id = 24
-pub static G_0018_d5c96b3d4e006fd1_NODES: &[Node] = &[
+/// id = 29
+pub static G_001d_d5c96b3d4e006fd1_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -524,15 +651,15 @@ pub static G_0018_d5c96b3d4e006fd1_NODES: &[Node] = &[
     Node { kind: Kind::Le, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0018_d5c96b3d4e006fd1: GuardIr = GuardIr {
+pub static G_001d_d5c96b3d4e006fd1: GuardIr = GuardIr {
     src: "actor == owner && card.placed && card.counter('crystals') <= 0",
-    program: Program { nodes: G_0018_d5c96b3d4e006fd1_NODES, root: 9 },
-    id: 24,
+    program: Program { nodes: G_001d_d5c96b3d4e006fd1_NODES, root: 9 },
+    id: 29,
 };
 
 /// `actor == owner && card.placed && card.counter('crystals') == 0`
-/// id = 25
-pub static G_0019_337b49460f6d7b34_NODES: &[Node] = &[
+/// id = 30
+pub static G_001e_337b49460f6d7b34_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -544,15 +671,15 @@ pub static G_0019_337b49460f6d7b34_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0019_337b49460f6d7b34: GuardIr = GuardIr {
+pub static G_001e_337b49460f6d7b34: GuardIr = GuardIr {
     src: "actor == owner && card.placed && card.counter('crystals') == 0",
-    program: Program { nodes: G_0019_337b49460f6d7b34_NODES, root: 9 },
-    id: 25,
+    program: Program { nodes: G_001e_337b49460f6d7b34_NODES, root: 9 },
+    id: 30,
 };
 
 /// `actor == owner && card.placed && card.counter('crystals') > 0`
-/// id = 26
-pub static G_001a_2fdbe1bd0456cf08_NODES: &[Node] = &[
+/// id = 31
+pub static G_001f_2fdbe1bd0456cf08_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -564,15 +691,39 @@ pub static G_001a_2fdbe1bd0456cf08_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_001a_2fdbe1bd0456cf08: GuardIr = GuardIr {
+pub static G_001f_2fdbe1bd0456cf08: GuardIr = GuardIr {
     src: "actor == owner && card.placed && card.counter('crystals') > 0",
-    program: Program { nodes: G_001a_2fdbe1bd0456cf08_NODES, root: 9 },
-    id: 26,
+    program: Program { nodes: G_001f_2fdbe1bd0456cf08_NODES, root: 9 },
+    id: 31,
+};
+
+/// `actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0`
+/// id = 32
+pub static G_0020_c3e8e1ca99d669b1_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 42, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -6320191193901917503, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 5, a: 6, b: 1, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 5, b: 7, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 8, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 12, c: 0 },
+];
+pub static G_0020_c3e8e1ca99d669b1: GuardIr = GuardIr {
+    src: "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0",
+    program: Program { nodes: G_0020_c3e8e1ca99d669b1_NODES, root: 13 },
+    id: 32,
 };
 
 /// `actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0`
-/// id = 27
-pub static G_001b_09c07c7c22a5a566_NODES: &[Node] = &[
+/// id = 33
+pub static G_0021_09c07c7c22a5a566_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -591,15 +742,15 @@ pub static G_001b_09c07c7c22a5a566_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 11, b: 14, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 15, c: 0 },
 ];
-pub static G_001b_09c07c7c22a5a566: GuardIr = GuardIr {
+pub static G_0021_09c07c7c22a5a566: GuardIr = GuardIr {
     src: "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0",
-    program: Program { nodes: G_001b_09c07c7c22a5a566_NODES, root: 16 },
-    id: 27,
+    program: Program { nodes: G_0021_09c07c7c22a5a566_NODES, root: 16 },
+    id: 33,
 };
 
 /// `actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0`
-/// id = 28
-pub static G_001c_edd633ef46add159_NODES: &[Node] = &[
+/// id = 34
+pub static G_0022_edd633ef46add159_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -618,15 +769,15 @@ pub static G_001c_edd633ef46add159_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 11, b: 14, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 15, c: 0 },
 ];
-pub static G_001c_edd633ef46add159: GuardIr = GuardIr {
+pub static G_0022_edd633ef46add159: GuardIr = GuardIr {
     src: "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0",
-    program: Program { nodes: G_001c_edd633ef46add159_NODES, root: 16 },
-    id: 28,
+    program: Program { nodes: G_0022_edd633ef46add159_NODES, root: 16 },
+    id: 34,
 };
 
 /// `actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0`
-/// id = 29
-pub static G_001d_bfde541b1f2674c1_NODES: &[Node] = &[
+/// id = 35
+pub static G_0023_bfde541b1f2674c1_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -649,15 +800,15 @@ pub static G_001d_bfde541b1f2674c1_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 15, b: 18, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 19, c: 0 },
 ];
-pub static G_001d_bfde541b1f2674c1: GuardIr = GuardIr {
+pub static G_0023_bfde541b1f2674c1: GuardIr = GuardIr {
     src: "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0",
-    program: Program { nodes: G_001d_bfde541b1f2674c1_NODES, root: 20 },
-    id: 29,
+    program: Program { nodes: G_0023_bfde541b1f2674c1_NODES, root: 20 },
+    id: 35,
 };
 
 /// `actor == owner && card.placed && is_circle(tile.id)`
-/// id = 30
-pub static G_001e_ce3319fdf796102d_NODES: &[Node] = &[
+/// id = 36
+pub static G_0024_ce3319fdf796102d_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -667,15 +818,15 @@ pub static G_001e_ce3319fdf796102d_NODES: &[Node] = &[
     Node { kind: Kind::Call, payload: 6, a: 5, b: 1, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 6, c: 0 },
 ];
-pub static G_001e_ce3319fdf796102d: GuardIr = GuardIr {
+pub static G_0024_ce3319fdf796102d: GuardIr = GuardIr {
     src: "actor == owner && card.placed && is_circle(tile.id)",
-    program: Program { nodes: G_001e_ce3319fdf796102d_NODES, root: 7 },
-    id: 30,
+    program: Program { nodes: G_0024_ce3319fdf796102d_NODES, root: 7 },
+    id: 36,
 };
 
 /// `actor == owner && card.placed && move.kind != Teleport && tile.id >= 0`
-/// id = 31
-pub static G_001f_0b87f5157518bf16_NODES: &[Node] = &[
+/// id = 37
+pub static G_0025_0b87f5157518bf16_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -690,15 +841,32 @@ pub static G_001f_0b87f5157518bf16_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 7, b: 10, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 11, c: 0 },
 ];
-pub static G_001f_0b87f5157518bf16: GuardIr = GuardIr {
+pub static G_0025_0b87f5157518bf16: GuardIr = GuardIr {
     src: "actor == owner && card.placed && move.kind != Teleport && tile.id >= 0",
-    program: Program { nodes: G_001f_0b87f5157518bf16_NODES, root: 12 },
-    id: 31,
+    program: Program { nodes: G_0025_0b87f5157518bf16_NODES, root: 12 },
+    id: 37,
+};
+
+/// `actor == owner && card.placed && move.main`
+/// id = 38
+pub static G_0026_eb7fd35c013da5ec_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 22, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 5, c: 0 },
+];
+pub static G_0026_eb7fd35c013da5ec: GuardIr = GuardIr {
+    src: "actor == owner && card.placed && move.main",
+    program: Program { nodes: G_0026_eb7fd35c013da5ec_NODES, root: 6 },
+    id: 38,
 };
 
 /// `actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key`
-/// id = 32
-pub static G_0020_5410409b86040e16_NODES: &[Node] = &[
+/// id = 39
+pub static G_0027_5410409b86040e16_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -714,15 +882,36 @@ pub static G_0020_5410409b86040e16_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 7, b: 11, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 12, c: 0 },
 ];
-pub static G_0020_5410409b86040e16: GuardIr = GuardIr {
+pub static G_0027_5410409b86040e16: GuardIr = GuardIr {
     src: "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key",
-    program: Program { nodes: G_0020_5410409b86040e16_NODES, root: 13 },
-    id: 32,
+    program: Program { nodes: G_0027_5410409b86040e16_NODES, root: 13 },
+    id: 39,
+};
+
+/// `actor == owner && card.placed && players_on(tile.id, owner) > 0`
+/// id = 40
+pub static G_0028_b043a7d6f9201bc9_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 28, a: 5, b: 2, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 7, b: 8, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 9, c: 0 },
+];
+pub static G_0028_b043a7d6f9201bc9: GuardIr = GuardIr {
+    src: "actor == owner && card.placed && players_on(tile.id, owner) > 0",
+    program: Program { nodes: G_0028_b043a7d6f9201bc9_NODES, root: 10 },
+    id: 40,
 };
 
 /// `actor == owner && card.placed && slot('here_held_len') <= 0`
-/// id = 33
-pub static G_0021_4df46d942061f6e6_NODES: &[Node] = &[
+/// id = 41
+pub static G_0029_4df46d942061f6e6_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -734,15 +923,15 @@ pub static G_0021_4df46d942061f6e6_NODES: &[Node] = &[
     Node { kind: Kind::Le, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0021_4df46d942061f6e6: GuardIr = GuardIr {
+pub static G_0029_4df46d942061f6e6: GuardIr = GuardIr {
     src: "actor == owner && card.placed && slot('here_held_len') <= 0",
-    program: Program { nodes: G_0021_4df46d942061f6e6_NODES, root: 9 },
-    id: 33,
+    program: Program { nodes: G_0029_4df46d942061f6e6_NODES, root: 9 },
+    id: 41,
 };
 
 /// `actor == owner && card.placed && slot('here_held_len') > 0`
-/// id = 34
-pub static G_0022_b59e2f1918ed1c7d_NODES: &[Node] = &[
+/// id = 42
+pub static G_002a_b59e2f1918ed1c7d_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -754,15 +943,15 @@ pub static G_0022_b59e2f1918ed1c7d_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0022_b59e2f1918ed1c7d: GuardIr = GuardIr {
+pub static G_002a_b59e2f1918ed1c7d: GuardIr = GuardIr {
     src: "actor == owner && card.placed && slot('here_held_len') > 0",
-    program: Program { nodes: G_0022_b59e2f1918ed1c7d_NODES, root: 9 },
-    id: 34,
+    program: Program { nodes: G_002a_b59e2f1918ed1c7d_NODES, root: 9 },
+    id: 42,
 };
 
 /// `actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0`
-/// id = 35
-pub static G_0023_2c37882c7cb7dca1_NODES: &[Node] = &[
+/// id = 43
+pub static G_002b_2c37882c7cb7dca1_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -778,15 +967,15 @@ pub static G_0023_2c37882c7cb7dca1_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 8, b: 11, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 12, c: 0 },
 ];
-pub static G_0023_2c37882c7cb7dca1: GuardIr = GuardIr {
+pub static G_002b_2c37882c7cb7dca1: GuardIr = GuardIr {
     src: "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
-    program: Program { nodes: G_0023_2c37882c7cb7dca1_NODES, root: 13 },
-    id: 35,
+    program: Program { nodes: G_002b_2c37882c7cb7dca1_NODES, root: 13 },
+    id: 43,
 };
 
 /// `actor == owner && card.placed && value > 0`
-/// id = 36
-pub static G_0024_4461309f9fa8782f_NODES: &[Node] = &[
+/// id = 44
+pub static G_002c_4461309f9fa8782f_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -797,15 +986,63 @@ pub static G_0024_4461309f9fa8782f_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 5, b: 6, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 7, c: 0 },
 ];
-pub static G_0024_4461309f9fa8782f: GuardIr = GuardIr {
+pub static G_002c_4461309f9fa8782f: GuardIr = GuardIr {
     src: "actor == owner && card.placed && value > 0",
-    program: Program { nodes: G_0024_4461309f9fa8782f_NODES, root: 8 },
-    id: 36,
+    program: Program { nodes: G_002c_4461309f9fa8782f_NODES, root: 8 },
+    id: 44,
+};
+
+/// `actor == owner && card.placed && value > 0 && card.counter('crystals') > 0`
+/// id = 45
+pub static G_002d_7ceeba413db7f57b_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 8773857897715966414, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 3, a: 8, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 12, c: 0 },
+];
+pub static G_002d_7ceeba413db7f57b: GuardIr = GuardIr {
+    src: "actor == owner && card.placed && value > 0 && card.counter('crystals') > 0",
+    program: Program { nodes: G_002d_7ceeba413db7f57b_NODES, root: 13 },
+    id: 45,
+};
+
+/// `actor == owner && card.placed && value > 0 && money(owner) < value`
+/// id = 46
+pub static G_002e_4d69ae156a0071fc_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 10, a: 8, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Lt, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 12, c: 0 },
+];
+pub static G_002e_4d69ae156a0071fc: GuardIr = GuardIr {
+    src: "actor == owner && card.placed && value > 0 && money(owner) < value",
+    program: Program { nodes: G_002e_4d69ae156a0071fc_NODES, root: 13 },
+    id: 46,
 };
 
 /// `actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0`
-/// id = 37
-pub static G_0025_59209106ee9ab61c_NODES: &[Node] = &[
+/// id = 47
+pub static G_002f_59209106ee9ab61c_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -825,15 +1062,15 @@ pub static G_0025_59209106ee9ab61c_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 12, b: 15, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 9, b: 16, c: 0 },
 ];
-pub static G_0025_59209106ee9ab61c: GuardIr = GuardIr {
+pub static G_002f_59209106ee9ab61c: GuardIr = GuardIr {
     src: "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
-    program: Program { nodes: G_0025_59209106ee9ab61c_NODES, root: 17 },
-    id: 37,
+    program: Program { nodes: G_002f_59209106ee9ab61c_NODES, root: 17 },
+    id: 47,
 };
 
 /// `actor == owner && effect.has(Pay) && target >= 0 && value >= 5000`
-/// id = 38
-pub static G_0026_f1f5385244449458_NODES: &[Node] = &[
+/// id = 48
+pub static G_0030_f1f5385244449458_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -849,15 +1086,15 @@ pub static G_0026_f1f5385244449458_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 8, b: 11, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 5, b: 12, c: 0 },
 ];
-pub static G_0026_f1f5385244449458: GuardIr = GuardIr {
+pub static G_0030_f1f5385244449458: GuardIr = GuardIr {
     src: "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
-    program: Program { nodes: G_0026_f1f5385244449458_NODES, root: 13 },
-    id: 38,
+    program: Program { nodes: G_0030_f1f5385244449458_NODES, root: 13 },
+    id: 48,
 };
 
 /// `actor == owner && effect.has(Pay) && value > 0`
-/// id = 39
-pub static G_0027_68be10fdb305ba58_NODES: &[Node] = &[
+/// id = 49
+pub static G_0031_68be10fdb305ba58_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -869,15 +1106,15 @@ pub static G_0027_68be10fdb305ba58_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 5, b: 8, c: 0 },
 ];
-pub static G_0027_68be10fdb305ba58: GuardIr = GuardIr {
+pub static G_0031_68be10fdb305ba58: GuardIr = GuardIr {
     src: "actor == owner && effect.has(Pay) && value > 0",
-    program: Program { nodes: G_0027_68be10fdb305ba58_NODES, root: 9 },
-    id: 39,
+    program: Program { nodes: G_0031_68be10fdb305ba58_NODES, root: 9 },
+    id: 49,
 };
 
 /// `actor == owner && fire(owner) >= 1`
-/// id = 40
-pub static G_0028_ee2a6980f5e563e7_NODES: &[Node] = &[
+/// id = 50
+pub static G_0032_ee2a6980f5e563e7_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -887,15 +1124,15 @@ pub static G_0028_ee2a6980f5e563e7_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0028_ee2a6980f5e563e7: GuardIr = GuardIr {
+pub static G_0032_ee2a6980f5e563e7: GuardIr = GuardIr {
     src: "actor == owner && fire(owner) >= 1",
-    program: Program { nodes: G_0028_ee2a6980f5e563e7_NODES, root: 7 },
-    id: 40,
+    program: Program { nodes: G_0032_ee2a6980f5e563e7_NODES, root: 7 },
+    id: 50,
 };
 
 /// `actor == owner && fire(owner) >= 1 && plan.fixed_roll == null`
-/// id = 41
-pub static G_0029_b21b81ab795fc4e9_NODES: &[Node] = &[
+/// id = 51
+pub static G_0033_b21b81ab795fc4e9_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -909,15 +1146,51 @@ pub static G_0029_b21b81ab795fc4e9_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 8, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 10, c: 0 },
 ];
-pub static G_0029_b21b81ab795fc4e9: GuardIr = GuardIr {
+pub static G_0033_b21b81ab795fc4e9: GuardIr = GuardIr {
     src: "actor == owner && fire(owner) >= 1 && plan.fixed_roll == null",
-    program: Program { nodes: G_0029_b21b81ab795fc4e9_NODES, root: 11 },
-    id: 41,
+    program: Program { nodes: G_0033_b21b81ab795fc4e9_NODES, root: 11 },
+    id: 51,
+};
+
+/// `actor == owner && fire(owner) >= 2`
+/// id = 52
+pub static G_0034_ee2a6a80f5e5659a_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 11, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+];
+pub static G_0034_ee2a6a80f5e5659a: GuardIr = GuardIr {
+    src: "actor == owner && fire(owner) >= 2",
+    program: Program { nodes: G_0034_ee2a6a80f5e5659a_NODES, root: 7 },
+    id: 52,
+};
+
+/// `actor == owner && hand(owner) >= 1`
+/// id = 53
+pub static G_0035_f77565f09ffc0e3a_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 13, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+];
+pub static G_0035_f77565f09ffc0e3a: GuardIr = GuardIr {
+    src: "actor == owner && hand(owner) >= 1",
+    program: Program { nodes: G_0035_f77565f09ffc0e3a_NODES, root: 7 },
+    id: 53,
 };
 
 /// `actor == owner && is_circle(tile.id)`
-/// id = 42
-pub static G_002a_9d115115eff03812_NODES: &[Node] = &[
+/// id = 54
+pub static G_0036_9d115115eff03812_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -925,15 +1198,15 @@ pub static G_002a_9d115115eff03812_NODES: &[Node] = &[
     Node { kind: Kind::Call, payload: 6, a: 3, b: 1, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 4, c: 0 },
 ];
-pub static G_002a_9d115115eff03812: GuardIr = GuardIr {
+pub static G_0036_9d115115eff03812: GuardIr = GuardIr {
     src: "actor == owner && is_circle(tile.id)",
-    program: Program { nodes: G_002a_9d115115eff03812_NODES, root: 5 },
-    id: 42,
+    program: Program { nodes: G_0036_9d115115eff03812_NODES, root: 5 },
+    id: 54,
 };
 
 /// `actor == owner && is_ring(tile.id)`
-/// id = 43
-pub static G_002b_9c53f55e2bc36c08_NODES: &[Node] = &[
+/// id = 55
+pub static G_0037_9c53f55e2bc36c08_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -941,15 +1214,15 @@ pub static G_002b_9c53f55e2bc36c08_NODES: &[Node] = &[
     Node { kind: Kind::Call, payload: 7, a: 3, b: 1, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 4, c: 0 },
 ];
-pub static G_002b_9c53f55e2bc36c08: GuardIr = GuardIr {
+pub static G_0037_9c53f55e2bc36c08: GuardIr = GuardIr {
     src: "actor == owner && is_ring(tile.id)",
-    program: Program { nodes: G_002b_9c53f55e2bc36c08_NODES, root: 5 },
-    id: 43,
+    program: Program { nodes: G_0037_9c53f55e2bc36c08_NODES, root: 5 },
+    id: 55,
 };
 
 /// `actor == owner && move.kind != Teleport && move.dir < 0`
-/// id = 44
-pub static G_002c_4baa7c4bf8bb2763_NODES: &[Node] = &[
+/// id = 56
+pub static G_0038_4baa7c4bf8bb2763_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -962,15 +1235,15 @@ pub static G_002c_4baa7c4bf8bb2763_NODES: &[Node] = &[
     Node { kind: Kind::Lt, payload: 0, a: 7, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 9, c: 0 },
 ];
-pub static G_002c_4baa7c4bf8bb2763: GuardIr = GuardIr {
+pub static G_0038_4baa7c4bf8bb2763: GuardIr = GuardIr {
     src: "actor == owner && move.kind != Teleport && move.dir < 0",
-    program: Program { nodes: G_002c_4baa7c4bf8bb2763_NODES, root: 10 },
-    id: 44,
+    program: Program { nodes: G_0038_4baa7c4bf8bb2763_NODES, root: 10 },
+    id: 56,
 };
 
 /// `actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0`
-/// id = 45
-pub static G_002d_cc787276d585bd82_NODES: &[Node] = &[
+/// id = 57
+pub static G_0039_cc787276d585bd82_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -989,15 +1262,15 @@ pub static G_002d_cc787276d585bd82_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 9, b: 14, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 15, c: 0 },
 ];
-pub static G_002d_cc787276d585bd82: GuardIr = GuardIr {
+pub static G_0039_cc787276d585bd82: GuardIr = GuardIr {
     src: "actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0",
-    program: Program { nodes: G_002d_cc787276d585bd82_NODES, root: 16 },
-    id: 45,
+    program: Program { nodes: G_0039_cc787276d585bd82_NODES, root: 16 },
+    id: 57,
 };
 
 /// `actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key`
-/// id = 46
-pub static G_002e_c48ad0885cd6e591_NODES: &[Node] = &[
+/// id = 58
+pub static G_003a_c48ad0885cd6e591_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1013,30 +1286,30 @@ pub static G_002e_c48ad0885cd6e591_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 7, b: 11, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 12, c: 0 },
 ];
-pub static G_002e_c48ad0885cd6e591: GuardIr = GuardIr {
+pub static G_003a_c48ad0885cd6e591: GuardIr = GuardIr {
     src: "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
-    program: Program { nodes: G_002e_c48ad0885cd6e591_NODES, root: 13 },
-    id: 46,
+    program: Program { nodes: G_003a_c48ad0885cd6e591_NODES, root: 13 },
+    id: 58,
 };
 
 /// `actor == owner && move.main`
-/// id = 47
-pub static G_002f_7899d38684d6d589_NODES: &[Node] = &[
+/// id = 59
+pub static G_003b_7899d38684d6d589_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
     Node { kind: Kind::Var, payload: 22, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
 ];
-pub static G_002f_7899d38684d6d589: GuardIr = GuardIr {
+pub static G_003b_7899d38684d6d589: GuardIr = GuardIr {
     src: "actor == owner && move.main",
-    program: Program { nodes: G_002f_7899d38684d6d589_NODES, root: 4 },
-    id: 47,
+    program: Program { nodes: G_003b_7899d38684d6d589_NODES, root: 4 },
+    id: 59,
 };
 
 /// `actor == owner && move.main && card.placed`
-/// id = 48
-pub static G_0030_7abdcec82e82168e_NODES: &[Node] = &[
+/// id = 60
+pub static G_003c_7abdcec82e82168e_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1045,15 +1318,15 @@ pub static G_0030_7abdcec82e82168e_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 5, c: 0 },
 ];
-pub static G_0030_7abdcec82e82168e: GuardIr = GuardIr {
+pub static G_003c_7abdcec82e82168e: GuardIr = GuardIr {
     src: "actor == owner && move.main && card.placed",
-    program: Program { nodes: G_0030_7abdcec82e82168e_NODES, root: 6 },
-    id: 48,
+    program: Program { nodes: G_003c_7abdcec82e82168e_NODES, root: 6 },
+    id: 60,
 };
 
 /// `actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_live_house(tile.id) && is_buyable(tile.id) && tile.owner != owner`
-/// id = 49
-pub static G_0031_ff1940131bc8e8ca_NODES: &[Node] = &[
+/// id = 61
+pub static G_003d_ff1940131bc8e8ca_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1077,15 +1350,15 @@ pub static G_0031_ff1940131bc8e8ca_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 16, b: 19, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 11, b: 20, c: 0 },
 ];
-pub static G_0031_ff1940131bc8e8ca: GuardIr = GuardIr {
+pub static G_003d_ff1940131bc8e8ca: GuardIr = GuardIr {
     src: "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_live_house(tile.id) && is_buyable(tile.id) && tile.owner != owner",
-    program: Program { nodes: G_0031_ff1940131bc8e8ca_NODES, root: 21 },
-    id: 49,
+    program: Program { nodes: G_003d_ff1940131bc8e8ca_NODES, root: 21 },
+    id: 61,
 };
 
 /// `actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6`
-/// id = 50
-pub static G_0032_eb9f21414aa9d910_NODES: &[Node] = &[
+/// id = 62
+pub static G_003e_eb9f21414aa9d910_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1106,15 +1379,15 @@ pub static G_0032_eb9f21414aa9d910_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 12, b: 16, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 8, b: 17, c: 0 },
 ];
-pub static G_0032_eb9f21414aa9d910: GuardIr = GuardIr {
+pub static G_003e_eb9f21414aa9d910: GuardIr = GuardIr {
     src: "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6",
-    program: Program { nodes: G_0032_eb9f21414aa9d910_NODES, root: 18 },
-    id: 50,
+    program: Program { nodes: G_003e_eb9f21414aa9d910_NODES, root: 18 },
+    id: 62,
 };
 
 /// `actor == owner && move.main && slot('skillState') != 2`
-/// id = 51
-pub static G_0033_a905e610e6d66eca_NODES: &[Node] = &[
+/// id = 63
+pub static G_003f_a905e610e6d66eca_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1126,15 +1399,15 @@ pub static G_0033_a905e610e6d66eca_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0033_a905e610e6d66eca: GuardIr = GuardIr {
+pub static G_003f_a905e610e6d66eca: GuardIr = GuardIr {
     src: "actor == owner && move.main && slot('skillState') != 2",
-    program: Program { nodes: G_0033_a905e610e6d66eca_NODES, root: 9 },
-    id: 51,
+    program: Program { nodes: G_003f_a905e610e6d66eca_NODES, root: 9 },
+    id: 63,
 };
 
 /// `actor == owner && move.main && slot('skillState') == 2`
-/// id = 52
-pub static G_0034_e424dd6a03642ade_NODES: &[Node] = &[
+/// id = 64
+pub static G_0040_e424dd6a03642ade_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1146,15 +1419,15 @@ pub static G_0034_e424dd6a03642ade_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 6, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0034_e424dd6a03642ade: GuardIr = GuardIr {
+pub static G_0040_e424dd6a03642ade: GuardIr = GuardIr {
     src: "actor == owner && move.main && slot('skillState') == 2",
-    program: Program { nodes: G_0034_e424dd6a03642ade_NODES, root: 9 },
-    id: 52,
+    program: Program { nodes: G_0040_e424dd6a03642ade_NODES, root: 9 },
+    id: 64,
 };
 
 /// `actor == owner && move.main && tile.id == tile_named('Bandori车站')`
-/// id = 53
-pub static G_0035_0c7750c52d35a556_NODES: &[Node] = &[
+/// id = 65
+pub static G_0041_0c7750c52d35a556_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1166,15 +1439,39 @@ pub static G_0035_0c7750c52d35a556_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 5, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0035_0c7750c52d35a556: GuardIr = GuardIr {
+pub static G_0041_0c7750c52d35a556: GuardIr = GuardIr {
     src: "actor == owner && move.main && tile.id == tile_named('Bandori车站')",
-    program: Program { nodes: G_0035_0c7750c52d35a556_NODES, root: 9 },
-    id: 53,
+    program: Program { nodes: G_0041_0c7750c52d35a556_NODES, root: 9 },
+    id: 65,
+};
+
+/// `actor == owner && move.main && tile.id >= 0 && fire(owner) >= 1`
+/// id = 66
+pub static G_0042_bfce7d91b1cc77b9_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 22, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 11, a: 8, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 12, c: 0 },
+];
+pub static G_0042_bfce7d91b1cc77b9: GuardIr = GuardIr {
+    src: "actor == owner && move.main && tile.id >= 0 && fire(owner) >= 1",
+    program: Program { nodes: G_0042_bfce7d91b1cc77b9_NODES, root: 13 },
+    id: 66,
 };
 
 /// `actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')`
-/// id = 54
-pub static G_0036_e103272567c839eb_NODES: &[Node] = &[
+/// id = 67
+pub static G_0043_e103272567c839eb_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1188,15 +1485,15 @@ pub static G_0036_e103272567c839eb_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 7, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 10, c: 0 },
 ];
-pub static G_0036_e103272567c839eb: GuardIr = GuardIr {
+pub static G_0043_e103272567c839eb: GuardIr = GuardIr {
     src: "actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')",
-    program: Program { nodes: G_0036_e103272567c839eb_NODES, root: 11 },
-    id: 54,
+    program: Program { nodes: G_0043_e103272567c839eb_NODES, root: 11 },
+    id: 67,
 };
 
 /// `actor == owner && move.roll != null`
-/// id = 55
-pub static G_0037_2d5805c5c61ac210_NODES: &[Node] = &[
+/// id = 68
+pub static G_0044_2d5805c5c61ac210_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1205,15 +1502,15 @@ pub static G_0037_2d5805c5c61ac210_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_0037_2d5805c5c61ac210: GuardIr = GuardIr {
+pub static G_0044_2d5805c5c61ac210: GuardIr = GuardIr {
     src: "actor == owner && move.roll != null",
-    program: Program { nodes: G_0037_2d5805c5c61ac210_NODES, root: 6 },
-    id: 55,
+    program: Program { nodes: G_0044_2d5805c5c61ac210_NODES, root: 6 },
+    id: 68,
 };
 
 /// `actor == owner && move.roll != null && move.kind != Teleport`
-/// id = 56
-pub static G_0038_563923f36160f49e_NODES: &[Node] = &[
+/// id = 69
+pub static G_0045_563923f36160f49e_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1226,15 +1523,15 @@ pub static G_0038_563923f36160f49e_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 7, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 9, c: 0 },
 ];
-pub static G_0038_563923f36160f49e: GuardIr = GuardIr {
+pub static G_0045_563923f36160f49e: GuardIr = GuardIr {
     src: "actor == owner && move.roll != null && move.kind != Teleport",
-    program: Program { nodes: G_0038_563923f36160f49e_NODES, root: 10 },
-    id: 56,
+    program: Program { nodes: G_0045_563923f36160f49e_NODES, root: 10 },
+    id: 69,
 };
 
 /// `actor == owner && move.roll != null && move.roll < 6`
-/// id = 57
-pub static G_0039_99170f3bcaedc168_NODES: &[Node] = &[
+/// id = 70
+pub static G_0046_99170f3bcaedc168_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1247,15 +1544,15 @@ pub static G_0039_99170f3bcaedc168_NODES: &[Node] = &[
     Node { kind: Kind::Lt, payload: 0, a: 7, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 9, c: 0 },
 ];
-pub static G_0039_99170f3bcaedc168: GuardIr = GuardIr {
+pub static G_0046_99170f3bcaedc168: GuardIr = GuardIr {
     src: "actor == owner && move.roll != null && move.roll < 6",
-    program: Program { nodes: G_0039_99170f3bcaedc168_NODES, root: 10 },
-    id: 57,
+    program: Program { nodes: G_0046_99170f3bcaedc168_NODES, root: 10 },
+    id: 70,
 };
 
 /// `actor == owner && move.roll >= 16`
-/// id = 58
-pub static G_003a_bb05389958cb9a8b_NODES: &[Node] = &[
+/// id = 71
+pub static G_0047_bb05389958cb9a8b_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1264,15 +1561,15 @@ pub static G_003a_bb05389958cb9a8b_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_003a_bb05389958cb9a8b: GuardIr = GuardIr {
+pub static G_0047_bb05389958cb9a8b: GuardIr = GuardIr {
     src: "actor == owner && move.roll >= 16",
-    program: Program { nodes: G_003a_bb05389958cb9a8b_NODES, root: 6 },
-    id: 58,
+    program: Program { nodes: G_0047_bb05389958cb9a8b_NODES, root: 6 },
+    id: 71,
 };
 
 /// `actor == owner && plan.fixed_roll == null`
-/// id = 59
-pub static G_003b_775c33f499fce81d_NODES: &[Node] = &[
+/// id = 72
+pub static G_0048_775c33f499fce81d_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1281,15 +1578,15 @@ pub static G_003b_775c33f499fce81d_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_003b_775c33f499fce81d: GuardIr = GuardIr {
+pub static G_0048_775c33f499fce81d: GuardIr = GuardIr {
     src: "actor == owner && plan.fixed_roll == null",
-    program: Program { nodes: G_003b_775c33f499fce81d_NODES, root: 6 },
-    id: 59,
+    program: Program { nodes: G_0048_775c33f499fce81d_NODES, root: 6 },
+    id: 72,
 };
 
 /// `actor == owner && players_on(owner.pos, owner) > 0`
-/// id = 60
-pub static G_003c_8d2e0a7e27feb096_NODES: &[Node] = &[
+/// id = 73
+pub static G_0049_8d2e0a7e27feb096_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1300,15 +1597,39 @@ pub static G_003c_8d2e0a7e27feb096_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 5, b: 6, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 7, c: 0 },
 ];
-pub static G_003c_8d2e0a7e27feb096: GuardIr = GuardIr {
+pub static G_0049_8d2e0a7e27feb096: GuardIr = GuardIr {
     src: "actor == owner && players_on(owner.pos, owner) > 0",
-    program: Program { nodes: G_003c_8d2e0a7e27feb096_NODES, root: 8 },
-    id: 60,
+    program: Program { nodes: G_0049_8d2e0a7e27feb096_NODES, root: 8 },
+    id: 73,
+};
+
+/// `actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0`
+/// id = 74
+pub static G_004a_64cea01e35093c44_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 14, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 5519720545872436727, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 5, a: 5, b: 1, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 4, b: 6, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 7, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 2234364869623897376, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 9, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 10, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 8, b: 12, c: 0 },
+];
+pub static G_004a_64cea01e35093c44: GuardIr = GuardIr {
+    src: "actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0",
+    program: Program { nodes: G_004a_64cea01e35093c44_NODES, root: 13 },
+    id: 74,
 };
 
 /// `actor == owner && roll_source == 1`
-/// id = 61
-pub static G_003d_7971fec7e22857dd_NODES: &[Node] = &[
+/// id = 75
+pub static G_004b_7971fec7e22857dd_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1317,15 +1638,15 @@ pub static G_003d_7971fec7e22857dd_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_003d_7971fec7e22857dd: GuardIr = GuardIr {
+pub static G_004b_7971fec7e22857dd: GuardIr = GuardIr {
     src: "actor == owner && roll_source == 1",
-    program: Program { nodes: G_003d_7971fec7e22857dd_NODES, root: 6 },
-    id: 61,
+    program: Program { nodes: G_004b_7971fec7e22857dd_NODES, root: 6 },
+    id: 75,
 };
 
 /// `actor == owner && slot('lock_dream_tag') != 0`
-/// id = 62
-pub static G_003e_a48c6881653b2c94_NODES: &[Node] = &[
+/// id = 76
+pub static G_004c_a48c6881653b2c94_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1335,15 +1656,15 @@ pub static G_003e_a48c6881653b2c94_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_003e_a48c6881653b2c94: GuardIr = GuardIr {
+pub static G_004c_a48c6881653b2c94: GuardIr = GuardIr {
     src: "actor == owner && slot('lock_dream_tag') != 0",
-    program: Program { nodes: G_003e_a48c6881653b2c94_NODES, root: 7 },
-    id: 62,
+    program: Program { nodes: G_004c_a48c6881653b2c94_NODES, root: 7 },
+    id: 76,
 };
 
-/// `actor == owner && slot('skill.asahiAim.first') == 0`
-/// id = 63
-pub static G_003f_717a7afc15a56790_NODES: &[Node] = &[
+/// `actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')`
+/// id = 77
+pub static G_004d_17dbdeb38114f25b_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1352,16 +1673,43 @@ pub static G_003f_717a7afc15a56790_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 8, b: 9, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 6790835732630505092, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 5, a: 12, b: 1, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 11, b: 13, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 10, b: 14, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 15, c: 0 },
 ];
-pub static G_003f_717a7afc15a56790: GuardIr = GuardIr {
-    src: "actor == owner && slot('skill.asahiAim.first') == 0",
-    program: Program { nodes: G_003f_717a7afc15a56790_NODES, root: 7 },
-    id: 63,
+pub static G_004d_17dbdeb38114f25b: GuardIr = GuardIr {
+    src: "actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')",
+    program: Program { nodes: G_004d_17dbdeb38114f25b_NODES, root: 16 },
+    id: 77,
+};
+
+/// `actor == owner && slot('skill.hinaLottery.borrowed') >= 0`
+/// id = 78
+pub static G_004e_30141d1ccf66188d_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -9069548022487686833, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+];
+pub static G_004e_30141d1ccf66188d: GuardIr = GuardIr {
+    src: "actor == owner && slot('skill.hinaLottery.borrowed') >= 0",
+    program: Program { nodes: G_004e_30141d1ccf66188d_NODES, root: 7 },
+    id: 78,
 };
 
 /// `actor == owner && slot('skill.kanonLost.silent') >= 3`
-/// id = 64
-pub static G_0040_d069e63786dacbd5_NODES: &[Node] = &[
+/// id = 79
+pub static G_004f_d069e63786dacbd5_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1371,15 +1719,15 @@ pub static G_0040_d069e63786dacbd5_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0040_d069e63786dacbd5: GuardIr = GuardIr {
+pub static G_004f_d069e63786dacbd5: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.kanonLost.silent') >= 3",
-    program: Program { nodes: G_0040_d069e63786dacbd5_NODES, root: 7 },
-    id: 64,
+    program: Program { nodes: G_004f_d069e63786dacbd5_NODES, root: 7 },
+    id: 79,
 };
 
 /// `actor == owner && slot('skill.rimiResolve.passed') != 0`
-/// id = 65
-pub static G_0041_ed07531709becb54_NODES: &[Node] = &[
+/// id = 80
+pub static G_0050_ed07531709becb54_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1389,15 +1737,15 @@ pub static G_0041_ed07531709becb54_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0041_ed07531709becb54: GuardIr = GuardIr {
+pub static G_0050_ed07531709becb54: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.rimiResolve.passed') != 0",
-    program: Program { nodes: G_0041_ed07531709becb54_NODES, root: 7 },
-    id: 65,
+    program: Program { nodes: G_0050_ed07531709becb54_NODES, root: 7 },
+    id: 80,
 };
 
 /// `actor == owner && slot('skill.roselia.first') != 0`
-/// id = 66
-pub static G_0042_224a4ddfb939bc80_NODES: &[Node] = &[
+/// id = 81
+pub static G_0051_224a4ddfb939bc80_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1407,15 +1755,15 @@ pub static G_0042_224a4ddfb939bc80_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0042_224a4ddfb939bc80: GuardIr = GuardIr {
+pub static G_0051_224a4ddfb939bc80: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.roselia.first') != 0",
-    program: Program { nodes: G_0042_224a4ddfb939bc80_NODES, root: 7 },
-    id: 66,
+    program: Program { nodes: G_0051_224a4ddfb939bc80_NODES, root: 7 },
+    id: 81,
 };
 
-/// `actor == owner && slot('skill.roselia.first') == 0`
-/// id = 67
-pub static G_0043_fd5ad4f70f991dbc_NODES: &[Node] = &[
+/// `actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0`
+/// id = 82
+pub static G_0052_bbabf022a40e4598_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1424,16 +1772,20 @@ pub static G_0043_fd5ad4f70f991dbc_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 8, b: 9, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 10, c: 0 },
 ];
-pub static G_0043_fd5ad4f70f991dbc: GuardIr = GuardIr {
-    src: "actor == owner && slot('skill.roselia.first') == 0",
-    program: Program { nodes: G_0043_fd5ad4f70f991dbc_NODES, root: 7 },
-    id: 67,
+pub static G_0052_bbabf022a40e4598: GuardIr = GuardIr {
+    src: "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
+    program: Program { nodes: G_0052_bbabf022a40e4598_NODES, root: 11 },
+    id: 82,
 };
 
 /// `actor == owner && slot('skill.soyoClear.armed') != 0`
-/// id = 68
-pub static G_0044_31c076ff3979efdb_NODES: &[Node] = &[
+/// id = 83
+pub static G_0053_31c076ff3979efdb_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1443,15 +1795,15 @@ pub static G_0044_31c076ff3979efdb_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0044_31c076ff3979efdb: GuardIr = GuardIr {
+pub static G_0053_31c076ff3979efdb: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.soyoClear.armed') != 0",
-    program: Program { nodes: G_0044_31c076ff3979efdb_NODES, root: 7 },
-    id: 68,
+    program: Program { nodes: G_0053_31c076ff3979efdb_NODES, root: 7 },
+    id: 83,
 };
 
 /// `actor == owner && slot('skill.soyoCrychic.armed') != 0`
-/// id = 69
-pub static G_0045_843e92c2eeb77dc9_NODES: &[Node] = &[
+/// id = 84
+pub static G_0054_843e92c2eeb77dc9_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1461,15 +1813,15 @@ pub static G_0045_843e92c2eeb77dc9_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0045_843e92c2eeb77dc9: GuardIr = GuardIr {
+pub static G_0054_843e92c2eeb77dc9: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.soyoCrychic.armed') != 0",
-    program: Program { nodes: G_0045_843e92c2eeb77dc9_NODES, root: 7 },
-    id: 69,
+    program: Program { nodes: G_0054_843e92c2eeb77dc9_NODES, root: 7 },
+    id: 84,
 };
 
 /// `actor == owner && slot('skill.sumimi.got') == 0`
-/// id = 70
-pub static G_0046_0722808d6e909bcf_NODES: &[Node] = &[
+/// id = 85
+pub static G_0055_0722808d6e909bcf_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1479,15 +1831,15 @@ pub static G_0046_0722808d6e909bcf_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0046_0722808d6e909bcf: GuardIr = GuardIr {
+pub static G_0055_0722808d6e909bcf: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.sumimi.got') == 0",
-    program: Program { nodes: G_0046_0722808d6e909bcf_NODES, root: 7 },
-    id: 70,
+    program: Program { nodes: G_0055_0722808d6e909bcf_NODES, root: 7 },
+    id: 85,
 };
 
 /// `actor == owner && slot('skill.takiCrychic.armed') == 0`
-/// id = 71
-pub static G_0047_6c90f18b9ee68160_NODES: &[Node] = &[
+/// id = 86
+pub static G_0056_6c90f18b9ee68160_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1497,15 +1849,15 @@ pub static G_0047_6c90f18b9ee68160_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0047_6c90f18b9ee68160: GuardIr = GuardIr {
+pub static G_0056_6c90f18b9ee68160: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.takiCrychic.armed') == 0",
-    program: Program { nodes: G_0047_6c90f18b9ee68160_NODES, root: 7 },
-    id: 71,
+    program: Program { nodes: G_0056_6c90f18b9ee68160_NODES, root: 7 },
+    id: 86,
 };
 
 /// `actor == owner && slot('skill.tamade.builtLast') == 0`
-/// id = 72
-pub static G_0048_90646b2c461e630f_NODES: &[Node] = &[
+/// id = 87
+pub static G_0057_90646b2c461e630f_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1515,15 +1867,15 @@ pub static G_0048_90646b2c461e630f_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0048_90646b2c461e630f: GuardIr = GuardIr {
+pub static G_0057_90646b2c461e630f: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.tamade.builtLast') == 0",
-    program: Program { nodes: G_0048_90646b2c461e630f_NODES, root: 7 },
-    id: 72,
+    program: Program { nodes: G_0057_90646b2c461e630f_NODES, root: 7 },
+    id: 87,
 };
 
 /// `actor == owner && slot('skill.tomoriPoem.due') != 0`
-/// id = 73
-pub static G_0049_a05cc207a4739b56_NODES: &[Node] = &[
+/// id = 88
+pub static G_0058_a05cc207a4739b56_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1533,15 +1885,15 @@ pub static G_0049_a05cc207a4739b56_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0049_a05cc207a4739b56: GuardIr = GuardIr {
+pub static G_0058_a05cc207a4739b56: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.tomoriPoem.due') != 0",
-    program: Program { nodes: G_0049_a05cc207a4739b56_NODES, root: 7 },
-    id: 73,
+    program: Program { nodes: G_0058_a05cc207a4739b56_NODES, root: 7 },
+    id: 88,
 };
 
 /// `actor == owner && slot('skill.tsugumiPlain.owed') != 0`
-/// id = 74
-pub static G_004a_e03fb4050a01bd20_NODES: &[Node] = &[
+/// id = 89
+pub static G_0059_e03fb4050a01bd20_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1551,15 +1903,15 @@ pub static G_004a_e03fb4050a01bd20_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_004a_e03fb4050a01bd20: GuardIr = GuardIr {
+pub static G_0059_e03fb4050a01bd20: GuardIr = GuardIr {
     src: "actor == owner && slot('skill.tsugumiPlain.owed') != 0",
-    program: Program { nodes: G_004a_e03fb4050a01bd20_NODES, root: 7 },
-    id: 74,
+    program: Program { nodes: G_0059_e03fb4050a01bd20_NODES, root: 7 },
+    id: 89,
 };
 
 /// `actor == owner && slot('skillState') != 2`
-/// id = 75
-pub static G_004b_3e19f0e5e534e9d8_NODES: &[Node] = &[
+/// id = 90
+pub static G_005a_3e19f0e5e534e9d8_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1569,15 +1921,38 @@ pub static G_004b_3e19f0e5e534e9d8_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_004b_3e19f0e5e534e9d8: GuardIr = GuardIr {
+pub static G_005a_3e19f0e5e534e9d8: GuardIr = GuardIr {
     src: "actor == owner && slot('skillState') != 2",
-    program: Program { nodes: G_004b_3e19f0e5e534e9d8_NODES, root: 7 },
-    id: 75,
+    program: Program { nodes: G_005a_3e19f0e5e534e9d8_NODES, root: 7 },
+    id: 90,
+};
+
+/// `actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0`
+/// id = 91
+pub static G_005b_10a684318c29f3cf_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 5275723767935477323, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 351538636084605129, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 8, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 7, b: 11, c: 0 },
+];
+pub static G_005b_10a684318c29f3cf: GuardIr = GuardIr {
+    src: "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0",
+    program: Program { nodes: G_005b_10a684318c29f3cf_NODES, root: 12 },
+    id: 91,
 };
 
 /// `actor == owner && slot('skillState') == 2`
-/// id = 76
-pub static G_004c_43b879093d04bef4_NODES: &[Node] = &[
+/// id = 92
+pub static G_005c_43b879093d04bef4_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1587,15 +1962,56 @@ pub static G_004c_43b879093d04bef4_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_004c_43b879093d04bef4: GuardIr = GuardIr {
+pub static G_005c_43b879093d04bef4: GuardIr = GuardIr {
     src: "actor == owner && slot('skillState') == 2",
-    program: Program { nodes: G_004c_43b879093d04bef4_NODES, root: 7 },
-    id: 76,
+    program: Program { nodes: G_005c_43b879093d04bef4_NODES, root: 7 },
+    id: 92,
+};
+
+/// `actor == owner && slot('star_beat.layers') > 0`
+/// id = 93
+pub static G_005d_185563b3e5b9283b_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -2092965982328628778, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 3, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 4, b: 5, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
+];
+pub static G_005d_185563b3e5b9283b: GuardIr = GuardIr {
+    src: "actor == owner && slot('star_beat.layers') > 0",
+    program: Program { nodes: G_005d_185563b3e5b9283b_NODES, root: 7 },
+    id: 93,
+};
+
+/// `actor == owner && target >= 0 && target != owner && pay_is_rent`
+/// id = 94
+pub static G_005e_a9ba3574067033b6_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 3, b: 4, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
+    Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 7, b: 8, c: 0 },
+    Node { kind: Kind::Var, payload: 6, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 6, b: 11, c: 0 },
+];
+pub static G_005e_a9ba3574067033b6: GuardIr = GuardIr {
+    src: "actor == owner && target >= 0 && target != owner && pay_is_rent",
+    program: Program { nodes: G_005e_a9ba3574067033b6_NODES, root: 12 },
+    id: 94,
 };
 
 /// `actor == owner && tile.id == tile_named('CiRCLE')`
-/// id = 77
-pub static G_004d_cca15b028e9ae667_NODES: &[Node] = &[
+/// id = 95
+pub static G_005f_cca15b028e9ae667_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1605,15 +2021,15 @@ pub static G_004d_cca15b028e9ae667_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_004d_cca15b028e9ae667: GuardIr = GuardIr {
+pub static G_005f_cca15b028e9ae667: GuardIr = GuardIr {
     src: "actor == owner && tile.id == tile_named('CiRCLE')",
-    program: Program { nodes: G_004d_cca15b028e9ae667_NODES, root: 7 },
-    id: 77,
+    program: Program { nodes: G_005f_cca15b028e9ae667_NODES, root: 7 },
+    id: 95,
 };
 
 /// `actor == owner && tile.id == tile_named('弦卷集团')`
-/// id = 78
-pub static G_004e_335140f84ed766bb_NODES: &[Node] = &[
+/// id = 96
+pub static G_0060_335140f84ed766bb_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1623,15 +2039,15 @@ pub static G_004e_335140f84ed766bb_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_004e_335140f84ed766bb: GuardIr = GuardIr {
+pub static G_0060_335140f84ed766bb: GuardIr = GuardIr {
     src: "actor == owner && tile.id == tile_named('弦卷集团')",
-    program: Program { nodes: G_004e_335140f84ed766bb_NODES, root: 7 },
-    id: 78,
+    program: Program { nodes: G_0060_335140f84ed766bb_NODES, root: 7 },
+    id: 96,
 };
 
 /// `actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null`
-/// id = 79
-pub static G_004f_9a3a4f7b7decd311_NODES: &[Node] = &[
+/// id = 97
+pub static G_0061_9a3a4f7b7decd311_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1645,15 +2061,15 @@ pub static G_004f_9a3a4f7b7decd311_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 8, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 10, c: 0 },
 ];
-pub static G_004f_9a3a4f7b7decd311: GuardIr = GuardIr {
+pub static G_0061_9a3a4f7b7decd311: GuardIr = GuardIr {
     src: "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null",
-    program: Program { nodes: G_004f_9a3a4f7b7decd311_NODES, root: 11 },
-    id: 79,
+    program: Program { nodes: G_0061_9a3a4f7b7decd311_NODES, root: 11 },
+    id: 97,
 };
 
 /// `actor == owner && tile.id == tile_named('流星堂')`
-/// id = 80
-pub static G_0050_e5464240708e0839_NODES: &[Node] = &[
+/// id = 98
+pub static G_0062_e5464240708e0839_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1663,15 +2079,32 @@ pub static G_0050_e5464240708e0839_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0050_e5464240708e0839: GuardIr = GuardIr {
+pub static G_0062_e5464240708e0839: GuardIr = GuardIr {
     src: "actor == owner && tile.id == tile_named('流星堂')",
-    program: Program { nodes: G_0050_e5464240708e0839_NODES, root: 7 },
-    id: 80,
+    program: Program { nodes: G_0062_e5464240708e0839_NODES, root: 7 },
+    id: 98,
+};
+
+/// `actor == owner && tile.id >= 0`
+/// id = 99
+pub static G_0063_eaa27ef734ec5cc3_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 3, b: 4, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
+];
+pub static G_0063_eaa27ef734ec5cc3: GuardIr = GuardIr {
+    src: "actor == owner && tile.id >= 0",
+    program: Program { nodes: G_0063_eaa27ef734ec5cc3_NODES, root: 6 },
+    id: 99,
 };
 
 /// `actor == owner && tok('PAREO标记') >= 1`
-/// id = 81
-pub static G_0051_3e3d46556d88bd58_NODES: &[Node] = &[
+/// id = 100
+pub static G_0064_3e3d46556d88bd58_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1681,15 +2114,15 @@ pub static G_0051_3e3d46556d88bd58_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0051_3e3d46556d88bd58: GuardIr = GuardIr {
+pub static G_0064_3e3d46556d88bd58: GuardIr = GuardIr {
     src: "actor == owner && tok('PAREO标记') >= 1",
-    program: Program { nodes: G_0051_3e3d46556d88bd58_NODES, root: 7 },
-    id: 81,
+    program: Program { nodes: G_0064_3e3d46556d88bd58_NODES, root: 7 },
+    id: 100,
 };
 
 /// `actor == owner && tok('P✽P粉丝(正)') >= 1`
-/// id = 82
-pub static G_0052_65ca05283c20183f_NODES: &[Node] = &[
+/// id = 101
+pub static G_0065_65ca05283c20183f_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1699,15 +2132,15 @@ pub static G_0052_65ca05283c20183f_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_0052_65ca05283c20183f: GuardIr = GuardIr {
+pub static G_0065_65ca05283c20183f: GuardIr = GuardIr {
     src: "actor == owner && tok('P✽P粉丝(正)') >= 1",
-    program: Program { nodes: G_0052_65ca05283c20183f_NODES, root: 7 },
-    id: 82,
+    program: Program { nodes: G_0065_65ca05283c20183f_NODES, root: 7 },
+    id: 101,
 };
 
 /// `actor == owner && turn_player == owner && owned_within(owner, 3) > 0`
-/// id = 83
-pub static G_0053_b3ea9c76423abcf5_NODES: &[Node] = &[
+/// id = 102
+pub static G_0066_b3ea9c76423abcf5_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1722,15 +2155,32 @@ pub static G_0053_b3ea9c76423abcf5_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 9, b: 10, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 11, c: 0 },
 ];
-pub static G_0053_b3ea9c76423abcf5: GuardIr = GuardIr {
+pub static G_0066_b3ea9c76423abcf5: GuardIr = GuardIr {
     src: "actor == owner && turn_player == owner && owned_within(owner, 3) > 0",
-    program: Program { nodes: G_0053_b3ea9c76423abcf5_NODES, root: 12 },
-    id: 83,
+    program: Program { nodes: G_0066_b3ea9c76423abcf5_NODES, root: 12 },
+    id: 102,
+};
+
+/// `actor == owner && value == 0`
+/// id = 103
+pub static G_0067_3cf5f28fbf66b03e_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 3, b: 4, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
+];
+pub static G_0067_3cf5f28fbf66b03e: GuardIr = GuardIr {
+    src: "actor == owner && value == 0",
+    program: Program { nodes: G_0067_3cf5f28fbf66b03e_NODES, root: 6 },
+    id: 103,
 };
 
 /// `actor == owner && value > 0`
-/// id = 84
-pub static G_0054_1e7532b17d8c308a_NODES: &[Node] = &[
+/// id = 104
+pub static G_0068_1e7532b17d8c308a_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1739,15 +2189,36 @@ pub static G_0054_1e7532b17d8c308a_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_0054_1e7532b17d8c308a: GuardIr = GuardIr {
+pub static G_0068_1e7532b17d8c308a: GuardIr = GuardIr {
     src: "actor == owner && value > 0",
-    program: Program { nodes: G_0054_1e7532b17d8c308a_NODES, root: 6 },
-    id: 84,
+    program: Program { nodes: G_0068_1e7532b17d8c308a_NODES, root: 6 },
+    id: 104,
+};
+
+/// `actor == owner && value >= 2000 && target != owner`
+/// id = 105
+pub static G_0069_c66b0956f9183161_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 2000, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 3, b: 4, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
+    Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 7, b: 8, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 6, b: 9, c: 0 },
+];
+pub static G_0069_c66b0956f9183161: GuardIr = GuardIr {
+    src: "actor == owner && value >= 2000 && target != owner",
+    program: Program { nodes: G_0069_c66b0956f9183161_NODES, root: 10 },
+    id: 105,
 };
 
 /// `actor == owner && value >= 999999`
-/// id = 85
-pub static G_0055_0ab1b82e312193d5_NODES: &[Node] = &[
+/// id = 106
+pub static G_006a_0ab1b82e312193d5_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1756,15 +2227,15 @@ pub static G_0055_0ab1b82e312193d5_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_0055_0ab1b82e312193d5: GuardIr = GuardIr {
+pub static G_006a_0ab1b82e312193d5: GuardIr = GuardIr {
     src: "actor == owner && value >= 999999",
-    program: Program { nodes: G_0055_0ab1b82e312193d5_NODES, root: 6 },
-    id: 85,
+    program: Program { nodes: G_006a_0ab1b82e312193d5_NODES, root: 6 },
+    id: 106,
 };
 
 /// `actor == owner || owner.money >= tile.price / 2`
-/// id = 86
-pub static G_0056_a1da5b0930f997cb_NODES: &[Node] = &[
+/// id = 107
+pub static G_006b_a1da5b0930f997cb_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -1775,28 +2246,28 @@ pub static G_0056_a1da5b0930f997cb_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 3, b: 6, c: 0 },
     Node { kind: Kind::Or, payload: 0, a: 2, b: 7, c: 0 },
 ];
-pub static G_0056_a1da5b0930f997cb: GuardIr = GuardIr {
+pub static G_006b_a1da5b0930f997cb: GuardIr = GuardIr {
     src: "actor == owner || owner.money >= tile.price / 2",
-    program: Program { nodes: G_0056_a1da5b0930f997cb_NODES, root: 8 },
-    id: 86,
+    program: Program { nodes: G_006b_a1da5b0930f997cb_NODES, root: 8 },
+    id: 107,
 };
 
 /// `band_is(owner, 'Pastel✽Palettes')`
-/// id = 87
-pub static G_0057_9fbce6f14f1310b9_NODES: &[Node] = &[
+/// id = 108
+pub static G_006c_9fbce6f14f1310b9_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 8981838353810470977, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 19, a: 0, b: 2, c: 0 },
 ];
-pub static G_0057_9fbce6f14f1310b9: GuardIr = GuardIr {
+pub static G_006c_9fbce6f14f1310b9: GuardIr = GuardIr {
     src: "band_is(owner, 'Pastel✽Palettes')",
-    program: Program { nodes: G_0057_9fbce6f14f1310b9_NODES, root: 2 },
-    id: 87,
+    program: Program { nodes: G_006c_9fbce6f14f1310b9_NODES, root: 2 },
+    id: 108,
 };
 
 /// `by != owner && by >= 0 && effect.hits(owner)`
-/// id = 88
-pub static G_0058_589d578f24e3ecda_NODES: &[Node] = &[
+/// id = 109
+pub static G_006d_589d578f24e3ecda_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 5, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -1808,15 +2279,15 @@ pub static G_0058_589d578f24e3ecda_NODES: &[Node] = &[
     Node { kind: Kind::Call, payload: 23, a: 7, b: 1, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 8, c: 0 },
 ];
-pub static G_0058_589d578f24e3ecda: GuardIr = GuardIr {
+pub static G_006d_589d578f24e3ecda: GuardIr = GuardIr {
     src: "by != owner && by >= 0 && effect.hits(owner)",
-    program: Program { nodes: G_0058_589d578f24e3ecda_NODES, root: 9 },
-    id: 88,
+    program: Program { nodes: G_006d_589d578f24e3ecda_NODES, root: 9 },
+    id: 109,
 };
 
 /// `by >= 0 && by != owner && effect.hits(owner)`
-/// id = 89
-pub static G_0059_5aca64944d37f9ca_NODES: &[Node] = &[
+/// id = 110
+pub static G_006e_5aca64944d37f9ca_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 5, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ge, payload: 0, a: 0, b: 1, c: 0 },
@@ -1828,26 +2299,26 @@ pub static G_0059_5aca64944d37f9ca_NODES: &[Node] = &[
     Node { kind: Kind::Call, payload: 23, a: 7, b: 1, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 8, c: 0 },
 ];
-pub static G_0059_5aca64944d37f9ca: GuardIr = GuardIr {
+pub static G_006e_5aca64944d37f9ca: GuardIr = GuardIr {
     src: "by >= 0 && by != owner && effect.hits(owner)",
-    program: Program { nodes: G_0059_5aca64944d37f9ca_NODES, root: 9 },
-    id: 89,
+    program: Program { nodes: G_006e_5aca64944d37f9ca_NODES, root: 9 },
+    id: 110,
 };
 
 /// `card.placed`
-/// id = 90
-pub static G_005a_fdbe52ad9cfe2ffa_NODES: &[Node] = &[
+/// id = 111
+pub static G_006f_fdbe52ad9cfe2ffa_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
 ];
-pub static G_005a_fdbe52ad9cfe2ffa: GuardIr = GuardIr {
+pub static G_006f_fdbe52ad9cfe2ffa: GuardIr = GuardIr {
     src: "card.placed",
-    program: Program { nodes: G_005a_fdbe52ad9cfe2ffa_NODES, root: 0 },
-    id: 90,
+    program: Program { nodes: G_006f_fdbe52ad9cfe2ffa_NODES, root: 0 },
+    id: 111,
 };
 
 /// `card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport`
-/// id = 91
-pub static G_005b_66b497b6d5bf9d41_NODES: &[Node] = &[
+/// id = 112
+pub static G_0070_66b497b6d5bf9d41_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -1862,15 +2333,46 @@ pub static G_005b_66b497b6d5bf9d41_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 7, b: 10, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 11, c: 0 },
 ];
-pub static G_005b_66b497b6d5bf9d41: GuardIr = GuardIr {
+pub static G_0070_66b497b6d5bf9d41: GuardIr = GuardIr {
     src: "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport",
-    program: Program { nodes: G_005b_66b497b6d5bf9d41_NODES, root: 12 },
-    id: 91,
+    program: Program { nodes: G_0070_66b497b6d5bf9d41_NODES, root: 12 },
+    id: 112,
+};
+
+/// `card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0`
+/// id = 113
+pub static G_0071_91d911cc9143dee7_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 1, b: 2, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 0, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 21, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 7, c: 0 },
+    Node { kind: Kind::Var, payload: 20, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 42, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 12, b: 13, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 11, b: 14, c: 0 },
+    Node { kind: Kind::Var, payload: 42, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 16, b: 17, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 15, b: 18, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 8, b: 19, c: 0 },
+];
+pub static G_0071_91d911cc9143dee7: GuardIr = GuardIr {
+    src: "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0",
+    program: Program { nodes: G_0071_91d911cc9143dee7_NODES, root: 20 },
+    id: 113,
 };
 
 /// `card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner`
-/// id = 92
-pub static G_005c_fe8d2f22beb9831f_NODES: &[Node] = &[
+/// id = 114
+pub static G_0072_fe8d2f22beb9831f_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -1890,15 +2392,15 @@ pub static G_005c_fe8d2f22beb9831f_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 12, b: 15, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 9, b: 16, c: 0 },
 ];
-pub static G_005c_fe8d2f22beb9831f: GuardIr = GuardIr {
+pub static G_0072_fe8d2f22beb9831f: GuardIr = GuardIr {
     src: "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner",
-    program: Program { nodes: G_005c_fe8d2f22beb9831f_NODES, root: 17 },
-    id: 92,
+    program: Program { nodes: G_0072_fe8d2f22beb9831f_NODES, root: 17 },
+    id: 114,
 };
 
 /// `card.placed && actor != owner && tile.id >= 0`
-/// id = 93
-pub static G_005d_05ba96ecc3685604_NODES: &[Node] = &[
+/// id = 115
+pub static G_0073_05ba96ecc3685604_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -1909,30 +2411,30 @@ pub static G_005d_05ba96ecc3685604_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 5, b: 6, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 7, c: 0 },
 ];
-pub static G_005d_05ba96ecc3685604: GuardIr = GuardIr {
+pub static G_0073_05ba96ecc3685604: GuardIr = GuardIr {
     src: "card.placed && actor != owner && tile.id >= 0",
-    program: Program { nodes: G_005d_05ba96ecc3685604_NODES, root: 8 },
-    id: 93,
+    program: Program { nodes: G_0073_05ba96ecc3685604_NODES, root: 8 },
+    id: 115,
 };
 
 /// `card.placed && actor == owner`
-/// id = 94
-pub static G_005e_93156b8e3a2389ac_NODES: &[Node] = &[
+/// id = 116
+pub static G_0074_93156b8e3a2389ac_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 1, b: 2, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 3, c: 0 },
 ];
-pub static G_005e_93156b8e3a2389ac: GuardIr = GuardIr {
+pub static G_0074_93156b8e3a2389ac: GuardIr = GuardIr {
     src: "card.placed && actor == owner",
-    program: Program { nodes: G_005e_93156b8e3a2389ac_NODES, root: 4 },
-    id: 94,
+    program: Program { nodes: G_0074_93156b8e3a2389ac_NODES, root: 4 },
+    id: 116,
 };
 
 /// `card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))`
-/// id = 95
-pub static G_005f_4c851ba8cd4accbe_NODES: &[Node] = &[
+/// id = 117
+pub static G_0075_4c851ba8cd4accbe_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -1964,15 +2466,67 @@ pub static G_005f_4c851ba8cd4accbe_NODES: &[Node] = &[
     Node { kind: Kind::Or, payload: 0, a: 18, b: 27, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 28, c: 0 },
 ];
-pub static G_005f_4c851ba8cd4accbe: GuardIr = GuardIr {
+pub static G_0075_4c851ba8cd4accbe: GuardIr = GuardIr {
     src: "card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))",
-    program: Program { nodes: G_005f_4c851ba8cd4accbe_NODES, root: 29 },
-    id: 95,
+    program: Program { nodes: G_0075_4c851ba8cd4accbe_NODES, root: 29 },
+    id: 117,
+};
+
+/// `card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0`
+/// id = 118
+pub static G_0076_3cb66ee466f12c92_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 1, b: 2, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 0, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 20, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 7, c: 0 },
+    Node { kind: Kind::Var, payload: 22, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 10, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 9, b: 12, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 8, b: 13, c: 0 },
+];
+pub static G_0076_3cb66ee466f12c92: GuardIr = GuardIr {
+    src: "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0",
+    program: Program { nodes: G_0076_3cb66ee466f12c92_NODES, root: 14 },
+    id: 118,
+};
+
+/// `card.placed && actor == owner && target >= 0 && target != owner && value > 0`
+/// id = 119
+pub static G_0077_ad8c3390cb7830c7_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 1, b: 2, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 0, b: 3, c: 0 },
+    Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 4, b: 7, c: 0 },
+    Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 9, b: 10, c: 0 },
+    Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 12, b: 13, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 11, b: 14, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 8, b: 15, c: 0 },
+];
+pub static G_0077_ad8c3390cb7830c7: GuardIr = GuardIr {
+    src: "card.placed && actor == owner && target >= 0 && target != owner && value > 0",
+    program: Program { nodes: G_0077_ad8c3390cb7830c7_NODES, root: 16 },
+    id: 119,
 };
 
 /// `card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')`
-/// id = 96
-pub static G_0060_5a7a9298f33ce825_NODES: &[Node] = &[
+/// id = 120
+pub static G_0078_5a7a9298f33ce825_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -1984,15 +2538,15 @@ pub static G_0060_5a7a9298f33ce825_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 5, b: 7, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 8, c: 0 },
 ];
-pub static G_0060_5a7a9298f33ce825: GuardIr = GuardIr {
+pub static G_0078_5a7a9298f33ce825: GuardIr = GuardIr {
     src: "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')",
-    program: Program { nodes: G_0060_5a7a9298f33ce825_NODES, root: 9 },
-    id: 96,
+    program: Program { nodes: G_0078_5a7a9298f33ce825_NODES, root: 9 },
+    id: 120,
 };
 
 /// `card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2`
-/// id = 97
-pub static G_0061_cd7b2ee14291dcc6_NODES: &[Node] = &[
+/// id = 121
+pub static G_0079_cd7b2ee14291dcc6_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -2017,15 +2571,15 @@ pub static G_0061_cd7b2ee14291dcc6_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 16, b: 20, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 9, b: 21, c: 0 },
 ];
-pub static G_0061_cd7b2ee14291dcc6: GuardIr = GuardIr {
+pub static G_0079_cd7b2ee14291dcc6: GuardIr = GuardIr {
     src: "card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2",
-    program: Program { nodes: G_0061_cd7b2ee14291dcc6_NODES, root: 22 },
-    id: 97,
+    program: Program { nodes: G_0079_cd7b2ee14291dcc6_NODES, root: 22 },
+    id: 121,
 };
 
 /// `card.placed && actor == owner && value > 0 && card.counter('crystals') > 0`
-/// id = 98
-pub static G_0062_6d65e1560da04b3b_NODES: &[Node] = &[
+/// id = 122
+pub static G_007a_6d65e1560da04b3b_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -2041,15 +2595,15 @@ pub static G_0062_6d65e1560da04b3b_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 7, b: 11, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 12, c: 0 },
 ];
-pub static G_0062_6d65e1560da04b3b: GuardIr = GuardIr {
+pub static G_007a_6d65e1560da04b3b: GuardIr = GuardIr {
     src: "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0",
-    program: Program { nodes: G_0062_6d65e1560da04b3b_NODES, root: 13 },
-    id: 98,
+    program: Program { nodes: G_007a_6d65e1560da04b3b_NODES, root: 13 },
+    id: 122,
 };
 
 /// `card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1`
-/// id = 99
-pub static G_0063_f4452a7520446870_NODES: &[Node] = &[
+/// id = 123
+pub static G_007b_f4452a7520446870_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: -5803096773376438969, a: 0, b: 0, c: 0 },
@@ -2066,15 +2620,15 @@ pub static G_0063_f4452a7520446870_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 8, b: 12, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 13, c: 0 },
 ];
-pub static G_0063_f4452a7520446870: GuardIr = GuardIr {
+pub static G_007b_f4452a7520446870: GuardIr = GuardIr {
     src: "card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1",
-    program: Program { nodes: G_0063_f4452a7520446870_NODES, root: 14 },
-    id: 99,
+    program: Program { nodes: G_007b_f4452a7520446870_NODES, root: 14 },
+    id: 123,
 };
 
 /// `card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1`
-/// id = 100
-pub static G_0064_11e092dcdda89e3c_NODES: &[Node] = &[
+/// id = 124
+pub static G_007c_11e092dcdda89e3c_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: -5803096773376438969, a: 0, b: 0, c: 0 },
@@ -2091,15 +2645,15 @@ pub static G_0064_11e092dcdda89e3c_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 8, b: 12, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 7, b: 13, c: 0 },
 ];
-pub static G_0064_11e092dcdda89e3c: GuardIr = GuardIr {
+pub static G_007c_11e092dcdda89e3c: GuardIr = GuardIr {
     src: "card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1",
-    program: Program { nodes: G_0064_11e092dcdda89e3c_NODES, root: 14 },
-    id: 100,
+    program: Program { nodes: G_007c_11e092dcdda89e3c_NODES, root: 14 },
+    id: 124,
 };
 
 /// `card.placed && card.counter('crystals') > 0`
-/// id = 101
-pub static G_0065_3f43337be5d56596_NODES: &[Node] = &[
+/// id = 125
+pub static G_007d_3f43337be5d56596_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 8773857897715966414, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 3, a: 1, b: 1, c: 0 },
@@ -2107,15 +2661,15 @@ pub static G_0065_3f43337be5d56596_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 2, b: 3, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 4, c: 0 },
 ];
-pub static G_0065_3f43337be5d56596: GuardIr = GuardIr {
+pub static G_007d_3f43337be5d56596: GuardIr = GuardIr {
     src: "card.placed && card.counter('crystals') > 0",
-    program: Program { nodes: G_0065_3f43337be5d56596_NODES, root: 5 },
-    id: 101,
+    program: Program { nodes: G_007d_3f43337be5d56596_NODES, root: 5 },
+    id: 125,
 };
 
 /// `card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id`
-/// id = 102
-pub static G_0066_b31c01abac6933b0_NODES: &[Node] = &[
+/// id = 126
+pub static G_007e_b31c01abac6933b0_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 20, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
@@ -2130,30 +2684,30 @@ pub static G_0066_b31c01abac6933b0_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 7, b: 10, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 11, c: 0 },
 ];
-pub static G_0066_b31c01abac6933b0: GuardIr = GuardIr {
+pub static G_007e_b31c01abac6933b0: GuardIr = GuardIr {
     src: "card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id",
-    program: Program { nodes: G_0066_b31c01abac6933b0_NODES, root: 12 },
-    id: 102,
+    program: Program { nodes: G_007e_b31c01abac6933b0_NODES, root: 12 },
+    id: 126,
 };
 
 /// `card.placed && owner.hand >= 7`
-/// id = 103
-pub static G_0067_5165c261ab2788b0_NODES: &[Node] = &[
+/// id = 127
+pub static G_007f_5165c261ab2788b0_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 30, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 7, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ge, payload: 0, a: 1, b: 2, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 3, c: 0 },
 ];
-pub static G_0067_5165c261ab2788b0: GuardIr = GuardIr {
+pub static G_007f_5165c261ab2788b0: GuardIr = GuardIr {
     src: "card.placed && owner.hand >= 7",
-    program: Program { nodes: G_0067_5165c261ab2788b0_NODES, root: 4 },
-    id: 103,
+    program: Program { nodes: G_007f_5165c261ab2788b0_NODES, root: 4 },
+    id: 127,
 };
 
 /// `card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner`
-/// id = 104
-pub static G_0068_271f5a68db2c7a9f_NODES: &[Node] = &[
+/// id = 128
+pub static G_0080_271f5a68db2c7a9f_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 6, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 1, c: 0 },
@@ -2170,15 +2724,15 @@ pub static G_0068_271f5a68db2c7a9f_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 9, b: 12, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 13, c: 0 },
 ];
-pub static G_0068_271f5a68db2c7a9f: GuardIr = GuardIr {
+pub static G_0080_271f5a68db2c7a9f: GuardIr = GuardIr {
     src: "card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner",
-    program: Program { nodes: G_0068_271f5a68db2c7a9f_NODES, root: 14 },
-    id: 104,
+    program: Program { nodes: G_0080_271f5a68db2c7a9f_NODES, root: 14 },
+    id: 128,
 };
 
 /// `card.placed && pay_is_rent && target == owner`
-/// id = 105
-pub static G_0069_f240b0be4153e859_NODES: &[Node] = &[
+/// id = 129
+pub static G_0081_f240b0be4153e859_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 6, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 1, c: 0 },
@@ -2187,15 +2741,42 @@ pub static G_0069_f240b0be4153e859_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_0069_f240b0be4153e859: GuardIr = GuardIr {
+pub static G_0081_f240b0be4153e859: GuardIr = GuardIr {
     src: "card.placed && pay_is_rent && target == owner",
-    program: Program { nodes: G_0069_f240b0be4153e859_NODES, root: 6 },
-    id: 105,
+    program: Program { nodes: G_0081_f240b0be4153e859_NODES, root: 6 },
+    id: 129,
+};
+
+/// `card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner`
+/// id = 130
+pub static G_0082_ad8a45bc0a29e7ff_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 6, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 3, b: 4, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1160591395881373262, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 7, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 8, b: 9, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1160591395881373262, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 11, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 12, b: 13, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 10, b: 14, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 6, b: 15, c: 0 },
+];
+pub static G_0082_ad8a45bc0a29e7ff: GuardIr = GuardIr {
+    src: "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
+    program: Program { nodes: G_0082_ad8a45bc0a29e7ff_NODES, root: 16 },
+    id: 130,
 };
 
 /// `card.placed && pay_is_rent && target == owner && value > 0`
-/// id = 106
-pub static G_006a_a22ec087ee725484_NODES: &[Node] = &[
+/// id = 131
+pub static G_0083_a22ec087ee725484_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 6, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 1, c: 0 },
@@ -2208,15 +2789,15 @@ pub static G_006a_a22ec087ee725484_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 5, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 9, c: 0 },
 ];
-pub static G_006a_a22ec087ee725484: GuardIr = GuardIr {
+pub static G_0083_a22ec087ee725484: GuardIr = GuardIr {
     src: "card.placed && pay_is_rent && target == owner && value > 0",
-    program: Program { nodes: G_006a_a22ec087ee725484_NODES, root: 10 },
-    id: 106,
+    program: Program { nodes: G_0083_a22ec087ee725484_NODES, root: 10 },
+    id: 131,
 };
 
 /// `card.placed && slot('one_of_us_partner') > 0`
-/// id = 107
-pub static G_006b_5e0c0c45b9249d17_NODES: &[Node] = &[
+/// id = 132
+pub static G_0084_5e0c0c45b9249d17_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 779181106717526243, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 1, b: 1, c: 0 },
@@ -2224,15 +2805,42 @@ pub static G_006b_5e0c0c45b9249d17_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 2, b: 3, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 4, c: 0 },
 ];
-pub static G_006b_5e0c0c45b9249d17: GuardIr = GuardIr {
+pub static G_0084_5e0c0c45b9249d17: GuardIr = GuardIr {
     src: "card.placed && slot('one_of_us_partner') > 0",
-    program: Program { nodes: G_006b_5e0c0c45b9249d17_NODES, root: 5 },
-    id: 107,
+    program: Program { nodes: G_0084_5e0c0c45b9249d17_NODES, root: 5 },
+    id: 132,
+};
+
+/// `card.placed && slot('one_of_us_partner') > 0 && (actor == owner || actor == slot('one_of_us_partner') - 1)`
+/// id = 133
+pub static G_0085_7b59a81a3e0ea438_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 779181106717526243, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 1, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Gt, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 0, b: 4, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 6, b: 7, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 779181106717526243, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 10, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Sub, payload: 0, a: 11, b: 12, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 9, b: 13, c: 0 },
+    Node { kind: Kind::Or, payload: 0, a: 8, b: 14, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 5, b: 15, c: 0 },
+];
+pub static G_0085_7b59a81a3e0ea438: GuardIr = GuardIr {
+    src: "card.placed && slot('one_of_us_partner') > 0 && (actor == owner || actor == slot('one_of_us_partner') - 1)",
+    program: Program { nodes: G_0085_7b59a81a3e0ea438_NODES, root: 16 },
+    id: 133,
 };
 
 /// `card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0`
-/// id = 108
-pub static G_006c_c0f2729a09dce191_NODES: &[Node] = &[
+/// id = 134
+pub static G_0086_c0f2729a09dce191_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 779181106717526243, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 1, b: 1, c: 0 },
@@ -2246,15 +2854,15 @@ pub static G_006c_c0f2729a09dce191_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 6, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 5, b: 10, c: 0 },
 ];
-pub static G_006c_c0f2729a09dce191: GuardIr = GuardIr {
+pub static G_0086_c0f2729a09dce191: GuardIr = GuardIr {
     src: "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0",
-    program: Program { nodes: G_006c_c0f2729a09dce191_NODES, root: 11 },
-    id: 108,
+    program: Program { nodes: G_0086_c0f2729a09dce191_NODES, root: 11 },
+    id: 134,
 };
 
 /// `card.placed && slot('saaya_sky_passed') != 0`
-/// id = 109
-pub static G_006d_3659627e8abd0883_NODES: &[Node] = &[
+/// id = 135
+pub static G_0087_3659627e8abd0883_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: -717182783503655855, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 1, b: 1, c: 0 },
@@ -2262,15 +2870,15 @@ pub static G_006d_3659627e8abd0883_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 2, b: 3, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 0, b: 4, c: 0 },
 ];
-pub static G_006d_3659627e8abd0883: GuardIr = GuardIr {
+pub static G_0087_3659627e8abd0883: GuardIr = GuardIr {
     src: "card.placed && slot('saaya_sky_passed') != 0",
-    program: Program { nodes: G_006d_3659627e8abd0883_NODES, root: 5 },
-    id: 109,
+    program: Program { nodes: G_0087_3659627e8abd0883_NODES, root: 5 },
+    id: 135,
 };
 
 /// `card.placed && turn_player == owner && plan.fixed_roll == null`
-/// id = 110
-pub static G_006e_48e0a5c78ec137fc_NODES: &[Node] = &[
+/// id = 136
+pub static G_0088_48e0a5c78ec137fc_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 9, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
@@ -2281,15 +2889,15 @@ pub static G_006e_48e0a5c78ec137fc_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 5, b: 6, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 4, b: 7, c: 0 },
 ];
-pub static G_006e_48e0a5c78ec137fc: GuardIr = GuardIr {
+pub static G_0088_48e0a5c78ec137fc: GuardIr = GuardIr {
     src: "card.placed && turn_player == owner && plan.fixed_roll == null",
-    program: Program { nodes: G_006e_48e0a5c78ec137fc_NODES, root: 8 },
-    id: 110,
+    program: Program { nodes: G_0088_48e0a5c78ec137fc_NODES, root: 8 },
+    id: 136,
 };
 
 /// `card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null`
-/// id = 111
-pub static G_006f_3233a0cf9be3d247_NODES: &[Node] = &[
+/// id = 137
+pub static G_0089_3233a0cf9be3d247_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 9, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
@@ -2309,15 +2917,15 @@ pub static G_006f_3233a0cf9be3d247_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 12, b: 15, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 8, b: 16, c: 0 },
 ];
-pub static G_006f_3233a0cf9be3d247: GuardIr = GuardIr {
+pub static G_0089_3233a0cf9be3d247: GuardIr = GuardIr {
     src: "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null",
-    program: Program { nodes: G_006f_3233a0cf9be3d247_NODES, root: 17 },
-    id: 111,
+    program: Program { nodes: G_0089_3233a0cf9be3d247_NODES, root: 17 },
+    id: 137,
 };
 
 /// `chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2`
-/// id = 112
-pub static G_0070_9cea689ee3a7e860_NODES: &[Node] = &[
+/// id = 138
+pub static G_008a_9cea689ee3a7e860_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: 15, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 22, a: 0, b: 1, c: 0 },
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
@@ -2338,38 +2946,61 @@ pub static G_0070_9cea689ee3a7e860_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 12, b: 16, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 9, b: 17, c: 0 },
 ];
-pub static G_0070_9cea689ee3a7e860: GuardIr = GuardIr {
+pub static G_008a_9cea689ee3a7e860: GuardIr = GuardIr {
     src: "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
-    program: Program { nodes: G_0070_9cea689ee3a7e860_NODES, root: 18 },
-    id: 112,
+    program: Program { nodes: G_008a_9cea689ee3a7e860_NODES, root: 18 },
+    id: 138,
 };
 
 /// `false`
-/// id = 113
-pub static G_0071_b5fae2c14238b978_NODES: &[Node] = &[
+/// id = 139
+pub static G_008b_b5fae2c14238b978_NODES: &[Node] = &[
     Node { kind: Kind::ConstBool, payload: 0, a: 0, b: 0, c: 0 },
 ];
-pub static G_0071_b5fae2c14238b978: GuardIr = GuardIr {
+pub static G_008b_b5fae2c14238b978: GuardIr = GuardIr {
     src: "false",
-    program: Program { nodes: G_0071_b5fae2c14238b978_NODES, root: 0 },
-    id: 113,
+    program: Program { nodes: G_008b_b5fae2c14238b978_NODES, root: 0 },
+    id: 139,
 };
 
-/// `is_circle(tile.id)`
-/// id = 114
-pub static G_0072_d979db6d387faafc_NODES: &[Node] = &[
+/// `fire(owner) >= 1`
+/// id = 140
+pub static G_008c_e1b99189fd4b59f5_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 11, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 1, b: 2, c: 0 },
+];
+pub static G_008c_e1b99189fd4b59f5: GuardIr = GuardIr {
+    src: "fire(owner) >= 1",
+    program: Program { nodes: G_008c_e1b99189fd4b59f5_NODES, root: 3 },
+    id: 140,
+};
+
+/// `is_circle(tile.id) && actor >= 0 && money(actor) >= 500`
+/// id = 141
+pub static G_008d_644a4e33596f7248_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 6, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 2, b: 3, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 1, b: 4, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 10, a: 6, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 500, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 7, b: 8, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 5, b: 9, c: 0 },
 ];
-pub static G_0072_d979db6d387faafc: GuardIr = GuardIr {
-    src: "is_circle(tile.id)",
-    program: Program { nodes: G_0072_d979db6d387faafc_NODES, root: 1 },
-    id: 114,
+pub static G_008d_644a4e33596f7248: GuardIr = GuardIr {
+    src: "is_circle(tile.id) && actor >= 0 && money(actor) >= 500",
+    program: Program { nodes: G_008d_644a4e33596f7248_NODES, root: 10 },
+    id: 141,
 };
 
 /// `is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')`
-/// id = 115
-pub static G_0073_24d2f2ef177d50dc_NODES: &[Node] = &[
+/// id = 142
+pub static G_008e_24d2f2ef177d50dc_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 6, a: 0, b: 1, c: 0 },
     Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
@@ -2378,125 +3009,96 @@ pub static G_0073_24d2f2ef177d50dc_NODES: &[Node] = &[
     Node { kind: Kind::Eq, payload: 0, a: 2, b: 4, c: 0 },
     Node { kind: Kind::Or, payload: 0, a: 1, b: 5, c: 0 },
 ];
-pub static G_0073_24d2f2ef177d50dc: GuardIr = GuardIr {
+pub static G_008e_24d2f2ef177d50dc: GuardIr = GuardIr {
     src: "is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
-    program: Program { nodes: G_0073_24d2f2ef177d50dc_NODES, root: 6 },
-    id: 115,
-};
-
-/// `move.main && tile.id >= 0`
-/// id = 116
-pub static G_0074_e73bc7b8119759bf_NODES: &[Node] = &[
-    Node { kind: Kind::Var, payload: 22, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Ge, payload: 0, a: 1, b: 2, c: 0 },
-    Node { kind: Kind::And, payload: 0, a: 0, b: 3, c: 0 },
-];
-pub static G_0074_e73bc7b8119759bf: GuardIr = GuardIr {
-    src: "move.main && tile.id >= 0",
-    program: Program { nodes: G_0074_e73bc7b8119759bf_NODES, root: 4 },
-    id: 116,
+    program: Program { nodes: G_008e_24d2f2ef177d50dc_NODES, root: 6 },
+    id: 142,
 };
 
 /// `owner.money >= 999999`
-/// id = 117
-pub static G_0075_a0b3d9ca51d8cbbf_NODES: &[Node] = &[
+/// id = 143
+pub static G_008f_a0b3d9ca51d8cbbf_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 27, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 999999, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ge, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_0075_a0b3d9ca51d8cbbf: GuardIr = GuardIr {
+pub static G_008f_a0b3d9ca51d8cbbf: GuardIr = GuardIr {
     src: "owner.money >= 999999",
-    program: Program { nodes: G_0075_a0b3d9ca51d8cbbf_NODES, root: 2 },
-    id: 117,
+    program: Program { nodes: G_008f_a0b3d9ca51d8cbbf_NODES, root: 2 },
+    id: 143,
 };
 
 /// `owner.out == 0`
-/// id = 118
-pub static G_0076_a2d97741ecfeb7d4_NODES: &[Node] = &[
+/// id = 144
+pub static G_0090_a2d97741ecfeb7d4_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 32, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_0076_a2d97741ecfeb7d4: GuardIr = GuardIr {
+pub static G_0090_a2d97741ecfeb7d4: GuardIr = GuardIr {
     src: "owner.out == 0",
-    program: Program { nodes: G_0076_a2d97741ecfeb7d4_NODES, root: 2 },
-    id: 118,
+    program: Program { nodes: G_0090_a2d97741ecfeb7d4_NODES, root: 2 },
+    id: 144,
 };
 
 /// `owner.pos >= 0`
-/// id = 119
-pub static G_0077_29b95104ca935ef9_NODES: &[Node] = &[
+/// id = 145
+pub static G_0091_29b95104ca935ef9_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 31, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ge, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_0077_29b95104ca935ef9: GuardIr = GuardIr {
+pub static G_0091_29b95104ca935ef9: GuardIr = GuardIr {
     src: "owner.pos >= 0",
-    program: Program { nodes: G_0077_29b95104ca935ef9_NODES, root: 2 },
-    id: 119,
+    program: Program { nodes: G_0091_29b95104ca935ef9_NODES, root: 2 },
+    id: 145,
 };
 
 /// `slot('detour_next_roll') != 0`
-/// id = 120
-pub static G_0078_7dcd042f63040007_NODES: &[Node] = &[
+/// id = 146
+pub static G_0092_7dcd042f63040007_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: 223505296369955842, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 0, b: 1, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 1, b: 2, c: 0 },
 ];
-pub static G_0078_7dcd042f63040007: GuardIr = GuardIr {
+pub static G_0092_7dcd042f63040007: GuardIr = GuardIr {
     src: "slot('detour_next_roll') != 0",
-    program: Program { nodes: G_0078_7dcd042f63040007_NODES, root: 3 },
-    id: 120,
+    program: Program { nodes: G_0092_7dcd042f63040007_NODES, root: 3 },
+    id: 146,
 };
 
 /// `slot('skill.kasumiGroup.start') == 0`
-/// id = 121
-pub static G_0079_ae1f98d1c044222e_NODES: &[Node] = &[
+/// id = 147
+pub static G_0093_ae1f98d1c044222e_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: -6725935522373136169, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 0, b: 1, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 1, b: 2, c: 0 },
 ];
-pub static G_0079_ae1f98d1c044222e: GuardIr = GuardIr {
+pub static G_0093_ae1f98d1c044222e: GuardIr = GuardIr {
     src: "slot('skill.kasumiGroup.start') == 0",
-    program: Program { nodes: G_0079_ae1f98d1c044222e_NODES, root: 3 },
-    id: 121,
+    program: Program { nodes: G_0093_ae1f98d1c044222e_NODES, root: 3 },
+    id: 147,
 };
 
 /// `slot('skillState') != 0`
-/// id = 122
-pub static G_007a_ff814c5b5d018c00_NODES: &[Node] = &[
+/// id = 148
+pub static G_0094_ff814c5b5d018c00_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: 5275723767935477323, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 0, b: 1, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 1, b: 2, c: 0 },
 ];
-pub static G_007a_ff814c5b5d018c00: GuardIr = GuardIr {
+pub static G_0094_ff814c5b5d018c00: GuardIr = GuardIr {
     src: "slot('skillState') != 0",
-    program: Program { nodes: G_007a_ff814c5b5d018c00_NODES, root: 3 },
-    id: 122,
-};
-
-/// `slot('skillState') == 2`
-/// id = 123
-pub static G_007b_da91d572b360f0a2_NODES: &[Node] = &[
-    Node { kind: Kind::ConstInt, payload: 5275723767935477323, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Call, payload: 0, a: 0, b: 1, c: 0 },
-    Node { kind: Kind::ConstInt, payload: 2, a: 0, b: 0, c: 0 },
-    Node { kind: Kind::Eq, payload: 0, a: 1, b: 2, c: 0 },
-];
-pub static G_007b_da91d572b360f0a2: GuardIr = GuardIr {
-    src: "slot('skillState') == 2",
-    program: Program { nodes: G_007b_da91d572b360f0a2_NODES, root: 3 },
-    id: 123,
+    program: Program { nodes: G_0094_ff814c5b5d018c00_NODES, root: 3 },
+    id: 148,
 };
 
 /// `slot('skillState') == 2 && card.placed`
-/// id = 124
-pub static G_007c_a46350d8d6307dff_NODES: &[Node] = &[
+/// id = 149
+pub static G_0095_a46350d8d6307dff_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: 5275723767935477323, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 0, b: 1, c: 0 },
     Node { kind: Kind::ConstInt, payload: 2, a: 0, b: 0, c: 0 },
@@ -2504,15 +3106,15 @@ pub static G_007c_a46350d8d6307dff_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 41, a: 0, b: 0, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 3, b: 4, c: 0 },
 ];
-pub static G_007c_a46350d8d6307dff: GuardIr = GuardIr {
+pub static G_0095_a46350d8d6307dff: GuardIr = GuardIr {
     src: "slot('skillState') == 2 && card.placed",
-    program: Program { nodes: G_007c_a46350d8d6307dff_NODES, root: 5 },
-    id: 124,
+    program: Program { nodes: G_0095_a46350d8d6307dff_NODES, root: 5 },
+    id: 149,
 };
 
 /// `slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0`
-/// id = 125
-pub static G_007d_472c5ea21afeb478_NODES: &[Node] = &[
+/// id = 150
+pub static G_0096_472c5ea21afeb478_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: 5275723767935477323, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 0, b: 1, c: 0 },
     Node { kind: Kind::ConstInt, payload: 2, a: 0, b: 0, c: 0 },
@@ -2528,41 +3130,60 @@ pub static G_007d_472c5ea21afeb478_NODES: &[Node] = &[
     Node { kind: Kind::And, payload: 0, a: 8, b: 11, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 5, b: 12, c: 0 },
 ];
-pub static G_007d_472c5ea21afeb478: GuardIr = GuardIr {
+pub static G_0096_472c5ea21afeb478: GuardIr = GuardIr {
     src: "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
-    program: Program { nodes: G_007d_472c5ea21afeb478_NODES, root: 13 },
-    id: 125,
+    program: Program { nodes: G_0096_472c5ea21afeb478_NODES, root: 13 },
+    id: 150,
+};
+
+/// `slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4`
+/// id = 151
+pub static G_0097_061dfbff069445fd_NODES: &[Node] = &[
+    Node { kind: Kind::ConstInt, payload: 5275723767935477323, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 2, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Eq, payload: 0, a: 1, b: 2, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -3988251891337723221, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 0, a: 4, b: 1, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 4, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Lt, payload: 0, a: 5, b: 6, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 3, b: 7, c: 0 },
+];
+pub static G_0097_061dfbff069445fd: GuardIr = GuardIr {
+    src: "slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4",
+    program: Program { nodes: G_0097_061dfbff069445fd_NODES, root: 8 },
+    id: 151,
 };
 
 /// `target != owner`
-/// id = 126
-pub static G_007e_66a4705953442e49_NODES: &[Node] = &[
+/// id = 152
+pub static G_0098_66a4705953442e49_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_007e_66a4705953442e49: GuardIr = GuardIr {
+pub static G_0098_66a4705953442e49: GuardIr = GuardIr {
     src: "target != owner",
-    program: Program { nodes: G_007e_66a4705953442e49_NODES, root: 2 },
-    id: 126,
+    program: Program { nodes: G_0098_66a4705953442e49_NODES, root: 2 },
+    id: 152,
 };
 
 /// `target == owner`
-/// id = 127
-pub static G_007f_a3e698387f8996ed_NODES: &[Node] = &[
+/// id = 153
+pub static G_0099_a3e698387f8996ed_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_007f_a3e698387f8996ed: GuardIr = GuardIr {
+pub static G_0099_a3e698387f8996ed: GuardIr = GuardIr {
     src: "target == owner",
-    program: Program { nodes: G_007f_a3e698387f8996ed_NODES, root: 2 },
-    id: 127,
+    program: Program { nodes: G_0099_a3e698387f8996ed_NODES, root: 2 },
+    id: 153,
 };
 
 /// `target == owner && actor != owner`
-/// id = 128
-pub static G_0080_587bc78fdd6d89af_NODES: &[Node] = &[
+/// id = 154
+pub static G_009a_587bc78fdd6d89af_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -2571,15 +3192,15 @@ pub static G_0080_587bc78fdd6d89af_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
 ];
-pub static G_0080_587bc78fdd6d89af: GuardIr = GuardIr {
+pub static G_009a_587bc78fdd6d89af: GuardIr = GuardIr {
     src: "target == owner && actor != owner",
-    program: Program { nodes: G_0080_587bc78fdd6d89af_NODES, root: 6 },
-    id: 128,
+    program: Program { nodes: G_009a_587bc78fdd6d89af_NODES, root: 6 },
+    id: 154,
 };
 
 /// `target == owner && actor != owner && slot('skillState') != 2`
-/// id = 129
-pub static G_0081_8ac9e21f308cc214_NODES: &[Node] = &[
+/// id = 155
+pub static G_009b_8ac9e21f308cc214_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -2593,15 +3214,15 @@ pub static G_0081_8ac9e21f308cc214_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 8, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 10, c: 0 },
 ];
-pub static G_0081_8ac9e21f308cc214: GuardIr = GuardIr {
+pub static G_009b_8ac9e21f308cc214: GuardIr = GuardIr {
     src: "target == owner && actor != owner && slot('skillState') != 2",
-    program: Program { nodes: G_0081_8ac9e21f308cc214_NODES, root: 11 },
-    id: 129,
+    program: Program { nodes: G_009b_8ac9e21f308cc214_NODES, root: 11 },
+    id: 155,
 };
 
 /// `target == owner && effect.has(Abnormal)`
-/// id = 130
-pub static G_0082_48527c7c0220177d_NODES: &[Node] = &[
+/// id = 156
+pub static G_009c_48527c7c0220177d_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -2609,15 +3230,15 @@ pub static G_0082_48527c7c0220177d_NODES: &[Node] = &[
     Node { kind: Kind::Call, payload: 22, a: 3, b: 1, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 4, c: 0 },
 ];
-pub static G_0082_48527c7c0220177d: GuardIr = GuardIr {
+pub static G_009c_48527c7c0220177d: GuardIr = GuardIr {
     src: "target == owner && effect.has(Abnormal)",
-    program: Program { nodes: G_0082_48527c7c0220177d_NODES, root: 5 },
-    id: 130,
+    program: Program { nodes: G_009c_48527c7c0220177d_NODES, root: 5 },
+    id: 156,
 };
 
 /// `target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key`
-/// id = 131
-pub static G_0083_ca1125638da6ff34_NODES: &[Node] = &[
+/// id = 157
+pub static G_009d_ca1125638da6ff34_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -2630,15 +3251,15 @@ pub static G_0083_ca1125638da6ff34_NODES: &[Node] = &[
     Node { kind: Kind::Ne, payload: 0, a: 7, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 5, b: 9, c: 0 },
 ];
-pub static G_0083_ca1125638da6ff34: GuardIr = GuardIr {
+pub static G_009d_ca1125638da6ff34: GuardIr = GuardIr {
     src: "target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key",
-    program: Program { nodes: G_0083_ca1125638da6ff34_NODES, root: 10 },
-    id: 131,
+    program: Program { nodes: G_009d_ca1125638da6ff34_NODES, root: 10 },
+    id: 157,
 };
 
 /// `target == owner && effect.has(Abnormal) && slot('lastWalk') > 0`
-/// id = 132
-pub static G_0084_ffb131a0f64d037b_NODES: &[Node] = &[
+/// id = 158
+pub static G_009e_ffb131a0f64d037b_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -2651,15 +3272,15 @@ pub static G_0084_ffb131a0f64d037b_NODES: &[Node] = &[
     Node { kind: Kind::Gt, payload: 0, a: 7, b: 8, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 5, b: 9, c: 0 },
 ];
-pub static G_0084_ffb131a0f64d037b: GuardIr = GuardIr {
+pub static G_009e_ffb131a0f64d037b: GuardIr = GuardIr {
     src: "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0",
-    program: Program { nodes: G_0084_ffb131a0f64d037b_NODES, root: 10 },
-    id: 132,
+    program: Program { nodes: G_009e_ffb131a0f64d037b_NODES, root: 10 },
+    id: 158,
 };
 
 /// `target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1`
-/// id = 133
-pub static G_0085_1e25469f92cf19d4_NODES: &[Node] = &[
+/// id = 159
+pub static G_009f_1e25469f92cf19d4_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 2, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
@@ -2673,69 +3294,93 @@ pub static G_0085_1e25469f92cf19d4_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 8, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 10, c: 0 },
 ];
-pub static G_0085_1e25469f92cf19d4: GuardIr = GuardIr {
+pub static G_009f_1e25469f92cf19d4: GuardIr = GuardIr {
     src: "target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1",
-    program: Program { nodes: G_0085_1e25469f92cf19d4_NODES, root: 11 },
-    id: 133,
+    program: Program { nodes: G_009f_1e25469f92cf19d4_NODES, root: 11 },
+    id: 159,
 };
 
 /// `tile.id == tile_named('星之鼓动山丘')`
-/// id = 134
-pub static G_0086_408f0aebed7ca878_NODES: &[Node] = &[
+/// id = 160
+pub static G_00a0_408f0aebed7ca878_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: -3727527183089806096, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 5, a: 1, b: 1, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 2, c: 0 },
 ];
-pub static G_0086_408f0aebed7ca878: GuardIr = GuardIr {
+pub static G_00a0_408f0aebed7ca878: GuardIr = GuardIr {
     src: "tile.id == tile_named('星之鼓动山丘')",
-    program: Program { nodes: G_0086_408f0aebed7ca878_NODES, root: 3 },
-    id: 134,
+    program: Program { nodes: G_00a0_408f0aebed7ca878_NODES, root: 3 },
+    id: 160,
+};
+
+/// `tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5`
+/// id = 161
+pub static G_00a1_60f669e9e8fec389_NODES: &[Node] = &[
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ge, payload: 0, a: 0, b: 1, c: 0 },
+    Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Ne, payload: 0, a: 3, b: 4, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
+    Node { kind: Kind::Var, payload: 14, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Call, payload: 14, a: 8, b: 1, c: 0 },
+    Node { kind: Kind::Call, payload: 27, a: 7, b: 2, c: 0 },
+    Node { kind: Kind::ConstInt, payload: 5, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::Le, payload: 0, a: 10, b: 11, c: 0 },
+    Node { kind: Kind::And, payload: 0, a: 6, b: 12, c: 0 },
+];
+pub static G_00a1_60f669e9e8fec389: GuardIr = GuardIr {
+    src: "tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5",
+    program: Program { nodes: G_00a1_60f669e9e8fec389_NODES, root: 13 },
+    id: 161,
 };
 
 /// `tok('PAREO标记') >= 1`
-/// id = 135
-pub static G_0087_6d05a83b40f7f686_NODES: &[Node] = &[
+/// id = 162
+pub static G_00a2_6d05a83b40f7f686_NODES: &[Node] = &[
     Node { kind: Kind::ConstInt, payload: -5364379826680190993, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 1, a: 0, b: 1, c: 0 },
     Node { kind: Kind::ConstInt, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ge, payload: 0, a: 1, b: 2, c: 0 },
 ];
-pub static G_0087_6d05a83b40f7f686: GuardIr = GuardIr {
+pub static G_00a2_6d05a83b40f7f686: GuardIr = GuardIr {
     src: "tok('PAREO标记') >= 1",
-    program: Program { nodes: G_0087_6d05a83b40f7f686_NODES, root: 3 },
-    id: 135,
+    program: Program { nodes: G_00a2_6d05a83b40f7f686_NODES, root: 3 },
+    id: 162,
 };
 
 /// `trigger_card == card.id`
-/// id = 136
-pub static G_0088_d4a3a2ffc770af91_NODES: &[Node] = &[
+/// id = 163
+pub static G_00a3_d4a3a2ffc770af91_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 12, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 40, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_0088_d4a3a2ffc770af91: GuardIr = GuardIr {
+pub static G_00a3_d4a3a2ffc770af91: GuardIr = GuardIr {
     src: "trigger_card == card.id",
-    program: Program { nodes: G_0088_d4a3a2ffc770af91_NODES, root: 2 },
-    id: 136,
+    program: Program { nodes: G_00a3_d4a3a2ffc770af91_NODES, root: 2 },
+    id: 163,
 };
 
 /// `turn_player == owner`
-/// id = 137
-pub static G_0089_7784ddb8db1ca08f_NODES: &[Node] = &[
+/// id = 164
+pub static G_00a4_7784ddb8db1ca08f_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 9, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 0, b: 1, c: 0 },
 ];
-pub static G_0089_7784ddb8db1ca08f: GuardIr = GuardIr {
+pub static G_00a4_7784ddb8db1ca08f: GuardIr = GuardIr {
     src: "turn_player == owner",
-    program: Program { nodes: G_0089_7784ddb8db1ca08f_NODES, root: 2 },
-    id: 137,
+    program: Program { nodes: G_00a4_7784ddb8db1ca08f_NODES, root: 2 },
+    id: 164,
 };
 
 /// `value > 0 && tok('P✽P粉丝(正)') >= 1`
-/// id = 138
-pub static G_008a_30224d42a571f17c_NODES: &[Node] = &[
+/// id = 165
+pub static G_00a5_30224d42a571f17c_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 3, a: 0, b: 0, c: 0 },
     Node { kind: Kind::ConstInt, payload: 0, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Gt, payload: 0, a: 0, b: 1, c: 0 },
@@ -2745,14 +3390,14 @@ pub static G_008a_30224d42a571f17c_NODES: &[Node] = &[
     Node { kind: Kind::Ge, payload: 0, a: 4, b: 5, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 6, c: 0 },
 ];
-pub static G_008a_30224d42a571f17c: GuardIr = GuardIr {
+pub static G_00a5_30224d42a571f17c: GuardIr = GuardIr {
     src: "value > 0 && tok('P✽P粉丝(正)') >= 1",
-    program: Program { nodes: G_008a_30224d42a571f17c_NODES, root: 7 },
-    id: 138,
+    program: Program { nodes: G_00a5_30224d42a571f17c_NODES, root: 7 },
+    id: 165,
 };
 
 /// Number of lowered guards. Ids are `0..GUARD_COUNT`.
-pub const GUARD_COUNT: usize = 139;
+pub const GUARD_COUNT: usize = 166;
 
 /// Index table: `BY_ID[id]` is the program. Ids are stable across
 /// regeneration as long as the inventory string set is unchanged
@@ -2765,138 +3410,165 @@ pub static BY_ID: &[&GuardIr] = &[
     &G_0004_ff4d3f517ce4a5e0,
     &G_0005_7bd10a6793b5d28c,
     &G_0006_990313d36affd264,
-    &G_0007_c3bf2d64737c1732,
-    &G_0008_56ea891dda26aefe,
-    &G_0009_ed89392e1efd4ba7,
-    &G_000a_eb149f3a4622b65a,
-    &G_000b_ca0e24f304d8fdfd,
-    &G_000c_69988b75e22589e8,
-    &G_000d_331b38cb778fe582,
-    &G_000e_4537190ba0ddd48d,
-    &G_000f_35c45b14c0fc4e13,
-    &G_0010_eb58e90051f55abe,
-    &G_0011_7bc76dfcb4d6546b,
-    &G_0012_0311a266fbbba544,
-    &G_0013_214959a693bf147e,
-    &G_0014_ac4e92e7f30be493,
-    &G_0015_cffc68a298a15f21,
-    &G_0016_01b66a9ed66a1b36,
-    &G_0017_a3c23af24fb6286c,
-    &G_0018_d5c96b3d4e006fd1,
-    &G_0019_337b49460f6d7b34,
-    &G_001a_2fdbe1bd0456cf08,
-    &G_001b_09c07c7c22a5a566,
-    &G_001c_edd633ef46add159,
-    &G_001d_bfde541b1f2674c1,
-    &G_001e_ce3319fdf796102d,
-    &G_001f_0b87f5157518bf16,
-    &G_0020_5410409b86040e16,
-    &G_0021_4df46d942061f6e6,
-    &G_0022_b59e2f1918ed1c7d,
-    &G_0023_2c37882c7cb7dca1,
-    &G_0024_4461309f9fa8782f,
-    &G_0025_59209106ee9ab61c,
-    &G_0026_f1f5385244449458,
-    &G_0027_68be10fdb305ba58,
-    &G_0028_ee2a6980f5e563e7,
-    &G_0029_b21b81ab795fc4e9,
-    &G_002a_9d115115eff03812,
-    &G_002b_9c53f55e2bc36c08,
-    &G_002c_4baa7c4bf8bb2763,
-    &G_002d_cc787276d585bd82,
-    &G_002e_c48ad0885cd6e591,
-    &G_002f_7899d38684d6d589,
-    &G_0030_7abdcec82e82168e,
-    &G_0031_ff1940131bc8e8ca,
-    &G_0032_eb9f21414aa9d910,
-    &G_0033_a905e610e6d66eca,
-    &G_0034_e424dd6a03642ade,
-    &G_0035_0c7750c52d35a556,
-    &G_0036_e103272567c839eb,
-    &G_0037_2d5805c5c61ac210,
-    &G_0038_563923f36160f49e,
-    &G_0039_99170f3bcaedc168,
-    &G_003a_bb05389958cb9a8b,
-    &G_003b_775c33f499fce81d,
-    &G_003c_8d2e0a7e27feb096,
-    &G_003d_7971fec7e22857dd,
-    &G_003e_a48c6881653b2c94,
-    &G_003f_717a7afc15a56790,
-    &G_0040_d069e63786dacbd5,
-    &G_0041_ed07531709becb54,
-    &G_0042_224a4ddfb939bc80,
-    &G_0043_fd5ad4f70f991dbc,
-    &G_0044_31c076ff3979efdb,
-    &G_0045_843e92c2eeb77dc9,
-    &G_0046_0722808d6e909bcf,
-    &G_0047_6c90f18b9ee68160,
-    &G_0048_90646b2c461e630f,
-    &G_0049_a05cc207a4739b56,
-    &G_004a_e03fb4050a01bd20,
-    &G_004b_3e19f0e5e534e9d8,
-    &G_004c_43b879093d04bef4,
-    &G_004d_cca15b028e9ae667,
-    &G_004e_335140f84ed766bb,
-    &G_004f_9a3a4f7b7decd311,
-    &G_0050_e5464240708e0839,
-    &G_0051_3e3d46556d88bd58,
-    &G_0052_65ca05283c20183f,
-    &G_0053_b3ea9c76423abcf5,
-    &G_0054_1e7532b17d8c308a,
-    &G_0055_0ab1b82e312193d5,
-    &G_0056_a1da5b0930f997cb,
-    &G_0057_9fbce6f14f1310b9,
-    &G_0058_589d578f24e3ecda,
-    &G_0059_5aca64944d37f9ca,
-    &G_005a_fdbe52ad9cfe2ffa,
-    &G_005b_66b497b6d5bf9d41,
-    &G_005c_fe8d2f22beb9831f,
-    &G_005d_05ba96ecc3685604,
-    &G_005e_93156b8e3a2389ac,
-    &G_005f_4c851ba8cd4accbe,
-    &G_0060_5a7a9298f33ce825,
-    &G_0061_cd7b2ee14291dcc6,
-    &G_0062_6d65e1560da04b3b,
-    &G_0063_f4452a7520446870,
-    &G_0064_11e092dcdda89e3c,
-    &G_0065_3f43337be5d56596,
-    &G_0066_b31c01abac6933b0,
-    &G_0067_5165c261ab2788b0,
-    &G_0068_271f5a68db2c7a9f,
-    &G_0069_f240b0be4153e859,
-    &G_006a_a22ec087ee725484,
-    &G_006b_5e0c0c45b9249d17,
-    &G_006c_c0f2729a09dce191,
-    &G_006d_3659627e8abd0883,
-    &G_006e_48e0a5c78ec137fc,
-    &G_006f_3233a0cf9be3d247,
-    &G_0070_9cea689ee3a7e860,
-    &G_0071_b5fae2c14238b978,
-    &G_0072_d979db6d387faafc,
-    &G_0073_24d2f2ef177d50dc,
-    &G_0074_e73bc7b8119759bf,
-    &G_0075_a0b3d9ca51d8cbbf,
-    &G_0076_a2d97741ecfeb7d4,
-    &G_0077_29b95104ca935ef9,
-    &G_0078_7dcd042f63040007,
-    &G_0079_ae1f98d1c044222e,
-    &G_007a_ff814c5b5d018c00,
-    &G_007b_da91d572b360f0a2,
-    &G_007c_a46350d8d6307dff,
-    &G_007d_472c5ea21afeb478,
-    &G_007e_66a4705953442e49,
-    &G_007f_a3e698387f8996ed,
-    &G_0080_587bc78fdd6d89af,
-    &G_0081_8ac9e21f308cc214,
-    &G_0082_48527c7c0220177d,
-    &G_0083_ca1125638da6ff34,
-    &G_0084_ffb131a0f64d037b,
-    &G_0085_1e25469f92cf19d4,
-    &G_0086_408f0aebed7ca878,
-    &G_0087_6d05a83b40f7f686,
-    &G_0088_d4a3a2ffc770af91,
-    &G_0089_7784ddb8db1ca08f,
-    &G_008a_30224d42a571f17c,
+    &G_0007_84a444a548d63bd9,
+    &G_0008_fbddf1b80b62f165,
+    &G_0009_56ea891dda26aefe,
+    &G_000a_a668eb45e4062d2c,
+    &G_000b_ed89392e1efd4ba7,
+    &G_000c_eb149f3a4622b65a,
+    &G_000d_ca0e24f304d8fdfd,
+    &G_000e_69988b75e22589e8,
+    &G_000f_331b38cb778fe582,
+    &G_0010_656af0607921128a,
+    &G_0011_4537190ba0ddd48d,
+    &G_0012_35c45b14c0fc4e13,
+    &G_0013_eb58e90051f55abe,
+    &G_0014_7bc76dfcb4d6546b,
+    &G_0015_0311a266fbbba544,
+    &G_0016_5828ea254abb1e66,
+    &G_0017_214959a693bf147e,
+    &G_0018_ac4e92e7f30be493,
+    &G_0019_01b66a9ed66a1b36,
+    &G_001a_18d54ba8269a1dc2,
+    &G_001b_0498e07e959f657c,
+    &G_001c_a3c23af24fb6286c,
+    &G_001d_d5c96b3d4e006fd1,
+    &G_001e_337b49460f6d7b34,
+    &G_001f_2fdbe1bd0456cf08,
+    &G_0020_c3e8e1ca99d669b1,
+    &G_0021_09c07c7c22a5a566,
+    &G_0022_edd633ef46add159,
+    &G_0023_bfde541b1f2674c1,
+    &G_0024_ce3319fdf796102d,
+    &G_0025_0b87f5157518bf16,
+    &G_0026_eb7fd35c013da5ec,
+    &G_0027_5410409b86040e16,
+    &G_0028_b043a7d6f9201bc9,
+    &G_0029_4df46d942061f6e6,
+    &G_002a_b59e2f1918ed1c7d,
+    &G_002b_2c37882c7cb7dca1,
+    &G_002c_4461309f9fa8782f,
+    &G_002d_7ceeba413db7f57b,
+    &G_002e_4d69ae156a0071fc,
+    &G_002f_59209106ee9ab61c,
+    &G_0030_f1f5385244449458,
+    &G_0031_68be10fdb305ba58,
+    &G_0032_ee2a6980f5e563e7,
+    &G_0033_b21b81ab795fc4e9,
+    &G_0034_ee2a6a80f5e5659a,
+    &G_0035_f77565f09ffc0e3a,
+    &G_0036_9d115115eff03812,
+    &G_0037_9c53f55e2bc36c08,
+    &G_0038_4baa7c4bf8bb2763,
+    &G_0039_cc787276d585bd82,
+    &G_003a_c48ad0885cd6e591,
+    &G_003b_7899d38684d6d589,
+    &G_003c_7abdcec82e82168e,
+    &G_003d_ff1940131bc8e8ca,
+    &G_003e_eb9f21414aa9d910,
+    &G_003f_a905e610e6d66eca,
+    &G_0040_e424dd6a03642ade,
+    &G_0041_0c7750c52d35a556,
+    &G_0042_bfce7d91b1cc77b9,
+    &G_0043_e103272567c839eb,
+    &G_0044_2d5805c5c61ac210,
+    &G_0045_563923f36160f49e,
+    &G_0046_99170f3bcaedc168,
+    &G_0047_bb05389958cb9a8b,
+    &G_0048_775c33f499fce81d,
+    &G_0049_8d2e0a7e27feb096,
+    &G_004a_64cea01e35093c44,
+    &G_004b_7971fec7e22857dd,
+    &G_004c_a48c6881653b2c94,
+    &G_004d_17dbdeb38114f25b,
+    &G_004e_30141d1ccf66188d,
+    &G_004f_d069e63786dacbd5,
+    &G_0050_ed07531709becb54,
+    &G_0051_224a4ddfb939bc80,
+    &G_0052_bbabf022a40e4598,
+    &G_0053_31c076ff3979efdb,
+    &G_0054_843e92c2eeb77dc9,
+    &G_0055_0722808d6e909bcf,
+    &G_0056_6c90f18b9ee68160,
+    &G_0057_90646b2c461e630f,
+    &G_0058_a05cc207a4739b56,
+    &G_0059_e03fb4050a01bd20,
+    &G_005a_3e19f0e5e534e9d8,
+    &G_005b_10a684318c29f3cf,
+    &G_005c_43b879093d04bef4,
+    &G_005d_185563b3e5b9283b,
+    &G_005e_a9ba3574067033b6,
+    &G_005f_cca15b028e9ae667,
+    &G_0060_335140f84ed766bb,
+    &G_0061_9a3a4f7b7decd311,
+    &G_0062_e5464240708e0839,
+    &G_0063_eaa27ef734ec5cc3,
+    &G_0064_3e3d46556d88bd58,
+    &G_0065_65ca05283c20183f,
+    &G_0066_b3ea9c76423abcf5,
+    &G_0067_3cf5f28fbf66b03e,
+    &G_0068_1e7532b17d8c308a,
+    &G_0069_c66b0956f9183161,
+    &G_006a_0ab1b82e312193d5,
+    &G_006b_a1da5b0930f997cb,
+    &G_006c_9fbce6f14f1310b9,
+    &G_006d_589d578f24e3ecda,
+    &G_006e_5aca64944d37f9ca,
+    &G_006f_fdbe52ad9cfe2ffa,
+    &G_0070_66b497b6d5bf9d41,
+    &G_0071_91d911cc9143dee7,
+    &G_0072_fe8d2f22beb9831f,
+    &G_0073_05ba96ecc3685604,
+    &G_0074_93156b8e3a2389ac,
+    &G_0075_4c851ba8cd4accbe,
+    &G_0076_3cb66ee466f12c92,
+    &G_0077_ad8c3390cb7830c7,
+    &G_0078_5a7a9298f33ce825,
+    &G_0079_cd7b2ee14291dcc6,
+    &G_007a_6d65e1560da04b3b,
+    &G_007b_f4452a7520446870,
+    &G_007c_11e092dcdda89e3c,
+    &G_007d_3f43337be5d56596,
+    &G_007e_b31c01abac6933b0,
+    &G_007f_5165c261ab2788b0,
+    &G_0080_271f5a68db2c7a9f,
+    &G_0081_f240b0be4153e859,
+    &G_0082_ad8a45bc0a29e7ff,
+    &G_0083_a22ec087ee725484,
+    &G_0084_5e0c0c45b9249d17,
+    &G_0085_7b59a81a3e0ea438,
+    &G_0086_c0f2729a09dce191,
+    &G_0087_3659627e8abd0883,
+    &G_0088_48e0a5c78ec137fc,
+    &G_0089_3233a0cf9be3d247,
+    &G_008a_9cea689ee3a7e860,
+    &G_008b_b5fae2c14238b978,
+    &G_008c_e1b99189fd4b59f5,
+    &G_008d_644a4e33596f7248,
+    &G_008e_24d2f2ef177d50dc,
+    &G_008f_a0b3d9ca51d8cbbf,
+    &G_0090_a2d97741ecfeb7d4,
+    &G_0091_29b95104ca935ef9,
+    &G_0092_7dcd042f63040007,
+    &G_0093_ae1f98d1c044222e,
+    &G_0094_ff814c5b5d018c00,
+    &G_0095_a46350d8d6307dff,
+    &G_0096_472c5ea21afeb478,
+    &G_0097_061dfbff069445fd,
+    &G_0098_66a4705953442e49,
+    &G_0099_a3e698387f8996ed,
+    &G_009a_587bc78fdd6d89af,
+    &G_009b_8ac9e21f308cc214,
+    &G_009c_48527c7c0220177d,
+    &G_009d_ca1125638da6ff34,
+    &G_009e_ffb131a0f64d037b,
+    &G_009f_1e25469f92cf19d4,
+    &G_00a0_408f0aebed7ca878,
+    &G_00a1_60f669e9e8fec389,
+    &G_00a2_6d05a83b40f7f686,
+    &G_00a3_d4a3a2ffc770af91,
+    &G_00a4_7784ddb8db1ca08f,
+    &G_00a5_30224d42a571f17c,
 ];
 
 /// Every generated guard, for the consistency check.
@@ -2917,138 +3589,165 @@ macro_rules! guard_id {
     ("actor != owner && card.placed") => { 4usize };
     ("actor != owner && gains_this_turn(owner) > 0") => { 5usize };
     ("actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0") => { 6usize };
-    ("actor != owner && move.main && card.placed") => { 7usize };
-    ("actor != owner && move.remaining > 0") => { 8usize };
-    ("actor != owner && tile.id == owner.pos") => { 9usize };
-    ("actor != owner && tile.id == owner.pos && fire(owner) >= 1 && move.remaining > 0") => { 10usize };
-    ("actor != owner && tile.id == tile_named('流星堂')") => { 11usize };
-    ("actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0") => { 12usize };
-    ("actor != owner && tile.owner == owner && value > 0") => { 13usize };
-    ("actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key") => { 14usize };
-    ("actor == owner") => { 15usize };
-    ("actor == owner && (character_is(owner, \"三角初华（Sumimi）\") || character_is(owner, \"纯田真奈\"))") => { 16usize };
-    ("actor == owner && (move.roll != null || value >= 0)") => { 17usize };
-    ("actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)") => { 18usize };
-    ("actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))") => { 19usize };
-    ("actor == owner && by >= 0 && by != owner") => { 20usize };
-    ("actor == owner && card.counter('crystals') >= 1") => { 21usize };
-    ("actor == owner && card.counter('crystals') >= 1 && card.placed") => { 22usize };
-    ("actor == owner && card.placed") => { 23usize };
-    ("actor == owner && card.placed && card.counter('crystals') <= 0") => { 24usize };
-    ("actor == owner && card.placed && card.counter('crystals') == 0") => { 25usize };
-    ("actor == owner && card.placed && card.counter('crystals') > 0") => { 26usize };
-    ("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0") => { 27usize };
-    ("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0") => { 28usize };
-    ("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0") => { 29usize };
-    ("actor == owner && card.placed && is_circle(tile.id)") => { 30usize };
-    ("actor == owner && card.placed && move.kind != Teleport && tile.id >= 0") => { 31usize };
-    ("actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key") => { 32usize };
-    ("actor == owner && card.placed && slot('here_held_len') <= 0") => { 33usize };
-    ("actor == owner && card.placed && slot('here_held_len') > 0") => { 34usize };
-    ("actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0") => { 35usize };
-    ("actor == owner && card.placed && value > 0") => { 36usize };
-    ("actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0") => { 37usize };
-    ("actor == owner && effect.has(Pay) && target >= 0 && value >= 5000") => { 38usize };
-    ("actor == owner && effect.has(Pay) && value > 0") => { 39usize };
-    ("actor == owner && fire(owner) >= 1") => { 40usize };
-    ("actor == owner && fire(owner) >= 1 && plan.fixed_roll == null") => { 41usize };
-    ("actor == owner && is_circle(tile.id)") => { 42usize };
-    ("actor == owner && is_ring(tile.id)") => { 43usize };
-    ("actor == owner && move.kind != Teleport && move.dir < 0") => { 44usize };
-    ("actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0") => { 45usize };
-    ("actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key") => { 46usize };
-    ("actor == owner && move.main") => { 47usize };
-    ("actor == owner && move.main && card.placed") => { 48usize };
-    ("actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_live_house(tile.id) && is_buyable(tile.id) && tile.owner != owner") => { 49usize };
-    ("actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6") => { 50usize };
-    ("actor == owner && move.main && slot('skillState') != 2") => { 51usize };
-    ("actor == owner && move.main && slot('skillState') == 2") => { 52usize };
-    ("actor == owner && move.main && tile.id == tile_named('Bandori车站')") => { 53usize };
-    ("actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')") => { 54usize };
-    ("actor == owner && move.roll != null") => { 55usize };
-    ("actor == owner && move.roll != null && move.kind != Teleport") => { 56usize };
-    ("actor == owner && move.roll != null && move.roll < 6") => { 57usize };
-    ("actor == owner && move.roll >= 16") => { 58usize };
-    ("actor == owner && plan.fixed_roll == null") => { 59usize };
-    ("actor == owner && players_on(owner.pos, owner) > 0") => { 60usize };
-    ("actor == owner && roll_source == 1") => { 61usize };
-    ("actor == owner && slot('lock_dream_tag') != 0") => { 62usize };
-    ("actor == owner && slot('skill.asahiAim.first') == 0") => { 63usize };
-    ("actor == owner && slot('skill.kanonLost.silent') >= 3") => { 64usize };
-    ("actor == owner && slot('skill.rimiResolve.passed') != 0") => { 65usize };
-    ("actor == owner && slot('skill.roselia.first') != 0") => { 66usize };
-    ("actor == owner && slot('skill.roselia.first') == 0") => { 67usize };
-    ("actor == owner && slot('skill.soyoClear.armed') != 0") => { 68usize };
-    ("actor == owner && slot('skill.soyoCrychic.armed') != 0") => { 69usize };
-    ("actor == owner && slot('skill.sumimi.got') == 0") => { 70usize };
-    ("actor == owner && slot('skill.takiCrychic.armed') == 0") => { 71usize };
-    ("actor == owner && slot('skill.tamade.builtLast') == 0") => { 72usize };
-    ("actor == owner && slot('skill.tomoriPoem.due') != 0") => { 73usize };
-    ("actor == owner && slot('skill.tsugumiPlain.owed') != 0") => { 74usize };
-    ("actor == owner && slot('skillState') != 2") => { 75usize };
-    ("actor == owner && slot('skillState') == 2") => { 76usize };
-    ("actor == owner && tile.id == tile_named('CiRCLE')") => { 77usize };
-    ("actor == owner && tile.id == tile_named('弦卷集团')") => { 78usize };
-    ("actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null") => { 79usize };
-    ("actor == owner && tile.id == tile_named('流星堂')") => { 80usize };
-    ("actor == owner && tok('PAREO标记') >= 1") => { 81usize };
-    ("actor == owner && tok('P✽P粉丝(正)') >= 1") => { 82usize };
-    ("actor == owner && turn_player == owner && owned_within(owner, 3) > 0") => { 83usize };
-    ("actor == owner && value > 0") => { 84usize };
-    ("actor == owner && value >= 999999") => { 85usize };
-    ("actor == owner || owner.money >= tile.price / 2") => { 86usize };
-    ("band_is(owner, 'Pastel✽Palettes')") => { 87usize };
-    ("by != owner && by >= 0 && effect.hits(owner)") => { 88usize };
-    ("by >= 0 && by != owner && effect.hits(owner)") => { 89usize };
-    ("card.placed") => { 90usize };
-    ("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport") => { 91usize };
-    ("card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner") => { 92usize };
-    ("card.placed && actor != owner && tile.id >= 0") => { 93usize };
-    ("card.placed && actor == owner") => { 94usize };
-    ("card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))") => { 95usize };
-    ("card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')") => { 96usize };
-    ("card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2") => { 97usize };
-    ("card.placed && actor == owner && value > 0 && card.counter('crystals') > 0") => { 98usize };
-    ("card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1") => { 99usize };
-    ("card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1") => { 100usize };
-    ("card.placed && card.counter('crystals') > 0") => { 101usize };
-    ("card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id") => { 102usize };
-    ("card.placed && owner.hand >= 7") => { 103usize };
-    ("card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner") => { 104usize };
-    ("card.placed && pay_is_rent && target == owner") => { 105usize };
-    ("card.placed && pay_is_rent && target == owner && value > 0") => { 106usize };
-    ("card.placed && slot('one_of_us_partner') > 0") => { 107usize };
-    ("card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0") => { 108usize };
-    ("card.placed && slot('saaya_sky_passed') != 0") => { 109usize };
-    ("card.placed && turn_player == owner && plan.fixed_roll == null") => { 110usize };
-    ("card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null") => { 111usize };
-    ("chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2") => { 112usize };
-    ("false") => { 113usize };
-    ("is_circle(tile.id)") => { 114usize };
-    ("is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')") => { 115usize };
-    ("move.main && tile.id >= 0") => { 116usize };
-    ("owner.money >= 999999") => { 117usize };
-    ("owner.out == 0") => { 118usize };
-    ("owner.pos >= 0") => { 119usize };
-    ("slot('detour_next_roll') != 0") => { 120usize };
-    ("slot('skill.kasumiGroup.start') == 0") => { 121usize };
-    ("slot('skillState') != 0") => { 122usize };
-    ("slot('skillState') == 2") => { 123usize };
-    ("slot('skillState') == 2 && card.placed") => { 124usize };
-    ("slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0") => { 125usize };
-    ("target != owner") => { 126usize };
-    ("target == owner") => { 127usize };
-    ("target == owner && actor != owner") => { 128usize };
-    ("target == owner && actor != owner && slot('skillState') != 2") => { 129usize };
-    ("target == owner && effect.has(Abnormal)") => { 130usize };
-    ("target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key") => { 131usize };
-    ("target == owner && effect.has(Abnormal) && slot('lastWalk') > 0") => { 132usize };
-    ("target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1") => { 133usize };
-    ("tile.id == tile_named('星之鼓动山丘')") => { 134usize };
-    ("tok('PAREO标记') >= 1") => { 135usize };
-    ("trigger_card == card.id") => { 136usize };
-    ("turn_player == owner") => { 137usize };
-    ("value > 0 && tok('P✽P粉丝(正)') >= 1") => { 138usize };
+    ("actor != owner && move.main && card.placed && fire(owner) >= 1 && dist(pos(actor), card.tile) <= 5") => { 7usize };
+    ("actor != owner && move.main && tile.id >= 0") => { 8usize };
+    ("actor != owner && move.remaining > 0") => { 9usize };
+    ("actor != owner && slot('skillState') != 2") => { 10usize };
+    ("actor != owner && tile.id == owner.pos") => { 11usize };
+    ("actor != owner && tile.id == owner.pos && fire(owner) >= 1 && move.remaining > 0") => { 12usize };
+    ("actor != owner && tile.id == tile_named('流星堂')") => { 13usize };
+    ("actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0") => { 14usize };
+    ("actor != owner && tile.owner == owner && value > 0") => { 15usize };
+    ("actor != owner && trigger_card != 0 && fire(owner) >= 1") => { 16usize };
+    ("actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key") => { 17usize };
+    ("actor == owner") => { 18usize };
+    ("actor == owner && (character_is(owner, \"三角初华（Sumimi）\") || character_is(owner, \"纯田真奈\"))") => { 19usize };
+    ("actor == owner && (move.roll != null || value >= 0)") => { 20usize };
+    ("actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)") => { 21usize };
+    ("actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))") => { 22usize };
+    ("actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))") => { 23usize };
+    ("actor == owner && by >= 0 && by != owner") => { 24usize };
+    ("actor == owner && card.counter('crystals') >= 1 && card.placed") => { 25usize };
+    ("actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0") => { 26usize };
+    ("actor == owner && card.counter('crystals') >= 1 && value > 0") => { 27usize };
+    ("actor == owner && card.placed") => { 28usize };
+    ("actor == owner && card.placed && card.counter('crystals') <= 0") => { 29usize };
+    ("actor == owner && card.placed && card.counter('crystals') == 0") => { 30usize };
+    ("actor == owner && card.placed && card.counter('crystals') > 0") => { 31usize };
+    ("actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0") => { 32usize };
+    ("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0") => { 33usize };
+    ("actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0") => { 34usize };
+    ("actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0") => { 35usize };
+    ("actor == owner && card.placed && is_circle(tile.id)") => { 36usize };
+    ("actor == owner && card.placed && move.kind != Teleport && tile.id >= 0") => { 37usize };
+    ("actor == owner && card.placed && move.main") => { 38usize };
+    ("actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key") => { 39usize };
+    ("actor == owner && card.placed && players_on(tile.id, owner) > 0") => { 40usize };
+    ("actor == owner && card.placed && slot('here_held_len') <= 0") => { 41usize };
+    ("actor == owner && card.placed && slot('here_held_len') > 0") => { 42usize };
+    ("actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0") => { 43usize };
+    ("actor == owner && card.placed && value > 0") => { 44usize };
+    ("actor == owner && card.placed && value > 0 && card.counter('crystals') > 0") => { 45usize };
+    ("actor == owner && card.placed && value > 0 && money(owner) < value") => { 46usize };
+    ("actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0") => { 47usize };
+    ("actor == owner && effect.has(Pay) && target >= 0 && value >= 5000") => { 48usize };
+    ("actor == owner && effect.has(Pay) && value > 0") => { 49usize };
+    ("actor == owner && fire(owner) >= 1") => { 50usize };
+    ("actor == owner && fire(owner) >= 1 && plan.fixed_roll == null") => { 51usize };
+    ("actor == owner && fire(owner) >= 2") => { 52usize };
+    ("actor == owner && hand(owner) >= 1") => { 53usize };
+    ("actor == owner && is_circle(tile.id)") => { 54usize };
+    ("actor == owner && is_ring(tile.id)") => { 55usize };
+    ("actor == owner && move.kind != Teleport && move.dir < 0") => { 56usize };
+    ("actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0") => { 57usize };
+    ("actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key") => { 58usize };
+    ("actor == owner && move.main") => { 59usize };
+    ("actor == owner && move.main && card.placed") => { 60usize };
+    ("actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_live_house(tile.id) && is_buyable(tile.id) && tile.owner != owner") => { 61usize };
+    ("actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6") => { 62usize };
+    ("actor == owner && move.main && slot('skillState') != 2") => { 63usize };
+    ("actor == owner && move.main && slot('skillState') == 2") => { 64usize };
+    ("actor == owner && move.main && tile.id == tile_named('Bandori车站')") => { 65usize };
+    ("actor == owner && move.main && tile.id >= 0 && fire(owner) >= 1") => { 66usize };
+    ("actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')") => { 67usize };
+    ("actor == owner && move.roll != null") => { 68usize };
+    ("actor == owner && move.roll != null && move.kind != Teleport") => { 69usize };
+    ("actor == owner && move.roll != null && move.roll < 6") => { 70usize };
+    ("actor == owner && move.roll >= 16") => { 71usize };
+    ("actor == owner && plan.fixed_roll == null") => { 72usize };
+    ("actor == owner && players_on(owner.pos, owner) > 0") => { 73usize };
+    ("actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0") => { 74usize };
+    ("actor == owner && roll_source == 1") => { 75usize };
+    ("actor == owner && slot('lock_dream_tag') != 0") => { 76usize };
+    ("actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')") => { 77usize };
+    ("actor == owner && slot('skill.hinaLottery.borrowed') >= 0") => { 78usize };
+    ("actor == owner && slot('skill.kanonLost.silent') >= 3") => { 79usize };
+    ("actor == owner && slot('skill.rimiResolve.passed') != 0") => { 80usize };
+    ("actor == owner && slot('skill.roselia.first') != 0") => { 81usize };
+    ("actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0") => { 82usize };
+    ("actor == owner && slot('skill.soyoClear.armed') != 0") => { 83usize };
+    ("actor == owner && slot('skill.soyoCrychic.armed') != 0") => { 84usize };
+    ("actor == owner && slot('skill.sumimi.got') == 0") => { 85usize };
+    ("actor == owner && slot('skill.takiCrychic.armed') == 0") => { 86usize };
+    ("actor == owner && slot('skill.tamade.builtLast') == 0") => { 87usize };
+    ("actor == owner && slot('skill.tomoriPoem.due') != 0") => { 88usize };
+    ("actor == owner && slot('skill.tsugumiPlain.owed') != 0") => { 89usize };
+    ("actor == owner && slot('skillState') != 2") => { 90usize };
+    ("actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0") => { 91usize };
+    ("actor == owner && slot('skillState') == 2") => { 92usize };
+    ("actor == owner && slot('star_beat.layers') > 0") => { 93usize };
+    ("actor == owner && target >= 0 && target != owner && pay_is_rent") => { 94usize };
+    ("actor == owner && tile.id == tile_named('CiRCLE')") => { 95usize };
+    ("actor == owner && tile.id == tile_named('弦卷集团')") => { 96usize };
+    ("actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null") => { 97usize };
+    ("actor == owner && tile.id == tile_named('流星堂')") => { 98usize };
+    ("actor == owner && tile.id >= 0") => { 99usize };
+    ("actor == owner && tok('PAREO标记') >= 1") => { 100usize };
+    ("actor == owner && tok('P✽P粉丝(正)') >= 1") => { 101usize };
+    ("actor == owner && turn_player == owner && owned_within(owner, 3) > 0") => { 102usize };
+    ("actor == owner && value == 0") => { 103usize };
+    ("actor == owner && value > 0") => { 104usize };
+    ("actor == owner && value >= 2000 && target != owner") => { 105usize };
+    ("actor == owner && value >= 999999") => { 106usize };
+    ("actor == owner || owner.money >= tile.price / 2") => { 107usize };
+    ("band_is(owner, 'Pastel✽Palettes')") => { 108usize };
+    ("by != owner && by >= 0 && effect.hits(owner)") => { 109usize };
+    ("by >= 0 && by != owner && effect.hits(owner)") => { 110usize };
+    ("card.placed") => { 111usize };
+    ("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport") => { 112usize };
+    ("card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0") => { 113usize };
+    ("card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner") => { 114usize };
+    ("card.placed && actor != owner && tile.id >= 0") => { 115usize };
+    ("card.placed && actor == owner") => { 116usize };
+    ("card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))") => { 117usize };
+    ("card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0") => { 118usize };
+    ("card.placed && actor == owner && target >= 0 && target != owner && value > 0") => { 119usize };
+    ("card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')") => { 120usize };
+    ("card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2") => { 121usize };
+    ("card.placed && actor == owner && value > 0 && card.counter('crystals') > 0") => { 122usize };
+    ("card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1") => { 123usize };
+    ("card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1") => { 124usize };
+    ("card.placed && card.counter('crystals') > 0") => { 125usize };
+    ("card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id") => { 126usize };
+    ("card.placed && owner.hand >= 7") => { 127usize };
+    ("card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner") => { 128usize };
+    ("card.placed && pay_is_rent && target == owner") => { 129usize };
+    ("card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner") => { 130usize };
+    ("card.placed && pay_is_rent && target == owner && value > 0") => { 131usize };
+    ("card.placed && slot('one_of_us_partner') > 0") => { 132usize };
+    ("card.placed && slot('one_of_us_partner') > 0 && (actor == owner || actor == slot('one_of_us_partner') - 1)") => { 133usize };
+    ("card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0") => { 134usize };
+    ("card.placed && slot('saaya_sky_passed') != 0") => { 135usize };
+    ("card.placed && turn_player == owner && plan.fixed_roll == null") => { 136usize };
+    ("card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null") => { 137usize };
+    ("chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2") => { 138usize };
+    ("false") => { 139usize };
+    ("fire(owner) >= 1") => { 140usize };
+    ("is_circle(tile.id) && actor >= 0 && money(actor) >= 500") => { 141usize };
+    ("is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')") => { 142usize };
+    ("owner.money >= 999999") => { 143usize };
+    ("owner.out == 0") => { 144usize };
+    ("owner.pos >= 0") => { 145usize };
+    ("slot('detour_next_roll') != 0") => { 146usize };
+    ("slot('skill.kasumiGroup.start') == 0") => { 147usize };
+    ("slot('skillState') != 0") => { 148usize };
+    ("slot('skillState') == 2 && card.placed") => { 149usize };
+    ("slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0") => { 150usize };
+    ("slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4") => { 151usize };
+    ("target != owner") => { 152usize };
+    ("target == owner") => { 153usize };
+    ("target == owner && actor != owner") => { 154usize };
+    ("target == owner && actor != owner && slot('skillState') != 2") => { 155usize };
+    ("target == owner && effect.has(Abnormal)") => { 156usize };
+    ("target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key") => { 157usize };
+    ("target == owner && effect.has(Abnormal) && slot('lastWalk') > 0") => { 158usize };
+    ("target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1") => { 159usize };
+    ("tile.id == tile_named('星之鼓动山丘')") => { 160usize };
+    ("tile.id >= 0 && actor != owner && dist(tile.id, pos(owner)) <= 5") => { 161usize };
+    ("tok('PAREO标记') >= 1") => { 162usize };
+    ("trigger_card == card.id") => { 163usize };
+    ("turn_player == owner") => { 164usize };
+    ("value > 0 && tok('P✽P粉丝(正)') >= 1") => { 165usize };
     ($other:literal) => {
         compile_error!("guard_id!: unknown guard string; re-run gen_cond_ir")
     };
