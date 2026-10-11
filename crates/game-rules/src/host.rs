@@ -3489,13 +3489,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "extreme",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::extreme(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "set_extreme",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_extreme(&mut c, v).map_err(HostErr::into_err)
@@ -4294,20 +4287,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "set_trigger_target",
-        |mut c: C<W>, v: i32| -> Result<(), Error> {
-            hostfns::set_trigger_target(&mut c, v).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "set_trigger_cancelled",
-        |mut c: C<W>| -> Result<(), Error> {
-            hostfns::set_trigger_cancelled(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "set_teleport_to",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_teleport_to(&mut c, v).map_err(HostErr::into_err)
@@ -4360,13 +4339,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "set_extra_steps",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_extra_steps(&mut c, v).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_tag",
-        |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
-            hostfns::move_tag(&mut c, kp, kl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4444,13 +4416,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "move_resolve",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::move_resolve(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "move_kind",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::move_kind(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

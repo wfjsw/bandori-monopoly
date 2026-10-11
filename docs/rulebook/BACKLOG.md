@@ -1305,20 +1305,23 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: delete the import + native stub. **Confirmed.**
 
 ## HOST-10 — host linker names with no guest import (dead registrations)
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-10 …`) —
+  dropped the five unused linker names. The guest's real names stay
+  (`set_extreme`, `trig_move_kind`, `trig_move_tag`, `trig_set_pay_target`,
+  `trig_set_cancelled`); the hostfns they share are unchanged.
 - **kind**: ABI defect (dead surface)
 - **class**: D
 - **severity**: low
 - **suggested batch**: guest imports vs host registration
-- **locations** (registered in `crates/game-rules/src/host.rs` but **not** in `rules/card-sdk/src/ctx/sys.rs`)
+- **locations** (removed from `crates/game-rules/src/host.rs`)
   | host name | guest actually uses |
   |---|---|
-  | `extreme` (`host.rs:3492`) | only `set_extreme` (no reader) |
-  | `move_kind` (`:4437`) | `trig_move_kind` |
-  | `move_tag` (`:4353`) | `trig_move_tag` |
-  | `set_trigger_target` (`:4283`) | `trig_set_pay_target` (same body) |
-  | `set_trigger_cancelled` (`:4290`) | `trig_set_cancelled` |
-- **current**: not a runtime break (wasm imports are the guest's names) but confuses the next ABI table
-- **expected**: drop the unused linker names or alias them explicitly
+  | `extreme` | only `set_extreme` (no reader) |
+  | `move_kind` | `trig_move_kind` |
+  | `move_tag` | `trig_move_tag` |
+  | `set_trigger_target` | `trig_set_pay_target` (same body) |
+  | `set_trigger_cancelled` | `trig_set_cancelled` |
+- **expected**: drop the unused linker names. **Confirmed.**
 
 ## HOST-11 — CEL `roll_source` sentinel doc disagrees with guest/host
 - **kind**: ABI defect (sentinel mismatch)
