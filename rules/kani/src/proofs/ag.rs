@@ -26,12 +26,16 @@ const CARD_SOUL: &str = "AG:绯红之魂";
 const CARD_GLORY: &str = "AG:刻入天穹傲岸的烈光";
 const CARD_ONE_OF_US: &str = "AG:ONE OF US";
 
+fn crystal_name() -> intern::NameId {
+    intern::intern(card_sdk::abi::counter::CRYSTALS)
+}
+
 fn crystal_key() -> u16 {
-    intern::intern(card_sdk::abi::counter::CRYSTALS).0
+    crystal_name().0
 }
 
 fn crystals_of(w: &World, player: i32) -> i32 {
-    w.key_get(player, crystal_key())
+    w.key_get(player, crystal_name())
 }
 
 fn slot_of(id: &str) -> u8 {
@@ -56,7 +60,7 @@ fn half_speed_play_world() -> World {
 
 /// C-AG-half-speed-01 iff.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn half_speed_01_place_iff() {
     let w = half_speed_play_world();
     let player = w.trig_player;
@@ -74,11 +78,11 @@ pub fn half_speed_01_place_iff() {
 
     kani::cover!(true, "half-speed play runs");
     assert!(
-        spec::half_speed_01_log_ok(effects, player, card),
+        spec::ag::half_speed_01_log_ok(effects, player, card),
         "C-AG-half-speed-01: log must be exactly PlaceCard(field)"
     );
     assert!(
-        spec::half_speed_01_post_ok(post_crystals),
+        spec::ag::half_speed_01_post_ok(post_crystals),
         "C-AG-half-speed-01: exactly 3 crystals on the card"
     );
     assert!(post.money == pre.money, "frame: money");
@@ -88,7 +92,7 @@ pub fn half_speed_01_place_iff() {
 
 /// MUTANT companion: the 4-crystal spec must disagree with the card.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn half_speed_01_mutant_is_detected() {
     let w = half_speed_play_world();
     let player = w.trig_player;
@@ -96,11 +100,11 @@ pub fn half_speed_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::play(CARD_MOCA_HALF, player));
     let post_crystals = world::with_world(|ww| crystals_of(ww, player));
     assert!(
-        !spec::half_speed_01_post_ok_mutant(post_crystals),
+        !spec::ag::half_speed_01_post_ok_mutant(post_crystals),
         "mutant (4 crystals) must not match the card's 3"
     );
     assert!(
-        spec::half_speed_01_post_ok(post_crystals),
+        spec::ag::half_speed_01_post_ok(post_crystals),
         "card does 3 crystals"
     );
 }
@@ -115,13 +119,13 @@ fn half_speed_decay_world(pre_crystals: i32) -> World {
     w.n_players = 2;
     let player = 0i32;
     w.trig_player = player;
-    w.key_set(player, crystal_key(), pre_crystals);
+    w.key_set(player, crystal_name(), pre_crystals);
     w
 }
 
 /// C-AG-half-speed-02 turn-end tick: −1 crystal.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn half_speed_02_decay_iff() {
     let pre_crystals: i32 = kani::any();
     kani::assume(pre_crystals >= 1 && pre_crystals <= 3);
@@ -141,18 +145,18 @@ pub fn half_speed_02_decay_iff() {
     kani::cover!(pre_crystals == 1, "decay from 1 (emptying)");
     kani::cover!(pre_crystals > 1, "decay from >1");
     assert!(
-        spec::half_speed_02_decay_log_ok(effects, player, key),
+        spec::ag::half_speed_02_decay_log_ok(effects, player, key),
         "C-AG-half-speed-02: tick is exactly AddCounter(crystals, -1)"
     );
     assert!(
-        spec::half_speed_02_decay_post_ok(pre_crystals, post_crystals),
+        spec::ag::half_speed_02_decay_post_ok(pre_crystals, post_crystals),
         "C-AG-half-speed-02: crystals fall by 1"
     );
 }
 
 /// MUTANT: decay by 2 must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn half_speed_02_mutant_is_detected() {
     let w = half_speed_decay_world(3);
     let player = w.trig_player;
@@ -197,7 +201,7 @@ fn half_speed_pay_world(amount: i32) -> World {
 /// OPEN-减半取整 is recorded in the unit table; this pins the body's printed
 /// number against the 基础[结算] 7 reading of 「向上取整10」.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn half_speed_04_pay_mul_iff() {
     let amount: i32 = kani::any();
     kani::assume(amount >= 1 && amount <= 10_000);
@@ -212,7 +216,7 @@ pub fn half_speed_04_pay_mul_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    let expected = spec::half_speed_04_amount_ceil10(pre_amount);
+    let expected = spec::ag::half_speed_04_amount_ceil10(pre_amount);
     kani::cover!(pre_amount % 2 == 0, "even amount");
     kani::cover!(pre_amount % 2 == 1, "odd amount (OPEN-减半取整)");
     kani::cover!(pre_amount < 20, "small amount (half < 10)");
@@ -221,13 +225,13 @@ pub fn half_speed_04_pay_mul_iff() {
         "C-AG-half-speed-04: pay amount must be ceil10(amount/2)"
     );
     assert!(
-        spec::half_speed_04_log_ok(effects, expected),
+        spec::ag::half_speed_04_log_ok(effects, expected),
         "C-AG-half-speed-04: log exactly the rewrite"
     );
     // Determined half for even multiples of 10: plain /2.
     if pre_amount % 20 == 0 {
         assert!(
-            post_amount == spec::half_speed_04_amount_even(pre_amount),
+            post_amount == spec::ag::half_speed_04_amount_even(pre_amount),
             "C-AG-half-speed-04: even 10-multiple halves exactly"
         );
     }
@@ -235,7 +239,7 @@ pub fn half_speed_04_pay_mul_iff() {
 
 /// Companion: the off-by-one spec must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn half_speed_04_mutant_is_detected() {
     let amount: i32 = kani::any();
     kani::assume(amount >= 2 && amount <= 10_000);
@@ -245,7 +249,7 @@ pub fn half_speed_04_mutant_is_detected() {
     invoke::unwrap_done(invoke::entry(CARD_MOCA_HALF, 3, player));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     assert!(
-        post_amount != spec::half_speed_04_amount_mutant(amount),
+        post_amount != spec::ag::half_speed_04_amount_mutant(amount),
         "mutant (+1) must not match the card"
     );
 }
@@ -278,7 +282,7 @@ fn sky_world(hand_bits: [bool; 8], have_sky: bool) -> World {
 
 /// C-AG-sky-02 / 03 iff (hand ≥ 3 → gain n*600; else draw 1).
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn sky_02_03_play_iff() {
     // Remaining hand (after the drawn card is taken) is the bitset minus the
     // sky card. Freeze a small symbolic hand of other cards.
@@ -309,7 +313,7 @@ pub fn sky_02_03_play_iff() {
     kani::cover!(hand_after_take >= 3, "hand >= 3 (gain)");
     kani::cover!(hand_after_take < 3, "hand < 3 (draw)");
     assert!(
-        spec::sky_play_log_ok(effects, player, card, hand_after_take),
+        spec::ag::sky_play_log_ok(effects, player, card, hand_after_take),
         "C-AG-sky-02/03: take + (gain n*600 | draw 1)"
     );
     if hand_after_take >= 3 {
@@ -328,7 +332,7 @@ pub fn sky_02_03_play_iff() {
 
 /// MUTANT companion: n*601 must not match.
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn sky_02_mutant_is_detected() {
     // Force the gain branch: 3 other cards in hand.
     let mut bits = [false; 8];
@@ -344,18 +348,18 @@ pub fn sky_02_mutant_is_detected() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     assert!(
-        !spec::sky_02_log_ok_mutant(effects, player, n),
+        !spec::ag::sky_02_log_ok_mutant(effects, player, n),
         "mutant (n*601) must not match"
     );
     assert!(
-        spec::sky_02_log_ok(effects, player, n),
+        spec::ag::sky_02_log_ok(effects, player, n),
         "card pays n*600"
     );
 }
 
 /// C-AG-sky-03 dedicated draw branch (hand < 3).
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn sky_03_draws_one() {
     let mut bits = [false; 8];
     bits[0] = true; // one other card → hand_after_take = 1
@@ -367,7 +371,7 @@ pub fn sky_03_draws_one() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     assert!(
-        spec::sky_03_log_ok(&effects[1..], player),
+        spec::ag::sky_03_log_ok(&effects[1..], player),
         "C-AG-sky-03: draw exactly 1 after the take"
     );
 }
@@ -401,7 +405,7 @@ fn colors_world() -> World {
 /// C-AG-colors-01 wrap + single-effect branches 1 / 3 / 4(money).
 /// Branch 6 (three effects) is multi-effect sequencing — see the unit table.
 #[kani::proof]
-#[kani::unwind(40)]
+#[kani::unwind(80)]
 pub fn colors_01_02_03_04_play_iff() {
     let w = colors_world();
     let player = w.trig_player;
@@ -415,11 +419,11 @@ pub fn colors_01_02_03_04_play_iff() {
     // The body's raw face is the first `ctx::roll(1,6)` — not recoverable
     // from the log. Assert the determined per-branch shapes by matching the
     // produced effect against every legal branch, and cover each shape.
-    let is_gain_1500 = spec::colors_02_log_ok(effects, player);
-    let is_draw_1 = spec::colors_04_log_ok(effects, player);
-    let is_gain_2000 = spec::colors_05_money_log_ok(effects, player);
+    let is_gain_1500 = spec::ag::colors_02_log_ok(effects, player);
+    let is_draw_1 = spec::ag::colors_04_log_ok(effects, player);
+    let is_gain_2000 = spec::ag::colors_05_money_log_ok(effects, player);
     let is_fire_fill = effects.len() == 1 && matches!(effects[0], Effect::GainFire { .. });
-    let is_empty = spec::colors_empty_discard_log_ok(effects);
+    let is_empty = spec::ag::colors_empty_discard_log_ok(effects);
     // Branch 2 / 5 with empty discard = empty log (announcement only).
     // Branch 6 = up to 3 apply effects (empty-discard leaves of 2/5 are no-ops).
     let is_multi = effects.len() >= 1 && effects.len() <= 3 && !is_gain_1500 && !is_draw_1;
@@ -456,7 +460,7 @@ pub fn colors_01_02_03_04_play_iff() {
 
 /// C-AG-colors-02 dedicated mutant (off-by-one).
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn colors_02_mutant_is_detected() {
     // Force roll = 1 by a concrete answer is impossible (roll is symbolic).
     // Instead prove the two specs disagree on any GainMoney{1500} log.
@@ -464,16 +468,16 @@ pub fn colors_02_mutant_is_detected() {
         player: 0,
         n: 1500,
     }];
-    assert!(spec::colors_02_log_ok(&effects, 0), "true spec matches 1500");
+    assert!(spec::ag::colors_02_log_ok(&effects, 0), "true spec matches 1500");
     assert!(
-        !spec::colors_02_log_ok_mutant(&effects, 0),
+        !spec::ag::colors_02_log_ok_mutant(&effects, 0),
         "mutant (1501) must not match a 1500 gain"
     );
 }
 
 /// C-AG-colors-06 with a frozen 2-card discard (pick branch).
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn colors_06_pick_to_hand() {
     for pick in [0usize, 1] {
         host::install();
@@ -515,12 +519,12 @@ pub fn colors_06_pick_to_hand() {
                     assert!(*card == 2 || *card == 3, "pick is one of the offered");
                     if effects.len() == 2 {
                         assert!(
-                            spec::colors_06_log_ok(effects, player, *card),
+                            spec::ag::colors_06_log_ok(effects, player, *card),
                             "C-AG-colors-06: take + add_to_hand"
                         );
                     } else {
                         assert!(
-                            spec::colors_03_log_ok(effects, player, *card),
+                            spec::ag::colors_03_log_ok(effects, player, *card),
                             "C-AG-colors-03: take + deck-top (no log on the insert)"
                         );
                     }
@@ -555,7 +559,7 @@ fn soul_play_world(money: i32) -> World {
 
 /// C-AG-soul-01 iff (any offered k; money is sufficient so pay lands).
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn soul_01_place_and_load_iff() {
     let money: i32 = kani::any();
     kani::assume(money >= 500 && money <= 10_000);
@@ -582,11 +586,11 @@ pub fn soul_01_place_and_load_iff() {
 
     assert!(k >= 1 && k <= 5, "C-AG-soul-01: k in 1..=5");
     assert!(
-        spec::soul_01_log_ok(effects, player, card, k),
+        spec::ag::soul_01_log_ok(effects, player, card, k),
         "C-AG-soul-01: pay k*500 then PlaceCard"
     );
     assert!(
-        spec::soul_01_post_ok(post_crystals, k),
+        spec::ag::soul_01_post_ok(post_crystals, k),
         "C-AG-soul-01: k crystals on the card"
     );
     assert!(
@@ -597,7 +601,7 @@ pub fn soul_01_place_and_load_iff() {
 
 /// Companion: k+1 crystals must not match.
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn soul_01_mutant_is_detected() {
     let w = soul_play_world(5000);
     let player = w.trig_player;
@@ -611,7 +615,7 @@ pub fn soul_01_mutant_is_detected() {
         k = *n / 500;
     }
     assert!(
-        !spec::soul_01_post_ok_mutant(post_crystals, k),
+        !spec::ag::soul_01_post_ok_mutant(post_crystals, k),
         "mutant (k+1 crystals) must not match"
     );
 }
@@ -632,7 +636,7 @@ fn soul_pay_world(amount: i32, crystals: i32, payee: i32) -> World {
     w.field_n = 1;
     w.field[0].player = owner;
     w.field[0].card = intern::intern(CARD_SOUL).0;
-    w.key_set(owner, crystal_key(), crystals);
+    w.key_set(owner, crystal_name(), crystals);
     w.money = [10_000; MAX_PLAYERS];
     // Yes/no prompt: pre-seat opt_n so the host's ask explores both answers.
     w.opt_n = 2;
@@ -642,7 +646,7 @@ fn soul_pay_world(amount: i32, crystals: i32, payee: i32) -> World {
 
 /// C-AG-soul-02 (a) accepted spend to a live payee.
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn soul_02_pay_choose_yes_iff() {
     let amount: i32 = kani::any();
     kani::assume(amount >= 1 && amount <= 10_000);
@@ -668,15 +672,15 @@ pub fn soul_02_pay_choose_yes_iff() {
     kani::cover!(accepted, "owner accepts the crystal spend");
     kani::cover!(!accepted, "owner declines (no-op)");
     if accepted {
-        let expected = spec::soul_02_amount(pre_amount);
+        let expected = spec::ag::soul_02_amount(pre_amount);
         assert!(
-            spec::soul_02_pay_log_ok(effects, owner, payee, key, expected),
+            spec::ag::soul_02_pay_log_ok(effects, owner, payee, key, expected),
             "C-AG-soul-02: +500 payee, −1 crystal, amount = max(pre-1000, 0)"
         );
         assert!(post_amount == expected, "C-AG-soul-02 amount");
         assert!(post_crystals == crystals - 1, "C-AG-soul-02 crystal");
     } else {
-        assert!(spec::soul_02_noop_log_ok(effects), "decline is a no-op");
+        assert!(spec::ag::soul_02_noop_log_ok(effects), "decline is a no-op");
         assert!(post_amount == pre_amount, "decline leaves the amount");
         assert!(post_crystals == crystals, "decline leaves the crystal");
     }
@@ -684,7 +688,7 @@ pub fn soul_02_pay_choose_yes_iff() {
 
 /// Companion: off-by-one amount must not match the accepted path.
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn soul_02_mutant_is_detected() {
     let amount = 5000i32;
     let w = soul_pay_world(amount, 2, 1);
@@ -697,10 +701,10 @@ pub fn soul_02_mutant_is_detected() {
     invoke::unwrap_done(invoke::entry(CARD_SOUL, 1, owner));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     assert!(
-        post_amount != spec::soul_02_amount_mutant(amount),
+        post_amount != spec::ag::soul_02_amount_mutant(amount),
         "mutant (+1) must not match"
     );
-    assert!(post_amount == spec::soul_02_amount(amount), "card does max(pre-1000,0)");
+    assert!(post_amount == spec::ag::soul_02_amount(amount), "card does max(pre-1000,0)");
 }
 
 // ===========================================================================
@@ -709,7 +713,7 @@ pub fn soul_02_mutant_is_detected() {
 
 /// C-AG-soul-03 iff.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn soul_03_skill_used_iff() {
     let crystals: i32 = kani::any();
     kani::assume(crystals >= 1 && crystals <= 3);
@@ -721,7 +725,7 @@ pub fn soul_03_skill_used_iff() {
         w.field_n = 1;
         w.field[0].player = owner;
         w.field[0].card = intern::intern(CARD_SOUL).0;
-        w.key_set(owner, crystal_key(), crystals);
+        w.key_set(owner, crystal_name(), crystals);
         w
     };
     let owner = w.trig_player;
@@ -734,7 +738,7 @@ pub fn soul_03_skill_used_iff() {
     let effects = &logbuf[..log_n];
     let post_crystals = world::with_world(|ww| crystals_of(ww, owner));
     assert!(
-        spec::soul_03_log_ok(effects, owner, key),
+        spec::ag::soul_03_log_ok(effects, owner, key),
         "C-AG-soul-03: exactly one crystal leaves"
     );
     assert!(post_crystals == crystals - 1, "crystals fall by 1");
@@ -774,7 +778,7 @@ fn glory_world(
 /// places the owners on real board tiles and reads `tile_price` through the
 /// same host the body uses.
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn glory_02_03_swap_iff() {
     // Pin two concrete deed sets so `owned_tiles` / `tile_price` are stable.
     // Tile 2 (board index 3) price 2600; tile 3 price 3200; tile 5 price 1600.
@@ -793,12 +797,12 @@ pub fn glory_02_03_swap_iff() {
 
     // Board prices (data/board.json 1-based index minus one):
     // slot 2 → price 2600, slot 3 → price 3200.
-    let from_them = spec::glory_half(3200);
-    let from_us = spec::glory_half(2600);
+    let from_them = spec::ag::glory_half(3200);
+    let from_us = spec::ag::glory_half(2600);
     kani::cover!(from_them > 0, "other has a dearest deed");
     kani::cover!(from_us > 0, "user has a dearest deed");
     assert!(
-        spec::glory_log_ok(effects, user, other, from_them, from_us),
+        spec::ag::glory_log_ok(effects, user, other, from_them, from_us),
         "C-AG-glory-02/03: PayTo legs are the two halves, in order"
     );
     assert!(
@@ -813,7 +817,7 @@ pub fn glory_02_03_swap_iff() {
 
 /// Companion: +1 on the first leg must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn glory_mutant_is_detected() {
     let user = 0i32;
     let other = 1i32;
@@ -824,7 +828,7 @@ pub fn glory_mutant_is_detected() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     assert!(
-        !spec::glory_log_ok_mutant(effects, user, other, 1600, 1300),
+        !spec::ag::glory_log_ok_mutant(effects, user, other, 1600, 1300),
         "mutant (+1) must not match"
     );
 }
@@ -841,7 +845,7 @@ pub fn glory_mutant_is_detected() {
 /// world where the other player owns a group-10 deed, and assert the
 /// placement lands.
 #[kani::proof]
-#[kani::unwind(40)]
+#[kani::unwind(80)]
 pub fn one_of_us_01_place_iff() {
     host::install();
     let mut w = World::new();

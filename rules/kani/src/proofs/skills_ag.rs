@@ -15,16 +15,24 @@ const SKILL_MOCA: &str = "skill:青叶摩卡:我行我素";
 const REST_TURNS: &str = "skill.afterglow.restTurns";
 const BAND_AFTERGLOW: &str = "Afterglow";
 
+fn rest_name() -> intern::NameId {
+    intern::intern(REST_TURNS)
+}
+
 fn rest_key() -> u16 {
-    intern::intern(REST_TURNS).0
+    rest_name().0
+}
+
+fn band_name() -> intern::NameId {
+    intern::intern(BAND_AFTERGLOW)
 }
 
 fn band_key() -> u16 {
-    intern::intern(BAND_AFTERGLOW).0
+    band_name().0
 }
 
 fn rest_of(w: &World, player: i32) -> i32 {
-    w.key_get(player, rest_key())
+    w.key_get(player, rest_name())
 }
 
 // ===========================================================================
@@ -39,7 +47,7 @@ fn firepot_tick_world(pre_rest: i32, pre_fire: i32) -> World {
     w.trig_player = player;
     w.turn_player = player;
     w.band_id[player as usize] = band_key();
-    w.key_set(player, rest_key(), pre_rest);
+    w.key_set(player, rest_name(), pre_rest);
     w.fire[player as usize] = pre_fire;
     w.fire_max = [1, 1, 1, 1]; // 「上限1」
     w
@@ -47,7 +55,7 @@ fn firepot_tick_world(pre_rest: i32, pre_fire: i32) -> World {
 
 /// C-AG-firepot-01 iff on the TurnEnd tick (ran_red entry 2).
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn firepot_01_tick_iff() {
     let pre_rest: i32 = kani::any();
     kani::assume(pre_rest >= 0 && pre_rest <= 2);
@@ -66,12 +74,12 @@ pub fn firepot_01_tick_iff() {
     let post_rest = world::with_world(|ww| rest_of(ww, player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
 
-    let grants = spec::firepot_01_grants(pre_rest);
+    let grants = spec::skills_ag::firepot_01_grants(pre_rest);
     kani::cover!(grants, "third idle turn grants a pot");
     kani::cover!(!grants, "first/second idle turn grants nothing");
     if grants {
         assert!(
-            spec::firepot_01_grant_log_ok(effects, player),
+            spec::skills_ag::firepot_01_grant_log_ok(effects, player),
             "C-AG-firepot-01: granting tick is exactly GainFire(1)"
         );
         // Host `gain_fire` is saturating_add with no fire_max clamp (the cap
@@ -83,25 +91,25 @@ pub fn firepot_01_tick_iff() {
         );
     } else {
         assert!(
-            spec::firepot_01_idle_log_ok(effects),
+            spec::skills_ag::firepot_01_idle_log_ok(effects),
             "C-AG-firepot-01: idle tick is a no-op in the log"
         );
         assert!(post_fire == pre_fire, "C-AG-firepot-01: fire unchanged");
     }
     assert!(
-        post_rest == spec::firepot_01_next_rest(pre_rest),
+        post_rest == spec::skills_ag::firepot_01_next_rest(pre_rest),
         "C-AG-firepot-01: rest counter is next_rest(pre)"
     );
 }
 
 /// Companion: the every-other-turn mutant must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn firepot_01_mutant_is_detected() {
     // pre_rest = 0: the card does not grant; the mutant (grant at +1>=2) does.
-    assert!(spec::firepot_01_grants(0) == false, "card: no grant at rest 0");
+    assert!(spec::skills_ag::firepot_01_grants(0) == false, "card: no grant at rest 0");
     assert!(
-        spec::firepot_01_grants_mutant(0),
+        spec::skills_ag::firepot_01_grants_mutant(0),
         "mutant: claims a grant at rest 0"
     );
 }
@@ -123,7 +131,7 @@ fn moca_offer_world(pre_fire: i32, src_pos: i32, used: i32) -> World {
     w.pos[owner as usize] = (src_pos + 17) % 60; // not already there
     w.band_id[owner as usize] = band_key();
     // Per-source CD key the body builds as `skill.mocaSelf.used:<src>`.
-    let key = intern::intern(&alloc_key(src)).0;
+    let key = intern::intern(alloc_key(src));
     w.key_set(owner, key, used);
     // Yes/no prompt: pre-seat opt_n so ask explores both answers.
     w.opt_n = 2;
@@ -143,7 +151,7 @@ fn alloc_key(src: i32) -> &'static str {
 
 /// C-AG-moca-02 iff (CardPlayed hook; residual `trigger::player_id() != owner`).
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn moca_02_teleport_iff() {
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 0 && pre_fire <= 1);
@@ -171,7 +179,7 @@ pub fn moca_02_teleport_iff() {
 
     if gated {
         assert!(
-            spec::moca_02_noop_log_ok(effects),
+            spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: CD / no-fire gate is a no-op"
         );
         assert!(post.pos[owner as usize] != src_pos || pre_fire == 0, "no teleport when gated");
@@ -180,16 +188,16 @@ pub fn moca_02_teleport_iff() {
     // Not gated: the body asks yes/no (symbolic). Both answers are legal.
     if accepted {
         assert!(
-            spec::moca_02_log_ok(effects, owner, src_pos),
+            spec::skills_ag::moca_02_log_ok(effects, owner, src_pos),
             "C-AG-moca-02: exactly Teleport(owner → src tile)"
         );
         assert!(
-            spec::moca_02_post_ok(post.pos[owner as usize], post.fire[owner as usize], src_pos, pre_fire),
+            spec::skills_ag::moca_02_post_ok(post.pos[owner as usize], post.fire[owner as usize], src_pos, pre_fire),
             "C-AG-moca-02: on the actor's tile with fire −1"
         );
     } else {
         assert!(
-            spec::moca_02_noop_log_ok(effects),
+            spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: declined offer is a no-op"
         );
         assert!(post.fire[owner as usize] == pre_fire, "decline leaves fire");
@@ -199,7 +207,7 @@ pub fn moca_02_teleport_iff() {
 
 /// Companion: wrong-tile mutant must not match the accepted path.
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(80)]
 pub fn moca_02_mutant_is_detected() {
     let w = moca_offer_world(1, 10, 0);
     let owner = 0i32;
@@ -212,11 +220,11 @@ pub fn moca_02_mutant_is_detected() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     assert!(
-        !spec::moca_02_log_ok_mutant(effects, owner, 10),
+        !spec::skills_ag::moca_02_log_ok_mutant(effects, owner, 10),
         "mutant (tile+1) must not match"
     );
     assert!(
-        spec::moca_02_log_ok(effects, owner, 10),
+        spec::skills_ag::moca_02_log_ok(effects, owner, 10),
         "card teleports to the actor's tile"
     );
 }
@@ -227,7 +235,7 @@ pub fn moca_02_mutant_is_detected() {
 
 /// C-AG-ran-02: the fire-spend half (plan reverse / NO_REWARD are stubs).
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn ran_02_spend_fire_iff() {
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 1 && pre_fire <= 1);
@@ -247,18 +255,18 @@ pub fn ran_02_spend_fire_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     assert!(
-        spec::ran_02_spend_log_empty(effects),
+        spec::skills_ag::ran_02_spend_log_empty(effects),
         "C-AG-ran-02: fire spend is not an Effect (spend_fire mutates fire only)"
     );
     assert!(
-        spec::ran_02_fire_ok(post_fire, pre_fire),
+        spec::skills_ag::ran_02_fire_ok(post_fire, pre_fire),
         "C-AG-ran-02: exactly one [火罐] spent"
     );
 }
 
 /// Companion: spending 2 must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(80)]
 pub fn ran_02_mutant_is_detected() {
     host::install();
     let mut w = World::new();
