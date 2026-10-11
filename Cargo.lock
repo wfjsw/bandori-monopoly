@@ -1750,6 +1750,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruleset-tests"
+version = "0.1.0"
+dependencies = [
+ "card-sdk",
+ "game-core",
+ "game-rules",
+ "serde_json",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"

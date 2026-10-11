@@ -1,0 +1,14 @@
+[package]
+name = "ruleset-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "Black-box rulebook tests for this game's shipped rules (cards, skills, tiles, events). Lives with the rule implementations under rules/. Engine-universal tests stay in crates/game-rules/tests/."
+
+[dependencies]
+
+[dev-dependencies]
+game-core = { path = "../../crates/game-core" }
+game-rules = { path = "../../crates/game-rules" }
+card-sdk = { workspace = true }
+serde_json = { workspace = true }

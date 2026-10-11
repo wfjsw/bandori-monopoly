@@ -1,10 +1,12 @@
-//! Card modules running inside a real match.
+//! Card modules running inside a real match -- the fixture-only half
+//! (`TEST:*` from `rules/fixtures/test-cards`). The shipped-card half lives
+//! in `rules/tests/tests/live_match.rs`.
 //!
-//! These tests are the end-to-end proof that the wasm seam works: a card played
-//! from hand runs its module, its prompts come out as engine prompts, and its
-//! effects land in the committed match state.
+//! These tests are the end-to-end proof that the wasm seam works: a card
+//! played from hand runs its module, its prompts come out as engine prompts,
+//! and its effects land in the committed match state.
 //!
-//! Build the modules first: `tools/build-ruleset.sh`.
+//! Build the modules first: `node tools/build-ruleset.mjs`.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -26,12 +28,6 @@ fn data() -> Arc<GameData> {
     )
 }
 
-fn rules() -> WasmRules {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/cards");
-    WasmRules::load_dir(data(), &dir)
-        .expect("ruleset should load")
-        .expect("dist/cards must exist -- run tools/build-ruleset.sh")
-}
 
 /// The shipped cards plus the test-only fixture cards (`TEST:*`), one ruleset.
 fn rules_with_fixtures() -> WasmRules {
@@ -67,10 +63,6 @@ fn play(card: &str) -> NetMessage {
     }
 }
 
-/// A two-player match where player 1 is human and holds `card` on its own turn.
-fn match_with(card: &str) -> Match {
-    match_with_rules(card, rules())
-}
 
 fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     let members = vec![member(1, false), member(2, true)];
@@ -109,145 +101,6 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     m
 }
 
-#[test]
-fn a_characters_skill_binds_to_whoever_picked_them() {
-    // The binding: a player's two skill rules follow from the character they
-    // picked and land on their field, which is what makes `On::Hook` reach them
-    // exactly as it reaches any other field card. See `game_core::data::skill_id`.
-    let members = vec![member(1, false), member(2, true)];
-    let mut m = Match::new(
-        data(),
-        Arc::new(rules()),
-        &members,
-        20261004,
-        MatchMode::Casual,
-        ScoreWeights::default(),
-    );
-    m.set_character(1, "户山香澄");
-    m.quick_start();
-    // The binding is observable the moment the match starts. Assert it *here*:
-    // `PPP:Returns` is in a Poppin' Party deck pool and its `DeckAtGameStart`
-    // hook places it, after which its (2) legitimately swaps the band skill for
-    // another player's -- so the field at the first turn is no longer the
-    // binding, it is the binding *after* Returns has had its say.
-    {
-        let st = m.state();
-        let ids: Vec<&str> = st.players[1]
-            .field
-            .iter()
-            .map(|f| f.card.as_str())
-            .collect();
-        assert!(
-            ids.contains(&"skill:户山香澄:非凡之星"),
-            "character skill bound: {ids:?}"
-        );
-        assert!(
-            ids.iter().any(|id| id.starts_with("skill:Poppin' Party:")),
-            "band skill follows from the character's band: {ids:?}"
-        );
-    }
-    // Let the bots run so a `TurnStartBefore` has fired for the human.
-    for _ in 0..2000 {
-        let st = m.state();
-        let mine = st.phase == "play"
-            && st.turn >= 0
-            && st
-                .players
-                .get(st.turn as usize)
-                .is_some_and(|s| s.member == 1);
-        if mine && st.step == stage::OPS {
-            break;
-        }
-        m.tick(0.25);
-    }
-    let st = m.state();
-    let ids: Vec<&str> = st.players[1]
-        .field
-        .iter()
-        .map(|f| f.card.as_str())
-        .collect();
-    // The character skill survives whatever else the deck did; the band skill
-    // may have been swapped by `PPP:Returns`' (2), which is that card's rule.
-    assert!(
-        ids.contains(&"skill:户山香澄:非凡之星"),
-        "character skill stays bound: {ids:?}"
-    );
-    // 「初始0，上限1」 -- the skill card is what assigns fire.max.
-    let fire = st.players[1].state.get("fire").copied().unwrap_or_default();
-    assert_eq!(fire.max, 1, "the skill assigned the cap: {fire:?}");
-}
-
-#[test]
-fn the_sample_cards_load_in_the_ruleset() {
-    let r = rules();
-    assert!(r.ruleset().card("AG:Y.O.L.O").is_some());
-    assert!(r.ruleset().card("HHW:（育美）").is_some());
-}
-
-#[test]
-fn a_played_card_runs_its_module_and_answers_a_prompt() {
-    // HHW:（育美） rolls 4d20 twice, offers the resulting tiles, places a mark.
-    let mut m = match_with("HHW:（育美）");
-    let before = m.hand_of(1).len();
-    m.act(1, &play("HHW:（育美）"))
-        .expect("play should start the effect");
-
-    // The module blocked on its tile prompt; answer with the first option.
-    let st = m.state();
-    assert_eq!(
-        st.prompt.kind, "tile",
-        "the module's prompt is an engine tile prompt: {:?}",
-        st.prompt
-    );
-    assert!(!st.prompt.options.is_empty());
-    let prompt = st.prompt.id;
-    m.act(
-        1,
-        &NetMessage {
-            prompt,
-            value: 0,
-            ..NetMessage::act("answer")
-        },
-    )
-    .expect("answer");
-
-    let st = m.state();
-    assert!(
-        st.events
-            .iter()
-            .any(|e| unadorned(&e.msg).key() == "cards:card-hhw.hagumi_marks_placed"),
-        "mark message logged: {:?}",
-        st.events.iter().map(|e| e.msg.key()).collect::<Vec<_>>()
-    );
-    assert!(
-        st.marks
-            .iter()
-            .any(|mk| mk.note.key() == "cards:card-hhw.hagumi_marks_mark_note"),
-        "a mark was placed: {:?}",
-        st.marks
-    );
-    assert_eq!(
-        m.hand_of(1).len(),
-        before - 1,
-        "the card left the hand: {:?}",
-        m.hand_of(1)
-    );
-}
-
-#[test]
-fn an_unported_card_falls_back_gracefully() {
-    let mut m = match_with("AG:Y.O.L.O");
-    let before = m.hand_of(1).len();
-    // Y.O.L.O is a counteraction card with no Play effect; playing it is legal but
-    // does nothing beyond leaving the hand.
-    m.act(1, &play("AG:Y.O.L.O")).expect("play");
-    assert_eq!(
-        m.hand_of(1).len(),
-        before - 1,
-        "the card left the hand: {:?}",
-        m.hand_of(1)
-    );
-}
 
 #[test]
 fn a_card_whose_crystals_run_out_leaves_the_field() {
@@ -323,40 +176,6 @@ fn a_transferred_dest_lands_in_the_named_players_pile() {
         user.discard.iter().any(|c| c == "TEST:dest_to"),
         "the user's discard: {:?}",
         user.discard
-    );
-}
-#[test]
-fn ported_official_cards_run_in_a_match() {
-    // R:[衍生] 压 -- straight gain, no prompt.
-    let mut m = match_with("R:[衍生] 压");
-    let before = m.state().players[1].money;
-    m.act(1, &play("R:[衍生] 压")).expect("play");
-    let st = m.state();
-    assert!(
-        st.players[1].money >= before + 1000,
-        "the card paid: {} -> {}",
-        before,
-        st.players[1].money
-    );
-    assert!(
-        st.events
-            .iter()
-            .any(|e| format!("{:?}", e.msg).contains("press_why")),
-        "its reason was logged"
-    );
-
-    // R:（ykn）louder -- nudge the RiNG multiplier, no prompt. It is 凑友希那's
-    // exclusive card, so the player must be her to play it.
-    let mut m = match_with("R:（ykn）louder");
-    m.set_character(1, "凑友希那");
-    m.act(1, &play("R:（ykn）louder")).expect("play");
-    let st = m.state();
-    assert!(
-        st.events
-            .iter()
-            .any(|e| format!("{:?}", e.msg).contains("louder")),
-        "logged: {:?}",
-        st.events.iter().map(|e| e.msg.key()).collect::<Vec<_>>()
     );
 }
 

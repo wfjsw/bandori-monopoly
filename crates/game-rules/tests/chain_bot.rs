@@ -12,7 +12,7 @@
 //! offer.
 //!
 //! Chain semantics (ruling 2026-10-07) are unchanged for humans -- see
-//! `rb_chain.rs`. Fixtures: `TEST:aimer` (effect X), `TEST:probe` (answers any
+//! `chain.rs`. Fixtures: `TEST:aimer` (effect X), `TEST:probe` (answers any
 //! effect link), from `rules/fixtures/test-cards`.
 
 mod common;
@@ -88,7 +88,7 @@ fn book_declaring(who: &str, card: &str, propensity_milli: i32) -> StrategyBook 
     b.version = STRATEGY_BOOK_VERSION;
     b.policy = POLICY_STANDARD.into();
     b.params_version = PARAMS_VERSION;
-    b.generated_at = "rb_chain_bot".into();
+    b.generated_at = "chain_bot".into();
     b.me.push(StrategyEntry {
         me: who.into(),
         band: String::new(),
