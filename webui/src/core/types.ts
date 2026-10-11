@@ -130,6 +130,10 @@ export interface MatchEvent {
    *  was in play at the time; absent / -1 otherwise (hand play, skill, event,
    *  old records). */
   uid?: number;
+  /** Should the client show the card flash (and the field-slot pulse)?
+   *  `false` for owner-self-only activations (the log entry still appears).
+   *  Default `true`. */
+  flash?: boolean;
 }
 /** C# `MovePlan` -- the movement the current turn is taking. `reach[k]` is the
  * tile after k+1 steps; `steps` is how far along it the seat has got. */

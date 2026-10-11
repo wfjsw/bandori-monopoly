@@ -215,3 +215,60 @@ fn quiet_presentation_is_in_the_manifest() {
     assert_eq!(info.on[1].presentation, card_sdk::abi::Presentation::QuietWhenEmpty, "entry 1");
     assert_eq!(info.on[2].presentation, card_sdk::abi::Presentation::QuietWhenEmpty, "entry 2");
 }
+
+/// Ruling 1: an activation whose effects are owner-self-only keeps the log
+/// entry but carries `flash: false` (no card animation).
+#[test]
+fn self_only_activation_has_no_flash() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    // TEST:tileHook's body only logs (owner-self narration) -> no flash.
+    t.give_play(0, "TEST:tileHook").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let fired = activations_since(&t, mark, "TEST:tileHook");
+    assert_eq!(fired.len(), 1, "the hook still announces: {}", t.recent_keys(20).join(", "));
+    assert!(
+        !fired[0].flash,
+        "a log-only hook is SelfOnly: {:?}",
+        fired[0]
+    );
+}
+
+/// An activation that touches another player flashes.
+#[test]
+fn cross_player_activation_flashes() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.set_money(0, 10_000);
+    t.set_money(1, 10_000);
+    // TEST:xfer1000 pays the next player 1000 -> Other -> flash.
+    t.give(0, &["TEST:xfer1000"]);
+    t.set_hand(0, &["TEST:xfer1000"]);
+    let mark = t.mark();
+    t.play(0, "TEST:xfer1000").unwrap();
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let fired: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "card" && e.card == "TEST:xfer1000")
+        .collect();
+    assert_eq!(fired.len(), 1, "the play announces: {}", t.recent_keys(20).join(", "));
+    assert!(
+        fired[0].flash,
+        "a transfer to another player must flash: {:?}",
+        fired[0]
+    );
+}

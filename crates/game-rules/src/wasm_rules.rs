@@ -3336,6 +3336,132 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
 
+
+    /// Ruling 1: the card **flash** is shown only when the activation left the
+    /// owner. Owner-self-only effects (own fire, counters, latches, hand-limit,
+    /// own bank money, own draw/discard) keep the log entry but no animation.
+    ///
+    /// Scope classification (see the report table):
+    /// * **Other** -- anything touching another player (money to/from them,
+    ///   targeting, designation, their status / hand / state).
+    /// * **Board** -- cards on board (place / unplace), tile marks, houses,
+    ///   deeds, mortgage, ownership, tile props.
+    /// * **Move** -- position change, teleport, stop-at, extra steps, plan
+    ///   rewrites of a move.
+    /// * **SelfOnly** -- own fire, own counters / latches / skill state, own
+    ///   hand-limit / start-hand, own prop / slot writes, own bank money,
+    ///   own draw / discard.
+    ///
+    /// Returns `true` when the activation should flash (some effect is
+    /// Other / Board / Move).
+    fn drive_should_flash(&self, cx: &Cx, after: &Run, owner: i32) -> bool {
+        // Money: any leg that is not (owner <-> bank) is Other.
+        for &(from, to, _amount) in &after.paid_log {
+            let touches_other = (from >= 0 && from != owner) || (to >= 0 && to != owner);
+            if touches_other {
+                return true;
+            }
+        }
+        // Cards / marks / houses on board.
+        if !after.house_log.is_empty() {
+            return true;
+        }
+        if !after.exile_log.is_empty() {
+            // Exile is a status hit -- Other (it lands on a player).
+            return true;
+        }
+        // Draw / discard: own = SelfOnly (proposed); another player's = Other.
+        for (who, _id) in &after.draw_log {
+            if *who != owner {
+                return true;
+            }
+        }
+        for (who, _id) in &after.discard_log {
+            if *who != owner {
+                return true;
+            }
+        }
+        // Fire spend on self = SelfOnly. Counter writes on self = SelfOnly.
+        // (counter_log rows are (owner, card, name, delta) -- the instance's
+        // owner; if that is not the drive owner, it touched another player.)
+        for (who, _card, _name, _delta) in &after.counter_log {
+            if *who != owner {
+                return true;
+            }
+        }
+        // Dest change (place / unplace / graveyard) = Board.
+        if after.dest >= 0 {
+            return true;
+        }
+        // Events this drive produced: the header (if any) and everything
+        // after it on the stream (body lines + host effects). Use the id
+        // tail rather than `parent` -- host-effect events are stamped to the
+        // header after the fact, and a nested activation's own events sit in
+        // the same window.
+        let header = after.parent;
+        for e in cx.world().recent.iter() {
+            if header >= 0 && e.id < header {
+                continue;
+            }
+            match e.r#type.as_str() {
+                "move" | "roll" | "teleport" => return true,
+                "build" | "mortgage" | "redeem" | "buy" | "overlap" => return true,
+                "pay" | "rent" | "gain" | "lose" => {
+                    // Money legs: the two sides ride the Msg args (`who` /
+                    // `to` as PlayerId); bank is -1. Own bank money is
+                    // SelfOnly (proposed); anything touching another seat
+                    // is Other.
+                    let sides = ["who", "to", "from"];
+                    for k in sides {
+                        if let Some(game_core::msg::Arg::PlayerId(p)) = e.msg.a.get(k) {
+                            if *p >= 0 && *p != owner {
+                                return true;
+                            }
+                        }
+                    }
+                    // Fallback: the event's own from/to fields (older paths).
+                    if (e.from >= 0 && e.from != owner) || (e.to >= 0 && e.to != owner) {
+                        return true;
+                    }
+                }
+                "status" => {
+                    if e.player_id != owner && e.player_id >= 0 {
+                        return true;
+                    }
+                    if e.other >= 0 && e.other != owner {
+                        return true;
+                    }
+                }
+                "draw" | "discard" | "mulligan" => {
+                    if e.player_id != owner && e.player_id >= 0 {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
+            // Outcome lines that name a plan rewrite or a board write.
+            if let Some(k) = e.msg.key().strip_prefix("log.outcome.") {
+                match k {
+                    "plan_steps" | "plan_stop" | "plan_teleport" | "plan_start"
+                    | "plan_dice" | "plan_no_buy" | "plan_no_build" => return true,
+                    "place" | "unplace" | "mark_add" | "mark_remove" | "mark_move" => return true,
+                    "stay" | "stun" | "exile" => {
+                        // Targeted at someone other than the owner.
+                        if let Some(game_core::msg::Arg::PlayerId(t)) = e.msg.a.get("target") {
+                            if *t != owner {
+                                return true;
+                            }
+                        } else if e.player_id != owner {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        false
+    }
+
     /// Debug guard: a **silent** entry (`CardDef::silent`) is bookkeeping --
     /// declarations, resets, latch clears the player never sees as a clause
     /// firing. It must not produce a visible effect (money, cards, marks,
@@ -3455,6 +3581,15 @@ impl<M: CardModules> RulesBridge<M> {
                         Vec::new()
                     };
                     cx.set_event_results(header, results);
+                    // Ruling 1: owner-self-only activations keep the log entry
+                    // but skip the card flash.
+                    let owner = if call.player_id() >= 0 {
+                        call.player_id()
+                    } else {
+                        after.trigger.player_id
+                    };
+                    let flash = self.drive_should_flash(cx, &after, owner);
+                    cx.set_event_flash(header, flash);
                     after.world.recent = cx.world().recent.clone();
                     cx.activation.retain(|&id| id != header);
                 }

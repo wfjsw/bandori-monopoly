@@ -1018,6 +1018,22 @@ pub struct MatchEvent {
     /// card's field slot instead of flashing its face. Absent on old records.
     #[serde(default = "no_parent", skip_serializing_if = "is_no_parent")]
     pub uid: i32,
+    /// Should the client show the card **flash** (and the field-slot pulse)
+    /// for this activation? `false` when every produced effect is
+    /// owner-self-only (own fire, counters, latches, hand-limit, bank money
+    /// on self) -- the log entry (header + outcome lines) still appears; only
+    /// the animation goes. `true` when anything reached another player, the
+    /// board (cards, marks, houses, deeds, tile props), or movement. v54.
+    #[serde(default = "default_flash", skip_serializing_if = "is_default_flash")]
+    pub flash: bool,
+}
+
+fn default_flash() -> bool {
+    true
+}
+
+fn is_default_flash(f: &bool) -> bool {
+    *f
 }
 
 fn is_no_parent(p: &i32) -> bool {
@@ -1060,6 +1076,7 @@ impl Default for MatchEvent {
             parent: -1,
             results: Vec::new(),
             uid: -1,
+            flash: true,
         }
     }
 }

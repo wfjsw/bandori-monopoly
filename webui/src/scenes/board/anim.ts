@@ -563,6 +563,9 @@ export class Animator {
         if (!e.card) break;
         this.lastDiscard = e.card;
         if (this.noFlash()) break;
+        // Ruling 1: owner-self-only activations keep the log entry but skip
+        // the card flash. `flash: false` is set at commit; default is true.
+        if (e.flash === false) break;
         await this.cardFlash(e, fast);
         break;
       case "event": if (!fast) sfx("event_card"); this.showBanner(tr("anim.event"), body); await wait(900); break;
