@@ -469,12 +469,17 @@ pub fn fire_bird_exhaust(step: &Step<'_>) -> Result<(), String> {
         .field
         .iter()
         .any(|f| f.card == FIRE_BIRD);
-    let post_discard = step.post.hidden[who]
-        .discard
-        .iter()
-        .any(|c| c == FIRE_BIRD);
-    if pre_on && !post_on && !post_discard {
-        return Err("Fire bird left the field without entering the discard".into());
+    // 「放入弃牌堆」 -- the discard is the book's destination. An empty
+    // draw pile may immediately reshuffle it into the draw (G-CARDS); both
+    // zones honour the clause.
+    let h = &step.post.hidden[who];
+    let landed = h.discard.iter().any(|c| c == FIRE_BIRD)
+        || h.draw.iter().any(|c| c == FIRE_BIRD);
+    if pre_on && !post_on && !landed {
+        return Err(format!(
+            "Fire bird left the field without entering the discard; discard={:?} draw={:?}",
+            h.discard, h.draw
+        ));
     }
     Ok(())
 }
@@ -594,6 +599,44 @@ fn fire_bird_turn_end_burn() {
         )
     })
     .expect("Fire bird turn-end burn");
+}
+
+/// C-R-Fire bird-04 -- the last crystal at turn end drops the card to the discard.
+#[test]
+fn fire_bird_exhaust_to_discard() {
+    forall(2, 0xC0C0_000E, |_rng, _i| {
+        let mut t = vanilla2();
+        t.place_raw(0, FIRE_BIRD);
+        t.set_crystals(0, FIRE_BIRD, 1);
+        t.dice(&[1]);
+        let _ = t.roll(0);
+        drain(&mut t);
+        let pre = t.snapshot_world();
+        t.observe(FIRE_BIRD_CLAUSES);
+        t.end(0).map_err(|e| format!("end rejected: {e}"))?;
+        drain(&mut t);
+        if t.on_field(0, FIRE_BIRD) {
+            return Err(format!(
+                "crystal count reached 0 but the card is still on the field: {:?}",
+                t.field(0)
+            ));
+        }
+        if !t.discard(0).contains(&FIRE_BIRD.to_string())
+            && !t.draw_pile(0).contains(&FIRE_BIRD.to_string())
+        {
+            return Err(format!(
+                "exhausted Fire bird is not in the discard; discard={:?} draw={:?}",
+                t.discard(0),
+                t.draw_pile(0)
+            ));
+        }
+        frame(
+            &pre,
+            t.world(),
+            &["money:P0", "field:P0", "crystals:P0", "fprop:P0", "discard:P0", "draw:P0"],
+        )
+    })
+    .expect("Fire bird exhaust");
 }
 
 /// C-R-Fire bird-03 -- rent is 1.5x while the card sits on the owner's field.
