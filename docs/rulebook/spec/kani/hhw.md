@@ -10,15 +10,17 @@ Method: specs are pure predicates written FROM the clause doc quotes only.
 Harnesses invoke the unmodified bodies via `invoke::`. Guards use `guard_id!` /
 `guard!` against the lowered single-source IR. Narration is not the frame.
 
-## Classification counts
+## Classification counts (this pass)
 
-| class | cards | character skills | band | total |
-|---|---:|---:|---:|---:|
-| PROVEN | (see table) | (see table) | (see table) | (see table) |
-| FAILS (finding) | 0 | 2 (known, pre-registered) | 0 | 2 |
-| BLOCKED-HOST | 3 rows | 1 row | 0 | 4 |
-| PROTOCOL-LEVEL | many clauses | several | 1 clause | — |
-| OPEN | several clauses | several | 1 clause | — |
+| class | count (clauses) | notes |
+|---|---:|---|
+| PROVEN (CBMC SUCCESSFUL) | 5 clauses | C-HHW-kokoro-01, kokoro-02, band-01 (decline), kkr-01, plus no-op companions |
+| FAILS (finding) | 2 (pre-registered) | kaoru-01, kaoru-02 (TEST-FINDINGS §6) |
+| BLOCKED-HOST | 3 card rows + 1 skill row | `rent_of`, `tile_at`×2, `trig_move_roll` |
+| PROTOCOL-LEVEL | ~20 clauses | counter windows, [触发结算], multi-turn clocks |
+| OPEN | ~15 clauses | OPEN-HHW-* list below |
+| TIMEOUT/OOM this pass | 1 | `athletic_place_three_crystals_iff` intern unwind cliff |
+| written, verdict pending | ~25 harnesses | code committed; slot-queued |
 
 The three card rows blocked on unmodeled ops (KANI-COVERAGE.md) are listed
 **BLOCKED-HOST** and left there:
@@ -63,14 +65,14 @@ Legend: **P**=PROVEN, **F**=FAILS(finding), **B**=BLOCKED-HOST, **PROTO**=PROTOC
 | C-HHW-parade-03 | 「[持续] [触发结算]后可将…放置于[移动终点]」 | PROTO | — | — | — | OPEN-HHW-触发结算 |
 | C-HHW-parade-04 | 「那格视为与弦卷集团交换位置」 | PROTO | — | — | — | tile-swap standing effect |
 | C-HHW-parade-05 | 「[触发结算]后此卡放入弃牌堆」 | PROTO | — | — | — | OPEN-HHW-触发结算 |
-| C-HHW-athletic-01 | 「放置于自己场上并放置3个奇迹水晶」 | P | `athletic_place_three_crystals_iff` | pending | — | — |
+| C-HHW-athletic-01 | 「放置于自己场上并放置3个奇迹水晶」 | TIMEOUT/OOM this pass | `athletic_place_three_crystals_iff` | FAILED 40.5s (intern unwind cliff) | — | re-run with a frozen card-name world |
 | C-HHW-athletic-02 | 「每回合结束时失去一个，为0时置入弃牌堆」 | P / F? | `athletic_turn_end_decay_iff`, `athletic_empty_discards` | pending | body may only `set_dest(Graveyard)` without unplace → LESS | — |
 | C-HHW-athletic-03 | 「每次掷骰获得一次资金，起始为700…下限100」 | P (spec) | (spec only this pass) | — | host `gain_fire` ignores cap (n/a here) | — |
 | C-HHW-athletic-04 | 「重骰…直至结果至少为10」 | P (spec) | (spec only) | — | inclusive floor ruling | — |
 | C-HHW-supply-01 | 「[反击] 经过CiRCLE…放置一个奇迹水晶」 | **B** | — | BLOCKED-HOST (`tile_at`) | — | — |
 | C-HHW-supply-02 | 「该格获得CiRCLE格子的全部效果」 | **B** + PROTO | — | BLOCKED-HOST (`tile_at`) | — | OPEN-HHW-CIRCLE-FX |
 | C-HHW-supply-03 | 「经过弦卷集团后，移除那格的一个奇迹水晶」 | **B** | — | BLOCKED-HOST (`tile_at`) | — | — |
-| C-HHW-kkr-01 | 「支付10000资金（视为买地花费）」 | P | `kkr_pay_10000_iff` | pending | — | — |
+| C-HHW-kkr-01 | 「支付10000资金（视为买地花费）」 | P | `kkr_pay_10000_iff` | **SUCCESSFUL** 250.7s | — | — |
 | C-HHW-kkr-02 | 「将此卡置于CiRCLE上」 | P (weak) | `kkr_place_on_circle_iff` | pending | host `place_card_on` arg layout may drop the tile | — |
 | C-HHW-kkr-03 | 「若其他玩家…[触发结算]…支付6000」 | O / PROTO | — | — | — | OPEN-HHW-触发结算, OPEN-HHW-KKR-OWNER |
 | C-HHW-misaki-01 | 「[反击] 使用火罐进行移动掷骰后…」 | PROTO | — | — | — | counter window |
@@ -118,8 +120,11 @@ Machine-wide slot cap: 3 concurrent CBMC; queueing is normal.
 | `kokoro_02_circle_pass_1500_iff` | skills_hhw | **SUCCESSFUL** (same runner tag quirk) | 241.0s |
 | `kokoro_02_noop_non_circle` | skills_hhw | **SUCCESSFUL** | 62.2s |
 | `band_01_declined_is_noop` | skills_hhw | **SUCCESSFUL** | 245.5s |
+| `kkr_pay_10000_iff` | hhw | **SUCCESSFUL** (same runner tag quirk) | 250.7s |
 | `hhw_smoke_cover` | hhw | **SUCCESSFUL** | 6.7s |
 | `skills_hhw_smoke_cover` | skills_hhw | **SUCCESSFUL** | 5.2s |
+| `athletic_place_three_crystals_iff` | hhw | **FAILED** (40.5s — log ends mid-`intern_bytes` unwind; treat as TIMEOUT/OOM class this pass, re-run with a tighter world) | 40.5s |
+| remaining ~25 harnesses | hhw / skills_hhw | **written, verdict pending** (slot-queued; not run to a verdict this pass) | — |
 | `kokoro_01_mutant_500` | skills_hhw | pending | — |
 | `kokoro_01_mutant_is_detected` | skills_hhw | pending | — |
 | `kokoro_01_noop_when_latch_set` | skills_hhw | pending | — |
