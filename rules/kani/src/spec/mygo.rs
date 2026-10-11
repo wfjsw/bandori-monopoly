@@ -327,3 +327,48 @@ pub fn hitoshizuku_body_global_pay_ok(
         .count();
     pays == expected
 }
+
+// ===========================================================================
+// C-MYGO-tomori-card-01/02
+// 「（1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡
+//  置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数」
+// Card: `MyGO:（灯）不再迷茫` On::Play.
+// Isolation: empty hand at pre (X=0 ⇒ crystals=1) so the `cards_in` /
+// `discard_from_hand` String loop is a no-op (the prompt pilot's memcmp cliff).
+// The general X>0 case is the same shape plus X DiscardFromHand effects.
+// ===========================================================================
+
+/// Exact effect log when the hand is empty: GiveStay(user, 2) then PlaceCard.
+/// `inc_slot("lockedStay", 2)` and `set_crystals(1)` are counter/slot writes
+/// with no Effect.
+pub fn tomori_card_02_empty_hand_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.len() == 2
+        && matches!(effects[0], Effect::GiveStay { player: p, n } if p == player && n == 2)
+        && matches!(
+            effects[1],
+            Effect::PlaceCard {
+                player: p,
+                dest,
+                card: c
+            } if p == player && dest == DEST_FIELD && c == card
+        )
+}
+
+/// MUTANT: demands 1 stay layer instead of 2.
+pub fn tomori_card_02_empty_hand_log_ok_mutant(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.len() == 2
+        && matches!(effects[0], Effect::GiveStay { player: p, n } if p == player && n == 1)
+        && matches!(
+            effects[1],
+            Effect::PlaceCard {
+                player: p,
+                dest,
+                card: c
+            } if p == player && dest == DEST_FIELD && c == card
+        )
+}
+
+/// Crystals demanded when X cards were discarded: exactly X + 1.
+pub fn tomori_card_02_crystals(x: i32) -> i32 {
+    x + 1
+}

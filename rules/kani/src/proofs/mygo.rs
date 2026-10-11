@@ -484,3 +484,74 @@ pub fn hitoshizuku_body_global_pay_observed() {
         );
     }
 }
+
+// ===========================================================================
+// C-MYGO-tomori-card-01/02
+// `MyGO:（灯）不再迷茫` On::Play.
+// Isolation: empty hand at pre (X=0 ⇒ crystals=1) so the `cards_in` String
+// loop is a no-op. lockedStay is a slot write (no Effect); set_crystals(1) is
+// a counter write (no Effect).
+// ===========================================================================
+
+/// Iff: GiveStay(user, 2) + PlaceCard(Field); crystals == 1 (X=0).
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn tomori_card_02_empty_hand_iff() {
+    let mut w = symbolic_play_world();
+    // Isolation: empty hand for every player (stated in the module docs).
+    for p in 0..MAX_PLAYERS {
+        w.hand_n = 0;
+        w.hand = [false; 8];
+    }
+    let player = living_player(&w);
+
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+
+    invoke::unwrap_done(invoke::play("MyGO:（灯）不再迷茫", player));
+
+    let post = world::snapshot();
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+    let locked = world::with_world(|ww| ww.key_get(player, crate::intern::intern("lockedStay")));
+
+    assert!(
+        spec::mygo::tomori_card_02_empty_hand_log_ok(effects, player, 2),
+        "C-MYGO-tomori-card-02: empty-hand log must be GiveStay(2) + PlaceCard"
+    );
+    assert!(
+        post_c == spec::mygo::tomori_card_02_crystals(0),
+        "C-MYGO-tomori-card-02: X=0 ⇒ exactly 1 crystal"
+    );
+    assert!(locked >= 2, "C-MYGO-tomori-card-01: lockedStay marks the 2 layers");
+    assert!(
+        post.stay[player as usize] == pre.stay[player as usize].saturating_add(2),
+        "C-MYGO-tomori-card-01: exactly 2 stay layers"
+    );
+    assert!(post.money == pre.money, "frame: money unchanged");
+    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(post.hand == pre.hand, "frame: hand unchanged (empty)");
+}
+
+/// Mutant: 1 stay layer must not match.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn tomori_card_02_mutant_is_detected() {
+    let mut w = symbolic_play_world();
+    w.hand_n = 0;
+    w.hand = [false; 8];
+    let player = living_player(&w);
+    world::reset_world(w);
+    invoke::unwrap_done(invoke::play("MyGO:（灯）不再迷茫", player));
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    assert!(
+        !spec::mygo::tomori_card_02_empty_hand_log_ok_mutant(effects, player, 2),
+        "mutant: 1-stay spec must not match the 2-stay card"
+    );
+}
