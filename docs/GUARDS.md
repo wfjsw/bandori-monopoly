@@ -426,7 +426,7 @@ equivalence, not necessity.
    keeps each card's pre-migration guard as `legacy_*` under the feature; on
    every probe the host evaluates both `legacy(ctx)` and
    `kind ∧ pre(ctx) ∧ guard(ctx)` and **panics** with card id + trigger dump on
-   any mismatch. Run over the `tests/rb_*.rs` suite, the seeded
+   any mismatch. Run over the `rules/tests/tests/*.rs` suite, the seeded
    `engine`/`mentality` tests, a fuzz sim (N random games), and the local
    `.bdrec` corpus. Once a card is clean, its `legacy_*` copy is deleted.
 2. **`precheck` tool** (rules/ or game-rules example): loads the ruleset,
@@ -437,7 +437,7 @@ equivalence, not necessity.
 3. **Fail-closed at build**: an unparsable condition is a `build-ruleset`
    error, never "treat as true" — the clauses it carries are gone from the guard.
    An absent condition means "no clauses beyond the guard".
-4. The rulebook suites (`rb_*`) stay the behavioural spec; they must stay
+4. The rulebook suites (`rules/tests/tests/*` (game suite)) stay the behavioural spec; they must stay
    green with the audit off after each card's legacy copy is removed.
 
 ## 6. Savings estimate
@@ -937,7 +937,7 @@ The `TEST:pre*` guard-condition tests assert on the **process-global**
 `guard_cost` counters, which every other test in `ruleset.rs` bumps through
 `can_counteract` / `run_hook` / `cant_play`. Under parallel test threads the
 absolute assertions raced (and a panicking test poisoned the shared `Mutex`).
-They now live in their own test binary (`tests/pre_conditions.rs`) with a
+They now live in their own test binary (`crates/game-rules/tests/pre_conditions.rs`) with a
 poison-tolerant lock; `tests/testworld.rs` is the shared `TestWorld` both
 binaries include via `#[path]`.
 
@@ -948,7 +948,7 @@ binaries include via `#[path]`.
 name)` reads the **bare** key through `CardWorld::slot`. Every `slot('…')`
 condition therefore read `0`: `slot('lastWalk') > 0` silently closed
 `MyGO:普通与理所当然`'s counteraction window
-(`rb_guards::ordinary_matches_only_abnormal`), and `slot('asUsualTurn') !=
+(`guards::ordinary_matches_only_abnormal`), and `slot('asUsualTurn') !=
 turn_key` degenerated to `0 != turn_key`. The function also only scanned a
 hardcoded `["asUsualTurn"]`. Fixed: the bare key (matching the guest),
 `SLOT_NAMES` covers `asUsualTurn` + `lastWalk`, and `fill_candidate` always
@@ -989,7 +989,7 @@ geometry / derived-list residuals GUARDS.md §6 lists (`meet_again` `next_dist`,
 
 ### 11.6 Fuzz soak finding (2026-10-08) -- FIXED
 
-`FUZZ_ITERS=2000 cargo test -p game-rules --test fuzz_interactions` (the
+`FUZZ_ITERS=2000 cargo test -p ruleset-tests --test fuzz_interactions` (the
 default suite runs 900 and is green) found **one** finding at
 `seed=10174556463119430459` (iter 1517): `drain_prompts: prompts never
 stopped` — a `choice` prompt storm around `cards:card-ppp.returns_title` /
@@ -1014,8 +1014,8 @@ property of the *status*, not of whichever writer landed the layer:
 `state_set_expires` still wins. The card rule needed no change -- the ask is
 correct per 「每回合开始时」.
 
-**Regression:** `rb_ppp::returns_turn_start_ask_survives_stun_skip`,
-`rb_fuzz_found::returns_prompt_storm` (the seed), and
+**Regression:** `ppp::returns_turn_start_ask_survives_stun_skip`,
+`fuzz_found::returns_prompt_storm` (the seed), and
 `state::tests::status_writes_carry_the_books_tick` /
 `explicit_expiry_is_not_overridden`. Re-checked green at `FUZZ_ITERS=2000`
 (only the known `money_ledger_gap` trips). **No `KNOWN_FINDINGS` entry**:

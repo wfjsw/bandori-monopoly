@@ -4,7 +4,7 @@ Black-box scenarios where effects from **different cards, character skills and
 band skills meet**. Every expectation comes from the live sheet text
 (`target/scratch/rb/*.md`) and the glossary / general rules in
 `data/rules.txt`. The implementation goes in
-`crates/game-rules/tests/rb_cross_*.rs` on the harness `tests/common/mod.rs`.
+`rules/tests/tests/cross_*.rs` on the harness `rules/tests/tests/common/mod.rs`.
 
 ## Conventions
 
@@ -54,11 +54,11 @@ band skills meet**. Every expectation comes from the live sheet text
   **RULING**. Implement it, then `#[ignore = "RULING: …"]` it unless the
   engine already matches the stated expectation.
 * A case the engine gets wrong is marked `#[ignore = "DISCREPANCY: …"]` as in
-  the rb_* suites. Never weaken an assertion.
+  the game suite (`rules/tests/tests/`). Never weaken an assertion.
 
 ---
 
-## 1. Effects, counter effects and chains (`rb_cross_chain.rs`)
+## 1. Effects, counter effects and chains (`cross_chain.rs`)
 
 ### C1. A single counter answers a multi-target card
 * **Cards:** 通用:登上武道馆 vs AG:宣战布告. 3 players.
@@ -319,7 +319,7 @@ band skills meet**. Every expectation comes from the live sheet text
 
 ---
 
-## 2. Moves and counter-moves (`rb_cross_move.rs`)
+## 2. Moves and counter-moves (`cross_move.rs`)
 
 ### M1. Y.O.L.O works only on your own roll
 * **Cards:** AG:Y.O.L.O. 2 players.
@@ -566,7 +566,7 @@ band skills meet**. Every expectation comes from the live sheet text
 
 ---
 
-## 3. Connected tiles, their effects and counter-effects (`rb_cross_tiles.rs`)
+## 3. Connected tiles, their effects and counter-effects (`cross_tiles.rs`)
 
 ### T1. Anon Tokyo links two tiles
 * **Cards:** MyGO:[千早爱音]Anon Tokyo.
@@ -802,7 +802,7 @@ band skills meet**. Every expectation comes from the live sheet text
 
 ---
 
-## 4. Status interplay (`rb_cross_status.rs`)
+## 4. Status interplay (`cross_status.rs`)
 
 ### S1. An exiled player can't be designated
 * **Setup:** P1 is exiled. 3 players.
@@ -872,7 +872,7 @@ band skills meet**. Every expectation comes from the live sheet text
 
 ---
 
-## 5. Long chains with in-chain interactions (`rb_cross_long.rs`)
+## 5. Long chains with in-chain interactions (`cross_long.rs`)
 
 Each long chain asserts **every intermediate step**: the order of the asks,
 which link each window answers (the prompt detail), the order bodies resolve
@@ -1086,8 +1086,8 @@ observe it. Don't assert only the end state.
 ## 6. Coverage-gap cases
 
 Cases for the **missing** pairs in `docs/rulebook/COVERAGE.md`'s
-surface x category-pair matrix. Ids `G01`…, file `rb_cross_gaps.rs`
-(or folded into the existing `rb_cross_*.rs` per the surface). Same
+surface x category-pair matrix. Ids `G01`…, file `rules/tests/tests/cross_gaps.rs`
+(or folded into the existing `cross_*.rs` per the surface). Same
 conventions as §1–§5: `R(t,h)`, loaded dice, `// 规则书:` quotes,
 `RULING` markers where the sheet is silent.
 
@@ -1127,7 +1127,7 @@ conventions as §1–§5: `R(t,h)`, loaded dice, `// 规则书:` quotes,
 * **Expect:** P1 and P3 each pay ceil-share of 2000; P2 pays 0.
 * **Note:** currently blocked by `TODO(ABI)` (no static targeting query).
   Write the test anyway and `#[ignore = "TODO(ABI): …"]` it, matching
-  `rb_money::per_pair_cancel_drops_one_designation`.
+  `money::per_pair_cancel_drops_one_designation`.
 * **RULING:** does X (the share) recompute after the drop? Assert the
   pre-drop share; record the alternative.
 
@@ -1386,7 +1386,7 @@ conventions as §1–§5: `R(t,h)`, loaded dice, `// 规则书:` quotes,
 * **Expect:** the kept card 「此次加手视为抽卡动作」, so 梦在前方 (1) still
   adds 1 crystal. The other looked-at cards going back to the deck do not.
 * **Note:** the harness gap is closed -- `ctx::draw` now raises `drew` (and
-  `drawn`) per single card. `rb_gap_res::g28_maya_look_at_top_still_counts_as_a_draw`
+  `drawn`) per single card. `gap_res::g28_maya_look_at_top_still_counts_as_a_draw`
   still carries a stale `TODO(harness)` ignore; drop it (or re-ignore with a
   real reason) when this case is next touched.
 

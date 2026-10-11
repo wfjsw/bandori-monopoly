@@ -105,15 +105,15 @@ pub struct KnownFinding {
 pub const KNOWN_FINDINGS: &[KnownFinding] = &[
     KnownFinding {
         signature: "charity_",
-        points_at: "rb_unintended_found::charity_writes_undeclared_state",
+        points_at: "unintended_found::charity_writes_undeclared_state",
     },
     KnownFinding {
         signature: "exist_used",
-        points_at: "rb_unintended_found::exist_writes_undeclared_state",
+        points_at: "unintended_found::exist_writes_undeclared_state",
     },
     KnownFinding {
         signature: "skillBlock",
-        points_at: "rb_unintended_found::stage_accident_writes_two_skillblock_names",
+        points_at: "unintended_found::stage_accident_writes_two_skillblock_names",
     },
 ];
 

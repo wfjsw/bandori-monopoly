@@ -193,7 +193,7 @@ StubRules and the sim run.
   recordings fail compat on ABI / format; that is acceptable.
 * **`linger`** must cross `adopt_turn_policy`.
 * **Flag-internal tests, rewritten to assert behaviour:**
-  * `rb_ras::lock_skill_colors_the_first_deed_like_a_live_house` asserted
+  * `ras::lock_skill_colors_the_first_deed_like_a_live_house` asserted
     `extraColor:1`; it now asserts the observable consequence (the deed counts
     as a Live House for that player).
   * `q4/snap.rs`, `q4/expiry.rs` recorded `turn.buy_discount` etc.; they now

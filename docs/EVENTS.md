@@ -217,9 +217,9 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
 | events category | ok (285 rules) | green (incl. 7 new `tests/events.rs`) | green, intentional ignores only | 28 events, 0 problems | ABI v37; sim on StubRules **261.6 ms/game** (budget ≤ 323), shell event counts identical to baseline (rent 19,612 / build 4,641 / buy 2,908 / forcebuy 415 / circle money 5,915 / agent half rent 4,221) |
 
 `cargo test -p game-rules --no-fail-fast` was green apart from three
-`cp_*` tests in `rb_general.rs` and one `rules/tile_marks/src/cp.rs` quote problem
+`cp_*` tests in `general.rs` and one `rules/tile_marks/src/cp.rs` quote problem
 in `check.py` -- both the concurrent [CP点] tile-mark batch, not this migration.
 
 Events with no dedicated test are listed in [TEST-FINDINGS.md](rulebook/TEST-FINDINGS.md)
-(all 28 of them). A black-box `rb_events.rs` agent can be added later; the
+(all 28 of them). A black-box `events.rs` agent can be added later; the
 engine tests here cover activate → effect → expire for the generic mechanics.

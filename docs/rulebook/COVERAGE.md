@@ -1,7 +1,7 @@
 # Behavioural coverage of the card / skill rules
 
 Generated from the live sheet extracts `target/scratch/rb/*.md`, the
-glossary `data/rules.txt`, the suites `crates/game-rules/tests/rb_*.rs`
+glossary `data/rules.txt`, the suites `crates/game-rules/rules/tests/tests/*.rs`
 + `live_match.rs` + `ruleset.rs`, the design docs
 `docs/rulebook/CROSS-TESTS.md` / `TEST-FINDINGS.md`, and the built
 ruleset manifest (`target/scratch/rb/manifest.txt`, 250 declared cards /
@@ -15,14 +15,14 @@ Status codes: **ok** = covered-passing · **ign** = covered-ignored ·
 ## Summary
 
 Current suite state (2026-10-06 working tree; grep of the `#[test]` /
-`#[ignore` **attributes** per file under `crates/game-rules/tests/`,
+`#[ignore` **attributes** per file under `rules/tests/tests/` (game suite) and `crates/game-rules/tests/` (engine suite),
 comment mentions excluded): **774 tests, 102 ignored**. Ignore kinds:
 `DISCREPANCY` × 84, `RULING` × 12, `CROSS-AGENT` × 1, `TODO(ABI)` × 2,
 `TODO(harness)` × 1, plus 2 harness soaks (`q4_unintended`'s soak / report
 generator). Whole-tree detail is in
 [TEST-FINDINGS.md](TEST-FINDINGS.md) §Status.
 
-`rb_guards.rs` (the [反击]-guard work) **has landed**: 10 tests, 0 ignored,
+`guards.rs` (the [反击]-guard work) **has landed**: 10 tests, 0 ignored,
 all green. It checks each `can_counteract` guard matches exactly what the
 card's rulebook clause names -- the money pipeline opens a `ChainKind::Effect`
 window on **every** money movement, so a guard with no effect-kind check
@@ -39,7 +39,7 @@ walking each sheet clause against the test names; recomputing them needs
 that walk again, so treat the percentages as a baseline, not a live figure.
 Where a row's `tests` names a test that is no longer `#[ignore]`d, the code
 is greener than the row says -- the `#[ignore]` reasons in
-`crates/game-rules/tests/` are authoritative (see [TEST-FINDINGS.md](TEST-FINDINGS.md) §4).
+`rules/tests/tests/` and `crates/game-rules/tests/` are authoritative (see [TEST-FINDINGS.md](TEST-FINDINGS.md) §4).
 
 **2026-10-06 assertion audit.** Several tests previously only `eprintln!`d an
 observed value and were counted as **ok**. Each now carries a real assertion;
@@ -231,7 +231,7 @@ assert the clause (or the reason it is not).
 | `通用:@Tsugu ycm#2` | >=22: draw 1 | **ok** | tsugu_ge22_draws_a_card |
 | `通用:@Tsugu ycm#3` | >=26: enter move phase, main move = teleport to bandori station, no settle | **ok** | tsugu_ge26_teleports_without_settle |
 | `通用:@Tsugu ycm#4` | >=26: may buy any unowned purchasable tile | **ok** | tsugu_ge26_can_buy_any_unowned |
-| `通用:@Tsugu ycm#5` | >=28: buy cost -1500 (min 0) | **ign** | tsugu_ge28_buy_discount_1500 is passing in rb_general but TEST-FINDINGS lists it as open; treat as covered-passing after recheck |
+| `通用:@Tsugu ycm#5` | >=28: buy cost -1500 (min 0) | **ign** | tsugu_ge28_buy_discount_1500 is passing in general but TEST-FINDINGS lists it as open; treat as covered-passing after recheck |
 | `通用:@Tsugu ycm#6` | <26: choose +1000 or teleport-and-settle | **ok** | tsugu_lt26_choose_gain_1000,tsugu_lt26_choose_move_settles |
 | `通用:登上武道馆#1` | X = ceil10(2000 / alive others) | **ok** | budokan_x_ceil10_per_alive_others |
 | `通用:登上武道馆#2` | Y = alive others (recorded, unused downstream) | **shl** | budokan_targets_everyone_else |
@@ -1172,7 +1172,7 @@ These block whole classes of clause from ever being asserted.
   pay-player), pre-split and post-split per payer/payee pair.
 * ~~No per-draw hook: `ctx::draw` does not raise `drew`.~~ **Landed:** a
   card-driven draw logs to `draw_log` and the commit path raises `drawn` /
-  `drew` once per single card. `rb_gap_res::g28_*` is re-tagged: Maya (2)'s
+  `drew` once per single card. `gap_res::g28_*` is re-tagged: Maya (2)'s
   replacement draw does not route the kept card through `drew`.
 * ~~「无法获取[CiRCLE奖励]」 suppression.~~ **Landed:** the [经过] reward is
   `tile:circle`'s Pass entry (`circle::settle_reward`), and suppression is
@@ -1180,7 +1180,7 @@ These block whole classes of clause from ever being asserted.
   walk-scoped veto) and the passing player's field instance (a per-player
   veto). `plan::set_no_circle_reward` and `state_key::NO_CIRCLE_REWARD` are
   gone. See [TILES.md](../TILES.md).
-* No static targeting query, so 「取消其对目标之一的[指定]」 cannot drop one designation (`TODO(ABI)` in `rb_money.rs`).
+* No static targeting query, so 「取消其对目标之一的[指定]」 cannot drop one designation (`TODO(ABI)` in `money.rs`).
 * No gain-event observer, so 「本回合内你每获得过一次资金」 (育美 (2)) is untestable.
 * No grade data in `data/`, so 学妹 / 同级生 / 学姐 (秘密与青春的虹彩) is untestable.
 * `use_skill` runs only a card's first `On::Play` entry, so a second activation (MyGO band draw-half) is unreachable.
@@ -1198,7 +1198,7 @@ Bias the generator at these surfaces / pairs, in this order:
 * `money.pipeline`: every generator seed should build a rent event and stack at least two of {flat-add, multiply, clamp-floor, replace-loss} on it. The multiply x multiply and multiply x clamp-floor pairs are the least settled (see the RULING list).
 * `money.pipeline` `cancel-one` against `split-share`: the multi-target pay is the single most common money event and the ABI cannot express the drop-one case yet. Fuzzing will keep rediscovering it; treat it as a known hole until `TODO(ABI)` lands.
 * `roll.dice`: stack {dice-set, dice-result, dice-fix} on one move roll. Y.O.L.O x Eve x 不要背负期待 x 白金燐子 is the 4-way. The order question is open (inter_yolo_pushes_haneoka_over_20 is waiting on a ruling).
-* `path.move`: a walk that hits {pass, forced-stop, end-rewrite} in one path. Rule 86 says recompute the path; the pair forced-stop x end-rewrite is now `rb_gap_move::g11_forced_stop_beats_lock_end_rewrite` (`RULING`, see [TEST-FINDINGS.md](TEST-FINDINGS.md) §6).
+* `path.move`: a walk that hits {pass, forced-stop, end-rewrite} in one path. Rule 86 says recompute the path; the pair forced-stop x end-rewrite is now `gap_move::g11_forced_stop_beats_lock_end_rewrite` (`RULING`, see [TEST-FINDINGS.md](TEST-FINDINGS.md) §6).
 * `counteract.window`: nest 3+ deep with a `shut-window` in the middle (骰子已经掷下) and a `join-window` (真奈). The close-the-round semantics are under-specified.
 * `status`: stay gained mid-move, plus `unstoppable` and `clear-status`. `rain_stay_blocks_this_turn_move` is currently a DISCREPANCY and also an ambiguity (ileuxali checks only at branch selection).
 * `turn.boundary` `extra-turn` x `until-turn`: a shield that ends 'at your next turn start' while extra turns are being granted. The order is a RULING.
@@ -1243,15 +1243,15 @@ Notes on the encoding:
   0 designed-but-unimplementable (grep of `#[test]` / `#[ignore` attributes,
   2026-10-06 working tree). The 2 RULING ones are
   `t04_anon_link_mortgaged_partner` and `t11_fire_bird_plus_hhw_double`.
-  Per-file tests/ignored: `rb_cross_chain.rs` 27/11, `rb_cross_move.rs`
-  36/13, `rb_cross_tiles.rs` 30/11, `rb_cross_status.rs` 10/2,
-  `rb_cross_long.rs` 8/4.
+  Per-file tests/ignored: `cross_chain.rs` 27/11, `cross_move.rs`
+  36/13, `cross_tiles.rs` 30/11, `cross_status.rs` 10/2,
+  `cross_long.rs` 8/4.
 
 
 ## Fuzz coverage
 
-Interaction fuzzer + metamorphic checks (`crates/game-rules/tests/fuzz_interactions.rs`,
-modules under `crates/game-rules/tests/fuzz/`). Black-box: `rules/cards/`,
+Interaction fuzzer + metamorphic checks (`rules/tests/tests/fuzz_interactions.rs`,
+modules under `rules/tests/rules/tests/tests/fuzz/`). Black-box: `rules/cards/`,
 `rules/skills/`, `rules/fixtures/` and `target/scratch/tainted/` were never
 opened; the generator draws card ids from the shipped manifest at runtime
 (`ruleset().cards()`, `TEST:*` fixtures excluded) and biases pairs through
@@ -1264,7 +1264,7 @@ opened; the generator draws card ids from the shipped manifest at runtime
 | default (`FUZZ_ITERS` unset) | 900 x 4 | 18,621 | 1,719 | 356 | 1,243 | 52 s (whole file ~60 s) |
 | soak `FUZZ_ITERS=2000` | 2000 x 4 | ~41k | ~3.8k | ~790 | ~2.6k | ~85 s |
 
-Long soak: `FUZZ_ITERS=5000 cargo test -p game-rules --test fuzz_interactions -- --nocapture`.
+Long soak: `FUZZ_ITERS=5000 cargo test -p ruleset-tests --test fuzz_interactions -- --nocapture`.
 Default is CI-cheap and lands in the 1-2 minute band.
 
 ### Card pairs co-occurring in a resolved chain or turn
@@ -1280,7 +1280,7 @@ window, or named by a trigger). Sample:
 * `AG:宣战布告` x `PPP:[衍生]Popipapapipopa`
 * `AG:朝同一片天空迈进` x `Mujica:祥，移动`
 
-Regenerate the full set with `FUZZ_ITERS=... cargo test -p game-rules --test
+Regenerate the full set with `FUZZ_ITERS=... cargo test -p ruleset-tests --test
 fuzz_interactions fuzz_interactions_invariants -- --nocapture` (the
 `sample co-occurring pairs` line names the first 12; the count is in the
 `fuzz:` line). The generator biases 75% of partner draws toward cards sharing
@@ -1315,17 +1315,17 @@ covered by construction:
 
 | kind | count | filed as |
 |---|---|---|
-| fire pot exceeded its declared cap | 39 | `rb_fuzz_found::fire_over_cap` |
-| money ledger does not close | 12 | `rb_fuzz_found::money_ledger_gap` |
-| `[停留]` went negative | 1 | `rb_fuzz_found::negative_status_leak` |
-| settle loop did not come to rest | 2 | `rb_fuzz_found::settle_loop_stuck` |
-| `log.card_trap` | 0 | (`rb_fuzz_found::card_trap_reachable`; `TEST:recurse` is excluded from the pool) |
-| determinism / save-restore | 0 | (`rb_fuzz_found::determinism_break`, `rb_fuzz_found::save_restore_break`) |
+| fire pot exceeded its declared cap | 39 | `fuzz_found::fire_over_cap` |
+| money ledger does not close | 12 | `fuzz_found::money_ledger_gap` |
+| `[停留]` went negative | 1 | `fuzz_found::negative_status_leak` |
+| settle loop did not come to rest | 2 | `fuzz_found::settle_loop_stuck` |
+| `log.card_trap` | 0 | (`fuzz_found::card_trap_reachable`; `TEST:recurse` is excluded from the pool) |
+| determinism / save-restore | 0 | (`fuzz_found::determinism_break`, `fuzz_found::save_restore_break`) |
 
 ### Findings
 
 All violations are filed as `#[ignore = "DISCREPANCY: ..."]` tests in
-`crates/game-rules/tests/rb_fuzz_found.rs` with a minimal repro. The fuzzer's
+`rules/tests/tests/fuzz_found.rs` with a minimal repro. The fuzzer's
 skip-list (`fuzz::KNOWN_FINDINGS`) recognises their signatures so a default
 run stays green.
 
@@ -1369,7 +1369,7 @@ run stays green.
    (「玩家的每回合结束时移除一层」; `stunStart` → turn start) on any stay /
    stun / stunStart write that has none. No `KNOWN_FINDINGS` skip entry:
    the fix is general and a future prompt storm is a new finding. Pinned by
-   `rb_fuzz_found::returns_prompt_storm`, `rb_ppp::
+   `fuzz_found::returns_prompt_storm`, `ppp::
    returns_turn_start_ask_survives_stun_skip`, and
    `state::tests::status_writes_carry_the_books_tick`. See
    [GUARDS.md](../GUARDS.md) §11.6.
@@ -1403,12 +1403,12 @@ run stays green.
 ## Unintended interactions
 
 Q4 -- unintended card / skill / tile interactions. Harness:
-`crates/game-rules/tests/q4_unintended.rs` plus the modules under
-`crates/game-rules/tests/q4/` (`snap` whole-`World` snapshot + surface map,
+`rules/tests/tests/q4_unintended.rs` plus the modules under
+`rules/tests/rules/tests/tests/q4/` (`snap` whole-`World` snapshot + surface map,
 `single` footprint audit, `pair` non-interference, `trig` trigger scope,
 `expiry` expiry / leak, `names` shared-name registry, `seat` bystander /
 seat invariance). Findings are filed as `#[ignore = "DISCREPANCY: unintended:
-..."]` tests in `crates/game-rules/tests/rb_unintended_found.rs`; the default
+..."]` tests in `rules/tests/tests/unintended_found.rs`; the default
 `sweep()` stays green by recognising their signatures in
 `q4::KNOWN_FINDINGS`, the same way `fuzz::KNOWN_FINDINGS` does.
 
@@ -1436,12 +1436,12 @@ Widen with `Q4_SAMPLE=0 Q4_SEEDS=4 Q4_PAIRS=120 cargo test -p game-rules
 
 | rule(s) | field | repro test | severity |
 |---|---|---|---|
-| (engine play-ctx) `TurnCtx.play_from_hand` | turn ctx | `rb_unintended_found::play_from_hand_flag_leaks_past_the_turn` | **fixed** (scoped to the play) |
-| `Mujica:心の雨` | `turn.abnormal` | `rb_unintended_found::kokoro_no_ame_leaves_turn_abnormal` | **fixed** (zeroed at turn start) |
-| `通用:登上武道馆` | `targeted[]` | `rb_unintended_found::budokan_leaves_targeted_counters` | **fixed** (the repro's turn lap now rolls first; `targeted[i]` was already zeroed at `i`'s turn start) |
-| `PP:初次演出事故` | token names (`skillBlock:Pastel✽Palettes` vs `skillBlock:PP2`) | `rb_unintended_found::stage_accident_writes_two_skillblock_names` | medium |
-| `HHW:爱心义演` | `state:charity_extra_total`, `state:charity_show_turn` | `rb_unintended_found::charity_writes_undeclared_state` | low |
-| `RAS:EXIST` | `state:exist_used` | `rb_unintended_found::exist_writes_undeclared_state` | low |
+| (engine play-ctx) `TurnCtx.play_from_hand` | turn ctx | `unintended_found::play_from_hand_flag_leaks_past_the_turn` | **fixed** (scoped to the play) |
+| `Mujica:心の雨` | `turn.abnormal` | `unintended_found::kokoro_no_ame_leaves_turn_abnormal` | **fixed** (zeroed at turn start) |
+| `通用:登上武道馆` | `targeted[]` | `unintended_found::budokan_leaves_targeted_counters` | **fixed** (the repro's turn lap now rolls first; `targeted[i]` was already zeroed at `i`'s turn start) |
+| `PP:初次演出事故` | token names (`skillBlock:Pastel✽Palettes` vs `skillBlock:PP2`) | `unintended_found::stage_accident_writes_two_skillblock_names` | medium |
+| `HHW:爱心义演` | `state:charity_extra_total`, `state:charity_show_turn` | `unintended_found::charity_writes_undeclared_state` | low |
+| `RAS:EXIST` | `state:exist_used` | `unintended_found::exist_writes_undeclared_state` | low |
 
 What they are:
 
@@ -1572,7 +1572,7 @@ Status codes here are for **rulebook** clauses, not card clauses:
 **ok** = implemented as written · **diff** = implemented differently (say
 how) · **miss** = missing · **na** = not applicable (UI / social / card
 domain) · **todo** = `TODO(规则书)` in the tree (the book does not say).
-Tests are `rb_rulebook.rs` unless another suite is named. Card effects
+Tests are `rulebook.rs` unless another suite is named. Card effects
 override the rulebook (特别注意 3), so a card bending a clause is not a hit.
 
 ### 专有名词 -- 资金与格子 (11)
@@ -1582,42 +1582,42 @@ override the rulebook (特别注意 3), so a card bending a clause is not a hit.
 | `G:场地#1` | the play area holding deeds, cards, piles | **na** | UI / social |
 | `G:获得#1` | 「[获得]X」 prints money | **ok** | `play.rs` `money` `gain` |
 | `G:消耗#1` | 「[消耗]X」 deletes money | **ok** | `play.rs` `money` `lose` |
-| `G:支付#1` | 「A[支付]BX」 moves X from A to B | **ok** | `play.rs` `money`; `rb_money` |
+| `G:支付#1` | 「A[支付]BX」 moves X from A to B | **ok** | `play.rs` `money`; `money` |
 | `G:结算#1` | settle runs every effect on the tile | **ok** | `settle_at` → `settle_tile` → tile rule instances |
-| `G:破产#1` | cannot pay (incl. mortgage) → liquidate, funds to the creditor | **ok** | `play.rs` `raise_funds`/`bankrupt`; `rb_rulebook::b01` |
+| `G:破产#1` | cannot pay (incl. mortgage) → liquidate, funds to the creditor | **ok** | `play.rs` `raise_funds`/`bankrupt`; `rulebook::b01` |
 | `G:存活#1` | not bankrupt and not left | **ok** | `World::out` |
 | `G:地产商#1` | one agent per colour | **ok** | `tile:agent`; board `group` (TODO on 「同色」) |
 | `G:可购买格子#1` | not CiRCLE / cafe / 江户川 / 流星堂 / agent | **ok** | `TileData::is_buyable` |
-| `G:拍卖#1` | all alive who can spend; first highest wins; min 100, +100 | **ok** | `mod.rs` auction handler `min = bid<=0 ? 100 : bid+100`; `rb_rulebook::b03` |
-| `G:CiRCLE奖励#1` | gain 2000 or draw 1 | **ok** | `circle::settle_reward` (tile body; `Play::circle_reward` is the built-in fallback); `rb_rulebook::s04`/`s05d`, `game-core play/tests::passing_circle_offers_money_or_a_card` |
+| `G:拍卖#1` | all alive who can spend; first highest wins; min 100, +100 | **ok** | `mod.rs` auction handler `min = bid<=0 ? 100 : bid+100`; `rulebook::b03` |
+| `G:CiRCLE奖励#1` | gain 2000 or draw 1 | **ok** | `circle::settle_reward` (tile body; `Play::circle_reward` is the built-in fallback); `rulebook::s04`/`s05d`, `game-core play/tests::passing_circle_offers_money_or_a_card` |
 
 ### 专有名词 -- 卡与技能 (12)
 
-Card domain (the `rb_<group>` suites). The engine-side hooks these name are
+Card domain (the `rules/tests/tests/<group>` suites). The engine-side hooks these name are
 present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`),
 `[主动]` (`use_skill`), `[手]` (`play_from_hand` gate), `[反击]`
-(`hand_counteractions` / `rb_chain`), `[持续]` (`FieldCard`),
+(`hand_counteractions` / `chain`), `[持续]` (`FieldCard`),
 `[特]` (`deckBeforeGame` / `deckAtGameStart`), `[限]` (`cant_play`).
 
 ### 专有名词 -- 移动 (15)
 
 | clause | meaning | status | evidence / tests |
 |---|---|---|---|
-| `M:主要移动#1` | the move phase's move | **ok** | `play.rs` `main_move`; `rb_rulebook::gf07` |
+| `M:主要移动#1` | the move phase's move | **ok** | `play.rs` `main_move`; `rulebook::gf07` |
 | `M:结算#1` | execute the tile's effects | **ok** | `settle_at` |
 | `M:移动起点#1` | the tile before the move | **ok** | `MoveCtx.from` |
 | `M:移动终点#1` | the tile after the move | **ok** | `MoveCtx.to` |
-| `M:路径#1` | excludes the start, includes the end; same start/end includes it | **diff** | walk excludes the start and includes the end (`rb_rulebook::t05`); a same-tile teleport now fires [经过] then [重叠] then [结算] at the target (`B41`, `t06b`); a 0-move fires [重叠] only (`E14`, `t06c`) -- TODO(规则书) whether [经过] also fires there |
+| `M:路径#1` | excludes the start, includes the end; same start/end includes it | **diff** | walk excludes the start and includes the end (`rulebook::t05`); a same-tile teleport now fires [经过] then [重叠] then [结算] at the target (`B41`, `t06b`); a 0-move fires [重叠] only (`E14`, `t06c`) -- TODO(规则书) whether [经过] also fires there |
 | `M:经过#1` | fire when X is on the path | **ok** | `passBefore`/`passTile`/`pass` per step |
 | `M:强制移动#1` | a forced move | **ok** | `card_move` / `MoveCtx` |
 | `M:强制停下#1` | a forced stop (doc's definition is truncated) | **ok** | `MoveCtx.stop_at` / `plan::set_stop_at` |
-| `M:传送#1` | path is just the end | **ok** | `play.rs` `teleport`; `rb_rulebook::t04` |
-| `M:无法移动#1` | main move ends in place and does not settle; non-teleports cancelled | **ok** | `st.skip_move`; `rb_rulebook::m04` |
-| `M:停留#1` | [无法移动]; stacks; one layer off at each turn end | **ok** | `give_stay` + `Tick::TurnEnd`; `rb_rulebook::m02`, `t02` |
-| `M:晕眩#1` | [无法移动] + no 主动 / [手] / pay-receive; stacks; one off at turn end | **ok** | `give_stun`; `rb_rulebook::m03`, `t01`; `rb_cross_status::s02`/`s03` |
-| `M:除外#1` | [无法移动] + no [指定] / 主动 / [手] / pay-receive; off-board; stacks; one off at turn **start**; skills and [持续] stop; teleports back to the written tile | **ok** | `give_exile` / `turn_start`; `rb_rulebook::t03`/`t04`; `rb_cross_status::s01` |
-| `M:不可阻挡#1` | ignores stay, no new stun/exile layers, layers still drop, may refuse teleport/forced move/stop | **ok** | `key::UNSTOPPABLE`; `rb_cross_move::m13`/`m30`; `rb_gap_window::g23`/`g24` |
-| `M:异常移动效果#1` | teleport, stay, stun, exile, forced move, forced stop, reverse | **ok** | `abnormalGuard` / `rb_guards` |
+| `M:传送#1` | path is just the end | **ok** | `play.rs` `teleport`; `rulebook::t04` |
+| `M:无法移动#1` | main move ends in place and does not settle; non-teleports cancelled | **ok** | `st.skip_move`; `rulebook::m04` |
+| `M:停留#1` | [无法移动]; stacks; one layer off at each turn end | **ok** | `give_stay` + `Tick::TurnEnd`; `rulebook::m02`, `t02` |
+| `M:晕眩#1` | [无法移动] + no 主动 / [手] / pay-receive; stacks; one off at turn end | **ok** | `give_stun`; `rulebook::m03`, `t01`; `cross_status::s02`/`s03` |
+| `M:除外#1` | [无法移动] + no [指定] / 主动 / [手] / pay-receive; off-board; stacks; one off at turn **start**; skills and [持续] stop; teleports back to the written tile | **ok** | `give_exile` / `turn_start`; `rulebook::t03`/`t04`; `cross_status::s01` |
+| `M:不可阻挡#1` | ignores stay, no new stun/exile layers, layers still drop, may refuse teleport/forced move/stop | **ok** | `key::UNSTOPPABLE`; `cross_move::m13`/`m30`; `gap_window::g23`/`g24` |
+| `M:异常移动效果#1` | teleport, stay, stun, exile, forced move, forced stop, reverse | **ok** | `abnormalGuard` / `guards` |
 
 ### 游戏中各模式的开始规则和胜利条件
 
@@ -1625,55 +1625,55 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 |---|---|---|---|
 | `E:娱乐#1` | 3-10 players | **na** | match setup (the harness asserts 2..=10) |
 | `E:娱乐#2` | each rolls 1d20, descending; ties re-roll (bold) | **ok** | `setup.rs` `roll_order`; `game-core engine.rs::ranked_games_run_the_ban_phase` |
-| `E:娱乐#3` | pick distinct characters; 10-card deck from general + band + exclusive; no [衍生] | **diff** | pick/deck is `setup.rs`; the 10-card / [衍生] rule is card-domain (`rb_<group>`) |
+| `E:娱乐#3` | pick distinct characters; 10-card deck from general + band + exclusive; no [衍生] | **diff** | pick/deck is `setup.rs`; the 10-card / [衍生] rule is card-domain (`ruleset-tests`) |
 | `E:娱乐#4` | each picks a distinct [场地] | **na** | UI / social |
 | `E:娱乐#5` | may end by mutual agreement | **ok** | `Match::end_vote`; `game-core engine.rs::unanimous_vote_ends_the_match` |
 | `R:正规#1` | 5-6 players | **na** | match setup |
 | `R:正规#2` | each may ban one character before picking | **ok** | `setup.rs` `begin_ban`/`do_ban` |
 | `R:正规#3` | ban reverse order, pick forward order | **ok** | `setup.rs` |
-| `R:正规#4` | last alive wins | **ok** | `check_game_over` `finish("last")`; `rb_rulebook::w01` |
+| `R:正规#4` | last alive wins | **ok** | `check_game_over` `finish("last")`; `rulebook::w01` |
 
 ### 游戏流程 (9)
 
 | clause | meaning | status | evidence / tests |
 |---|---|---|---|
-| `F:流程#1` | start on CiRCLE, 10000, draw 2; one mulligan | **ok** | `begin_play`/`opening`; `rb_rulebook::gf01`/`gf02` |
-| `F:流程#2` | hand limit 5; discard down; non-[持续] used cards to discard; reshuffle | **ok** | `hand_limit()` base 5; `draw`/`discard`; `rb_rulebook::gf03`/`gf04` |
+| `F:流程#1` | start on CiRCLE, 10000, draw 2; one mulligan | **ok** | `begin_play`/`opening`; `rulebook::gf01`/`gf02` |
+| `F:流程#2` | hand limit 5; discard down; non-[持续] used cards to discard; reshuffle | **ok** | `hand_limit()` base 5; `draw`/`discard`; `rulebook::gf03`/`gf04` |
 | `F:流程#3` | 开始/运营/移动/结束; next player after a turn (bold) | **ok** | `stage` + `next_turn` |
 | `F:流程#4` | non-[反击] [手] only in 运营 | **ok** | `play.rs` `step == stage::OPS` gate |
-| `F:流程#5` | mortgage at 运营 or when short; +50% of price (bold) | **ok** | `mortgage_value = price/2`; `rb_rulebook::gf05`, `game-core play/tests::short_of_cash_mortgages_then_pays` |
-| `F:流程#6` | redeem at 运营; -60% of price (bold, 60% red) | **ok** | `redeem_cost = round(price*0.6)`; `rb_rulebook::gf06` |
+| `F:流程#5` | mortgage at 运营 or when short; +50% of price (bold) | **ok** | `mortgage_value = price/2`; `rulebook::gf05`, `game-core play/tests::short_of_cash_mortgages_then_pays` |
+| `F:流程#6` | redeem at 运营; -60% of price (bold, 60% red) | **ok** | `redeem_cost = round(price*0.6)`; `rulebook::gf06` |
 | `F:流程#7` | flip the deed in a non-automated game | **na** | UI |
-| `F:流程#8` | 1 [主要移动] per turn; base 1d20 clockwise (bold); settle at the end | **ok** | `main_move` + `main_moved`; `rb_rulebook::gf07`/`t07` |
-| `F:流程#9` | bankruptcy / leave: clear pieces+cards+effects; deeds ownerless (bold, red); auction 3 | **ok** | `remove_from_game`/`auction_leftovers`; `rb_rulebook::b01`/`b02` |
+| `F:流程#8` | 1 [主要移动] per turn; base 1d20 clockwise (bold); settle at the end | **ok** | `main_move` + `main_moved`; `rulebook::gf07`/`t07` |
+| `F:流程#9` | bankruptcy / leave: clear pieces+cards+effects; deeds ownerless (bold, red); auction 3 | **ok** | `remove_from_game`/`auction_leftovers`; `rulebook::b01`/`b02` |
 
 ### 其他规则注意事项 (6)
 
 | clause | meaning | status | evidence / tests |
 |---|---|---|---|
-| `O:其他#1.1` | [经过] along the path in order; recompute the path if the end changes | **ok** | walk loop re-reads `plan` per step; `rb_cross_move::m17_lock_redirects_destination` |
+| `O:其他#1.1` | [经过] along the path in order; recompute the path if the end changes | **ok** | walk loop re-reads `plan` per step; `cross_move::m17_lock_redirects_destination` |
 | `O:其他#1.2` | a skill/card [主要移动] states whether it settles | **ok** | `MoveCtx.resolve`; `after_walk` |
 | `O:其他#2` | designate many: activator first, action order | **ok** | `hand_counteractions` / card domain |
-| `O:其他#3` | multiple [反击]: next player first; one timing per round | **ok** | `rb_chain` (TEST-FINDINGS §10) |
+| `O:其他#3` | multiple [反击]: next player first; one timing per round | **ok** | `chain` (TEST-FINDINGS §10) |
 | `O:其他#4` | non-optional effects must fire | **na** | card domain |
 | `O:其他#5` | band/char effects judged by the current cards | **ok** | `bind_skills` |
-| `O:其他#6` | mortgage / redeem / forced purchase unaffected by effects | **ok** | all three move money outside `money()`; `rb_rulebook::o06`, `s11` |
+| `O:其他#6` | mortgage / redeem / forced purchase unaffected by effects | **ok** | all three move money outside `money()`; `rulebook::o06`, `s11` |
 
 ### 基础[结算]规则 (11)
 
 | clause | meaning | status | evidence / tests |
 |---|---|---|---|
-| `S:结算#1` | CiRCLE + 江户川 draw 1 | **ok** | `tile:circle`/`tile:edogawa` settle; `rb_rulebook::s01`/`s02` |
-| `S:结算#1.1` | [经过]CiRCLE with start ≠ CiRCLE → [CiRCLE奖励] | **ok** | `tile:circle`'s Pass-entry residual guard (`pass_pays`, `trigger::move_from`); `rb_rulebook::s05`, `s05b`, `s05c` |
-| `S:结算#2` | cafe + 流星堂 draw 1 + 1 event | **ok** | `tile:event`; `rb_rulebook::s03` |
+| `S:结算#1` | CiRCLE + 江户川 draw 1 | **ok** | `tile:circle`/`tile:edogawa` settle; `rulebook::s01`/`s02` |
+| `S:结算#1.1` | [经过]CiRCLE with start ≠ CiRCLE → [CiRCLE奖励] | **ok** | `tile:circle`'s Pass-entry residual guard (`pass_pays`, `trigger::move_from`); `rulebook::s05`, `s05b`, `s05c` |
+| `S:结算#2` | cafe + 流星堂 draw 1 + 1 event | **ok** | `tile:event`; `rulebook::s03` |
 | `S:结算#2.1` | the event is public, not in hand, immediate | **ok** | `draw_event` |
 | `S:结算#2.2` | event to the event discard; reshuffle when empty | **ok** | `setup_event_deck` / `draw_event` |
-| `S:结算#3` | ownerless: may pay price+houses, gain the deed (bold) | **ok** | `offer_buy`/`buy_price`; `rb_rulebook::s06` |
-| `S:结算#5.1` | own, unmortgaged: may pay the build cost to upgrade (bold); level cap; cannot fund by mortgaging that deed | **ok** | `build`/`why_not_build_on` (`buildMax`, RiNG cap 0); the mortgage exclusion is emergent (a mortgaged deed refuses the build); `rb_rulebook::s08`/`s09` |
-| `S:结算#5.2` | own, mortgaged: no effect | **ok** | `property.rs` own branch; `rb_rulebook::s07` |
+| `S:结算#3` | ownerless: may pay price+houses, gain the deed (bold) | **ok** | `offer_buy`/`buy_price`; `rulebook::s06` |
+| `S:结算#5.1` | own, unmortgaged: may pay the build cost to upgrade (bold); level cap; cannot fund by mortgaging that deed | **ok** | `build`/`why_not_build_on` (`buildMax`, RiNG cap 0); the mortgage exclusion is emergent (a mortgaged deed refuses the build); `rulebook::s08`/`s09` |
+| `S:结算#5.2` | own, mortgaged: no effect | **ok** | `property.rs` own branch; `rulebook::s07` |
 | `S:结算#6.1` | other's, unmortgaged: pay the current-level rent (bold) | **ok** | `pay_rent` rent table; `game-core play/tests::rent_follows_the_rent_table` |
-| `S:结算#6.2` | other's, mortgaged: 2×(price+houses) force-buy, stays mortgaged (bold, red); price and payee unaffected | **ok** | `offer_force_buy` moves money directly; `rb_rulebook::s10`/`s11`, `game-core play/tests::mortgaged_land_can_be_force_bought_at_double` |
-| `S:结算#7` | agent: if all same-colour are others' → half-charge each front-to-back (ceil 10); else settle one | **ok** | `tile:agent`'s body; `half_ceil10` in `pay_rent`; `rb_rulebook::s12`/`s12b`/`s12c`/`s12d`, `game-core play/tests::agent_charges_half_rent_...` (TODO on 「同色」/`extraColor`) |
+| `S:结算#6.2` | other's, mortgaged: 2×(price+houses) force-buy, stays mortgaged (bold, red); price and payee unaffected | **ok** | `offer_force_buy` moves money directly; `rulebook::s10`/`s11`, `game-core play/tests::mortgaged_land_can_be_force_bought_at_double` |
+| `S:结算#7` | agent: if all same-colour are others' → half-charge each front-to-back (ceil 10); else settle one | **ok** | `tile:agent`'s body; `half_ceil10` in `pay_rent`; `rulebook::s12`/`s12b`/`s12c`/`s12d`, `game-core play/tests::agent_charges_half_rent_...` (TODO on 「同色」/`extraColor`) |
 
 ### 时点流程 -- 开始游戏 (8)
 
@@ -1719,7 +1719,7 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | 9 | 掷骰时 | **diff** | `rollPlan` + an un-raised table roll |
 | 10 | 掷骰后 | **ok** | `rollAfter` + `moveRoll` |
 | 11 | 移动前 | **miss** | none |
-| 12 | 移动时/[经过] | **ok** | `passBefore`/`passTile`/`pass` per step; a teleport fires at the end **including onto its own tile** (`B41`; `rb_rulebook::t06b`). TODO(规则书): whether a 0-step move also fires [经过] -- `E14` names only [重叠] there (`t06c`) |
+| 12 | 移动时/[经过] | **ok** | `passBefore`/`passTile`/`pass` per step; a teleport fires at the end **including onto its own tile** (`B41`; `rulebook::t06b`). TODO(规则书): whether a 0-step move also fires [经过] -- `E14` names only [重叠] there (`t06c`) |
 | 13 | 移动后/[重叠] | **ok** | `passPlayer` at the end of a walk (`E13`, `t06`), on a teleport's target (`B41`, `t06b`) and on a 0-step move (`E14`, `t06c`) |
 | 14 | 结算前 | **ok** | `settleBefore` |
 | 15 | 结算 | **ok** | `settle` + `settleBody` |
@@ -1774,5 +1774,5 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 ruling; those are already counted in ok/diff/miss. The five `miss` rows are
 the four unnamed timing windows (行动阶段 3/6/11, 支付阶段 3) plus
 基础[结算] 1.1's start-tile check. New tests live in
-`crates/game-rules/tests/rb_rulebook.rs` (33 tests, 2 `#[ignore]` as
+`rules/tests/tests/rulebook.rs` (33 tests, 2 `#[ignore]` as
 DISCREPANCY).

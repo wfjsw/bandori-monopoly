@@ -154,7 +154,7 @@ fn g01_fire_bird_times_ave_mujica_on_one_rent() {
 //
 // `place_raw` arms the card's hooks but not its 「生效2次」 stack counter (the
 // play body sets that). One stack is what the ruling formula's +100 names;
-// 「生效2次」 stacks two (+200) -- see `rb_pp::expect_pay_plus_100`.
+// 「生效2次」 stacks two (+200) -- see `pp::expect_pay_plus_100`.
 #[test]
 fn g02_half_speed_plus_expectations_floor_on_a_rent() {
     let mut t = Table::new(&["青叶摩卡", "仓田真白"]);

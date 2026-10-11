@@ -2,13 +2,35 @@
 
 Black-box integration tests check every card, character skill and band skill
 against the live rule sheet. The sheet is the Google Sheet with cards /
-characters / bands tabs, and it is the definitive source. The tests live in
-`crates/game-rules/tests/rb_*.rs`, on the shared harness `tests/common/mod.rs`.
-They were written without reading `rules/cards/**` or `rules/skills/**`.
+characters / bands tabs, and it is the definitive source. They were written
+without reading `rules/cards/**` or `rules/skills/**`.
 
-* `cargo test -p game-rules --test rb_<group>`: everything green.
-* `cargo test -p game-rules --test rb_<group> -- --ignored`: runs the
-  **open discrepancies**. Each ignored test keeps the rulebook's assertion, and
+## Suite layout (2026-10-11)
+
+Tests are split by what they exercise:
+
+* **Game suite** (`ruleset-tests`, tests in `rules/tests/tests/`, harness
+  `rules/tests/tests/common/mod.rs`) -- this game's shipped cards, character
+  and band skills, board tiles, money rules and settle stages. Lives with the
+  rule implementations under `rules/`. Run with `cargo test -p ruleset-tests`.
+  File names drop the old `rb_` prefix (`rb_ppp.rs` -> `ppp.rs`).
+* **Engine suite** (`game-rules`, tests in `crates/game-rules/tests/`, harness
+  `crates/game-rules/tests/common/mod.rs`) -- universal engine mechanisms
+  (chain / counteraction windows, guards and pre-conditions, the ruleset
+  loader, message keys, settle-stack, replay/record). Test bodies use only
+  `TEST:*` fixtures or engine APIs. The old `rb_` prefix is gone
+  (`rb_chain.rs` -> `chain.rs`).
+
+Mixed files are split per test function: `live_match.rs` (fixture half stays
+in the engine suite, shipped-card half in the game suite),
+`effect_applied_log.rs` (engine) vs `effect_log_cards.rs` (game), and
+`ruleset.rs` (engine loader half vs game card-behaviour half).
+
+* game suite: `cargo test -p ruleset-tests --test <group>`: everything green.
+* `cargo test -p ruleset-tests --test <group> -- --ignored`: runs the
+  ignored DISCREPANCY / RULING cases.
+* engine suite: `cargo test -p game-rules` (or `--test <group>`).
+* **open discrepancies**. Each ignored test keeps the rulebook's assertion, and
   its `#[ignore = "…"]` reason says what the engine does instead.
   * `DISCREPANCY:` marks an engine or card gap.
   * `RULING:` marks an ambiguity waiting on a ruling (§6).
@@ -20,12 +42,12 @@ They were written without reading `rules/cards/**` or `rules/skills/**`.
 ## Status (2026-10-07)
 
 Counts are a grep of the `#[test]` / `#[ignore = "…"]` **attributes** per file
-in `crates/game-rules/tests/` (comment mentions excluded), so
+in `rules/tests/tests/` + `crates/game-rules/tests/` (comment mentions excluded), so
 `pass = tests - ignored` and `open = ignored`. The 2026-10-06 gate was
 **34 targets, 761 passed / 0 failed / 93 ignored**; the tree has since grown
 from concurrent work, so these drift while other agents edit. A re-grep on
 2026-10-07 gives **875 tests, 90 `#[ignore]`** across the whole suite -- the
-delta is other agents' in-flight tests plus the `rb_card_paths` wave below
+delta is other agents' in-flight tests plus the `card_paths` wave below
 (all 4 of its opens closed; the 4th was a **test bug**, fixed 2026-10-07,
 §6 item 14).
 
@@ -46,14 +68,14 @@ Per group (`pass` / `open`):
 | sumimi | 20 | 1 |
 | crychic | 35 | 0 |
 | rulebook | 38 | 0 |
-| card paths (`rb_card_paths`) | 14 | 1 |
+| card paths (`card_paths`) | 14 | 1 |
 
-The rest of the tree (same grep): `rb_cross_*` 111 tests / 40 open,
-`rb_gap_*` 32 / 14, `rb_fuzz_found` 14 / 8, `rb_chain` 13 / 1, `rb_guards`
-10 / 0, `rb_harness` 6 / 0, `rb_money` 4 / 0, `ruleset` 12 / 0,
+The rest of the tree (same grep): `cross_*` 111 tests / 40 open,
+`gap_*` 32 / 14, `fuzz_found` 14 / 8, `chain` 13 / 1, `guards`
+10 / 0, `harness` 6 / 0, `money` 4 / 0, `ruleset` 12 / 0,
 `fuzz_interactions` 9 / 0, `live_match` 16 / 0, `q4_unintended` 3 / 2
 (soak + report generator, not discrepancies),
-`rb_unintended_found` 6 / 0. **Whole suite: 875 tests, 90 `#[ignore]`.**
+`unintended_found` 6 / 0. **Whole suite: 875 tests, 90 `#[ignore]`.**
 
 A 0 in "open" means none were found, not that the group is verified correct.
 See coverage gaps below.
@@ -67,7 +89,7 @@ draw / active list / filing away; the bodies live in the crate.
 Engine-side coverage is `crates/game-core/tests/events.rs` (7 tests: the
 `StubRules` fallback, bind on the board owner, idempotent bind, expire to
 discard, expire to `event_removed`, deck-top push, banish). Black-box coverage
-is `crates/game-rules/tests/rb_events.rs` (73 tests, one or more per event).
+is `rules/tests/tests/events.rs` (73 tests, one or more per event).
 
 The discrepancy pass (2026-10-07) cleared 12 of the 14 `DISCREPANCY` ignores.
 Two `RULING` ignores remain (哈比内尔 「结束后传送」 timing; 元祖！邦多利酱's
@@ -98,7 +120,7 @@ move and never updated.
 
 ### Card-paths wave (2026-10-07)
 
-`rb_card_paths.rs` (15 tests) covers four paths that landed untested:
+`card_paths.rs` (15 tests) covers four paths that landed untested:
 `AG:（巴）商店街的救世主` (tomoe_savior), `CRYCHIC:（睦）从没有觉得...`
 (mutsumi_never), `Mujica:（海铃）` (umiri_card), `RAS:（PAREO）渐渐远去的你`
 (pareo_far). Three of its four `#[ignore]`s are closed:
@@ -150,7 +172,7 @@ Landed themes only; the per-item history is gone from this file.
 * **Roll windows (ABI 33)** -- card and fire-pot rolls raise the
   「掷骰结算前」 [反击] link.
 * **Q4 unintended leaks** -- `play_from_hand` / `turn.abnormal` / `targeted`
-  scoping; all six `rb_unintended_found` repros green.
+  scoping; all six `unintended_found` repros green.
 * **Fuzz findings** -- `fire_over_cap`, `negative_status_leak`,
   `money_ledger_gap`, `settle_loop_stuck`, `money_depth_opens_windows`
   (loud safety cap, `Cx::reentrant_hooks`), `returns_prompt_storm`
@@ -176,14 +198,14 @@ Landed themes only; the per-item history is gone from this file.
   `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰ per offered card -- user ruling
   2026-10-08, "bots must be able to counteract"; a book entry at 0 holds a card
   back; chaos `CHAOS_COUNTER_CHANCE`; advanced as an ordinary held prompt,
-  deadline fallback = the skip). Pinned by `tests/rb_chain_bot.rs`.
+  deadline fallback = the skip). Pinned by `crates/game-rules/tests/chain_bot.rs`.
 
 ## Rulebook doc check (2026-10-06)
 
 The live Google Doc 规则书 tab is the ground truth for the **core rules**.
 Snapshot: [rulebook-doc.md](rulebook-doc.md). Clause-by-clause engine verdicts
 are in [COVERAGE.md](COVERAGE.md) §Rulebook doc (2026-10-06). Black-box tests:
-`crates/game-rules/tests/rb_rulebook.rs` (38 tests, 0 `#[ignore]`).
+`rules/tests/tests/rulebook.rs` (38 tests, 0 `#[ignore]`).
 
 Still open from that check:
 
@@ -202,7 +224,7 @@ Still open from that check:
 * **支付阶段 1 / 5 and 7 shaping.** One `effect` raise carries window 5's
   cancel/retarget power at window 1's position; `payChoose` / `payAt` are
   unnamed extra stages; `paid` fires only on a payer-side loss and is distinct
-  from `payAfter`. Card-facing order is pinned by `rb_gap_money::g01`/`g02`.
+  from `payAfter`. Card-facing order is pinned by `gap_money::g01`/`g02`.
 
 Ambiguities from this check that still need a ruling live in §6 (RiNG rent,
 agent 「同色」, RiNG mortgageability, 强制购买 pay-hook scope).
@@ -219,9 +241,9 @@ batch)**); entries below marked that way are theirs.
   `H.Db.Card(id).Targeting` + `H.Others`, declared via `prop::DESIGNATES`) and
   **per-pair cancel** (`ctx::cancel_designation` / `designation_cancelled`,
   C# `play.Tags["immune"+seat]`) landed: one designation drops, the rest of the
-  play's designations land. `rb_money::per_pair_cancel_drops_one_designation`,
-  `rb_gap_money::g03_net_error_drops_one_leg_of_a_split` and
-  `rb_general::net_cancels_one_target_not_all` are green and un-ignored.
+  play's designations land. `money::per_pair_cancel_drops_one_designation`,
+  `gap_money::g03_net_error_drops_one_leg_of_a_split` and
+  `general::net_cancels_one_target_not_all` are green and un-ignored.
   The share is the **pre-drop** figure (RULING; `g04`'s halving-vs-cancel
   order stays RULING).
 * ~~育美 (2) / `hagumi_marks` (2): count gains during the turn.~~
@@ -342,8 +364,8 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * ~~Sweet Escape's 「收费标价」 gate is a ruling (§6).~~ **Fixed
     2026-10-10** (un-ignored, green; gate reads 「收费标价」 as the tile
     price sum).
-* **cross** (`rb_cross_chain` 11, `rb_cross_move` 13, `rb_cross_tiles` 11,
-  `rb_cross_status` 0, `rb_cross_long` 5): the `#[ignore]` reasons in those
+* **cross** (`cross_chain` 11, `cross_move` 13, `cross_tiles` 11,
+  `cross_status` 0, `cross_long` 5): the `#[ignore]` reasons in those
   files name each case. The big ones: 骰子已经掷下 is placed twice and does
   not shut the windows (c14, g18); 无法将视线移开 cannot be played as a
   counter and does not force the counter-user to move (c16, l01, l04);
@@ -358,12 +380,12 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   (`SETTLE-02`; `lock_pay` zeroed every payment in the game -- now scoped
   to the skill owner's `你` money. The 「无法从手中打出任何牌」 play gate is
   a **B** capability `cantPlayHand` and stays open).
-* **gap** (`rb_gap_*` 15): the `RULING` ones are in §6. The `DISCREPANCY`
+* **gap** (`gap_*` 15): the `RULING` ones are in §6. The `DISCREPANCY`
   ones are g18 (c14's shut-window), g19 (真奈's join + 网络链接异常),
   g21 (祥子 (1) absorbs nothing), g23 ([不可阻挡] still gains [除外] from
   无路矢), g28 (Maya (2)'s kept card does not raise `drew`), g30 (t13's
   stack overflow).
-* **fuzz** (`rb_fuzz_found` 14 tests, 8 open): latent shapes the fuzzer
+* **fuzz** (`fuzz_found` 14 tests, 8 open): latent shapes the fuzzer
   found, filed with minimal repros -- see [COVERAGE.md](COVERAGE.md) "Fuzz
   coverage". Still open: `unknown_card_id`, `determinism_break`,
   `save_restore_break`, `negation_not_total`, `multiply_order_matters`,
@@ -404,7 +426,7 @@ only.
     **provenance** (this card instance's marks), not as 「marks I own」 --
     the old `count_marks(.., player_id)` keyed on `owner`, which a [CP点]
     no longer has. Cite: （1） + `data/rules.txt` 125.
-    Test: `rb_general::cp_marks_are_neutral_and_attached_to_the_card`.
+    Test: `general::cp_marks_are_neutral_and_attached_to_the_card`.
   * **There are two kinds of [CP点]** (verbatim: 「自己[场上]1个[CP点] referred
     to the cp point attached to the card. There are points on the tile (which
     mandated by tilemark) and points on the card (mandated by the card rule)」).
@@ -414,8 +436,8 @@ only.
     view's field-card counter badge. [手] 「并在自己[场上]添加6个[CP点]」 seeds
     it at 6; （1）'s spread adds **tile** [CP点] only. The per-player counter
     `mark::CP_FIELD_TOK` is gone (ABI v38).
-    Tests: `rb_general::cp_places_one_tile_mark_and_six_on_card_cp`,
-    `rb_general::cp_on_card_count_rides_the_field_card`.
+    Tests: `general::cp_places_one_tile_mark_and_six_on_card_cp`,
+    `general::cp_on_card_count_rides_the_field_card`.
   * **The settle clause spends both kinds and pays the settler.** 「在拥有[CP]
     点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」:
     any player's [结算] on a tile carrying a [CP点] removes the tile mark
@@ -430,8 +452,8 @@ only.
     instead paid `Seat` after gating the clause on `m.Seat == Seat` (so settler
     and controller coincided) and spent a per-player `Tok(Seat, "CP点")`; the
     ruling replaces the counter and this reading drops the gate.
-    Tests: `rb_general::cp_settle_on_marked_tile_pays_800`,
-    `rb_general::cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler`.
+    Tests: `general::cp_settle_on_marked_tile_pays_800`,
+    `general::cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler`.
   * **The card is graveyarded as soon as its on-card [CP点] is empty.** 「The
     attached on-card cp mark」 is `FieldCard::cp` on this instance (the same
     ruling), **not** the tile marks it placed (the older reading). When that
@@ -442,8 +464,8 @@ only.
     removing one -- and not as a check at each spend site. Tile marks may
     outlive the card; without a live `src` card holding on-card [CP点] the
     settle clause is inert on them.
-    Tests: `rb_general::cp_card_is_graveyarded_when_its_on_card_cp_reaches_zero`,
-    `rb_general::cp_card_stays_when_only_its_tile_marks_run_out`.
+    Tests: `general::cp_card_is_graveyarded_when_its_on_card_cp_reaches_zero`,
+    `general::cp_card_stays_when_only_its_tile_marks_run_out`.
   * **It cannot be played while its [特] effect is still pending.** 「Pending」
     is read as **the [特] is still live on the field**: the card is the [特]'s
     carrier, and (per the graveyard ruling) it leaves exactly when its
@@ -451,11 +473,11 @@ only.
     The alternative reading -- the literal 「下2回合开始时」 window, so a second
     copy could join one that still carries marks after two turn starts --
     is **not** what is implemented. The reason key is `special_live`
-    (「[特]」), not a CP-named one, because `rb_general
+    (「[特]」), not a CP-named one, because `general
     ::cp_hand_is_not_gated_at_two_points` refuses any second-play message
     containing `cp` / `CP` / `点`; the sheet 2026-10-06 `A8` gate it pins is
     still gone and this is a different one.
-    Test: `rb_general::cp_cannot_be_played_again_while_the_special_is_pending`.
+    Test: `general::cp_cannot_be_played_again_while_the_special_is_pending`.
 
 **Open rulings:**
 
@@ -470,24 +492,24 @@ rulings above.
    offer? Or like any teleport, with an immediate `offer_buy`?
    * Engine now: it settles like any teleport, because `Move::new` defaults
      `main = false`.
-   * Carrying `main` through breaks `rb_general::tsugu_lt26_choose_move_settles`,
+   * Carrying `main` through breaks `general::tsugu_lt26_choose_move_settles`,
      which pins the immediate offer.
 2. **燃尽前的线香花火, last crystal.** Does removing the last crystal also
    grant 「获得一个额外回合」?
    * If it does, that extra turn's own end ticks one [眩晕] off. That would
-     explain `rb_cross_long::l07_extra_turn_cascade` (stun 1, want 2).
+     explain `cross_long::l07_extra_turn_cascade` (stun 1, want 2).
    * The turn-end order (行动阶段 18 before 19) is already correct.
 3. **（燐子）Ringing Bloom (3) X.** Is 「X为你收费格上的房屋数」 the count after
    (2) 「视为」 raises it, or the real count?
    * Engine now: the counted value, `prop::RENT_HOUSES`. `TODO(规则书)` in
      the card. Read with the real count, X would be 0 on exactly the tiles
-     (2) raised. Test: `rb_cross_tiles::t10_ringing_bloom` (green; pins the
+     (2) raised. Test: `cross_tiles::t10_ringing_bloom` (green; pins the
      counted value).
 4. **Two halvings on one settle.** （香澄）大家我都喜欢哦 halves 「地租」 and
    祥，移动 halves 「支付价格」. Do they stack to ¼, or does the 支付阶段
    「支付减半/翻倍」 window apply once?
    * Engine now: ¼ (the two clauses modify different nouns). Test:
-     `rb_mujica::saki_move_halves_a_forced_stop_and_pay` (green, pins 70).
+     `mujica::saki_move_halves_a_forced_stop_and_pay` (green, pins 70).
 5. **Sweet Escape 「收费标价」.** Does it mean purchase price or rent?
    * The tiles ±2 of CiRCLE sum to price 8200 (meets ≥2000) but to base
      rent 820 (fails).
@@ -496,11 +518,11 @@ rulings above.
      price sum (8200 ≥ 2000). The ruling is recorded by the green test;
      if the book meant base rent the test must be flipped.
 6. **Tomorrow's Door (3) on a co-owned 星之鼓动山丘.** Does the co-owned hill
-   count as 「[拥有者]拥有的格子」? Test: `rb_cross_tiles::t22_hill_coownership`
+   count as 「[拥有者]拥有的格子」? Test: `cross_tiles::t22_hill_coownership`
    (RULING, record-only).
 7. **Drawing a card several effects respond to.** Is a drawn effect card
    captured by one effect, or auto-played? Test:
-   `rb_cross_long::l06_one_draw_several_effects` -- **un-ignored
+   `cross_long::l06_one_draw_several_effects` -- **un-ignored
    2026-10-10**, green (pins the engine's capture-before-auto-play
    order). Still a live ruling question if the book wants auto-play
    first; the green test is the current recorded choice.
@@ -509,8 +531,8 @@ rulings above.
    entry only, so a later activation is unreachable and a hand play can be
    refused. Ruling: one entry that branches on `is_placed()`, or a real
    selection prompt? Engine now: the first entry only.
-   Tests: `rb_mygo::band_draw_for_two_crystals`,
-   `rb_morfonica::nnm_discard_marks_draw_x` (both DISCREPANCY).
+   Tests: `mygo::band_draw_for_two_crystals`,
+   `morfonica::nnm_discard_marks_draw_x` (both DISCREPANCY).
    NNM (2)'s new 「x次经过CiRCLE时的资金奖励」 waits on this. Sheet NOT FOUND
    (NNM's 「发动以下效果中的一个」 is a choice *inside* one entry).
 9. **[晕眩] vs a card's own follow-on gain.** Does rulebook 49
@@ -518,7 +540,7 @@ rulings above.
    body just stunned?
    * Example: Mujica:心の雨's fallback does 「眩晕」 then 「获得1000资金」.
    * Engine now: the gain lands. Tests:
-     `rb_mujica::heart_rain_fallback_stun_and_money`,
+     `mujica::heart_rain_fallback_stun_and_money`,
      `heart_rain_nobody_in_range_fallback`.
 
 9. **RiNG rent.** 「地主拥有的 RiNG 数量 × ringMultiplier × 1d20」 and the
@@ -530,7 +552,7 @@ rulings above.
 10. **Agent 「同色」.** 「每种颜色拥有一个地产商格子」 never says whether
     `extraColor` / 「该格获得所有颜色」 widens the colour group.
     `docs/TILES.md` `TODO(规则书)`. Engine now: the board's `group`.
-    Test: `rb_cross_tiles::t16_soyo_mixed_colors` (ignored).
+    Test: `cross_tiles::t16_soyo_mixed_colors` (ignored).
 11. **RiNG mortgageability.** 游戏流程 5 says 「抵押拥有的地契」 with no
     exclusion, but the engine refuses (`err.mortgage_ring`, `mortgageable`
     filters `kind != "ring"`). Is RiNG mortgageable, and if not where does
@@ -561,11 +583,11 @@ rulings above.
       un-mortgage before raising, the same post-state `buy()` leaves.
       Reading the other way (keep the mortgage; let 「自动」 bypass the build
       gate) needs a card text that says so.
-    * Tests: `rb_card_paths::tomoe_savior_buy_listener_hears_the_acquisition`,
+    * Tests: `card_paths::tomoe_savior_buy_listener_hears_the_acquisition`,
       `tomoe_savior_buy_listener_places_the_free_house`,
       `tomoe_savior_buy_listener_pays_the_chuchu_bonus` (all green).
     * Sheet NOT FOUND for either half.
-14. **TEST BUG (fixed 2026-10-07): `rb_card_paths::pareo_far_triggers_the_pareo_skill_offer`.**
+14. **TEST BUG (fixed 2026-10-07): `card_paths::pareo_far_triggers_the_pareo_skill_offer`.**
     Not an engine gap -- the (2) 「可选择失去1PAREO标记」 offer *does* come up
     (PAREO mark unified under the literal `PAREO标记`, 「初始1」 at
     `deckAtGameStart`, `build()` raises `houseAdded`, and pareo_far's
@@ -598,7 +620,7 @@ rulings above.
 
 * **Y.O.L.O timing (R-4).** Now that Y.O.L.O is own-roll-only, when is its
   +1d4 added relative to the card's own roll and to other additive dice
-  modifiers? `rb_mygo::inter_yolo_pushes_haneoka_over_20` was `CROSS-AGENT`
+  modifiers? `mygo::inter_yolo_pushes_haneoka_over_20` was `CROSS-AGENT`
   on this; **un-ignored 2026-10-10**, green. Engine now: the +1d4 is
   added to the card's own roll result.
   Sheet HINT (`新卡组卡` `C3` 「任意掷骰结算前…使结果增加1d4」) says additive
@@ -608,38 +630,38 @@ rulings above.
   There is no flip-effect trigger to observe, so the X>owned overflow never
   becomes crystals. Ruling: is a fan-flip its own timing, or is this folded
   into the fan-spend / fan-gain points?
-  (`rb_pp::band_skill_overflow_to_crystals`, DISCREPANCY.) Sheet NOT FOUND.
+  (`pp::band_skill_overflow_to_crystals`, DISCREPANCY.) Sheet NOT FOUND.
 * **R-1 money multiply × multiply:** Fire bird 1.5× vs Ave Mujica 1.5× vs
-  摩卡 half vs HHW band double-pay. (`rb_gap_money::g01_*` still RULING;
-  `rb_cross_tiles::t11_*` **un-ignored 2026-10-10**, green for the
+  摩卡 half vs HHW band double-pay. (`gap_money::g01_*` still RULING;
+  `cross_tiles::t11_*` **un-ignored 2026-10-10**, green for the
   Fire bird × HHW pair.) Engine now: the multipliers compose in
   declaration order. Sheet HINT: all live in the one window
   `回合階段&註釋` `B30`/`C30`; no product/stack rule.
 * **R-3 money cancel-one × split-share:** does X recompute after a
-  designation is dropped? (`rb_gap_money::g03_*`, TODO(ABI); `g04_*`,
+  designation is dropped? (`gap_money::g03_*`, TODO(ABI); `g04_*`,
   RULING: halving vs cancel-one order on a 分摊 leg.) Sheet NOT FOUND.
 * **R-5 path hook order:** does a per-tile forced stop beat a
-  `SettleBefore` end-rewrite? (`rb_gap_move::g11_*` **un-ignored
+  `SettleBefore` end-rewrite? (`gap_move::g11_*` **un-ignored
   2026-10-10**, green.) Engine now: the forced stop wins. Sheet NOT FOUND.
 * **R-6 counteract close vs join:** once a round on X closes, may a
   真奈-style joiner still enter it? Engine now: no. No dedicated test;
-  `rb_gap_window::g19_*` is the related DISCREPANCY (join + 网络链接异常).
+  `gap_window::g19_*` is the related DISCREPANCY (join + 网络链接异常).
   Sheet NOT FOUND (the joiner text is in `技能改动` `A51`).
 * **R-7 extra-turn × until-turn:** does 「until your next turn start」 end at
   the first turn start after, including an extra turn's?
-  (`rb_cross_long::l07_extra_turn_cascade`, DISCREPANCY -- tied to item 2.)
+  (`cross_long::l07_extra_turn_cascade`, DISCREPANCY -- tied to item 2.)
   Sheet NOT FOUND.
 * **Other `RULING` ignores** (sheet NOT FOUND for all): G07 (does a negated
-  EXIST redirect count as 「造成影响」? `rb_gap_money::g07_*`), G08 (星月夜's
-  re-roll over a whole dice set, `rb_gap_move::g08_*`), G13 (does 普通与理所当然
-  copy a signed 移动格数? `rb_gap_move::g13_*`), G26 (does Popipapapipopa's
+  EXIST redirect count as 「造成影响」? `gap_money::g07_*`), G08 (星月夜's
+  re-roll over a whole dice set, `gap_move::g08_*`), G13 (does 普通与理所当然
+  copy a signed 移动格数? `gap_move::g13_*`), G26 (does Popipapapipopa's
   crystal spend reduce a rent the *owner* receives?
-  `rb_gap_res::g26_*`), G29 (is each iteration of 春日影's draw-to-6 a
-  replaceable draw? `rb_gap_res::g29_*`), t04 (does the Anon link add half
-  of a mortgaged partner tile's 收费? `rb_cross_tiles::t04_*`).
+  `gap_res::g26_*`), G29 (is each iteration of 春日影's draw-to-6 a
+  replaceable draw? `gap_res::g29_*`), t04 (does the Anon link add half
+  of a mortgaged partner tile's 收费? `cross_tiles::t04_*`).
 * **三全音 payback recipient** (bank vs original payee). Sheet NOT FOUND
   (`新卡组卡` `G2` 「弃置此卡并支付由此卡获得的资金」 names no payee).
-  `rb_morfonica::tritone_countdown_discards_and_pays_back` drives the
+  `morfonica::tritone_countdown_discards_and_pays_back` drives the
   countdown but does not pin the payee.
 * **像往常一样 money refund on an undone forced move.** Sheet HINT
   (`新卡组卡` `C6` 「取消所有受到的效果（不进行任何结算）」) is broad enough
@@ -725,7 +747,7 @@ The rulebook (`data/rules.txt`):
 Our engine: `hand_counteractions` / `build_round` / `resolve_rounds` /
 `chain_starter` / `Priority` in `crates/game-rules/src/wasm_rules.rs`.
 
-**Fixed** (2026-10-06, `rb_chain.rs` covers each): a round collects counters to
+**Fixed** (2026-10-06, `chain.rs` covers each): a round collects counters to
 the same timing and only then do the declared counters become new timings; a
 negated counter's body does not run but the declaration and the spend stand.
 
@@ -772,7 +794,7 @@ player and asks them last; one activation per visit -- is retired):
 * 「多个效果可[反击]同一个时点」 still does not cap declarations per player;
   the cap is now "all of them before priority moves on", not one per visit.
 
-**Open item in `rb_chain.rs`:** `counters_to_counters_start_with_the_declarer`
+**Open item in `chain.rs`:** `counters_to_counters_start_with_the_declarer`
 is `#[ignore]`d. The engine does start the nested round at the declarer (and
 `counters_to_a_counter_wait_for_the_round_on_x_to_close` observes that), but
 `TEST:deny`'s guard `deny_yes` requires `trigger::player_id() != player_id` --
@@ -851,7 +873,7 @@ implemented (raze clears houses before the `bought` hook).
 
 **Flag-internal tests, rewritten to assert the same behaviour:**
 
-* `rb_ras::lock_skill_colors_the_first_deed_like_a_live_house` asserted
+* `ras::lock_skill_colors_the_first_deed_like_a_live_house` asserted
   `extraColor:1`; it now asserts the observable consequence (the bought deed
   counts as a Live House for that player). The `t.owner(SHOPPING)` assertion
   (rulebook behaviour) is unchanged.
@@ -887,11 +909,11 @@ load while the module-instantiation and world-clone counts stay put.
   (`Flow<bool>` on `buy` / `build` / `mortgage` / `card_*`). Guest logs that
   claimed a buy are gated on it (`tsugu_ycm`, `tomoe_savior`); `dream_ahead`
   (crystals only on success) and `afterglow` (free-house log only on success)
-  already checked the bool. Tests: `rb_ag::band_free_house_skipped_when_build_refused`,
-  `rb_general::tsugu_buy_gate_refused_does_not_log_a_buy`.
+  already checked the bool. Tests: `ag::band_free_house_skipped_when_build_refused`,
+  `general::tsugu_buy_gate_refused_does_not_log_a_buy`.
 * **HOST-07** — `ctx::buy_quotes` is the hook-aware quote (`CardRules::buy_quote`
   via `Run::buy_quotes` / `purchase::quote_for`), quote == charge. Still a
-  query. Test: `rb_general::agent_quote_carries_the_tsugu_buy_add`.
+  query. Test: `general::agent_quote_carries_the_tsugu_buy_add`.
 * **HOST-08** — `plan::set_no_build` folds into `can_build = !on`;
   `plan::set_build_anywhere` writes `MovePlan.build_anywhere` and lifts the
   landing-only build check. Both backends wired. Test:
@@ -913,15 +935,15 @@ Nine new black-box tests for the decided `PIPELINE-AUDIT` items (see
 
 | Test | Item |
 |---|---|
-| `rb_money::card_shortfall_raises_funds_then_bankrupts` | Q1 / B1 |
-| `rb_money::card_shortfall_may_be_funded_by_mortgage` | Q1 / B1 |
-| `rb_money::pre_split_modifier_shapes_the_total_not_each_leg` | Q2 |
-| `rb_money::self_payment_leaves_money_unchanged_when_affordable` | Q4 |
-| `rb_money::self_payment_may_be_funded_by_mortgage` | Q4 |
-| `rb_money::self_payment_shortfall_raises_funds_then_bankrupts` | Q4 |
-| `rb_rulebook::bankruptcy_stops_field_effects` | B2 |
-| `rb_rulebook::bankrupt_before_sees_a_dead_player` | B3 |
-| `rb_rulebook::auction_winner_may_mortgage_to_fund_the_bid` | B4 |
+| `money::card_shortfall_raises_funds_then_bankrupts` | Q1 / B1 |
+| `money::card_shortfall_may_be_funded_by_mortgage` | Q1 / B1 |
+| `money::pre_split_modifier_shapes_the_total_not_each_leg` | Q2 |
+| `money::self_payment_leaves_money_unchanged_when_affordable` | Q4 |
+| `money::self_payment_may_be_funded_by_mortgage` | Q4 |
+| `money::self_payment_shortfall_raises_funds_then_bankrupts` | Q4 |
+| `rulebook::bankruptcy_stops_field_effects` | B2 |
+| `rulebook::bankrupt_before_sees_a_dead_player` | B3 |
+| `rulebook::auction_winner_may_mortgage_to_fund_the_bid` | B4 |
 
 New `TEST:*` fixtures in `rules/fixtures/test-cards/src/lib.rs`:
 `TEST:totalCut` (a `payTotalAdd` probe that cuts the command total by 500),
@@ -931,7 +953,7 @@ probe that boosts every payment by 100).
 
 ### One pinned behaviour read against the ruling's wording
 
-**B2 「tokens」 vs `rb_pp::shanyao_counter_on_short_payment`.** The ruling says
+**B2 「tokens」 vs `pp::shanyao_counter_on_short_payment`.** The ruling says
 `remove_from_game` clears "field cards / tokens / skill effects". 规则书 L81's
 removal list is 棋子 / 角色卡 / 乐队卡 / 手卡 plus 「正在生效的卡，技能效果」;
 「标志物解释」 (火罐 / 奇迹水晶 / P✽P粉丝 ...) is a separate vocabulary and L81
@@ -979,7 +1001,7 @@ Re-homed per `docs/rulebook/SETTLE-STAGES.md` §4 and the user rulings of
 2026-10-07. New hooks `moveBefore` / `moveAfter`; Q7 ruled and implemented
 (the `TODO(规则书) PIPELINE-AUDIT Q7` marker is removed). ABI 42 → 43.
 
-Tests: `crates/game-rules/tests/rb_settle_stages.rs` (7 cases, all green):
+Tests: `rules/tests/tests/settle_stages.rs` (7 cases, all green):
 
 * `m1_no_settle_move_still_grants_the_move_after_fire` — 儿时玩伴's 「移动后」
   pot fires on a 「不触发结算」 move (R1).
@@ -1000,7 +1022,7 @@ Excluded pending rulings (left with `TODO(规则书)` markers): `want_to_grab`
 (2) (R5), `Sumimi:no_breakup` (R3).
 
 Known failures at time of writing (need investigation, possibly pre-existing
-from the in-flight batch): `rb_card_paths` 4 cases —
+from the in-flight batch): `card_paths` 4 cases —
 `mutsumi_never_2_runs_the_band_skill_2`,
 `mutsumi_never_2_runs_the_band_skill_2_on_a_crystal_shortfall`,
 `mutsumi_never_2_band_2_removes_the_crychic_cards`,
@@ -1010,7 +1032,7 @@ from the in-flight batch): `rb_card_paths` 4 cases —
 
 ## Late 2026-10-07 batch (Q3 / V1 / V2 / V4 / V5 / markers / est-cost)
 
-New `rb_money` cases (all green at time of writing):
+New `money` cases (all green at time of writing):
 
 * Q3 reversal: `two_sided_negative_final_reverses_the_payment`,
   `one_sided_negative_gain_becomes_a_loss`,
@@ -1027,7 +1049,7 @@ New `rb_money` cases (all green at time of writing):
 * Markers: `marker_spend_window_cancels_the_spend`,
   `bankruptcy_clears_owned_markers_wherever_they_sit`,
   `misaki_may_counteract_with_zero_fire`.
-* `rb_pp::shanyao_counter_on_short_payment` now expects the P✽P fan to be
+* `pp::shanyao_counter_on_short_payment` now expects the P✽P fan to be
   **cleared** with the bankruptcy (reversing the keep-tokens deviation).
 
 Open items unchanged: N3 (effect-level atomicity), N4 (「取消所有受到的效果」
@@ -1061,7 +1083,7 @@ ruling list in §6 and the open sections below.
   offer is i18n keys `kokoro_practice_force_*`; the test matched the resolved
   Chinese text (`yukina` / `练习` / `火罐`) and declined the offer as noise --
   the same class as §6 item 14 (pareo_far). Match the key; un-ignored and
-  green. (`rb_settle_stages::m4_kokoro_force_stop_stops_a_passer` already
+  green. (`settle_stages::m4_kokoro_force_stop_stops_a_passer` already
   pinned the mechanism.)
 * **白金燐子 (2) pre-roll window** (`rinko_skill_2_*`, two tests, **test bug
   D**). 「你可以在移动掷骰前消耗X个[火罐]」 with 「此技能可以正常使用」 is a
@@ -1135,9 +1157,9 @@ or A/B items that need a wider surface than this batch:
 * **A (partly done):** 选择自己的舞台 vs a self-inflicted [传送]
   (`choose_your_stage_answers_an_abnormal_move`) -- **fixed and
   un-ignored 2026-10-10**. 安可 vs an overlapping teleport
-  (`ix_encore_blocks_overlap_teleport`) is still ignored (rb_pp).
+  (`ix_encore_blocks_overlap_teleport`) is still ignored (pp).
 * **A, engine:** 要乐奈 (3) / 凑友希那 (3) stop-pot landing (`t.pos == 36`)
-  and the `rb_cross_move` stop-pot cases -- `plan::set_stop_at` during a
+  and the `cross_move` stop-pot cases -- `plan::set_stop_at` during a
   `PassTile` hook does not land the piece on the hook's tile.
   ~~**Mis-diagnosed.**~~ **D (test), fixed 2026-10-10:** the engine landing is
   correct (green `m4_kokoro_*` / `g11` / `g12` / `m16` / roselia yukina).
@@ -1154,7 +1176,7 @@ or A/B items that need a wider surface than this batch:
   笑容大游行 stack overflow; 网络链接异常 drop-one (c05 un-ignored
   2026-10-10; g19 still sees the whole-card negate on the join path);
   花园多惠 (2) cancel window; 骰子已经掷下 shut-window; the remaining
-  `rb_fuzz_found` latent shapes.
+  `fuzz_found` latent shapes.
 * **Stale-ignore batch 2026-10-10 (un-ignored, green):**
   `c05_cancels_one_designation_of_four`, `l06_one_draw_several_effects`,
   `t11_fire_bird_plus_hhw_double`, `immunity_gap`, `card_trap_reachable`,
