@@ -243,6 +243,10 @@ pub struct Run {
     /// 0 -- see [`RulesBridge::check_silent_body`]. Not taken by the
     /// multi-pass replace bookkeeping (unlike [`Self::posted`]).
     logged: u32,
+    /// This run's entry is silent (`CardDef::silent`): no activation flash and
+    /// no outcome lines for its state / plan writes either (the flag hides
+    /// the whole presentation, and the body must be pure bookkeeping).
+    silent_body: bool,
     /// The `"card"` activation event id this run groups under (`-1` = none).
     /// Every write-through event carries it, so the log nests the outcome
     /// under the header.
@@ -356,6 +360,62 @@ impl Run {
     /// write-through like every other body line.
     fn outcome(&mut self, who: i32, msg: Msg) {
         self.post_log("text", who, msg, "");
+    }
+
+    /// Outcome line for a rulebook-visible state-key write (hand limit, fire
+    /// pot, stay / stun / exile & friends). Scratch keys (`skill.*` latches,
+    /// slots, counters the player never sees as a clause firing) stay silent.
+    /// A write that lands on the same value is not an effect and logs nothing.
+    fn outcome_state(&mut self, who: i32, key: &str, was: i32, now: i32) {
+        if was == now || self.silent_body {
+            return;
+        }
+        let mk = match key {
+            card_sdk::abi::state_key::HAND_LIMIT => "log.outcome.hand_limit",
+            // FIRE count changes narrate through `gain_fire` / `fire_spent`;
+            // a raw `state::set` on the key is the declare-cap initial write
+            // and stays silent.
+            card_sdk::abi::state_key::STAY
+            | card_sdk::abi::state_key::STUN
+            | card_sdk::abi::state_key::STUN_START
+            | card_sdk::abi::state_key::EXILE
+            | card_sdk::abi::state_key::EXILE_TO
+            | card_sdk::abi::state_key::EXILE_MAIN
+            | card_sdk::abi::state_key::NO_HAND
+            | card_sdk::abi::state_key::UNSTOPPABLE
+            | card_sdk::abi::state_key::START_HAND
+            | card_sdk::abi::state_key::SKILL_STATE => "log.outcome.state",
+            // Scratch: `skill.*` latches, slots, and anything else the
+            // rulebook does not word as a clause firing.
+            _ => return,
+        };
+        self.outcome(
+            who,
+            Msg::new(mk)
+                .player_id("who", who)
+                .text("key", key)
+                .i("value", now as i64)
+                .i("from", was as i64),
+        );
+    }
+
+    /// Outcome line for a plan rewrite the rulebook words as happening (dice,
+    /// teleport destination, stop-at, extra steps, no-buy / no-build, start).
+    /// Posted under the activation header so the log says what the clause did
+    /// to the move.
+    fn outcome_plan(&mut self, mk: &str, tile: i32, n: i32, why: &str) {
+        if self.silent_body {
+            return;
+        }
+        let who = self.trigger.player_id;
+        self.outcome(
+            who,
+            Msg::new(mk)
+                .player_id("who", who)
+                .tile("tile", tile)
+                .i("n", n as i64)
+                .text("why", why),
+        );
     }
 
     /// Record a crystal write on the instance at `uid` so the commit point can
@@ -1139,10 +1199,16 @@ impl CardWorld for Run {
         self.world.state_expires(player_id, key)
     }
     fn state_set(&mut self, player_id: i32, key: &str, value: i32) -> i32 {
-        self.world.state_set(player_id, key, value)
+        let was = self.world.state_get(player_id, key);
+        let now = self.world.state_set(player_id, key, value);
+        self.outcome_state(player_id, key, was, now);
+        now
     }
     fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
-        self.world.state_add(player_id, key, delta)
+        let was = self.world.state_get(player_id, key);
+        let now = self.world.state_add(player_id, key, delta);
+        self.outcome_state(player_id, key, was, now);
+        now
     }
     fn state_set_bounds(&mut self, player_id: i32, key: &str, min: i32, max: i32) {
         self.world.state_set_bounds(player_id, key, min, max);
@@ -1794,6 +1860,7 @@ impl CardWorld for Run {
     }
     // movement shaping ---------------------------------------------------------
     fn set_steps(&mut self, v: i32) {
+        let was = self.world.move_total();
         self.world.set_steps(v);
         // Keep the shared MoveBefore link coherent for later counters and
         // hooks. Its base distance is already final; a plan rewrite extends
@@ -1805,6 +1872,9 @@ impl CardWorld for Run {
                 m.total = (m.total + delta).max(0);
                 m.remaining = (m.remaining + delta).max(0);
             }
+        }
+        if self.world.move_total() != was {
+            self.outcome_plan("log.outcome.plan_steps", -1, v, "");
         }
     }
     fn set_roller(&mut self, v: i32) {
@@ -1822,7 +1892,11 @@ impl CardWorld for Run {
         self.world.set_signed(v);
     }
     fn set_stop_at(&mut self, v: i32) {
+        let was = self.world.move_stop_at();
         self.world.set_stop_at(v);
+        if v != was {
+            self.outcome_plan("log.outcome.plan_stop", v, 0, "");
+        }
     }
     fn set_parity(&mut self, v: i32) {
         self.world.set_parity(v);
@@ -1832,6 +1906,9 @@ impl CardWorld for Run {
     }
     fn set_no_buy(&mut self, v: bool) {
         self.world.set_no_buy(v);
+        if v {
+            self.outcome_plan("log.outcome.plan_no_buy", -1, 0, "");
+        }
     }
     fn set_kind(&mut self, v: i32) {
         self.world.set_kind(v);
@@ -1847,6 +1924,9 @@ impl CardWorld for Run {
     }
     fn set_extra_steps(&mut self, v: i32) {
         self.world.set_extra_steps(v);
+        if v != 0 {
+            self.outcome_plan("log.outcome.plan_steps", -1, v, "");
+        }
     }
     fn set_settle_tile(&mut self, v: i32) {
         self.world.set_settle_tile(v);
@@ -1862,6 +1942,9 @@ impl CardWorld for Run {
     }
     fn set_no_build(&mut self, v: bool) {
         self.world.set_no_build(v);
+        if v {
+            self.outcome_plan("log.outcome.plan_no_build", -1, 0, "");
+        }
     }
     fn set_build_anywhere(&mut self, v: bool) {
         self.world.set_build_anywhere(v);
@@ -1878,15 +1961,18 @@ impl CardWorld for Run {
 
     fn set_teleport_to(&mut self, v: i32) {
         self.world.set_teleport_to(v);
+        self.outcome_plan("log.outcome.plan_teleport", v, 0, "");
     }
     fn set_start(&mut self, v: i32, why: &str) {
         self.world.set_start(v, why);
+        self.outcome_plan("log.outcome.plan_start", v, 0, why);
     }
     fn clear_dice(&mut self) {
         self.world.clear_dice();
     }
     fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.world.set_base_dice(count, sides, why);
+        self.outcome_plan("log.outcome.plan_dice", -1, count, why);
     }
     fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.world.add_base_dice(count, sides, why);
@@ -2433,6 +2519,7 @@ impl<M: CardModules> RulesBridge<M> {
                 posted: std::mem::take(&mut posted_ids),
                 log_idx: 0,
                 logged: 0,
+                silent_body: false,
                 parent: activation_id,
             };
             run.world.skip_log = true;
@@ -2469,6 +2556,7 @@ impl<M: CardModules> RulesBridge<M> {
                 w.live = Some(cx_ptr as *mut Cx<'static>);
                 if self.entry_silent(card_id, entry) {
                     silent_body.set(true);
+                    w.silent_body = true;
                 }
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
                 if id >= 0 && activation_id < 0 {
@@ -2582,6 +2670,7 @@ impl<M: CardModules> RulesBridge<M> {
                         posted: std::mem::take(&mut posted_ids),
                         log_idx: 0,
                         logged: 0,
+                        silent_body: false,
                         parent: activation_id,
                     };
                     let mut announce = |w: &mut crate::Run, _entry: i32| {
@@ -4826,6 +4915,7 @@ impl<M: CardModules> RulesBridge<M> {
             posted: vec![],
             log_idx: 0,
             logged: 0,
+            silent_body: false,
             parent: -1,
         }
     }
@@ -5042,6 +5132,7 @@ impl<M: CardModules> RulesBridge<M> {
                 posted: vec![],
                 log_idx: 0,
                 logged: 0,
+                silent_body: false,
                 parent: -1,
             };
             let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
@@ -6863,6 +6954,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             posted: vec![],
             log_idx: 0,
             logged: 0,
+            silent_body: false,
             parent: -1,
         };
         self.ruleset
@@ -6945,6 +7037,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             posted: vec![],
             log_idx: 0,
             logged: 0,
+            silent_body: false,
             parent: -1,
         };
         q.tiles
