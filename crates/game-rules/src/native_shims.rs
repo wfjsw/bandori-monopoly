@@ -432,8 +432,6 @@ pub trait HostOps {
     fn op_set_settle_as_agent(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_plan_add_follower`
     fn op_plan_add_follower(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_set_bonus`
-    fn op_set_bonus(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_move_stop_at`
     fn op_move_stop_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_move_parity`
@@ -1316,10 +1314,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_plan_add_follower(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::plan_add_follower(self, a[0])?;
         Ok(0)
-    }
-    fn op_set_bonus(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        let _ = a;
-        Err(HostErr::trap("set_bonus: no host body yet"))
     }
     fn op_move_stop_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::move_stop_at(self)? as i64)
@@ -3340,10 +3334,6 @@ pub unsafe extern "C-unwind" fn bandori_plan_add_follower(player_id: i32) {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_set_bonus(n: i32, ptr: i32, len: i32) {
-    let _ = [n, ptr, len, 0, 0, 0];
-    abort_host(HostErr::trap("set_bonus: no host body yet"))
-}
 
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_move_stop_at() -> i32 {

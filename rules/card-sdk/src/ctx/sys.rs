@@ -521,8 +521,6 @@ extern "C-unwind" {
     pub fn set_settle_as_agent(on: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_plan_add_follower")]
     pub fn plan_add_follower(player_id: i32);
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_bonus")]
-    pub fn set_bonus(n: i32, ptr: i32, len: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_move_stop_at")]
     pub fn move_stop_at() -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_move_parity")]

@@ -1291,15 +1291,18 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: `set_no_build(true)` ≡ `set_can_build(false)`; `set_build_anywhere` opens builds past the landing-only rule. **Confirmed.**
 
 ## HOST-09 — `set_bonus` dead guest import + native trap
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-09 …`) —
+  deleted. No `ctx` wrapper, never called, absent from the built wasm (GC).
+  Import + `native_shims` stub + `bandori_set_bonus` symbol removed. Nothing
+  to implement: no card text names a move-plan / dice bonus buffer.
 - **kind**: ABI defect (dead surface)
-- **class**: D (dead) / A if a card starts using it
+- **class**: D (dead)
 - **severity**: low
 - **suggested batch**: guest imports vs host registration
-- **locations**
-  - `rules/card-sdk/src/ctx/sys.rs:524-525` `pub fn set_bonus(n: i32, ptr: i32, len: i32);`
-  - no `ctx` wrapper, never called; not in host linker; `native_shims.rs:1320-1322` / `:3339-3341` trap `"set_bonus: no host body yet"`
-  - absent from built `card_all.wasm` imports (GC)
-- **expected**: implement (move-plan / dice bonus buffer) or delete the import + native stub
+- **locations** (removed)
+  - `rules/card-sdk/src/ctx/sys.rs` `set_bonus`
+  - `crates/game-rules/src/native_shims.rs` `op_set_bonus` / `bandori_set_bonus`
+- **expected**: delete the import + native stub. **Confirmed.**
 
 ## HOST-10 — host linker names with no guest import (dead registrations)
 - **kind**: ABI defect (dead surface)
