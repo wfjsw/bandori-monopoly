@@ -105,20 +105,32 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-end-it-all-02 | 在场时迷子不再推让我来结束一切 | PROVEN | `end_it_all_02_*` | TBD | `event_is_active` modeled | — |
 | E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | BLOCKED-HOST | `never_ends_01_noop_under_stub_tile_named` | TBD | `tile_named("RiNG {n}")` → -1; body early-returns | — |
 
-## Summary counts (to be finalized after the run)
+## Summary counts (clause-level; verdicts pending CBMC run)
 
-| classification | count |
-|---|---:|
-| PROVEN | TBD |
-| FAILS | TBD (at least E-aao-02 LESS) |
-| PROTOCOL-LEVEL | TBD |
-| BLOCKED-HOST | TBD |
-| OPEN | TBD |
-| cannot test | TBD |
+| classification | count | notes |
+|---|---:|---|
+| PROVEN (or partial-PROVEN) | ~30 | activation/expiry split where model allows |
+| FAILS(LESS) | 1 | E-aao-02 |
+| PROTOCOL-LEVEL | ~18 | draw/filing, scheduling, plan stubs, deck push |
+| BLOCKED-HOST | ~10 | tile_named names, neighbor, remove_marks, trig_move_* |
+| OPEN | ~12 | listed in the table's OPEN column |
+| cannot test | 4 | skin, clocks, shout, fire-pot skill gate |
+
+55 harnesses in `proofs/events.rs`. Full per-clause table above.
 
 ## Findings
 
-1. **E-aao-02 LESS** — book: 「此卡在场时全场玩家不能使用卡牌的[手]效果」. Body (`rules/events/src/a_a_o.rs`) keeps the card and schedules expiry but arms **no** hand-effect veto (explicit `TODO(规则书)/TODO(engine)`). Proof `aao_02_hand_veto_is_armed` asserts the veto and is expected to FAIL.
+1. **E-aao-02 LESS (body)** — book: 「此卡在场时全场玩家不能使用卡牌的[手]效果」. Body (`rules/events/src/a_a_o.rs`) keeps the card and schedules expiry but arms **no** hand-effect veto (explicit `TODO(规则书)/TODO(engine)`). Proof `aao_02_hand_veto_is_armed` asserts the veto and is expected to FAIL.
+
+2. **HOST WRONG — `Op::neighbor` returns a tile, not a seat.** asukayama's prev/next status split (2 [眩晕] / lock hand / rest [除外]) cannot be proven; under the Kani host every non-drawer lands in the 「其余」 [除外] leg. Proof `asukayama_02_status_spread_blocked_neighbor` pins the partial GiveExile leg and documents the gap.
+
+3. **HOST LESS — `state::set_expires` ignores the field column** and writes VALUE, clobbering `stunStart=2` down to 1. Relevant to asukayama's 「回合开始时减少一层的[眩晕]」.
+
+4. **HOST LESS — `Op::pay_total` both shapes *and* transfers.** The real pipeline only shapes the pre-split total; the host also emits a bank `PayTo` of 1000. front_or_back proofs treat that first `PayTo` as a protocol artifact and pin the per-winner share legs (`1000/n`).
+
+5. **PROTOCOL stubs used by event bodies:** `event_deck_push`, `event_banish`, `draw_event`, `card_move`, `raise_bought`, `set_build_discount`, `set_self_prop`, `remove_marks_f`, `schedule_turn_end`, `card_text_mentions`, `plan::set_*`.
+
+6. **UNMODELED (loud fail):** `trig_move_roll` (moca halve, heat_head sub_die), `trig_move_resolve` / `trig_move_remaining` (circle_rebuild pass reward). Proofs avoid these paths; the clauses stay BLOCKED-HOST.
 
 ## Notes on methodology
 
