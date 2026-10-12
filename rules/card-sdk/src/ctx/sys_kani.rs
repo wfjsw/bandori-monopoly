@@ -140,7 +140,13 @@ pub fn players_on_at(tile: i32, except: i32, index: i32) -> i32 {
 }
 
 pub fn player_count() -> i32 {
-    kani_host::call_i32(Op::player_count, [0, 0, 0, 0, 0, 0])
+    let n = kani_host::call_i32(Op::player_count, [0, 0, 0, 0, 0, 0]);
+    // Model bound N ∈ 2..=4 (world.rs). Pin it here, next to the `0..n`
+    // Range the unmodified card bodies construct — CBMC does not propagate
+    // the host's assume through `call_i32` into the Range's trip count
+    // (poorest's try_fold hit "Not unwinding … iteration 24" without this).
+    kani::assume(n >= 2 && n <= 4);
+    n
 }
 
 pub fn player_out(player_id: i32) -> i32 {
