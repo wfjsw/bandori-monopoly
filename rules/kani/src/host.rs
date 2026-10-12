@@ -30,7 +30,8 @@ pub fn install() {
     kani_host::install(dispatch);
 }
 
-/// Byte-equal to `expected` via the intern table (no `memcmp`).
+/// Byte-equal to `expected` via a fixed 8×8 chunk walk (no `memcmp`).
+/// The trip count is 8, so `#[kani::unwind(8)]` covers every name compare.
 fn name_eq(handle: i32, len: i32, expected: &str) -> bool {
     let b = card_sdk::native::read(handle, len.max(0) as usize);
     // Byte compare against the expected name — no UTF-8 validation.
@@ -38,14 +39,19 @@ fn name_eq(handle: i32, len: i32, expected: &str) -> bool {
     if b.len() != e.len() || b.len() > 64 {
         return false;
     }
-    let n = b.len();
-    let mut i = 0usize;
+    let mut outer = 0usize;
     let mut ok = true;
-    while i < n {
-        if b[i] != e[i] {
-            ok = false;
+    while outer < 8 {
+        let base = outer * 8;
+        let mut k = 0usize;
+        while k < 8 {
+            let i = base + k;
+            if i < b.len() && b[i] != e[i] {
+                ok = false;
+            }
+            k += 1;
         }
-        i += 1;
+        outer += 1;
     }
     ok
 }
@@ -302,13 +308,19 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         Op::owned_count => world::with_world(|w| {
             let p = a0;
+            // 8×8 chunk walk over the 60-tile board (unwind bound 8, not 60).
             let mut n = 0;
-            let mut i = 0;
-            while i < 60 {
-                if w.tiles[i].owner == p {
-                    n += 1;
+            let mut outer = 0usize;
+            while outer < 8 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let i = outer * 8 + k;
+                    if i < 60 && w.tiles[i].owner == p {
+                        n += 1;
+                    }
+                    k += 1;
                 }
-                i += 1;
+                outer += 1;
             }
             n
         }) as i64,
@@ -316,17 +328,22 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let p = a0;
             let idx = a1;
             let mut n = 0;
-            let mut i = 0;
             let mut found = -1;
-            while i < 60 {
-                if w.tiles[i].owner == p {
-                    if n == idx {
-                        // 0-based engine index (was wrongly `i + 1`).
-                        found = i as i32;
+            let mut outer = 0usize;
+            while outer < 8 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let i = outer * 8 + k;
+                    if i < 60 && w.tiles[i].owner == p {
+                        if n == idx {
+                            // 0-based engine index (was wrongly `i + 1`).
+                            found = i as i32;
+                        }
+                        n += 1;
                     }
-                    n += 1;
+                    k += 1;
                 }
-                i += 1;
+                outer += 1;
             }
             found
         }) as i64,

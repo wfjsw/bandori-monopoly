@@ -196,18 +196,28 @@ impl IrCtx {
     }
 
     pub fn named_get(&self, name_id: i64) -> Option<i64> {
+        // while-loop with early exit: `iter().find()` unrolls into an
+        // iterator chain that CBMC prices like NAMED_CAP closures.
         let n = self.named_n as usize;
-        self.named[..n]
-            .iter()
-            .find(|(k, _)| *k == name_id)
-            .map(|(_, v)| *v)
+        let mut i = 0usize;
+        while i < n {
+            if self.named[i].0 == name_id {
+                return Some(self.named[i].1);
+            }
+            i += 1;
+        }
+        None
     }
 
     pub fn named_set(&mut self, name_id: i64, v: i64) {
         let n = self.named_n as usize;
-        if let Some(slot) = self.named[..n].iter_mut().find(|(k, _)| *k == name_id) {
-            slot.1 = v;
-            return;
+        let mut i = 0usize;
+        while i < n {
+            if self.named[i].0 == name_id {
+                self.named[i].1 = v;
+                return;
+            }
+            i += 1;
         }
         if n < NAMED_CAP {
             self.named[n] = (name_id, v);
@@ -236,19 +246,26 @@ impl IrCtx {
     pub fn bin_get(&self, a: i64, b: i64) -> i64 {
         let key = a * 1024 + b;
         let n = self.bin_n as usize;
-        self.bin[..n]
-            .iter()
-            .find(|(k, _)| *k == key)
-            .map(|(_, v)| *v)
-            .unwrap_or(0)
+        let mut i = 0usize;
+        while i < n {
+            if self.bin[i].0 == key {
+                return self.bin[i].1;
+            }
+            i += 1;
+        }
+        0
     }
 
     pub fn bin_set(&mut self, a: i64, b: i64, v: i64) {
         let key = a * 1024 + b;
         let n = self.bin_n as usize;
-        if let Some(slot) = self.bin[..n].iter_mut().find(|(k, _)| *k == key) {
-            slot.1 = v;
-            return;
+        let mut i = 0usize;
+        while i < n {
+            if self.bin[i].0 == key {
+                self.bin[i].1 = v;
+                return;
+            }
+            i += 1;
         }
         if n < BIN_CAP {
             self.bin[n] = (key, v);

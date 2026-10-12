@@ -59,20 +59,39 @@ pub fn ruleset_len() -> usize {
     n
 }
 
-/// Index `idx` of the flattened [`RULESET`] (integer arithmetic, **no**
-/// string compare). Fails loudly on out-of-range.
+/// Start index of each band in the flattened [`RULESET`], plus one past the
+/// end (`CARD_COUNT`). Verified against the live tables by
+/// `band_starts_match_ruleset` and by `conf_hostops2`.
+/// Lengths: 15,15,14,15,15,15,15,19,18,15,17,11,12,54,6,1,28 = 285.
+pub const BAND_START: [usize; 18] = [
+    0, 15, 30, 44, 59, 74, 89, 104, 123, 141, 156, 173, 184, 196, 250, 256, 257, 285,
+];
+
+/// Index `idx` of the flattened [`RULESET`] by a const offset table + binary
+/// search (~5 integer compares) — **no** 17-band integer walk, **no** string
+/// compare. Fails loudly on out-of-range.
 pub fn by_idx(idx: usize) -> &'static card_sdk::CardDef {
-    let mut left = idx;
-    let mut b = 0usize;
-    while b < RULESET.len() {
-        let band = RULESET[b];
-        if left < band.len() {
-            return &band[left];
-        }
-        left -= band.len();
-        b += 1;
+    if idx >= BAND_START[BAND_START.len() - 1] {
+        fail_unknown_idx(idx);
     }
-    fail_unknown_idx(idx)
+    // Greatest b with BAND_START[b] <= idx.
+    let mut lo = 0usize;
+    let mut hi = RULESET.len(); // exclusive band upper bound
+    while lo < hi {
+        let mid = (lo + hi + 1) / 2;
+        if BAND_START[mid] <= idx {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    // lo in 0..RULESET.len(), idx < BAND_START[lo+1]
+    let band = RULESET[lo];
+    let off = idx - BAND_START[lo];
+    if off >= band.len() {
+        fail_unknown_idx(idx);
+    }
+    &band[off]
 }
 
 fn fail_unknown_idx(idx: usize) -> ! {

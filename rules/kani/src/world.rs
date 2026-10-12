@@ -37,7 +37,12 @@ pub const MAX_ANSWERS: usize = 8;
 /// Bounded pile / field arrays (interned card ids) and the pilot bitsets.
 pub const MAX_CARDS: usize = 8;
 /// Generic named counters (tokens, state keys, slots).
-pub const MAX_KEYS: usize = 32;
+/// Named keys per map (tokens / slots / state / props). **8** is the model
+/// bound: a full map is a documented cut (the old `set` overwrite-slot-0
+/// behaviour). The loop trip count is `MAX_KEYS` itself, so a harness with
+/// `#[kani::unwind(8)]` covers every `NameMap` walk — `while i < self.n`
+/// would still demand `unwind >= 255` for a `u8` index.
+pub const MAX_KEYS: usize = 8;
 /// Field card instances (uid + card id + props).
 pub const MAX_FIELD: usize = 8;
 /// Tile marks.
@@ -377,24 +382,26 @@ impl NameMap {
     }
 
     /// `Some(value)` when `key` is present (even if the value is 0).
+    /// `set` never inserts a duplicate key, so first-match is the match.
+    /// Loop bound is [`MAX_KEYS`] (not `self.n`) so CBMC's unwinding
+    /// assertion is satisfied at `unwind == MAX_KEYS`.
     pub fn get_opt(&self, key: NameId) -> Option<i32> {
         let mut i = 0usize;
-        let mut v: Option<i32> = None;
-        while i < self.n as usize {
-            if self.slots[i].key == key {
-                v = Some(self.slots[i].value);
+        while i < MAX_KEYS {
+            if i < self.n as usize && self.slots[i].key == key {
+                return Some(self.slots[i].value);
             }
             i += 1;
         }
-        v
+        None
     }
 
     /// Set `key` to `value`, inserting if needed. Returns the value.
     /// A full table overwrites slot 0 (bounded, documented).
     pub fn set(&mut self, key: NameId, value: i32) -> i32 {
         let mut i = 0usize;
-        while i < self.n as usize {
-            if self.slots[i].key == key {
+        while i < MAX_KEYS {
+            if i < self.n as usize && self.slots[i].key == key {
                 self.slots[i].value = value;
                 return value;
             }
