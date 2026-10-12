@@ -116,6 +116,7 @@ fn table() -> &'static mut Table {
 /// string literal (every `ctx::tok` / `slot` / `state_*` name in a card body)
 /// the whole hash constant-folds through `#[inline(always)]`.
 /// Same result as the old 8×8 chunk walk for every `s`.
+#[cfg(kani)]
 #[inline(always)]
 fn fnv1a(s: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -140,8 +141,32 @@ fn fnv1a(s: &[u8]) -> u64 {
     h
 }
 
+
+/// Production twin of `fnv1a` — the original 8×8 chunk walk, byte-for-byte
+/// the master code so wasm/native codegen is unchanged (`cfg(not(kani))`).
+#[cfg(not(kani))]
+fn fnv1a(s: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut outer = 0usize;
+    while outer < 8 {
+        let base = outer * 8;
+        let mut k = 0usize;
+        while k < 8 {
+            let i = base + k;
+            if i < s.len() {
+                h ^= s[i] as u64;
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            k += 1;
+        }
+        outer += 1;
+    }
+    h
+}
+
 /// `const fn` twin of [`fnv1a`] — same bits, usable in `const` items so a
 /// literal's hash is a compile-time `u64` before CBMC sees the program.
+#[cfg(kani)]
 pub const fn fnv1a_const(name: &str) -> u64 {
     let s = name.as_bytes();
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -162,6 +187,7 @@ pub const fn fnv1a_const(name: &str) -> u64 {
 /// **Zero loops** (same reason as [`fnv1a`]). NOT `a == b`: that lowers to
 /// memcmp, whose builtin loop needs unwind >= 64 and trips
 /// *"Not unwinding memcmp at 32"* (measured).
+#[cfg(kani)]
 #[inline(always)]
 fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > MAX_NAME {
@@ -189,6 +215,47 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     ok
 }
 
+
+/// Production twin of `bytes_eq` — original 8 outer × 8 unrolled bytes.
+#[cfg(not(kani))]
+fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() || a.len() > MAX_NAME {
+        return false;
+    }
+    let n = a.len();
+    let mut outer = 0usize;
+    let mut ok = true;
+    while outer < 8 {
+        let base = outer * 8;
+        if base + 0 < n && a[base + 0] != b[base + 0] {
+            ok = false;
+        }
+        if base + 1 < n && a[base + 1] != b[base + 1] {
+            ok = false;
+        }
+        if base + 2 < n && a[base + 2] != b[base + 2] {
+            ok = false;
+        }
+        if base + 3 < n && a[base + 3] != b[base + 3] {
+            ok = false;
+        }
+        if base + 4 < n && a[base + 4] != b[base + 4] {
+            ok = false;
+        }
+        if base + 5 < n && a[base + 5] != b[base + 5] {
+            ok = false;
+        }
+        if base + 6 < n && a[base + 6] != b[base + 6] {
+            ok = false;
+        }
+        if base + 7 < n && a[base + 7] != b[base + 7] {
+            ok = false;
+        }
+        outer += 1;
+    }
+    ok
+}
+
 /// Bucket start index for `hash`.
 fn bucket(hash: u64) -> usize {
     (hash as usize) & (SLOTS - 1)
@@ -199,6 +266,7 @@ fn bucket(hash: u64) -> usize {
 /// Returns [`NameId::INVALID`] when the table is full, the name is longer
 /// than [`MAX_NAME`], or [`MAX_PROBES`] is exhausted (loud — callers that
 /// cannot tolerate `INVALID` go through `intern_or_fail`).
+#[cfg(kani)]
 #[inline(always)]
 pub fn intern_bytes(s: &[u8]) -> NameId {
     if s.len() > MAX_NAME {
@@ -212,6 +280,7 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
 /// [`intern_bytes`] so an inlined call site can constant-fold `fnv1a`
 /// (the hash of a string literal is a compile-time `u64`) and this routine
 /// only does integer probes + a zero-loop byte compare.
+#[cfg(kani)]
 pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
     if s.len() > MAX_NAME {
         return NameId::INVALID;
@@ -290,9 +359,48 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
 }
 
 /// Intern a `&str` (uses its bytes; does not re-validate UTF-8).
-#[inline(always)]
+#[cfg_attr(kani, inline(always))]
 pub fn intern(s: &str) -> NameId {
     intern_bytes(s.as_bytes())
+}
+
+
+/// Production `intern_bytes` — master's 8-probe loop + `copy_from_slice`
+/// insert, byte-for-byte so wasm/native codegen is unchanged.
+#[cfg(not(kani))]
+pub fn intern_bytes(s: &[u8]) -> NameId {
+    if s.len() > MAX_NAME {
+        return NameId::INVALID;
+    }
+    let n = s.len() as u8;
+    let h = fnv1a(s);
+    let h = if h == 0 { 1 } else { h };
+    let t = table();
+    let start = bucket(h);
+    let mut probe = 0usize;
+    let mut first_empty = usize::MAX;
+    while probe < MAX_PROBES {
+        let idx = (start + probe) & (SLOTS - 1);
+        let slot = &t.slots[idx];
+        if slot.hash == 0 {
+            if first_empty == usize::MAX {
+                first_empty = idx;
+            }
+        } else if slot.hash == h && slot.len == n && bytes_eq(&slot.bytes[..n as usize], s) {
+            return NameId(idx as u16);
+        }
+        probe += 1;
+    }
+    if first_empty == usize::MAX || t.n as usize >= MAX_INTERN {
+        return NameId::INVALID;
+    }
+    let slot = &mut t.slots[first_empty];
+    slot.hash = h;
+    slot.len = n;
+    let nbytes = s.len().min(MAX_NAME);
+    slot.bytes[..nbytes].copy_from_slice(&s[..nbytes]);
+    t.n += 1;
+    NameId(first_empty as u16)
 }
 
 /// The bytes previously interned as `id`. Empty when `id` is stale.
