@@ -14,6 +14,6 @@
 # unmodified card body. CBMC unwinds the Range try_fold conservatively
 # (24 hits the limit at the old default); 32 covers it with margin.
 # Re-calibrate with tools/kani/calibrate.py once the clamp is confirmed.
-aya_haruka_02_shave_iff = 32
-aya_haruka_02_mutant_x_off_by_one = 32
-aya_haruka_02_mutant_is_detected = 32
+aya_haruka_02_shave_iff = 64
+aya_haruka_02_mutant_x_off_by_one = 64
+aya_haruka_02_mutant_is_detected = 64

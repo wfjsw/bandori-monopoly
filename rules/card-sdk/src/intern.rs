@@ -114,7 +114,41 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > MAX_NAME {
         return false;
     }
-    a == b
+    // NOT `a == b`: that lowers to memcmp, whose builtin loop needs
+    // unwind >= 64 and trips "Not unwinding memcmp at 32" (measured).
+    // 8 outer × 8 unrolled bytes: the only loop is 8 iterations.
+    let n = a.len();
+    let mut outer = 0usize;
+    let mut ok = true;
+    while outer < 8 {
+        let base = outer * 8;
+        if base + 0 < n && a[base + 0] != b[base + 0] {
+            ok = false;
+        }
+        if base + 1 < n && a[base + 1] != b[base + 1] {
+            ok = false;
+        }
+        if base + 2 < n && a[base + 2] != b[base + 2] {
+            ok = false;
+        }
+        if base + 3 < n && a[base + 3] != b[base + 3] {
+            ok = false;
+        }
+        if base + 4 < n && a[base + 4] != b[base + 4] {
+            ok = false;
+        }
+        if base + 5 < n && a[base + 5] != b[base + 5] {
+            ok = false;
+        }
+        if base + 6 < n && a[base + 6] != b[base + 6] {
+            ok = false;
+        }
+        if base + 7 < n && a[base + 7] != b[base + 7] {
+            ok = false;
+        }
+        outer += 1;
+    }
+    ok
 }
 
 /// Bucket start index for `hash`.
