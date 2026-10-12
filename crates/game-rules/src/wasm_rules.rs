@@ -7405,6 +7405,15 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.card(id).is_some()
     }
 
+    /// [`game_core::engine::CardRules::normal`] -- a card with a rule but no
+    /// `On::Play` entry (a pure [反击] / hook card) is not a normal [手] card
+    /// and cannot be played from hand. A card without a rule keeps the default.
+    fn normal(&self, card: &str) -> bool {
+        self.ruleset
+            .card(card)
+            .is_none_or(|idx| self.ruleset.has_play_entry(idx))
+    }
+
     /// [`game_core::engine::CardRules::has_play`] -- the rule's `On::Play`
     /// entry. Passive / hook-only skills never appear in a skill list.
     fn has_play(&self, card: &str) -> bool {
