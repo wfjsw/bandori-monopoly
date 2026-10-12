@@ -28,6 +28,28 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 ---
 
+# card-std-split leftovers (2026-10-12)
+
+Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
+`tile_attr`/`tile_in`). Not merge blockers once drift is green.
+
+- **CD-01 CEL `is_live_house` group-10 quirk.** `SnapSrc` / `LiveSnap` still
+  answer CEL `is_live_house(t)` as buyable && group **10** (shop), while the
+  host / `tile_in(_, t, "livehouse")` is buyable && group **6**. Preserved so
+  existing condition strings keep the same results. Align CEL sugar with the
+  host in a dedicated pass and re-check card_events.
+- **CD-02 `crystals_changed_guard` residuals.** `ruleset_core::crystals_changed_of`
+  is the shared base; the x11 per-card copies still carry local residuals
+  (value vs 0, `is_placed`, …). Fold the identical prefix onto the helper.
+- **CD-03 `legacy_*` audit copies.** Delete only after NEGATION-AUDIT is clean
+  (GUARDS.md G3). Not part of the split.
+- **CD-04 HookKind game-named wire variants** (`CircleAffected`, `CpChanged`,
+  `CrystalsChanged`, …) stay in `card-sdk` as wire codes; ownership is
+  documented. A rename would be an ABI break for no gain.
+- **CD-05 native arena trap leak.** `native::enter`'s frame stack has a depth-64
+  safety valve if `Drop` is skipped on a non-unwinding trap. Fine for
+  `C-unwind`; revisit if a non-unwinding abort path appears.
+
 # HIGH
 
 ## STACK-01 — nested `card_settle_at` recursion overflows the stack (engine defect)
