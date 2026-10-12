@@ -112,6 +112,11 @@ use crate::world::{self, World};
 
 pub const TOK_PP_POS: &str = world::TOK_PP_POS;
 pub const TOK_PP_NEG: &str = world::TOK_PP_NEG;
+
+/// Compile-time `id_of` for the pilot fan tokens. Using the consts (not a
+/// runtime `id_of` call) keeps those hashes out of the CBMC unwind path.
+pub const ID_TOK_PP_POS: i64 = rules_cond_ir::ctx::id_of(TOK_PP_POS);
+pub const ID_TOK_PP_NEG: i64 = rules_cond_ir::ctx::id_of(TOK_PP_NEG);
 /// Player-state keys the host reads as `stun` / `exile` / `noHand`.
 pub const KEY_STUN: &str = "stun";
 pub const KEY_EXILE: &str = "exile";
@@ -182,6 +187,72 @@ pub const TILE_NAMES: [(i32, &str); 60] = [
     (57, "旧古河庭园"),
     (58, "广町家画室"),
     (59, "高级住宅区"),
+];
+
+/// Compile-time `id_of` for every [`TILE_NAMES`] entry, same order.
+/// Using this table (not a runtime `id_of(name)` per tile) keeps 60 hash
+/// walks out of the CBMC unwind path.
+pub const TILE_NAME_IDS: [i64; 60] = [
+    rules_cond_ir::ctx::id_of(TILE_NAMES[0].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[1].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[2].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[3].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[4].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[5].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[6].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[7].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[8].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[9].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[10].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[11].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[12].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[13].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[14].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[15].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[16].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[17].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[18].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[19].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[20].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[21].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[22].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[23].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[24].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[25].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[26].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[27].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[28].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[29].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[30].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[31].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[32].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[33].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[34].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[35].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[36].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[37].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[38].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[39].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[40].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[41].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[42].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[43].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[44].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[45].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[46].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[47].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[48].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[49].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[50].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[51].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[52].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[53].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[54].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[55].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[56].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[57].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[58].1),
+    rules_cond_ir::ctx::id_of(TILE_NAMES[59].1),
 ];
 
 /// Optional extras the general `World` does not yet carry. Every field has a
@@ -603,11 +674,11 @@ fn fill_named(c: &mut IrCtx, w: &World, owner: i32) {
     }
     // Pilot fan views (same keys, guaranteed present even if the map is empty).
     c.named_set(
-        rules_cond_ir::ctx::id_of(TOK_PP_POS),
+        ID_TOK_PP_POS,
         w.fans_pos[owner as usize] as i64,
     );
     c.named_set(
-        rules_cond_ir::ctx::id_of(TOK_PP_NEG),
+        ID_TOK_PP_NEG,
         w.fans_neg[owner as usize] as i64,
     );
 }
@@ -819,8 +890,8 @@ pub fn fill_from_world(
             while k < 8 {
                 let t = outer * 8 + k;
                 if t < TILE_NAMES.len() {
-                    let (id, name) = TILE_NAMES[t];
-                    c.named_set(rules_cond_ir::ctx::id_of(name), id as i64);
+                    let (id, _name) = TILE_NAMES[t];
+                    c.named_set(TILE_NAME_IDS[t], id as i64);
                 }
                 k += 1;
             }
@@ -875,11 +946,11 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     }
     // Fan tokens the shave clause reads.
     c.named_set(
-        rules_cond_ir::ctx::id_of(TOK_PP_POS),
+        ID_TOK_PP_POS,
         w.fans_pos[op] as i64,
     );
     c.named_set(
-        rules_cond_ir::ctx::id_of(TOK_PP_NEG),
+        ID_TOK_PP_NEG,
         w.fans_neg[op] as i64,
     );
     c
@@ -1218,8 +1289,8 @@ pub fn fill_for_guard(
                 while k < 8 {
                     let ti = outer * 8 + k;
                     if ti < TILE_NAMES.len() {
-                        let (tid, tname) = TILE_NAMES[ti];
-                        if rules_cond_ir::ctx::id_of(tname) == name_id {
+                        let (tid, _tname) = TILE_NAMES[ti];
+                        if TILE_NAME_IDS[ti] == name_id {
                             c.named_set(name_id, tid as i64);
                             is_tile = true;
                         }
@@ -1245,10 +1316,10 @@ pub fn fill_for_guard(
                     }
                     i += 1;
                 }
-                if name_id == rules_cond_ir::ctx::id_of(TOK_PP_POS) {
+                if name_id == ID_TOK_PP_POS {
                     c.named_set(name_id, w.fans_pos[op] as i64);
                 }
-                if name_id == rules_cond_ir::ctx::id_of(TOK_PP_NEG) {
+                if name_id == ID_TOK_PP_NEG {
                     c.named_set(name_id, w.fans_neg[op] as i64);
                 }
             }

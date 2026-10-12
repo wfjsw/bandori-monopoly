@@ -298,11 +298,10 @@ impl IrCtx {
 
 /// `FNV-1a 64`, identical to `rules_cond::id_of`. Baked at lower time for
 /// string arguments (`slot('name')`).
-/// Fixed 8×8 chunk walk (unwind bound 8, not the name's byte length) —
-/// this function is called on CJK names (16–52 bytes) throughout
-/// `fill_pay_add` / `fill_for_guard` and was the #1 unwind in the
-/// money-shave profile (32 distinct `id_of` loops).
-pub fn id_of(name: &str) -> i64 {
+/// `const fn` so `id_of("literal")` is a compile-time constant and never
+/// enters the CBMC unwind path. The 8×8 chunk walk is only for the rare
+/// runtime name; a `const` evaluation of a literal produces the same hash.
+pub const fn id_of(name: &str) -> i64 {
     let b = name.as_bytes();
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     let mut outer = 0usize;
