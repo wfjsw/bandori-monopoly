@@ -19,7 +19,11 @@ fn symbolic_play_world() -> World {
         w.pos[p] = kani::any();
         kani::assume((0..8).contains(&w.pos[p]));
         w.fire[p] = kani::any();
-        kani::assume((0..=20).contains(&w.fire[p]));
+        // The book gives +1 [火罐] "获得一个[火罐]"; the global hold cap
+        // (rulebook-doc.md:240, host fire_max) clamps a gain at the cap, so
+        // the clause's exact effect is only defined below the cap. At-cap
+        // behaviour is the cap rule, proven separately.
+        kani::assume((0..w.fire_max[p]).contains(&w.fire[p]));
         w.out[p] = false;
     }
     let player: i32 = kani::any();
