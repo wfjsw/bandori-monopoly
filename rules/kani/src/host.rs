@@ -25,55 +25,124 @@ use crate::world::{
     TOK_PP_POS,
 };
 
+/// Pre-interned identities for every name the host compares against a
+/// constant. Built once in [`install`]; comparing two `NameId`s is a `u16`
+/// equality — no hash, no byte walk, no heap.
+pub struct Known {
+    pub tok_pp_pos: NameId,
+    pub tok_pp_neg: NameId,
+    pub crystals: NameId,
+    pub cp: NameId,
+    pub rent_houses: NameId,
+    pub tile_shop: NameId,
+    pub card_aya: NameId,
+    pub card_resonance: NameId,
+    pub card_other: NameId,
+    pub card_extra: NameId,
+}
+
+static mut KNOWN: Option<Known> = None;
+
+fn known_init() -> Known {
+    Known {
+        tok_pp_pos: intern::intern(TOK_PP_POS),
+        tok_pp_neg: intern::intern(TOK_PP_NEG),
+        crystals: intern::intern(world::COUNTER_CRYSTALS),
+        cp: intern::intern(world::COUNTER_CP),
+        rent_houses: intern::intern(world::RENT_HOUSES),
+        tile_shop: intern::intern(TILE_SHOP_NAME),
+        card_aya: intern::intern(world::CARD_AYA),
+        card_resonance: intern::intern(CARD_RESONANCE),
+        card_other: intern::intern(world::CARD_OTHER),
+        card_extra: intern::intern(world::CARD_EXTRA),
+    }
+}
+
+fn known() -> &'static Known {
+    // Lazy: conformance tests drive the host without `install()`. Proofs
+    // still call `install()` first so the table is warm before the body.
+    unsafe {
+        if KNOWN.is_none() {
+            KNOWN = Some(known_init());
+        }
+        KNOWN.as_ref().unwrap()
+    }
+}
+
 /// Call this at the top of every proof.
 pub fn install() {
     kani_host::install(dispatch);
+    let k = known_init();
+    // Loud: every constant name must intern (table has room for the pilot set).
+    #[cfg(kani)]
+    {
+        kani::assert(k.tok_pp_pos.is_valid(), "known.tok_pp_pos");
+        kani::assert(k.tok_pp_neg.is_valid(), "known.tok_pp_neg");
+        kani::assert(k.crystals.is_valid(), "known.crystals");
+        kani::assert(k.card_aya.is_valid(), "known.card_aya");
+        kani::assert(k.card_resonance.is_valid(), "known.card_resonance");
+        kani::assert(k.card_other.is_valid(), "known.card_other");
+        kani::assert(k.card_extra.is_valid(), "known.card_extra");
+    }
+    unsafe {
+        KNOWN = Some(k);
+    }
 }
 
-/// Byte-equal to `expected` via a fixed 8×8 chunk walk (no `memcmp`).
-/// The trip count is 8, so `#[kani::unwind(8)]` covers every name compare.
-fn name_eq(handle: i32, len: i32, expected: &str) -> bool {
-    let b = card_sdk::native::read(handle, len.max(0) as usize);
-    // Byte compare against the expected name — no UTF-8 validation.
-    let e = expected.as_bytes();
-    if b.len() != e.len() || b.len() > 64 {
-        return false;
-    }
-    let mut outer = 0usize;
-    let mut ok = true;
-    while outer < 8 {
-        let base = outer * 8;
-        let mut k = 0usize;
-        while k < 8 {
-            let i = base + k;
-            if i < b.len() && b[i] != e[i] {
-                ok = false;
-            }
-            k += 1;
-        }
-        outer += 1;
-    }
-    ok
-}
-
-/// Intern whatever name the guest passed; `NameId::INVALID` on overflow.
+/// Decode a guest name handle. Under the string facade the handle *is* the
+/// `NameId` (`intern::INTERN_TAG | id`); otherwise fall back to reading the
+/// arena bytes and interning (legacy / non-`s()` producers).
+#[inline(always)]
 fn name_id(handle: i32, len: i32) -> NameId {
+    if let Some(id) = intern::decode_handle(handle) {
+        #[cfg(kani)]
+        kani::assert(id.is_valid(), "name handle carries INVALID NameId");
+        return id;
+    }
     let b = card_sdk::native::read(handle, len.max(0) as usize);
     intern::intern_bytes(&b)
 }
 
+/// Bytes of a guest name, from the intern table (static, no heap).
+fn name_bytes(handle: i32, len: i32) -> &'static [u8] {
+    intern::resolve(name_id(handle, len))
+}
+
+/// Byte-equal to `expected`. Prefer [`name_eq_id`] when `expected` is a
+/// pre-interned constant (a `u16` compare).
+fn name_eq(handle: i32, len: i32, expected: &str) -> bool {
+    intern::id_eq_str(name_id(handle, len), expected)
+}
+
+fn name_eq_id(handle: i32, len: i32, expected: NameId) -> bool {
+    name_id(handle, len) == expected
+}
+
 fn card_slot(handle: i32, len: i32) -> u8 {
-    let b = card_sdk::native::read(handle, len.max(0) as usize);
+    let id = name_id(handle, len);
+    let k = known();
+    // Pre-interned full names: one `u16` compare each.
+    if id == k.card_aya {
+        return 0;
+    }
+    if id == k.card_resonance {
+        return 1;
+    }
+    if id == k.card_other {
+        return 2;
+    }
+    if id == k.card_extra {
+        return 3;
+    }
+    let b = intern::resolve(id);
     // Kani interned-str facade from `ctx::cards_in`: a single byte whose
     // value IS the slot (0..3). See `card-sdk/src/ctx.rs` `cards_in`.
     if b.len() == 1 && b[0] < 4 {
         return b[0];
     }
-    // Length + one CJK discriminator byte. `name_eq`'s 29-byte loop is an
-    // unwind-cut under CBMC: `place_card("PP:[丸山彩]憧憬的前方")` never
-    // returned and every prompt proof was vacuous. The four pilot names are
-    // distinguished by len (29 = AYA) or by `b[4]` (first CJK byte after
-    // "PP:["): 衍=0xE8, 标=0xE6, 强=0xE5.
+    // Length + one CJK discriminator byte (legacy fallback for un-interned
+    // producers). The four pilot names are distinguished by len (29 = AYA)
+    // or by `b[4]` (first CJK byte after "PP:["): 衍=0xE8, 标=0xE6, 强=0xE5.
     match b.len() {
         29 => 0,
         17 => match b.get(4).copied().unwrap_or(0) {
@@ -82,39 +151,25 @@ fn card_slot(handle: i32, len: i32) -> u8 {
             0xE5 => 3,
             _ => 2,
         },
-        _ => {
-            // Fall back to the real compare for other names (short ones only).
-            if name_eq(handle, len, world::CARD_AYA) {
-                0
-            } else if name_eq(handle, len, world::CARD_RESONANCE) {
-                1
-            } else if name_eq(handle, len, world::CARD_OTHER) {
-                2
-            } else if name_eq(handle, len, world::CARD_EXTRA) {
-                3
-            } else {
-                2
-            }
-        }
+        _ => 2,
     }
 }
 
 fn card_u16(handle: i32, len: i32) -> u16 {
-    let b = card_sdk::native::read(handle, len.max(0) as usize);
+    let id = name_id(handle, len);
+    let k = known();
+    // Full pilot names pre-interned at install: the NameId *is* the world id.
+    if id == k.card_aya || id == k.card_resonance || id == k.card_other || id == k.card_extra {
+        return id.0;
+    }
+    let b = intern::resolve(id);
     // 1-byte interned-str facade from `ctx::cards_in`.
     if b.len() == 1 && b[0] < 4 {
-        return if b[0] == 0 {
-            0 // AYA: synthetic, never intern the 29-byte name
-        } else {
-            intern::intern(world::card_id_str(b[0])).0
-        };
+        return intern::intern(world::card_id_str(b[0])).0;
     }
-    // Never `intern` a 29-byte name under Kani — `intern_bytes`'s compare
-    // is an unwind-cut and `place_card` never returned. AYA's field id can
-    // be a synthetic 0; pile identity for the prompt proofs is OTHER/EXTRA
-    // (17-byte names, intern is fine).
+    // Legacy length/CJK heuristic for un-interned producers.
     if b.len() == 29 {
-        return 0; // AYA
+        return k.card_aya.0;
     }
     if b.len() == 17 {
         let slot = match b.get(4).copied().unwrap_or(0) {
@@ -125,7 +180,30 @@ fn card_u16(handle: i32, len: i32) -> u16 {
         };
         return intern::intern(world::card_id_str(slot)).0;
     }
-    name_id(handle, len).0
+    id.0
+}
+
+/// Slot 0..=3 of a pile card id. Pre-interned pilot names are a `u16`
+/// compare; the 1-byte facade and legacy length heuristic cover the rest.
+fn card_slot_of_id(id: NameId) -> u8 {
+    let k = known();
+    if id == k.card_aya {
+        return 0;
+    }
+    if id == k.card_resonance {
+        return 1;
+    }
+    if id == k.card_other {
+        return 2;
+    }
+    if id == k.card_extra {
+        return 3;
+    }
+    let b = intern::resolve(id);
+    if b.len() == 1 && b[0] < 4 {
+        return b[0];
+    }
+    world::card_slot_of_bytes(b)
 }
 
 fn player_idx(p: i32) -> usize {
@@ -200,11 +278,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             // Real board: `data.tiles.iter().position(|t| t.name == name)`
             // (hostfns `tile_named`). Every `board.json` name resolves; unknown
             // names are -1.
-            let bytes = card_sdk::native::read(a0, a1.max(0) as usize);
-            let mut found = board::tile_named_bytes(&bytes);
+            let id = name_id(a0, a1);
+            let mut found = board::tile_named_bytes(intern::resolve(id));
             // Pilot boards (all `pos < 8`) keep the stub-shop index so the
             // money/teleport pilots against the 8-tile fixture still work.
-            if name_eq(a0, a1, TILE_SHOP_NAME) {
+            if id == known().tile_shop {
                 let pilot = world::with_world(|w| w.pos.iter().all(|&p| p < 8));
                 if pilot {
                     found = TILE_SHOP;
@@ -746,7 +824,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                     let mut i = 0usize;
                     while i < w.discard_n as usize && n < world::MAX_CARDS {
                         let id = intern::NameId(w.discard_pile[i]);
-                        let slot = world::card_slot_of_bytes(intern::resolve(id));
+                        // NameId compare against the pre-interned pilot ids —
+                        // no byte walk. Unknown ids fall back to the zero-loop
+                        // byte heuristic.
+                        let slot = card_slot_of_id(id);
                         // de-dup against bitset slots already emitted
                         let mut seen = false;
                         let mut j = 0usize;
@@ -1193,7 +1274,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::counter_self | Op::card_counter => {
             let key = name_id(a0, a1);
             world::with_world(|w| {
-                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                if key == known().crystals {
                     w.field_crystals(w.last_uid)
                 } else {
                     w.key_get(w.trig_player, key)
@@ -1205,7 +1286,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let uid = a0;
             let key = name_id(a1, a2);
             world::with_world(|w| {
-                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                if key == known().crystals {
                     w.field_crystals(uid)
                 } else {
                     w.field_counter(uid, key)
@@ -1219,7 +1300,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let max = a3;
             world::with_world_mut(|w| {
                 let p = w.trig_player;
-                let was = if key == intern::intern(world::COUNTER_CRYSTALS) {
+                let was = if key == known().crystals {
                     w.field_crystals(w.last_uid)
                 } else {
                     w.key_get(p, key)
@@ -1231,7 +1312,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 if max > 0 && now > max {
                     now = max;
                 }
-                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                if key == known().crystals {
                     w.set_field_crystals(w.last_uid, now);
                 } else {
                     w.key_set(p, key, now);
@@ -1251,7 +1332,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let n = a3;
             let max = a4;
             world::with_world_mut(|w| {
-                let was = if key == intern::intern(world::COUNTER_CRYSTALS) {
+                let was = if key == known().crystals {
                     w.field_crystals(uid)
                 } else {
                     w.field_counter(uid, key)
@@ -1263,7 +1344,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 if max > 0 && now > max {
                     now = max;
                 }
-                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                if key == known().crystals {
                     w.set_field_crystals(uid, now);
                 } else {
                     w.set_field_counter(uid, key, now);
@@ -1280,7 +1361,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let key = name_id(a0, a1);
             let v = a2;
             world::with_world_mut(|w| {
-                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                if key == known().crystals {
                     w.set_field_crystals(w.last_uid, v);
                 } else {
                     w.key_set(w.trig_player, key, v);
@@ -1299,9 +1380,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let p = if op == Op::count_held_name { a2 } else { a2 };
             world::with_world(|w| {
                 let pp = player_idx(p);
-                if key == intern::intern(TOK_PP_POS) {
+                if key == known().tok_pp_pos {
                     w.fans_pos[pp]
-                } else if key == intern::intern(TOK_PP_NEG) {
+                } else if key == known().tok_pp_neg {
                     w.fans_neg[pp]
                 } else {
                     w.key_get(p, key)
@@ -1328,9 +1409,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| {
                 w.key_set(p, key, v);
                 w.sync_views();
-                if key == intern::intern(TOK_PP_POS) {
+                if key == known().tok_pp_pos {
                     w.fans_pos[player_idx(p)] = v;
-                } else if key == intern::intern(TOK_PP_NEG) {
+                } else if key == known().tok_pp_neg {
                     w.fans_neg[player_idx(p)] = v;
                 }
                 w.push(Effect::SetToken {

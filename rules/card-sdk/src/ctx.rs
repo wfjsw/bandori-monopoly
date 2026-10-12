@@ -23,9 +23,26 @@ fn s(v: &str) -> (i32, i32) {
     in_bytes(v.as_bytes())
 }
 
+/// ABI handle for a **name** the host looks up by identity.
+///
+/// Under `cfg(kani)` this is `intern::encode_handle(intern(v))` — the handle
+/// *is* the interned `NameId`, so the host never re-hashes or heap-copies the
+/// bytes. Card bodies keep calling `ctx::tok(p, "literal")` unchanged; the
+/// literal's FNV hash constant-folds through the zero-loop `intern::fnv1a`.
+/// Production wasm / native keep the real `ptr, len` arena ABI.
 #[cfg(not(target_arch = "wasm32"))]
 fn s(v: &str) -> (i32, i32) {
-    in_bytes(v.as_bytes())
+    #[cfg(kani)]
+    {
+        let id = crate::intern::intern(v);
+        #[cfg(kani)]
+        kani::assert(id.is_valid(), "name intern table exhausted or name too long");
+        (crate::intern::encode_handle(id), v.len() as i32)
+    }
+    #[cfg(not(kani))]
+    {
+        in_bytes(v.as_bytes())
+    }
 }
 
 /// The ABI handle for an **input** buffer the host reads during the call.

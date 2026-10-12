@@ -47,6 +47,28 @@ impl NameId {
     }
 }
 
+/// ABI handle tag for an interned name. Under `cfg(kani)`, `ctx::s("…")`
+/// returns `(INTERN_TAG | NameId, len)` instead of a native-arena index, so
+/// the host never re-reads or re-hashes the bytes. Arena (out-buffer) handles
+/// are small non-negative indices and never carry this bit.
+pub const INTERN_TAG: i32 = 0x4000_0000;
+
+/// Encode a `NameId` as an ABI handle.
+#[inline(always)]
+pub fn encode_handle(id: NameId) -> i32 {
+    INTERN_TAG | (id.0 as i32 & 0xffff)
+}
+
+/// Decode an ABI handle. `None` when the handle is a plain arena index.
+#[inline(always)]
+pub fn decode_handle(handle: i32) -> Option<NameId> {
+    if handle & INTERN_TAG != 0 {
+        Some(NameId((handle & 0xffff) as u16))
+    } else {
+        None
+    }
+}
+
 /// One open-addressed bucket. `hash == 0` marks empty (FNV of a non-empty
 /// name is never 0; empty string hashes to the offset basis, not 0).
 struct Slot {
@@ -87,67 +109,79 @@ fn table() -> &'static mut Table {
 }
 
 /// FNV-1a 64 (same as `rules_cond_ir::ctx::id_of`).
-/// Fixed 8×8 chunk walk so the unwind bound is 8, not `MAX_NAME`.
+///
+/// **Zero loops.** A `while` walk is an unwind cliff under CBMC even at 8
+/// iterations (the 900 s profile counted 144 `fnv1a` unrolls). 64 straight
+/// `if i < len` steps have no loop for CBMC to unwind, and when `s` is a
+/// string literal (every `ctx::tok` / `slot` / `state_*` name in a card body)
+/// the whole hash constant-folds through `#[inline(always)]`.
+/// Same result as the old 8×8 chunk walk for every `s`.
+#[inline(always)]
 fn fnv1a(s: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    let mut outer = 0usize;
-    while outer < 8 {
-        let base = outer * 8;
-        let mut k = 0usize;
-        while k < 8 {
-            let i = base + k;
-            if i < s.len() {
-                h ^= s[i] as u64;
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < s.len() {
+                h ^= s[$i] as u64;
                 h = h.wrapping_mul(0x0000_0100_0000_01b3);
             }
-            k += 1;
-        }
-        outer += 1;
+        };
+    }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
+    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
+    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
+    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
+    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+    h
+}
+
+/// `const fn` twin of [`fnv1a`] — same bits, usable in `const` items so a
+/// literal's hash is a compile-time `u64` before CBMC sees the program.
+pub const fn fnv1a_const(name: &str) -> u64 {
+    let s = name.as_bytes();
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut i = 0usize;
+    // `const fn` may loop; this is evaluated at compile time for literals and
+    // never enters the CBMC unwind path. The runtime twin above is loop-free.
+    while i < s.len() && i < MAX_NAME {
+        h ^= s[i] as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        i += 1;
     }
     h
 }
 
 /// Fixed-bound byte compare. Lengths are already checked equal and
-/// `<= MAX_NAME`, so `==` (memcmp) is one CBMC unwind — the 8×8 chunk walk
-/// was still 500+ unwinds per harness from the intern lookup path.
+/// `<= MAX_NAME`.
+///
+/// **Zero loops** (same reason as [`fnv1a`]). NOT `a == b`: that lowers to
+/// memcmp, whose builtin loop needs unwind >= 64 and trips
+/// *"Not unwinding memcmp at 32"* (measured).
+#[inline(always)]
 fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > MAX_NAME {
         return false;
     }
-    // NOT `a == b`: that lowers to memcmp, whose builtin loop needs
-    // unwind >= 64 and trips "Not unwinding memcmp at 32" (measured).
-    // 8 outer × 8 unrolled bytes: the only loop is 8 iterations.
     let n = a.len();
-    let mut outer = 0usize;
     let mut ok = true;
-    while outer < 8 {
-        let base = outer * 8;
-        if base + 0 < n && a[base + 0] != b[base + 0] {
-            ok = false;
-        }
-        if base + 1 < n && a[base + 1] != b[base + 1] {
-            ok = false;
-        }
-        if base + 2 < n && a[base + 2] != b[base + 2] {
-            ok = false;
-        }
-        if base + 3 < n && a[base + 3] != b[base + 3] {
-            ok = false;
-        }
-        if base + 4 < n && a[base + 4] != b[base + 4] {
-            ok = false;
-        }
-        if base + 5 < n && a[base + 5] != b[base + 5] {
-            ok = false;
-        }
-        if base + 6 < n && a[base + 6] != b[base + 6] {
-            ok = false;
-        }
-        if base + 7 < n && a[base + 7] != b[base + 7] {
-            ok = false;
-        }
-        outer += 1;
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < n && a[$i] != b[$i] {
+                ok = false;
+            }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
+    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
+    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
+    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
+    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
     ok
 }
 
@@ -161,6 +195,7 @@ fn bucket(hash: u64) -> usize {
 /// Returns [`NameId::INVALID`] when the table is full, the name is longer
 /// than [`MAX_NAME`], or [`MAX_PROBES`] is exhausted (loud — callers that
 /// cannot tolerate `INVALID` go through `intern_or_fail`).
+#[inline(always)]
 pub fn intern_bytes(s: &[u8]) -> NameId {
     if s.len() > MAX_NAME {
         return NameId::INVALID;
@@ -201,6 +236,7 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
 }
 
 /// Intern a `&str` (uses its bytes; does not re-validate UTF-8).
+#[inline(always)]
 pub fn intern(s: &str) -> NameId {
     intern_bytes(s.as_bytes())
 }
