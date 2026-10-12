@@ -240,3 +240,20 @@ cargo check --manifest-path rules/Cargo.toml --workspace --target wasm32-unknown
 * Card bodies under `rules/cards/**` are unmodified.
 * `conf_fill_diff` / `conf_model` / `conf_hostops2` / `pilot_guards` green.
 * Spec text still comes from the 规则书 (clause docs), not engine behaviour.
+---
+
+## 7. Soundness caveat: `player_count()` is the constant 4 under Kani (coordinator note)
+
+Loops of the form `for p in 0..ctx::player_count()` are exact for any `n_players`
+because seats `>= n_players` report `player_out == true`. Bodies that use the
+**value** of `player_count()` are NOT: they see 4 even in a 2- or 3-player world.
+Today these are `card-ras/chuchu_music.rs:139`, `card-crychic/sakiko_lead.rs:41`,
+`card-hhw/kokoro_circle.rs:36`, `card-general/clear_cp.rs:89`,
+`card-mujica/umiri_card.rs:185`, `card-morfonica/tsukushi_garden.rs:31`,
+`events/hallucination.rs:46`.
+
+A proof about one of those bodies therefore holds **for 4-player worlds only**.
+Its harness must `kani::assume(w.n_players == 4)` (loudly, with a comment), and
+its unit table row must say "n=4 only". Do not report such a clause as
+fully PROVEN for 2..=4 players. (A cheap follow-up is a per-harness world
+constructor that fixes `n_players` to 2, 3 and 4 in three separate proofs.)
