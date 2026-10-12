@@ -280,14 +280,15 @@ with the NameId ABI, `ids.contains(&c)` and `take_card(..., &id)` are
 
 | harness | before (TUNING.md §4) | after | verdict |
 |---|---|---|---|
-| `hostops_smoke::rent_of_property_table` | **FAILED** unwinding at `intern_bytes` | **SUCCESSFUL 59 s** at unwind 12 | SUCCESSFUL (covers reachable) |
-| `money_shave::aya_haruka_02_shave_iff` | **TIMEOUT 900 s** (fnv1a 144 + bytes_eq 127 + memcmp 14) | TIMEOUT 1800 s at unwind 32 (no intern unwinds; solver-bound on the symbolic world + `poorest` `Range::try_fold`) | TIMEOUT — intern cliff gone, 5 min target **not** met |
-| `prompt::aya_haruka_01_empty_discard` | ~194 s | _pending re-time_ | — |
-| `prompt::aya_haruka_01_prompt_all_picks_iff` | timeout / `Vec<String>` cliff | _pending_ | — |
-| `ras::riot_02_03_cycle_iff` | TIMEOUT 600 s | _pending_ | — |
-| `ppp::wait_aoki_01_place_on_field_iff` | 195 s SUCCESSFUL | _pending_ | — |
-| `teleport::tae_sound_teleport_and_fire_iff` | 68 s (unsound history) | _pending_ | — |
-| `general::fever_04_turn_start_iff` | FAILED unwinding at `fill_from_world` | _pending_ | — |
+| `hostops_smoke::rent_of_property_table` | **FAILED** unwinding at `intern_bytes` | **SUCCESSFUL 59 s** at unwind 12 | SUCCESSFUL |
+| `money_shave::aya_haruka_02_shave_iff` | **TIMEOUT 900 s** (fnv1a 144 + bytes_eq 127 + memcmp 14) | **TIMEOUT 1800 s** at unwind 32; profile has **0** fnv1a/bytes_eq/intern_bytes/memcmp unwinds | TIMEOUT — string cliff gone; solver-bound on symbolic world + `poorest` `Range::try_fold` |
+| `prompt::aya_haruka_01_empty_discard` | ~194 s (old, not re-timed) | **SUCCESSFUL 573 s** at unwind 24 | SUCCESSFUL (under 10 min) |
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | timeout / `Vec<String>` cliff | _not re-timed_ | — |
+| `ras::riot_02_03_cycle_iff` | TIMEOUT 600 s | _not re-timed_ | — |
+| `ppp::wait_aoki_01_place_on_field_iff` | 195 s SUCCESSFUL | **SUCCESSFUL 414 s** at unwind 32 | SUCCESSFUL (under 10 min) |
+| `teleport::tae_sound_teleport_and_fire_iff` | 68 s (unsound history) | _not re-timed_ | — |
+| `general::fever_04_turn_start_iff` | FAILED unwinding at `fill_from_world` | _not re-timed_ | — |
+| `money_shave::aya_haruka_02_mutant_is_detected` | attr 64 | table 32 | _not re-timed_ |
 
 `aya_haruka_02_shave_iff` profile after the facade: **no** `fnv1a` /
 `bytes_eq` / `intern_bytes` / `memcmp` unwinds. Remaining cost is the
@@ -326,6 +327,15 @@ rent_of_property_table = 12           # MAX_FIELD × NameMap nested scans
 
 Re-calibrate with `tools/kani/calibrate.py --mutate 2` (too-small N must
 FAIL with an unwinding assertion).
+
+**Measured mutation check** (`hostops_smoke::rent_of_property_table`, manual
+attribute patch):
+
+| N | verdict |
+|---:|---|
+| 12 (sound) | SUCCESSFUL 59 s |
+| **2 (deliberate)** | **UNWINDING** (unwinding assertion) — pipeline cannot silently regress |
+
 
 ---
 
