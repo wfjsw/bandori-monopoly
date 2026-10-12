@@ -375,26 +375,17 @@ impl Run {
     ) -> i32 {
         // The header is not a body line: `logged` counts narration/outcome
         // lines the body posted, and a QuietWhenEmpty drive whose body was
-        // silent must see 0 here so it can retract.
+        // silent must see 0 here so it can retract. It is also **not** part of
+        // the `posted`/`log_idx` replace-log mechanism (that exists so a
+        // multi-pass re-run's *body* lines replace the learn pass's, not
+        // duplicate); the header is posted once and never replaced. Sharing
+        // the slot shifted every body line by one and double-logged on a
+        // re-run.
         if let Some(live) = self.live {
             let cx = unsafe { &mut *live };
             let parent = self.parent;
-            if self.log_idx < self.posted.len() {
-                let id = self.posted[self.log_idx];
-                self.log_idx += 1;
-                if cx.relog_event(id, msg.clone()) {
-                    return id;
-                }
-                let id = cx.log_card_activation(
-                    kind, owner, card, target, tile, negated, msg, parent, uid,
-                );
-                self.posted[self.log_idx - 1] = id;
-                return id;
-            }
-            self.log_idx += 1;
             let id =
                 cx.log_card_activation(kind, owner, card, target, tile, negated, msg, parent, uid);
-            self.posted.push(id);
             return id;
         }
         let e = self
@@ -2636,9 +2627,6 @@ impl<M: CardModules> RulesBridge<M> {
                     if flushed_header < 0 && w.pending_header.is_none() {
                         w.pending_header = saved_header.clone();
                     }
-                    if w.log_idx < w.posted.len() {
-                        w.log_idx += 1;
-                    }
                     return;
                 }
                 w.parent = activation_id;
@@ -2790,16 +2778,11 @@ impl<M: CardModules> RulesBridge<M> {
                         parent: activation_id,
                     };
                     let mut announce = |w: &mut crate::Run, _entry: i32| {
-                        // Already announced on the learn pass. Consume the
-                        // header's slot in the replace log without re-posting
-                        // (a second header would duplicate the flash; skipping
-                        // the slot would make the first body line overwrite
-                        // the header).
+                        // Already announced on the learn pass. The header is
+                        // not in the replace log (post_card appends it
+                        // outside), so no slot to consume here.
                         w.parent = activation_id;
                         w.live = Some(cx_ptr as *mut Cx<'static>);
-                        if w.log_idx < w.posted.len() {
-                            w.log_idx += 1;
-                        }
                     };
                     let outcome2 = if guarded {
                         match self
