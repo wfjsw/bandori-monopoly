@@ -307,14 +307,22 @@ string cliff is gone; the proof is now model-bound.
 
 ### Wasm / native hash note
 
-`node tools/build-ruleset.mjs` **without** `CARGO_TARGET_DIR`:
-`dist/cards/conds-*.bin` and `dist/fixtures/*.wasm` are **byte-identical**
-to master. `dist/cards/*.wasm` (the unified `card_all` module) differs by
-**21 bytes** (411940 vs 411919) — residual codegen / panic-string drift
-from `cfg(kani)` scaffolding in shared `card-sdk` files. Non-kani logic is
-master's code (`cfg(not(kani))` twins are byte-for-byte). Card behaviour on
-wasm is unchanged. Comparison: `sha256sum dist/cards/* dist/fixtures/*`
-after two `build-ruleset` runs (ours vs `git checkout master -- rules/card-sdk`).
+`node tools/build-ruleset.mjs` **without** `CARGO_TARGET_DIR`, compared
+against the **merge-base** (`10ddefe`) `card-sdk` (swap
+`intern.rs`/`ctx.rs`/`native.rs` only — those are the files this branch
+touches):
+
+| artifact | result |
+|---|---|
+| `dist/cards/conds-*.bin` | **identical** |
+| `dist/fixtures/*.wasm` | **identical** |
+| `dist/cards/*.wasm` (`card_all`) | **differs by 21 bytes** (411940 vs 411919) |
+
+The 21-byte delta is residual codegen / panic-string drift from
+`cfg(kani)` scaffolding in shared `card-sdk` files. Non-kani logic is the
+merge-base code (`cfg(not(kani))` twins are byte-for-byte). Card behaviour
+on wasm is unchanged. Method: `sha256sum dist/cards/* dist/fixtures/*`
+after two `build-ruleset` runs.
 
 ### Unwind table updates
 
