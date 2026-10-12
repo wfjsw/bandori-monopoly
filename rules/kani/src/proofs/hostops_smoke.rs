@@ -38,7 +38,7 @@ fn call(op: Op, a: Args) -> i64 {
 /// Fixed tile (购物中心 = engine index 1) so CBMC explores only the house
 /// axis; `conf_model` pins the multi-tile grid.
 #[kani::proof]
-#[kani::unwind(8)]
+#[kani::unwind(12)]
 pub fn rent_of_property_table() {
     install_empty();
     let tile: i32 = 1; // 购物中心, rent [300, 1360, 3220, 6680]

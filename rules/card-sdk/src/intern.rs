@@ -209,18 +209,32 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
     let start = bucket(h);
     let mut probe = 0usize;
     let mut first_empty = usize::MAX;
-    while probe < MAX_PROBES {
-        let idx = (start + probe) & (SLOTS - 1);
-        let slot = &t.slots[idx];
-        if slot.hash == 0 {
-            if first_empty == usize::MAX {
-                first_empty = idx;
+    // 8 probes, **zero loops** (same reason as `fnv1a`: an 8-trip `while`
+    // still shows up as `Unwinding loop … iteration 8` and, with
+    // `inline(always)`, once per call site). Each probe is an integer
+    // compare + a zero-loop `bytes_eq` on a hit.
+    macro_rules! probe_once {
+        () => {{
+            let idx = (start + probe) & (SLOTS - 1);
+            let slot = &t.slots[idx];
+            if slot.hash == 0 {
+                if first_empty == usize::MAX {
+                    first_empty = idx;
+                }
+            } else if slot.hash == h && slot.len == n && bytes_eq(&slot.bytes[..n as usize], s) {
+                return NameId(idx as u16);
             }
-        } else if slot.hash == h && slot.len == n && bytes_eq(&slot.bytes[..n as usize], s) {
-            return NameId(idx as u16);
-        }
-        probe += 1;
+            probe += 1;
+        }};
     }
+    probe_once!();
+    probe_once!();
+    probe_once!();
+    probe_once!();
+    probe_once!();
+    probe_once!();
+    probe_once!();
+    probe_once!();
     if first_empty == usize::MAX || t.n as usize >= MAX_INTERN {
         return NameId::INVALID;
     }
