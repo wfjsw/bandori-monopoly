@@ -21,7 +21,9 @@ cd "$ROOT"
 
 # --- fixed build settings (do not change without updating KANI.md §1) ---
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/home/monopoly/kani-target-f}"
-export CARGO_BUILD_JOBS=8
+# Honour a caller-provided CARGO_BUILD_JOBS (this tuning pass uses 3 so a
+# concurrent central pass still has cores); default remains 8 for full sweeps.
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-8}"
 # Keep the required path unless the caller already pointed elsewhere on purpose
 # via --out only. The target dir is deliberately NOT /home/monopoly/kani-target
 # (owned by another agent).
@@ -30,7 +32,13 @@ if [[ "$CARGO_TARGET_DIR" == "/home/monopoly/kani-target" ]]; then
   exit 2
 fi
 
-UNWIND=80
+# Default global unwind. Deliberately small: the symbolic model's loops are
+# bounded by MAX_* constants that this branch tightened; a harness that needs
+# more declares `#[kani::unwind(N)]` or gets a row in
+# rules/kani/unwind_table.toml (calibrated by tools/kani/calibrate.py).
+# --unwind on the CLI forces every selected harness to one value.
+DEFAULT_UNWIND=24
+UNWIND=""
 # Unwinding assertions stay ON by default: with them off (the old default) an
 # insufficient --default-unwind silently truncates paths and CBMC still prints
 # "VERIFICATION:- SUCCESSFUL" with every assert/cover UNREACHABLE (found by the
@@ -43,6 +51,10 @@ TIMEOUT="${TIMEOUT:-900}"
 OUT_DIR=""
 UNIT_FILTER=()
 HARNESS_FILTER=()
+
+# Per-harness unwind table (harness = N). Table entry beats the source
+# attribute so a calibration win is what the runner actually uses.
+UNWIND_TABLE="$ROOT/rules/kani/unwind_table.toml"
 
 usage() {
   sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
@@ -105,7 +117,7 @@ if [[ ! -d "$PROOF_DIR" ]]; then
   exit 2
 fi
 
-HARNESS_LIST="$OUT_DIR/harnesses.tsv"   # unit \t harness \t file
+HARNESS_LIST="$OUT_DIR/harnesses.tsv"   # unit \t harness \t file \t unwind_attr
 : > "$HARNESS_LIST"
 
 discover() {
@@ -118,14 +130,14 @@ out = Path(sys.argv[2])
 
 # Accept:
 #   #[kani::proof]
-#   #[kani::proof]
-#   #[kani::should_panic]
+#   #[kani::unwind(N)]
 #   pub fn name()
 # and
-#   clause_proof! { ... pub fn name() { ... } }
+#   clause_proof! { #[kani::unwind(N)] pub fn name() { ... } }
 #   clause_mutant! { ... pub fn name() { ... } }
 proof_attr = re.compile(r'#\[kani::proof\]')
 fn_re = re.compile(r'\b(?:pub\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(')
+unwind_re = re.compile(r'#\[kani::unwind\((\d+)\)\]')
 macro_re = re.compile(r'\b(clause_proof|clause_mutant)!\s*\{', re.M)
 
 rows = []
@@ -137,31 +149,36 @@ for path in sorted(proof_dir.glob('*.rs')):
     # strip line comments so commented-out proofs are not discovered
     src_nc = re.sub(r'//.*', '', src)
 
-    names = []
-    # 1) #[kani::proof] ... fn name
+    names = []  # (name, unwind_or_empty)
+    # 1) #[kani::proof] ... fn name  (unwind attr may sit before or after proof)
     for m in proof_attr.finditer(src_nc):
         window = src_nc[m.end(): m.end() + 400]
         fm = fn_re.search(window)
         if fm:
-            names.append(fm.group(1))
+            # look back a little for #[kani::unwind(N)] before the proof,
+            # and forward for one sitting between proof and fn.
+            pre = src_nc[max(0, m.start() - 120): m.start()]
+            um = unwind_re.search(pre) or unwind_re.search(window)
+            names.append((fm.group(1), um.group(1) if um else ''))
 
     # 2) clause_proof! / clause_mutant! blocks
     for m in macro_re.finditer(src_nc):
         window = src_nc[m.end(): m.end() + 800]
         fm = fn_re.search(window)
         if fm:
-            names.append(fm.group(1))
+            um = unwind_re.search(window)
+            names.append((fm.group(1), um.group(1) if um else ''))
 
     # unique, keep order
     seen = set()
-    for n in names:
+    for n, uw in names:
         if n not in seen:
             seen.add(n)
-            rows.append((unit, n, str(path)))
+            rows.append((unit, n, str(path), uw))
 
 with out.open('w') as f:
-    for unit, name, path in rows:
-        f.write(f'{unit}\t{name}\t{path}\n')
+    for unit, name, path, uw in rows:
+        f.write(f'{unit}\t{name}\t{path}\t{uw}\n')
 print(len(rows))
 PY
 }
@@ -169,10 +186,10 @@ PY
 N_DISC="$(discover)"
 echo "discovered $N_DISC harness(es) under rules/kani/src/proofs"
 
-# Apply filters
+# Apply filters. Columns: unit, name, file, unwind_attr (may be empty).
 SELECTED="$OUT_DIR/selected.tsv"
 : > "$SELECTED"
-while IFS=$'\t' read -r unit name file; do
+while IFS=$'\t' read -r unit name file attr; do
   if [[ ${#UNIT_FILTER[@]} -gt 0 ]]; then
     ok=0
     for u in "${UNIT_FILTER[@]}"; do
@@ -187,11 +204,11 @@ while IFS=$'\t' read -r unit name file; do
     done
     [[ $ok -eq 1 ]] || continue
   fi
-  printf '%s\t%s\t%s\n' "$unit" "$name" "$file" >> "$SELECTED"
+  printf '%s\t%s\t%s\t%s\n' "$unit" "$name" "$file" "$attr" >> "$SELECTED"
 done < "$HARNESS_LIST"
 
 N_SEL="$(wc -l < "$SELECTED" | tr -d ' ')"
-echo "selected $N_SEL harness(es)  jobs=$JOBS  timeout=${TIMEOUT}s  unwind=$UNWIND"
+echo "selected $N_SEL harness(es)  jobs=$JOBS  timeout=${TIMEOUT}s  unwind=${UNWIND:-auto}"
 echo "  CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
 echo "  out=$OUT_DIR"
 
@@ -227,18 +244,62 @@ acquire_slot() {
   done
 }
 
+# Resolve the unwind bound for one harness.
+# Priority: CLI --unwind > unwind_table.toml > #[kani::unwind(N)] attr > DEFAULT.
+resolve_unwind() {
+  local name="$1" attr="$2"
+  if [[ -n "$UNWIND" ]]; then
+    echo "$UNWIND"
+    return
+  fi
+  local t
+  t="$(python3 - "$UNWIND_TABLE" "$name" <<'PY'
+import re, sys
+from pathlib import Path
+table, name = sys.argv[1], sys.argv[2]
+p = Path(table)
+if not p.exists():
+    print("")
+    raise SystemExit(0)
+for line in p.read_text().splitlines():
+    line = line.strip()
+    if not line or line.startswith('#') or line.startswith('['):
+        continue
+    m = re.match(r'^([A-Za-z0-9_:.]+)\s*=\s*(\d+)\s*$', line)
+    if m and m.group(1) == name:
+        print(m.group(2))
+        raise SystemExit(0)
+print("")
+PY
+)"
+  if [[ -n "$t" ]]; then
+    echo "$t"
+    return
+  fi
+  if [[ -n "$attr" ]]; then
+    echo "$attr"
+    return
+  fi
+  echo "$DEFAULT_UNWIND"
+}
+
 run_one() {
-  local unit="$1" name="$2" log="$3"
+  local unit="$1" name="$2" log="$3" attr="$4"
   local start end dt verdict exit_code
+  local unwind
+  unwind="$(resolve_unwind "$name" "$attr")"
   acquire_slot
   start=$(date +%s.%N)
 
-  # cargo kani from the worktree root; exact flags per KANI.md §1
+  # cargo kani from the worktree root; exact flags per KANI.md §1.
+  # Pass --default-unwind matching the resolved bound so the CLI value and any
+  # #[kani::unwind] attribute cannot disagree (attribute wins in Kani; we
+  # keep them equal). Unwinding assertions stay ON unless --no-unwind-checks.
   set +e
   timeout --signal=TERM --kill-after=30 "${TIMEOUT}s" \
     cargo kani -p rules-kani \
       --harness "$name" \
-      --default-unwind "$UNWIND" \
+      --default-unwind "$unwind" \
       $( [[ "$NO_UNWIND_CHECKS" == 1 ]] && echo --no-unwinding-checks ) \
     >"$log" 2>&1
   exit_code=$?
@@ -264,12 +325,17 @@ run_one() {
       verdict="UNSOUND"
     fi
   elif grep -qi 'VERIFICATION:- FAILED' "$log" 2>/dev/null; then
-    # UNMODELED only when the failing check IS the unmodeled-op assertion.
-    if grep -qE 'Failed Checks:.*unmodeled host op' "$log" 2>/dev/null; then
+    if grep -qi 'unwinding assertion' "$log" 2>/dev/null; then
+      # Loud: the bound is too small. This is the calibration signal, not a
+      # spec failure. Surface it distinctly so calibrate.py can react.
+      verdict="UNWINDING"
+    elif grep -qE 'Failed Checks:.*unmodeled host op' "$log" 2>/dev/null; then
       verdict="UNMODELED"
     else
       verdict="FAILED"
     fi
+  elif grep -qi 'unwinding assertion' "$log" 2>/dev/null; then
+    verdict="UNWINDING"
   elif [[ $exit_code -eq 0 ]]; then
     # Some kani versions only print CHECKS; accept exit 0 as successful
     # only when the log does not claim a failure.
@@ -290,7 +356,7 @@ run_one() {
 
   # Emit one TSV result line on stdout (collected by the driver)
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$unit" "$name" "$verdict" "$dt" "$UNWIND" "$log"
+    "$unit" "$name" "$verdict" "$dt" "$unwind" "$log"
 }
 
 # ---------------------------------------------------------------------------
@@ -299,6 +365,7 @@ run_one() {
 RESULTS_TSV="$OUT_DIR/results.tsv"
 : > "$RESULTS_TSV"
 export RESULTS_TSV TIMEOUT UNWIND NO_UNWIND_CHECKS CARGO_TARGET_DIR CARGO_BUILD_JOBS
+export DEFAULT_UNWIND UNWIND_TABLE
 
 # Worker pool: read selected.tsv, run at most JOBS at a time.
 # Uses a temp dir of running PIDs.
@@ -308,7 +375,7 @@ mkdir -p "$WORKDIR"
 
 running=0
 idx=0
-while IFS=$'\t' read -r unit name file; do
+while IFS=$'\t' read -r unit name file attr; do
   idx=$((idx + 1))
   log="$LOG_DIR/${unit}__${name}.log"
   # throttle
@@ -323,7 +390,7 @@ while IFS=$'\t' read -r unit name file; do
   done
   (
     set +e
-    line="$(run_one "$unit" "$name" "$log")"
+    line="$(run_one "$unit" "$name" "$log" "$attr")"
     set -e
     flock "$RESULTS_TSV" bash -c "printf '%s\n' \"$line\" >> \"$RESULTS_TSV\""
   ) &
@@ -340,7 +407,7 @@ fi
 # ---------------------------------------------------------------------------
 # Write JSON + markdown
 # ---------------------------------------------------------------------------
-python3 - "$RESULTS_TSV" "$RESULTS_JSON" "$RESULTS_MD" "$UNWIND" "$JOBS" "$TIMEOUT" "$CARGO_TARGET_DIR" <<'PY'
+python3 - "$RESULTS_TSV" "$RESULTS_JSON" "$RESULTS_MD" "${UNWIND:-auto}" "$JOBS" "$TIMEOUT" "$CARGO_TARGET_DIR" <<'PY'
 import json, sys, datetime, collections
 from pathlib import Path
 
@@ -361,15 +428,15 @@ for line in Path(tsv).read_text().splitlines():
 
 rows.sort(key=lambda r: (r["unit"], r["harness"]))
 summary = collections.Counter(r["verdict"] for r in rows)
-for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND"):
+for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND", "UNWINDING"):
     summary.setdefault(k, 0)
 
 payload = {
     "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "crate": "rules-kani",
     "target_dir": target,
-    "unwind": int(unwind),
-    "no_unwinding_checks": True,
+    "unwind": unwind,
+    "no_unwinding_checks": False,
     "jobs": int(jobs),
     "timeout_sec": int(timeout),
     "summary": dict(summary),
@@ -393,7 +460,7 @@ A("## Summary")
 A("")
 A("| verdict | count |")
 A("|---|---:|")
-for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND"):
+for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND", "UNWINDING"):
     A(f"| {k} | {summary[k]} |")
 A(f"| **total** | **{len(rows)}** |")
 A("")
@@ -407,11 +474,11 @@ for r in rows:
 A("")
 Path(out_md).write_text("\n".join(lines) + "\n")
 
-bad = sum(summary[k] for k in ("FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND"))
+bad = sum(summary[k] for k in ("FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND", "UNWINDING"))
 print(f"wrote {out_json}")
 print(f"wrote {out_md}")
 print(f"SUCCESSFUL={summary['SUCCESSFUL']} FAILED={summary['FAILED']} "
-      f"TIMEOUT={summary['TIMEOUT']} UNMODELED={summary['UNMODELED']} VACUOUS={summary['VACUOUS']} UNSOUND={summary['UNSOUND']}")
+      f"TIMEOUT={summary['TIMEOUT']} UNMODELED={summary['UNMODELED']} VACUOUS={summary['VACUOUS']} UNSOUND={summary['UNSOUND']} UNWINDING={summary['UNWINDING']}")
 sys.exit(1 if bad else 0)
 PY
 STATUS=$?
