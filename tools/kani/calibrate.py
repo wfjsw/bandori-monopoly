@@ -230,9 +230,49 @@ def main() -> int:
     entries = load_table()
     entries[key] = n
     write_table(entries)
+    # Kani prefers #[kani::unwind(N)] over --default-unwind, so keep the
+    # source attribute in sync or the table entry is ignored.
+    patched = patch_unwind_attr(args.harness, n)
     print(f"[calibrate] wrote {TABLE}: {key} = {n}  ({best['seconds']}s)")
+    if patched:
+        print(f"[calibrate] patched #[kani::unwind({n})] in {patched}")
+    else:
+        print("[calibrate] note: no #[kani::unwind] attr found; "
+              "the table entry is the only bound")
     print(f"[calibrate] trials: {[(t['unwind'], t['verdict'], t['seconds']) for t in trials]}")
     return 0
+
+
+def patch_unwind_attr(harness: str, n: int) -> str | None:
+    """Rewrite `#[kani::unwind(M)]` above `fn harness` to `#[kani::unwind(n)]`."""
+    proofs = ROOT / "rules" / "kani" / "src" / "proofs"
+    for path in proofs.glob("*.rs"):
+        src = path.read_text()
+        if f"fn {harness}(" not in src:
+            continue
+        # Replace the unwind attribute closest above the fn.
+        pattern = re.compile(
+            r"(#\[kani::unwind\()(\d+)(\)\])"
+            r"((?:\s*#\[[^\]]+\])*\s*(?:pub\s+)?fn\s+"
+            + re.escape(harness)
+            + r"\s*\()"
+        )
+        new, cnt = pattern.subn(rf"\g<1>{n}\g<3>\g<4>", src, count=1)
+        if cnt:
+            path.write_text(new)
+            return str(path)
+        # No attribute: insert one just before `#[kani::proof]` / the fn.
+        pattern2 = re.compile(
+            r"(#\[kani::proof\])"
+            r"((?:\s*#\[[^\]]+\])*\s*(?:pub\s+)?fn\s+"
+            + re.escape(harness)
+            + r"\s*\()"
+        )
+        new, cnt = pattern2.subn(rf"#[kani::unwind({n})]\n\g<1>\g<2>", src, count=1)
+        if cnt:
+            path.write_text(new)
+            return str(path)
+    return None
 
 
 if __name__ == "__main__":
