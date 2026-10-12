@@ -327,13 +327,19 @@ fn hand_size_view(w: &World, p: usize) -> i64 {
 }
 
 fn owned_tiles(w: &World, p: i32) -> i64 {
+    // 8×8 chunk walk over the 60-tile board (unwind bound 8).
     let mut n = 0i64;
-    let mut i = 0usize;
-    while i < 60 {
-        if w.tiles[i].owner == p {
-            n += 1;
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let i = outer * 8 + k;
+            if i < 60 && w.tiles[i].owner == p {
+                n += 1;
+            }
+            k += 1;
         }
-        i += 1;
+        outer += 1;
     }
     n
 }
@@ -344,12 +350,23 @@ fn key_get_name(w: &World, p: i32, name: &str) -> i64 {
 }
 
 /// `id_of` over raw bytes (no UTF-8 validation — that is a Kani unwinding cliff).
-/// Same FNV-1a as `rules_cond_ir::ctx::id_of`.
+/// Same FNV-1a as `rules_cond_ir::ctx::id_of`. Fixed 8×8 chunk walk so the
+/// unwind bound is 8, not `MAX_NAME`.
 fn id_of_bytes(b: &[u8]) -> i64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for x in b.iter() {
-        h ^= *x as u64;
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    let mut outer = 0usize;
+    while outer < 8 {
+        let base = outer * 8;
+        let mut k = 0usize;
+        while k < 8 {
+            let i = base + k;
+            if i < b.len() {
+                h ^= b[i] as u64;
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            k += 1;
+        }
+        outer += 1;
     }
     h as i64
 }
@@ -388,36 +405,46 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
 }
 
 /// Board-derived membership sets (static, independent of the world).
+/// 8×8 chunk walk over the 60-tile board (unwind bound 8).
 fn fill_board_sets(c: &mut IrCtx, w: &World) {
-    let mut i = 0usize;
-    while i < 60 {
-        let t = board::TILES[i];
-        // Membership ids are the **0-based slot** (`tile.id` / `is_circle(t)`).
-        // `TILES[i].index` is the 1-based board.json index — do not insert that.
-        let id = i as i64;
-        match t.kind {
-            0 => {
-                c.set_insert(SetId::Circle, id);
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let i = outer * 8 + k;
+            if i < 60 {
+                let t = board::TILES[i];
+                // Membership ids are the **0-based slot** (`tile.id` / `is_circle(t)`).
+                // `TILES[i].index` is the 1-based board.json index — do not insert that.
+                let id = i as i64;
+                match t.kind {
+                    0 => {
+                        c.set_insert(SetId::Circle, id);
+                    }
+                    3 => {
+                        c.set_insert(SetId::Ring, id);
+                    }
+                    _ => {}
+                }
+                if t.kind == 1 || t.kind == 3 {
+                    c.set_insert(SetId::Buyable, id);
+                }
+                if (t.kind == 1 || t.kind == 3) && t.group == 6 {
+                    c.set_insert(SetId::LiveHouse, id);
+                }
             }
-            3 => {
-                c.set_insert(SetId::Ring, id);
-            }
-            _ => {}
+            k += 1;
         }
-        if t.kind == 1 || t.kind == 3 {
-            c.set_insert(SetId::Buyable, id);
-        }
-        if (t.kind == 1 || t.kind == 3) && t.group == 6 {
-            c.set_insert(SetId::LiveHouse, id);
-        }
-        i += 1;
+        outer += 1;
     }
     // `BlockedBands` — band name ids the world currently blocks from skills.
     let mut b = 0usize;
-    while b < w.blocked_bands_n as usize && b < 4 {
-        let id = w.blocked_bands[b];
-        if id != 0 {
-            c.set_insert(SetId::BlockedBands, id as i64);
+    while b < 4 {
+        if (b as u8) < w.blocked_bands_n {
+            let id = w.blocked_bands[b];
+            if id != 0 {
+                c.set_insert(SetId::BlockedBands, id as i64);
+            }
         }
         b += 1;
     }
@@ -605,9 +632,22 @@ pub fn fill_from_world(
     c.tile_count = 60;
 
     // OptInt defaults: any negative reads as Null. Start there, then overwrite.
-    for (id, _, ty) in VARS {
-        if *ty == VarTy::OptInt {
-            c.set_scalar(*id, -1);
+    // 8×8 chunk walk over the 43-entry VARS table (unwind bound 8).
+    {
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < VARS.len() {
+                    let (id, _, ty) = VARS[i];
+                    if ty == VarTy::OptInt {
+                        c.set_scalar(id, -1);
+                    }
+                }
+                k += 1;
+            }
+            outer += 1;
         }
     }
 
@@ -771,11 +811,21 @@ pub fn fill_from_world(
     fill_named(&mut c, w, owner);
     fill_geometry_bins(&mut c, w);
     // `tile_named('…')` — every board name, matching `fill_window`'s `tile_ids`.
-    let mut t = 0usize;
-    while t < TILE_NAMES.len() {
-        let (id, name) = TILE_NAMES[t];
-        c.named_set(rules_cond_ir::ctx::id_of(name), id as i64);
-        t += 1;
+    // 8×8 chunk walk (unwind bound 8, not 60).
+    {
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let t = outer * 8 + k;
+                if t < TILE_NAMES.len() {
+                    let (id, name) = TILE_NAMES[t];
+                    c.named_set(rules_cond_ir::ctx::id_of(name), id as i64);
+                }
+                k += 1;
+            }
+            outer += 1;
+        }
     }
     // Candidate `card.counter('name')` pairs (key = `id_of(name)`).
     let mut k = 0usize;
@@ -832,6 +882,398 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
         rules_cond_ir::ctx::id_of(TOK_PP_NEG),
         w.fans_neg[op] as i64,
     );
+    c
+}
+
+/// What a lowered guard program actually reads. Collected by walking the
+/// static `Node` arena (small, const) so [`fill_for_guard`] can skip the
+/// 60-tile board fill, the geometry bins, and the VARS sweep.
+#[derive(Clone, Copy, Default)]
+pub struct GuardNeeds {
+    /// Bit `i` set when `VarId` discriminant `i` is read.
+    pub vars: u64,
+    /// Bit `i` set when `FnId` discriminant `i` is called.
+    pub fns: u64,
+    /// Up to 8 const named ids (`slot('x')` / `tok('x')` / `tile_named('x')`).
+    pub named: [i64; 8],
+    pub named_n: u8,
+    /// Seat-field bits the program reads (any seat).
+    pub seat_fields: u32,
+    /// Whether any seat-function arg is symbolic (fill all seats vs one).
+    pub seat_arg_symbolic: bool,
+    /// Const seat index the program reads, when known.
+    pub seat_const: i64,
+}
+
+impl GuardNeeds {
+    fn needs_var(&self, id: VarId) -> bool {
+        (self.vars >> (id as u64)) & 1 == 1
+    }
+    fn note_var(&mut self, id: i64) {
+        if id >= 0 && id < 64 {
+            self.vars |= 1u64 << id;
+        }
+    }
+    fn note_fn(&mut self, fid: i64) {
+        if fid >= 0 && fid < 64 {
+            self.fns |= 1u64 << fid;
+        }
+    }
+    fn note_named(&mut self, id: i64) {
+        let n = self.named_n as usize;
+        if n < 8 {
+            self.named[n] = id;
+            self.named_n = (n + 1) as u8;
+        }
+    }
+}
+
+/// Collect what guard `gid`'s program reads from an [`IrCtx`].
+/// The node arena is static and short (every real guard < 16 nodes); the
+/// walk is a fixed 32-iteration chunk so the unwind bound is 8.
+pub fn guard_needs(gid: usize) -> GuardNeeds {
+    let mut n = GuardNeeds::default();
+    n.seat_const = -1;
+    let prog = &generated::BY_ID[gid].program;
+    let nodes = prog.nodes;
+    let mut i = 0usize;
+    // Guards are tiny; 32 nodes is a generous ceiling with a fixed bound.
+    while i < 32 {
+        if i < nodes.len() {
+            let node = nodes[i];
+            match node.kind {
+                rules_cond_ir::nodes::Kind::Var => n.note_var(node.payload),
+                rules_cond_ir::nodes::Kind::Call => {
+                    n.note_fn(node.payload);
+                    let first = node.a as usize;
+                    let nargs = node.b as usize;
+                    // Constant name / seat arguments are baked at lower time.
+                    let mut k = 0usize;
+                    while k < 3 {
+                        if k < nargs && first + k < nodes.len() {
+                            let arg = nodes[first + k];
+                            if arg.kind == rules_cond_ir::nodes::Kind::ConstInt {
+                                // FnId 0..=4 take a name id; 10..=17 take a seat.
+                                if node.payload <= 4 {
+                                    n.note_named(arg.payload);
+                                } else if (10..=17).contains(&node.payload)
+                                    || node.payload == 18
+                                    || node.payload == 19
+                                    || node.payload == 21
+                                    || node.payload == 24
+                                    || node.payload == 25
+                                    || node.payload == 33
+                                {
+                                    if n.seat_const < 0 {
+                                        n.seat_const = arg.payload;
+                                    }
+                                }
+                            } else {
+                                // Symbolic seat/name argument.
+                                if (10..=17).contains(&node.payload) {
+                                    n.seat_arg_symbolic = true;
+                                }
+                            }
+                        }
+                        k += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    n
+}
+
+/// Fill only the fields guard `gid` reads.
+///
+/// Soundness: unread fields keep `IrCtx::default()` (0 / empty), which is
+/// what the evaluator never consults. `conf_fill_diff` still pins the **full**
+/// [`fill_from_world`] binding; this is the light path proofs should call.
+pub fn fill_for_guard(
+    w: &World,
+    gid: usize,
+    owner: i32,
+    card: i64,
+    card_placed: bool,
+    card_tile: i64,
+    ov: &TriggerOverlay,
+) -> IrCtx {
+    let needs = guard_needs(gid);
+    let mut c = IrCtx::default();
+    c.n_players = w.n_players as i64;
+    c.tile_count = 60;
+
+    // OptInt defaults only for the vars this guard reads.
+    {
+        let mut i = 0u64;
+        while i < 64 {
+            if (needs.vars >> i) & 1 == 1 {
+                let id = i as u16;
+                // Look up the type via the VARS table (43 entries; 8×8 walk).
+                let mut outer = 0usize;
+                while outer < 8 {
+                    let mut k = 0usize;
+                    while k < 8 {
+                        let vi = outer * 8 + k;
+                        if vi < VARS.len() {
+                            let (vid, _, ty) = VARS[vi];
+                            if (vid as u16) == id && ty == VarTy::OptInt {
+                                c.set_scalar(vid, -1);
+                            }
+                        }
+                        k += 1;
+                    }
+                    outer += 1;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    // Window / candidate scalars the guard actually reads.
+    let op = if owner >= 0 { owner as usize } else { 0 };
+    macro_rules! set_if {
+        ($id:expr, $val:expr) => {
+            if needs.needs_var($id) {
+                c.set_scalar($id, $val);
+            }
+        };
+    }
+    set_if!(VarId::Kind, ov.kind.unwrap_or(w.trig_kind) as i64);
+    set_if!(VarId::Actor, w.trig_player as i64);
+    set_if!(VarId::Target, w.trig_target as i64);
+    set_if!(VarId::Value, ov.value.unwrap_or(w.trig_value as i64));
+    set_if!(VarId::Step, ov.step);
+    set_if!(VarId::By, ov.by);
+    set_if!(
+        VarId::PayIsRent,
+        (ov.pay_is_rent || w.trig_pay_is_rent) as i64
+    );
+    set_if!(
+        VarId::RollSource,
+        if ov.roll_source >= 0 {
+            ov.roll_source
+        } else {
+            w.trig_roll_source as i64
+        }
+    );
+    set_if!(VarId::Abnormal, ov.abnormal as i64);
+    set_if!(VarId::TurnPlayer, w.turn_player as i64);
+    set_if!(VarId::TurnKey, w.turn_key as i64);
+    set_if!(
+        VarId::PlanFixedRoll,
+        if ov.plan_fixed_roll != -1 {
+            ov.plan_fixed_roll
+        } else {
+            w.plan_fixed_roll as i64
+        }
+    );
+    set_if!(
+        VarId::TriggerCard,
+        if ov.trigger_card != 0 {
+            ov.trigger_card
+        } else {
+            w.trig_card as i64
+        }
+    );
+    set_if!(
+        VarId::CounterName,
+        if ov.counter_name != 0 {
+            ov.counter_name
+        } else {
+            w.counter_name as i64
+        }
+    );
+    let tile = w.trig_tile;
+    set_if!(VarId::TileId, tile as i64);
+    if needs.needs_var(VarId::TileOwner)
+        || needs.needs_var(VarId::TileHouses)
+        || needs.needs_var(VarId::TileMortgaged)
+        || needs.needs_var(VarId::TilePrice)
+    {
+        if tile >= 0 && (tile as usize) < 60 {
+            set_if!(VarId::TileOwner, w.tiles[tile as usize].owner as i64);
+            set_if!(VarId::TileHouses, w.tiles[tile as usize].houses as i64);
+            set_if!(
+                VarId::TileMortgaged,
+                w.tiles[tile as usize].mortgaged as i64
+            );
+            set_if!(
+                VarId::TilePrice,
+                board::TILES[tile as usize].price as i64
+            );
+        } else {
+            set_if!(VarId::TileOwner, -1);
+            set_if!(VarId::TileHouses, 0);
+            set_if!(VarId::TileMortgaged, 0);
+            set_if!(VarId::TilePrice, 0);
+        }
+    }
+    let mv = &w.move_snap;
+    let (move_roll, move_kind, move_remaining, move_main, move_dir) = if mv.present() {
+        (
+            mv.roll as i64,
+            mv.kind as i64,
+            mv.remaining as i64,
+            w.trig_main as i64,
+            mv.dir as i64,
+        )
+    } else {
+        (-1, -1, 0, w.trig_main as i64, 1)
+    };
+    set_if!(
+        VarId::MoveRoll,
+        if ov.move_roll != -1 { ov.move_roll } else { move_roll }
+    );
+    set_if!(
+        VarId::MoveKind,
+        if ov.move_kind != -1 { ov.move_kind } else { move_kind }
+    );
+    set_if!(
+        VarId::MoveRemaining,
+        if ov.move_remaining != 0 {
+            ov.move_remaining
+        } else {
+            move_remaining
+        }
+    );
+    set_if!(VarId::MoveMain, if ov.move_main { 1 } else { move_main });
+    set_if!(
+        VarId::MoveDir,
+        if ov.move_dir != 1 { ov.move_dir } else { move_dir }
+    );
+    let chain_n = (ov.chain_n as usize).min(4);
+    set_if!(VarId::EffectCount, chain_n as i64);
+    set_if!(VarId::Owner, owner as i64);
+    set_if!(VarId::OwnerId, owner as i64);
+    set_if!(VarId::OwnerMoney, w.money[op] as i64);
+    set_if!(VarId::OwnerFire, w.fire[op] as i64);
+    set_if!(VarId::OwnerCrystals, w.band_crystals[op] as i64);
+    set_if!(VarId::OwnerHand, hand_size_view(w, op));
+    set_if!(VarId::OwnerPos, w.pos[op] as i64);
+    set_if!(VarId::OwnerOut, w.out[op] as i64);
+    set_if!(VarId::OwnerStay, w.stay[op] as i64);
+    set_if!(VarId::OwnerStun, key_get_name(w, owner, KEY_STUN));
+    set_if!(VarId::OwnerExile, key_get_name(w, owner, KEY_EXILE));
+    set_if!(VarId::OwnerNoHand, key_get_name(w, owner, KEY_NO_HAND));
+    set_if!(
+        VarId::OwnerCharacter,
+        id_of_name_id(NameId(w.character_id[op]))
+    );
+    set_if!(VarId::OwnerBand, id_of_name_id(NameId(w.band_id[op])));
+    set_if!(VarId::OwnerTiles, owned_tiles(w, owner));
+    set_if!(VarId::CardId, card);
+    set_if!(VarId::CardPlaced, card_placed as i64);
+    set_if!(
+        VarId::CardTile,
+        if card_placed { card_tile } else { -2 }
+    );
+
+    // Seats: only the rows the guard reads.
+    let seat_lo = if needs.seat_arg_symbolic || needs.seat_const < 0 {
+        0
+    } else {
+        needs.seat_const.max(0) as usize
+    };
+    let seat_hi = if needs.seat_arg_symbolic {
+        world::MAX_PLAYERS
+    } else {
+        (seat_lo + 1).min(world::MAX_PLAYERS)
+    };
+    let want_seat = needs.seat_fields != 0;
+    if want_seat {
+        let mut p = seat_lo;
+        while p < world::MAX_PLAYERS {
+            if p < seat_hi {
+                c.seat[p][SeatField::Money as usize] = w.money[p] as i64;
+                c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
+                c.seat[p][SeatField::Fire as usize] = w.fire[p] as i64;
+                c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
+                c.seat[p][SeatField::Stay as usize] = w.stay[p] as i64;
+                c.seat[p][SeatField::Crystals as usize] = w.band_crystals[p] as i64;
+                c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
+                c.seat[p][SeatField::Gains as usize] = w.gains_this_turn[p] as i64;
+                c.seat[p][SeatField::Targeted as usize] = w.targeted_count[p] as i64;
+                c.seat[p][SeatField::Between as usize] = w.between_seat[p] as i64;
+                c.seat[p][SeatField::Tiles as usize] = owned_tiles(w, p as i32);
+            }
+            p += 1;
+        }
+    }
+
+    // Named ids the guard looks up (const args only; symbolic names get the
+    // owner's live keys).
+    let mut ni = 0usize;
+    while ni < 8 {
+        if (ni as u8) < needs.named_n {
+            let name_id = needs.named[ni];
+            // Tile names are static; everything else is owner-scoped.
+            let mut is_tile = false;
+            let mut t = 0usize;
+            while t < 8 {
+                let ti = t;
+                if ti < TILE_NAMES.len() {
+                    let (tid, tname) = TILE_NAMES[ti];
+                    if rules_cond_ir::ctx::id_of(tname) == name_id {
+                        c.named_set(name_id, tid as i64);
+                        is_tile = true;
+                    }
+                }
+                t += 1;
+            }
+            if !is_tile {
+                // Owner's named map, or the pilot fan views.
+                let map = &w.player_keys[op];
+                let mut i = 0usize;
+                while i < crate::world::MAX_KEYS {
+                    if i < map.n as usize {
+                        let slot = map.slots[i];
+                        if slot.key != NameId::INVALID
+                            && id_of_name_id(slot.key) == name_id
+                        {
+                            c.named_set(name_id, slot.value as i64);
+                        }
+                    }
+                    i += 1;
+                }
+                if name_id == rules_cond_ir::ctx::id_of(TOK_PP_POS) {
+                    c.named_set(name_id, w.fans_pos[op] as i64);
+                }
+                if name_id == rules_cond_ir::ctx::id_of(TOK_PP_NEG) {
+                    c.named_set(name_id, w.fans_neg[op] as i64);
+                }
+            }
+        }
+        ni += 1;
+    }
+
+    // Board sets / geometry bins only when the guard's fns need them.
+    let needs_sets = (needs.fns >> 6) & 0xF != 0 // IsCircle..IsBuyable
+        || (needs.fns >> 20) & 1 != 0 // Blocked
+        || (needs.fns >> 22) & 3 != 0; // ChainHas / ChainHits
+    if needs_sets {
+        fill_board_sets(&mut c, w);
+    }
+    let needs_geom = (needs.fns >> 27) & 0x1F != 0; // Dist..OnPath
+    if needs_geom {
+        fill_geometry_bins(&mut c, w);
+    }
+    // Chain overlay (cheap).
+    {
+        let mut ci = 0usize;
+        while ci < 4 {
+            if ci < chain_n {
+                let (kind, _from, hits) = ov.chain[ci];
+                c.set_insert(SetId::ChainKinds, kind);
+                if hits >= 0 {
+                    c.set_insert(SetId::ChainHits, hits);
+                }
+            }
+            ci += 1;
+        }
+    }
     c
 }
 
