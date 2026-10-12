@@ -6,7 +6,8 @@
 //!
 //! turn's money never drops, then stun + a band crystal after the turn.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",

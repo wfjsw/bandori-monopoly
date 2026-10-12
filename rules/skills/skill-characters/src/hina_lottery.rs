@@ -16,7 +16,7 @@
 //! expiry -- which is what the keyed state's `expires` is for.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const FANS_UP: &str = "P✽P粉丝(正)";

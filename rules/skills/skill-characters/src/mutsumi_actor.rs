@@ -15,7 +15,7 @@
 //! new -- plus the new character's initial fire.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns since the last hand play. A play resets it.

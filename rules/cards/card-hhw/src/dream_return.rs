@@ -8,7 +8,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::ChainKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_RETURN: CardDef = CardDef::new(

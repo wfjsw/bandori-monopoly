@@ -225,6 +225,41 @@ impl CondView for SnapshotView<'_> {
     fn is_buyable(&self, tile: i64) -> bool {
         self.win.buyable_tiles.contains(&tile)
     }
+    fn tile_is(&self, tile: i64, kind: &str) -> bool {
+        match kind {
+            "circle" => self.is_circle(tile),
+            "ring" => self.is_ring(tile),
+            _ => self
+                .win
+                .tile_kinds
+                .get(tile as usize)
+                .map(|k| k == kind)
+                .unwrap_or(false),
+        }
+    }
+    fn tile_attr(&self, tile: i64, attr: &str) -> i64 {
+        self.win
+            .tile_attrs
+            .get(&(tile, attr.to_string()))
+            .copied()
+            .unwrap_or_else(|| match attr {
+                "group" | "tier" | "area" | "index" => -1,
+                _ => 0,
+            })
+    }
+    fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool {
+        // Precomputed true triples (fill_window), plus the four baked lists
+        // for the CEL sugar names.
+        match class {
+            "buyable" if player < 0 => self.is_buyable(tile),
+            "livehouse" if player < 0 => self.is_live_house(tile),
+            _ => self
+                .win
+                .tile_classes
+                .iter()
+                .any(|&(p, t, ref c)| p == player && t == tile && c == class),
+        }
+    }
     fn slot_table(&self) -> Vec<(String, i64)> {
         self.cand.slots.iter().map(|(k, v)| (k.clone(), *v)).collect()
     }

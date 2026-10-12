@@ -48,7 +48,7 @@
 extern crate alloc;
 
 use card_sdk::abi::{state_key, TriggerKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::CardDef;
 
 /// 「初始N，上限M」 -- the fire-pot bounds, plus the initial count at the

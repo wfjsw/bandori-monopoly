@@ -28,6 +28,8 @@ pub mod inline;
 /// the symbols (`docs/BOT.md` B1, the `LNK2019` fix).
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native_shims;
+/// THE ruleset class registration for `tile_in` (ABI v56).
+pub mod tile_class;
 mod wasm_rules;
 mod world;
 

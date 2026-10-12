@@ -12,7 +12,7 @@
 //! turn start; the free turn is announced when it is taken.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Did this player's own build commit last turn?

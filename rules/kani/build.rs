@@ -9,9 +9,9 @@ use std::fs;
 use std::path::PathBuf;
 
 const ARRAY_OPS: &[&str] = &[
-    "roll", "roll_ask", "log", "effect", "tile_count", "tile_named", "tile_owner", "player_pos",
-    "tile_steps_ahead", "rent_of", "buy_price", "build_cost", "mortgage_value", "owned_count", "owned_at", "is_buyable",
-    "is_shop", "is_ring", "is_circle", "is_live_house", "tile_group", "tile_price", "houses_of", "rent_houses_of",
+    "roll", "roll_ask", "log", "effect", "flash", "no_flash", "flash_card", "flash_card_keyed",
+    "flash_tile", "tile_count", "tile_named", "tile_owner", "player_pos",
+    "tile_steps_ahead", "rent_of", "buy_price", "build_cost", "mortgage_value", "owned_count", "owned_at",     "tile_is", "tile_attr", "tile_in", "tile_group", "tile_price", "houses_of", "rent_houses_of",
     "set_houses", "add_house", "mortgaged_of", "set_mortgaged", "set_owner", "dist", "tile_forward", "neighbor",
     "players_on_count", "players_on_at", "player_count", "player_out", "others_count", "others_at", "money", "gain",
     "gain_typed", "pay", "pay_to", "pay_total", "pay_leg", "draw", "draw_event", "pay_rent",
@@ -39,9 +39,9 @@ const ARRAY_OPS: &[&str] = &[
     "placed_tile", "play_doubled", "set_play_doubled", "schedule_turn_end", "set_no_money_loss", "set_fixed_roll", "fixed_roll", "set_next_steps",
     "turn_main_steps", "add_fire_max", "card_build", "set_can_build", "clear_dice", "can_build_on", "card_buy", "buy_quotes",
     "ai_agent_choice", "buy", "acquire", "agent_offer", "linger", "card_immune", "card_mortgage", "card_text_mentions",
-    "gain_fixed", "is_agent", "paid_in_settle", "place_card_on", "play_from_hand", "set_build_discount", "set_card_immune", "set_card_tile",
-    "set_extreme", "turn_rolls", "turn_snap", "turn_start_pos", "is_color", "unplace_card_named", "tok_names", "designations",
-    "cancel_designation", "designation_cancelled", "gate", "card_settle_at", "card_offer_build", "do_move_roll", "is_live_house_for", "placed_cards",
+    "gain_fixed", "paid_in_settle", "place_card_on", "play_from_hand", "set_build_discount", "set_card_immune", "set_card_tile",
+    "set_extreme", "turn_rolls", "turn_snap", "turn_start_pos", "unplace_card_named", "tok_names", "designations",
+    "cancel_designation", "designation_cancelled", "gate", "card_settle_at", "card_offer_build", "do_move_roll", "placed_cards",
     "field_instances", "unplace_at", "tile_at", "set_tile_at", "is_face_down_at", "set_face_down_at", "is_immune_at", "set_immune_at",
     "set_build_cost_pct", "set_card_face_down", "card_face_down",
 ];

@@ -17,7 +17,7 @@
 //! deck's top card at each of this player's turn starts.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state, trigger, CardPile};
+use ruleset_core::ctx::{self, state, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「每获得一层停留，眩晕，你获得1500资金」.

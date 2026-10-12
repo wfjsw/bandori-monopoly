@@ -14,7 +14,7 @@
 //! next buyable tile instead.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const MARK: &str = "saaya标记";

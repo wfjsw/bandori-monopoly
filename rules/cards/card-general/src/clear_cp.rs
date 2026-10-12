@@ -28,7 +28,7 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::{counter, mark, HookKind, MarkFilter, Message, Target, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CLEAR_CP: CardDef = CardDef::new(

@@ -24,7 +24,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{state_key, Flash, HookKind, MoveKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The tile the clause names.
@@ -72,7 +72,7 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
 /// refuses an action outside the operations phase, as it does for every `act`,
 /// so this only has to check the cost.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::FIRE) < 1 {

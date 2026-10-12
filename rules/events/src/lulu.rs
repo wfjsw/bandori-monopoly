@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `很噜的感觉`）:
 //! > 所有玩家可选择[传送]至快餐店（不触发场地效果），如果选择[传送]需支付500资金并喊出“噜噜噜！”（只要玩家嗓子允许，必须喊出“噜噜噜！”）
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;

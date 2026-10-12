@@ -9,7 +9,7 @@
 //! 弦卷集团, the move settles as the agent tile; the card then swaps tiles around.
 
 use card_sdk::abi::{ChainKind, HookKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";

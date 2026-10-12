@@ -15,7 +15,7 @@
 //! 「可选择盖房」 is the build offer that follows.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「你的回合中[经过]」 -- latched on the pass, paid at turn end.
@@ -71,7 +71,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「可选择使用3个[火罐]」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::FIRE) < 3 {

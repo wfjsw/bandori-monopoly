@@ -18,7 +18,7 @@
 //! 「不触发结算」 walk.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new(

@@ -9,7 +9,7 @@
 //! rent, and the card hits the discard when the crystals run out.
 
 use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const FIRE_BIRD: CardDef = CardDef::new(

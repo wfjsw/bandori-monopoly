@@ -8,7 +8,7 @@
 //!
 
 use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mujica:#J11";

@@ -7,7 +7,7 @@
 //!
 //! Both board tiles share one rule -- the book gives them one sentence.
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle("", None, settle)]);

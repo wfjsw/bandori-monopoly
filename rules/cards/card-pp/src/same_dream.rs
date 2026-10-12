@@ -10,7 +10,8 @@
 //!
 //! then flip every face-down fan back up.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play("", None, same_dream)]);
 

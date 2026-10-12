@@ -7,7 +7,7 @@
 //! by others until your next turn, then draw if nothing was blocked.
 
 use card_sdk::abi::{GateKind, HookKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:夏日合宿";

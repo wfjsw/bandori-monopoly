@@ -10,7 +10,7 @@
 //! arm a turn-end undo of abnormal movement (counteraction or hand play).
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RAN_AS_USUAL: CardDef = CardDef::new(

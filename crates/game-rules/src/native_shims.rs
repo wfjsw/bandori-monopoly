@@ -62,16 +62,12 @@ pub trait HostOps {
     fn op_owned_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_owned_at`
     fn op_owned_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_buyable`
-    fn op_is_buyable(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_shop`
-    fn op_is_shop(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_ring`
-    fn op_is_ring(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_circle`
-    fn op_is_circle(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_live_house`
-    fn op_is_live_house(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_tile_is` -- 3 args (tile, kind_ptr, kind_len).
+    fn op_tile_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_tile_attr` -- 3 args (tile, attr_ptr, attr_len).
+    fn op_tile_attr(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_tile_in` -- 4 args (player_id, tile, class_ptr, class_len).
+    fn op_tile_in(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_tile_group`
     fn op_tile_group(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_tile_price`
@@ -514,8 +510,6 @@ pub trait HostOps {
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_gain_fixed`
     fn op_gain_fixed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_agent`
-    fn op_is_agent(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_paid_in_settle`
     fn op_paid_in_settle(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_place_card_on`
@@ -536,8 +530,6 @@ pub trait HostOps {
     fn op_turn_snap(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_turn_start_pos`
     fn op_turn_start_pos(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_color`
-    fn op_is_color(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_unplace_card_named`
     fn op_unplace_card_named(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_tok_names`
@@ -556,8 +548,6 @@ pub trait HostOps {
     fn op_card_offer_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_do_move_roll`
     fn op_do_move_roll(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_is_live_house_for`
-    fn op_is_live_house_for(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_placed_cards`
     fn op_placed_cards(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_field_instances`
@@ -715,20 +705,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_owned_at(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::owned_at(self, a[0], a[1])? as i64)
     }
-    fn op_is_buyable(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_buyable(self, a[0])? as i64)
+    fn op_tile_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::tile_is(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_is_shop(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_shop(self, a[0])? as i64)
+    fn op_tile_attr(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::tile_attr(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_is_ring(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_ring(self, a[0])? as i64)
-    }
-    fn op_is_circle(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_circle(self, a[0])? as i64)
-    }
-    fn op_is_live_house(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_live_house(self, a[0])? as i64)
+    fn op_tile_in(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::tile_in(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_tile_group(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::tile_group(self, a[0])? as i64)
@@ -1460,9 +1444,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_gain_fixed(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::gain_fixed(self, a[0], a[1], a[2], a[3])? as i64)
     }
-    fn op_is_agent(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_agent(self, a[0])? as i64)
-    }
     fn op_paid_in_settle(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::paid_in_settle(self)? as i64)
     }
@@ -1495,9 +1476,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_turn_start_pos(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::turn_start_pos(self, a[0])? as i64)
     }
-    fn op_is_color(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_color(self, a[0], a[1], a[2])? as i64)
-    }
     fn op_unplace_card_named(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::unplace_card_named(self, a[0], a[1], a[2])? as i64)
     }
@@ -1525,9 +1503,6 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_do_move_roll(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::do_move_roll(self, a[0])? as i64)
-    }
-    fn op_is_live_house_for(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::is_live_house_for(self, a[0], a[1])? as i64)
     }
     fn op_placed_cards(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::placed_cards(self, a[0], a[1], a[2])? as i64)
@@ -1826,40 +1801,29 @@ pub unsafe extern "C-unwind" fn bandori_owned_at(player_id: i32, index: i32) -> 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_buyable(tile: i32) -> i32 {
-    with_host(|h| match h.op_is_buyable([tile, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn bandori_tile_is(tile: i32, kind_ptr: i32, kind_len: i32) -> i32 {
+    with_host(|h| match h.op_tile_is([tile, kind_ptr, kind_len, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_shop(tile: i32) -> i32 {
-    with_host(|h| match h.op_is_shop([tile, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn bandori_tile_attr(tile: i32, attr_ptr: i32, attr_len: i32) -> i32 {
+    with_host(|h| match h.op_tile_attr([tile, attr_ptr, attr_len, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_ring(tile: i32) -> i32 {
-    with_host(|h| match h.op_is_ring([tile, 0, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_circle(tile: i32) -> i32 {
-    with_host(|h| match h.op_is_circle([tile, 0, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_live_house(tile: i32) -> i32 {
-    with_host(|h| match h.op_is_live_house([tile, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn bandori_tile_in(
+    player_id: i32,
+    tile: i32,
+    class_ptr: i32,
+    class_len: i32,
+) -> i32 {
+    with_host(|h| match h.op_tile_in([player_id, tile, class_ptr, class_len, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3655,14 +3619,6 @@ pub unsafe extern "C-unwind" fn bandori_gain_fixed(player_id: i32, amount: i32, 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_agent(tile: i32) -> i32 {
-    with_host(|h| match h.op_is_agent([tile, 0, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_paid_in_settle() -> i32 {
     with_host(|h| match h.op_paid_in_settle([0, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -3743,14 +3699,6 @@ pub unsafe extern "C-unwind" fn bandori_turn_start_pos(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_color(player_id: i32, tile: i32, group: i32) -> i32 {
-    with_host(|h| match h.op_is_color([player_id, tile, group, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32 {
     with_host(|h| match h.op_unplace_card_named([player_id, cp, cl, 0, 0, 0]) {
         Ok(v) => v as i32,
@@ -3818,14 +3766,6 @@ pub unsafe extern "C-unwind" fn bandori_card_offer_build(player_id: i32, buf: i3
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_do_move_roll(player_id: i32) -> i32 {
     with_host(|h| match h.op_do_move_roll([player_id, 0, 0, 0, 0, 0]) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-#[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_is_live_house_for(player_id: i32, tile: i32) -> i32 {
-    with_host(|h| match h.op_is_live_house_for([player_id, tile, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

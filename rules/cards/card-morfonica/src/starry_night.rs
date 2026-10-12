@@ -12,7 +12,7 @@
 //! ×1000 to stock X crystals; each removal pays the owner 1,000.
 
 use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:蝴蝶飞舞的星月夜";

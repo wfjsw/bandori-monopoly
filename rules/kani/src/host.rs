@@ -425,51 +425,97 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
             found
         }) as i64,
-        Op::is_buyable => {
+        Op::tile_is => {
+            // ABI: tile_is(tile, kind_ptr, kind_len)
             let s = board::tile_slot(a0);
             if s < 0 {
                 0
             } else {
+                let kind = name_id(a1, a2);
                 let t = &board::TILES[s as usize];
-                let owned = world::with_world(|w| w.tiles[tile_idx(a0)].owner);
-                (board::is_property(t) && owned < 0) as i64
+                // Compare via interned wire spellings.
+                let hit = [
+                    ("circle", board::is_circle(t)),
+                    ("ring", board::is_ring(t)),
+                    ("agent", board::is_agent(t)),
+                    ("property", board::is_property(t)),
+                    ("cafe", t.kind == 4),
+                    ("edogawa", t.kind == 5),
+                    ("ryuseido", t.kind == 6),
+                ]
+                .iter()
+                .any(|(k, hit)| *hit && intern::id_eq_str(kind, k));
+                hit as i64
             }
         }
-        Op::is_shop => {
+        Op::tile_attr => {
+            // ABI: tile_attr(tile, attr_ptr, attr_len)
             let s = board::tile_slot(a0);
             if s < 0 {
-                0
+                // Missing-tile defaults (mirror `tile_class::attr_of`).
+                let attr = name_id(a1, a2);
+                if intern::id_eq_str(attr, "group")
+                    || intern::id_eq_str(attr, "tier")
+                    || intern::id_eq_str(attr, "area")
+                    || intern::id_eq_str(attr, "index")
+                {
+                    -1
+                } else {
+                    0
+                }
             } else {
-                board::is_shop(&board::TILES[s as usize]) as i64
+                let attr = name_id(a1, a2);
+                let t = &board::TILES[s as usize];
+                if intern::id_eq_str(attr, "group") {
+                    t.group as i64
+                } else if intern::id_eq_str(attr, "tier") {
+                    -1
+                } else if intern::id_eq_str(attr, "price") {
+                    t.price as i64
+                } else if intern::id_eq_str(attr, "house") {
+                    t.house_cost as i64
+                } else if intern::id_eq_str(attr, "area") {
+                    -1
+                } else if intern::id_eq_str(attr, "rent") {
+                    t.rent.len() as i64
+                } else if intern::id_eq_str(attr, "index") {
+                    t.index as i64
+                } else {
+                    0
+                }
             }
         }
-        Op::is_ring => {
-            let s = board::tile_slot(a0);
-            if s < 0 {
-                0
+        Op::tile_in => {
+            // ABI: tile_in(player_id, tile, class_ptr, class_len)
+            // This model keeps the historical quirks so proofs stay put:
+            // buyable = unowned property; livehouse = tiles 31/50.
+            let class = name_id(a2, a3);
+            if intern::id_eq_str(class, "buyable") {
+                let s = board::tile_slot(a1);
+                if s < 0 {
+                    0
+                } else {
+                    let t = &board::TILES[s as usize];
+                    let owned = world::with_world(|w| w.tiles[tile_idx(a1)].owner);
+                    (board::is_property(t) && owned < 0) as i64
+                }
+            } else if intern::id_eq_str(class, "shop") {
+                let s = board::tile_slot(a1);
+                if s < 0 {
+                    0
+                } else {
+                    board::is_shop(&board::TILES[s as usize]) as i64
+                }
+            } else if intern::id_eq_str(class, "livehouse") {
+                // Live House is board.json index 32 (agent) / 51 (property
+                // Live House Galaxy) → engine positions 31 / 50.
+                let _ = a0;
+                (a1 == 31 || a1 == 50) as i64
+            } else if intern::id_eq_str(class, "color:6") {
+                // Same live-house set for the colour-6 class (this model's quirk).
+                (a1 == 31 || a1 == 50) as i64
             } else {
-                board::is_ring(&board::TILES[s as usize]) as i64
-            }
-        }
-        Op::is_circle => {
-            let s = board::tile_slot(a0);
-            if s < 0 {
                 0
-            } else {
-                board::is_circle(&board::TILES[s as usize]) as i64
-            }
-        }
-        Op::is_live_house | Op::is_live_house_for => {
-            // Live House is board.json index 32 (agent) / 51 (property
-            // Live House Galaxy) → engine positions 31 / 50.
-            (a0 == 31 || a0 == 50) as i64
-        }
-        Op::is_agent => {
-            let s = board::tile_slot(a0);
-            if s < 0 {
-                0
-            } else {
-                board::is_agent(&board::TILES[s as usize]) as i64
             }
         }
         Op::dist | Op::tile_forward => {
@@ -1854,11 +1900,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::buy
         | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice
         | Op::raise | Op::raise_bought | Op::play_card | Op::play_from_hand
-        | Op::can_build_on | Op::is_color | Op::ring_multiplier | Op::add_ring_bonus
+        | Op::can_build_on | Op::ring_multiplier | Op::add_ring_bonus
         | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat
         | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile
         | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations
-        | Op::cancel_designation | Op::designation_cancelled | Op::is_agent => {
+        | Op::cancel_designation | Op::designation_cancelled => {
             // Several of these are read-only queries we did model above; the
             // remaining ones are engine-protocol and return a benign 0. Any
             // op that must fail loudly is handled by the catch-all below if

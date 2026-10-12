@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `上学时间`）:
 //! > 全体玩家移动到操作角色当前上学的学校的格子然后获得1层[除外]（如果剧情没有明说则移动到周边学区）。
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;

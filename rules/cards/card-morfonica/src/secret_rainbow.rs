@@ -11,7 +11,7 @@
 //! the rule (see [`GRADES`] below).
 
 use card_sdk::abi::ChainKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new(

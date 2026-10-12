@@ -17,7 +17,7 @@
 //! the residual guard is gone.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The teleport is armed (0/1). Presence only -- the tile to teleport to rides

@@ -511,38 +511,33 @@ pub fn owned_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32
     })
 }
 
-pub fn is_buyable<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_buyable(tile)
-    })
+/// `tile_is(tile, kind_ptr, kind_len) -> i32` -- data kind by wire spelling.
+/// Replaces `is_circle` / `is_ring` / `is_agent`.
+pub fn tile_is<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
+    let kind = guest_str(c, kp, kl)?;
+    Ok(c.st().wr().tile_is(tile, &kind) as i32)
 }
 
-pub fn is_shop<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_shop(tile)
-    })
+/// `tile_attr(tile, attr_ptr, attr_len) -> i32` -- generic field read.
+/// Replaces the attr family of `tile_group` / `tile_price` (those stay as
+/// sugar). `kind` / `color` strings are `tile_is` / future string attrs.
+pub fn tile_attr<C: HostCtx>(c: &mut C, tile: i32, ap: i32, al: i32) -> Result<i32, HostErr> {
+    let attr = guest_str(c, ap, al)?;
+    Ok(c.st().wr().tile_attr(tile, &attr))
 }
 
-pub fn is_ring<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_ring(tile)
-    })
-}
-
-pub fn is_circle<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_circle(tile)
-    })
-}
-
-pub fn is_color<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, group: i32) -> Result<i32, HostErr> {
-    Ok({
-            c.st().wr().is_color(player_id, tile, group) as i32
-    })
-}
-
-pub fn is_live_house_for<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().is_live_house_for(player_id, tile),)
+/// `tile_in(player_id, tile, class_ptr, class_len) -> i32` -- class membership.
+/// Replaces `is_buyable` / `is_shop` / `is_live_house` / `is_live_house_for` /
+/// `is_color`.
+pub fn tile_in<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    cp: i32,
+    cl: i32,
+) -> Result<i32, HostErr> {
+    let class = guest_str(c, cp, cl)?;
+    Ok(c.st().wr().tile_in(player_id, tile, &class) as i32)
 }
 
 pub fn paid_in_settle<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
@@ -636,18 +631,6 @@ pub fn turn_snap<C: HostCtx>(c: &mut C, player_id: i32, buf: i32) -> Result<i32,
             }
             c.write_guest( buf, &out)?;
             Ok(16)
-}
-
-pub fn is_agent<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_agent(tile)
-    })
-}
-
-pub fn is_live_house<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().is_live_house(tile)
-    })
 }
 
 pub fn tile_group<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {

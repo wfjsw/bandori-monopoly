@@ -14,7 +14,7 @@
 //! player into a MyGO or Ave Mujica player. （3） is a crystal on a 4→5 crossing.
 
 use card_sdk::abi::{state_key, CardPile, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:CRYCHIC:美好的往日幻影";

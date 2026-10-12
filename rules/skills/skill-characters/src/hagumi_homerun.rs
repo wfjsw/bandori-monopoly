@@ -18,7 +18,7 @@
 //! which rides on the plan's dice table.
 
 use card_sdk::abi::{HookKind, MarkFilter};
-use card_sdk::ctx::{self, plan};
+use ruleset_core::ctx::{self, plan};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「可乐饼」 parked on a tile.

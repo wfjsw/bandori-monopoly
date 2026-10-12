@@ -148,6 +148,13 @@ pub struct WindowCtx {
     pub ring_tiles: Vec<i64>,
     pub live_house_tiles: Vec<i64>,
     pub buyable_tiles: Vec<i64>,
+    /// ABI v56: data kind wire spelling per tile id (empty = unknown).
+    /// Backs `tile_is` for kinds outside the four CEL sugar lists.
+    pub tile_kinds: Vec<String>,
+    /// ABI v56: `(tile, attr) -> value` rows for `tile_attr`.
+    pub tile_attrs: BTreeMap<(i64, String), i64>,
+    /// ABI v56: true `(player, tile, class)` triples for `tile_in`.
+    pub tile_classes: Vec<(i64, i64, String)>,
     /// Board tile count (the ring size) -- backs `dist` and the path scans.
     pub tile_count: i64,
     /// Per-tile owner seat (`-1` = unowned), index = tile id. Backs

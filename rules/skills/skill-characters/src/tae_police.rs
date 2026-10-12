@@ -16,7 +16,7 @@
 //! is the `card` chain for a hand play and `skillUsed` for a skill press.
 
 use card_sdk::abi::{prop, state_key, ChainKind, HookKind, MarkFilter};
-use card_sdk::ctx::{self, state, trigger};
+use ruleset_core::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「[多惠兔子]」.

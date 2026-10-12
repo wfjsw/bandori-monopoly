@@ -18,7 +18,7 @@
 //! that settle, which is what `PayMul` is.
 
 use card_sdk::abi::{state_key, AbKind, HookKind};
-use card_sdk::ctx::{self, state, trigger};
+use ruleset_core::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Settle this player owes at their own next turn end, from （2）.

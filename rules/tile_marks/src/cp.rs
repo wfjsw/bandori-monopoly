@@ -74,7 +74,7 @@
 //!   made settler and card controller the same player.)
 
 use card_sdk::abi::{counter, mark, HookKind, MarkFilter};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 /// The board-owned [CP点] rule. One instance on [`BOARD_OWNER`], governing no

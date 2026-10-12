@@ -11,7 +11,7 @@
 
 use card_sdk::abi::state_key;
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const WELCOME_MUJICA: CardDef = CardDef::new(

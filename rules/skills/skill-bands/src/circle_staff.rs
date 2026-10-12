@@ -9,7 +9,7 @@
 //! play's own numbers are already tagged for a doubling to target.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, CardPile};
+use ruleset_core::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CIRCLE_STAFF: CardDef = CardDef::new(

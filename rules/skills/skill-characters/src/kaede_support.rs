@@ -23,7 +23,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「每两个回合没有玩家发动该技能」 -- a band-wide rest counter.
@@ -217,7 +217,7 @@ fn at_turn_end(_player_id: i32) -> card_sdk::Asked {
 
 /// 状态2（2）: 「进入状态2时你可消耗X个火罐，指定其他人的X个地契」.
 fn can_enter_two(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {

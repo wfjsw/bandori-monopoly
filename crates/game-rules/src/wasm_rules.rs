@@ -797,7 +797,7 @@ impl CardWorld for Run {
         tiles
             .iter()
             .map(|&t| {
-                if self.is_buyable(t) != 0 {
+                if self.tile_in(-1, t, "buyable") {
                     (self.buy_price(t), true)
                 } else {
                     (-1, false)
@@ -1512,51 +1512,23 @@ impl CardWorld for Run {
     }
 
     // board extensions ------------------------------------------------------
-    fn is_buyable(&self, tile: i32) -> i32 {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.is_buyable()) as i32
+    /// ABI v56: data kind by wire spelling. Replaces `is_circle`/`is_ring`/`is_agent`.
+    fn tile_is(&self, tile: i32, kind: &str) -> bool {
+        crate::tile_class::kind_is(self.data.tiles.get(tile.max(0) as usize), kind)
     }
-    fn is_shop(&self, tile: i32) -> i32 {
-        // A 「商店街」 deed: buyable and colour group 10.
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.is_buyable() && t.group == 10) as i32
+    /// ABI v56: generic field read. Replaces the attr family of `tile_group`/`tile_price`.
+    fn tile_attr(&self, tile: i32, attr: &str) -> i32 {
+        crate::tile_class::attr_of(self.data.tiles.get(tile.max(0) as usize), attr)
     }
-    fn is_ring(&self, tile: i32) -> i32 {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == game_core::data::TileKind::Ring) as i32
-    }
-    fn is_circle(&self, tile: i32) -> i32 {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == game_core::data::TileKind::Circle) as i32
-    }
-    fn is_color(&self, player_id: i32, tile: i32, group: i32) -> bool {
-        // The tile-prop colour reader (`docs/PURCHASE.md`): the tile's own
-        // `TileData.group`, `prop::ANY_COLOR` (「该格获得所有颜色」), or this
-        // player's `colorFor:<p>` -- which may name `group` or
-        // `prop::ALL_COLORS` for "all colours".
-        let any = self.world.tile_prop(tile, game_core::state::prop::ANY_COLOR) != 0;
-        let color_for = self.world.tile_prop(
-            tile,
-            &format!("{}{}", game_core::state::prop::COLOR_FOR_PREFIX, player_id),
-        );
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| {
-                t.group == group
-                    || t.group == game_core::state::prop::ALL_COLORS
-                    || any
-                    || color_for == group
-                    || color_for == game_core::state::prop::ALL_COLORS
-            })
+    /// ABI v56: class membership. Replaces `is_buyable`/`is_shop`/`is_live_house`/
+    /// `is_live_house_for`/`is_color`. Props first, then [`crate::tile_class`].
+    fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
+        crate::tile_class::tile_in(
+            self.data.tiles.get(tile.max(0) as usize),
+            player_id,
+            class,
+            |k| self.world.tile_prop(tile, k),
+        )
     }
     fn paid_in_settle(&self) -> i32 {
         self.world.turn.paid_in_settle
@@ -1586,28 +1558,6 @@ impl CardWorld for Run {
             .get(player_id.max(0) as usize)
             .map(|s| (s.pos, s.stay, s.stun, s.exile))
             .unwrap_or((-1, 0, 0, 0))
-    }
-    fn is_agent(&self, tile: i32) -> i32 {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == game_core::data::TileKind::Agent) as i32
-    }
-    fn is_live_house(&self, tile: i32) -> i32 {
-        // Live House: buyable and colour group 6. The per-player colour
-        // override is a tile prop, so see `is_live_house_for`.
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.is_buyable() && t.group == 6) as i32
-    }
-    fn is_live_house_for(&self, player_id: i32, tile: i32) -> i32 {
-        (self.is_color(player_id, tile, 6)
-            && self
-                .data
-                .tiles
-                .get(tile.max(0) as usize)
-                .is_some_and(|t| t.is_buyable())) as i32
     }
     fn tile_group(&self, tile: i32) -> i32 {
         self.data
@@ -6374,6 +6324,23 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
             .get(tile.max(0) as usize)
             .is_some_and(|t| t.is_buyable())
     }
+    #[inline]
+    fn tile_is(&self, tile: i32, kind: &str) -> bool {
+        crate::tile_class::kind_is(self.data.tiles.get(tile.max(0) as usize), kind)
+    }
+    #[inline]
+    fn tile_attr(&self, tile: i32, attr: &str) -> i32 {
+        crate::tile_class::attr_of(self.data.tiles.get(tile.max(0) as usize), attr)
+    }
+    #[inline]
+    fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
+        crate::tile_class::tile_in(
+            self.data.tiles.get(tile.max(0) as usize),
+            player_id,
+            class,
+            |k| self.world.tile_prop(tile, k),
+        )
+    }
     fn player_count(&self) -> i32 {
         self.world.st.players.len() as i32
     }
@@ -6911,6 +6878,20 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .tiles
             .get(tile.max(0) as usize)
             .is_some_and(|t| t.is_buyable())
+    }
+    fn tile_is(&self, tile: i64, kind: &str) -> bool {
+        crate::tile_class::kind_is(self.data.tiles.get(tile.max(0) as usize), kind)
+    }
+    fn tile_attr(&self, tile: i64, attr: &str) -> i64 {
+        crate::tile_class::attr_of(self.data.tiles.get(tile.max(0) as usize), attr) as i64
+    }
+    fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool {
+        crate::tile_class::tile_in(
+            self.data.tiles.get(tile.max(0) as usize),
+            player as i32,
+            class,
+            |k| self.world.tile_prop(tile as i32, k),
+        )
     }
     fn slot_table(&self) -> Vec<(String, i64)> {
         crate::cond_pre::SLOT_NAMES

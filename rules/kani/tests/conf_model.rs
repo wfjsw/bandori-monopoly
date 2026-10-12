@@ -336,43 +336,41 @@ impl CardWorld for ConfWorld {
             .map(|(i, _)| i as i32)
             .unwrap_or(-1)
     }
-    fn is_buyable(&self, tile: i32) -> i32 {
+    /// ABI v56: kind by wire spelling. Replaces `is_circle`/`is_ring`/`is_agent`.
+    fn tile_is(&self, tile: i32, kind: &str) -> bool {
         let s = rules_kani::board::tile_slot(tile);
         if s < 0 {
-            return 0;
+            return false;
         }
         let t = &rules_kani::board::TILES[s as usize];
-        (rules_kani::board::is_property(t) && self.tile_owner(tile) < 0) as i32
-    }
-    fn is_shop(&self, tile: i32) -> i32 {
-        let s = rules_kani::board::tile_slot(tile);
-        if s < 0 {
-            0
-        } else {
-            rules_kani::board::is_shop(&rules_kani::board::TILES[s as usize]) as i32
+        match kind {
+            "circle" => rules_kani::board::is_circle(t),
+            "ring" => rules_kani::board::is_ring(t),
+            "agent" => rules_kani::board::is_agent(t),
+            "property" => rules_kani::board::is_property(t),
+            _ => false,
         }
     }
-    fn is_ring(&self, tile: i32) -> i32 {
-        let s = rules_kani::board::tile_slot(tile);
-        if s < 0 {
-            0
-        } else {
-            rules_kani::board::is_ring(&rules_kani::board::TILES[s as usize]) as i32
+    /// ABI v56: class membership. Keeps this model's quirks (is_buyable =
+    /// unowned property; livehouse = the two hard-coded tiles).
+    fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
+        match class {
+            "buyable" => {
+                let s = rules_kani::board::tile_slot(tile);
+                s >= 0
+                    && rules_kani::board::is_property(&rules_kani::board::TILES[s as usize])
+                    && self.tile_owner(tile) < 0
+            }
+            "shop" => {
+                let s = rules_kani::board::tile_slot(tile);
+                s >= 0 && rules_kani::board::is_shop(&rules_kani::board::TILES[s as usize])
+            }
+            "livehouse" => {
+                let _ = player_id;
+                tile == 32 || tile == 51
+            }
+            _ => false,
         }
-    }
-    fn is_circle(&self, tile: i32) -> i32 {
-        let s = rules_kani::board::tile_slot(tile);
-        if s < 0 {
-            0
-        } else {
-            rules_kani::board::is_circle(&rules_kani::board::TILES[s as usize]) as i32
-        }
-    }
-    fn is_live_house(&self, tile: i32) -> i32 {
-        (tile == 32 || tile == 51) as i32
-    }
-    fn is_live_house_for(&self, _player_id: i32, tile: i32) -> i32 {
-        self.is_live_house(tile)
     }
     fn tile_group(&self, tile: i32) -> i32 {
         board_group(tile)
@@ -836,14 +834,6 @@ impl CardWorld for ConfWorld {
     fn set_trigger_move_roll(&mut self, roll: i32) {
         self.move_roll = roll;
         self.move_present = true;
-    }
-    fn is_agent(&self, tile: i32) -> i32 {
-        let s = rules_kani::board::tile_slot(tile);
-        if s < 0 {
-            0
-        } else {
-            rules_kani::board::is_agent(&rules_kani::board::TILES[s as usize]) as i32
-        }
     }
     fn paid_in_settle(&self) -> i32 {
         0

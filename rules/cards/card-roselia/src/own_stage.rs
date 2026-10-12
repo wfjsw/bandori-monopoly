@@ -8,7 +8,7 @@
 //! movement-locked turn) settles.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger, AbKind};
+use ruleset_core::ctx::{self, trigger, AbKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(

@@ -18,7 +18,7 @@
 //! amount seen from one side.
 
 use card_sdk::abi::{counter, state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns spent in 状态2. 「处于状态2的第三回合开始时」 reads this.
@@ -113,7 +113,7 @@ fn bend(player_id: i32) -> card_sdk::Asked {
 /// 「处于状态2时可消耗一个奇迹水晶使你的一次[支付]金额减半」 -- the press is the
 /// halve, so it rides the pay window rather than standing alone.
 fn can_halve(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {

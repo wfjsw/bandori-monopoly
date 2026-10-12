@@ -26,7 +26,8 @@ world copy the host runs against.
 
 ```rust
 // rules/cards/card-roselia/src/press.rs
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 /// C# `CardPress` -- 压: gain 1,000.
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
@@ -276,20 +277,41 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 `Sumimi:#L12` declare `(prop::HAND_LIMIT_DELTA, -1)`; `MyGO:壱雫空` declares
 `(prop::PLAYABLE_STUNNED, 1)`.
 
-## The vocabulary (`card_sdk::ctx`)
+## The vocabulary (`card_sdk::ctx` vs `ruleset_core::ctx`)
+
+**Split (ABI v56).** `card-sdk` is only generalized card-runtime mechanisms
+plus the guest ABI wire codes. This ruleset's names (火罐 / 奇迹水晶 / CiRCLE /
+RiNG / Live House / band skills / rent-buy verbs) live in `ruleset-core`.
+Card bodies import `use ruleset_core::ctx` (a facade that re-exports the
+generic surface and the game sugar).
+
+Generic tile queries (host ABI v56):
+
+* `tile_is(tile, "ring"|"circle"|"agent"|"property"|…)` -- data `TileKind`
+* `tile_attr(tile, "group"|"area"|"tier"|"price"|"house"|"rent"|"index")` -- i32 field
+* `tile_in(player, tile, "buyable"|"shop"|"livehouse"|"color:<g>")` -- ruleset
+  class; per-player overrides are class-membership props (`class:` /
+  `classFor:<p>:`) plus the existing `anyColor` / `colorFor:<p>`
+
+Game sugar in `ruleset_core::ctx` (kept readable for card code):
+`is_ring(t) = tile_is(t, "ring")`, `is_circle` / `is_agent` likewise;
+`is_buyable` / `is_shop` / `is_live_house` / `is_live_house_for` / `is_color`
+are `tile_in` classes.
 
 | group | functions |
 |---|---|
 | dice & log | `roll`, `log` |
-| board | `tile_count`, `tile_named`, `tile_owner`, `player_pos`, `tile_steps_ahead`, `rent_of`, `buy_price`, `build_cost`, `mortgage_value`, `owned_tiles`, `is_buyable`, `is_shop`, `tile_group`, `tile_price`, `houses_of`, `set_houses`, `add_house`, `mortgaged_of`, `set_mortgaged`, `set_owner`, `dist`, `tile_forward`, `neighbor`, `players_on`, `is_ring`, `is_circle`, `is_live_house` |
-| players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `character_is`, `in_band`, `turn_player`, `round_no`, `turn_key`, `gains_this_turn` (「当前回合内你每获得过一次资金」 -- the engine's per-turn money-in counter, reset at each turn start) |
+| board (generic) | `tile_count`, `tile_named`, `tile_owner`, `player_pos`, `tile_steps_ahead`, `rent_of`, `buy_price`, `build_cost`, `mortgage_value`, `owned_tiles`, `tile_is`, `tile_attr`, `tile_in`, `tile_group`, `tile_price`, `houses_of`, `set_houses`, `add_house`, `mortgaged_of`, `set_mortgaged`, `set_owner`, `dist`, `tile_forward`, `neighbor`, `players_on` |
+| board (game sugar) | `is_buyable`, `is_shop`, `is_ring`, `is_circle`, `is_live_house`, `is_agent` |
+| players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `turn_player`, `round_no`, `turn_key`, `gains_this_turn` (「当前回合内你每获得过一次资金」 -- the engine's per-turn money-in counter, reset at each turn start). Game: `character_is`, `in_band` |
 | targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
 | hand & deck | `draw`, `add_to_hand`, `add_to_deck`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `add_to_deck_at` (`DeckPos::{Top,Bottom,Random}`), `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, CardPile, id)` / `take_from_hand` (remove without discarding) |
 | marks & tokens | `place_mark`, `place_mark_new`, `count_marks`, `bump_mark`, `remove_marks`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
 | tile designations | `designate_tile`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance (see 「Tile designations」) |
 | named counters (ABI v50) | `counter` / `add_counter` / `set_counter` (this instance), `counter_at` / `add_counter_at` (by uid), `card_counter` / `add_card_counter` (a placed card by id). Wire names `cp` / `crystals` map to `FieldCard::cp` / `FieldCard::crystals`; anything else lives in `FieldCard::counters`. The old CP helpers (`place_cp` / `count_cp` / `clear_cp` / `add_cp` / `cp_attached`) are **gone** -- use the mark / counter API, and see 「Cross-card messages」 for the 该清CP了 ↔ `mark:cp` shape |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
-| pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`, i.e. its named `'crystals'` counter), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
+| pots & status (generic) | `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
+| pots & status (game) | `band_crystals`, `add_band_crystals`, `fire`, `fire_max`, `gain_fire`, `spend_fire`, `crystals` / `set_crystals` / `add_crystals` / `decay` |
 | skills & band attachments (ABI v35) | `band_skill` / `character_skill` (the bound rule id, C# `H._fx[i].bands` / `.skill`), `band_skills` (every band attachment as `(uid, id, extra)`), `add_band_skill` (C# `H.MakeBand`; `extra` = 「拿取」 copy: 「相同乐队技能卡的效果不可叠加」 / 「不视为那个乐队的角色」), `invoke_skill` (run a skill rule's press entry `On::Play` for a player -- 「立即执行乐队技能的（2）效果」 / `SkillPareo -> Offer()`. No `skillUsed`: that is the player's own press (`use_skill`).) |
 | ring | `ring_multiplier`, `add_ring_bonus`, `teleport_to` |
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_tiles` (labels + prices + AI hint), `ask_player`, `ask_card`, `ask_number` |

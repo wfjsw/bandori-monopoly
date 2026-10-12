@@ -11,7 +11,7 @@
 //! mark is spent when it pays out.
 
 use card_sdk::abi::{state_key, HookKind, MarkFilter};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「火罐」 this skill parks on a tile.

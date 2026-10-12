@@ -120,6 +120,7 @@ pub fn is_property(t: &TileData) -> bool {
 }
 
 /// `TileData::is_buyable` — Property or Ring (game-core `data.rs`).
+/// Replaced by `tile_in(t, "buyable")` on the host; kept as the static-data half.
 pub fn is_buyable(t: &TileData) -> bool {
     t.kind == 1 || t.kind == 3
 }
@@ -142,6 +143,57 @@ pub fn is_circle(t: &TileData) -> bool {
 
 pub fn is_agent(t: &TileData) -> bool {
     t.kind == 2
+}
+
+/// ABI v56: `tile_is` -- data kind by wire spelling (kind codes: 0=circle
+/// 1=property 2=agent 3=ring 4=cafe 5=edogawa 6=ryuseido).
+pub fn tile_is(t: &TileData, kind: &str) -> bool {
+    match kind {
+        "circle" => is_circle(t),
+        "property" => is_property(t),
+        "agent" => is_agent(t),
+        "ring" => is_ring(t),
+        "cafe" => t.kind == 4,
+        "edogawa" => t.kind == 5,
+        "ryuseido" => t.kind == 6,
+        _ => false,
+    }
+}
+
+/// ABI v56: `tile_attr` -- generic field read. `"house"` is the build cost
+/// (`TileData.house` / `house_cost`), not the standing count. `"rent"` is the
+/// rent table length (this model's fixed `[i32; 4]`). `"area"`/`"tier"` are
+/// not modelled (missing -> -1 / 0 defaults).
+pub fn tile_attr(t: &TileData, attr: &str) -> i32 {
+    match attr {
+        "group" => t.group,
+        "tier" => -1,
+        "price" => t.price,
+        "house" => t.house_cost,
+        "area" => -1,
+        "rent" => t.rent.len() as i32,
+        "index" => t.index,
+        _ => 0,
+    }
+}
+
+/// ABI v56: `tile_in` -- static class definitions (props are not modelled on
+/// this static board). Matching `game-rules::tile_class`.
+pub fn tile_in(t: &TileData, class: &str) -> bool {
+    match class {
+        "buyable" => is_buyable(t),
+        "shop" => is_shop(t),
+        "livehouse" => is_buyable(t) && t.group == 6,
+        _ => {
+            let Some(g) = class.strip_prefix("color:") else {
+                return false;
+            };
+            match g.parse::<i32>() {
+                Ok(g) => t.group == g || t.group == -2,
+                Err(_) => false,
+            }
+        }
+    }
 }
 
 /// `purchase::table_rent` — rent at `houses` (clamped into the 0..=3 table).

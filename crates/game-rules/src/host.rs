@@ -2765,44 +2765,23 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "is_buyable",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::is_buyable(&mut c, tile).map_err(HostErr::into_err)
+        "tile_is",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            hostfns::tile_is(&mut c, tile, kp, kl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "is_shop",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::is_shop(&mut c, tile).map_err(HostErr::into_err)
+        "tile_attr",
+        |mut c: C<W>, tile: i32, ap: i32, al: i32| -> Result<i32, Error> {
+            hostfns::tile_attr(&mut c, tile, ap, al).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "is_ring",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::is_ring(&mut c, tile).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "is_circle",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::is_circle(&mut c, tile).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "is_color",
-        |mut c: C<W>, player_id: i32, tile: i32, group: i32| -> Result<i32, Error> {
-            hostfns::is_color(&mut c, player_id, tile, group).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "is_live_house_for",
-        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            hostfns::is_live_house_for(&mut c, player_id, tile).map_err(HostErr::into_err)
+        "tile_in",
+        |mut c: C<W>, player_id: i32, tile: i32, cp: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::tile_in(&mut c, player_id, tile, cp, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2901,20 +2880,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "turn_snap",
         |mut c: C<W>, player_id: i32, buf: i32| -> Result<i32, Error> {
             hostfns::turn_snap(&mut c, player_id, buf).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "is_agent",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::is_agent(&mut c, tile).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "is_live_house",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::is_live_house(&mut c, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4786,21 +4751,6 @@ impl CardWorld for NullWorld {
     fn set_trigger_deal_houses(&mut self, _: i32) {}
     fn set_trigger_deal_mortgaged(&mut self, _: i32) {}
     fn set_trigger_reason(&mut self, _: &str) {}
-    fn is_buyable(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_shop(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_ring(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_circle(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_live_house(&self, _: i32) -> i32 {
-        0
-    }
     fn tile_group(&self, _: i32) -> i32 {
         -1
     }

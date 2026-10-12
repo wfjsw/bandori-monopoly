@@ -5,7 +5,8 @@
 //! >  每次打出此卡时使ring的价格基础乘数+5
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, louder)]);
 

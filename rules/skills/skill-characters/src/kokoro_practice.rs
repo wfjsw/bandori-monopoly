@@ -18,7 +18,7 @@
 //! and a forced stop bought with a pot when someone passes you.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「首次经过CiRCLE不获得经过奖励」.

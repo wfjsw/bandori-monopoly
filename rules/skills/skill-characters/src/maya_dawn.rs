@@ -19,7 +19,7 @@
 use alloc::string::String;
 
 use card_sdk::abi::{CardPile, HookKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const FANS_UP: &str = "P✽P粉丝(正)";

@@ -19,7 +19,7 @@
 //! when they hold a mark -- the plan's route filter.
 
 use card_sdk::abi::{state_key, HookKind, MarkFilter};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「[怪盗标记]」.
@@ -93,7 +93,7 @@ fn settle(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「主要阶段可消耗7火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::FIRE) < 7 {

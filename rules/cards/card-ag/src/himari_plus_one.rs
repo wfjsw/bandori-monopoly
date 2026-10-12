@@ -6,7 +6,7 @@
 //! Counteraction: when one of your own rolls is under 6, it goes up by 1.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(

@@ -224,32 +224,35 @@ fn gain_fire_clamps_at_cap() {
     assert_eq!(got, 0, "at cap gains nothing");
 }
 
-/// `is_shop` = buyable && group == 10 (商店街), not `kind == 5`.
+/// `tile_in(_, _, "shop")` = buyable && group == 10 (商店街), not `kind == 5`.
+/// (Was `Op::is_shop` before ABI v56.)
 #[test]
 fn is_shop_is_buyable_group_10() {
     let _g = model_lock();
     install(base());
+    // Class string "shop"; tile_in(player, tile, class_ptr, class_len).
+    let (cp, cl) = card_sdk::native::intern(b"shop");
     // 羽泽咖啡厅 (47) is property + group 10 — a 商店街 deed.
     assert_eq!(
-        rules_kani::host::dispatch(Op::is_shop, [47, 0, 0, 0, 0, 0]),
+        rules_kani::host::dispatch(Op::tile_in, [-1, 47, cp, cl, 0, 0]),
         1,
         "羽泽咖啡厅 (group 10 property) is a shop"
     );
     // 江户川乐器店 is kind edogawa group 0 — NOT a shop.
     assert_eq!(
-        rules_kani::host::dispatch(Op::is_shop, [30, 0, 0, 0, 0, 0]),
+        rules_kani::host::dispatch(Op::tile_in, [-1, 30, cp, cl, 0, 0]),
         0,
         "江户川乐器店 is not group 10"
     );
     // The agent tile 「商店街」 (46) is the group marker, not buyable.
     assert_eq!(
-        rules_kani::host::dispatch(Op::is_shop, [46, 0, 0, 0, 0, 0]),
+        rules_kani::host::dispatch(Op::tile_in, [-1, 46, cp, cl, 0, 0]),
         0,
         "商店街 agent itself is not buyable"
     );
     // Live House Galaxy is group 6 — not a shop.
     assert_eq!(
-        rules_kani::host::dispatch(Op::is_shop, [50, 0, 0, 0, 0, 0]),
+        rules_kani::host::dispatch(Op::tile_in, [-1, 50, cp, cl, 0, 0]),
         0,
         "Live House Galaxy is group 6"
     );

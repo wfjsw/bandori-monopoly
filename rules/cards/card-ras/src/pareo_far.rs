@@ -9,7 +9,8 @@
 //! `ctx::invoke_skill`.
 
 use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 /// The shared mark name. `skill:鳰原令王那:梦幻可爱♪女仆` (2) reads and spends
 /// 「PAREO标记」 by that literal, so the card must add under the same name --

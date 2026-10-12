@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 use card_sdk::abi::{roll_source, ChainKind, HookKind};
 
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LAYER_KEEP: CardDef = CardDef::new(

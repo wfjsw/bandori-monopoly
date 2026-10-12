@@ -385,22 +385,8 @@ impl CardWorld for TestWorld {
         self.trigger.reason = Some(reason.to_string());
     }
     // The test world models money, marks and dice only -- board/hand queries are
-    // neutral until a test needs them.
-    fn is_buyable(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_shop(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_ring(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_circle(&self, _: i32) -> i32 {
-        0
-    }
-    fn is_live_house(&self, _: i32) -> i32 {
-        0
-    }
+    // neutral until a test needs them. (`tile_is` / `tile_attr` / `tile_in`
+    // default safely.)
     fn tile_group(&self, _: i32) -> i32 {
         -1
     }

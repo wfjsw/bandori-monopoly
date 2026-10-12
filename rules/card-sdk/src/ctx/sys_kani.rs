@@ -83,25 +83,19 @@ pub fn owned_at(player_id: i32, index: i32) -> i32 {
     kani_host::call_i32(Op::owned_at, [player_id, index, 0, 0, 0, 0])
 }
 
-pub fn is_buyable(tile: i32) -> i32 {
-    kani_host::call_i32(Op::is_buyable, [tile, 0, 0, 0, 0, 0])
+pub fn tile_is(tile: i32, kind_ptr: i32, kind_len: i32) -> i32 {
+    kani_host::call_i32(Op::tile_is, [tile, kind_ptr, kind_len, 0, 0, 0])
 }
 
-pub fn is_shop(tile: i32) -> i32 {
-    kani_host::call_i32(Op::is_shop, [tile, 0, 0, 0, 0, 0])
+pub fn tile_attr(tile: i32, attr_ptr: i32, attr_len: i32) -> i32 {
+    kani_host::call_i32(Op::tile_attr, [tile, attr_ptr, attr_len, 0, 0, 0])
 }
 
-pub fn is_ring(tile: i32) -> i32 {
-    kani_host::call_i32(Op::is_ring, [tile, 0, 0, 0, 0, 0])
+pub fn tile_in(player_id: i32, tile: i32, class_ptr: i32, class_len: i32) -> i32 {
+    kani_host::call_i32(Op::tile_in, [player_id, tile, class_ptr, class_len, 0, 0])
 }
 
-pub fn is_circle(tile: i32) -> i32 {
-    kani_host::call_i32(Op::is_circle, [tile, 0, 0, 0, 0, 0])
-}
 
-pub fn is_live_house(tile: i32) -> i32 {
-    kani_host::call_i32(Op::is_live_house, [tile, 0, 0, 0, 0, 0])
-}
 
 pub fn tile_group(tile: i32) -> i32 {
     kani_host::call_i32(Op::tile_group, [tile, 0, 0, 0, 0, 0])
@@ -1113,9 +1107,6 @@ pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::gain_fixed, [player_id, amount, ptr, len, 0, 0])
 }
 
-pub fn is_agent(tile: i32) -> i32 {
-    kani_host::call_i32(Op::is_agent, [tile, 0, 0, 0, 0, 0])
-}
 
 pub fn paid_in_settle() -> i32 {
     kani_host::call_i32(Op::paid_in_settle, [0, 0, 0, 0, 0, 0])
@@ -1157,9 +1148,6 @@ pub fn turn_start_pos(player_id: i32) -> i32 {
     kani_host::call_i32(Op::turn_start_pos, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn is_color(player_id: i32, tile: i32, group: i32) -> i32 {
-    kani_host::call_i32(Op::is_color, [player_id, tile, group, 0, 0, 0])
-}
 
 pub fn unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32 {
     kani_host::call_i32(Op::unplace_card_named, [player_id, cp, cl, 0, 0, 0])
@@ -1197,9 +1185,6 @@ pub fn do_move_roll(player_id: i32) -> i32 {
     kani_host::call_i32(Op::do_move_roll, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn is_live_house_for(player_id: i32, tile: i32) -> i32 {
-    kani_host::call_i32(Op::is_live_house_for, [player_id, tile, 0, 0, 0, 0])
-}
 
 pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32 {
     kani_host::call_i32(Op::placed_cards, [player_id, buf, cap, 0, 0, 0])

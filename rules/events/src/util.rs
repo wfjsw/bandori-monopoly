@@ -7,7 +7,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 
 /// Every seat in turn order, skipping players already out of the game.
 pub fn all_players() -> Vec<i32> {

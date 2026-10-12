@@ -12,7 +12,7 @@
 //! placed card that walks one player per turn and takes band skill cards.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mujica:（海铃）";

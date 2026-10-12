@@ -11,7 +11,7 @@
 //! player's favour, latched per turn.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Sumimi:人气偶像组合";

@@ -20,7 +20,7 @@
 //! and is not implemented.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The 「角色标记」 namespace every consumer agrees on (NNM's `角色标记:*` too).
@@ -150,7 +150,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 
 /// （3） 「你可以使用手中的角色标记，视为使用该角色的技能」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if ctx::tok_names(player_id, MARK_PREFIX).is_empty() {

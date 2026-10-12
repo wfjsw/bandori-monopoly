@@ -6,7 +6,8 @@
 //!
 //! on one of your tiles, then roll 3d20 and maybe build free on that tile.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const SMILE_PATROL: CardDef =
     CardDef::new("HHW:微笑巡逻队", &[On::Play("", Some(cant_play), play)]);

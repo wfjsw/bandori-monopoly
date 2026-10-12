@@ -278,6 +278,9 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Val {
         31 => FnId::OwnedWithin,
         32 => FnId::OnPath,
         33 => FnId::Between,
+        34 => FnId::TileIs,
+        35 => FnId::TileAttr,
+        36 => FnId::TileIn,
         _ => return Val::Err,
     };
     let nargs = n.b as usize;
@@ -327,6 +330,84 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
         FnId::IsRing => set_has(ctx, SetId::Ring, int(0)),
         FnId::IsLiveHouse => set_has(ctx, SetId::LiveHouse, int(0)),
         FnId::IsBuyable => set_has(ctx, SetId::Buyable, int(0)),
+        // ABI v56 generic tile queries. String args lower to `id_of` hashes.
+        // Membership is modelled through the existing sets + named table
+        // (keep the IR integer-only; fills that need more should bake
+        // `named` rows -- see `fill_board_sets`).
+        FnId::TileIs => {
+            let tile = match int(0) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            let kind_id = match int(1) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            // Known wire kinds reuse the membership sets; the rest read
+            // `named[tile]` as a bitset of the 8 `TileKind::as_str` indices.
+            if kind_id == ctx::id_of("circle") {
+                return set_has(ctx, SetId::Circle, Ok(tile));
+            }
+            if kind_id == ctx::id_of("ring") {
+                return set_has(ctx, SetId::Ring, Ok(tile));
+            }
+            let bits = ctx.named_get(tile).unwrap_or(0);
+            match wire_kind_bit(kind_id) {
+                Some(b) => Val::Bool(bits & (1i64 << b) != 0),
+                None => Val::Bool(false),
+            }
+        }
+        FnId::TileAttr => {
+            let tile = match int(0) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            let attr_id = match int(1) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            let idx = wire_attr_index(attr_id);
+            if idx < 0 {
+                return Val::Int(0);
+            }
+            let key = tile * 16 + idx;
+            let missing = match idx {
+                // group / tier / area / index
+                0 | 1 | 4 | 6 => -1,
+                _ => 0,
+            };
+            Val::Int(ctx.named_get(key).unwrap_or(missing))
+        }
+        FnId::TileIn => {
+            let player = match int(0) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            let tile = match int(1) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            let class_id = match int(2) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            // Sugar classes reuse the sets; `color:<g>` / generic `class*`
+            // need a filled `named` row (key = packed player/tile, value =
+            // class id). Missing -> false.
+            if class_id == ctx::id_of("buyable") {
+                return set_has(ctx, SetId::Buyable, Ok(tile));
+            }
+            if class_id == ctx::id_of("livehouse") {
+                return set_has(ctx, SetId::LiveHouse, Ok(tile));
+            }
+            if class_id == ctx::id_of("shop") {
+                // shop = buyable && group 10; not a set today -> named row.
+                let key = ((player + 2) << 32) ^ tile;
+                return Val::Bool(ctx.named_get(key) == Some(class_id));
+            }
+            let key = ((player + 2) << 32) ^ tile;
+            Val::Bool(ctx.named_get(key) == Some(class_id))
+        }
         FnId::Money => seat_i64(ctx, args, SeatField::Money),
         FnId::Fire => seat_i64(ctx, args, SeatField::Fire),
         FnId::Crystals => seat_i64(ctx, args, SeatField::Crystals),
@@ -434,6 +515,36 @@ fn set_has(ctx: &IrCtx, set: SetId, r: Result<i64, ()>) -> Val {
         Ok(id) => Val::Bool(ctx.set_contains(set, id)),
         Err(()) => Val::Err,
     }
+}
+
+/// `TileKind::as_str` wire spelling -> bit index in `named[tile]`'s kind bitset
+/// (circle=0 … event=7). `None` for anything else.
+fn wire_kind_bit(kind_id: i64) -> Option<u32> {
+    const KINDS: [&str; 8] = [
+        "circle",
+        "cafe",
+        "edogawa",
+        "ryuseido",
+        "property",
+        "ring",
+        "agent",
+        "event",
+    ];
+    KINDS
+        .iter()
+        .position(|k| kind_id == ctx::id_of(k))
+        .map(|i| i as u32)
+}
+
+/// `tile_attr` field name -> slot in the `named` packing (`tile * 16 + slot`).
+/// `-1` for unknown attrs.
+fn wire_attr_index(attr_id: i64) -> i64 {
+    const ATTRS: [&str; 7] = ["group", "tier", "price", "house", "area", "rent", "index"];
+    ATTRS
+        .iter()
+        .position(|a| attr_id == ctx::id_of(a))
+        .map(|i| i as i64)
+        .unwrap_or(-1)
 }
 
 fn seat_i64(ctx: &IrCtx, args: &[Val], f: SeatField) -> Val {

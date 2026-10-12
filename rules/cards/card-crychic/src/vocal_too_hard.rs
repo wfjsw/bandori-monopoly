@@ -7,7 +7,7 @@
 //! that cancels one 5,000+ payment to another player.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const VOCAL_TOO_HARD: CardDef = CardDef::new(

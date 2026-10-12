@@ -6,7 +6,8 @@
 //!
 //! Instruments (no settle), +1 fire.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const TAE_SOUND: CardDef =
     CardDef::new("PPP:（多惠）寻找更好的声音", &[On::Play("", None, tae_sound)]);

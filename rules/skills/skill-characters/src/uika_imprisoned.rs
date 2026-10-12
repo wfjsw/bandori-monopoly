@@ -19,7 +19,7 @@
 //! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「回忆地块」 -- the three the clause names.

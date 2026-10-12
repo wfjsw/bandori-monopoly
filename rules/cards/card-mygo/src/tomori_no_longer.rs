@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 use alloc::string::String;
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger, CardPile};
+use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new(

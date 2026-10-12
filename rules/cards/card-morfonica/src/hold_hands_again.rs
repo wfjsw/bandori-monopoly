@@ -12,7 +12,7 @@
 //! Counteraction-only (`Normal => false`).
 
 use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:再次牵起手来";

@@ -1,0 +1,13 @@
+[package]
+name = "ruleset-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "BanG Dream Monopoly / this ruleset's vocabulary and sugar over card-sdk's generic mechanisms."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../card-sdk", features = ["guest"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }

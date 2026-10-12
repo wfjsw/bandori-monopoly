@@ -8,7 +8,7 @@
 //! grow a miracle crystal on it, and at 5+ the next foreign passer is trapped.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANA_FUNNY: CardDef = CardDef::new(

@@ -11,6 +11,7 @@ description = "Black-box rulebook tests for this game's shipped rules (cards, sk
 game-core = { path = "../../crates/game-core" }
 game-rules = { path = "../../crates/game-rules" }
 card-sdk = { workspace = true }
+ruleset-core = { path = "../ruleset-core" }
 serde_json = { workspace = true }
 rules-spec = { path = "../spec" }
 spec-kit = { path = "../../crates/spec-kit" }

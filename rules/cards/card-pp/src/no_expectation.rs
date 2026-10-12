@@ -16,7 +16,7 @@
 //! the reshuffle stack growth runs on `Reshuffled`.
 
 use card_sdk::abi::{prop, HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new(

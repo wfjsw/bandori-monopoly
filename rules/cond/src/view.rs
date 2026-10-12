@@ -144,10 +144,20 @@ pub trait CondView {
     /// `tile_named(name) -> id`; `-1` when unknown (the guest's convention).
     fn tile_named(&self, name: &str) -> i64;
     /// Tile-kind predicates (the guest's `is_circle` family).
+    /// Sugar over [`Self::tile_is`] / [`Self::tile_in`]; kept abstract so each
+    /// view's existing results (including snapshot quirks) do not shift.
     fn is_circle(&self, tile: i64) -> bool;
     fn is_ring(&self, tile: i64) -> bool;
     fn is_live_house(&self, tile: i64) -> bool;
     fn is_buyable(&self, tile: i64) -> bool;
+    /// ABI v56: `tile_is(tile, kind)` -- data `TileKind` by wire spelling.
+    fn tile_is(&self, tile: i64, kind: &str) -> bool;
+    /// ABI v56: `tile_attr(tile, attr)` -- generic i32 field read.
+    /// `kind` / `color` strings are [`Self::tile_is`] / future string attrs.
+    fn tile_attr(&self, tile: i64, attr: &str) -> i64;
+    /// ABI v56: `tile_in(player, tile, class)` -- ruleset class membership
+    /// (`buyable` / `shop` / `livehouse` / `color:<g>`).
+    fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool;
 
     // -- eager function tables (docs/GUARDS.md §4.2b: why eager) ------------
     /// Every `slot(name)` latch the host knows. Baked into `_<var>` for the

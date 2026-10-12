@@ -7,7 +7,7 @@
 //! swap half of each side's most expensive deed price when you pass a player.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const PROUD_LIGHT: CardDef = CardDef::new(

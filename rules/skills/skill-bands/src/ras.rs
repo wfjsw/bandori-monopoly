@@ -12,7 +12,7 @@
 //! teleport if the player is still standing there.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「每回合可选择只获得第一次受到的[异常移动效果]」 -- 1 once one has landed.

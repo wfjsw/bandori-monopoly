@@ -11,7 +11,7 @@
 //! on this rule's own id -- not the player's counter.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:MyGO!!!!!:迷途之星";
@@ -81,7 +81,7 @@ fn on_discarded(player_id: i32) -> card_sdk::Asked {
 /// (2) move-1 and the (3) draw-1. `ctx::is_placed` is true for the skill
 /// press, so the instance's crystal pool is the one being spent.
 fn available(player_id: i32) -> [bool; 2] {
-    if card_sdk::ctx::skill_blocked(player_id, "") || !is_my_turn(player_id) {
+    if ruleset_core::ctx::skill_blocked(player_id, "") || !is_my_turn(player_id) {
         return [false, false];
     }
     let c = ctx::crystals();
@@ -92,7 +92,7 @@ fn available(player_id: i32) -> [bool; 2] {
 /// move-1 costs 1 crystal and the (3) draw costs 2, so 1 crystal is already
 /// enough for the move half.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if !is_my_turn(player_id) {

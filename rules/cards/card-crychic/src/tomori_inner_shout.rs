@@ -11,7 +11,8 @@
 //!
 //! re-declare 「想要成为人类」's X for money, then a MyGO placement + pull skill.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 use crate::want_human::SLOT_X;
 

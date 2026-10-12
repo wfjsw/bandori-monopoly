@@ -17,7 +17,7 @@
 //! two uses, which is a counter keyed on the source rather than on the target.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;

@@ -12,7 +12,7 @@
 //! no-circle-reward flag on the walk that passes a CiRCLE.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
@@ -80,7 +80,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「将X个反面[P✽P粉丝]变正…X大于拥有的反面的[P✽P粉丝]时可为此卡添加
 /// 等量溢出的[奇迹水晶]（最多10个）」 -- the press is the flip.
 fn can_flip(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if ctx::tok(player_id, FAN) < 1 {

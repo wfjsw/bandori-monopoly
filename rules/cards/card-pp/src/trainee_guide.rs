@@ -19,7 +19,7 @@
 //! and the cash-in still need hooks the ABI lacks.
 
 use card_sdk::abi::{prop, state_key, HookKind};
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(

@@ -127,6 +127,9 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
                 31 => FnId::OwnedWithin,
                 32 => FnId::OnPath,
                 33 => FnId::Between,
+                34 => FnId::TileIs,
+                35 => FnId::TileAttr,
+                36 => FnId::TileIn,
                 _ => return Val::Err,
             };
             let nargs = n.b as usize;

@@ -7,7 +7,7 @@
 //! [反击] auto-plays when drawn: money by hand size, else draw.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAME_SKY: CardDef = CardDef::new(

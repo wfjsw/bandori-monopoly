@@ -6,7 +6,7 @@
 //!
 //! whole discard pile back into the deck and gain 500 per returned card.
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", Some(cant_play), play)]);

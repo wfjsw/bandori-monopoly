@@ -19,7 +19,7 @@
 //! cut applies to the whole, and the split happens afterwards.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -52,7 +52,7 @@ fn mine(player_id: i32) -> bool {
     // -- the `skillBlock:Pastel✽Palettes` token (one spelling, the band's real
     // name). `skill_blocked` covers the token, the global `skillBlock`, and a
     // `skillBlock` mark on the tile.
-    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
     }
     ctx::trigger::player_id() == player_id
@@ -82,7 +82,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// 分摊前资金减少Y×100（最少0）」.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     // 「不可使用」 -- same gate as `mine`, repeated in the body.
-    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
     let amount = ctx::trigger::value();

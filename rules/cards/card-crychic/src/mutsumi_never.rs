@@ -16,7 +16,8 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const MUTSUMI_NEVER: CardDef = CardDef::new(
     "CRYCHIC:（睦）从没有觉得...",

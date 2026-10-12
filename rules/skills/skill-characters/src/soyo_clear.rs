@@ -18,7 +18,7 @@
 //! attribute a payment's reduction to one skill. See the TODO.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The re-colour is armed for this turn's landing.

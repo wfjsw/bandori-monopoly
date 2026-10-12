@@ -8,7 +8,7 @@
 //! swap to the other Sumimi character (play or [反击] after own move roll).
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_IN_ONE: CardDef = CardDef::new(
@@ -71,8 +71,8 @@ fn swap(player_id: i32) {
         ctx::unplace_at(uid);
     }
     ctx::place_card(player_id, to.1, &Msg::new(key!("two_in_one_note")));
-    card_sdk::ctx::state::set_bounds(player_id, card_sdk::abi::state_key::FIRE, 0, to.3);
-    card_sdk::ctx::state::set(player_id, card_sdk::abi::state_key::FIRE, to.2);
+    ruleset_core::ctx::state::set_bounds(player_id, card_sdk::abi::state_key::FIRE, 0, to.3);
+    ruleset_core::ctx::state::set(player_id, card_sdk::abi::state_key::FIRE, to.2);
     ctx::log(
         player_id,
         &Msg::new(key!("two_in_one_swap"))

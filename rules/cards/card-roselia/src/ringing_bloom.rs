@@ -13,7 +13,7 @@
 //! best tile and pays out when one of your non-RiNG tiles collects rent.
 
 use card_sdk::abi::{prop, HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RINGING_BLOOM: CardDef = CardDef::new(

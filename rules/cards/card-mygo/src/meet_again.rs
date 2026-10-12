@@ -8,7 +8,7 @@
 //! player in the direction of travel.
 
 use card_sdk::abi::{ChainKind, MoveKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MEET_AGAIN: CardDef = CardDef::new(

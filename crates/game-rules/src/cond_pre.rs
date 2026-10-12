@@ -358,6 +358,15 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn is_buyable(&self, tile: i64) -> bool {
         self.src.is_buyable(tile as i32)
     }
+    fn tile_is(&self, tile: i64, kind: &str) -> bool {
+        self.src.tile_is(tile as i32, kind)
+    }
+    fn tile_attr(&self, tile: i64, attr: &str) -> i64 {
+        self.src.tile_attr(tile as i32, attr) as i64
+    }
+    fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool {
+        self.src.tile_in(player as i32, tile as i32, class)
+    }
 
     // -- eager function tables ---------------------------------------------
     fn slot_table(&self) -> Vec<(String, i64)> {
@@ -598,10 +607,34 @@ pub trait SnapSrc {
     /// every name so a condition's `tile_named('…')` resolves.
     fn tile_name(&self, tile: i32) -> String;
     /// Tile-kind predicates backing the CEL `is_circle(t)` family.
+    /// (Sugar over [`Self::tile_is`] / [`Self::tile_in`]; kept abstract so
+    /// existing CEL results -- including the `is_live_house` group-10 quirk in
+    /// this snapshot path -- do not shift. See `tile_class` for the host ops.)
     fn is_circle(&self, tile: i32) -> bool;
     fn is_ring(&self, tile: i32) -> bool;
     fn is_live_house(&self, tile: i32) -> bool;
     fn is_buyable(&self, tile: i32) -> bool;
+    /// ABI v56 generic tile queries (the host `tile_is` / `tile_attr` /
+    /// `tile_in`). Defaults fall back safely for fixture worlds.
+    fn tile_is(&self, tile: i32, kind: &str) -> bool {
+        let _ = (tile, kind);
+        false
+    }
+    fn tile_attr(&self, tile: i32, attr: &str) -> i32 {
+        // Fixture fallback only -- `"house"` is `TileData.house` (build cost),
+        // not the standing house count (`houses_of`).
+        match attr {
+            "price" => self.tile_price(tile),
+            _ => {
+                let _ = tile;
+                0
+            }
+        }
+    }
+    fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
+        let _ = (player_id, tile, class);
+        false
+    }
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
     fn fire(&self, player_id: i32) -> i32;
@@ -680,19 +713,33 @@ impl<W: CardWorld> SnapSrc for W {
     }
     #[inline]
     fn is_circle(&self, tile: i32) -> bool {
-        CardWorld::is_circle(self, tile) != 0
+        // CEL sugar kept on the old predicate so results do not shift;
+        // equivalent to `tile_is(tile, "circle")` for a correct world.
+        CardWorld::tile_is(self, tile, "circle")
     }
     #[inline]
     fn is_ring(&self, tile: i32) -> bool {
-        CardWorld::is_ring(self, tile) != 0
+        CardWorld::tile_is(self, tile, "ring")
     }
     #[inline]
     fn is_live_house(&self, tile: i32) -> bool {
-        CardWorld::is_live_house(self, tile) != 0
+        CardWorld::tile_in(self, -1, tile, "livehouse")
     }
     #[inline]
     fn is_buyable(&self, tile: i32) -> bool {
-        CardWorld::is_buyable(self, tile) != 0
+        CardWorld::tile_in(self, -1, tile, "buyable")
+    }
+    #[inline]
+    fn tile_is(&self, tile: i32, kind: &str) -> bool {
+        CardWorld::tile_is(self, tile, kind)
+    }
+    #[inline]
+    fn tile_attr(&self, tile: i32, attr: &str) -> i32 {
+        CardWorld::tile_attr(self, tile, attr)
+    }
+    #[inline]
+    fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
+        CardWorld::tile_in(self, player_id, tile, class)
     }
     #[inline]
     fn player_count(&self) -> i32 {
@@ -1160,6 +1207,9 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let mut ring_tiles = Vec::new();
     let mut live_house_tiles = Vec::new();
     let mut buyable_tiles = Vec::new();
+    let mut tile_kinds = Vec::new();
+    let mut tile_attrs = std::collections::BTreeMap::new();
+    let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
         if world.is_circle(tile) {
             circle_tiles.push(tile as i64);
@@ -1173,6 +1223,8 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         if world.is_buyable(tile) {
             buyable_tiles.push(tile as i64);
         }
+        // ABI v56 generic tile queries (kind / attr / class tables).
+        fill_tile_generic(world, tile, &mut tile_kinds, &mut tile_attrs, &mut tile_classes);
     }
 
     let players: Vec<PlayerSnap> = (0..world.player_count())
@@ -1268,6 +1320,9 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         ring_tiles,
         live_house_tiles,
         buyable_tiles,
+        tile_kinds,
+        tile_attrs,
+        tile_classes,
         tile_count: world.tile_count() as i64,
         tile_owners: (0..world.tile_count())
             .map(|t| world.tile_owner(t) as i64)
@@ -1286,6 +1341,9 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let mut ring_tiles = Vec::new();
     let mut live_house_tiles = Vec::new();
     let mut buyable_tiles = Vec::new();
+    let mut tile_kinds = Vec::new();
+    let mut tile_attrs = std::collections::BTreeMap::new();
+    let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
         if world.is_circle(tile) {
             circle_tiles.push(tile as i64);
@@ -1299,6 +1357,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         if world.is_buyable(tile) {
             buyable_tiles.push(tile as i64);
         }
+        fill_tile_generic(world, tile, &mut tile_kinds, &mut tile_attrs, &mut tile_classes);
     }
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
@@ -1353,11 +1412,62 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         ring_tiles,
         live_house_tiles,
         buyable_tiles,
+        tile_kinds,
+        tile_attrs,
+        tile_classes,
         tile_count: world.tile_count() as i64,
         tile_owners: (0..world.tile_count())
             .map(|t| world.tile_owner(t) as i64)
             .collect(),
         plan_fixed_roll: (world.fixed_roll() >= 0).then(|| world.fixed_roll() as i64),
+    }
+}
+
+/// ABI v56: fill one tile's kind / attr / class rows for the window snapshot.
+fn fill_tile_generic<S: SnapSrc>(
+    world: &S,
+    tile: i32,
+    tile_kinds: &mut Vec<String>,
+    tile_attrs: &mut std::collections::BTreeMap<(i64, String), i64>,
+    tile_classes: &mut Vec<(i64, i64, String)>,
+) {
+    // Kind: probe the eight wire spellings (`TileKind::as_str`).
+    let kinds = [
+        "circle",
+        "cafe",
+        "edogawa",
+        "ryuseido",
+        "property",
+        "ring",
+        "agent",
+        "event",
+    ];
+    let kind = kinds.iter().find(|k| world.tile_is(tile, k)).copied();
+    tile_kinds.push(kind.unwrap_or_default().to_string());
+
+    // Attrs: the seven documented fields.
+    for attr in ["group", "tier", "price", "house", "area", "rent", "index"] {
+        tile_attrs.insert((tile as i64, attr.to_string()), world.tile_attr(tile, attr) as i64);
+    }
+
+    // Classes: the ruleset vocabulary plus `color:<g>` for groups present on
+    // the board. `player = -1` plus each live seat.
+    let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    for g in -2..=32 {
+        classes.push(format!("color:{g}"));
+    }
+    let players: Vec<i32> = std::iter::once(-1)
+        .chain(0..world.player_count())
+        .collect();
+    for &p in &players {
+        for c in &classes {
+            if world.tile_in(p, tile, c) {
+                tile_classes.push((p as i64, tile as i64, c.clone()));
+            }
+        }
     }
 }
 

@@ -17,7 +17,7 @@
 //! place with N crystals; spend a crystal to cut a payment by 1,000.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "AG:绯红之魂";

@@ -12,6 +12,7 @@ publish = false
 
 [dependencies]
 card-sdk = { workspace = true, features = ["guest"] }
+ruleset-core = { path = "../ruleset-core" }
 # Unmodified card / skill / event bodies under proof. Same crates
 # `rules-native` links (the shipped ruleset).
 card-ag = { path = "../cards/card-ag" }

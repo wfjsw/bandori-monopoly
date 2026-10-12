@@ -12,7 +12,7 @@
 //! `Teleport`; the trigger carries which one in `abnormal_kind()`.
 
 use card_sdk::abi::{AbKind, HookKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANON_RESTART: CardDef = CardDef::new(

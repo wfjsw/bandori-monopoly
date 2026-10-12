@@ -10,7 +10,7 @@
 //! the Live House one -- not one this skill recoloured.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{CardDef, On};
 
 const DONE: &str = "skill.roselia.first";

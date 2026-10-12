@@ -16,7 +16,7 @@
 //! - 「为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]」 -- paid on top
 //!   of the branch, and only to a Pastel✽Palettes player.
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg};
 
 /// The [共鸣] fuel card. Empty `On`: it has no hand play and no hook of its own

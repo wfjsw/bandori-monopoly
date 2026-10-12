@@ -12,7 +12,7 @@
 //! plan rather than replacing its base -- 「额外添加」, not 「变更为」.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SATO_RED: CardDef = CardDef::new(
@@ -52,7 +52,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「移动阶段前可使用X个[火罐]」 -- X is what the player holds.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::FIRE) < 1 {

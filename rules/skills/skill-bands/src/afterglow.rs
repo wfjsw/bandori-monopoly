@@ -7,7 +7,7 @@
 //! 「自动免费在上面加盖一栋房子」 is `card_build` with the build cost waived.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AFTERGLOW: CardDef = CardDef::new(

@@ -16,7 +16,7 @@
 //! dice table being rewritten when it fires.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns since the last CiRCLE reward. Cleared on the reward.

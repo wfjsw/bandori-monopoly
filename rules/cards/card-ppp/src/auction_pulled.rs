@@ -11,7 +11,7 @@
 //! A pure [特] card (C# has no `Play`, `Normal => false`, `Immune => true`).
 
 use card_sdk::abi::{CardPile, HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PPP:[衍生]拍卖撤下来了";

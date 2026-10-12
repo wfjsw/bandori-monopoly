@@ -17,7 +17,7 @@
 //! （3） is a standing modifier to （1） that lights up once anyone is out.
 
 use card_sdk::abi::{prop, ChainKind, HookKind};
-use card_sdk::ctx::{self, plan, state, trigger};
+use ruleset_core::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const USED: &str = "skill.sayoThorns.used";

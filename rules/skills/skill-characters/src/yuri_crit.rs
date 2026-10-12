@@ -19,7 +19,7 @@
 //! is the same provenance question as the temporary-pot cost. See the TODO.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The counter X. 「X初始为0」.

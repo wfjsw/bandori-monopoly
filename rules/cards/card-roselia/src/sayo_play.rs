@@ -10,7 +10,7 @@
 //! as H.AnnounceSkill plus SkillSayo's extension (+1 or +2, no fire cost).
 
 use card_sdk::abi::{prop, ChainKind, MoveKind, TriggerKind};
-use card_sdk::ctx::{self, plan, state, trigger};
+use ruleset_core::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(

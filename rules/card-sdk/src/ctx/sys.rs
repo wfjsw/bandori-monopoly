@@ -68,16 +68,14 @@ extern "C-unwind" {
     pub fn owned_count(player_id: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_owned_at")]
     pub fn owned_at(player_id: i32, index: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_buyable")]
-    pub fn is_buyable(tile: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_shop")]
-    pub fn is_shop(tile: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_ring")]
-    pub fn is_ring(tile: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_circle")]
-    pub fn is_circle(tile: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_live_house")]
-    pub fn is_live_house(tile: i32) -> i32;
+    // v56: generic tile queries replace is_buyable/is_shop/is_ring/is_circle/
+    // is_live_house/is_agent/is_color/is_live_house_for.
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tile_is")]
+    pub fn tile_is(tile: i32, kind_ptr: i32, kind_len: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tile_attr")]
+    pub fn tile_attr(tile: i32, attr_ptr: i32, attr_len: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tile_in")]
+    pub fn tile_in(player_id: i32, tile: i32, class_ptr: i32, class_len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tile_group")]
     pub fn tile_group(tile: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tile_price")]
@@ -620,8 +618,6 @@ extern "C-unwind" {
     pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_gain_fixed")]
     pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_agent")]
-    pub fn is_agent(tile: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_paid_in_settle")]
     pub fn paid_in_settle() -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_place_card_on")]
@@ -649,8 +645,6 @@ extern "C-unwind" {
     pub fn turn_snap(player_id: i32, buf: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_turn_start_pos")]
     pub fn turn_start_pos(player_id: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_color")]
-    pub fn is_color(player_id: i32, tile: i32, group: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_unplace_card_named")]
     pub fn unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tok_names")]
@@ -669,8 +663,6 @@ extern "C-unwind" {
     pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_do_move_roll")]
     pub fn do_move_roll(player_id: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_is_live_house_for")]
-    pub fn is_live_house_for(player_id: i32, tile: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_placed_cards")]
     pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_field_instances")]

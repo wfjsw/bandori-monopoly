@@ -23,7 +23,7 @@
 //! provenance. See the TODO below.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_GODDESS: CardDef = CardDef::new(
@@ -54,7 +54,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「你可以消耗一个火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::FIRE) < 1 {

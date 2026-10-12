@@ -13,7 +13,7 @@
 //! keyed state is for.
 
 use card_sdk::abi::{counter, state_key, AbKind, HookKind};
-use card_sdk::ctx::{self, state, trigger};
+use ruleset_core::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Latch for 「每回合限一次」.
@@ -58,7 +58,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「运营阶段可消耗1个[火罐]」 plus 「每回合限一次」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, USED) != 0 {

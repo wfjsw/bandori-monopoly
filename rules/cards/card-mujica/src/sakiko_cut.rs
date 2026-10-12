@@ -6,7 +6,7 @@
 //!
 //! mortgage your best deed, discard a hand card, teleport with settle as main move.
 
-use card_sdk::ctx::{self, CardPile};
+use ruleset_core::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKIKO_CUT: CardDef = CardDef::new(

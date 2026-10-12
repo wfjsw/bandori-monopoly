@@ -31,7 +31,7 @@
 //! card half).
 
 use card_sdk::abi::{prop, HookKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词). Matches `game_core::engine::world::CIRCLE_MONEY`.

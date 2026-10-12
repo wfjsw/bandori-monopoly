@@ -9,7 +9,7 @@
 //! taken -- a counter this skill owns, not the board's.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「选择[获得]资金次数」 -- how many times the money option has been taken.

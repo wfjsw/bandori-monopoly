@@ -95,6 +95,24 @@ pub enum Fx {
     IntPred {
         calc: fn(i64) -> bool,
     },
+    /// `f(tile: int, kind: string) -> bool` over a baked kind -> tile list
+    /// (`tile_is` is the only user).
+    TileIs {
+        var: &'static str,
+        fill: fn(&dyn CondView) -> Vec<(String, Vec<i64>)>,
+    },
+    /// `f(tile: int, attr: string) -> int` over a baked `(tile, attr) -> v` map
+    /// (`tile_attr` is the only user).
+    TileAttr {
+        var: &'static str,
+        fill: fn(&dyn CondView) -> Vec<(i64, String, i64)>,
+    },
+    /// `f(player: int, tile: int, class: string) -> bool` over baked true
+    /// `(player, tile, class)` triples (`tile_in` is the only user).
+    TileIn {
+        var: &'static str,
+        fill: fn(&dyn CondView) -> Vec<(i64, i64, String)>,
+    },
 }
 
 /// One vocabulary name.
@@ -695,7 +713,97 @@ pub const VOCAB: &[Name] = &[
             var: "_buyable_tiles",
             fill: |v| v.tile_kind_list(TileKind::Buyable),
         },
-        doc: "is_buyable(t) -> tile kind is buyable",
+        doc: "is_buyable(t) -> tile kind is buyable (sugar over tile_in)",
+    },
+    // -- ABI v56 generic tile queries ---------------------------------------
+    Name {
+        cel: "tile_is",
+        aliases: &[],
+        flat: "tile_is",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Bool,
+        get: NO_GET,
+        fx: Fx::TileIs {
+            var: "_tile_is",
+            fill: |v| {
+                let kinds = [
+                    "circle",
+                    "cafe",
+                    "edogawa",
+                    "ryuseido",
+                    "property",
+                    "ring",
+                    "agent",
+                    "event",
+                ];
+                let n = v.tile_count();
+                kinds
+                    .iter()
+                    .map(|&k| {
+                        let tiles = (0..n).filter(|&t| v.tile_is(t, k)).collect();
+                        (k.to_string(), tiles)
+                    })
+                    .collect()
+            },
+        },
+        doc: "tile_is(t, kind) -> data TileKind equals the wire spelling",
+    },
+    Name {
+        cel: "tile_attr",
+        aliases: &[],
+        flat: "tile_attr",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::TileAttr {
+            var: "_tile_attr",
+            fill: |v| {
+                let attrs = ["group", "tier", "price", "house", "area", "rent", "index"];
+                let n = v.tile_count();
+                let mut rows = Vec::new();
+                for t in 0..n {
+                    for a in attrs {
+                        rows.push((t, a.to_string(), v.tile_attr(t, a)));
+                    }
+                }
+                rows
+            },
+        },
+        doc: "tile_attr(t, attr) -> i32 field (group/tier/price/house/area/rent/index)",
+    },
+    Name {
+        cel: "tile_in",
+        aliases: &[],
+        flat: "tile_in",
+        scope: Scope::Func { arity: 3, cand: false },
+        ty: Ty::Bool,
+        get: NO_GET,
+        fx: Fx::TileIn {
+            var: "_tile_in",
+            fill: |v| {
+                let n = v.tile_count();
+                let seats = v.seat_count();
+                let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect();
+                for g in -2..=32 {
+                    classes.push(format!("color:{}", g));
+                }
+                let mut rows = Vec::new();
+                for t in 0..n {
+                    for p in std::iter::once(-1).chain(0..seats) {
+                        for c in &classes {
+                            if v.tile_in(p, t, c) {
+                                rows.push((p, t, c.clone()));
+                            }
+                        }
+                    }
+                }
+                rows
+            },
+        },
+        doc: "tile_in(p, t, class) -> ruleset class membership (buyable/shop/livehouse/color:<g>)",
     },
     Name {
         cel: "money",
@@ -1158,6 +1266,12 @@ pub enum Table {
     Seats(i64),
     /// `(a, b) -> v` (`players_on` / `next_dist` / … two-key lookups).
     BinMap(Vec<(i64, i64, i64)>),
+    /// kind -> tile list (`tile_is`).
+    StrIntList(Vec<(String, Vec<i64>)>),
+    /// `(tile, attr) -> v` (`tile_attr`).
+    IntStrMap(Vec<(i64, String, i64)>),
+    /// true `(player, tile, class)` triples (`tile_in`).
+    TripleSet(Vec<(i64, i64, String)>),
 }
 
 fn opt(v: i64) -> Val {
@@ -1223,5 +1337,8 @@ pub fn fn_table(n: &Name, view: &dyn CondView) -> Option<(&'static str, Table)> 
         Fx::IntIntConst { var, .. } => Some((var, Table::Seats(view.tile_count()))),
         Fx::BinInt { var, fill } => Some((var, Table::BinMap(fill(view)))),
         Fx::IntPred { .. } => None,
+        Fx::TileIs { var, fill } => Some((var, Table::StrIntList(fill(view)))),
+        Fx::TileAttr { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
+        Fx::TileIn { var, fill } => Some((var, Table::TripleSet(fill(view)))),
     }
 }

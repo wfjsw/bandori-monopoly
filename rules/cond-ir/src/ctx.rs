@@ -46,6 +46,10 @@ pub enum FnId {
     OwnedWithin,
     OnPath,
     Between,
+    // ABI v56 generic tile queries (appended; earlier discriminants stable).
+    TileIs,
+    TileAttr,
+    TileIn,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).

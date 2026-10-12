@@ -7,7 +7,7 @@
 //! [反击] that lets the other players counteract as if they were the target.
 
 use card_sdk::abi::ChainKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MANA_CHAMPION: CardDef = CardDef::new(

@@ -6,7 +6,8 @@
 //!
 //! and teleport to the matching Live House tile.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const BE_STRONGEST: CardDef =
     CardDef::new("RAS:成为最强", &[On::Play("", Some(cant_play), be_strongest)]);

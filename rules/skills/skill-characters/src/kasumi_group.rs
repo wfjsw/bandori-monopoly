@@ -15,7 +15,7 @@
 //! between setup and the first turn start would come first.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Latch so 「开局时」 pays once. Free-form state: this is a consumer naming its

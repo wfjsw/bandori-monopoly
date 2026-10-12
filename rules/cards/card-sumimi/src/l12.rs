@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use alloc::string::String;
 use card_sdk::abi::{prop, state_key};
-use card_sdk::ctx::{self, trigger, CardPile};
+use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const L12: CardDef = CardDef::new(

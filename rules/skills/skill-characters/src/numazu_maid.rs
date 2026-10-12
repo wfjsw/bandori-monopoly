@@ -12,7 +12,7 @@
 //! quarter is taken. 「分摊支付」 is the split-pay the vocabulary already has.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const PAREO: &str = "PAREO标记";

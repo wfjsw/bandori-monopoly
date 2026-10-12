@@ -10,7 +10,7 @@
 //! park on 星之鼓动山丘; anyone who passes it is force-stopped there at half rent.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(

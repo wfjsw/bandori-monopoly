@@ -6,7 +6,7 @@
 //!
 
 use card_sdk::abi::{GateKind, HookKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EXIST: CardDef = CardDef::new(

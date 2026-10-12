@@ -19,7 +19,7 @@
 //! `actor == owner`.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「你的资金消耗减半」 -- two `TurnEnd` layers, so the window runs through
@@ -114,7 +114,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     // next turn end. The window therefore covers the rest of this turn, the
     // other players' turns, and the owner's next turn through its end.
     state::set(player_id, HALF, 2);
-    state::set_expires(player_id, HALF, card_sdk::ctx::state::TURN_END);
+    state::set_expires(player_id, HALF, ruleset_core::ctx::state::TURN_END);
     ctx::log(player_id, &Msg::new(key!("mana_donut_half")));
     Ok(())
 }

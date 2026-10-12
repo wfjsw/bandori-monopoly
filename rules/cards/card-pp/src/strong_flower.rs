@@ -17,8 +17,9 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{plan, trigger};
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx::{plan, trigger};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PP:可爱又强壮的花朵";
 

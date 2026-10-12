@@ -13,7 +13,7 @@
 //! crystal. （3） is the hill's ownership shared across the band.
 
 use card_sdk::abi::{counter, state_key, GateKind, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Poppin' Party:星之鼓动";
@@ -204,7 +204,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
 /// Which press effects are available right now, in rulebook order: the
 /// sticker->crystal exchange and the crystal->draw/cash spend.
 fn available(player_id: i32) -> [bool; 2] {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return [false, false];
     }
     [
@@ -215,7 +215,7 @@ fn available(player_id: i32) -> [bool; 2] {
 
 /// Combined gate: admit whenever either press effect is available.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     let avail = available(player_id);

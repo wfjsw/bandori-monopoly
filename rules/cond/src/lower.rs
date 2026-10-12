@@ -211,6 +211,9 @@ fn fn_id_of(name: &str) -> Option<FnId> {
         "is_ring" => FnId::IsRing,
         "is_live_house" => FnId::IsLiveHouse,
         "is_buyable" => FnId::IsBuyable,
+        "tile_is" => FnId::TileIs,
+        "tile_attr" => FnId::TileAttr,
+        "tile_in" => FnId::TileIn,
         "money" => FnId::Money,
         "fire" => FnId::Fire,
         "crystals" => FnId::Crystals,
@@ -247,7 +250,8 @@ fn fn_arity(fid: FnId) -> usize {
         | Tiles | Blocked | ChainHas | ChainHits | GainsThisTurn | TargetedCount
         | RepeatedDigits | Between => 1,
         CharacterIs | BandIs | Neighbor | Dist | PlayersOn | NextDist | OthersWithin
-        | OwnedWithin | OnPath => 2,
+        | OwnedWithin | OnPath | TileIs | TileAttr => 2,
+        TileIn => 3,
     }
 }
 
@@ -386,6 +390,9 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("is_ring", IsRing),
         ("is_live_house", IsLiveHouse),
         ("is_buyable", IsBuyable),
+        ("tile_is", TileIs),
+        ("tile_attr", TileAttr),
+        ("tile_in", TileIn),
         ("money", Money),
         ("fire", Fire),
         ("crystals", Crystals),

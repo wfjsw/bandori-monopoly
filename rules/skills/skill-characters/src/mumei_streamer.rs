@@ -18,7 +18,7 @@
 //! hooks.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Cards this skill flipped, so it can flip them back on exit.

@@ -298,7 +298,7 @@ pub trait CardWorld: Clone + 'static {
         tiles
             .iter()
             .map(|&t| {
-                if self.is_buyable(t) != 0 {
+                if self.tile_in(-1, t, "buyable") {
                     (self.buy_price(t), true)
                 } else {
                     (-1, false)
@@ -310,17 +310,35 @@ pub trait CardWorld: Clone + 'static {
     fn mortgage_value(&self, tile: i32) -> i32;
     fn owned_count(&self, player_id: i32) -> i32;
     fn owned_at(&self, player_id: i32, index: i32) -> i32;
-    /// A deed tile (`TileData::is_buyable`).
-    fn is_buyable(&self, tile: i32) -> i32;
-    /// A 「商店街」 deed (buyable, colour group 10).
-    fn is_shop(&self, tile: i32) -> i32;
-    /// A RiNG deed (`TileKind::Ring`).
-    fn is_ring(&self, tile: i32) -> i32;
-    /// The CiRCLE tile (`TileKind::Circle`).
-    fn is_circle(&self, tile: i32) -> i32;
-    /// Does `tile` count as colour `group` for `player_id`?
-    /// Reads the tile props (`prop::ANY_COLOR` / `prop::colorFor:<p>`).
-    fn is_color(&self, _player_id: i32, _tile: i32, _group: i32) -> bool {
+    /// 1 iff `tile`'s data kind equals the `kind` wire spelling
+    /// (`TileKind::as_str`: circle|cafe|edogawa|ryuseido|property|ring|agent|
+    /// event). Unknown tile -> false. Replaces `is_circle` / `is_ring` /
+    /// `is_agent`. No class vocabulary here.
+    fn tile_is(&self, tile: i32, kind: &str) -> bool {
+        let _ = (tile, kind);
+        false
+    }
+    /// Generic i32 field read (`"group"` / `"tier"` / `"price"` / `"house"` /
+    /// `"area"` / `"rent"` / `"index"`). `kind` / `color` strings are answered
+    /// by [`Self::tile_is`] / future string attrs, not this API.
+    /// Missing tile: `group`/`tier`/`area`/`index` -> -1, else 0. Unknown attr -> 0.
+    fn tile_attr(&self, tile: i32, attr: &str) -> i32 {
+        // Safe fallback for fixture worlds: the kept generic field readers.
+        match attr {
+            "group" => self.tile_group(tile),
+            "price" => self.tile_price(tile),
+            _ => {
+                let _ = tile;
+                0
+            }
+        }
+    }
+    /// Class membership (`"buyable"` / `"shop"` / `"livehouse"` / `"color:<g>"`,
+    /// plus generic `class:` / `classFor:<p>:` props). Replaces `is_buyable` /
+    /// `is_shop` / `is_live_house` / `is_live_house_for` / `is_color`.
+    /// See [`crate::tile_class`] -- THE ruleset's class registration.
+    fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
+        let _ = (player_id, tile, class);
         false
     }
     /// What this turn's [触发结算]s have cost the player so far.
@@ -342,17 +360,6 @@ pub trait CardWorld: Clone + 'static {
     /// The four status values a turn-end undo restores.
     fn turn_snap(&self, _player_id: i32) -> (i32, i32, i32, i32) {
         (-1, 0, 0, 0)
-    }
-    /// The 「地产商」 tile (`TileKind::Agent`).
-    fn is_agent(&self, _tile: i32) -> i32 {
-        0
-    }
-    /// A Live House deed (buyable, colour group 6).
-    fn is_live_house(&self, tile: i32) -> i32;
-    /// [`Self::is_live_house`] for one player: the base check plus their
-    /// colour override (「使其对你视为live house格子」).
-    fn is_live_house_for(&self, _player_id: i32, tile: i32) -> i32 {
-        self.is_live_house(tile)
     }
     /// Colour group (`TileData::group`; -1 for no tile).
     fn tile_group(&self, tile: i32) -> i32;

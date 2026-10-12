@@ -17,7 +17,7 @@
 //! runs on the `Drew` hook.
 
 use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVE_BUSHIDO: CardDef = CardDef::new(

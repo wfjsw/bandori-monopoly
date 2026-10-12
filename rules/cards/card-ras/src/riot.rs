@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::ChainKind;
-use card_sdk::ctx::{self, trigger, CardPile};
+use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{CardDef, On};
 
 pub const RIOT: CardDef = CardDef::new(

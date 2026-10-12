@@ -14,7 +14,7 @@
 //! The teleport is the turn's main move (`ctx::plan::set_teleport_to` +
 //! `ctx::card_move`); the turn-end body is scheduled with `at_turn_end`.
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new(

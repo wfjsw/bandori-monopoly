@@ -15,7 +15,7 @@
 //! moment is `settleBefore` -- the settle has not run yet.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(

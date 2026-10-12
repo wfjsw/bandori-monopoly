@@ -8,7 +8,8 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", Some(cant_play), play)]);
 
@@ -68,7 +69,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
             return Some(Msg::new(key!("to_the_peak_stunned")));
         }
         if ctx::stay_of(player_id) > 0
-            && card_sdk::ctx::state::get(player_id, card_sdk::abi::state_key::UNSTOPPABLE) <= 0
+            && ruleset_core::ctx::state::get(player_id, card_sdk::abi::state_key::UNSTOPPABLE) <= 0
         {
             // `H.Moving` lets a `[停留]` player through when 「不可阻挡」 is up.
             return Some(Msg::new(key!("to_the_peak_stuck")));

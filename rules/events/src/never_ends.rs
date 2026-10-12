@@ -5,7 +5,7 @@
 
 use alloc::format;
 
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};

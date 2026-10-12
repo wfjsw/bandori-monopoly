@@ -140,6 +140,41 @@ fn table_value(t: &Table) -> Value {
             }
             Value::Map(Map { map: Arc::new(m) })
         }
+        Table::StrIntList(rows) => {
+            // kind -> tile list (`tile_is`). Nested map of kind -> list.
+            let mut outer = HashMap::new();
+            for (k, tiles) in rows {
+                let list: Vec<Value> = tiles.iter().map(|t| Value::Int(*t)).collect();
+                outer.insert(
+                    Key::String(Arc::new(k.clone())),
+                    Value::List(Arc::new(list)),
+                );
+            }
+            Value::Map(Map { map: Arc::new(outer) })
+        }
+        Table::IntStrMap(rows) => {
+            // `(tile, attr) -> v`, keyed by `"tile:attr"` (`tile_attr`).
+            let mut m = HashMap::new();
+            for (tile, attr, v) in rows {
+                m.insert(
+                    Key::String(Arc::new(format!("{tile}:{attr}"))),
+                    Value::Int(*v),
+                );
+            }
+            Value::Map(Map { map: Arc::new(m) })
+        }
+        Table::TripleSet(rows) => {
+            // true `(player, tile, class)` triples (`tile_in`), keyed by
+            // `"player:tile:class"`.
+            let mut m = HashMap::new();
+            for (p, t, c) in rows {
+                m.insert(
+                    Key::String(Arc::new(format!("{p}:{t}:{c}"))),
+                    Value::Int(1),
+                );
+            }
+            Value::Map(Map { map: Arc::new(m) })
+        }
     }
 }
 
@@ -350,6 +385,70 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
+        Fx::TileIs { var, .. } => {
+            let var = var.to_string();
+            // `tile_is(t, kind)` -- kind is a string (or an id_of hash we
+            // cannot reverse, so only string args resolve).
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, tile: i64, kind: Arc<String>| -> Result<bool, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    let want = format!("{tile}:{}", kind.as_str());
+                    // Table is kind -> tile list; scan for the pair.
+                    for (k, v) in m.iter() {
+                        if let Key::String(ks) = k {
+                            if ks.as_str() != kind.as_str() {
+                                continue;
+                            }
+                            if let Value::List(items) = v {
+                                return Ok(items.iter().any(|i| matches!(i, Value::Int(x) if *x == tile)));
+                            }
+                        }
+                    }
+                    let _ = want;
+                    Ok(false)
+                },
+            )
+            .expect(fname);
+        }
+        Fx::TileAttr { var, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, tile: i64, attr: Arc<String>| -> Result<i64, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    Ok(int_at_str(&m, &format!("{tile}:{}", attr.as_str()), default_attr(attr.as_str())))
+                },
+            )
+            .expect(fname);
+        }
+        Fx::TileIn { var, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext,
+                      player: i64,
+                      tile: i64,
+                      class: Arc<String>|
+                      -> Result<bool, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    Ok(m.get(&Key::String(Arc::new(format!(
+                        "{player}:{tile}:{}",
+                        class.as_str()
+                    ))))
+                    .is_some())
+                },
+            )
+            .expect(fname);
+        }
+    }
+}
+
+/// Missing-value default for `tile_attr` (mirrors `tile_class::attr_of`).
+fn default_attr(attr: &str) -> i64 {
+    match attr {
+        "group" | "tier" | "area" | "index" => -1,
+        _ => 0,
     }
 }
 

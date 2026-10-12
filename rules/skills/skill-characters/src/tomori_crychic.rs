@@ -13,7 +13,7 @@
 //! The settle is the `settleAtEnd` counter the engine already honours.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
@@ -65,7 +65,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「可消耗1火罐清除自身一层[停留]」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::FIRE) < 1 {

@@ -10,7 +10,7 @@
 //! total this card holds. （3） spends that total against a build.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Hello, Happy World!:传播笑容";

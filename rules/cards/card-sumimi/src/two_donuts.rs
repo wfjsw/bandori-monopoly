@@ -17,7 +17,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_DONUTS: CardDef = CardDef::new(

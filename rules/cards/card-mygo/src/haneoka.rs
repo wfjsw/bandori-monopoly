@@ -8,7 +8,7 @@
 //! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(

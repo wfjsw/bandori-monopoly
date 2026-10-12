@@ -15,7 +15,7 @@
 //! CiRCLE奖励」 is the plan's no-circle-reward flag.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The band-wide 「每三回合没有使用…（2）技能」 counter. Shared by every
@@ -57,7 +57,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「可使用一个[火罐]」.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
     if state::get(player_id, state_key::FIRE) < 1 {

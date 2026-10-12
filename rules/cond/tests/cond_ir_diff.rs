@@ -392,6 +392,17 @@ fn diff_all_inventory_guards() {
             .insert("PAREO标记".into(), 1);
         f.ir.seat[0][SeatField::Money as usize] = 500;
         f.ir.n_players = 2;
+        // Mirror seat money into the CEL snapshot (`money(p)` reads
+        // `win.players[p].money`; IR reads `seat[p][Money]`).
+        if f.win.players.is_empty() {
+            f.win.players = vec![
+                rules_cond::PlayerSnap {
+                    money: 500,
+                    ..rules_cond::PlayerSnap::default()
+                },
+                rules_cond::PlayerSnap::default(),
+            ];
+        }
         assert_agree(src, &f);
         agree += 1;
 

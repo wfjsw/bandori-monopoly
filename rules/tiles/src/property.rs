@@ -21,7 +21,7 @@
 //! TODO(规则书): 「每块地有标注的等级上限」 is `buildMax` (`TileData.rent.len() - 1`,
 //! 0 for RiNG).
 
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::abi::prop;
 use card_sdk::{CardDef, Msg, On};
 

@@ -15,8 +15,9 @@
 //! (「视为你的主要移动」) are still held (see the TODOs below).
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{plan, trigger};
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx::{plan, trigger};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 /// The passer this card is waiting for, or -1. A slot rather than a `GrabFx`
 /// attachment: it is a value the card stores under its own key.

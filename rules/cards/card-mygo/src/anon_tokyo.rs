@@ -16,7 +16,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{HookKind, MarkFilter, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANON_TOKYO: CardDef = CardDef::new(

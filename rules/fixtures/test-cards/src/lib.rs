@@ -3,7 +3,7 @@
 //! Test-only cards for the host's cross-module tests.
 
 use card_sdk::abi::{ChainKind, GateKind, HookKind};
-use card_sdk::ctx::{self, trigger, CardPile};
+use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Plays another card (in another module) in the middle of its own effect.

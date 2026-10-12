@@ -16,7 +16,7 @@
 //!   `trigger::set_move_roll` between the two totals.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「你以外玩家中上一次进行的移动掷骰结果」.

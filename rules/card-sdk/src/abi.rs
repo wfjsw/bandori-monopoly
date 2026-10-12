@@ -365,7 +365,20 @@ use alloc::{string::String, vec::Vec};
 ///      persistent state and survives halt; the activation's own flash obeys
 ///      the same rule. Client-side, event ids dedupe a re-delivered frame.
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 55;
+/// v56: **generic tile queries** replace the eight game-named kind/class host
+///      ops (`is_ring` / `is_circle` / `is_agent` / `is_shop` / `is_live_house`
+///      / `is_buyable` / `is_live_house_for` / `is_color`). New imports:
+///      `tile_is(tile, kind)` -- data `TileKind` by wire spelling;
+///      `tile_attr(tile, attr)` -- i32 field read (`group`/`area`/`tier`/
+///      `price`/`house`/`rent`/`index`);
+///      `tile_in(player, tile, class)` -- ruleset class membership
+///      (`buyable`/`shop`/`livehouse`/`color:<g>`), with per-player overrides
+///      as generic class-membership props (`class:` / `classFor:<p>:`) plus the
+///      existing `anyColor` / `colorFor:<p>` colour props. Game sugar
+///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
+///      `tile_group` / `tile_price` stay as generic field sugar.
+///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 56;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

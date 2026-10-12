@@ -6,7 +6,8 @@
 //! crystals that stand in for band-skill crystal removal. Not in
 //! docs/rulebook/cards.json -- translated from the C# class and the card text.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",

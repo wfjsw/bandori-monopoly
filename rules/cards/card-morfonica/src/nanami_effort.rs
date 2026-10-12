@@ -15,7 +15,7 @@
 //!
 //! x character tokens for one of three effects.
 
-use card_sdk::ctx::{self, CardPile};
+use ruleset_core::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:（NNM）稍微努力了一下";

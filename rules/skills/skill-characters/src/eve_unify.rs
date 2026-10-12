@@ -14,7 +14,7 @@
 //! is the moment the face exists, and 「为此次投掷结果增加Yd4」 adds Yd4 to it.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -42,7 +42,7 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
 /// (derived plan state) stay here (not yet in the condition vocabulary).
 /// `actor == owner && tok('P✽P粉丝(正)') >= 1` is the pre.
 fn roll_ok(player_id: i32) -> bool {
-    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+    if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
     }
     ctx::fixed_roll().is_none()

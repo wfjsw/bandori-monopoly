@@ -15,7 +15,8 @@
 //! a ladder of rewards keyed on how many field cards the user has.
 //! The ladder body runs off `cards_in(Field)` for the placed-card count.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANGER: CardDef = CardDef::new(
     "PP:[衍生]魔法战队Pastel✽Ranger",

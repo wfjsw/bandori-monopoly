@@ -9,7 +9,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANY_COLOR_SUNSET: CardDef =
     CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, play)]);

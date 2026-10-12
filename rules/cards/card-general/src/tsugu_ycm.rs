@@ -13,8 +13,9 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::{HookKind, MoveKind};
-use card_sdk::ctx::{plan, trigger};
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx::{plan, trigger};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const TSUGU_YCM: CardDef = CardDef::new(
     "通用:@Tsugu ycm",

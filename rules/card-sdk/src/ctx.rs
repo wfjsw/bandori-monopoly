@@ -16,7 +16,7 @@ use crate::abi::{MoveKind, PromptKind, TriggerKind};
 use crate::msg::Msg;
 use crate::Prompt;
 
-mod sys;
+pub mod sys;
 
 #[cfg(target_arch = "wasm32")]
 #[cfg_attr(kani, inline(always))]
@@ -125,6 +125,32 @@ fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8>
     {
         let _ = scratch;
         crate::native::read(p, n.max(0) as usize)
+    }
+}
+
+/// Raw ABI helpers for the game sugar crate (`ruleset-core`). Card bodies use
+/// the typed [`super`] wrappers; `ruleset-core` implements this ruleset's
+/// readable names on top of these plus the generic [`tile_is`] family.
+pub mod raw {
+    pub use super::sys;
+    use super::*;
+    pub fn s(v: &str) -> (i32, i32) {
+        super::s(v)
+    }
+    pub fn mj(m: &Msg) -> (i32, i32) {
+        super::mj(m)
+    }
+    pub fn asked(i: i32) -> Result<i32, Prompt> {
+        super::asked(i)
+    }
+    pub fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
+        super::out_buf(cap)
+    }
+    pub fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
+        super::out_read(p, n, scratch)
+    }
+    pub fn in_bytes(v: &[u8]) -> (i32, i32) {
+        super::in_bytes(v)
     }
 }
 
@@ -277,30 +303,31 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
-/// A deed tile (property / RiNG).
-pub fn is_buyable(tile: i32) -> bool {
-    unsafe { sys::is_buyable(tile) != 0 }
+/// Does the tile's **data kind** equal `kind` (the `TileKind` wire spelling:
+/// `"ring"`, `"circle"`, `"agent"`, `"property"`, …)? Generic host query —
+/// game sugar (`is_ring` / `is_circle` / …) lives in `ruleset-core`.
+#[cfg_attr(kani, inline(always))]
+pub fn tile_is(tile: i32, kind: &str) -> bool {
+    let (p, l) = s(kind);
+    unsafe { sys::tile_is(tile, p, l) != 0 }
 }
 
-/// A 「商店街」 deed (buyable and colour group 10).
-pub fn is_shop(tile: i32) -> bool {
-    unsafe { sys::is_shop(tile) != 0 }
+/// Generic tile field read (`"group"` / `"area"` / `"tier"` / `"price"` /
+/// `"house"` / `"rent"` / `"index"`). See ABI v56. Game named-tile helpers
+/// live in `ruleset-core`.
+#[cfg_attr(kani, inline(always))]
+pub fn tile_attr(tile: i32, attr: &str) -> i32 {
+    let (p, l) = s(attr);
+    unsafe { sys::tile_attr(tile, p, l) }
 }
 
-/// A RiNG deed (never holds houses).
-pub fn is_ring(tile: i32) -> bool {
-    unsafe { sys::is_ring(tile) != 0 }
-}
-
-/// The CiRCLE tile.
-pub fn is_circle(tile: i32) -> bool {
-    unsafe { sys::is_circle(tile) != 0 }
-}
-
-/// A Live House deed (buyable, colour group 6). The
-/// `ExtraColor` band-skill colours are not visible here (TODO in the cards).
-pub fn is_live_house(tile: i32) -> bool {
-    unsafe { sys::is_live_house(tile) != 0 }
+/// Is `tile` in the ruleset **class** `class` for `player_id` (`"buyable"` /
+/// `"shop"` / `"livehouse"` / `"color:<g>"`)? Per-player overrides are generic
+/// class-membership props. Game sugar lives in `ruleset-core`.
+#[cfg_attr(kani, inline(always))]
+pub fn tile_in(player_id: i32, tile: i32, class: &str) -> bool {
+    let (p, l) = s(class);
+    unsafe { sys::tile_in(player_id, tile, p, l) != 0 }
 }
 
 /// The colour group (-1 for no tile).
@@ -563,39 +590,6 @@ pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
     Ok(())
 }
 
-/// 「[支付]拥有格子的玩家格子地契所标记的现等级地租」. The engine's
-/// rent pipeline: the rent table at the tile's current level, or the RiNG
-/// dice-rent (「地主拥有的 RiNG 数量 × ringMultiplier × 1d20」, TODO(规则书)),
-/// and with `half` the agent's 「半价收费（向上取整10）」 cut. Raises `pay`.
-/// Pauses; the body must `?` the result. `docs/TILES.md`.
-pub fn pay_rent(player_id: i32, tile: i32, half: bool) -> Result<(), Prompt> {
-    asked(unsafe { sys::pay_rent(player_id, tile, half as i32) })?;
-    Ok(())
-}
-
-/// 「可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子
-/// 地契和拥有权」 on a non-main landing on unowned land. Pauses; `?` it.
-pub fn offer_buy(player_id: i32, tile: i32) -> Result<(), Prompt> {
-    asked(unsafe { sys::offer_buy(player_id, tile) })?;
-    Ok(())
-}
-
-/// 「可选择[支付]…资金总价的两倍，从该玩家处强行购买该格
-/// 地契，获得的地契仍为抵押状态」 on a mortgaged deed. 「此次购买的价格不受任何
-/// 资金变动效果影响」 is the engine's (it moves money directly). Pauses; `?` it.
-pub fn offer_force_buy(player_id: i32, tile: i32) -> Result<(), Prompt> {
-    asked(unsafe { sys::offer_force_buy(player_id, tile) })?;
-    Ok(())
-}
-
-/// 「可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 on
-/// one's own land. Pauses; `?` it.
-#[cfg_attr(kani, inline(always))]
-pub fn offer_build(player_id: i32, tile: i32) -> Result<(), Prompt> {
-    asked(unsafe { sys::offer_build(player_id, tile) })?;
-    Ok(())
-}
-
 #[cfg_attr(kani, inline(always))]
 pub fn add_to_hand(player_id: i32, card: &str) {
     let (p, l) = s(card);
@@ -825,16 +819,6 @@ pub fn transfer_to_dest(to: i32, dest: Dest) -> Option<i32> {
     (v >= 0).then_some(v)
 }
 
-/// The RiNG rent multiplier.
-pub fn ring_multiplier() -> i32 {
-    unsafe { sys::ring_multiplier() }
-}
-
-/// Add `n` to the RiNG rent multiplier; returns the new multiplier.
-pub fn add_ring_bonus(n: i32) -> i32 {
-    unsafe { sys::add_ring_bonus(n) }
-}
-
 /// Move a player without settling (no [触发结算] at the landing).
 pub fn teleport_to(player_id: i32, tile: i32) {
     unsafe { sys::teleport_to(player_id, tile) }
@@ -883,27 +867,6 @@ pub fn event_banish(id: &str) {
 /// Is this card in play at the player?
 pub fn is_placed() -> bool {
     unsafe { sys::is_placed() != 0 }
-}
-
-/// Miracle crystals on **this card instance**. The
-/// instance is the one running -- its placement is not a parameter, because the
-/// host knows it from the dispatch and the same card id can sit on several
-/// players' fields at once. [`card_crystals`] is the form for a *named* other
-/// card, which does need to say whose field to look on.
-pub fn crystals() -> i32 {
-    counter(crate::abi::counter::CRYSTALS)
-}
-
-/// Set this card instance's crystals; returns the new count.
-pub fn set_crystals(n: i32) -> i32 {
-    set_counter(crate::abi::counter::CRYSTALS, n)
-}
-
-/// Adjust this card instance's crystals by `n`, clamped at 0
-/// and at `max` (`0` = uncapped); returns the new count.
-#[cfg_attr(kani, inline(always))]
-pub fn add_crystals(n: i32, max: i32) -> Result<i32, Prompt> {
-    add_counter(crate::abi::counter::CRYSTALS, n, max)
 }
 
 /// One declared **property** of the running rule instance (`FieldCard::props`,
@@ -1443,104 +1406,6 @@ pub fn inc_slot(player_id: i32, key: &str, by: i32) -> i32 {
 
 // ----------------------------------------------------------- pots & status
 
-/// 「乐队卡 / 团卡」 [奇迹水晶] -- the count on `player_id`'s **band-skill field
-/// instance** (`skill:<band>:<skill>`). 0 when the player has no band skill.
-///
-/// This is one pool with [`crystals`] / [`add_crystals`] inside a band skill's
-/// own handlers (they run on that same instance), so a card that says 「为乐队卡
-/// 添加N个[奇迹水晶]」 feeds exactly what the band skill spends. There is no
-/// second store.
-pub fn band_crystals(player_id: i32) -> i32 {
-    unsafe { sys::band_crystals(player_id) }
-}
-
-/// Add `n` to `player_id`'s band-card crystals ([`band_crystals`]). `max` > 0
-/// clamps the result, `max` = 0 is uncapped -- the caller declares the cap
-/// (「最多10个」), the engine does not invent one. Returns the new count; 0 (and
-/// a no-op) when the player has no band skill.
-pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    unsafe { sys::add_band_crystals(player_id, n, max) }
-}
-
-/// The rule id of `player_id`'s **band skill** attachment
-/// (`skill:<band>:<skill>`, `FieldCard::band_skill`), or `None`
-/// when the player has none. This is 「乐队技能」: 「立即执行乐队技能的（2）效果」
-/// names it, and [`invoke_skill`] runs a numbered effect on it.
-pub fn band_skill(player_id: i32) -> Option<String> {
-    let cap = 1024;
-    let (p, scratch) = out_buf(cap as usize);
-    let n = unsafe { sys::band_skill(player_id, p, cap) };
-    if n <= 0 || n > cap {
-        return None;
-    }
-    let buf = out_read(p, n, scratch);
-    let s: String = postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
-}
-
-/// The rule id of `player_id`'s **character skill**
-/// (`skill:<character>:<skill>`), or `None`. A card that reaches 「你的技能」
-/// (pareo_far's 「视为你的房屋总数增加」) names it and
-/// [`invoke_skill`] runs its offer.
-pub fn character_skill(player_id: i32) -> Option<String> {
-    let cap = 1024;
-    let (p, scratch) = out_buf(cap as usize);
-    let n = unsafe { sys::character_skill(player_id, p, cap) };
-    if n <= 0 || n > cap {
-        return None;
-    }
-    let buf = out_read(p, n, scratch);
-    let s: String = postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
-}
-
-/// One band-skill attachment: `(uid, rule id, extra)` in placement order.
-/// `extra` is a 「拿取」ed copy: 「相同乐队技能卡
-/// 的效果不可叠加」 and 「不视为那个乐队的角色」.
-pub fn band_skills(player_id: i32) -> Vec<(i32, String, i32)> {
-    let cap = 8192;
-    let (p, scratch) = out_buf(cap as usize);
-    let n = unsafe { sys::band_skills(player_id, p, cap) };
-    if n <= 0 || n > cap {
-        return Vec::new();
-    }
-    let buf = out_read(p, n, scratch);
-    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
-}
-
-/// Attach a band-skill instance to `player_id`. `extra` marks a 「拿取」ed copy
-/// (「相同乐队技能卡的效果不可叠加」 /
-/// 「不视为那个乐队的角色」). Returns the new instance's uid, or -1 when the id
-/// is not a band skill or the player is gone. Idempotent per id: a second
-/// attach of an id already present (extra or not) is refused, which is the
-/// 「不可叠加」 half.
-#[cfg_attr(kani, inline(always))]
-pub fn add_band_skill(player_id: i32, id: &str, extra: bool) -> i32 {
-    let (p, l) = s(id);
-    unsafe { sys::add_band_skill(player_id, p, l, extra as i32) }
-}
-
-/// Run a skill rule's **press entry** (`On::Play`) for `player_id`, nested in
-/// this run the way [`play_card`] is. Returns where the skill says it goes
-/// ([`Dest`]);
-/// skills normally leave their own instance in place. Unlike the engine's
-/// `use_skill` (the player pressing the skill button) this raises **no**
-/// `skillUsed` -- it is a card executing the body, not the player using it.
-#[cfg_attr(kani, inline(always))]
-pub fn invoke_skill(player_id: i32, id: &str) -> Result<Dest, Prompt> {
-    let (p, l) = s(id);
-    let v = asked(unsafe { sys::invoke_skill(player_id, p, l) })?;
-    Ok(Dest::from_i32(v))
-}
-
 /// Announce that `player_id` just became the owner of
 /// `tile`, so the `bought` hook chain (「购买」 hooks: Afterglow's free
 /// house, ...) hears it. A card that hands a deed over outside the buy routine
@@ -1556,20 +1421,6 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 /// Returns true when the link settled (nobody cancelled it).
 pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> bool {
     unsafe { sys::raise(player_id, kind as i32, value) != 0 }
-}
-
-pub fn fire(player_id: i32) -> i32 {
-    unsafe { sys::fire(player_id) }
-}
-
-pub fn fire_max(player_id: i32) -> i32 {
-    unsafe { sys::fire_max(player_id) }
-}
-
-/// Gain fire pots, capped by the player's own cap.
-pub fn gain_fire(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
-    let (p, l) = mj(why);
-    asked(unsafe { sys::gain_fire(player_id, n, p, l) })
 }
 
 pub fn give_stay(player_id: i32, n: i32) {
@@ -1614,17 +1465,6 @@ pub fn card_move(player_id: i32) -> bool {
     unsafe { sys::card_move(player_id) != 0 }
 }
 
-/// Spend `n` [火罐]; false when the player has fewer. Logs
-/// the spend (`why` is the reason message).
-///
-/// Marker window (user ruling 2026-10-07): `markerSpend` opens **before** the
-/// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
-/// counteraction cancelled the link).
-pub fn spend_fire(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
-    let (p, l) = mj(why);
-    asked(unsafe { sys::spend_fire(player_id, n, p, l) }).map(|v| v != 0)
-}
-
 /// `[停留]` layers on the player.
 pub fn stay_of(player_id: i32) -> i32 {
     unsafe { sys::stay_of(player_id) }
@@ -1655,20 +1495,6 @@ pub fn round_no() -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn turn_key() -> i32 {
     unsafe { sys::turn_key() }
-}
-
-/// Is the player's character exactly `name`?
-#[cfg_attr(kani, inline(always))]
-pub fn character_is(player_id: i32, name: &str) -> bool {
-    let (p, l) = s(name);
-    unsafe { sys::character_is(player_id, p, l) != 0 }
-}
-
-/// Is the player's character in this band?
-#[cfg_attr(kani, inline(always))]
-pub fn in_band(player_id: i32, name: &str) -> bool {
-    let (p, l) = s(name);
-    unsafe { sys::in_band(player_id, p, l) != 0 }
 }
 
 /// Where a card goes when its effect finishes. Wire values 0..=3 are the
@@ -2241,29 +2067,6 @@ pub fn turn_main_steps() -> i32 {
     unsafe { sys::turn_main_steps() }
 }
 
-/// Raise (or, negative, lower) `player_id`'s [火罐] cap;
-/// returns the new cap.
-pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
-    unsafe { sys::add_fire_max(player_id, n) }
-}
-
-/// Burn one of this card's crystals (the decay tick). Returns the count
-/// left.
-///
-/// The 「…为0时放入弃牌堆」 half of a decay clause is **not** here: it is the
-/// card's `HookKind::CrystalsChanged` handler, so a count emptied by *any*
-/// write (another card's `add_card_crystals`, say) leaves the field too. This
-/// used to unplace-and-discard at 0, which only covered the tick.
-pub fn decay() -> Result<i32, Prompt> {
-    // Propagate, never swallow: `add_crystals` opens the `markerSpend` window
-    // (`HostRequest::Marker`), so it can pause. The old `unwrap_or(0)` turned
-    // that pause into "decay did nothing" and the body kept going -- which the
-    // replay model's `finish` boundary check traps ("card published a prompt
-    // and kept going", the card goes out) and the inline answer model
-    // (`docs/BOT.md` §3.2) answers. `?` makes both paths see the same body.
-    add_crystals(-1, 0)
-}
-
 /// The trigger a counteraction is being checked against.
 pub mod trigger {
     use super::*;
@@ -2612,11 +2415,6 @@ pub mod effect {
 
 // ------------------------------------------------------------- placement & skills
 
-/// Does `tile` count as colour `group` for `player_id`?
-#[cfg_attr(kani, inline(always))]
-pub fn is_color(player_id: i32, tile: i32, group: i32) -> bool {
-    unsafe { sys::is_color(player_id, tile, group) != 0 }
-}
 
 /// Take a *named* card off the player's field. True when it was there.
 /// [`unplace_card`] is the special case where the named card is the one running.
@@ -2674,11 +2472,6 @@ pub fn do_move_roll(player_id: i32) -> i32 {
     unsafe { sys::do_move_roll(player_id) }
 }
 
-/// Live-House check for one player: the base check plus their extra-colour
-/// band-skill colours.
-pub fn is_live_house_for(player_id: i32, tile: i32) -> bool {
-    unsafe { sys::is_live_house_for(player_id, tile) != 0 }
-}
 
 /// Is this card in play at the player?
 /// Ids of the player's placed field cards, in placement order.
@@ -2705,12 +2498,6 @@ pub fn set_build_cost_pct(pct: i32) {
 pub fn set_card_face_down(player_id: i32, card: &str, down: bool) -> bool {
     let (cp, cl) = s(card);
     unsafe { sys::set_card_face_down(player_id, cp, cl, down as i32) != 0 }
-}
-
-/// Adjust [奇迹水晶] on a named placed card; `max` caps (0 = uncapped).
-#[cfg_attr(kani, inline(always))]
-pub fn add_card_crystals(player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-    add_card_counter(player_id, card, crate::abi::counter::CRYSTALS, n, max)
 }
 
 /// Is this placed card face-down? Field filters use this half of the
@@ -2840,10 +2627,6 @@ pub fn gain_fixed(player_id: i32, amount: i32, why: &Msg) -> Result<i32, Prompt>
     gain(player_id, amount, why)
 }
 
-/// Is this the 地产商 tile?
-pub fn is_agent(tile: i32) -> bool {
-    unsafe { sys::is_agent(tile) != 0 }
-}
 
 /// What this turn's [触发结算]s have cost the player so far.
 #[cfg_attr(kani, inline(always))]
@@ -2930,39 +2713,11 @@ pub fn turn_start_pos(player_id: i32) -> i32 {
 
 // --------------------------------------------- card crystals & build
 
-/// [奇迹水晶] on a named placed card.
-pub fn card_crystals(player_id: i32, card: &str) -> i32 {
-    card_counter(player_id, card, crate::abi::counter::CRYSTALS)
-}
-
 /// Pay `tile`'s build cost and raise one house.
 /// `true` only when a house was added (HOST-06): `false` on
 /// `why_not_build_on` / `buildBefore` cancel / unpaid cost / max houses.
 pub fn card_build(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_build(player_id, tile) != 0 }
-}
-
-/// 「位于此卡所在格子上的玩家无法使用角色及乐队技能」 / 「不可使用任何<BAND>
-/// 角色的（2）技能」 -- the shared skill-press gate. `skillBlock` on the player
-/// suppresses every skill; `skillBlock:<band>` suppresses one band's. A
-/// `skillBlock` mark on the tile the player stands on suppresses everyone there.
-/// `band` is the skill's own band, or `""` when it does not have one.
-pub fn skill_blocked(player_id: i32, band: &str) -> bool {
-    if tok(player_id, "skillBlock") > 0 {
-        return true;
-    }
-    if !band.is_empty() {
-        let key = alloc::format!("skillBlock:{}", band);
-        if tok(player_id, &key) > 0 {
-            return true;
-        }
-    }
-    let t = player_pos(player_id);
-    t >= 0
-        && count_marks(
-            t,
-            &crate::abi::MarkFilter::any().kind("skillBlock"),
-        ) > 0
 }
 
 /// Where **this instance** sits, or -1 for "with its owner" / gone.
@@ -3010,17 +2765,6 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
     }
     let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
-}
-
-/// The instance at `uid`, wherever it sits. [`crystals`] / [`self_tile`] are
-/// the forms for the running instance; these address some *other* one.
-pub fn crystals_at(uid: i32) -> i32 {
-    counter_at(uid, crate::abi::counter::CRYSTALS)
-}
-
-/// Adjust [奇迹水晶] on the instance at `uid`; `max` caps (0 = uncapped).
-pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
-    add_counter_at(uid, crate::abi::counter::CRYSTALS, n, max)
 }
 
 /// Take the instance at `uid` off the field; returns the owner it left.

@@ -29,11 +29,10 @@ pub enum Op {
     mortgage_value = 12,
     owned_count = 13,
     owned_at = 14,
-    is_buyable = 15,
-    is_shop = 16,
-    is_ring = 17,
-    is_circle = 18,
-    is_live_house = 19,
+    // v56: six kind/class ops -> tile_is / tile_attr / tile_in (15,19 free).
+    tile_is = 16,
+    tile_attr = 17,
+    tile_in = 18,
     tile_group = 20,
     tile_price = 21,
     houses_of = 22,
@@ -286,7 +285,7 @@ pub enum Op {
     card_mortgage = 269,
     card_text_mentions = 270,
     gain_fixed = 271,
-    is_agent = 272,
+    // is_agent = 272 (removed v56)
     paid_in_settle = 273,
     place_card_on = 274,
     play_from_hand = 275,
@@ -297,7 +296,7 @@ pub enum Op {
     turn_rolls = 280,
     turn_snap = 281,
     turn_start_pos = 282,
-    is_color = 283,
+    // is_color = 283 (removed v56)
     unplace_card_named = 284,
     tok_names = 285,
     designations = 286,
@@ -307,7 +306,7 @@ pub enum Op {
     card_settle_at = 290,
     card_offer_build = 291,
     do_move_roll = 292,
-    is_live_house_for = 293,
+    // is_live_house_for = 293 (removed v56)
     placed_cards = 294,
     field_instances = 295,
     unplace_at = 296,

@@ -14,7 +14,7 @@
 //! whole point of spending the pot.
 
 use card_sdk::abi::{roll_source, HookKind};
-use card_sdk::ctx;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RAISE_EFFORT: CardDef = CardDef::new(

@@ -8,7 +8,8 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use ruleset_core::ctx;
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const SWEET_ESCAPE: CardDef = CardDef::new(
     "Sumimi:Sweet Escape",
