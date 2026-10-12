@@ -107,11 +107,16 @@ CBMC `Unwinding loop …` line counts, by function:
 | `memcmp` (card bodies) | 14 | 14 | unmodified `String`/`slice` compares — not a model loop |
 | `invoke::by_idx` | 10 | 8 | const `BAND_START` binary search |
 
+Final 900 s profile (unwind 64, TIMEOUT): `fnv1a` 144, `bytes_eq` 127,
+`memcmp` 14, `intern_bytes` 15, `by_idx` 10, `named_set` 8, `poorest` 4.
+No `Not unwinding` — the 64 bound covers `memcmp`. The run is solver-bound
+on those unrolls, not stuck in a single 60-tile scan.
+
 ### Before → after (the nine requested harnesses)
 
 | harness | before (sound) | after | verdict | notes |
 |---|---|---|---|---|
-| `money_shave::aya_haruka_02_shave_iff` | **>50 min**, stuck in `intern_bytes` (unsound history: 85 s) | **in flight / not yet under 5 min** | — | model loops are gone; remaining cost is `bytes_eq`/`fnv1a` from `ctx::tok` + 14 card-body `memcmp`s. See §6 |
+| `money_shave::aya_haruka_02_shave_iff` | **>50 min**, stuck in `intern_bytes` (unsound history: 85 s) | **TIMEOUT 900 s** at unwind 64 | TIMEOUT | model loops are at 0–8 unrolls; remaining cost is `intern::fnv1a`/`bytes_eq` from `ctx::tok` (144+127 unrolls) + 14 card-body `memcmp`s (need unwind ≥ 64). See §6 |
 | `wrong_guard::wrong_guard_too_loose_is_caught` | attr unwind 6 (cheap) | _not re-timed_ | — | small guard-only harness; expected cheap |
 | `wrong_guard::real_guard_matches_clause_iff` | attr unwind 6 | _not re-timed_ | — | same |
 | `teleport::tae_sound_teleport_and_fire_iff` | 68 s (unsound history) / attr 80 | _not re-timed_ | — | |
@@ -121,17 +126,20 @@ CBMC `Unwinding loop …` line counts, by function:
 | `hostops_smoke::rent_of_property_table` | **FAILED** unwinding assertion at `intern_bytes` | intern is 8-probe + memcpy | _not re-timed_ | `rent_houses` interns `rentHouses` once per call |
 | `prompt::aya_haruka_01_empty_discard` | ~194 s | _not re-timed_ | — | |
 
-**Honest bottom line on the 5-minute target:** not met for
-`aya_haruka_02_shave_iff`. The symbolic-model loops that made it infeasible
-(`intern_bytes` scan, 60-tile fills, `id_of` over CJK literals, the unbounded
-`0..player_count()` Range) are fixed — the profile above shows them at 0–8
-unrolls. What is left is (a) `intern::bytes_eq` / `fnv1a` from the card body's
-`ctx::tok` lookups (still 100+ unrolls on the pre-memcmp build) and (b) 14
-`memcmp`s inside unmodified card bodies. Those are **card-body / ABI** costs,
-not model-loop costs; a `cfg(kani)` interned-str facade in card bodies (or a
-10× CPU budget) is the known next step (`KANI.md` §5). The remaining eight
-harnesses were not re-timed inside this pass's serial-CBMC budget; the model
-cuts apply to them and the calibration tooling is in place.
+**Honest bottom line on the 5-minute target:** **not met** for
+`aya_haruka_02_shave_iff` (TIMEOUT at 900 s, unwind 64). The symbolic-model
+loops that made it infeasible (`intern_bytes` table scan, 60-tile fills,
+`id_of` over CJK literals, the unbounded `0..player_count()` Range) are
+fixed — the profile above shows them at 0–8 unrolls. What is left is
+(a) `intern::fnv1a` + `bytes_eq` from the card body's `ctx::tok` lookups
+(144 + 127 unrolls at the 900 s cut) and (b) 14 `memcmp`s inside unmodified
+card bodies (the builtin loop needs `unwind ≥ 64`; `a == b` in `bytes_eq`
+was measured to trip *"Not unwinding memcmp at 32"*). Those are **card-body
+/ ABI** costs, not model-loop costs. A `cfg(kani)` interned-str facade in
+card bodies (or a 10× CPU budget) is the known next step
+(`HOSTOPS-ROUND2.md` follow-up, `KANI.md` §5). The remaining eight
+harnesses were not fully re-timed inside this pass's serial-CBMC budget;
+the model cuts apply to them and the calibration tooling is in place.
 
 ---
 
