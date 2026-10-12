@@ -194,7 +194,7 @@ pub fn signpost_02_lose_1000_at_end_iff() {
     // single-source guard: the real CEL string on `On::AtEnd`
     let gid = crate::guard_id!("owner.out == 0");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, player, 0, false, -1, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, player, 0, false, -1, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (owner alive)");
     kani::cover!(!admitted, "guard rejects (owner out)");
@@ -457,7 +457,7 @@ pub fn popipapapipopa_c1_crystal_on_pass_iff() {
         "card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))"
     );
     let ov = ir_fill::TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, player, 2, true, named as i64, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, player, 2, true, named as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (named pass)");
     kani::cover!(!admitted, "guard rejects");
@@ -546,7 +546,7 @@ pub fn popipapapipopa_c2_pay_reduce_iff() {
     let mut ov = ir_fill::TriggerOverlay::default();
     ov.value = Some(amount as i64);
     ov.push_card_counter(CRYSTALS_KEY, pre_crystals as i64);
-    let ctx = ir_fill::fill_from_world(&w, player, 2, true, -1, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, player, 2, true, -1, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits");
     if !admitted {

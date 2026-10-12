@@ -78,9 +78,9 @@ pub fn aya_with_01_five_fans_iff() {
         t.trig_player = me;
         t
     };
-    let ctx = crate::ir_fill::fill_from_world(
+    let ctx = crate::ir_fill::fill_for_guard(
         &w2,
-        me,
+        gid, me,
         0,
         false,
         -1,

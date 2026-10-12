@@ -185,7 +185,7 @@ pub fn hina_01_pass_circle_iff() {
     // single-source guard: the real CEL string, lowered once
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
     let ov = ir_fill::TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, player, 0, true, -1, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, player, 0, true, -1, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (on a CiRCLE tile)");
     kani::cover!(!admitted, "guard rejects (not CiRCLE / not owner)");
@@ -276,7 +276,7 @@ pub fn childhood_02_fire_iff() {
     let gid = crate::guard_id!("actor == owner && move.main && card.placed");
     let mut ov = ir_fill::TriggerOverlay::default();
     ov.move_main = true;
-    let ctx = ir_fill::fill_from_world(&w, player, 0, true, -1, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, player, 0, true, -1, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits");
     kani::cover!(!admitted, "guard rejects");
