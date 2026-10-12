@@ -167,6 +167,20 @@ assertion follows from the quote. Debug with `Table::dump_prompt`,
 `keys_since`, and `snap::diff`. A genuine discrepancy stays failing, with a
 message naming the clause ID and the quote.
 
+## Results
+
+Consolidated status of the formal-verification effort (2026-10-12):
+
+* [`FINDINGS.md`](FINDINGS.md) — every genuine book-vs-implementation
+  discrepancy (red `spec_*` tests + Kani FAILS rows + clause-doc Findings),
+  deduplicated by clause ID, with class LESS / MORE / WRONG.
+* [`OPEN-QUESTIONS.md`](OPEN-QUESTIONS.md) — every OPEN-* book gap, grouped
+  by concept across units, with a suggested yes/no question for the
+  rulebook owner.
+* [`KANI-STATUS.md`](KANI-STATUS.md) — coverage dashboard: per-unit clause
+  classifications and harness verdicts, soundness caveats, and how to
+  refresh from `tools/kani/central.sh`.
+
 ## Open questions (index)
 
 Consolidated from the area docs. Book gaps that clauses must not invent:
