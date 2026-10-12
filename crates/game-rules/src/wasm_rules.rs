@@ -120,12 +120,19 @@ const MAX_COUNTERACT_DEPTH: u32 = 16;
 /// TODO(规则书): the book states no per-visit bound.
 const MAX_COUNTERACT_PER_VISIT: u32 = 16;
 
-/// Piles, randomness and their log at a host boundary. Replaying a card starts
-/// from the pre-draw piles, then adopts each completed request at its original
+/// Piles and randomness at a host boundary. Replaying a card starts from the
+/// pre-draw piles, then adopts each completed request at its original
 /// statement. A discard/redraw effect cannot discard its freshly drawn hand.
 ///
 /// A **snapshot** (deep copy at construction): the checkpoint outlives the
 /// mutations that follow the boundary, so it cannot share the live handle.
+///
+/// The event tail (`recent` / `next_event`) is **not** part of the checkpoint:
+/// during a drive every event is allocated from the live world's single
+/// counter (the guest copy runs with `skip_log` and posts write-through).
+/// Copying the tail here used to reset that counter whenever a host request
+/// made the guest's pile writes visible, so the next live log reused an id
+/// the guest had already spent (two `text` events with the same id).
 #[derive(Clone)]
 struct PileCheckpoint {
     world: Arc<game_core::engine::World>,
@@ -139,8 +146,6 @@ impl PileCheckpoint {
     fn apply(&self, world: &mut game_core::engine::World) {
         world.hidden = self.world.hidden.clone();
         world.rng = self.world.rng.clone();
-        world.recent = self.world.recent.clone();
-        world.next_event = self.world.next_event;
     }
 }
 
@@ -2777,6 +2782,12 @@ impl<M: CardModules> RulesBridge<M> {
             prompted: false,
                         parent: activation_id,
                     };
+                    // Same as the learn pass: the guest copy must not allocate
+                    // event ids (`World::log` is stubbed; lines post
+                    // write-through). Setting the flag goes through `DerefMut`
+                    // and detaches the copy -- that is fine, the live counter
+                    // is the only one that matters (see `commit_after`).
+                    run.world.skip_log = true;
                     let mut announce = |w: &mut crate::Run, _entry: i32| {
                         // Already announced on the learn pass. The header is
                         // not in the replace log (post_card appends it
@@ -3602,36 +3613,33 @@ impl<M: CardModules> RulesBridge<M> {
             let dest = after.dest;
             *trigger = after.trigger.clone();
             // Keep the live event tail (write-through order) over the guest
-            // copy's stale one. The guest copy is the state. The pending walk
-            // also stays on the live world -- swapping in a stale `WalkFlush`
-            // would re-publish the approach from its origin after a mid-walk
-            // flash (the walk-before-flash invariant).
-            // Adopt the live tail **and** keep the guest copy's tail: a
-            // `SharedWorld` write (e.g. `refill_draw_pile`'s `World::log`)
-            // may land on a detached copy, and `commit_after`'s swap must not
-            // discard it. Merge by event id -- the live tail wins on a clash
-            // (the replace-log already rewrote the guest's copies).
+            // copy's stale one. The guest copy is the state; the event stream
+            // and its `next_event` counter live solely on the live world (the
+            // guest runs with `skip_log` and posts write-through). Adopting
+            // the live tail **and** the live counter is what keeps ids unique
+            // across a drive -- the guest copy may have been detached at any
+            // `DerefMut` (its own `skip_log` write included) and must never
+            // allocate an id of its own. The pending walk also stays on the
+            // live world -- swapping in a stale `WalkFlush` would re-publish
+            // the approach from its origin after a mid-walk flash (the
+            // walk-before-flash invariant).
+            after.world.recent = cx.world().recent.clone();
+            after.world.next_event = cx.world().next_event;
+            // Event ids must be unique and strictly increasing across the
+            // whole tail. A duplicate means two `World`s allocated from the
+            // same `next_event` (the draw-with-reshuffle bug).
             {
-                use std::collections::BTreeSet;
-                let mut seen: BTreeSet<i32> = BTreeSet::new();
-                let mut merged: Vec<game_core::state::MatchEvent> = Vec::new();
+                let mut prev = i32::MIN;
                 for e in after.world.recent.iter() {
-                    if seen.insert(e.id) {
-                        merged.push(e.clone());
-                    }
-                }
-                for e in cx.world().recent.iter() {
-                    if seen.insert(e.id) {
-                        merged.push(e.clone());
-                    }
-                }
-                merged.sort_by_key(|e| e.id);
-                after.world.recent = Default::default();
-                for e in merged {
-                    after.world.recent.push_back(e);
+                    debug_assert!(
+                        e.id > prev,
+                        "event ids must be strictly increasing: {} follows {}",
+                        e.id,
+                        prev
+                    );
+                    prev = e.id;
                 }
             }
-            after.world.next_event = after.world.next_event.max(cx.world().next_event);
             after.world.walk_flush = cx.world().walk_flush.clone();
             // Complete the activation: 「无事发生」 when nothing followed.
             // `activation_id` is the header this drive posted (the local from

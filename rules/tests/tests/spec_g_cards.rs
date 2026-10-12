@@ -626,11 +626,33 @@ fn g_cards_04_empty_draw_reshuffles_the_discard() {
     assert_eq!(t.draw_pile(0).len(), 2, "the rest sits on the new pile");
 }
 
+/// Assert the event tail's ids are unique and strictly increasing (one
+/// `next_event` counter allocated every id).
+fn assert_event_ids_unique_increasing(t: &Table) {
+    let ids: Vec<i32> = t.m.world().recent.iter().map(|e| e.id).collect();
+    let mut sorted = ids.clone();
+    sorted.sort();
+    let mut dedup = sorted.clone();
+    dedup.dedup();
+    assert_eq!(
+        sorted.len(),
+        dedup.len(),
+        "event ids must be unique: {ids:?}"
+    );
+    assert!(
+        ids.windows(2).all(|w| w[0] < w[1]),
+        "event ids must be strictly increasing: {ids:?}"
+    );
+}
+
 /// Engine-level regression: a body that triggers a draw-with-reshuffle after a
 /// lazy header has been flushed must leave **exactly one** `log.reshuffle` and
-/// **exactly one** `log.draw` in the tail, and the pile state the host effects
-/// produced. The header's posting path (outside the replace-log) must not
-/// change pile state or drop the reshuffle's log line.
+/// **exactly one** `log.draw` in the tail, the landing `text` line
+/// (`log.land_draw`) present, and the pile state the host effects produced.
+/// The header's posting path (outside the replace-log) must not change pile
+/// state or drop the reshuffle's log line. Event ids must be unique and
+/// strictly increasing -- a duplicate id means two `World` copies allocated
+/// from the same `next_event`.
 #[test]
 fn draw_with_reshuffle_after_a_lazy_header_logs_once_each() {
     let mut t = quiet_table();
@@ -639,8 +661,11 @@ fn draw_with_reshuffle_after_a_lazy_header_logs_once_each() {
     t.set_discard(0, &["通用:GREAT!", "通用:PERFECT!", "通用:FEVER!"]);
     t.observe(CLAUSES);
     let keys = settle_on(&mut t, "江户川乐器店");
+    assert_event_ids_unique_increasing(&t);
+    let lands = keys.iter().filter(|k| *k == "log.land_draw").count();
     let reshuffles = keys.iter().filter(|k| *k == "log.reshuffle").count();
     let draws = keys.iter().filter(|k| *k == "log.draw").count();
+    assert_eq!(lands, 1, "exactly one landing line: {keys:?}");
     assert_eq!(reshuffles, 1, "exactly one reshuffle: {keys:?}");
     assert_eq!(draws, 1, "exactly one draw: {keys:?}");
     assert_eq!(t.draw_pile(0).len(), 2, "reshuffle moved the 3, draw took 1: {:?}", t.draw_pile(0));
@@ -661,10 +686,13 @@ fn draw_with_reshuffle_after_a_prompt_logs_once_each() {
         t.decline();
     }
     let keys2 = t.keys_since(0);
+    assert_event_ids_unique_increasing(&t);
+    let lands = keys2.iter().filter(|k| *k == "log.land_draw").count();
     let reshuffles = keys2.iter().filter(|k| *k == "log.reshuffle").count();
     let draws = keys2.iter().filter(|k| *k == "log.draw").count();
-    assert!(reshuffles >= 1, "the reshuffle survives the re-run: {keys:?} / {keys2:?}");
-    assert!(draws >= 1, "the draw survives the re-run: {keys:?} / {keys2:?}");
+    assert_eq!(lands, 1, "exactly one landing line: {keys:?} / {keys2:?}");
+    assert_eq!(reshuffles, 1, "exactly one reshuffle: {keys:?} / {keys2:?}");
+    assert_eq!(draws, 1, "exactly one draw: {keys:?} / {keys2:?}");
     assert_eq!(t.hand(0).len(), 1, "one card drawn: {:?}", t.hand(0));
 }
 
