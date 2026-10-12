@@ -240,6 +240,93 @@ cargo check --manifest-path rules/Cargo.toml --workspace --target wasm32-unknown
 * Card bodies under `rules/cards/**` are unmodified.
 * `conf_fill_diff` / `conf_model` / `conf_hostops2` / `pilot_guards` green.
 * Spec text still comes from the 规则书 (clause docs), not engine behaviour.
+
+---
+
+## 10. String facade (branch `kani-strfacade`)
+
+Goal: make string-keyed code in card bodies cheap under Kani **without
+editing card bodies** (byte-for-byte unmodified, wasm32 + native unchanged
+in behaviour). All changes are `cfg(kani)`-gated or live in `rules-kani`.
+
+### Method
+
+| piece | what |
+|---|---|
+| `card-sdk/src/intern.rs` | `fnv1a` / `bytes_eq` / probe / insert are **zero-loop** under `cfg(kani)` (64-way `macro_rules!` steps, `.get` not `[i]` — no `slice_index_fail` panic paths). `intern_by_hash(h, s)` takes a precomputed FNV so an inlined `s()` constant-folds a literal's hash. Production (`cfg(not(kani))`) keeps master's 8×8 loops byte-for-byte. |
+| `card-sdk/src/ctx.rs` `s()` | under `cfg(kani)` returns `(INTERN_TAG \| NameId, len)` — the handle *is* the intern id. No arena `Vec`, no host re-hash. `#[cfg_attr(kani, inline(always))]` on every `&str` wrapper so a card body's `ctx::tok(p, "literal")` constant-folds the hash through the chain. |
+| `card-sdk/src/native.rs` `read` | tagged handles resolve from the intern table (static bytes). Untagged handles stay arena out-buffers. |
+| `rules/kani/src/host.rs` | `name_id` decodes the tag (O(1)). `Known` pre-interns pilot names at `install()`; `key == intern::intern(TOK_PP_POS)` becomes `key == known().tok_pp_pos` (`u16` compare). `card_slot` / `card_u16` / `card_slot_of_id` are NameId compares. |
+| `rules/kani/src/world.rs` | `sync_views` / `rent_houses` cache `NameId`s once per proof. `card_slot_of_bytes` zero-loop. |
+| `rules/kani/src/invoke.rs` | `hook_idx` / `hook_kind_matches` parse `"PayAdd"` / `"Hook"` to `HookKind` / `KindTag` and compare integers — kills the 14 `memcmp`s of short ASCII tags. |
+| `rules/kani/src/board.rs` | `bytes_eq` zero-loop (same bits as the old 8×8 walk). |
+
+Card bodies still see `Vec<String>` / `String`. `ctx::cards_in` already
+returns 1-byte facade strings under `cfg(kani)` (HOSTOPS-ROUND2); combined
+with the NameId ABI, `ids.contains(&c)` and `take_card(..., &id)` are
+1-byte / `u16` compares.
+
+### What is now cheap
+
+| was | now |
+|---|---|
+| `fnv1a` 144 unrolls, `bytes_eq` 127, `intern_bytes` 15 (900 s profile of `aya_haruka_02_shave_iff`) | **0** unwind (zero-loop); hash of a literal constant-folds through `inline(always)` |
+| `intern::intern(CONST)` on every `count_held` / `set_held` / `crystals` check | pre-interned `Known` ids — `u16` compare |
+| 14 `memcmp`s of `"PayAdd"` etc. in `invoke::hook_idx` | integer `KindTag` / `HookKind` match |
+| `copy_from_slice` `len_mismatch_fail` panic paths in intern insert | zero-loop `.get` byte copy |
+| host `name_eq` 8×8 byte walk over CJK | `NameId` compare for the four pilots; `.get` walk otherwise |
+
+### Measurements (one serial CBMC job, unwinding assertions ON)
+
+| harness | before (TUNING.md §4) | after | verdict |
+|---|---|---|---|
+| `hostops_smoke::rent_of_property_table` | **FAILED** unwinding at `intern_bytes` | **SUCCESSFUL 59 s** at unwind 12 | SUCCESSFUL (covers reachable) |
+| `money_shave::aya_haruka_02_shave_iff` | **TIMEOUT 900 s** (fnv1a 144 + bytes_eq 127 + memcmp 14) | TIMEOUT 1800 s at unwind 32 (no intern unwinds; solver-bound on the symbolic world + `poorest` `Range::try_fold`) | TIMEOUT — intern cliff gone, 5 min target **not** met |
+| `prompt::aya_haruka_01_empty_discard` | ~194 s | _pending re-time_ | — |
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | timeout / `Vec<String>` cliff | _pending_ | — |
+| `ras::riot_02_03_cycle_iff` | TIMEOUT 600 s | _pending_ | — |
+| `ppp::wait_aoki_01_place_on_field_iff` | 195 s SUCCESSFUL | _pending_ | — |
+| `teleport::tae_sound_teleport_and_fire_iff` | 68 s (unsound history) | _pending_ | — |
+| `general::fever_04_turn_start_iff` | FAILED unwinding at `fill_from_world` | _pending_ | — |
+
+`aya_haruka_02_shave_iff` profile after the facade: **no** `fnv1a` /
+`bytes_eq` / `intern_bytes` / `memcmp` unwinds. Remaining cost is the
+symbolic world (money/out/pos of 4 seats), `poorest`'s `0..player_count()`
+`Range::try_fold` (4 unrolls), and `invoke::by_idx` (binary search). The
+string cliff is gone; the proof is now model-bound.
+
+### Remaining intractable patterns
+
+| pattern | why | affected clauses |
+|---|---|---|
+| `Vec<String>` / `String` drop glue in card bodies (`ids: Vec<String>`, `push`, `swap_remove`) | heap metadata stays symbolic to CBMC; cannot replace `String` without editing the body's type annotation (`Vec<alloc::string::String>` is named) | `aya_longing` Play (prompt class), any `cards_in` consumer |
+| `ids.contains(&c)` over a growable `Vec` | `Vec::contains` unrolls the grow path; 1-byte facade makes each `eq` cheap but the iteration bound is still `ids.len()` | prompt / all-picks / riot cycle |
+| `ctx::player_count()` **value** (not the loop) | documented §7 caveat — unchanged | `chuchu_music`, `sakiko_lead`, `kokoro_circle`, `clear_cp`, `umiri_card`, `tsukushi_garden`, `hallucination` |
+| multi-turn / chain / settle | PROTOCOL (`KANI.md` §6) | all chain windows |
+
+### Wasm / native hash note
+
+`node tools/build-ruleset.mjs` **without** `CARGO_TARGET_DIR`:
+`dist/cards/conds-*.bin` and `dist/fixtures/*.wasm` are **byte-identical**
+to master. `dist/cards/*.wasm` (the unified `card_all` module) differs by
+**21 bytes** (411940 vs 411919) — residual codegen / panic-string drift
+from `cfg(kani)` scaffolding in shared `card-sdk` files. Non-kani logic is
+master's code (`cfg(not(kani))` twins are byte-for-byte). Card behaviour on
+wasm is unchanged. Comparison: `sha256sum dist/cards/* dist/fixtures/*`
+after two `build-ruleset` runs (ours vs `git checkout master -- rules/card-sdk`).
+
+### Unwind table updates
+
+```toml
+aya_haruka_02_shave_iff = 32          # was 64
+aya_haruka_02_mutant_x_off_by_one = 32
+aya_haruka_02_mutant_is_detected = 32
+rent_of_property_table = 12           # MAX_FIELD × NameMap nested scans
+```
+
+Re-calibrate with `tools/kani/calibrate.py --mutate 2` (too-small N must
+FAIL with an unwinding assertion).
+
 ---
 
 ## 7. Soundness caveat: `player_count()` is the constant 4 under Kani (coordinator note)
