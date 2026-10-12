@@ -196,10 +196,21 @@ impl IrCtx {
     }
 
     pub fn named_get(&self, name_id: i64) -> Option<i64> {
+        let n = self.named_n as usize;
+        // Small-table path (light fills). Fixed 4-iteration walk.
+        if n <= 4 {
+            let mut i = 0usize;
+            while i < 4 {
+                if i < n && self.named[i].0 == name_id {
+                    return Some(self.named[i].1);
+                }
+                i += 1;
+            }
+            return None;
+        }
         // 10×8 = 80 = NAMED_CAP chunk walk (unwind bound 10). Must cover the
         // whole table: `fill_from_world` inserts 60 tile names before the
         // card counters, so a 64-slot walk would miss them.
-        let n = self.named_n as usize;
         let mut outer = 0usize;
         while outer < 10 {
             let mut k = 0usize;
@@ -217,6 +228,24 @@ impl IrCtx {
 
     pub fn named_set(&mut self, name_id: i64, v: i64) {
         let n = self.named_n as usize;
+        // Small-table path (light fills insert ≤ 4 pairs): a fixed 4-iteration
+        // walk, so `#[kani::unwind(4)]` covers it. The 10×8 walk below is only
+        // for the full `fill_from_world` 60-name table.
+        if n <= 4 {
+            let mut i = 0usize;
+            while i < 4 {
+                if i < n && self.named[i].0 == name_id {
+                    self.named[i].1 = v;
+                    return;
+                }
+                i += 1;
+            }
+            if n < NAMED_CAP {
+                self.named[n] = (name_id, v);
+                self.named_n = (n + 1) as u8;
+            }
+            return;
+        }
         let mut outer = 0usize;
         while outer < 10 {
             let mut k = 0usize;
