@@ -170,19 +170,10 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
     let slot = &mut t.slots[first_empty];
     slot.hash = h;
     slot.len = n;
-    let mut outer = 0usize;
-    while outer < 8 {
-        let base = outer * 8;
-        let mut k = 0usize;
-        while k < 8 {
-            let i = base + k;
-            if i < s.len() {
-                slot.bytes[i] = s[i];
-            }
-            k += 1;
-        }
-        outer += 1;
-    }
+    // memcpy — one CBMC unwind, not an 8×8 chunk walk (the insert path was
+    // still the slowest loop after the lookup was hashed).
+    let nbytes = s.len().min(MAX_NAME);
+    slot.bytes[..nbytes].copy_from_slice(&s[..nbytes]);
     t.n += 1;
     NameId(first_empty as u16)
 }
