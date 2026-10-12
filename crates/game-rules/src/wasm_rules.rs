@@ -3606,7 +3606,31 @@ impl<M: CardModules> RulesBridge<M> {
             // also stays on the live world -- swapping in a stale `WalkFlush`
             // would re-publish the approach from its origin after a mid-walk
             // flash (the walk-before-flash invariant).
-            after.world.recent = cx.world().recent.clone();
+            // Adopt the live tail **and** keep the guest copy's tail: a
+            // `SharedWorld` write (e.g. `refill_draw_pile`'s `World::log`)
+            // may land on a detached copy, and `commit_after`'s swap must not
+            // discard it. Merge by event id -- the live tail wins on a clash
+            // (the replace-log already rewrote the guest's copies).
+            {
+                use std::collections::BTreeSet;
+                let mut seen: BTreeSet<i32> = BTreeSet::new();
+                let mut merged: Vec<game_core::state::MatchEvent> = Vec::new();
+                for e in after.world.recent.iter() {
+                    if seen.insert(e.id) {
+                        merged.push(e.clone());
+                    }
+                }
+                for e in cx.world().recent.iter() {
+                    if seen.insert(e.id) {
+                        merged.push(e.clone());
+                    }
+                }
+                merged.sort_by_key(|e| e.id);
+                after.world.recent = Default::default();
+                for e in merged {
+                    after.world.recent.push_back(e);
+                }
+            }
             after.world.next_event = after.world.next_event.max(cx.world().next_event);
             after.world.walk_flush = cx.world().walk_flush.clone();
             // Complete the activation: 「无事发生」 when nothing followed.

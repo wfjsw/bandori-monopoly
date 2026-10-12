@@ -626,6 +626,48 @@ fn g_cards_04_empty_draw_reshuffles_the_discard() {
     assert_eq!(t.draw_pile(0).len(), 2, "the rest sits on the new pile");
 }
 
+/// Engine-level regression: a body that triggers a draw-with-reshuffle after a
+/// lazy header has been flushed must leave **exactly one** `log.reshuffle` and
+/// **exactly one** `log.draw` in the tail, and the pile state the host effects
+/// produced. The header's posting path (outside the replace-log) must not
+/// change pile state or drop the reshuffle's log line.
+#[test]
+fn draw_with_reshuffle_after_a_lazy_header_logs_once_each() {
+    let mut t = quiet_table();
+    t.set_hand(0, &[]);
+    t.set_draw(0, &[]);
+    t.set_discard(0, &["通用:GREAT!", "通用:PERFECT!", "通用:FEVER!"]);
+    t.observe(CLAUSES);
+    let keys = settle_on(&mut t, "江户川乐器店");
+    let reshuffles = keys.iter().filter(|k| *k == "log.reshuffle").count();
+    let draws = keys.iter().filter(|k| *k == "log.draw").count();
+    assert_eq!(reshuffles, 1, "exactly one reshuffle: {keys:?}");
+    assert_eq!(draws, 1, "exactly one draw: {keys:?}");
+    assert_eq!(t.draw_pile(0).len(), 2, "reshuffle moved the 3, draw took 1: {:?}", t.draw_pile(0));
+    assert_eq!(t.discard(0).len(), 0, "discard emptied into the draw pile: {:?}", t.discard(0));
+    assert_eq!(t.hand(0).len(), 1, "one card drawn: {:?}", t.hand(0));
+}
+
+/// The same with a prompt between the header flush and the draw (re-run path).
+#[test]
+fn draw_with_reshuffle_after_a_prompt_logs_once_each() {
+    let mut t = quiet_table();
+    t.set_hand(0, &[]);
+    t.set_draw(0, &[]);
+    t.set_discard(0, &["通用:GREAT!", "通用:PERFECT!", "通用:FEVER!"]);
+    t.observe(CLAUSES);
+    let keys = settle_on(&mut t, "江户川乐器店");
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    let keys2 = t.keys_since(0);
+    let reshuffles = keys2.iter().filter(|k| *k == "log.reshuffle").count();
+    let draws = keys2.iter().filter(|k| *k == "log.draw").count();
+    assert!(reshuffles >= 1, "the reshuffle survives the re-run: {keys:?} / {keys2:?}");
+    assert!(draws >= 1, "the draw survives the re-run: {keys:?} / {keys2:?}");
+    assert_eq!(t.hand(0).len(), 1, "one card drawn: {:?}", t.hand(0));
+}
+
 /// G-CARDS-02 on a pure draw: the pile multiset is conserved.
 #[test]
 fn g_cards_02_pure_draw_conserves_the_pile_multiset() {
