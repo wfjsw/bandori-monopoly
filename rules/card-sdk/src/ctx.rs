@@ -317,7 +317,25 @@ fn players_on_at(tile: i32, except: i32, index: i32) -> i32 {
 // ------------------------------------------------------------------ players
 
 pub fn player_count() -> i32 {
-    unsafe { sys::player_count() }
+    let n = unsafe { sys::player_count() };
+    // Model bound N ∈ 2..=4. Pin the *return* here — next to the `0..n`
+    // Range every card body builds — because CBMC does not carry the bound
+    // across `sys::player_count` into the Range's trip count (poorest's
+    // try_fold unwound 24× and hit the limit). The clamp is identity when
+    // the model invariant holds; `kani::assert` makes a violation loud.
+    #[cfg(kani)]
+    {
+        kani::assert(n >= 2 && n <= 4, "player_count outside model bound N∈2..=4");
+        return if n < 2 {
+            2
+        } else if n > 4 {
+            4
+        } else {
+            n
+        };
+    }
+    #[cfg(not(kani))]
+    n
 }
 
 /// 1 when the player is out of the game.
