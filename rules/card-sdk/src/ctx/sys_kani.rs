@@ -141,12 +141,20 @@ pub fn players_on_at(tile: i32, except: i32, index: i32) -> i32 {
 
 pub fn player_count() -> i32 {
     let n = kani_host::call_i32(Op::player_count, [0, 0, 0, 0, 0, 0]);
-    // Model bound N ∈ 2..=4 (world.rs). Pin it here, next to the `0..n`
-    // Range the unmodified card bodies construct — CBMC does not propagate
-    // the host's assume through `call_i32` into the Range's trip count
-    // (poorest's try_fold hit "Not unwinding … iteration 24" without this).
-    kani::assume(n >= 2 && n <= 4);
-    n
+    // Model bound N ∈ 2..=4 (world.rs). CBMC does not propagate `assume`
+    // into the `0..n` Range trip count that unmodified card bodies build
+    // (`poorest`'s try_fold unwound 23×). Return a value whose *type range*
+    // is visible: assert the bound, then clamp (identity when the assert
+    // holds). A clamp that is not the identity is a loud failure.
+    kani::assert(n >= 2 && n <= 4, "player_count outside model bound N∈2..=4");
+    let b = if n < 2 {
+        2
+    } else if n > 4 {
+        4
+    } else {
+        n
+    };
+    b
 }
 
 pub fn player_out(player_id: i32) -> i32 {
