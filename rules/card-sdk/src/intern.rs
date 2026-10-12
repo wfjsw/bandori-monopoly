@@ -241,10 +241,25 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
     let slot = &mut t.slots[first_empty];
     slot.hash = h;
     slot.len = n;
-    // memcpy — one CBMC unwind, not an 8×8 chunk walk (the insert path was
-    // still the slowest loop after the lookup was hashed).
+    // Zero-loop byte copy. NOT `copy_from_slice`: that lowers to memcpy plus
+    // a `len_mismatch_fail` panic path CBMC still explores when the source
+    // length is even slightly symbolic (measured in the shave profile).
     let nbytes = s.len().min(MAX_NAME);
-    slot.bytes[..nbytes].copy_from_slice(&s[..nbytes]);
+    macro_rules! cpy {
+        ($i:expr) => {
+            if $i < nbytes {
+                slot.bytes[$i] = s[$i];
+            }
+        };
+    }
+    cpy!(0); cpy!(1); cpy!(2); cpy!(3); cpy!(4); cpy!(5); cpy!(6); cpy!(7);
+    cpy!(8); cpy!(9); cpy!(10); cpy!(11); cpy!(12); cpy!(13); cpy!(14); cpy!(15);
+    cpy!(16); cpy!(17); cpy!(18); cpy!(19); cpy!(20); cpy!(21); cpy!(22); cpy!(23);
+    cpy!(24); cpy!(25); cpy!(26); cpy!(27); cpy!(28); cpy!(29); cpy!(30); cpy!(31);
+    cpy!(32); cpy!(33); cpy!(34); cpy!(35); cpy!(36); cpy!(37); cpy!(38); cpy!(39);
+    cpy!(40); cpy!(41); cpy!(42); cpy!(43); cpy!(44); cpy!(45); cpy!(46); cpy!(47);
+    cpy!(48); cpy!(49); cpy!(50); cpy!(51); cpy!(52); cpy!(53); cpy!(54); cpy!(55);
+    cpy!(56); cpy!(57); cpy!(58); cpy!(59); cpy!(60); cpy!(61); cpy!(62); cpy!(63);
     t.n += 1;
     NameId(first_empty as u16)
 }

@@ -211,22 +211,23 @@ pub fn play_idx(idx: usize, player: i32) -> Asked {
 /// `"RollPlan"`, `"Settle"`, `"Message"`. For `Hook`, `hook_name` may filter
 /// by `HookKind` short name (`"PayAdd"`); `""` matches the first hook.
 ///
-/// `kind` / `hook_name` are short ASCII tags (not card ids) — the compare is
-/// a handful of bytes, fine under CBMC.
+/// `kind` / `hook_name` are short ASCII tags (not card ids). Parsed to
+/// integers first so the `On` dispatch is enum compares, not `memcmp`.
 pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
     let card = by_idx(idx);
+    let ktag = kind_tag(kind);
     for (i, on) in card.on.iter().enumerate() {
-        let hit = match (kind, on) {
-            ("Play", On::Play(..)) => true,
-            ("Counteract", On::Counteract(..)) => true,
-            ("Hook", On::Hook(kinds, ..)) => {
+        let hit = match (ktag, on) {
+            (KindTag::Play, On::Play(..)) => true,
+            (KindTag::Counteract, On::Counteract(..)) => true,
+            (KindTag::Hook, On::Hook(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
-            ("Gate", On::Gate(..)) => true,
-            ("AtEnd", On::AtEnd(..)) => true,
-            ("RollPlan", On::RollPlan(..)) => true,
-            ("Settle", On::Settle(..)) => true,
-            ("Message", On::Message(..)) => true,
+            (KindTag::Gate, On::Gate(..)) => true,
+            (KindTag::AtEnd, On::AtEnd(..)) => true,
+            (KindTag::RollPlan, On::RollPlan(..)) => true,
+            (KindTag::Settle, On::Settle(..)) => true,
+            (KindTag::Message, On::Message(..)) => true,
             _ => false,
         };
         if hit {
@@ -234,6 +235,35 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
         }
     }
     fail_no_kind(kind)
+}
+
+/// On-entry kind tag (integer, no `memcmp`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum KindTag {
+    Play,
+    Counteract,
+    Hook,
+    Gate,
+    AtEnd,
+    RollPlan,
+    Settle,
+    Message,
+    Other,
+}
+
+#[inline(always)]
+fn kind_tag(kind: &str) -> KindTag {
+    match kind {
+        "Play" => KindTag::Play,
+        "Counteract" => KindTag::Counteract,
+        "Hook" => KindTag::Hook,
+        "Gate" => KindTag::Gate,
+        "AtEnd" => KindTag::AtEnd,
+        "RollPlan" => KindTag::RollPlan,
+        "Settle" => KindTag::Settle,
+        "Message" => KindTag::Message,
+        _ => KindTag::Other,
+    }
 }
 
 /// First `On::Counteract` of card `idx`.
@@ -324,8 +354,62 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 // ---------------------------------------------------------------------------
 
 /// Match a `HookKind` by its short name without `format!` (no String/UTF-8).
+///
+/// Parse `hook_name` to a `HookKind` first (a `match` on literals that
+/// constant-folds when the caller passes `"PayAdd"`), then an integer
+/// compare against `kinds`. The old `hook_kind_name(k) == hook_name` lowered
+/// to `memcmp` per arm (14 unwinds in the shave profile).
 fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool {
-    kinds.iter().any(|k| hook_kind_name(*k) == hook_name)
+    let want = hook_kind_parse(hook_name);
+    match want {
+        Some(w) => kinds.iter().any(|k| *k == w),
+        None => false,
+    }
+}
+
+/// Short name → `HookKind`. `None` for `""` or an unknown tag.
+/// A `match` on literals constant-folds when the caller passes one.
+#[inline(always)]
+fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
+    use card_sdk::abi::HookKind as H;
+    match name {
+        "PayAdd" => Some(H::PayAdd),
+        "PayMul" => Some(H::PayMul),
+        "PayChoose" => Some(H::PayChoose),
+        "PayAt" => Some(H::PayAt),
+        "PayAfter" => Some(H::PayAfter),
+        "Pay" => Some(H::Pay),
+        "TurnEnd" => Some(H::TurnEnd),
+        "TurnStart" => Some(H::TurnStart),
+        "TurnEndBefore" => Some(H::TurnEndBefore),
+        "TurnEndAfter" => Some(H::TurnEndAfter),
+        "Roll" => Some(H::Roll),
+        "RollAfter" => Some(H::RollAfter),
+        "RollPlan" => Some(H::RollPlan),
+        "Settle" => Some(H::Settle),
+        "SettleBody" => Some(H::SettleBody),
+        "SettleAfter" => Some(H::SettleAfter),
+        "CardPlayed" => Some(H::CardPlayed),
+        "Discarded" => Some(H::Discarded),
+        "DiscardBefore" => Some(H::DiscardBefore),
+        "DiscardAfter" => Some(H::DiscardAfter),
+        "Bought" => Some(H::Bought),
+        "BuyAdd" => Some(H::BuyAdd),
+        "BuyMul" => Some(H::BuyMul),
+        "BuySet" => Some(H::BuySet),
+        "HouseAdded" => Some(H::HouseAdded),
+        "CounterChanged" => Some(H::CounterChanged),
+        "FireSpent" => Some(H::FireSpent),
+        "Teleported" => Some(H::Teleported),
+        "Targeted" => Some(H::Targeted),
+        "Pass" => Some(H::Pass),
+        "PassTile" => Some(H::PassTile),
+        "PassPlayer" => Some(H::PassPlayer),
+        "Exile" => Some(H::Exile),
+        "Stay" => Some(H::Stay),
+        "Stun" => Some(H::Stun),
+        _ => None,
+    }
 }
 
 fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
