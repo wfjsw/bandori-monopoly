@@ -62,6 +62,26 @@ export function applyVolumes(): void {
 
 const lastPlayed = new Map<string, number>();
 
+// Short clips are fetched once and replayed from a blob URL: a fresh
+// `new Audio(url)` per play can re-download the file whenever the server's
+// cache headers don't let the media element reuse it.
+const clips = new Map<string, Promise<string | null>>();
+
+function clipUrl(src: string): Promise<string | null> {
+  let p = clips.get(src);
+  if (!p) {
+    p = fetch(src)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+      .then((b) => URL.createObjectURL(b))
+      .catch(() => {
+        clips.delete(src); // allow a retry on the next play
+        return null;
+      });
+    clips.set(src, p);
+  }
+  return p;
+}
+
 /** Sfx.Play(name) -- rate-limited per name. */
 export function sfx(name: string, minGapMs = 60): void {
   const level = settings().se;
@@ -71,9 +91,11 @@ export function sfx(name: string, minGapMs = 60): void {
   lastPlayed.set(name, t);
   const src = res(`BandoriSE/${name}`);
   if (!src) return;
-  const a = new Audio(src);
-  a.volume = level / 10;
-  void a.play().catch(() => undefined);
+  void clipUrl(src).then((url) => {
+    const a = new Audio(url ?? src);
+    a.volume = level / 10;
+    void a.play().catch(() => undefined);
+  });
 }
 
 let voice: HTMLAudioElement | null = null;
@@ -118,10 +140,14 @@ export function playVoice(cnId: string, line: string): void {
   const src = res(`BandoriVoice/${cnId}/${line}`);
   if (!src || !unlocked) return;
   voice?.pause();
-  voice = new Audio(src);
-  voice.volume = settings().voice / 10;
-  tap(voice);
-  void voice.play().catch(() => undefined);
+  const mine = (voice = new Audio());
+  void clipUrl(src).then((url) => {
+    if (voice !== mine) return; // superseded by a newer line
+    mine.src = url ?? src;
+    mine.volume = settings().voice / 10;
+    tap(mine);
+    void mine.play().catch(() => undefined);
+  });
 }
 
 /** Raw RMS of the playing voice line, clamped to `[0,1]` (0 when silent). */
