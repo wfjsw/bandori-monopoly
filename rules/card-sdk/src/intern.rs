@@ -121,8 +121,10 @@ fn fnv1a(s: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     macro_rules! step {
         ($i:expr) => {
-            if $i < s.len() {
-                h ^= s[$i] as u64;
+            // `.get`, not `s[$i]`: indexing emits a slice_index_fail panic
+            // path CBMC still explores (64 per hash in the shave formula).
+            if let Some(&b) = s.get($i) {
+                h ^= b as u64;
                 h = h.wrapping_mul(0x0000_0100_0000_01b3);
             }
         };
@@ -169,8 +171,10 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     let mut ok = true;
     macro_rules! step {
         ($i:expr) => {
-            if $i < n && a[$i] != b[$i] {
-                ok = false;
+            // `.get`, not `[i]`: no slice_index_fail panic path.
+            match (a.get($i), b.get($i)) {
+                (Some(x), Some(y)) if x != y => ok = false,
+                _ => {}
             }
         };
     }
@@ -200,11 +204,24 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
     if s.len() > MAX_NAME {
         return NameId::INVALID;
     }
-    let n = s.len() as u8;
     let h = fnv1a(s);
+    intern_by_hash(h, s)
+}
+
+/// Table lookup/insert for a **precomputed** FNV-1a hash. Split from
+/// [`intern_bytes`] so an inlined call site can constant-fold `fnv1a`
+/// (the hash of a string literal is a compile-time `u64`) and this routine
+/// only does integer probes + a zero-loop byte compare.
+pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
+    if s.len() > MAX_NAME {
+        return NameId::INVALID;
+    }
+    let n = s.len() as u8;
     // FNV of any byte string is never 0 (offset basis is nonzero and the
     // multiplier is odd). Still guard: a zero hash would alias EMPTY.
-    let h = if h == 0 { 1 } else { h };
+    if h == 0 {
+        h = 1;
+    }
     let t = table();
     let start = bucket(h);
     let mut probe = 0usize;
@@ -221,7 +238,14 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
                 if first_empty == usize::MAX {
                     first_empty = idx;
                 }
-            } else if slot.hash == h && slot.len == n && bytes_eq(&slot.bytes[..n as usize], s) {
+            } else if slot.hash == h
+                && slot.len == n
+                && slot
+                    .bytes
+                    .get(..n as usize)
+                    .map(|sb| bytes_eq(sb, s))
+                    .unwrap_or(false)
+            {
                 return NameId(idx as u16);
             }
             probe += 1;
@@ -247,8 +271,9 @@ pub fn intern_bytes(s: &[u8]) -> NameId {
     let nbytes = s.len().min(MAX_NAME);
     macro_rules! cpy {
         ($i:expr) => {
-            if $i < nbytes {
-                slot.bytes[$i] = s[$i];
+            // `.get`, not `[i]`: no slice_index_fail panic path.
+            if let Some(&b) = s.get($i) {
+                slot.bytes[$i] = b;
             }
         };
     }

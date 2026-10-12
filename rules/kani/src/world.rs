@@ -87,8 +87,10 @@ pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
         let mut ok = true;
         macro_rules! step {
             ($i:expr) => {
-                if $i < e.len() && a[$i] != e[$i] {
-                    ok = false;
+                // `.get`, not `[i]`: no slice_index_fail panic path.
+                match (a.get($i), e.get($i)) {
+                    (Some(x), Some(y)) if x != y => ok = false,
+                    _ => {}
                 }
             };
         }
