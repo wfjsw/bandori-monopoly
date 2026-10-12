@@ -117,8 +117,8 @@ on those unrolls, not stuck in a single 60-tile scan.
 | harness | before (sound) | after | verdict | notes |
 |---|---|---|---|---|
 | `money_shave::aya_haruka_02_shave_iff` | **>50 min**, stuck in `intern_bytes` (unsound history: 85 s) | **TIMEOUT 900 s** at unwind 64 | TIMEOUT | model loops are at 0–8 unrolls; remaining cost is `intern::fnv1a`/`bytes_eq` from `ctx::tok` (144+127 unrolls) + 14 card-body `memcmp`s (need unwind ≥ 64). See §6 |
-| `wrong_guard::wrong_guard_too_loose_is_caught` | attr unwind 6 (cheap) | _not re-timed_ | — | small guard-only harness; expected cheap |
-| `wrong_guard::real_guard_matches_clause_iff` | attr unwind 6 | _not re-timed_ | — | same |
+| `wrong_guard::wrong_guard_too_loose_is_caught` | attr unwind 6 (cheap) | **SUCCESSFUL 16.9 s** | SUCCESSFUL | under 5 min |
+| `wrong_guard::real_guard_matches_clause_iff` | attr unwind 6 | **SUCCESSFUL 14.9 s** | SUCCESSFUL | **2/2 covers SATISFIED** (not vacuous) |
 | `teleport::tae_sound_teleport_and_fire_iff` | 68 s (unsound history) / attr 80 | _not re-timed_ | — | |
 | `ppp::wait_aoki_01_place_on_field_iff` | 195 s (hostops2, sound) | _not re-timed_ | — | |
 | `ppp::bang_dream_01_crystal_iff` | attr unwind 32 | _not re-timed_ | — | |
@@ -199,6 +199,20 @@ python3 tools/kani/calibrate.py --unit money_shave \
 
 The mutation check (`--mutate 2`) must report `UNWINDING`/`FAILED` — if a
 too-small N ever returns SUCCESSFUL the pipeline is vacuous (exit 3).
+
+**Measured mutation check** (manual attribute patch, `hostops_smoke::
+rent_of_property_table`):
+
+| N | verdict |
+|---:|---|
+| 8 (source) | expected sound |
+| **2 (deliberate)** | **UNWINDING** (unwinding assertion) — pipeline cannot silently regress |
+
+`wrong_guard` at N=2 still passed because that harness's loops really only
+need 2; `rent_of` is the one whose `intern::fnv1a` walk needs 8.
+
+Note: `--unwind` on the CLI **cannot** override a source `#[kani::unwind]`
+(Kani prefers the attribute). The mutation check patches the attribute.
 
 ---
 
