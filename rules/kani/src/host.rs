@@ -457,7 +457,18 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
         // ---- players ----
         Op::player_pos => world::with_world(|w| w.pos[player_idx(a0)]) as i64,
-        Op::player_count => world::with_world(|w| w.n_players) as i64,
+        Op::player_count => {
+            // Pin N ∈ 2..=4 at the ABI. Unmodified card bodies write
+            // `(0..ctx::player_count()).all(…)`; an unconstrained `i32` Range
+            // is an unwinding cliff (the money-shave profile stalled at
+            // `poorest`'s try_fold). The model already assumes this bound in
+            // every symbolic world — this makes it visible where the Range
+            // is constructed.
+            let n = world::with_world(|w| w.n_players) as i64;
+            #[cfg(kani)]
+            kani::assume(n >= 2 && n <= 4);
+            n
+        }
         Op::player_out => world::with_world(|w| w.out[player_idx(a0)]) as i64,
         Op::others_count => world::with_world(|w| {
             let me = a0;
