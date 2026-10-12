@@ -107,26 +107,14 @@ fn fnv1a(s: &[u8]) -> u64 {
     h
 }
 
-/// Fixed-bound byte compare (8×8 chunks). `==` on slices lowers to `memcmp`.
+/// Fixed-bound byte compare. Lengths are already checked equal and
+/// `<= MAX_NAME`, so `==` (memcmp) is one CBMC unwind — the 8×8 chunk walk
+/// was still 500+ unwinds per harness from the intern lookup path.
 fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > MAX_NAME {
         return false;
     }
-    let mut outer = 0usize;
-    let mut ok = true;
-    while outer < 8 {
-        let base = outer * 8;
-        let mut k = 0usize;
-        while k < 8 {
-            let i = base + k;
-            if i < a.len() && a[i] != b[i] {
-                ok = false;
-            }
-            k += 1;
-        }
-        outer += 1;
-    }
-    ok
+    a == b
 }
 
 /// Bucket start index for `hash`.
