@@ -52,7 +52,7 @@ fn symbolic_pay_world() -> World {
 /// guard admits**. When it rejects, the body is not run (the host's
 /// `admits()` gate) and the log is empty by construction.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(64)]
 pub fn aya_haruka_02_shave_iff() {
     let w = symbolic_pay_world();
     let owner = w.trig_player;
@@ -128,7 +128,7 @@ pub fn aya_haruka_02_shave_iff() {
 
 /// MUTANT: the reference wants X+1. The card does X. Kani must report FAIL.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(64)]
 #[kani::should_panic]
 pub fn aya_haruka_02_mutant_x_off_by_one() {
     let w = symbolic_pay_world();
@@ -160,7 +160,7 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
 /// Companion (no `should_panic`): the mutant spec does NOT match the card.
 /// If this FAILS, the off-by-one is live — the expected outcome.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(64)]
 pub fn aya_haruka_02_mutant_is_detected() {
     let w = symbolic_pay_world();
     let owner = w.trig_player;

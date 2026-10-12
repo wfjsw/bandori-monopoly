@@ -48,7 +48,7 @@ pub fn kokoro_01_opening_1000_iff() {
 
     let gid = crate::guard_id!("slot('skill.kasumiGroup.start') == 0");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, -1i64, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, -1i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (latch still 0)");
     if !admitted {
@@ -126,7 +126,7 @@ pub fn kokoro_01_noop_when_latch_set() {
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 1);
     let gid = crate::guard_id!("slot('skill.kasumiGroup.start') == 0");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, -1i64, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, -1i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(!admitted, "guard rejects (latch already set)");
     assert!(!admitted, "latch=1 must reject the once-only grant");
@@ -148,7 +148,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
 
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, CIRCLE as i64, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, CIRCLE as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (own pass of CiRCLE)");
     kani::cover!(!admitted, "guard rejects");
@@ -186,7 +186,7 @@ pub fn kokoro_02_noop_non_circle() {
     let w = symbolic_pass_world(owner, 5);
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, 5i64, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, 5i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(!admitted, "guard rejects non-CiRCLE");
     assert!(!admitted, "non-CiRCLE pass must not admit the extra 1500");
@@ -247,7 +247,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
 
     let gid = crate::guard_id!("actor == owner && tile.id == tile_named('弦卷集团')");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, TSUZUMI_GROUP as i64, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, TSUZUMI_GROUP as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits (own pass of 弦卷集团)");
     if !admitted {
@@ -287,7 +287,7 @@ pub fn misaki_skill_01_noop_other_tile() {
     let w = symbolic_pass_world(owner, CIRCLE);
     let gid = crate::guard_id!("actor == owner && tile.id == tile_named('弦卷集团')");
     let ov = TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, CIRCLE as i64, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, CIRCLE as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
     kani::cover!(!admitted, "guard rejects non-弦卷集团");
     assert!(!admitted);

@@ -140,6 +140,8 @@ pub fn players_on_at(tile: i32, except: i32, index: i32) -> i32 {
 }
 
 pub fn player_count() -> i32 {
+    // The 2..=4 clamp lives in `ctx::player_count` (next to the card body's
+    // `0..n` Range). See that wrapper for why.
     kani_host::call_i32(Op::player_count, [0, 0, 0, 0, 0, 0])
 }
 

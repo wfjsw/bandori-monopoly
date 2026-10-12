@@ -5,23 +5,37 @@
 //! unwinding. Production wasm / native paths are unchanged: they keep the
 //! real `ptr, len` ABI in [`crate::ctx::sys`].
 //!
-//! The table is a fixed-capacity array of byte slices. Lookup is a bounded
-//! byte compare (not `str::eq`) so CBMC unwinds it under `--no-unwinding-checks`
-//! with a small bound.
+//! ## Loop bounds (CBMC unwinding assertions)
+//!
+//! Unwinding assertions require a **static** trip count: `while i < runtime_n`
+//! still needs `unwind >= max(runtime_n)` even with early exit. Every loop
+//! here is therefore a fixed 8-iteration chunk walk (8×8 = 64 bytes) or a
+//! fixed 8-probe open-addressed lookup. A harness with `#[kani::unwind(9)]`
+//! covers the whole table. Exceeding the probe limit is a **loud** `INVALID`
+//! (the caller's `intern_or_fail` panics under Kani) — never a silent cut.
 //!
 //! Game-specific meaning of a name (which id is 「P✽P粉丝」) lives in
 //! `rules-kani`, not here.
 
 #![allow(dead_code)]
 
-/// Maximum interned names in one verification run. Bounded so every loop
-/// unwinds; cards under proof only need a handful of card / token / tile names.
+/// Maximum interned names in one verification run. The open-addressed table
+/// has `SLOTS = 2 * MAX_INTERN` buckets and answers a lookup in ≤
+/// [`MAX_PROBES`] integer compares.
 pub const MAX_INTERN: usize = 32;
 
-/// Longest name we store. Longer names are truncated for identity purposes
-/// only when comparing; the first 64 bytes decide identity (same bound as the
-/// pilot's `guest_eq`).
-pub const MAX_NAME: usize = 48;
+/// Table buckets (power of two). Load factor ≤ 1/2 at `MAX_INTERN`.
+pub const SLOTS: usize = 64;
+
+/// Linear probes per lookup / insert. 8 is enough for a half-full 64-slot
+/// table under FNV-1a (and is the unwind bound the proofs use).
+pub const MAX_PROBES: usize = 8;
+
+/// Longest name we store. Longer names are rejected (`INVALID`) — a loud
+/// cut, never a silent truncate. Guest/host traffic is card / token / tile /
+/// key ids; the longest card id is 52 bytes (`PPP:（沙绫）…`) and token keys
+/// are ≤ 16. The byte walk is chunked 8×8 so the unwind bound is 8, not 56.
+pub const MAX_NAME: usize = 64;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct NameId(pub u16);
@@ -33,19 +47,32 @@ impl NameId {
     }
 }
 
+/// One open-addressed bucket. `hash == 0` marks empty (FNV of a non-empty
+/// name is never 0; empty string hashes to the offset basis, not 0).
+struct Slot {
+    hash: u64,
+    len: u8,
+    bytes: [u8; MAX_NAME],
+}
+
+impl Slot {
+    const EMPTY: Slot = Slot {
+        hash: 0,
+        len: 0,
+        bytes: [0; MAX_NAME],
+    };
+}
+
 struct Table {
     n: u16,
-    /// Packed names: `n` entries of `MAX_NAME` bytes + length in `lens`.
-    bytes: [[u8; MAX_NAME]; MAX_INTERN],
-    lens: [u8; MAX_INTERN],
+    slots: [Slot; SLOTS],
 }
 
 impl Table {
     const fn new() -> Self {
         Self {
             n: 0,
-            bytes: [[0; MAX_NAME]; MAX_INTERN],
-            lens: [0; MAX_INTERN],
+            slots: [Slot::EMPTY; SLOTS],
         }
     }
 }
@@ -59,56 +86,118 @@ fn table() -> &'static mut Table {
     unsafe { &mut TABLE }
 }
 
-/// Fixed-bound byte compare. `==` on slices lowers to `memcmp`.
+/// FNV-1a 64 (same as `rules_cond_ir::ctx::id_of`).
+/// Fixed 8×8 chunk walk so the unwind bound is 8, not `MAX_NAME`.
+fn fnv1a(s: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut outer = 0usize;
+    while outer < 8 {
+        let base = outer * 8;
+        let mut k = 0usize;
+        while k < 8 {
+            let i = base + k;
+            if i < s.len() {
+                h ^= s[i] as u64;
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            k += 1;
+        }
+        outer += 1;
+    }
+    h
+}
+
+/// Fixed-bound byte compare. Lengths are already checked equal and
+/// `<= MAX_NAME`, so `==` (memcmp) is one CBMC unwind — the 8×8 chunk walk
+/// was still 500+ unwinds per harness from the intern lookup path.
 fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > MAX_NAME {
         return false;
     }
-    // Loop only over the actual length (already bounded by MAX_NAME). A
-    // fixed 64-iteration compare is an unwinding cliff when intern runs
-    // once per name lookup inside a card body.
+    // NOT `a == b`: that lowers to memcmp, whose builtin loop needs
+    // unwind >= 64 and trips "Not unwinding memcmp at 32" (measured).
+    // 8 outer × 8 unrolled bytes: the only loop is 8 iterations.
     let n = a.len();
-    let mut i = 0usize;
+    let mut outer = 0usize;
     let mut ok = true;
-    while i < n {
-        if a[i] != b[i] {
+    while outer < 8 {
+        let base = outer * 8;
+        if base + 0 < n && a[base + 0] != b[base + 0] {
             ok = false;
         }
-        i += 1;
+        if base + 1 < n && a[base + 1] != b[base + 1] {
+            ok = false;
+        }
+        if base + 2 < n && a[base + 2] != b[base + 2] {
+            ok = false;
+        }
+        if base + 3 < n && a[base + 3] != b[base + 3] {
+            ok = false;
+        }
+        if base + 4 < n && a[base + 4] != b[base + 4] {
+            ok = false;
+        }
+        if base + 5 < n && a[base + 5] != b[base + 5] {
+            ok = false;
+        }
+        if base + 6 < n && a[base + 6] != b[base + 6] {
+            ok = false;
+        }
+        if base + 7 < n && a[base + 7] != b[base + 7] {
+            ok = false;
+        }
+        outer += 1;
     }
     ok
 }
 
+/// Bucket start index for `hash`.
+fn bucket(hash: u64) -> usize {
+    (hash as usize) & (SLOTS - 1)
+}
+
 /// Intern raw bytes (no UTF-8 validation — that is a CBMC unwinding cliff).
 ///
-/// Returns [`NameId::INVALID`] when the table is full or the name is longer
-/// than [`MAX_NAME`].
+/// Returns [`NameId::INVALID`] when the table is full, the name is longer
+/// than [`MAX_NAME`], or [`MAX_PROBES`] is exhausted (loud — callers that
+/// cannot tolerate `INVALID` go through `intern_or_fail`).
 pub fn intern_bytes(s: &[u8]) -> NameId {
     if s.len() > MAX_NAME {
         return NameId::INVALID;
     }
-    let n = s.len();
+    let n = s.len() as u8;
+    let h = fnv1a(s);
+    // FNV of any byte string is never 0 (offset basis is nonzero and the
+    // multiplier is odd). Still guard: a zero hash would alias EMPTY.
+    let h = if h == 0 { 1 } else { h };
     let t = table();
-    let mut i = 0u16;
-    while i < t.n {
-        let idx = i as usize;
-        if t.lens[idx] as usize == n && bytes_eq(&t.bytes[idx][..n], s) {
-            return NameId(i);
+    let start = bucket(h);
+    let mut probe = 0usize;
+    let mut first_empty = usize::MAX;
+    while probe < MAX_PROBES {
+        let idx = (start + probe) & (SLOTS - 1);
+        let slot = &t.slots[idx];
+        if slot.hash == 0 {
+            if first_empty == usize::MAX {
+                first_empty = idx;
+            }
+        } else if slot.hash == h && slot.len == n && bytes_eq(&slot.bytes[..n as usize], s) {
+            return NameId(idx as u16);
         }
-        i += 1;
+        probe += 1;
     }
-    if t.n as usize >= MAX_INTERN {
+    if first_empty == usize::MAX || t.n as usize >= MAX_INTERN {
         return NameId::INVALID;
     }
-    let idx = t.n as usize;
-    let mut j = 0usize;
-    while j < n {
-        t.bytes[idx][j] = s[j];
-        j += 1;
-    }
-    t.lens[idx] = n as u8;
+    let slot = &mut t.slots[first_empty];
+    slot.hash = h;
+    slot.len = n;
+    // memcpy — one CBMC unwind, not an 8×8 chunk walk (the insert path was
+    // still the slowest loop after the lookup was hashed).
+    let nbytes = s.len().min(MAX_NAME);
+    slot.bytes[..nbytes].copy_from_slice(&s[..nbytes]);
     t.n += 1;
-    NameId(t.n - 1)
+    NameId(first_empty as u16)
 }
 
 /// Intern a `&str` (uses its bytes; does not re-validate UTF-8).
@@ -117,20 +206,21 @@ pub fn intern(s: &str) -> NameId {
 }
 
 /// The bytes previously interned as `id`. Empty when `id` is stale.
+/// (The slot index **is** the id under the open-addressed table.)
 pub fn resolve(id: NameId) -> &'static [u8] {
     if !id.is_valid() {
         return &[];
     }
     let t = table();
     let idx = id.0 as usize;
-    if idx >= t.n as usize {
+    if idx >= SLOTS || t.slots[idx].hash == 0 {
         return &[];
     }
     // SAFETY: table entries are never removed; we hand out a slice of the
     // static. Cast through raw pointer to extend the lifetime to `'static`
     // (the table is never resized or cleared during a proof).
-    let p = t.bytes[idx].as_ptr();
-    let n = t.lens[idx] as usize;
+    let p = t.slots[idx].bytes.as_ptr();
+    let n = t.slots[idx].len as usize;
     unsafe { core::slice::from_raw_parts(p, n) }
 }
 
@@ -158,6 +248,11 @@ pub fn len() -> u16 {
 pub fn reset() {
     let t = table();
     t.n = 0;
+    let mut i = 0usize;
+    while i < SLOTS {
+        t.slots[i] = Slot::EMPTY;
+        i += 1;
+    }
 }
 
 /// True when `id`'s stored bytes equal `s`.
@@ -179,5 +274,25 @@ mod tests {
         let c = intern("P✽P粉丝(正)");
         assert_ne!(a, c);
         assert_eq!(resolve_str(c), "P✽P粉丝(正)");
+    }
+
+    #[test]
+    fn intern_fixed_loop_bounds() {
+        reset();
+        // Longest card id (52 bytes) must intern; 65-byte name is rejected.
+        let long = "x".repeat(52);
+        assert!(intern(&long).is_valid());
+        let too_long = "y".repeat(MAX_NAME + 1);
+        assert!(!intern(&too_long).is_valid());
+        // Distinct short names fill the table; overflow is INVALID (loud).
+        let mut ids = [NameId::INVALID; MAX_INTERN];
+        for i in 0..MAX_INTERN {
+            ids[i] = intern(&format!("k{i}"));
+            assert!(ids[i].is_valid(), "slot {i}");
+        }
+        assert!(!intern("overflow").is_valid());
+        for i in 0..MAX_INTERN {
+            assert_eq!(resolve_str(ids[i]), format!("k{i}"));
+        }
     }
 }

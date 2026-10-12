@@ -152,7 +152,7 @@ pub fn band_01_clear_iff() {
 
     let gid = crate::guard_id!("actor == owner && slot('skill.sumimi.got') == 0");
     let ov = ir_fill::TriggerOverlay::default();
-    let ctx = ir_fill::fill_from_world(&w, owner, 0, true, -1, &ov);
+    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, -1, &ov);
     let admitted = crate::guard!(gid, &ctx);
 
     let pre = {

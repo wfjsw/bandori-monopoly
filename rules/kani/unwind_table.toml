@@ -1,0 +1,19 @@
+# Minimal sound unwind bound per harness (calibrated).
+# Written by tools/kani/calibrate.py — do not hand-edit numbers without
+# re-running the calibration; a too-small N FAILS the unwinding assertion
+# (mutation-checked), it never silently truncates.
+#
+# Consumed by tools/kani/run.sh: table entry > #[kani::unwind] attribute >
+# global default (DEFAULT_UNWIND=24).
+#
+# Format: `harness_name = N` under [unwind]. Key is the bare fn name (the
+# runner's --harness filter), not the module path.
+
+[unwind]
+# money_shave's poorest() does (0..player_count()).all(...) in the
+# unmodified card body. CBMC unwinds the Range try_fold conservatively
+# (24 hits the limit at the old default); 32 covers it with margin.
+# Re-calibrate with tools/kani/calibrate.py once the clamp is confirmed.
+aya_haruka_02_shave_iff = 64
+aya_haruka_02_mutant_x_off_by_one = 64
+aya_haruka_02_mutant_is_detected = 64

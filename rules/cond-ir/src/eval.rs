@@ -425,7 +425,8 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
 }
 
 fn vars_counter_name_idx() -> u16 {
-    crate::vars::by_flat("counter_name").map(|(i, _)| i).unwrap_or(0)
+    // Const index — never a VARS string scan on the eval path.
+    crate::vars::VarId::CounterName as u16
 }
 
 fn set_has(ctx: &IrCtx, set: SetId, r: Result<i64, ()>) -> Val {

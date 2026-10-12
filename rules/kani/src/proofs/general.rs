@@ -335,7 +335,10 @@ fn fever_guard_admits(w: &World, player: i32, placed: bool) -> bool {
     let gid = crate::guard_id!("card.placed");
     let ov = crate::ir_fill::TriggerOverlay::default();
     let card = crate::intern::intern_or_fail("通用:[衍生]FEVER!").0 as i64;
-    let ctx = crate::ir_fill::fill_from_world(w, player, card, placed, -1, &ov);
+    // `card.placed` reads one scalar; `fill_for_guard` skips the 60-tile /
+    // geometry / VARS bulk that made this harness fail the unwinding
+    // assertion at `fill_from_world`.
+    let ctx = crate::ir_fill::fill_for_guard(w, gid, player, card, placed, -1, &ov);
     crate::guard!(gid, &ctx)
 }
 

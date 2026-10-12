@@ -316,12 +316,44 @@ fn players_on_at(tile: i32, except: i32, index: i32) -> i32 {
 
 // ------------------------------------------------------------------ players
 
+/// Model bound N ∈ 2..=4.
+///
+/// Under Kani this returns the **constant 4** so the unmodified card bodies'
+/// `(0..ctx::player_count())` Range is a literal `0..4` that CBMC can finish
+/// in 4 unrolls. A table / if-else clamp on the real `n` was not enough:
+/// CBMC does not connect a function return's value range to `Range::try_fold`
+/// (poorest unwound 24× and hit the limit).
+///
+/// Soundness: seats `>= N` must read as **out**, so `poorest`'s
+/// `p == player_id || player_out(p) || …` short-circuits before looking at
+/// `money_of(p)`. `player_out` does that (see below). The real `n` is still
+/// asserted to be in 2..=4 — a violation is loud.
+#[inline(always)]
 pub fn player_count() -> i32 {
-    unsafe { sys::player_count() }
+    let n = unsafe { sys::player_count() };
+    #[cfg(kani)]
+    {
+        kani::assert(n >= 2 && n <= 4, "player_count outside model bound N∈2..=4");
+        return 4;
+    }
+    #[cfg(not(kani))]
+    n
 }
 
-/// 1 when the player is out of the game.
+/// 1 when the player is out of the game (or not a seat at all).
+///
+/// Under Kani `player_count` returns the constant 4, so `0..4` loops visit
+/// seats `>= N`. Those must read as out — `poorest` short-circuits on this
+/// before `money_of(p)`.
+#[inline(always)]
 pub fn player_out(player_id: i32) -> bool {
+    #[cfg(kani)]
+    {
+        let n = unsafe { sys::player_count() };
+        if player_id < 0 || player_id >= n {
+            return true;
+        }
+    }
     unsafe { sys::player_out(player_id) != 0 }
 }
 

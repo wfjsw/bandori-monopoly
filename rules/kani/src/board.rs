@@ -218,61 +218,144 @@ pub const TILE_NAMES: [&str; 60] = [
 
 /// Resolve a board tile name to its 0-based engine index, or -1.
 /// Mirrors `game_core` `tile_named`: `Vec::position` over `data.tiles`.
-/// The name compare is a bounded byte loop (no `String::eq` / `memcmp`).
+/// Look-up is a binary search over a compile-time FNV-1a hash table
+/// (~6 integer compares), then a byte compare on the hit — never a 60-slot
+/// name scan (that is a CBMC unwinding cliff).
 pub fn tile_named(name: &str) -> i32 {
-    let mut i = 0usize;
-    let mut found = -1i32;
-    while i < TILE_NAMES.len() {
-        if str_eq(TILE_NAMES[i], name) {
-            found = i as i32;
-        }
-        i += 1;
-    }
-    found
+    tile_named_bytes(name.as_bytes())
 }
 
-fn str_eq(a: &str, b: &str) -> bool {
-    let (x, y) = (a.as_bytes(), b.as_bytes());
-    if x.len() != y.len() || x.len() > 64 {
-        return false;
-    }
-    let n = x.len();
+/// FNV-1a 64, same as `rules_cond_ir::ctx::id_of`.
+const fn tile_hash(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     let mut i = 0usize;
-    let mut ok = true;
-    while i < n {
-        if x[i] != y[i] {
-            ok = false;
-        }
+    while i < bytes.len() {
+        h ^= bytes[i] as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
         i += 1;
     }
-    ok
+    h
 }
+
+/// Sorted `(hash, board_index)` pairs. Generated from [`TILE_NAMES`];
+/// uniqueness checked by `board_hash_table_is_sound` below and by the
+/// `conf_model` suite. Hashes are distinct, so the binary search is exact
+/// without a collision chain (the byte compare still guards the hit).
+pub const TILE_NAME_HASHES: [u64; 60] = [
+    0x032cd9f1245d3645,
+    0x13804180992c8621,
+    0x178e0cafb35c31a0,
+    0x18f17caa0f030356,
+    0x1c77050fdc356991,
+    0x1cc771af5833ad4e,
+    0x274bea073f2490f2,
+    0x2aeae7b7c50aa67b,
+    0x2e8d1ee1111664c0,
+    0x2e8d20e111166826,
+    0x2e8d21e1111669d9,
+    0x2e8d23e111166d3f,
+    0x34be7b838c5fc85b,
+    0x3708e53ea661ca17,
+    0x38f818e9e7561f6d,
+    0x4c99fc977c26ddf7,
+    0x4d15b09c6a8c5a6e,
+    0x4f1014d761d4ca95,
+    0x5239c782d314a3fb,
+    0x54be9e1393afabdb,
+    0x57f6d9f87b7537cb,
+    0x588ad81f2bb57e4f,
+    0x5a39cceefbf08571,
+    0x5e3de51e93788684,
+    0x61545b7d96778f7b,
+    0x64a97a849ece896b,
+    0x66138e1d6ca2a8b9,
+    0x6c39a833ff758487,
+    0x6fe9f868fa327a18,
+    0x730c581c6ecb1a13,
+    0x73cb295f4fd492ac,
+    0x78e9448d7fe23590,
+    0x8270a0584fdf1978,
+    0x8e28a4021fff37d3,
+    0x8e6cb0aa4b51728f,
+    0x90dd8a2bca725c23,
+    0x99325798a3160f06,
+    0xa136a621ddaeda90,
+    0xa84a2b984eec9ac1,
+    0xa91c1a2bdbc9734f,
+    0xaf73f4cb9cbbc3af,
+    0xbc4497544c378d86,
+    0xc0be4f1be812125b,
+    0xc3251b991b2a1f48,
+    0xc7555c5a4025f8c2,
+    0xc7d56ebc60aac086,
+    0xc8a7761f272db000,
+    0xc8ae7fb9eb1e9dd6,
+    0xc94c95ac9b573a34,
+    0xcc4529c6b951d4f0,
+    0xd49b4b969e42c6a9,
+    0xd90ee3af40fdd8c2,
+    0xe7211eb19dbea643,
+    0xf1df3ad5891ff8d0,
+    0xf72ba860bed49ee2,
+    0xfb49549e05ae1d38,
+    0xfc29171dbcad19c6,
+    0xfdb78a02313cbe6d,
+    0xfe898bd257c45c6e,
+    0xff06a1bcc8c3aeae,
+];
+
+/// Board index for each [`TILE_NAME_HASHES`] slot (same order).
+pub const TILE_NAME_IDX: [i32; 60] = [
+    42, 38, 24, 41, 18, 30, 37, 1, 8, 36, 16, 53, 55, 54, 48, 45, 29, 50, 17, 26, 15, 20, 34, 52,
+    9, 39, 13, 49, 19, 33, 32, 11, 25, 2, 57, 56, 22, 12, 28, 47, 46, 3, 58, 40, 59, 10, 4, 21,
+    43, 44, 0, 5, 31, 14, 7, 23, 6, 51, 35, 27,
+];
 
 /// [`tile_named`] over raw guest bytes (the Kani ABI passes `ptr, len`).
+/// Binary search on the FNV table; byte-compare only the matching slot.
 pub fn tile_named_bytes(name: &[u8]) -> i32 {
-    let mut i = 0usize;
-    let mut found = -1i32;
-    while i < TILE_NAMES.len() {
-        if bytes_eq(TILE_NAMES[i].as_bytes(), name) {
-            found = i as i32;
-        }
-        i += 1;
+    if name.len() > 64 {
+        return -1;
     }
-    found
+    let h = tile_hash(name);
+    // Binary search TILE_NAME_HASHES (sorted, unique).
+    let mut lo = 0usize;
+    let mut hi = 60usize;
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if TILE_NAME_HASHES[mid] < h {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    if lo < 60 && TILE_NAME_HASHES[lo] == h {
+        let idx = TILE_NAME_IDX[lo] as usize;
+        if bytes_eq(TILE_NAMES[idx].as_bytes(), name) {
+            return idx as i32;
+        }
+    }
+    -1
 }
 
 fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > 64 {
         return false;
     }
-    let n = a.len();
-    let mut i = 0usize;
+    // Fixed 8×8 chunk walk (unwind bound 8, not `MAX_NAME`).
+    let mut outer = 0usize;
     let mut ok = true;
-    while i < n {
-        if a[i] != b[i] {
-            ok = false;
+    while outer < 8 {
+        let base = outer * 8;
+        let mut k = 0usize;
+        while k < 8 {
+            let i = base + k;
+            if i < a.len() && a[i] != b[i] {
+                ok = false;
+            }
+            k += 1;
         }
-        i += 1;
+        outer += 1;
     }
     ok
 }
