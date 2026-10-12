@@ -87,62 +87,114 @@ that would mean the pipeline could silently regress to vacuous proofs).
 
 ## 4. Timing table
 
-Filled in as runs complete. Method: one serial CBMC job
+Method: one serial CBMC job
 (`bash tools/kani/run.sh --unit U --harness NAME --jobs 1 --timeout 3600`),
 machine-wide cap 2 (one slot reserved for the concurrent central pass).
+All runs keep unwinding assertions **ON**.
 
-### Profile of `aya_haruka_02_shave_iff` (sound, unwind 24, mid-tuning)
+### Profile of `aya_haruka_02_shave_iff` (the calibration target)
 
-CBMC `Unwinding loop …` lines, counted by function (iterations × loops):
+CBMC `Unwinding loop …` line counts, by function:
 
-| function | first profile | after intern+id_of+player_count | what |
+| function | start of branch | after all model cuts | what changed |
 |---|---:|---:|---|
-| `rules_cond_ir::ctx::id_of` | 144 | **0** | FNV over CJK literals; now `const fn` + `TILE_NAME_IDS` / `ID_TOK_PP_*` |
-| `card_sdk::intern::intern_bytes` / `fnv1a` / `bytes_eq` | 3600 s stall | **0** | 8-probe open addressing, 8×8 byte walks |
-| `IrCtx::named_set` | 144 | 180 → ~4 | 4-iter fast path when `n ≤ 4` (light fills) |
-| `poorest` / `Range::try_fold` | 23 (hit unwind 24: *"Not unwinding"*) | **4** | card body `(0..player_count()).all(...)`; `player_count` now `kani::assume(N∈2..=4)` at the ABI |
-| `memcmp` | 14 | 14 | `String` / slice compares in unmodified bodies — remaining cliff |
-| `invoke::by_idx` | 10 | 8 | binary search |
+| `card_sdk::intern::intern_bytes` | 3600 s stall | ~23 unrolls | 8-probe open addressing + `copy_from_slice` insert |
+| `card_sdk::intern::bytes_eq` | (inside the stall) | 1727 → **1** (latest) | lookup is hash-first; `bytes_eq` is one memcmp after the length check |
+| `card_sdk::intern::fnv1a` | (inside the stall) | 72–216 | 8×8 chunk hash (unwind 8) |
+| `rules_cond_ir::ctx::id_of` | 144 | **0** | `const fn` + `TILE_NAME_IDS` / `ID_TOK_PP_*` |
+| `IrCtx::named_set` | 144 | 8 | 4-iter fast path when `n ≤ 4` |
+| `poorest` / `Range::try_fold` | 23 (*"Not unwinding at 24"*) | **4** | `player_count` returns the literal 4 under Kani (see §2) |
+| `memcmp` (card bodies) | 14 | 14 | unmodified `String`/`slice` compares — not a model loop |
+| `invoke::by_idx` | 10 | 8 | const `BAND_START` binary search |
 
-| harness | before (sound, global 80) | after (tuned model + per-harness unwind) | verdict | covers |
+### Before → after (the nine requested harnesses)
+
+| harness | before (sound) | after | verdict | notes |
 |---|---|---|---|---|
-| `money_shave::aya_haruka_02_shave_iff` | >50 min stuck in `intern_bytes` | _in flight_ | | |
-| `wrong_guard::wrong_guard_too_loose_is_caught` | attr unwind 6 | _pending_ | | |
-| `wrong_guard::real_guard_matches_clause_iff` | attr unwind 6 | _pending_ | | |
-| `teleport::tae_sound_teleport_and_fire_iff` | attr unwind 80 | _pending_ | | |
-| `ppp::wait_aoki_01_place_on_field_iff` | 195 s | _pending_ | | |
-| `ppp::bang_dream_01_crystal_iff` | attr unwind 32 | _pending_ | | |
-| `general::fever_04_*` | FAILED unwinding assertion at `fill_from_world` | now `fill_for_guard` | | |
-| `hostops_smoke::rent_of_property_table` | FAILED unwinding assertion at `intern_bytes` | intern is 8-probe | | |
-| `prompt::aya_haruka_01_empty_discard` | ~194 s | _pending_ | | |
+| `money_shave::aya_haruka_02_shave_iff` | **>50 min**, stuck in `intern_bytes` (unsound history: 85 s) | **in flight / not yet under 5 min** | — | model loops are gone; remaining cost is `bytes_eq`/`fnv1a` from `ctx::tok` + 14 card-body `memcmp`s. See §6 |
+| `wrong_guard::wrong_guard_too_loose_is_caught` | attr unwind 6 (cheap) | _not re-timed_ | — | small guard-only harness; expected cheap |
+| `wrong_guard::real_guard_matches_clause_iff` | attr unwind 6 | _not re-timed_ | — | same |
+| `teleport::tae_sound_teleport_and_fire_iff` | 68 s (unsound history) / attr 80 | _not re-timed_ | — | |
+| `ppp::wait_aoki_01_place_on_field_iff` | 195 s (hostops2, sound) | _not re-timed_ | — | |
+| `ppp::bang_dream_01_crystal_iff` | attr unwind 32 | _not re-timed_ | — | |
+| `general::fever_04_*` | **FAILED** unwinding assertion at `fill_from_world` | switched to `fill_for_guard` | _not re-timed_ | the 60-tile / geometry bulk is skipped for `card.placed` |
+| `hostops_smoke::rent_of_property_table` | **FAILED** unwinding assertion at `intern_bytes` | intern is 8-probe + memcpy | _not re-timed_ | `rent_houses` interns `rentHouses` once per call |
+| `prompt::aya_haruka_01_empty_discard` | ~194 s | _not re-timed_ | — | |
+
+**Honest bottom line on the 5-minute target:** not met for
+`aya_haruka_02_shave_iff`. The symbolic-model loops that made it infeasible
+(`intern_bytes` scan, 60-tile fills, `id_of` over CJK literals, the unbounded
+`0..player_count()` Range) are fixed — the profile above shows them at 0–8
+unrolls. What is left is (a) `intern::bytes_eq` / `fnv1a` from the card body's
+`ctx::tok` lookups (still 100+ unrolls on the pre-memcmp build) and (b) 14
+`memcmp`s inside unmodified card bodies. Those are **card-body / ABI** costs,
+not model-loop costs; a `cfg(kani)` interned-str facade in card bodies (or a
+10× CPU budget) is the known next step (`KANI.md` §5). The remaining eight
+harnesses were not re-timed inside this pass's serial-CBMC budget; the model
+cuts apply to them and the calibration tooling is in place.
 
 ---
 
 ## 5. Vacuity checks
 
-For each re-timed harness, confirm:
+Method (for every re-timed harness):
 
-1. covers are **SATISFIED** (`kani::cover!` counts, no "unreachable");
-2. code after the card body is reachable — temporarily `assert!(false)`
-   after the invoke and confirm the run **FAILS**.
+1. **Covers SATISFIED** — the runner fails the verdict as `VACUOUS` if CBMC
+   reports `cover properties satisfied (N unreachable)` or `0 of M cover
+   properties satisfied`.
+2. **Post-invoke reachable** — temporarily add `assert!(false)` after the
+   `invoke::*` call; the run must **FAIL**. A run that still says SUCCESSFUL
+   never reached the body (truncated unwind or contradictory assume).
 
-Record results here. A proof that cannot fail the post-invoke assert is
-vacuous and must not be reported as SUCCESSFUL.
-
----
-
-## 6. What remains expensive
-
-| cliff | who | why |
-|---|---|---|
-| `String` / `Vec` drop-glue + `memcmp` in **unmodified card bodies** | `aya_haruka_01_prompt_all_picks`, `riot_02_03_cycle`, any `ids.contains(&c)` path | heap `String` length stays symbolic; needs a `cfg(kani)` interned-str facade in card bodies or a 10× CPU budget. **Not a model-loop problem.** |
-| `fill_geometry_bins` (60 × seats × radius) | guards using `players_on` / `owned_within` / `on_path` | still a full board walk; `fill_for_guard` skips it unless the IR calls those `FnId`s |
-| `fill_from_world` full path | proofs that have not yet moved to `fill_for_guard` | kept for `conf_fill_diff`; proofs should call `fill_for_guard` |
-| multi-turn / chain / settle | — | **PROTOCOL-LEVEL** (`KANI.md` §6); Kani proves a straight-line body only |
+The runner's `VACUOUS` gate is on by default (see `tools/kani/run.sh`).
+Per-harness post-invoke `assert!(false)` mutation results are recorded here
+as harnesses are re-timed.
 
 ---
 
-## 7. Verification checklist
+## 6. What remains expensive (why 5 min was not hit)
+
+| cliff | who | why | fix that is left |
+|---|---|---|---|
+| `intern::bytes_eq` / `fnv1a` from `ctx::tok` / `ctx::intern` | every body that names a token / key (`shave_x`'s two `tok` calls) | each lookup still hashes and may byte-compare; 8 probes × 8-iter walks | pre-intern the four pilot names as `const NameId`s, or a `cfg(kani)` interned-str facade in card bodies |
+| `memcmp` (14×) in **unmodified card bodies** | `String` / `slice` compares inside `aya_longing` etc. | heap `String` length stays symbolic | `cfg(kani)` interned-str facade in card bodies (see `HOSTOPS-ROUND2.md` follow-up) |
+| `aya_haruka_01_prompt_all_picks`, `riot_02_03_cycle` | `ids.contains(&c)` | `Vec<String>` + `memcmp` unrolls to 30+ | same facade; **not a model-loop problem** |
+| `fill_geometry_bins` (60 × seats × radius) | guards using `players_on` / `owned_within` / `on_path` | full board walk | `fill_for_guard` skips it unless the IR calls those `FnId`s |
+| multi-turn / chain / settle | — | **PROTOCOL-LEVEL** (`KANI.md` §6) | TLA+/SMT, not Kani |
+
+These are **card-body / ABI** costs. The symbolic model's own loops
+(`intern` table scan, 60-tile fills, `id_of`, NameMap, RULESET walk,
+`0..player_count()` Range) are all at 0–8 unrolls after this branch.
+
+---
+
+## 7. Calibration table
+
+`rules/kani/unwind_table.toml` — consumed by `tools/kani/run.sh` (table
+entry beats `#[kani::unwind]`, which beats `DEFAULT_UNWIND=24`).
+
+```toml
+[unwind]
+aya_haruka_02_shave_iff = 32
+aya_haruka_02_mutant_x_off_by_one = 32
+aya_haruka_02_mutant_is_detected = 32
+```
+
+`32` covers the card-body `Range::try_fold` with margin (CBMC will not
+constant-fold the `0..4` end across `try_fold`, so the attribute must be
+≥ the limit that would otherwise trip *"Not unwinding"*). Re-calibrate:
+
+```sh
+python3 tools/kani/calibrate.py --unit money_shave \
+    --harness aya_haruka_02_shave_iff --timeout 3600 --mutate 2
+```
+
+The mutation check (`--mutate 2`) must report `UNWINDING`/`FAILED` — if a
+too-small N ever returns SUCCESSFUL the pipeline is vacuous (exit 3).
+
+---
+
+## 8. Verification checklist
 
 ```sh
 export CARGO_TARGET_DIR=/home/monopoly/kani-target-tune CARGO_BUILD_JOBS=3
@@ -157,7 +209,7 @@ cargo check --manifest-path rules/Cargo.toml --workspace --target wasm32-unknown
 
 ---
 
-## 8. Rules we did not break
+## 9. Rules we did not break
 
 * Unwinding assertions stay ON. `--no-unwinding-checks` is exploration-only
   and can never be reported as SUCCESSFUL.
