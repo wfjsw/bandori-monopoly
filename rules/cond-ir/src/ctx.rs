@@ -196,14 +196,16 @@ impl IrCtx {
     }
 
     pub fn named_get(&self, name_id: i64) -> Option<i64> {
-        // 8×8 chunk walk over the table (unwind bound 8, not NAMED_CAP=80).
+        // 10×8 = 80 = NAMED_CAP chunk walk (unwind bound 10). Must cover the
+        // whole table: `fill_from_world` inserts 60 tile names before the
+        // card counters, so a 64-slot walk would miss them.
         let n = self.named_n as usize;
         let mut outer = 0usize;
-        while outer < 8 {
+        while outer < 10 {
             let mut k = 0usize;
             while k < 8 {
                 let i = outer * 8 + k;
-                if i < n && self.named[i].0 == name_id {
+                if i < n && i < NAMED_CAP && self.named[i].0 == name_id {
                     return Some(self.named[i].1);
                 }
                 k += 1;
@@ -216,11 +218,11 @@ impl IrCtx {
     pub fn named_set(&mut self, name_id: i64, v: i64) {
         let n = self.named_n as usize;
         let mut outer = 0usize;
-        while outer < 8 {
+        while outer < 10 {
             let mut k = 0usize;
             while k < 8 {
                 let i = outer * 8 + k;
-                if i < n && self.named[i].0 == name_id {
+                if i < n && i < NAMED_CAP && self.named[i].0 == name_id {
                     self.named[i].1 = v;
                     return;
                 }

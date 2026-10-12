@@ -1210,21 +1210,28 @@ pub fn fill_for_guard(
         if (ni as u8) < needs.named_n {
             let name_id = needs.named[ni];
             // Tile names are static; everything else is owner-scoped.
+            // 8×8 chunk walk covers all 60 board names (unwind bound 8).
             let mut is_tile = false;
-            let mut t = 0usize;
-            while t < 8 {
-                let ti = t;
-                if ti < TILE_NAMES.len() {
-                    let (tid, tname) = TILE_NAMES[ti];
-                    if rules_cond_ir::ctx::id_of(tname) == name_id {
-                        c.named_set(name_id, tid as i64);
-                        is_tile = true;
+            let mut outer = 0usize;
+            while outer < 8 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let ti = outer * 8 + k;
+                    if ti < TILE_NAMES.len() {
+                        let (tid, tname) = TILE_NAMES[ti];
+                        if rules_cond_ir::ctx::id_of(tname) == name_id {
+                            c.named_set(name_id, tid as i64);
+                            is_tile = true;
+                        }
                     }
+                    k += 1;
                 }
-                t += 1;
+                outer += 1;
             }
             if !is_tile {
                 // Owner's named map, or the pilot fan views.
+                // (Tile-name probe above must cover all 60 board names — see
+                // the 8×8 walk.)
                 let map = &w.player_keys[op];
                 let mut i = 0usize;
                 while i < crate::world::MAX_KEYS {
