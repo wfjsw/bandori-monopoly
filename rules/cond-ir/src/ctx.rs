@@ -196,28 +196,37 @@ impl IrCtx {
     }
 
     pub fn named_get(&self, name_id: i64) -> Option<i64> {
-        // while-loop with early exit: `iter().find()` unrolls into an
-        // iterator chain that CBMC prices like NAMED_CAP closures.
+        // 8×8 chunk walk over the table (unwind bound 8, not NAMED_CAP=80).
         let n = self.named_n as usize;
-        let mut i = 0usize;
-        while i < n {
-            if self.named[i].0 == name_id {
-                return Some(self.named[i].1);
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < n && self.named[i].0 == name_id {
+                    return Some(self.named[i].1);
+                }
+                k += 1;
             }
-            i += 1;
+            outer += 1;
         }
         None
     }
 
     pub fn named_set(&mut self, name_id: i64, v: i64) {
         let n = self.named_n as usize;
-        let mut i = 0usize;
-        while i < n {
-            if self.named[i].0 == name_id {
-                self.named[i].1 = v;
-                return;
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < n && self.named[i].0 == name_id {
+                    self.named[i].1 = v;
+                    return;
+                }
+                k += 1;
             }
-            i += 1;
+            outer += 1;
         }
         if n < NAMED_CAP {
             self.named[n] = (name_id, v);
@@ -246,12 +255,18 @@ impl IrCtx {
     pub fn bin_get(&self, a: i64, b: i64) -> i64 {
         let key = a * 1024 + b;
         let n = self.bin_n as usize;
-        let mut i = 0usize;
-        while i < n {
-            if self.bin[i].0 == key {
-                return self.bin[i].1;
+        // 8×8 chunk walk (unwind bound 8, not BIN_CAP=64).
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < n && self.bin[i].0 == key {
+                    return self.bin[i].1;
+                }
+                k += 1;
             }
-            i += 1;
+            outer += 1;
         }
         0
     }
@@ -259,13 +274,18 @@ impl IrCtx {
     pub fn bin_set(&mut self, a: i64, b: i64, v: i64) {
         let key = a * 1024 + b;
         let n = self.bin_n as usize;
-        let mut i = 0usize;
-        while i < n {
-            if self.bin[i].0 == key {
-                self.bin[i].1 = v;
-                return;
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < n && self.bin[i].0 == key {
+                    self.bin[i].1 = v;
+                    return;
+                }
+                k += 1;
             }
-            i += 1;
+            outer += 1;
         }
         if n < BIN_CAP {
             self.bin[n] = (key, v);
@@ -276,11 +296,26 @@ impl IrCtx {
 
 /// `FNV-1a 64`, identical to `rules_cond::id_of`. Baked at lower time for
 /// string arguments (`slot('name')`).
+/// Fixed 8×8 chunk walk (unwind bound 8, not the name's byte length) —
+/// this function is called on CJK names (16–52 bytes) throughout
+/// `fill_pay_add` / `fill_for_guard` and was the #1 unwind in the
+/// money-shave profile (32 distinct `id_of` loops).
 pub fn id_of(name: &str) -> i64 {
+    let b = name.as_bytes();
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in name.as_bytes() {
-        h ^= *b as u64;
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    let mut outer = 0usize;
+    while outer < 8 {
+        let base = outer * 8;
+        let mut k = 0usize;
+        while k < 8 {
+            let i = base + k;
+            if i < b.len() {
+                h ^= b[i] as u64;
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            k += 1;
+        }
+        outer += 1;
     }
     h as i64
 }
