@@ -322,6 +322,7 @@ fn players_on_at(tile: i32, except: i32, index: i32) -> i32 {
 #[cfg(kani)]
 const PLAYER_COUNT_TABLE: [i32; 5] = [2, 2, 2, 3, 4];
 
+#[inline(always)]
 pub fn player_count() -> i32 {
     let n = unsafe { sys::player_count() };
     #[cfg(kani)]

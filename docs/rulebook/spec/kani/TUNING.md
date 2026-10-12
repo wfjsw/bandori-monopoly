@@ -57,6 +57,13 @@ moves the needle.
 3. `#[kani::unwind(N)]` on the harness (also accepted inside `clause_proof!`)
 4. `DEFAULT_UNWIND=24` (was a global 80)
 
+**Kani itself prefers `#[kani::unwind(N)]` over `--default-unwind`.** The
+runner always passes `--default-unwind` with the resolved value, but if the
+source attribute is smaller it **wins** and the table is ignored. Keep them
+in sync — `tools/kani/calibrate.py` rewrites the attribute to the sound N
+it finds. A too-small attribute is how `aya_haruka` kept hitting
+*"Not unwinding … iteration 24"* after the table said 32.
+
 Unwinding assertions stay ON. A too-small bound is verdict **UNWINDING**
 (loud, fail-closed) — never a silent `SUCCESSFUL`. `--no-unwinding-checks`
 caps the verdict at **UNSOUND** and can never be reported as a proof.
