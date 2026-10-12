@@ -42,7 +42,8 @@ moves the needle.
 | `ir_fill::fill_for_guard` | (new) | walks the static IR arena (fixed 32 nodes) and fills **only** what the guard reads; skips geometry bins / board sets / 60-name fill unless the program uses those `FnId`s | `conf_fill_diff` still pins full `fill_from_world` |
 | `cond-ir::id_of` | `for b in name.as_bytes()` (CJK 16–52) | `const fn` 8×8 chunk; `TILE_NAME_IDS` / `ID_TOK_PP_*` precomputed | same FNV hash |
 | `cond-ir` `named_get`/`named_set` | 80-slot walk for every insert | `n ≤ 4` fast path (4-iter walk); 10×8 walk only for the full 60-name table | same semantics |
-| `host` `player_count` | returns raw `n_players` | `kani::assume(N ∈ 2..=4)` at the ABI | card bodies write `0..player_count()`; an unconstrained `i32` Range hit *"Not unwinding … iteration 24"* on `poorest` |
+| `host` `player_count` | returns raw `n_players` | `kani::assert` + return **const 4** under Kani; `player_out(p)` is true for `p >= N` | card bodies write `0..player_count()`; CBMC never connects a function return's range to `Range::try_fold` (assume / clamp / table lookup all failed). The literal `0..4` finishes in 4 unrolls; `player_out` short-circuits seats `>= N` so `poorest` stays sound |
+| `card-sdk` `intern_bytes` insert | 8×8 chunk copy | `copy_from_slice` (one memcpy unwind) | insert path was still unwinding 25 min in |
 
 `fill_pay_add` (the money-shave light path) is unchanged.
 
