@@ -61,6 +61,52 @@ pub fn effect<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(
             Ok(())
 }
 
+// -- flash (v55) -------------------------------------------------------------
+
+/// `ctx::flash` -- request the activation's flash at this point.
+pub fn flash<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
+    c.st_mut().w().flash();
+    Ok(())
+}
+
+/// `ctx::no_flash` -- suppress the activation's flash (runtime decision).
+pub fn no_flash<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
+    c.st_mut().w().no_flash();
+    Ok(())
+}
+
+/// `ctx::flash_card` -- proactive "look here" flash of another card.
+pub fn flash_card<C: HostCtx>(c: &mut C, cp: i32, cl: i32, p: i32, n: i32) -> Result<(), HostErr> {
+    let card_id = guest_str(c, cp, cl)?;
+    let msg = guest_msg(c, p, n)?;
+    c.st_mut().w().flash_card(&card_id, msg);
+    Ok(())
+}
+
+/// `ctx::flash_card_keyed` -- proactive flash with an explicit identity key.
+pub fn flash_card_keyed<C: HostCtx>(
+    c: &mut C,
+    kp: i32,
+    kl: i32,
+    cp: i32,
+    cl: i32,
+    p: i32,
+    n: i32,
+) -> Result<(), HostErr> {
+    let key = guest_str(c, kp, kl)?;
+    let card_id = guest_str(c, cp, cl)?;
+    let msg = guest_msg(c, p, n)?;
+    c.st_mut().w().flash_card_keyed(&key, &card_id, msg);
+    Ok(())
+}
+
+/// `ctx::flash_tile` -- proactive "look here" flash of a tile.
+pub fn flash_tile<C: HostCtx>(c: &mut C, tile: i32, p: i32, n: i32) -> Result<(), HostErr> {
+    let msg = guest_msg(c, p, n)?;
+    c.st_mut().w().flash_tile(tile, msg);
+    Ok(())
+}
+
 pub fn tile_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().tile_count())
 }

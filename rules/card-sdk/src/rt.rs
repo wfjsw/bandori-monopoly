@@ -40,7 +40,8 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                         .iter()
                         .find(|(e, _)| *e == ei as i32)
                         .map(|(_, l)| String::from(*l)),
-                    presentation: c.presentation(ei as i32),
+                    presentation: c.presentation(ei as i32).header,
+                    flash: c.presentation(ei as i32).flash,
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of

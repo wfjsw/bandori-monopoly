@@ -136,6 +136,11 @@ pub struct CardDef {
     /// and change nothing (capped gain, 「已满」) -- the player does not need
     /// a flash for a no-op. A body that logs / pays / moves still flashes.
     pub quiet_when_empty: &'static [i32],
+    /// Per-entry flash policy overrides -- `(entry index, Flash)`. An entry
+    /// with no override is [`abi::Flash::Auto`] (host classifies by scope).
+    /// [`abi::Flash::Always`] / [`abi::Flash::Never`] are the rule's own
+    /// opinion and win over the Auto classification. `CardDef::flash`.
+    pub flash: &'static [(i32, crate::abi::Flash)],
 }
 
 impl CardDef {
@@ -148,6 +153,7 @@ impl CardDef {
             labels: &[],
             silent: &[],
             quiet_when_empty: &[],
+            flash: &[],
         }
     }
 
@@ -162,6 +168,7 @@ impl CardDef {
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
         }
     }
 
@@ -177,6 +184,7 @@ impl CardDef {
             labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
         }
     }
 
@@ -204,6 +212,7 @@ impl CardDef {
             labels: self.labels,
             silent: entries,
             quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
         }
     }
 
@@ -222,26 +231,64 @@ impl CardDef {
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: entries,
+            flash: self.flash,
         }
     }
 
-    /// How entry `index` presents itself in the log.
-    pub const fn presentation(&self, index: i32) -> crate::abi::Presentation {
+    /// Override the flash policy of these entries -- `(entry index, Flash)`.
+    /// [`abi::Flash::Always`] flashes even an owner-self-only effect the
+    /// player should notice; [`abi::Flash::Never`] keeps the log entry but
+    /// suppresses the flash / pulse even for a cross-player one. Entries with
+    /// no override stay [`abi::Flash::Auto`] (host classifies by scope).
+    /// Replaces any earlier `flash` call.
+    ///
+    /// ```ignore
+    /// pub const T: CardDef = CardDef::new("skill:…", &[
+    ///     On::Play("", None, use_skill),                 // 0: Auto
+    ///     On::Hook(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    /// ]).flash(&[(1, Flash::Always)]);
+    /// ```
+    pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            legacy: self.legacy,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: entries,
+        }
+    }
+
+    /// How entry `index` presents itself in the log: the header mode plus the
+    /// flash policy, folded from the `silent` / `quiet_when_empty` / `flash`
+    /// side tables. The one lookup.
+    pub const fn presentation(&self, index: i32) -> crate::abi::EntryPresentation {
+        let mut header = crate::abi::Presentation::Visible;
         let mut i = 0;
         while i < self.silent.len() {
             if self.silent[i] == index {
-                return crate::abi::Presentation::Silent;
+                header = crate::abi::Presentation::Silent;
             }
             i += 1;
         }
         let mut i = 0;
         while i < self.quiet_when_empty.len() {
             if self.quiet_when_empty[i] == index {
-                return crate::abi::Presentation::QuietWhenEmpty;
+                header = crate::abi::Presentation::QuietWhenEmpty;
             }
             i += 1;
         }
-        crate::abi::Presentation::Visible
+        let mut flash = crate::abi::Flash::Auto;
+        let mut i = 0;
+        while i < self.flash.len() {
+            if self.flash[i].0 == index {
+                flash = self.flash[i].1;
+            }
+            i += 1;
+        }
+        crate::abi::EntryPresentation { header, flash }
     }
 
     /// Keep the pre-migration guard of entry `entry` as `legacy` for the G3
@@ -257,6 +304,7 @@ impl CardDef {
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
         }
     }
 

@@ -30,6 +30,16 @@ pub trait HostOps {
     fn op_log(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_effect`
     fn op_effect(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_flash` (v55)
+    fn op_flash(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_no_flash` (v55)
+    fn op_no_flash(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_flash_card` (v55) -- 4 args in the array (cp, cl, p, n).
+    fn op_flash_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_flash_card_keyed` (v55) -- 6 args (kp, kl, cp, cl, p, n).
+    fn op_flash_card_keyed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_flash_tile` (v55) -- 3 args (tile, p, n).
+    fn op_flash_tile(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_tile_count`
     fn op_tile_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_tile_named`
@@ -650,6 +660,26 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_effect(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::effect(self, a[0], a[1], a[2])?;
+        Ok(0)
+    }
+    fn op_flash(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::flash(self)?;
+        Ok(0)
+    }
+    fn op_no_flash(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::no_flash(self)?;
+        Ok(0)
+    }
+    fn op_flash_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::flash_card(self, a[0], a[1], a[2], a[3])?;
+        Ok(0)
+    }
+    fn op_flash_card_keyed(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::flash_card_keyed(self, a[0], a[1], a[2], a[3], a[4], a[5])?;
+        Ok(0)
+    }
+    fn op_flash_tile(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::flash_tile(self, a[0], a[1], a[2])?;
         Ok(0)
     }
     fn op_tile_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
@@ -4113,6 +4143,43 @@ pub unsafe extern "C-unwind" fn bandori_msg_reply(v: i32) -> i32 {
 pub unsafe extern "C-unwind" fn bandori_trig_name(p: i32, n: i32) -> i32 {
     with_host(|h| match h.op_trig_name(p, n) {
         Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+// -- flash (v55) -------------------------------------------------------------
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_flash() {
+    with_host(|h| match h.op_flash([0, 0, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_no_flash() {
+    with_host(|h| match h.op_no_flash([0, 0, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_flash_card(cp: i32, cl: i32, p: i32, n: i32) {
+    with_host(|h| match h.op_flash_card([cp, cl, p, n, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_flash_card_keyed(kp: i32, kl: i32, cp: i32, cl: i32, p: i32, n: i32) {
+    with_host(|h| match h.op_flash_card_keyed([kp, kl, cp, cl, p, n]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_flash_tile(tile: i32, p: i32, n: i32) {
+    with_host(|h| match h.op_flash_tile([tile, p, n, 0, 0, 0]) {
+        Ok(_) => {},
         Err(e) => abort_host(e),
     })
 }

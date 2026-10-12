@@ -23,7 +23,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{state_key, HookKind, MoveKind};
+use card_sdk::abi::{state_key, Flash, HookKind, MoveKind};
 use card_sdk::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -41,7 +41,11 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
         // hook's applicability (the residual guard), not its effect.
         On::Hook(&[HookKind::Settle], "", Some(on_settle_applies), on_settle),
     ],
-).silent(&[1]);
+)
+.silent(&[1])
+// （1） gains a [火罐] -- owner-self-only, but the rulebook describes it
+// happening and the player should see the clause fire. `Always` beats Auto.
+.flash(&[(2, Flash::Always)]);
 
 /// 「初始0，上限1」 -- this skill states the fire-pot cap. It is a *consumer*
 /// deciding the bound; the engine only holds it.

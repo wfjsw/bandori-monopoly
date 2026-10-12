@@ -641,6 +641,48 @@ pub struct World {
     /// Stub event returned when [`Self::skip_log`] is set.
     #[serde(skip)]
     pub stub: MatchEvent,
+    /// Once-per-flash identity (ABI v55), shared across `World::clone` so a
+    /// prompt's routine re-run (which restarts from a snapshot clone) sees the
+    /// flashes the pre-prompt pass already posted. A flash already shown
+    /// before the prompt must not play again after the answer. Transient.
+    #[serde(skip)]
+    pub flash: SharedFlash,
+}
+
+/// Once-per-flash state (ABI v55), shared across `World::clone` via [`Arc`].
+/// `PartialEq` is always-equal: the state is transient and not part of the
+/// compared match state (like `walk_flush`).
+#[derive(Debug, Default)]
+pub struct FlashState {
+    /// Identity key -> already-posted event id.
+    pub seen: std::collections::HashMap<String, i32>,
+    /// Next flash ordinal within the current drive.
+    pub ordinal: u32,
+    /// `ctx::flash` was called.
+    pub requested: bool,
+    /// `ctx::no_flash` was called.
+    pub no_flash: bool,
+    /// Flash events already posted, carried across a prompt's re-run (the
+    /// re-run starts from a snapshot and would drop them).
+    pub saved: Vec<MatchEvent>,
+}
+
+/// Shared handle to [`FlashState`] (COW-free: clones share, which is the point).
+#[derive(Debug, Clone, Default)]
+pub struct SharedFlash {
+    inner: Arc<std::sync::Mutex<FlashState>>,
+}
+
+impl SharedFlash {
+    pub fn lock(&self) -> std::sync::MutexGuard<'_, FlashState> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+impl PartialEq for SharedFlash {
+    fn eq(&self, _other: &Self) -> bool {
+        true // transient; not part of compared state
+    }
 }
 
 impl World {
@@ -672,6 +714,7 @@ impl World {
             walk_flush: WalkFlush::default(),
             skip_log: false,
             stub: MatchEvent::default(),
+            flash: SharedFlash::default(),
         }
     }
 

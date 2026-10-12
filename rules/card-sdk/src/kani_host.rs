@@ -320,6 +320,12 @@ pub enum Op {
     set_build_cost_pct = 303,
     set_card_face_down = 304,
     card_face_down = 305,
+    // v55 flash family -- once-per-flash identity lives host-side.
+    flash = 306,
+    no_flash = 307,
+    flash_card = 308,
+    flash_card_keyed = 309,
+    flash_tile = 310,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

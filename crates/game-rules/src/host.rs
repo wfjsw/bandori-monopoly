@@ -2364,6 +2364,34 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::effect(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
+    // flash (v55) -- once-per-flash identity lives on the drive's Run state.
+    l.func_wrap(m, "flash", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::flash(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(m, "no_flash", |mut c: C<W>| -> Result<(), Error> {
+        hostfns::no_flash(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
+        "flash_card",
+        |mut c: C<W>, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::flash_card(&mut c, cp, cl, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "flash_card_keyed",
+        |mut c: C<W>, kp: i32, kl: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::flash_card_keyed(&mut c, kp, kl, cp, cl, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "flash_tile",
+        |mut c: C<W>, tile: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::flash_tile(&mut c, tile, p, n).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "tile_count",

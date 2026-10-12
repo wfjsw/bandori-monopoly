@@ -253,6 +253,23 @@ pub trait CardWorld: Clone + 'static {
     /// Log line (a localizable message from the card).
     fn log(&mut self, player_id: i32, msg: Msg);
 
+    // ------------------------------------------------------------- flash
+    /// Request the card **flash** for THIS activation at this point (overrides
+    /// the `Auto` scope classification; a no-op under `Flash::Never`). The
+    /// lazy 「效果适用」 header is flushed first. v55.
+    fn flash(&mut self) {}
+    /// Suppress the card flash for THIS activation (runtime decision). Wins
+    /// over [`Self::flash`] / `Flash::Always`, loses to `Flash::Never`.
+    fn no_flash(&mut self) {}
+    /// Proactively flash another card as a "look here" cue -- its own
+    /// `"flash"` event, parent-linked under the activation.
+    fn flash_card(&mut self, _card_id: &str, _msg: Msg) {}
+    /// Like [`Self::flash_card`] with an explicit identity key (the same key
+    /// in one drive flashes once even if its position shifts between runs).
+    fn flash_card_keyed(&mut self, _key: &str, _card_id: &str, _msg: Msg) {}
+    /// Proactively flash a tile as a "look here" cue.
+    fn flash_tile(&mut self, _tile: i32, _msg: Msg) {}
+
     // ------------------------------------------------------------- board
     fn tile_count(&self) -> i32;
     /// Tile index of a name (a data key), or -1.

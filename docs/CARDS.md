@@ -144,6 +144,57 @@ Path: `CardDef::silent` → `ManifestOn::silent` (ABI v53) →
 `announce_drive` skips the `"card"` post and the 「效果适用」 header; the body
 runs the full category → pre → guard layering unchanged.
 
+## Flash policy (`CardDef::flash`, ABI v55)
+
+Beside the header mode (Visible / Silent / QuietWhenEmpty), each entry carries
+a **flash policy** -- whether the activation's centre flash (and field-slot
+pulse) shows:
+
+* `Flash::Auto` (default) -- today's host classification: owner-self-only
+  effects keep the log entry but no flash; anything that reached another
+  player, the board, or movement flashes.
+* `Flash::Always` -- the rule says this entry always flashes, even an
+  owner-self-only effect the player must notice.
+* `Flash::Never` -- the log entry stays; no flash / pulse, even for a
+  cross-player effect.
+
+```rust
+pub const T: CardDef = CardDef::new("skill:…", &[
+    On::Play("", None, use_skill),                  // 0: Auto
+    On::Hook(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+]).flash(&[(1, Flash::Always)]);
+```
+
+**Precedence** (highest first): `Flash::Never` > `ctx::no_flash()` >
+`ctx::flash()` / `Flash::Always` > `Auto`-by-scope. A body may override at
+runtime:
+
+* `ctx::flash()` -- request the flash for THIS activation at this point
+  (overrides `Auto`; a no-op under `Never`). Posts a `"flash"` cue (once-per-
+  flash) and flushes the lazy 「效果适用」 header first -- a flash is a visible
+  outcome and the header names which clause is firing.
+* `ctx::no_flash()` -- suppress for this activation (decided at runtime).
+* `ctx::flash_card(card_id, &Msg)` / `ctx::flash_tile(tile, &Msg)` -- a
+  proactive "look here" cue as its own `"flash"` event, parent-linked under
+  the activation. Usable by pseudo cards (tiles, `mark:*`).
+* `ctx::flash_card_keyed(key, card_id, &Msg)` -- like `flash_card` with an
+  explicit identity key whose position can shift between runs.
+
+**Once-per-flash** (user, 2026-10-11): a flash is identified by `(drive,
+ordinal within the drive)` or an explicit key. Once posted to the stream, a
+body re-run after a prompt must NOT post or play it again. Unlike logs
+(replace-by-index, dropped on halt), a flash already shown before the prompt
+stays shown. The identity lives in the drive's persistent state and survives
+halt; the client dedupes by event id so a re-delivered frame never replays a
+flash.
+
+**QuietWhenEmpty interaction**: a requested flash counts as visible -- if
+`ctx::flash()` ran, the header is kept.
+
+Path: `CardDef::flash` → `ManifestOn::flash` (v55) → `commit_after` stamps the
+`"card"` event's `flash` flag under the precedence above. Proactive `"flash"`
+events play through the client's cardFlash path.
+
 ## Bot-only estimated execution cost
 
 `prop::EST_COST` (`"estCost"`) is a card's **estimated execution cost** (user

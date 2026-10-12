@@ -33,6 +33,18 @@ extern "C-unwind" {
     pub fn log(player_id: i32, ptr: i32, len: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_effect")]
     pub fn effect(player_id: i32, ptr: i32, len: i32);
+    // flash (v55) -- once-per-flash identity lives host-side (drive ordinal /
+    // explicit key); the guest just requests.
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_flash")]
+    pub fn flash();
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_no_flash")]
+    pub fn no_flash();
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_flash_card")]
+    pub fn flash_card(cp: i32, cl: i32, p: i32, n: i32);
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_flash_card_keyed")]
+    pub fn flash_card_keyed(kp: i32, kl: i32, cp: i32, cl: i32, p: i32, n: i32);
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_flash_tile")]
+    pub fn flash_tile(tile: i32, p: i32, n: i32);
     // board
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tile_count")]
     pub fn tile_count() -> i32;

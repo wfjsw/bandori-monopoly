@@ -1224,6 +1224,130 @@ fn silent_ask_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// -- flash policy (v55) ------------------------------------------------------
+
+use card_sdk::abi::Flash;
+
+/// `Flash::Always` on an owner-self-only effect (gain to self): the player
+/// should still see the flash.
+const FLASH_ALWAYS: CardDef = CardDef::new("TEST:flashAlways", &[On::Play("", None, flash_always)])
+    .flash(&[(0, Flash::Always)]);
+
+fn flash_always(player_id: i32) -> card_sdk::Asked {
+    ctx::gain(player_id, 1, &Msg::new(key!("flash_always_gain")))?;
+    Ok(())
+}
+
+/// `Flash::Never` on a cross-player effect (a pay leg to another seat): the
+/// log entry stays, no flash / pulse.
+const FLASH_NEVER: CardDef = CardDef::new("TEST:flashNever", &[On::Play("", None, flash_never)])
+    .flash(&[(0, Flash::Never)]);
+
+fn flash_never(player_id: i32) -> card_sdk::Asked {
+    let other = ctx::others(player_id).first().copied().unwrap_or(-1);
+    ctx::pay_leg(player_id, other, 1, &Msg::new(key!("flash_never_pay")))?;
+    Ok(())
+}
+
+/// `ctx::flash()` then `ask_yes`: exactly ONE flash, posted **before** the
+/// prompt. The body re-runs after the answer and must not flash again.
+const FLASH_THEN_ASK: CardDef = CardDef::new("TEST:flashThenAsk", &[On::Play("", None, flash_then_ask)]);
+
+fn flash_then_ask(player_id: i32) -> card_sdk::Asked {
+    ctx::flash();
+    ctx::log(player_id, &Msg::new(key!("flash_then_ask_mark")));
+    let yes = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("flash_ask_title")),
+        &Msg::new(key!("flash_ask_text")),
+    )?;
+    if yes {
+        ctx::log(player_id, &Msg::new(key!("flash_ask_yes")));
+    } else {
+        ctx::log(player_id, &Msg::new(key!("flash_ask_no")));
+    }
+    Ok(())
+}
+
+/// Two prompts in a row, one `ctx::flash()` before each: one flash per
+/// distinct ordinal, none doubled across the three passes.
+const FLASH_TWO_ASKS: CardDef = CardDef::new("TEST:flashTwoAsks", &[On::Play("", None, flash_two_asks)]);
+
+fn flash_two_asks(player_id: i32) -> card_sdk::Asked {
+    ctx::flash_card("TEST:flashAlways", &Msg::new(key!("flash_two_cue1")));
+    ctx::log(player_id, &Msg::new(key!("flash_two_mark1")));
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("flash_ask_title")),
+        &Msg::new(key!("flash_ask_text")),
+    )?;
+    ctx::flash_card("TEST:flashAlways", &Msg::new(key!("flash_two_cue2")));
+    ctx::log(player_id, &Msg::new(key!("flash_two_mark2")));
+    let _ = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("flash_ask_title")),
+        &Msg::new(key!("flash_ask_text")),
+    )?;
+    Ok(())
+}
+
+/// `ctx::flash_card_keyed` with the same key twice in one drive: flashes once.
+const FLASH_KEYED_TWICE: CardDef = CardDef::new("TEST:flashKeyedTwice", &[On::Play("", None, flash_keyed_twice)]);
+
+fn flash_keyed_twice(player_id: i32) -> card_sdk::Asked {
+    ctx::flash_card_keyed("cue", "TEST:flashAlways", &Msg::new(key!("flash_keyed_a")));
+    ctx::log(player_id, &Msg::new(key!("flash_keyed_mark1")));
+    ctx::flash_card_keyed("cue", "TEST:flashAlways", &Msg::new(key!("flash_keyed_b")));
+    ctx::log(player_id, &Msg::new(key!("flash_keyed_mark2")));
+    Ok(())
+}
+
+/// `ctx::flash_card` posts a parent-linked `"flash"` event **before** later
+/// effects (code order).
+const FLASH_CARD_EARLY: CardDef = CardDef::new("TEST:flashCardEarly", &[On::Play("", None, flash_card_early)]);
+
+fn flash_card_early(player_id: i32) -> card_sdk::Asked {
+    ctx::flash_card("TEST:flashAlways", &Msg::new(key!("flash_card_cue")));
+    ctx::log(player_id, &Msg::new(key!("flash_card_after")));
+    Ok(())
+}
+
+/// `ctx::no_flash` suppresses an otherwise-flashing cross-player pay.
+const FLASH_SUPPRESS: CardDef = CardDef::new("TEST:flashSuppress", &[On::Play("", None, flash_suppress)]);
+
+fn flash_suppress(player_id: i32) -> card_sdk::Asked {
+    ctx::no_flash();
+    let other = ctx::others(player_id).first().copied().unwrap_or(-1);
+    ctx::pay_leg(player_id, other, 1, &Msg::new(key!("flash_suppress_pay")))?;
+    Ok(())
+}
+
+/// Owner-self-only play (gain to self) with default `Flash::Auto`: no flash.
+const FLASH_AUTO_SELF: CardDef = CardDef::new("TEST:flashAutoSelf", &[On::Play("", None, flash_auto_self)]);
+
+fn flash_auto_self(player_id: i32) -> card_sdk::Asked {
+    ctx::gain(player_id, 1, &Msg::new(key!("flash_auto_gain")))?;
+    Ok(())
+}
+
+/// Nested drive: the outer body flashes then plays an inner card that also
+/// flashes. The two flash sets are independent.
+const FLASH_OUTER: CardDef = CardDef::new("TEST:flashOuter", &[On::Play("", None, flash_outer)]);
+
+fn flash_outer(player_id: i32) -> card_sdk::Asked {
+    ctx::flash_card("TEST:flashAlways", &Msg::new(key!("flash_outer_cue")));
+    ctx::play_card("TEST:flashInner", player_id)?;
+    Ok(())
+}
+
+/// The nested drive's own flash (played by [`FLASH_OUTER`]).
+const FLASH_INNER: CardDef = CardDef::new("TEST:flashInner", &[On::Play("", None, flash_inner)]);
+
+fn flash_inner(player_id: i32) -> card_sdk::Asked {
+    ctx::flash_card("TEST:flashAlways", &Msg::new(key!("flash_inner_cue")));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
@@ -1231,5 +1355,7 @@ card_sdk::bandori_ruleset!(&[
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
-    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK
+    SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
+    FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
+    FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER
 ]);

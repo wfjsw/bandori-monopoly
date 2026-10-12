@@ -344,7 +344,28 @@ use alloc::{string::String, vec::Vec};
 ///      header is already on the stream), it behaves like `Visible`.
 ///      Nested activations announce normally. No host-function change;
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 54;
+/// v55: `ManifestOn::flash` -- a declarative, per-entry [`Flash`] policy beside
+///      the header mode: `Auto` (host classifies by scope, owner-self-only =>
+///      no flash), `Always` (the rule says this entry always flashes, e.g. a
+///      self-only effect the player must notice), `Never` (log entry stays,
+///      no flash/pulse). Authored via `CardDef::flash`. The header modes of
+///      v54 are unchanged; `CardDef::presentation` is the one lookup that
+///      folds header + flash into [`EntryPresentation`].
+///      Imperative flash from the body (like `ctx::log`): new host imports
+///      `flash` / `no_flash` / `flash_card` / `flash_tile` /
+///      `flash_card_keyed` (see `ctx::flash` and kin). Precedence:
+///      `Never` > `ctx::no_flash` > `ctx::flash` / `Always` > `Auto`-by-scope.
+///      A proactive `"flash"` event is parent-linked under the activation and
+///      plays through the client's cardFlash path.
+///      **Once-per-flash identity** (user, 2026-10-11): a flash is identified
+///      by `(drive id, flash ordinal within the drive)` or an explicit key via
+///      `ctx::flash_card_keyed`. Once posted to the stream, a re-run that
+///      reaches the same identity MUST NOT post it again (unlike logs, which
+///      replace-by-index and drop on halt). Identity lives in the drive's
+///      persistent state and survives halt; the activation's own flash obeys
+///      the same rule. Client-side, event ids dedupe a re-delivered frame.
+///      SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 55;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -373,6 +394,48 @@ impl Default for Presentation {
     fn default() -> Self {
         Self::Visible
     }
+}
+
+/// Whether the activation flashes (`ManifestOn::flash`, v55).
+///
+/// `Auto` is today's host classification (owner-self-only => no flash);
+/// `Always` / `Never` are the rule's own opinion and win over it. Body code
+/// may still override at runtime via `ctx::flash` / `ctx::no_flash` under the
+/// precedence `Never` > `ctx::no_flash` > `ctx::flash` / `Always` > `Auto`.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Flash {
+    /// Classify by scope (owner-self-only => no flash). The default.
+    Auto = 0,
+    /// This entry always flashes, even when the effect is owner-self-only.
+    Always = 1,
+    /// Log entry stays; no flash / pulse, even when the effect is cross-player.
+    Never = 2,
+}
+
+impl Flash {
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => Self::Always,
+            2 => Self::Never,
+            _ => Self::Auto,
+        }
+    }
+}
+
+impl Default for Flash {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+/// One entry's log presentation: the header mode plus the flash policy.
+/// Returned by `CardDef::presentation` -- the one lookup that folds
+/// `silent` / `quiet_when_empty` / `flash`. v55.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EntryPresentation {
+    pub header: Presentation,
+    pub flash: Flash,
 }
 
 /// Temporary trigger tag for the extension selected before source declaration.
@@ -2188,10 +2251,13 @@ pub struct ManifestOn {
     /// `None` = unlabelled (the line shows just the card name). v52.
     #[serde(default)]
     pub label: Option<String>,
-    /// How this entry presents itself (`CardDef::silent` /
+    /// How this entry presents itself in the log (`CardDef::silent` /
     /// `CardDef::quiet_when_empty`). See [`Presentation`]. v54.
     #[serde(default)]
     pub presentation: Presentation,
+    /// Whether the activation flashes (`CardDef::flash`). See [`Flash`]. v55.
+    #[serde(default)]
+    pub flash: Flash,
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).

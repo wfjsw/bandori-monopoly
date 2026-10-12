@@ -171,6 +171,53 @@ pub fn effect(player_id: i32, msg: &Msg) {
     unsafe { sys::effect(player_id, p, l) }
 }
 
+// ---------------------------------------------------------------- flash
+
+/// Request the card **flash** for THIS activation at this point (overrides the
+/// `Auto` scope classification; a no-op under `Flash::Never`). The lazy
+/// 「效果适用」 header is posted first -- a flash is a visible outcome and the
+/// header names which clause is firing. A `QuietWhenEmpty` entry keeps its
+/// header once a flash was requested.
+///
+/// Once-per-flash: identified by `(drive, flash ordinal within the drive)`.
+/// A body re-run after a prompt must not flash the same ordinal again; the
+/// already-posted flash stays shown and is not dropped on halt.
+pub fn flash() {
+    unsafe { sys::flash() }
+}
+
+/// Suppress the card flash for THIS activation (decided at runtime). Wins over
+/// [`flash`] / `Flash::Always`, loses to `Flash::Never`.
+pub fn no_flash() {
+    unsafe { sys::no_flash() }
+}
+
+/// Proactively flash another card as a "look here" cue -- its own `"flash"`
+/// event in the stream, parent-linked under the activation. Usable by pseudo
+/// cards (tiles, `mark:*`). Identified by the next flash ordinal within the
+/// drive; use [`flash_card_keyed`] when the position can shift between runs.
+pub fn flash_card(card_id: &str, msg: &Msg) {
+    let (cp, cl) = s(card_id);
+    let (p, l) = mj(msg);
+    unsafe { sys::flash_card(cp, cl, p, l) }
+}
+
+/// Like [`flash_card`] but with an explicit identity key: the same `key` in one
+/// drive flashes once, even if its position shifts between re-runs.
+pub fn flash_card_keyed(key: &str, card_id: &str, msg: &Msg) {
+    let (kp, kl) = s(key);
+    let (cp, cl) = s(card_id);
+    let (p, l) = mj(msg);
+    unsafe { sys::flash_card_keyed(kp, kl, cp, cl, p, l) }
+}
+
+/// Proactively flash a tile as a "look here" cue -- its own `"flash"` event,
+/// parent-linked under the activation. Identified by the next flash ordinal.
+pub fn flash_tile(tile: i32, msg: &Msg) {
+    let (p, l) = mj(msg);
+    unsafe { sys::flash_tile(tile, p, l) }
+}
+
 // ------------------------------------------------------------------ board
 
 #[cfg_attr(kani, inline(always))]

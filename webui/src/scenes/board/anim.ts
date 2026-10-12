@@ -25,7 +25,7 @@ const CARD_FLASH_MS = 1200;
 const CARD_FLASH_FAST_MS = 350;
 import type { GameSession } from "../../game/session";
 import { t as tr } from "../../i18n/t";
-import { activationPresentation } from "./presentation.ts";
+import { FlashOnce, flashPlay } from "./presentation.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -107,6 +107,9 @@ export class Animator {
   /** Activation event id -> indent depth, for nesting a child activation
    *  (and its children) under the parent that caused it. */
   private actDepth = new Map<number, number>();
+  /** Once-per-flash: event ids this view has already played (or sealed from
+   *  history). A re-delivered frame never replays a flash. */
+  private flashOnce = new FlashOnce();
   /** Animation speed scales every sleep and timer. A 4x replay additionally
    *  takes the instant path; live matches still show each movement step. */
   speed = 1;
@@ -118,8 +121,15 @@ export class Animator {
   private pulseTimer = 0;
   private pulseCard = "";
   private disposed = false;
+  private bump: () => void;
+  private view: () => MatchView | null;
+  private readonly replay: boolean;
 
-  constructor(private bump: () => void, private view: () => MatchView | null, private readonly replay = false) {}
+  constructor(bump: () => void, view: () => MatchView | null, replay = false) {
+    this.bump = bump;
+    this.view = view;
+    this.replay = replay;
+  }
 
   /** `sleep` scaled by [`speed`]. */
   private nap(ms: number): Promise<void> {
@@ -155,7 +165,16 @@ export class Animator {
     clearTimeout(this.pulseTimer);
   }
 
-  addLog(e: MatchEvent): void {
+  /**
+   * Append `e`'s log rows. `history` marks the mount-time ingest of events
+   * already in the state: those seal their once-per-flash id so a later
+   * re-delivery of the same frame never animates (and never duplicates rows).
+   */
+  addLog(e: MatchEvent, opts?: { history?: boolean }): void {
+    // Once-per-flash: a re-delivered frame of an id this view already played
+    // (or sealed from history) contributes no second flash, no re-arm, and
+    // no duplicate log rows.
+    if (this.flashOnce.has(e.id)) return;
     const names = e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names();
     const parts = fmtMsgParts(e.msg, names);
     const line = partsText(parts) || fmtMsg(e.msg, names);
@@ -189,6 +208,9 @@ export class Animator {
       this.flash = { ...f, detail: [...f.detail, line], out: false };
       this.armFlash(f.id, this.fast());
     }
+    // History rows have already been shown (or were never animated): seal
+    // their flash identity so a reconnect / seek cannot play them now.
+    if (opts?.history && (e.type === "flash" || e.type === "card")) this.flashOnce.seal(e.id);
     if (!rows.length) return;
     this.log = [...this.log.slice(-199), ...rows];
   }
@@ -244,7 +266,7 @@ export class Animator {
   private showBanner(title: string, body = ""): void {
     this.banner = { title, body, id: ++this.seq };
     clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(() => {
+    this.bannerTimer = setTimeout(() => {
       this.banner = null;
       this.bump();
     }, 2200 / Math.max(1, this.speed));
@@ -259,11 +281,12 @@ export class Animator {
    *  activation's own follow-ups (its roll, its effect lines) land on the face
    *  instead of waiting it out. */
   private async cardFlash(e: MatchEvent, fast: boolean): Promise<void> {
-    // Ruling 1 + pulse reconciliation: see [`activationPresentation`].
-    if (activationPresentation(e) === "none") return;
+    // Ruling 1 + pulse reconciliation + once-per-flash: see [`flashPlay`].
+    const p = flashPlay(this.flashOnce, e);
+    if (p === "none") return;
     // An in-play card's 「效果适用」 lights its slot in the field row instead
     // of bringing the face to the centre.
-    if (activationPresentation(e) === "pulse") {
+    if (p === "pulse") {
       const uid = this.fieldUid(e.uid ?? -1);
       if (uid !== null) {
         while (this.pulse && !this.disposed) await sleep(30 / Math.max(1, this.speed));
@@ -278,10 +301,13 @@ export class Animator {
     // A genuine activation (play / [反击] / skill / event) names who did it.
     // An already-in-play card's 「效果适用」 line carries the why; the flash
     // shows that short why (plus a one-line outcome summary when there is
-    // one) so the player sees why the card flashed.
+    // one) so the player sees why the card flashed. A proactive `"flash"` cue
+    // carries its own "look here" line as the caption.
     const kind = e.kind ?? "";
     let caption: string;
-    if (KIND_KEY[kind]) {
+    if (e.type === "flash") {
+      caption = fmtMsg(e.msg, this.names()) || tr("board.cardEffect", { card: cardTitle(e.card) });
+    } else if (KIND_KEY[kind]) {
       caption = tr(KIND_KEY[kind], { who: e.playerId >= 0 ? this.player(e.playerId) : tr("board.cardNeutral") });
     } else if (e.msg?.k === "log.effect_applied") {
       const why = e.msg.a?.why as { msg?: Msg } | undefined;
@@ -314,7 +340,7 @@ export class Animator {
     if (!fast && sound) sfx("card_play");
     clearTimeout(this.pulseTimer);
     const hold = (fast ? 350 : PULSE_MS) / Math.max(1, this.speed);
-    this.pulseTimer = window.setTimeout(() => {
+    this.pulseTimer = setTimeout(() => {
       if (this.pulse?.id !== id) return;
       this.pulse = null;
       this.bump();
@@ -336,7 +362,7 @@ export class Animator {
     const hold = (fast ? CARD_FLASH_FAST_MS : CARD_FLASH_MS) / Math.max(1, this.speed);
     const fade = (fast ? 0 : 250) / Math.max(1, this.speed);
     clearTimeout(this.flashTimer);
-    this.flashTimer = window.setTimeout(() => {
+    this.flashTimer = setTimeout(() => {
       if (this.flash?.id !== id) return;
       if (fade <= 0) {
         this.flash = null;
@@ -345,7 +371,7 @@ export class Animator {
       }
       this.flash = { ...this.flash, out: true };
       this.bump();
-      this.flashTimer = window.setTimeout(() => {
+      this.flashTimer = setTimeout(() => {
         if (this.flash?.id !== id || !this.flash.out) return;
         this.flash = null;
         this.bump();
@@ -378,7 +404,7 @@ export class Animator {
   private showTurn(label: string): void {
     this.turnAnnouncement = { label, id: ++this.seq };
     clearTimeout(this.turnTimer);
-    this.turnTimer = window.setTimeout(() => {
+    this.turnTimer = setTimeout(() => {
       this.turnAnnouncement = null;
       this.bump();
     }, TURN_MS / Math.max(1, this.speed));
@@ -562,14 +588,27 @@ export class Animator {
       case "card":
         // A card's effect activated -- or a counteraction negated it. This is
         // the one card flash: hand plays, skill presses, event draws, [反击]
-        // bodies and field-card hooks all land here.
+        // bodies and field-card hooks all land here. The event's own `flash`
+        // (set at commit) is the final decision -- `cardFlash` / `flashPlay`
+        // honour it, and a negated activation (无效) always shows.
         if (!e.card) break;
         this.lastDiscard = e.card;
         if (this.noFlash()) break;
-        // Ruling 1: owner-self-only activations keep the log entry but skip
-        // the card flash. `flash: false` is set at commit; default is true.
-        if (e.flash === false) break;
         await this.cardFlash(e, fast);
+        break;
+      case "flash":
+        // Proactive "look here" cue (`ctx::flash_card` / `flash_tile`): the
+        // named card's face, or a tile banner when there is no card. Parent-
+        // linked under the activation; once-per-flash by event id.
+        if (this.noFlash()) break;
+        if (e.card) {
+          this.lastDiscard = e.card;
+          await this.cardFlash(e, fast);
+          break;
+        }
+        if (flashPlay(this.flashOnce, e) === "none") break;
+        this.showBanner(body);
+        await wait(fast ? 0 : 700);
         break;
       case "event": if (!fast) sfx("event_card"); this.showBanner(tr("anim.event"), body); await wait(900); break;
       case "eventend": this.showBanner(tr("anim.eventEnd"), body); await wait(500); break;
@@ -591,7 +630,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
   const animRef = useRef<Animator | null>(null);
   if (!animRef.current) {
     const a = new Animator(bump, () => viewRef.current, sess.kind === "replay");
-    for (const e of sess.view?.state.events ?? []) a.addLog(e);
+    for (const e of sess.view?.state.events ?? []) a.addLog(e, { history: true });
     animRef.current = a;
   }
   useEffect(() => {

@@ -1203,6 +1203,28 @@ impl Match {
         match res {
             Ok(()) | Err(Halt(HaltKind::Ended)) => {
                 let signals = std::mem::take(&mut w.signals);
+                // Once-per-flash (ABI v55): a prompt's re-run starts from a
+                // snapshot and would drop the pre-prompt pass's flash events.
+                // `FlashState::saved` carries every flash already posted;
+                // re-insert any missing from the tail (renumbered) so a flash
+                // shown before the prompt stays shown and is not replayed.
+                if !answers.is_empty() {
+                    let saved = w.flash.lock().saved.clone();
+                    for e in saved {
+                        if e.r#type != "flash" {
+                            continue;
+                        }
+                        let dup = w.recent.iter().any(|x| {
+                            x.r#type == "flash" && x.msg.key() == e.msg.key() && x.card == e.card
+                        });
+                        if !dup {
+                            let mut e = e;
+                            e.id = w.next_event;
+                            w.next_event += 1;
+                            w.recent.push_back(e);
+                        }
+                    }
+                }
                 self.world = w;
                 self.pending = None;
                 self.wait = delay.min(MAX_WAIT);

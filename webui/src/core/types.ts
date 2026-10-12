@@ -132,8 +132,15 @@ export interface MatchEvent {
   uid?: number;
   /** Should the client show the card flash (and the field-slot pulse)?
    *  `false` for owner-self-only activations (the log entry still appears).
-   *  Default `true`. */
+   *  This is the final decision, set at commit -- the client does not
+   *  re-derive it. Default `true`. v54. */
   flash?: boolean;
+  // `type` is the event kind. Besides the usual roll / move / pay / `"card"`
+  // activations, v55 adds a proactive `"flash"` cue (`ctx::flash_card` /
+  // `flash_tile` / `flash_card_keyed`): `card` names the face to show (empty
+  // for a tile cue), `msg` is the "look here" text (may carry a `tile` arg),
+  // and `parent` links it under the activation that posted it. Those play
+  // through the same cardFlash path and are once-per-flash by event id.
 }
 /** C# `MovePlan` -- the movement the current turn is taking. `reach[k]` is the
  * tile after k+1 steps; `steps` is how far along it the seat has got. */

@@ -288,6 +288,14 @@ pub struct Run {
     /// Every write-through event carries it, so the log nests the outcome
     /// under the header.
     parent: i32,
+    /// This entry's declarative flash policy (`ManifestOn::flash`, v55).
+    /// `ctx::flash` / `no_flash` / the once-per-flash identity live on
+    /// `world.flash_*` so they survive a prompt's routine re-run the same way
+    /// the event tail does.
+    flash_policy: card_sdk::abi::Flash,
+    /// Next flash ordinal **this pass** (resets each re-run so the same call
+    /// site maps to the same identity). `SharedFlash.seen` holds the posted.
+    flash_ordinal: u32,
 }
 
 impl Run {
@@ -322,13 +330,32 @@ impl Run {
     /// drive's first visible outcome. Returns the header's event id, or the
     /// current parent when there is nothing pending (silent / already
     /// flushed).
+    ///
+    /// Once-per-flash (v55): the header IS the activation's flash event. A
+    /// prompt's routine re-run must not post it a second time -- the identity
+    /// lives in `SharedFlash` across `World::clone`, and the re-run adopts the
+    /// live event tail so the first pass's header stays. Reuse it as the
+    /// parent for the re-run's body lines.
     fn flush_header(&mut self) -> i32 {
+        let hkey = self.flash_key("__hdr__");
+        let already = self.world.flash.lock().seen.contains_key(&hkey);
         let Some(h) = self.pending_header.take() else {
             return self.parent;
         };
         let id = self.post_card(&h.kind, h.owner, h.msg, &h.card, h.target, h.tile, false, h.uid);
         self.parent = id;
         self.own_activation = id;
+        if already {
+            // Re-run's duplicate header: keep the log line, suppress the
+            // second flash (the first pass already showed it before the
+            // prompt).
+            if let Some(live) = self.live {
+                let cx = unsafe { &mut *live };
+                cx.set_event_flash(id, false);
+            }
+        } else {
+            self.world.flash.lock().seen.insert(hkey, id);
+        }
         id
     }
 
@@ -363,6 +390,67 @@ impl Run {
         if self.parent >= 0 {
             e.parent = self.parent;
         }
+    }
+
+    /// Scope a flash identity to this drive's card so a later activation of
+    /// the same card is a fresh drive (and a nested drive is independent).
+    fn flash_key(&self, inner: &str) -> String {
+        format!("{}|{}", self.current_card, inner)
+    }
+
+    /// Post one proactive `"flash"` event write-through, once-per-flash.
+    ///
+    /// Identity is `key` (an ordinal or an explicit `ctx::flash_card_keyed`
+    /// key) within this drive. If the identity was already posted (a re-run
+    /// after a prompt / halt), this is a **no-op** -- the flash already shown
+    /// before the prompt must not play again. Otherwise the event is posted
+    /// parent-linked under the activation and the identity is recorded.
+    ///
+    /// The lazy header flushes first (a flash is a visible outcome and the
+    /// header names which clause is firing). Walk segments flush via
+    /// `Cx::log_event` / `World::log`, so an approach always precedes the
+    /// flash that interrupted it.
+    fn post_flash(&mut self, key: String, card: &str, msg: Msg, tile: i32) {
+        if self.flash_policy == card_sdk::abi::Flash::Never {
+            // Never suppresses even a proactive flash -- the rule said the
+            // player must not be cued.
+            return;
+        }
+        // Once-per-flash: already posted under this identity -> no-op.
+        if self.world.flash.lock().seen.contains_key(&key) {
+            return;
+        }
+        // Lazy header first: the flash is a visible outcome.
+        self.flush_header();
+        self.logged = self.logged.saturating_add(1);
+        let player_id = self.trigger.player_id;
+        // Carry the tile on the Msg so the client can aim the cue.
+        let msg = if tile >= 0 {
+            msg.clone().tile("tile", tile)
+        } else {
+            msg
+        };
+        let parent = self.parent;
+        let id = if let Some(live) = self.live {
+            let cx = unsafe { &mut *live };
+            // Walk-flush ordering: `log_event` flushes pending walk segments
+            // first, like any log, so an approach precedes the flash.
+            let id = cx.log_event("flash", player_id, msg.clone(), parent, card, 0);
+            // Carry across a prompt's re-run (once-per-flash).
+            if let Some(e) = cx.world().recent.back() {
+                self.world.flash.lock().saved.push(e.clone());
+            }
+            id
+        } else {
+            // No live sink (probe / quote): guest-copy only.
+            let e = self.world.log("flash", player_id, msg);
+            if !card.is_empty() {
+                e.card = card.to_string();
+            }
+            e.parent = parent;
+            e.id
+        };
+        self.world.flash.lock().seen.insert(key, id);
     }
 
     /// Post a `"card"` activation (the 「效果适用」 header / a skill 「发动」 /
@@ -585,6 +673,66 @@ impl CardWorld for Run {
     fn log(&mut self, player_id: i32, msg: Msg) {
         let msg = self.attribute(msg);
         self.post_log("text", player_id, msg, "");
+    }
+
+    // -- flash (v55, once-per-flash identity) ---------------------------------
+
+    /// Request the activation's flash at this point (overrides `Auto`; a
+    /// no-op under `Flash::Never`). Flushes the lazy header first -- a flash
+    /// is a visible outcome and the header names which clause is firing. A
+    /// `QuietWhenEmpty` entry keeps its header once a flash was requested.
+    ///
+    /// Posts a `"flash"` event (once-per-flash) so a prompt's re-run does not
+    /// play the same cue again.
+    fn flash(&mut self) {
+        // Never > ctx::no_flash > ctx::flash / Always > Auto.
+        if self.flash_policy == card_sdk::abi::Flash::Never {
+            return;
+        }
+        // Lazy header: post the 「效果适用」 line at the flash point so the
+        // player sees why the card flashed (a bare face with no why is noise).
+        self.flush_header();
+        self.world.flash.lock().requested = true;
+        // A `"flash"` cue for THIS activation, once-per-flash.
+        let ord = self.flash_ordinal;
+        self.flash_ordinal += 1;
+        let key = self.flash_key(&format!("ord:{ord}"));
+        let card = self
+            .current_card
+            .strip_prefix("event:")
+            .unwrap_or(&self.current_card)
+            .to_string();
+        self.post_flash(key, &card, Msg::new("log.flash_cue"), -1);
+    }
+
+    /// Suppress the activation's flash (runtime decision). Wins over
+    /// `ctx::flash` / `Flash::Always`, loses to `Flash::Never`.
+    fn no_flash(&mut self) {
+        self.world.flash.lock().no_flash = true;
+    }
+
+    /// Proactively flash another card as a "look here" cue. Its own `"flash"`
+    /// event, parent-linked under the activation, identified by the next
+    /// flash ordinal within the drive.
+    fn flash_card(&mut self, card_id: &str, msg: Msg) {
+        let ord = self.flash_ordinal;
+        self.flash_ordinal += 1;
+        let key = self.flash_key(&format!("ord:{ord}"));
+        self.post_flash(key, card_id, msg, -1);
+    }
+
+    /// Like [`Self::flash_card`] with an explicit identity key.
+    fn flash_card_keyed(&mut self, key: &str, card_id: &str, msg: Msg) {
+        let k = self.flash_key(&format!("key:{key}"));
+        self.post_flash(k, card_id, msg, -1);
+    }
+
+    /// Proactively flash a tile as a "look here" cue.
+    fn flash_tile(&mut self, tile: i32, msg: Msg) {
+        let ord = self.flash_ordinal;
+        self.flash_ordinal += 1;
+        let key = self.flash_key(&format!("ord:{ord}"));
+        self.post_flash(key, "", msg, tile);
     }
 
     // board -----------------------------------------------------------------
@@ -2328,7 +2476,7 @@ impl<M: CardModules> RulesBridge<M> {
         // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
         // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
         // the header is retracted at commit if the body produced nothing.
-        if self.entry_presentation(card_id, entry) == card_sdk::abi::Presentation::Silent {
+        if self.entry_presentation(card_id, entry).header == card_sdk::abi::Presentation::Silent {
             return -1;
         }
         use game_core::state::card_trigger;
@@ -2424,19 +2572,22 @@ impl<M: CardModules> RulesBridge<M> {
             .unwrap_or_default()
     }
 
-    /// How `card_id`'s `entry` presents itself (`CardDef::silent` /
-    /// `CardDef::quiet_when_empty`). `Visible` when the card or entry is
-    /// unknown (announce as before).
-    fn entry_presentation(&self, card_id: &str, entry: i32) -> card_sdk::abi::Presentation {
+    /// How `card_id`'s `entry` presents itself: the header mode plus the
+    /// flash policy (`CardDef::silent` / `quiet_when_empty` / `flash`). The
+    /// defaults (`Visible` + `Auto`) when the card or entry is unknown.
+    fn entry_presentation(&self, card_id: &str, entry: i32) -> card_sdk::abi::EntryPresentation {
         let Some(idx) = self.ruleset.card(card_id) else {
-            return card_sdk::abi::Presentation::Visible;
+            return card_sdk::abi::EntryPresentation::default();
         };
-        self.ruleset
+        let on = self
+            .ruleset
             .cards()
             .get(idx as usize)
-            .and_then(|c| c.on.get(entry.max(0) as usize))
-            .map(|o| o.presentation)
-            .unwrap_or_default()
+            .and_then(|c| c.on.get(entry.max(0) as usize));
+        card_sdk::abi::EntryPresentation {
+            header: on.map(|o| o.presentation).unwrap_or_default(),
+            flash: on.map(|o| o.flash).unwrap_or_default(),
+        }
     }
 
     /// Run one effect to completion, prompting through the engine as needed.
@@ -2551,6 +2702,10 @@ impl<M: CardModules> RulesBridge<M> {
         // share it (same shape as the raw `cx_ptr` write-through).
         let silent_body = std::cell::Cell::new(false);
         let quiet_when_empty = std::cell::Cell::new(false);
+        // Declarative flash policy (v55) rides across passes like silent_body:
+        // the commit pass's announce is a no-op and must not lose it.
+        let flash_policy_cell: std::cell::Cell<card_sdk::abi::Flash> =
+            std::cell::Cell::new(card_sdk::abi::Flash::Auto);
         let mut prompted = false;
         // Ruling 2a: the lazy header survives across passes (learn + commit
         // run share one buffer; a pause must not drop it).
@@ -2597,6 +2752,8 @@ impl<M: CardModules> RulesBridge<M> {
                 own_activation: -1,
             prompted: false,
                 parent: activation_id,
+                flash_policy: card_sdk::abi::Flash::Auto,
+                flash_ordinal: 0,
             };
             run.world.skip_log = true;
             // Simulation mode (`docs/BOT.md` §3.2): with a provider installed
@@ -2641,18 +2798,22 @@ impl<M: CardModules> RulesBridge<M> {
                 // `TurnStartBefore` of one card, say) must not inherit the
                 // previous sibling's silent flag -- otherwise a silent
                 // declare-cap poisons the visible clause that follows it.
-                if pres == card_sdk::abi::Presentation::Silent {
+                if pres.header == card_sdk::abi::Presentation::Silent {
                     silent_body.set(true);
                     w.silent_body = true;
                 } else {
                     silent_body.set(false);
                     w.silent_body = false;
                 }
-                if pres == card_sdk::abi::Presentation::QuietWhenEmpty {
+                if pres.header == card_sdk::abi::Presentation::QuietWhenEmpty {
                     quiet_when_empty.set(true);
                 } else {
                     quiet_when_empty.set(false);
                 }
+                // Declarative flash policy (v55) rides on the Run so the
+                // commit's precedence check can see `Never` / `Always`.
+                w.flash_policy = pres.flash;
+                flash_policy_cell.set(pres.flash);
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
                 if w.pending_header.is_some() {
                     saved_header = w.pending_header.clone();
@@ -2733,9 +2894,19 @@ impl<M: CardModules> RulesBridge<M> {
                     if answers.is_empty() {
                         let mut after = after;
                         posted_ids = std::mem::take(&mut after.posted);
-                        flushed_header = after.own_activation;
+                        if after.own_activation >= 0 {
+                            flushed_header = after.own_activation;
+                        }
                         after.prompted = prompted;
-                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
+                        {
+                            let mut after = after;
+                            after.flash_policy = flash_policy_cell.get();
+                            if after.own_activation < 0 {
+                                after.own_activation = flushed_header;
+                            }
+                            let hdr = if flushed_header >= 0 { flushed_header } else { own_activation };
+                            return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), hdr);
+                        }
                     }
                     // Recover the learn pass's write-through log so the commit
                     // pass replaces those lines instead of appending duplicates.
@@ -2781,6 +2952,8 @@ impl<M: CardModules> RulesBridge<M> {
                 own_activation: -1,
             prompted: false,
                         parent: activation_id,
+                        flash_policy: card_sdk::abi::Flash::Auto,
+                        flash_ordinal: 0,
                     };
                     // Same as the learn pass: the guest copy must not allocate
                     // event ids (`World::log` is stubbed; lines post
@@ -2812,9 +2985,19 @@ impl<M: CardModules> RulesBridge<M> {
                         Ok(Outcome::Done(after2)) => {
                             let mut after2 = after2;
                             posted_ids = std::mem::take(&mut after2.posted);
-                            flushed_header = after2.own_activation;
+                            if after2.own_activation >= 0 {
+                                flushed_header = after2.own_activation;
+                            }
                             after2.prompted = prompted;
-                            return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
+                            {
+                                let mut after2 = after2;
+                                after2.flash_policy = flash_policy_cell.get();
+                                if after2.own_activation < 0 {
+                                    after2.own_activation = flushed_header;
+                                }
+                                let hdr = if flushed_header >= 0 { flushed_header } else { own_activation };
+                                return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), hdr);
+                            }
                         }
                         // The commit pass must not pause: the learn pass
                         // already answered everything. Anything else is a
@@ -2826,7 +3009,15 @@ impl<M: CardModules> RulesBridge<M> {
                             posted_ids = std::mem::take(&mut after.posted);
                             flushed_header = after.own_activation;
                             after.prompted = prompted;
-                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), own_activation);
+                        {
+                            let mut after = after;
+                            after.flash_policy = flash_policy_cell.get();
+                            if after.own_activation < 0 {
+                                after.own_activation = flushed_header;
+                            }
+                            let hdr = if flushed_header >= 0 { flushed_header } else { own_activation };
+                            return self.commit_after(cx, after, call, card_id, trigger, silent_body.get(), quiet_when_empty.get(), hdr);
+                        }
                         }
                     }
                 }
@@ -2872,6 +3063,9 @@ impl<M: CardModules> RulesBridge<M> {
                 Ok(Outcome::NeedHost(req, mut run)) => {
                     // Keep the write-through log across the re-run.
                     posted_ids = std::mem::take(&mut run.posted);
+                    if run.own_activation >= 0 {
+                        flushed_header = run.own_activation;
+                    }
                     // The host routine runs against the **live** world and is
                     // not replayed, so the turn-ctx policy the card just set up
                     // (build/buy discounts, free buy, ...) has to cross now.
@@ -3434,7 +3628,7 @@ impl<M: CardModules> RulesBridge<M> {
     ///
     /// Returns `true` when the activation should flash (some effect is
     /// Other / Board / Move).
-    fn drive_should_flash(&self, cx: &Cx, after: &Run, owner: i32) -> bool {
+    fn drive_should_flash(&self, cx: &Cx, after: &Run, owner: i32, header: i32) -> bool {
         // Money: any leg that is not (owner <-> bank) is Other.
         for &(from, to, _amount) in &after.paid_log {
             let touches_other = (from >= 0 && from != owner) || (to >= 0 && to != owner);
@@ -3478,7 +3672,7 @@ impl<M: CardModules> RulesBridge<M> {
         // tail rather than `parent` -- host-effect events are stamped to the
         // header after the fact, and a nested activation's own events sit in
         // the same window.
-        let header = after.parent;
+        let _ = after.parent;
         for e in cx.world().recent.iter() {
             if header >= 0 && e.id < header {
                 continue;
@@ -3664,6 +3858,9 @@ impl<M: CardModules> RulesBridge<M> {
                 // QuietWhenEmpty + nothing visible + no prompt: retract the
                 // header entirely (no flash, no 「效果适用」, no
                 // 「（无事发生）」). A prompt already showed it to the client.
+                // A **requested flash** (`ctx::flash`) counts as visible -- the
+                // player was cued, so the header that names the clause stays.
+                let flash_requested = after.world.flash.lock().requested;
                 let body_empty = after.logged == 0
                     && after.paid_log.is_empty()
                     && after.draw_log.is_empty()
@@ -3672,7 +3869,7 @@ impl<M: CardModules> RulesBridge<M> {
                     && after.house_log.is_empty()
                     && after.exile_log.is_empty()
                     && after.fire_spent_log.is_empty();
-                if quiet_when_empty && body_empty && !after.prompted {
+                if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
                     cx.drop_events(&[header]);
                     after.world.recent = cx.world().recent.clone();
                     cx.activation.retain(|&id| id != header);
@@ -3683,14 +3880,25 @@ impl<M: CardModules> RulesBridge<M> {
                         Vec::new()
                     };
                     cx.set_event_results(header, results);
-                    // Ruling 1: owner-self-only activations keep the log entry
-                    // but skip the card flash.
+                    // Ruling 1 + v55 precedence:
+                    //   Never > ctx::no_flash > ctx::flash / Always > Auto.
+                    // `Auto` classifies by scope (owner-self-only => no flash).
                     let owner = if call.player_id() >= 0 {
                         call.player_id()
                     } else {
                         after.trigger.player_id
                     };
-                    let flash = self.drive_should_flash(cx, &after, owner);
+                    let no_flash = after.world.flash.lock().no_flash;
+                    let flash = if after.flash_policy == card_sdk::abi::Flash::Never {
+                        false
+                    } else if no_flash {
+                        false
+                    } else if flash_requested || after.flash_policy == card_sdk::abi::Flash::Always
+                    {
+                        true
+                    } else {
+                        self.drive_should_flash(cx, &after, owner, header)
+                    };
                     cx.set_event_flash(header, flash);
                     after.world.recent = cx.world().recent.clone();
                     cx.activation.retain(|&id| id != header);
@@ -3698,6 +3906,18 @@ impl<M: CardModules> RulesBridge<M> {
             }
             after.world.skip_log = false;
             after.world.stub = Default::default();
+            // Drive ended: drop this card's once-per-flash identities so a
+            // later activation of the same card is a fresh drive. (A Halt that
+            // never reaches here keeps them -- the flash already shown before
+            // the prompt must not play again on the re-run.)
+            {
+                let mut f = after.world.flash.lock();
+                let prefix = format!("{card_id}|");
+                f.seen.retain(|k, _| !k.starts_with(&prefix));
+                f.ordinal = 0;
+                f.requested = false;
+                f.no_flash = false;
+            }
             cx.swap_shared(after.world);
             // Empty-deck maintenance precedes all settlement after-hooks.
             for player_id in after.reshuffle_log {
@@ -5252,6 +5472,8 @@ impl<M: CardModules> RulesBridge<M> {
                 own_activation: -1,
             prompted: false,
             parent: -1,
+            flash_policy: card_sdk::abi::Flash::Auto,
+            flash_ordinal: 0,
         }
     }
 
@@ -5473,6 +5695,8 @@ impl<M: CardModules> RulesBridge<M> {
                 own_activation: -1,
             prompted: false,
                 parent: -1,
+                flash_policy: card_sdk::abi::Flash::Auto,
+                flash_ordinal: 0,
             };
             let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
             let mut options: Vec<(String, i32, i32)> = Vec::new();
@@ -7299,6 +7523,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 own_activation: -1,
             prompted: false,
             parent: -1,
+            flash_policy: card_sdk::abi::Flash::Auto,
+            flash_ordinal: 0,
         };
         self.ruleset
             .cant_play(&run, idx, player_id as i32)
@@ -7386,6 +7612,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 own_activation: -1,
             prompted: false,
             parent: -1,
+            flash_policy: card_sdk::abi::Flash::Auto,
+            flash_ordinal: 0,
         };
         q.tiles
             .iter()

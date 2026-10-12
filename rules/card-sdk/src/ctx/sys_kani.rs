@@ -19,6 +19,26 @@ pub fn effect(player_id: i32, ptr: i32, len: i32) {
     kani_host::call_unit(Op::effect, [player_id, ptr, len, 0, 0, 0]);
 }
 
+pub fn flash() {
+    kani_host::call_unit(Op::flash, [0, 0, 0, 0, 0, 0]);
+}
+
+pub fn no_flash() {
+    kani_host::call_unit(Op::no_flash, [0, 0, 0, 0, 0, 0]);
+}
+
+pub fn flash_card(cp: i32, cl: i32, p: i32, n: i32) {
+    kani_host::call_unit(Op::flash_card, [cp, cl, p, n, 0, 0]);
+}
+
+pub fn flash_card_keyed(kp: i32, kl: i32, cp: i32, cl: i32, p: i32, n: i32) {
+    kani_host::call_unit(Op::flash_card_keyed, [kp, kl, cp, cl, p, n]);
+}
+
+pub fn flash_tile(tile: i32, p: i32, n: i32) {
+    kani_host::call_unit(Op::flash_tile, [tile, p, n, 0, 0, 0]);
+}
+
 pub fn tile_count() -> i32 {
     kani_host::call_i32(Op::tile_count, [0, 0, 0, 0, 0, 0])
 }
