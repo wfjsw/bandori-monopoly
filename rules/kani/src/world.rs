@@ -76,20 +76,32 @@ pub fn card_slot_of(name: &str) -> u8 {
 }
 
 /// Byte-level slot lookup (no UTF-8 validation).
+/// Zero-loop compare: `while i < e.len()` over a 29-byte CJK id was an
+/// unwind cliff (the host `memcmp` family).
 pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
     fn eq(a: &[u8], lit: &str) -> bool {
         let e = lit.as_bytes();
-        if a.len() != e.len() {
+        if a.len() != e.len() || a.len() > 64 {
             return false;
         }
-        let mut i = 0usize;
         let mut ok = true;
-        while i < e.len() {
-            if a[i] != e[i] {
-                ok = false;
-            }
-            i += 1;
+        macro_rules! step {
+            ($i:expr) => {
+                // `.get`, not `[i]`: no slice_index_fail panic path.
+                match (a.get($i), e.get($i)) {
+                    (Some(x), Some(y)) if x != y => ok = false,
+                    _ => {}
+                }
+            };
         }
+        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+        step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+        step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+        step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
+        step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
+        step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
+        step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
+        step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
         ok
     }
     if eq(b, CARD_AYA) {
@@ -107,6 +119,31 @@ pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
 
 pub const TOK_PP_POS: &str = "P✽P粉丝(正)";
 pub const TOK_PP_NEG: &str = "P✽P粉丝(反)";
+
+/// Cached `NameId`s for the two fan tokens. Interned once per proof (the
+/// same table `host::install` pre-fills); every later `sync_views` is a `u16`
+/// compare, not a hash.
+fn fan_tok_ids() -> (NameId, NameId) {
+    static mut IDS: Option<(NameId, NameId)> = None;
+    unsafe {
+        if IDS.is_none() {
+            IDS = Some((intern::intern(TOK_PP_POS), intern::intern(TOK_PP_NEG)));
+        }
+        IDS.unwrap()
+    }
+}
+
+/// Cached `NameId` for `RENT_HOUSES` (see [`World::rent_houses`]).
+fn rent_houses_id() -> NameId {
+    static mut ID: Option<NameId> = None;
+    unsafe {
+        if ID.is_none() {
+            ID = Some(intern::intern(RENT_HOUSES));
+        }
+        ID.unwrap()
+    }
+}
+
 /// `game_core::state::prop::RENT_HOUSES` — house-count override for rent.
 pub const RENT_HOUSES: &str = "rentHouses";
 
@@ -849,8 +886,7 @@ impl World {
     }
 
     pub fn sync_views(&mut self) {
-        let pos_id = intern::intern(TOK_PP_POS);
-        let neg_id = intern::intern(TOK_PP_NEG);
+        let (pos_id, neg_id) = fan_tok_ids();
         for p in 0..MAX_PLAYERS {
             self.fans_pos[p] = self.player_keys[p].get(pos_id);
             self.fans_neg[p] = self.player_keys[p].get(neg_id);
@@ -908,7 +944,7 @@ impl World {
     /// owner; else the standing house count. A stored override of `0` still
     /// wins (matches `if let Some(&v) = …` in `ops.rs`).
     pub fn rent_houses(&self, tile: i32) -> i32 {
-        let key = intern::intern(RENT_HOUSES);
+        let key = rent_houses_id();
         // 1) tile-scoped override (a field card sitting on this tile)
         let mut i = 0usize;
         while i < MAX_FIELD {

@@ -86,13 +86,34 @@ pub fn reserve(len: usize) -> (i32, i32) {
 }
 
 /// The bytes behind a handle, up to `len`. Empty when the handle is stale.
+///
+/// Under `cfg(kani)`, a handle tagged [`crate::intern::INTERN_TAG`] is a
+/// `NameId` (from `ctx::s`), not an arena index — resolve it from the intern
+/// table (static bytes, no heap). Untagged handles are out-buffer arena
+/// indices as before.
 pub fn read(handle: i32, len: usize) -> Vec<u8> {
+    #[cfg(kani)]
+    {
+        if let Some(id) = crate::intern::decode_handle(handle) {
+            let b = crate::intern::resolve(id);
+            return b[..len.min(b.len())].to_vec();
+        }
+    }
     with_arena(|a| {
         a.borrow()
             .get(handle as usize)
             .map(|v| v[..len.min(v.len())].to_vec())
             .unwrap_or_default()
     })
+}
+
+/// The bytes behind a name handle, as a slice of the intern table when the
+/// handle is a `NameId` (no heap). Falls back to [`read`] for arena handles.
+/// Host name lookups should prefer [`crate::intern::decode_handle`] +
+/// [`crate::intern::resolve`] directly.
+#[cfg(kani)]
+pub fn read_name_bytes(handle: i32, len: usize) -> Vec<u8> {
+    read(handle, len)
 }
 
 /// The host writing into a buffer reserved by [`reserve`].

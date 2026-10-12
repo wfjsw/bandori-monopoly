@@ -342,20 +342,23 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > 64 {
         return false;
     }
-    // Fixed 8×8 chunk walk (unwind bound 8, not `MAX_NAME`).
-    let mut outer = 0usize;
+    // Zero-loop compare (`.get`, no panic paths). Same bits as the old 8×8 walk.
     let mut ok = true;
-    while outer < 8 {
-        let base = outer * 8;
-        let mut k = 0usize;
-        while k < 8 {
-            let i = base + k;
-            if i < a.len() && a[i] != b[i] {
-                ok = false;
+    macro_rules! step {
+        ($i:expr) => {
+            match (a.get($i), b.get($i)) {
+                (Some(x), Some(y)) if x != y => ok = false,
+                _ => {}
             }
-            k += 1;
-        }
-        outer += 1;
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
+    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
+    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
+    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
+    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
     ok
 }
