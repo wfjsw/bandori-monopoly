@@ -59,6 +59,8 @@ export interface CardFaceProps {
    */
   field?: boolean;
   onClick?: () => void;
+  /** Activation that must be deliberate (hand cards): also fired by Enter / Space. */
+  onDoubleClick?: () => void;
   onMouseEnter?: (el: HTMLElement) => void;
   onMouseLeave?: () => void;
   onFocus?: (el: HTMLElement) => void;
@@ -69,10 +71,11 @@ export interface CardFaceProps {
   style?: CSSProperties;
 }
 
-export const CardFace = memo(function CardFace({ id, size = "mini", width, on, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
+export const CardFace = memo(function CardFace({ id, size = "mini", width, on, field, onClick, onDoubleClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
   const c = D.card(id);
   const faceStyle = width != null ? { ...style, ["--card-w" as string]: `${width}px` } : style;
-  const clickable = !!onClick;
+  const activate = onClick ?? onDoubleClick;
+  const clickable = !!activate;
   return (
     <div
       className={cx(s.face, s[size], on && s.on, field && s.field, className)}
@@ -80,7 +83,8 @@ export const CardFace = memo(function CardFace({ id, size = "mini", width, on, f
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      onDoubleClick={onDoubleClick}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } } : undefined}
       onMouseEnter={(e) => onMouseEnter?.(e.currentTarget)}
       onMouseLeave={onMouseLeave}
       onFocus={(e) => onFocus?.(e.currentTarget)}

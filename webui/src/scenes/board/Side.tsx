@@ -12,11 +12,11 @@ import { useResetScroll } from "../../hooks/measure";
 import type { GameSession } from "../../game/session";
 import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
-import { CardFace, type CardAction, showCard, TagChip } from "../../ui/Card";
+import { CardFace, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
-import { usePromptSheet } from "../../ui/Modal";
+import { ask, usePromptSheet } from "../../ui/Modal";
 import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import type { Animator } from "./anim";
@@ -167,6 +167,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
   if (!slots.length) return null;
   const fire = async (id: string) => {
     if (using) return;
+    if (!(await ask(cardTitle(id), tr("board.skillConfirm"), tr("board.useSkill")))) return;
     setUsing(true);
     try {
       await act(sess, { act: "skill", card: id });
@@ -278,22 +279,13 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
     stickCard(id, note);
   };
   const peekHand = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
-  const detail = (id: string, k: number) => {
+  // Double-click (or Enter) activates: discard while over the limit, else play.
+  // A single click only previews -- the hover panel already shows the card.
+  const activate = (id: string, k: number) => {
     setHover(null);
-    const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
-    // Replay (and a live prompt sheet): inspection only -- no play / discard.
-    if (sess.readOnly || sheet.open) return void showCard(id, [], note);
-    // Per-card `playable` (online extras / solo `view_extra`): gate the play
-    // action. Absent = unknown = keep the coarse gate's behaviour.
-    const cardPlayable = m.v.playable?.[k] !== false;
-    const acts: CardAction[] = [];
-    if (m.overHand) acts.push({ label: tr("board.discardThis"), enabled: !auto, kind: "white", run: () => act(sess, { act: "discard", card: id }) });
-    acts.push({
-      label: canPlay ? tr("board.play") : tr("board.playOnlyOps"),
-      enabled: canPlay && cardPlayable,
-      run: () => act(sess, { act: "play", card: id }),
-    });
-    showCard(id, acts, note);
+    if (sess.readOnly || sheet.open || auto) return;
+    if (m.overHand) return void act(sess, { act: "discard", card: id });
+    if (canPlay && m.v.playable?.[k] !== false) void act(sess, { act: "play", card: id });
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
@@ -362,7 +354,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
                 id={id}
                 size="mini"
                 title={cardTitle(id)}
-                onClick={() => detail(id, k)}
+                onDoubleClick={() => activate(id, k)}
                 onMouseEnter={() => peekHand(k, id)}
                 onMouseLeave={() => setHover(null)}
                 onFocus={() => peekHand(k, id)}
