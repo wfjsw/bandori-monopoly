@@ -216,3 +216,18 @@ trampolines (each loads one constant `&CardDef`) + a thin integer
 
 Every harness that goes through `invoke::event_play_idx` shares the
 IF-chain; the per-card dispatch is a global win for the unit.
+
+### Follow-up (coordinator): derived table is build-time
+
+`body_dispatch_fn.rs` is **not committed**. `rules/kani/build.rs`
+(`gen_body_dispatch`) parses `invoke::BAND_START` and writes
+`$OUT_DIR/body_dispatch_fn.rs` (same rule as `cond_irs.rs`); `invoke.rs`
+`include!`s it. `.gitignore` lists the old source path. Adding a card only
+needs `gen_card_ids.py` + `BAND_START` — trampolines regenerate on build.
+
+Re-verified after the move: `wrong_guard::real_guard_matches_clause_iff`
+**SUCCESSFUL 17 s** (2/2 covers sat);
+`events::duobang_01_02_two_player_iff` **SUCCESSFUL 979 s** (5/5 covers sat,
+same 605k-var formula). `cargo build -p game-rules -p rules-native -p rules-kani`,
+`cargo test -p rules-kani` 3× green, `cargo test -p rules-cond --features lower`,
+wasm32 workspace check green.
