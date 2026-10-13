@@ -487,3 +487,20 @@ Phase C).
 `MatchPlayer.state` keys `stay`, `stun`, `stunStart`, `exile`, `exileTo`,
 `fire`, `handLimit` (and their `StateVar` shape). Trigger names
 `stay` / `stun` / `exile` / `fireSpent` / `markerSpend` stay.
+---
+
+## 8. Status (2026-10-13)
+
+Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
+
+* `rules/status` hosts `status:{stay,stun,exile,fire,unstoppable,no_hand}`
+  linked into `card-all`, `rules-native` and the aggregate build (native and
+  sandbox manifests agree: 291 cards).
+* Every card / skill / tile / event call site uses `rules_status::*`; the
+  `ctx::{give_stay,…,cant_move,can_pay}` imports are `#[doc(hidden)]` host
+  services. The never-implemented `clear_move_skip` import was dropped.
+* `[除外]` is **not** part of the `skip_move` latch (closeout-2 ruling):
+  `World::stay_unlatch` follows 停留/不可阻挡 only; `status_gates().move` still
+  includes exile.
+* Remaining `TODO(ABI)`: genericize `give_*` / `gain_fire` / `spend_fire` into
+  `apply_abnormal` + `marker::*` and bump the ABI (§3.7).
