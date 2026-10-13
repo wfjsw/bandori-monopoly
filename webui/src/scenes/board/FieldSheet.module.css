@@ -97,7 +97,7 @@
    face's own shadow / background. */
 .slot .card {
   box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
-  background: color-mix(in srgb, var(--own, #fff) 12%, #fff);
+  background: color-mix(in srgb, var(--own, var(--white)) 12%, var(--white));
 }
 
 /* Live markers in the face's bottom zone -- the part that must read while the
@@ -200,3 +200,6 @@
     animation: none;
   }
 }
+/* Players-panel hover: the hovered seat's field cards light up; the rest fade. */
+.slot.hot { filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own)); transform: translateY(6px); }
+.slot.dim { opacity: 0.35; filter: grayscale(0.7); }

@@ -23,7 +23,7 @@
 .dialog { width: 503px; margin-top: -294px; z-index: var(--z-lift); }
 .tag { position: relative; width: 290px; height: 40px; background: var(--pink); color: #fff; border-radius: var(--r-lg) 12px 0 0; font-size: 22px; font-weight: 700; padding: 3px 22px; }
 .tag img { position: absolute; right: -6px; top: -2px; height: 44px; }
-.box { min-height: 120px; background: rgba(255, 255, 255, 0.95); border-radius: 0 12px 12px 12px; box-shadow: var(--shadow); padding: 22px 36px; display: flex; align-items: center; font-size: 22px; line-height: 1.6; }
+.box { min-height: 120px; background: rgba(246, 242, 243, 0.95); border-radius: 0 12px 12px 12px; box-shadow: var(--shadow); padding: 22px 36px; display: flex; align-items: center; font-size: 22px; line-height: 1.6; }
 
 .cluster { position: absolute; right: 196px; top: 175px; width: 542px; display: flex; flex-direction: column; }
 .topRow { display: flex; gap: 17px; height: 62px; }
@@ -40,7 +40,7 @@
 .tile:hover:not(:disabled) { filter: brightness(1.04); }
 .badge { position: absolute; right: -14px; top: -16px; width: 56px; height: 56px; }
 
-.small { composes: tile; height: 100%; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; gap: 0.45em; font-size: 22px; font-weight: 700; background: linear-gradient(#fff, #f3f3f6); box-shadow: var(--lift); }
+.small { composes: tile; height: 100%; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; gap: 0.45em; font-size: 22px; font-weight: 700; background: linear-gradient(var(--white), #f3f3f6); box-shadow: var(--lift); }
 .small i { width: 1.27em; height: 1.27em; }
 .history { width: 150px; }
 .replay { width: 95px; }

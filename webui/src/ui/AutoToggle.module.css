@@ -102,7 +102,7 @@
 .cooldown {
   padding: 0 10px;
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(246, 242, 243, 0.25);
   font-size: 16px;
 }
 .fading {

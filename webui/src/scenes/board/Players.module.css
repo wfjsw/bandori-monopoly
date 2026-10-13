@@ -6,7 +6,8 @@
 /* Scrolls vertically only. Your own seat's ring (`.me`: 3px outline + 2px
    offset) sits 5px outside its panel; the padding keeps it inside the scroll
    box, so it neither clips nor makes the list scroll sideways. */
-.players { position: absolute; left: 0; top: 107px; bottom: calc(160px + var(--replay-bar-bottom, 0px)); width: 100%; box-sizing: border-box; padding: 5px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+.playersWrap { position: absolute; left: 0; top: 107px; bottom: calc(160px + var(--replay-bar-bottom, 0px)); width: 100%; }
+.players { position: absolute; inset: 0; box-sizing: border-box; padding: 5px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
 /* Two lines beside the avatar: character … money, then status /
    hand / fire / graveyard. Each line is one row high, so a 54-70px panel
    holds both without spilling. */
@@ -16,7 +17,7 @@
    seat colour, which may be pink too) -- a thick bar down the left edge, a
    blue wash, and an outer ring. It stacks with `.turn`, whose pink border sits
    inside the ring. */
-.me { background: linear-gradient(90deg, #d6e8ff 0%, #eef5ff 60%, #fff 100%); box-shadow: var(--shadow), inset 8px 0 0 var(--me-blue); outline: 3px solid var(--me-blue); outline-offset: 2px; }
+.me { background: linear-gradient(90deg, #d6e8ff 0%, #eef5ff 60%, var(--white) 100%); box-shadow: var(--shadow), inset 8px 0 0 var(--me-blue); outline: 3px solid var(--me-blue); outline-offset: 2px; }
 .me.turn { background: linear-gradient(90deg, #d6e8ff 0%, #eef5ff 60%, #fff7f9 100%); }
 .players { --me-blue: #2f7df6; }
 .out { opacity: 0.55; filter: grayscale(0.6); }
@@ -62,8 +63,8 @@
 .stageLine { color: var(--sub); font-size: 12px; margin: 5px 0 2px; }
 .foot { color: var(--pink); font-weight: 700; font-size: 15px; height: 22px; }
 
-.clock { width: 30px; height: 30px; line-height: 30px; left: 2px; top: 2px; font-size: 13px; font-weight: 700; color: var(--pink); background: radial-gradient(#fff 56%, transparent 59%), conic-gradient(var(--pink) calc(var(--frac) * 360deg), var(--light-pill) 0); }
-.shield { color: var(--shield); background: radial-gradient(#fff 56%, transparent 59%), conic-gradient(var(--shield) calc(var(--frac) * 360deg), var(--light-pill) 0); }
+.clock { width: 30px; height: 30px; line-height: 30px; left: 2px; top: 2px; font-size: 13px; font-weight: 700; color: var(--pink); background: radial-gradient(var(--white) 56%, transparent 59%), conic-gradient(var(--pink) calc(var(--frac) * 360deg), var(--light-pill) 0); }
+.shield { color: var(--shield); background: radial-gradient(var(--white) 56%, transparent 59%), conic-gradient(var(--shield) calc(var(--frac) * 360deg), var(--light-pill) 0); }
 .low { color: var(--tag-red); }
 .compact .clock { width: 24px; height: 24px; line-height: 24px; font-size: 11px; }
 
@@ -105,3 +106,4 @@
 .cardPeekRow { display: flex; gap: 10px; align-items: flex-start; }
 .cardPeekHead { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; }
 .cardPeekHead b { color: var(--pink); font-size: 15px; }
+.panel:hover { filter: brightness(1.04); }

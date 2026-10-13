@@ -1,7 +1,7 @@
 // Player panels on the left; the match log is placed in the right column.
 
 import { stateOf, stateMax } from "../../core/names";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cardTitle } from "../../core/data";
 import { cx } from "../../core/cx";
@@ -18,6 +18,7 @@ import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
 import { byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
+import { setHoverSeat } from "./hoverSeat";
 
 /** A player's status chips: [停留] / [眩晕] / [除外] / 托管 (the engine's takeover). */
 export function statusChips(x: MatchPlayer): string[] {
@@ -56,6 +57,20 @@ function turnOrder(S: Model["S"]): number[] {
   return [...seats.filter((i) => !out(i)), ...seats.filter(out)];
 }
 
+/** Every marker a player holds: counter units, plus each field card's crystals, CP and named counters. */
+function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
+  if (!x) return [];
+  const out: { label: string; n: number }[] = [];
+  for (const tok of x.tokens ?? []) if (tok.value > 0) out.push({ label: tok.name, n: tok.value });
+  for (const fc of x.field ?? []) {
+    const card = cardTitle(fc.card);
+    if (fc.crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.crystals });
+    if (fc.cp > 0) out.push({ label: `${card} · CP`, n: fc.cp });
+    for (const [name, n] of Object.entries(fc.counters ?? {})) if (n > 0) out.push({ label: `${card} · ${name}`, n });
+  }
+  return out;
+}
+
 export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {
   const S = m.S;
   const n = S.players.length;
@@ -66,10 +81,17 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
   // panel's row so the peek lines up beside it.
   const [peek, setPeek] = useState<number | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
   const peekRow = peek == null ? -1 : order.indexOf(peek);
+  const [firePeek, setFirePeek] = useState<number | null>(null);
+  const fireRow = firePeek == null ? -1 : order.indexOf(firePeek);
+  const fireMarks = firePeek == null ? [] : markersOf(S.players[firePeek]);
   const peekCards = peek == null ? [] : byTitle(S.players[peek]?.discard ?? []);
+  // The panels unmount-proof the highlight: clear it when this column goes away.
+  useEffect(() => () => setHoverSeat(-1), []);
   return (
-    <div className={s.players} style={{ gap }}>
+    <div className={s.playersWrap}>
+    <div className={s.players} style={{ gap }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
       {order.map((i) => {
         const x = S.players[i];
         const c = m.charOf(i);
@@ -78,7 +100,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
         // The seat number doubles as the turn clock while it is this seat's turn.
         const clock = i === S.turn ? t : null;
         return (
-          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)}>
+          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)} onMouseEnter={() => setHoverSeat(i)} onMouseLeave={() => setHoverSeat(-1)}>
             {clock ? (
               <span className={cx(s.n, s.clock, clock.cls)} style={{ ["--frac" as string]: clock.frac }} title={clock.caption}>{clock.value}</span>
             ) : (
@@ -102,7 +124,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
             <div className={s.sub}>
               {status.map((t) => <span key={t} className={s.status}>{t}</span>)}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
+              <span className={s.fire} onMouseEnter={() => setFirePeek(i)} onMouseLeave={() => setFirePeek(null)}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
               <span className={s.grave} title={tr("board.graveyardPile")} onMouseEnter={() => setPeek(i)} onMouseLeave={() => setPeek(null)} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>
@@ -113,8 +135,20 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
           </button>
         );
       })}
-      {/* The hovered player's graveyard, alphabetical, beside their panel. */}
-      <div className={cx(s.peek, peek != null && s.peekOn)} style={{ top: Math.max(0, peekRow) * (height + gap) }}>
+    </div>
+      {/* The hovered player's graveyard, alphabetical, beside their panel. Outside
+          the scrolling list, which would clip it. */}
+      <div className={cx(s.peek, firePeek != null && s.peekOn)} style={{ top: 5 + Math.max(0, fireRow) * (height + gap) - scrollTop }}>
+        {firePeek != null && (
+          <>
+            <div className={s.peekHead}>{tr("board.markers")}<b>×{fireMarks.length}</b></div>
+            {fireMarks.length
+              ? fireMarks.map((mk, k) => <div key={k} className={s.peekRow}><span>{mk.label}</span><b>{mk.n}</b></div>)
+              : <div className={s.peekEmpty}>{tr("board.markersEmpty")}</div>}
+          </>
+        )}
+      </div>
+      <div className={cx(s.peek, peek != null && s.peekOn)} style={{ top: 5 + Math.max(0, peekRow) * (height + gap) - scrollTop }}>
         {peek != null && (
           <>
             <div className={s.peekHead}>{tr("board.graveyardPile")}<b>×{peekCards.length}</b></div>
