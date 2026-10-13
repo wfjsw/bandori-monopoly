@@ -28,22 +28,39 @@ pub use crate::card_id;
 
 /// One band / skill / event table, same order as `rules-native::RULESET`.
 pub static RULESET: &[&[card_sdk::CardDef]] = &[
+    #[cfg(feature = "band-ag")]
     card_ag::CARDS,
+    #[cfg(feature = "band-crychic")]
     card_crychic::CARDS,
+    #[cfg(feature = "band-general")]
     card_general::CARDS,
+    #[cfg(feature = "band-hhw")]
     card_hhw::CARDS,
+    #[cfg(feature = "band-morfonica")]
     card_morfonica::CARDS,
+    #[cfg(feature = "band-mujica")]
     card_mujica::CARDS,
+    #[cfg(feature = "band-mygo")]
     card_mygo::CARDS,
+    #[cfg(feature = "band-pp")]
     card_pp::CARDS,
+    #[cfg(feature = "band-ppp")]
     card_ppp::CARDS,
+    #[cfg(feature = "band-ras")]
     card_ras::CARDS,
+    #[cfg(feature = "band-roselia")]
     card_roselia::CARDS,
+    #[cfg(feature = "band-sumimi")]
     card_sumimi::CARDS,
+    #[cfg(feature = "skills-bands")]
     skill_bands::CARDS,
+    #[cfg(feature = "skills-characters")]
     skill_characters::CARDS,
+    #[cfg(feature = "tiles")]
     rules_tiles::CARDS,
+    #[cfg(feature = "tiles")]
     rules_tile_marks::CARDS,
+    #[cfg(feature = "events")]
     rules_events::CARDS,
 ];
 
@@ -60,12 +77,10 @@ pub fn ruleset_len() -> usize {
 }
 
 /// Start index of each band in the flattened [`RULESET`], plus one past the
-/// end (`CARD_COUNT`). Verified against the live tables by
-/// `band_starts_match_ruleset` and by `conf_hostops2`.
-/// Lengths: 15,15,14,15,15,15,15,19,18,15,17,11,12,54,6,1,28 = 285.
-pub const BAND_START: [usize; 18] = [
-    0, 15, 30, 44, 59, 74, 89, 104, 123, 141, 156, 173, 184, 196, 250, 256, 257, 285,
-];
+/// end (`CARD_COUNT`). Generated at build time from the **enabled** feature
+/// crates (`build.rs` `gen_body_dispatch`); `band_starts_match_ruleset` pins
+/// it to the live tables.
+include!(concat!(env!("OUT_DIR"), "/band_start.rs"));
 
 /// Index `idx` of the flattened [`RULESET`] by a const offset table.
 ///
@@ -77,60 +92,7 @@ pub fn by_idx(idx: usize) -> &'static card_sdk::CardDef {
     if idx >= BAND_START[BAND_START.len() - 1] {
         fail_unknown_idx(idx);
     }
-    // Greatest b with BAND_START[b] <= idx. Unrolled (BAND_START has 18
-    // entries / 17 boundaries).
-    let mut lo = 0usize;
-    if BAND_START[1] <= idx {
-        lo = 1;
-    }
-    if BAND_START[2] <= idx {
-        lo = 2;
-    }
-    if BAND_START[3] <= idx {
-        lo = 3;
-    }
-    if BAND_START[4] <= idx {
-        lo = 4;
-    }
-    if BAND_START[5] <= idx {
-        lo = 5;
-    }
-    if BAND_START[6] <= idx {
-        lo = 6;
-    }
-    if BAND_START[7] <= idx {
-        lo = 7;
-    }
-    if BAND_START[8] <= idx {
-        lo = 8;
-    }
-    if BAND_START[9] <= idx {
-        lo = 9;
-    }
-    if BAND_START[10] <= idx {
-        lo = 10;
-    }
-    if BAND_START[11] <= idx {
-        lo = 11;
-    }
-    if BAND_START[12] <= idx {
-        lo = 12;
-    }
-    if BAND_START[13] <= idx {
-        lo = 13;
-    }
-    if BAND_START[14] <= idx {
-        lo = 14;
-    }
-    if BAND_START[15] <= idx {
-        lo = 15;
-    }
-    if BAND_START[16] <= idx {
-        lo = 16;
-    }
-    if BAND_START[17] <= idx {
-        lo = 17;
-    }
+    let lo = band_of(idx);
     let band = RULESET[lo];
     let off = idx - BAND_START[lo];
     if off >= band.len() {
@@ -677,11 +639,13 @@ pub fn unwrap_done(r: Asked) {
 // ---------------------------------------------------------------------------
 
 /// `PP:[丸山彩]憧憬的前方` -- `On::Play`.
+#[cfg(feature = "band-pp")]
 pub fn aya_longing_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), player_id)
 }
 
 /// `PP:[丸山彩]憧憬的前方` -- `On::Hook(PayAdd)`.
+#[cfg(feature = "band-pp")]
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
     hook_kind_only_idx(
         crate::card_id!("PP:[丸山彩]憧憬的前方"),
@@ -691,11 +655,13 @@ pub fn aya_longing_pay_add(player_id: i32) -> Asked {
 }
 
 /// `PPP:（多惠）寻找更好的声音` -- `On::Play`.
+#[cfg(feature = "band-ppp")]
 pub fn tae_sound_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PPP:（多惠）寻找更好的声音"), player_id)
 }
 
 /// `MyGO:轮符雨` -- `On::Play`.
+#[cfg(feature = "band-mygo")]
 pub fn rinne_rain_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("MyGO:轮符雨"), player_id)
 }
