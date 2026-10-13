@@ -329,3 +329,23 @@ fn self_crystals_roundtrip_without_field_slot() {
     let stored = kworld::with_world(|w| w.self_crystals);
     assert_eq!(stored, 5, "stored on World::self_crystals");
 }
+
+/// `neighbor(p, ±1)` is the **next** present seat in turn order, wrapping —
+/// not the last one scanned (that was the far side for n=4).
+#[test]
+fn neighbor_is_the_next_present_seat() {
+    let _g = model_lock();
+    install(base());
+    kworld::reset_world(KWorld {
+        n_players: 4,
+        ..KWorld::new()
+    });
+    let fwd = rules_kani::host::dispatch(Op::neighbor, [0, 1, 0, 0, 0, 0]);
+    assert_eq!(fwd, 1, "forward neighbour of 0 is seat 1");
+    let back = rules_kani::host::dispatch(Op::neighbor, [0, -1, 0, 0, 0, 0]);
+    assert_eq!(back, 3, "backward neighbour of 0 is seat 3");
+    // Seat 1 out: forward neighbour of 0 becomes 2.
+    kworld::with_world_mut(|w| w.out[1] = true);
+    let fwd2 = rules_kani::host::dispatch(Op::neighbor, [0, 1, 0, 0, 0, 0]);
+    assert_eq!(fwd2, 2, "skip the out seat");
+}
