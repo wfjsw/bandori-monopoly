@@ -108,6 +108,27 @@ type SkillSlot = {
   tip: string;
 };
 
+/**
+ * The live markers a skill card carries, for its top-right corner: the field
+ * instance's crystals, on-card CP and named counters, plus the player's
+ * counter units bound to that instance (fire pots and the like when a skill
+ * keeps them as its own counter). Zero counts are dropped.
+ */
+export function skillMarks(p: Model["S"]["players"][number] | undefined, id: string): { key: string; label: string; title: string }[] {
+  const fc = p?.field?.find((c) => c.card === id);
+  if (!p || !fc) return [];
+  const out: { key: string; label: string; title: string }[] = [];
+  if (fc.crystals > 0) out.push({ key: "crystals", label: `◆${fc.crystals}`, title: tr("board.crystals", { n: fc.crystals }) });
+  if (fc.cp > 0) out.push({ key: "cp", label: `CP${fc.cp}`, title: tr("board.cp", { n: fc.cp }) });
+  for (const [name, n] of Object.entries(fc.counters ?? {})) {
+    if (n > 0) out.push({ key: `c:${name}`, label: `${name}×${n}`, title: `${name} ×${n}` });
+  }
+  for (const tok of p.tokens ?? []) {
+    if (tok.instance === fc.uid && tok.value > 0) out.push({ key: `t:${tok.name}`, label: `${tok.name}×${tok.value}`, title: `${tok.name} ×${tok.value}` });
+  }
+  return out;
+}
+
 /** The viewer's pressable skills, straight from the engine's list. */
 export function skillSlots(m: Model): SkillSlot[] {
   const names = namesOf(m.S);
@@ -141,6 +162,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
   const auto = useAutoplay(sess);
   const sheet = usePromptSheet();
   const slots = skillSlots(m);
+  const me = m.me;
   // One use in flight: a second click before the engine answers is dropped.
   const [using, setUsing] = useState(false);
   if (!slots.length) return null;
@@ -158,6 +180,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
       <div className={s.skillRow}>
         {slots.map((a) => {
           const usable = a.enabled && !auto && !sess.readOnly && !sheet.open;
+          const marks = skillMarks(me, a.id);
           return (
             <div
               key={a.id}
@@ -179,6 +202,11 @@ function SkillStack({ m, sess, peek, unpeek }: {
                 onFocus={() => peek(a.id, a.enabled ? "" : a.reason, a.text)}
                 onBlur={unpeek}
               />
+              {marks.length > 0 && (
+                <div className={s.skillMarks}>
+                  {marks.map((x) => <span key={x.key} className={s.skillMark} title={x.title}>{x.label}</span>)}
+                </div>
+              )}
             </div>
           );
         })}

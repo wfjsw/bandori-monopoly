@@ -428,6 +428,30 @@
 .skillCard {
   cursor: pointer;
 }
+/* Live markers pinned to the card's top-right corner. They sit above the
+   neighbouring slots (which overlap this one) so they stay readable. */
+.skillMarks {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  pointer-events: none;
+}
+.skillMark {
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  background: var(--purple);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1.5px #fff;
+}
 .skillOff {
   opacity: 0.55;
   filter: grayscale(0.6);
