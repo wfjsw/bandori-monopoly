@@ -207,6 +207,14 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
     }
 }
 
+// Per-card body dispatch (`call_body_idx`) is generated:
+// `python3 tools/kani/gen_body_dispatch.py` → `generated/body_dispatch_fn.rs`.
+// Each arm fully expands the `fn` load + call so CBMC's function-pointer
+// removal sees a per-card points-to set, not the union of every address-taken
+// function (the 4k-target IF-chain behind `duobang_01_02`'s SAT cliff).
+#[cfg(kani)]
+include!("generated/body_dispatch_fn.rs");
+
 fn fail_entry_oob(idx: usize, entry_index: usize) -> ! {
     #[cfg(kani)]
     kani::assert(false, "entry index out of range");
@@ -230,13 +238,24 @@ fn fail_no_kind(kind: &str) -> ! {
 // ---------------------------------------------------------------------------
 
 /// Call entry `entry_index` of card `idx` (Play / Hook / …).
+///
+/// Under Kani this goes through [`call_body_idx`] (per-card direct call
+/// sites). A single shared `code*` call makes CBMC expand a ~4300-target
+/// function-pointer IF-chain — the events-unit SAT cliff.
 pub fn entry_idx(idx: usize, entry_index: usize, player: i32) -> Asked {
-    let card = by_idx(idx);
-    let on = match card.on.get(entry_index) {
-        Some(o) => o,
-        None => fail_entry_oob(idx, entry_index),
-    };
-    body_of(on)(player)
+    #[cfg(kani)]
+    {
+        return call_body_idx(idx, entry_index, player);
+    }
+    #[cfg(not(kani))]
+    {
+        let card = by_idx(idx);
+        let on = match card.on.get(entry_index) {
+            Some(o) => o,
+            None => fail_entry_oob(idx, entry_index),
+        };
+        body_of(on)(player)
+    }
 }
 
 /// First `On::Play` of card `idx`.

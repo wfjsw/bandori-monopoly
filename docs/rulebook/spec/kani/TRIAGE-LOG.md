@@ -134,3 +134,84 @@ neighbour, `asukayama_02` proves the full 2-眩晕 / noHand / 1-除外 split.
 `kani_host::Op` but not in `sys_kani.rs`, so `cargo kani` failed to compile
 `card-sdk` on master (the central pass's `general` unit hit this). Mirrored
 the two wrappers.
+
+## Batch 3 — events `duobang_01_02` SAT regression (perf)
+
+Problem: `events::duobang_01_02_two_player_iff` verified **680 s** at
+`34456b2` (batch-1 base) but **TIMEOUT 1800 s** on master `506e900`.
+`duobang_01_mutant_is_detected` also exceeded 4 min. Log ended after
+symbolic execution (`aborting path on assume(false)`; loops only
+`all_players` 4 + `duobang.rs:23` 2 + `duobang.rs:45` 1) with a 1.9 GB
+solver stuck in SAT — **not** an unrolling cliff.
+
+### Bisect (serial CBMC, unwind 32, assertions ON)
+
+| commit | what landed | duobang_01_02 verdict + time |
+|---|---|---|
+| `34456b2` | known-good (kani-fix2 join ops) | **SUCCESSFUL 680 s** (prior central run) |
+| `36daf0d` | docs-only vs 34456b2 | (same code; not re-run) |
+| `6aa73e0` | batch 2: Msg facade, integer hooks, zero-loop `by_idx`, intern `(FNV,len)`, `all_players` 4-iter | **TIMEOUT 1800 s** — same profile (unwind 4+4+2+1, 1.9 GB SAT) |
+| `16b9df4` / `506e900` | status-hosts + tears docs | **TIMEOUT 1800 s** (problem statement; duobang body unchanged) |
+
+Tears cleanup `33a9704` is docs-only. Status-hosts does not touch
+`duobang.rs`. **The regressing range is batch 2** (`36daf0d..6aa73e0`).
+
+### Root cause (class E — SAT instance size)
+
+CBMC `--show-goto-functions` on the 6aa73e0 duobang binary shows
+`invoke::entry_idx` after *Removal of function pointers*:
+
+* one shared `code*` call (`body_of(on)(player)`)
+* expanded to an IF-chain of **4313** targets (`IF ptr = address_of(f_i) THEN GOTO …`)
+* 91 distinct `::play` bodies kept (RULESET holds every `fn` address, so
+  `--drop-unused-functions` cannot strip them)
+
+That chain is bit-blasted into the CNF. The body loops are tiny (4+4+2+1);
+the 1.9 GB solver is the **program**, not the dice. Batch-2's invoke
+rewrite (by_idx unrolled, hook dispatch) did not shrink the chain; the
+Msg facade additionally walked the intern `static mut` table on every
+`Msg::new` (log / transfer lines).
+
+### Fix (soundness kept: unwinding ON, covers reachable, mutants detected)
+
+1. **Per-card body dispatch** (`generated/body_dispatch_fn.rs`,
+   `tools/kani/gen_body_dispatch.py`). `entry_idx` under `cfg(kani)` goes
+   through `call_body_idx`: one match arm per RULESET index, each
+   `inline(always) call_body(&BAND[i], …)` on a `&'static` constant so
+   LLVM emits a **direct** call (or at worst a 1-target site).
+2. **`Msg::new` skips `intern()`** under `cfg(kani)`. The host's
+   `Op::log` / `Op::effect` only bump a narration counter and never read
+   the key; `ctx::s()` names the host compares still intern.
+
+No card-body edits. Production (`cfg(not(kani))`) `entry_idx` / `Msg`
+paths unchanged. `cargo build -p game-rules -p rules-native -p rules-kani`
+green; `cargo test -p rules-kani` green; `cargo test -p rules-cond
+--features lower` green; wasm32 workspace check green.
+
+### After (fix-trampoline)
+
+| harness | before | after | notes |
+|---|---|---|---|
+| `events::duobang_01_02_two_player_iff` | TIMEOUT 1800 s | **SUCCESSFUL 922 s wall / 542 s CBMC** (5/5 covers sat, 0/34678 failed) | formula 605k vars / 732k clauses (was 1.9 GB stuck) |
+| `events::duobang_01_mutant_is_detected` | >4 min | **SUCCESSFUL 714 s** | mutant detected |
+| `events::pico_swap_01_rotates_positions` | 1767 s | **SUCCESSFUL 1287 s** (1/1 cover sat) | was near 1800 s limit |
+| `events::tears_01_same_colour_next_pays_700` | 724 s | pending | |
+
+Dispatch shape after the fix: 285 `#[inline(never)]` `call_card_N`
+trampolines (each loads one constant `&CardDef`) + a thin integer
+`call_body_idx` match. A shared `body_of(on)(player)` site unions every
+`fn(i32) -> Asked` in the binary into one 874–4313 target IF-chain.
+
+### Events proofs likely on the same path (same `entry_idx` / `all_players` / `Msg` / `Vec` shape)
+
+| id | shape | note |
+|---|---|---|
+| `duobang_01_02` / `duobang_01_mutant` | all_players + Vec faces + Msg + transfer | **this batch** |
+| `pico_swap_01` / `02` / mutant | all_players + Vec dests + Msg | 1767 s near limit at batch 2 |
+| `tears_01` / `02` / mutant | all_players + Vec + Msg + transfer | 724 s after class-A cut |
+| `front_or_back_*` | all_players + Vec winners + Msg + split_pay | old TIMEOUT |
+| `chart_rush_*` | all_players + Vec + Msg | old TIMEOUT after Msg facade |
+| `asukayama_02`, `ex_quest`, `habinel`, `lulu`, `school_time`, `kizuna`, `never_ends`, `lost_chase`, `embers_*`, `estate_*`, `bear_cookie`, `this_hand` | all_players + Msg | same `entry_idx` cliff |
+
+Every harness that goes through `invoke::event_play_idx` shares the
+IF-chain; the per-card dispatch is a global win for the unit.
