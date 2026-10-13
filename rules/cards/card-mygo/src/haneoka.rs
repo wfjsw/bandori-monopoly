@@ -7,7 +7,7 @@
 //! Sheet 2026-10-06: every threshold is inclusive (「至少为」), and the
 //! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{roll_source, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -39,8 +39,11 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「投掷1d20」
-    // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
-    let r = ctx::roll(player_id, 1, 20);
+    // `roll_ask` (not `ctx::roll`) so the 「掷骰结算前」 [反击] window (Y.O.L.O
+    // 「你的任意掷骰结算前」) rings on this card's own 1d20 -- the only way to
+    // reach the 「大于20」 / 「至少为20」 place branch (a plain d20 tops out at 20).
+    // `ctx::roll_ask` honours a forced extreme (「以理论最大值或最小值结算」).
+    let r = ctx::roll_ask(player_id, 1, 20, roll_source::CARD);
     if r < 10 {
         // 规则书 (sheet 2026-10-06): 「若小于10，此卡放入弃牌堆且视为此卡未生效」
         ctx::log(

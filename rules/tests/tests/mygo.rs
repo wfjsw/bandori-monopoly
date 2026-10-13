@@ -1423,9 +1423,16 @@ fn inter_yolo_pushes_haneoka_over_20() {
     t.set_draw(0, &["R:[衍生] 压"]);
     t.give(0, &["MyGO:羽丘的不可思议女孩", "AG:Y.O.L.O"]);
     // The card's own d20 = 20 and Y.O.L.O's d4 = 3 -> 23 > 20.
+    // Y.O.L.O is counteract-only (no `On::Play`): it answers the card's
+    // 「掷骰结算前」 window, it is not a free hand play.
     t.dice(&[20, 3]);
-    t.play(0, "AG:Y.O.L.O").unwrap();
     t.play(0, "MyGO:羽丘的不可思议女孩").unwrap();
+    assert!(
+        t.counteract_offered("AG:Y.O.L.O"),
+        "Y.O.L.O rings on the card's own 1d20: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:Y.O.L.O").unwrap();
     rest(&mut t);
     drain(&mut t);
     assert_eq!(t.houses(7), 1, "23 > 10: free house");
