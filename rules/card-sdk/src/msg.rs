@@ -193,13 +193,19 @@ impl Msg {
 
 #[cfg(kani)]
 impl Msg {
-    /// A message by key. The key is interned (zero-loop under Kani) so `mj`
-    /// can hand the host a `NameId` handle; no `String` is allocated.
+    /// A message by key. No heap, no intern-table probe.
+    ///
+    /// The symbolic host (`Op::log` / `Op::effect`) only bumps a narration
+    /// counter and never reads the key, so a full `intern()` (static-mut
+    /// table walk) on every log / transfer line is pure SAT cost — the
+    /// `duobang_01_02` profile sat in a 1.9 GB CNF after the batch-2
+    /// facade started interning here. Key slot is 0 (unused by the model);
+    /// `ctx::s()` names the host actually compares still go through the
+    /// intern table.
     pub fn new(key: &str) -> Self {
-        let id = crate::intern::intern(key);
-        kani::assert(id.is_valid(), "msg key intern table exhausted or key too long");
+        let _ = key;
         Self {
-            k: id.0,
+            k: 0,
             a: [0; MAX_INLINE_ARGS],
             n: 0,
         }
