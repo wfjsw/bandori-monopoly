@@ -165,6 +165,12 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **question**: C-Q4.
 
 ## CH-01 — self-applied abnormal / self-[传送] never opens a [反击] window
+- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the abnormal
+  `Effect` chain already opened for self-applied abnormals (the green twin
+  `choose_your_stage_answers_an_abnormal_move` proved it); `ix_encore_…` was
+  a **D** test drive that never declared 安可. Un-ignored and green after the
+  drive plays the counteraction. `m28b` (MOVE-11) and `m09` (MOVE-12) are
+  filed under their own MOVE ids and fixed alongside.
 - **kind**: implementation bug + missing ABI
 - **class**: A (wire the abnormal/Effect chain on `card_move` teleport) then B if the move-tag cannot express 「因任何原因」
 - **severity**: high (安可 is a staple [反击])
@@ -172,15 +178,14 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **locations**
   - `rules/cards/card-general/src/encore.rs:35` (「因任何原因」)
   - `rules/cards/card-ag/src/ran_as_usual.rs:23` (「包括你的技能」), `:27` (C# once-per-turn gate — separate C, see CH-07), `:92` (`Plan.Reverse` skill move is abnormal but `_abnormalTurn` never counted it)
-  - `rules/tests/tests/pp.rs:963` `ix_encore_blocks_overlap_teleport` `#[ignore = "DISCREPANCY: book says 安可 counters any abnormal movement on its user; no window opens for 重叠的声音's self-teleport"]`
-  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (是我自己的问题 still fires after an abnormal move)
-  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (RAS band (1) cannot decline a second abnormal — no window)
+  - `rules/tests/tests/pp.rs:963` `ix_encore_blocks_overlap_teleport` (un-ignored, green)
+  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (see MOVE-11)
+  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (see MOVE-12)
   - `crates/game-rules/src/wasm_rules.rs:2801` (self-applied abnormals note)
   - **D**: `choose_your_stage_answers_an_abnormal_move` (`roselia.rs:369`) — ignore already removed; keep as a D note only
 - **rulebook**: 通用:安可 「[反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次…」; （兰）像往常一样 (2) 「受到异常移动效果（包括你的技能）」.
-- **current**: `abnormal` chain only opens when `by != target`; `card_move` / `plan::set_teleport_to` never runs the abnormal gate at all.
-- **expected**: every abnormal move on the user — self-inflicted included — opens the [反击] window before it lands.
-- **capability if B needed**: move-tag hook for 「因任何原因/包括你的技能」 self-abnormal; teleport-as-main-move raises `Effect` + `AbKind::Teleport`.
+- **was**: `abnormal` chain only opens when `by != target`; `card_move` / `plan::set_teleport_to` never runs the abnormal gate at all.
+- **now**: every abnormal move on the user — self-inflicted included — opens the [反击] window before it lands (`HostRequest::Move` / `Teleport` run `abnormal_gate`).
 
 ## CH-02 — 花园多惠 (2) cancel window never opens
 - **status**: **fixed** (2026-10-11, `backlog-windows-a`) — the bound skill declared
@@ -316,20 +321,25 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **fixed**: take the main roll after the X prompt (same drive as the green roselia/gap twins). Un-ignored, green twice. m11 records 14 (Y.O.L.O adds +2 over the fixed 12; the 「固定」 vs additives question stays open as C-Q24-adjacent RULING in the test).
 
 ## MOVE-03 — MyGO band (2) move-1 replacement never fires / multi-activation `On::Play`
+- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the multi-activation
+  half was already merged into one `On::Play` with a which-effect prompt (the
+  green twins `band_move_one_for_a_crystal` / `band_draw_for_two_crystals` /
+  `band_press_offers_both_effects_when_both_are_available`). `m22_mygo_band_move1`
+  was a **D** test drive: it rolled first and looked for a window inside
+  `t.roll`, but 「于移动掷骰前选择移动1格以替代移动掷骰」 is a skill press
+  *before* the roll (`t.skill`). Un-ignored and green with the green twin's
+  drive. NNM 「发动以下效果中的一个」 is a separate in-entry choice (C-Q6).
 - **kind**: implementation bug + ABI defect
 - **class**: B (multi-activation selection) unblocks A
 - **severity**: high
 - **suggested batch**: movement / skills: MyGO
 - **locations**
-  - `rules/tests/tests/cross_move.rs:927` `m22_mygo_band_move1` (`move-1 replacement does not fire`)
-  - `rules/tests/tests/mygo.rs` `band_draw_for_two_crystals` (2-crystal draw half unreachable)
-  - `rules/skills/skill-bands/src/` MyGO (2)/(3) — two `On::Play` entries; `use_skill` runs only the first
-  - also Morfonica NNM: `rules/cards/card-morfonica/src/nanami_effort.rs`, `rules/tests/tests/morfonica.rs:468` `nnm_option2_gains_x_times_circle_money_reward`
+  - `rules/tests/tests/cross_move.rs:927` `m22_mygo_band_move1` (un-ignored, green)
+  - `rules/tests/tests/mygo.rs` `band_draw_for_two_crystals` / `band_move_one_for_a_crystal`
+  - `rules/skills/skill-bands/src/mygo.rs` — one `On::Play` with a selection prompt
+  - also Morfonica NNM: `rules/cards/card-morfonica/src/nanami_effort.rs`
   - TEST-FINDINGS §6 item 8 (multi-activation selection)
 - **rulebook**: MyGO band (2) has several activations (move-1 replacement and a 2-crystal draw); NNM 「发动以下效果中的一个」.
-- **current**: `use_skill` runs only the first `On::Play`; later activations unreachable; a hand play can be refused (`nanami_effort_not_placed`).
-- **expected**: either one entry branching on `is_placed()`, or a real selection prompt (see C-Q6).
-- **capability**: multi-activation selection on `CardDef` / `use_skill`.
 
 ## MOVE-04 — 若能再次交汇 re-roll loop hits `world_mut` while a routine is pending
 - **kind**: test-harness sequencing (not a card/host defect)
@@ -343,18 +353,28 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **fixed**: queue all faces before `t.roll` (snapshot replay also means mid-window loads never reach the re-roll). Card (`meet_again.rs`) and host `do_move_roll` / `set_move_roll` write-back are correct and unchanged.
 
 ## MOVE-05 — mid-turn [停留] does not stop the main move
+- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — glossary 51
+  「[停留]=无法移动」 is rulebook, so a stay gained in 运营 locks the turn's
+  main move immediately. `give_stay` / `give_exile` now maintain the
+  `skip_move` latch as a consequence of the state (set on gain, clear when the
+  last layer drops and no [除外] holds the move); [不可阻挡] 「无视已存在的
+  [停留]」 keeps the walk legal. `rain_stay_blocks_this_turn_move` un-ignored
+  and green. C-Q7's *mid-walk* half (stay gained after the roll) is unchanged:
+  the walk still completes — only the pre-roll lock is in scope here.
+  Green twins that moved after a stay grant (`rain_extra_settle_at_turn_end`,
+  `rain_day_drains_one_crystal_per_turn_end`, `g15_…`) now use [不可阻挡] or
+  skip the roll, since the glossary forbids the move.
 - **kind**: rulebook divergence
-- **class**: C (glossary vs ileuxali design) — or A if glossary 51 is treated as rulebook
+- **class**: A (glossary 51 is rulebook)
 - **severity**: high
 - **suggested batch**: movement
 - **locations**
-  - `rules/tests/tests/mygo.rs:285` `rain_stay_blocks_this_turn_move` `#[ignore = "DISCREPANCY: glossary says [停留]=无法移动; engine lets a mid-turn [停留] holder complete the main move anyway"]`
-  - `crates/game-core` move-branch selection (prohibition checked once)
+  - `rules/tests/tests/mygo.rs:285` `rain_stay_blocks_this_turn_move` (un-ignored, green)
+  - `crates/game-core/src/engine/ops.rs` `give_stay` / `give_exile` (skip latch)
   - TEST-FINDINGS §9 (ileuxali: check once at move-branch selection)
-- **rulebook**: glossary 51 「[停留]=无法移动」.
-- **current**: a [停留] gained mid-move does not stop the current move.
-- **expected**: either stop immediately (glossary) or only the next move (design reference).
-- **question**: C-Q7.
+- **rulebook**: glossary 51 「[停留]=无法移动」; 51 「[不可阻挡]」 「无视已存在的[停留]」.
+- **was**: a [停留] gained mid-turn did not stop the current move (latch set only at turn start).
+- **question**: C-Q7 mid-walk half still open (stay gained *during* a walk).
 
 ## SETTLE-01 — 笑容大游行 tile-swap overflows the stack
 - **status**: stack overflow half **fixed** by STACK-01 (the work stack flattens the
@@ -919,32 +939,55 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **capability**: board grid geometry ray-nearest search + `plan::set_teleport_to` teleport-with-settle (`H.MainMoveAs`).
 
 ## MOVE-10 — 若宫伊芙 (2) fan flip + Y.O.L.O dice accounting
-- **kind**: implementation bug
-- **class**: A
+- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — **D** test drive.
+  Eve's (2) is an `ask_number` 0..=up choice (options are `ask.intOption`), so
+  Y = 2 is `answer(0, 2)` — the same drive as the green twins
+  `g10_eve_plus_yd4_on_a_2d20_move` / `g32`. The old matcher looked for
+  「若宫伊芙」/「粉丝」 in the options (never present) and declined, so only
+  Y.O.L.O's 1d4 landed (pos 5 = 4+1). Un-ignored and green (pos 8 = 4+2+2).
+- **kind**: test-harness drive
+- **class**: D
 - **severity**: medium
 - **suggested batch**: movement / draw/discard pipeline
 - **locations**
-  - `rules/tests/tests/cross_move.rs:140` `m03_eve_then_yolo` (`pos 5 instead of 8`)
-- **note**: may share a root with MOVE-03 / Y.O.L.O additive timing (**D**: `inter_yolo_pushes_haneoka_over_20` ignore already removed).
+  - `rules/tests/tests/cross_move.rs:140` `m03_eve_then_yolo` (un-ignored, green)
 
 ## MOVE-11 — 是我自己的问题 still fires after an abnormal move effect
-- **kind**: implementation bug
-- **class**: A
+- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — 「（2）若受到
+  [异常移动效果]影响，此卡不生效」 now gates the [反击] offer itself
+  (`can_counteract`). The signal is the longer-lived `abnormalHit` latch (set
+  when an abnormal lands, cleared when the player's next [主要移动] completes),
+  so a forced move on *another* player's turn still suppresses the owner's
+  next main-move window. The test drive also had a **D** bug: the saki_move
+  target pick is a `saki_move_title` choice (not `kind == "player"`) and the
+  direction is `saki_move_dir` option 0 — without that the force-move never
+  landed. Un-ignored and green.
+- **kind**: implementation bug + test-harness drive
+- **class**: A (+D)
 - **severity**: medium
 - **suggested batch**: counteraction windows / movement
 - **locations**
-  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (and `m28a` body)
+  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (un-ignored, green)
+  - `rules/cards/card-crychic/src/my_own_problem.rs` `can_counteract`
+  - `crates/game-core/src/state.rs` `key::ABNORMAL_HIT`
 - **rulebook**: sheet says it does **not** fire after an abnormal move effect.
-- **current**: still fires.
 
 ## MOVE-12 — RAS band (1) cannot decline the second abnormal-move effect
-- **kind**: implementation bug
-- **class**: A
+- **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the drop of the
+  second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late to cancel)
+  with pre `actor == owner` (the causer, not the recipient). Moved to
+  `On::Gate(&[GateKind::AbnormalGuard])` with pre `target == owner`, so the
+  declaration gate refuses the second [异常移动效果] of the turn. The test
+  drive also had a **D** bug (same saki_move matcher as MOVE-11) that left
+  `err.play_phase` because the force-move never landed. Un-ignored and green.
+- **kind**: implementation bug + test-harness drive
+- **class**: A (+D)
 - **severity**: medium
 - **suggested batch**: counteraction windows
 - **locations**
-  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (`err.play_phase` / no window)
-- **rulebook**: RAS band (1) — first abnormal only; a second is optional.
+  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (un-ignored, green)
+  - `rules/skills/skill-bands/src/ras.rs` `on_abnormal` (now `AbnormalGuard`)
+- **rulebook**: RAS band (1) 「每回合可选择只获得第一次受到的[异常移动效果]」.
 
 ## MOVE-13 — 星月夜's re-roll scope (whole dice set vs base die)
 - **kind**: rulebook divergence
