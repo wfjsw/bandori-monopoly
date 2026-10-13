@@ -214,10 +214,13 @@ pub fn is_bookkeeping(path: &str) -> bool {
     {
         return true;
     }
-    // Movement scratch the engine writes on every walk.
+    // Movement scratch the engine writes on every walk, plus the
+    // [异常移动效果] hit latch (set when an abnormal move lands, cleared when
+    // the next [主要移动] completes) -- engine bookkeeping, not a card's
+    // frame-visible effect. Cards read it; the frame condition does not.
     if let Some(rest) = path.strip_prefix("state:P") {
         let key = rest.split(':').nth(1).unwrap_or("");
-        if key == "lastWalk" {
+        if key == "lastWalk" || key == "abnormalHit" {
             return true;
         }
     }
