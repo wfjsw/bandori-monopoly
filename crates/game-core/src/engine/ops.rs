@@ -2012,17 +2012,25 @@ impl World {
     /// which keys wear off. They clamp at 0 because that is the status rule,
     /// not because the engine enforces bounds -- [`Self::state_add`] would not.
     pub fn give_stay(&mut self, player_id: i32, n: i32) {
+        // 「[停留]：处于该状态时[无法移动]」 -- the skip is a *consequence* of
+        // the state, not a separate latch. A layer gained mid-turn (运营
+        // plays like 轮符雨) locks the turn's main move immediately; dropping
+        // the last layer (with no [除外] holding the move either) un-skips
+        // it, the same as when 壱雫空 clears the last layer.
+        // 「[不可阻挡]」: 「处于该状态时无视已存在的[停留]」 -- an unstoppable
+        // holder walks through the stay rather than losing the move.
+        let mut skip = None;
         if let Some(s) = self.player_mut(player_id) {
             let v = (s.stay() + n).max(0);
             s.state_set(key::STAY, v);
             s.state_set_expires(key::STAY, Some(Tick::TurnEnd));
-            // 「[停留]：处于该状态时[无法移动]」 -- the skip is a *consequence* of
-            // the state, not a separate latch. Dropping the last layer (with no
-            // [除外] holding the move either) un-skips the turn's main move, the
-            // same as when 壱雫空 clears the last layer.
-            let unskip = v == 0 && s.exile() == 0;
-            if unskip && self.st.turn == player_id {
-                self.st.skip_move = false;
+            let unstoppable = s.state_get(key::UNSTOPPABLE) > 0;
+            let exile = s.exile();
+            skip = Some((v > 0 && !unstoppable) || exile > 0);
+        }
+        if let Some(skip) = skip {
+            if self.st.turn == player_id {
+                self.st.skip_move = skip;
             }
         }
     }
@@ -2036,10 +2044,19 @@ impl World {
     }
 
     pub fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
+        // 「[除外]」 also grants [无法移动] -- same skip consequence as 停留.
+        let mut skip = None;
         if let Some(s) = self.player_mut(player_id) {
             let v = (s.exile() + n).max(0);
             s.state_set(key::EXILE, v);
             s.state_set(key::EXILE_TO, to);
+            let stay_skip = s.stay() > 0 && s.state_get(key::UNSTOPPABLE) == 0;
+            skip = Some(v > 0 || stay_skip);
+        }
+        if let Some(skip) = skip {
+            if self.st.turn == player_id {
+                self.st.skip_move = skip;
+            }
         }
     }
 

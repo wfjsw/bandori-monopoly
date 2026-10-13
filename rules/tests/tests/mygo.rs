@@ -266,9 +266,13 @@ fn rain_gives_one_stay() {
 fn rain_extra_settle_at_turn_end() {
     // 规则书: 「并在回合结束时额外进行一次[触发结算]」 -- the landing tile
     // settles again at turn end (rent charged twice).
+    // Glossary 51: 「[停留]=无法移动」 -- 轮符雨's stay would lock the main move
+    // (see `rain_stay_blocks_this_turn_move`); [不可阻挡] keeps the walk legal
+    // while still counting the stay layer.
     let mut t = Table::vanilla(2);
     t.own(1, &[2]);
     t.set_pos(0, 1);
+    t.set_state(0, "unstoppable", 1);
     t.give_play(0, "MyGO:轮符雨").unwrap();
     t.dice(&[1]);
     t.roll(0).unwrap();
@@ -282,7 +286,6 @@ fn rain_extra_settle_at_turn_end() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: glossary says [停留]=无法移动; engine lets a mid-turn [停留] holder complete the main move anyway"]
 fn rain_stay_blocks_this_turn_move() {
     // 规则书: 「[停留]：处于该状态时[无法移动]」 (glossary) -- gaining stay in
     // 运营 must lock this turn's main move.
@@ -830,12 +833,14 @@ fn rain_day_adjacent_tiles_also_stay() {
 #[test]
 fn rain_day_drains_one_crystal_per_turn_end() {
     // 规则书: 「每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆」
+    // The 1d10 = 1 colour includes 购物中心 (tile 1); CiRCLE (0) is adjacent, so
+    // the user gains [停留] and the main move is locked (glossary 51). The
+    // crystal burn is what this test pins -- just end the turn.
     let mut t = Table::vanilla(2);
     t.dice(&[1]);
     t.give_play(0, "MyGO:那天的雨").unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:那天的雨"), 5);
-    t.dice(&[1]);
-    t.roll(0).unwrap();
+    assert_eq!(t.state(0, "stay"), 1, "adjacent to the rain's colour");
     rest(&mut t);
     drain(&mut t);
     t.end(0).unwrap();

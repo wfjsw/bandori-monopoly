@@ -347,6 +347,12 @@ pub struct StateVar {
 pub mod key {
     /// 「停留」 layers -- wear off at end of turn.
     pub const STAY: &str = "stay";
+    /// Latch set when an [异常移动效果] lands on the player and cleared when
+    /// their next [主要移动] completes. Longer-lived than `TurnCtx::abnormal`
+    /// (which is per calendar turn): 「若受到[异常移动效果]影响，此卡不生效」
+    /// (是我自己的问题 (2)) reads this so a forced move on another player's
+    /// turn still suppresses the card at the owner's next main-move end.
+    pub const ABNORMAL_HIT: &str = "abnormalHit";
     /// 「晕眩」 layers -- wear off at end of turn.
     pub const STUN: &str = "stun";
     /// Stun applied this turn, which only starts counting next turn. A
