@@ -194,11 +194,6 @@ fn find_or_fail(id: &str) -> &'static card_sdk::CardDef {
 }
 
 /// Entry body of `On` (the `fn(i32) -> Asked`).
-///
-/// `inline(always)` so a caller that already holds a `&'static CardDef`
-/// constant sees the `fn` load at its own site (Kani: that load must be a
-/// constant address — see [`call_body`]).
-#[inline(always)]
 fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
         On::Play(_, _, f)
@@ -212,25 +207,11 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
     }
 }
 
-/// Call `card.on[entry_index]`'s body.
-///
-/// Must stay `inline(always)` and must be fed a `&'static CardDef`
-/// **constant** (each [`call_body_idx`] arm). The point is one call site
-/// per card after inlining: CBMC's function-pointer removal turns a single
-/// shared `code*` site into an IF-chain over every address-taken function
-/// in the binary (~4300 targets in the events unit). That chain is the SAT
-/// cliff behind `duobang_01_02_two_player_iff` (680 s → TIMEOUT).
-#[inline(always)]
-fn call_body(card: &'static card_sdk::CardDef, entry_index: usize, player: i32) -> Asked {
-    let on = match card.on.get(entry_index) {
-        Some(o) => o,
-        None => fail_entry_oob(0, entry_index),
-    };
-    body_of(on)(player)
-}
-
 // Per-card body dispatch (`call_body_idx`) is generated:
 // `python3 tools/kani/gen_body_dispatch.py` → `generated/body_dispatch_fn.rs`.
+// Each arm fully expands the `fn` load + call so CBMC's function-pointer
+// removal sees a per-card points-to set, not the union of every address-taken
+// function (the 4k-target IF-chain behind `duobang_01_02`'s SAT cliff).
 #[cfg(kani)]
 include!("generated/body_dispatch_fn.rs");
 
