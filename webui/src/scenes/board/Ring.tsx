@@ -2,7 +2,7 @@
 
 import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
@@ -220,7 +220,7 @@ function quoteTip(q: TileQuote): string {
  *  CiRCLE carries its pass / stop notes in place of the caption. Sizes are
  *  fractions of the measured cell (`--cell-h` / `--cell-w` on `.ring`), so the
  *  scale holds from the narrow 1366 cells up to the wide 2560 ones. */
-function TileFace({
+const TileFace = memo(function TileFace({
   tile,
   quote,
   cellW,
@@ -287,7 +287,7 @@ function TileFace({
       </span>
     </>
   );
-}
+});
 
 export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   const S = m.S;

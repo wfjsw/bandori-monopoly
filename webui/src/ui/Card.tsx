@@ -4,7 +4,7 @@
 // regardless of stylesheet order. `InspectCard` is the one hover-preview /
 // click-to-inspect behaviour every prompt and card collection shares.
 
-import type { CSSProperties, ReactNode } from "react";
+import { memo, type CSSProperties, type ReactNode } from "react";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { D, cardTitle, cardText, cardColor, skillCard, GENERAL_BAND } from "../core/data";
@@ -33,14 +33,14 @@ export const CARD_KIND_LABEL: Record<CardKind, string> = {
 
 const TAG_SHORT: Record<string, string> = { "手牌": "card.tag.hand", "手": "card.tag.hand", "反击": "card.tag.counter", "持续": "card.tag.cont" };
 
-export function TagChip({ tag }: { tag: string }) {
+export const TagChip = memo(function TagChip({ tag }: { tag: string }) {
   const key = TAG_SHORT[tag];
   return <span className={cx(s.tag, (tag === "手" || tag === "反击") && s.red)}>{key ? tr(key) : tag}</span>;
-}
+});
 
-export function KindChip({ kind, className }: { kind: CardKind; className?: string }) {
+export const KindChip = memo(function KindChip({ kind, className }: { kind: CardKind; className?: string }) {
   return <span className={cx(s.kind, s[`k${Object.keys(CARD_KIND_LABEL).indexOf(kind)}`], className)}>{tr(CARD_KIND_LABEL[kind])}</span>;
-}
+});
 
 export interface CardFaceProps {
   id: string;

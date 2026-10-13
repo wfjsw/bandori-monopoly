@@ -2,7 +2,7 @@
 // with the cards-in-play row over its top edge, and the collapsed hand
 // underneath. Controls sit below the players; the right is a full match log.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
 import { t as tr } from "../../i18n/t";
@@ -113,7 +113,9 @@ export function Board({ sess }: { sess: GameSession }) {
     } else navigate({ name: "room", id: sess.id });
   };
 
-  const m = view ? model(view) : null;
+  // Stable per snapshot, so the memoized panels below skip the 500 ms timer
+  // and animation-only re-renders.
+  const m = useMemo(() => (view ? model(view) : null), [view]);
   useMatchDriver({ sess, m, anim, auto, exit });
 
   if (!m) return null;
