@@ -303,7 +303,13 @@ pub fn pico_swap_01_rotates_positions() {
 
     // Ring = [0,1,2]; each takes the next pre-position.
     let expected = [(0i32, 20i32), (1, 30), (2, 10)];
-    kani::cover!(n_log == 3, "three teleports in the ring");
+    // Latch `set_slot` emits `SetState` around the teleports, so the raw
+    // `log_n` is 9, not 3. Cover the Teleport subsequence instead.
+    let n_tele = effects
+        .iter()
+        .filter(|e| matches!(e, Effect::Teleport { .. }))
+        .count();
+    kani::cover!(n_tele == 3, "three teleports in the ring");
     assert!(
         spec::events::log_is_teleports(effects, &expected),
         "E-pico-swap-01: rotate onto the next ring member's pre-position"
@@ -330,7 +336,11 @@ pub fn pico_swap_02_skips_exiled_players() {
 
     // Ring [0,2]: 0 → pos(2)=30, 2 → pos(0)=10. Player 1 unmoved.
     let expected = [(0i32, 30i32), (2, 10)];
-    kani::cover!(n_log == 2, "exiled seat skipped");
+    let n_tele = effects
+        .iter()
+        .filter(|e| matches!(e, Effect::Teleport { .. }))
+        .count();
+    kani::cover!(n_tele == 2, "exiled seat skipped");
     assert!(
         spec::events::log_is_teleports(effects, &expected),
         "E-pico-swap-02: exiled player skipped and not a destination source"
