@@ -105,3 +105,4 @@
 .cardPeekRow { display: flex; gap: 10px; align-items: flex-start; }
 .cardPeekHead { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; }
 .cardPeekHead b { color: var(--pink); font-size: 15px; }
+.panel:hover { filter: brightness(1.04); }

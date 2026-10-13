@@ -1,7 +1,7 @@
 // Player panels on the left; the match log is placed in the right column.
 
 import { stateOf, stateMax } from "../../core/names";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cardTitle } from "../../core/data";
 import { cx } from "../../core/cx";
@@ -18,6 +18,7 @@ import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
 import { byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
+import { setHoverSeat } from "./hoverSeat";
 
 /** A player's status chips: [停留] / [眩晕] / [除外] / 托管 (the engine's takeover). */
 export function statusChips(x: MatchPlayer): string[] {
@@ -68,6 +69,8 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   const [peek, setPeek] = useState<number | null>(null);
   const peekRow = peek == null ? -1 : order.indexOf(peek);
   const peekCards = peek == null ? [] : byTitle(S.players[peek]?.discard ?? []);
+  // The panels unmount-proof the highlight: clear it when this column goes away.
+  useEffect(() => () => setHoverSeat(-1), []);
   return (
     <div className={s.players} style={{ gap }}>
       {order.map((i) => {
@@ -78,7 +81,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
         // The seat number doubles as the turn clock while it is this seat's turn.
         const clock = i === S.turn ? t : null;
         return (
-          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)}>
+          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)} onMouseEnter={() => setHoverSeat(i)} onMouseLeave={() => setHoverSeat(-1)}>
             {clock ? (
               <span className={cx(s.n, s.clock, clock.cls)} style={{ ["--frac" as string]: clock.frac }} title={clock.caption}>{clock.value}</span>
             ) : (

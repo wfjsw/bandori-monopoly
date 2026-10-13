@@ -1,5 +1,6 @@
 // The 60-tile ring, tokens, and the center: cards in play, the event deck, banner.
 
+import { useHoverSeat, useSeatHovered } from "./hoverSeat";
 import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { memo, useCallback, useRef, useState } from "react";
@@ -306,7 +307,8 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, showTip, hideTip, 
   const t = D.tiles[i];
   const [col, row] = cell(i);
   const owner = S.owners[i] ?? -1;
-  const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable);
+  const hot = useSeatHovered(owner);
+  const cls = cx(s.tile, owner >= 0 && s.owned, hot && s.hot, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable);
   const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
   const tileMarks = S.marks ?? [];
   const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
@@ -402,6 +404,7 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   const pos = anim.pos ?? S.players.map((x) => x.pos);
   const pick = new Set(pickable);
   const vp = useBoardViewport();
+  const hoverSeat = useHoverSeat();
   const wrapRef = vp.wrapRef;
   const [tip, setTip] = useState<MarkTip | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -475,7 +478,7 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
               // caption / gutter, not over the name.
               const top = cellY(row, vp.board.height) + (vp.board.height / ROWS) * 0.22;
               return (
-                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
+                <div key={i} className={cx(s.token, i === S.turn && s.current, i === hoverSeat && s.hot)} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                   {ch
                     ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />

@@ -17,6 +17,7 @@ import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
 import { InspectCard } from "../../ui/Card";
 import { showEvent } from "./Popups";
+import { useHoverSeat } from "./hoverSeat";
 import { t as tr } from "../../i18n/t";
 import s from "./FieldSheet.module.css";
 
@@ -34,6 +35,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const S = m.S;
   const names = namesOf(S);
   const dock = useDockRaise();
+  const hoverSeat = useHoverSeat();
   // Skill rules (`skill:`) are engine plumbing on the field, not cards in play.
   const rows = S.players
     .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
@@ -56,7 +58,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
           return (
-            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
+            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, owner === hoverSeat && s.hot)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
@@ -85,7 +87,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           return (
             <div
               key={e.id}
-              className={cx(s.slot, k === 0 && s.sep)}
+              className={cx(s.slot, k === 0 && s.sep, e.playerId >= 0 && e.playerId === hoverSeat && s.hot)}
               style={{ ["--own" as string]: e.playerId >= 0 ? m.colorOf(e.playerId) : "var(--purple)" }}
             >
               {e.faceDown ? (
