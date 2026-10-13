@@ -959,13 +959,24 @@ fn ix_netlink_vs_jennifer_target() {
 
 /// 规则书 (通用:安可): 「[反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次[异常移动效果]」
 /// vs PP:[衍生]重叠的声音's teleport of its user.
+/// The self-[传送] opens the same abnormal [反击] window a forced move does
+/// (cf. the green twin `choose_your_stage_answers_an_abnormal_move`); the
+/// drive must actually declare 安可 when the window opens.
 #[test]
-#[ignore = "DISCREPANCY: book says 安可 counters any abnormal movement on its user; no window opens for 重叠的声音's self-teleport (pos becomes 35)"]
 fn ix_encore_blocks_overlap_teleport() {
     let mut t = Table::vanilla(2);
     t.give(0, &["通用:安可", "PP:[衍生]重叠的声音"]);
     t.play(0, "PP:[衍生]重叠的声音").unwrap();
-    drain(&mut t);
+    let mut answered = false;
+    while t.prompt().is_some() {
+        if t.counteract_offered("通用:安可") {
+            t.counteract(0, "通用:安可").unwrap();
+            answered = true;
+        } else {
+            t.decline();
+        }
+    }
+    assert!(answered, "安可 window must open for the self-teleport: {}", t.dump_prompt());
     assert_eq!(t.pos(0), 0, "teleport negated");
 }
 
