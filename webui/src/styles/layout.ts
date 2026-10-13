@@ -39,8 +39,8 @@ export const FIELD_PEEK = 60;
 export const HAND_PEEK = 30;
 /** Skill-stack peek: the top strip of the skill cards while the hand is retracted (Side `.skillStack`). */
 export const SKILL_PEEK = 28;
-/** Skill-stack card face width (Side `.skillCard`, Card `tile`). */
-export const SKILL_CARD_W = 96;
+/** Skill-stack card face width: the same face as a hand card (Card `mini`), so the two always match. */
+export const SKILL_CARD_W = 120;
 /** Skill-stack dense horizontal step: px between neighbouring card centres. */
 export const SKILL_STEP = 34;
 /** Gap the skill stack leaves between itself and the hand fan. */

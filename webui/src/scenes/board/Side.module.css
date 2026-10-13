@@ -417,7 +417,7 @@
   transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease;
 }
 .skillSlot + .skillSlot {
-  margin-left: calc(var(--skill-step, 34px) - var(--skill-card-w, 96px));
+  margin-left: calc(var(--skill-step, 34px) - var(--skill-card-w, 120px));
 }
 .skillSlot:hover,
 .skillSlot:focus-within {
