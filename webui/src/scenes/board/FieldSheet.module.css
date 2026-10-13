@@ -68,7 +68,6 @@
    board and blinks with a light halo, like Master Duel's activated card. */
 .pulse {
   z-index: 3;
-  --field-title-gap: 0px;
   animation: pulse-out var(--pulse-ms, 1500ms) ease-in-out both;
 }
 .pulse .card {
@@ -78,9 +77,14 @@
 /* Only this slot comes out: the row stays retracted. A slot's own height is the
    card's, so dropping it by 100% less the peek brings its whole face into view. */
 @keyframes pulse-out {
-  0% { transform: translateY(0) scale(1); }
-  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); }
-  100% { transform: translateY(0) scale(1); }
+  0% { transform: translateY(0) scale(1); --field-title-gap: auto; }
+  17% { --field-title-gap: auto; }
+  /* Fully out: the face reads as an ordinary card (name under the tags); it is
+     pinned back to the bottom zone before the retract starts, so the markers
+     ride the bottom edge the whole way up. */
+  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); --field-title-gap: 0px; }
+  83% { --field-title-gap: auto; }
+  100% { transform: translateY(0) scale(1); --field-title-gap: auto; }
 }
 /* Row already lowered by hover: the slot only lifts a little. */
 .up .pulse {
