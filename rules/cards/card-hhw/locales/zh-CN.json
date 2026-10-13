@@ -74,6 +74,8 @@
   "smile_parade_moved": "已移至{{tile}}，奇迹水晶清空",
   "smile_parade_note": "「笑容大游行」在场（这格和弦卷集团交换位置）",
   "smile_parade_placed": "{{who}} 将「笑容大游行」放置在 {{tile}} 上",
+  "smile_parade_swapped": "「笑容大游行」：{{a}} 与 {{b}} 交换位置",
+  "smile_parade_swap_discard": "「笑容大游行」在 {{tile}} [触发结算]后放入弃牌堆",
   "smile_parade_title": "微笑游行",
   "smile_patrol_built": "{{tile}} 免费加盖了第 {{n}} 栋房屋（微笑巡逻队）",
   "smile_patrol_cannot_build": "{{tile}} 不能加盖房屋（微笑巡逻队）",

@@ -286,8 +286,8 @@ fn g29_maya_look_at_top_inside_the_draw_curve() {
 // 规则书 (笑容大游行 (3)): 「当此卡位于格子上时，那格视为与“弦卷集团”格子交换
 // 位置」.
 // 规则书 (Parking Space (1)): 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」.
-// Note: `t13_smile_parade` is DISCREPANCY (stack overflow).
-#[ignore = "DISCREPANCY: 笑容大游行 stack-overflows (t13); this adds the Parking Space field-place leg once it lands"]
+// Note: `t13_smile_parade` asserts the (1) placement; this adds the Parking
+// Space field-place leg of the (3) swap.
 #[test]
 fn g30_smile_parade_swap_with_a_field_card_in_place() {
     let mut t = Table::new(&["都筑诗船", "仓田真白"]);
@@ -296,20 +296,34 @@ fn g30_smile_parade_swap_with_a_field_card_in_place() {
     drain(&mut t);
     let space = tile("Space");
     place_on_tile(&mut t, 0, "通用:[都筑诗船]Parking Space", space);
-    t.give(0, &["HHW:笑容大游行"]);
-    // Pass 弦卷集团 (index 28) and drop the parade there.
-    t.set_pos(0, 27);
-    t.dice(&[2]);
-    t.roll(0).unwrap();
-    drain_playing(&mut t, 0, "HHW:笑容大游行");
+    // (2)'s end state: the parade sits on Space next to Parking Space. The
+    // swap changes what the tile *is*, not what is on it.
+    place_on_tile(&mut t, 0, "HHW:笑容大游行", space);
+    t.set_crystals(0, "HHW:笑容大游行", 0);
+    // P1 settles on Space: Parking Space's (1) replaces the settle (a stay at
+    // turn end), and (3) discards the parade after that settle.
+    until_turn(&mut t, 1);
+    t.set_pos(1, (space + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
     drain(&mut t);
-    // The swap changes what the tile *is*, not what is on it: Parking Space's
-    // (1) still replaces the settle on Space.
+    eprintln!(
+        "g30 record: field0 = {:?}, P1 money = {}, stay = {}, keys = {:?}",
+        t.field_ids(0),
+        t.money(1),
+        t.state(1, "stay"),
+        t.recent_keys(20)
+    );
     assert!(
         t.field_ids(0).iter().any(|c| c.contains("Parking Space")),
         "Parking Space is still on Space: {:?}",
         t.field_ids(0)
     );
+    // Parking Space's (1) 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」
+    // still replaces the settle -- the swap changes what the tile *is*, not
+    // what is on it. No rent moved (Space is unowned; a swapped-in agent body
+    // would at least prompt).
+    assert_eq!(t.money(1), 10_000, "Parking Space replaced the settle (no rent)");
 }
 
 // =====================================================================

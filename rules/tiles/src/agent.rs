@@ -13,14 +13,15 @@
 //!
 //! 同色 is the board's `group` widened by the tile-prop colour overrides
 //! (`prop::ANY_COLOR` 「该格获得所有颜色」 / `prop::colorFor:<p>`), via
-//! `ctx::is_color`. An `ANY_COLOR`-only member is offered for the buy branch
-//! but never for the build branch (soyo 「该格本身不可因自有以外的颜色的地产商盖房」).
+//! `ctx::is_color`. An `ANY_COLOR`-only member is offered for the buy / rent
+//! branches but never for the build branch (soyo 「该格本身不可因自有以外的颜色的
+//! 地产商盖房」).
 //!
-//! TODO(规则书): 「同色」 is the board's `group` (see `data/board.json`); the
-//! book never says whether the per-player colour overrides (`anyColor` /
-//! `colorFor:<p>`) / 「该格获得所有颜色」 widens it. The
-//! half-charge's 「向上取整10」 is implemented as `ceil(full/2/10)*10` in
-//! `pay_rent`, matching the C#; the book only says 「向上取整10」.
+//! The choice branch's 「无主或玩家拥有的[可购买格子]」 reads as unowned **or any
+//! player-owned** (not just the mover's): unowned → buy, own → build, another
+//! player's deed → a half-rent settle (the agent's 「半价收费」 signature, which
+//! soyo's 「地产商的减半收费」 names as the base it further halves). The
+//! half-charge's 「向上取整10」 is `ceil(full/2/10)*10` in `pay_rent`.
 
 use alloc::vec::Vec;
 
@@ -83,7 +84,8 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「否则可选择该格子同色的无主或玩家拥有的[可购买格子]之一进行
-    // 一次[结算]。」 -- one offer over the unowned (buy) and own (build) members.
+    // 一次[结算]。」 -- one offer over the unowned (buy), own (build) and
+    // other-player (half-rent) members.
     let quotes = ctx::buy_quotes(player_id, BuyKind::Agent as i32, &same);
     let mut options: Vec<i32> = Vec::new();
     let mut labels: Vec<Msg> = Vec::new();
@@ -118,6 +120,21 @@ fn settle(player_id: i32) -> card_sdk::Asked {
                     .tile("tile", t)
                     .i("nth", ctx::houses_of(t) as i64 + 1)
                     .n("cost", cost as i64),
+            );
+        } else if owner != player_id && !ctx::mortgaged_of(t) {
+            // 「玩家拥有的」 includes other seats; the settle is the agent's
+            // 「半价收费的[结算]（向上取整10）」 -- `ceil(full/2/10)*10` in
+            // integer math (no `f64::ceil` on wasm).
+            let full = ctx::rent_of(t);
+            let half = (full + 1) / 2;
+            let half = ((half + 9) / 10) * 10;
+            options.push(t);
+            prices.push(half);
+            labels.push(
+                Msg::new("ask.agent.rent")
+                    .tile("tile", t)
+                    .player_id("who", owner)
+                    .n("price", half as i64),
             );
         }
     }
@@ -154,9 +171,16 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // The chosen branch settles once -- 「进行一次[结算]」. `H.AgentOffer`
-    // runs the buy or the build as one host routine, so the commit pass's
-    // pre-filled answer cannot double-act.
-    let kind = if ctx::tile_owner(t) < 0 { 0 } else { 1 };
+    // runs the buy / build / half-rent as one host routine, so the commit
+    // pass's pre-filled answer cannot double-act.
+    let owner = ctx::tile_owner(t);
+    let kind = if owner < 0 {
+        0
+    } else if owner == player_id {
+        1
+    } else {
+        2
+    };
     ctx::agent_offer(player_id, agent, t, kind);
     Ok(())
 }

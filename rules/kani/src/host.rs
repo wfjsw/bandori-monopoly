@@ -673,6 +673,29 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         Op::gain_typed => dispatch(Op::gain, a),
         Op::gain_fixed => dispatch(Op::gain, a),
+        Op::adjust_money => {
+            // Raw money adjustment: `money += delta` with **no** payment
+            // pipeline (no payAdd/payMul, no effect window). Mirrors
+            // `hostfns::adjust_money` / `World::adjust_money_raw`.
+            let delta = a1;
+            if delta != 0 {
+                world::with_world_mut(|w| {
+                    let p = player_idx(a0);
+                    if delta > 0 {
+                        w.money[p] = w.money[p].saturating_add(delta);
+                        w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(delta);
+                        w.push(Effect::GainMoney {
+                            player: a0,
+                            n: delta,
+                        });
+                    } else {
+                        let n = (-delta).min(w.money[p].max(0));
+                        w.money[p] -= n;
+                    }
+                });
+            }
+            world::with_world(|w| w.money[player_idx(a0)]) as i64
+        }
         Op::pay => {
             if a1 > 0 {
                 world::with_world_mut(|w| {

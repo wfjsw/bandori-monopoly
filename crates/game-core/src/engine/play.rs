@@ -2269,6 +2269,24 @@ impl Cx<'_> {
                         .i("nth", self.w.st.houses[t] + 1)
                         .n("cost", self.build_cost(t)),
                 );
+            } else if self.w.st.owners[t] >= 0
+                && self.w.st.owners[t] as usize != i
+                && !self.w.st.mortgaged[t]
+            {
+                // 「无主或玩家拥有的」 includes other seats; the settle is the
+                // agent's 「半价收费的[结算]（向上取整10）」 -- `ceil(full/2/10)*10`
+                // in integer math (matches `pay_rent` / `agent.rs`).
+                let full = purchase::table_rent(self.data, &self.w, t);
+                let half = (full + 1) / 2;
+                let half = ((half + 9) / 10) * 10;
+                options.push(t);
+                prices.push(half);
+                labels.push(
+                    Msg::new("ask.agent.rent")
+                        .tile("tile", t)
+                        .player_id("who", self.w.st.owners[t])
+                        .n("price", half),
+                );
             }
         }
         if options.is_empty() {
@@ -2309,6 +2327,9 @@ impl Cx<'_> {
             && self.why_not_build_on(i, t).is_none()
         {
             self.build(i, t)?;
+        } else if self.w.st.owners[t] as usize != i && !self.w.st.mortgaged[t] {
+            // 「进行一次[结算]」 on another player's deed -- the agent's half charge.
+            self.pay_rent(i, t, true)?;
         }
         self.wait(0.6);
         Ok(())

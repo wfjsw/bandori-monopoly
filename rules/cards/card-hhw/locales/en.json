@@ -74,6 +74,8 @@
   "smile_parade_moved": "Moved to {{tile}}; crystals cleared",
   "smile_parade_note": "Smile Parade in play (this tile swaps with Tsurumaki Group)",
   "smile_parade_placed": "{{who}} put Smile Parade on {{tile}}",
+  "smile_parade_swapped": "Smile Parade: {{a}} swapped position with {{b}}",
+  "smile_parade_swap_discard": "Smile Parade went to the discard after a settle on {{tile}}",
   "smile_parade_title": "Smile Parade",
   "smile_patrol_built": "{{tile}} got free house #{{n}} (Smile Patrol)",
   "smile_patrol_cannot_build": "{{tile}} cannot build a house (Smile Patrol)",

@@ -870,6 +870,40 @@ impl CardWorld for Run {
         }
         paid
     }
+    /// Raw money adjustment -- `money += delta` with a `log.gain` / `log.lose`
+    /// line, **no** `paid_log` entry (so no `payAfter`) and **no** money-lock
+    /// check. 规则书 「不受其他任何效果影响」.
+    fn adjust_money_raw(&mut self, player_id: i32, delta: i32, src: Msg) -> i32 {
+        if delta >= 0 {
+            let got = self.world.gain_money(player_id, delta, src.clone());
+            if got != 0 {
+                let msg = Msg::new("log.gain")
+                    .player_id("who", player_id)
+                    .n("amount", got as i64)
+                    .msg("src", Msg::new("log.part.why").msg("why", src));
+                self.post_log_value("gain", player_id, msg, "", got);
+            }
+            got
+        } else {
+            let amount = -delta;
+            let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
+                return 0;
+            };
+            if s.out() {
+                return 0;
+            }
+            let lost = amount.min(s.money).max(0);
+            s.money -= lost;
+            if lost != 0 {
+                let msg = Msg::new("log.lose")
+                    .player_id("who", player_id)
+                    .n("amount", lost as i64)
+                    .msg("src", Msg::new("log.part.why").msg("why", src));
+                self.post_log_value("lose", player_id, msg, "", -lost);
+            }
+            lost
+        }
+    }
 
     // hand / deck -----------------------------------------------------------
     fn draw(&mut self, player_id: i32, n: i32) -> i32 {
@@ -3304,16 +3338,22 @@ impl<M: CardModules> RulesBridge<M> {
             kind,
         } => {
             // The chosen branch of the agent offer (the post-pick commit):
-            // buy the unowned tile, or build one level on an own one. `kind`
-            // names the branch the body saw (0 = buy, 1 = build); the engine
-            // re-checks the tile's current state so a commit-pass re-run of
-            // the body -- whose options list the just-committed effect already
-            // reshaped -- cannot double-act (the answer is in the log, so this
-            // arm does not re-execute). HOST-06: answers the branch outcome.
+            // buy the unowned tile, build one level on an own one, or half-rent
+            // another player's deed. `kind` names the branch the body saw
+            // (0 = buy, 1 = build, 2 = half-rent); the engine re-checks the
+            // tile's current state so a commit-pass re-run of the body -- whose
+            // options list the just-committed effect already reshaped -- cannot
+            // double-act (the answer is in the log, so this arm does not
+            // re-execute). HOST-06: answers the branch outcome.
             let p = player_id.max(0) as usize;
             let t = tile.max(0) as usize;
             let did = match kind {
                 1 => cx.card_build(p, t)?,
+                2 => {
+                    // The agent's 「半价收费的[结算]」 on another player's deed.
+                    cx.card_pay_rent(p, t, true)?;
+                    true
+                }
                 _ => cx.card_buy(p, t, 1)?, // `BuyKind::Agent`
             };
             return Ok(did as i32);
@@ -3462,6 +3502,42 @@ impl<M: CardModules> RulesBridge<M> {
             p.by_card = Some(call.player_id());
             let paid = cx.money(p)?;
             return Ok(paid.moved());
+        }
+        // Raw money adjustment (no payment pipeline). 规则书 「不受其他任何效果
+        // 影响」 -- the amount moves as-is.
+        HostRequest::AdjustMoney {
+            player_id,
+            delta,
+            src,
+        } => {
+            let msg = src.unwrap_or_else(|| crate::Msg::new("log.part.why"));
+            let mut w = cx.world_copy();
+            let moved = if delta >= 0 {
+                w.gain_money(player_id, delta, msg.clone())
+            } else {
+                let amount = -delta;
+                let Some(s) = w.st.players.get_mut(player_id.max(0) as usize) else {
+                    return Ok(0);
+                };
+                if s.out() {
+                    return Ok(0);
+                }
+                let lost = amount.min(s.money).max(0);
+                s.money -= lost;
+                if lost != 0 {
+                    w.log(
+                        "lose",
+                        player_id,
+                        crate::Msg::new("log.lose")
+                            .player_id("who", player_id)
+                            .n("amount", lost as i64)
+                            .msg("src", crate::Msg::new("log.part.why").msg("why", msg)),
+                    );
+                }
+                lost
+            };
+            cx.swap_world(w);
+            return Ok(moved);
         }
         // Marker spend / gain (user ruling 2026-10-07): the marker's own
         // [反击] window opens **before** the markers move. A counteraction

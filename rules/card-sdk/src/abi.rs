@@ -284,7 +284,8 @@ use alloc::{string::String, vec::Vec};
 ///      records the **tile id** (or -1 for 「不选」) in the answer log, so a
 ///      commit-pass re-run of a body whose options the just-committed host
 ///      effect reshaped still maps the pick to the same tile. `agent_offer` --
-///      the chosen branch (buy / build) as one host routine. `raise` --
+///      the chosen branch (buy `0` / build `1` / half-rent `2`) as one host
+///      routine. `raise` --
 ///      guest-raised trigger points (`circleAffected` from `tile:circle`);
 ///      returns whether the link settled. `gain_typed` -- a bank print through
 ///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
@@ -378,7 +379,22 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 56;
+/// v57: **closeout integration** -- one monotonic bump covering every addition
+///      the five closeout batches made on top of v56:
+///      `TriggerKind::FirePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
+///      substitution + flip-effect hook; `ctx::raise` is prompt-aware);
+///      `join_redirect_target` / `set_join_used` (真奈 join retarget, CH-05);
+///      and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
+///      `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
+///      `adjust_money`). `money += delta` with a `log.gain` / `log.lose` line
+///      and **no** payment pipeline: no `payAdd` / `payMul` / `payChoose` /
+///      `payAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
+///      任何效果影响」 wants a [指定] split's amount to land as-is (ONE OF US's
+///      「被分享方资金直接增加，不受其他任何效果影响」). Non-pausing. Positive
+///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
+///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
+///      engine batch's SAVE_VERSION 6 → 7 is independent).
+pub const ABI_VERSION: i32 = 57;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

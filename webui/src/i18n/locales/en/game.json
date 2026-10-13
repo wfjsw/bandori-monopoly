@@ -1,7 +1,8 @@
 {
   "ask.agent.build": "{{tile}}  build #{{nth}}  {{cost}}",
   "ask.agent.buy": "{{tile}}  buy {{price}}{{extra}}",
-  "ask.agent.text": "{{who}} stopped at the dealer: settle one tile of the same colour -- buy an unowned one, or add a house to your own. You can also skip. If short on cash, you can mortgage other deeds to fund it.",
+  "ask.agent.rent": "{{tile}}  half-charge {{who}} {{price}}",
+  "ask.agent.text": "{{who}} stopped at the dealer: settle one tile of the same colour -- buy an unowned one, add a house to your own, or half-charge another player's deed. You can also skip. If short on cash, you can mortgage other deeds to fund it.",
   "ask.agent.title": "Dealer · {{agent}}",
   "ask.auction.text": "Land price {{price}}{{extra}}. Minimum bid 100, raises of at least 100; the highest bidder pays and takes the deed. After a bid it waits 6 more seconds; with no new bid the deed is sold.",
   "ask.auction.title": "Auction: {{tile}}",
