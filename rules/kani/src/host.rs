@@ -1904,7 +1904,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat
         | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile
         | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations
-        | Op::cancel_designation | Op::designation_cancelled => {
+        | Op::cancel_designation | Op::designation_cancelled
+        | Op::join_redirect_target | Op::set_join_used
+        | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => {
             // Several of these are read-only queries we did model above; the
             // remaining ones are engine-protocol and return a benign 0. Any
             // op that must fail loudly is handled by the catch-all below if

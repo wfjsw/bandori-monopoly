@@ -265,6 +265,14 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **was**: `err.play_phase` when played as the counter; forced move did not happen.
 
 ## CH-05 — nested [反击] copy machinery (play-history / nested PlayCtx)
+- **status**: **partially fixed** (2026-10-13, `closeout-3-windows`) — join retarget
+  (`改为你`) landed for 真奈 (CH-06 / g19 green). `Trigger.join_redirect` /
+  `join_used` + `prop::SELF_REDIRECT` + `ctx::join_redirect_target()` /
+  `set_join_used()` / `self_target()`. The pre-scan in `hand_counteractions`
+  sets `join_redirect` when a `SELF_REDIRECT` counter is in a hand, so the
+  redirect is live before any body runs. The full nested PlayCtx window (per-seat
+  「如同自身的对应目标被指定一般」 with its own chain) and play-history query
+  (Mortis copy) are still open.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: high (Mortis and Mana Champion are the two "copy a counter" cards)
@@ -274,31 +282,35 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   - `rules/cards/card-sumimi/src/mana_champion.rs:57` (nested `H.Counteract(copy, p)`, shield + counteractor's draw)
   - `rules/cards/card-mujica/src/dice_cast.rs:55` (「（此卡可以被反击）」 needs the reverse-order counter play)
 - **rulebook**: Mortis 「此卡打出时效果为场上任意其他玩家打出的上一张卡…」 + 「（此卡复制[反击]卡时可在符合条件时打出）」; Mana Champion 「此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你…」
-- **current**: no play-history query, no cross-card `PlayCtx` nesting (`ctx::play_card` runs `play` without the copied card's identity / counteraction mode). Mortis copy is a stub; Mana Champion shield/draw unexpressed.
+- **current**: join retarget works (g19). No play-history query; full nested PlayCtx window still TODO.
 - **expected**: copy the latest eligible play and nest a full Play/Counteract run with forwarded Tags/Extreme/Doubled.
 - **capability**: `play-history query` + `nested PlayCtx` (cross-card identity + counteraction mode).
 
 ## CH-06 — 网络链接异常 still drops the wrong designation in join fixtures
-- **status**: **reclassified B** (2026-10-11) — the per-pair cancel itself works
-  (`c05` green). What `g19` still needs is 真奈's nested join window: 「此时场上
-  其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家
-  自身的效果改为你」. That is CH-05's `nested PlayCtx` (the joiner's self-targeted
-  cancel must be retargeted to 真奈's user). Without the nested window, P3's
-  网络链接异常 plays in the outer ring and cancels P3's own designation (P3
-  exempt, P0 pays) instead of P0's via 「改为你」.
+- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — 真奈's join retarget
+  (「改为你」) landed. `SELF_REDIRECT` on 真奈 marks the counter as opening a
+  join; `Trigger.join_redirect` is set at declaration; 网络链接异常's
+  self-targeted cancel now cancels 真奈's user's designation (not the joiner's).
+  Joiner draws 1 (真奈's shield clause). `g19_manas_join_window_lets_a_third_party_drop_one`
+  un-ignored, green. Remaining TODOs (nested window shape, fallback-draw
+  joiner-count) are tagged `TODO(规则书)` under CH-05.
 - **kind**: implementation bug
 - **class**: B (capability: nested PlayCtx / join retarget — see CH-05)
 - **severity**: high
 - **suggested batch**: host ABI: counteraction windows
 - **locations**
-  - `rules/tests/tests/gap_window.rs` `g19_manas_join_window_lets_a_third_party_drop_one` (still ignored)
-  - `rules/cards/card-sumimi/src/mana_champion.rs` (nested half is TODO)
-  - ABI already landed: `ctx::designations` / `ctx::cancel_designation` / `designation_cancelled`
+  - `rules/tests/tests/gap_window.rs` `g19_manas_join_window_lets_a_third_party_drop_one` (un-ignored, green)
+  - `rules/cards/card-sumimi/src/mana_champion.rs` (join retarget + fallback draw)
+  - `rules/cards/card-general/src/net_error.rs` (join-aware cancel)
 - **rulebook**: sheet cancels **one** designation (「取消一个指定」 / 「改为你」).
-- **current**: without the join, P3's cancel drops P3's own designation.
-- **expected**: under the join, P3's self-targeted cancel drops P0's (真奈's user); P2/P3 still pay.
+- **was**: P3's cancel dropped P3's own designation (P3 exempt, P0 pays).
 
 ## CH-07 — 「视为此卡未生效」 has no observer
+- **status**: **minimal path landed** (2026-10-13, `closeout-3-windows`) —
+  无路矢's refused-exile early-out is the first observer: the card is spent and
+  does nothing (no place / no designate / no later teleport) when glossary 14
+  refuses the [除外] cost. The general took-effect return value + `CardWasted`
+  (C-Q5) is still open.
 - **kind**: rulebook divergence + ABI defect
 - **class**: C (semantics) then B (`PlayCtx.Effective` / return-value)
 - **severity**: high (appears on many short-pay cards)
@@ -474,28 +486,33 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **was**: play refused with `err.play_phase`.
 
 ## WINDOW-02 — R.I.O.T. + 宣战布告 same timing loses the 500 payment
-- **status**: **partially fixed** (2026-10-11, `backlog-windows-a`) — a
+- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — a
   `DESIGNATES` play is one [反击] timing (CROSS-TESTS C13): its `Effect`
   counters also answer the play's own `card` raise. `effect::hits` falls back
   to the static `DESIGNATES` list when the effects list is empty. The offer
   scan, probe and **body dispatch** all use the same Effect-on-DESIGNATES-play
   entry lookup, so 宣战布告 is declared on the play and its 500 lands.
-  `c13_riot_and_war_declaration` un-ignored, green.
-- **still open**: `l01_counter_war_five_links_deep` — in the five-link war,
-  E (网络链接异常) should cancel A's designation (P0 pays nothing to P1) and P2
-  should still pay X. Currently both wars charge and P2 skips X.
+  `c13_riot_and_war_declaration` un-ignored, green (2026-10-11).
+  `l01_counter_war_five_links_deep` — the five-link war now nests counters to
+  counters (C answers B, D answers C, E answers A) instead of putting every
+  counter on X's round. Un-ignored, green.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (war declaration is a whole-table event)
 - **suggested batch**: counteraction windows / payment pipeline
 - **locations**
   - `rules/tests/tests/cross_chain.rs` `c13_riot_and_war_declaration` (un-ignored, green)
-  - `rules/tests/tests/cross_long.rs` `l01_counter_war_five_links_deep` (still ignored)
+  - `rules/tests/tests/cross_long.rs` `l01_counter_war_five_links_deep` (un-ignored, green)
   - `crates/game-rules/src/host.rs` `counteracts_to_play` / `counteract_entry`, `rules/card-sdk/src/ctx.rs` `effect::hits`
 - **rulebook**: R.I.O.T. / 宣战布告 — 500 payment and the war ring offers.
 - **was**: 500 missing; war never declared on the play's timing.
 
 ## WINDOW-03 — EXIST redirect / 「造成影响」 latch is at declaration, not settlement
+- **status**: **partially fixed** (2026-10-13, `closeout-3-windows`) — the
+  C12 overlap (EXIST × 夏日合宿) is fixed: `target_player` now runs Redirect
+  **before** Untargetable, so EXIST 「目标将改为你」 re-names first and the gate
+  checks the final name. `c12_exist_vs_summer_camp` un-ignored, green.
+  The 「造成影响」 latch itself (declaration vs settlement, C-Q8) is still open.
 - **kind**: rulebook divergence
 - **class**: C
 - **severity**: high
@@ -1060,14 +1077,21 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **question**: C-Q25.
 
 ## SETTLE-04 — 线香花火 last crystal / extra turn / stun cascade (R-7)
+- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — C-Q26a ruling: the
+  last crystal removal does **not** grant an extra turn. The terminal effect is
+  discard + 2 [眩晕]. (Granting one would auto-skip it on the stun — `play.rs`
+  `stunned` -> `end_turn` — and its 「每回合结束时移除一层」 tick would eat one of
+  the two layers, netting 1.) `l07_extra_turn_cascade` un-ignored, green.
+  C-Q26b (「until your next turn start」 vs an extra turn's start) is still open.
 - **kind**: rulebook divergence
 - **class**: C
 - **severity**: medium
 - **suggested batch**: settle stages
 - **locations**
-  - `rules/tests/tests/cross_long.rs:522` `l07_extra_turn_cascade` (want 2 stun layers, get 1)
+  - `rules/tests/tests/cross_long.rs:522` `l07_extra_turn_cascade` (un-ignored, green)
+  - `rules/cards/card-mujica/src/sparkler.rs` (last removal skips `give_extra_turn`)
   - TEST-FINDINGS §6 items 2 and R-7
-- **question**: C-Q26 (does removing the last crystal grant the extra turn? does 「until your next turn start」 end at an extra turn's start?).
+- **question**: C-Q26b (does 「until your next turn start」 end at an extra turn's start?).
 
 ## SETTLE-05 — no_breakup R3 timing (settleAfter vs tileResolved)
 - **kind**: rulebook divergence
@@ -1127,34 +1151,53 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **question**: C-Q32.
 
 ## CH-11 — 「会在骗着买水晶的人」 offers 「不要背负期待」 as a crystal endpoint
+- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — 「此卡不受任何其他
+  效果影响」 is a static [特] property (`prop::IMMUNE` / `FieldCard.immune`),
+  stamped at placement from the card's static props, so `place_raw` and engine
+  placement see it without running the play body. `c26_immunity_vs_crystal_mover`
+  un-ignored, green.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
 - **locations**
-  - `rules/tests/tests/cross_chain.rs:1175` `c26_immunity_vs_crystal_mover`
+  - `rules/tests/tests/cross_chain.rs:1175` `c26_immunity_vs_crystal_mover` (un-ignored, green)
+  - `crates/game-core/src/engine/ops.rs` `place_card_on` (stamps `immune` from `prop::IMMUNE`)
 - **rulebook**: 「此卡不受任何其他效果影响」 — should not be a crystal endpoint.
-- **current**: offered anyway.
+- **was**: `set_self_immune` was a play-body side effect; `place_raw` never ran it.
 
 ## CH-12 — [不可阻挡] still grants new [除外] from 无路矢
+- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — glossary 14
+  「无法获得新的[除外]层数」/「也不会获得新的层数」 now refuses new [除外]/[晕眩]
+  in `abnormal_gate`. 无路矢's exile is its teleport cost, so a refused gain
+  negates the card (CH-07 minimal: spent, no place / no designate / no later
+  teleport). `g23_unstoppable_refuses_the_exile_cost` un-ignored, green.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
 - **locations**
-  - `rules/tests/tests/gap_window.rs:302` `g23_unstoppable_refuses_the_exile_cost`
-- **rulebook**: glossary 51 「无法获得新的[除外]层数」.
-- **current**: 无路矢 still grants 2 [除外] to the holder.
+  - `rules/tests/tests/gap_window.rs:302` `g23_unstoppable_refuses_the_exile_cost` (un-ignored, green)
+  - `crates/game-rules/src/wasm_rules.rs` `abnormal_gate` (unstoppable × Stun/Exile)
+  - `rules/cards/card-mygo/src/no_road.rs` (early-out when the exile is refused)
+- **rulebook**: glossary 14 「无法获得新的[除外]层数」.
+- **was**: 无路矢 still granted 2 [除外] to the holder.
 
 ## CH-13 — Here the world does not land on the second card played in one turn
+- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — `TriggerKind::TwoCards`
+  (「当有人同一回合内打出两张卡时」) is now raised on the play that makes it two
+  hand-card plays in a turn (`TurnCtx.cards_played`), opening its own [反击]
+  window. `c21_here_the_world` un-ignored, green.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: medium
 - **suggested batch**: draw/discard pipeline
 - **locations**
-  - `rules/tests/tests/cross_chain.rs:957` `c21_here_the_world`
+  - `rules/tests/tests/cross_chain.rs:957` `c21_here_the_world` (un-ignored, green)
+  - `crates/game-core/src/engine/play.rs` `play_from_hand` (raises `"twoCards"`)
   - **D note**: `l06_one_draw_several_effects` ignore already removed (capture-vs-autoplay is C-Q33)
 - **rulebook**: Here the world captures a drawn / second card.
+- **was**: the TwoCards trigger was never raised.
 
 ## CRYSTAL-01 — crystal can pay a skill's fire cost (FirePaying)
 - **kind**: ABI defect
@@ -1812,7 +1855,9 @@ Does 普通与理所当然 copy a signed or unsigned 移动格数? (Ignored test
 「减少1d6」: subtract 1d6 from the face, or drop a die from the pool (「少投1d6」)? Sheet says 减少1d6.
 
 **C-Q26 (SETTLE-04, 线香花火 / extra turn).**
-(26a) Does removing the last crystal of 燃尽前的线香花火 also grant 「获得一个额外回合」?
+(26a) ~~Does removing the last crystal of 燃尽前的线香花火 also grant 「获得一个额外回合」?~~
+  **Ruled 2026-10-13**: no. The terminal effect is discard + 2 [眩晕]; granting an
+  extra turn would auto-skip it on the stun and eat one layer.
 (26b) Does 「until your next turn start」 end at the first turn start after, including an extra turn's? (R-7.)
 
 **C-Q27** — same as C-Q10 (no_breakup R3). *(kept for numbering of SETTLE-05)*

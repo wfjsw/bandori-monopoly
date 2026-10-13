@@ -39,6 +39,7 @@
   "no_road_ask": "[target] which player's tile? (you [teleport] there when [exile] ends; your tile income during [exile] goes to them)",
   "no_road_log": "when [exile] ends you [teleport] to {{tile}} (counts as that turn's main move); your tile income during [exile] goes to {{who}} ({{card}})",
   "no_road_redirect": "Exile: rent rerouted to {{who}}",
+  "no_road_refused": "{{card}}: cannot gain new [exile] layers; treated as not in effect",
   "no_road_title": "No Road",
   "no_road_why_not_none": "there is no other player",
   "ordinary_log": "the next main move becomes {{n}} step(s) (Ordinary and Natural)",

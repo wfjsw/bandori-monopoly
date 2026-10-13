@@ -655,6 +655,10 @@ extern "C-unwind" {
     pub fn cancel_designation(seat: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_designation_cancelled")]
     pub fn designation_cancelled(seat: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_join_redirect_target")]
+    pub fn join_redirect_target() -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_join_used")]
+    pub fn set_join_used();
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_gate")]
     pub fn gate(player_id: i32, kind: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_settle_at")]

@@ -1045,15 +1045,14 @@ observe it. Don't assert only the end state.
   2. Extra turn B. P0's roll pays 运动的天赋's 700, then 600 on its re-roll(s).
      It re-rolls until the roll is ≥ 10.
   3. B ends. 线香花火's last crystal goes: card to P0's discard, P0 gains 2
-     [眩晕], and P0 gets another extra turn (「…并使你获得一个额外回合」 —
-     whether the last removal also grants an extra turn is a **RULING**).
-     运动的天赋 → 1.
+     [眩晕]. **C-Q26a ruled 2026-10-13**: the last removal does **not** grant
+     an extra turn -- the terminal effect is discard + 2 [眩晕]. 运动的天赋 → 1.
   4. On P1's turn, P1 plays 壱雫空: P0's stun is cleared. The payments follow
      the ruling on 壱雫空.
   5. P0's next turn: P0 moves normally. 运动的天赋 → 0, so it goes to the
      discard.
 * **Expect:**
-  * The turn order, A → B → (C?) → P1.
+  * The turn order, A → B → P1.
   * The crystal counts after each turn end.
   * The stun before and after 壱雫空.
   * The money from 运动的天赋 per roll.

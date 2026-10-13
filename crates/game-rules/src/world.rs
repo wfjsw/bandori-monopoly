@@ -76,6 +76,14 @@ pub struct Trigger {
     pub name: Option<String>,
     /// A `BuyGate` refusal's reason key.
     pub reason: Option<String>,
+    /// 真奈 join: the seat self-targeted effects of counters answering **this
+    /// link** are redirected to (「改为你」). Set at declaration time when a
+    /// `SELF_REDIRECT` counter is declared against this link; `None` outside
+    /// a join. Scoped to the link -- does not leak into other plays.
+    pub join_redirect: Option<i32>,
+    /// 真奈 join: a joiner used the redirect (shielded the redirect target).
+    /// Set by the joiner's body; read by the join opener to decide its draw.
+    pub join_used: bool,
 }
 
 /// The move that caused a trigger.
@@ -151,6 +159,8 @@ impl Default for Trigger {
             card: None,
             name: None,
             reason: None,
+            join_redirect: None,
+            join_used: false,
         }
     }
 }
@@ -181,6 +191,8 @@ impl Trigger {
             card: None,
             name: None,
             reason: None,
+            join_redirect: None,
+            join_used: false,
         }
     }
 
@@ -936,6 +948,13 @@ pub trait CardWorld: Clone + 'static {
     fn set_trigger_deal_mortgaged(&mut self, v: i32);
     /// A `BuyGate` refusal's reason key, shown instead of a bare cancel.
     fn set_trigger_reason(&mut self, reason: &str);
+    /// 真奈 join: the seat self-targeted effects of counters answering this
+    /// link are redirected to (「改为你」). `None` outside a join.
+    fn trigger_join_redirect(&self) -> Option<i32> {
+        self.trigger().join_redirect
+    }
+    /// 真奈 join: mark that a joiner used the redirect (shielded the target).
+    fn set_trigger_join_used(&mut self) {}
 
     // ----------------------------------------------- turn plan & scheduling
     // Defaults are no-ops so test worlds need not implement them.

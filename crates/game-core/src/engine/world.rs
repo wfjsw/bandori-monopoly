@@ -139,6 +139,10 @@ pub struct TurnCtx {
     pub extra: bool,
     pub main_moved: bool,
     pub played: Vec<String>,
+    /// Hand-card plays this turn (skills do not count). 「当有人同一回合内打出
+    /// 两张卡时」 (TwoCards) reads this -- the second card play raises it.
+    #[serde(default)]
+    pub cards_played: usize,
     /// Players whose money cannot drop for the rest of this turn. Auctions are
     /// not payments, so they are exempt.
     #[serde(default)]
@@ -232,6 +236,7 @@ impl Default for TurnCtx {
             extra: false,
             main_moved: false,
             played: Vec::new(),
+            cards_played: 0,
             no_money_loss: Vec::new(),
             fixed_roll: None,
             main_steps: 0,

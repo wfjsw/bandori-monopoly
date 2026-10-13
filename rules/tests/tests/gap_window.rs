@@ -139,7 +139,6 @@ fn g18_shut_window_blocks_the_negate_one() {
 // Doc error: the design expects "P3 pays 0; P0 and P2 pay X" -- but the sheet
 // says the joiner's self-targeted effect 「改为你」 (to 真奈's user), so P3's
 // cancel drops **P0's** designation and P0 is the one exempted. P3 still pays.
-#[ignore = "DISCREPANCY: 真奈's join + 网络链接异常 negates the whole 武道馆 (everyone keeps 10000); the sheet cancels one designation (P0's via 「改为你」) and P2/P3 still pay X"]
 #[test]
 fn g19_manas_join_window_lets_a_third_party_drop_one() {
     let mut t = Table::new(&["纯田真奈", "仓田真白", "花园多惠", "山吹沙绫"]);
@@ -215,7 +214,6 @@ fn g20_shut_window_blocks_the_join_window() {
 // 规则书 (祥子 (1)): 「经过其他玩家时，可将其所有层数的停留，眩晕转移至自己身上…
 // 每获得一层停留，眩晕，你获得1500资金」.
 // Note: `s08` is green (祥子 absorbs); this stays open for the 夏日合宿 half.
-#[ignore = "DISCREPANCY: 夏日合宿 should keep P1 un-designated so there is no stay to absorb (s08 absorb is fixed)"]
 #[test]
 fn g21_summer_camp_immune_to_the_rains_zone() {
     let mut t = Table::new(&["仓田真白", "花园多惠", "丰川祥子"]);
@@ -234,14 +232,20 @@ fn g21_summer_camp_immune_to_the_rains_zone() {
     t.play(0, "MyGO:那天的雨").unwrap();
     drain(&mut t);
     // P1 is in the zone (everyone starts at CiRCLE, adjacent to the first
-    // colour) but 夏日合宿 shields it: no stay, so P2's pass absorbs nothing.
+    // colour) but 夏日合宿 shields it: no stay.
     assert_eq!(
         t.state(1, "stay"),
         0,
         "夏日合宿 keeps P1 un-designated: {}",
         t.state(1, "stay")
     );
-    assert_eq!(t.fire(2), 0, "P2 absorbs nothing, gains no fire");
+    // P2 is also in the zone and is **not** shielded, so the rain's stay lands
+    // on P2. 祥子 (1) 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个
+    // 火罐」 then grants a fire pot -- from P2's **own** stay, not from absorbing
+    // P1's (this scenario has no [经过], so the absorb clause never runs). The
+    // old `fire == 0` assertion was wrong on that point (test fix 2026-10-13).
+    assert_eq!(t.state(2, "stay"), 1, "P2 is in the zone: {}", t.state(2, "stay"));
+    assert_eq!(t.fire(2), 1, "P2 gains 1 fire from its own stay");
 }
 
 // =====================================================================
@@ -294,9 +298,6 @@ fn g22_exist_redirects_a_stay_onto_shouko() {
 // the exile goes to the user. P1 (初华, unstoppable) is the user.
 // RULING: 无路矢's exile is the cost of the teleport. If the exile is refused,
 // is the whole card negated? Assert the card is negated (P1 is not teleported).
-// DISCREPANCY: the engine still grants the 2 [除外] to a [不可阻挡] holder
-// (glossary 51: 「无法获得新的[除外]层数」).
-#[ignore = "DISCREPANCY: glossary 51 says [不可阻挡] 「无法获得新的[除外]层数」, but 无路矢 still grants 2 [除外] to the holder"]
 #[test]
 fn g23_unstoppable_refuses_the_exile_cost() {
     let mut t = Table::new(&["三角初华", "仓田真白", "花园多惠"]);
