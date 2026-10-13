@@ -296,7 +296,10 @@ struct Saved {
 /// (`TileMark::instance` / `Counter::instance`), stamped **at creation time**.
 /// `restore_saved` is exact (`version != SAVE_VERSION` is refused) and runs no
 /// re-attach -- rewriting live state would break save → restore identity.
-pub const SAVE_VERSION: u32 = 6;
+/// v7: `TurnCtx::plan` (the live `MoveCtx`) is serialized. It carries the roll
+/// tables a card shaped for the pending move; skipping it made save/restore
+/// lose those tables and the next roll diverged.
+pub const SAVE_VERSION: u32 = 7;
 
 /// A running match.
 pub struct Match {
