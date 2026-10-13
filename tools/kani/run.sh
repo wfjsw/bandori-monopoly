@@ -333,6 +333,7 @@ run_one() {
   set +e
   timeout --signal=TERM --kill-after=30 "${TIMEOUT}s" \
     cargo kani -p rules-kani \
+      --no-default-features \
       --features "$(unit_features "$unit")" \
       --harness "$name" \
       --default-unwind "$unwind" \
