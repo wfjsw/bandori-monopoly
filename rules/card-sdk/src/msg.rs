@@ -40,7 +40,6 @@ use std::collections::BTreeMap;
 #[cfg(all(not(target_arch = "wasm32"), kani))]
 use std::vec::Vec;
 
-#[cfg(not(kani))]
 use serde::Serialize;
 // Decoding is the *host's* job -- card guests only ever encode a Msg to hand to
 // the host, so the derive is kept off their cdylibs. Gate on the `guest`
@@ -110,7 +109,7 @@ pub const MAX_INLINE_ARGS: usize = 4;
 /// not read `k`/`a` (`Op::log` only bumps a narration counter), so the values
 /// are carried for counterexample readability and future arg-aware models.
 #[cfg(kani)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Msg {
     /// Interned key id (`crate::intern::NameId.0`). 0 is a valid interned name.
     k: u16,
