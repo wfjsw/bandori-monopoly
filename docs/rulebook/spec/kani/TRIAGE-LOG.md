@@ -174,11 +174,12 @@ Msg facade additionally walked the intern `static mut` table on every
 
 ### Fix (soundness kept: unwinding ON, covers reachable, mutants detected)
 
-1. **Per-card body dispatch** (`generated/body_dispatch_fn.rs`,
-   `tools/kani/gen_body_dispatch.py`). `entry_idx` under `cfg(kani)` goes
-   through `call_body_idx`: one match arm per RULESET index, each
-   `inline(always) call_body(&BAND[i], …)` on a `&'static` constant so
-   LLVM emits a **direct** call (or at worst a 1-target site).
+1. **Per-card body trampolines** (`call_card_N` + `call_body_idx`),
+   generated at build time by `rules/kani/build.rs` (`gen_body_dispatch`)
+   into `$OUT_DIR/body_dispatch_fn.rs` and `include!`d from `src/invoke.rs`.
+   Never committed (same rule as `cond_irs.rs`). Each trampoline is
+   `#[inline(never)]` and loads one constant `&CardDef` so CBMC's
+   points-to set is that card's entries only.
 2. **`Msg::new` skips `intern()`** under `cfg(kani)`. The host's
    `Op::log` / `Op::effect` only bump a narration counter and never read
    the key; `ctx::s()` names the host compares still intern.

@@ -1,7 +1,9 @@
 //! Generated single-source tables (see `docs/rulebook/spec/COND-SINGLE-SOURCE.md`).
 //!
-//! * `cond_irs` — lowered CEL guards + `guard_id!`
+//! * `cond_irs` — lowered CEL guards + `guard_id!` (build.rs → `$OUT_DIR`)
 //! * `card_ids` — card/skill/event/tile/mark id → index + `card_id!`
+//! * `body_dispatch_fn.rs` — per-card Kani body trampolines (build.rs →
+//!   `$OUT_DIR`, `include!`d by `src/invoke.rs`, never committed)
 
 pub mod card_ids;
 /// Lowered CEL guards + `guard_id!`. Generated at build time by `build.rs`

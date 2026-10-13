@@ -207,13 +207,14 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
     }
 }
 
-// Per-card body dispatch (`call_body_idx`) is generated:
-// `python3 tools/kani/gen_body_dispatch.py` → `generated/body_dispatch_fn.rs`.
-// Each arm fully expands the `fn` load + call so CBMC's function-pointer
-// removal sees a per-card points-to set, not the union of every address-taken
-// function (the 4k-target IF-chain behind `duobang_01_02`'s SAT cliff).
+// Per-card body dispatch (`call_body_idx`) is generated at build time by
+// `build.rs` (`gen_body_dispatch`) into `$OUT_DIR/body_dispatch_fn.rs` —
+// never committed (same rule as `cond_irs.rs`). Each trampoline loads one
+// constant `&CardDef` so CBMC's function-pointer removal sees a per-card
+// points-to set, not the union of every address-taken `fn(i32) -> Asked`
+// (the 4k-target IF-chain behind `duobang_01_02`'s SAT cliff).
 #[cfg(kani)]
-include!("generated/body_dispatch_fn.rs");
+include!(concat!(env!("OUT_DIR"), "/body_dispatch_fn.rs"));
 
 fn fail_entry_oob(idx: usize, entry_index: usize) -> ! {
     #[cfg(kani)]
