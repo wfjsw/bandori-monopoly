@@ -38,6 +38,9 @@ pub use view_impl::SnapshotView;
 /// AST → heap-free IR for Kani (host-only; feature `lower`).
 #[cfg(feature = "lower")]
 pub mod lower;
+/// Build-time generator for the Kani guard IR table (feature `lower`).
+#[cfg(feature = "lower")]
+pub mod gen_ir;
 /// The §4.2 vocabulary lint/rewrite: only the host (`compile`) walks it.
 #[cfg(feature = "compile")]
 pub mod schema;

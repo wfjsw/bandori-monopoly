@@ -36,7 +36,7 @@ Name: **AST-derived IR** (`rules-cond-ir` + `rules-cond::lower`).
 | parser | exactly one: the vendored `cel` crate via `rules-cond::compile` (already load-bearing for the host) |
 | translator | `lower`: the **rewritten** AST (`lint_and_rewrite` output) → a heap-free arena IR |
 | Rust side | `rules-cond-ir::eval` over `Val { Int, Bool, Null, List, Err }` — integer-only, no `String`/`Vec`/`HashMap` at eval |
-| Kani side | generated `const` programs in `rules/kani/src/generated/cond_irs.rs`, evaluated by the same interpreter under a symbolic `IrCtx` |
+| Kani side | generated `const` programs (`cond_irs`, generated into `$OUT_DIR` by `rules/kani/build.rs`; never committed), evaluated by the same interpreter under a symbolic `IrCtx` |
 | production | **unchanged**: the host still evaluates the CEL string via `rules-cond`; the IR is host-only (`lower` feature / `cfg(kani)` / tests) |
 
 Smaller trusted base, zero migration risk, cannot diverge in parsing. The
@@ -53,7 +53,7 @@ On::Hook(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
 
 Then, to prove it under Kani:
 
-1. `cargo run -p rules-cond --features lower --example gen_cond_ir`
+1. (automatic) `rules/kani/build.rs` calls `rules_cond::gen_ir::generate` on every build; `cargo run -p rules-cond --features lower --example gen_cond_ir [-- OUT.rs]` prints/dumps the same table
    (regenerates `rules/kani/src/generated/cond_irs.rs` from every inventory
    string; also emits a **const id** per guard and the `guard_id!` macro);
 2. in the harness, `let gid = guard_id!("actor == owner && value > 0");` and
@@ -323,7 +323,7 @@ same proof obligation holds for the real single-source guard.
 | phase | content | effort |
 |---|---|---|
 | 0 | machinery + 3 pilots | done |
-| 1 | run `gen_cond_ir` in CI; fail the build if the generated table is stale | ~0.5 day |
+| 1 | (done) the table is generated at build time, so it cannot be stale | ~0.5 day |
 | 2 | per-clause Kani harnesses that use `guard_id!`/`guard!` instead of `assume` | ~2–3 min/harness once the world model covers the clause's fields |
 | 3 | extend `ir_fill` to the full `WindowCtx`/`CandidateCtx` surface + guard-fill differential vs `fill_window`/`fill_candidate` | done (const-id lookup + per-field map + differential) |
 | 4 | optional: a `cond!` sugar that expands to the string literal only (no second parser) for new guards | 0.5 day, zero risk |
