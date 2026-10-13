@@ -1267,6 +1267,10 @@ pub struct Replayer {
     /// Turn boundaries since the last keyframe.
     turns_since_kf: u32,
     last_kf_time: f32,
+    /// Index pass: least ticks between keyframes, sized from the first save so
+    /// the byte cap lasts the whole record rather than its first stretch.
+    kf_gap_ticks: u64,
+    last_kf_tick: u64,
 }
 
 impl Replayer {
@@ -1370,6 +1374,8 @@ impl Replayer {
             capture: false,
             turns_since_kf: 0,
             last_kf_time: 0.0,
+            kf_gap_ticks: 0,
+            last_kf_tick: 0,
         };
         rp.drain_events();
         Ok(rp)
@@ -1553,13 +1559,19 @@ impl Replayer {
             self.turns_since_kf += 1;
         }
         let due = self.keyframes.is_empty()
-            || self.turns_since_kf >= 4
-            || self.time - self.last_kf_time >= 20.0;
+            || ((self.turns_since_kf >= 4 || self.time - self.last_kf_time >= 20.0)
+                && self.tick - self.last_kf_tick >= self.kf_gap_ticks);
         if !due || self.keyframe_bytes >= MAX_KEYFRAME_BYTES {
             return;
         }
         let save = self.m.save();
+        // Spread what is left of the byte budget over the ticks left. Saves
+        // grow through a game (the first is tiny), so budget for 1.5x this one.
+        let room = MAX_KEYFRAME_BYTES.saturating_sub(self.keyframe_bytes + save.len());
+        let fit = (room / (save.len() * 3 / 2).max(1)).max(1) as u64;
+        self.kf_gap_ticks = self.total_ticks().saturating_sub(self.tick) / fit;
         self.keyframe_bytes += save.len();
+        self.last_kf_tick = self.tick;
         self.turns_since_kf = 0;
         self.last_kf_time = self.time;
         self.keyframes.push(Keyframe {
@@ -1603,24 +1615,36 @@ impl Replayer {
         let mut used = 0usize;
         {
             let idx = self.idx.as_mut().expect("just built");
-            while used < budget && idx.cursor < total {
-                let before = idx.cursor;
-                idx.next_input();
-                if idx.cursor == before {
+            // Budget units are tick quanta and non-tick inputs, not whole log
+            // entries: one `Ticks` entry can be thousands of quanta, and a
+            // chunk of those blocks the page for minutes on a long game.
+            while used < budget && idx.cursor < total && !idx.ended() {
+                let before = (idx.cursor, idx.sub);
+                if matches!(idx.body.inputs.get(idx.cursor), Some(Input::Ticks { .. })) {
+                    idx.apply_one_tick();
+                } else {
+                    idx.apply_non_tick();
+                }
+                if (idx.cursor, idx.sub) == before {
                     break; // no progress
                 }
                 used += 1;
-                if idx.ended() {
+                // Keyframes stop at the cap; replaying the rest would only burn CPU.
+                if idx.keyframe_bytes >= MAX_KEYFRAME_BYTES {
                     break;
                 }
             }
-            self.keyframes = idx.keyframes.clone();
-            self.keyframe_bytes = idx.keyframe_bytes;
+            // Tiny chunks are the norm; copy the (up to 4 MB) keyframes only
+            // when a new one landed.
+            if idx.keyframes.len() != self.keyframes.len() {
+                self.keyframes = idx.keyframes.clone();
+                self.keyframe_bytes = idx.keyframe_bytes;
+            }
         }
         let done = self
             .idx
             .as_ref()
-            .is_some_and(|i| i.cursor >= total || i.ended());
+            .is_some_and(|i| i.cursor >= total || i.ended() || i.keyframe_bytes >= MAX_KEYFRAME_BYTES);
         IndexStatus {
             done,
             inputs: self.idx.as_ref().map_or(0, |i| i.cursor as u32),

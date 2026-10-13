@@ -26,6 +26,9 @@ import type {
   TurnMark,
 } from "./record";
 
+/** Target main-thread time of one keyframe-index chunk (ms). */
+const INDEX_CHUNK_MS = 12;
+
 /** `TurnMark` with the u64 tick already converted to a number. */
 export interface Turn {
   round: number;
@@ -248,17 +251,26 @@ export class ReplaySession extends GameSession {
     }
   }
 
-  /** Keyframes for `seek`, built in `setTimeout` chunks so the UI stays up. */
+  /** Keyframes for `seek`, built in small `setTimeout` chunks so the UI stays
+   *  up. The page engine runs on the main thread, and one tick quantum of a
+   *  long game costs milliseconds, so the chunk size adapts to take about
+   *  {@link INDEX_CHUNK_MS} each rather than assuming a fixed amount of work,
+   *  and while playing it idles four times as long as it worked so playback
+   *  keeps most of the thread. */
   private runIndex(): void {
     if (this.indexing) return;
     this.indexing = true;
+    let budget = 4;
     const step = () => {
       if (this.closed) return;
-      void this.run((h) => h.index(250))
+      const t0 = performance.now();
+      void this.run((h) => h.index(budget))
         .then((st) => {
+          const ms = Math.max(1, performance.now() - t0);
+          budget = Math.max(1, Math.min(2000, Math.round((budget * INDEX_CHUNK_MS) / ms)));
           this.indexStatus = st;
           this.emitOther();
-          if (!st.done && !this.closed) window.setTimeout(step, 16);
+          if (!st.done && !this.closed) window.setTimeout(step, this.playing ? Math.max(16, ms * 4) : 16);
           else this.indexing = false;
         })
         .catch((e) => {
@@ -266,7 +278,8 @@ export class ReplaySession extends GameSession {
           this.indexing = false;
         });
     };
-    window.setTimeout(step, 0);
+    // After the first frame, so the Board paints before any indexing starts.
+    window.setTimeout(step, 250);
   }
 
   setPlaying(on: boolean): void {
