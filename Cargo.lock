@@ -1767,6 +1767,7 @@ dependencies = [
  "game-rules",
  "postcard",
  "rules-events",
+ "rules-status",
  "rules-tile-marks",
  "rules-tiles",
  "serde_json",

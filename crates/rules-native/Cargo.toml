@@ -31,6 +31,7 @@ skill-bands = { path = "../../rules/skills/skill-bands" }
 skill-characters = { path = "../../rules/skills/skill-characters" }
 rules-tiles = { path = "../../rules/tiles" }
 rules-tile-marks = { path = "../../rules/tile_marks" }
+rules-status = { path = "../../rules/status" }
 rules-events = { path = "../../rules/events" }
 
 [dev-dependencies]
