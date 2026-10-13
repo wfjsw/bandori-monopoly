@@ -1193,7 +1193,7 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
                 kind,
                 value,
             };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
             }
 }
 

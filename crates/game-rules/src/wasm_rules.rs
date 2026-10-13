@@ -899,6 +899,13 @@ impl CardWorld for Run {
     }
     fn add_to_hand(&mut self, player_id: i32, card: &str) {
         self.world.add_to_hand(player_id, card);
+        // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
+        // *is* the draw: the after points (`drawn` / `drew`) fire for it
+        // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
+        // bounce, a tutor) is not a draw and must not raise them.
+        if self.trigger.kind == TriggerKind::DrewBefore {
+            self.draw_log.push((player_id, card.to_string()));
+        }
     }
     fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
         let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
@@ -4107,32 +4114,35 @@ impl<M: CardModules> RulesBridge<M> {
                 // with `t.card` naming it -- so a card that has no game-start
                 // clause is never instantiated for one.
                 self.game_start_hooks(cx, t.player_id, kind, &mut trigger)?;
-            } else if is_own_card_kind(kind) {
-                // These run on a fresh instance of the card named on
-                // `t.card` (`Drawn`) -- it is in a hand / pile, not placed.
-                // `Discarded` is *not* here: a placed field card hears about
-                // discards (MyGO band (3) 「每次你的卡在未生效的情况下进入弃牌
-                // 堆时」), so it rides the field-card path below.
-                if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
-                    if let Some(idx) = self
-                        .ruleset
-                        .card(card_id)
-                        .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
-                    {
-                        self.drive_hook(
-                            cx,
-                            Call::Hook {
-                                card: idx,
-                                kind,
-                                player_id: t.player_id,
-                            },
-                            card_id,
-                            -1,
-                            &mut trigger,
-                        )?;
+            } else {
+                // Own-card dispatch for `Drawn` (the card is in a hand / pile)
+                // and `Discarded` (the card that just entered the discard --
+                // RAS:游击演出's [特] 「此卡进入弃卡区的回合结束时」). A placed
+                // field card also hears about discards (MyGO band (3) 「每次你
+                // 的卡在未生效的情况下进入弃牌堆时」), so `Discarded` falls
+                // through to the field-card walk as well.
+                if matches!(kind, TriggerKind::Drawn | TriggerKind::Discarded) {
+                    if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
+                        if let Some(idx) = self
+                            .ruleset
+                            .card(card_id)
+                            .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
+                        {
+                            self.drive_hook(
+                                cx,
+                                Call::Hook {
+                                    card: idx,
+                                    kind,
+                                    player_id: t.player_id,
+                                },
+                                card_id,
+                                -1,
+                                &mut trigger,
+                            )?;
+                        }
                     }
                 }
-            } else {
+                if kind != TriggerKind::Drawn {
                 let world = cx.world_copy();
                 for player_id in 0..world.player_count() {
                     // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81 「所有其正在生效
@@ -4293,6 +4303,7 @@ impl<M: CardModules> RulesBridge<M> {
                         -1,
                         &mut trigger,
                     )?;
+                }
                 }
             }
             // Scheduled turn-end callbacks (「你的下回合结束时」 and kin): the
@@ -7913,6 +7924,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     false
                 });
                 cx.swap_world(w);
+                eprintln!("DBG scheduled due={due:?} early={early} ended={ended}");
                 for (id, owner, uid) in due {
                     if let Some(idx) = self
                         .ruleset
@@ -8059,6 +8071,8 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::DeckAtGameStart
             | TriggerKind::Drew
             | TriggerKind::DrewBefore
+            | TriggerKind::FirePaying
+            | TriggerKind::FlipEffect
             | TriggerKind::Reshuffled
             | TriggerKind::Bought
             | TriggerKind::BeforeOut

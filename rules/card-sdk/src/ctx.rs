@@ -1553,9 +1553,10 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
 /// (e.g. [`TriggerKind::CircleAffected`]); `value` is the trigger's `value`.
-/// Returns true when the link settled (nobody cancelled it).
-pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> bool {
-    unsafe { sys::raise(player_id, kind as i32, value) != 0 }
+/// Returns true when the link settled (nobody cancelled it). A hook that
+/// prompts pauses the run (`Err(Prompt)`).
+pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prompt> {
+    asked(unsafe { sys::raise(player_id, kind as i32, value) }).map(|v| v != 0)
 }
 
 pub fn fire(player_id: i32) -> i32 {
@@ -1621,6 +1622,15 @@ pub fn card_move(player_id: i32) -> bool {
 /// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
 /// counteraction cancelled the link).
 pub fn spend_fire(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+    if n <= 0 {
+        return Ok(true);
+    }
+    // 「以代替此次技能的火罐消耗」 -- `FirePaying` runs before the pots move.
+    // A hook that substitutes the cost cancels the link and performs its own
+    // payment; the spend is then treated as satisfied.
+    if !raise(player_id, crate::abi::TriggerKind::FirePaying, n)? {
+        return Ok(true);
+    }
     let (p, l) = mj(why);
     asked(unsafe { sys::spend_fire(player_id, n, p, l) }).map(|v| v != 0)
 }
