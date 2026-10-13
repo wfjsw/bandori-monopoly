@@ -46,3 +46,20 @@ cel = { path = "third_party/cel-rust" }
 
 [profile.dev]
 debug = true
+
+# The card ruleset is compiled by wasmi inside the browser engine at every
+# match start. At opt-level 0 (with debug assertions and UB checks) translating
+# the card module takes seconds under `npm run dev`; keep the interpreter and
+# its wasm parser optimized in dev builds. Our own crates stay unoptimized, so
+# debug assertions and the console cheats are unaffected. Release builds
+# already use opt-level 3 for everything, so engine bundles do not change.
+[profile.dev.package.wasmi]
+opt-level = 3
+[profile.dev.package.wasmi_core]
+opt-level = 3
+[profile.dev.package.wasmi_ir]
+opt-level = 3
+[profile.dev.package.wasmi_collections]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
