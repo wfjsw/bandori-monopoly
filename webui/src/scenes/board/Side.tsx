@@ -280,27 +280,16 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   };
   const peekHand = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
   // First click selects (highlighted border); clicking the selected card (or
-  // Enter) opens its detail popup, whose buttons discard / play it.
+  // Enter) activates it: discard while over the limit, else play.
   const [picked, setPicked] = useState<string | null>(null);
   const activate = (id: string, k: number) => {
     const key = `${id}:${k}`;
     if (picked !== key) return void setPicked(key);
     setPicked(null);
     setHover(null);
-    const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
-    // Replay (and a live prompt sheet): inspection only -- no play / discard.
-    if (sess.readOnly || sheet.open) return void showCard(id, [], note);
-    // Per-card `playable` (online extras / solo `view_extra`): gate the play
-    // action. Absent = unknown = keep the coarse gate's behaviour.
-    const cardPlayable = m.v.playable?.[k] !== false;
-    const acts: CardAction[] = [];
-    if (m.overHand) acts.push({ label: tr("board.discardThis"), enabled: !auto, kind: "white", run: () => act(sess, { act: "discard", card: id }) });
-    acts.push({
-      label: canPlay ? tr("board.play") : tr("board.playOnlyOps"),
-      enabled: canPlay && cardPlayable,
-      run: () => act(sess, { act: "play", card: id }),
-    });
-    showCard(id, acts, note);
+    if (sess.readOnly || sheet.open || auto) return;
+    if (m.overHand) return void act(sess, { act: "discard", card: id });
+    if (canPlay && m.v.playable?.[k] !== false) void act(sess, { act: "play", card: id });
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
