@@ -314,14 +314,14 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * 网络链接异常's drop-one is landed (§3); two cross fixtures still see the
     whole-card negate (c05 / g19) -- see cross below.
 * **pp** (3)
-  * 丸山彩's (2) PayChoose hook still prompts under 初次演出事故 -- the
-    `skillBlock` token is set but the guard/body `skill_blocked` check does
-    not see it (hook-guard dispatch).
+  * ~~丸山彩's (2) PayChoose hook still prompts under 初次演出事故.~~
+    **Fixed 2026-10-13** (the residual guard was fine; the test's `set_fans`
+    wiped `skillBlock`. SKILL-01).
   * 冰川日菜 (2) never rolls 1d4 nor borrows a skill (`skill.hinaLottery`
     stays -1).
   * 安可 doesn't counter 重叠的声音's self-teleport.
-  * PP band (2) overflow crystals: a passive 「X大于拥有数时」 hook on a
-    fan-flip effect, and there is no flip-effect trigger to observe (§6).
+  * ~~PP band (2) overflow crystals: no flip-effect trigger to observe.~~
+    **Fixed 2026-10-13** (`FlipEffect` = 94; ABI-05).
 * **roselia** (1)
   * ~~凑友希那 (3) stop-pot offers no prompt.~~ **Fixed 2026-10-09** (test
     matched Chinese text instead of the `kokoro_practice_force_*` key).
@@ -332,7 +332,9 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * ~~选择自己的舞台 opens no window on a self-inflicted [传送].~~
     **Fixed 2026-10-10** (un-ignored, green).
 * **morfonica** (2)
-  * 星月夜's even-roll crystal-removal offer never prompts.
+  * ~~星月夜's even-roll crystal-removal offer never prompts.~~
+    **Fixed 2026-10-13** (it did prompt; the owner, not the roller, pays.
+    DRAW-02).
   * 纯真振翅 never rolls after the teleport.
   * （NNM）稍微努力了一下 is a **card bug**: its CardDef declares two
     `On::Play` entries and the host dispatches only the first, so a hand
@@ -341,15 +343,15 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
 * **ras** (2)
   * ~~游击演出 lands one tile past the chosen one.~~ **Fixed 2026-10-09**
     (`card_settle_at` no longer inherits the turn's walk).
-  * 游击演出's [特] never opens at turn end.
+  * ~~游击演出's [特] never opens at turn end.~~ **Fixed 2026-10-13**
+    (own-card `Discarded` dispatch + arm hook; DRAW-03).
   * ~~Repaint halves a shaped settlement payment only partially (the
     Tomorrow's Door surcharge joins at full price).~~ **Fixed 2026-10-10**
     (`MONEY-03`; the pipeline already did the right thing -- the test's dice
     put the hill off-path so Repaint was never offered. Un-ignored, green).
 * **mygo** (4)
-  * 灯 不再迷茫: a crystal cannot pay a skill's fire cost (B -- wants a
-    pre-spend `FirePaying` hook), so the card is never [移除]d when its
-    crystals run out (two tests).
+  * ~~灯 不再迷茫: a crystal cannot pay a skill's fire cost.~~
+    **Fixed 2026-10-13** (`FirePaying` = 78; CRYSTAL-01, two tests).
   * A mid-turn [停留] doesn't stop the move (also an ambiguity -- §6).
   * ~~要乐奈's Space teleport spends the 3 fire but leaves the piece at the
     origin.~~ **Fixed 2026-10-09** (`card_move` now runs the plan).
@@ -385,12 +387,18 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   g21 (祥子 (1) absorbs nothing), g23 ([不可阻挡] still gains [除外] from
   无路矢), g28 (Maya (2)'s kept card does not raise `drew`), g30 (t13's
   stack overflow).
-* **fuzz** (`fuzz_found` 14 tests, 8 open): latent shapes the fuzzer
+* **fuzz** (`fuzz_found` 14 tests, 1 open): latent shapes the fuzzer
   found, filed with minimal repros -- see [COVERAGE.md](COVERAGE.md) "Fuzz
-  coverage". Still open: `unknown_card_id`, `determinism_break`,
-  `save_restore_break`, `negation_not_total`, `multiply_order_matters`,
-  `monotonicity_break`. Un-ignored 2026-10-10 (green): `card_trap_reachable`,
-  `immunity_gap`.
+  coverage". Un-ignored 2026-10-13 (green, `closeout-5-engine`):
+  `unknown_card_id`, `determinism_break`, `save_restore_break`,
+  `negation_not_total`, `monotonicity_break`. Still open:
+  `multiply_order_matters` (MONEY-01 / C-Q1 ruling). Un-ignored 2026-10-10
+  (green): `card_trap_reachable`, `immunity_gap`.
+  * `save_restore_break` root cause: `TurnCtx::plan` (`MoveCtx`) was
+    `#[serde(skip)]`, so a restore dropped card-shaped roll tables and the
+    next roll diverged. Serialized now (`SAVE_VERSION` 7).
+  * `negation_not_total` / `monotonicity_break` were harness gaps (hardcoded
+    counteractor seat; net displacement instead of walk length).
   `returns_prompt_storm` (2026-10-08) is fixed and live: a raw
   `state_set("stun", …)` left a permanent [晕眩] that skipped every later
   turn, and PPP:Returns' 「每回合开始时」 band borrow asked once per skipped
@@ -551,8 +559,11 @@ rulings above.
    C# shape.) No black-box test.
 10. **Agent 「同色」.** 「每种颜色拥有一个地产商格子」 never says whether
     `extraColor` / 「该格获得所有颜色」 widens the colour group.
-    `docs/TILES.md` `TODO(规则书)`. Engine now: the board's `group`.
-    Test: `cross_tiles::t16_soyo_mixed_colors` (ignored).
+    **Settled 2026-10-13** (`closeout-4-tiles`): it does (`ctx::is_color` /
+    `agent_colour_set`); an `ANY_COLOR`-only member is buyable / rentable
+    but never buildable. The choice set 「无主或玩家拥有的」 is unowned or
+    **any** player-owned (another seat's deed → the agent's half-charge).
+    Test: `cross_tiles::t16_soyo_mixed_colors` (live, green).
 11. **RiNG mortgageability.** 游戏流程 5 says 「抵押拥有的地契」 with no
     exclusion, but the engine refuses (`err.mortgage_ring`, `mortgageable`
     filters `kind != "ring"`). Is RiNG mortgageable, and if not where does
@@ -794,15 +805,10 @@ player and asks them last; one activation per visit -- is retired):
 * 「多个效果可[反击]同一个时点」 still does not cap declarations per player;
   the cap is now "all of them before priority moves on", not one per visit.
 
-**Open item in `chain.rs`:** `counters_to_counters_start_with_the_declarer`
-is `#[ignore]`d. The engine does start the nested round at the declarer (and
-`counters_to_a_counter_wait_for_the_round_on_x_to_close` observes that), but
-`TEST:deny`'s guard `deny_yes` requires `trigger::player_id() != player_id` --
-it never answers a player's *own* counter -- so the declarer has no eligible
-card on their own counter's round and the "starts with the declarer" offer
-cannot be observed through that fixture. The rulebook does not forbid answering
-your own link; either the fixture guard or the test's observation needs a
-change (black-box side).
+**Open item in `chain.rs`:** ~~`counters_to_counters_start_with_the_declarer`
+is `#[ignore]`d~~ **Fixed 2026-10-13** (`closeout-3-windows`): `TEST:deny`'s
+guard `deny_yes` no longer excludes self, so the declarer is offered deny on
+their own counter's round and ruling 2026-10-07 is observable. Un-ignored, green.
 
 ## Harness notes
 
@@ -827,12 +833,14 @@ change (black-box side).
 
 * **Ruling 3** (mortgage to fund a buy): engine refuses today; unchanged.
 * **Ruling 4** (agent pick: full [结算] or direct buy/build; 「玩家拥有的」
-  includes others?): today's behaviour kept — a direct buy / build, and
-  「玩家拥有的」 means the picking player's own tiles.
+  includes others?): **superseded 2026-10-13** (`closeout-4-tiles`) —
+  「无主或玩家拥有的」 is unowned or **any** player-owned: unowned → buy,
+  own → build, another seat's non-mortgaged deed → the agent's half-charge.
 * **Ruling 5** (soyo 「所有颜色」 toward half-charge; per-player 「视为live
-  house」 widen the agent set?): today's behaviour kept — `ANY_COLOR` joins
-  the set for buy offers but is never buildable; the half-charge set is the
-  plain `group` match.
+  house」 widen the agent set?): **superseded 2026-10-13** — `ANY_COLOR`
+  widens the colour set for buy **and** rent offers (never buildable); the
+  half-charge set includes `ANY_COLOR`-only members, and soyo's PayMul
+  halves again on top (「地产商的减半收费基础上额外减半」).
 * **Ruling 6** (is 强制购买 a 「购买」 for 「购买…时」 listeners?): no hooks
   today — `bought` / `buyAfter` do not fire on force-buy.
 * **Ruling 7** (auction win a 「购买格子」 for discounts? auction [消耗] through
@@ -1134,21 +1142,46 @@ changed only *how the test drives the engine* (match i18n keys; press a
 press-skill; observe at the right boundary) or a *forgot-the-CiRCLE-reward*
 expectation that contradicted the book's own reward clause.
 
+### Batch 2026-10-13 (closeout-1-skills): character/band skills
+
+Fixed and un-ignored (green):
+
+* **CRYSTAL-01 / FirePaying** (`light_crystal_pays_skill_fire_cost`,
+  `light_removed_when_crystals_run_out`). New `TriggerKind::FirePaying` (78)
+  raised inside `ctx::spend_fire` before the pots move; a hook that substitutes
+  cancels the link. 不再迷茫 (2) hooks it and burns one crystal; (3) sweeps at
+  0 via `CounterChanged` (`Dest::Banished`). The 诗超绊 (2)/(3) gate no longer
+  requires `fire >= cost` (a crystal can stand in).
+* **DRAW-01 / Maya drew** (`g28_maya_look_at_top_still_counts_as_a_draw`). A
+  `DrewBefore` replacement's `add_to_hand` now pushes to `draw_log`, so the
+  after points fire for the kept card.
+* **DRAW-02 / 星月夜 even-roll** (`starry_even_roll_of_another_player_offers_crystal_removal`).
+  The hook did prompt; `attack` billed the roller (C#) while the sheet's
+  omitted subject of 「可消耗」 is the card controller. The owner now pays.
+* **DRAW-03 / 游击演出 [特]** (`guerrilla_special_offers_to_mark_a_deed_as_livehouse`).
+  Own-card `Discarded` dispatch + a `Discarded` hook that arms the turn-end
+  check. The test discards through the engine (over-hand `discard_card`).
+* **CRYSTAL-04 / NNM (2)** (`nnm_option2_gains_x_times_circle_money_reward`).
+  Each of the x rewards runs the money half of the CiRCLE reward step
+  (`circleAffected`), so Morfonica's 1000/1500/2000 cycle scales it.
+* **ABI-05 / PP band overflow** (`band_skill_overflow_to_crystals`). New
+  `TriggerKind::FlipEffect` (94) raised with the clause's intended X before the
+  counters move; the band (2) hooks it and adds `X - owned` crystals.
+* **SKILL-01 / skillBlock** (`accident_blocks_pp_skill_2`). The residual guard
+  was already consulting `skill_blocked`; the test's `set_fans` helper wiped
+  the whole tokens vector (including `skillBlock`). The helper now updates the
+  two fan counters in place.
+
+Test fixes (not engine): DRAW-02's who-pays reading; DRAW-03's discard path;
+CRYSTAL-04's prompt sequence and Morfonica-cycle expectation; SKILL-01's
+`set_fans`; the two light tests' setup (bind the skill; assert the card is
+[移除]d at 0 per (3)).
+
 ### Still open (unchanged, triaged)
 
 The remaining `#[ignore]`s are C (ruling -- §6 and the Timing / order block)
 or A/B items that need a wider surface than this batch:
 
-* **B, contained next:** MyGO:（灯）不再迷茫 (2) 「移除此卡上的一个[奇迹水晶]
-  以代替此次技能的火罐消耗」. `spend_fire` has no pre-spend substitution hook
-  (only the post-commit `fireSpent`), so a 0-fire player cannot pay with a
-  crystal. Wants a `FirePaying` hook (or a substitute consult inside
-  `spend_fire`) -- ABI bump. Tests: `light_crystal_pays_skill_fire_cost`,
-  `light_removed_when_crystals_run_out`.
-* **B, contained next:** 丸山彩 (2) under 初次演出事故 -- the
-  `skillBlock:Pastel✽Palettes` token is set but `skill_blocked` is not seen
-  on the `PayTotalAdd` guard/body (hook-guard dispatch). Test:
-  `accident_blocks_pp_skill_2`.
 * **B / A:** 冰川日菜 (2) -- `hina_lottery` is written (roll 1d4, borrow the
   matching (2)) but `place_raw` + `begin_turn` never reaches `borrowed`.
   Test: `hina_skill_2_borrows_skill` (also asserts the *face* where the
@@ -1157,7 +1190,9 @@ or A/B items that need a wider surface than this batch:
 * **A (partly done):** 选择自己的舞台 vs a self-inflicted [传送]
   (`choose_your_stage_answers_an_abnormal_move`) -- **fixed and
   un-ignored 2026-10-10**. 安可 vs an overlapping teleport
-  (`ix_encore_blocks_overlap_teleport`) is still ignored (pp).
+  (`ix_encore_blocks_overlap_teleport`) -- **fixed and un-ignored
+  2026-10-13** (`closeout-2-movement`; the window already opened, the test
+  drive just never declared 安可).
 * **A, engine:** 要乐奈 (3) / 凑友希那 (3) stop-pot landing (`t.pos == 36`)
   and the `cross_move` stop-pot cases -- `plan::set_stop_at` during a
   `PassTile` hook does not land the piece on the hook's tile.
@@ -1172,7 +1207,9 @@ or A/B items that need a wider surface than this batch:
 * **C:** everything whose `#[ignore]` says `RULING` / `CROSS-AGENT`, plus the
   §6 open list and the Timing / order block. Collected as numbered questions
   in the report.
-* **B, wider:** NNM (2) / MyGO band (2) multi-activation (§6 item 8);
+* **B, wider:** NNM (2) / MyGO band (2) multi-activation (§6 item 8 -- MyGO
+  half **fixed 2026-10-13** in `closeout-2-movement`, one `On::Play` with a
+  which-effect prompt);
   笑容大游行 stack overflow; 网络链接异常 drop-one (c05 un-ignored
   2026-10-10; g19 still sees the whole-card negate on the join path);
   花园多惠 (2) cancel window; 骰子已经掷下 shut-window; the remaining
@@ -1239,9 +1276,14 @@ High-severity class-A window items. 9 tests un-ignored, green twice.
   `target == owner && actor != owner`. Force-move lands on
   `trigger::player_id` of the answered link. Un-ignored:
   `c16_cannot_look_away_answers_a_counter`, `l04_forced_move_into_remote_settle`.
-* **CH-06 reclassified B:** per-pair cancel works (`c05` green). `g19` needs
+* **CH-06 reclassified B:** per-pair cancel works (`c05` green). ~~`g19` needs
   真奈's nested join window (CH-05 `nested PlayCtx`) so the joiner's
-  self-targeted cancel is retargeted 「改为你」 to 真奈's user.
+  self-targeted cancel is retargeted 「改为你」 to 真奈's user.~~
+  **Fixed 2026-10-13** (`closeout-3-windows`): `SELF_REDIRECT` + `Trigger.join_redirect`
+  / `join_used` + `ctx::join_redirect_target()` / `set_join_used()`. 网络链接异常's
+  self-targeted cancel now redirects to 真奈's user under the join. Un-ignored
+  `g19_manas_join_window_lets_a_third_party_drop_one`, green. CH-05 remainder
+  (full nested PlayCtx window, play-history query) tagged `TODO(规则书)`.
 * **WINDOW-01 (test bug):** `err.play_phase` was a turn-start skill hook
   prompt left open (若叶睦 / 丰川祥子 `ask_yes` at `TurnStartBefore`), so the
   match was busy. Drain after `begin_turn`. Un-ignored:
@@ -1270,3 +1312,88 @@ High-severity class-A window items. 9 tests un-ignored, green twice.
 * **l01 open:** five-link war -- E (网络链接异常) should cancel A's designation
   (P0 pays nothing to P1) and P2 should still pay X. Currently both wars charge
   and P2 skips X. Ignore reason updated.
+
+## Movement batch (2026-10-13, `closeout-2-movement`)
+
+Six ignored DISCREPANCY tests un-ignored and green. Root causes split
+**D** (test drive) from **A** (engine / card):
+
+* **D, `m03_eve_then_yolo` (MOVE-10):** Eve's (2) is an `ask_number` 0..=up
+  choice (options are `ask.intOption`); the old matcher looked for 「若宫伊芙」
+  /「粉丝」 in the options and declined. Drive is `answer(0, 2)` (Y = 2), same
+  as the green twins `g10` / `g32`. Additive timing Eve `RollAfter` → Y.O.L.O
+  `MoveRoll` was already correct (4 + 2d4 + 1d4 = 8).
+* **D, `m22_mygo_band_move1` (MOVE-03):** 「于移动掷骰前选择移动1格以替代
+  移动掷骰」 is a skill press *before* the roll (`t.skill`), not a window
+  inside `t.roll`. The multi-activation half was already merged into one
+  `On::Play` with a which-effect prompt (green twins `band_move_one_…` /
+  `band_draw_…`).
+* **D + A, `ix_encore_blocks_overlap_teleport` (CH-01):** the self-[传送]
+  already opened the abnormal [反击] window (green twin
+  `choose_your_stage_answers_an_abnormal_move`); the test just `drain`ed
+  instead of declaring 安可. Drive now plays the counteraction.
+* **A, `rain_stay_blocks_this_turn_move` (MOVE-05):** glossary 51
+  「[停留]=无法移动」 is rulebook. `give_stay` / `give_exile` now maintain
+  the `skip_move` latch as a consequence of the state (set on gain, clear when
+  the last layer drops and no [除外] holds the move); [不可阻挡] 「无视已存在
+  的[停留]」 keeps the walk legal. C-Q7's *mid-walk* half (stay gained after
+  the roll) is unchanged. Green twins that moved after a stay grant
+  (`rain_extra_settle_at_turn_end`, `rain_day_drains_one_crystal_per_turn_end`,
+  `g15_parking_space_…`) now use [不可阻挡] or skip the roll.
+* **A + D, `m28b_my_own_problem_after_forced_move` (MOVE-11):** 「（2）若受到
+  [异常移动效果]影响，此卡不生效」 now gates the [反击] offer
+  (`can_counteract`). The signal is a longer-lived `abnormalHit` latch (set
+  when an abnormal lands, cleared when the player's next [主要移动] completes)
+  because the force-move is on *another* player's turn and `TurnCtx::abnormal`
+  is per calendar turn. The saki_move drive also had to answer the target pick
+  (`saki_move_title` choice, not `kind == "player"`) and the direction
+  (`saki_move_dir` option 0) — without that the force-move never landed.
+* **A + D, `m09_ras_band_first_abnormal_only` (MOVE-12):** RAS band (1)'s
+  drop of the second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late
+  to cancel) with pre `actor == owner` (the causer). Moved to
+  `On::Gate(&[GateKind::AbnormalGuard])` with pre `target == owner` (the
+  recipient). Same saki_move drive fix as MOVE-11.
+
+**Pre-existing (not this batch):** `inter_yolo_pushes_haneoka_over_20` fails
+with `err.play_timing` on master source too — `t.play(0, "AG:Y.O.L.O")` is a
+counteract-only card with no `On::Play`. Left as-is.
+
+## Batch 3 — counteraction windows and card interactions (2026-10-13, `closeout-3-windows`)
+
+* **WINDOW-02 / l01 (engine):** the five-link war now nests counters to
+  counters -- C answers B, D answers C, E answers A -- instead of putting every
+  counter on X's round. Un-ignored `l01_counter_war_five_links_deep`, green.
+* **chain.rs `counters_to_counters_start_with_the_declarer` (fixture):**
+  `TEST:deny`'s guard `deny_yes` excluded self (`trigger::player_id() !=
+  player_id`), so the declarer was never offered deny on their own counter's
+  round and ruling 2026-10-07 "the declarer is that round's initial user" was
+  unobservable. The rulebook does not forbid answering your own link. Un-ignored,
+  green.
+* **SETTLE-04 / l07 (C-Q26a ruling):** the last 线香花火 crystal removal does
+  **not** grant an extra turn. The terminal effect is discard + 2 [眩晕].
+  (Granting one would auto-skip it on the stun -- `play.rs` `stunned` ->
+  `end_turn` -- and its 「每回合结束时移除一层」 tick would eat one of the two
+  layers, netting 1.) The old ignore reason blamed phase-10/11 ordering; the
+  real cause was the extra turn's auto-skip. Un-ignored, green.
+* **CH-13 / c21 (engine):** `TriggerKind::TwoCards` (「当有人同一回合内打出两张
+  卡时」) was never raised. `play_from_hand` now counts hand-card plays in
+  `TurnCtx.cards_played` and raises `"twoCards"` on the second, opening its own
+  [反击] window. Un-ignored `c21_here_the_world`, green.
+* **CH-11 / c26 (placement prop):** 「此卡不受任何其他效果影响」 was a play-body
+  side effect (`set_self_immune`), so `place_raw` never saw it. New
+  `prop::IMMUNE` is stamped onto `FieldCard.immune` at placement. Un-ignored
+  `c26_immunity_vs_crystal_mover`, green.
+* **CH-12 / g23 (glossary 14):** [不可阻挡] now refuses new [除外]/[晕眩] layers
+  in `abnormal_gate`. 无路矢's exile is its teleport cost, so a refused gain
+  negates the card (CH-07 minimal: spent, no place / no designate / no later
+  teleport). Un-ignored `g23_unstoppable_refuses_the_exile_cost`, green.
+* **WINDOW-03 / c12 (gate order):** `target_player` runs Redirect **before**
+  Untargetable, so EXIST 「目标将改为你」 re-names first and the gate checks the
+  final name. Un-ignored `c12_exist_vs_summer_camp`, green. (The 「造成影响」
+  declaration-vs-settlement latch, C-Q8, is still open.)
+* **g21 (test fix + gate):** area status grants that never call `ctx::target`
+  (那天的雨's 「所有玩家获得一层[停留]」) now consult Untargetable in
+  `abnormal_gate`, so 夏日合宿 「你只会被自己发动的效果指定」 shields. The test's
+  `fire == 0` assertion was wrong: P2's fire is from its **own** stay via
+  祥子 (1) 「受到停留…获得一个火罐」, not from absorption (no [经过] in this
+  scenario). Fixed to assert P2 stay == 1 and fire == 1. Un-ignored, green.

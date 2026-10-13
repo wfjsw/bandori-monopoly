@@ -206,7 +206,6 @@ fn g27_crystal_move_does_not_touch_fire_or_the_dice_set() {
 // DISCREPANCY: `ctx::draw` raises `drew`, but Maya (2)'s replacement draw
 // (look at top Y+1, keep one) does not route the kept card through the draw
 // pipeline's `drew` raise that 梦在前方's per-draw crystal listens to.
-#[ignore = "DISCREPANCY: the kept card of Maya (2)'s look-at-top does not raise `drew` for 梦在前方's crystal"]
 #[test]
 fn g28_maya_look_at_top_still_counts_as_a_draw() {
     let mut t = Table::new(&["大和麻弥", "仓田真白"]);
@@ -215,23 +214,33 @@ fn g28_maya_look_at_top_still_counts_as_a_draw() {
     drain(&mut t);
     t.place_raw(0, "PP:梦在前方，结彩当下");
     t.set_crystals(0, "PP:梦在前方，结彩当下", 0);
+    // `clean()` wipes the start-of-game fans; Maya (2) needs one to flip.
+    t.m.world_mut().st.players[0].tokens = vec![game_core::state::Counter {
+        name: "P✽P粉丝(正)".into(),
+        value: 2,
+        instance: None,
+    }];
     set_draw_n(&mut t, 0, 3);
     t.set_hand(0, &["R:[衍生] 觉悟", "R:[衍生] 觉悟", "R:[衍生] 觉悟"]);
-    // Use Maya's (2) on the CiRCLE-reward draw (or a plain draw).
-    let skill = t.skill_id(0, "朝阳照耀的片刻");
-    // Trigger a draw: end the move on CiRCLE's cafe? Simpler: the skill is
-    // offered when a draw happens. Walk past CiRCLE for the reward draw.
-    t.set_pos(0, 59);
-    t.dice(&[2]);
-    t.roll(0).unwrap();
-    if t.prompt().is_some() && t.counteract_offered(&skill) {
-        let _ = t.counteract(0, &skill);
+    // Trigger a draw. The PP band skill's (3) suppresses [CiRCLE奖励], so
+    // use a hand card that draws instead of walking past CiRCLE.
+    t.give(0, &["通用:10次招募（1回限定）"]);
+    t.play(0, "通用:10次招募（1回限定）").unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        let k = if t.prompt_refers("maya_dawn") {
+            0 // Y=1, then the first look-at-top card
+        } else {
+            p.fallback
+        };
+        let _ = t.answer(0, k);
     }
     drain(&mut t);
     assert_eq!(
         t.crystals(0, "PP:梦在前方，结彩当下"),
         Some(1),
-        "the kept card still counts as a draw"
+        "the kept card still counts as a draw: keys={:?}",
+        t.recent_keys(20)
     );
 }
 
@@ -277,8 +286,8 @@ fn g29_maya_look_at_top_inside_the_draw_curve() {
 // 规则书 (笑容大游行 (3)): 「当此卡位于格子上时，那格视为与“弦卷集团”格子交换
 // 位置」.
 // 规则书 (Parking Space (1)): 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」.
-// Note: `t13_smile_parade` is DISCREPANCY (stack overflow).
-#[ignore = "DISCREPANCY: 笑容大游行 stack-overflows (t13); this adds the Parking Space field-place leg once it lands"]
+// Note: `t13_smile_parade` asserts the (1) placement; this adds the Parking
+// Space field-place leg of the (3) swap.
 #[test]
 fn g30_smile_parade_swap_with_a_field_card_in_place() {
     let mut t = Table::new(&["都筑诗船", "仓田真白"]);
@@ -287,20 +296,34 @@ fn g30_smile_parade_swap_with_a_field_card_in_place() {
     drain(&mut t);
     let space = tile("Space");
     place_on_tile(&mut t, 0, "通用:[都筑诗船]Parking Space", space);
-    t.give(0, &["HHW:笑容大游行"]);
-    // Pass 弦卷集团 (index 28) and drop the parade there.
-    t.set_pos(0, 27);
-    t.dice(&[2]);
-    t.roll(0).unwrap();
-    drain_playing(&mut t, 0, "HHW:笑容大游行");
+    // (2)'s end state: the parade sits on Space next to Parking Space. The
+    // swap changes what the tile *is*, not what is on it.
+    place_on_tile(&mut t, 0, "HHW:笑容大游行", space);
+    t.set_crystals(0, "HHW:笑容大游行", 0);
+    // P1 settles on Space: Parking Space's (1) replaces the settle (a stay at
+    // turn end), and (3) discards the parade after that settle.
+    until_turn(&mut t, 1);
+    t.set_pos(1, (space + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
     drain(&mut t);
-    // The swap changes what the tile *is*, not what is on it: Parking Space's
-    // (1) still replaces the settle on Space.
+    eprintln!(
+        "g30 record: field0 = {:?}, P1 money = {}, stay = {}, keys = {:?}",
+        t.field_ids(0),
+        t.money(1),
+        t.state(1, "stay"),
+        t.recent_keys(20)
+    );
     assert!(
         t.field_ids(0).iter().any(|c| c.contains("Parking Space")),
         "Parking Space is still on Space: {:?}",
         t.field_ids(0)
     );
+    // Parking Space's (1) 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」
+    // still replaces the settle -- the swap changes what the tile *is*, not
+    // what is on it. No rent moved (Space is unowned; a swapped-in agent body
+    // would at least prompt).
+    assert_eq!(t.money(1), 10_000, "Parking Space replaced the settle (no rent)");
 }
 
 // =====================================================================

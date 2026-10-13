@@ -493,6 +493,31 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
     asked(unsafe { sys::gain_typed(player_id, amount, tp, tl, xp, xl) })
 }
 
+/// A **raw** money adjustment -- `money += delta` with a `log.gain` /
+/// `log.lose` line and **no** payment pipeline: no `payAdd` / `payMul` /
+/// `payChoose` / `payAt`, no `effect` [反击] window, no `payAfter`. 规则书
+/// 「不受其他任何效果影响」 -- the amount moves as-is (ONE OF US's 「被分享方
+/// 资金直接增加」). Positive `delta` is a gain, negative a loss. Non-pausing:
+/// returns the amount actually moved (0 = the seat was out).
+#[cfg_attr(kani, inline(always))]
+pub fn adjust_money(player_id: i32, delta: i32, src: &Msg) -> i32 {
+    let (p, l) = mj(src);
+    unsafe { sys::adjust_money(player_id, delta, p, l) }
+}
+
+/// [`adjust_money`] with a positive `amount` -- a raw gain. Convenience.
+#[cfg_attr(kani, inline(always))]
+pub fn gain_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+    adjust_money(player_id, amount.max(0), src)
+}
+
+/// [`adjust_money`] with a positive `amount` taken away -- a raw loss.
+/// Convenience.
+#[cfg_attr(kani, inline(always))]
+pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+    adjust_money(player_id, -amount.max(0), src)
+}
+
 /// Money out (what the player could pay), logged.
 pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = mj(src);
@@ -1418,9 +1443,10 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
 /// (e.g. [`TriggerKind::CircleAffected`]); `value` is the trigger's `value`.
-/// Returns true when the link settled (nobody cancelled it).
-pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> bool {
-    unsafe { sys::raise(player_id, kind as i32, value) != 0 }
+/// Returns true when the link settled (nobody cancelled it). A hook that
+/// prompts pauses the run (`Err(Prompt)`).
+pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prompt> {
+    asked(unsafe { sys::raise(player_id, kind as i32, value) }).map(|v| v != 0)
 }
 
 pub fn give_stay(player_id: i32, n: i32) {
@@ -1978,6 +2004,25 @@ pub fn cancel_designation(seat: i32) {
 /// Is `seat`'s designation on the play being resolved cancelled?
 pub fn designation_cancelled(seat: i32) -> bool {
     unsafe { sys::designation_cancelled(seat) != 0 }
+}
+
+/// 真奈 join (CH-05): the seat self-targeted effects of counters answering
+/// this link are redirected to (「改为你」). `None` outside a join.
+pub fn join_redirect_target() -> Option<i32> {
+    let v = unsafe { sys::join_redirect_target() };
+    (v >= 0).then_some(v)
+}
+
+/// 真奈 join: mark that a joiner used the redirect (shielded the target), so
+/// the join opener knows not to take its fallback draw.
+pub fn set_join_used() {
+    unsafe { sys::set_join_used() }
+}
+
+/// The seat a self-targeted effect of this counter should aim at: the join
+/// redirect target when under a join (「改为你」), else `player_id` itself.
+pub fn self_target(player_id: i32) -> i32 {
+    join_redirect_target().unwrap_or(player_id)
 }
 
 /// Abnormal effects that got through to `player_id`
@@ -2575,9 +2620,10 @@ pub fn acquire(player_id: i32, from: i32, tile: i32, price: i32) -> bool {
     unsafe { sys::acquire(player_id, from, tile, price) != 0 }
 }
 
-/// The agent offer's chosen branch: buy (`kind = 0`) or build (`kind = 1`)
-/// `tile` from the `agent` tile's colour set. `true` only when that branch
-/// actually committed (HOST-06).
+/// The agent offer's chosen branch: buy (`kind = 0`), build (`kind = 1`) or
+/// half-rent settle on another player's deed (`kind = 2`) for `tile` from the
+/// `agent` tile's colour set. `true` only when that branch actually committed
+/// (HOST-06).
 pub fn agent_offer(player_id: i32, agent: i32, tile: i32, kind: i32) -> bool {
     unsafe { sys::agent_offer(player_id, agent, tile, kind) != 0 }
 }

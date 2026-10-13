@@ -530,15 +530,8 @@ fn counters_to_a_counter_wait_for_the_round_on_x_to_close() {
 // the same rules, where the declarer is that round's initial user」 -- the
 // declarer is asked first on its own counter's round, ahead of everyone else.
 // (The old rule opened that round at the seat after the declarer and asked the
-// declarer last.)
-// DISCREPANCY: with only the declarer holding a TEST:deny, the round over the
-// declarer's own probe closes with **no prompt at all** -- the deny is not
-// offered to the declarer against their own counter's play (either the
-// fixture guard excludes self, or the engine omits the declarer from their own
-// counter's round). The ruling's "the declarer is that round's initial user"
-// is therefore unobservable with the TEST fixtures; the assertion below stays
-// as the ruling's expectation.
-#[ignore = "DISCREPANCY: TEST:deny is not offered to the declarer against their own counter's play, so the round over the declarer's own probe closes with no prompt and 'the declarer is that round's initial user' (ruling 2026-10-07) cannot be observed"]
+// declarer last.) The rulebook does not forbid answering your own link, so the
+// declarer's deny is offered against their own counter's play.
 #[test]
 fn counters_to_counters_start_with_the_declarer() {
     let mut t = Table::vanilla(3);

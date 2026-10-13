@@ -109,7 +109,7 @@ impl std::fmt::Display for CondError {
 
 impl std::error::Error for CondError {}
 
-// TODO(规则书) / G3 (docs/GUARDS.md §5.2): the `precheck` lint helper that
-// flags kind-based rejection inside *guards* (not conditions) lives in a
-// later phase. Conditions already reject kind here; the guard-side scan is
-// intentionally out of scope for G1.
+// G3 (docs/GUARDS.md §5.2 / §10.1): the `precheck` lint helper that flags
+// kind-based rejection inside *guards* (not conditions) is
+// `cargo run -p game-rules --example precheck`. Conditions already reject
+// kind here.

@@ -325,6 +325,11 @@ pub enum Op {
     flash_card = 308,
     flash_card_keyed = 309,
     flash_tile = 310,
+    // 真奈 join (CH-05) -- declaration-scoped self-redirect.
+    join_redirect_target = 311,
+    set_join_used = 312,
+    // Raw money adjustment (v57 closeout) -- no payment pipeline.
+    adjust_money = 313,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

@@ -39,6 +39,7 @@
   "no_road_ask": "[指定] 哪名玩家所在的格子？（[除外] 结束后传送到那里；[除外] 期间你的格子收入归 Ta）",
   "no_road_log": "[除外] 结束后 [传送] 到 {{tile}}（视为那回合的主要移动）；[除外] 期间的格子收入由 {{who}} 获得（{{card}}）",
   "no_road_redirect": "除外期间：格子收入转给{{who}}",
+  "no_road_refused": "{{card}}：无法获得新的[除外]层数，视为此卡未生效",
   "no_road_title": "无路矢",
   "no_road_why_not_none": "没有别的玩家",
   "ordinary_log": "下一次主要移动改为移动 {{n}} 格（普通与理所当然）",

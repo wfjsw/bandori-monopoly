@@ -755,6 +755,12 @@ impl Cx<'_> {
             self.w.set_slot(i as i32, "lastWalk", plan.total + 1);
         }
         if as_main {
+            // 「若受到[异常移动效果]影响，此卡不生效」 (是我自己的问题 (2)):
+            // the longer-lived abnormal latch is consumed by the main move it
+            // would suppress -- the settle-before window above already read it.
+            if let Some(p) = self.w.st.players.get_mut(i) {
+                p.state_set(key::ABNORMAL_HIT, 0);
+            }
             self.w.st.step = stage::END;
         }
         self.wait(1.2);
@@ -1211,6 +1217,25 @@ impl Cx<'_> {
                 if !m.signed {
                     m.roll = m.roll.max(m.min_roll);
                 }
+                // G-STATUS-02 [无法移动] (glossary 10 / items 11-13):
+                // 「[主要移动]的[移动终点]视为当前所在格子且不[结算]」. The roll
+                // itself still happens (dice, counteractions, `log.roll`), but
+                // the walk goes nowhere and does not settle. A [传送] rewrite
+                // above is unaffected (「无法使用非[传送]的移动效果」).
+                // [不可阻挡] (item 14) cancels the [停留] half; a press that
+                // arms the move against abnormal movement (白金燐子 (2)
+                // 「本次移动不受异常移动效果影响」) is the same flag and
+                // cancels the whole clamp for this walk.
+                let unstoppable = self.w.st.players[i].state_get(key::UNSTOPPABLE) > 0;
+                let immobile = !unstoppable
+                    && (self.w.st.players[i].stay() > 0
+                        || self.w.st.players[i].stun() > 0
+                        || self.w.st.players[i].exile() > 0);
+                if immobile {
+                    m.roll = 0;
+                    m.steps = 0;
+                    m.resolve = false;
+                }
                 self.walk(&mut m)?;
             }
             // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
@@ -1261,6 +1286,12 @@ impl Cx<'_> {
             if m.kind != MoveKind::Teleport {
                 self.w.set_slot(i as i32, "lastWalk", m.total + 1);
             }
+        }
+        // 「若受到[异常移动效果]影响，此卡不生效」 (是我自己的问题 (2)):
+        // the longer-lived abnormal latch is consumed by the main move it
+        // would suppress -- the settle-before window above already read it.
+        if let Some(p) = self.w.st.players.get_mut(i) {
+            p.state_set(key::ABNORMAL_HIT, 0);
         }
         self.w.st.step = stage::END;
         self.wait(1.2);
@@ -2257,6 +2288,24 @@ impl Cx<'_> {
                         .i("nth", self.w.st.houses[t] + 1)
                         .n("cost", self.build_cost(t)),
                 );
+            } else if self.w.st.owners[t] >= 0
+                && self.w.st.owners[t] as usize != i
+                && !self.w.st.mortgaged[t]
+            {
+                // 「无主或玩家拥有的」 includes other seats; the settle is the
+                // agent's 「半价收费的[结算]（向上取整10）」 -- `ceil(full/2/10)*10`
+                // in integer math (matches `pay_rent` / `agent.rs`).
+                let full = purchase::table_rent(self.data, &self.w, t);
+                let half = (full + 1) / 2;
+                let half = ((half + 9) / 10) * 10;
+                options.push(t);
+                prices.push(half);
+                labels.push(
+                    Msg::new("ask.agent.rent")
+                        .tile("tile", t)
+                        .player_id("who", self.w.st.owners[t])
+                        .n("price", half),
+                );
             }
         }
         if options.is_empty() {
@@ -2297,6 +2346,9 @@ impl Cx<'_> {
             && self.why_not_build_on(i, t).is_none()
         {
             self.build(i, t)?;
+        } else if self.w.st.owners[t] as usize != i && !self.w.st.mortgaged[t] {
+            // 「进行一次[结算]」 on another player's deed -- the agent's half charge.
+            self.pay_rent(i, t, true)?;
         }
         self.wait(0.6);
         Ok(())
@@ -4438,6 +4490,12 @@ impl Cx<'_> {
         if self.w.st.turn == i as i32 {
             self.w.turn.played.push(id.to_string());
         }
+        // 「当有人同一回合内打出两张卡时」 (TriggerKind::TwoCards) -- raised on
+        // the play that makes it two hand-card plays this turn (any seat; the
+        // counter is Sumimi:Here the world). Skills do not count (they do not
+        // go through `play_from_hand`).
+        self.w.turn.cards_played = self.w.turn.cards_played.saturating_add(1);
+        let two_cards = self.w.turn.cards_played == 2;
         self.wait(0.9);
         let t = raise!(
             self,
@@ -4447,6 +4505,18 @@ impl Cx<'_> {
             cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
+        if two_cards {
+            // A separate [反击] timing from the play's own `card` window: Here
+            // the world answers 「当有人同一回合内打出两张卡时」, not the play.
+            raise!(
+                self,
+                "twoCards",
+                i,
+                card = Some(id.to_string()),
+                cards = vec![id.to_string()],
+                by_card = Some(i as i32)
+            )?;
+        }
         let rules = self.rules;
         // A cancelled trigger (`is_cancelled`) -- the play is negated; the card still goes to its
         // Dest below but its effect body does not run. The card still flashes,

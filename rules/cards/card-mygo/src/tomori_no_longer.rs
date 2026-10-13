@@ -21,12 +21,17 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     "MyGO:（灯）不再迷茫",
     &[
         On::Play("", None, tomori_no_longer),
-        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') == 0", None, sweep),
-        // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- the
-        // offer exists only for a positive spend (nothing to substitute at 0)
-        // with a crystal to trade.
+        // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept whenever the
+        // count empties, whichever write emptied it (the skill-cost swap, a
+        // move, or a decay). `CounterChanged` is name-filtered to
+        // `counter::CRYSTALS`.
+        On::Hook(&[HookKind::CounterChanged], "", Some(sweep_guard), sweep),
+        // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
+        // `FirePaying` pre-spend substitution. The offer exists only for a
+        // positive spend with a crystal to trade; accepting cancels the fire
+        // spend and burns one crystal instead.
         On::Hook(
-            &[HookKind::FireSpent],
+            &[HookKind::FirePaying],
             "actor == owner && card.counter('crystals') >= 1 && value > 0",
             None,
             cover,
@@ -45,6 +50,8 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
 const SLOT_COVERING: &str = "tomori_no_longer.covering";
 
 /// （2）'s substitution. Applicability is the entry's condition (`value > 0`).
+/// Cancelling the `FirePaying` link is the substitution: the fire pots never
+/// move, and one crystal is removed instead.
 fn cover(player_id: i32) -> card_sdk::Asked {
     let spent = ctx::trigger::value();
     if !ctx::ask_yes(
@@ -57,7 +64,7 @@ fn cover(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_COVERING, 1);
     ctx::add_crystals(-1, i32::MAX)?;
     ctx::set_slot(player_id, SLOT_COVERING, 0);
-    ctx::gain_fire(player_id, spent, &Msg::new(key!("tomori_no_longer_refund")))?;
+    ctx::trigger::set_cancelled();
     ctx::log(
         player_id,
         &Msg::new(key!("tomori_no_longer_covered")).i("n", spent as i64),
@@ -139,8 +146,20 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-/// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」.
+/// Guard for [`sweep`] -- the count emptied (the write was a decrease and the
+/// card now holds 0). Name-filtered to `counter::CRYSTALS`.
+fn sweep_guard(player_id: i32) -> bool {
+    trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && ctx::is_placed()
+        && trigger::player_id() == player_id
+        && trigger::card_is(ID)
+        && trigger::value() <= 0
+        && ctx::crystals() == 0
+}
+
+/// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- `[移除]` is
+/// [`Dest::Banished`] (gone from the field, not into the discard).
 fn sweep(_player_id: i32) -> card_sdk::Asked {
-    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::set_dest(ctx::Dest::Banished);
     Ok(())
 }

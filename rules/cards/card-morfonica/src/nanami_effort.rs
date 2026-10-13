@@ -15,8 +15,13 @@
 //!
 //! x character tokens for one of three effects.
 
+use card_sdk::abi::{TriggerKind, REWARD_MONEY};
 use ruleset_core::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
+
+/// 「[获得]2000资金」 (专有名词 11) -- the default CiRCLE money reward. A
+/// `circleAffected` listener may replace it (Morfonica's cycle).
+const CIRCLE_MONEY: i32 = 2000;
 
 const ID: &str = "Mor:（NNM）稍微努力了一下";
 /// The counter names 「角色标记:*」.
@@ -108,18 +113,14 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         // (1) 「回合结束时抽x张卡（可超过上限）」 -- scheduled, runs in `effect_draw`.
         0 => effect_draw(player_id, x)?,
         // (2) Sheet 2026-10-06 新卡组卡 G7: 「获得x次经过CiRCLE时的资金奖励」
-        // -- x times the CiRCLE pass *money* reward, not a flat x*2000. The
-        // default reward is 2000; a modified one (Morfonica's 1000/1500/2000
-        // cycle) should scale this too.
-        // TODO(规则书): query the live CiRCLE money reward (it is rewritten by
-        //   `circleAffected` listeners) instead of hard-coding 2000.
+        // -- x times the CiRCLE pass *money* reward, not a flat x*2000. Each
+        // time runs the money half of the reward step (`circleAffected`
+        // between pick and payout), so a listener that rewrites the amount
+        // (Morfonica's 1000/1500/2000 cycle) scales this too.
         1 => {
-            let got = x * 2000;
-            ctx::gain(
-                player_id,
-                got,
-                &Msg::new(key!("nanami_effort_money")).i("n", got as i64),
-            )?;
+            for _ in 0..x {
+                gain_circle_money(player_id)?;
+            }
         }
         // (3) 「将此卡放置在场上并为其放置x个奇迹水晶」 -- placed with x crystals
         // on it; (4) is its exhaustion.
@@ -138,6 +139,21 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // 限制」 -- a press. The owner's skill is the `skill:<character>:<name>` field
     // card `bind_skills` placed, so `placed_cards` finds it and `play_card` runs
     // its `On::Play` entry.
+    Ok(())
+}
+
+/// One 「经过CiRCLE时的资金奖励」 -- the money half of the CiRCLE reward step.
+/// `circleAffected` fires between the pick and the payout (value = 0 = money),
+/// so a listener may replace the amount or cancel it outright; if it stands,
+/// the default 专有名词 11 figure is paid.
+fn gain_circle_money(player_id: i32) -> card_sdk::Asked {
+    if ctx::raise(player_id, TriggerKind::CircleAffected, REWARD_MONEY)? {
+        ctx::gain(
+            player_id,
+            CIRCLE_MONEY,
+            &Msg::new(key!("nanami_effort_money")).i("n", CIRCLE_MONEY as i64),
+        )?;
+    }
     Ok(())
 }
 

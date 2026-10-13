@@ -870,6 +870,40 @@ impl CardWorld for Run {
         }
         paid
     }
+    /// Raw money adjustment -- `money += delta` with a `log.gain` / `log.lose`
+    /// line, **no** `paid_log` entry (so no `payAfter`) and **no** money-lock
+    /// check. 规则书 「不受其他任何效果影响」.
+    fn adjust_money_raw(&mut self, player_id: i32, delta: i32, src: Msg) -> i32 {
+        if delta >= 0 {
+            let got = self.world.gain_money(player_id, delta, src.clone());
+            if got != 0 {
+                let msg = Msg::new("log.gain")
+                    .player_id("who", player_id)
+                    .n("amount", got as i64)
+                    .msg("src", Msg::new("log.part.why").msg("why", src));
+                self.post_log_value("gain", player_id, msg, "", got);
+            }
+            got
+        } else {
+            let amount = -delta;
+            let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
+                return 0;
+            };
+            if s.out() {
+                return 0;
+            }
+            let lost = amount.min(s.money).max(0);
+            s.money -= lost;
+            if lost != 0 {
+                let msg = Msg::new("log.lose")
+                    .player_id("who", player_id)
+                    .n("amount", lost as i64)
+                    .msg("src", Msg::new("log.part.why").msg("why", src));
+                self.post_log_value("lose", player_id, msg, "", -lost);
+            }
+            lost
+        }
+    }
 
     // hand / deck -----------------------------------------------------------
     fn draw(&mut self, player_id: i32, n: i32) -> i32 {
@@ -899,6 +933,13 @@ impl CardWorld for Run {
     }
     fn add_to_hand(&mut self, player_id: i32, card: &str) {
         self.world.add_to_hand(player_id, card);
+        // 「此次加手视为抽卡动作」 -- a `DrewBefore` replacement's add-to-hand
+        // *is* the draw: the after points (`drawn` / `drew`) fire for it
+        // (ABI v30, [`TriggerKind::DrewBefore`]). Any other add-to-hand (a
+        // bounce, a tutor) is not a draw and must not raise them.
+        if self.trigger.kind == TriggerKind::DrewBefore {
+            self.draw_log.push((player_id, card.to_string()));
+        }
     }
     fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
         let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
@@ -1939,6 +1980,12 @@ impl CardWorld for Run {
     }
     fn set_trigger_reason(&mut self, reason: &str) {
         self.trigger.reason = Some(reason.to_string());
+    }
+    fn set_trigger_join_used(&mut self) {
+        self.trigger.join_used = true;
+    }
+    fn trigger_join_redirect(&self) -> Option<i32> {
+        self.trigger.join_redirect
     }
 
     // turn plan & scheduling -------------------------------------------------
@@ -3286,21 +3333,37 @@ impl<M: CardModules> RulesBridge<M> {
         }
         HostRequest::AgentOffer {
             player_id,
-            agent: _,
+            agent,
             tile,
             kind,
         } => {
             // The chosen branch of the agent offer (the post-pick commit):
-            // buy the unowned tile, or build one level on an own one. `kind`
-            // names the branch the body saw (0 = buy, 1 = build); the engine
-            // re-checks the tile's current state so a commit-pass re-run of
-            // the body -- whose options list the just-committed effect already
-            // reshaped -- cannot double-act (the answer is in the log, so this
-            // arm does not re-execute). HOST-06: answers the branch outcome.
+            // buy the unowned tile, build one level on an own one, or half-rent
+            // another player's deed. `kind` names the branch the body saw
+            // (0 = buy, 1 = build, 2 = half-rent); the engine re-checks the
+            // tile's current state so a commit-pass re-run of the body -- whose
+            // options list the just-committed effect already reshaped -- cannot
+            // double-act (the answer is in the log, so this arm does not
+            // re-execute). HOST-06: answers the branch outcome.
+            // HOST-13: `agent` is kept on the audit line -- which agent tile
+            // offered this branch -- instead of being dropped.
             let p = player_id.max(0) as usize;
             let t = tile.max(0) as usize;
+            cx.log(
+                player_id,
+                Msg::new("log.agent_offer_commit")
+                    .player_id("who", player_id)
+                    .tile("agent", agent)
+                    .tile("tile", tile)
+                    .i("kind", kind as i64),
+            );
             let did = match kind {
                 1 => cx.card_build(p, t)?,
+                2 => {
+                    // The agent's 「半价收费的[结算]」 on another player's deed.
+                    cx.card_pay_rent(p, t, true)?;
+                    true
+                }
                 _ => cx.card_buy(p, t, 1)?, // `BuyKind::Agent`
             };
             return Ok(did as i32);
@@ -3449,6 +3512,42 @@ impl<M: CardModules> RulesBridge<M> {
             p.by_card = Some(call.player_id());
             let paid = cx.money(p)?;
             return Ok(paid.moved());
+        }
+        // Raw money adjustment (no payment pipeline). 规则书 「不受其他任何效果
+        // 影响」 -- the amount moves as-is.
+        HostRequest::AdjustMoney {
+            player_id,
+            delta,
+            src,
+        } => {
+            let msg = src.unwrap_or_else(|| crate::Msg::new("log.part.why"));
+            let mut w = cx.world_copy();
+            let moved = if delta >= 0 {
+                w.gain_money(player_id, delta, msg.clone())
+            } else {
+                let amount = -delta;
+                let Some(s) = w.st.players.get_mut(player_id.max(0) as usize) else {
+                    return Ok(0);
+                };
+                if s.out() {
+                    return Ok(0);
+                }
+                let lost = amount.min(s.money).max(0);
+                s.money -= lost;
+                if lost != 0 {
+                    w.log(
+                        "lose",
+                        player_id,
+                        crate::Msg::new("log.lose")
+                            .player_id("who", player_id)
+                            .n("amount", lost as i64)
+                            .msg("src", crate::Msg::new("log.part.why").msg("why", msg)),
+                    );
+                }
+                lost
+            };
+            cx.swap_world(w);
+            return Ok(moved);
         }
         // Marker spend / gain (user ruling 2026-10-07): the marker's own
         // [反击] window opens **before** the markers move. A counteraction
@@ -4057,32 +4156,35 @@ impl<M: CardModules> RulesBridge<M> {
                 // with `t.card` naming it -- so a card that has no game-start
                 // clause is never instantiated for one.
                 self.game_start_hooks(cx, t.player_id, kind, &mut trigger)?;
-            } else if is_own_card_kind(kind) {
-                // These run on a fresh instance of the card named on
-                // `t.card` (`Drawn`) -- it is in a hand / pile, not placed.
-                // `Discarded` is *not* here: a placed field card hears about
-                // discards (MyGO band (3) 「每次你的卡在未生效的情况下进入弃牌
-                // 堆时」), so it rides the field-card path below.
-                if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
-                    if let Some(idx) = self
-                        .ruleset
-                        .card(card_id)
-                        .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
-                    {
-                        self.drive_hook(
-                            cx,
-                            Call::Hook {
-                                card: idx,
-                                kind,
-                                player_id: t.player_id,
-                            },
-                            card_id,
-                            -1,
-                            &mut trigger,
-                        )?;
+            } else {
+                // Own-card dispatch for `Drawn` (the card is in a hand / pile)
+                // and `Discarded` (the card that just entered the discard --
+                // RAS:游击演出's [特] 「此卡进入弃卡区的回合结束时」). A placed
+                // field card also hears about discards (MyGO band (3) 「每次你
+                // 的卡在未生效的情况下进入弃牌堆时」), so `Discarded` falls
+                // through to the field-card walk as well.
+                if matches!(kind, TriggerKind::Drawn | TriggerKind::Discarded) {
+                    if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
+                        if let Some(idx) = self
+                            .ruleset
+                            .card(card_id)
+                            .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
+                        {
+                            self.drive_hook(
+                                cx,
+                                Call::Hook {
+                                    card: idx,
+                                    kind,
+                                    player_id: t.player_id,
+                                },
+                                card_id,
+                                -1,
+                                &mut trigger,
+                            )?;
+                        }
                     }
                 }
-            } else {
+                if kind != TriggerKind::Drawn {
                 let world = cx.world_copy();
                 for player_id in 0..world.player_count() {
                     // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81 「所有其正在生效
@@ -4243,6 +4345,7 @@ impl<M: CardModules> RulesBridge<M> {
                         -1,
                         &mut trigger,
                     )?;
+                }
                 }
             }
             // Scheduled turn-end callbacks (「你的下回合结束时」 and kin): the
@@ -4567,13 +4670,20 @@ impl<M: CardModules> RulesBridge<M> {
         if s >= cx.state().players.len() || cx.world().out(s) {
             return Ok(false);
         }
-        // `unstoppable` (「不可阻挡」) is a blanket bypass for the *movement*
-        // abnormals -- the ones that put the player somewhere they did not
-        // choose. Status (stay/stun/exile) still lands. A self-caused move
-        // (`by == player_id`) is *chosen*, not 「受到的」 (glossary 51 「可选择
-        // 受到的[传送]，[强制移动]，[强制停下]效果是否生效」), so [不可阻挡] does
-        // not refuse it -- a card's own `card_move` (里美's 「期间[不可阻挡]」)
-        // must still walk.
+        // `unstoppable` (「不可阻挡」, glossary 14) -- three separate clauses:
+        // 1. movement abnormals (teleport / forced / stop / reverse): a blanket
+        //    bypass, the ones that put the player somewhere they did not
+        //    choose. A self-caused move (`by == player_id`) is *chosen*, not
+        //    「受到的」 (「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」),
+        //    so [不可阻挡] does not refuse it -- a card's own `card_move`
+        //    (里美's 「期间[不可阻挡]」) must still walk.
+        // 2. [晕眩] / [除外]: 「也不会获得新的层数」 / 「无法获得新的[除外]层数」 --
+        //    the gain does not land at all (this gate answers `false`, so the
+        //    layer is never written). Existing layers still decay (「在适当时机
+        //    依旧掉层」).
+        // 3. [停留]: 「无视已存在的[停留]」 is a movement bypass (already in 1's
+        //    spirit via `stunned`/`stay` checks at move time), not a refusal of
+        //    new layers -- but 「也不会获得新的层数」 names only 晕眩 and 除外.
         let movement = matches!(
             kind,
             crate::AbKind::Teleport
@@ -4581,7 +4691,11 @@ impl<M: CardModules> RulesBridge<M> {
                 | crate::AbKind::Stop
                 | crate::AbKind::Reverse
         );
-        if movement && by != player_id && cx.state().players[s].unstoppable() > 0 {
+        let unstoppable = cx.state().players[s].unstoppable() > 0;
+        if movement && by != player_id && unstoppable {
+            return Ok(false);
+        }
+        if matches!(kind, crate::AbKind::Stun | crate::AbKind::Exile) && unstoppable {
             return Ok(false);
         }
         let on = |t: &mut CoreTrigger| {
@@ -4589,6 +4703,18 @@ impl<M: CardModules> RulesBridge<M> {
             t.value = kind as i32;
             t.by_card = Some(by);
         };
+        // `Untargetable` at declaration, same as `target_player`: 「你只会被
+        // 自己发动的效果指定」 (夏日合宿) also covers an area status grant that
+        // lands on the player without a `ctx::target` pick (那天的雨's 「所有
+        // 玩家获得一层[停留]」). A self-caused grant (`by == player_id`) is the
+        // owner's own effect and passes the gate's own condition.
+        if self
+            .raise_core(cx, "untargetable", player_id, |t| t.by_card = Some(by))?
+            .is_cancelled()
+        {
+            cx.log(player_id, Msg::new("log.untargetable").player_id("who", player_id));
+            return Ok(false);
+        }
         // `AbnormalGuard` is a gate at declaration: a field card may block the
         // effect before anyone answers it.
         if self.raise_core(cx, "abnormalGuard", by, on)?.is_cancelled() {
@@ -4627,6 +4753,10 @@ impl<M: CardModules> RulesBridge<M> {
             w.turn.abnormal.resize(s + 1, 0);
         }
         w.turn.abnormal[s] += 1;
+        // Longer-lived latch for 「若受到[异常移动效果]影响，此卡不生效」
+        // (是我自己的问题 (2)): survives across turns until the player's next
+        // [主要移动] completes.
+        w.state_set(player_id, game_core::state::key::ABNORMAL_HIT, 1);
         cx.swap_world(w);
         Ok(true)
     }
@@ -4668,17 +4798,12 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(-1);
         }
         // ---- declaration ----------------------------------------------
-        // `Untargetable` governs who may be *named*. Block here and the effect
-        // cannot name `p` at all, so no chain forms against them.
-        if self
-            .raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?
-            .is_cancelled()
-        {
-            cx.log(p, Msg::new("log.untargetable").player_id("who", p));
-            return Ok(-1);
-        }
         // `Redirect` is declaration re-naming: the recipient set is settled
         // before the chain opens, so whoever holds the name is who answers.
+        // Runs **before** `Untargetable` so a redirect (EXIST 「目标将改为你」)
+        // re-names first, and the gate then checks the *final* name -- naming a
+        // 夏日合宿-shielded seat and having EXIST move it onto the EXIST holder
+        // must still land (C12).
         let mut p = p;
         if single {
             let r = self.raise_core(cx, "redirect", by, |t| {
@@ -4699,6 +4824,16 @@ impl<M: CardModules> RulesBridge<M> {
                 );
                 p = to;
             }
+        }
+        // `Untargetable` governs who may be *named*. Block here and the effect
+        // cannot name `p` at all, so no chain forms against them. Checked on
+        // the post-redirect name.
+        if self
+            .raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?
+            .is_cancelled()
+        {
+            cx.log(p, Msg::new("log.untargetable").player_id("who", p));
+            return Ok(-1);
         }
         // Named. Count it *after* naming, so a player who cannot be named does
         // not accrue 「成为目标」 counts (see `centrifugal`'s 「第二次」).
@@ -4987,6 +5122,25 @@ impl<M: CardModules> RulesBridge<M> {
         // `MAX_COUNTERACT_PER_VISIT` offers, over `MAX_COUNTERACT_DEPTH + 1`
         // rounds.
         let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
+        // 真奈 join (CH-05): pre-scan hands for a `SELF_REDIRECT` card so the
+        // redirect is set before any body runs -- the join opener may be
+        // declared in a later round (e.g. at an Effect window), and joiners
+        // whose bodies run earlier still see the redirect.
+        for seat in 0..n {
+            for id in hand_of(cx, seat) {
+                if self.ruleset.card(id).is_some_and(|i| {
+                    self.ruleset.cards()[i as usize]
+                        .props
+                        .get(card_sdk::abi::prop::SELF_REDIRECT)
+                        .copied()
+                        .unwrap_or(0)
+                        != 0
+                }) {
+                    chain[0].link.join_redirect = Some(seat as i32);
+                    break;
+                }
+            }
+        }
         self.build_round(cx, &mut chain, 0, depth, &mut budget)?;
         // STACK-01: resolve as a job list so a nested settle can suspend the
         // walk and resume without rebuilding the chain.
@@ -5093,6 +5247,20 @@ impl<M: CardModules> RulesBridge<M> {
                     link.answers = timing as u32;
                     round.push(at);
                     chain[timing].answers.push(at);
+                    // 真奈 join (CH-05): a `SELF_REDIRECT` counter opens a join
+                    // on the link it answers -- self-targeted effects of later
+                    // counters answering the same link redirect to its declarer
+                    // (「改为你」). Declaration-scoped: the redirect lives on the
+                    // link, so it cannot leak into other plays.
+                    if self.ruleset.cards()[idx as usize]
+                        .props
+                        .get(card_sdk::abi::prop::SELF_REDIRECT)
+                        .copied()
+                        .unwrap_or(0)
+                        != 0
+                    {
+                        chain[timing].link.join_redirect = Some(cursor as i32);
+                    }
                     chain.push(ChainLink {
                         seat: cursor,
                         idx,
@@ -5963,6 +6131,8 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         name: t.name.clone(),
         roll_source: t.roll_source,
         reason: t.reason.clone(),
+        join_redirect: None,
+        join_used: false,
     }
 }
 
@@ -8040,6 +8210,8 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::DeckAtGameStart
             | TriggerKind::Drew
             | TriggerKind::DrewBefore
+            | TriggerKind::FirePaying
+            | TriggerKind::FlipEffect
             | TriggerKind::Reshuffled
             | TriggerKind::Bought
             | TriggerKind::BeforeOut

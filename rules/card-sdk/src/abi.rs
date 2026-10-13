@@ -284,7 +284,8 @@ use alloc::{string::String, vec::Vec};
 ///      records the **tile id** (or -1 for 「不选」) in the answer log, so a
 ///      commit-pass re-run of a body whose options the just-committed host
 ///      effect reshaped still maps the pick to the same tile. `agent_offer` --
-///      the chosen branch (buy / build) as one host routine. `raise` --
+///      the chosen branch (buy `0` / build `1` / half-rent `2`) as one host
+///      routine. `raise` --
 ///      guest-raised trigger points (`circleAffected` from `tile:circle`);
 ///      returns whether the link settled. `gain_typed` -- a bank print through
 ///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
@@ -378,7 +379,22 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 56;
+/// v57: **closeout integration** -- one monotonic bump covering every addition
+///      the five closeout batches made on top of v56:
+///      `TriggerKind::FirePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
+///      substitution + flip-effect hook; `ctx::raise` is prompt-aware);
+///      `join_redirect_target` / `set_join_used` (真奈 join retarget, CH-05);
+///      and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
+///      `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
+///      `adjust_money`). `money += delta` with a `log.gain` / `log.lose` line
+///      and **no** payment pipeline: no `payAdd` / `payMul` / `payChoose` /
+///      `payAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
+///      任何效果影响」 wants a [指定] split's amount to land as-is (ONE OF US's
+///      「被分享方资金直接增加，不受其他任何效果影响」). Non-pausing. Positive
+///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
+///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
+///      engine batch's SAVE_VERSION 6 → 7 is independent).
+pub const ABI_VERSION: i32 = 57;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -485,6 +501,9 @@ pub mod export {
 pub mod state_key {
     /// `[停留]` -- layers that wear off at end of turn.
     pub const STAY: &str = "stay";
+    /// Latch set when an [异常移动效果] lands, cleared when the player's next
+    /// [主要移动] completes. Longer-lived than the per-turn abnormal counter.
+    pub const ABNORMAL_HIT: &str = "abnormalHit";
     /// `[晕眩]` -- layers that wear off at end of turn.
     pub const STUN: &str = "stun";
     /// `[晕眩]` applied this turn, which only starts counting next turn.
@@ -696,6 +715,16 @@ pub mod prop {
     /// 「[指定][使用者]以外的所有玩家」 / 「其他玩家[分摊]」 shape). Default `0`
     /// (names nobody).
     pub const DESIGNATES: &str = "designates";
+    /// 真奈 join (「其反击卡中针对打出玩家自身的效果改为你」): `1` = this
+    /// counter opens a join; self-targeted effects of later counters answering
+    /// the **same link** are redirected to the declarer. Declaration-scoped.
+    /// Default `0`.
+    pub const SELF_REDIRECT: &str = "selfRedirect";
+    /// 「此卡不受任何其他效果影响」: `1` = the placed instance is immune
+    /// (`FieldCard.immune`). Stamped at placement from the card's static props
+    /// so a `place_raw` / engine placement sees it without running the play
+    /// body. Mirrors `game_core::state::prop::IMMUNE`.
+    pub const IMMUNE: &str = "immune";
     /// Virtual **rent** house count (「房屋数视为…」).
     /// Presence is the override -- a house count of `0` is a legitimate value,
     /// so the read is `props.get`, not `unwrap_or(0)`. Real `st.houses` is
@@ -1303,14 +1332,23 @@ pub enum TriggerKind {
     /// replacement draw, and the after points ([`Self::Drawn`] / [`Self::Drew`])
     /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
     DrewBefore = 77,
+    /// v56: **before** one fire spend commits (`ctx::spend_fire`). `t.value` is
+    /// the requested amount. A hook that substitutes the cost (「以代替此次技能
+    /// 的火罐消耗」) cancels the trigger and performs its own payment; the engine
+    /// then treats the spend as satisfied and does not touch the fire pots.
+    /// Hook-only. (78 was `CpChanged`; v50 folded it into [`Self::CounterChanged`].)
+    FirePaying = 78,
+    /// v56: a face-down counter is being flipped face-up (「将X个反面…变正」).
+    /// `t.value` is the effect's **intended** X (the number the clause names),
+    /// raised *before* the counters move so a listener still sees the pre-flip
+    /// count. Hook-only.
+    FlipEffect = 94,
     /// v36: a card instance's attached [CP点] count was just written (placed or
     /// cleared). `t.card` is the card the marks are attached to, `t.player_id`
     /// its owner, and `t.value` is the **change applied** to the attached count
     /// (negative when a [CP点] left). The count after the write is
     /// `ctx::cp_attached()` on the instance itself.
     ///
-    // 78 was `CpChanged`; v50 folds it into [`Self::CounterChanged`] with
-    // `t.name == counter::CP`.
 
     // v40: the purchase surface (`docs/PURCHASE.md`).
     /// May `t.player_id` buy `t.tile` at all? A placed card
@@ -1468,6 +1506,8 @@ impl TriggerKind {
             74 => Self::SkillUsed,
             76 => Self::CounterChanged,
             77 => Self::DrewBefore,
+            78 => Self::FirePaying,
+            94 => Self::FlipEffect,
 
             79 => Self::BuyGate,
             80 => Self::BuyAdd,
@@ -1569,6 +1609,8 @@ impl TriggerKind {
             Self::SkillUsed => "skillUsed",
             Self::CounterChanged => "counterChanged",
             Self::DrewBefore => "drewBefore",
+            Self::FirePaying => "firePaying",
+            Self::FlipEffect => "flipEffect",
 
             Self::BuyGate => "buyGate",
             Self::BuyAdd => "buyAdd",
@@ -1668,6 +1710,8 @@ impl TriggerKind {
             "skillUsed" => Self::SkillUsed,
             "counterChanged" | "crystalsChanged" | "cpChanged" => Self::CounterChanged,
             "drewBefore" => Self::DrewBefore,
+            "firePaying" => Self::FirePaying,
+            "flipEffect" => Self::FlipEffect,
 
             "buyGate" => Self::BuyGate,
             "buyAdd" => Self::BuyAdd,
@@ -2124,6 +2168,12 @@ declare_kinds! {
         /// See [`TriggerKind::DrewBefore`] -- the per-draw *replacement* point
         /// (「此次加手视为抽卡动作」). Hook-only.
         DrewBefore = 77,
+        /// See [`TriggerKind::FirePaying`] -- before one fire spend commits;
+        /// cancel to substitute the cost. Hook-only.
+        FirePaying = 78,
+        /// See [`TriggerKind::FlipEffect`] -- a face-down counter is being
+        /// flipped face-up. Hook-only.
+        FlipEffect = 94,
         /// v40: the buy price's first modifier stage (`docs/PURCHASE.md`) --
         /// fixed ±, before [`Self::BuyMul`] / [`Self::BuySet`]. `t.value` /
         /// `set_price` on the run; each stage floors the price at 0.

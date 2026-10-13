@@ -482,6 +482,9 @@ mod tests {
         assert!(intern(&long).is_valid());
         let too_long = "y".repeat(MAX_NAME + 1);
         assert!(!intern(&too_long).is_valid());
+        // Capacity is a fresh table: the length checks above already occupy a
+        // slot, and `MAX_INTERN` is the whole-table cap, not "remaining".
+        reset();
         // Distinct short names fill the table; overflow is INVALID (loud).
         let mut ids = [NameId::INVALID; MAX_INTERN];
         for i in 0..MAX_INTERN {

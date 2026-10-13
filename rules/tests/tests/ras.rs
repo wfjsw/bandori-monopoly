@@ -1458,7 +1458,6 @@ fn band_skill_accept_makes_the_next_main_move_a_teleport() {
 // ===========================================================================
 
 #[test]
-#[ignore = "DISCREPANCY: book's [特] window (card in discard + ≥1000 paid in settle + no buildable livehouse owned or purchasable) never opens at turn end; engine leaves the card in the discard with no prompt"]
 fn guerrilla_special_offers_to_mark_a_deed_as_livehouse() {
     // 规则书: 「[特]：此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了
     // 至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子，
@@ -1471,32 +1470,42 @@ fn guerrilla_special_offers_to_mark_a_deed_as_livehouse() {
     t.set_houses(BUDOKAN, 1); // rent 1440 >= 1000
     t.set_money(0, 20_000);
     t.set_discard(0, &[]);
-    t.give(0, &["RAS:游击演出"]);
+    // Over the hand limit so `discard` is a legal 运营 command -- that path
+    // raises `discarded`, which is what arms the [特] check (the card's [手]
+    // is a [反击] only, so there is no plain play that spends it).
+    t.give(0, &[
+        "RAS:游击演出",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+        "R:[衍生] 压",
+    ]);
+    // A non-empty draw pile: `discard` refills an empty deck from the discard,
+    // which would shuffle 游击演出 straight back in.
+    t.set_draw(0, &["R:[衍生] 觉悟", "R:[衍生] 觉悟"]);
     t.begin_turn(0);
     drain(&mut t);
-    // Spend the card in 运营 (its [手] half is a [反击], so a plain play just
-    // drops it into the discard) so that it 「进入弃卡区」 this turn.
-    let played = t.play(0, "RAS:游击演出");
+    t.discard_card(0, "RAS:游击演出").unwrap();
     drain(&mut t);
-    if played.is_err() {
-        eprintln!("guerrilla play refused in 运营: {played:?}");
-    }
     t.set_pos(0, BUDOKAN - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);
     assert!(t.money(0) < 20_000, "paid rent this turn");
-    if !t.discard(0).contains(&"RAS:游击演出".to_string()) {
-        t.set_discard(0, &["RAS:游击演出"]);
-    }
+    assert!(
+        t.discard(0).contains(&"RAS:游击演出".to_string()),
+        "the card entered the discard this turn: {:?}",
+        t.discard(0)
+    );
     t.end(0).unwrap();
-    drain(&mut t);
+    // Do not drain: the [特] ask_yes is the window under test.
     assert!(
         t.prompt().is_some() || t.on_field(0, "RAS:游击演出"),
         "turn-end [特] window or placement; prompt={} field={:?} discard={:?}",
         t.dump_prompt(),
         t.field_ids(0),
-        t.discard(0)
+        t.discard(0),
     );
 }
 

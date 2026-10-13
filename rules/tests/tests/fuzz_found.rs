@@ -77,23 +77,23 @@ fn fire_over_cap() {
 // card ids
 // =====================================================================
 
-/// A card id that is not in the shipped manifest turned up in a zone. Either
-/// the generator produced a dangling id (it only draws from
-/// `ruleset().cards()`, so this would be an engine bug) or a card effect
-/// fabricated one.
+/// A card id that is not in the shipped manifest must never turn up in a zone.
+/// The generator only draws from `ruleset().cards()`, so a dangling id would be
+/// an engine or card-effect fabrication. The original fuzzer seed no longer
+/// reproduces; this pins the invariant on that seed and a nearby sweep.
 #[test]
-#[ignore = "DISCREPANCY: an unknown card id appeared in a hand/draw/discard/field zone"]
 fn unknown_card_id() {
-    let seed = 0xF022_F022_F022_F022u64
+    let base = 0xF022_F022_F022_F022u64
         .wrapping_add(7)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    let mut t = Table::with_seed(&["户山香澄", "花园多惠"], seed);
-    let mut rng = fuzz::rng::Rng::new(seed ^ 0xA5A5);
-    fuzz::drive::drive(&mut t, &mut rng, 3, fuzz::drive::AnswerMode::Free).unwrap();
     let known = fuzz::gen::all_card_ids();
-    match fuzz::drive::check_cards(&t, known) {
-        Ok(()) => panic!("every card id was known on this seed; the finding is not reproducing"),
-        Err(e) => panic!("unknown card id: {e}"),
+    for i in 0..8u64 {
+        let seed = base.wrapping_add(i).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        let mut t = Table::with_seed(&["户山香澄", "花园多惠"], seed);
+        let mut rng = fuzz::rng::Rng::new(seed ^ 0xA5A5);
+        fuzz::drive::drive(&mut t, &mut rng, 3, fuzz::drive::AnswerMode::Free).unwrap();
+        fuzz::drive::check_cards(&t, &known)
+            .unwrap_or_else(|e| panic!("unknown card id on seed {seed:#x}: {e}"));
     }
 }
 
@@ -121,55 +121,57 @@ fn card_trap_reachable() {
 // determinism / save-restore
 // =====================================================================
 
-/// The same seed and the same answer sequence produced different final
-/// `World` JSON (or the answer sequence itself diverged under replay).
+/// Same seed + same answers must produce identical save JSON (and the replay
+/// must consume exactly the same answer sequence). The original finding seed
+/// holds; this pins it.
 #[test]
-#[ignore = "DISCREPANCY: same seed + same answers diverge (determinism break)"]
 fn determinism_break() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(13)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    match fuzz::meta::check_determinism(seed, 3) {
-        Ok(()) => panic!("determinism held on this seed; the finding is not reproducing"),
-        Err(e) => panic!("determinism break: {e}"),
-    }
+    fuzz::meta::check_determinism(seed, 3).expect("determinism break");
 }
 
-/// `Match::save()` / `Match::restore` at a random point did not reproduce the
-/// same final state as the unbroken run.
+/// `Match::save()` / `Match::restore` at a mid-run point must continue to the
+/// same final state as the unbroken run. Root cause of the original break:
+/// `TurnCtx::plan` (the live `MoveCtx`, including card-shaped roll tables) was
+/// `#[serde(skip)]`, so a restore dropped the pending move's dice and the next
+/// roll diverged. Now serialized (`SAVE_VERSION` 7).
 #[test]
-#[ignore = "DISCREPANCY: save/restore diverges from the unbroken run"]
 fn save_restore_break() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(17)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    match fuzz::meta::check_save_restore(seed, 4) {
-        Ok(()) => panic!("save/restore held on this seed; the finding is not reproducing"),
-        Err(e) => panic!("save/restore break: {e}"),
-    }
+    fuzz::meta::check_save_restore(seed, 4).expect("save/restore break");
 }
 
 // =====================================================================
 // metamorphic
 // =====================================================================
 
-/// A negated no-target [手] effect still moved money / changed state, so
-/// "fully negate X" did not equal "never play X".
+/// A negated no-target [手] effect must not move money: "fully negate X"
+/// equals "never play X". The original finding was a harness gap (the
+/// counteraction was hardcoded to seat 1 even when the window asked another
+/// seat, and a stunned seat silently skipped the declare). The check now uses
+/// a vanilla board and declares as the asked seat.
 #[test]
-#[ignore = "DISCREPANCY: negating a no-target [手] effect did not reduce to never playing it"]
 fn negation_not_total() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(19)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    match fuzz::meta::check_negation(seed) {
-        Ok(()) => panic!("negation held on this seed; the finding is not reproducing"),
-        Err(e) => panic!("negation gap: {e}"),
-    }
+    fuzz::meta::check_negation(seed).expect("negation gap");
 }
 
-/// Two multiplicative money modifiers did not commute.
+/// Two multiplicative money modifiers must commute.
+///
+/// **Still open as a ruling (MONEY-01 / C-Q1).** The rulebook lists
+/// 「支付减半/翻倍」 as one 时点 (rulebook.txt 支付阶段 4) with no product /
+/// stack / order rule for two live multipliers (Fire bird 1.5×, Ave Mujica
+/// 状态2 1.5×, HHW band double-pay, 摩卡 0.5×). Two identical 0.5× modifiers
+/// commute under any composition, so this probe cannot decide the question --
+/// leave it ignored until the user answers C-Q1.
 #[test]
-#[ignore = "DISCREPANCY: two multiplicative money modifiers do not commute"]
+#[ignore = "RULING: MONEY-01 / C-Q1 -- composition of two live money multipliers (product? declaration order? one-per-window?)"]
 fn multiply_order_matters() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(23)
@@ -180,17 +182,16 @@ fn multiply_order_matters() {
     }
 }
 
-/// A +N roll modifier shortened a move (monotonicity break).
+/// A +N roll modifier must never shorten a move. The original check measured
+/// net board displacement, which a longer walk can shrink by landing on a
+/// teleporting tile; the check now measures the walk length itself
+/// (`main_steps`) on a vanilla board.
 #[test]
-#[ignore = "DISCREPANCY: a +N roll modifier shortened a move"]
 fn monotonicity_break() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(29)
         .wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    match fuzz::meta::check_monotonicity(seed) {
-        Ok(()) => panic!("monotonicity held on this seed; the finding is not reproducing"),
-        Err(e) => panic!("monotonicity gap: {e}"),
-    }
+    fuzz::meta::check_monotonicity(seed).expect("monotonicity gap");
 }
 
 /// An effect on an immune / untargetable player still changed that player.
@@ -267,6 +268,7 @@ fn money_depth_opens_windows() {
         }
     }
 }
+
 // =====================================================================
 // prompt storm: PPP:Returns turn-start ask under a permanent stun
 // =====================================================================

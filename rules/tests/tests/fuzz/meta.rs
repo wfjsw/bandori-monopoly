@@ -93,23 +93,26 @@ pub fn check_save_restore(seed: u64, turns: u32) -> Result<(), String> {
 /// no-target [手] effect. The result must equal never playing X, apart from the
 /// spent cards.
 ///
+/// The board is a quiet vanilla table so the counteractor is never stunned /
+/// exiled and the [反击] window is always offered to the seat that holds
+/// 网络链接异常. The counteraction is declared as **whichever seat the window
+/// asks** (the original harness hardcoded player 1 and silently skipped when
+/// another seat was asked, which looked like a negation gap).
+///
 /// Returns Ok when the two finals agree modulo card spend, or a description.
 pub fn check_negation(seed: u64) -> Result<(), String> {
     // Baseline: a quiet two-player table with no card played.
-    let (mut base, _) = super::gen::arrange(seed);
-    let mut r = Rng::new(seed ^ 0x00AB);
-    // Give everyone a big hand of nothing so the run is short and quiet.
-    let _ = drive(&mut base, &mut r, 1, AnswerMode::Free)?;
+    let _ = seed; // the arrangement is vanilla; the seed only names the finding
+    let base = crate::common::Table::vanilla(2);
     let base_money: Vec<i32> = (0..base.n).map(|i| base.money(i)).collect();
     let base_pos: Vec<i32> = (0..base.n).map(|i| base.pos(i) as i32).collect();
 
     // Treatment: play a no-target [手] effect, negate it with 网络链接异常.
     // 通用:GREAT is [移除] + gain 2000 + add PERFECT -- it has no [指定], so
     // 网络链接异常's clause 2 negates every effect.
-    let (mut tx, _) = super::gen::arrange(seed);
+    let mut tx = crate::common::Table::vanilla(2);
     tx.give(0, &["通用:GREAT"]);
     tx.give(1, &["通用:网络链接异常"]);
-    // Keep the board aligned with the baseline so only the play differs.
     for i in 0..tx.n {
         tx.set_money(i, base_money[i]);
         tx.set_pos(i, base_pos[i] as usize);
@@ -119,9 +122,16 @@ pub fn check_negation(seed: u64) -> Result<(), String> {
         // The card was not playable in this arrangement -- not a failure.
         return Ok(());
     }
-    // Negate if the window is offered.
+    // Declare 网络链接异常 as whichever seat the window asks.
     if tx.counteract_offered("通用:网络链接异常") {
-        let _ = tx.counteract(1, "通用:网络链接异常");
+        let who = tx.asked().first().copied().unwrap_or(1);
+        tx.counteract(who, "通用:网络链接异常")
+            .map_err(|e| format!("negation: counteract failed: {e}"))?;
+    } else {
+        return Err(format!(
+            "negation: 网络链接异常 was not offered on a no-target [手] play (prompt: {})",
+            tx.dump_prompt()
+        ));
     }
     while tx.prompt().is_some() {
         tx.decline();
@@ -183,43 +193,47 @@ pub fn check_commutativity(seed: u64) -> Result<(), String> {
 }
 
 /// Monotonicity: adding a +N roll card (AG:Y.O.L.O adds 1d4) never shortens a
-/// move; a halving modifier (摩卡 0.5倍速 on the move roll) never increases a
-/// payment.
+/// move. The check measures the **walk length** (`lastWalk` / `main_steps`),
+/// not the net board displacement -- a longer walk that lands on a teleporting
+/// tile can end closer to where it started without the roll having been
+/// shortened. A vanilla board keeps the walk unimpeded so the face itself is
+/// what is compared.
 pub fn check_monotonicity(seed: u64) -> Result<(), String> {
+    let _ = seed;
     // Move length: with Y.O.L.O the walk must be >= without it.
     let walk = |with_yolo: bool| -> Result<i32, String> {
-        let (mut t, _) = super::gen::arrange(seed);
-        let n = t.n;
-        for i in 0..n {
-            t.set_money(i, 10_000);
-        }
+        let mut t = crate::common::Table::vanilla(2);
         t.set_pos(0, 0);
-        // Clear a path.
-        for tile in 0..t.m.world().st.owners.len() {
-            t.set_owner(tile, None);
-        }
         if with_yolo {
             t.give(0, &["AG:Y.O.L.O"]);
             t.place_raw(0, "AG:Y.O.L.O");
         }
         t.dice(&[3]);
         t.begin_turn(0);
-        let before = t.pos(0);
         let _ = t.roll(0);
         // Answer the Y.O.L.O counteract window by declaring it.
-        if with_yolo && t.counteract_offered("AG:Y.O.L.O") {
-            let _ = t.counteract(0, "AG:Y.O.L.O");
+        if with_yolo {
+            if t.counteract_offered("AG:Y.O.L.O") {
+                let who = t.asked().first().copied().unwrap_or(0);
+                let _ = t.counteract(who, "AG:Y.O.L.O");
+            } else {
+                return Err("monotonicity: Y.O.L.O was not offered on the move roll".into());
+            }
         }
         while t.prompt().is_some() {
             t.decline();
         }
-        Ok((t.pos(0) as i32) - (before as i32))
+        // Walk length, not net displacement. `main_steps` is the planned total
+        // the walk wrote; `lastWalk` is the same figure as a slot (`total + 1`
+        // is the slot's historical encoding -- read the slot's raw value).
+        let steps = t.m.world().turn.main_steps;
+        Ok(steps)
     };
     let without = walk(false)?;
     let with = walk(true)?;
     if with < without {
         return Err(format!(
-            "monotonicity: +1d4 shortened the move ({without} -> {with})"
+            "monotonicity: +1d4 shortened the walk ({without} -> {with})"
         ));
     }
     Ok(())

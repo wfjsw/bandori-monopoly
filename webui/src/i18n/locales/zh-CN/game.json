@@ -1,7 +1,8 @@
 {
   "ask.agent.build": "{{tile}}　加盖第 {{nth}} 栋  {{cost}}",
   "ask.agent.buy": "{{tile}}　购买 {{price}}{{extra}}",
-  "ask.agent.text": "{{who}} 停在地产商：选一块同色的地结算一次——无主的可以买下，自己的可以加盖一栋房屋；也可以不选。现金不足时可以抵押其他地契凑钱。",
+  "ask.agent.rent": "{{tile}}　向 {{who}} 半价收费 {{price}}",
+  "ask.agent.text": "{{who}} 停在地产商：选一块同色的地结算一次——无主的可以买下，自己的可以加盖一栋房屋，其他玩家的可以半价收费；也可以不选。现金不足时可以抵押其他地契凑钱。",
   "ask.agent.title": "地产商 · {{agent}}",
   "ask.auction.text": "地价 {{price}}{{extra}}。最低出价 100，每次至少加 100，出价最高的人 [消耗] 出价获得地契；有人出价后至少再等 6 秒，没人再加价就成交。",
   "ask.auction.title": "竞价：{{tile}}",
@@ -186,6 +187,7 @@
   "log.agent_none": "{{who}} 停在地产商 {{agent}}（没有同色的地）",
   "log.agent_nothing": "{{who}} 停在地产商 {{agent}}：同色没有符合购买 / 加盖条件的地",
   "log.agent_skip": "{{who}} 在地产商没有选格子",
+  "log.agent_offer_commit": "{{who}} 在地产商 {{agent}} 上确认了对 {{tile}} 的选项（分支 {{kind}}）",
   "log.auction_leftovers": "拍卖出局玩家留下的地契：{{tiles}}{{more}}",
   "log.auction_no_bid": "没有人出价，{{tile}} 还是无主",
   "log.auction_nobody": "没有人能参加 {{tile}} 的竞价",

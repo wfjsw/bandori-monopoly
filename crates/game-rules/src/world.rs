@@ -76,6 +76,14 @@ pub struct Trigger {
     pub name: Option<String>,
     /// A `BuyGate` refusal's reason key.
     pub reason: Option<String>,
+    /// 真奈 join: the seat self-targeted effects of counters answering **this
+    /// link** are redirected to (「改为你」). Set at declaration time when a
+    /// `SELF_REDIRECT` counter is declared against this link; `None` outside
+    /// a join. Scoped to the link -- does not leak into other plays.
+    pub join_redirect: Option<i32>,
+    /// 真奈 join: a joiner used the redirect (shielded the redirect target).
+    /// Set by the joiner's body; read by the join opener to decide its draw.
+    pub join_used: bool,
 }
 
 /// The move that caused a trigger.
@@ -151,6 +159,8 @@ impl Default for Trigger {
             card: None,
             name: None,
             reason: None,
+            join_redirect: None,
+            join_used: false,
         }
     }
 }
@@ -181,6 +191,8 @@ impl Trigger {
             card: None,
             name: None,
             reason: None,
+            join_redirect: None,
+            join_used: false,
         }
     }
 
@@ -402,6 +414,17 @@ pub trait CardWorld: Clone + 'static {
     fn gain(&mut self, player_id: i32, amount: i32, src: Msg) -> i32;
     /// Money out (what the player could pay), logged.
     fn pay(&mut self, player_id: i32, amount: i32, src: Msg) -> i32;
+    /// A **raw** money adjustment -- `money += delta`, no payment pipeline, no
+    /// money-lock check, no `payAfter`. Positive is a gain, negative a loss.
+    /// Logged with `log.gain` / `log.lose`. Returns the amount actually moved.
+    /// 规则书 「不受其他任何效果影响」 (ONE OF US's 「被分享方资金直接增加」).
+    fn adjust_money_raw(&mut self, player_id: i32, delta: i32, src: Msg) -> i32 {
+        if delta >= 0 {
+            self.gain(player_id, delta, src)
+        } else {
+            self.pay(player_id, -delta, src)
+        }
+    }
 
     /// Adopt the recorded pile state of an already-applied host request.
     /// The default keeps standalone host fixtures independent of engine replay.
@@ -936,6 +959,13 @@ pub trait CardWorld: Clone + 'static {
     fn set_trigger_deal_mortgaged(&mut self, v: i32);
     /// A `BuyGate` refusal's reason key, shown instead of a bare cancel.
     fn set_trigger_reason(&mut self, reason: &str);
+    /// 真奈 join: the seat self-targeted effects of counters answering this
+    /// link are redirected to (「改为你」). `None` outside a join.
+    fn trigger_join_redirect(&self) -> Option<i32> {
+        self.trigger().join_redirect
+    }
+    /// 真奈 join: mark that a joiner used the redirect (shielded the target).
+    fn set_trigger_join_used(&mut self) {}
 
     // ----------------------------------------------- turn plan & scheduling
     // Defaults are no-ops so test worlds need not implement them.

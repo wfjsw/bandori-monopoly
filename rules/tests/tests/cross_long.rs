@@ -102,7 +102,13 @@ fn rent(t: usize, h: usize) -> i32 {
 // each visit exhausts every eligible counteraction or ends on an explicit
 // pass; laps continue until a quiet lap; a counter's own round starts with its
 // declarer) + the LIFO ruling (unchanged).
-#[ignore = "DISCREPANCY: five-link war: E (网络链接异常) should cancel A's designation (P0 pays nothing to P1) and P2 should still pay X; currently both wars charge and P2 skips X"]
+//
+// CROSS-TESTS L1 drives a specific link shape: C answers B, D answers C, E
+// answers A. 网络链接异常 is also eligible on X's own Card window (it can cancel
+// one of X's designations -- C5), so the drive must decline it there and only
+// declare it when the window answers the intended counter. Each check keys on
+// `answered_card` plus the `declared` progress so the two 宣战布告 rounds
+// (B first, then A) get C and E respectively.
 #[test]
 fn l01_counter_war_five_links_deep() {
     let mut t = Table::vanilla(4);
@@ -129,27 +135,57 @@ fn l01_counter_war_five_links_deep() {
         let Some(_) = t.prompt() else { break };
         let asked = t.asked();
         assert_eq!(asked.len(), 1, "{}", t.dump_prompt());
-        ask_order.push((asked[0], answered_card(&t).unwrap_or_default()));
-        if t.counteract_offered("AG:宣战布告") && asked[0] == 1 && !declared.contains(&"A") {
-            declared.push("A");
-            t.counteract(1, "AG:宣战布告").unwrap();
-        } else if t.counteract_offered("AG:宣战布告") && asked[0] == 2 && !declared.contains(&"B") {
-            declared.push("B");
-            t.counteract(2, "AG:宣战布告").unwrap();
-        } else if t.counteract_offered("通用:网络链接异常") && asked[0] == 0 && !declared.contains(&"C") {
-            declared.push("C");
-            t.counteract(0, "通用:网络链接异常").unwrap();
-        } else if t.counteract_offered("通用:网络链接异常") && asked[0] == 2 && !declared.contains(&"D") {
-            declared.push("D");
-            t.counteract(2, "通用:网络链接异常").unwrap();
-        } else if t.counteract_offered("通用:网络链接异常") && asked[0] == 3 && !declared.contains(&"E") {
-            declared.push("E");
-            t.counteract(3, "通用:网络链接异常").unwrap();
+        let answered = answered_card(&t).unwrap_or_default();
+        ask_order.push((asked[0], answered.clone()));
+        if answered == "通用:登上武道馆" {
+            // Round on X: only the wars land here. The 网络链接异常 cards wait
+            // for the counters-to-counters rounds (C5 shows they *could* cancel
+            // one of X's designations; L1's chain uses them deeper instead).
+            if t.counteract_offered("AG:宣战布告") && asked[0] == 1 && !declared.contains(&"A") {
+                declared.push("A");
+                t.counteract(1, "AG:宣战布告").unwrap();
+            } else if t.counteract_offered("AG:宣战布告") && asked[0] == 2 && !declared.contains(&"B") {
+                declared.push("B");
+                t.counteract(2, "AG:宣战布告").unwrap();
+            } else {
+                t.decline();
+            }
+        } else if answered == "AG:宣战布告" {
+            // Rounds on B (newest first) then A. C answers B (the first war
+            // round). E answers A -- gated on D already declared so it does not
+            // fire on B's quiet lap (which re-offers P3 after C lands).
+            if t.counteract_offered("通用:网络链接异常") && asked[0] == 0 && !declared.contains(&"C") {
+                declared.push("C");
+                t.counteract(0, "通用:网络链接异常").unwrap();
+            } else if t.counteract_offered("通用:网络链接异常")
+                && asked[0] == 3
+                && !declared.contains(&"E")
+                && declared.contains(&"D")
+            {
+                declared.push("E");
+                t.counteract(3, "通用:网络链接异常").unwrap();
+            } else {
+                t.decline();
+            }
+        } else if answered == "通用:网络链接异常" {
+            // Round on C: D answers C (negating it whole -- C is a [手] with no
+            // [指定]).
+            if t.counteract_offered("通用:网络链接异常") && asked[0] == 2 && !declared.contains(&"D") {
+                declared.push("D");
+                t.counteract(2, "通用:网络链接异常").unwrap();
+            } else {
+                t.decline();
+            }
         } else {
             t.decline();
         }
     }
     eprintln!("l01 ask order: {ask_order:?}, declared = {declared:?}");
+    assert_eq!(
+        declared,
+        vec!["A", "B", "C", "D", "E"],
+        "every card declared exactly once, in chain order"
+    );
 
     // The walk above covers the rounds on X and on each declared counter.
 
@@ -524,8 +560,10 @@ fn l06_one_draw_several_effects() {
 
 // 规则书: 线香花火 (「最后一个奇迹水晶移除后…2层眩晕」 + extra turn on each
 // removal) + 运动的天赋 (700 then 600... re-roll until >= 10).
-// RULING: whether the last removal also grants an extra turn.
-#[ignore = "DISCREPANCY: the last 线香花火 removal nets 1 [眩晕] layer, want 2 — the phase-10 「回合结束时」 status decay runs after the phase-11 「回合结束后」 crystal removal and eats one of the two"]
+// C-Q26a ruling (2026-10-13): the last removal does **not** grant an extra
+// turn -- the terminal effect is discard + 2 [眩晕]. (Granting one would
+// auto-skip it on the stun and its 「每回合结束时移除一层」 tick would eat one
+// of the two, netting 1.)
 #[test]
 fn l07_extra_turn_cascade() {
     let mut t = Table::vanilla(2);

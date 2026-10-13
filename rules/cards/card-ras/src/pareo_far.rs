@@ -46,33 +46,34 @@ fn pareo_far(player_id: i32) -> card_sdk::Asked {
         }
     }
     // 规则书: 「可选择移除任意你拥有的格子上的一层房屋」 -- optional, any tile
-    // this player owns, one layer. The ABI has no `ask_tile(allowNone: true)?`,
-    // so the option is a yes/no first and the tile a second prompt; that reads
-    // the same to the player and costs nothing extra when they decline.
+    // this player owns, one layer. `ask_tiles` carries a 「不选」 slot
+    // (`TileId` answers `-1`), so one prompt covers both the optional and the
+    // pick -- HOST-05's `ask_tile(allowNone: true)`.
     let with_houses: Vec<i32> = ctx::owned_tiles(player_id)
         .into_iter()
         .filter(|&t| ctx::houses_of(t) > 0)
         .collect();
     if !with_houses.is_empty() {
-        let yes = ctx::ask_yes(
+        let labels: Vec<Msg> = with_houses
+            .iter()
+            .map(|&t| Msg::new("ask.tileOption").tile("tile", t))
+            .collect();
+        let prices: Vec<i32> = with_houses.iter().map(|_| 0i32).collect();
+        let t = ctx::ask_tiles(
             player_id,
-            &Msg::new(key!("pareo_far_ask_title")),
-            &Msg::new(key!("pareo_far_ask_text")),
+            &Msg::new(key!("pareo_far_pick_title")),
+            &Msg::new(key!("pareo_far_pick_text")),
+            &with_houses,
+            &labels,
+            &prices,
+            -1,
         )?;
-        if yes {
-            let t = ctx::ask_tile(
+        if t >= 0 {
+            ctx::add_house(t, -1);
+            ctx::log(
                 player_id,
-                &Msg::new(key!("pareo_far_pick_title")),
-                &Msg::new(key!("pareo_far_pick_text")),
-                &with_houses,
-            )?;
-            if t >= 0 {
-                ctx::add_house(t, -1);
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("pareo_far_removed")).tile("tile", t),
-                );
-            }
+                &Msg::new(key!("pareo_far_removed")).tile("tile", t),
+            );
         }
     }
     Ok(())

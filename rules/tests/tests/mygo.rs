@@ -123,7 +123,6 @@ fn light_places_with_stay_and_x_plus_1_crystals() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says a crystal can pay a skill's fire cost (clause 2); engine spends fire or refuses and leaves the crystal count untouched"]
 fn light_crystal_pays_skill_fire_cost() {
     // 规则书: 「（2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」
     let mut t = Table::new(&["高松灯", "千早爱音"]);
@@ -139,18 +138,24 @@ fn light_crystal_pays_skill_fire_cost() {
     t.roll(1).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        let k = t
-            .option("skill:高松灯")
-            .or(t.option("诗超绊"))
-            .unwrap_or(p.fallback);
+        // Accept the 诗超绊 press and 不再迷茫's crystal-substitution offer;
+        // decline anything else (buy prompts, etc.).
+        let k = if t.prompt_refers("tomori") {
+            0
+        } else {
+            t.option("skill:高松灯")
+                .or(t.option("诗超绊"))
+                .unwrap_or(p.fallback)
+        };
         let _ = t.answer(0, k);
     }
     rest(&mut t);
     drain(&mut t);
-    assert_eq!(
-        crystals(&t, 0, "MyGO:（灯）不再迷茫"),
-        0,
-        "the crystal paid the skill cost"
+    // The crystal paid the fire cost; (3) then removed the card at 0.
+    assert!(
+        !t.on_field(0, "MyGO:（灯）不再迷茫"),
+        "the crystal paid the skill cost and (3) removed the card: {:?}",
+        t.field_ids(0)
     );
     assert_eq!(t.fire(0), 0, "no fire was available or spent");
 }
@@ -212,11 +217,13 @@ fn light_zero_hand_gives_one_crystal() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says the card is [移除]d when its crystals run out; the crystal-as-skill-cost clause (2) does not spend from the card, so the card never empties"]
 fn light_removed_when_crystals_run_out() {
     // 规则书: 「（3）此卡上的奇迹水晶耗尽后，[移除]此卡」
-    let mut t = Table::vanilla(2);
-    t.set_character_raw(0, "高松灯");
+    // The crystal is emptied by （2）'s skill-cost substitution, which is what
+    // then trips （3）. So the skill has to be bound (vanilla strips skills).
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
     t.set_hand(0, &[]);
     t.give_play(0, "MyGO:（灯）不再迷茫").unwrap();
     set_crystals(&mut t, 0, "MyGO:（灯）不再迷茫", 1);
@@ -227,10 +234,13 @@ fn light_removed_when_crystals_run_out() {
     t.roll(1).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        let k = t
-            .option("skill:高松灯")
-            .or(t.option("诗超绊"))
-            .unwrap_or(p.fallback);
+        let k = if t.prompt_refers("tomori") {
+            0
+        } else {
+            t.option("skill:高松灯")
+                .or(t.option("诗超绊"))
+                .unwrap_or(p.fallback)
+        };
         let _ = t.answer(0, k);
     }
     rest(&mut t);
@@ -266,9 +276,13 @@ fn rain_gives_one_stay() {
 fn rain_extra_settle_at_turn_end() {
     // 规则书: 「并在回合结束时额外进行一次[触发结算]」 -- the landing tile
     // settles again at turn end (rent charged twice).
+    // Glossary 51: 「[停留]=无法移动」 -- 轮符雨's stay would lock the main move
+    // (see `rain_stay_blocks_this_turn_move`); [不可阻挡] keeps the walk legal
+    // while still counting the stay layer.
     let mut t = Table::vanilla(2);
     t.own(1, &[2]);
     t.set_pos(0, 1);
+    t.set_state(0, "unstoppable", 1);
     t.give_play(0, "MyGO:轮符雨").unwrap();
     t.dice(&[1]);
     t.roll(0).unwrap();
@@ -282,7 +296,6 @@ fn rain_extra_settle_at_turn_end() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: glossary says [停留]=无法移动; engine lets a mid-turn [停留] holder complete the main move anyway"]
 fn rain_stay_blocks_this_turn_move() {
     // 规则书: 「[停留]：处于该状态时[无法移动]」 (glossary) -- gaining stay in
     // 运营 must lock this turn's main move.
@@ -830,12 +843,14 @@ fn rain_day_adjacent_tiles_also_stay() {
 #[test]
 fn rain_day_drains_one_crystal_per_turn_end() {
     // 规则书: 「每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆」
+    // The 1d10 = 1 colour includes 购物中心 (tile 1); CiRCLE (0) is adjacent, so
+    // the user gains [停留] and the main move is locked (glossary 51). The
+    // crystal burn is what this test pins -- just end the turn.
     let mut t = Table::vanilla(2);
     t.dice(&[1]);
     t.give_play(0, "MyGO:那天的雨").unwrap();
     assert_eq!(crystals(&t, 0, "MyGO:那天的雨"), 5);
-    t.dice(&[1]);
-    t.roll(0).unwrap();
+    assert_eq!(t.state(0, "stay"), 1, "adjacent to the rain's colour");
     rest(&mut t);
     drain(&mut t);
     t.end(0).unwrap();
@@ -1408,9 +1423,16 @@ fn inter_yolo_pushes_haneoka_over_20() {
     t.set_draw(0, &["R:[衍生] 压"]);
     t.give(0, &["MyGO:羽丘的不可思议女孩", "AG:Y.O.L.O"]);
     // The card's own d20 = 20 and Y.O.L.O's d4 = 3 -> 23 > 20.
+    // Y.O.L.O is counteract-only (no `On::Play`): it answers the card's
+    // 「掷骰结算前」 window, it is not a free hand play.
     t.dice(&[20, 3]);
-    t.play(0, "AG:Y.O.L.O").unwrap();
     t.play(0, "MyGO:羽丘的不可思议女孩").unwrap();
+    assert!(
+        t.counteract_offered("AG:Y.O.L.O"),
+        "Y.O.L.O rings on the card's own 1d20: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:Y.O.L.O").unwrap();
     rest(&mut t);
     drain(&mut t);
     assert_eq!(t.houses(7), 1, "23 > 10: free house");

@@ -110,6 +110,8 @@ pub trait HostOps {
     fn op_gain(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_gain_typed`
     fn op_gain_typed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_adjust_money`
+    fn op_adjust_money(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_pay`
     fn op_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_pay_to`
@@ -635,6 +637,10 @@ pub trait HostOps {
     fn op_msg_reply(&mut self, v: i32) -> Result<i64, HostErr>;
     /// `bandori_trig_name`
     fn op_trig_name(&mut self, p: i32, n: i32) -> Result<i64, HostErr>;
+    /// `bandori_join_redirect_target`
+    fn op_join_redirect_target(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_set_join_used`
+    fn op_set_join_used(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
 }
 
 impl<C: crate::host::HostCtx> HostOps for C {
@@ -779,6 +785,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_gain_typed(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::gain_typed(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
+    }
+    fn op_adjust_money(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::adjust_money(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::pay(self, a[0], a[1], a[2], a[3])? as i64)
@@ -1636,6 +1645,13 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_trig_name(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::trig_name(self, p, n)? as i64)
     }
+    fn op_join_redirect_target(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::join_redirect_target(self)? as i64)
+    }
+    fn op_set_join_used(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::set_join_used(self)?;
+        Ok(0)
+    }
 }
 
 thread_local! {
@@ -1992,6 +2008,14 @@ pub unsafe extern "C-unwind" fn bandori_gain(player_id: i32, amount: i32, ptr: i
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_gain_typed(player_id: i32, amount: i32, tp: i32, tl: i32, xp: i32, xl: i32) -> i32 {
     with_host(|h| match h.op_gain_typed([player_id, amount, tp, tl, xp, xl, ]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_adjust_money(player_id: i32, delta: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_adjust_money([player_id, delta, ptr, len, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -4119,6 +4143,20 @@ pub unsafe extern "C-unwind" fn bandori_flash_card_keyed(kp: i32, kl: i32, cp: i
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_flash_tile(tile: i32, p: i32, n: i32) {
     with_host(|h| match h.op_flash_tile([tile, p, n, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_join_redirect_target() -> i32 {
+    with_host(|h| match h.op_join_redirect_target([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_set_join_used() {
+    with_host(|h| match h.op_set_join_used([0, 0, 0, 0, 0, 0]) {
         Ok(_) => {},
         Err(e) => abort_host(e),
     })

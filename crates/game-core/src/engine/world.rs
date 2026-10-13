@@ -130,15 +130,21 @@ pub struct TurnSnap {
 /// 100), so a fresh turn would build for free; the manual impl keeps full price.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurnCtx {
-    /// The movement being planned / walked. Runtime-only: it carries roll
-    /// tables, so it never reaches the wire (the broadcast summary is
-    /// `MatchState::plan`).
-    #[serde(skip)]
+    /// The movement being planned / walked. The wire still carries only the
+    /// broadcast summary (`MatchState::plan`); this full context is what
+    /// `Match::save` must round-trip -- a shaped `base` / `dice` table or a
+    /// `steps` fix written by a card lives here and dropping it made
+    /// save/restore diverge on the next roll (`fuzz_found::save_restore_break`).
+    #[serde(default)]
     pub plan: crate::engine::move_ctx::MoveCtx,
     pub player_id: usize,
     pub extra: bool,
     pub main_moved: bool,
     pub played: Vec<String>,
+    /// Hand-card plays this turn (skills do not count). 「当有人同一回合内打出
+    /// 两张卡时」 (TwoCards) reads this -- the second card play raises it.
+    #[serde(default)]
+    pub cards_played: usize,
     /// Players whose money cannot drop for the rest of this turn. Auctions are
     /// not payments, so they are exempt.
     #[serde(default)]
@@ -232,6 +238,7 @@ impl Default for TurnCtx {
             extra: false,
             main_moved: false,
             played: Vec::new(),
+            cards_played: 0,
             no_money_loss: Vec::new(),
             fixed_roll: None,
             main_steps: 0,

@@ -223,13 +223,20 @@ fn a_played_card_runs_its_module_and_answers_a_prompt() {
 fn an_unported_card_falls_back_gracefully() {
     let mut m = match_with("AG:Y.O.L.O");
     let before = m.hand_of(1).len();
-    // Y.O.L.O is a counteraction card with no Play effect; playing it is legal but
-    // does nothing beyond leaving the hand.
-    m.act(1, &play("AG:Y.O.L.O")).expect("play");
+    // Y.O.L.O is a counteraction (「你的任意掷骰结算前打出此卡」) with no
+    // `On::Play`. A hand `play` is therefore refused (`err.play_timing`) and
+    // the card stays in hand -- a graceful refusal, not a crash. (Same
+    // correction as `inter_yolo_pushes_haneoka_over_20`: do not `play` a
+    // counteract-only card.)
+    let r = m.act(1, &play("AG:Y.O.L.O"));
+    assert!(
+        r.is_err(),
+        "counteract-only cards are not hand plays: {r:?}"
+    );
     assert_eq!(
         m.hand_of(1).len(),
-        before - 1,
-        "the card left the hand: {:?}",
+        before,
+        "the card stayed in hand: {:?}",
         m.hand_of(1)
     );
 }

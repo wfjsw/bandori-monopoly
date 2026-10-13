@@ -1,7 +1,8 @@
 {
   "ask.agent.build": "{{tile}}  build #{{nth}}  {{cost}}",
   "ask.agent.buy": "{{tile}}  buy {{price}}{{extra}}",
-  "ask.agent.text": "{{who}} stopped at the dealer: settle one tile of the same colour -- buy an unowned one, or add a house to your own. You can also skip. If short on cash, you can mortgage other deeds to fund it.",
+  "ask.agent.rent": "{{tile}}  half-charge {{who}} {{price}}",
+  "ask.agent.text": "{{who}} stopped at the dealer: settle one tile of the same colour -- buy an unowned one, add a house to your own, or half-charge another player's deed. You can also skip. If short on cash, you can mortgage other deeds to fund it.",
   "ask.agent.title": "Dealer · {{agent}}",
   "ask.auction.text": "Land price {{price}}{{extra}}. Minimum bid 100, raises of at least 100; the highest bidder pays and takes the deed. After a bid it waits 6 more seconds; with no new bid the deed is sold.",
   "ask.auction.title": "Auction: {{tile}}",
@@ -186,6 +187,7 @@
   "log.agent_none": "{{who}} stopped at dealer {{agent}} (no tile of that colour)",
   "log.agent_nothing": "{{who}} stopped at dealer {{agent}}: no eligible tiles of that colour to buy or build",
   "log.agent_skip": "{{who}} skipped the dealer without picking a tile",
+  "log.agent_offer_commit": "{{who}} committed the dealer {{agent}} offer on {{tile}} (branch {{kind}})",
   "log.auction_leftovers": "Auctioning the deeds {{who}} left behind: {{tiles}}{{more}}",
   "log.auction_no_bid": "No bids -- {{tile}} stays unowned",
   "log.auction_nobody": "Nobody can bid on {{tile}}",

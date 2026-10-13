@@ -127,6 +127,9 @@ extern "C-unwind" {
         xp: i32,
         xl: i32,
     ) -> i32;
+    // Raw money adjustment (no payment pipeline). `delta` > 0 gain, < 0 loss.
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_adjust_money")]
+    pub fn adjust_money(player_id: i32, delta: i32, ptr: i32, len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_pay")]
     pub fn pay(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_pay_to")]
@@ -655,6 +658,10 @@ extern "C-unwind" {
     pub fn cancel_designation(seat: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_designation_cancelled")]
     pub fn designation_cancelled(seat: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_join_redirect_target")]
+    pub fn join_redirect_target() -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_join_used")]
+    pub fn set_join_used();
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_gate")]
     pub fn gate(player_id: i32, kind: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_settle_at")]
