@@ -697,9 +697,11 @@ impl Match {
             st.time_left = self.shield + bank;
             // `why_not_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
-            // hidden hand). The public `skip_move` below re-derives from
-            // stay / exile and can disagree (unstoppable, mid-turn [停留],
-            // [除外]); a bot that trusted it sent `end` into `err.roll_first`.
+            // hidden hand). The public `skip_move` is that same live latch --
+            // it used to be re-derived from stay / exile, which disagrees with
+            // the gate (unstoppable, mid-turn [停留], a [除外] granted this
+            // turn by MyGO:无路矢): a policy that trusted it sent `end` into
+            // `err.roll_first` forever.
             {
                 let live_skip = self.world.st.skip_move;
                 let main_moved = self.world.turn.main_moved;
@@ -718,11 +720,6 @@ impl Match {
                     && st.step != stage::MOVE
                     && !owes_roll
                     && !over_hand;
-            }
-            if st.step == stage::OPS && !st.busy {
-                if let Some(s) = st.current() {
-                    st.skip_move = s.stay() > 0 || s.exile() > 0;
-                }
             }
         }
         st
