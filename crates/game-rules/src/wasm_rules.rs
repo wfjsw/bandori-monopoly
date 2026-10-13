@@ -3018,7 +3018,7 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                 }
-                Ok(Outcome::NeedInput(p)) => {
+                Ok(Outcome::NeedInput(p, mut paused)) => {
                     let player_id = p.player_id;
                     let kind = p.kind;
                     let ask = prompt_to_ask(p);
@@ -3041,6 +3041,17 @@ impl<M: CardModules> RulesBridge<M> {
                             return Err(e);
                         }
                     };
+                    // The prompt was answered (replay / provider), so the body
+                    // runs again with this answer pre-filled. Keep what the
+                    // paused pass already posted -- its header and body lines
+                    // -- so the re-run replaces them in place; without this
+                    // every line logged before the prompt appears twice.
+                    if let Some(run) = paused.as_mut() {
+                        posted_ids = std::mem::take(&mut run.posted);
+                        if run.own_activation >= 0 {
+                            flushed_header = run.own_activation;
+                        }
+                    }
                     // A card prompt has one player: the module's i-th answer is that
                     // player's answer to its i-th prompt.
                     let v = reply
