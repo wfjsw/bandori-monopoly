@@ -265,11 +265,9 @@ fn t05_one_of_us_shares() {
     drain(&mut t);
     let r = rent(t48, 0);
     eprintln!(
-        "t05 record: P1 = {}, P0 = {}, R = {r}; field0={:?} keys={:?}",
+        "t05 record: P1 = {}, P0 = {}, R = {r}",
         t.money(1),
-        t.money(0),
-        t.field_ids(0),
-        t.recent_keys(40)
+        t.money(0)
     );
     assert_eq!(t.money(2), 10_000 - r, "P2 pays R");
     // 「先在原主人方结算完成」 -- P1 keeps the full rent, then shares half.

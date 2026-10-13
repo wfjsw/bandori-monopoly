@@ -326,6 +326,7 @@ pub enum Op {
     flash_card = 308,
     flash_card_keyed = 309,
     flash_tile = 310,
+    adjust_money = 311,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

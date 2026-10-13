@@ -369,6 +369,33 @@ pub fn gain_typed<C: HostCtx>(
             }
 }
 
+/// Raw money adjustment (`ctx::adjust_money` / `gain_raw` / `lose_raw`):
+/// `money += delta` with a `log.gain` / `log.lose` line and **no** payment
+/// pipeline (no `payAdd`, no `effect` window, no `payAfter`). 规则书
+/// 「不受其他任何效果影响」 -- the amount moves as-is.
+pub fn adjust_money<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    delta: i32,
+    p: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let src = guest_msg(c, p, n)?;
+    // Non-pausing: the inline host may intercept (bot / simulation); otherwise
+    // apply straight to the world copy, like `set_slot`.
+    if let Some(v) = crate::inline::request_or_inline(
+        c,
+        HostRequest::AdjustMoney {
+            player_id,
+            delta,
+            src: Some(src.clone()),
+        },
+    )? {
+        return Ok(v);
+    }
+    Ok(c.st_mut().w().adjust_money_raw(player_id, delta, src))
+}
+
 pub fn pay<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let src = guest_msg(c, p, n)?;
                         // A card-driven payment is paused so the engine can raise a `pay`

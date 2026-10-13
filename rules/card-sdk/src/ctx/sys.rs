@@ -129,6 +129,9 @@ extern "C-unwind" {
         xp: i32,
         xl: i32,
     ) -> i32;
+    // Raw money adjustment (no payment pipeline). `delta` > 0 gain, < 0 loss.
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_adjust_money")]
+    pub fn adjust_money(player_id: i32, delta: i32, ptr: i32, len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_pay")]
     pub fn pay(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_pay_to")]

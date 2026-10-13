@@ -466,6 +466,31 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
     asked(unsafe { sys::gain_typed(player_id, amount, tp, tl, xp, xl) })
 }
 
+/// A **raw** money adjustment -- `money += delta` with a `log.gain` /
+/// `log.lose` line and **no** payment pipeline: no `payAdd` / `payMul` /
+/// `payChoose` / `payAt`, no `effect` [反击] window, no `payAfter`. 规则书
+/// 「不受其他任何效果影响」 -- the amount moves as-is (ONE OF US's 「被分享方
+/// 资金直接增加」). Positive `delta` is a gain, negative a loss. Non-pausing:
+/// returns the amount actually moved (0 = the seat was out).
+#[cfg_attr(kani, inline(always))]
+pub fn adjust_money(player_id: i32, delta: i32, src: &Msg) -> i32 {
+    let (p, l) = mj(src);
+    unsafe { sys::adjust_money(player_id, delta, p, l) }
+}
+
+/// [`adjust_money`] with a positive `amount` -- a raw gain. Convenience.
+#[cfg_attr(kani, inline(always))]
+pub fn gain_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+    adjust_money(player_id, amount.max(0), src)
+}
+
+/// [`adjust_money`] with a positive `amount` taken away -- a raw loss.
+/// Convenience.
+#[cfg_attr(kani, inline(always))]
+pub fn lose_raw(player_id: i32, amount: i32, src: &Msg) -> i32 {
+    adjust_money(player_id, -amount.max(0), src)
+}
+
 /// Money out (what the player could pay), logged.
 pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = mj(src);

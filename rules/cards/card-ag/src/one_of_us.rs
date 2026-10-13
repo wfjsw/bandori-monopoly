@@ -37,11 +37,14 @@ pub const ONE_OF_US: CardDef = CardDef::new(
             Some(share_at_resolved_applies),
             share_at_resolved,
         ),
-        // Consume the measured rent every resolve (silent bookkeeping) so a
-        // skipped split cannot leak into a later settle.
+        // Consume the measured rent every resolve (bookkeeping) so a
+        // skipped split cannot leak into a later settle. `quiet_when_empty`
+        // rather than `silent`: it shares a TileResolved drive with the
+        // visible share above, and the per-drive silent check would see the
+        // share's logs and accuse this bookkeeping of hiding a real effect.
         On::Hook(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, clear_measured_rent),
     ],
-).silent(&[2, 4]);
+).silent(&[2]).quiet_when_empty(&[4]);
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.
@@ -167,13 +170,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金
     // 直接增加，不受其他任何效果影响）」 -- the split is `measure_rent` +
     // `share_at_resolved` below: the settle completes at the original owner
-    // (`tileResolved`), then the partner's half lands.
-    // TODO(规则书)[judgement]: 「不受其他任何效果影响」 wants a raw money add
-    // (`H.State.seats[].money`), not a payment; `ctx::transfer` still rides the
-    // payment pipeline. And 「平分」 reads as a half-share of the settle income
-    // moving owner -> partner (the C# note: "P0 gets half from P1"); whether
-    // the owner keeps the full rent and the partner is topped up, or the two
-    // split the rent itself, is the same shape either way at half.
+    // (`tileResolved`), then the other side's half lands as a **raw** money
+    // add (`ctx::adjust_money`), so no payment hook can boost it.
     // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有次地契」
     // -- the deed hand-over is `On::Hook(&[HookKind::BeforeOut], "", Some(...))` below
     // (C# `CardOneOfUs.BeforeOut`).
@@ -204,8 +202,8 @@ fn measure_rent(owner: i32) -> card_sdk::Asked {
 
 /// 「先在地契原主人方结算完成，之后被分享方资金直接增加」 -- the settle's
 /// terminal (`tileResolved`, 「结算完成时」; `SETTLE-STAGES.md` §4 M5). The
-/// owner's side has already settled; now the partner's half lands. Fires even
-/// when the settle was cancelled (complete-as-nothing) -- with no recorded
+/// 地契原主人's side has already settled; now the 被分享方's half lands. Fires
+/// even when the settle was cancelled (complete-as-nothing) -- with no recorded
 /// income there is nothing to split.
 /// Residual guard for [`share_at_resolved`]: a designated deed produced
 /// income worth splitting. Derived lookups (`designated`, the live tile
@@ -220,10 +218,13 @@ fn share_at_resolved_applies(owner: i32) -> bool {
         return false;
     }
     let owner_of_tile = ctx::tile_owner(trigger::tile());
-    owner_of_tile >= 0 && owner_of_tile != partner
+    // 规则书: 「指定双方各一块地契」 -- the tile is one of the pair's deeds;
+    // its owner is one side of the pair (the 「地契原主人」), not a third party
+    // (「被指定的地块不会有第三方参与分钱」). Either side's deed splits.
+    owner_of_tile >= 0 && (owner_of_tile == owner || owner_of_tile == partner)
 }
 
-/// Silent bookkeeping: consume the measured rent so a skipped split cannot
+/// Bookkeeping: consume the measured rent so a skipped split cannot
 /// leak into a later settle.
 fn clear_measured_rent(owner: i32) -> card_sdk::Asked {
     ctx::set_slot(owner, "one_of_us_rent", 0);
@@ -234,25 +235,23 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
     let partner = ctx::slot(owner, "one_of_us_partner") - 1;
     let income = ctx::slot(owner, "one_of_us_rent");
     // Applicability is [`share_at_resolved_applies`]; the tally is consumed
-    // by [`clear_measured_rent`] (a silent entry that always runs).
-    // 「触发结算收益平分」 -- half the settle income to the partner. The
-    // settle has already paid the owner in full (「先在地契原主人方结算完成」);
-    // this is the partner's share, moving owner -> partner (the C# note: "P0
-    // gets half from P1"). Applicability is [`share_at_resolved_applies`].
+    // by [`clear_measured_rent`] (a bookkeeping entry that always runs).
+    // 「触发结算收益平分」 -- half the settle income moves to the other side of
+    // the pair. The settle has already paid the 地契原主人 in full
+    // (「先在地契原主人方结算完成」); this is the 被分享方's share.
     let half = income / 2;
     let tile = trigger::tile();
     let owner_of_tile = ctx::tile_owner(tile);
-    // TODO(规则书)[judgement]: 「不受其他任何效果影响」 -- see the note in `play`.
-    ctx::transfer(
-        owner_of_tile,
-        partner,
-        half,
-        &Msg::new(key!("one_of_us_share")),
-    )?;
+    // The 被分享方 is the other member of the pair (「之后被分享方资金直接增加」).
+    let recipient = if owner_of_tile == partner { owner } else { partner };
+    // 规则书: 「不受其他任何效果影响」 -- raw money moves, no payment pipeline.
+    let src = Msg::new(key!("one_of_us_share"));
+    ctx::lose_raw(owner_of_tile, half, &src);
+    ctx::gain_raw(recipient, half, &src);
     ctx::log(
-        partner,
+        recipient,
         &Msg::new(key!("one_of_us_shared"))
-            .player_id("who", partner)
+            .player_id("who", recipient)
             .tile("tile", tile)
             .n("money", half as i64),
     );

@@ -396,6 +396,19 @@ pub enum HostRequest {
         typ: String,
         text: Option<crate::Msg>,
     },
+    /// A **raw** money adjustment -- `ctx::adjust_money` / `ctx::gain_raw` /
+    /// `ctx::lose_raw`. Positive `delta` is a gain, negative a loss. Moves the
+    /// balance directly (`World::gain_money` / a raw decrement) with a
+    /// `log.gain` / `log.lose` line, **without** the `HostRequest::Pay` money
+    /// pipeline: no `payAdd` / `payMul` / `payChoose` / `payAt`, no `effect`
+    /// [反击] window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
+    /// amount a [指定] split moves to land as-is (ONE OF US's 「被分享方资金
+    /// 直接增加」). Answers the amount actually moved (0 = the seat was out).
+    AdjustMoney {
+        player_id: i32,
+        delta: i32,
+        src: Option<crate::Msg>,
+    },
     /// Marker spend / gain (user ruling 2026-10-07): the engine raises
     /// `markerSpend` / `markerGain` -- the marker's own [反击] window --
     /// **before** the markers move. Answers `1` (the move goes through) or `0`
@@ -2635,6 +2648,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "gain_typed",
         |mut c: C<W>, player_id: i32, amount: i32, tp: i32, tl: i32, xp: i32, xl: i32| -> Result<i32, Error> {
             hostfns::gain_typed(&mut c, player_id, amount, tp, tl, xp, xl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "adjust_money",
+        |mut c: C<W>, player_id: i32, delta: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::adjust_money(&mut c, player_id, delta, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

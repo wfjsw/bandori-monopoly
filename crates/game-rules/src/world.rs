@@ -395,6 +395,17 @@ pub trait CardWorld: Clone + 'static {
     fn gain(&mut self, player_id: i32, amount: i32, src: Msg) -> i32;
     /// Money out (what the player could pay), logged.
     fn pay(&mut self, player_id: i32, amount: i32, src: Msg) -> i32;
+    /// A **raw** money adjustment -- `money += delta`, no payment pipeline, no
+    /// money-lock check, no `payAfter`. Positive is a gain, negative a loss.
+    /// Logged with `log.gain` / `log.lose`. Returns the amount actually moved.
+    /// 规则书 「不受其他任何效果影响」 (ONE OF US's 「被分享方资金直接增加」).
+    fn adjust_money_raw(&mut self, player_id: i32, delta: i32, src: Msg) -> i32 {
+        if delta >= 0 {
+            self.gain(player_id, delta, src)
+        } else {
+            self.pay(player_id, -delta, src)
+        }
+    }
 
     /// Adopt the recorded pile state of an already-applied host request.
     /// The default keeps standalone host fixtures independent of engine replay.

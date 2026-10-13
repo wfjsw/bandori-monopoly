@@ -365,7 +365,16 @@ use alloc::{string::String, vec::Vec};
 ///      persistent state and survives halt; the activation's own flash obeys
 ///      the same rule. Client-side, event ids dedupe a re-delivered frame.
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 55;
+/// v56: **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
+///      `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
+///      `adjust_money`). `money += delta` with a `log.gain` / `log.lose` line
+///      and **no** payment pipeline: no `payAdd` / `payMul` / `payChoose` /
+///      `payAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
+///      任何效果影响」 wants a [指定] split's amount to land as-is (ONE OF US's
+///      「被分享方资金直接增加，不受其他任何效果影响」). Non-pausing. Positive
+///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
+///      decrement under the hood. SAVE_VERSION unchanged (no save field).
+pub const ABI_VERSION: i32 = 56;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

@@ -189,6 +189,10 @@ pub fn gain_typed(player_id: i32, amount: i32, tp: i32, tl: i32, xp: i32, xl: i3
     kani_host::call_i32(Op::gain_typed, [player_id, amount, tp, tl, xp, xl])
 }
 
+pub fn adjust_money(player_id: i32, delta: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::adjust_money, [player_id, delta, ptr, len, 0, 0])
+}
+
 pub fn pay(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::pay, [player_id, amount, ptr, len, 0, 0])
 }

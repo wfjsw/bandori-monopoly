@@ -114,6 +114,8 @@ pub trait HostOps {
     fn op_gain(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_gain_typed`
     fn op_gain_typed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_adjust_money`
+    fn op_adjust_money(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_pay`
     fn op_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_pay_to`
@@ -795,6 +797,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_gain_typed(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::gain_typed(self, a[0], a[1], a[2], a[3], a[4], a[5])? as i64)
+    }
+    fn op_adjust_money(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::adjust_money(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::pay(self, a[0], a[1], a[2], a[3])? as i64)
@@ -2028,6 +2033,14 @@ pub unsafe extern "C-unwind" fn bandori_gain(player_id: i32, amount: i32, ptr: i
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_gain_typed(player_id: i32, amount: i32, tp: i32, tl: i32, xp: i32, xl: i32) -> i32 {
     with_host(|h| match h.op_gain_typed([player_id, amount, tp, tl, xp, xl, ]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_adjust_money(player_id: i32, delta: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_adjust_money([player_id, delta, ptr, len, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
