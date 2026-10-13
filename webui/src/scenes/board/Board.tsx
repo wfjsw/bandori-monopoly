@@ -116,6 +116,9 @@ export function Board({ sess }: { sess: GameSession }) {
   // Stable per snapshot, so the memoized panels below skip the 500 ms timer
   // and animation-only re-renders.
   const m = useMemo(() => (view ? model(view) : null), [view]);
+  // The state already holds the next turn while the last one's events still
+  // play; panels that show whose turn it is follow the animation instead.
+  const shown = useMemo(() => (m && anim.turn != null && anim.turn !== m.S.turn ? { ...m, S: { ...m.S, turn: anim.turn } } : m), [m, anim.turn]);
   useMatchDriver({ sess, m, anim, auto, exit });
   // A stable tile-click, so the memoized ring tiles are not re-rendered by a
   // fresh closure each time; it reads the latest handler below.
@@ -156,7 +159,7 @@ export function Board({ sess }: { sess: GameSession }) {
       <AutoBanner sess={sess} />
       <div className={s.body}>
         <div className={s.left}>
-          <Players m={m} solo={sess.kind !== "online"} elapsed={(performance.now() - at) / 1000} />
+          <Players m={shown ?? m} solo={sess.kind !== "online"} elapsed={(performance.now() - at) / 1000} />
           <Side m={m} sess={sess} anim={anim} />
         </div>
         <div className={s.middle}>
@@ -166,7 +169,7 @@ export function Board({ sess }: { sess: GameSession }) {
           <FieldSheet m={m} pulse={anim.pulse} />
           <div className={s.mapSlot}>
             <Ring
-              m={m}
+              m={shown ?? m}
               anim={anim}
               pickable={tilePick}
               walk={tilePick.length > 0 && S.prompt.walk}
