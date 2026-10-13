@@ -397,7 +397,7 @@
 .token.hot { z-index: 999; }
 .token.dim { opacity: 0.3; filter: grayscale(0.8); }
 
-/* Players-panel hover: a bobbing arrow over the hovered seat's token. */
+/* A bobbing arrow over the hovered seat's token, else the turn-holder's. */
 .arrow {
   position: absolute;
   left: 0;
