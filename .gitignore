@@ -59,3 +59,8 @@ docs/ui-ref
 /tools/live2d/
 /docs/LIVE2D*.md
 /webui/src/live2d/check*.mjs
+
+# Kani guard IR table: derived from the guard condition strings and generated
+# into $OUT_DIR by rules/kani/build.rs. Never commit a copy (it drifted every
+# time a guard was edited); the ignore line catches a manual `gen_cond_ir` dump.
+/rules/kani/src/generated/cond_irs.rs

@@ -44,7 +44,7 @@ rules/kani::board            static 60-tile board from data/board.json
 | **invoke** | `rules/kani/src/invoke.rs` | registry lookup of shipped `CardDef` / skill / event; calls the unmodified `On` body |
 | **harness kit** | `rules/kani/src/harness.rs` | `clause_proof!`, `clause_mutant!`, `assert_frame!`, `cover_both!`, `any_player`, `any_in` |
 | **shim** | `rules/kani/src/shim.rs` | `guard!` / `guard_id!` — real single-source guard verdict; `guard_assumed!` only for non-lowerable leftovers (greppable) |
-| **guard IR** | `rules/kani/src/generated/cond_irs.rs` | 139 lowered CEL guards + const ids (`BY_ID`) |
+| **guard IR** | `cond_irs` (generated into `$OUT_DIR` by `rules/kani/build.rs`, not committed) | 139 lowered CEL guards + const ids (`BY_ID`) |
 | **ir_fill** | `rules/kani/src/ir_fill.rs` | general World → `IrCtx` (every field filled or documented) |
 | **spec units** | `rules/kani/src/spec/<unit>.rs` | reference specs FROM the clause docs only |
 | **proof units** | `rules/kani/src/proofs/<unit>.rs` | `#[kani::proof]` harnesses |
