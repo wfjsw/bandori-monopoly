@@ -340,10 +340,8 @@ fn symbolic_pareo_world(pareo_key: u16) -> World {
         // isolation: no houses anywhere ⇒ no optional removal prompt
         w.tiles[p].houses = 0;
     }
-    // every tile house-free (bounded board walk)
-    for t in 0..60 {
-        w.tiles[t].houses = 0;
-    }
+    // `World::new` already has `houses = 0` on every tile — the old 60-trip
+    // walk tripped the unwinding assertion at unwind 32 (class A).
     w
 }
 

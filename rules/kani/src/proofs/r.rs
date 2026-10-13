@@ -561,10 +561,8 @@ pub fn student_council_add_resolve_iff() {
     let mut w = base_world();
     let player = w.trig_player;
     // Isolation: no owned tiles (so `spots` is empty and the body returns
-    // after the insert). Also keep the discard empty so nothing else fires.
-    for t in 0..60 {
-        w.tiles[t].owner = -1;
-    }
+    // after the insert). `World::new` already has `owner = -1` everywhere —
+    // the old 60-trip clear tripped the unwinding assertion at unwind 24.
     let pre_deck_n = w.deck_n as i32;
     w.deck_n = 0;
     let pre = {
@@ -594,9 +592,7 @@ pub fn student_council_add_resolve_iff() {
 pub fn student_council_add_resolve_mutant_is_detected() {
     let mut w = base_world();
     let player = w.trig_player;
-    for t in 0..60 {
-        w.tiles[t].owner = -1;
-    }
+    // `World::new` already has `owner = -1` (was a 60-trip clear at unwind 24).
     w.deck_n = 0;
     let _pre = {
         world::reset_world(w);

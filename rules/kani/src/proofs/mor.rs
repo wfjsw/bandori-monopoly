@@ -472,11 +472,7 @@ fn courage_world() -> (World, i32) {
     let player: i32 = kani::any();
     kani::assume(player >= 0 && player < w.n_players);
     kani::assume(!w.out[player as usize]);
-    for t in 0..60 {
-        w.tiles[t].owner = -1;
-        w.tiles[t].houses = 0;
-        w.tiles[t].mortgaged = false;
-    }
+    // `World::new` already has owner=-1 / houses=0 / mortgaged=false.
     for p in 0..MAX_PLAYERS {
         w.pos[p] = kani::any();
         kani::assume(w.pos[p] >= 0 && w.pos[p] < 60);
@@ -664,11 +660,7 @@ fn toko_world() -> (World, i32) {
     kani::assume(player >= 0 && player < w.n_players);
     kani::assume(!w.out[player as usize]);
     // No deeds anywhere ⇒ no swappable pair ⇒ the body early-returns.
-    for t in 0..60 {
-        w.tiles[t].owner = -1;
-        w.tiles[t].houses = 0;
-        w.tiles[t].mortgaged = false;
-    }
+    // (`World::new` already leaves every tile owner=-1 / house-free.)
     w.symbolic_answers = true;
     w.trig_player = player;
     (w, player)
@@ -714,11 +706,7 @@ pub fn toko_swap_iff_blocked_host() {
     // Seed a same-group mortgaged pair on the 0-based indices 1 and 6
     // (board group 1: tiles 2 and 7 are 1-based 2,7 → 0-based 1,6).
     // `owned_at` will report them as 2 and 7 (1-based) — the index split.
-    for t in 0..60 {
-        w.tiles[t].owner = -1;
-        w.tiles[t].houses = 0;
-        w.tiles[t].mortgaged = false;
-    }
+    // (`World::new` already leaves every tile owner=-1 / house-free.)
     w.tiles[1].owner = player;
     w.tiles[1].mortgaged = true;
     w.tiles[6].owner = other;
@@ -1371,11 +1359,7 @@ fn noble_world(owned: bool) -> (World, i32, i32) {
     kani::assume(!w.out[player as usize]);
     let pos: i32 = kani::any();
     kani::assume(pos >= 0 && pos < 60);
-    for t in 0..60 {
-        w.tiles[t].owner = -1;
-        w.tiles[t].houses = 0;
-        w.tiles[t].mortgaged = false;
-    }
+    // `World::new` already leaves every tile owner=-1 / house-free.
     if owned {
         w.tiles[pos as usize].owner = player;
     } else {

@@ -165,9 +165,10 @@ pub fn duobang_01_mutant_is_detected() {
 fn tears_world(share: bool) -> World {
     let mut w = base_world();
     w.n_players = 2;
-    for t in w.tiles.iter_mut() {
-        t.owner = -1;
-    }
+    // `World::new` / `TileState::new` already leave every `owner = -1`
+    // (houses 0, mortgaged false). The old `for t in w.tiles.iter_mut()` was
+    // a 60-trip no-op that tripped the unwinding assertion under
+    // `#[kani::unwind(32)]` (class A).
     // board index 2 (slot 1) group 1; board 6 (slot 5) group 1; board 10 (slot 9) group 2.
     w.tiles[1].owner = 0;
     if share {
