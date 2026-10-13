@@ -397,6 +397,32 @@ interface SoloSave {
   replayId?: string;
 }
 
+/** An engine worker booted ahead of a solo start, if any. */
+let warmEngine: SoloEngine | null = null;
+
+/**
+ * Boot a solo engine worker in the background (glue, data, ruleset) so the
+ * next `startSolo` / `resumeSolo` skips that cost. Idempotent; the setup
+ * screen calls it when it opens. A failed warm-up is dropped and the start
+ * falls back to a cold worker (and reports its own error).
+ */
+export function warmSoloEngine(): void {
+  if (warmEngine) return;
+  const e = new SoloEngine();
+  warmEngine = e;
+  e.boot().catch(() => {
+    if (warmEngine === e) warmEngine = null;
+    e.close();
+  });
+}
+
+/** The warmed worker (handed over once), else a fresh one. */
+function takeSoloEngine(): SoloEngine {
+  const e = warmEngine ?? new SoloEngine();
+  warmEngine = null;
+  return e;
+}
+
 /**
  * One solo match. The `SoloMatch` (wasm), its 50 ms fixed-step tick loop and
  * the engine's standard bots run in a module worker (`soloWorker.ts`); this
@@ -507,7 +533,7 @@ export class SoloSession extends GameSession {
     // exported record carries the openings and verifies. Solo proves little --
     // the player is both committer and contributor -- so the UI does not show
     // the commitment.
-    const engine = new SoloEngine();
+    const engine = takeSoloEngine();
     return new SoloSession(engine, weights, async () => {
       await engine.boot();
       await engine.start({ members, mode: 0, weights, you: 1 });
@@ -524,7 +550,7 @@ export class SoloSession extends GameSession {
     try {
       const s: SoloSave = JSON.parse(raw);
       if (s.v !== SOLO_VERSION) throw new Error("old save");
-      const engine = new SoloEngine();
+      const engine = takeSoloEngine();
       const out = new SoloSession(
         engine,
         s.weights,

@@ -14,6 +14,7 @@ import { Board } from "./board/Board";
 import { useOnline } from "./lobby/Room";
 import { Select } from "./select/Select";
 import { t as tr } from "../i18n/t";
+import s from "./Play.module.css";
 import { useConsoleSession } from "../console/context";
 
 /**
@@ -44,10 +45,29 @@ function useSoloResume(sess: ReturnType<typeof resumeSolo>): void {
   }, [sess]);
 }
 
+/** Shown while the solo engine worker boots and opens the match. */
+function Opening() {
+  return (
+    <div className={s.opening} role="status">
+      <div className={s.spinner} />
+      <div>{tr("play.opening")}</div>
+    </div>
+  );
+}
+
 function SoloPlay() {
   const [sess] = useState(() => resumeSolo());
+  const [open, setOpen] = useState(false);
   useSoloResume(sess);
-  return sess ? <Match sess={sess} /> : null;
+  useEffect(() => {
+    let alive = true;
+    void sess?.ready.then(() => alive && setOpen(true), () => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [sess]);
+  if (!sess) return null;
+  return open ? <Match sess={sess} /> : <Opening />;
 }
 
 function OnlinePlay({ id }: { id: string }) {

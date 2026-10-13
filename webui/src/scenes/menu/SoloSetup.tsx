@@ -2,13 +2,13 @@
 // per seat (or 随机), score rules, and each bot's mentality (标准 / 混沌). A
 // solo match left running (or saved before a refresh) can be continued.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { navigate } from "../../app/router";
 import { cx } from "../../core/cx";
 import { D, rules } from "../../core/data";
 import { getProfile } from "../../core/store";
 import type { BotMentality, CharacterData, ScoreWeights } from "../../core/types";
-import { SoloSession, botSoloCapMs, discardSolo, resumeSolo, setBotSoloCapMs, startSolo } from "../../game/session";
+import { SoloSession, botSoloCapMs, discardSolo, resumeSolo, setBotSoloCapMs, startSolo, warmSoloEngine } from "../../game/session";
 import { Btn } from "../../ui/Button";
 import { Avatar, CharCard, inTab, tabLabels } from "../../ui/Character";
 import { Chips } from "../../ui/Chips";
@@ -38,6 +38,8 @@ const other = (m: BotMentality): BotMentality => {
 };
 
 function SoloSetup({ close }: { close: () => void }) {
+  // Boot the engine worker while the player picks seats.
+  useEffect(() => warmSoloEngine(), []);
   const player = getProfile().playerName;
   const [bots, setBots] = useState(() => Math.min(9, Math.max(2, Number(localStorage.getItem(BOTS_KEY) ?? 3) || 3)));
   const [weights, setWeights] = useState<ScoreWeights>({ ...DEFAULT_WEIGHTS });
