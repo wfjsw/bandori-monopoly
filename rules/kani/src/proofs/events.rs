@@ -303,7 +303,13 @@ pub fn pico_swap_01_rotates_positions() {
 
     // Ring = [0,1,2]; each takes the next pre-position.
     let expected = [(0i32, 20i32), (1, 30), (2, 10)];
-    kani::cover!(n_log == 3, "three teleports in the ring");
+    // Latch `set_slot` emits `SetState` around the teleports, so the raw
+    // `log_n` is 9, not 3. Cover the Teleport subsequence instead.
+    let n_tele = effects
+        .iter()
+        .filter(|e| matches!(e, Effect::Teleport { .. }))
+        .count();
+    kani::cover!(n_tele == 3, "three teleports in the ring");
     assert!(
         spec::events::log_is_teleports(effects, &expected),
         "E-pico-swap-01: rotate onto the next ring member's pre-position"
@@ -330,7 +336,11 @@ pub fn pico_swap_02_skips_exiled_players() {
 
     // Ring [0,2]: 0 → pos(2)=30, 2 → pos(0)=10. Player 1 unmoved.
     let expected = [(0i32, 30i32), (2, 10)];
-    kani::cover!(n_log == 2, "exiled seat skipped");
+    let n_tele = effects
+        .iter()
+        .filter(|e| matches!(e, Effect::Teleport { .. }))
+        .count();
+    kani::cover!(n_tele == 2, "exiled seat skipped");
     assert!(
         spec::events::log_is_teleports(effects, &expected),
         "E-pico-swap-02: exiled player skipped and not a destination source"
@@ -1211,8 +1221,11 @@ pub fn heat_head_01_activation_phase_up() {
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(dest == 2, "E-heat-head: keep (dest=Field)");
-    let crystals_key = intern::intern("crystals");
-    let phase = world::with_world(|w| w.key_get(0, crystals_key));
+    // `ctx::set_crystals` writes the **field-instance** counter (`Op::
+    // set_counter_self` → `field_crystals(last_uid)`), not a player key.
+    // Reading `key_get(0, "crystals")` was a harness bug (class B) — it
+    // stayed 0 and the assert failed on the old base.
+    let phase = world::with_world(|w| w.field_crystals(w.last_uid));
     assert!(phase == 1, "E-heat-head-01: phase 1 (add 1d6) is armed");
 }
 
@@ -1227,8 +1240,7 @@ pub fn heat_head_03_phase_end_files_away() {
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
     // First AtEnd: phase 1 → 2.
     invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:超燃甩头"), "AtEnd", "", 0));
-    let crystals_key = intern::intern("crystals");
-    let phase = world::with_world(|w| w.key_get(0, crystals_key));
+    let phase = world::with_world(|w| w.field_crystals(w.last_uid));
     assert!(phase == 2, "E-heat-head-02: first turn end arms phase 2");
     // Second AtEnd: expire.
     let n0 = log_n_of();
@@ -1430,7 +1442,10 @@ pub fn embers_04_clear_on_exile_blocked() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::unwind(16)]
+// all_players() is a `Range::try_fold` over `0..player_count()`; CBMC does
+// not constant-fold the end across try_fold (TUNING §7/§10), so 16 was a
+// silent cut ("Not unwinding … iteration 16"). 32 covers the 4-seat walk.
+#[kani::unwind(32)]
 pub fn bear_cookie_01_push_is_protocol() {
     {
         world::reset_world(base_world());
@@ -1666,8 +1681,8 @@ pub fn circle_rebuild_01_activation_five_crystals() {
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:协助CiRCLE重建"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(dest == 2, "E-circle-rebuild-01: keep");
-    let crystals_key = intern::intern("crystals");
-    let n = world::with_world(|w| w.key_get(0, crystals_key));
+    // Field-instance crystals (see heat_head_01) — not a player key.
+    let n = world::with_world(|w| w.field_crystals(w.last_uid));
     assert!(n == 5, "E-circle-rebuild-01: five miracle crystals on the instance");
     // CiRCLE tile is BLOCKED-HOST(tile_named) — NO_REWARD arm is a no-op dest.
 }
@@ -1805,25 +1820,53 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
 
-    // Host neighbor(player, ±1) = tile at pos±1, never a seat in 0..4 for
-    // these positions (9 and 11). So the body's prev/next compares miss and
-    // every non-drawer living seat takes GiveExile 1.
+    // Host `neighbor(p, ±1)` is the next **present player in turn order**
+    // (hostfns `neighbor`), not a tile. For n=4, drawer=0: prev=3, next=1.
+    // Book (data/events.json, 飞鸟山之战):
+    //   「上一位玩家获得2层回合开始时减少一层的[眩晕]」  -> state_add stunStart=2
+    //   「下一位玩家在下个自己的回合结束前不可使用手牌」 -> state_set noHand=2
+    //   「其余玩家获得1层在回合开始时移除的[除外]」       -> give_exile(p,1,-1)
+    // stun/noHand are state keys (`state_add`/`state_set`); only exile is an
+    // `Effect::GiveExile`. The old harness expected a tile-valued neighbor and
+    // 3 exiles — that was a class-B stub assumption, superseded.
+    let stun_key = intern::intern("stunStart");
+    let nohand_key = intern::intern("noHand");
+    let (stun_prev, nohand_next, exile_prev, exile_next) = world::with_world(|w| {
+        (
+            w.key_get(3, stun_key),
+            w.key_get(1, nohand_key),
+            w.key_get(3, intern::intern("exile")),
+            w.key_get(1, intern::intern("exile")),
+        )
+    });
+    assert!(
+        stun_prev == 2,
+        "E-asukayama-02: prev (seat 3) takes 2 [眩晕] (stunStart)"
+    );
+    assert!(
+        nohand_next == 2,
+        "E-asukayama-02: next (seat 1) noHand = 2"
+    );
+    assert!(
+        exile_prev == 0 && exile_next == 0,
+        "E-asukayama-02: prev/next do not take [除外]"
+    );
+
     let mut exiles = 0;
     for e in effects {
         if let Effect::GiveExile { player, n, to } = e {
+            assert!(*player == 2, "E-asukayama-02: the remaining seat (2) takes [除外]");
             assert!(*player != 0, "drawer is not in the 「其余」 loop");
             assert!(*n == 1 && *to == -1, "1 [除外] layer, no named return");
             exiles += 1;
         }
     }
-    kani::cover!(exiles == 3, "three non-drawer seats exiled under the host neighbor model");
+    kani::cover!(exiles == 1, "remaining seat exiled");
     assert!(
-        exiles == 3,
-        "E-asukayama-02 BLOCKED-HOST(neighbor): host neighbor returns a tile, so prev/next \
-         miss every seat and all non-drawers take [除外]; the 2-眩晕 / noHand split is NOT proven"
+        exiles == 1,
+        "E-asukayama-02: exactly one exile (the remaining seat, not prev/next)"
     );
 }
-
 // ===========================================================================
 // Unit table — classification per clause id
 // ===========================================================================

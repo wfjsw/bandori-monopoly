@@ -50,9 +50,9 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-this-hand-01 | 移动X，X=1d20-1d20+1d20 | PROTOCOL-LEVEL | — | — | `card_move` + `plan::set_*` stubs; no pos change | — |
 | E-this-hand-02 | X负数则反方向 | PROTOCOL-LEVEL | — | — | `plan::set_reverse` stub | — |
 | E-this-hand-03 | 不触发场地效果 | PROTOCOL-LEVEL | — | — | settle suppression is engine | — |
-| E-pico-swap-01 | 未[除外]者传送到下一位未[除外]者位置 | PROVEN | `pico_swap_01_rotates_positions` | TBD | — | — |
+| E-pico-swap-01 | 未[除外]者传送到下一位未[除外]者位置 | PROVEN | `pico_swap_01_rotates_positions` SUCCESSFUL 1767 s | latch `SetState` skipped in `log_is_teleports` | — | — |
 | E-pico-swap-02 | [除外]者不动、跳过 | PROVEN | `pico_swap_02_skips_exiled_players`, `pico_swap_mutant_is_detected` | TBD | — | — |
-| E-circle-rebuild-01 | 放置于场地中央，5个奇迹水晶 | PROVEN (activation) | `circle_rebuild_01_activation` | TBD | — | — |
+| E-circle-rebuild-01 | 放置于场地中央，5个奇迹水晶 | PROVEN (activation) | `circle_rebuild_01_activation_five_crystals` SUCCESSFUL | host `self_crystals` fallback | — | — |
 | E-circle-rebuild-02 | counter 镜像水晶数 | PROVEN (if crystals modeled) | (same) | TBD | — | — |
 | E-circle-rebuild-03 | 经过CiRCLE移除一个，为0放入弃牌 | BLOCKED-HOST | — | — | `trig_move_resolve` / `trig_move_remaining` unmodeled on the pass hook | — |
 | E-circle-rebuild-04 | 触发结算改为 2停留 或 -500 | OPEN + PROTOCOL | — | — | [触发结算] undefined; priority claim untestable | OPEN-触发结算 |
@@ -65,7 +65,7 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-bear-cookie-02 | 下次事件抽到冲榜 | PROTOCOL-LEVEL | — | — | same | — |
 | E-bear-cookie-03 | 火罐玩家可补X并付X×1000 | BLOCKED-HOST | — | — | `card_text_mentions` stub → nobody eligible | X/cap = skill text |
 | E-asukayama-01 | 全员传送到飞鸟山公园，抽卡者移动1d20 | BLOCKED-HOST | — | — | `tile_named(飞鸟山公园)`; `card_move` stub | — |
-| E-asukayama-02 | 上一位2眩晕 / 下一位锁手 / 其余1除外 | PROVEN (status) | `asukayama_02_status_spread` | TBD | stun shares `stay[]` (host) | — |
+| E-asukayama-02 | 上一位2眩晕 / 下一位锁手 / 其余1除外 | PROVEN (status, seat neighbour) | `asukayama_02_status_spread_blocked_neighbor` SUCCESSFUL 989 s | host `neighbor` fixed to next present seat | — |
 | E-asukayama-03 | 状态回合开始衰减 | PROTOCOL-LEVEL | — | — | engine status tick | — |
 | E-school-time-01 | 移到学校格并+1除外 | BLOCKED-HOST | — | — | `tile_named(school / 周边学区)` → -1 | — |
 | E-school-time-02 | 无学校 → 周边学区 | BLOCKED-HOST | — | — | same | — |
@@ -87,9 +87,9 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-marina-box-02 | 经过CiRCLE可消耗500，抽1d10≥6得1200 | PROVEN | `marina_box_02_*` | TBD | — | OPEN-marina-who, OPEN-marina-default |
 | E-bangdream-chan-01 | 第3回合开始放入弃牌 | PROVEN (activation+expiry) | `bangdream_chan_01_*` | TBD | — | — |
 | E-bangdream-chan-02 | 免费时间5s / 恢复0s | cannot test | — | — | host clocks, no seam | — |
-| E-heat-head-01 | 下回合结束前移动掷骰+1d6 | PROTOCOL-LEVEL | — | — | `plan::add_extra_dice` stub | — |
+| E-heat-head-01 | 下回合结束前移动掷骰+1d6 | PROVEN (keep + phase-1 crystals) / PROTOCOL (dice) | `heat_head_01_activation_phase_up` SUCCESSFUL 423 s | host `self_crystals` fallback | `plan::add_extra_dice` stub | — |
 | E-heat-head-02 | 此后 −1d6 | PROTOCOL-LEVEL / BLOCKED-HOST | — | — | `trig_move_roll` unmodeled | OPEN-heat-head-2 |
-| E-heat-head-03 | 此后放入弃牌 | PROVEN (phase + expiry) | `heat_head_03_*` | TBD | phase machine via crystals | — |
+| E-heat-head-03 | 此后放入弃牌 | PROVEN (phase + expiry) | `heat_head_03_phase_end_files_away` SUCCESSFUL 692 s | host `self_crystals` fallback | phase machine via crystals | — |
 | E-surprise-duel-01 | 放置于场地中央 | PROVEN (activation) | `surprise_duel_01_*` | TBD | — | — |
 | E-surprise-duel-02 | 下2回合开始放入弃牌 | PROVEN (expiry) | `surprise_duel_02_*` | TBD | — | OPEN-surprise-2turn (2nd-next reading) |
 | E-surprise-duel-03 | 其余玩家改向最近方向 | PROTOCOL-LEVEL | — | — | `plan::set_reverse` stub | — |

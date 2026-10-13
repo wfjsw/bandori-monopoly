@@ -309,3 +309,43 @@ fn generated_card_ids_match_ruleset() {
         assert_eq!(def.id, rules_kani::generated::IDS[i], "index {i}");
     }
 }
+/// Event instances (no `field[]` slot) still own their crystals / phase.
+/// `set_counter_self`/`counter_self` fall back to `World::self_crystals` —
+/// heat_head's two-phase machine and circle_rebuild's 5 miracle crystals.
+#[test]
+fn self_crystals_roundtrip_without_field_slot() {
+    let _g = model_lock();
+    install(base());
+    // last_uid=1 has no field slot in a fresh world.
+    let n = kworld::with_world(|w| w.field_n);
+    assert_eq!(n, 0, "fresh world has no field cards");
+    let h0 = card_sdk::native::intern(b"crystals");
+    let before = rules_kani::host::dispatch(Op::counter_self, [h0.0, h0.1, 0, 0, 0, 0]);
+    assert_eq!(before, 0, "unset self crystals are 0");
+    let h = card_sdk::native::intern(b"crystals");
+    rules_kani::host::dispatch(Op::set_counter_self, [h.0, h.1, 5, 0, 0, 0]);
+    let after = rules_kani::host::dispatch(Op::counter_self, [h.0, h.1, 0, 0, 0, 0]);
+    assert_eq!(after, 5, "self crystals stick without a field slot");
+    let stored = kworld::with_world(|w| w.self_crystals);
+    assert_eq!(stored, 5, "stored on World::self_crystals");
+}
+
+/// `neighbor(p, ±1)` is the **next** present seat in turn order, wrapping —
+/// not the last one scanned (that was the far side for n=4).
+#[test]
+fn neighbor_is_the_next_present_seat() {
+    let _g = model_lock();
+    install(base());
+    kworld::reset_world(KWorld {
+        n_players: 4,
+        ..KWorld::new()
+    });
+    let fwd = rules_kani::host::dispatch(Op::neighbor, [0, 1, 0, 0, 0, 0]);
+    assert_eq!(fwd, 1, "forward neighbour of 0 is seat 1");
+    let back = rules_kani::host::dispatch(Op::neighbor, [0, -1, 0, 0, 0, 0]);
+    assert_eq!(back, 3, "backward neighbour of 0 is seat 3");
+    // Seat 1 out: forward neighbour of 0 becomes 2.
+    kworld::with_world_mut(|w| w.out[1] = true);
+    let fwd2 = rules_kani::host::dispatch(Op::neighbor, [0, 1, 0, 0, 0, 0]);
+    assert_eq!(fwd2, 2, "skip the out seat");
+}

@@ -96,10 +96,10 @@ Pure contracts were also spot-checked via
 | `perfect_01_mutant_is_detected` | written, verdict pending | | 24 | |
 | `fever_01_iff` | written, verdict pending | | 24 | place_card; timed out at 300s in one attempt |
 | `fever_01_mutant_is_detected` | written, verdict pending | | 24 | |
-| `fever_04_turn_start_iff` | written, verdict pending | | 24 | guard `card.placed` via IR |
-| `fever_04_wrong_turn_noop` | written, verdict pending | | 24 | |
-| `fever_04_not_placed_guard_rejects` | written, verdict pending | | 24 | guard-only (cheap) |
-| `fever_04_mutant_is_detected` | written, verdict pending | | 24 | |
+| `fever_04_turn_start_iff` | **SUCCESSFUL 652 s** | A→fixed | 24 | guard `card.placed` via IR |
+| `fever_04_wrong_turn_noop` | **SUCCESSFUL 673 s** | A→fixed | 24 | |
+| `fever_04_not_placed_guard_rejects` | **SUCCESSFUL 180 s** | A→fixed | 24 | guard-only (cheap) |
+| `fever_04_mutant_is_detected` | **SUCCESSFUL 474 s** | — | 24 | |
 | `encore_01_leaf_quiet_frame` | written, verdict pending | | 24 | negate flag BLOCKED-HOST |
 
 ## Skills

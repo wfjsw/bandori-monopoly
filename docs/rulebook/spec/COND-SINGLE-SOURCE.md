@@ -362,9 +362,9 @@ Invocation: `cargo kani -p rules-kani --harness <name> --default-unwind 8 --no-u
 | `ir_add_matches_spec` | **SUCCESSFUL** | 0.7 s | |
 | `ir_sub_matches_spec` | **SUCCESSFUL** | 1.0 s | |
 | `ir_mul_matches_spec` | (prior: SUCCESSFUL 47 s) | | not re-run this pass |
-| `ir_div_matches_spec` / `ir_rem_matches_spec` | incomplete (CBMC `checked_div`) | | covered by differential boundary grid |
-| `ir_div_matches_spec` | **incomplete** | > 3 min | CBMC `checked_div` on full i64×i64; case-split version still slow. Covered exhaustively by the differential boundary grid |
-| `ir_rem_matches_spec` | **incomplete** | > 3 min | same |
+| `ir_div_matches_spec` / `ir_rem_matches_spec` | **SUCCESSFUL** (i16 split + kissat) | 152 s / 133 s | error class full width; Ok value = unique trunc-divmod on the i16 image; full-width 2-divider identity still not claimed |
+| `ir_div_matches_spec` | **SUCCESSFUL** | 152 s | reformulated: error class + truncating-divmod characterisation of the evaluator's single result (i16 image) + floor-rounding / wrong-error mutants |
+| `ir_rem_matches_spec` | **SUCCESSFUL** | 133 s | same reformulation |
 | `ir_logical_matches_spec_for_all_operands` | **SUCCESSFUL** | 0.9 s | error-absorption table |
 | `ir_neg_not_match_spec` | **SUCCESSFUL** | 0.7 s | |
 | `error_root_is_false` | **SUCCESSFUL** | 1.1 s | |

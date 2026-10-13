@@ -59,25 +59,37 @@ pub fn log_is_gains(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
     true
 }
 
-/// Effect log is exactly the listed `Teleport`s, in order.
+/// Book-visible effect log is exactly the listed `Teleport`s, in order.
+///
+/// `Effect::SetState` from `ctx::set_slot` is latch/slot plumbing (the card's
+/// `latch:pico.dest` snapshot), not a book effect — it is skipped. Narration
+/// (`ctx::log`) lives in a separate buffer and is not in this slice. Any
+/// other effect (pay, gain, …) is a mismatch. This is what made
+/// `pico_swap_01`/`02` FAIL on the old base while the native tests passed
+/// (unit-vs-central disagreement in FINDINGS.md): the latch wrote three
+/// `SetState` before and after the teleports and the exact-length check
+/// rejected the whole log.
 pub fn log_is_teleports(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
-    if effects.len() != expected.len() {
-        return false;
-    }
-    for (e, &(p, tile)) in effects.iter().zip(expected.iter()) {
+    let mut i = 0usize;
+    for e in effects {
         match e {
+            Effect::SetState { .. } => continue,
             Effect::Teleport {
                 player: q,
                 tile: t,
             } => {
-                if *q != p || *t != tile {
+                if i >= expected.len() {
                     return false;
                 }
+                if *q != expected[i].0 || *t != expected[i].1 {
+                    return false;
+                }
+                i += 1;
             }
             _ => return false,
         }
     }
-    true
+    i == expected.len()
 }
 
 /// Effect log is exactly one `EventExpire` for `key`.

@@ -525,8 +525,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             d as i64
         }
         Op::neighbor => {
-            // hostfns `neighbor`: the next **present** player in turn order,
+            // hostfns `neighbor`: the **next** present player in turn order,
             // wrapping. `dir < 0` walks backwards. Not a board tile.
+            //
+            // Must return the *first* present seat at distance 1,2,… — the
+            // old loop kept overwriting `found` and returned the *last*
+            // present seat (for n=4 all-present that is the far side, not
+            // the neighbour). Class C; pinned by
+            // `conf_hostops2::neighbor_is_the_next_present_seat`.
             let n = MAX_PLAYERS as i32;
             let dir = if a1 < 0 { -1 } else { 1 };
             let mut found = -1i32;
@@ -538,6 +544,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 });
                 if present {
                     found = k;
+                    break; // next, not last
                 }
                 j += 1;
             }
