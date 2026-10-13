@@ -1217,6 +1217,25 @@ impl Cx<'_> {
                 if !m.signed {
                     m.roll = m.roll.max(m.min_roll);
                 }
+                // G-STATUS-02 [无法移动] (glossary 10 / items 11-13):
+                // 「[主要移动]的[移动终点]视为当前所在格子且不[结算]」. The roll
+                // itself still happens (dice, counteractions, `log.roll`), but
+                // the walk goes nowhere and does not settle. A [传送] rewrite
+                // above is unaffected (「无法使用非[传送]的移动效果」).
+                // [不可阻挡] (item 14) cancels the [停留] half; a press that
+                // arms the move against abnormal movement (白金燐子 (2)
+                // 「本次移动不受异常移动效果影响」) is the same flag and
+                // cancels the whole clamp for this walk.
+                let unstoppable = self.w.st.players[i].state_get(key::UNSTOPPABLE) > 0;
+                let immobile = !unstoppable
+                    && (self.w.st.players[i].stay() > 0
+                        || self.w.st.players[i].stun() > 0
+                        || self.w.st.players[i].exile() > 0);
+                if immobile {
+                    m.roll = 0;
+                    m.steps = 0;
+                    m.resolve = false;
+                }
                 self.walk(&mut m)?;
             }
             // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
