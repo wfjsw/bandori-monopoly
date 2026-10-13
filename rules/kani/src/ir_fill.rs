@@ -366,7 +366,7 @@ pub fn guard_by_src(src: &str) -> &'static rules_cond_ir::Program {
             return &g.program;
         }
     }
-    panic!("guard not in generated table; re-run gen_cond_ir");
+    panic!("guard not in the generated table (the guard string has no lowering)");
 }
 
 /// Const-id lookup of the program (O(1) index). The Kani path.

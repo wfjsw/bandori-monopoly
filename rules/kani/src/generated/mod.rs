@@ -4,7 +4,12 @@
 //! * `card_ids` — card/skill/event/tile/mark id → index + `card_id!`
 
 pub mod card_ids;
-pub mod cond_irs;
+/// Lowered CEL guards + `guard_id!`. Generated at build time by `build.rs`
+/// (`rules_cond::gen_ir::generate`) into `$OUT_DIR`; never committed.
+#[allow(dead_code)]
+pub mod cond_irs {
+    include!(concat!(env!("OUT_DIR"), "/cond_irs.rs"));
+}
 
 pub use card_ids::{card_id_const, card_id_opt, CARD_COUNT, IDS};
 pub use cond_irs::{

@@ -17,7 +17,7 @@ use rules_cond_ir::nodes::{Kind, Node};
 use rules_cond_ir::vars::VarId;
 
 /// Lower of `"actor == owner && value > 0"` (the real guard). See
-/// `generated/cond_irs.rs` for the checked-in copy of the same nodes.
+/// the build-generated `cond_irs` for the same nodes.
 fn real_guard_nodes() -> [Node; 6] {
     [
         Node::leaf_var(VarId::Actor as u16),

@@ -20,15 +20,17 @@ fn collect_guards() -> Vec<String> {
     out
 }
 
+/// The table exactly as `rules/kani/build.rs` generates it (it is built, not
+/// committed).
+fn generated_text() -> String {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    rules_cond::gen_ir::generate(root).0
+}
+
 /// Parse the generated file's `src` strings and node arrays back into
 /// `OwnedProgram`s so we can compare without linking rules-kani.
 fn parse_generated() -> Vec<(String, OwnedProgram)> {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("kani/src/generated/cond_irs.rs");
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("generated file missing ({e}); run gen_cond_ir"));
+    let text = generated_text();
     let mut out = Vec::new();
     // Very small structured parse: each block is
     //   pub static G_...: GuardIr = GuardIr {
@@ -138,7 +140,7 @@ fn every_guard_lowers_to_its_embedded_ir() {
     let embedded = parse_generated();
     assert!(
         !embedded.is_empty(),
-        "generated table is empty — run gen_cond_ir"
+        "generated table is empty — the generator output is broken"
     );
     let mut checked = 0;
     for src in &guards {
@@ -148,7 +150,7 @@ fn every_guard_lowers_to_its_embedded_ir() {
         let hit = embedded.iter().find(|(s, _)| s == src);
         let Some((_, emb)) = hit else {
             panic!(
-                "guard {src:?} is in the inventory but not in the generated IR — re-run gen_cond_ir"
+                "guard {src:?} is in the inventory but not in the generated IR — re-the generator output is broken"
             );
         };
         assert_eq!(
@@ -181,11 +183,7 @@ fn generated_has_no_stray_entries() {
 /// `BY_ID[id]` rely on this.
 #[test]
 fn generated_guard_ids_are_dense_and_ordered() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("kani/src/generated/cond_irs.rs");
-    let text = std::fs::read_to_string(&path).expect("generated file missing");
+    let text = generated_text();
     let mut ids = Vec::new();
     for line in text.lines() {
         let t = line.trim();

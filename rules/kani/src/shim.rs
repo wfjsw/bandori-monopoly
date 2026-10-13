@@ -28,7 +28,7 @@
 
 /// `guard_id!` is **generated** (`#[macro_export]` in
 /// `generated/cond_irs.rs`) so its literal-match arms live in the same macro
-/// the user calls. See that file / `gen_cond_ir`.
+/// the user calls. See `rules_cond::gen_ir` (run from build.rs).
 ///
 /// ```ignore
 /// let id = guard_id!("actor == owner && value > 0"); // compile-checked
