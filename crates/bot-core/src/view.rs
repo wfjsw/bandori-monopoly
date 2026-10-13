@@ -108,6 +108,7 @@ impl SeatView {
         st.think_time = 0;
         st.base_time = 0.0;
         st.bonus_time = 0.0;
+        st.clock_paused = false;
         st.prompt.time_left = 0.0;
         // The event tail is public history; keep it (it distinguishes info
         // sets) but drop nothing else.
@@ -273,6 +274,7 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
         s.time_left = 0.0;
         s.base_time = 0.0;
         s.bonus_time = 0.0;
+        s.clock_paused = false;
         s.prompt.time_left = 0.0;
     }
     // The turn-start 运营 surface's per-card playability is **not** the

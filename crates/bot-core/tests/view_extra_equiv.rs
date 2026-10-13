@@ -53,6 +53,7 @@ fn normalized(st: &MatchState) -> MatchState {
     s.think_time = 0;
     s.base_time = 0.0;
     s.bonus_time = 0.0;
+    s.clock_paused = false;
     s.prompt.time_left = 0.0;
     s
 }

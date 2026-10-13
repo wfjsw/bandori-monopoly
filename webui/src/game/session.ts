@@ -8,6 +8,7 @@
 import { D, rules } from "../core/data";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
+import { startClockSync, clockSync } from "./clockSync";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
 import { SOLO_CAP_MS } from "./botBudget";
@@ -848,6 +849,7 @@ export class OnlineSession extends GameSession {
    * (online samples hidden zones; solo reads the live match).
    */
   private extras: OnlineExtras;
+  private stopClock: () => void;
 
   constructor(room: RoomInfo, you: number, view: MatchView | null = null) {
     super();
@@ -872,7 +874,32 @@ export class OnlineSession extends GameSession {
       status: (c) => {
         this.connected = c;
         this.emitOther();
+        // Re-sync on reconnect: hidden-tab timers throttle, and a dropped
+        // stream may have missed background refreshes.
+        if (c) this.resyncClock();
       },
+    });
+    // NTP-style offset onto the server's monotonic clock (turn deadlines).
+    this.stopClock = startClockSync(async (t1) => {
+      const r = await api.clock(t1);
+      return r.ok && r.data ? r.data : null;
+    });
+    // Re-sync when the tab becomes visible again (timers throttle while hidden).
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this.onVisible);
+    }
+  }
+
+  private onVisible = () => {
+    if (document.visibilityState === "visible") this.resyncClock();
+  };
+
+  /** One forced refresh sample (rate-limited by the estimator's burst). */
+  resyncClock(): void {
+    void api.clock(performance.now()).then((r) => {
+      if (r.ok && r.data) {
+        clockSync.refresh({ t1: r.data.t1, t2: r.data.t2, t3: r.data.t3, t4: performance.now() });
+      }
     });
   }
 
@@ -894,6 +921,10 @@ export class OnlineSession extends GameSession {
 
   leave(): void {
     this.close();
+    this.stopClock();
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.onVisible);
+    }
     if (!this.dissolved) void api.leave(this.id);
   }
 }

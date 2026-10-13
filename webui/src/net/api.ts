@@ -87,6 +87,13 @@ export const api = {
       return { ok: false, error: msg("err.offline"), status: 0 };
     }
   },
+  /**
+   * One NTP-style clock sample (`docs/SERVER.md` §Turn clock). `t1` is the
+   * caller's `performance.now()` at send; the server stamps `t2` at receive
+   * and `t3` just before replying, on the same monotonic clock the turn
+   * deadlines use.
+   */
+  clock: (t1: number) => call<{ t1: number; t2: number; t3: number }>("POST", "/api/clock", { t1 }),
 };
 
 export interface StreamHandlers {

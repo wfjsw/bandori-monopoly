@@ -165,6 +165,12 @@ pub struct MatchState {
     pub time_left: f32,
     pub base_time: f32,
     pub bonus_time: f32,
+    /// True while the acting seat's turn clock is held waiting for that seat's
+    /// `anim_done` ack (or the hold cap). The server publishes no deadline
+    /// while this is set; clients show the clock held at full. Solo and
+    /// machine seats never hold.
+    #[serde(default)]
+    pub clock_paused: bool,
     pub bought: bool,
     pub built: bool,
     /// Next uid to hand out for a card instance. **Global** across the match, not
@@ -233,6 +239,7 @@ impl Default for MatchState {
             time_left: 0.0,
             base_time: 0.0,
             bonus_time: 0.0,
+            clock_paused: false,
             bought: false,
             built: false,
             next_card_uid: 1,

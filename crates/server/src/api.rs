@@ -426,6 +426,16 @@ pub struct MatchView {
     /// another seat's entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tile_quotes: Option<Vec<Option<game_core::state::TileQuote>>>,
+    /// Absolute turn-clock deadlines on the monotonic server clock (ms).
+    /// Absent while the clock is held (`state.clockPaused`), on a machine
+    /// seat, in solo, or outside the play phase -- the client then shows the
+    /// clock held at full (or no clock at all).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clock: Option<crate::clock::ClockWire>,
+    /// Server monotonic ms when this frame was built. Piggybacked so a client
+    /// can refine its offset without a dedicated ping (see `crate::clock`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server_time_ms: Option<f64>,
 }
 
 /// Ask the worker for one member's view. Blocking; see `pool`.
@@ -433,7 +443,26 @@ pub fn match_view(m: &crate::room::MatchHandle, member: i32) -> ApiResult<MatchV
     // Human clients compute the per-viewer extras themselves (the seat-view
     // engine, `docs/BOT.md` §1) -- do not pay the worker for them here.
     let v = m.view(member, false).map_err(|e| ApiError::bad(e.as_str()))?;
-    serde_json::from_value(v).map_err(|e| ApiError::bad(format!("view: {e}").as_str()))
+    let mut view: MatchView =
+        serde_json::from_value(v).map_err(|e| ApiError::bad(format!("view: {e}").as_str()))?;
+    let now = crate::clock::server_time_ms();
+    view.clock = crate::clock::clock_for_state(&view.state, now);
+    view.server_time_ms = Some(now);
+    Ok(view)
+}
+
+/// `POST /api/clock` -- one NTP-style sample. `t1` is the client's
+/// `performance.now()` at send; `t2` is stamped at receive and `t3` just
+/// before the response leaves. See `crate::clock` and `webui/src/game/clockSync.ts`.
+pub async fn clock_ping(Json(ping): Json<crate::clock::ClockPing>) -> Json<crate::clock::ClockPong> {
+    // T2 as late as possible: the first thing after the body is parsed.
+    let t2 = crate::clock::server_time_ms();
+    let t3 = crate::clock::server_time_ms();
+    Json(crate::clock::ClockPong {
+        t1: ping.t1,
+        t2,
+        t3,
+    })
 }
 
 #[derive(Debug, Serialize)]
