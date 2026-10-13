@@ -144,6 +144,13 @@ pub fn on(
         (On::Play(_, why, _), export::OP_GUARD) => match why {
             Some(why) => match why(player_id) {
                 None => 0,
+                // Kani: the Play `why` reason is a `Msg`; serialising it allocates
+                // a `Vec` (and the facade `Msg` is not the wire form). The
+                // symbolic host treats a non-zero reason as "has reason" and
+                // never reads the bytes. Production keeps the real postcard.
+                #[cfg(kani)]
+                Some(_reason) => 1,
+                #[cfg(not(kani))]
                 Some(reason) => leak(postcard::to_allocvec(&reason).unwrap_or_default()),
             },
             None => 0,

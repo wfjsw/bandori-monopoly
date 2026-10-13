@@ -11,9 +11,27 @@ use ruleset_core::ctx;
 
 /// Every seat in turn order, skipping players already out of the game.
 pub fn all_players() -> Vec<i32> {
-    (0..ctx::player_count())
-        .filter(|&p| !ctx::player_out(p))
-        .collect()
+    // Kani: `filter().collect()` grows a `Vec` through the iterator `extend`
+    // path (CBMC `Vec::extend_with` cliff). A fixed 4-iter loop over the
+    // §7 `player_count()==4` model is the same seat set in the same order.
+    #[cfg(kani)]
+    {
+        let mut out = Vec::with_capacity(4);
+        let mut p = 0i32;
+        while p < 4 {
+            if !ctx::player_out(p) {
+                out.push(p);
+            }
+            p += 1;
+        }
+        out
+    }
+    #[cfg(not(kani))]
+    {
+        (0..ctx::player_count())
+            .filter(|&p| !ctx::player_out(p))
+            .collect()
+    }
 }
 
 /// The event's rule id (`event:<id>`), for `ctx::event_*` calls that name it.

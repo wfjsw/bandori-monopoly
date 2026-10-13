@@ -67,7 +67,7 @@ fn in_bytes(v: &[u8]) -> (i32, i32) {
 
 /// The i32 wire form of a message: `postcard` bytes leaked for the host to read
 /// (same lifetime convention as every other buffer crossing the ABI).
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(kani)))]
 fn mj(m: &Msg) -> (i32, i32) {
     let b = m.to_bytes();
     let out = (b.as_ptr() as i32, b.len() as i32);
@@ -75,22 +75,18 @@ fn mj(m: &Msg) -> (i32, i32) {
     out
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+/// Kani: the host model records narration as a counter only (the book's frame
+/// is about game effects). Hand it the interned-key handle + arg count — two
+/// ints, no `Vec<u8>`, no arena intern (which would push a heap `Vec` per log
+/// and unwind as `drop_glue`). Production builds keep the real bytes.
+#[cfg(kani)]
 fn mj(m: &Msg) -> (i32, i32) {
-    // Kani: the host model records narration as a counter only (the book's
-    // frame is about game effects). Serialising a `Msg` walks a
-    // `BTreeMap<String, Arg>` through postcard -- a deep recursive structure
-    // that does not unwind under CBMC. Skip the payload; the key is unused
-    // by the symbolic host. Production builds keep the real bytes.
-    #[cfg(kani)]
-    {
-        let _ = m;
-        in_bytes(&[])
-    }
-    #[cfg(not(kani))]
-    {
-        in_bytes(&m.to_bytes())
-    }
+    m.abi_pair()
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(kani)))]
+fn mj(m: &Msg) -> (i32, i32) {
+    in_bytes(&m.to_bytes())
 }
 
 /// Reserve an **out-buffer** the host writes into during the call.

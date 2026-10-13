@@ -72,16 +72,43 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 
 | id | before | class | action | after |
 |---|---|---|---|---|
-| money_shave::aya_haruka_02_shave_not_poorest_noop | (new split) | E | documented state cut + clause-term assume | TIMEOUT/OOM-bound at 19 min / 3.8 GB (killed to free the slot); profile: `Vec::extend_with` 31, `memcmp` 10, `by_idx` 10 — still solver-bound |
-| money_shave::aya_haruka_02_* | TIMEOUT 1800 s | E | fans cut + split | not re-run to completion; remaining cliff is `Msg`/`Vec<u8>` drop+extend in the card body's `ctx::log` path |
+| **card-sdk Msg facade (`cfg(kani)`)** | `Vec::extend_with` 31 + `drop_glue` in `ctx::log` | E (TUNING §10) | `Msg` = interned key + fixed `[i64;4]` args (`Copy`); builders never construct `Arg`/`String`/`Box`; `mj()` = 2 ints, no arena `Vec` per log | **Vec cliff gone** (profile 0 extend/drop); dist hashes **byte-identical** to master |
+| **sys_kani `join_redirect_target` / `set_join_used`** | central `general` unit failed to compile on master | C | mirrored `sys.rs` externs | compiles; central can pick up after merge |
+| **invoke integer hook + zero-loop `by_idx`** | `memcmp` 10, `by_idx` 10 | E | `hook_kind_only_idx(HookKind)`; `tag_key` packed-int dispatch; `by_idx` unrolled band select | **memcmp 0, by_idx 0** |
+| **intern identity `(FNV,len)`** | `bytes_eq` 64×8×10 known names | E | drop `bytes_eq` from probe hit; loud INVALID on hash+len mismatch; `pilot_intern_hashes_are_unique` | intern aborts collapsed |
+| money_shave splits drop guard IR | `fill_pay_add` + `named_set` 8 | A/setup | halves assume host invoked body (`shave_iff` proves the IR) | IR gone from split profile |
+| money_shave::aya_haruka_02_shave_not_poorest_noop | TIMEOUT 1800 s | E | all of the above | still **TIMEOUT** at 1800 s (profile now only `poorest` Range 4 + world setup 4+4); 10 min goal **not met** |
+| money_shave::aya_haruka_02_* (iff / poorest / mutants) | TIMEOUT | E | same stack | pending re-run (not reached inside budget) |
 | events::heat_head_01_activation_phase_up | FAILED | B + C | harness read `key_get(0,"crystals")` but `set_crystals` writes the field-instance counter; also `World::self_crystals` fallback for event instances with no field slot | **SUCCESSFUL 423 s** |
 | events::heat_head_03_phase_end_files_away | FAILED | B + C | same | **SUCCESSFUL 692 s** |
 | events::circle_rebuild_01_activation_five_crystals | FAILED | B + C | same crystals read + host fallback | **SUCCESSFUL** (see ev-circle) |
 | events::asukayama_02_status_spread_blocked_neighbor | FAILED | B + C | harness assumed stub `neighbor` returned tiles; host `neighbor` returned the *last* present seat (not the next). Fixed host to first-match + rewrote harness to the seat split (prev stunStart=2, next noHand=2, remaining give_exile) | **SUCCESSFUL 989 s** |
 | events::pico_swap_01 | FAILED | B + F | `log_is_teleports` exact-length vs latch `SetState`; cover `n_log==3` vacuous for the same reason. Filter `SetState`; cover counts Teleports | **SUCCESSFUL 1767 s** (covers sat) |
 | events::aao_02_hand_veto_is_armed | FAILED | **D GENUINE E-aao-02** | keep failing; do not fix | FAILED (unchanged) |
-| events::embers_03_settle_costs_ten_per_copy | FAILED | OPEN / D? | [触发结算] undefined (OPEN-触发结算); not re-run | pending |
-| events::* TIMEOUT (chart_rush, front_or_back, never_ends, …) | TIMEOUT | E / A | `Vec` drop_glue, symbolic-Vec `for &p in &winners`, fmt recursion; bear_cookie unwind 16→32 | pending |
+| events::embers_03_settle_costs_ten_per_copy | FAILED | OPEN | [触发结算] undefined (OPEN-触发结算). Harness already proves only the determined fragment (`embers_03_settle_ok` = 10×copies pay leg); settle timing is the OPEN half | OPEN (not a card-body bug) |
+| events::* TIMEOUT (chart_rush, front_or_back, never_ends, …) | TIMEOUT | E / A | Msg facade + `all_players` 4-iter. `chart_rush_01_spends_fire` re-run: unwind profile only `base_world` 4 + `all_players` 3 — Vec/memcmp cliff **gone**, still **TIMEOUT 1800 s** (solver-bound on the symbolic world). `front_or_back` body uses `Vec<i32>` front/back (cannot edit body). `never_ends` is fmt `PadAdapter` | chart_rush_01: TIMEOUT; rest pending |
+
+### money_shave cliff trail (batch 2)
+
+One serial CBMC job at a time, unwind assertions ON, `aya_haruka_02_shave_not_poorest_noop`
+(the cheap split half) as the probe:
+
+| step | profile left | verdict |
+|---|---|---|
+| batch-1 end | `Vec::extend_with` 31, `memcmp` 10, `by_idx` 10 | TIMEOUT |
+| Msg facade | `memcmp` 10, `by_idx` 10, intern `bytes_eq` | TIMEOUT 1800 s |
+| + memcmp-free hooks | `by_idx` 10, intern `bytes_eq`, `named_set` 8 | TIMEOUT 1800 s |
+| + zero-loop `by_idx` | intern `bytes_eq`, `named_set` 8, `poorest` 4 | TIMEOUT 1800 s |
+| + splits drop guard IR | intern `bytes_eq`, `poorest` 4, world 4+4 | TIMEOUT 1800 s |
+| + intern `(FNV,len)` | `poorest` Range 4 + `symbolic_pay_world`/`assume_not_poorest` 4+4 only | **TIMEOUT 1800 s** |
+
+**Honest bottom line:** the named TUNING §10 Msg cliff is **fixed**
+(`Vec::extend_with` / `drop_glue` gone; production dist byte-identical).
+The proof is still solver-bound after all unroll cliffs are gone — what
+remains is the 4-seat symbolic world + `poorest`'s `Range::try_fold` over
+it, i.e. the model, not a string/heap cliff. The **≤10 min** goal is
+**not met**. Next lever is shrinking `World` for the split halves (only
+`money`/`out`/`pay_amount` are read) or a dedicated 2–3 player constructor.
 
 ### Host-model defect fixed (class C)
 
@@ -99,3 +126,10 @@ The scan kept overwriting `found` and returned the **last** present seat
 Now `break`s on the first present seat. Pinned by
 `conf_hostops2::neighbor_is_the_next_present_seat`. With the correct
 neighbour, `asukayama_02` proves the full 2-眩晕 / noHand / 1-除外 split.
+
+### Host-model / ABI gap fixed (class C) — `sys_kani` join ops
+
+`join_redirect_target` / `set_join_used` existed in `sys.rs` (extern) and
+`kani_host::Op` but not in `sys_kani.rs`, so `cargo kani` failed to compile
+`card-sdk` on master (the central pass's `general` unit hit this). Mirrored
+the two wrappers.

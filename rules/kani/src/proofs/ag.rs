@@ -761,9 +761,7 @@ fn glory_world(
     w.trig_tile = 0; // the tile being passed
     w.pos[user as usize] = 0;
     w.pos[other as usize] = 0; // other stands on the passed tile
-    for t in 0..60 {
-        w.tiles[t].owner = -1;
-    }
+    // `World::new` already has `owner = -1` everywhere (was a 60-trip clear).
     for &(t, _price) in user_tiles {
         w.tiles[t as usize].owner = user;
     }

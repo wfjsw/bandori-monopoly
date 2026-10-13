@@ -67,25 +67,70 @@ pub const BAND_START: [usize; 18] = [
     0, 15, 30, 44, 59, 74, 89, 104, 123, 141, 156, 173, 184, 196, 250, 256, 257, 285,
 ];
 
-/// Index `idx` of the flattened [`RULESET`] by a const offset table + binary
-/// search (~5 integer compares) — **no** 17-band integer walk, **no** string
-/// compare. Fails loudly on out-of-range.
+/// Index `idx` of the flattened [`RULESET`] by a const offset table.
+///
+/// Zero-loop band select (17 integer compares) — a `while` binary search
+/// unwinds 10 times under CBMC even when `idx` is a `card_id!(…)` constant.
+/// Fails loudly on out-of-range.
+#[inline(always)]
 pub fn by_idx(idx: usize) -> &'static card_sdk::CardDef {
     if idx >= BAND_START[BAND_START.len() - 1] {
         fail_unknown_idx(idx);
     }
-    // Greatest b with BAND_START[b] <= idx.
+    // Greatest b with BAND_START[b] <= idx. Unrolled (BAND_START has 18
+    // entries / 17 boundaries).
     let mut lo = 0usize;
-    let mut hi = RULESET.len(); // exclusive band upper bound
-    while lo < hi {
-        let mid = (lo + hi + 1) / 2;
-        if BAND_START[mid] <= idx {
-            lo = mid;
-        } else {
-            hi = mid - 1;
-        }
+    if BAND_START[1] <= idx {
+        lo = 1;
     }
-    // lo in 0..RULESET.len(), idx < BAND_START[lo+1]
+    if BAND_START[2] <= idx {
+        lo = 2;
+    }
+    if BAND_START[3] <= idx {
+        lo = 3;
+    }
+    if BAND_START[4] <= idx {
+        lo = 4;
+    }
+    if BAND_START[5] <= idx {
+        lo = 5;
+    }
+    if BAND_START[6] <= idx {
+        lo = 6;
+    }
+    if BAND_START[7] <= idx {
+        lo = 7;
+    }
+    if BAND_START[8] <= idx {
+        lo = 8;
+    }
+    if BAND_START[9] <= idx {
+        lo = 9;
+    }
+    if BAND_START[10] <= idx {
+        lo = 10;
+    }
+    if BAND_START[11] <= idx {
+        lo = 11;
+    }
+    if BAND_START[12] <= idx {
+        lo = 12;
+    }
+    if BAND_START[13] <= idx {
+        lo = 13;
+    }
+    if BAND_START[14] <= idx {
+        lo = 14;
+    }
+    if BAND_START[15] <= idx {
+        lo = 15;
+    }
+    if BAND_START[16] <= idx {
+        lo = 16;
+    }
+    if BAND_START[17] <= idx {
+        lo = 17;
+    }
     let band = RULESET[lo];
     let off = idx - BAND_START[lo];
     if off >= band.len() {
@@ -251,17 +296,101 @@ enum KindTag {
     Other,
 }
 
+/// memcmp-free short-tag key: `(len, first 8 bytes LE, next 8 bytes LE)`.
+/// `match s { "lit" => … }` lowers to `memcmp` (6+ CBMC unrolls per arm);
+/// packing to integers keeps the dispatch O(1) with zero memcmp.
+#[inline(always)]
+fn tag_key(s: &str) -> (u8, u64, u64) {
+    let b = s.as_bytes();
+    let mut lo = 0u64;
+    let mut hi = 0u64;
+    if let Some(&c) = b.get(0) {
+        lo |= c as u64;
+    }
+    if let Some(&c) = b.get(1) {
+        lo |= (c as u64) << 8;
+    }
+    if let Some(&c) = b.get(2) {
+        lo |= (c as u64) << 16;
+    }
+    if let Some(&c) = b.get(3) {
+        lo |= (c as u64) << 24;
+    }
+    if let Some(&c) = b.get(4) {
+        lo |= (c as u64) << 32;
+    }
+    if let Some(&c) = b.get(5) {
+        lo |= (c as u64) << 40;
+    }
+    if let Some(&c) = b.get(6) {
+        lo |= (c as u64) << 48;
+    }
+    if let Some(&c) = b.get(7) {
+        lo |= (c as u64) << 56;
+    }
+    if let Some(&c) = b.get(8) {
+        hi |= c as u64;
+    }
+    if let Some(&c) = b.get(9) {
+        hi |= (c as u64) << 8;
+    }
+    if let Some(&c) = b.get(10) {
+        hi |= (c as u64) << 16;
+    }
+    if let Some(&c) = b.get(11) {
+        hi |= (c as u64) << 24;
+    }
+    if let Some(&c) = b.get(12) {
+        hi |= (c as u64) << 32;
+    }
+    if let Some(&c) = b.get(13) {
+        hi |= (c as u64) << 40;
+    }
+    if let Some(&c) = b.get(14) {
+        hi |= (c as u64) << 48;
+    }
+    if let Some(&c) = b.get(15) {
+        hi |= (c as u64) << 56;
+    }
+    (b.len() as u8, lo, hi)
+}
+
+/// Const twin of [`tag_key`] so the match arms are integer constants.
+const fn tag_key_const(s: &str) -> (u8, u64, u64) {
+    let b = s.as_bytes();
+    let mut lo = 0u64;
+    let mut hi = 0u64;
+    let mut i = 0;
+    while i < 8 && i < b.len() {
+        lo |= (b[i] as u64) << (8 * i);
+        i += 1;
+    }
+    while i < 16 && i < b.len() {
+        hi |= (b[i] as u64) << (8 * (i - 8));
+        i += 1;
+    }
+    (b.len() as u8, lo, hi)
+}
+
 #[inline(always)]
 fn kind_tag(kind: &str) -> KindTag {
-    match kind {
-        "Play" => KindTag::Play,
-        "Counteract" => KindTag::Counteract,
-        "Hook" => KindTag::Hook,
-        "Gate" => KindTag::Gate,
-        "AtEnd" => KindTag::AtEnd,
-        "RollPlan" => KindTag::RollPlan,
-        "Settle" => KindTag::Settle,
-        "Message" => KindTag::Message,
+    const PLAY: (u8, u64, u64) = tag_key_const("Play");
+    const COUNTERACT: (u8, u64, u64) = tag_key_const("Counteract");
+    const HOOK: (u8, u64, u64) = tag_key_const("Hook");
+    const GATE: (u8, u64, u64) = tag_key_const("Gate");
+    const AT_END: (u8, u64, u64) = tag_key_const("AtEnd");
+    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
+    const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
+    const MESSAGE: (u8, u64, u64) = tag_key_const("Message");
+    match tag_key(kind) {
+        PLAY => KindTag::Play,
+        COUNTERACT => KindTag::Counteract,
+        HOOK => KindTag::Hook,
+        GATE => KindTag::Gate,
+        AT_END => KindTag::AtEnd,
+        ROLL_PLAN => KindTag::RollPlan,
+        SETTLE => KindTag::Settle,
+        MESSAGE => KindTag::Message,
         _ => KindTag::Other,
     }
 }
@@ -272,8 +401,25 @@ pub fn counteract_idx(idx: usize, player: i32) -> Asked {
 }
 
 /// First `On::Hook` of card `idx`, optionally filtered by hook-kind name.
+#[inline(always)]
 pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
     hook_idx(idx, "Hook", hook_name, player)
+}
+
+/// First `On::Hook` of card `idx` matching `want`. **Integer-only** — no
+/// `&str` tags, so CBMC never lowers the dispatch to `memcmp` (the shave
+/// profile's remaining 10 memcmps were `match name { "PayAdd" => … }`).
+#[inline(always)]
+pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32) -> Asked {
+    let card = by_idx(idx);
+    for (i, on) in card.on.iter().enumerate() {
+        if let On::Hook(kinds, _, _, _) = on {
+            if kinds.iter().any(|k| *k == want) {
+                return entry_idx(idx, i, player);
+            }
+        }
+    }
+    fail_no_kind("Hook")
 }
 
 /// Skill entry: alias of [`play_idx`].
@@ -368,46 +514,81 @@ fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool
 }
 
 /// Short name → `HookKind`. `None` for `""` or an unknown tag.
-/// A `match` on literals constant-folds when the caller passes one.
+/// Dispatch is on [`tag_key`] integers — never `memcmp`.
 #[inline(always)]
 fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     use card_sdk::abi::HookKind as H;
-    match name {
-        "PayAdd" => Some(H::PayAdd),
-        "PayMul" => Some(H::PayMul),
-        "PayChoose" => Some(H::PayChoose),
-        "PayAt" => Some(H::PayAt),
-        "PayAfter" => Some(H::PayAfter),
-        "Pay" => Some(H::Pay),
-        "TurnEnd" => Some(H::TurnEnd),
-        "TurnStart" => Some(H::TurnStart),
-        "TurnEndBefore" => Some(H::TurnEndBefore),
-        "TurnEndAfter" => Some(H::TurnEndAfter),
-        "Roll" => Some(H::Roll),
-        "RollAfter" => Some(H::RollAfter),
-        "RollPlan" => Some(H::RollPlan),
-        "Settle" => Some(H::Settle),
-        "SettleBody" => Some(H::SettleBody),
-        "SettleAfter" => Some(H::SettleAfter),
-        "CardPlayed" => Some(H::CardPlayed),
-        "Discarded" => Some(H::Discarded),
-        "DiscardBefore" => Some(H::DiscardBefore),
-        "DiscardAfter" => Some(H::DiscardAfter),
-        "Bought" => Some(H::Bought),
-        "BuyAdd" => Some(H::BuyAdd),
-        "BuyMul" => Some(H::BuyMul),
-        "BuySet" => Some(H::BuySet),
-        "HouseAdded" => Some(H::HouseAdded),
-        "CounterChanged" => Some(H::CounterChanged),
-        "FireSpent" => Some(H::FireSpent),
-        "Teleported" => Some(H::Teleported),
-        "Targeted" => Some(H::Targeted),
-        "Pass" => Some(H::Pass),
-        "PassTile" => Some(H::PassTile),
-        "PassPlayer" => Some(H::PassPlayer),
-        "Exile" => Some(H::Exile),
-        "Stay" => Some(H::Stay),
-        "Stun" => Some(H::Stun),
+    const PAY_ADD: (u8, u64, u64) = tag_key_const("PayAdd");
+    const PAY_MUL: (u8, u64, u64) = tag_key_const("PayMul");
+    const PAY_CHOOSE: (u8, u64, u64) = tag_key_const("PayChoose");
+    const PAY_AT: (u8, u64, u64) = tag_key_const("PayAt");
+    const PAY_AFTER: (u8, u64, u64) = tag_key_const("PayAfter");
+    const PAY: (u8, u64, u64) = tag_key_const("Pay");
+    const TURN_END: (u8, u64, u64) = tag_key_const("TurnEnd");
+    const TURN_START: (u8, u64, u64) = tag_key_const("TurnStart");
+    const TURN_END_BEFORE: (u8, u64, u64) = tag_key_const("TurnEndBefore");
+    const TURN_END_AFTER: (u8, u64, u64) = tag_key_const("TurnEndAfter");
+    const ROLL: (u8, u64, u64) = tag_key_const("Roll");
+    const ROLL_AFTER: (u8, u64, u64) = tag_key_const("RollAfter");
+    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
+    const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
+    const SETTLE_BODY: (u8, u64, u64) = tag_key_const("SettleBody");
+    const SETTLE_AFTER: (u8, u64, u64) = tag_key_const("SettleAfter");
+    const CARD_PLAYED: (u8, u64, u64) = tag_key_const("CardPlayed");
+    const DISCARDED: (u8, u64, u64) = tag_key_const("Discarded");
+    const DISCARD_BEFORE: (u8, u64, u64) = tag_key_const("DiscardBefore");
+    const DISCARD_AFTER: (u8, u64, u64) = tag_key_const("DiscardAfter");
+    const BOUGHT: (u8, u64, u64) = tag_key_const("Bought");
+    const BUY_ADD: (u8, u64, u64) = tag_key_const("BuyAdd");
+    const BUY_MUL: (u8, u64, u64) = tag_key_const("BuyMul");
+    const BUY_SET: (u8, u64, u64) = tag_key_const("BuySet");
+    const HOUSE_ADDED: (u8, u64, u64) = tag_key_const("HouseAdded");
+    const COUNTER_CHANGED: (u8, u64, u64) = tag_key_const("CounterChanged");
+    const FIRE_SPENT: (u8, u64, u64) = tag_key_const("FireSpent");
+    const TELEPORTED: (u8, u64, u64) = tag_key_const("Teleported");
+    const TARGETED: (u8, u64, u64) = tag_key_const("Targeted");
+    const PASS: (u8, u64, u64) = tag_key_const("Pass");
+    const PASS_TILE: (u8, u64, u64) = tag_key_const("PassTile");
+    const PASS_PLAYER: (u8, u64, u64) = tag_key_const("PassPlayer");
+    const EXILE: (u8, u64, u64) = tag_key_const("Exile");
+    const STAY: (u8, u64, u64) = tag_key_const("Stay");
+    const STUN: (u8, u64, u64) = tag_key_const("Stun");
+    match tag_key(name) {
+        PAY_ADD => Some(H::PayAdd),
+        PAY_MUL => Some(H::PayMul),
+        PAY_CHOOSE => Some(H::PayChoose),
+        PAY_AT => Some(H::PayAt),
+        PAY_AFTER => Some(H::PayAfter),
+        PAY => Some(H::Pay),
+        TURN_END => Some(H::TurnEnd),
+        TURN_START => Some(H::TurnStart),
+        TURN_END_BEFORE => Some(H::TurnEndBefore),
+        TURN_END_AFTER => Some(H::TurnEndAfter),
+        ROLL => Some(H::Roll),
+        ROLL_AFTER => Some(H::RollAfter),
+        ROLL_PLAN => Some(H::RollPlan),
+        SETTLE => Some(H::Settle),
+        SETTLE_BODY => Some(H::SettleBody),
+        SETTLE_AFTER => Some(H::SettleAfter),
+        CARD_PLAYED => Some(H::CardPlayed),
+        DISCARDED => Some(H::Discarded),
+        DISCARD_BEFORE => Some(H::DiscardBefore),
+        DISCARD_AFTER => Some(H::DiscardAfter),
+        BOUGHT => Some(H::Bought),
+        BUY_ADD => Some(H::BuyAdd),
+        BUY_MUL => Some(H::BuyMul),
+        BUY_SET => Some(H::BuySet),
+        HOUSE_ADDED => Some(H::HouseAdded),
+        COUNTER_CHANGED => Some(H::CounterChanged),
+        FIRE_SPENT => Some(H::FireSpent),
+        TELEPORTED => Some(H::Teleported),
+        TARGETED => Some(H::Targeted),
+        PASS => Some(H::Pass),
+        PASS_TILE => Some(H::PassTile),
+        PASS_PLAYER => Some(H::PassPlayer),
+        EXILE => Some(H::Exile),
+        STAY => Some(H::Stay),
+        STUN => Some(H::Stun),
         _ => None,
     }
 }
@@ -475,7 +656,11 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
 
 /// `PP:[丸山彩]憧憬的前方` -- `On::Hook(PayAdd)`.
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
-    hook_only_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), "PayAdd", player_id)
+    hook_kind_only_idx(
+        crate::card_id!("PP:[丸山彩]憧憬的前方"),
+        card_sdk::abi::HookKind::PayAdd,
+        player_id,
+    )
 }
 
 /// `PPP:（多惠）寻找更好的声音` -- `On::Play`.

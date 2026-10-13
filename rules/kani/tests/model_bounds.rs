@@ -58,8 +58,15 @@ fn band_starts_match_ruleset() {
     }
 }
 
+/// Serialise tests that touch the process-global intern table (`static mut`).
+fn intern_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[test]
 fn intern_fixed_loop_bounds() {
+    let _g = intern_lock();
     // card-sdk intern: open-addressed, 8 probes, 8×8 byte walks.
     card_sdk::intern::reset();
     let a = card_sdk::intern::intern("PP:[丸山彩]憧憬的前方");
@@ -73,4 +80,29 @@ fn intern_fixed_loop_bounds() {
     assert!(card_sdk::intern::intern(&long).is_valid());
     let too_long = "y".repeat(card_sdk::intern::MAX_NAME + 1);
     assert!(!card_sdk::intern::intern(&too_long).is_valid());
+}
+
+/// Kani intern identity is `(FNV-1a, len)` (bytes_eq dropped from the probe
+/// hit — it was the money_shave setup cliff). This pins the proof corpus:
+/// every pilot/known name must intern to a distinct `NameId`, so a 64-bit
+/// collision cannot silently alias two of them.
+#[test]
+fn pilot_intern_hashes_are_unique() {
+    let _g = intern_lock();
+    use rules_kani::host::PILOT_INTERN_NAMES;
+    card_sdk::intern::reset();
+    let mut seen = std::collections::BTreeSet::new();
+    for name in PILOT_INTERN_NAMES {
+        let id = card_sdk::intern::intern(name);
+        assert!(id.is_valid(), "pilot name {name:?} failed to intern");
+        assert!(
+            seen.insert(id),
+            "pilot name {name:?} collided with an earlier name (hash+len alias)"
+        );
+        assert_eq!(
+            card_sdk::intern::resolve_str(id),
+            *name,
+            "intern/resolve drift for {name:?}"
+        );
+    }
 }

@@ -175,6 +175,14 @@ pub fn aya_haruka_02_shave_iff() {
 /// SPLIT of `aya_haruka_02_shave_iff` (poorest half). Same clause, narrower
 /// assume — cheaper for the solver, no behaviour hidden: the iff's other half
 /// is `aya_haruka_02_shave_not_poorest_noop`.
+///
+/// Together the two halves are the clause:
+/// * **guard** (`actor == owner && value > 0`): proved in `shave_iff` (both
+///   admit and reject) and `wrong_guard` (the single-source string). The
+///   splits assume the host invoked the body (`On::Hook` contract) so they
+///   do not re-evaluate the IR — that is a setup cut, not a weaker claim.
+/// * **poorest** (「资金数是所有存活玩家中最少」 ⇒ shave by X): this half.
+/// * **not-poorest** ⇒ no-op: the other half.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn aya_haruka_02_shave_poorest() {
@@ -182,15 +190,10 @@ pub fn aya_haruka_02_shave_poorest() {
     assume_poorest(&w);
     let owner = w.trig_player;
     let pre_amount = w.pay_amount;
-    let gid = crate::guard_id!("actor == owner && value > 0");
-    let ctx = ir_fill::fill_pay_add(&w, owner);
-    let admitted = crate::guard!(gid, &ctx);
-    // With trig_value possibly 0 the guard may still reject; cover both.
-    kani::cover!(admitted, "guard admits");
-    kani::cover!(!admitted, "guard rejects");
-    if !admitted {
-        return;
-    }
+    // Host already invoked the body: guard terms hold (`shave_iff` proves
+    // the IR agrees). No `fill_pay_add` / `guard!` here — that circuit is the
+    // split's remaining cliff after the Msg/memcmp/by_idx cuts.
+    kani::assume(w.trig_value > 0);
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -216,6 +219,9 @@ pub fn aya_haruka_02_shave_poorest() {
 /// SPLIT of `aya_haruka_02_shave_iff` (not-poorest half): the body must
 /// no-op (「如果[拥有者]的资金数是所有存活玩家中最少则…」 — the shave is
 /// gated on the poorest reading).
+///
+/// Guard admission is assumed (host invoked the body); see `shave_poorest`
+/// for how the two halves + `shave_iff` cover the full clause.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn aya_haruka_02_shave_not_poorest_noop() {
@@ -223,13 +229,7 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
     assume_not_poorest(&w);
     let owner = w.trig_player;
     let pre_amount = w.pay_amount;
-    let gid = crate::guard_id!("actor == owner && value > 0");
-    let ctx = ir_fill::fill_pay_add(&w, owner);
-    let admitted = crate::guard!(gid, &ctx);
-    kani::cover!(admitted, "guard admits");
-    if !admitted {
-        return;
-    }
+    kani::assume(w.trig_value > 0);
     let pre = {
         world::reset_world(w);
         world::snapshot()
