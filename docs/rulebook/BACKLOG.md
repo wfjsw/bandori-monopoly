@@ -238,6 +238,14 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **was**: `err.play_phase` when played as the counter; forced move did not happen.
 
 ## CH-05 — nested [反击] copy machinery (play-history / nested PlayCtx)
+- **status**: **partially fixed** (2026-10-13, `closeout-3-windows`) — join retarget
+  (`改为你`) landed for 真奈 (CH-06 / g19 green). `Trigger.join_redirect` /
+  `join_used` + `prop::SELF_REDIRECT` + `ctx::join_redirect_target()` /
+  `set_join_used()` / `self_target()`. The pre-scan in `hand_counteractions`
+  sets `join_redirect` when a `SELF_REDIRECT` counter is in a hand, so the
+  redirect is live before any body runs. The full nested PlayCtx window (per-seat
+  「如同自身的对应目标被指定一般」 with its own chain) and play-history query
+  (Mortis copy) are still open.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: high (Mortis and Mana Champion are the two "copy a counter" cards)
@@ -247,29 +255,28 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   - `rules/cards/card-sumimi/src/mana_champion.rs:57` (nested `H.Counteract(copy, p)`, shield + counteractor's draw)
   - `rules/cards/card-mujica/src/dice_cast.rs:55` (「（此卡可以被反击）」 needs the reverse-order counter play)
 - **rulebook**: Mortis 「此卡打出时效果为场上任意其他玩家打出的上一张卡…」 + 「（此卡复制[反击]卡时可在符合条件时打出）」; Mana Champion 「此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你…」
-- **current**: no play-history query, no cross-card `PlayCtx` nesting (`ctx::play_card` runs `play` without the copied card's identity / counteraction mode). Mortis copy is a stub; Mana Champion shield/draw unexpressed.
+- **current**: join retarget works (g19). No play-history query; full nested PlayCtx window still TODO.
 - **expected**: copy the latest eligible play and nest a full Play/Counteract run with forwarded Tags/Extreme/Doubled.
 - **capability**: `play-history query` + `nested PlayCtx` (cross-card identity + counteraction mode).
 
 ## CH-06 — 网络链接异常 still drops the wrong designation in join fixtures
-- **status**: **reclassified B** (2026-10-11) — the per-pair cancel itself works
-  (`c05` green). What `g19` still needs is 真奈's nested join window: 「此时场上
-  其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中针对打出玩家
-  自身的效果改为你」. That is CH-05's `nested PlayCtx` (the joiner's self-targeted
-  cancel must be retargeted to 真奈's user). Without the nested window, P3's
-  网络链接异常 plays in the outer ring and cancels P3's own designation (P3
-  exempt, P0 pays) instead of P0's via 「改为你」.
+- **status**: **fixed** (2026-10-13, `closeout-3-windows`) — 真奈's join retarget
+  (「改为你」) landed. `SELF_REDIRECT` on 真奈 marks the counter as opening a
+  join; `Trigger.join_redirect` is set at declaration; 网络链接异常's
+  self-targeted cancel now cancels 真奈's user's designation (not the joiner's).
+  Joiner draws 1 (真奈's shield clause). `g19_manas_join_window_lets_a_third_party_drop_one`
+  un-ignored, green. Remaining TODOs (nested window shape, fallback-draw
+  joiner-count) are tagged `TODO(规则书)` under CH-05.
 - **kind**: implementation bug
 - **class**: B (capability: nested PlayCtx / join retarget — see CH-05)
 - **severity**: high
 - **suggested batch**: host ABI: counteraction windows
 - **locations**
-  - `rules/tests/tests/gap_window.rs` `g19_manas_join_window_lets_a_third_party_drop_one` (still ignored)
-  - `rules/cards/card-sumimi/src/mana_champion.rs` (nested half is TODO)
-  - ABI already landed: `ctx::designations` / `ctx::cancel_designation` / `designation_cancelled`
+  - `rules/tests/tests/gap_window.rs` `g19_manas_join_window_lets_a_third_party_drop_one` (un-ignored, green)
+  - `rules/cards/card-sumimi/src/mana_champion.rs` (join retarget + fallback draw)
+  - `rules/cards/card-general/src/net_error.rs` (join-aware cancel)
 - **rulebook**: sheet cancels **one** designation (「取消一个指定」 / 「改为你」).
-- **current**: without the join, P3's cancel drops P3's own designation.
-- **expected**: under the join, P3's self-targeted cancel drops P0's (真奈's user); P2/P3 still pay.
+- **was**: P3's cancel dropped P3's own designation (P3 exempt, P0 pays).
 
 ## CH-07 — 「视为此卡未生效」 has no observer
 - **status**: **minimal path landed** (2026-10-13, `closeout-3-windows`) —

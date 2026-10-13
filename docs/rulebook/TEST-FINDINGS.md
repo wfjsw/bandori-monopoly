@@ -1234,9 +1234,14 @@ High-severity class-A window items. 9 tests un-ignored, green twice.
   `target == owner && actor != owner`. Force-move lands on
   `trigger::player_id` of the answered link. Un-ignored:
   `c16_cannot_look_away_answers_a_counter`, `l04_forced_move_into_remote_settle`.
-* **CH-06 reclassified B:** per-pair cancel works (`c05` green). `g19` needs
+* **CH-06 reclassified B:** per-pair cancel works (`c05` green). ~~`g19` needs
   真奈's nested join window (CH-05 `nested PlayCtx`) so the joiner's
-  self-targeted cancel is retargeted 「改为你」 to 真奈's user.
+  self-targeted cancel is retargeted 「改为你」 to 真奈's user.~~
+  **Fixed 2026-10-13** (`closeout-3-windows`): `SELF_REDIRECT` + `Trigger.join_redirect`
+  / `join_used` + `ctx::join_redirect_target()` / `set_join_used()`. 网络链接异常's
+  self-targeted cancel now redirects to 真奈's user under the join. Un-ignored
+  `g19_manas_join_window_lets_a_third_party_drop_one`, green. CH-05 remainder
+  (full nested PlayCtx window, play-history query) tagged `TODO(规则书)`.
 * **WINDOW-01 (test bug):** `err.play_phase` was a turn-start skill hook
   prompt left open (若叶睦 / 丰川祥子 `ask_yes` at `TurnStartBefore`), so the
   match was busy. Drain after `begin_turn`. Un-ignored:
