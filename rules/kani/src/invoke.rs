@@ -67,25 +67,70 @@ pub const BAND_START: [usize; 18] = [
     0, 15, 30, 44, 59, 74, 89, 104, 123, 141, 156, 173, 184, 196, 250, 256, 257, 285,
 ];
 
-/// Index `idx` of the flattened [`RULESET`] by a const offset table + binary
-/// search (~5 integer compares) — **no** 17-band integer walk, **no** string
-/// compare. Fails loudly on out-of-range.
+/// Index `idx` of the flattened [`RULESET`] by a const offset table.
+///
+/// Zero-loop band select (17 integer compares) — a `while` binary search
+/// unwinds 10 times under CBMC even when `idx` is a `card_id!(…)` constant.
+/// Fails loudly on out-of-range.
+#[inline(always)]
 pub fn by_idx(idx: usize) -> &'static card_sdk::CardDef {
     if idx >= BAND_START[BAND_START.len() - 1] {
         fail_unknown_idx(idx);
     }
-    // Greatest b with BAND_START[b] <= idx.
+    // Greatest b with BAND_START[b] <= idx. Unrolled (BAND_START has 18
+    // entries / 17 boundaries).
     let mut lo = 0usize;
-    let mut hi = RULESET.len(); // exclusive band upper bound
-    while lo < hi {
-        let mid = (lo + hi + 1) / 2;
-        if BAND_START[mid] <= idx {
-            lo = mid;
-        } else {
-            hi = mid - 1;
-        }
+    if BAND_START[1] <= idx {
+        lo = 1;
     }
-    // lo in 0..RULESET.len(), idx < BAND_START[lo+1]
+    if BAND_START[2] <= idx {
+        lo = 2;
+    }
+    if BAND_START[3] <= idx {
+        lo = 3;
+    }
+    if BAND_START[4] <= idx {
+        lo = 4;
+    }
+    if BAND_START[5] <= idx {
+        lo = 5;
+    }
+    if BAND_START[6] <= idx {
+        lo = 6;
+    }
+    if BAND_START[7] <= idx {
+        lo = 7;
+    }
+    if BAND_START[8] <= idx {
+        lo = 8;
+    }
+    if BAND_START[9] <= idx {
+        lo = 9;
+    }
+    if BAND_START[10] <= idx {
+        lo = 10;
+    }
+    if BAND_START[11] <= idx {
+        lo = 11;
+    }
+    if BAND_START[12] <= idx {
+        lo = 12;
+    }
+    if BAND_START[13] <= idx {
+        lo = 13;
+    }
+    if BAND_START[14] <= idx {
+        lo = 14;
+    }
+    if BAND_START[15] <= idx {
+        lo = 15;
+    }
+    if BAND_START[16] <= idx {
+        lo = 16;
+    }
+    if BAND_START[17] <= idx {
+        lo = 17;
+    }
     let band = RULESET[lo];
     let off = idx - BAND_START[lo];
     if off >= band.len() {
