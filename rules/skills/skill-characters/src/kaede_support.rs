@@ -195,7 +195,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST, n);
     if n >= 2 {
         state::set(player_id, REST, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("kaede_support_gain_fire")))?;
+        rules_status::fire::gain(player_id, 1, &Msg::new(key!("kaede_support_gain_fire")))?;
     }
     if state::get(player_id, state_key::FIRE) < state::max(player_id, state_key::FIRE) {
         return Ok(());
@@ -242,7 +242,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
     if x <= 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, x, &Msg::new(key!("kaede_support_spend")))? {
+    if !rules_status::fire::spend(player_id, x, &Msg::new(key!("kaede_support_spend")))? {
         return Ok(());
     }
     for _ in 0..x {

@@ -82,7 +82,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         // 「其余玩家获得1层在回合开始时移除的[除外]」
-        ctx::give_exile(p, 1, -1);
+        rules_status::exile::send(p, 1, -1);
         ctx::log(p, &Msg::new("log.event.asukayama_exile").player_id("who", p));
     }
     Ok(())

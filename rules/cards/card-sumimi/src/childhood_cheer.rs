@@ -40,7 +40,7 @@ const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「可在移动掷骰前打出此卡」 -- only while the turn's main move is
     // still open (C# `H.MoveWhyNot`).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
@@ -75,7 +75,7 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
 fn after_move(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并在移动后获得一个火罐」 -- 行动阶段 13, after [重叠] and
     // before any settle. Fires for a 「不触发结算」 move too.
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

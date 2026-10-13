@@ -33,9 +33,9 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
     let mut options = alloc::vec::Vec::new();
     options.push(Msg::new(key!("uika_fearless_draw")));
     // C# only offers the fix-roll option when `H.MoveWhyNot(i) == null &&
-    // H._turnCtx.Plan.FixedRoll < 0`; `ctx::cant_move` is `H.MoveWhyNot` and
+    // H._turnCtx.Plan.FixedRoll < 0`; `rules_status::move_blocked` is `H.MoveWhyNot` and
     // `ctx::fixed_roll` is `Plan.FixedRoll` (`None` when unset, i.e. `< 0`).
-    let can_move = ctx::cant_move(player_id).is_none() && ctx::fixed_roll().is_none();
+    let can_move = rules_status::move_blocked(player_id).is_none() && ctx::fixed_roll().is_none();
     if can_move {
         options.push(Msg::new(key!("uika_fearless_fix")));
     }

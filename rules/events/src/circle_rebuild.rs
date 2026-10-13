@@ -125,7 +125,7 @@ fn on_settle_body(_owner: i32) -> card_sdk::Asked {
         )?;
         if pick == 0 {
             // 「获得2层[停留]」
-            ctx::give_stay(who, 2);
+            rules_status::stay::add(who, 2);
             ctx::log(
                 who,
                 &Msg::new("log.event.rebuild_stay").player_id("who", who),

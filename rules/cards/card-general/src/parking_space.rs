@@ -143,7 +143,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             ctx::set_slot(turn, SLOT_STAY, 0);
             // C# `H.GiveStay(turn, layers, Seat, "Parking Space")` -> `AddStay`
             // logs 「… 获得 N 层 [停留]（Parking Space）」.
-            ctx::give_stay(turn, layers);
+            rules_status::stay::add(turn, layers);
             ctx::log(
                 turn,
                 &Msg::new(key!("parking_space_stay"))

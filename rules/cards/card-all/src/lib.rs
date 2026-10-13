@@ -24,5 +24,6 @@ card_sdk::bandori_ruleset!(
     skill_characters::CARDS,
     rules_tiles::CARDS,
     rules_tile_marks::CARDS,
+    rules_status::CARDS,
     rules_events::CARDS
 );

@@ -96,7 +96,7 @@ fn settle(player_id: i32) -> card_sdk::Asked {
             // `buy_quotes` is parallel to `same`.
             let (price, eligible) = quotes.get(idx).copied().unwrap_or((-1, false));
             let price = price.max(0);
-            if ctx::can_pay(player_id) && eligible {
+            if rules_status::can_pay(player_id) && eligible {
                 let houses = ctx::houses_of(t);
                 options.push(t);
                 prices.push(price);

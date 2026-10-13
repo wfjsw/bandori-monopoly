@@ -47,7 +47,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("raise_effort_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("raise_effort_gain")))?;
     Ok(())
 }
 
@@ -67,7 +67,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("raise_effort_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("raise_effort_spend")))? {
         return Ok(());
     }
     // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so `roll_ask` with

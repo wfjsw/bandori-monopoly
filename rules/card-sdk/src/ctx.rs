@@ -1445,15 +1445,28 @@ pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prom
     asked(unsafe { sys::raise(player_id, kind as i32, value) }).map(|v| v != 0)
 }
 
+// ---------------------------------------------------------- status hosts
+// These are the `rules/status` hosts' **engine services**, not the
+// card-facing API. Cards call `rules_status::{stay,stun,exile,fire}::*`
+// (`docs/STATUS-HOSTS.md`). `give_*` keep their names because they open the
+// abnormal [反击] window (`abnormal_gate`) -- a generic `apply_abnormal`
+// would replace them; until then this is the one place game vocabulary sits
+// in card-sdk (the 火罐 verbs live in `ruleset-core`), marked hidden so it is not the documented surface.
+// TODO(ABI): genericize to `apply_abnormal` + `marker::gain_capped` /
+// `marker::spend` and delete these (HOST-09/10 style dead-surface removal).
+
+#[doc(hidden)]
 pub fn give_stay(player_id: i32, n: i32) {
     unsafe { sys::give_stay(player_id, n) }
 }
 
+#[doc(hidden)]
 pub fn give_stun(player_id: i32, n: i32) {
     unsafe { sys::give_stun(player_id, n) }
 }
 
 /// Give `[除外]` layers to the player, returning them after.
+#[doc(hidden)]
 pub fn give_exile(player_id: i32, n: i32, to: i32) {
     unsafe { sys::give_exile(player_id, n, to) }
 }
@@ -1464,12 +1477,14 @@ pub fn give_extra_turn(player_id: i32) {
 }
 
 /// Can the player pay? Not out, not stunned, not exiled.
+#[doc(hidden)]
 pub fn can_pay(player_id: i32) -> bool {
     unsafe { sys::can_pay(player_id) != 0 }
 }
 
 /// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
+#[doc(hidden)]
 pub fn cant_move(player_id: i32) -> Option<Msg> {
     match unsafe { sys::cant_move(player_id) } {
         0 => None,
@@ -1488,16 +1503,19 @@ pub fn card_move(player_id: i32) -> bool {
 }
 
 /// `[停留]` layers on the player.
+#[doc(hidden)]
 pub fn stay_of(player_id: i32) -> i32 {
     unsafe { sys::stay_of(player_id) }
 }
 
 /// `[晕眩]` layers on the player.
+#[doc(hidden)]
 pub fn stun_of(player_id: i32) -> i32 {
     unsafe { sys::stun_of(player_id) }
 }
 
 /// `[除外]` layers on the player (mirrors [`stun_of`]).
+#[doc(hidden)]
 pub fn exile_of(player_id: i32) -> i32 {
     unsafe { sys::exile_of(player_id) }
 }

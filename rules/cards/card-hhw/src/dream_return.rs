@@ -55,7 +55,7 @@ fn can_counteract(player_id: i32) -> bool {
     // must be such a tile (C# `Targets(player_id).Count > 0`). The rent / seat
     // shape is the pre; `H.CanPay` (a stunStart-aware composite) and the
     // `Targets` scan stay here.
-    !targets(player_id).is_empty() && ctx::can_pay(player_id)
+    !targets(player_id).is_empty() && rules_status::can_pay(player_id)
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

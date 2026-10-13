@@ -47,7 +47,7 @@ fn rain(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[手]: 「被[指定]的玩家获得一层[停留]」
     for t in targets {
-        ctx::give_stay(t, 1);
+        rules_status::stay::add(t, 1);
         ctx::log(t, &Msg::new(key!("rain_stay")).player_id("who", t));
     }
     Ok(())

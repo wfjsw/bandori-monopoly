@@ -1,0 +1,14 @@
+[package]
+name = "rules-status"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Status rule hosts: one CardDef per rulebook status marker (status:*), standing on the neutral board owner."
+
+[lib]
+# rlib: linked into the shipped module (card-all) like the band crates.
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../card-sdk", features = ["guest"] }
+ruleset-core = { path = "../ruleset-core" }

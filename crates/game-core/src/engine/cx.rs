@@ -1181,28 +1181,30 @@ impl<'a> Cx<'a> {
         self.w.st.phase == "play"
     }
 
-    /// `CanPay`: not out, not stunned, not exiled.
+    /// `CanPay`: not out, and the status hosts' pay gate is open.
     pub(crate) fn can_pay(&self, i: usize) -> bool {
         let s = &self.w.st.players[i];
-        !s.out() && !s.stunned() && s.exile() == 0
+        !s.out() && s.status_gates().pay
     }
 
     /// `Blocked(i)` -- why a player can't move money.
     pub(crate) fn blocked(&self, i: usize) -> &'static str {
         let s = &self.w.st.players[i];
-        if s.exile() > 0 {
+        // The status hosts' clause: [除外] names the stronger refusal.
+        if !s.status_gates().on_board {
             "status.exiled"
         } else {
             "status.stunned"
         }
     }
 
-    /// Players starting at `from`, wrapping, that are in the game and not exiled.
+    /// Players starting at `from`, wrapping, that are in the game and on board
+    /// (the status hosts' on-board gate).
     pub fn present_from(&self, from: usize) -> Vec<usize> {
         let n = self.w.player_count();
         (0..n)
             .map(|k| (from + k) % n)
-            .filter(|&i| !self.out(i) && self.w.st.players[i].exile() == 0)
+            .filter(|&i| !self.out(i) && self.w.st.players[i].status_gates().on_board)
             .collect()
     }
 }

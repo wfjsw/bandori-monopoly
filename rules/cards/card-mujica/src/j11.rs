@@ -40,12 +40,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// owner and every player within 1 tile.
 fn fire(player_id: i32) {
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::give_stun(player_id, 1);
+    rules_status::stun::add(player_id, 1);
     let here = ctx::player_pos(player_id);
     for p in ctx::others(player_id) {
         // C# `H.Within(Seat, 1)` (includeSame: true): `H.Dist(seat.pos, p.pos) <= 1`.
         if ctx::dist(here, ctx::player_pos(p)) <= 1 {
-            ctx::give_stun(p, 1);
+            rules_status::stun::add(p, 1);
         }
     }
     ctx::log(

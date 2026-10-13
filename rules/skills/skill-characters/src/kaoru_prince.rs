@@ -87,7 +87,7 @@ fn settle(player_id: i32) -> card_sdk::Asked {
             return Ok(());
         }
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("kaoru_prince_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("kaoru_prince_gain")))?;
     Ok(())
 }
 
@@ -136,7 +136,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = near.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 7, &Msg::new(key!("kaoru_prince_spend")))? {
+    if !rules_status::fire::spend(player_id, 7, &Msg::new(key!("kaoru_prince_spend")))? {
         return Ok(());
     }
     // 「在…玩家场上放置3个[怪盗标记]」 -- on one of that player's tiles.

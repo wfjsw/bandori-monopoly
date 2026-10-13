@@ -22,7 +22,7 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
     for p in ctx::others(player_id) {
         // Only players who can actually put 500 on the table are asked (C#
         // `where H.CanPay(num2) && H.State.seats[num2].money >= 500`).
-        if !ctx::can_pay(p) || ctx::money_of(p) < 500 {
+        if !rules_status::can_pay(p) || ctx::money_of(p) < 500 {
             continue;
         }
         let title = Msg::new(key!("thanks_party_join_title"));

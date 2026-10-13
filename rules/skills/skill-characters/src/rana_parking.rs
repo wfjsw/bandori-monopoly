@@ -72,7 +72,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if ctx::is_circle(t) {
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("rana_parking_gain")))?;
+        rules_status::fire::gain(player_id, 1, &Msg::new(key!("rana_parking_gain")))?;
         return Ok(());
     }
     if ctx::is_ring(t) && ctx::tok(player_id, PARFAIT) >= 1 {
@@ -105,7 +105,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if space < 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rana_parking_spend")))? {
+    if !rules_status::fire::spend(player_id, 3, &Msg::new(key!("rana_parking_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);

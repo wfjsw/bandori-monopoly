@@ -22,13 +22,15 @@ const SKILLS = join(ROOT, "rules", "skills");
 const TILES = join(ROOT, "rules", "tiles");
 const EVENTS = join(ROOT, "rules", "events");
 const TILE_MARKS = join(ROOT, "rules", "tile_marks");
+const STATUS = join(ROOT, "rules", "status");
 const OUT = join(CARDS, "card-all");
 
 /** [{root, dir, name, rel}] of every rule crate, sorted. Covers `rules/cards/*`
  *  (the cards you draw), `rules/skills/*` (character / band skills),
  *  `rules/tiles` (board tile rules, `docs/TILES.md`), `rules/tile_marks`
- *  (tile-mark rules, `mark:*`, `docs/TILES.md` -> Board marks) and
- *  `rules/events` (event card rules, `docs/EVENTS.md`) -- five areas on
+ *  (tile-mark rules, `mark:*`, `docs/TILES.md` -> Board marks),
+ *  `rules/status` (status rule hosts, `status:*`, `docs/STATUS-HOSTS.md`) and
+ *  `rules/events` (event card rules, `docs/EVENTS.md`) -- six areas on
  *  purpose, one shipped module. */
 function ruleCrates() {
   const scan = (root, dirFilter, rel) =>
@@ -42,8 +44,8 @@ function ruleCrates() {
         if (!m) throw new Error(`${toml}: no package name`);
         return [{ root, dir, name: m[1], rel: rel + dir }];
       });
-  // `rules/tiles`, `rules/tile_marks` and `rules/events` are one crate each
-  // (not directories of them).
+  // `rules/tiles`, `rules/tile_marks`, `rules/status` and `rules/events` are
+  // one crate each (not directories of them).
   const single = (root, dir, rel) => {
     const toml = join(root, "Cargo.toml");
     const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
@@ -55,6 +57,7 @@ function ruleCrates() {
     ...scan(SKILLS, (e) => e.isDirectory(), "../../skills/"),
     ...single(TILES, "tiles", "../../tiles"),
     ...single(TILE_MARKS, "tile_marks", "../../tile_marks"),
+    ...single(STATUS, "status", "../../status"),
     ...single(EVENTS, "events", "../../events"),
   ];
 }

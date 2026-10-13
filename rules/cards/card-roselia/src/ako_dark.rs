@@ -48,14 +48,14 @@ fn legacy_can_counteract(player_id: i32) -> bool {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[反击]: 「使自己获得一层[眩晕]」 -- C# `H.GiveStun(i, 1, i, "黑暗大魔姬亚子")`.
-    ctx::give_stun(player_id, 1);
+    rules_status::stun::add(player_id, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("ako_dark_stun")).player_id("who", player_id),
     );
     // 规则书（1）[反击]: the pay is waived once the player is stunned (C# CounteractHint:
     // 「这笔就不用付了」) -- C# `c.Trigger.Pay.cancel = true` when `H.State.seats[i].Stunned`.
-    if ctx::stun_of(player_id) > 0 {
+    if rules_status::stun::get(player_id) > 0 {
         trigger::set_pay_amount(0);
     }
     // 规则书（1）[反击]: 「若此卡从手牌以外的地方打出，你抽一张卡」 -- the

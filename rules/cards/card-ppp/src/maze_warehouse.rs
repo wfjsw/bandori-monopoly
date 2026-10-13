@@ -57,7 +57,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if ryuseido >= 0 && ctx::dist(ctx::player_pos(player_id), ryuseido) > 5 {
         return Some(Msg::new(key!("maze_warehouse_range")).player_id("who", player_id));
     }
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 /// C# 「无主可购买地」 -- `H._tiles[t].IsBuyable && H.State.owners[t] < 0`.

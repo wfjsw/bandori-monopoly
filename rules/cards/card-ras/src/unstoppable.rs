@@ -13,7 +13,7 @@ pub const UNSTOPPABLE: CardDef =
 /// C# `CardUnstoppable.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 /// C# `CardUnstoppable.Spots` -- the six destinations, indexed by the 1d6.

@@ -249,7 +249,7 @@ fn stunner(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
     };
-    ctx::give_stun(target, 1);
+    rules_status::stun::add(target, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("stunner_done")).i("count", ctx::abnormal_count(target) as i64),

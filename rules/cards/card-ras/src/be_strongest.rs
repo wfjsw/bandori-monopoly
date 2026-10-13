@@ -15,7 +15,7 @@ pub const BE_STRONGEST: CardDef =
 /// C# `CardBeStrongest.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 /// C# `H._tiles[t].group == 6` in tile-index order (board.json). Index 0 is the

@@ -45,7 +45,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("anon_restart_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("anon_restart_gain")))?;
     Ok(())
 }
 
@@ -69,7 +69,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 2, &Msg::new(key!("anon_restart_spend")))? {
+    if !rules_status::fire::spend(player_id, 2, &Msg::new(key!("anon_restart_spend")))? {
         return Ok(());
     }
     ctx::draw(player_id, 1)?;

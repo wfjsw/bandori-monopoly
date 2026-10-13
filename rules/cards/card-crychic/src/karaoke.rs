@@ -20,7 +20,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「作为你本回合的移动掷骰数」 -- the card arms the turn's main move,
     // so the C# `H.MoveWhyNot` gate applies (own turn, main move still available,
     // turn's move not skipped).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn karaoke(player_id: i32) -> card_sdk::Asked {

@@ -1010,7 +1010,7 @@ impl World {
         if self.st.houses.get(tile as usize).copied().unwrap_or(0) as usize >= t.rent.len() - 1 {
             return Some(Msg::new("err.build_full"));
         }
-        if s.out() || s.stunned() || s.exile() > 0 {
+        if s.out() || !s.status_gates().pay {
             return Some(Msg::new("err.cannot_spend"));
         }
         None
@@ -1422,6 +1422,32 @@ impl World {
         // (`rules/tile_marks/src/cp.rs`): a board-wide category, so it is not bound
         // per board tile the way `tile:*` is. Idempotent.
         for id in crate::data::mark_rule_ids() {
+            if !rules.has_rule(id) {
+                continue;
+            }
+            if self
+                .st
+                .board_field
+                .iter()
+                .any(|f| f.card == *id && f.tile < 0)
+            {
+                continue;
+            }
+            let props = rules.card_props(id);
+            self.place_card_on(
+                data,
+                crate::state::BOARD_OWNER,
+                -1,
+                id,
+                Msg::default(),
+                props,
+            );
+        }
+        // Board-wide **status hosts** (`status:*`,
+        // `crate::data::status_rule_ids`) -- one instance each on the neutral
+        // board owner (`docs/STATUS-HOSTS.md`). Each owns its status counter's
+        // semantics. Idempotent, same path as `mark:*`.
+        for id in crate::data::status_rule_ids() {
             if !rules.has_rule(id) {
                 continue;
             }
@@ -2018,6 +2044,12 @@ impl World {
     /// so on the item (`expires: TurnEnd`) rather than the engine remembering
     /// which keys wear off. They clamp at 0 because that is the status rule,
     /// not because the engine enforces bounds -- [`Self::state_add`] would not.
+    ///
+    /// The verbs are the `status:*` hosts' grant API (`docs/STATUS-HOSTS.md`,
+    /// `rules/status`). Phase B keeps them here so StubRules matches and the
+    /// old `ctx::give_stay` shim work; the un-latch is the `status:stay`
+    /// host's count-changed clause ([`Self::stay_unlatch`]), not a side
+    /// effect the grant site invents.
     pub fn give_stay(&mut self, player_id: i32, n: i32) {
         // 「[停留]：处于该状态时[无法移动]」 and step 7 「停留效果发动：跳过主要
         // 移动阶段」 -- the skip is a *consequence* of the state, not a separate
@@ -2045,6 +2077,19 @@ impl World {
             if self.st.turn == player_id {
                 self.st.skip_move = skip;
             }
+        }
+    }
+
+    /// `status:stay` count-changed clause (rules.txt 48): when the last [停留]
+    /// layer (or an [不可阻挡] grant) leaves the player free to walk, the turn's
+    /// main-move latch is released. [除外] is deliberately not part of it (see
+    /// [`Self::give_stay`]).
+    pub fn stay_unlatch(&mut self, player_id: i32) {
+        let free = self
+            .player_id(player_id)
+            .is_some_and(|s| s.stay() == 0 || s.state_get(key::UNSTOPPABLE) > 0);
+        if free && self.st.turn == player_id {
+            self.st.skip_move = false;
         }
     }
 

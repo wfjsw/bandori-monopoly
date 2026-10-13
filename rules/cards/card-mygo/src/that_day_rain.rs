@@ -215,7 +215,7 @@ fn rain(player_id: i32) {
         }
         let pos = ctx::player_pos(p);
         if area.contains(&pos) {
-            ctx::give_stay(p, 1);
+            rules_status::stay::add(p, 1);
             ctx::log(p, &Msg::new(key!("that_day_rain_stay")).player_id("who", p));
         }
     }

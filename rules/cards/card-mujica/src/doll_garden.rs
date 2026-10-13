@@ -19,7 +19,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「视为你本回合的主要移动」 -- the forced walk is the main move, so
     // the C# `H.MoveWhyNot` gate applies (own turn, main move still available,
     // turn's move not skipped).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn doll_garden(player_id: i32) -> card_sdk::Asked {
@@ -31,7 +31,7 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「无法移动的玩家只能选择向你支付」 -- C# gates on
         // `stay <= 0 && !Stunned` (`MatchPlayer::stunned()` = `stun + stunStart > 0`;
         // `stun_of` is the `stun` field alone).
-        let can_move = ctx::stay_of(p) <= 0 && ctx::stun_of(p) <= 0;
+        let can_move = rules_status::stay::get(p) <= 0 && rules_status::stun::get(p) <= 0;
         if can_move {
             let pick = ctx::ask_pick(
                 p,

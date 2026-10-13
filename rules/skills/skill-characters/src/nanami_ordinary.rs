@@ -101,7 +101,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("nanami_ordinary_gain")))?;
     Ok(())
 }
 
@@ -125,7 +125,7 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("nanami_ordinary_spend")))? {
         return Ok(());
     }
     ctx::add_tok(player_id, &mark_name(&id), 1, i32::MAX)?;

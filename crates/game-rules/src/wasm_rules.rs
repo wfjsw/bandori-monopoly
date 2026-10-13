@@ -1847,11 +1847,11 @@ impl CardWorld for Run {
 
     // status extensions -----------------------------------------------------
     fn can_pay(&self, player_id: i32) -> i32 {
-        // Not out, not stunned, not exiled.
+        // The status hosts' pay gate (not out, not [晕眩], not [除外]).
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
             return 0;
         };
-        (!s.out() && !s.stunned() && s.exile() == 0) as i32
+        (!s.out() && s.status_gates().pay) as i32
     }
     fn cant_move(&self, player_id: i32) -> i32 {
         // Why the [主要移动] is still unavailable (0 = free).

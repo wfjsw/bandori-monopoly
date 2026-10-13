@@ -30,7 +30,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书[手]2: 「进入移动阶段并将本回合的[主要移动]改为[传送]」 -- the teleport
     // is the turn's main move, so the C# `H.MoveWhyNot` gate applies (own turn,
     // main move still available, turn's move not skipped).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
@@ -60,7 +60,7 @@ fn overlapping_voices(player_id: i32) -> card_sdk::Asked {
 /// C# `CardOverlappingVoices.After` -- the scheduled turn-end body.
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]3: 「获得1层[停留]」
-    ctx::give_stay(player_id, 1);
+    rules_status::stay::add(player_id, 1);
     // 规则书[手]3: 「和1个正面的[P✽P粉丝]」 -- C# `H.GainFans(i, 1, up: true)`.
     ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
     // 规则书[手]3: 「将1张“明天见”加入手卡」

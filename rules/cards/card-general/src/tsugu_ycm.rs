@@ -59,7 +59,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「将本回合的[主要移动]改为[传送]」 -- the card replaces the main
     // move, so the C# `H.MoveWhyNot` gate applies (own turn, main move still
     // available, turn's move not skipped).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
@@ -151,8 +151,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
         if pick == 1 {
             // C# `rr.index == 1 && !H._turnCtx.MainMoved` -- the teleport is a
             // main-move option, so it is only taken while `H.MoveWhyNot` still
-            // passes (`ctx::cant_move(player_id).is_none()`).
-            if station >= 0 && ctx::cant_move(player_id).is_none() {
+            // passes (`rules_status::move_blocked(player_id).is_none()`).
+            if station >= 0 && rules_status::move_blocked(player_id).is_none() {
                 // 规则书（4）[手]: 「进入移动阶段并将本回合的[主要移动]改为[传送]到
                 // “bandori车站”并[结算]」 -- one move: the turn's main move, and it
                 // settles on arrival (the default).

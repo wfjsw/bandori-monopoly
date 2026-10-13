@@ -48,7 +48,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得1个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("lisa_goddess_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("lisa_goddess_gain")))?;
     Ok(())
 }
 
@@ -83,7 +83,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
@@ -112,7 +112,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
         return Ok(());
     }
     // 「若你这样做，此次传送不触发任何结算」

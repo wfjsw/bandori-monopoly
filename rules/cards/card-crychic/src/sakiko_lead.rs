@@ -23,7 +23,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「你的下次主要移动」 -- the lead rides the turn's main move, so the
     // C# then defers to `H.MoveWhyNot` (own turn, main move still available,
     // turn's move not skipped).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn sakiko_lead(player_id: i32) -> card_sdk::Asked {

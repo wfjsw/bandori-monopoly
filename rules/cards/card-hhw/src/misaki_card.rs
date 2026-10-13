@@ -75,9 +75,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         &list,
     )?;
     // 规则书[反击]: 「消耗所有火罐」 -- C# `H.SpendFire(i, H.Fire(i), "（美咲）")`.
-    let fire = ctx::fire(player_id);
+    let fire = rules_status::fire::get(player_id);
     if fire > 0 {
-        ctx::spend_fire(player_id, fire, &Msg::new(key!("misaki_card_pay")))?;
+        rules_status::fire::spend(player_id, fire, &Msg::new(key!("misaki_card_pay")))?;
     }
     // 规则书[反击]: 「传送至...玩家所在的格子并触发结算」
     let to = ctx::player_pos(who);

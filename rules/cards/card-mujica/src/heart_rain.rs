@@ -34,7 +34,7 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
             0
         };
         if layers > 0 {
-            ctx::give_stay(p, layers);
+            rules_status::stay::add(p, layers);
             any_stay = true;
         }
     }
@@ -44,7 +44,7 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
             player_id,
             &Msg::new(key!("heart_rain_fallback")).player_id("who", player_id),
         );
-        ctx::give_stun(player_id, 1);
+        rules_status::stun::add(player_id, 1);
         ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")))?;
     }
     Ok(())

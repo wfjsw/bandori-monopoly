@@ -565,7 +565,11 @@ impl Cx<'_> {
             return Ok(());
         }
         self.w.signals.push(Signal::StartTimer(i));
-        if self.w.st.players[i].stunned() {
+        // The status hosts' act / move gates (`docs/STATUS-HOSTS.md` §4).
+        // [晕眩] closes the whole turn; [停留] (unless [不可阻挡]) closes only
+        // the main move.
+        let gates = self.w.st.players[i].status_gates();
+        if !gates.act {
             self.w.log(
                 "status",
                 i as i32,
@@ -575,10 +579,7 @@ impl Cx<'_> {
             self.wait(1.2);
             return self.end_turn(i);
         }
-        // 「不可阻挡」 -- a player who cannot be stopped walks through a [停留]
-        // rather than losing the move to it.
-        let unstoppable = self.w.st.players[i].state_get(key::UNSTOPPABLE) > 0;
-        if self.w.st.players[i].stay() > 0 && !unstoppable {
+        if !gates.r#move {
             self.w.st.skip_move = true;
             self.w.log(
                 "status",
@@ -1967,7 +1968,9 @@ impl Cx<'_> {
 
     /// The CiRCLE reward: 2,000 money or one card. `start` is the move's 移动起点.
     fn circle_reward(&mut self, i: usize, landing: bool, start: i32) -> Flow<()> {
-        if self.w.st.players[i].exile() > 0 {
+        // [除外] 「玩家棋子不失为存在于任何格子上」 -- no CiRCLE reward while
+        // off board (the status hosts' on-board gate).
+        if !self.w.st.players[i].status_gates().on_board {
             return Ok(());
         }
         let at = self.w.st.players[i].pos;
@@ -2078,7 +2081,8 @@ impl Cx<'_> {
     /// records where the player stopped (the end-step buy/build gates ask).
     /// Returns false when the settle does not run at all.
     pub fn prep_land(&mut self, i: usize, at: usize, main: bool) -> bool {
-        if at >= self.data.tiles.len() || self.w.st.players[i].exile() > 0 || self.out(i) {
+        if at >= self.data.tiles.len() || !self.w.st.players[i].status_gates().on_board || self.out(i)
+        {
             return false;
         }
         if main {
@@ -3303,7 +3307,7 @@ impl Cx<'_> {
             return Ok(Paid::default());
         }
         if p.kind != PayKind::ForceBuy {
-            // The payer is gated by `can_pay` (out / stunned / exiled). The
+            // The payer is gated by `can_pay` (the status hosts' pay gate). The
             // payee is gated only by [晕眩] (rulebook 49: 「无法收付款」 --
             // stunned cannot *receive* either); exile is not a receiving block
             // -- 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 still
@@ -4411,9 +4415,12 @@ impl Cx<'_> {
     fn cannot_play(&self, i: usize, id: &str) -> Option<&'static str> {
         let s = &self.w.st.players[i];
         let stun_ok = self.rules.card_prop(id, crate::state::prop::PLAYABLE_STUNNED) != 0;
-        if s.exile() > 0 {
+        let gates = s.status_gates();
+        if !gates.on_board {
             Some("err.play_exiled")
-        } else if s.stunned() && !stun_ok {
+        } else if !gates.act && !stun_ok {
+            // [晕眩] 「无法使用…手卡的[手]效果」; `playableStunned` is the one
+            // exception in the pool.
             Some("err.play_stunned")
         } else if s.no_hand() > 0 {
             Some("err.play_no_hand")

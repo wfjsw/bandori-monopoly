@@ -21,7 +21,7 @@ pub const SIGNPOST: CardDef = CardDef::new(
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {

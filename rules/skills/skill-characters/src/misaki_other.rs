@@ -54,7 +54,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次经过"弦卷集团"（#29）格子后获得2火罐」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 2, &Msg::new(key!("misaki_other_gain")))?;
+    rules_status::fire::gain(player_id, 2, &Msg::new(key!("misaki_other_gain")))?;
     state::set(player_id, GROUP, 0);
     Ok(())
 }
@@ -70,7 +70,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("misaki_other_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("misaki_other_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(1, 10, "另一个我");
@@ -93,10 +93,10 @@ fn can_use_exile(player_id: i32) -> Option<Msg> {
 /// （3）「获得一层在你的下回合开始前移除的[除外]」 -- the exile wears off at the
 /// next turn start, which is what `expires: TurnStart` says.
 fn use_exile(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("misaki_other_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("misaki_other_spend")))? {
         return Ok(());
     }
-    ctx::give_exile(player_id, 1, -1);
+    rules_status::exile::send(player_id, 1, -1);
     ctx::log(player_id, &Msg::new(key!("misaki_other_exile")));
     Ok(())
 }

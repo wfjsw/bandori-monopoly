@@ -103,7 +103,7 @@ const ID: &str = "MyGO:（灯）不再迷茫";
 fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得两层仅能被自然流失效果移除的[停留]」 -- C#
     // `H.GiveStay(i, 2, i, CardName)`.
-    ctx::give_stay(player_id, 2);
+    rules_status::stay::add(player_id, 2);
     // 规则书（1）: 「仅能被自然流失效果移除的[停留]」 -- C# `H.IncV(i,
     // "lockedStay", 2)` marks the two layers as locked (cleared only by natural
     // decay).

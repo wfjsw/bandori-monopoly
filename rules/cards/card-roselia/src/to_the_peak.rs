@@ -45,7 +45,7 @@ fn why_not_build_on(player_id: i32, t: i32) -> Option<&'static str> {
     if ctx::houses_of(t) >= MAX_HOUSES {
         return Some("full");
     }
-    if !ctx::can_pay(player_id) {
+    if !rules_status::can_pay(player_id) {
         return Some("cannot_pay");
     }
     None
@@ -65,10 +65,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
         .collect();
     if !free.is_empty() {
         // C# `H.Moving(seat)` -- the walk branch needs a movable player.
-        if ctx::stun_of(player_id) > 0 {
+        if rules_status::stun::get(player_id) > 0 {
             return Some(Msg::new(key!("to_the_peak_stunned")));
         }
-        if ctx::stay_of(player_id) > 0
+        if rules_status::stay::get(player_id) > 0
             && ruleset_core::ctx::state::get(player_id, card_sdk::abi::state_key::UNSTOPPABLE) <= 0
         {
             // `H.Moving` lets a `[停留]` player through when 「不可阻挡」 is up.

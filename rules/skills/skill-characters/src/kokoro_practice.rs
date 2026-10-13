@@ -131,7 +131,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !is_ring(t) {
         let have = state::get(player_id, state_key::FIRE);
         if have > 0 {
-            ctx::spend_fire(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
+            rules_status::fire::spend(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
         }
     }
     Ok(())
@@ -155,7 +155,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("kokoro_practice_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("kokoro_practice_spend")))? {
         return Ok(());
     }
     if !ctx::gate(ctx::trigger::player_id(), card_sdk::abi::AbKind::Stop) {
@@ -171,6 +171,6 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 /// and before any settle, for every completed move -- a 「不触发结算」 move
 /// grants the pot too. `actor == owner && is_ring(tile.id)` is the pre.
 fn on_move_end(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
     Ok(())
 }

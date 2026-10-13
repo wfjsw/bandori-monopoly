@@ -52,7 +52,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     if trigger::abnormal_kind() != Some(AbKind::Stay) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("taki_meeting_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("taki_meeting_gain")))?;
     Ok(())
 }
 
@@ -92,7 +92,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&(uid, ref card)) = field.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("taki_meeting_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("taki_meeting_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);

@@ -38,7 +38,7 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
 
 fn want_to_grab(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得一层[停留]。」
-    ctx::give_stay(player_id, 1);
+    rules_status::stay::add(player_id, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("want_to_grab_note")).player_id("who", player_id),

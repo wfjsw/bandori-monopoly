@@ -31,7 +31,7 @@ pub const STAR_BEAT: CardDef = CardDef::new(
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 /// C# `H.MoneyHasDigit(seat, '5')` -- the decimal form of |money| contains 5.

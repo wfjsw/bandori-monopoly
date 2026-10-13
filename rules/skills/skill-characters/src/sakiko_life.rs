@@ -125,8 +125,8 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     let Some(&other) = ctx::players_on(at, player_id).first() else {
         return Ok(());
     };
-    let stay = ctx::stay_of(other);
-    let stun = ctx::stun_of(other);
+    let stay = rules_status::stay::get(other);
+    let stun = rules_status::stun::get(other);
     if stay + stun <= 0 {
         return Ok(());
     }
@@ -144,11 +144,11 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     // here (the self-side `give_*` raises `Abnormal` for the fire-pot clause).
     if stay > 0 {
         state::add(other, state_key::STAY, -stay);
-        ctx::give_stay(player_id, stay);
+        rules_status::stay::add(player_id, stay);
     }
     if stun > 0 {
         state::add(other, state_key::STUN, -stun);
-        ctx::give_stun(player_id, stun);
+        rules_status::stun::add(player_id, stun);
     }
     // 「每获得一层停留，眩晕，你获得1500资金」
     ctx::gain(
@@ -177,7 +177,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     ) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("sakiko_life_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("sakiko_life_gain")))?;
     Ok(())
 }
 

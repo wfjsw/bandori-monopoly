@@ -48,7 +48,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次有其他玩家在"流星堂"抽取事件时获得一个[火罐]」.
 fn on_event(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("arisa_bonsai_gain")))?;
     Ok(())
 }
 
@@ -66,7 +66,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     // 「抽取一个视为在"流星堂"抽取的事件」 -- the draw is tagged as the
     // station's, which is what the `event` hook above reads.
     ctx::draw(player_id, 1)?;
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_end")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("arisa_bonsai_end")))?;
     Ok(())
 }
 
@@ -87,7 +87,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if ctx::spend_fire(player_id, 2, &Msg::new(key!("arisa_bonsai_spend")))? {
+    if rules_status::fire::spend(player_id, 2, &Msg::new(key!("arisa_bonsai_spend")))? {
         ctx::add_band_crystals(player_id, 1, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("arisa_bonsai_crystal")));
     }

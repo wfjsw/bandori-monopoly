@@ -76,7 +76,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("mutsumi_crychic_gain")))?;
     Ok(())
 }
 
@@ -107,7 +107,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if face < 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
         return Ok(());
     }
     ctx::set_fixed_roll(face);

@@ -30,7 +30,7 @@ fn debut_success(player_id: i32) -> card_sdk::Asked {
 /// C# `CardDebutSuccess.After` -- the scheduled turn-end body.
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」
-    ctx::give_stun(player_id, 1);
+    rules_status::stun::add(player_id, 1);
     ctx::add_band_crystals(player_id, 1, 0);
     Ok(())
 }
