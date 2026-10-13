@@ -154,7 +154,9 @@ fn m02_two_counters_on_one_roll() {
 
 // 规则书: 若宫伊芙 (2): 「投掷前…Y个正面[P✽P粉丝]变反…增加Yd4」.
 // Y.O.L.O: +1d4 after the roll.
-#[ignore = "DISCREPANCY: 若宫伊芙 (2) fan flip + Y.O.L.O dice accounting: pos 5 instead of 8"]
+// Drive shape matches the green twins (`g10_eve_plus_yd4_on_a_2d20_move`,
+// `g32`): Eve's (2) is an `ask_number` 0..=up choice prompt, so the Y answer
+// is the option *index* (Y = 2 is `answer(0, 2)`), not a title substring.
 #[test]
 fn m03_eve_then_yolo() {
     let mut t = Table::new(&["若宫伊芙", "花园多惠"]);
@@ -164,26 +166,23 @@ fn m03_eve_then_yolo() {
     t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
         name: "P✽P粉丝(正)".into(),
         value: 5,
-    
+
         instance: None,
     });
     t.give(0, &["AG:Y.O.L.O"]);
     // Before the roll: flip Y = 2 fans for +2d4 (loaded 1, 1). d20 = 4.
     t.dice(&[4, 1, 1, 2]);
     t.roll(0).unwrap();
-    // Y.O.L.O adds 1d4 = 2.
+    // Y.O.L.O adds 1d4 = 2; Eve's (2) asks how many fans to flip (Y = 2).
     loop {
-        let Some(_) = t.prompt() else { break };
+        let Some(p) = t.prompt() else { break };
         if t.counteract_offered("AG:Y.O.L.O") {
             t.counteract(0, "AG:Y.O.L.O").unwrap();
+        } else if p.kind == "choice" && t.prompt_refers("eve_unify") {
+            // Eve's ask_number 0..=up: option index == Y.
+            t.answer(0, 2).unwrap();
         } else {
-            // 若宫伊芙 (2) pre-roll window
-            let k = t.option("若宫伊芙").or_else(|| t.option("粉丝"));
-            if let Some(k) = k {
-                t.answer(0, k).unwrap();
-            } else {
-                t.decline();
-            }
+            t.decline();
         }
     }
     eprintln!(
@@ -192,6 +191,11 @@ fn m03_eve_then_yolo() {
         t.p(0).tokens
     );
     assert_eq!(t.pos(0), 8, "4 + 2 + 2");
+    assert_eq!(
+        t.token(0, "P✽P粉丝(正)"),
+        3,
+        "flipped 2 of the 5 face-up fans"
+    );
 }
 
 // =====================================================================
@@ -420,7 +424,10 @@ fn m08_ran_undoes_forced_move() {
 // =====================================================================
 
 // 规则书: RAS band (1): 「每回合可选择只获得第一次受到的[异常移动效果]」.
-#[ignore = "DISCREPANCY: RAS band (1) does not let P0 decline the second abnormal-move effect (err.play_phase / no window)"]
+// Drive matches the green saki_move twins: the target pick is a `saki_move_title`
+// choice (whose options carry `who`), the direction is `saki_move_dir` option 0.
+// The second abnormal (雨啊's [停留]) is dropped by the band skill's
+// `AbnormalGuard` (the declaration gate), not the too-late `Abnormal` outcome.
 #[test]
 fn m09_ras_band_first_abnormal_only() {
     let mut t = Table::new(&["和奏瑞依", "花园多惠", "户山香澄"]);
@@ -431,15 +438,14 @@ fn m09_ras_band_first_abnormal_only() {
     t.give_play(1, "Mujica:祥，移动").unwrap();
     loop {
         let Some(p) = t.prompt() else { break };
-        if p.kind == "player" {
+        if p.title.key().contains("saki_move_title") {
+            answer_player(&mut t, 1, 0);
+        } else if p.title.key().contains("saki_move_dir") {
+            t.answer(1, 0).unwrap();
+        } else if p.kind == "player" {
             answer_player(&mut t, 1, 0);
         } else {
-            let k = t.option("3").or_else(|| t.option("前"));
-            if let Some(k) = k {
-                t.answer(1, k).unwrap();
-            } else {
-                t.decline();
-            }
+            t.decline();
         }
     }
     t.dice(&[1, 1]);
@@ -460,11 +466,6 @@ fn m09_ras_band_first_abnormal_only() {
             }
         }
     }
-    eprintln!(
-        "m09 record: P0 pos = {} (moved 3), stay = {} (want 0)",
-        t.pos(0),
-        t.state(0, "stay")
-    );
     assert_eq!(t.pos(0), 3, "moved 3");
     assert_eq!(t.state(0, "stay"), 0, "no stay from 雨啊");
 }
@@ -963,7 +964,10 @@ fn m21_tomoe_shifts_start() {
 
 // 规则书: MyGO band (2): 「于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」.
 // 想要成为人类: 「每当你的移动掷骰小于X，为此卡添加一个奇迹水晶」.
-#[ignore = "DISCREPANCY: MyGO band (2) move-1 replacement does not fire (P0 moves the full roll)"]
+// Drive shape matches the green twin `band_move_one_for_a_crystal`: the press
+// is a skill button *before* the roll (`t.skill`), not a window inside
+// `t.roll`. With 1 crystal only the move-1 half is available, so it runs
+// without a which-effect prompt and the roll is never taken.
 #[test]
 fn m22_mygo_band_move1() {
     let mut t = Table::new(&["高松灯", "花园多惠"]);
@@ -974,17 +978,12 @@ fn m22_mygo_band_move1() {
     t.set_crystals(0, &band, 1);
     // 想要成为人类 (X = 10) on the field.
     t.place_raw(0, "CRYCHIC:想要成为人类");
-    // Replace the roll with a 1-tile move.
+    // Replace the roll with a 1-tile move (the press runs the move itself).
     t.dice(&[15]);
-    t.roll(0).unwrap();
+    t.skill(0, &band).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
-        let k = t.option("1").or_else(|| t.option("迷途之星"));
-        if let Some(k) = k {
-            t.answer(0, k).unwrap();
-        } else {
-            t.decline();
-        }
+        t.decline();
     }
     assert_eq!(t.pos(0), 1, "moves 1");
     assert_eq!(
@@ -1202,7 +1201,6 @@ fn m28a_my_own_problem() {
     assert_eq!(t.pos(0), 8, "moves 1 further from P1");
 }
 
-#[ignore = "DISCREPANCY: 是我自己的问题 still fires after an abnormal move effect (the sheet says it does not)"]
 #[test]
 fn m28b_my_own_problem_after_forced_move() {
     let mut t = Table::vanilla(2);
@@ -1214,17 +1212,24 @@ fn m28b_my_own_problem_after_forced_move() {
     t.give_play(1, "Mujica:祥，移动").unwrap();
     loop {
         let Some(p) = t.prompt() else { break };
-        if p.kind == "player" {
+        if p.title.key().contains("saki_move_title") {
+            // Target pick (`ask_player` is a choice whose options carry `who`).
+            answer_player(&mut t, 1, 0);
+        } else if p.title.key().contains("saki_move_dir") {
+            // Direction: option 0 is 向前 (the green twin answers 0).
+            t.answer(1, 0).unwrap();
+        } else if p.kind == "player" {
             answer_player(&mut t, 1, 0);
         } else {
-            let k = t.option("3").or_else(|| t.option("前"));
-            if let Some(k) = k {
-                t.answer(1, k).unwrap();
-            } else {
-                t.decline();
-            }
+            t.decline();
         }
     }
+    assert_eq!(t.pos(0), 8, "forced 3 forward from 5");
+    assert_eq!(
+        t.state(0, "abnormalHit"),
+        1,
+        "the forced move latched the abnormal-hit"
+    );
     // P0's main move: the card has no effect.
     until_turn(&mut t, 0);
     t.dice(&[1]);

@@ -4638,6 +4638,10 @@ impl<M: CardModules> RulesBridge<M> {
             w.turn.abnormal.resize(s + 1, 0);
         }
         w.turn.abnormal[s] += 1;
+        // Longer-lived latch for 「若受到[异常移动效果]影响，此卡不生效」
+        // (是我自己的问题 (2)): survives across turns until the player's next
+        // [主要移动] completes.
+        w.state_set(player_id, game_core::state::key::ABNORMAL_HIT, 1);
         cx.swap_world(w);
         Ok(true)
     }

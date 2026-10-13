@@ -442,6 +442,11 @@ fn g14_amekomi_replaces_a_started_backward_walk() {
 // 规则书 (轮符雨): 「使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]」.
 // RULING: does 「额外进行一次[触发结算]」 re-run a *replaced* settle? Assert
 // 2 stays. The engine already grants both stays, so this is a live pass.
+//
+// Glossary 51: 「[停留]=无法移动」 -- a stay gained in 运营 locks the main move
+// (see `rain_stay_blocks_this_turn_move`). This test is about the *settle
+// replacement*, so the mover is [不可阻挡] (「无视已存在的[停留]」) to keep the
+// walk legal while still counting 轮符雨's stay layer.
 #[test]
 fn g15_parking_space_settle_replaced_plus_rain_extra_settle() {
     let mut t = Table::new(&["都筑诗船", "仓田真白"]);
@@ -452,6 +457,8 @@ fn g15_parking_space_settle_replaced_plus_rain_extra_settle() {
     assert_eq!(space, 42);
     // Parking Space already on Space.
     place_on_tile(&mut t, 0, "通用:[都筑诗船]Parking Space", space);
+    // 「不可阻挡」 so 轮符雨's stay does not lock the main move (glossary 51).
+    t.set_state(0, "unstoppable", 1);
     t.give(0, &["MyGO:轮符雨"]);
     t.play(0, "MyGO:轮符雨").unwrap();
     drain(&mut t);

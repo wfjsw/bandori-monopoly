@@ -1184,7 +1184,9 @@ or A/B items that need a wider surface than this batch:
 * **A (partly done):** 选择自己的舞台 vs a self-inflicted [传送]
   (`choose_your_stage_answers_an_abnormal_move`) -- **fixed and
   un-ignored 2026-10-10**. 安可 vs an overlapping teleport
-  (`ix_encore_blocks_overlap_teleport`) is still ignored (pp).
+  (`ix_encore_blocks_overlap_teleport`) -- **fixed and un-ignored
+  2026-10-13** (`closeout-2-movement`; the window already opened, the test
+  drive just never declared 安可).
 * **A, engine:** 要乐奈 (3) / 凑友希那 (3) stop-pot landing (`t.pos == 36`)
   and the `cross_move` stop-pot cases -- `plan::set_stop_at` during a
   `PassTile` hook does not land the piece on the hook's tile.
@@ -1199,7 +1201,9 @@ or A/B items that need a wider surface than this batch:
 * **C:** everything whose `#[ignore]` says `RULING` / `CROSS-AGENT`, plus the
   §6 open list and the Timing / order block. Collected as numbered questions
   in the report.
-* **B, wider:** NNM (2) / MyGO band (2) multi-activation (§6 item 8);
+* **B, wider:** NNM (2) / MyGO band (2) multi-activation (§6 item 8 -- MyGO
+  half **fixed 2026-10-13** in `closeout-2-movement`, one `On::Play` with a
+  which-effect prompt);
   笑容大游行 stack overflow; 网络链接异常 drop-one (c05 un-ignored
   2026-10-10; g19 still sees the whole-card negate on the join path);
   花园多惠 (2) cancel window; 骰子已经掷下 shut-window; the remaining
@@ -1297,3 +1301,48 @@ High-severity class-A window items. 9 tests un-ignored, green twice.
 * **l01 open:** five-link war -- E (网络链接异常) should cancel A's designation
   (P0 pays nothing to P1) and P2 should still pay X. Currently both wars charge
   and P2 skips X. Ignore reason updated.
+
+## Movement batch (2026-10-13, `closeout-2-movement`)
+
+Six ignored DISCREPANCY tests un-ignored and green. Root causes split
+**D** (test drive) from **A** (engine / card):
+
+* **D, `m03_eve_then_yolo` (MOVE-10):** Eve's (2) is an `ask_number` 0..=up
+  choice (options are `ask.intOption`); the old matcher looked for 「若宫伊芙」
+  /「粉丝」 in the options and declined. Drive is `answer(0, 2)` (Y = 2), same
+  as the green twins `g10` / `g32`. Additive timing Eve `RollAfter` → Y.O.L.O
+  `MoveRoll` was already correct (4 + 2d4 + 1d4 = 8).
+* **D, `m22_mygo_band_move1` (MOVE-03):** 「于移动掷骰前选择移动1格以替代
+  移动掷骰」 is a skill press *before* the roll (`t.skill`), not a window
+  inside `t.roll`. The multi-activation half was already merged into one
+  `On::Play` with a which-effect prompt (green twins `band_move_one_…` /
+  `band_draw_…`).
+* **D + A, `ix_encore_blocks_overlap_teleport` (CH-01):** the self-[传送]
+  already opened the abnormal [反击] window (green twin
+  `choose_your_stage_answers_an_abnormal_move`); the test just `drain`ed
+  instead of declaring 安可. Drive now plays the counteraction.
+* **A, `rain_stay_blocks_this_turn_move` (MOVE-05):** glossary 51
+  「[停留]=无法移动」 is rulebook. `give_stay` / `give_exile` now maintain
+  the `skip_move` latch as a consequence of the state (set on gain, clear when
+  the last layer drops and no [除外] holds the move); [不可阻挡] 「无视已存在
+  的[停留]」 keeps the walk legal. C-Q7's *mid-walk* half (stay gained after
+  the roll) is unchanged. Green twins that moved after a stay grant
+  (`rain_extra_settle_at_turn_end`, `rain_day_drains_one_crystal_per_turn_end`,
+  `g15_parking_space_…`) now use [不可阻挡] or skip the roll.
+* **A + D, `m28b_my_own_problem_after_forced_move` (MOVE-11):** 「（2）若受到
+  [异常移动效果]影响，此卡不生效」 now gates the [反击] offer
+  (`can_counteract`). The signal is a longer-lived `abnormalHit` latch (set
+  when an abnormal lands, cleared when the player's next [主要移动] completes)
+  because the force-move is on *another* player's turn and `TurnCtx::abnormal`
+  is per calendar turn. The saki_move drive also had to answer the target pick
+  (`saki_move_title` choice, not `kind == "player"`) and the direction
+  (`saki_move_dir` option 0) — without that the force-move never landed.
+* **A + D, `m09_ras_band_first_abnormal_only` (MOVE-12):** RAS band (1)'s
+  drop of the second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late
+  to cancel) with pre `actor == owner` (the causer). Moved to
+  `On::Gate(&[GateKind::AbnormalGuard])` with pre `target == owner` (the
+  recipient). Same saki_move drive fix as MOVE-11.
+
+**Pre-existing (not this batch):** `inter_yolo_pushes_haneoka_over_20` fails
+with `err.play_timing` on master source too — `t.play(0, "AG:Y.O.L.O")` is a
+counteract-only card with no `On::Play`. Left as-is.

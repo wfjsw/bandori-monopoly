@@ -755,6 +755,12 @@ impl Cx<'_> {
             self.w.set_slot(i as i32, "lastWalk", plan.total + 1);
         }
         if as_main {
+            // 「若受到[异常移动效果]影响，此卡不生效」 (是我自己的问题 (2)):
+            // the longer-lived abnormal latch is consumed by the main move it
+            // would suppress -- the settle-before window above already read it.
+            if let Some(p) = self.w.st.players.get_mut(i) {
+                p.state_set(key::ABNORMAL_HIT, 0);
+            }
             self.w.st.step = stage::END;
         }
         self.wait(1.2);
@@ -1261,6 +1267,12 @@ impl Cx<'_> {
             if m.kind != MoveKind::Teleport {
                 self.w.set_slot(i as i32, "lastWalk", m.total + 1);
             }
+        }
+        // 「若受到[异常移动效果]影响，此卡不生效」 (是我自己的问题 (2)):
+        // the longer-lived abnormal latch is consumed by the main move it
+        // would suppress -- the settle-before window above already read it.
+        if let Some(p) = self.w.st.players.get_mut(i) {
+            p.state_set(key::ABNORMAL_HIT, 0);
         }
         self.w.st.step = stage::END;
         self.wait(1.2);
