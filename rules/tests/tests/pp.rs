@@ -1125,7 +1125,6 @@ fn chiasa_exclusive_places_and_splits_2000() {
 
 /// 规则书: 「（2）每回合开始时必须进行1次投掷1d4…获得以下角色的（2）技能」(冰川日菜)
 #[test]
-#[ignore = "DISCREPANCY: book says 冰川日菜's (2) rolls 1d4 each turn start and borrows a skill; skill.hinaLottery.borrowed stays -1"]
 fn hina_skill_2_borrows_skill() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "冰川日菜");
@@ -1133,6 +1132,7 @@ fn hina_skill_2_borrows_skill() {
     t.dice(&[2]);
     t.begin_turn(0);
     drain(&mut t);
-    assert_eq!(t.state(0, "skill.hinaLottery.borrowed"), 2);
+    assert_eq!(t.state(0, "skill.hinaLottery.borrowed"), 1);
+    assert!(t.on_field(0, "skill:白鹭千圣:保持坦率的你"));
 }
 
