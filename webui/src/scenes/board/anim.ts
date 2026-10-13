@@ -59,7 +59,7 @@ export interface LogLine {
 
 /** A turn-stage change, queued behind the events that led to it. `step` is the
  *  engine's stage number (1..4 = 开始 / 运营 / 移动 / 结束). */
-interface StageMark { step: number; newTurn: boolean; label?: string }
+interface StageMark { step: number; newTurn: boolean; label?: string; turn?: number }
 
 type Item = { ev: MatchEvent } | { mark: StageMark };
 
@@ -78,6 +78,11 @@ export class Animator {
    *  reach 结束 in one update; logging the stage here keeps it after the events
    *  that led to it. Null means the queue has caught up with the state. */
   stage: number | null = null;
+  /** The seat whose turn the animation is showing. The state already holds
+   *  the next turn while the previous turn's events are still playing; the
+   *  board shows this seat as current until the new-turn mark plays. Null
+   *  means the queue has caught up with the state. */
+  turn: number | null = null;
   /** Token positions while animating (null: use the state). */
   pos: number[] | null = null;
   dice = 0;
@@ -235,8 +240,9 @@ export class Animator {
    *  the events that produced it (solo `pump` and the SSE frames both send
    *  events first), so queueing the change here plays it after them; until it
    *  plays, the log holds the stage the animation started in. */
-  stageTo(from: number, mark: StageMark): void {
+  stageTo(from: number, mark: StageMark, fromTurn?: number): void {
     if (this.stage == null) this.stage = from;
+    if (this.turn == null && mark.newTurn && fromTurn !== undefined) this.turn = fromTurn;
     this.queue.push({ mark });
     void this.run();
   }
@@ -246,6 +252,7 @@ export class Animator {
     // A new turn starts from no roll -- don't leave the previous player's face
     // sitting on the dice.
     this.dice = 0;
+    if (m.turn !== undefined) this.turn = m.turn;
     // Announce whose turn it is once. The engine's 开始 → 运营 transition
     // stays in the log and does not add another popup or animation delay.
     this.toStage(1, true);
@@ -444,6 +451,7 @@ export class Animator {
     this.pos = null;
     // Caught up: the last stage played is the state's own.
     this.stage = null;
+    this.turn = null;
     this.bump();
   }
 
@@ -676,7 +684,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
           const newTurn = prev.turn !== now.turn;
           const who = namesOf(now).playerId(now.turn);
           const label = newTurn ? (now.turn === v.playerId ? tr("anim.yourTurn") : tr("anim.turnOf", { who })) : undefined;
-          a.stageTo(prev.step, { step: now.step, newTurn, label });
+          a.stageTo(prev.step, { step: now.step, newTurn, label, turn: now.turn }, prev.turn);
         }
       },
       (e) => a.push(e),
