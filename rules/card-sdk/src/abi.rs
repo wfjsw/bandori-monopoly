@@ -683,6 +683,11 @@ pub mod prop {
     /// 「[指定][使用者]以外的所有玩家」 / 「其他玩家[分摊]」 shape). Default `0`
     /// (names nobody).
     pub const DESIGNATES: &str = "designates";
+    /// 「此卡不受任何其他效果影响」: `1` = the placed instance is immune
+    /// (`FieldCard.immune`). Stamped at placement from the card's static props
+    /// so a `place_raw` / engine placement sees it without running the play
+    /// body. Mirrors `game_core::state::prop::IMMUNE`.
+    pub const IMMUNE: &str = "immune";
     /// Virtual **rent** house count (「房屋数视为…」).
     /// Presence is the override -- a house count of `0` is a legitimate value,
     /// so the read is `props.get`, not `unwrap_or(0)`. Real `st.houses` is

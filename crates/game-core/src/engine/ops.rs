@@ -1077,6 +1077,13 @@ impl World {
         // A band skill's instance is the 「乐队卡 / 团卡」 crystal holder; see
         // [`Self::band_skill_uid`].
         let band_skill = data.is_band_skill(card);
+        // 「此卡不受任何其他效果影响」 is a static [特] property, not a play-body
+        // side effect -- `place_raw` and engine placement must see it too.
+        let immune = props
+            .get(crate::state::prop::IMMUNE)
+            .copied()
+            .unwrap_or(0)
+            != 0;
         let inst = FieldCard {
             uid,
             card: card.to_string(),
@@ -1087,7 +1094,7 @@ impl World {
             cp: 0,
             counters: BTreeMap::new(),
             face_down: false,
-            immune: false,
+            immune,
             props,
             band_skill,
             extra: false,
