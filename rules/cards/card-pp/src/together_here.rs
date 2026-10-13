@@ -7,6 +7,7 @@
 //!
 //! X is 5, +ceil((down - up)/2) while down > up; [共鸣] cuts X by 5 and draws.
 
+use card_sdk::abi::TriggerKind;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TOGETHER_HERE: CardDef =
@@ -29,8 +30,13 @@ fn together_here(player_id: i32) -> card_sdk::Asked {
         x -= 5;
         ctx::draw(player_id, 1)?;
     }
-    // 规则书[手]: 「将X个反面[P✽P粉丝]变正」
+    // 规则书[手]: 「将X个反面[P✽P粉丝]变正」 -- the flip effect's X is the
+    // clause's X, even when fewer are owned. `FlipEffect` runs before the
+    // counters move so a listener (PP band (2)) still sees the pre-flip count.
     let flip = x.max(0).min(down);
+    if x > 0 {
+        ctx::raise(player_id, TriggerKind::FlipEffect, x)?;
+    }
     if flip > 0 {
         ctx::add_tok(player_id, FANS_DOWN, -flip, i32::MAX)?;
         ctx::add_tok(player_id, FANS_UP, flip, i32::MAX)?;
