@@ -94,4 +94,53 @@ fn main() {
     writeln!(s, "    fn op_trig_name(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::trig_name, [p, n, 0, 0, 0, 0])) }}").unwrap();
     writeln!(s, "}}").unwrap();
     fs::write(&out, s).unwrap();
+
+    // Fail the build if `HostOps` grew a method SymOps does not generate.
+    // The flash family (op_flash / op_no_flash / op_flash_card /
+    // op_flash_card_keyed / op_flash_tile) sat in the trait but not in
+    // ARRAY_OPS on the merge-base, so `impl HostOps for SymOps` was missing
+    // five required methods -- a silent compile break until someone built
+    // rules-kani. Keep ARRAY_OPS + the custom-arity list honest.
+    let shims = fs::read_to_string(
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
+            .join("../../crates/game-rules/src/native_shims.rs"),
+    )
+    .expect("read native_shims.rs");
+    let trait_body = shims
+        .split("pub trait HostOps {")
+        .nth(1)
+        .map(|s| s.split("\n}").next().unwrap_or(""))
+        .unwrap_or("");
+    // Custom-arity names already written above (not in ARRAY_OPS).
+    let custom = [
+        "op_place_mark", "op_count_marks_f", "op_bump_mark_f", "op_remove_marks_f",
+        "op_mark_src_at", "op_mark_instance_at", "op_counter_self", "op_add_counter_self",
+        "op_set_counter_self", "op_counter_at", "op_add_counter_at", "op_card_counter",
+        "op_add_card_counter", "op_count_held", "op_add_held", "op_count_held_name",
+        "op_set_held_name", "op_move_units", "op_self_uid", "op_send", "op_msg_sender_uid",
+        "op_msg_sender_seat", "op_msg_name", "op_msg_a", "op_msg_b", "op_msg_c", "op_msg_tile",
+        "op_msg_seat", "op_msg_text", "op_msg_reply", "op_trig_name",
+    ];
+    let mut generated: Vec<String> = ARRAY_OPS.iter().map(|n| format!("op_{n}")).collect();
+    generated.extend(custom.iter().map(|s| s.to_string()));
+    let mut missing = Vec::new();
+    let mut start = 0usize;
+    while let Some(rel) = trait_body[start..].find("fn op_") {
+        let at = start + rel + 3;
+        let rest = &trait_body[at..];
+        let end = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        let name = &rest[..end];
+        if !generated.iter().any(|g| g == name) {
+            missing.push(name.to_string());
+        }
+        start = at + end;
+    }
+    if !missing.is_empty() {
+        panic!(
+            "rules-kani/build.rs: HostOps methods missing from ARRAY_OPS/custom list: {missing:?}. \
+             Add them to ARRAY_OPS (or the custom-arity block) so SymOps implements HostOps."
+        );
+    }
 }
