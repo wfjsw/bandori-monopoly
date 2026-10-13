@@ -248,37 +248,31 @@ fn gen_body_dispatch() {
             let _ = writeln!(s, "/// `{path}` — named const so CBMC resolves one target.");
             s.push_str("#[cfg(kani)]\n#[inline(never)]\n");
             let _ = writeln!(s, "fn call_card_{idx}(entry_index: usize, player: i32) -> Asked {{");
-            // Pilot pattern (91fe463): `match &CONST.on[0] { On::Play(_,_,f) => f(p) }`.
-            // A **literal** index into the named const's `on` lets CBMC resolve
-            // the pointer from that initialiser to one target. `on.get(sym)`
-            // keeps the whole address-taken set (874).
+            // EXACT pilot pattern (91fe463): match `&CONST.on[0]` (literal
+            // index) and call `f(player)` inside the arm.
+            let _ = writeln!(s, "    let card = &{path};");
             s.push_str("    if entry_index == 0 {\n");
-            let _ = writeln!(s, "        let card = &{path};");
             s.push_str("        return match &card.on[0] {\n");
-            s.push_str("            On::Play(_, _, f)\n");
-            s.push_str("            | On::Counteract(_, _, _, f)\n");
-            s.push_str("            | On::Hook(_, _, _, f)\n");
-            s.push_str("            | On::Gate(_, _, _, f)\n");
-            s.push_str("            | On::RollPlan(_, _, f)\n");
-            s.push_str("            | On::AtEnd(_, _, f)\n");
-            s.push_str("            | On::Settle(_, _, f)\n");
-            s.push_str("            | On::Message(_, _, _, f) => f(player),\n");
+            s.push_str("            On::Play(_, _, f) => f(player),\n");
+            s.push_str("            On::Counteract(_, _, _, f) => f(player),\n");
+            s.push_str("            On::Hook(_, _, _, f) => f(player),\n");
+            s.push_str("            On::Gate(_, _, _, f) => f(player),\n");
+            s.push_str("            On::RollPlan(_, _, f) => f(player),\n");
+            s.push_str("            On::AtEnd(_, _, f) => f(player),\n");
+            s.push_str("            On::Settle(_, _, f) => f(player),\n");
+            s.push_str("            On::Message(_, _, _, f) => f(player),\n");
             s.push_str("        };\n");
             s.push_str("    }\n");
-            let _ = writeln!(s, "    let card: &'static card_sdk::CardDef = &{path};");
-            s.push_str("    let on = match card.on.get(entry_index) {\n");
-            s.push_str("        Some(o) => o,\n");
+            s.push_str("    match card.on.get(entry_index) {\n");
+            s.push_str("        Some(On::Play(_, _, f))\n");
+            s.push_str("        | Some(On::Counteract(_, _, _, f))\n");
+            s.push_str("        | Some(On::Hook(_, _, _, f))\n");
+            s.push_str("        | Some(On::Gate(_, _, _, f))\n");
+            s.push_str("        | Some(On::RollPlan(_, _, f))\n");
+            s.push_str("        | Some(On::AtEnd(_, _, f))\n");
+            s.push_str("        | Some(On::Settle(_, _, f))\n");
+            s.push_str("        | Some(On::Message(_, _, _, f)) => f(player),\n");
             let _ = writeln!(s, "        None => fail_entry_oob({idx}, entry_index),");
-            s.push_str("    };\n");
-            s.push_str("    match on {\n");
-            s.push_str("        On::Play(_, _, f)\n");
-            s.push_str("        | On::Counteract(_, _, _, f)\n");
-            s.push_str("        | On::Hook(_, _, _, f)\n");
-            s.push_str("        | On::Gate(_, _, _, f)\n");
-            s.push_str("        | On::RollPlan(_, _, f)\n");
-            s.push_str("        | On::AtEnd(_, _, f)\n");
-            s.push_str("        | On::Settle(_, _, f)\n");
-            s.push_str("        | On::Message(_, _, _, f) => f(player),\n");
             s.push_str("    }\n");
             s.push_str("}\n\n");
         }
