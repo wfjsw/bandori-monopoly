@@ -468,22 +468,36 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **question**: C-Q8.
 
 ## FUZZ-01 — determinism / save-restore / unknown card id / negation totality
+- **status**: **fixed** (2026-10-13, `closeout-5-engine`, `fix: FUZZ-01 …`) —
+  5 of 6 shapes un-ignored and green:
+  * `save_restore_break` — root cause was `TurnCtx::plan` (`MoveCtx`) marked
+    `#[serde(skip)]`, so a restore dropped card-shaped roll tables and the next
+    roll diverged (pinned seed walked 36 vs 4). `MoveCtx` is now serialized
+    (`SAVE_VERSION` 6 → 7).
+  * `negation_not_total` — harness gap: the declare was hardcoded to seat 1
+    even when the [反击] window asked another seat, and a stunned seat silently
+    skipped the declare. `check_negation` now uses a vanilla board and declares
+    as the asked seat; the invariant (negated GREAT leaves money unchanged)
+    holds.
+  * `monotonicity_break` — harness measured net board displacement, which a
+    longer walk can shrink by landing on a teleporting tile. Now measures
+    `turn.main_steps` (walk length) on a vanilla board.
+  * `determinism_break` / `unknown_card_id` — original seeds no longer
+    reproduce (40-seed sweep clean); converted to green invariant pins.
+  * `multiply_order_matters` stays `#[ignore]` under **MONEY-01 / C-Q1** (the
+    rulebook gives no composition rule for two live money multipliers).
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (breaks every sim / replay)
 - **suggested batch**: fuzz/determinism
 - **locations**
-  - `rules/tests/tests/fuzz_found.rs:85` `unknown_card_id` (unknown card id in hand/draw/discard/field)
-  - `rules/tests/tests/fuzz_found.rs:128` `determinism_break` (same seed + answers diverge)
-  - `rules/tests/tests/fuzz_found.rs:142` `save_restore_break` (save/restore diverges)
-  - `rules/tests/tests/fuzz_found.rs:160` `negation_not_total` (negating a no-target [手] did not reduce to never playing it)
-  - `rules/tests/tests/fuzz_found.rs:186` `monotonicity_break` (a +N roll modifier shortened a move)
+  - `rules/tests/tests/fuzz_found.rs` (5 green pins; `multiply_order_matters` ignored)
+  - `rules/tests/tests/fuzz/meta.rs` `check_negation` / `check_monotonicity` (harness fixes)
+  - `crates/game-core/src/engine/move_ctx.rs` / `world.rs` (`TurnCtx::plan` serde)
   - **D**: `card_trap_reachable`, `immunity_gap` ignores already removed
   - `rules/tests/tests/inline_provider.rs:247` B2 HostRequest learn-pass gap (see HOST-01 -- top-level pay path now pinned green; nested-settle remainder)
 - **rulebook**: general engine invariants (same answers → same world; save/restore round-trip; negation is total; +N never shortens).
-- **current**: each shape is a latent fuzz repro still ignored.
-- **expected**: green under the existing `fuzz_found` assertions.
-- **note**: may share one pipeline root cause (guest/world overlay + HostRequest ordering); investigate as one batch. HOST-01's top-level rebase is in (see its entry); the nested-settle remainder is the open part.
+- **expected**: green under the existing `fuzz_found` assertions. **Confirmed** (except C-Q1).
 
 ## HOST-01 — HostRequest B2 equivalence gap (learn pass vs live+host_effects)
 - **kind**: ABI defect / implementation bug
@@ -1213,40 +1227,59 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: `ctx` can read the data file, or the table is generated.
 
 ## HOST-02 — 时点流程 tables missing from `data/rules.txt` + missing timing kinds
+- **status**: **partial** (2026-10-13, `closeout-5-engine`) — the four 时点流程
+  tables (开始游戏 / 回合流程 / 行动阶段 / 支付阶段) are now in
+  `data/rules.txt` verbatim from `docs/rulebook/rulebook.txt`. Still open:
+  missing trigger kinds 行动阶段 3 / 6 / 11, 支付阶段 3 (「支付计算后」), and
+  支付阶段 1 / 5 / 7 shaping (one `effect` raise carries window 5's power at
+  window 1's position).
 - **kind**: rulebook divergence / engine surface
 - **class**: A (sync the tables) + B (timing kinds)
 - **severity**: medium
 - **suggested batch**: fuzz/determinism / settle stages
 - **locations**
-  - TEST-FINDINGS "Rulebook doc check" — `data/rules.txt` stubs 开始游戏 / 回合流程 / 行动阶段 / 支付阶段
+  - `data/rules.txt` 时点流程 (tables synced)
   - missing trigger kinds: 行动阶段 3 / 6 / 11, 支付阶段 3 (「支付计算后」)
   - 支付阶段 1 / 5 / 7 shaping (one `effect` raise carries window 5's power at window 1's position)
 - **expected**: sync the tables without rewording; raise the missing windows when a card hooks them.
 
 ## HOST-03 — guard-side kind-rejection lint (G3)
+- **status**: **already landed** (stale backlog row) — `cargo run -p game-rules
+  --example precheck` is the G3 lint (`docs/GUARDS.md` §10.1); it flags guards
+  that still reject on the trigger kind. `rules/cond/src/lib.rs:109` still
+  carries a leftover `TODO` note pointing at the same item.
 - **kind**: tooling gap
 - **class**: A
 - **severity**: low
 - **suggested batch**: fuzz/determinism
 - **locations**
-  - `rules/cond/src/lib.rs:106` (`precheck` lint helper, GUARDS.md §5.2)
+  - `crates/game-rules/examples/precheck.rs`
+  - `docs/GUARDS.md` §5.2 / §10.1
 
 ## HOST-04 — `tile_kind` / ring query missing on the ABI
+- **status**: **fixed** (2026-10-13, `closeout-5-engine`, `fix: HOST-04 …`) —
+  stale row: `ctx::is_ring` has been on the ABI since v9 (`TileKind::Ring`).
+  `sweet_escape` / `now_sumimi` now call it instead of the local
+  rent-table approximation.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: low
 - **suggested batch**: tiles
 - **locations**
-  - `rules/cards/card-sumimi/src/sweet_escape.rs:18`, `now_sumimi.rs:29` (C# `TileData.kind == "ring"`; ABI has no `tile_kind`)
+  - `rules/cards/card-sumimi/src/sweet_escape.rs`, `now_sumimi.rs` (`ctx::is_ring`)
 
 ## HOST-05 — `ask_tile(allowNone: true)` / free-amount `ask_money`
+- **status**: **partial** (2026-10-13, `closeout-5-engine`) —
+  `pareo_far` now uses `ask_tiles` (TileId, 「不选」 → `-1`) so the optional
+  house-removal is one prompt. Free-amount `ask_money` is still missing;
+  `tsurumaki_estate`'s 「竞价」 still steps 1000-at-a-time through `ask_pick`.
 - **kind**: ABI defect
 - **class**: B
 - **severity**: low
 - **suggested batch**: HostRequest handlers
 - **locations**
-  - `rules/cards/card-ras/src/pareo_far.rs:48` (ask_tile allowNone)
-  - `rules/events/src/tsurumaki_estate.rs:53` (ask_money)
+  - `rules/cards/card-ras/src/pareo_far.rs` (ask_tiles 「不选」)
+  - `rules/events/src/tsurumaki_estate.rs:53` (ask_money still open)
 
 
 ## HOST-06 — HostRequest purchase replies always `1` (guest `bool` is a lie)
@@ -1408,13 +1441,16 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: deterministic stopping rule (iteration budget), assert on the decision rule rather than timing. **Confirmed.**
 
 ## HOST-13 — `HostRequest::AgentOffer` drops `agent`
+- **status**: **fixed** (2026-10-13, `closeout-5-engine`, `fix: HOST-13 …`) —
+  the `AgentOffer` arm now writes `log.agent_offer_commit` carrying the agent
+  tile, the chosen tile, and the branch kind, instead of discarding `agent`.
 - **kind**: ABI defect
 - **class**: C (keep for audit log?)
 - **severity**: low
 - **suggested batch**: HostRequest handlers
-- **locations**: `wasm_rules.rs:2264-2267` `agent: _` discarded; guest `rules/tiles/src/agent.rs:160` passes the agent tile
-- **current**: harmless for the commit (tile state is re-checked) but the answer log cannot audit which agent offered
-- **expected**: keep the field for logging / audit, or document why it is dropped
+- **locations**: `wasm_rules.rs` `HostRequest::AgentOffer` arm (agent kept on the audit line)
+- **current**: the answer log names which agent offered
+- **expected**: keep the field for logging / audit. **Confirmed.**
 
 
 ---
