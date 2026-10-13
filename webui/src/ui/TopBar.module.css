@@ -7,7 +7,7 @@
    its help button takes the pointer). */
 .bar > .crumb { pointer-events: none; }
 .crumb .help { pointer-events: auto; }
-.squareBtn { display: flex; align-items: center; justify-content: center; border-radius: var(--r-md); color: var(--pink); background: linear-gradient(#fff, #f2f2f5); box-shadow: var(--lift); }
+.squareBtn { display: flex; align-items: center; justify-content: center; border-radius: var(--r-md); color: var(--pink); background: linear-gradient(var(--white), #f2f2f5); box-shadow: var(--lift); }
 .squareBtn:active { transform: translateY(3px); box-shadow: var(--lift-down); }
 .back { composes: squareBtn; position: absolute; left: 38px; top: 18px; width: 82px; height: 80px; }
 .menu { composes: squareBtn; position: absolute; right: 38px; top: 17px; width: 82px; height: 82px; }

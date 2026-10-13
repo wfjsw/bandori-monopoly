@@ -8,6 +8,9 @@
    transport already lowers (`--replay-bar-top` on Board `.body`) -- no extra
    offset here, so the peek lands under the bar, not behind it. */
 
+/* `--field-fill` (Card `.field::before` / `::after`): 1 = the face's name sits
+   in the bottom zone above the markers, 0 = it follows the tags. Not animated. */
+
 .sheet {
   position: absolute;
   inset: 0;
@@ -35,6 +38,9 @@
 }
 .up .row {
   transform: translateY(0);
+  /* Slid out, the face reads as an ordinary card: the name follows the tags
+     (Card `.field .title`) instead of staying pinned to the peek zone. */
+  --field-fill: 0;
 }
 
 /* One card's slot: equal heights across the row (the face stretches to the
@@ -75,8 +81,10 @@
    card's, so dropping it by 100% less the peek brings its whole face into view. */
 @keyframes pulse-out {
   0% { transform: translateY(0) scale(1); }
-  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); }
-  100% { transform: translateY(0) scale(1); }
+  17% { --field-fill: 1; }
+  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); --field-fill: 0; }
+  83% { --field-fill: 1; }
+  100% { transform: translateY(0) scale(1); --field-fill: 1; }
 }
 /* Row already lowered by hover: the slot only lifts a little. */
 .up .pulse {
@@ -97,7 +105,7 @@
    face's own shadow / background. */
 .slot .card {
   box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
-  background: color-mix(in srgb, var(--own, #fff) 12%, #fff);
+  background: color-mix(in srgb, var(--own, var(--white)) 12%, var(--white));
 }
 
 /* Live markers in the face's bottom zone -- the part that must read while the
@@ -200,3 +208,6 @@
     animation: none;
   }
 }
+/* Players-panel hover: the hovered seat's field cards light up; the rest fade. */
+.slot.hot { filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own)); transform: translateY(6px); }
+.slot.dim { opacity: 0.35; filter: grayscale(0.7); }

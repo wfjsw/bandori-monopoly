@@ -972,6 +972,18 @@ impl World {
         None
     }
 
+    /// Refresh `fans_pos` / `fans_neg` for **one** seat from `player_keys`.
+    ///
+    /// The old `sync_views` walked all 4 seats on every `add_held` /
+    /// `set_held_name` (pp setup cliff). Call sites that know the seat
+    /// use this; [`Self::sync_views`] remains for a full refresh.
+    pub fn sync_views_player(&mut self, player: i32) {
+        let (pos_id, neg_id) = fan_tok_ids();
+        let i = player_idx(player);
+        self.fans_pos[i] = self.player_keys[i].get(pos_id);
+        self.fans_neg[i] = self.player_keys[i].get(neg_id);
+    }
+
     pub fn sync_views(&mut self) {
         let (pos_id, neg_id) = fan_tok_ids();
         for p in 0..MAX_PLAYERS {

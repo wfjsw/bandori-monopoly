@@ -1,5 +1,6 @@
 // The 60-tile ring, tokens, and the center: cards in play, the event deck, banner.
 
+import { useHoverSeat, useSeatFocus } from "./hoverSeat";
 import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { memo, useCallback, useRef, useState } from "react";
@@ -310,7 +311,8 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, onHover, sh
   const t = D.tiles[i];
   const [col, row] = cell(i);
   const owner = S.owners[i] ?? -1;
-  const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail);
+  const focus = useSeatFocus(owner);
+  const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail);
   const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
   const tileMarks = S.marks ?? [];
   const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
@@ -418,6 +420,7 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
   const pos = anim.pos ?? S.players.map((x) => x.pos);
   const pick = new Set(pickable);
   const vp = useBoardViewport();
+  const hoverSeat = useHoverSeat();
   const wrapRef = vp.wrapRef;
   const [tip, setTip] = useState<MarkTip | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -491,7 +494,8 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
               // caption / gutter, not over the name.
               const top = cellY(row, vp.board.height) + (vp.board.height / ROWS) * 0.22;
               return (
-                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
+                <div key={i} className={cx(s.token, i === S.turn && s.current, hoverSeat >= 0 && s[i === hoverSeat ? "hot" : "dim"])} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
+                  {i === (hoverSeat >= 0 ? hoverSeat : S.turn) && <span className={s.arrow} />}
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                   {ch
                     ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />
@@ -551,9 +555,9 @@ function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
         <span className={s.pocket} style={{ gridColumn: "9 / 12", gridRow: "8 / 10" }} />
         <span style={{ gridColumn: "2 / 5", gridRow: "2 / 4" }}>{tr("board.markerZone")}</span>
         <span style={{ gridColumn: "9 / 12", gridRow: "2 / 4" }}>{tr("board.specialMarkerZone")}</span>
-        <span className={s.zoneNarrow} style={{ gridColumn: "5 / 6", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
-        <span style={{ gridColumn: "6 / 8", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span>
-        <span className={s.zoneNarrow} style={{ gridColumn: "8 / 9", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
+        {/* <span className={s.zoneNarrow} style={{ gridColumn: "5 / 6", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span> */}
+        {/* <span style={{ gridColumn: "6 / 8", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span> */}
+        {/* <span className={s.zoneNarrow} style={{ gridColumn: "8 / 9", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span> */}
       </div>
       {/* The die in the board's roll zone (掷骰区): the one roll control, on
           the spot the board names for it. Hidden in replays (`roll` null). */}
@@ -577,8 +581,10 @@ function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
           sit on the board's top sheet (FieldSheet), not in the interior. */}
       <div className={s.piles}>
         <button type="button" className={s.pile} onClick={() => showEventPile(S)}>
-          <div className={s.stack}><img src={sceneImg("card_back")} alt="" /></div>
-          <div className={s.pileLabel}>{tr("board.eventDeck")}<b>×{S.eventDeck}</b></div>
+          <div className={s.stack}>
+            <img src={sceneImg("card_back")} alt="" />
+            <div className={s.pileLabel}>{tr("board.eventDeck")}<b>×{S.eventDeck}</b></div>
+          </div>
         </button>
       </div>
       <div className={s.hint}>{tr("board.ringHint")}</div>

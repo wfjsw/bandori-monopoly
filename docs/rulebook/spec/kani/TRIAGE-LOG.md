@@ -262,3 +262,32 @@ site: match `idx` → `&'static CardDef` constant, one `On` load + call
 SSA/solver-bound after that (~15 min, no verdict yet) — World copy +
 card-body IR remains. 2-seat variants / lazy `sync_views` / no full
 `reset_world` copy are the next levers (documented, clause-faithful).
+
+## Batch 3c — pp setup cost (coordinator item 6)
+
+Levers applied (in payoff order):
+
+| lever | what | result |
+|---|---|---|
+| (1) per-seat `sync_views` | `add_held` / `set_held_name` refresh one seat | unwind `sync_views` **gone** |
+| (2) in-place `symbolic_play_world` | no `reset_world(w)` full-World copy | harness setup is field writes only |
+| (3) `pin_two_seats()` | same_dream_01/02, title_idol_01, maya_inf_02 (documented seat-count independent) | 2-seat money/fans |
+| (4) intern fan tokens once | was per seat | intern walks gone |
+| NameMap direct-index | (previous batch) | `get_opt`/`set` unrolls **gone** |
+
+Unwind after cuts: **only** `symbolic_play_world` 4 (the seat loop).
+
+**Remaining cliff (not an unroll):** SSA / solver after symbolic execution.
+Root: one shared `fn(i32) -> Asked` `code*` call site expands to an
+**874-target IF-chain** (every address-taken body in the binary). Tried
+and rejected: 285 per-card trampolines (285×874 = 249k branches, 75–77 MB
+goto); per-arm `f(player)` (same). Best measured shape: one
+match-selected `&'static CardDef` + one `code*` call (42 MB goto). A
+true **direct** call needs a named `play` symbol (card-body `pub` —
+forbidden). `pp::same_dream_01` / `title_idol_01_mutant` remain SSA-bound
+at 12–18 min (no verdict inside 10 min target).
+
+`duobang_01_02` on this stack: SUCCESSFUL 542 s CBMC (events bodies are
+smaller). next lever: reduce World SSA (NameMap `SLOTS` 64 → packed
+dense id) or a `cfg(kani)` body-enum in `card-sdk` so the call is a match
+on an integer, not a `code*`.

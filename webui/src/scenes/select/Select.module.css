@@ -37,7 +37,7 @@
 .skillText { margin-top: 0.57em; font-size: 1em; line-height: 1.7; max-height: 128px; overflow: auto; }
 
 .tabs { position: absolute; left: 0; right: 0; top: 0; }
-.gridPanel { position: absolute; left: 0; right: 0; top: 48px; height: 550px; background: rgba(255, 255, 255, 0.6); border-radius: var(--r-lg); padding: 18px 18px 18px 20px; }
+.gridPanel { position: absolute; left: 0; right: 0; top: 48px; height: 550px; background: rgba(246, 242, 243, 0.6); border-radius: var(--r-lg); padding: 18px 18px 18px 20px; }
 .grid { height: 100%; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 124px); gap: 14px 13px; align-content: start; padding: 4px; }
 
 .order { position: absolute; left: 0; right: 274px; top: 618px; height: 110px; background: var(--panel); border-radius: var(--r-lg); box-shadow: var(--shadow); }
