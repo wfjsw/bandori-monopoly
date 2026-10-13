@@ -360,6 +360,7 @@
   "mode.ranked": "Ranked mode",
   "mode.shortSolo": "Solo",
   "mode.solo": "Solo mode",
+  "play.opening": "Starting the match…",
   "play.noSolo": "No solo match in progress",
   "player.deedHouse": " {{n}}h",
   "player.deedMortgaged": " (mortgaged)",

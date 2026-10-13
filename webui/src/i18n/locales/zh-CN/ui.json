@@ -360,6 +360,7 @@
   "mode.ranked": "正规模式",
   "mode.shortSolo": "单机",
   "mode.solo": "单机模式",
+  "play.opening": "正在启动对局…",
   "play.noSolo": "没有进行中的单机对局",
   "player.deedHouse": " {{n}}栋",
   "player.deedMortgaged": "（抵押）",
