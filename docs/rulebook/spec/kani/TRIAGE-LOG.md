@@ -87,6 +87,7 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | events::aao_02_hand_veto_is_armed | FAILED | **D GENUINE E-aao-02** | keep failing; do not fix | FAILED (unchanged) |
 | events::embers_03_settle_costs_ten_per_copy | FAILED | OPEN | [触发结算] undefined (OPEN-触发结算). Harness already proves only the determined fragment (`embers_03_settle_ok` = 10×copies pay leg); settle timing is the OPEN half | OPEN (not a card-body bug) |
 | events::* TIMEOUT (chart_rush, front_or_back, never_ends, …) | TIMEOUT | E / A | Msg facade + `all_players` 4-iter. `chart_rush_01_spends_fire` re-run: unwind profile only `base_world` 4 + `all_players` 3 — Vec/memcmp cliff **gone**, still **TIMEOUT 1800 s** (solver-bound on the symbolic world). `front_or_back` body uses `Vec<i32>` front/back (cannot edit body). `never_ends` is fmt `PadAdapter` | chart_rush_01: TIMEOUT; rest pending |
+| events::tears_01 / tears_02 / tears_mutant | UNWINDING 324–334 s (central) | **A** | `tears_world` cleared `owner=-1` over 60 tiles under `unwind(32)`; `World::new` already does. Deleted the loop (same class-A no-ops in r/ras/ag/mor setup) | **SUCCESSFUL 724 s / 761 s / 609 s** (covers sat on iff halves) |
 
 ### money_shave cliff trail (batch 2)
 
