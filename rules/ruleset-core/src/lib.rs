@@ -158,7 +158,21 @@ pub fn gain_fire(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
 }
 
 /// Spend `n` [火罐]; false when the player has fewer. Logs the spend.
+///
+/// Marker window (user ruling 2026-10-07): `markerSpend` opens **before** the
+/// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
+/// counteraction cancelled the link).
+///
+/// 「以代替此次技能的火罐消耗」 -- `FirePaying` runs before the pots move.
+/// A hook that substitutes the cost cancels the link and performs its own
+/// payment; the spend is then treated as satisfied.
 pub fn spend_fire(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+    if n <= 0 {
+        return Ok(true);
+    }
+    if !card_sdk::ctx::raise(player_id, card_sdk::abi::TriggerKind::FirePaying, n)? {
+        return Ok(true);
+    }
     let (p, l) = raw::mj(why);
     raw::asked(unsafe { raw::sys::spend_fire(player_id, n, p, l) }).map(|v| v != 0)
 }

@@ -123,7 +123,6 @@ fn light_places_with_stay_and_x_plus_1_crystals() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says a crystal can pay a skill's fire cost (clause 2); engine spends fire or refuses and leaves the crystal count untouched"]
 fn light_crystal_pays_skill_fire_cost() {
     // 规则书: 「（2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」
     let mut t = Table::new(&["高松灯", "千早爱音"]);
@@ -139,18 +138,24 @@ fn light_crystal_pays_skill_fire_cost() {
     t.roll(1).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        let k = t
-            .option("skill:高松灯")
-            .or(t.option("诗超绊"))
-            .unwrap_or(p.fallback);
+        // Accept the 诗超绊 press and 不再迷茫's crystal-substitution offer;
+        // decline anything else (buy prompts, etc.).
+        let k = if t.prompt_refers("tomori") {
+            0
+        } else {
+            t.option("skill:高松灯")
+                .or(t.option("诗超绊"))
+                .unwrap_or(p.fallback)
+        };
         let _ = t.answer(0, k);
     }
     rest(&mut t);
     drain(&mut t);
-    assert_eq!(
-        crystals(&t, 0, "MyGO:（灯）不再迷茫"),
-        0,
-        "the crystal paid the skill cost"
+    // The crystal paid the fire cost; (3) then removed the card at 0.
+    assert!(
+        !t.on_field(0, "MyGO:（灯）不再迷茫"),
+        "the crystal paid the skill cost and (3) removed the card: {:?}",
+        t.field_ids(0)
     );
     assert_eq!(t.fire(0), 0, "no fire was available or spent");
 }
@@ -212,11 +217,13 @@ fn light_zero_hand_gives_one_crystal() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says the card is [移除]d when its crystals run out; the crystal-as-skill-cost clause (2) does not spend from the card, so the card never empties"]
 fn light_removed_when_crystals_run_out() {
     // 规则书: 「（3）此卡上的奇迹水晶耗尽后，[移除]此卡」
-    let mut t = Table::vanilla(2);
-    t.set_character_raw(0, "高松灯");
+    // The crystal is emptied by （2）'s skill-cost substitution, which is what
+    // then trips （3）. So the skill has to be bound (vanilla strips skills).
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
     t.set_hand(0, &[]);
     t.give_play(0, "MyGO:（灯）不再迷茫").unwrap();
     set_crystals(&mut t, 0, "MyGO:（灯）不再迷茫", 1);
@@ -227,10 +234,13 @@ fn light_removed_when_crystals_run_out() {
     t.roll(1).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        let k = t
-            .option("skill:高松灯")
-            .or(t.option("诗超绊"))
-            .unwrap_or(p.fallback);
+        let k = if t.prompt_refers("tomori") {
+            0
+        } else {
+            t.option("skill:高松灯")
+                .or(t.option("诗超绊"))
+                .unwrap_or(p.fallback)
+        };
         let _ = t.answer(0, k);
     }
     rest(&mut t);

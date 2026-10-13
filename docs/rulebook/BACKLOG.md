@@ -578,6 +578,10 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **class**: B
 - **severity**: medium
 - **suggested batch**: host ABI: out-buffers / skills: PP
+- **status**: **fixed** (this batch, `fix: ABI-05 …`) — `TriggerKind::FlipEffect` /
+  `HookKind::FlipEffect` (94) raised with the clause's intended X *before* the
+  counters move. `PP:有你与我在这里共度` raises it; the PP band (2) hooks it and
+  adds `X - owned` overflow crystals. Test: `band_skill_overflow_to_crystals`.
 - **locations**
   - `rules/tests/tests/pp.rs:877` `band_skill_overflow_to_crystals`
 - **rulebook**: PP band (2) 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 — passive hook on a fan-*flip*.
@@ -666,6 +670,10 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **class**: B (contained)
 - **severity**: medium
 - **suggested batch**: skills: PP
+- **status**: **fixed** (this batch, `fix: SKILL-01 …`) — the residual guard
+  *was* consulting `skill_blocked` correctly; the test's `set_fans` helper
+  replaced the whole tokens vector and wiped `skillBlock`. The helper now
+  updates the two fan counters in place. Test: `accident_blocks_pp_skill_2`.
 - **locations**
   - `rules/tests/tests/pp.rs:1078` `accident_blocks_pp_skill_2`
 - **rulebook**: 初次演出事故 blocks the PP skill; 丸山彩 (2) PayChoose hook must not prompt.
@@ -843,6 +851,10 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **class**: A
 - **severity**: medium
 - **suggested batch**: draw/discard pipeline
+- **status**: **fixed** (this batch, `fix: DRAW-01 …`) — a `DrewBefore`
+  replacement's `add_to_hand` now pushes to the run's `draw_log`, so the after
+  points (`drawn` / `drew`) fire for the kept card (「此次加手视为抽卡动作」).
+  Test: `g28_maya_look_at_top_still_counts_as_a_draw`.
 - **locations**
   - `rules/tests/tests/gap_res.rs:209` `g28_maya_look_at_top_still_counts_as_a_draw`
 - **rulebook**: look-at-top + keep is a draw for 「梦在前方」's crystal.
@@ -854,6 +866,10 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **class**: A
 - **severity**: medium
 - **suggested batch**: draw/discard pipeline / skills: Morfonica
+- **status**: **fixed** (this batch, `fix: DRAW-02 …`) — the hook did prompt;
+  `attack` billed the *roller* (C#) while the sheet's omitted subject of 「可消耗」
+  is the card controller. The owner now pays 1,000 and removes a crystal (net 0
+  with （3）'s payout). Test: `starry_even_roll_of_another_player_offers_crystal_removal`.
 - **locations**
   - `rules/tests/tests/morfonica.rs:304` `starry_even_roll_of_another_player_offers_crystal_removal`
   - `rules/cards/card-morfonica/src/starry_night.rs`
@@ -865,6 +881,11 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **class**: A
 - **severity**: medium
 - **suggested batch**: skills: RAS
+- **status**: **fixed** (this batch, `fix: DRAW-03 …`) — own-card `Discarded`
+  dispatch (the card that entered the discard hears its own discard) plus a
+  `Discarded` hook that arms the turn-end check (C# `OnDiscarded`). The test
+  now discards through the engine (`discard_card`) rather than a raw
+  `set_discard`. Test: `guerrilla_special_offers_to_mark_a_deed_as_livehouse`.
 - **locations**
   - `rules/tests/tests/ras.rs:1411` `guerrilla_special_offers_to_mark_a_deed_as_livehouse`
 - **rulebook**: [特] (card in discard + ≥1000 paid in settle + no buildable livehouse owned or purchasable) at turn end.
@@ -1097,6 +1118,11 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **class**: B
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
+- **status**: **fixed** (this batch, `fix: CRYSTAL-01 …`) — `TriggerKind::FirePaying` /
+  `HookKind::FirePaying` (78) raised inside `ctx::spend_fire` before the pots
+  move; a hook that substitutes cancels the link. 不再迷茫 (2) hooks it and
+  burns one crystal; (3) sweeps the card at 0 via `CounterChanged`.
+  Tests: `light_crystal_pays_skill_fire_cost`, `light_removed_when_crystals_run_out`.
 - **locations**
   - `rules/tests/tests/mygo.rs:126` `light_crystal_pays_skill_fire_cost`
   - `rules/tests/tests/mygo.rs:215` `light_removed_when_crystals_run_out`
@@ -1135,6 +1161,10 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **class**: A
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting / rent multipliers
+- **status**: **fixed** (this batch, `fix: CRYSTAL-04 …`) — each of the x
+  rewards now runs the money half of the CiRCLE reward step (`circleAffected`
+  between pick and payout), so Morfonica's 1000/1500/2000 cycle (and any other
+  listener) scales it. Test: `nnm_option2_gains_x_times_circle_money_reward`.
 - **locations**
   - `rules/cards/card-morfonica/src/nanami_effort.rs:114` (hard-codes 2000)
   - `rules/tests/tests/morfonica.rs:468` `nnm_option2_gains_x_times_circle_money_reward`

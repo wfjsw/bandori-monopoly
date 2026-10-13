@@ -1303,14 +1303,23 @@ pub enum TriggerKind {
     /// replacement draw, and the after points ([`Self::Drawn`] / [`Self::Drew`])
     /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
     DrewBefore = 77,
+    /// v56: **before** one fire spend commits (`ctx::spend_fire`). `t.value` is
+    /// the requested amount. A hook that substitutes the cost (「以代替此次技能
+    /// 的火罐消耗」) cancels the trigger and performs its own payment; the engine
+    /// then treats the spend as satisfied and does not touch the fire pots.
+    /// Hook-only. (78 was `CpChanged`; v50 folded it into [`Self::CounterChanged`].)
+    FirePaying = 78,
+    /// v56: a face-down counter is being flipped face-up (「将X个反面…变正」).
+    /// `t.value` is the effect's **intended** X (the number the clause names),
+    /// raised *before* the counters move so a listener still sees the pre-flip
+    /// count. Hook-only.
+    FlipEffect = 94,
     /// v36: a card instance's attached [CP点] count was just written (placed or
     /// cleared). `t.card` is the card the marks are attached to, `t.player_id`
     /// its owner, and `t.value` is the **change applied** to the attached count
     /// (negative when a [CP点] left). The count after the write is
     /// `ctx::cp_attached()` on the instance itself.
     ///
-    // 78 was `CpChanged`; v50 folds it into [`Self::CounterChanged`] with
-    // `t.name == counter::CP`.
 
     // v40: the purchase surface (`docs/PURCHASE.md`).
     /// May `t.player_id` buy `t.tile` at all? A placed card
@@ -1468,6 +1477,8 @@ impl TriggerKind {
             74 => Self::SkillUsed,
             76 => Self::CounterChanged,
             77 => Self::DrewBefore,
+            78 => Self::FirePaying,
+            94 => Self::FlipEffect,
 
             79 => Self::BuyGate,
             80 => Self::BuyAdd,
@@ -1569,6 +1580,8 @@ impl TriggerKind {
             Self::SkillUsed => "skillUsed",
             Self::CounterChanged => "counterChanged",
             Self::DrewBefore => "drewBefore",
+            Self::FirePaying => "firePaying",
+            Self::FlipEffect => "flipEffect",
 
             Self::BuyGate => "buyGate",
             Self::BuyAdd => "buyAdd",
@@ -1668,6 +1681,8 @@ impl TriggerKind {
             "skillUsed" => Self::SkillUsed,
             "counterChanged" | "crystalsChanged" | "cpChanged" => Self::CounterChanged,
             "drewBefore" => Self::DrewBefore,
+            "firePaying" => Self::FirePaying,
+            "flipEffect" => Self::FlipEffect,
 
             "buyGate" => Self::BuyGate,
             "buyAdd" => Self::BuyAdd,
@@ -2124,6 +2139,12 @@ declare_kinds! {
         /// See [`TriggerKind::DrewBefore`] -- the per-draw *replacement* point
         /// (「此次加手视为抽卡动作」). Hook-only.
         DrewBefore = 77,
+        /// See [`TriggerKind::FirePaying`] -- before one fire spend commits;
+        /// cancel to substitute the cost. Hook-only.
+        FirePaying = 78,
+        /// See [`TriggerKind::FlipEffect`] -- a face-down counter is being
+        /// flipped face-up. Hook-only.
+        FlipEffect = 94,
         /// v40: the buy price's first modifier stage (`docs/PURCHASE.md`) --
         /// fixed ±, before [`Self::BuyMul`] / [`Self::BuySet`]. `t.value` /
         /// `set_price` on the run; each stage floors the price at 0.

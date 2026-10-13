@@ -12,10 +12,20 @@ use common::*;
 use game_core::state::Counter;
 
 fn set_fans(t: &mut Table, who: usize, up: i32, down: i32) {
-    t.m.world_mut().st.players[who].tokens = vec![
-        Counter { name: "P✽P粉丝(正)".into(), value: up, instance: None },
-        Counter { name: "P✽P粉丝(反)".into(), value: down, instance: None },
-    ];
+    // Update the two fan counters in place -- do not replace the whole
+    // tokens vector (that would wipe `skillBlock` and every other token).
+    let p = &mut t.m.world_mut().st.players[who];
+    for (name, value) in [("P✽P粉丝(正)", up), ("P✽P粉丝(反)", down)] {
+        match p.tokens.iter_mut().find(|c| c.name == name) {
+            Some(c) => c.value = value,
+            None => p.tokens.push(Counter {
+                name: name.into(),
+                value,
+                instance: None,
+            }),
+        }
+    }
+    p.tokens.retain(|c| c.value > 0 || c.name.starts_with("P✽P粉丝"));
 }
 
 fn fans(t: &Table, who: usize) -> (i32, i32) {
@@ -874,7 +884,6 @@ fn band_skill_turn_start_crystal_and_draw() {
 
 /// 规则书: 「（2）…X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。」
 #[test]
-#[ignore = "DISCREPANCY: band skill (2) is a passive 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 hook on a flip effect, not a press; there is no flip-effect trigger to observe, so 有你与我在这里共度's X>owned overflow never becomes crystals"]
 fn band_skill_overflow_to_crystals() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
@@ -1075,7 +1084,6 @@ fn dream_ahead_reduces_hand_limit() {
 
 /// 规则书: 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」(初次演出事故)
 #[test]
-#[ignore = "DISCREPANCY: the skillBlock token is set (tok=1) but the aya_with PayChoose hook still prompts -- the guard/body skill_blocked check does not see it; needs a deeper look at hook-guard dispatch"]
 fn accident_blocks_pp_skill_2() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");

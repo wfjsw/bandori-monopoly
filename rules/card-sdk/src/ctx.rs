@@ -1418,9 +1418,10 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
 /// (e.g. [`TriggerKind::CircleAffected`]); `value` is the trigger's `value`.
-/// Returns true when the link settled (nobody cancelled it).
-pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> bool {
-    unsafe { sys::raise(player_id, kind as i32, value) != 0 }
+/// Returns true when the link settled (nobody cancelled it). A hook that
+/// prompts pauses the run (`Err(Prompt)`).
+pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prompt> {
+    asked(unsafe { sys::raise(player_id, kind as i32, value) }).map(|v| v != 0)
 }
 
 pub fn give_stay(player_id: i32, n: i32) {

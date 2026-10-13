@@ -11,8 +11,8 @@
 //! 变正」 is the flip effect that consumes them. （3） is the plan's
 //! no-circle-reward flag on the walk that passes a CiRCLE.
 
-use card_sdk::abi::{state_key, HookKind};
-use ruleset_core::ctx::{self, state};
+use card_sdk::abi::{state_key, HookKind, TriggerKind};
+use ruleset_core::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
@@ -25,10 +25,16 @@ pub const PASTEL: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        On::Play("", Some(can_flip), flip),
+        // （2）「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的
+        // 反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 --
+        // a passive hook on the flip effect, not a press. `FlipEffect` is raised
+        // with the clause's X before the counters move, so `tok(FAN)` is still
+        // the pre-flip count. 「可为此卡添加」 is the book's permissive may
+        // (there is no cost or downside), so the overflow is applied here.
+        On::Hook(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
     ],
 )
-    .legacy(&[(1, legacy_mine)]);
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -77,40 +83,20 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「将X个反面[P✽P粉丝]变正…X大于拥有的反面的[P✽P粉丝]时可为此卡添加
-/// 等量溢出的[奇迹水晶]（最多10个）」 -- the press is the flip.
-fn can_flip(player_id: i32) -> Option<Msg> {
-    if ruleset_core::ctx::skill_blocked(player_id, "") {
-        return Some(Msg::new(key!("skill_blocked")));
-    }
-    if ctx::tok(player_id, FAN) < 1 {
-        return Some(Msg::new(key!("pastel_no_fan")));
-    }
-    None
-}
-
-fn flip(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id)?;
+/// （2）「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]
+/// （最多10个）」 -- the overflow is `X - owned`, taken while `tok(FAN)` is
+/// still the pre-flip count.
+fn on_flip(player_id: i32) -> card_sdk::Asked {
+    let x = trigger::value();
     let have = ctx::tok(player_id, FAN);
-    let want = ctx::ask_number(
-        player_id,
-        &Msg::new(key!("pastel_title")),
-        &Msg::new(key!("pastel_how_many")),
-        1,
-        have.max(1),
-    )?;
-    if want <= 0 {
+    let over = (x - have).max(0);
+    if over <= 0 {
         return Ok(());
     }
-    ctx::add_tok(player_id, FAN, -want, i32::MAX)?;
-    // 「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」
-    let over = (want - have).max(0);
-    if over > 0 {
-        ctx::add_crystals(over, 10)?;
-        ctx::log(
-            player_id,
-            &Msg::new(key!("pastel_over")).i("n", over as i64),
-        );
-    }
+    ctx::add_crystals(over, 10)?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pastel_over")).i("n", over as i64),
+    );
     Ok(())
 }
