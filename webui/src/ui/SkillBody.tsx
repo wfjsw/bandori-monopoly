@@ -2,12 +2,12 @@
 // Skill bodies and card effect text share it; the parsing (and the shapes it
 // recognises) lives in ./bodyText.ts.
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { cx } from "../core/cx";
 import { parse } from "./bodyText";
 import s from "./SkillBody.module.css";
 
-export function SkillBody({ text, prefix, className }: { text: string; prefix?: ReactNode; className?: string }) {
+export const SkillBody = memo(function SkillBody({ text, prefix, className }: { text: string; prefix?: ReactNode; className?: string }) {
   const blocks = parse(text);
   // The skill name rides with the first paragraph; when the body opens straight
   // onto a list it gets a line of its own above it.
@@ -63,4 +63,4 @@ export function SkillBody({ text, prefix, className }: { text: string; prefix?: 
       })}
     </div>
   );
-}
+});

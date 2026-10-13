@@ -7,7 +7,7 @@
 // info is the shared one: the owner's colour on the frame, the standing hover
 // preview, click-to-inspect.
 
-import { type CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 import { useDockRaise } from "../../hooks/dock";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
@@ -30,7 +30,7 @@ export function rowSpread(n: number): Record<string, string> {
   return { "--row-slot": `${slot.toFixed(1)}px` };
 }
 
-export function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: number; ms: number } | null }) {
+export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: number; ms: number } | null }) {
   const S = m.S;
   const names = namesOf(S);
   const dock = useDockRaise();
@@ -107,4 +107,4 @@ export function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: 
       </div>
     </div>
   );
-}
+});

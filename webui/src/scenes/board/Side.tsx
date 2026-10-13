@@ -1,6 +1,6 @@
 // Compact turn controls at the bottom left; the Hand is docked below the map.
 
-import { useRef, useState, type CSSProperties } from "react";
+import { memo, useRef, useState, type CSSProperties } from "react";
 import { handLimit } from "../../core/hand";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
@@ -74,7 +74,7 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
 }
 
 /** Only appears when somebody has already requested an online settlement. */
-export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
+export const SettleVote = memo(function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
   const auto = useAutoplay(sess);
   const vote = m.S.vote;
   const k = vote.players.indexOf(m.playerId);
@@ -89,7 +89,7 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
       </div>}
     </div>
   );
-}
+});
 
 /**
  * One pressable skill on the stack. `id` / `enabled` / `reason` come from the
@@ -230,7 +230,7 @@ export function fanRise(n: number, spread = 660): string {
  * looking at cards is fine, play / discard are not. Once the sheet retracts the
  * hand raises again for looking; once the question is answered it is normal.
  */
-export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
+export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
   // One hover target for both the hand fan and the skill stack: the dock's own
   // floating preview and the standing card panel read this.
   const [hover, setHover] = useState<{ id: string; note: string; text?: string } | null>(null);
@@ -385,9 +385,9 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
       </div>
     </>
   );
-}
+});
 
-function AnimationSpeed({ sess }: { sess: GameSession }) {
+const AnimationSpeed = memo(function AnimationSpeed({ sess }: { sess: GameSession }) {
   useSessionOther(sess);
   return (
     <div className={s.speeds} role="group" aria-label={tr("board.animationSpeed")}>
@@ -396,4 +396,4 @@ function AnimationSpeed({ sess }: { sess: GameSession }) {
       ))}
     </div>
   );
-}
+});

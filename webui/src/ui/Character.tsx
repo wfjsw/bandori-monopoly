@@ -1,7 +1,7 @@
 // Character pieces: band filter tabs, stand-art cards, round avatars, name
 // plates and band logos.
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { bandLogo, charArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { D } from "../core/data";
@@ -37,6 +37,9 @@ export function bandColor(band: string): string {
 export interface CharCardProps {
   c: CharacterData;
   onClick?: () => void;
+  /** Like `onClick` but handed the character: lets a grid pass one stable
+   *  callback to every card, so the memoized cards are not re-rendered. */
+  onPick?: (c: CharacterData) => void;
   /** Faded: picked by someone else or banned. */
   dim?: boolean;
   /** Pink ring: highlighted / your own. */
@@ -49,9 +52,9 @@ export interface CharCardProps {
 }
 
 /** Stand-art card with the band-colored underline and the name. */
-export function CharCard({ c, onClick, dim, chosen, stamp, stampKind = "pink", check, home }: CharCardProps) {
+export const CharCard = memo(function CharCard({ c, onClick, onPick, dim, chosen, stamp, stampKind = "pink", check, home }: CharCardProps) {
   return (
-    <button type="button" className={cx(s.card, dim && s.dim, chosen && s.chosen)} onClick={onClick}>
+    <button type="button" className={cx(s.card, dim && s.dim, chosen && s.chosen)} onClick={onPick ? () => onPick(c) : onClick}>
       <div className={s.art}>
         <img src={charArt(D.artId(c), "thumb")} alt="" loading="lazy" draggable={false} />
       </div>
@@ -62,19 +65,19 @@ export function CharCard({ c, onClick, dim, chosen, stamp, stampKind = "pink", c
       {home && <div className={cx(s.check, s.home)}><Icon name="home" /></div>}
     </button>
   );
-}
+});
 
 /** Round avatar cropped from the SD art, ringed in the character color. */
-export function Avatar({ c, size = 64, className }: { c: CharacterData | undefined; size?: number; className?: string }) {
+export const Avatar = memo(function Avatar({ c, size = 64, className }: { c: CharacterData | undefined; size?: number; className?: string }) {
   return (
     <div className={cx(s.avatar, !c && s.empty, className)} style={{ ["--av-border" as string]: c?.color ?? "var(--line)", width: size, height: size, borderWidth: size < 50 ? 2 : size < 70 ? 3 : 4 }}>
       {c && <img src={charArt(D.artId(c), "sdThumb")} alt="" draggable={false} />}
     </div>
   );
-}
+});
 
 /** The character's name plate art, or a CSS plate when the art has none. */
-export function NamePlate({ c, width = 355 }: { c: CharacterData; width?: number }) {
+export const NamePlate = memo(function NamePlate({ c, width = 355 }: { c: CharacterData; width?: number }) {
   const src = charArt(D.artId(c), "namePlate");
   if (src.includes("/name_")) return <img className={s.plate} style={{ width }} src={src} alt={c.display} />;
   return (
@@ -83,12 +86,12 @@ export function NamePlate({ c, width = 355 }: { c: CharacterData; width?: number
       <small>{c.band}</small>
     </div>
   );
-}
+});
 
-export function BandMark({ band, className }: { band: string; className?: string }) {
+export const BandMark = memo(function BandMark({ band, className }: { band: string; className?: string }) {
   const src = bandLogo(band);
   return src ? <img className={cx(s.logo, className)} src={src} alt={band} /> : <div className={cx(s.logoText, className)} style={{ color: bandColor(band) }}>{band}</div>;
-}
+});
 
 /** Grid wrapper so scenes can lay out cards in their own columns. */
 export function CharGrid({ className, children }: { className?: string; children: ReactNode }) {

@@ -2,7 +2,7 @@
 // with the cards-in-play row over its top edge, and the collapsed hand
 // underneath. Controls sit below the players; the right is a full match log.
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
 import { t as tr } from "../../i18n/t";
@@ -113,15 +113,21 @@ export function Board({ sess }: { sess: GameSession }) {
     } else navigate({ name: "room", id: sess.id });
   };
 
-  const m = view ? model(view) : null;
+  // Stable per snapshot, so the memoized panels below skip the 500 ms timer
+  // and animation-only re-renders.
+  const m = useMemo(() => (view ? model(view) : null), [view]);
   useMatchDriver({ sess, m, anim, auto, exit });
+  // A stable tile-click, so the memoized ring tiles are not re-rendered by a
+  // fresh closure each time; it reads the latest handler below.
+  const tileClick = useRef<(i: number) => void>(() => undefined);
+  const onTile = useCallback((i: number) => tileClick.current(i), []);
 
   if (!m) return null;
   const S = m.S;
   // Tile-pick clicks answer a `tile` prompt; while 托管 is on they must not
   // (the deed-inspect click stays -- that is read-only).
   const tilePick = !auto && waitingOn(S.prompt, m.playerId) && S.prompt.kind === "tile" && !anim.animating ? S.prompt.items.map(Number) : [];
-  const onTile = (i: number) => {
+  tileClick.current = (i: number) => {
     const k = tilePick.indexOf(i);
     if (k >= 0) return void act(sess, { act: "answer", prompt: S.prompt.id, value: k });
     openDeed(sess, i);

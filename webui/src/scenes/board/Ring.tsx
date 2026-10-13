@@ -2,7 +2,7 @@
 
 import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
@@ -220,7 +220,7 @@ function quoteTip(q: TileQuote): string {
  *  CiRCLE carries its pass / stop notes in place of the caption. Sizes are
  *  fractions of the measured cell (`--cell-h` / `--cell-w` on `.ring`), so the
  *  scale holds from the narrow 1366 cells up to the wide 2560 ones. */
-function TileFace({
+const TileFace = memo(function TileFace({
   tile,
   quote,
   cellW,
@@ -287,7 +287,115 @@ function TileFace({
       </span>
     </>
   );
-}
+});
+
+/** One tile: its own memo boundary, so a marker hover, a zoom-less re-render
+ *  or the turn timer leaves the 60 tiles alone. Everything it draws derives
+ *  from the (per-snapshot) model, so the props are all stable values. */
+const Tile = memo(function Tile({ i, m, cellW, cellH, picked, showTip, hideTip, onTile }: {
+  i: number;
+  m: Model;
+  cellW: number;
+  cellH: number;
+  picked: boolean;
+  showTip: (e: React.MouseEvent, title: string, lines: string[]) => void;
+  hideTip: () => void;
+  onTile: (i: number) => void;
+}) {
+  const S = m.S;
+  const t = D.tiles[i];
+  const [col, row] = cell(i);
+  const owner = S.owners[i] ?? -1;
+  const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable);
+  const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
+  const tileMarks = S.marks ?? [];
+  const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
+  const marks = tileMarks.filter((x) => x.tile === i && x.category !== "designate").slice(0, 3);
+  const embers = S.embers?.[i] ?? 0;
+  const quote = m.v.tileQuotes?.[i] ?? null;
+  const quoteTipLine = quote ? quoteTip(quote) : t.price > 0 ? `${tr("deed.price")} ${t.price}` : "";
+  const markTip = (x: { category: string; owner: number; card: string; note?: Msg | null; count: number; kind: string }) => {
+    const cp = x.category === "cp";
+    const des = x.category === "designate";
+    const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
+    const title = cp
+      ? (x.count > 1 ? `${tr("board.markCp")} ×${x.count}` : tr("board.markCp"))
+      : des
+        ? (x.count > 1 ? `${cardTitle(x.card)} ×${x.count}` : cardTitle(x.card))
+        : (x.count > 1 ? `${kindLabel} ×${x.count}` : kindLabel);
+    const lines = [
+      des
+        ? x.owner >= 0 ? tr("board.markDesignate", { who: m.nameOf(x.owner) }) : ""
+        : !cp && x.owner >= 0 ? tr("board.markOwner", { who: m.nameOf(x.owner) }) : "",
+      x.card && !des ? tr("board.markFrom", { card: cardTitle(x.card) }) : "",
+      x.note ? fmtMsg(x.note, namesOf(S)) : "",
+    ];
+    return { title, lines };
+  };
+  const extras = (
+    <>
+      <div className={s.houses}>{Array.from({ length: Math.min(S.houses[i] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
+      {designations.length > 0 && (
+        <div className={s.desig}>
+          {designations.slice(0, 2).map((x) => {
+            const { title, lines } = markTip(x);
+            const ink = x.owner >= 0 && isLight(m.colorOf(x.owner)) ? s.lightInk : undefined;
+            return (
+              <span
+                key={x.uid}
+                className={cx(s.markDesignate, ink)}
+                style={{ background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
+                onMouseEnter={(e) => showTip(e, title, lines)}
+                onMouseLeave={hideTip}
+              >{shortMarkName(cardTitle(x.card))}</span>
+            );
+          })}
+          {designations.length > 2 && (
+            <span className={s.desigMore}>+{designations.length - 2}</span>
+          )}
+        </div>
+      )}
+      {(marks.length > 0 || embers > 0) && (
+        <div className={cx(s.marks, designations.length > 0 && s.marksAside)}>
+          {marks.map((x) => {
+            // [CP点] is its own tile-mark category: neutral (no seat owns
+            // one), labelled 「CP点」, and its popup has no 「放置者」.
+            const cp = x.category === "cp";
+            const { title, lines } = markTip(x);
+            const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
+            return (
+              <span
+                key={x.uid}
+                className={cx(s.mark, cp && s.cp)}
+                style={cp ? undefined : { background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
+                onMouseEnter={(e) => showTip(e, title, lines)}
+                onMouseLeave={hideTip}
+              >{cp ? "CP" : (kindLabel.trim()[0] ?? "•")}</span>
+            );
+          })}
+          {embers > 0 && (
+            <span className={cx(s.mark, s.ember)} onMouseEnter={(e) => showTip(e, tr("board.embers", { n: embers }), [])} onMouseLeave={hideTip}>{embers}</span>
+          )}
+        </div>
+      )}
+    </>
+  );
+  return (
+    <button
+      key={i}
+      type="button"
+      className={cls}
+      style={style}
+      aria-label={`${t.index}. ${plain(t.name)}`}
+      title={`${t.index}. ${plain(t.name)}${quoteTipLine ? ` · ${quoteTipLine}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
+      onClick={() => onTile(i)}
+    >
+      <TileFace tile={t} quote={quote} cellW={cellW} cellH={cellH} />
+      {owner >= 0 && <span className={s.ownerStrip} />}
+      {extras}
+    </button>
+  );
+});
 
 export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   const S = m.S;
@@ -302,15 +410,15 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   // bounding box carries only the stage scale, and converting the marker's
   // screen box against it lands in the wrap's own pixel space (the window) at
   // any zoom.
-  const showTip = (e: React.MouseEvent, title: string, lines: string[]) => {
+  const showTip = useCallback((e: React.MouseEvent, title: string, lines: string[]) => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     const r = wrap.getBoundingClientRect();
     const k = r.width / (wrap.offsetWidth || 1) || 1;
     const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setTip({ x: (b.left + b.width / 2 - r.left) / k, y: (b.top - r.top) / k, title, lines: lines.filter(Boolean) });
-  };
-  const hideTip = () => setTip(null);
+  }, [wrapRef]);
+  const hideTip = useCallback(() => setTip(null), []);
   // The tip is content-sized (`width: max-content`, max 220px) and the wrap
   // clips the panned board, so keep it inside the *window*: clamp x by its
   // measured width against the window's width and flip it below the marker
@@ -349,101 +457,9 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
           }}
         >
           <Center m={m} roll={roll} />
-          {D.tiles.map((t, i) => {
-            const [col, row] = cell(i);
-            const cellW = vp.board.width / COLS;
-            const cellH = vp.board.height / ROWS;
-            const owner = S.owners[i] ?? -1;
-            const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, pick.has(i) && s.pickable);
-            const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
-            const tileMarks = S.marks ?? [];
-            const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
-            const marks = tileMarks.filter((x) => x.tile === i && x.category !== "designate").slice(0, 3);
-            const embers = S.embers?.[i] ?? 0;
-            const quote = m.v.tileQuotes?.[i] ?? null;
-            const quoteTipLine = quote ? quoteTip(quote) : t.price > 0 ? `${tr("deed.price")} ${t.price}` : "";
-            const markTip = (x: { category: string; owner: number; card: string; note?: Msg | null; count: number; kind: string }) => {
-              const cp = x.category === "cp";
-              const des = x.category === "designate";
-              const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
-              const title = cp
-                ? (x.count > 1 ? `${tr("board.markCp")} ×${x.count}` : tr("board.markCp"))
-                : des
-                  ? (x.count > 1 ? `${cardTitle(x.card)} ×${x.count}` : cardTitle(x.card))
-                  : (x.count > 1 ? `${kindLabel} ×${x.count}` : kindLabel);
-              const lines = [
-                des
-                  ? x.owner >= 0 ? tr("board.markDesignate", { who: m.nameOf(x.owner) }) : ""
-                  : !cp && x.owner >= 0 ? tr("board.markOwner", { who: m.nameOf(x.owner) }) : "",
-                x.card && !des ? tr("board.markFrom", { card: cardTitle(x.card) }) : "",
-                x.note ? fmtMsg(x.note, namesOf(S)) : "",
-              ];
-              return { title, lines };
-            };
-            const extras = (
-              <>
-                <div className={s.houses}>{Array.from({ length: Math.min(S.houses[i] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
-                {designations.length > 0 && (
-                  <div className={s.desig}>
-                    {designations.slice(0, 2).map((x) => {
-                      const { title, lines } = markTip(x);
-                      const ink = x.owner >= 0 && isLight(m.colorOf(x.owner)) ? s.lightInk : undefined;
-                      return (
-                        <span
-                          key={x.uid}
-                          className={cx(s.markDesignate, ink)}
-                          style={{ background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
-                          onMouseEnter={(e) => showTip(e, title, lines)}
-                          onMouseLeave={hideTip}
-                        >{shortMarkName(cardTitle(x.card))}</span>
-                      );
-                    })}
-                    {designations.length > 2 && (
-                      <span className={s.desigMore}>+{designations.length - 2}</span>
-                    )}
-                  </div>
-                )}
-                {(marks.length > 0 || embers > 0) && (
-                  <div className={cx(s.marks, designations.length > 0 && s.marksAside)}>
-                    {marks.map((x) => {
-                      // [CP点] is its own tile-mark category: neutral (no seat owns
-                      // one), labelled 「CP点」, and its popup has no 「放置者」.
-                      const cp = x.category === "cp";
-                      const { title, lines } = markTip(x);
-                      const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
-                      return (
-                        <span
-                          key={x.uid}
-                          className={cx(s.mark, cp && s.cp)}
-                          style={cp ? undefined : { background: x.owner >= 0 ? m.colorOf(x.owner) : "var(--note)" }}
-                          onMouseEnter={(e) => showTip(e, title, lines)}
-                          onMouseLeave={hideTip}
-                        >{cp ? "CP" : (kindLabel.trim()[0] ?? "•")}</span>
-                      );
-                    })}
-                    {embers > 0 && (
-                      <span className={cx(s.mark, s.ember)} onMouseEnter={(e) => showTip(e, tr("board.embers", { n: embers }), [])} onMouseLeave={hideTip}>{embers}</span>
-                    )}
-                  </div>
-                )}
-              </>
-            );
-            return (
-              <button
-                key={i}
-                type="button"
-                className={cls}
-                style={style}
-                aria-label={`${t.index}. ${plain(t.name)}`}
-                title={`${t.index}. ${plain(t.name)}${quoteTipLine ? ` · ${quoteTipLine}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
-                onClick={() => onTile(i)}
-              >
-                <TileFace tile={t} quote={quote} cellW={cellW} cellH={cellH} />
-                {owner >= 0 && <span className={s.ownerStrip} />}
-                {extras}
-              </button>
-            );
-          })}
+          {D.tiles.map((_, i) => (
+            <Tile key={i} i={i} m={m} cellW={vp.board.width / COLS} cellH={vp.board.height / ROWS} picked={pick.has(i)} showTip={showTip} hideTip={hideTip} onTile={onTile} />
+          ))}
           <div className={s.tokens}>
             {S.players.map((x, i) => {
               if (x.bankrupt || x.left) return null;

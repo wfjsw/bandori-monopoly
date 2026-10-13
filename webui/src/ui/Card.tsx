@@ -4,7 +4,7 @@
 // regardless of stylesheet order. `InspectCard` is the one hover-preview /
 // click-to-inspect behaviour every prompt and card collection shares.
 
-import type { CSSProperties, ReactNode } from "react";
+import { memo, type CSSProperties, type ReactNode } from "react";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { D, cardTitle, cardText, cardColor, skillCard, GENERAL_BAND } from "../core/data";
@@ -33,14 +33,14 @@ export const CARD_KIND_LABEL: Record<CardKind, string> = {
 
 const TAG_SHORT: Record<string, string> = { "手牌": "card.tag.hand", "手": "card.tag.hand", "反击": "card.tag.counter", "持续": "card.tag.cont" };
 
-export function TagChip({ tag }: { tag: string }) {
+export const TagChip = memo(function TagChip({ tag }: { tag: string }) {
   const key = TAG_SHORT[tag];
   return <span className={cx(s.tag, (tag === "手" || tag === "反击") && s.red)}>{key ? tr(key) : tag}</span>;
-}
+});
 
-export function KindChip({ kind, className }: { kind: CardKind; className?: string }) {
+export const KindChip = memo(function KindChip({ kind, className }: { kind: CardKind; className?: string }) {
   return <span className={cx(s.kind, s[`k${Object.keys(CARD_KIND_LABEL).indexOf(kind)}`], className)}>{tr(CARD_KIND_LABEL[kind])}</span>;
-}
+});
 
 export interface CardFaceProps {
   id: string;
@@ -69,7 +69,7 @@ export interface CardFaceProps {
   style?: CSSProperties;
 }
 
-export function CardFace({ id, size = "mini", width, on, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
+export const CardFace = memo(function CardFace({ id, size = "mini", width, on, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
   const c = D.card(id);
   const faceStyle = width != null ? { ...style, ["--card-w" as string]: `${width}px` } : style;
   const clickable = !!onClick;
@@ -94,7 +94,7 @@ export function CardFace({ id, size = "mini", width, on, field, onClick, onMouse
       {field ? <div className={s.marks}>{children}</div> : children}
     </div>
   );
-}
+});
 
 /** An empty deck slot (pink with a star). */
 export function EmptySlot({ size = "strip", star, width }: { size?: CardFaceProps["size"]; star: string; width?: number }) {
@@ -157,7 +157,7 @@ export interface InspectCardProps extends CardFaceProps {
  * the detail sheet. Every card shown in a prompt or a card-collection popup
  * goes through this one component -- no per-call-site wiring.
  */
-export function InspectCard({ id, actions, note, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
+export const InspectCard = memo(function InspectCard({ id, actions, note, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
   const enter = (el: HTMLElement) => {
     if (preview) previewFrom(el, id, note);
     onHover?.(id);
@@ -179,4 +179,4 @@ export function InspectCard({ id, actions, note, onHover, preview = true, onClic
       {...face}
     />
   );
-}
+});

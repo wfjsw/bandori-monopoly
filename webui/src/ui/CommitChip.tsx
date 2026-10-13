@@ -2,11 +2,12 @@
 // copyable chip. The full hash is what a skeptic compares against the
 // recompute the replay viewer's "verify" runs.
 
+import { memo } from "react";
 import { toast } from "./Toast";
 import { t as tr } from "../i18n/t";
 import s from "./CommitChip.module.css";
 
-export function CommitChip({ commit }: { commit: string }) {
+export const CommitChip = memo(function CommitChip({ commit }: { commit: string }) {
   if (!commit) return null;
   const short = commit.slice(0, 12);
   return (
@@ -23,4 +24,4 @@ export function CommitChip({ commit }: { commit: string }) {
       <code className={s.hash}>{short}…</code>
     </button>
   );
-}
+});

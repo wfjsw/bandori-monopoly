@@ -4,7 +4,7 @@
 // card until another replaces it. The match screen turns off the floating
 // hover popups while this is up (CardPreview `useStandingPreviewOn`).
 
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import { CardPreview, cardStandClass, stickCard, useStickyCard } from "../../ui/CardPreview";
 import { t as tr } from "../../i18n/t";
 import s from "./CardStand.module.css";
@@ -16,7 +16,7 @@ function useStickOn(id: string | undefined): void {
   }, [id]);
 }
 
-export function CardStand({ flash }: { flash?: string }) {
+export const CardStand = memo(function CardStand({ flash }: { flash?: string }) {
   const card = useStickyCard();
   useStickOn(flash);
   return (
@@ -28,4 +28,4 @@ export function CardStand({ flash }: { flash?: string }) {
       )}
     </div>
   );
-}
+});

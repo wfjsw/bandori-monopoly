@@ -2,7 +2,7 @@
 // and the tr("deckPick.title") deck popup. Left: preview of the highlighted character;
 // right: band chips + card grid; bottom: turn order strip and the big button.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { navigate } from "../../app/router";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
@@ -52,6 +52,7 @@ export function Select({ sess }: { sess: GameSession }) {
   // modal is not opened (it would block the board for nothing).
   const me = view?.state.players[view.playerId];
   const actRef = useLatestRef(act);
+  const pickRef = useLatestRef({ auto, hasChar: !!me?.character });
   useEffect(() => {
     if (!view || !me || sess.autoMode !== "off") return;
     if (view.state.phase === "deck" && !me.deckReady && deckOpenedFor.current !== me.character && !isModalOpen("deck")) {
@@ -59,6 +60,12 @@ export function Select({ sess }: { sess: GameSession }) {
       showDeckPick(sess, me.character, actRef.current);
     }
   });
+
+  const pickChar = useCallback((c: CharacterData) => {
+    if (pickRef.current.auto) return;
+    sfx("place");
+    if (!pickRef.current.hasChar) setPicked(c.name);
+  }, []);
 
   if (!view || !me) return null;
   const st = view.state;
@@ -142,11 +149,7 @@ export function Select({ sess }: { sess: GameSession }) {
                     stamp={banned ? tr("select.stepBan") : taken ? (mine ? tr("common.you") : taken.name) : undefined}
                     stampKind={banned ? "gray" : "pink"}
                     check={c.name === chosen && (mine || myTurn)}
-                    onClick={() => {
-                      if (auto) return;
-                      sfx("place");
-                      if (!me.character) setPicked(c.name);
-                    }}
+                    onPick={pickChar}
                   />
                 );
               })}
