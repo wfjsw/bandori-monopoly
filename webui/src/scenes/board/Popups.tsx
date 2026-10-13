@@ -122,22 +122,22 @@ export function openDeed(sess: GameSession, i: number): void {
   openModal(plain(D.tiles[i].name), (close) => <Deed sess={sess} i={i} close={close} />, { size: "small", key: "deed" });
 }
 
-function DeedList({ sess, redeem, close }: { sess: GameSession; redeem: boolean; close: () => void }) {
+function DeedList({ sess, close }: { sess: GameSession; close: () => void }) {
   const m = useModel(sess);
   const auto = useAutoplay(sess); // 托管
   if (!m) return null;
   const S = m.S;
-  const mine = D.tiles.map((_, i) => i).filter((i) => S.owners[i] === m.playerId && !!S.mortgaged[i] === redeem && (redeem || D.tiles[i].kind !== "ring"));
+  // One list: mortgaged deeds first (redeemable), then the mortgageable rest.
+  const mine = D.tiles.map((_, i) => i).filter((i) => S.owners[i] === m.playerId && (!!S.mortgaged[i] || D.tiles[i].kind !== "ring"));
+  mine.sort((x, y) => Number(!!S.mortgaged[y]) - Number(!!S.mortgaged[x]));
   return (
     <div className={s.list}>
-      <p className={s.hint}>
-        {redeem ? tr("deedList.redeemHint")
-          : tr("deedList.mortgageHint")}
-      </p>
+      <p className={s.hint}>{tr("deedList.hint")}</p>
       {mine.length ? (
         <div className={s.rows}>
           {mine.map((i) => {
             const t = D.tiles[i];
+            const redeem = !!S.mortgaged[i];
             return (
               <div key={i} className={s.row}>
                 <i className={s.strip} style={{ background: t.color }} />
@@ -151,14 +151,14 @@ function DeedList({ sess, redeem, close }: { sess: GameSession; redeem: boolean;
             );
           })}
         </div>
-      ) : <div className={s.empty}>{redeem ? tr("deedList.emptyRedeem") : tr("deedList.emptyMortgage")}</div>}
+      ) : <div className={s.empty}>{tr("deedList.empty")}</div>}
       <div className={s.status}>{tr("deedList.money", { n: n0(m.me.money) })}</div>
     </div>
   );
 }
 
-export function showDeedList(sess: GameSession, redeem: boolean): void {
-  openModal(redeem ? tr("board.redeemDeeds") : tr("board.mortgageDeeds"), (close) => <DeedList sess={sess} redeem={redeem} close={close} />, { size: "mid" });
+export function showDeedList(sess: GameSession): void {
+  openModal(tr("board.deeds"), (close) => <DeedList sess={sess} close={close} />, { size: "mid" });
 }
 
 export function showPlayerInfo(m: Model, i: number): void {
