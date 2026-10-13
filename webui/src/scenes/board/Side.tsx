@@ -67,8 +67,7 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
           <div className={s.diceHint}>{hint}</div>
         </button>
       )}
-      <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess, false)}>{tr("board.mortgageDeeds")}</Btn>
-      <Btn icon="redo" className={s.act} disabled={auto} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
+      <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess)}>{tr("board.deeds")}</Btn>
     </div>
   );
 }
