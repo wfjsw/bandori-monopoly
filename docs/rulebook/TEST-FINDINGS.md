@@ -794,15 +794,10 @@ player and asks them last; one activation per visit -- is retired):
 * 「多个效果可[反击]同一个时点」 still does not cap declarations per player;
   the cap is now "all of them before priority moves on", not one per visit.
 
-**Open item in `chain.rs`:** `counters_to_counters_start_with_the_declarer`
-is `#[ignore]`d. The engine does start the nested round at the declarer (and
-`counters_to_a_counter_wait_for_the_round_on_x_to_close` observes that), but
-`TEST:deny`'s guard `deny_yes` requires `trigger::player_id() != player_id` --
-it never answers a player's *own* counter -- so the declarer has no eligible
-card on their own counter's round and the "starts with the declarer" offer
-cannot be observed through that fixture. The rulebook does not forbid answering
-your own link; either the fixture guard or the test's observation needs a
-change (black-box side).
+**Open item in `chain.rs`:** ~~`counters_to_counters_start_with_the_declarer`
+is `#[ignore]`d~~ **Fixed 2026-10-13** (`closeout-3-windows`): `TEST:deny`'s
+guard `deny_yes` no longer excludes self, so the declarer is offered deny on
+their own counter's round and ruling 2026-10-07 is observable. Un-ignored, green.
 
 ## Harness notes
 
@@ -1270,3 +1265,43 @@ High-severity class-A window items. 9 tests un-ignored, green twice.
 * **l01 open:** five-link war -- E (网络链接异常) should cancel A's designation
   (P0 pays nothing to P1) and P2 should still pay X. Currently both wars charge
   and P2 skips X. Ignore reason updated.
+
+## Batch 3 — counteraction windows and card interactions (2026-10-13, `closeout-3-windows`)
+
+* **WINDOW-02 / l01 (engine):** the five-link war now nests counters to
+  counters -- C answers B, D answers C, E answers A -- instead of putting every
+  counter on X's round. Un-ignored `l01_counter_war_five_links_deep`, green.
+* **chain.rs `counters_to_counters_start_with_the_declarer` (fixture):**
+  `TEST:deny`'s guard `deny_yes` excluded self (`trigger::player_id() !=
+  player_id`), so the declarer was never offered deny on their own counter's
+  round and ruling 2026-10-07 "the declarer is that round's initial user" was
+  unobservable. The rulebook does not forbid answering your own link. Un-ignored,
+  green.
+* **SETTLE-04 / l07 (C-Q26a ruling):** the last 线香花火 crystal removal does
+  **not** grant an extra turn. The terminal effect is discard + 2 [眩晕].
+  (Granting one would auto-skip it on the stun -- `play.rs` `stunned` ->
+  `end_turn` -- and its 「每回合结束时移除一层」 tick would eat one of the two
+  layers, netting 1.) The old ignore reason blamed phase-10/11 ordering; the
+  real cause was the extra turn's auto-skip. Un-ignored, green.
+* **CH-13 / c21 (engine):** `TriggerKind::TwoCards` (「当有人同一回合内打出两张
+  卡时」) was never raised. `play_from_hand` now counts hand-card plays in
+  `TurnCtx.cards_played` and raises `"twoCards"` on the second, opening its own
+  [反击] window. Un-ignored `c21_here_the_world`, green.
+* **CH-11 / c26 (placement prop):** 「此卡不受任何其他效果影响」 was a play-body
+  side effect (`set_self_immune`), so `place_raw` never saw it. New
+  `prop::IMMUNE` is stamped onto `FieldCard.immune` at placement. Un-ignored
+  `c26_immunity_vs_crystal_mover`, green.
+* **CH-12 / g23 (glossary 14):** [不可阻挡] now refuses new [除外]/[晕眩] layers
+  in `abnormal_gate`. 无路矢's exile is its teleport cost, so a refused gain
+  negates the card (CH-07 minimal: spent, no place / no designate / no later
+  teleport). Un-ignored `g23_unstoppable_refuses_the_exile_cost`, green.
+* **WINDOW-03 / c12 (gate order):** `target_player` runs Redirect **before**
+  Untargetable, so EXIST 「目标将改为你」 re-names first and the gate checks the
+  final name. Un-ignored `c12_exist_vs_summer_camp`, green. (The 「造成影响」
+  declaration-vs-settlement latch, C-Q8, is still open.)
+* **g21 (test fix + gate):** area status grants that never call `ctx::target`
+  (那天的雨's 「所有玩家获得一层[停留]」) now consult Untargetable in
+  `abnormal_gate`, so 夏日合宿 「你只会被自己发动的效果指定」 shields. The test's
+  `fire == 0` assertion was wrong: P2's fire is from its **own** stay via
+  祥子 (1) 「受到停留…获得一个火罐」, not from absorption (no [经过] in this
+  scenario). Fixed to assert P2 stay == 1 and fire == 1. Un-ignored, green.
