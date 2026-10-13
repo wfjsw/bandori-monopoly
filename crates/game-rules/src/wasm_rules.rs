@@ -7924,7 +7924,6 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     false
                 });
                 cx.swap_world(w);
-                eprintln!("DBG scheduled due={due:?} early={early} ended={ended}");
                 for (id, owner, uid) in due {
                     if let Some(idx) = self
                         .ruleset
