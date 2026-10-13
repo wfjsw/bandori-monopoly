@@ -188,6 +188,20 @@ paths unchanged. `cargo build -p game-rules -p rules-native -p rules-kani`
 green; `cargo test -p rules-kani` green; `cargo test -p rules-cond
 --features lower` green; wasm32 workspace check green.
 
+### After (fix-trampoline)
+
+| harness | before | after | notes |
+|---|---|---|---|
+| `events::duobang_01_02_two_player_iff` | TIMEOUT 1800 s | **SUCCESSFUL 922 s wall / 542 s CBMC** (5/5 covers sat, 0/34678 failed) | formula 605k vars / 732k clauses (was 1.9 GB stuck) |
+| `events::duobang_01_mutant_is_detected` | >4 min | pending | |
+| `events::pico_swap_01_rotates_positions` | 1767 s | pending | |
+| `events::tears_01_same_colour_next_pays_700` | 724 s | pending | |
+
+Dispatch shape after the fix: 285 `#[inline(never)]` `call_card_N`
+trampolines (each loads one constant `&CardDef`) + a thin integer
+`call_body_idx` match. A shared `body_of(on)(player)` site unions every
+`fn(i32) -> Asked` in the binary into one 874–4313 target IF-chain.
+
 ### Events proofs likely on the same path (same `entry_idx` / `all_players` / `Msg` / `Vec` shape)
 
 | id | shape | note |
