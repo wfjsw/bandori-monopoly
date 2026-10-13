@@ -70,7 +70,19 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     // there when the last layer ticks away. That engine-owned return stays the
     // functional storage -- it is what the exile tick reads -- so it is **not**
     // replaced by a designation mark.
+    // Glossary 14 [不可阻挡] 「无法获得新的[除外]层数」: the exile is the cost of
+    // the teleport, so a refused gain negates the whole card (「视为此卡未生效」,
+    // CH-07 minimal -- the card is spent, no place / no designate / no later
+    // teleport). C-Q26-adjacent ruling recorded by `g23_unstoppable_refuses_the_exile_cost`.
+    let before = ctx::state::get(player_id, card_sdk::abi::state_key::EXILE);
     ctx::give_exile(player_id, 2, tile);
+    if ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) <= before {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("no_road_refused")).card("card", "MyGO:无路矢"),
+        );
+        return Ok(());
+    }
     // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`. The
     // engine's exile tick reads this slot and consumes the turn's main move.
     ctx::set_slot(player_id, card_sdk::abi::state_key::EXILE_MAIN, 1);

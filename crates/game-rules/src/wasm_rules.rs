@@ -4617,13 +4617,20 @@ impl<M: CardModules> RulesBridge<M> {
         if s >= cx.state().players.len() || cx.world().out(s) {
             return Ok(false);
         }
-        // `unstoppable` (「不可阻挡」) is a blanket bypass for the *movement*
-        // abnormals -- the ones that put the player somewhere they did not
-        // choose. Status (stay/stun/exile) still lands. A self-caused move
-        // (`by == player_id`) is *chosen*, not 「受到的」 (glossary 51 「可选择
-        // 受到的[传送]，[强制移动]，[强制停下]效果是否生效」), so [不可阻挡] does
-        // not refuse it -- a card's own `card_move` (里美's 「期间[不可阻挡]」)
-        // must still walk.
+        // `unstoppable` (「不可阻挡」, glossary 14) -- three separate clauses:
+        // 1. movement abnormals (teleport / forced / stop / reverse): a blanket
+        //    bypass, the ones that put the player somewhere they did not
+        //    choose. A self-caused move (`by == player_id`) is *chosen*, not
+        //    「受到的」 (「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」),
+        //    so [不可阻挡] does not refuse it -- a card's own `card_move`
+        //    (里美's 「期间[不可阻挡]」) must still walk.
+        // 2. [晕眩] / [除外]: 「也不会获得新的层数」 / 「无法获得新的[除外]层数」 --
+        //    the gain does not land at all (this gate answers `false`, so the
+        //    layer is never written). Existing layers still decay (「在适当时机
+        //    依旧掉层」).
+        // 3. [停留]: 「无视已存在的[停留]」 is a movement bypass (already in 1's
+        //    spirit via `stunned`/`stay` checks at move time), not a refusal of
+        //    new layers -- but 「也不会获得新的层数」 names only 晕眩 and 除外.
         let movement = matches!(
             kind,
             crate::AbKind::Teleport
@@ -4631,7 +4638,11 @@ impl<M: CardModules> RulesBridge<M> {
                 | crate::AbKind::Stop
                 | crate::AbKind::Reverse
         );
-        if movement && by != player_id && cx.state().players[s].unstoppable() > 0 {
+        let unstoppable = cx.state().players[s].unstoppable() > 0;
+        if movement && by != player_id && unstoppable {
+            return Ok(false);
+        }
+        if matches!(kind, crate::AbKind::Stun | crate::AbKind::Exile) && unstoppable {
             return Ok(false);
         }
         let on = |t: &mut CoreTrigger| {
@@ -4639,6 +4650,18 @@ impl<M: CardModules> RulesBridge<M> {
             t.value = kind as i32;
             t.by_card = Some(by);
         };
+        // `Untargetable` at declaration, same as `target_player`: 「你只会被
+        // 自己发动的效果指定」 (夏日合宿) also covers an area status grant that
+        // lands on the player without a `ctx::target` pick (那天的雨's 「所有
+        // 玩家获得一层[停留]」). A self-caused grant (`by == player_id`) is the
+        // owner's own effect and passes the gate's own condition.
+        if self
+            .raise_core(cx, "untargetable", player_id, |t| t.by_card = Some(by))?
+            .is_cancelled()
+        {
+            cx.log(player_id, Msg::new("log.untargetable").player_id("who", player_id));
+            return Ok(false);
+        }
         // `AbnormalGuard` is a gate at declaration: a field card may block the
         // effect before anyone answers it.
         if self.raise_core(cx, "abnormalGuard", by, on)?.is_cancelled() {
@@ -4718,17 +4741,12 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(-1);
         }
         // ---- declaration ----------------------------------------------
-        // `Untargetable` governs who may be *named*. Block here and the effect
-        // cannot name `p` at all, so no chain forms against them.
-        if self
-            .raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?
-            .is_cancelled()
-        {
-            cx.log(p, Msg::new("log.untargetable").player_id("who", p));
-            return Ok(-1);
-        }
         // `Redirect` is declaration re-naming: the recipient set is settled
         // before the chain opens, so whoever holds the name is who answers.
+        // Runs **before** `Untargetable` so a redirect (EXIST 「目标将改为你」)
+        // re-names first, and the gate then checks the *final* name -- naming a
+        // 夏日合宿-shielded seat and having EXIST move it onto the EXIST holder
+        // must still land (C12).
         let mut p = p;
         if single {
             let r = self.raise_core(cx, "redirect", by, |t| {
@@ -4749,6 +4767,16 @@ impl<M: CardModules> RulesBridge<M> {
                 );
                 p = to;
             }
+        }
+        // `Untargetable` governs who may be *named*. Block here and the effect
+        // cannot name `p` at all, so no chain forms against them. Checked on
+        // the post-redirect name.
+        if self
+            .raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?
+            .is_cancelled()
+        {
+            cx.log(p, Msg::new("log.untargetable").player_id("who", p));
+            return Ok(-1);
         }
         // Named. Count it *after* naming, so a player who cannot be named does
         // not accrue 「成为目标」 counts (see `centrifugal`'s 「第二次」).

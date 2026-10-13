@@ -595,7 +595,6 @@ fn c11_exist_redirects_single_target() {
 
 // 规则书: EXIST redirects to its owner; 夏日合宿 blocks designation of P1.
 // RULING: whether 夏日合宿 counts as having "negated" something (its draw).
-#[ignore = "DISCREPANCY: with 夏日合宿 on P1 and EXIST on P2, 找回珍妮弗 does not land on P2"]
 #[test]
 fn c12_exist_vs_summer_camp() {
     let mut t = Table::vanilla(3);
@@ -961,7 +960,6 @@ fn c20_vocal_too_hard_plus_half_speed() {
 // 规则书: Here the world: 「当有人同一回合内打出两张卡时，将此卡放置于对方场上…
 // 下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶…每个回合开始时移除一个，
 // 当奇迹水晶数为0时…加入手牌，并使此卡使用者抽一张卡」.
-#[ignore = "DISCREPANCY: Here the world does not land on the second card played in one turn"]
 #[test]
 fn c21_here_the_world() {
     let mut t = Table::vanilla(2);
@@ -1167,7 +1165,6 @@ fn c25_hanae_vs_skill_main() {
 
 // 规则书: 不要背负期待 [特]: 「此卡不受任何其他效果影响」.
 // 会被骗着买水晶的人: move one crystal between two cards.
-#[ignore = "DISCREPANCY: 会被骗着买水晶的人 offers 不要背负期待 (「此卡不受任何其他效果影响」) as a crystal endpoint"]
 #[test]
 fn c26_immunity_vs_crystal_mover() {
     let mut t = Table::vanilla(2);
