@@ -57,6 +57,20 @@ function turnOrder(S: Model["S"]): number[] {
   return [...seats.filter((i) => !out(i)), ...seats.filter(out)];
 }
 
+/** Every marker a player holds: counter units, plus each field card's crystals, CP and named counters. */
+function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
+  if (!x) return [];
+  const out: { label: string; n: number }[] = [];
+  for (const tok of x.tokens ?? []) if (tok.value > 0) out.push({ label: tok.name, n: tok.value });
+  for (const fc of x.field ?? []) {
+    const card = cardTitle(fc.card);
+    if (fc.crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.crystals });
+    if (fc.cp > 0) out.push({ label: `${card} · CP`, n: fc.cp });
+    for (const [name, n] of Object.entries(fc.counters ?? {})) if (n > 0) out.push({ label: `${card} · ${name}`, n });
+  }
+  return out;
+}
+
 export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {
   const S = m.S;
   const n = S.players.length;
@@ -69,6 +83,9 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   const [peek, setPeek] = useState<number | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const peekRow = peek == null ? -1 : order.indexOf(peek);
+  const [firePeek, setFirePeek] = useState<number | null>(null);
+  const fireRow = firePeek == null ? -1 : order.indexOf(firePeek);
+  const fireMarks = firePeek == null ? [] : markersOf(S.players[firePeek]);
   const peekCards = peek == null ? [] : byTitle(S.players[peek]?.discard ?? []);
   // The panels unmount-proof the highlight: clear it when this column goes away.
   useEffect(() => () => setHoverSeat(-1), []);
@@ -107,7 +124,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
             <div className={s.sub}>
               {status.map((t) => <span key={t} className={s.status}>{t}</span>)}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
+              <span className={s.fire} onMouseEnter={() => setFirePeek(i)} onMouseLeave={() => setFirePeek(null)}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
               <span className={s.grave} title={tr("board.graveyardPile")} onMouseEnter={() => setPeek(i)} onMouseLeave={() => setPeek(null)} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>
@@ -121,6 +138,16 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
     </div>
       {/* The hovered player's graveyard, alphabetical, beside their panel. Outside
           the scrolling list, which would clip it. */}
+      <div className={cx(s.peek, firePeek != null && s.peekOn)} style={{ top: 5 + Math.max(0, fireRow) * (height + gap) - scrollTop }}>
+        {firePeek != null && (
+          <>
+            <div className={s.peekHead}>{tr("board.markers")}<b>×{fireMarks.length}</b></div>
+            {fireMarks.length
+              ? fireMarks.map((mk, k) => <div key={k} className={s.peekRow}><span>{mk.label}</span><b>{mk.n}</b></div>)
+              : <div className={s.peekEmpty}>{tr("board.markersEmpty")}</div>}
+          </>
+        )}
+      </div>
       <div className={cx(s.peek, peek != null && s.peekOn)} style={{ top: 5 + Math.max(0, peekRow) * (height + gap) - scrollTop }}>
         {peek != null && (
           <>
