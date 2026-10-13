@@ -37,11 +37,18 @@ pub const MAX_ANSWERS: usize = 8;
 /// Bounded pile / field arrays (interned card ids) and the pilot bitsets.
 pub const MAX_CARDS: usize = 8;
 /// Generic named counters (tokens, state keys, slots).
-/// Named keys per map (tokens / slots / state / props). **8** is the model
-/// bound: a full map is a documented cut (the old `set` overwrite-slot-0
-/// behaviour). The loop trip count is `MAX_KEYS` itself, so a harness with
-/// `#[kani::unwind(8)]` covers every `NameMap` walk — `while i < self.n`
-/// would still demand `unwind >= 255` for a `u8` index.
+///
+/// **Direct-index by `NameId.0`** (`0..SLOTS`, 64), not a linear scan.
+/// The old `MAX_KEYS=8` walk was the pp-unit unwind cliff
+/// (`NameMap::get_opt` 144 + `NameMap::set` 80 unrolls in
+/// `same_dream_01_band_plus_3_iff`). Intern ids are `u16` in `0..32`
+/// (`intern::MAX_INTERN`); `NameId::INVALID` and any out-of-range id read
+/// as missing and are a silent no-op on `set` (never alias).
+///
+/// `MAX_KEYS` is kept as the **documented per-map key budget** for
+/// conformance diffs (the engine's `NameMap` is also 8). The model holds
+/// up to `SLOTS` distinct keys; a proof that needs more than
+/// `MAX_KEYS` live keys is still allowed (strictly more room than master).
 pub const MAX_KEYS: usize = 8;
 /// Field card instances (uid + card id + props).
 pub const MAX_FIELD: usize = 8;
@@ -385,8 +392,11 @@ pub const PROMPT_YESNO: i32 = 1;
 // Generic named map (tokens / state / counters)
 // ---------------------------------------------------------------------------
 
-/// One `(key, value)` slot. Empty slots have `key == NameId::INVALID`.
+/// One `(key, value)` slot. Kept for any external pin of the old linear-map
+/// shape; `NameMap` itself is direct-index (see below) and no longer stores
+/// `NamedVal`s.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[allow(dead_code)]
 pub struct NamedVal {
     pub key: NameId,
     pub value: i32,
@@ -399,18 +409,36 @@ impl NamedVal {
     };
 }
 
-/// A fixed-capacity map from interned name → i32.
+/// A map from interned name → i32, **direct-indexed by `NameId.0`**.
+///
+/// CBMC cost: O(1) (one compare + one array index). The old 8-slot linear
+/// scan unrolled 8× per `get`/`set` and was the pp-unit unwind cliff
+/// (144 + 80 unrolls in `same_dream_01`).
+///
+/// Presence is a `u32` bitset over `intern::SLOTS` (64) buckets.
+/// `NameId::INVALID` / out-of-range ids never alias a live key: `get_opt`
+/// is `None`, `set` is a documented no-op.
+/// Extra (key, value) slots for derived ids (`key + 0x2000/0x4000/0x8000`
+/// MIN/MAX/EXPIRES columns) that live outside the intern bucket range.
+const MAX_EXTRA: usize = 16;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct NameMap {
-    pub slots: [NamedVal; MAX_KEYS],
-    pub n: u8,
+    vals: [i32; crate::intern::SLOTS],
+    /// Bit `i` set = key `NameId(i)` is present (even if `vals[i] == 0`).
+    present: u64,
+    /// Linear fallback for `NameId.0 >= SLOTS` (derived MIN/MAX/EXPIRES).
+    extra: [(NameId, i32); MAX_EXTRA],
+    extra_n: u8,
 }
 
 impl NameMap {
     pub const fn new() -> Self {
         Self {
-            slots: [NamedVal::EMPTY; MAX_KEYS],
-            n: 0,
+            vals: [0; crate::intern::SLOTS],
+            present: 0,
+            extra: [(NameId::INVALID, 0); MAX_EXTRA],
+            extra_n: 0,
         }
     }
 
@@ -419,36 +447,53 @@ impl NameMap {
     }
 
     /// `Some(value)` when `key` is present (even if the value is 0).
-    /// `set` never inserts a duplicate key, so first-match is the match.
-    /// Loop bound is [`MAX_KEYS`] (not `self.n`) so CBMC's unwinding
-    /// assertion is satisfied at `unwind == MAX_KEYS`.
+    /// O(1): one range check + one bit test. No loop.
     pub fn get_opt(&self, key: NameId) -> Option<i32> {
-        let mut i = 0usize;
-        while i < MAX_KEYS {
-            if i < self.n as usize && self.slots[i].key == key {
-                return Some(self.slots[i].value);
+        let i = key.0 as usize;
+        if i < crate::intern::SLOTS {
+            if ((self.present >> i) & 1) == 1 {
+                return Some(self.vals[i]);
             }
-            i += 1;
+            return None;
+        }
+        // Derived MIN/MAX/EXPIRES ids — tiny linear table (≤ MAX_EXTRA).
+        let mut e = 0usize;
+        while e < MAX_EXTRA {
+            if e < self.extra_n as usize && self.extra[e].0 == key {
+                return Some(self.extra[e].1);
+            }
+            e += 1;
         }
         None
     }
 
     /// Set `key` to `value`, inserting if needed. Returns the value.
-    /// A full table overwrites slot 0 (bounded, documented).
+    /// O(1). Out-of-range / `INVALID` ids are a no-op (never alias).
     pub fn set(&mut self, key: NameId, value: i32) -> i32 {
-        let mut i = 0usize;
-        while i < MAX_KEYS {
-            if i < self.n as usize && self.slots[i].key == key {
-                self.slots[i].value = value;
+        let i = key.0 as usize;
+        if i < crate::intern::SLOTS {
+            self.vals[i] = value;
+            self.present |= 1u64 << i;
+            return value;
+        }
+        if !key.is_valid() {
+            return value;
+        }
+        let mut e = 0usize;
+        while e < MAX_EXTRA {
+            if e < self.extra_n as usize && self.extra[e].0 == key {
+                self.extra[e].1 = value;
                 return value;
             }
-            i += 1;
+            e += 1;
         }
-        if (self.n as usize) < MAX_KEYS {
-            self.slots[self.n as usize] = NamedVal { key, value };
-            self.n += 1;
+        if (self.extra_n as usize) < MAX_EXTRA {
+            self.extra[self.extra_n as usize] = (key, value);
+            self.extra_n += 1;
         } else {
-            self.slots[0] = NamedVal { key, value };
+            // Documented cut: overflow overwrites extra[0] (same shape as the
+            // old NameMap full-table rule). Never aliases a different key.
+            self.extra[0] = (key, value);
         }
         value
     }
@@ -456,6 +501,29 @@ impl NameMap {
     pub fn add(&mut self, key: NameId, delta: i32) -> i32 {
         let v = self.get(key).saturating_add(delta);
         self.set(key, v)
+    }
+
+    /// Visit every present `(key, value)` in index order.
+    ///
+    /// Bound is `MAX_INTERN` (32) — used only by `ir_fill`'s copy path,
+    /// not the hot `get`/`set`. `f` sees at most `MAX_KEYS` live keys in
+    /// practice (the engine budget); extra slots are model headroom.
+    pub fn for_each(&self, mut f: impl FnMut(NameId, i32)) {
+        let mut i = 0usize;
+        while i < crate::intern::SLOTS {
+            if ((self.present >> i) & 1) == 1 {
+                f(NameId(i as u16), self.vals[i]);
+            }
+            i += 1;
+        }
+        let mut e = 0usize;
+        while e < MAX_EXTRA {
+            if e < self.extra_n as usize {
+                let (k, v) = self.extra[e];
+                f(k, v);
+            }
+            e += 1;
+        }
     }
 }
 
@@ -1128,4 +1196,29 @@ pub fn snapshot() -> Snapshot {
             log_n: w.log_n,
         }
     })
+}
+#[cfg(test)]
+mod namemap_tests {
+    use super::*;
+    use crate::intern;
+
+    #[test]
+    fn direct_index_roundtrip() {
+        intern::reset();
+        let mut m = NameMap::new();
+        let k = intern::intern("PAREO标记");
+        eprintln!("key={:?} raw={} max={}", k, k.0, crate::intern::SLOTS);
+        assert!(k.is_valid(), "intern failed");
+        assert!(m.get_opt(k).is_none());
+        m.set(k, 2);
+        assert_eq!(m.get_opt(k), Some(2));
+        assert_eq!(m.get(k), 2);
+        let mut seen = 0;
+        m.for_each(|key, v| {
+            assert_eq!(key, k);
+            assert_eq!(v, 2);
+            seen += 1;
+        });
+        assert_eq!(seen, 1);
+    }
 }
