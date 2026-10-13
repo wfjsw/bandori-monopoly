@@ -188,7 +188,7 @@ function SkillStack({ m, sess, peek, unpeek }: {
             >
               <CardFace
                 id={a.id}
-                size="tile"
+                size="mini"
                 width={SKILL_CARD_W}
                 className={s.skillCard}
                 onClick={() => {
