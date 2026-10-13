@@ -137,7 +137,7 @@
 }
 /* Ownership: a tint, an inner ring, and the colour strip along the bottom
    (inside the body's bottom gutter, never on the caption). */
-.owned { background: color-mix(in srgb, var(--owner) 12%, #fff); box-shadow: inset 0 0 0 2px var(--owner); }
+.owned { background: color-mix(in srgb, var(--owner) 12%, var(--var(--white))); box-shadow: inset 0 0 0 2px var(--owner); }
 .ownerStrip {
   position: absolute;
   left: calc(var(--u, 12px) * 0.3);
@@ -342,7 +342,7 @@
 .pile:hover .stack { transform: translateY(-3px); }
 .stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 4px 4px 0 #fff, 5px 5px 0 #f0b3c3, 0 6px 14px rgba(0, 0, 0, 0.18); }
 .stack img.face { border: 3px solid #fff; }
-.pileEmpty { position: absolute; inset: 0; border-radius: 8px; border: 3px dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(255, 255, 255, 0.5); }
+.pileEmpty { position: absolute; inset: 0; border-radius: 8px; border: 3px dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(246, 242, 243, 0.5); }
 .pileLabel { position: relative; height: 26px; padding: 0 12px; border-radius: 13px; background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 13px; font-weight: 700; line-height: 26px; white-space: nowrap; }
 .pileLabel b { color: var(--pink); margin-left: 6px; }
 .hint { position: absolute; left: 66.6667%; top: 70%; width: 25%; height: 20%; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: 15px; line-height: 1.5; pointer-events: none; }
@@ -352,12 +352,12 @@
 .rollDock { position: absolute; left: 41.6667%; top: 30%; width: 16.6667%; height: 40%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .roll {
   position: relative; width: 118px; height: 118px; border-radius: 50%;
-  background: radial-gradient(circle at 32% 28%, #fff, #f3e2e8 78%);
+  background: radial-gradient(circle at 32% 28%, var(--var(--white)), #f3e2e8 78%);
   box-shadow: 0 8px 22px rgba(60, 20, 40, 0.22), inset 0 -3px 8px rgba(60, 20, 40, 0.1);
   color: var(--pink); pointer-events: auto; cursor: default;
 }
 .roll.can { cursor: pointer; box-shadow: 0 8px 22px rgba(237, 78, 118, 0.32), inset 0 0 0 3px var(--pink); }
-.roll.can:hover { background: radial-gradient(circle at 32% 28%, #fff, var(--pink-pale) 78%); }
+.roll.can:hover { background: radial-gradient(circle at 32% 28%, var(--var(--white)), var(--pink-pale) 78%); }
 .roll:disabled { opacity: 0.82; }
 .diceImg { position: absolute; left: 50%; top: 46%; width: 74px; height: 74px; transform: translate(-50%, -50%); transition: transform 0.12s; }
 .roll.can:hover .diceImg { transform: translate(-50%, -50%) rotate(-8deg) scale(1.05); }
@@ -385,7 +385,7 @@
 
 /* Pan/zoom buttons, top-right of the board window. Same pill language as the
    animation-speed control (Side.module.css): small, white, pink on hover. */
-.zoomCtl { position: absolute; right: 8px; top: 8px; z-index: var(--z-modal); display: flex; align-items: center; gap: 2px; height: 28px; padding: 2px; border-radius: var(--r-xl); background: rgba(255, 255, 255, 0.82); border: 1.5px solid var(--line); opacity: 0.72; transition: opacity 0.15s, background 0.15s; pointer-events: auto; }
+.zoomCtl { position: absolute; right: 8px; top: 8px; z-index: var(--z-modal); display: flex; align-items: center; gap: 2px; height: 28px; padding: 2px; border-radius: var(--r-xl); background: rgba(246, 242, 243, 0.82); border: 1.5px solid var(--line); opacity: 0.72; transition: opacity 0.15s, background 0.15s; pointer-events: auto; }
 .zoomCtl:hover, .zoomCtl:focus-within { opacity: 1; background: var(--surface); }
 .zoomCtl button { width: 30px; height: 23px; border-radius: 11px; color: var(--sub); font-size: 13px; font-weight: 700; line-height: 23px; text-align: center; padding: 0; }
 .zoomCtl button:hover { color: var(--pink); background: var(--light-pill); }

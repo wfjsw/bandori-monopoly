@@ -8,7 +8,7 @@
 .btn:disabled { opacity: 0.5; }
 .icon { width: 22px; height: 22px; }
 
-.white { color: var(--text); background: linear-gradient(#fff, #f3f3f6); box-shadow: var(--lift); }
+.white { color: var(--text); background: linear-gradient(var(--var(--white)), #f3f3f6); box-shadow: var(--lift); }
 .white .icon { color: var(--pink); }
 .white:active:not(:disabled) { box-shadow: var(--lift-down); }
 .pink { color: #fff; background: linear-gradient(var(--pink-light), var(--pink)); box-shadow: 0 4px 0 var(--pink-deep), 0 6px 14px rgba(237, 78, 118, 0.25); }

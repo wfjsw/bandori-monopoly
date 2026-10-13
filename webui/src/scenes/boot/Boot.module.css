@@ -1,6 +1,6 @@
 .boot { position: absolute; inset: 0; cursor: pointer; }
-.art { position: absolute; inset: 0; background: center / cover no-repeat #fff; }
-.panel { position: absolute; left: 50px; bottom: 50px; width: 460px; background: rgba(255, 255, 255, 0.92); border-radius: var(--r-2xl); padding: 20px 26px; display: flex; flex-direction: column; gap: 12px; align-items: center; box-shadow: var(--shadow); }
+.art { position: absolute; inset: 0; background: center / cover no-repeat var(--var(--white)); }
+.panel { position: absolute; left: 50px; bottom: 50px; width: 460px; background: rgba(246, 242, 243, 0.92); border-radius: var(--r-2xl); padding: 20px 26px; display: flex; flex-direction: column; gap: 12px; align-items: center; box-shadow: var(--shadow); }
 .logo { max-width: 260px; max-height: 80px; }
 .tip { color: var(--sub); text-align: center; font-size: 16px; }
 .progress { width: 100%; height: 10px; background: var(--pink-pale); border-radius: 5px; overflow: hidden; }
