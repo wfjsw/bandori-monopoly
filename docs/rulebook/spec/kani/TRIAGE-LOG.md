@@ -327,3 +327,44 @@ direct wrappers, not a `code*` load.
 
 Unrolls remain clean (`symbolic_play_world` 4 only) after the 3c setup
 cuts.
+
+### Lever A — per-unit crate features (address-taken set)
+
+`rules-kani` optional features `band-*` / `skills-*` / `events` / `tiles`
+(`default = all`). `run.sh --unit` maps to `--no-default-features --features
+…`. `RULESET` / `BAND_START` / `card_ids` / body-dispatch generate from the
+**enabled** set (`card_id!` = const-fn byte compare; disabled id = compile
+error).
+
+`pp::same_dream_01_band_plus_3_iff` with `--features band-pp` only:
+
+| metric | all crates (285) | band-pp (19) |
+|---|---:|---:|
+| goto binary | 42–106 MB | **11 MB** |
+| `call_card_*` trampolines | 285 | **19** |
+| `address_of` IFs per `code*` site | **874** | **388** |
+| verdict | TIMEOUT 1800 s | **TIMEOUT 1800 s** (SSA-bound after clean unwind) |
+
+~2.3× fewer targets per site, 15× fewer sites. Still not 1 target —
+CBMC removal is type-based over every `fn(i32)->Asked` **in the linked
+binary** (pp bodies + shared runtime ≈ 388).
+
+### Lever B — `goto-instrument --restrict-function-pointer`
+
+Exists (`--restrict-function-pointer pointer_name/target[,targets]*`,
+`--restrict-function-pointer-by-name`). CBMC itself has no such flag;
+Kani exposes `--cbmc-args` but not a goto-instrument hook, so pinning the
+site needs a pipeline wrap (goto-cc → restrict → cbmc) that `cargo kani`
+does not offer today.
+
+### Plain answer
+
+**Neither lever gets pp under ~10–15 min.** Unrolls are clean
+(`symbolic_play_world` 4); SSA/solver after symbolic execution is still
+>18 min / TIMEOUT at 1800 s even with 19 cards and 388-target sites.
+
+### events backlog (central pass)
+
+| id | verdict | class | note |
+|---|---|---|---|
+| `events::moca_01_activation_keeps_the_card` | UNWINDING 507 s | A | `memcmp` 38 unrolls (host tag compare) — same class as the old hook-dispatch cliff |
