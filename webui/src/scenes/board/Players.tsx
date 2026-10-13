@@ -67,12 +67,14 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
   // panel's row so the peek lines up beside it.
   const [peek, setPeek] = useState<number | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
   const peekRow = peek == null ? -1 : order.indexOf(peek);
   const peekCards = peek == null ? [] : byTitle(S.players[peek]?.discard ?? []);
   // The panels unmount-proof the highlight: clear it when this column goes away.
   useEffect(() => () => setHoverSeat(-1), []);
   return (
-    <div className={s.players} style={{ gap }}>
+    <div className={s.playersWrap}>
+    <div className={s.players} style={{ gap }} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
       {order.map((i) => {
         const x = S.players[i];
         const c = m.charOf(i);
@@ -116,8 +118,10 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
           </button>
         );
       })}
-      {/* The hovered player's graveyard, alphabetical, beside their panel. */}
-      <div className={cx(s.peek, peek != null && s.peekOn)} style={{ top: Math.max(0, peekRow) * (height + gap) }}>
+    </div>
+      {/* The hovered player's graveyard, alphabetical, beside their panel. Outside
+          the scrolling list, which would clip it. */}
+      <div className={cx(s.peek, peek != null && s.peekOn)} style={{ top: 5 + Math.max(0, peekRow) * (height + gap) - scrollTop }}>
         {peek != null && (
           <>
             <div className={s.peekHead}>{tr("board.graveyardPile")}<b>×{peekCards.length}</b></div>
