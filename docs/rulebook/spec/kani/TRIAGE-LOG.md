@@ -291,3 +291,39 @@ at 12–18 min (no verdict inside 10 min target).
 smaller). next lever: reduce World SSA (NameMap `SLOTS` 64 → packed
 dense id) or a `cfg(kani)` body-enum in `card-sdk` so the call is a match
 on an integer, not a `code*`.
+
+### Named-const trampolines — CBMC still 874 targets (measurement)
+
+Tried the pilot invoker shape (`git show 91fe463:rules/kani/src/invoke.rs`):
+
+```rust
+let card = &card_pp::same_dream::SAME_DREAM;
+match &card.on[0] { On::Play(_, _, f) => f(player), … }
+```
+
+`parse_cards` in `build.rs` names each pub const
+(`&{crate}::{module}::{CONST}`) from the band `lib.rs` `use mod::CONST` +
+`CARDS` order. **Literal** `on[0]` index (not `on.get(sym)`).
+
+| shape | goto size | `address_of` / IFs per `code*` site |
+|---|---|---|
+| `&CARDS[i]` single site | 42 MB | 874 |
+| named const + `on.get(sym)` ×285 trampolines | 75 MB | **874 per trampoline** |
+| named const + `on[0]` pilot arm + `on.get` fallback | 105 MB | **1747 per trampoline** (2 sites × 874) |
+
+`goto-instrument --show-goto-functions` on
+`pp::same_dream_01_band_plus_3_iff`: every `invoke::call_card_N` has
+**874 `address_of` IF-branches** for `f(player)`. The value set does **not**
+collapse to 1. CBMC's function-pointer removal is **type-based** over
+every `fn(i32) -> Asked` in the binary (874 today; the pilot era had far
+fewer address-taken bodies), not value-based on the named const's
+initialiser.
+
+**Conclusion:** naming the pub const + literal `on[0]` is not enough on
+this CBMC. A 1-target resolve needs either (a) a **named** `play` symbol
+(`pub fn` in the card module — currently a card-body edit), or (b) a
+`card-sdk` `On` body **integer id** so the call is `match body_id` with
+direct wrappers, not a `code*` load.
+
+Unrolls remain clean (`symbolic_play_world` 4 only) after the 3c setup
+cuts.
