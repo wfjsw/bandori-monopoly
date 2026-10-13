@@ -314,14 +314,14 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * 网络链接异常's drop-one is landed (§3); two cross fixtures still see the
     whole-card negate (c05 / g19) -- see cross below.
 * **pp** (3)
-  * 丸山彩's (2) PayChoose hook still prompts under 初次演出事故 -- the
-    `skillBlock` token is set but the guard/body `skill_blocked` check does
-    not see it (hook-guard dispatch).
+  * ~~丸山彩's (2) PayChoose hook still prompts under 初次演出事故.~~
+    **Fixed 2026-10-13** (the residual guard was fine; the test's `set_fans`
+    wiped `skillBlock`. SKILL-01).
   * 冰川日菜 (2) never rolls 1d4 nor borrows a skill (`skill.hinaLottery`
     stays -1).
   * 安可 doesn't counter 重叠的声音's self-teleport.
-  * PP band (2) overflow crystals: a passive 「X大于拥有数时」 hook on a
-    fan-flip effect, and there is no flip-effect trigger to observe (§6).
+  * ~~PP band (2) overflow crystals: no flip-effect trigger to observe.~~
+    **Fixed 2026-10-13** (`FlipEffect` = 94; ABI-05).
 * **roselia** (1)
   * ~~凑友希那 (3) stop-pot offers no prompt.~~ **Fixed 2026-10-09** (test
     matched Chinese text instead of the `kokoro_practice_force_*` key).
@@ -332,7 +332,9 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * ~~选择自己的舞台 opens no window on a self-inflicted [传送].~~
     **Fixed 2026-10-10** (un-ignored, green).
 * **morfonica** (2)
-  * 星月夜's even-roll crystal-removal offer never prompts.
+  * ~~星月夜's even-roll crystal-removal offer never prompts.~~
+    **Fixed 2026-10-13** (it did prompt; the owner, not the roller, pays.
+    DRAW-02).
   * 纯真振翅 never rolls after the teleport.
   * （NNM）稍微努力了一下 is a **card bug**: its CardDef declares two
     `On::Play` entries and the host dispatches only the first, so a hand
@@ -341,15 +343,15 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
 * **ras** (2)
   * ~~游击演出 lands one tile past the chosen one.~~ **Fixed 2026-10-09**
     (`card_settle_at` no longer inherits the turn's walk).
-  * 游击演出's [特] never opens at turn end.
+  * ~~游击演出's [特] never opens at turn end.~~ **Fixed 2026-10-13**
+    (own-card `Discarded` dispatch + arm hook; DRAW-03).
   * ~~Repaint halves a shaped settlement payment only partially (the
     Tomorrow's Door surcharge joins at full price).~~ **Fixed 2026-10-10**
     (`MONEY-03`; the pipeline already did the right thing -- the test's dice
     put the hill off-path so Repaint was never offered. Un-ignored, green).
 * **mygo** (4)
-  * 灯 不再迷茫: a crystal cannot pay a skill's fire cost (B -- wants a
-    pre-spend `FirePaying` hook), so the card is never [移除]d when its
-    crystals run out (two tests).
+  * ~~灯 不再迷茫: a crystal cannot pay a skill's fire cost.~~
+    **Fixed 2026-10-13** (`FirePaying` = 78; CRYSTAL-01, two tests).
   * A mid-turn [停留] doesn't stop the move (also an ambiguity -- §6).
   * ~~要乐奈's Space teleport spends the 3 fire but leaves the piece at the
     origin.~~ **Fixed 2026-10-09** (`card_move` now runs the plan).
@@ -1134,21 +1136,46 @@ changed only *how the test drives the engine* (match i18n keys; press a
 press-skill; observe at the right boundary) or a *forgot-the-CiRCLE-reward*
 expectation that contradicted the book's own reward clause.
 
+### Batch 2026-10-13 (closeout-1-skills): character/band skills
+
+Fixed and un-ignored (green):
+
+* **CRYSTAL-01 / FirePaying** (`light_crystal_pays_skill_fire_cost`,
+  `light_removed_when_crystals_run_out`). New `TriggerKind::FirePaying` (78)
+  raised inside `ctx::spend_fire` before the pots move; a hook that substitutes
+  cancels the link. 不再迷茫 (2) hooks it and burns one crystal; (3) sweeps at
+  0 via `CounterChanged` (`Dest::Banished`). The 诗超绊 (2)/(3) gate no longer
+  requires `fire >= cost` (a crystal can stand in).
+* **DRAW-01 / Maya drew** (`g28_maya_look_at_top_still_counts_as_a_draw`). A
+  `DrewBefore` replacement's `add_to_hand` now pushes to `draw_log`, so the
+  after points fire for the kept card.
+* **DRAW-02 / 星月夜 even-roll** (`starry_even_roll_of_another_player_offers_crystal_removal`).
+  The hook did prompt; `attack` billed the roller (C#) while the sheet's
+  omitted subject of 「可消耗」 is the card controller. The owner now pays.
+* **DRAW-03 / 游击演出 [特]** (`guerrilla_special_offers_to_mark_a_deed_as_livehouse`).
+  Own-card `Discarded` dispatch + a `Discarded` hook that arms the turn-end
+  check. The test discards through the engine (over-hand `discard_card`).
+* **CRYSTAL-04 / NNM (2)** (`nnm_option2_gains_x_times_circle_money_reward`).
+  Each of the x rewards runs the money half of the CiRCLE reward step
+  (`circleAffected`), so Morfonica's 1000/1500/2000 cycle scales it.
+* **ABI-05 / PP band overflow** (`band_skill_overflow_to_crystals`). New
+  `TriggerKind::FlipEffect` (94) raised with the clause's intended X before the
+  counters move; the band (2) hooks it and adds `X - owned` crystals.
+* **SKILL-01 / skillBlock** (`accident_blocks_pp_skill_2`). The residual guard
+  was already consulting `skill_blocked`; the test's `set_fans` helper wiped
+  the whole tokens vector (including `skillBlock`). The helper now updates the
+  two fan counters in place.
+
+Test fixes (not engine): DRAW-02's who-pays reading; DRAW-03's discard path;
+CRYSTAL-04's prompt sequence and Morfonica-cycle expectation; SKILL-01's
+`set_fans`; the two light tests' setup (bind the skill; assert the card is
+[移除]d at 0 per (3)).
+
 ### Still open (unchanged, triaged)
 
 The remaining `#[ignore]`s are C (ruling -- §6 and the Timing / order block)
 or A/B items that need a wider surface than this batch:
 
-* **B, contained next:** MyGO:（灯）不再迷茫 (2) 「移除此卡上的一个[奇迹水晶]
-  以代替此次技能的火罐消耗」. `spend_fire` has no pre-spend substitution hook
-  (only the post-commit `fireSpent`), so a 0-fire player cannot pay with a
-  crystal. Wants a `FirePaying` hook (or a substitute consult inside
-  `spend_fire`) -- ABI bump. Tests: `light_crystal_pays_skill_fire_cost`,
-  `light_removed_when_crystals_run_out`.
-* **B, contained next:** 丸山彩 (2) under 初次演出事故 -- the
-  `skillBlock:Pastel✽Palettes` token is set but `skill_blocked` is not seen
-  on the `PayTotalAdd` guard/body (hook-guard dispatch). Test:
-  `accident_blocks_pp_skill_2`.
 * **B / A:** 冰川日菜 (2) -- `hina_lottery` is written (roll 1d4, borrow the
   matching (2)) but `place_raw` + `begin_turn` never reaches `borrowed`.
   Test: `hina_skill_2_borrows_skill` (also asserts the *face* where the
