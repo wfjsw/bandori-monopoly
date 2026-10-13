@@ -193,7 +193,7 @@ green; `cargo test -p rules-kani` green; `cargo test -p rules-cond
 | harness | before | after | notes |
 |---|---|---|---|
 | `events::duobang_01_02_two_player_iff` | TIMEOUT 1800 s | **SUCCESSFUL 922 s wall / 542 s CBMC** (5/5 covers sat, 0/34678 failed) | formula 605k vars / 732k clauses (was 1.9 GB stuck) |
-| `events::duobang_01_mutant_is_detected` | >4 min | pending | |
+| `events::duobang_01_mutant_is_detected` | >4 min | **SUCCESSFUL 714 s** | mutant detected |
 | `events::pico_swap_01_rotates_positions` | 1767 s | pending | |
 | `events::tears_01_same_colour_next_pays_700` | 724 s | pending | |
 
