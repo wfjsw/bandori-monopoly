@@ -37,8 +37,8 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-draw-01 | 抽取的事件卡不进入手卡并向所有玩家公开，效果立刻生效 | PROTOCOL-LEVEL | — | — | event-deck ops are stubs (`draw_event`) | — |
 | E-draw-02 | 事件结算后进入事件弃卡区 | PROTOCOL-LEVEL | — | — | filing pile is protocol (`event_banish` / discard list not modeled) | — |
 | E-draw-03 | 没有事件可抽取则将事件弃卡区洗切… | PROTOCOL-LEVEL | — | — | reshuffle is engine scheduling | ruling 2026-10-07 recycle-after-file |
-| E-duobang-01 | 最高者从最低者获得胜出点数x50（18 vs 16 → 100） | PROVEN | `duobang_01_02_two_player_iff` | TBD | — | OPEN-duobang-tie |
-| E-duobang-02 | total moved = (max-min)*50 (unique extremes) | PROVEN | `duobang_01_02_two_player_iff`, `duobang_01_mutant_is_detected` | TBD | multi-extreme total is `n_low*n_high*each` (OPEN) | OPEN-duobang-tie |
+| E-duobang-01 | 最高者从最低者获得胜出点数x50（18 vs 16 → 100） | PROVEN | `duobang_01_02_two_player_iff` | see TRIAGE-LOG batch 3 (perf fix) | — | OPEN-duobang-tie |
+| E-duobang-02 | total moved = (max-min)*50 (unique extremes) | PROVEN | `duobang_01_02_two_player_iff`, `duobang_01_mutant_is_detected` | see TRIAGE-LOG batch 3 (perf fix) | multi-extreme total is `n_low*n_high*each` (OPEN) | OPEN-duobang-tie |
 | E-estate-01 | 随机指定可购买格子…出价最大…获得地契 | PROTOCOL-LEVEL | — | — | `raise_bought` stub; sealed-bid stand-in is not a raise auction | OPEN-estate-tie, OPEN-estate-empty |
 | E-estate-02 | 全员出价 0 → 无人支付 | PROTOCOL-LEVEL | — | — | same | — |
 | E-estate-03 | 仅指定格子易主 | PROTOCOL-LEVEL | — | — | `raise_bought` stub | — |
