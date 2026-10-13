@@ -28,37 +28,63 @@ fn tok_neg() -> u16 {
     crate::intern::intern(FANS_DOWN).0
 }
 
-/// Symbolic play world: 2..=4 players, bounded money/fans, no [共鸣] in hand.
-fn symbolic_play_world() -> World {
+/// Install the symbolic play world **in place** (2..=4 players, bounded
+/// money/fans, no [共鸣] in hand).
+///
+/// Writes the global cell directly — no `World` copy, no `reset_world(w)`
+/// (the full-struct assign was an SSA cliff). `World::new()` defaults are
+/// already in the cell from `world_mut()`.
+fn symbolic_play_world() {
     host::install();
     // Intern the two fan tokens once — `intern(FANS_*)` per seat walked the
     // intern table 8× per call (pp setup cliff).
     let up = crate::intern::intern(FANS_UP);
     let down = crate::intern::intern(FANS_DOWN);
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
-        w.out[p] = false;
-        w.fans_pos[p] = kani::any();
-        kani::assume(w.fans_pos[p] >= 0 && w.fans_pos[p] <= 20);
-        w.fans_neg[p] = kani::any();
-        kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
-        w.hand_resonance[p] = 0;
-        // keep generic keys in sync with the views (ids interned once above)
-        w.key_set(p as i32, up, w.fans_pos[p]);
-        w.key_set(p as i32, down, w.fans_neg[p]);
-    }
-    w.symbolic_answers = true;
-    w
+    world::with_world_mut(|w| {
+        w.n_players = kani::any();
+        kani::assume(w.n_players >= 2 && w.n_players <= 4);
+        for p in 0..MAX_PLAYERS {
+            w.money[p] = kani::any();
+            kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
+            w.out[p] = false;
+            w.fans_pos[p] = kani::any();
+            kani::assume(w.fans_pos[p] >= 0 && w.fans_pos[p] <= 20);
+            w.fans_neg[p] = kani::any();
+            kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
+            w.hand_resonance[p] = 0;
+            w.key_set(p as i32, up, w.fans_pos[p]);
+            w.key_set(p as i32, down, w.fans_neg[p]);
+        }
+        w.symbolic_answers = true;
+    });
 }
 
-fn any_player_in(w: &World) -> i32 {
+/// Seat-count-independent clauses (pp steps 1–2, no 共鸣): pin `n_players`
+/// to 2 so the 4-seat money/fans arrays are not all live. Documented per
+/// clause in the harness that calls this.
+fn pin_two_seats() {
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+    });
+}
+
+fn any_player_in() -> i32 {
     let p: i32 = kani::any();
-    kani::assume(p >= 0 && p < w.n_players);
+    let n = world::with_world(|w| w.n_players);
+    kani::assume(p >= 0 && p < n);
     p
+}
+
+fn set_band_crystals(p: i32, v: i32) {
+    world::with_world_mut(|w| w.band_crystals[p as usize] = v);
+}
+
+fn fans_pos_of(p: i32) -> i32 {
+    world::with_world(|w| w.fans_pos[p as usize])
+}
+
+fn fans_neg_of(p: i32) -> i32 {
+    world::with_world(|w| w.fans_neg[p as usize])
 }
 
 fn effects_of() -> ([Effect; 24], usize) {
@@ -85,18 +111,18 @@ fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn same_dream_01_band_plus_3_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
+    // Steps 1–2 read only the user's band/fans (step 3 isolated, no 共鸣).
+    // Seat-count independent → pin 2 seats.
+    symbolic_play_world();
+    pin_two_seats();
+    let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    w.band_crystals[user as usize] = pre_band;
-    let pre_up = w.fans_pos[user as usize];
-    let pre_down = w.fans_neg[user as usize];
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    let pre_up = fans_pos_of(user as usize);
+    let pre_down = fans_neg_of(user as usize);
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
+    let pre = world::snapshot();
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
@@ -160,14 +186,15 @@ pub fn same_dream_01_band_plus_3_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn same_dream_02_money_mutant_is_detected() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    kani::assume(w.fans_pos[user as usize] >= 1);
-    let pre_up = w.fans_pos[user as usize];
+    // Money leg is per-user; seat-count independent → pin 2 seats.
+    symbolic_play_world();
+    pin_two_seats();
+    let user = any_player_in();
+    kani::assume(fans_pos_of(user as usize) >= 1);
+    let pre_up = fans_pos_of(user as usize);
     let pre_band = 0;
-    w.band_crystals[user as usize] = pre_band;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects
@@ -193,13 +220,14 @@ pub fn same_dream_02_money_mutant_is_detected() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn title_idol_01_band_plus_2_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
+    // Step 1 is the user's band pool only — seat-count independent.
+    symbolic_play_world();
+    pin_two_seats();
+    let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    w.band_crystals[user as usize] = pre_band;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     // Step 1 is unconditional +2. Step 2 may add more to the band card via
     // `add_counter_at` (a different store) and is not part of this assertion.
@@ -214,13 +242,12 @@ pub fn title_idol_01_band_plus_2_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn title_idol_01_mutant_is_detected() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
+    symbolic_play_world();
+    let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    w.band_crystals[user as usize] = pre_band;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     assert!(
         band != spec::pp::title_idol_01_band_after_mutant(pre_band),
@@ -238,14 +265,13 @@ pub fn title_idol_01_mutant_is_detected() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn seeyou_01_gate_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    let up = w.fans_pos[user as usize];
-    let down = w.fans_neg[user as usize];
+    symbolic_play_world();
+    let user = any_player_in();
+    let up = fans_pos_of(user as usize);
+    let down = fans_neg_of(user as usize);
     // isolation: no resonance card in hand, so the (2) bypass cannot open
-    w.hand_resonance[user as usize] = 0;
-    world::reset_world(w);
-
+    world::with_world_mut(|w| w.hand_resonance[user as usize] = 0);
+    
     // The gate is `up <= down` when the player holds no 共鸣.
     let allowed = spec::pp::seeyou_01_gate_ok(up, down);
     kani::cover!(allowed, "gate admits (up <= down)");
@@ -281,13 +307,12 @@ pub fn seeyou_01_gate_iff() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn seeyou_03_flip_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    let up = w.fans_pos[user as usize];
-    let down = w.fans_neg[user as usize];
+    symbolic_play_world();
+    let user = any_player_in();
+    let up = fans_pos_of(user as usize);
+    let down = fans_neg_of(user as usize);
     kani::assume(spec::pp::seeyou_01_gate_ok(up, down));
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let flip = spec::pp::seeyou_03_flip(up, down);
     let (ex_up, ex_down) = spec::pp::seeyou_03_post(up, down);
@@ -311,10 +336,10 @@ pub fn seeyou_03_flip_iff() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn seeyou_03_mutant_is_detected() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    let up = w.fans_pos[user as usize];
-    let down = w.fans_neg[user as usize];
+    symbolic_play_world();
+    let user = any_player_in();
+    let up = fans_pos_of(user as usize);
+    let down = fans_neg_of(user as usize);
     kani::assume(spec::pp::seeyou_01_gate_ok(up, down));
     // Reachable disagreement needs owned < down, i.e. up == 0 and down > 0,
     // or more generally up + down < down is impossible; use up==0, down>=2
@@ -326,8 +351,7 @@ pub fn seeyou_03_mutant_is_detected() {
     // So min(owned, down) == down always! The mutant equals the spec.
     // Use a different mutant: flip `down + 1` capped nowhere.
     kani::assume(down >= 1);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let flip = spec::pp::seeyou_03_flip(up, down);
     // Detect an off-by-one high: card flips `flip`, mutant wants `flip + 1`.
@@ -347,12 +371,11 @@ pub fn seeyou_03_mutant_is_detected() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn together_01_x_formula_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    let up = w.fans_pos[user as usize];
-    let down = w.fans_neg[user as usize];
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
+    symbolic_play_world();
+    let user = any_player_in();
+    let up = fans_pos_of(user as usize);
+    let down = fans_neg_of(user as usize);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
     let post = world::snapshot();
     let flip = spec::pp::together_01_flip(up, down);
     let x = spec::pp::together_01_x(up, down);
@@ -377,15 +400,14 @@ pub fn together_01_x_formula_iff() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn together_01_mutant_is_detected() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    let up = w.fans_pos[user as usize];
-    let down = w.fans_neg[user as usize];
+    symbolic_play_world();
+    let user = any_player_in();
+    let up = fans_pos_of(user as usize);
+    let down = fans_neg_of(user as usize);
     // Need up < down and ceil_half(down-up) != 1
     kani::assume(up < down);
     kani::assume(spec::pp::ceil_half(down - up) != 1);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
     let post = world::snapshot();
     let real = post.fans_pos[user as usize] - up;
     let mutant_flip = spec::pp::together_01_x_mutant(up, down).min(down).max(0);
@@ -408,15 +430,14 @@ const CRYSTALS: &str = "奇迹水晶";
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn guide_01_band_and_crystals_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
+    symbolic_play_world();
+    let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    w.band_crystals[user as usize] = pre_band;
-    let up = w.fans_pos[user as usize];
-    let down = w.fans_neg[user as usize];
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    let up = fans_pos_of(user as usize);
+    let down = fans_neg_of(user as usize);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let band = band_crystals_of(user);
     assert!(
         band == spec::pp::guide_01_band_after(pre_band),
@@ -442,15 +463,14 @@ pub fn guide_01_band_and_crystals_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn guide_01_mutant_is_detected() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    let up = w.fans_pos[user as usize];
-    let down = w.fans_neg[user as usize];
+    symbolic_play_world();
+    let user = any_player_in();
+    let up = fans_pos_of(user as usize);
+    let down = fans_neg_of(user as usize);
     let owned = up + down;
     kani::assume(owned % 3 != 0 && owned >= 1);
-    w.band_crystals[user as usize] = 0;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
+    world::with_world_mut(|w| w.band_crystals[user as usize] = 0);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let cry = card_crystals_of_player(user, crate::intern::intern(CRYSTALS));
     assert!(
         cry != spec::pp::guide_01_crystals_mutant(up, down),
@@ -468,10 +488,9 @@ pub fn guide_01_mutant_is_detected() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn eve_bushido_01_gain_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), user));
+    symbolic_play_world();
+    let user = any_player_in();
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -511,10 +530,9 @@ pub fn eve_bushido_01_gain_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn no_expect_02_place_deck_draw_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
+    symbolic_play_world();
+    let user = any_player_in();
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -539,10 +557,9 @@ pub fn no_expect_02_place_deck_draw_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn first_accident_01_place_deck_draw_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), user));
+    symbolic_play_world();
+    let user = any_player_in();
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
@@ -664,17 +681,16 @@ pub fn shine_again_01_formula() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn eve_bushido_04_crystal_per_draw_iff() {
-    let mut w = symbolic_play_world();
-    let me = any_player_in(&w);
+    symbolic_play_world();
+    let me = any_player_in();
     let pre = kani::any();
     kani::assume(pre >= 0 && pre < 3); // cap region is BLOCKED-HOST (max ignored)
-    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
-    w.trig_player = me;
-    w.trig_value = 1;
-    w.pay_amount = 1;
+    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
+    world::with_world_mut(|w| w.trig_player = me);
+    world::with_world_mut(|w| w.trig_value = 1);
+    world::with_world_mut(|w| w.pay_amount = 1);
     // place the card so `is_placed` holds
-    world::reset_world(w);
-    world::with_world_mut(|ww| {
+        world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！").0,
@@ -699,15 +715,14 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
 #[kani::proof]
 #[kani::unwind(16)]
 pub fn eve_bushido_04_noop_when_zero_draw() {
-    let mut w = symbolic_play_world();
-    let me = any_player_in(&w);
-    w.trig_player = me;
-    w.trig_value = 0;
-    w.pay_amount = 0;
+    symbolic_play_world();
+    let me = any_player_in();
+    world::with_world_mut(|w| w.trig_player = me);
+    world::with_world_mut(|w| w.trig_value = 0);
+    world::with_world_mut(|w| w.pay_amount = 0);
     let pre = 1;
-    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
-    world::reset_world(w);
-    world::with_world_mut(|ww| {
+    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
+        world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！").0,
@@ -734,14 +749,13 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn guide_04_turn_end_crystal_iff() {
-    let mut w = symbolic_play_world();
-    let me = any_player_in(&w);
+    symbolic_play_world();
+    let me = any_player_in();
     let pre = kani::any();
     kani::assume(pre >= 0 && pre <= 4); // stay under the 5-crystal cash-in
-    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
-    w.trig_player = me;
-    world::reset_world(w);
-    world::with_world_mut(|ww| {
+    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
+    world::with_world_mut(|w| w.trig_player = me);
+        world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:练习生解密指南").0,
@@ -774,15 +788,14 @@ pub fn guide_04_turn_end_crystal_iff() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn dream_ahead_01_crystal_per_draw_iff() {
-    let mut w = symbolic_play_world();
-    let me = any_player_in(&w);
+    symbolic_play_world();
+    let me = any_player_in();
     let pre = kani::any();
     kani::assume(pre >= 0 && pre < 5);
-    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
-    w.trig_player = me;
-    w.trig_value = 1;
-    world::reset_world(w);
-    world::with_world_mut(|ww| {
+    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
+    world::with_world_mut(|w| w.trig_player = me);
+    world::with_world_mut(|w| w.trig_value = 1);
+        world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:梦在前方，结彩当下").0,
@@ -816,10 +829,9 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn shine_again_00_immune_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:再次闪耀"), user));
+    symbolic_play_world();
+    let user = any_player_in();
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:再次闪耀"), user));
     let immune = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user && ww.field[i].immune)
     });
@@ -836,10 +848,9 @@ pub fn shine_again_00_immune_iff() {
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn no_expect_01_immune_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
+    symbolic_play_world();
+    let user = any_player_in();
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
@@ -854,12 +865,11 @@ pub fn no_expect_01_immune_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn jennifer_01_place_other_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
+    symbolic_play_world();
+    let user = any_player_in();
     // Isolation: at least one other living player exists.
-    kani::assume(w.n_players >= 2);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:找回珍妮弗"), user));
+    kani::assume(world::with_world(|w| w.n_players) >= 2);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:找回珍妮弗"), user));
     let owner = world::with_world(|ww| {
         let mut o = -1;
         let mut i = 0;
@@ -885,17 +895,16 @@ pub fn jennifer_01_place_other_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn ranger_01_02_steps_by_count_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
+    symbolic_play_world();
+    let user = any_player_in();
     // Isolation: no [共鸣]; pre-place 0..=2 other owned field cards so the
     // Ranger itself (placed by the play) makes count ∈ 1..=3.
     let others: i32 = kani::any();
     kani::assume(others >= 0 && others <= 2);
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    w.band_crystals[user as usize] = pre_band;
-    world::reset_world(w);
-    // Pre-place `others` dummy field cards owned by `user`.
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+        // Pre-place `others` dummy field cards owned by `user`.
     let mut i = 0;
     while i < others {
         world::with_world_mut(|ww| {
@@ -942,16 +951,15 @@ pub fn ranger_01_02_steps_by_count_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn flower_01_place_on_tile_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
+    symbolic_play_world();
+    let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    w.band_crystals[user as usize] = pre_band;
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
     // Give the user two owned tiles so ask_tile has a choice.
-    w.tiles[1].owner = user;
-    w.tiles[2].owner = user;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:可爱又强壮的花朵"), user));
+    world::with_world_mut(|w| w.tiles[1].owner = user);
+    world::with_world_mut(|w| w.tiles[2].owner = user);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:可爱又强壮的花朵"), user));
     let band = band_crystals_of(user);
     assert!(
         band == spec::pp::flower_01_band_after(pre_band),
@@ -984,11 +992,10 @@ pub fn flower_01_place_on_tile_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn chisato_mask_01_total_iff() {
-    let mut w = symbolic_play_world();
-    let user = any_player_in(&w);
-    kani::assume(w.n_players >= 2);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[白鹭千圣]微笑的铁假面"), user));
+    symbolic_play_world();
+    let user = any_player_in();
+    kani::assume(world::with_world(|w| w.n_players) >= 2);
+        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[白鹭千圣]微笑的铁假面"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // OPEN-分摊: only the 2000 total toward the user is determined.
@@ -1024,16 +1031,15 @@ pub fn chisato_mask_01_total_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn first_accident_02_blocks_pp_skill_2_iff() {
-    let mut w = symbolic_play_world();
-    let me = any_player_in(&w);
+    symbolic_play_world();
+    let me = any_player_in();
     let pre_amount = kani::any();
     kani::assume(pre_amount >= 1 && pre_amount <= 5_000);
-    let pre_up = w.fans_pos[me as usize];
-    w.trig_player = me;
-    w.trig_value = pre_amount;
-    w.pay_amount = pre_amount;
-    world::reset_world(w);
-    // 1) play 初次演出事故 — sets the skillBlock token
+    let pre_up = fans_pos_of(me as usize);
+    world::with_world_mut(|w| w.trig_player = me);
+    world::with_world_mut(|w| w.trig_value = pre_amount);
+    world::with_world_mut(|w| w.pay_amount = pre_amount);
+        // 1) play 初次演出事故 — sets the skillBlock token
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), me));
     let blocked = world::with_world(|ww| {
         ww.key_get(me, crate::intern::intern("skillBlock:Pastel✽Palettes")) > 0
@@ -1066,20 +1072,19 @@ pub fn first_accident_02_blocks_pp_skill_2_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn shine_again_01_rescue_iff() {
-    let mut w = symbolic_play_world();
-    let me = any_player_in(&w);
+    symbolic_play_world();
+    let me = any_player_in();
     let price = kani::any();
     kani::assume(price >= 5 && price <= 5_000);
     let pre_amount = kani::any();
     kani::assume(pre_amount >= 1 && pre_amount <= 5_000);
-    w.money[me as usize] = 0; // short on cash
-    w.trig_player = me;
-    w.trig_value = pre_amount;
-    w.pay_amount = pre_amount;
+    world::with_world_mut(|w| w.money[me as usize] = 0); // short on cash
+    world::with_world_mut(|w| w.trig_player = me);
+    world::with_world_mut(|w| w.trig_value = pre_amount);
+    world::with_world_mut(|w| w.pay_amount = pre_amount);
     // one buyable owned tile at `price`
-    w.tiles[3].owner = me;
-    world::reset_world(w);
-    world::with_world_mut(|ww| {
+    world::with_world_mut(|w| w.tiles[3].owner = me);
+        world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:再次闪耀").0,
@@ -1094,9 +1099,9 @@ pub fn shine_again_01_rescue_iff() {
     });
     // Host model of `is_buyable` / `tile_price` / `tile_group` is partial;
     // the body's rescue is: +1 positive fan and gain price/5.
-    let pre_fans = world::with_world(|ww| ww.fans_pos[me as usize]);
+    let pre_fans = world::with_world(|ww| wfans_pos_of(me as usize));
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PayChoose", me));
-    let post_fans = world::with_world(|ww| ww.fans_pos[me as usize]);
+    let post_fans = world::with_world(|ww| wfans_pos_of(me as usize));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects
