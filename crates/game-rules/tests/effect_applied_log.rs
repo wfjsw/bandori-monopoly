@@ -272,3 +272,24 @@ fn reread_after_host_effect_sees_the_updated_value() {
         "landing pass reads are rebased onto live+host_effects (HOST-01)"
     );
 }
+
+/// Two copies of one hook card each announce with their own field uid.
+#[test]
+fn same_name_copies_announce_with_their_own_uid() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    let a = t.place_raw(0, "TEST:tileHook");
+    let b = t.place_raw(0, "TEST:tileHook");
+    assert_ne!(a, b);
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let heads = activations_since(&t, mark, "TEST:tileHook");
+    eprintln!("{:?}", heads.iter().map(|e| (e.id, e.uid, e.msg.key().to_string())).collect::<Vec<_>>());
+    let mut uids: Vec<i32> = heads.iter().filter(|e| e.msg.key() == "log.effect_applied").map(|e| e.uid).collect();
+    uids.sort();
+    assert_eq!(uids, vec![a.min(b), a.max(b)], "{heads:?}");
+}

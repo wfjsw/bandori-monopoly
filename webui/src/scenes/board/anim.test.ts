@@ -365,3 +365,23 @@ test("Animator: a \"flash\" tile cue (no card) banners once and dedupes", async 
   if (anim.banner) assert.equal(anim.banner.id, bannerId);
   assert.equal(anim.log.filter((l) => l.id === 61).length, 1);
 });
+test("Animator: two same-name field cards pulse one after the other", async () => {
+  const bumps: number[] = [];
+  const field = (uid: number) => ({ uid, card: "TEST:twin", faceDown: false });
+  const view = { state: { players: [{ field: [field(70), field(71)] }] } } as never;
+  const anim = new Animator(() => bumps.push(Date.now()), () => view, false);
+  const seen: number[] = [];
+  const t0 = Date.now();
+  const stamps: Array<[number, number]> = [];
+  const poll = setInterval(() => {
+    const u = anim.pulse?.uid ?? -1;
+    if (seen[seen.length - 1] !== u) { seen.push(u); stamps.push([u, Date.now() - t0]); }
+  }, 5);
+  for (const [id, uid] of [[61, 70], [63, 71]]) {
+    anim.push(frame({ id, type: "card", card: "TEST:twin", kind: "hook", uid, msg: { k: "log.effect_applied" }, flash: true }));
+  }
+  for (let i = 0; i < 600 && (anim.animating || anim.pulse); i++) await sleep(10);
+  clearInterval(poll);
+  console.log(JSON.stringify(stamps));
+  assert.deepEqual(seen.filter((u) => u >= 0), [70, 71]);
+});
