@@ -742,7 +742,7 @@ export const policies: Record<PolicyName, Policy> = {
         if (myTurn) {
           const r = redeemChoice(S, ctx.tiles, me, params.redeem_reserve);
           if (r !== null) return [{ act: "redeem", value: r }];
-          if (S.skipMove) return [{ act: "end" }];
+          if (S.skipMove && S.canEndHere) return [{ act: "end" }];
           if (ctx.playedThisTurn < params.max_plays_per_turn && ctx.random() < params.play_card_chance_milli / 1000) {
             const card = pick(affordableCards(view, params), ctx.random);
             if (card) out.push({ act: "play", card });
@@ -808,7 +808,7 @@ export const policies: Record<PolicyName, Policy> = {
       const out: Command[] = [];
       if (S.step === 2) {
         if (myTurn) {
-          if (S.skipMove && !affordableCards(view, CHAOS_RESERVE).length && !usableSkills(view).length) return [{ act: "end" }];
+          if (S.skipMove && S.canEndHere && !affordableCards(view, CHAOS_RESERVE).length && !usableSkills(view).length) return [{ act: "end" }];
           // Every playable card first (100%, no cap) -- keep making things happen.
           // The only filter is chaos's own coin reserve against the card's
           // estimated execution cost (`view.estCost`).
@@ -819,7 +819,7 @@ export const policies: Record<PolicyName, Policy> = {
           for (const id of usableSkills(view)) out.push({ act: "skill", card: id });
           // Then redeem whatever keeps the reserve.
           for (const t of redeemable(S, ctx.tiles, me, CHAOS_RESERVE)) out.push({ act: "redeem", value: t });
-          if (S.skipMove) out.push({ act: "end" });
+          if (S.skipMove && S.canEndHere) out.push({ act: "end" });
         }
         if (S.roller === me) out.push({ act: "roll" });
         return out;

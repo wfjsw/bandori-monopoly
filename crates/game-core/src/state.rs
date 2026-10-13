@@ -155,9 +155,10 @@ pub struct MatchState {
     pub can_roll_here: bool,
     /// The same for `act {act:"end"}` (the end branch:
     /// `roll_first` while a main move is still owed, `moving`, `over_hand`).
-    /// The public [`Self::skip_move`] re-derives from stay / exile and can
-    /// disagree with this gate (unstoppable, mid-turn [停留], [除外]) -- a bot
-    /// that trusted it sent `end` into `err.roll_first`.
+    /// [`Self::skip_move`] is the same live latch, so the two always agree
+    /// (it was once re-derived from stay / exile, which did not: unstoppable,
+    /// mid-turn [停留], [除外] -- a bot trusting it sent `end` into
+    /// `err.roll_first`).
     pub can_end_here: bool,
     /// The movement this turn is taking.
     pub plan: MovePlan,

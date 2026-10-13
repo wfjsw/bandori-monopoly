@@ -1518,3 +1518,27 @@ fn normal_ordinary_copies_last_main_move_steps() {
         assert!(t.hand(0).contains(&"MyGO:普通与理所当然".to_string()));
     }
 }
+
+#[test]
+fn no_road_in_ops_still_owes_the_roll_and_does_not_read_as_skip() {
+    // 规则书: 「获得2层[除外]」 only wears off at a later turn start, so the
+    // turn it is played in still has its roll. Regression: the public
+    // `skip_move` read true (exile > 0) while the gate still wanted the roll,
+    // so a policy that trusted it sent `end` -> `err.roll_first` forever (the
+    // 2026-10-13 stuck match).
+    let mut t = Table::vanilla(3);
+    t.set_pos(1, 10);
+    t.begin_turn(0);
+    t.give_play(0, "MyGO:无路矢").unwrap();
+    let k = t.option("PlayerId(1)").expect("player-choice prompt");
+    t.answer(0, k).unwrap();
+    assert_eq!(t.state(0, "exile"), 2);
+    let st = t.st();
+    assert_eq!(st.step, stage::OPS);
+    assert!(!st.skip_move, "the roll is still owed: not a skipped movement");
+    assert!(st.can_roll_here && !st.can_end_here);
+    assert_eq!(t.end(0), Err("err.roll_first".to_string()));
+    t.roll(0).unwrap();
+    t.end(0).unwrap();
+    assert_eq!(t.turn(), 1, "the turn passes on");
+}
