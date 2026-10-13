@@ -301,7 +301,6 @@ fn starry_owner_may_reroll_the_move_roll() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book offers to pay 1000 and remove a crystal when another player's move roll is even; engine never prompts"]
 fn starry_even_roll_of_another_player_offers_crystal_removal() {
     // 规则书: 「当其他角色的移动掷骰结果是偶数时可消耗1000资金并移除此卡的一个[奇迹水晶]」
     let mut t = Table::vanilla(2);
@@ -465,32 +464,35 @@ fn nnm_placed_press_refused_without_a_crystal() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: Sheet 2026-10-06 新卡组卡 G7 (2): 「获得x次经过CiRCLE时的资金奖励」 (was 「获得x*2000资金」). The default reward is 2000 so x*2000 matches here, but a modified CiRCLE money reward (Morfonica's 1000/1500/2000 cycle) should scale this too -- TODO(规则书) in nanami_effort.rs"]
 fn nnm_option2_gains_x_times_circle_money_reward() {
     // Sheet 2026-10-06 新卡组卡 G7 (2): 「获得x次经过CiRCLE时的资金奖励」
     // -- x times the CiRCLE pass *money* reward (专有名词 11: 「[CiRCLE奖励]：
-    // [获得]2000资金或抽1张卡」), not a flat x*2000. With the default reward
-    // that is 2000 per time; the point of the reword is that a modified
-    // CiRCLE money reward (e.g. Morfonica's 1000/1500/2000 cycle) scales it.
+    // [获得]2000资金或抽1张卡」), not a flat x*2000. 广町七深 is Morfonica, so
+    // the band skill rewrites the money reward to a 1000/1500/2000 cycle
+    // (`circleAffected`); the first one is 1000. That is the point of the
+    // reword: the figure tracks the live reward, not 2000.
     let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
     add_token(&mut t, 0, "角色标记:skill:户山香澄:鼓动", 1);
     t.give(0, &["Mor:（NNM）稍微努力了一下"]);
     t.play(0, "Mor:（NNM）稍微努力了一下").unwrap();
-    // Options are (1) draw x / (2) money / (3) place. Pick the money one.
-    let p = t.expect_prompt();
-    let k = t.option("2000")
+    // First prompt: how many 角色标记 to spend (x). One mark → one option.
+    t.answer_one(0).unwrap();
+    // Second prompt: which effect. Options are (1) draw x / (2) money / (3) place.
+    let k = t
+        .option("2000")
         .or(t.option("资金"))
         .or(t.option("CiRCLE"))
         .unwrap_or(1);
     t.answer_one(k).unwrap();
     decline_all(&mut t);
-    // x = 1 → one CiRCLE money reward = 2000 (default).
+    // x = 1 → one CiRCLE money reward. Morfonica's first cycle figure is 1000
+    // (not the default 2000): the reword is what makes that scaling matter.
     assert_eq!(
         t.money(0),
-        10_000 + 2_000,
-        "x=1 → one CiRCLE money reward"
+        10_000 + 1_000,
+        "x=1 → one live CiRCLE money reward (Morfonica cycle starts at 1000)"
     );
 }
 

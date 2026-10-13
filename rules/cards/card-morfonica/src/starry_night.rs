@@ -181,32 +181,36 @@ fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
 }
 
 /// 规则书（2）: 「当其他角色的移动掷骰结果是偶数时可消耗1000资金并移除此卡的一个
-/// [奇迹水晶]」 -- C# `CardStarryNight.Attack`: the *roller* is asked to pay 1,000.
+/// [奇迹水晶]」 -- the omitted subject of 「可消耗」 is this card's controller
+/// (the same 「你」 that owns the card and receives （3）'s payout), not the
+/// roller. C# `CardStarryNight.Attack` billed the roller; that is not what the
+/// sheet says. With （3） paying 1,000 per crystal the owner is out net 0 and
+/// the crystal count drops -- a voluntary decay of this card.
 fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
-    if ctx::player_out(roller) || !ctx::can_pay(roller) || ctx::money_of(roller) < 1000 {
+    if ctx::player_out(player_id) || !ctx::can_pay(player_id) || ctx::money_of(player_id) < 1000 {
         return Ok(());
     }
     if !ctx::ask_yes(
-        roller,
+        player_id,
         &Msg::new(key!("starry_night_attack_title")),
         &Msg::new(key!("starry_night_attack_ask")).card("card", ID)
-            .player_id("who", player_id)
+            .player_id("who", roller)
             .i("roll", roll as i64),
     )? {
         return Ok(());
     }
     let paid = ctx::pay(
-        roller,
+        player_id,
         1000,
-        &Msg::new(key!("starry_night_attack_pay")).player_id("who", roller),
+        &Msg::new(key!("starry_night_attack_pay")).player_id("who", player_id),
     )?;
     if paid >= 1000 {
         remove_crystal(player_id)?;
         ctx::log(
             player_id,
             &Msg::new(key!("starry_night_attack_done"))
-                .player_id("who", roller)
-                .player_id("owner", player_id),
+                .player_id("who", player_id)
+                .player_id("roller", roller),
         );
     }
     Ok(())
