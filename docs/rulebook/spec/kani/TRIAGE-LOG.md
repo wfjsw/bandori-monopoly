@@ -247,3 +247,18 @@ setup, not the card body.
 `conf_fill_diff` / `conf_model` / `conf_hostops2` / `pilot_guards` /
 `model_bounds` green. `cargo build -p game-rules -p rules-native -p rules-kani`
 + wasm32 workspace check green.
+
+### pp dispatch shape (iterate)
+
+First cut (285 `call_card_N` trampolines) kept every IF-chain live —
+`call_body_idx` is a 285-arm match and `idx` is a parameter, so SSA held
+285×874 chains (75 MB goto, 3.4 GB SSA). Replaced with **one** `code*`
+site: match `idx` → `&'static CardDef` constant, one `On` load + call
+(42 MB goto, 1×874 chain). `inline(always)` on `entry_idx` / `play_idx` /
+`event_play_idx` / `call_body_idx` so a `card_id!` constant can fold.
+
+`pp::same_dream_01_band_plus_3_iff` unwind is now only
+`sync_views` 8 + `symbolic_play_world` 4 (NameMap walks gone). Still
+SSA/solver-bound after that (~15 min, no verdict yet) — World copy +
+card-body IR remains. 2-seat variants / lazy `sync_views` / no full
+`reset_world` copy are the next levers (documented, clause-faithful).
