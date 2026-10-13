@@ -58,7 +58,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
           return (
-            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, owner === hoverSeat && s.hot)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
+            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
@@ -87,7 +87,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           return (
             <div
               key={e.id}
-              className={cx(s.slot, k === 0 && s.sep, e.playerId >= 0 && e.playerId === hoverSeat && s.hot)}
+              className={cx(s.slot, k === 0 && s.sep, hoverSeat >= 0 && s[e.playerId === hoverSeat ? "hot" : "dim"])}
               style={{ ["--own" as string]: e.playerId >= 0 ? m.colorOf(e.playerId) : "var(--purple)" }}
             >
               {e.faceDown ? (

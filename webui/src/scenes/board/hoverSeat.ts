@@ -23,7 +23,9 @@ export function useHoverSeat(): number {
   return useSyncExternalStore(subscribe, () => seat);
 }
 
-/** Is `i` the hovered seat? Re-renders only when that answer changes. */
-export function useSeatHovered(i: number): boolean {
-  return useSyncExternalStore(subscribe, () => i >= 0 && seat === i);
+/** How a piece owned by seat `i` (-1: nobody) reads while a panel is hovered:
+ *  "hot" for the hovered seat's, "dim" for everything else, "" when no panel
+ *  is hovered. Re-renders only when that answer changes. */
+export function useSeatFocus(i: number): "" | "hot" | "dim" {
+  return useSyncExternalStore(subscribe, () => (seat < 0 ? "" : i === seat ? "hot" : "dim"));
 }

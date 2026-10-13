@@ -200,5 +200,6 @@
     animation: none;
   }
 }
-/* Players-panel hover: the hovered seat's field cards light up. */
+/* Players-panel hover: the hovered seat's field cards light up; the rest fade. */
 .slot.hot { filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own)); transform: translateY(6px); }
+.slot.dim { opacity: 0.35; filter: grayscale(0.7); }
