@@ -795,6 +795,14 @@ pub fn trig_set_pay_target(to: i32) {
     kani_host::call_unit(Op::trig_set_pay_target, [to, 0, 0, 0, 0, 0]);
 }
 
+pub fn join_redirect_target() -> i32 {
+    kani_host::call_i32(Op::join_redirect_target, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn set_join_used() {
+    kani_host::call_unit(Op::set_join_used, [0, 0, 0, 0, 0, 0]);
+}
+
 pub fn trig_set_cancelled() {
     kani_host::call_unit(Op::trig_set_cancelled, [0, 0, 0, 0, 0, 0]);
 }
