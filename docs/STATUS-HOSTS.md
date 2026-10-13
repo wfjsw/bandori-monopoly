@@ -526,8 +526,10 @@ policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
   ask it through `rules_status::can_pay` -- a wasm guard could not be run
   there, and a gate cannot be *raised* from inside a pure guard.
 * **Vocabulary.** A condition reads other statuses (`stay` needs
-  `unstoppable`), so the CEL vocabulary exposes `state(p, 'key')` over the
-  seat's player-state map (`docs/GUARDS.md`).
+  `unstoppable`), so the CEL vocabulary exposes the generic
+  `state(p, 'key')` -- a seat's player-state value for an arbitrary string
+  key, missing = 0 (`docs/GUARDS.md`). The IR carries it in a separate
+  `(seat, key, value)` table (`STATE_CAP = 64`).
 * **Engine side.** `CardRules::gate_open(world, Gate, player)` -> `World::gate_open`.
   The wasm ruleset evaluates the conditions over a players-only window
   (`game_rules::gate`); `StubRules` returns `None` and the engine falls back to
