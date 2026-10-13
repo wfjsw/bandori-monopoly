@@ -479,6 +479,7 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
               const top = cellY(row, vp.board.height) + (vp.board.height / ROWS) * 0.22;
               return (
                 <div key={i} className={cx(s.token, i === S.turn && s.current, hoverSeat >= 0 && s[i === hoverSeat ? "hot" : "dim"])} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
+                  {i === hoverSeat && <span className={s.arrow} />}
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                   {ch
                     ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />

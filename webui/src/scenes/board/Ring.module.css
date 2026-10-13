@@ -396,3 +396,17 @@
 .token.hot .sd, .token.hot .dot { filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 6px var(--pink, #f6a)); transform: scale(1.25); transform-origin: 50% 100%; }
 .token.hot { z-index: 999; }
 .token.dim { opacity: 0.3; filter: grayscale(0.8); }
+
+/* Players-panel hover: a bobbing arrow over the hovered seat's token. */
+.arrow {
+  position: absolute;
+  left: 0;
+  bottom: calc(min(calc(var(--cell-w, 80px) * 0.42), 44px) * 1.75 + 2px);
+  width: 22px;
+  height: 18px;
+  margin-left: -11px;
+  background: var(--pink, #f6a);
+  clip-path: polygon(50% 100%, 0 30%, 30% 30%, 30% 0, 70% 0, 70% 30%, 100% 30%);
+  animation: arrowBob 0.7s ease-in-out infinite;
+}
+@keyframes arrowBob { 50% { transform: translateY(-5px); } }
