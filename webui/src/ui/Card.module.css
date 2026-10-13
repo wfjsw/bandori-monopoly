@@ -42,7 +42,7 @@
 .field .tags { order: 3; }
 .field .title {
   order: 4;
-  margin-top: auto;
+  margin-top: var(--field-title-gap, auto); /* FieldSheet zeroes it while slid out */
   height: 38px; /* two 13px lines at 1.3, plus the base padding */
   padding: 3px 2px 1px;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
