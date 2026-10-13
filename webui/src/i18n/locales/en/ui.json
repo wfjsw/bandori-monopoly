@@ -34,7 +34,7 @@
   "board.autoplayStarting": "starting in {{n}}s — click again to switch",
   "board.bankrupt": "Bankrupt",
   "board.botSuffix": " (bot)",
-  "board.canPlay": "Double-click a card to play it",
+  "board.canPlay": "Click a card to select it, click again to play it",
   "board.cardEffect": "{{card}}'s effect",
   "board.cardKind.counter": "{{who}} counters",
   "board.cardKind.event": "{{who}} event",

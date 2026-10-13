@@ -279,9 +279,13 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
     stickCard(id, note);
   };
   const peekHand = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
-  // Double-click (or Enter) activates: discard while over the limit, else play.
-  // A single click only previews -- the hover panel already shows the card.
+  // First click selects (highlighted border); clicking the selected card (or
+  // Enter) activates it: discard while over the limit, else play.
+  const [picked, setPicked] = useState<string | null>(null);
   const activate = (id: string, k: number) => {
+    const key = `${id}:${k}`;
+    if (picked !== key) return void setPicked(key);
+    setPicked(null);
     setHover(null);
     if (sess.readOnly || sheet.open || auto) return;
     if (m.overHand) return void act(sess, { act: "discard", card: id });
@@ -354,7 +358,8 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
                 id={id}
                 size="mini"
                 title={cardTitle(id)}
-                onDoubleClick={() => activate(id, k)}
+                on={picked === `${id}:${k}`}
+                onClick={() => activate(id, k)}
                 onMouseEnter={() => peekHand(k, id)}
                 onMouseLeave={() => setHover(null)}
                 onFocus={() => peekHand(k, id)}
