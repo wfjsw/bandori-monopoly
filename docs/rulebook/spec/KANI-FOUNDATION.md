@@ -643,3 +643,24 @@ tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out
 9. **One unit, two files.** `spec/<unit>.rs` + `proofs/<unit>.rs` only.
 10. **Run the runner** before you hand the unit back; paste verdicts into the
     unit table.
+
+---
+
+## Adding a host import (checklist — a miss breaks EVERY Kani proof)
+
+A new `bandori_*` import in `rules/card-sdk/src/ctx/sys.rs` must also be added
+to the Kani side, or `card-sdk` stops compiling under `cfg(kani)` and every
+harness FAILS in seconds (this happened with `join_redirect_target` /
+`set_join_used`):
+
+1. `rules/card-sdk/src/kani_host.rs` — an `Op` variant with the same slot.
+2. `rules/card-sdk/src/ctx/sys_kani.rs` — the same-signature `pub fn` calling
+   `kani_host::call_*` (`call_i32` / `call_unit` / ...).
+3. `rules/kani/src/host.rs` — a faithful `dispatch` arm (follow
+   `crates/game-rules/src/hostfns.rs`); engine-scheduling surfaces stay
+   PROTOCOL-LEVEL and loud, never a silent `0`. Add the world field in
+   `world.rs` if the op carries state.
+4. A conformance test in `rules/kani/tests/conf_*.rs`.
+5. Check: `bash tools/kani/run.sh --unit wrong_guard --harness real_guard_matches_clause_iff --jobs 1`
+   must still verify. `tools/kani/central.sh` aborts the whole pass when a unit
+   fails to compile in every harness.
