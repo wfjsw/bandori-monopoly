@@ -476,7 +476,7 @@ fn finish(state: NativeHostState, res: Result<CallOut, HostErr>) -> Result<Outco
                 let world = state.world.expect("world is restored after nested calls");
                 Ok(Outcome::NeedHost(req, world))
             } else if let Some(p) = state.asked {
-                Ok(Outcome::NeedInput(p))
+                Ok(Outcome::NeedInput(p, state.world))
             } else {
                 Err(RuleError::Trap("need-input exit without a prompt".into()))
             }

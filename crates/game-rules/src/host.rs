@@ -477,8 +477,11 @@ impl std::error::Error for RuleError {}
 pub enum Outcome<W> {
     /// Finished: commit this world.
     Done(W),
-    /// Blocked on a prompt with no answer yet. Nothing was committed.
-    NeedInput(Prompt),
+    /// Blocked on a prompt with no answer yet. Nothing was committed. The run's
+    /// world rides along (when the backend has it) so the drive can recover the
+    /// write-through lines the pass already posted: the re-run replaces them in
+    /// place instead of appending a second copy.
+    NeedInput(Prompt, Option<W>),
     /// Blocked on a host routine (buy/build/mortgage/move/pay/...) with no
     /// answer yet. The run's world rides along so the host can read the
     /// turn-ctx policy the card set up (`build_discount`, `lingering`, ...)
@@ -1514,7 +1517,7 @@ fn finish<W>(store: Store<HostState<W>>, res: Result<i64, Error>) -> Result<Outc
                 let world = state.world.expect("world is restored after nested calls");
                 Ok(Outcome::NeedHost(req, world))
             } else if let Some(p) = state.asked {
-                Ok(Outcome::NeedInput(p))
+                Ok(Outcome::NeedInput(p, state.world))
             } else {
                 // `Prompt` is a unit struct, so a card can fabricate one
                 // without a host call having published a question. Refuse it
