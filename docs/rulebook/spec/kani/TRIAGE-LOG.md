@@ -231,3 +231,19 @@ Re-verified after the move: `wrong_guard::real_guard_matches_clause_iff`
 same 605k-var formula). `cargo build -p game-rules -p rules-native -p rules-kani`,
 `cargo test -p rules-kani` 3× green, `cargo test -p rules-cond --features lower`,
 wasm32 workspace check green.
+
+## Batch 3 follow-up (coordinator): pp world-setup cliff
+
+Central `pp::same_dream_01_band_plus_3_iff` TIMEOUT 1800 s. Unwind profile
+dominated by `NameMap::get_opt` **144** + `NameMap::set` **80** +
+`sync_views` 8 + `symbolic_play_world` 4 — the per-seat named-counter
+setup, not the card body.
+
+| cut | what |
+|---|---|
+| `NameMap` direct-index | `vals[NameId.0]` over `intern::SLOTS` (64 buckets) + `u64` present bitset. O(1) get/set. Derived MIN/MAX/EXPIRES ids (`key+0x2000/0x4000/0x8000`) use a 16-slot extra list (linear, rare). |
+| pp setup intern once | `symbolic_play_world` interned `FANS_UP`/`FANS_DOWN` per seat (8-probe table walk × 8); now once. |
+
+`conf_fill_diff` / `conf_model` / `conf_hostops2` / `pilot_guards` /
+`model_bounds` green. `cargo build -p game-rules -p rules-native -p rules-kani`
++ wasm32 workspace check green.
