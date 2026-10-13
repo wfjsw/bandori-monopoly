@@ -472,6 +472,9 @@ pub mod export {
 pub mod state_key {
     /// `[停留]` -- layers that wear off at end of turn.
     pub const STAY: &str = "stay";
+    /// Latch set when an [异常移动效果] lands, cleared when the player's next
+    /// [主要移动] completes. Longer-lived than the per-turn abnormal counter.
+    pub const ABNORMAL_HIT: &str = "abnormalHit";
     /// `[晕眩]` -- layers that wear off at end of turn.
     pub const STUN: &str = "stun";
     /// `[晕眩]` applied this turn, which only starts counting next turn.

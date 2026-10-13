@@ -51,15 +51,30 @@ fn nearest(player_id: i32) -> Vec<i32> {
 /// to move away from (C# `H.Others(seat).Count > 0`). A derived seat scan
 /// outside the CEL schema (docs/GUARDS.md §4.2c). The `actor == owner &&
 /// move.main` applicability is the entry's condition.
+///
+/// 规则书[反击]（2）: 「若受到[异常移动效果]影响，此卡不生效」 -- the [反击] is
+/// not offered at all once the mover has been hit by an abnormal move effect
+/// (the sheet says the card does not fire after an abnormal). The latch is
+/// longer-lived than the per-turn abnormal counter: a forced move on another
+/// player's turn still suppresses the owner's next main-move window.
 fn can_counteract(player_id: i32) -> bool {
-    !ctx::others(player_id).is_empty()
+    !ctx::others(player_id).is_empty() && !hit_by_abnormal(player_id)
+}
+
+/// 规则书[反击]（2）: 「若受到[异常移动效果]影响」 -- the engine's
+/// `abnormalHit` latch (set when an abnormal lands, cleared when the player's
+/// next [主要移动] completes), plus the per-turn counter as a belt-and-braces
+/// for a same-turn hit the latch already covers.
+fn hit_by_abnormal(player_id: i32) -> bool {
+    ctx::state::get(player_id, card_sdk::abi::state_key::ABNORMAL_HIT) > 0
+        || ctx::abnormal_count(player_id) > 0
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书[反击]（2）: 「若受到[异常移动效果]影响，此卡不生效」 -- C#
-    // `H._abnormalTurn[i] > 0` -> `c.Effective = false` (the card is still
-    // consumed; only its effect body is skipped).
-    if ctx::abnormal_count(player_id) > 0 {
+    // 规则书[反击]（2）: belt-and-braces -- the guard above already refuses the
+    // window; if a replay still reaches the body, skip the effect (the card is
+    // consumed either way).
+    if hit_by_abnormal(player_id) {
         ctx::log(player_id, &Msg::new(key!("my_own_problem_ineffective")));
         return Ok(());
     }
