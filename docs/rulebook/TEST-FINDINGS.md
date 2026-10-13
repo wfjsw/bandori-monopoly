@@ -551,8 +551,11 @@ rulings above.
    C# shape.) No black-box test.
 10. **Agent 「同色」.** 「每种颜色拥有一个地产商格子」 never says whether
     `extraColor` / 「该格获得所有颜色」 widens the colour group.
-    `docs/TILES.md` `TODO(规则书)`. Engine now: the board's `group`.
-    Test: `cross_tiles::t16_soyo_mixed_colors` (ignored).
+    **Settled 2026-10-13** (`closeout-4-tiles`): it does (`ctx::is_color` /
+    `agent_colour_set`); an `ANY_COLOR`-only member is buyable / rentable
+    but never buildable. The choice set 「无主或玩家拥有的」 is unowned or
+    **any** player-owned (another seat's deed → the agent's half-charge).
+    Test: `cross_tiles::t16_soyo_mixed_colors` (live, green).
 11. **RiNG mortgageability.** 游戏流程 5 says 「抵押拥有的地契」 with no
     exclusion, but the engine refuses (`err.mortgage_ring`, `mortgageable`
     filters `kind != "ring"`). Is RiNG mortgageable, and if not where does
