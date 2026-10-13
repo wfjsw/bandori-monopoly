@@ -35,6 +35,9 @@
 }
 .up .row {
   transform: translateY(0);
+  /* Slid out, the face reads as an ordinary card: the name follows the tags
+     (Card `.field .title`) instead of staying pinned to the peek zone. */
+  --field-title-gap: 0px;
 }
 
 /* One card's slot: equal heights across the row (the face stretches to the
@@ -65,6 +68,7 @@
    board and blinks with a light halo, like Master Duel's activated card. */
 .pulse {
   z-index: 3;
+  --field-title-gap: 0px;
   animation: pulse-out var(--pulse-ms, 1500ms) ease-in-out both;
 }
 .pulse .card {
