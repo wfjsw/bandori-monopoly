@@ -636,9 +636,6 @@ impl Cx<'_> {
                 s.state_set(key::NO_HAND, 0);
             }
         }
-        // `status:stay` count-changed clause: the wear-off may have dropped
-        // the last [停留] layer.
-        self.w.stay_unlatch(i as i32);
         // 「并在回合结束时额外进行一次[触发结算]」 is no longer an engine
         // counter: it is a scheduled turn-end rule op (`On::AtEnd`, whose body
         // calls `ctx::settle`) -- `docs/TILES.md`.
