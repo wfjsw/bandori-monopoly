@@ -36,8 +36,9 @@
   --money-optional: #a67c00;
   --money-receive: #0a5f7a;
   --ink: #4b2233;
-  --surface: #fff;
-  --panel: rgba(255, 255, 255, 0.93);
+  --white: #f6f2f3; /* the interface "white": a touch off pure, easier on the eyes */
+  --surface: var(--white);
+  --panel: rgba(246, 242, 243, 0.93);
   --backdrop: #f4e4ea;
   --scrim: rgba(60, 40, 50, 0.38);
   --line: #ddd;

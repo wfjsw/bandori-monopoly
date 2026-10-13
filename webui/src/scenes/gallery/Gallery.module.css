@@ -1,6 +1,6 @@
 .tabs { position: absolute; left: 67px; right: 67px; top: 165px; display: flex; justify-content: space-between; align-items: center; }
-.count { height: 40px; line-height: 40px; padding: 0 54px; border-radius: var(--r-2xl); background: rgba(255, 255, 255, 0.85); font-size: 16px; font-weight: 700; }
-.panel { position: absolute; left: 67px; right: 67px; top: 244px; height: 600px; background: rgba(255, 255, 255, 0.55); border-radius: 18px; padding: 22px 20px 22px 25px; }
+.count { height: 40px; line-height: 40px; padding: 0 54px; border-radius: var(--r-2xl); background: rgba(246, 242, 243, 0.85); font-size: 16px; font-weight: 700; }
+.panel { position: absolute; left: 67px; right: 67px; top: 244px; height: 600px; background: rgba(246, 242, 243, 0.55); border-radius: 18px; padding: 22px 20px 22px 25px; }
 .grid { height: 100%; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 124px); justify-content: space-between; gap: 20px 0; align-content: start; padding: 2px 30px 4px 2px; }
 
 .popup { width: 1280px; }
