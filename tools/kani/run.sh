@@ -300,7 +300,7 @@ unit_features() {
     sumimi) echo "band-sumimi" ;;
     events) echo "events" ;;
     tiles|tile_marks) echo "tiles" ;;
-    skills_pp) echo "band-pp,skills-bands" ;;
+    skills_pp) echo "band-pp,skills-characters" ;;
     skills_ppp) echo "band-ppp,skills-bands" ;;
     skills_r) echo "band-roselia,skills-bands" ;;
     skills_ag) echo "band-ag,skills-bands" ;;

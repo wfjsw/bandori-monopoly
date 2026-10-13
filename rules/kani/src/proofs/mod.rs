@@ -37,7 +37,7 @@ pub mod sumimi;
 pub mod general;
 #[cfg(feature = "events")]
 pub mod events;
-#[cfg(feature = "band-pp")]
+#[cfg(all(feature = "band-pp", feature = "skills-characters"))]
 pub mod skills_pp;
 #[cfg(feature = "band-ppp")]
 pub mod skills_ppp;
