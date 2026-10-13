@@ -10,28 +10,58 @@ publish = false
 # member and is deliberately NOT listed in rules/Cargo.toml (the wasm guest
 # workspace). Run proofs from the repo root: `cargo kani -p rules-kani`.
 
+[features]
+# Default = every band/skill/event/tile so conformance tests and other
+# tools see the full RULESET. A unit run (`tools/kani/run.sh --unit pp`)
+# enables only that unit's crates so CBMC's function-pointer removal sees
+# a much smaller address-taken `fn(i32)->Asked` set (the 874-target IF-chain).
+default = ["all"]
+all = [
+    "band-ag", "band-crychic", "band-general", "band-hhw", "band-morfonica",
+    "band-mujica", "band-mygo", "band-pp", "band-ppp", "band-ras",
+    "band-roselia", "band-sumimi",
+    "skills-bands", "skills-characters",
+    "tiles", "events",
+]
+band-ag = ["dep:card-ag"]
+band-crychic = ["dep:card-crychic"]
+band-general = ["dep:card-general"]
+band-hhw = ["dep:card-hhw"]
+band-morfonica = ["dep:card-morfonica"]
+band-mujica = ["dep:card-mujica"]
+band-mygo = ["dep:card-mygo"]
+band-pp = ["dep:card-pp"]
+band-ppp = ["dep:card-ppp"]
+band-ras = ["dep:card-ras"]
+band-roselia = ["dep:card-roselia"]
+band-sumimi = ["dep:card-sumimi"]
+skills-bands = ["dep:skill-bands"]
+skills-characters = ["dep:skill-characters"]
+tiles = ["dep:rules-tiles", "dep:rules-tile-marks"]
+events = ["dep:rules-events"]
+
 [dependencies]
 card-sdk = { workspace = true, features = ["guest"] }
 ruleset-core = { path = "../ruleset-core" }
-# Unmodified card / skill / event bodies under proof. Same crates
-# `rules-native` links (the shipped ruleset).
-card-ag = { path = "../cards/card-ag" }
-card-crychic = { path = "../cards/card-crychic" }
-card-general = { path = "../cards/card-general" }
-card-hhw = { path = "../cards/card-hhw" }
-card-morfonica = { path = "../cards/card-morfonica" }
-card-mujica = { path = "../cards/card-mujica" }
-card-mygo = { path = "../cards/card-mygo" }
-card-pp = { path = "../cards/card-pp" }
-card-ppp = { path = "../cards/card-ppp" }
-card-ras = { path = "../cards/card-ras" }
-card-roselia = { path = "../cards/card-roselia" }
-card-sumimi = { path = "../cards/card-sumimi" }
-skill-bands = { path = "../skills/skill-bands" }
-skill-characters = { path = "../skills/skill-characters" }
-rules-tiles = { path = "../tiles" }
-rules-tile-marks = { path = "../tile_marks" }
-rules-events = { path = "../events" }
+# Unmodified card / skill / event bodies under proof. Optional per unit
+# (see [features]) so a single-unit kani build links only that unit's crates.
+card-ag = { path = "../cards/card-ag", optional = true }
+card-crychic = { path = "../cards/card-crychic", optional = true }
+card-general = { path = "../cards/card-general", optional = true }
+card-hhw = { path = "../cards/card-hhw", optional = true }
+card-morfonica = { path = "../cards/card-morfonica", optional = true }
+card-mujica = { path = "../cards/card-mujica", optional = true }
+card-mygo = { path = "../cards/card-mygo", optional = true }
+card-pp = { path = "../cards/card-pp", optional = true }
+card-ppp = { path = "../cards/card-ppp", optional = true }
+card-ras = { path = "../cards/card-ras", optional = true }
+card-roselia = { path = "../cards/card-roselia", optional = true }
+card-sumimi = { path = "../cards/card-sumimi", optional = true }
+skill-bands = { path = "../skills/skill-bands", optional = true }
+skill-characters = { path = "../skills/skill-characters", optional = true }
+rules-tiles = { path = "../tiles", optional = true }
+rules-tile-marks = { path = "../tile_marks", optional = true }
+rules-events = { path = "../events", optional = true }
 # Single-source guard IR (heap-free; the translator output).
 rules-cond-ir = { path = "../cond-ir" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
