@@ -4438,6 +4438,12 @@ impl Cx<'_> {
         if self.w.st.turn == i as i32 {
             self.w.turn.played.push(id.to_string());
         }
+        // 「当有人同一回合内打出两张卡时」 (TriggerKind::TwoCards) -- raised on
+        // the play that makes it two hand-card plays this turn (any seat; the
+        // counter is Sumimi:Here the world). Skills do not count (they do not
+        // go through `play_from_hand`).
+        self.w.turn.cards_played = self.w.turn.cards_played.saturating_add(1);
+        let two_cards = self.w.turn.cards_played == 2;
         self.wait(0.9);
         let t = raise!(
             self,
@@ -4447,6 +4453,18 @@ impl Cx<'_> {
             cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
+        if two_cards {
+            // A separate [反击] timing from the play's own `card` window: Here
+            // the world answers 「当有人同一回合内打出两张卡时」, not the play.
+            raise!(
+                self,
+                "twoCards",
+                i,
+                card = Some(id.to_string()),
+                cards = vec![id.to_string()],
+                by_card = Some(i as i32)
+            )?;
+        }
         let rules = self.rules;
         // A cancelled trigger (`is_cancelled`) -- the play is negated; the card still goes to its
         // Dest below but its effect body does not run. The card still flashes,
