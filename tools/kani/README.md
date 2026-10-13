@@ -52,3 +52,20 @@ Verdicts: `SUCCESSFUL` | `FAILED` | `TIMEOUT` | `UNMODELED`.
   phase on the target-dir lock, then CBMC runs. Keep `--jobs` ≤ 4 on this box.
 * Pilot harnesses live in `money_shave.rs`, `teleport.rs`, `prompt.rs`
   (treat those stems as units).
+## Watching a long pass
+
+`run.sh` writes each harness's full output to its own log
+(`<out>/<unit>/logs/<unit>__<harness>.log`) and appends one line to
+`<out>/<unit>/results.tsv` as soon as a harness FINISHES. `results.json`/`.md`
+only appear when the whole unit is done, and `central.log` only carries unit
+headers. To see progress:
+
+```sh
+python3 tools/kani/progress.py --out /home/monopoly/kani-central-results3          # snapshot
+python3 tools/kani/progress.py --out ... --watch 60                                # refresh every 60 s
+tail -f <out>/<unit>/logs/<unit>__<harness>.log                                    # the live CBMC output of one proof
+```
+
+The snapshot lists every unit's done/total with verdict counts, the proof being
+run now (and how long its log has been silent), the CBMC process's memory and
+age, and the last finished harnesses.
