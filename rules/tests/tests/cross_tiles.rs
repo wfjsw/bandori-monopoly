@@ -125,7 +125,6 @@ fn t01_anon_tokyo_link() {
 
 // 规则书: Fire bird: 「自己的所有格子收费变成1.5倍」.
 // RULING: whether the linked half uses the base rent or the boosted rent.
-#[ignore = "DISCREPANCY: Anon Tokyo link + Fire bird arrangement"]
 #[test]
 fn t02_anon_link_plus_fire_bird() {
     let mut t = Table::new(&["千早爱音", "花园多惠"]);
@@ -135,7 +134,10 @@ fn t02_anon_link_plus_fire_bird() {
     let t2 = tile("天文馆");
     t.own(0, &[t1, t2]);
     t.set_pos(0, t1);
+    // Fire bird dies at turn end without crystals (「奇迹水晶耗尽时将此卡放入
+    // 弃牌堆」); charge it so it is still in play for P1's settle.
     t.place_raw(0, "R:Fire bird");
+    t.set_crystals(0, "R:Fire bird", 5);
     t.give_play(0, "MyGO:[千早爱音]Anon Tokyo").unwrap();
     drain(&mut t);
     until_turn(&mut t, 1);
@@ -160,7 +162,9 @@ fn t02_anon_link_plus_fire_bird() {
 // =====================================================================
 
 // 规则书: Repaint: 「对方此次结算的支付减半」. Expect (R1 + R2/2) / 2.
-#[ignore = "DISCREPANCY: Anon Tokyo link + Repaint arrangement"]
+// 「支付减半」 has no 「向上取整10」 (unlike 爱心义演 / the agent's half-charge),
+// so the half is plain `full / 2`. CROSS-TESTS T3: P0 plays Repaint on P1's roll
+// (「当任意其他玩家进行移动掷骰」 -- not the mover's own).
 #[test]
 fn t03_anon_link_plus_repaint() {
     let mut t = Table::new(&["千早爱音", "花园多惠"]);
@@ -173,20 +177,24 @@ fn t03_anon_link_plus_repaint() {
     t.give_play(0, "MyGO:[千早爱音]Anon Tokyo").unwrap();
     drain(&mut t);
     until_turn(&mut t, 1);
-    t.give(1, &["RAS:Repaint"]);
+    // Repaint answers *another* player's move roll: P0 holds it, P1 rolls.
+    // 「使目标玩家的此次移动数-X」 with X = P0's tiles on the path: roll 3 from
+    // t1-1 so the path is [t1, t2, t2+1], X = 2, the shortened move (1) still
+    // lands on t1 (a shorter roll would be cut to 0 and never settle).
+    t.give(0, &["RAS:Repaint"]);
     t.set_pos(1, t1 - 1);
-    t.dice(&[1]);
+    t.dice(&[3]);
     t.roll(1).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
         if t.counteract_offered("RAS:Repaint") {
-            t.counteract(1, "RAS:Repaint").unwrap();
+            t.counteract(0, "RAS:Repaint").unwrap();
         } else {
             t.decline();
         }
     }
     let full = rent(t1, 0) + rent(t2, 0) / 2;
-    let half = ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10;
+    let half = full / 2;
     assert_eq!(t.money(1), 10_000 - half, "halved: {full} -> {half}");
 }
 
@@ -225,22 +233,23 @@ fn t04_anon_link_mortgaged_partner() {
 // =====================================================================
 
 // 规则书: ONE OF US: 「先在原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响」.
-#[ignore = "DISCREPANCY: ONE OF US shared-settlement arrangement"]
 #[test]
 fn t05_one_of_us_shares() {
     let mut t = Table::new(&["美竹兰", "花园多惠", "青叶摩卡"]);
     t.clean();
-    t.begin_turn(2);
+    t.begin_turn(0);
     let t47 = tile("羽泽咖啡厅");
     let t48 = tile("山吹面包房");
     t.own(0, &[t47]);
     t.own(1, &[t48]);
     t.place_raw(0, "通用:[衍生]FEVER!");
     t.give_play(0, "AG:ONE OF US").unwrap();
-    // Designate P0's 47 and P1's 48.
+    // Pick partner P1, then designate P0's 47 and P1's 48.
     loop {
         let Some(p) = t.prompt() else { break };
-        if p.kind == "tile" {
+        if p.kind == "player" {
+            answer_player(&mut t, 0, 1);
+        } else if p.kind == "tile" {
             let want = if p.items.iter().any(|s| s == "47") { "47" } else { "48" };
             let k = p.items.iter().position(|s| s == want).unwrap() as i32;
             t.answer(0, k).unwrap();
@@ -256,11 +265,18 @@ fn t05_one_of_us_shares() {
     drain(&mut t);
     let r = rent(t48, 0);
     eprintln!(
-        "t05 record: P1 = {}, P0 = {}, R = {r}",
+        "t05 record: P1 = {}, P0 = {}, R = {r}; field0={:?} keys={:?}",
         t.money(1),
-        t.money(0)
+        t.money(0),
+        t.field_ids(0),
+        t.recent_keys(40)
     );
     assert_eq!(t.money(2), 10_000 - r, "P2 pays R");
+    // 「先在原主人方结算完成」 -- P1 keeps the full rent, then shares half.
+    // 「之后被分享方资金直接增加，不受其他任何效果影响」 -- P0's half is a raw
+    // add, so FEVER! (on P0's field) must not boost it.
+    assert_eq!(t.money(1), 10_000 + r / 2, "P1 keeps R and pays R/2 to P0");
+    assert_eq!(t.money(0), 10_000 + r / 2, "P0 gets exactly R/2 (FEVER! does not boost)");
 }
 
 // =====================================================================
@@ -563,7 +579,6 @@ fn t12_student_council_check() {
 // =====================================================================
 
 // 规则书: 笑容大游行 (1)(2)(3). Assert placement, crystals, discard; record the swap.
-#[ignore = "DISCREPANCY: 笑容大游行 overflows the stack when it triggers"]
 #[test]
 fn t13_smile_parade() {
     let mut t = Table::vanilla(2);
@@ -585,6 +600,17 @@ fn t13_smile_parade() {
         t.field_ids(0),
         t.crystals(0, "HHW:笑容大游行"),
         t.marks()
+    );
+    // （1）: 「可将此卡放置在其上」 + 「为此卡添加3个[奇迹水晶]」.
+    assert!(
+        t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),
+        "the card is placed on the field: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(
+        t.crystals(0, "HHW:笑容大游行"),
+        Some(3),
+        "the card is charged with 3 crystals"
     );
 }
 
@@ -854,7 +880,6 @@ fn t20_clear_cp() {
 
 // 规则书: （立希）: 「拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子进行一次[触发结算]，
 // 本次结算导致的所有[支付]变为原价的四分之一」.
-#[ignore = "DISCREPANCY: （立希）想认真去做 quarter-rent on a linked tile"]
 #[test]
 fn t21_riki_plus_anon_link() {
     let mut t = Table::new(&["椎名立希", "千早爱音", "花园多惠"]);
@@ -863,12 +888,15 @@ fn t21_riki_plus_anon_link() {
     let t1 = tile("购物中心");
     let t2 = tile("天文馆");
     t.own(1, &[t1, t2]);
+    // Anon Tokyo is P1's [手] -- play it on P1's turn.
+    until_turn(&mut t, 1);
     t.set_pos(1, t1);
     t.give_play(1, "MyGO:[千早爱音]Anon Tokyo").unwrap();
     drain(&mut t);
-    t.set_state(2, "stay", 1);
     t.set_pos(2, t1 + 1);
     until_turn(&mut t, 0);
+    // [停留] ticks off at TurnEnd, so arm it on P0's turn just before the play.
+    t.set_state(2, "stay", 1);
     t.give_play(0, "MyGO:（立希）想认真去做").unwrap();
     loop {
         let Some(p) = t.prompt() else { break };
