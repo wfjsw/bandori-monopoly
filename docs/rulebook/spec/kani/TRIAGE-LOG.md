@@ -86,7 +86,7 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | events::pico_swap_01 | FAILED | B + F | `log_is_teleports` exact-length vs latch `SetState`; cover `n_log==3` vacuous for the same reason. Filter `SetState`; cover counts Teleports | **SUCCESSFUL 1767 s** (covers sat) |
 | events::aao_02_hand_veto_is_armed | FAILED | **D GENUINE E-aao-02** | keep failing; do not fix | FAILED (unchanged) |
 | events::embers_03_settle_costs_ten_per_copy | FAILED | OPEN | [触发结算] undefined (OPEN-触发结算). Harness already proves only the determined fragment (`embers_03_settle_ok` = 10×copies pay leg); settle timing is the OPEN half | OPEN (not a card-body bug) |
-| events::* TIMEOUT (chart_rush, front_or_back, never_ends, …) | TIMEOUT | E / A | Msg facade should clear chart_rush `Vec<u8>` drop_glue; `all_players` now 4-iter under kani. `front_or_back` body uses `Vec<i32>` front/back (cannot edit body — need a Vec facade or accept); `never_ends` is fmt `PadAdapter` | pending re-run |
+| events::* TIMEOUT (chart_rush, front_or_back, never_ends, …) | TIMEOUT | E / A | Msg facade + `all_players` 4-iter. `chart_rush_01_spends_fire` re-run: unwind profile only `base_world` 4 + `all_players` 3 — Vec/memcmp cliff **gone**, still **TIMEOUT 1800 s** (solver-bound on the symbolic world). `front_or_back` body uses `Vec<i32>` front/back (cannot edit body). `never_ends` is fmt `PadAdapter` | chart_rush_01: TIMEOUT; rest pending |
 
 ### money_shave cliff trail (batch 2)
 
@@ -100,7 +100,7 @@ One serial CBMC job at a time, unwind assertions ON, `aya_haruka_02_shave_not_po
 | + memcmp-free hooks | `by_idx` 10, intern `bytes_eq`, `named_set` 8 | TIMEOUT 1800 s |
 | + zero-loop `by_idx` | intern `bytes_eq`, `named_set` 8, `poorest` 4 | TIMEOUT 1800 s |
 | + splits drop guard IR | intern `bytes_eq`, `poorest` 4, world 4+4 | TIMEOUT 1800 s |
-| + intern `(FNV,len)` | `poorst` Range 4 + `symbolic_pay_world`/`assume_not_poorest` 4+4 only | pending |
+| + intern `(FNV,len)` | `poorest` Range 4 + `symbolic_pay_world`/`assume_not_poorest` 4+4 only | **TIMEOUT 1800 s** |
 
 **Honest bottom line:** the named TUNING §10 Msg cliff is **fixed**
 (`Vec::extend_with` / `drop_glue` gone; production dist byte-identical).
