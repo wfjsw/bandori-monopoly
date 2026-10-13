@@ -1032,3 +1032,12 @@ correct per 「每回合开始时」.
 `drain_prompts: prompts never stopped` is an over-broad signature and the
 root cause is fixed -- a future prompt storm is a new finding and must fail
 the soak. See `docs/rulebook/TEST-FINDINGS.md`.
+
+
+## Status-gate functions (ABI 58)
+
+`stay(p)`, `stunned(p)` (= `stun` + the pending `stunStart` layer), `exile(p)`
+and `unstoppable(p)` return a seat's status layers. They exist so the CEL-only
+`ActGate` / `PayGate` / `MoveGate` entries of the `status:*` rules
+(`docs/STATUS-HOSTS.md` §9) can read each other's statuses. Those gate entries
+carry **no** residual guard (the load refuses one): the condition is the answer.

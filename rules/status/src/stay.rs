@@ -28,7 +28,7 @@
 //! [不可阻挡] (`data/rules.txt` 51) 「无视已存在的[停留]」 is a
 //! cross-host clause: the move gate stays clear while `unstoppable` > 0.
 
-use card_sdk::abi::{AbKind, HookKind};
+use card_sdk::abi::{AbKind, GateKind, HookKind};
 use card_sdk::ctx::trigger;
 use card_sdk::{CardDef, On};
 
@@ -42,8 +42,26 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // card that wants to know 「受到[停留]时」 hears it here rather than
         // sniffing the grant site.
         On::Hook(&[HookKind::Abnormal], "", Some(stay_landed), on_stay_landed),
+        // 「处于该状态时[无法移动]」 + [不可阻挡] 「无视已存在的[停留]」
+        // (rules.txt 47/48/51) -- the move gate, **CEL-only**: the condition is
+        // the whole answer, so the host evaluates it natively in pure reads
+        // (`Gate::Move` at turn start, the view's `can_roll_here`). Holding
+        // another status (`unstoppable`) is why the vocabulary exposes
+        // per-seat status functions.
+        On::Gate(&[GateKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
     ],
 );
+
+/// The condition under which [停留] closes the move gate. [停留] closes
+/// neither the act nor the pay gate.
+pub const STAY_HOLDS_MOVE: &str = "stay(actor) > 0 && unstoppable(actor) == 0";
+
+/// The answer of a closed gate (only run if a gate is ever raised; pure reads
+/// use the condition alone).
+fn refuse(_owner: i32) -> card_sdk::Asked {
+    trigger::set_cancelled();
+    Ok(())
+}
 
 /// 规则书: the hook fires for an [停留] abnormal landing on anyone.
 /// `trigger::abnormal_kind()` names the kind; `t.player_id` is the target.

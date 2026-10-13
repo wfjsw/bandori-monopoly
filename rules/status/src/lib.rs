@@ -83,22 +83,30 @@ pub static CARDS: &[card_sdk::CardDef] = &[
 // engine verbs (Phase B shims; Phase C drops the old `ctx::{give_stay, …}`
 // names once every card has moved).
 
-// -------------------------------------------------------- generic gate readers
+// ----------------------------------------------------------- status gates
 //
-// Replacements for `ctx::can_pay` / `ctx::cant_move` (Phase C deletes those
-// names). These are **generic** -- no status vocabulary -- and read the same
-// thing the engine's policy sites read.
+// [无法移动] / 「无法收付款」 / 「无法使用[主动]技能…」 are **gates**, not markers.
+// Each host declares the ones it holds as CEL-only `On::Gate` entries
+// (`stay.rs` / `stun.rs` / `exile.rs`: `ActGate`, `PayGate`, `MoveGate`). The
+// condition is the whole answer, so the engine and the host evaluate it
+// natively in pure reads -- including from a card's guard. A gate entry with a
+// residual guard or no condition is refused at ruleset load.
 
-pub use card_sdk::ctx::{can_pay, cant_move};
-
-/// `true` when the player may use [主动] skills and [手] effects.
-/// Not out, not [晕眩], not [除外].
-pub fn can_act(player_id: i32) -> bool {
-    can_pay(player_id)
+/// May `player_id` pay or receive payment (「无法收付款」)? Not out, and no
+/// standing `PayGate` condition holds ([晕眩], [除外]). Pure; safe in guards.
+pub fn can_pay(player_id: i32) -> bool {
+    card_sdk::ctx::can_pay(player_id)
 }
 
 /// `None` when the player may still make this turn's [主要移动], else the
-/// shared refusal (`status.move_*` messages).
+/// shared refusal (`status.move_*` messages). This is the generic turn-flow
+/// question (not your turn / already moved / the turn's move is closed); the
+/// status part is the `MoveGate` conditions, applied to the turn's latch at
+/// turn start and when a layer is granted mid-turn.
 pub fn move_blocked(player_id: i32) -> Option<card_sdk::Msg> {
-    cant_move(player_id)
+    card_sdk::ctx::cant_move(player_id)
 }
+
+// TODO(ABI): `ActGate` has no guest reader (no card asks "may I act?" -- the
+// engine applies it to [手] plays and turn start). A pure reader needs a host
+// import (`gate_open(kind, player)`), which would replace `can_pay` too.

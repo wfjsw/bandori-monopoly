@@ -173,7 +173,10 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BankruptResolved
         | TriggerKind::LeaveBefore
         | TriggerKind::LeaveAfter => Msg::new("log.why.out").player_id("who", who),
-        TriggerKind::State => Msg::new("log.why.state").player_id("who", who),
+        TriggerKind::State
+        | TriggerKind::ActGate
+        | TriggerKind::PayGate
+        | TriggerKind::MoveGate => Msg::new("log.why.state").player_id("who", who),
 
         // ---- targeting / gates -------------------------------------------
         TriggerKind::Target

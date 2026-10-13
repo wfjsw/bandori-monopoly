@@ -568,8 +568,11 @@ impl Cx<'_> {
         // The status hosts' act / move gates (`docs/STATUS-HOSTS.md` §4).
         // [晕眩] closes the whole turn; [停留] (unless [不可阻挡]) closes only
         // the main move.
-        let gates = self.w.st.players[i].status_gates();
-        if !gates.act {
+        let (act, mv) = (
+            self.w.gate_open(self.rules, super::Gate::Act, i),
+            self.w.gate_open(self.rules, super::Gate::Move, i),
+        );
+        if !act {
             self.w.log(
                 "status",
                 i as i32,
@@ -579,7 +582,7 @@ impl Cx<'_> {
             self.wait(1.2);
             return self.end_turn(i);
         }
-        if !gates.r#move {
+        if !mv {
             self.w.st.skip_move = true;
             self.w.log(
                 "status",
@@ -2886,7 +2889,11 @@ impl Cx<'_> {
     /// The rule lives on [`super::ops`] so a card asking
     /// "where may I build?" gets the same answer the build step does.
     pub(crate) fn why_not_build_on(&self, i: usize, t: usize) -> Option<Msg> {
-        self.w.why_not_build_on(self.data, i as i32, t as i32)
+        self.w
+            .why_not_build_on(self.data, i as i32, t as i32)
+            // The payer's gate ([晕眩]/[除外] 「无法收付款」) -- `can_pay` also
+            // refuses an out seat.
+            .or_else(|| (!self.can_pay(i)).then(|| Msg::new("err.cannot_spend")))
     }
 
     /// The quoted price for one tile, through the rules crate's `buy_quote`
@@ -4418,7 +4425,7 @@ impl Cx<'_> {
         let gates = s.status_gates();
         if !gates.on_board {
             Some("err.play_exiled")
-        } else if !gates.act && !stun_ok {
+        } else if !self.w.gate_open(self.rules, super::Gate::Act, i) && !stun_ok {
             // [晕眩] 「无法使用…手卡的[手]效果」; `playableStunned` is the one
             // exception in the pool.
             Some("err.play_stunned")

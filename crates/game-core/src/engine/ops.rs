@@ -1010,7 +1010,9 @@ impl World {
         if self.st.houses.get(tile as usize).copied().unwrap_or(0) as usize >= t.rent.len() - 1 {
             return Some(Msg::new("err.build_full"));
         }
-        if s.out() || !s.status_gates().pay {
+        // The payer's own gate ([晕眩]/[除外] 「无法收付款」) is the caller's
+        // `Gate::Pay` question: a World has no ruleset to ask.
+        if s.out() {
             return Some(Msg::new("err.cannot_spend"));
         }
         None
@@ -2077,6 +2079,24 @@ impl World {
             if self.st.turn == player_id {
                 self.st.skip_move = skip;
             }
+        }
+    }
+
+    /// Is the status gate open for this player? Asks the ruleset (the
+    /// `status:*` pseudo cards' CEL conditions); a ruleset with no opinion
+    /// falls back to the engine-side mirror [`crate::state::MatchPlayer::status_gates`].
+    pub fn gate_open(&self, rules: &dyn super::CardRules, gate: super::Gate, player: usize) -> bool {
+        if let Some(open) = rules.gate_open(self, gate, player) {
+            return open;
+        }
+        let Some(p) = self.st.players.get(player) else {
+            return true;
+        };
+        let g = p.status_gates();
+        match gate {
+            super::Gate::Act => g.act,
+            super::Gate::Pay => g.pay,
+            super::Gate::Move => g.r#move,
         }
     }
 

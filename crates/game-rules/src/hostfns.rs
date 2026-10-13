@@ -1279,10 +1279,25 @@ pub fn give_extra_turn<C: HostCtx>(c: &mut C, player_id: i32) -> Result<(), Host
         Ok(())
 }
 
+/// The payer's gate. Not out, and the `PayGate` conditions of the standing
+/// `status:*` rules (CEL-only, evaluated natively) all leave it open
+/// (`docs/STATUS-HOSTS.md`). A handle-less run (a test world) falls back to
+/// the world's own answer.
+fn pay_gate_open<C: HostCtx>(c: &mut C, player_id: i32) -> bool {
+    if c.st().wr().player_out(player_id) != 0 {
+        return false;
+    }
+    match c.st().rules.clone() {
+        Some(rules) => {
+            let win = crate::gate::window_of_card_world(c.st().wr(), player_id);
+            rules.gate_open(crate::TriggerKind::PayGate, &win)
+        }
+        None => c.st().wr().can_pay(player_id) != 0,
+    }
+}
+
 pub fn can_pay<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().can_pay(player_id)
-    })
+    Ok(pay_gate_open(c, player_id) as i32)
 }
 
 pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
@@ -1377,9 +1392,9 @@ pub fn unplace_card_named<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i3
 }
 
 pub fn can_build_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().can_build_on(player_id, tile) as i32
-    })
+    // The tile-level reasons are the world's; the payer's gate is the
+    // status rules' (`PayGate`).
+    Ok((c.st().wr().can_build_on(player_id, tile) && pay_gate_open(c, player_id)) as i32)
 }
 
 pub fn card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {

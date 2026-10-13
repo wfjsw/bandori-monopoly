@@ -1184,7 +1184,7 @@ impl<'a> Cx<'a> {
     /// `CanPay`: not out, and the status hosts' pay gate is open.
     pub(crate) fn can_pay(&self, i: usize) -> bool {
         let s = &self.w.st.players[i];
-        !s.out() && s.status_gates().pay
+        !s.out() && self.w.gate_open(self.rules, super::Gate::Pay, i)
     }
 
     /// `Blocked(i)` -- why a player can't move money.

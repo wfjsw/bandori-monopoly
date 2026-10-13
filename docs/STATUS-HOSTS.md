@@ -504,3 +504,38 @@ Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
   includes exile.
 * Remaining `TODO(ABI)`: genericize `give_*` / `gain_fire` / `spend_fire` into
   `apply_abnormal` + `marker::*` and bump the ABI (§3.7).
+
+---
+
+## 9. Gates are CEL-only `On::Gate` entries (ABI 58)
+
+The act / pay / move gates are no longer `MatchPlayer::status_gates()` read at
+policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
+`On::Gate` entries (`TriggerKind::{ActGate, PayGate, MoveGate}`):
+
+| host | gates | condition |
+|---|---|---|
+| `status:stay` | `MoveGate` | `stay(actor) > 0 && unstoppable(actor) == 0` |
+| `status:stun` | `ActGate`, `PayGate`, `MoveGate` | `stunned(actor) > 0` (stun + the pending `stunStart` layer) |
+| `status:exile` | `ActGate`, `PayGate`, `MoveGate` | `exile(actor) > 0` |
+
+* **CEL only.** The condition is the whole answer: the ruleset load refuses a
+  gate entry with a residual guard or without a condition
+  (`host::validate_cel_only_gates`). That is what lets the engine ask the gate
+  in a pure `&self` read (the view, rollouts, `Cx::can_pay`) and a card guard
+  ask it through `rules_status::can_pay` -- a wasm guard could not be run
+  there, and a gate cannot be *raised* from inside a pure guard.
+* **Vocabulary.** A condition reads other statuses (`stay` needs
+  `unstoppable`), so the CEL vocabulary exposes per-seat `stay(p)`,
+  `stunned(p)`, `exile(p)`, `unstoppable(p)` (`docs/GUARDS.md`).
+* **Engine side.** `CardRules::gate_open(world, Gate, player)` -> `World::gate_open`.
+  The wasm ruleset evaluates the conditions over a players-only window
+  (`game_rules::gate`); `StubRules` returns `None` and the engine falls back to
+  `MatchPlayer::status_gates()`, the same clauses in Rust.
+  `tests/status_gate_drift.rs` pins the two equal on every layer combination.
+* **Still engine-side:** `on_board` / `targetable` ([除外] 「不失为存在于任何
+  格子上」, 「不能被[指定]」) and the stay latch (`give_stay` / `stay_unlatch`).
+  `TODO(规则书)`: give them gate kinds too.
+* **No guest `ActGate` reader.** `rules_status::can_act` was removed (it was an
+  alias of `can_pay` with no caller). `TODO(ABI)`: a generic
+  `gate_open(kind, player)` import would serve both.

@@ -20,6 +20,7 @@
 //! See `docs/P0-FINDINGS.md` for why this replaced the CEL + Lua design.
 
 mod host;
+pub mod gate;
 pub mod hostfns;
 pub mod inline;
 /// The `bandori_*` host-import shims (native only). Lives here, not in

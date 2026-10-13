@@ -507,6 +507,16 @@ pub trait CardRules: Send + Sync {
         true
     }
 
+    /// A status gate (`docs/STATUS-HOSTS.md`): `Some(true)` = open. The
+    /// ruleset answers from the standing `status:*` rules' CEL-only
+    /// `On::Gate` conditions, natively and purely. `None` (the default) means
+    /// "no ruleset opinion": the engine falls back to
+    /// [`crate::state::MatchPlayer::status_gates`], the same clauses in Rust
+    /// (what `StubRules` runs; pinned equal by `tests/status_gate_drift.rs`).
+    fn gate_open(&self, _w: &super::World, _gate: Gate, _player: usize) -> Option<bool> {
+        None
+    }
+
     /// Extra card-specific reason it can't be played right now.
     fn cant_play(&self, _cx: &Cx, _player: usize, _card: &str) -> Option<Msg> {
         None
@@ -611,6 +621,17 @@ pub trait CardRules: Send + Sync {
             })
             .collect()
     }
+}
+
+/// Which status gate a [`CardRules::gate_open`] question is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Gate {
+    /// [主动] skills and 手卡的[手]效果.
+    Act,
+    /// Paying / receiving payment.
+    Pay,
+    /// This turn's [主要移动].
+    Move,
 }
 
 /// Every card and event has no effect yet.

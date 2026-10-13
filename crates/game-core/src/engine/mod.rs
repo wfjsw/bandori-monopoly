@@ -40,7 +40,7 @@ pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::{Paid, Pay, PayEvent, PayKind};
 pub use play::purchase;
 pub use rules::{
-    CardRules, Dest, Dir, Effect, Negation, Payee, RollSource, StubRules, Trigger, TriggerBuy,
+    CardRules, Dest, Dir, Effect, Gate, Negation, Payee, RollSource, StubRules, Trigger, TriggerBuy,
     TriggerMove, TriggerPay,
 };
 pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, World};
@@ -661,8 +661,9 @@ impl Match {
             let can_pay = st
                 .players
                 .get(ti)
-                .map(|p| !p.out() && p.status_gates().pay)
-                .unwrap_or(false);
+                .map(|p| !p.out())
+                .unwrap_or(false)
+                && self.world.gate_open(&*self.rules, Gate::Pay, ti);
             if st.step == stage::END
                 && !st.bought
                 && pos >= 0
@@ -714,6 +715,7 @@ impl Match {
                 // the halves the cost preview does not carry) plus the funds.
                 st.can_build_here = st.build_cost >= 0
                     && st.plan.can_build
+                    && can_pay
                     && self
                         .world
                         .why_not_build_on(&self.data, ti as i32, pos)
@@ -1712,7 +1714,7 @@ impl Match {
             .iter()
             .map(|&s| {
                 let x = &self.world.st.players[s];
-                !x.out() && x.status_gates().pay
+                !x.out() && self.world.gate_open(&*self.rules, Gate::Pay, s)
             })
             .collect();
         // Standard's bid step / nudge read the seat's `StrategyParams`

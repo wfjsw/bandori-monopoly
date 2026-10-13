@@ -540,6 +540,81 @@ pub(crate) struct Inner {
     /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
     /// can never fire at a kind.
     hook_mask: Vec<u128>,
+    /// The CEL-only status gates (`TriggerKind::{ActGate, PayGate, MoveGate}`):
+    /// per gate kind, the `(card, entry)` pairs whose condition closes it.
+    /// Built once at load so a gate read walks only these.
+    gates: [Vec<(i32, i32)>; GATE_KINDS.len()],
+}
+
+/// The gate kinds answered natively from conditions alone (see
+/// [`gate_open_over`]). Index = position in this array.
+pub const GATE_KINDS: [crate::TriggerKind; 3] = [
+    crate::TriggerKind::ActGate,
+    crate::TriggerKind::PayGate,
+    crate::TriggerKind::MoveGate,
+];
+
+fn gate_index(kind: crate::TriggerKind) -> Option<usize> {
+    GATE_KINDS.iter().position(|&k| k == kind)
+}
+
+/// `(card, entry)` of every gate entry answering `kind`, found by scanning the
+/// manifest. The uncached form of [`Inner::gates`].
+pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i32, i32)> {
+    let mut out = Vec::new();
+    for (ci, c) in cards.iter().enumerate() {
+        for (ei, o) in c.on.iter().enumerate() {
+            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+                out.push((ci as i32, ei as i32));
+            }
+        }
+    }
+    out
+}
+
+/// A status gate entry is **CEL-only**: its condition is the whole answer, so
+/// the host can evaluate it natively in a pure read. A residual wasm guard (or
+/// a missing condition) would be invisible to that read -- refuse at load.
+pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
+    for c in cards {
+        for (ei, o) in c.on.iter().enumerate() {
+            if o.kind != OnKind::Gate as i32 {
+                continue;
+            }
+            if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k as i32 == t)) {
+                continue;
+            }
+            if o.has_guard || o.pre.is_none() {
+                return Err(RuleError::Load(format!(
+                    "{}/{ei}: an ActGate/PayGate/MoveGate entry must be CEL-only (a condition, no residual guard)",
+                    c.id
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Is the gate open? Closed when any entry's condition holds against `win`
+/// (`actor` = the asked player). Pure and native: no wasm, no mutation.
+pub fn gate_open_over<'a>(
+    entries: impl IntoIterator<Item = (i32, i32)>,
+    pre: impl Fn(i32, i32) -> Option<&'a crate::cond_pre::CompiledPre>,
+    win: &rules_cond::WindowCtx,
+) -> bool {
+    let mut scope = None;
+    for (c, e) in entries {
+        let Some(p) = pre(c, e) else { continue };
+        let sc = scope.get_or_insert_with(|| crate::cond_pre::window_scope(win));
+        let cand = rules_cond::CandidateCtx {
+            owner: win.actor,
+            ..Default::default()
+        };
+        if crate::cond_pre::condition_allows(Some(p), Some(sc), &cand) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Builds a [`Ruleset`] from any number of card modules (normally one per card).
@@ -613,6 +688,8 @@ impl RulesetBuilder {
             counteract_mask.push(cm);
             hook_mask.push(hm);
         }
+        validate_cel_only_gates(&self.cards)?;
+        let gates = GATE_KINDS.map(|k| gate_entries_scan(&self.cards, k));
         // Compile every condition once (docs/GUARDS.md §4.3). Fail-closed: a
         // parse / unknown-var / float error is a build error, never "treat as
         // true". On the runtime-only (browser) path a source `pre` without a
@@ -689,6 +766,7 @@ impl RulesetBuilder {
                 declared,
                 counteract_mask,
                 hook_mask,
+                gates,
             }),
             fuel: DEFAULT_FUEL,
         })
@@ -1611,6 +1689,19 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     fn declares_buy(&self) -> bool {
         BUY_HOOK_KINDS.iter().any(|&k| self.declares(k))
     }
+    /// A CEL-only status gate (`ActGate` / `PayGate` / `MoveGate`): `true` =
+    /// open. Default scans the manifest; [`Ruleset`] overrides with its
+    /// load-time list.
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        if !self.declares(kind) {
+            return true;
+        }
+        gate_open_over(
+            gate_entries_scan(self.cards(), kind),
+            |c, e| self.pre(c, e),
+            win,
+        )
+    }
     /// Condition pre-filter (BOT-RESEARCH.md #1): `Some(entry)` when the
     /// card's [反击] at this window's kind exists and its condition admits.
     /// `None` skips the `Run` / guard entirely. Default builds the candidate
@@ -1756,6 +1847,14 @@ impl CardModules for Ruleset {
     fn play_gate_vanishes(&self, card: i32) -> bool {
         Ruleset::play_gate_vanishes(self, card)
     }
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        let Some(i) = gate_index(kind) else { return true };
+        gate_open_over(
+            self.inner.gates[i].iter().copied(),
+            |c, e| CardModules::pre(self, c, e),
+            win,
+        )
+    }
     fn sha256(&self) -> Option<&str> {
         Some(Ruleset::sha256(self))
     }
@@ -1860,6 +1959,21 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let _ = (i, entry);
         None
     }
+    /// A CEL-only status gate, `true` = open (see [`CardModules::gate_open`]).
+    /// Default scans the card table through [`Self::card`].
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        let mut entries = Vec::new();
+        let mut i = 0;
+        while let Some(c) = self.card(i) {
+            for (ei, o) in c.on.iter().enumerate() {
+                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+                    entries.push((i, ei as i32));
+                }
+            }
+            i += 1;
+        }
+        gate_open_over(entries, |c, e| self.pre(c, e), win)
+    }
 }
 
 impl RulesHandle for Arc<Inner> {
@@ -1871,6 +1985,14 @@ impl RulesHandle for Arc<Inner> {
     }
     fn pre(&self, i: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
         self.pre.get(i as usize)?.get(entry as usize)?.as_ref()
+    }
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        let Some(i) = gate_index(kind) else { return true };
+        gate_open_over(
+            self.gates[i].iter().copied(),
+            |c, e| RulesHandle::pre(self, c, e),
+            win,
+        )
     }
 }
 
@@ -4876,5 +4998,41 @@ impl CardWorld for NullWorld {
     }
     fn in_band(&self, _: i32, _: &str) -> i32 {
         0
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    fn card(on: Vec<ManifestOn>) -> CardInfo {
+        CardInfo {
+            id: "t:gate".into(),
+            on,
+            props: Default::default(),
+        }
+    }
+
+    fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
+        ManifestOn {
+            kind: OnKind::Gate as i32,
+            triggers: vec![crate::TriggerKind::PayGate as i32],
+            pre: pre.map(str::to_string),
+            has_guard,
+            has_legacy: false,
+            messages: vec![],
+            label: None,
+            presentation: Default::default(),
+            flash: Default::default(),
+        }
+    }
+
+    /// A status gate must be CEL-only: a residual guard or a missing
+    /// condition is invisible to a pure read, so the load refuses it.
+    #[test]
+    fn status_gates_must_be_cel_only() {
+        assert!(validate_cel_only_gates(&[card(vec![gate(false, Some("true"))])]).is_ok());
+        assert!(validate_cel_only_gates(&[card(vec![gate(true, Some("true"))])]).is_err());
+        assert!(validate_cel_only_gates(&[card(vec![gate(false, None)])]).is_err());
     }
 }

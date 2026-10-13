@@ -7572,6 +7572,20 @@ impl<M: CardModules> RulesBridge<M> {
 }
 
 impl<M: CardModules> CardRules for RulesBridge<M> {
+    fn gate_open(
+        &self,
+        w: &game_core::engine::World,
+        gate: game_core::engine::Gate,
+        player: usize,
+    ) -> Option<bool> {
+        let kind = crate::gate::kind_of(gate);
+        // No card declares this gate: the ruleset has no opinion.
+        if !self.ruleset.declares(kind) {
+            return None;
+        }
+        let win = crate::gate::window_of_world(w, player);
+        Some(self.ruleset.gate_open(kind, &win))
+    }
     fn ruleset_sha256(&self) -> Option<&str> {
         self.ruleset.sha256()
     }
@@ -8250,6 +8264,9 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::AbnormalGuard
             | TriggerKind::ImmuneAll
             | TriggerKind::Untargetable
+            | TriggerKind::ActGate
+            | TriggerKind::PayGate
+            | TriggerKind::MoveGate
             | TriggerKind::Redirect
             | TriggerKind::CounterChanged
     )
@@ -8430,6 +8447,9 @@ mod tests {
             "immuneAll",
             "untargetable",
             "redirect",
+            "actGate",
+            "payGate",
+            "moveGate",
             // v28 post-commit points (what a committed effect did)
             "fireSpent",
             "skillUsed",

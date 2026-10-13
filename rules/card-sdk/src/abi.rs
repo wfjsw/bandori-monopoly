@@ -379,6 +379,11 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v58: **status gates** -- `TriggerKind::{ActGate = 95, PayGate = 96,
+///      MoveGate = 97}` (also `GateKind`): CEL-only `On::Gate` questions the
+///      `status:*` pseudo cards answer; the host evaluates the condition
+///      natively (`ctx::can_pay`'s host body asks `PayGate`). No new host
+///      import, no SAVE_VERSION change.
 /// v57: **closeout integration** -- one monotonic bump covering every addition
 ///      the five closeout batches made on top of v56:
 ///      `TriggerKind::FirePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
@@ -394,7 +399,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 57;
+pub const ABI_VERSION: i32 = 58;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1429,6 +1434,16 @@ pub enum TriggerKind {
     MarkerSpend = 92,
     /// **Before a marker gain** moves. Same window shape as [`Self::MarkerSpend`].
     MarkerGain = 93,
+    /// v58: **status gate** (`rules/status`). May `t.player_id` use [主动]
+    /// skills / 手卡的[手]效果? Answered by `On::Gate` entries that are
+    /// **CEL-only** (no residual guard): the host evaluates the condition
+    /// natively wherever the question is asked, including pure reads.
+    ActGate = 95,
+    /// v58: may `t.player_id` pay or receive payment (「无法收付款」)?
+    /// CEL-only, like [`Self::ActGate`].
+    PayGate = 96,
+    /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
+    MoveGate = 97,
 }
 
 impl TriggerKind {
@@ -1529,6 +1544,9 @@ impl TriggerKind {
             91 => Self::MoveAfter,
             92 => Self::MarkerSpend,
             93 => Self::MarkerGain,
+            95 => Self::ActGate,
+            96 => Self::PayGate,
+            97 => Self::MoveGate,
             _ => Self::None,
         }
     }
@@ -1632,6 +1650,9 @@ impl TriggerKind {
             Self::MoveAfter => "moveAfter",
             Self::MarkerSpend => "markerSpend",
             Self::MarkerGain => "markerGain",
+            Self::ActGate => "actGate",
+            Self::PayGate => "payGate",
+            Self::MoveGate => "moveGate",
         }
     }
 
@@ -1733,6 +1754,9 @@ impl TriggerKind {
             "moveAfter" => Self::MoveAfter,
             "markerSpend" => Self::MarkerSpend,
             "markerGain" => Self::MarkerGain,
+            "actGate" => Self::ActGate,
+            "payGate" => Self::PayGate,
+            "moveGate" => Self::MoveGate,
             _ => Self::None,
         }
     }
@@ -2257,6 +2281,16 @@ declare_kinds! {
         /// A placed card refuses with `trigger::set_cancelled()` plus a
         /// reason. Runs for every [`BuyKind`], Force included.
         BuyGate = 79,
+        /// v58: **status gate** (`rules/status`). May `t.player_id` use [主动]
+        /// skills / 手卡的[手]效果? Answered by `On::Gate` entries that are
+        /// **CEL-only** (no residual guard): the host evaluates the condition
+        /// natively wherever the question is asked, including pure reads.
+        ActGate = 95,
+        /// v58: may `t.player_id` pay or receive payment (「无法收付款」)?
+        /// CEL-only, like [`Self::ActGate`].
+        PayGate = 96,
+        /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
+        MoveGate = 97,
     }
 }
 
