@@ -565,8 +565,10 @@ function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
           sit on the board's top sheet (FieldSheet), not in the interior. */}
       <div className={s.piles}>
         <button type="button" className={s.pile} onClick={() => showEventPile(S)}>
-          <div className={s.stack}><img src={sceneImg("card_back")} alt="" /></div>
-          <div className={s.pileLabel}>{tr("board.eventDeck")}<b>×{S.eventDeck}</b></div>
+          <div className={s.stack}>
+            <img src={sceneImg("card_back")} alt="" />
+            <div className={s.pileLabel}>{tr("board.eventDeck")}<b>×{S.eventDeck}</b></div>
+          </div>
         </button>
       </div>
       <div className={s.hint}>{tr("board.ringHint")}</div>
