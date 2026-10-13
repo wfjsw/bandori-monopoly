@@ -1494,13 +1494,6 @@ pub fn give_extra_turn(player_id: i32) {
     unsafe { sys::give_extra_turn(player_id) }
 }
 
-/// Generic turn verb: clear the `skip_move` latch if it is `player_id`'s
-/// turn. The `status:stay` count-changed clause (`docs/STATUS-HOSTS.md`)
-/// calls this when the last [停留] layer drops.
-pub fn clear_move_skip(player_id: i32) {
-    unsafe { sys::clear_move_skip(player_id) }
-}
-
 /// Can the player pay? Not out, not stunned, not exiled.
 #[doc(hidden)]
 pub fn can_pay(player_id: i32) -> bool {

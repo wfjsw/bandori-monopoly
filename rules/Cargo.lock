@@ -13,6 +13,7 @@ name = "card-ag"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -46,6 +47,7 @@ name = "card-crychic"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -54,6 +56,7 @@ name = "card-general"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -62,6 +65,7 @@ name = "card-hhw"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -70,6 +74,7 @@ name = "card-morfonica"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -78,6 +83,7 @@ name = "card-mujica"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -86,6 +92,7 @@ name = "card-mygo"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -94,6 +101,7 @@ name = "card-pp"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -102,6 +110,7 @@ name = "card-ppp"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -110,6 +119,7 @@ name = "card-ras"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -118,6 +128,7 @@ name = "card-roselia"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -135,6 +146,7 @@ name = "card-sumimi"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -164,6 +176,7 @@ name = "fixture-test-cards"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -214,6 +227,7 @@ name = "rules-events"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "rules-tiles",
  "ruleset-core",
  "serde_json",
@@ -239,6 +253,7 @@ name = "rules-tiles"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -298,6 +313,7 @@ name = "skill-bands"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 
@@ -306,6 +322,7 @@ name = "skill-characters"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-status",
  "ruleset-core",
 ]
 

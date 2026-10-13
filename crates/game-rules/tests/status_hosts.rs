@@ -136,18 +136,18 @@ fn stay_unlatch_restores_main_move() {
     );
 }
 
-/// With [除外] still holding the move, clearing [停留] does **not** un-latch.
+/// [除外] is not part of the `skip_move` latch (glossary 13 grants
+/// [无法移动] but not 「跳过主要移动阶段」): clearing [停留] releases the latch
+/// even while exiled; the move gate itself stays closed.
 #[test]
-fn stay_unlatch_waits_for_exile() {
+fn stay_unlatch_ignores_exile() {
     let mut t = Table::vanilla(2);
     t.set_state(0, "stay", 1);
     t.set_state(0, "exile", 1);
     t.m.world_mut().st.skip_move = true;
     t.m.world_mut().give_stay(0, -1);
-    assert!(
-        t.m.world().st.skip_move,
-        "[除外] still holds the move after [停留] clears"
-    );
+    assert!(!t.m.world().st.skip_move);
+    assert!(!t.m.world().st.players[0].status_gates().r#move);
 }
 
 // =====================================================================
