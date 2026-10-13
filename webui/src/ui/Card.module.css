@@ -41,14 +41,31 @@
 .field .line { order: 2; }
 .field .tags { order: 3; }
 .field .title {
-  order: 4;
-  margin-top: var(--field-title-gap, auto); /* FieldSheet zeroes it while slid out */
+  order: 5;
   height: 38px; /* two 13px lines at 1.3, plus the base padding */
   padding: 3px 2px 1px;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
+/* Two spacers around the name. FieldSheet drives `--field-fill` (1 retracted,
+   0 slid out): retracted, the leading one is open and the name sits right above
+   the markers in the peek zone; slid out, the trailing one is open instead and
+   the name rides up under the tags. The markers stay on the face's bottom edge
+   either way. The negative margin cancels the flex gap each spacer would add. */
+.field::before,
+.field::after {
+  content: "";
+  margin-bottom: -2px;
+}
+.field::before {
+  order: 4;
+  flex: var(--field-fill, 1) 1 0;
+}
+.field::after {
+  order: 6;
+  flex: calc(1 - var(--field-fill, 1)) 1 0;
+}
 .field .marks {
-  order: 5;
+  order: 7;
   height: 18px;
   display: flex; align-items: center; gap: 3px;
   padding: 0 2px;

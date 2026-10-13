@@ -8,6 +8,9 @@
    transport already lowers (`--replay-bar-top` on Board `.body`) -- no extra
    offset here, so the peek lands under the bar, not behind it. */
 
+/* `--field-fill` (Card `.field::before` / `::after`): 1 = the face's name sits
+   in the bottom zone above the markers, 0 = it follows the tags. Not animated. */
+
 .sheet {
   position: absolute;
   inset: 0;
@@ -37,7 +40,7 @@
   transform: translateY(0);
   /* Slid out, the face reads as an ordinary card: the name follows the tags
      (Card `.field .title`) instead of staying pinned to the peek zone. */
-  --field-title-gap: 0px;
+  --field-fill: 0;
 }
 
 /* One card's slot: equal heights across the row (the face stretches to the
@@ -68,7 +71,6 @@
    board and blinks with a light halo, like Master Duel's activated card. */
 .pulse {
   z-index: 3;
-  --field-title-gap: 0px;
   animation: pulse-out var(--pulse-ms, 1500ms) ease-in-out both;
 }
 .pulse .card {
@@ -79,8 +81,10 @@
    card's, so dropping it by 100% less the peek brings its whole face into view. */
 @keyframes pulse-out {
   0% { transform: translateY(0) scale(1); }
-  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); }
-  100% { transform: translateY(0) scale(1); }
+  17% { --field-fill: 1; }
+  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); --field-fill: 0; }
+  83% { --field-fill: 1; }
+  100% { transform: translateY(0) scale(1); --field-fill: 1; }
 }
 /* Row already lowered by hover: the slot only lifts a little. */
 .up .pulse {
