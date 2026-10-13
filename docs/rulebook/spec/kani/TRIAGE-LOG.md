@@ -67,3 +67,27 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 * bit-for-bit identity with `spec_arith`'s second `checked_div`/`checked_rem` over the full i64×i64 grid (intractable circuit equivalence; the old form timed out at 1800 s).
 * tree-level `eval_node` composition (covered by `rules-cond/tests/cond_ir_diff.rs` + COND-SINGLE-SOURCE §4).
 * Ok-value characterisation outside the i16 image (the i16 image contains every rounding/sign/bound class; full-width identity remains the differential boundary grid's job).
+
+## Batch 2 — money_shave / events
+
+| id | before | class | action | after |
+|---|---|---|---|---|
+| money_shave::aya_haruka_02_shave_not_poorest_noop | (new split) | E | documented state cut + clause-term assume | TIMEOUT/OOM-bound at 19 min / 3.8 GB (killed to free the slot); profile: `Vec::extend_with` 31, `memcmp` 10, `by_idx` 10 — still solver-bound |
+| money_shave::aya_haruka_02_* | TIMEOUT 1800 s | E | fans cut + split | not re-run to completion; remaining cliff is `Msg`/`Vec<u8>` drop+extend in the card body's `ctx::log` path |
+| events::heat_head_01_activation_phase_up | FAILED | B + C | harness read `key_get(0,"crystals")` but `set_crystals` writes the field-instance counter; also `World::self_crystals` fallback for event instances with no field slot | **SUCCESSFUL 423 s** |
+| events::heat_head_03_phase_end_files_away | FAILED | B + C | same | **SUCCESSFUL 692 s** |
+| events::circle_rebuild_01_activation_five_crystals | FAILED | B + C | same crystals read + host fallback | **SUCCESSFUL** (see ev-circle) |
+| events::asukayama_02_status_spread_blocked_neighbor | FAILED | B | harness assumed stub `neighbor` returned tiles; host now returns the next present **player seat** (book 「上一位/下一位玩家」). Rewrote to prev=3 stunStart=2, next=1 noHand=2, seat 2 give_exile(1,-1) | pending re-run |
+| events::pico_swap_01/02 | FAILED | B | `log_is_teleports` required exact `Effect` length; latch `set_slot` emits `SetState` around the teleports. Skip `SetState` plumbing | pending re-run |
+| events::aao_02_hand_veto_is_armed | FAILED | **D GENUINE E-aao-02** | keep failing; do not fix | FAILED (unchanged) |
+| events::embers_03_settle_costs_ten_per_copy | FAILED | OPEN / D? | [触发结算] undefined (OPEN-触发结算); not re-run | pending |
+| events::* TIMEOUT (chart_rush, front_or_back, never_ends, …) | TIMEOUT | E / A | `Vec` drop_glue, symbolic-Vec `for &p in &winners`, fmt recursion; bear_cookie unwind 16→32 | pending |
+
+### Host-model defect fixed (class C)
+
+`World::set_field_crystals` was a silent no-op when `last_uid` had no `field[]`
+slot. Events (`heat_head` phase, `circle_rebuild`'s 5 miracle crystals) call
+`ctx::set_crystals` on the running instance. Added `World::self_crystals` as
+the fallback for that case; `conf_hostops2::self_crystals_roundtrip_without_field_slot`
+pins it. `conf_fill_diff` / `conf_model` / `conf_hostops2` / `pilot_guards` /
+`model_bounds` stay green (3×).

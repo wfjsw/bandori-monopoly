@@ -590,6 +590,9 @@ pub struct World {
     /// Pending `place_card` destination (`ctx::set_dest`).
     pub dest: i32,
     pub last_uid: i32,
+    /// Crystals of the running instance when it has no `field[]` slot
+    /// (events: heat_head phase, circle_rebuild's 5 miracle crystals).
+    pub self_crystals: i32,
 
     // ---- tiles ----
     pub tiles: [TileState; 60],
@@ -711,6 +714,7 @@ impl World {
             next_uid: 1,
             dest: 0,
             last_uid: 1,
+            self_crystals: 0,
             tiles: [TileState::new(); 60],
             marks: [Mark::EMPTY; MAX_MARKS],
             marks_n: 0,
@@ -846,11 +850,19 @@ impl World {
 
     // ---- field-instance counters (uid-addressed) ----
     pub fn field_crystals(&self, uid: i32) -> i32 {
-        self.field_slot(uid).map(|f| f.crystals).unwrap_or(0)
+        if let Some(f) = self.field_slot(uid) {
+            return f.crystals;
+        }
+        self.self_crystals
     }
     pub fn set_field_crystals(&mut self, uid: i32, v: i32) {
         if let Some(f) = self.field_slot_mut(uid) {
             f.crystals = v;
+        } else {
+            // Event / non-field instance: the counter lives on the running
+            // self, not in `field[]`. (heat_head phase, circle_rebuild's 5
+            // miracle crystals, …). Reset by `World::new` / `reset_world`.
+            self.self_crystals = v;
         }
     }
     pub fn field_cp(&self, uid: i32) -> i32 {
