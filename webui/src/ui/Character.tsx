@@ -37,6 +37,9 @@ export function bandColor(band: string): string {
 export interface CharCardProps {
   c: CharacterData;
   onClick?: () => void;
+  /** Like `onClick` but handed the character: lets a grid pass one stable
+   *  callback to every card, so the memoized cards are not re-rendered. */
+  onPick?: (c: CharacterData) => void;
   /** Faded: picked by someone else or banned. */
   dim?: boolean;
   /** Pink ring: highlighted / your own. */
@@ -49,9 +52,9 @@ export interface CharCardProps {
 }
 
 /** Stand-art card with the band-colored underline and the name. */
-export function CharCard({ c, onClick, dim, chosen, stamp, stampKind = "pink", check, home }: CharCardProps) {
+export const CharCard = memo(function CharCard({ c, onClick, onPick, dim, chosen, stamp, stampKind = "pink", check, home }: CharCardProps) {
   return (
-    <button type="button" className={cx(s.card, dim && s.dim, chosen && s.chosen)} onClick={onClick}>
+    <button type="button" className={cx(s.card, dim && s.dim, chosen && s.chosen)} onClick={onPick ? () => onPick(c) : onClick}>
       <div className={s.art}>
         <img src={charArt(D.artId(c), "thumb")} alt="" loading="lazy" draggable={false} />
       </div>
@@ -62,7 +65,7 @@ export function CharCard({ c, onClick, dim, chosen, stamp, stampKind = "pink", c
       {home && <div className={cx(s.check, s.home)}><Icon name="home" /></div>}
     </button>
   );
-}
+});
 
 /** Round avatar cropped from the SD art, ringed in the character color. */
 export const Avatar = memo(function Avatar({ c, size = 64, className }: { c: CharacterData | undefined; size?: number; className?: string }) {

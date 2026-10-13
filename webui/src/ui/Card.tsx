@@ -69,7 +69,7 @@ export interface CardFaceProps {
   style?: CSSProperties;
 }
 
-export function CardFace({ id, size = "mini", width, on, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
+export const CardFace = memo(function CardFace({ id, size = "mini", width, on, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
   const c = D.card(id);
   const faceStyle = width != null ? { ...style, ["--card-w" as string]: `${width}px` } : style;
   const clickable = !!onClick;
@@ -94,7 +94,7 @@ export function CardFace({ id, size = "mini", width, on, field, onClick, onMouse
       {field ? <div className={s.marks}>{children}</div> : children}
     </div>
   );
-}
+});
 
 /** An empty deck slot (pink with a star). */
 export function EmptySlot({ size = "strip", star, width }: { size?: CardFaceProps["size"]; star: string; width?: number }) {
@@ -157,7 +157,7 @@ export interface InspectCardProps extends CardFaceProps {
  * the detail sheet. Every card shown in a prompt or a card-collection popup
  * goes through this one component -- no per-call-site wiring.
  */
-export function InspectCard({ id, actions, note, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
+export const InspectCard = memo(function InspectCard({ id, actions, note, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
   const enter = (el: HTMLElement) => {
     if (preview) previewFrom(el, id, note);
     onHover?.(id);
@@ -179,4 +179,4 @@ export function InspectCard({ id, actions, note, onHover, preview = true, onClic
       {...face}
     />
   );
-}
+});
