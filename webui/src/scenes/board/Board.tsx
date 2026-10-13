@@ -169,6 +169,7 @@ export function Board({ sess }: { sess: GameSession }) {
               m={m}
               anim={anim}
               pickable={tilePick}
+              walk={tilePick.length > 0 && S.prompt.walk}
               onTile={onTile}
               roll={roll}
             />

@@ -847,6 +847,9 @@ pub enum PromptKind {
     /// just-committed host effect reshaped still maps the pick to the same
     /// tile.
     TileId = 5,
+    /// Pick a tile the player then **walks** to (`ask_tile_walk`): answered
+    /// like `Tile`, but the board lights the path as well as the tile.
+    TileWalk = 6,
 }
 
 impl PromptKind {
@@ -858,6 +861,7 @@ impl PromptKind {
             3 => Self::Player,
             4 => Self::Card,
             5 => Self::TileId,
+            6 => Self::TileWalk,
             _ => return None,
         })
     }
@@ -872,6 +876,7 @@ impl PromptKind {
             Self::Card => "card",
             // Same UI as `Tile` -- only the recorded answer differs.
             Self::TileId => "tile",
+            Self::TileWalk => "tile",
         }
     }
 }

@@ -51,6 +51,8 @@ export interface RingProps {
   anim: Animator;
   /** Tiles a "tile" prompt lets you pick by clicking. */
   pickable: number[];
+  /** The pending tile prompt is walked to: light the path to the hovered tile. */
+  walk?: boolean;
   onTile: (i: number) => void;
   /** The die in the board's roll zone (hidden in replays). */
   roll?: RollControl | null;
@@ -292,12 +294,14 @@ const TileFace = memo(function TileFace({
 /** One tile: its own memo boundary, so a marker hover, a zoom-less re-render
  *  or the turn timer leaves the 60 tiles alone. Everything it draws derives
  *  from the (per-snapshot) model, so the props are all stable values. */
-const Tile = memo(function Tile({ i, m, cellW, cellH, picked, showTip, hideTip, onTile }: {
+const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, onHover, showTip, hideTip, onTile }: {
   i: number;
   m: Model;
   cellW: number;
   cellH: number;
   picked: boolean;
+  trail: boolean;
+  onHover: (i: number | null) => void;
   showTip: (e: React.MouseEvent, title: string, lines: string[]) => void;
   hideTip: () => void;
   onTile: (i: number) => void;
@@ -306,7 +310,7 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, showTip, hideTip, 
   const t = D.tiles[i];
   const [col, row] = cell(i);
   const owner = S.owners[i] ?? -1;
-  const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable);
+  const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail);
   const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
   const tileMarks = S.marks ?? [];
   const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
@@ -389,6 +393,8 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, showTip, hideTip, 
       aria-label={`${t.index}. ${plain(t.name)}`}
       title={`${t.index}. ${plain(t.name)}${quoteTipLine ? ` · ${quoteTipLine}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
       onClick={() => onTile(i)}
+      onMouseEnter={picked ? () => onHover(i) : undefined}
+      onMouseLeave={picked ? () => onHover(null) : undefined}
     >
       <TileFace tile={t} quote={quote} cellW={cellW} cellH={cellH} />
       {owner >= 0 && <span className={s.ownerStrip} />}
@@ -397,8 +403,18 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, showTip, hideTip, 
   );
 });
 
-export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
+export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
   const S = m.S;
+  const [hovered, setHovered] = useState<number | null>(null);
+  // The tiles stepped over on the shorter way round to the hovered pick.
+  const trail = new Set<number>();
+  if (walk && hovered !== null && pickable.includes(hovered)) {
+    const n = D.tiles.length;
+    const from = m.me.pos;
+    const fwd = (((hovered - from) % n) + n) % n;
+    const dir = fwd <= n - fwd ? 1 : -1;
+    for (let k = 1, len = Math.min(fwd, n - fwd); k < len; k++) trail.add((((from + dir * k) % n) + n) % n);
+  }
   const pos = anim.pos ?? S.players.map((x) => x.pos);
   const pick = new Set(pickable);
   const vp = useBoardViewport();
@@ -458,7 +474,7 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
         >
           <Center m={m} roll={roll} />
           {D.tiles.map((_, i) => (
-            <Tile key={i} i={i} m={m} cellW={vp.board.width / COLS} cellH={vp.board.height / ROWS} picked={pick.has(i)} showTip={showTip} hideTip={hideTip} onTile={onTile} />
+            <Tile key={i} i={i} m={m} cellW={vp.board.width / COLS} cellH={vp.board.height / ROWS} picked={pick.has(i)} trail={trail.has(i)} onHover={setHovered} showTip={showTip} hideTip={hideTip} onTile={onTile} />
           ))}
           <div className={s.tokens}>
             {S.players.map((x, i) => {

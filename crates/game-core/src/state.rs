@@ -953,6 +953,10 @@ pub struct MatchPrompt {
     /// Per-option prices on an agent prompt, parallel to `options`.
     #[serde(default)]
     pub prices: Vec<i32>,
+    /// A tile prompt whose pick is walked to (not teleported): the board
+    /// lights the path to the tile as well.
+    #[serde(default)]
+    pub walk: bool,
 }
 
 fn neg_one() -> i32 {
@@ -979,6 +983,7 @@ impl Default for MatchPrompt {
             count: 0,
             price: -1,
             prices: vec![],
+            walk: false,
         }
     }
 }

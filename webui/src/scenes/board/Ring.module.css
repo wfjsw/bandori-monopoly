@@ -164,6 +164,7 @@
   pointer-events: none;
 }
 .landed { box-shadow: inset 0 0 0 3px var(--pink); z-index: 2; }
+.trail { box-shadow: inset 0 0 0 3px var(--gold); background: rgba(246, 178, 30, 0.16); z-index: 2; }
 .pickable { animation: glow 0.9s ease-in-out infinite alternate; z-index: 3; }
 @keyframes glow { from { box-shadow: inset 0 0 0 3px var(--gold); } to { box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 4px rgba(246, 178, 30, 0.8); background: rgba(246, 178, 30, 0.16); } }
 

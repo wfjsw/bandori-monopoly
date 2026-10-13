@@ -1614,6 +1614,16 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
     Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
 }
 
+/// [`ask_tile`] for a pick the player then walks to: the board lights the
+/// path to the hovered tile as well as the tile itself.
+pub fn ask_tile_walk(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
+    for &t in tiles {
+        unsafe { sys::opt_int(t) }
+    }
+    let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
+    Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+}
+
 /// Tile ask with per-option labels, prices, and an AI choice hint
 /// (the agent-landing prompt's `ask.view.prices` + `with_ai`).
 ///
