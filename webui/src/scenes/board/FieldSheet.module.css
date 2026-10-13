@@ -8,6 +8,14 @@
    transport already lowers (`--replay-bar-top` on Board `.body`) -- no extra
    offset here, so the peek lands under the bar, not behind it. */
 
+/* 0 = the face's name sits under its tags, 1 = it is pinned to the bottom zone
+   (Card `.field::after`). Registered so it transitions / animates. */
+@property --field-fill {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
 .sheet {
   position: absolute;
   inset: 0;
@@ -31,13 +39,16 @@
   pointer-events: none;
   max-width: 100%;
   transform: translateY(calc(-100% + var(--field-peek)));
-  transition: transform var(--dur-slow) var(--ease-sheet);
+  /* Retracting, the name drops to the bottom zone at once; */
+  transition: transform var(--dur-slow) var(--ease-sheet), --field-fill 0.12s ease;
 }
 .up .row {
   transform: translateY(0);
   /* Slid out, the face reads as an ordinary card: the name follows the tags
      (Card `.field .title`) instead of staying pinned to the peek zone. */
-  --field-title-gap: 0px;
+  /* ... sliding out, it waits for the row to arrive before moving up. */
+  --field-fill: 0;
+  transition: transform var(--dur-slow) var(--ease-sheet), --field-fill 0.2s ease var(--dur-slow);
 }
 
 /* One card's slot: equal heights across the row (the face stretches to the
@@ -77,14 +88,14 @@
 /* Only this slot comes out: the row stays retracted. A slot's own height is the
    card's, so dropping it by 100% less the peek brings its whole face into view. */
 @keyframes pulse-out {
-  0% { transform: translateY(0) scale(1); --field-title-gap: auto; }
-  17% { --field-title-gap: auto; }
-  /* Fully out: the face reads as an ordinary card (name under the tags); it is
-     pinned back to the bottom zone before the retract starts, so the markers
-     ride the bottom edge the whole way up. */
-  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); --field-title-gap: 0px; }
-  83% { --field-title-gap: auto; }
-  100% { transform: translateY(0) scale(1); --field-title-gap: auto; }
+  0% { transform: translateY(0) scale(1); --field-fill: 1; }
+  18% { --field-fill: 1; }
+  /* Fully out: the name rides up under the tags, and is back at the bottom
+     zone before the retract starts. */
+  30%, 72% { --field-fill: 0; }
+  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); }
+  82% { --field-fill: 1; }
+  100% { transform: translateY(0) scale(1); --field-fill: 1; }
 }
 /* Row already lowered by hover: the slot only lifts a little. */
 .up .pulse {

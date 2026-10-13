@@ -42,10 +42,18 @@
 .field .tags { order: 3; }
 .field .title {
   order: 4;
-  margin-top: var(--field-title-gap, auto); /* FieldSheet zeroes it while slid out */
   height: 38px; /* two 13px lines at 1.3, plus the base padding */
   padding: 3px 2px 1px;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.field::after {
+  /* The spacer that pins the name + markers to the face's bottom (the peek
+     zone). FieldSheet drives `--field-fill` (1 retracted, 0 slid out) so the
+     name rides up under the tags only once the face is out, and drops back
+     the moment it retracts -- never emptying the peek mid-slide. */
+  content: "";
+  order: 3;
+  flex: var(--field-fill, 1) 1 0;
 }
 .field .marks {
   order: 5;
