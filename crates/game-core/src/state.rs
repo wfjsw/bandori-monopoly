@@ -163,8 +163,8 @@ pub struct MatchState {
     /// The movement this turn is taking.
     pub plan: MovePlan,
     pub time_left: f32,
-    pub shield: f32,
-    pub bank: f32,
+    pub base_time: f32,
+    pub bonus_time: f32,
     pub bought: bool,
     pub built: bool,
     /// Next uid to hand out for a card instance. **Global** across the match, not
@@ -231,8 +231,8 @@ impl Default for MatchState {
             can_end_here: false,
             plan: MovePlan::default(),
             time_left: 0.0,
-            shield: 0.0,
-            bank: 0.0,
+            base_time: 0.0,
+            bonus_time: 0.0,
             bought: false,
             built: false,
             next_card_uid: 1,

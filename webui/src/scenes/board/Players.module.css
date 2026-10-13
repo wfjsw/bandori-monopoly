@@ -22,7 +22,7 @@
 .players { --me-blue: #2f7df6; }
 .out { opacity: 0.55; filter: grayscale(0.6); }
 /* The seat number; on the seat whose turn it is (online) it becomes the turn
-   clock: the 20s shield ring, then the 60s bank. */
+   clock: the base-time ring, then the bonus-time ring. */
 .n { position: absolute; left: 6px; top: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; background: var(--pink); color: #fff; font-size: 14px; text-align: center; line-height: 24px; box-shadow: 0 0 0 2px #fff; }
 .av { grid-row: 1 / 3; position: relative; }
 .bot { position: absolute; left: 1px; bottom: 0; width: 16px; height: 16px; border-radius: 50%; background: var(--sub); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
@@ -64,7 +64,7 @@
 .foot { color: var(--pink); font-weight: 700; font-size: 15px; height: 22px; }
 
 .clock { width: 30px; height: 30px; line-height: 30px; left: 2px; top: 2px; font-size: 13px; font-weight: 700; color: var(--pink); background: radial-gradient(var(--white) 56%, transparent 59%), conic-gradient(var(--pink) calc(var(--frac) * 360deg), var(--light-pill) 0); }
-.shield { color: var(--shield); background: radial-gradient(var(--white) 56%, transparent 59%), conic-gradient(var(--shield) calc(var(--frac) * 360deg), var(--light-pill) 0); }
+.base { color: var(--shield); background: radial-gradient(var(--white) 56%, transparent 59%), conic-gradient(var(--shield) calc(var(--frac) * 360deg), var(--light-pill) 0); }
 .low { color: var(--tag-red); }
 .compact .clock { width: 24px; height: 24px; line-height: 24px; font-size: 11px; }
 

@@ -171,7 +171,7 @@ export interface MatchState {
   canEndHere: boolean;
   /** The movement this turn is taking. */
   plan: MovePlan;
-  timeLeft: number; shield: number; bank: number;
+  timeLeft: number; baseTime: number; bonusTime: number;
   bought: boolean; built: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];

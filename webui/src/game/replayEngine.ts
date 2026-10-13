@@ -105,7 +105,10 @@ export function normalizeMatchView(raw: unknown): MatchView {
   st.buyPrice = def(st.buyPrice, -1);
   st.buildCost = def(st.buildCost, -1);
   st.timeLeft = def(st.timeLeft, 0);
-  st.shield = def(st.shield, 0);
+  // Accept both the old `shield` / `bank` names and the renamed fields so a
+  // record written before the turn-clock rename still hydrates.
+  st.baseTime = def(st.baseTime, def(st.shield, 0));
+  st.bonusTime = def(st.bonusTime, def(st.bank, 0));
   st.endReason = def(st.endReason, "");
   v.state = st;
   v.hand = def(v.hand, []);

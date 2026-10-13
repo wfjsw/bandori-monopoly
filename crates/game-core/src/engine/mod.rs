@@ -191,10 +191,10 @@ const MAX_WAIT: f32 = 6.0;
 const CHOICE_WAIT: f32 = 1.2;
 /// Seconds before the first phase starts (`_wait` in the constructor).
 const ORDER_WAIT: f32 = 4.0;
-/// Turn clock: shield per turn, bank refill per turn, bank cap (`StartTimer`).
-const SHIELD: f32 = 15.0;
-const BANK_REFILL: f32 = 10.0;
-const BANK_MAX: f32 = 30.0;
+/// Turn clock: base time per turn, bonus-time refill per turn, bonus cap (`StartTimer`).
+const BASE_TIME: f32 = 15.0;
+const BONUS_REFILL: f32 = 10.0;
+const BONUS_MAX: f32 = 30.0;
 /// End-match vote duration and cool-down after a failed vote.
 const VOTE_SECONDS: f32 = 30.0;
 const VOTE_COOLDOWN: f32 = 30.0;
@@ -277,8 +277,8 @@ struct Saved {
     pending: Option<Pending>,
     live_rng: Rng,
     wait: f32,
-    bank: Vec<f32>,
-    shield: f32,
+    bonus_time: Vec<f32>,
+    base_time: f32,
     timed_out: bool,
     vote: MatchVote,
     vote_seq: i32,
@@ -310,8 +310,8 @@ pub struct Match {
     pending: Option<Pending>,
     live_rng: Rng,
     wait: f32,
-    bank: Vec<f32>,
-    shield: f32,
+    bonus_time: Vec<f32>,
+    base_time: f32,
     timed_out: bool,
     vote: MatchVote,
     vote_seq: i32,
@@ -345,8 +345,8 @@ impl Match {
             pending: self.pending.clone(),
             live_rng: self.live_rng.clone(),
             wait: self.wait,
-            bank: self.bank.clone(),
-            shield: self.shield,
+            bonus_time: self.bonus_time.clone(),
+            base_time: self.base_time,
             timed_out: self.timed_out,
             vote: self.vote.clone(),
             vote_seq: self.vote_seq,
@@ -398,8 +398,8 @@ impl Match {
             pending: s.pending,
             live_rng: s.live_rng,
             wait: s.wait,
-            bank: s.bank,
-            shield: s.shield,
+            bonus_time: s.bonus_time,
+            base_time: s.base_time,
             timed_out: s.timed_out,
             vote: s.vote,
             vote_seq: s.vote_seq,
@@ -545,8 +545,8 @@ impl Match {
             mode,
             pending: None,
             wait: ORDER_WAIT,
-            bank: vec![0.0; n],
-            shield: 0.0,
+            bonus_time: vec![0.0; n],
+            base_time: 0.0,
             timed_out: false,
             vote: MatchVote::default(),
             vote_seq: 0,
@@ -694,10 +694,10 @@ impl Match {
                         .is_none()
                     && self.world.purchase_funds(&self.data, ti, Some(t)) >= st.build_cost.max(0);
             }
-            let bank = self.bank.get(st.turn as usize).copied().unwrap_or(0.0);
-            st.shield = self.shield;
-            st.bank = bank;
-            st.time_left = self.shield + bank;
+            let bonus = self.bonus_time.get(st.turn as usize).copied().unwrap_or(0.0);
+            st.base_time = self.base_time;
+            st.bonus_time = bonus;
+            st.time_left = self.base_time + bonus;
             // `why_not_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
@@ -1122,8 +1122,8 @@ impl Match {
             pending: self.pending.clone(),
             live_rng: self.live_rng.clone(),
             wait: self.wait,
-            bank: self.bank.clone(),
-            shield: self.shield,
+            bonus_time: self.bonus_time.clone(),
+            base_time: self.base_time,
             timed_out: self.timed_out,
             vote: self.vote.clone(),
             vote_seq: self.vote_seq,
@@ -1231,8 +1231,8 @@ impl Match {
                 for s in signals {
                     match s {
                         Signal::StartTimer(i) => {
-                            self.bank[i] = (self.bank[i] + BANK_REFILL).min(BANK_MAX);
-                            self.shield = SHIELD;
+                            self.bonus_time[i] = (self.bonus_time[i] + BONUS_REFILL).min(BONUS_MAX);
+                            self.base_time = BASE_TIME;
                         }
                         Signal::TurnBegan => self.timed_out = false,
                     }
@@ -1557,12 +1557,12 @@ impl Match {
                 return;
             }
             if !self.timed_out {
-                if self.shield > 0.0 {
-                    self.shield = (self.shield - dt).max(0.0);
+                if self.base_time > 0.0 {
+                    self.base_time = (self.base_time - dt).max(0.0);
                 } else {
-                    self.bank[turn] = (self.bank[turn] - dt).max(0.0);
+                    self.bonus_time[turn] = (self.bonus_time[turn] - dt).max(0.0);
                 }
-                if self.shield + self.bank[turn] > 0.0 {
+                if self.base_time + self.bonus_time[turn] > 0.0 {
                     return;
                 }
                 self.timed_out = true;

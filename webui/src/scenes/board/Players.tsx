@@ -31,18 +31,18 @@ export function statusChips(x: MatchPlayer): string[] {
   ].filter(Boolean);
 }
 
-/** The turn clock of the player whose turn it is: the 20s shield, then the
- *  60s bank. Solo has no deadlines (the engine never expires one), and a
+/** The turn clock of the player whose turn it is: the base time first, then
+ *  the bonus time. Solo has no deadlines (the engine never expires one), and a
  *  machine-driven turn has none either, so both show no clock. */
 function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; caption: string; frac: number; cls: string } | null {
   const S = m.S;
   const cur = S.players[S.turn];
   if (solo || S.phase !== "play" || S.turn < 0 || !cur || cur.ai) return null;
   const e = !S.busy && !m.asking ? elapsed : 0;
-  const shield = Math.max(0, S.shield - e);
-  const bank = Math.max(0, S.bank - Math.max(0, e - S.shield));
-  if (shield > 0) return { value: String(Math.ceil(shield)), caption: tr("board.shield"), frac: Math.min(1, shield / 20), cls: s.shield };
-  return { value: String(Math.ceil(bank)), caption: tr("board.remain"), frac: Math.min(1, bank / 60), cls: bank < 10 ? s.low : "" };
+  const base = Math.max(0, S.baseTime - e);
+  const bonus = Math.max(0, S.bonusTime - Math.max(0, e - S.baseTime));
+  if (base > 0) return { value: String(Math.ceil(base)), caption: tr("board.baseTime"), frac: Math.min(1, base / 15), cls: s.base };
+  return { value: String(Math.ceil(bonus)), caption: tr("board.remain"), frac: Math.min(1, bonus / 30), cls: bonus < 10 ? s.low : "" };
 }
 
 /** Seats in the order they act from now: the current turn first, then the
