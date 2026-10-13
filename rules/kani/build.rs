@@ -267,7 +267,7 @@ fn gen_body_dispatch() {
         }
     }
     s.push_str("/// Per-card body dispatch (Kani). Integer match → one trampoline.\n");
-    s.push_str("#[cfg(kani)]\n");
+    s.push_str("#[cfg(kani)]\n#[inline(always)]\n");
     s.push_str("fn call_body_idx(idx: usize, entry_index: usize, player: i32) -> Asked {\n");
     s.push_str("    match idx {\n");
     for i in 0..BANDS.len() {

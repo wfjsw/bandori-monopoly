@@ -243,6 +243,10 @@ fn fail_no_kind(kind: &str) -> ! {
 /// Under Kani this goes through [`call_body_idx`] (per-card direct call
 /// sites). A single shared `code*` call makes CBMC expand a ~4300-target
 /// function-pointer IF-chain — the events-unit SAT cliff.
+///
+/// `inline(always)` so a `card_id!(…)` constant folds the match to one
+/// arm and only that trampoline stays reachable.
+#[inline(always)]
 pub fn entry_idx(idx: usize, entry_index: usize, player: i32) -> Asked {
     #[cfg(kani)]
     {
@@ -260,6 +264,7 @@ pub fn entry_idx(idx: usize, entry_index: usize, player: i32) -> Asked {
 }
 
 /// First `On::Play` of card `idx`.
+#[inline(always)]
 pub fn play_idx(idx: usize, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
@@ -443,11 +448,13 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32
 }
 
 /// Skill entry: alias of [`play_idx`].
+#[inline(always)]
 pub fn skill_play_idx(idx: usize, player: i32) -> Asked {
     play_idx(idx, player)
 }
 
 /// Event entry: alias of [`play_idx`].
+#[inline(always)]
 pub fn event_play_idx(idx: usize, player: i32) -> Asked {
     play_idx(idx, player)
 }
