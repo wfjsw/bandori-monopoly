@@ -332,7 +332,9 @@ export class Animator {
   private fieldUid(uid: number): number | null {
     if (uid < 0) return null;
     for (const p of this.view()?.state.players ?? []) {
-      for (const c of p.field ?? []) if (c.uid === uid && !c.faceDown) return uid;
+      // `skill:` rules are not drawn in the field row (FieldSheet), so a skill's
+      // hook has no slot to light: it keeps the centre flash.
+      for (const c of p.field ?? []) if (c.uid === uid && !c.faceDown && !c.card.startsWith("skill:")) return uid;
     }
     return null;
   }

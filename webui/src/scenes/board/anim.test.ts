@@ -385,3 +385,13 @@ test("Animator: two same-name field cards pulse one after the other", async () =
   console.log(JSON.stringify(stamps));
   assert.deepEqual(seen.filter((u) => u >= 0), [70, 71]);
 });
+
+test("Animator: a skill rule's hook (not drawn in the field row) keeps the centre flash", async () => {
+  const view = { state: { players: [{ field: [{ uid: 5, card: "skill:A:B", faceDown: false }] }] } } as never;
+  const anim = new Animator(() => {}, () => view, false);
+  anim.push(frame({ id: 81, type: "card", card: "skill:A:B", kind: "hook", uid: 5, msg: { k: "log.effect_applied" }, flash: true }));
+  let flashed = false;
+  for (let i = 0; i < 60 && !flashed; i++) { flashed = !!anim.flash; await sleep(10); }
+  assert.ok(flashed, "centre flash shows");
+  assert.equal(anim.pulse, null);
+});
