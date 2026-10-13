@@ -538,9 +538,9 @@ function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
         <span className={s.pocket} style={{ gridColumn: "9 / 12", gridRow: "8 / 10" }} />
         <span style={{ gridColumn: "2 / 5", gridRow: "2 / 4" }}>{tr("board.markerZone")}</span>
         <span style={{ gridColumn: "9 / 12", gridRow: "2 / 4" }}>{tr("board.specialMarkerZone")}</span>
-        <span className={s.zoneNarrow} style={{ gridColumn: "5 / 6", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
-        <span style={{ gridColumn: "6 / 8", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span>
-        <span className={s.zoneNarrow} style={{ gridColumn: "8 / 9", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
+        {/* <span className={s.zoneNarrow} style={{ gridColumn: "5 / 6", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span> */}
+        {/* <span style={{ gridColumn: "6 / 8", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span> */}
+        {/* <span className={s.zoneNarrow} style={{ gridColumn: "8 / 9", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span> */}
       </div>
       {/* The die in the board's roll zone (掷骰区): the one roll control, on
           the spot the board names for it. Hidden in replays (`roll` null). */}
