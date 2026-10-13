@@ -69,8 +69,8 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-asukayama-03 | 状态回合开始衰减 | PROTOCOL-LEVEL | — | — | engine status tick | — |
 | E-school-time-01 | 移到学校格并+1除外 | BLOCKED-HOST | — | — | `tile_named(school / 周边学区)` → -1 | — |
 | E-school-time-02 | 无学校 → 周边学区 | BLOCKED-HOST | — | — | same | — |
-| E-tears-01 | 同色 ⇒ 下一位付当前700 | PROVEN | `tears_01_same_colour_next_pays_700` | TBD | — | OPEN-tears-colour |
-| E-tears-02 | 否则当前付下一位300 | PROVEN | `tears_02_different_colour_current_pays_300`, `tears_mutant_is_detected` | TBD | — | — |
+| E-tears-01 | 同色 ⇒ 下一位付当前700 | PROVEN | `tears_01_same_colour_next_pays_700` **SUCCESSFUL 724 s** (covers sat) | class A 60-tile clear deleted | — | OPEN-tears-colour |
+| E-tears-02 | 否则当前付下一位300 | PROVEN | `tears_02_different_colour_current_pays_300` **SUCCESSFUL 761 s**, `tears_mutant_is_detected` **SUCCESSFUL 609 s** | same | — | — |
 | E-kizuna-01 | 投X+1d20，全员传送 mod60 +1除外 | PARTIAL / BLOCKED-HOST | — | — | teleport dest is `face%60` (no `tile_named`) — effect log of `Teleport`+`GiveExile` provable; song X undefined | OPEN-kizuna-song |
 | E-chart-rush-01 | 失去所有火罐，投Xd20 X=lost+1 | PROVEN | `chart_rush_01_*` | TBD | — | — |
 | E-chart-rush-02 | 名次 2000/1500/1000/500，同点共高档 | PROVEN | `chart_rush_02_*` | TBD | — | OPEN-chart-rush-or, OPEN-chart-rush-tie |
