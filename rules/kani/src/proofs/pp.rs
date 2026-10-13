@@ -79,12 +79,12 @@ fn set_band_crystals(p: i32, v: i32) {
     world::with_world_mut(|w| w.band_crystals[p as usize] = v);
 }
 
-fn fans_pos_of(p: i32) -> i32 {
-    world::with_world(|w| w.fans_pos[p as usize])
+fn fans_pos_of(p: usize) -> i32 {
+    world::with_world(|w| w.fans_pos[p])
 }
 
-fn fans_neg_of(p: i32) -> i32 {
-    world::with_world(|w| w.fans_neg[p as usize])
+fn fans_neg_of(p: usize) -> i32 {
+    world::with_world(|w| w.fans_neg[p])
 }
 
 fn effects_of() -> ([Effect; 24], usize) {
@@ -1099,9 +1099,9 @@ pub fn shine_again_01_rescue_iff() {
     });
     // Host model of `is_buyable` / `tile_price` / `tile_group` is partial;
     // the body's rescue is: +1 positive fan and gain price/5.
-    let pre_fans = world::with_world(|ww| wfans_pos_of(me as usize));
+    let pre_fans = world::with_world(|ww| fans_pos_of(me as usize));
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PayChoose", me));
-    let post_fans = world::with_world(|ww| wfans_pos_of(me as usize));
+    let post_fans = world::with_world(|ww| fans_pos_of(me as usize));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects
