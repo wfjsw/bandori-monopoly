@@ -57,7 +57,7 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
 );
 
 /// The condition under which [除外] closes the act, pay and move gates.
-pub const EXILED: &str = "exile(actor) > 0";
+pub const EXILED: &str = "state(actor,'exile') > 0";
 
 fn refuse(_owner: i32) -> card_sdk::Asked {
     trigger::set_cancelled();

@@ -42,13 +42,12 @@ pub struct PlayerSnap {
     pub out: i64,
     pub stay: i64,
     pub stun: i64,
-    /// Pending `[晕眩]` layer (`stunStart`) — starts counting next turn.
-    pub stun_start: i64,
     pub exile: i64,
     /// 1 = 「不可持有手牌」.
     pub no_hand: i64,
-    /// `[不可阻挡]` layers.
-    pub unstoppable: i64,
+    /// `state(p, 'key')` backing map (`MatchPlayer.state`): every keyed
+    /// player-state value on this seat. Missing key = 0.
+    pub state: std::collections::BTreeMap<String, i64>,
     pub character: i64,
     pub band: i64,
     /// Count of tiles the seat owns.

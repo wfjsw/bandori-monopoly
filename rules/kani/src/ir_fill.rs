@@ -123,6 +123,27 @@ pub const KEY_STUN_START: &str = "stunStart";
 pub const KEY_EXILE: &str = "exile";
 pub const KEY_NO_HAND: &str = "noHand";
 pub const KEY_UNSTOPPABLE: &str = "unstoppable";
+/// The finite player-state key set the IR `state(p, 'key')` table carries
+/// (`STATE_CAP = 64` = 4 seats x these). `stay` lives on `World::stay`, not
+/// `player_keys`, and is folded in by [`fill_state_rows`].
+pub const STATE_KEYS: [&str; 5] = [
+    KEY_STUN,
+    KEY_STUN_START,
+    KEY_EXILE,
+    KEY_NO_HAND,
+    KEY_UNSTOPPABLE,
+];
+/// `id_of` of each [`STATE_KEYS`] entry (const, so never a CBMC hash walk).
+pub const STATE_KEY_IDS: [i64; 5] = [
+    rules_cond_ir::ctx::id_of(KEY_STUN),
+    rules_cond_ir::ctx::id_of(KEY_STUN_START),
+    rules_cond_ir::ctx::id_of(KEY_EXILE),
+    rules_cond_ir::ctx::id_of(KEY_NO_HAND),
+    rules_cond_ir::ctx::id_of(KEY_UNSTOPPABLE),
+];
+/// `id_of("stay")` -- the one state key backed by `World::stay` rather than
+/// `player_keys`.
+pub const ID_STATE_STAY: i64 = rules_cond_ir::ctx::id_of("stay");
 
 /// Board tile names (`tile_named('…')`), 0-based slot → spelling from
 /// `data/board.json`. Production `fill_window` registers every one so a
@@ -461,10 +482,8 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
         c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
         c.seat[p][SeatField::Stay as usize] = w.stay[p] as i64;
         c.seat[p][SeatField::Stun as usize] = key_get_name(w, p as i32, KEY_STUN);
-        c.seat[p][SeatField::StunStart as usize] = key_get_name(w, p as i32, KEY_STUN_START);
         c.seat[p][SeatField::Exile as usize] = key_get_name(w, p as i32, KEY_EXILE);
         c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
-        c.seat[p][SeatField::Unstoppable as usize] = key_get_name(w, p as i32, KEY_UNSTOPPABLE);
         c.seat[p][SeatField::Character as usize] = id_of_name_id(NameId(w.character_id[p]));
         c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.band_id[p]));
         c.seat[p][SeatField::Tiles as usize] = owned_tiles(w, p as i32);
@@ -476,6 +495,22 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
         c.seat[p][SeatField::Gains as usize] = w.gains_this_turn[p] as i64;
         c.seat[p][SeatField::Targeted as usize] = w.targeted_count[p] as i64;
         c.seat[p][SeatField::Between as usize] = w.between_seat[p] as i64;
+        fill_state_rows(c, w, p);
+    }
+}
+
+/// Fill seat `p`'s `state(p, 'key')` rows: the finite [`STATE_KEYS`] set plus
+/// `stay` (backed by `World::stay`, not `player_keys`). 5 key-ids + stay =
+/// 6 rows per seat; 4 seats = 24 of `STATE_CAP = 64`.
+fn fill_state_rows(c: &mut IrCtx, w: &World, p: usize) {
+    c.state_set(p as i64, ID_STATE_STAY, w.stay[p] as i64);
+    let mut i = 0usize;
+    while i < STATE_KEYS.len() {
+        let v = key_get_name(w, p as i32, STATE_KEYS[i]);
+        if v != 0 {
+            c.state_set(p as i64, STATE_KEY_IDS[i], v);
+        }
+        i += 1;
     }
 }
 
@@ -1001,6 +1036,8 @@ impl GuardNeeds {
 
 /// Seat-field bits a `FnId` call reads (0 when the call is not seat-scalar).
 /// Used by [`guard_needs`] so [`fill_for_guard`] fills only what the IR reads.
+/// `state(p, 'key')` (FnId 37) reads the separate `IrCtx::state` table, not a
+/// [`SeatField`].
 fn seat_field_bits(fid: i64) -> u32 {
     let bit = |f: SeatField| 1u32 << (f as u32);
     match fid {
@@ -1017,11 +1054,6 @@ fn seat_field_bits(fid: i64) -> u32 {
         24 => bit(SeatField::Gains),
         25 => bit(SeatField::Targeted),
         33 => bit(SeatField::Between),
-        37 => bit(SeatField::Stay),
-        // `stunned` sums `stun` + `stunStart`.
-        38 => bit(SeatField::Stun) | bit(SeatField::StunStart),
-        39 => bit(SeatField::Exile),
-        40 => bit(SeatField::Unstoppable),
         _ => 0,
     }
 }
@@ -1057,8 +1089,8 @@ pub fn guard_needs(gid: usize) -> GuardNeeds {
                             if j < nargs && first + j < nodes.len() {
                                 let arg = nodes[first + j];
                                 if arg.kind == rules_cond_ir::nodes::Kind::ConstInt {
-                                    // FnId 0..=4 take a name id; 10..=17 and the
-                                    // status fns (37..=40) take a seat.
+                                    // FnId 0..=4 take a name id; 10..=17 and
+                                    // `state` (37) take a seat as arg 0.
                                     if node.payload <= 4 {
                                         n.note_named(arg.payload);
                                     } else if (10..=17).contains(&node.payload)
@@ -1068,16 +1100,20 @@ pub fn guard_needs(gid: usize) -> GuardNeeds {
                                         || node.payload == 24
                                         || node.payload == 25
                                         || node.payload == 33
-                                        || (37..=40).contains(&node.payload)
+                                        || node.payload == 37 && j == 0
                                     {
                                         if n.seat_const < 0 {
                                             n.seat_const = arg.payload;
                                         }
                                     }
+                                    // `state(p, 'key')`: the key is a const
+                                    // `id_of` hash (arg 1). The light fill
+                                    // carries the whole finite key set, so
+                                    // the id itself is not needed here.
                                 } else {
                                     // Symbolic seat/name argument.
                                     if (10..=17).contains(&node.payload)
-                                        || (37..=40).contains(&node.payload)
+                                        || (node.payload == 37 && j == 0)
                                     {
                                         n.seat_arg_symbolic = true;
                                     }
@@ -1322,19 +1358,11 @@ pub fn fill_for_guard(
                 if sf & (1 << (SeatField::Stun as u32)) != 0 {
                     c.seat[p][SeatField::Stun as usize] = key_get_name(w, p as i32, KEY_STUN);
                 }
-                if sf & (1 << (SeatField::StunStart as u32)) != 0 {
-                    c.seat[p][SeatField::StunStart as usize] =
-                        key_get_name(w, p as i32, KEY_STUN_START);
-                }
                 if sf & (1 << (SeatField::Exile as u32)) != 0 {
                     c.seat[p][SeatField::Exile as usize] = key_get_name(w, p as i32, KEY_EXILE);
                 }
                 if sf & (1 << (SeatField::NoHand as u32)) != 0 {
                     c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
-                }
-                if sf & (1 << (SeatField::Unstoppable as u32)) != 0 {
-                    c.seat[p][SeatField::Unstoppable as usize] =
-                        key_get_name(w, p as i32, KEY_UNSTOPPABLE);
                 }
                 if sf & (1 << (SeatField::Crystals as u32)) != 0 {
                     c.seat[p][SeatField::Crystals as usize] = w.band_crystals[p] as i64;
@@ -1361,6 +1389,18 @@ pub fn fill_for_guard(
                 if sf & (1 << (SeatField::Tiles as u32)) != 0 {
                     c.seat[p][SeatField::Tiles as usize] = owned_tiles(w, p as i32);
                 }
+            }
+            p += 1;
+        }
+    }
+
+    // `state(p, 'key')` (FnId 37): the finite key set for the seats the guard
+    // reads. `seat_fields` is empty for this fn -- it lives on `IrCtx::state`.
+    if (needs.fns >> 37) & 1 != 0 {
+        let mut p = seat_lo;
+        while p < world::MAX_PLAYERS {
+            if p < seat_hi {
+                fill_state_rows(&mut c, w, p);
             }
             p += 1;
         }

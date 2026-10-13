@@ -50,13 +50,10 @@ pub enum FnId {
     TileIs,
     TileAttr,
     TileIn,
-    // Status-gate per-seat layers (appended; earlier discriminants stable).
-    Stay,
-    /// `[晕眩]` layers **including** the pending `stunStart` layer
-    /// (`stun + stunStart`).
-    Stunned,
-    Exile,
-    Unstoppable,
+    /// `state(p, 'key')` -- the seat's player-state value for an arbitrary
+    /// string key (`MatchPlayer.state` / `state_get`). Missing = 0. The key
+    /// argument is an `id_of` hash baked at lower time.
+    State,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).
@@ -79,13 +76,9 @@ pub enum SeatField {
     Gains,
     Targeted,
     Between,
-    /// Pending `[晕眩]` layer (`stunStart`) — starts counting next turn.
-    StunStart,
-    /// `[不可阻挡]` layers.
-    Unstoppable,
 }
 
-pub const SEAT_FIELD_COUNT: usize = 18;
+pub const SEAT_FIELD_COUNT: usize = 16;
 pub const MAX_PLAYERS: usize = 4;
 
 /// Membership sets backing `is_*` / `chain_has` / `chain_hits` / `blocked`.
@@ -119,6 +112,11 @@ pub const NAMED_CAP: usize = 80;
 /// `(a * 1024 + b) -> v`, same packing as `rules-cond`'s eager fill.
 pub const BIN_CAP: usize = 64;
 
+/// Player-state rows for `state(p, 'key')`: `(seat, key_id, value)`. `key_id`
+/// is `id_of(key)`, the same hash the lowerer bakes for the string argument.
+/// Sized for 4 seats x 16 keys. Missing `(seat, key)` answers 0.
+pub const STATE_CAP: usize = 64;
+
 #[derive(Copy, Clone, Debug)]
 pub struct IrCtx {
     /// Flat scalars ([`VarId`] as index), raw i64. `OptInt` uses `-1` = null;
@@ -130,6 +128,9 @@ pub struct IrCtx {
     /// `(name_id, value)` pairs; `named_n` live entries.
     pub named: [(i64, i64); NAMED_CAP],
     pub named_n: u8,
+    /// `(seat, key_id, value)` rows for `state(p, 'key')`; `state_n` live.
+    pub state: [(i64, i64, i64); STATE_CAP],
+    pub state_n: u8,
     /// Bitsets ([`SetId`] as index).
     pub sets: [[u64; SET_BITS / 64]; SET_COUNT],
     /// Board tile count — backs `dist` / ring wraps.
@@ -147,6 +148,8 @@ impl Default for IrCtx {
             n_players: 0,
             named: [(0, 0); NAMED_CAP],
             named_n: 0,
+            state: [(0, 0, 0); STATE_CAP],
+            state_n: 0,
             sets: [[0; SET_BITS / 64]; SET_COUNT],
             tile_count: 0,
             bin: [(0, 0); BIN_CAP],
@@ -277,6 +280,48 @@ impl IrCtx {
         if n < NAMED_CAP {
             self.named[n] = (name_id, v);
             self.named_n = (n + 1) as u8;
+        }
+    }
+
+    /// `state(p, 'key')` lookup. 8×8 chunk walk over `STATE_CAP = 64`
+    /// (unwind bound 8). Missing `(seat, key)` answers 0.
+    pub fn state_get(&self, seat: i64, key_id: i64) -> i64 {
+        let n = self.state_n as usize;
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < n && i < STATE_CAP && self.state[i].0 == seat && self.state[i].1 == key_id {
+                    return self.state[i].2;
+                }
+                k += 1;
+            }
+            outer += 1;
+        }
+        0
+    }
+
+    /// Insert or overwrite a `state(p, 'key')` row. 8×8 chunk walk (unwind
+    /// bound 8).
+    pub fn state_set(&mut self, seat: i64, key_id: i64, v: i64) {
+        let n = self.state_n as usize;
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < n && i < STATE_CAP && self.state[i].0 == seat && self.state[i].1 == key_id {
+                    self.state[i].2 = v;
+                    return;
+                }
+                k += 1;
+            }
+            outer += 1;
+        }
+        if n < STATE_CAP {
+            self.state[n] = (seat, key_id, v);
+            self.state_n = (n + 1) as u8;
         }
     }
 

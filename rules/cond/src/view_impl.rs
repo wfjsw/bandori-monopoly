@@ -192,17 +192,26 @@ impl CondView for SnapshotView<'_> {
     fn stun(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.stun).unwrap_or(0)
     }
-    fn stun_start(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.stun_start).unwrap_or(0)
-    }
     fn exile(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.exile).unwrap_or(0)
     }
     fn no_hand(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.no_hand).unwrap_or(0)
     }
-    fn unstoppable(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.unstoppable).unwrap_or(0)
+    fn state(&self, seat: i64, key: &str) -> i64 {
+        self.win
+            .player(seat)
+            .map(|p| p.state.get(key).copied().unwrap_or(0))
+            .unwrap_or(0)
+    }
+    fn state_table(&self) -> Vec<(i64, String, i64)> {
+        let mut rows = Vec::new();
+        for (s, p) in self.win.players.iter().enumerate() {
+            for (k, v) in &p.state {
+                rows.push((s as i64, k.clone(), *v));
+            }
+        }
+        rows
     }
     fn character(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.character).unwrap_or(0)

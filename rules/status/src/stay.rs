@@ -54,7 +54,7 @@ pub const STATUS_STAY: CardDef = CardDef::new(
 
 /// The condition under which [停留] closes the move gate. [停留] closes
 /// neither the act nor the pay gate.
-pub const STAY_HOLDS_MOVE: &str = "stay(actor) > 0 && unstoppable(actor) == 0";
+pub const STAY_HOLDS_MOVE: &str = "state(actor,'stay') > 0 && state(actor,'unstoppable') == 0";
 
 /// The answer of a closed gate (only run if a gate is ever raised; pure reads
 /// use the condition alone).

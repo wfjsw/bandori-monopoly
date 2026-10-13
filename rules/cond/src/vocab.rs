@@ -113,6 +113,12 @@ pub enum Fx {
         var: &'static str,
         fill: fn(&dyn CondView) -> Vec<(i64, i64, String)>,
     },
+    /// `f(seat: int, key: string) -> int` over a baked `(seat, key) -> v` map
+    /// (`state` is the only user). Missing = 0. Mirrors [`Fx::TileAttr`].
+    SeatStrInt {
+        var: &'static str,
+        fill: fn(&dyn CondView) -> Vec<(i64, String, i64)>,
+    },
 }
 
 /// One vocabulary name.
@@ -1011,59 +1017,19 @@ pub const VOCAB: &[Name] = &[
         },
         doc: "targeted_count(p) -> hostile targetings of p this turn",
     },
-    // -- status-gate layers -------------------------------------------------
+    // -- player-state lookup -------------------------------------------------
     Name {
-        cel: "stay",
+        cel: "state",
         aliases: &[],
-        flat: "stay",
-        scope: Scope::Func { arity: 1, cand: false },
+        flat: "state",
+        scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Int,
         get: NO_GET,
-        fx: Fx::SeatInt {
-            var: "_stay",
-            field: |v, s| v.stay(s),
+        fx: Fx::SeatStrInt {
+            var: "_state",
+            fill: |v| v.state_table(),
         },
-        doc: "stay(p) -> seat's [停留] layers",
-    },
-    Name {
-        cel: "stunned",
-        aliases: &[],
-        flat: "stunned",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
-        get: NO_GET,
-        fx: Fx::SeatInt {
-            var: "_stunned",
-            // [晕眩] layers including the pending `stunStart` layer.
-            field: |v, s| v.stun(s) + v.stun_start(s),
-        },
-        doc: "stunned(p) -> seat's [晕眩] layers including the pending stunStart layer",
-    },
-    Name {
-        cel: "exile",
-        aliases: &[],
-        flat: "exile",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
-        get: NO_GET,
-        fx: Fx::SeatInt {
-            var: "_exile",
-            field: |v, s| v.exile(s),
-        },
-        doc: "exile(p) -> seat's [除外] layers",
-    },
-    Name {
-        cel: "unstoppable",
-        aliases: &[],
-        flat: "unstoppable",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Int,
-        get: NO_GET,
-        fx: Fx::SeatInt {
-            var: "_unstoppable",
-            field: |v, s| v.unstoppable(s),
-        },
-        doc: "unstoppable(p) -> seat's [不可阻挡] layers",
+        doc: "state(p, 'key') -> the seat's player-state value for that key ('stay' / 'stun' / 'stunStart' / 'exile' / 'unstoppable' / …); missing = 0",
     },
     // -- pure int predicate -------------------------------------------------
     Name {
@@ -1394,5 +1360,6 @@ pub fn fn_table(n: &Name, view: &dyn CondView) -> Option<(&'static str, Table)> 
         Fx::TileIs { var, fill } => Some((var, Table::StrIntList(fill(view)))),
         Fx::TileAttr { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
         Fx::TileIn { var, fill } => Some((var, Table::TripleSet(fill(view)))),
+        Fx::SeatStrInt { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
     }
 }

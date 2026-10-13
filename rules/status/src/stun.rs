@@ -48,7 +48,7 @@ pub const STATUS_STUN: CardDef = CardDef::new(
 );
 
 /// The condition under which [晕眩] closes the act, pay and move gates.
-pub const STUNNED: &str = "stunned(actor) > 0";
+pub const STUNNED: &str = "state(actor,'stun') + state(actor,'stunStart') > 0";
 
 fn refuse(_owner: i32) -> card_sdk::Asked {
     trigger::set_cancelled();

@@ -515,9 +515,9 @@ policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
 
 | host | gates | condition |
 |---|---|---|
-| `status:stay` | `MoveGate` | `stay(actor) > 0 && unstoppable(actor) == 0` |
-| `status:stun` | `ActGate`, `PayGate`, `MoveGate` | `stunned(actor) > 0` (stun + the pending `stunStart` layer) |
-| `status:exile` | `ActGate`, `PayGate`, `MoveGate` | `exile(actor) > 0` |
+| `status:stay` | `MoveGate` | `state(actor,'stay') > 0 && state(actor,'unstoppable') == 0` |
+| `status:stun` | `ActGate`, `PayGate`, `MoveGate` | `state(actor,'stun') + state(actor,'stunStart') > 0` (stun + the pending `stunStart` layer) |
+| `status:exile` | `ActGate`, `PayGate`, `MoveGate` | `state(actor,'exile') > 0` |
 
 * **CEL only.** The condition is the whole answer: the ruleset load refuses a
   gate entry with a residual guard or without a condition
@@ -526,8 +526,8 @@ policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
   ask it through `rules_status::can_pay` -- a wasm guard could not be run
   there, and a gate cannot be *raised* from inside a pure guard.
 * **Vocabulary.** A condition reads other statuses (`stay` needs
-  `unstoppable`), so the CEL vocabulary exposes per-seat `stay(p)`,
-  `stunned(p)`, `exile(p)`, `unstoppable(p)` (`docs/GUARDS.md`).
+  `unstoppable`), so the CEL vocabulary exposes `state(p, 'key')` over the
+  seat's player-state map (`docs/GUARDS.md`).
 * **Engine side.** `CardRules::gate_open(world, Gate, player)` -> `World::gate_open`.
   The wasm ruleset evaluates the conditions over a players-only window
   (`game_rules::gate`); `StubRules` returns `None` and the engine falls back to

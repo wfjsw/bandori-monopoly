@@ -653,9 +653,10 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
   native batch adds `dist`, `players_on`, `next_dist`, `others_within`,
   `owned_within`, `on_path`, `between`, `gains_this_turn`, `targeted_count`
   and the pure predicate `repeated_digits` (three new `Fx` shapes:
-  `IntIntConst` / `BinInt` / `IntPred`). The status-gate batch adds the
-  per-seat layer counts `stay(p)`, `stunned(p)` ( `[晕眩]` including the
-  pending `stunStart` layer), `exile(p)` and `unstoppable(p)`.
+  `IntIntConst` / `BinInt` / `IntPred`). The status-gate batch adds
+  `state(p, 'key')` -- the seat's player-state value for an arbitrary string
+  key (`'stay'` / `'stun'` / `'stunStart'` / `'exile'` / `'unstoppable'` /
+  …); missing = 0.
 * Unit tests (`tests/cond_tests.rs`, 29 + 4 wire + doctest): parse errors,
   unknown vars, float / kind rejection, truth tables for the sample
   conditions, function lookups, scope-reuse equivalence, **postcard
@@ -1036,8 +1037,11 @@ the soak. See `docs/rulebook/TEST-FINDINGS.md`.
 
 ## Status-gate functions (ABI 58)
 
-`stay(p)`, `stunned(p)` (= `stun` + the pending `stunStart` layer), `exile(p)`
-and `unstoppable(p)` return a seat's status layers. They exist so the CEL-only
+`state(p, 'key')` returns a seat's player-state value for an arbitrary string
+key (`MatchPlayer.state` / `state_get`); missing = 0. The status gates spell
+their clauses as `state(actor,'stay') > 0 && state(actor,'unstoppable') == 0`,
+`state(actor,'stun') + state(actor,'stunStart') > 0`,
+`state(actor,'exile') > 0`. They exist so the CEL-only
 `ActGate` / `PayGate` / `MoveGate` entries of the `status:*` rules
 (`docs/STATUS-HOSTS.md` §9) can read each other's statuses. Those gate entries
 carry **no** residual guard (the load refuses one): the condition is the answer.

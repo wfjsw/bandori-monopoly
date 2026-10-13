@@ -441,6 +441,18 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             )
             .expect(fname);
         }
+        Fx::SeatStrInt { var, .. } => {
+            let var = var.to_string();
+            // `state(p, 'key')` -- the key is a string; missing = 0.
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, seat: i64, key: Arc<String>| -> Result<i64, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    Ok(int_at_str(&m, &format!("{seat}:{}", key.as_str()), 0))
+                },
+            )
+            .expect(fname);
+        }
     }
 }
 

@@ -1,8 +1,9 @@
 //! The status gates' window (`docs/STATUS-HOSTS.md`): the cheapest possible
 //! CEL window for the CEL-only `ActGate` / `PayGate` / `MoveGate` conditions.
 //!
-//! Those conditions read only per-seat status layers (`stay(actor)`,
-//! `stunned(actor)`, `exile(actor)`, `unstoppable(actor)`), so the window is
+//! Those conditions read only per-seat status layers via `state(p, 'key')`
+//! (`state(actor,'stay')`, `state(actor,'stun') + state(actor,'stunStart')`,
+//! `state(actor,'exile')`, `state(actor,'unstoppable')`), so the window is
 //! `actor` plus one [`PlayerSnap`] per seat -- no tile tables. Built per read
 //! (the view, a rollout's `can_pay`), so it must stay O(players).
 
@@ -41,14 +42,31 @@ fn window(actor: i32, seats: impl Iterator<Item = Layers>) -> WindowCtx {
         target: -1,
         by: -1,
         players: seats
-            .map(|l| PlayerSnap {
-                out: l.out as i64,
-                stay: l.stay as i64,
-                stun: l.stun as i64,
-                stun_start: l.stun_start as i64,
-                exile: l.exile as i64,
-                unstoppable: l.unstoppable as i64,
-                ..PlayerSnap::default()
+            .map(|l| {
+                let mut state = std::collections::BTreeMap::new();
+                if l.stay != 0 {
+                    state.insert(key::STAY.to_string(), l.stay as i64);
+                }
+                if l.stun != 0 {
+                    state.insert(key::STUN.to_string(), l.stun as i64);
+                }
+                if l.stun_start != 0 {
+                    state.insert(key::STUN_START.to_string(), l.stun_start as i64);
+                }
+                if l.exile != 0 {
+                    state.insert(key::EXILE.to_string(), l.exile as i64);
+                }
+                if l.unstoppable != 0 {
+                    state.insert(key::UNSTOPPABLE.to_string(), l.unstoppable as i64);
+                }
+                PlayerSnap {
+                    out: l.out as i64,
+                    stay: l.stay as i64,
+                    stun: l.stun as i64,
+                    exile: l.exile as i64,
+                    state,
+                    ..PlayerSnap::default()
+                }
             })
             .collect(),
         ..WindowCtx::default()

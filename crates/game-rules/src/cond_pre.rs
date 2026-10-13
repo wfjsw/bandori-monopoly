@@ -323,17 +323,23 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn stun(&self, seat: i64) -> i64 {
         self.src.stun_of(seat as i32) as i64
     }
-    fn stun_start(&self, seat: i64) -> i64 {
-        self.src.stun_start_of(seat as i32) as i64
-    }
     fn exile(&self, seat: i64) -> i64 {
         self.src.state_get(seat as i32, game_core::state::key::EXILE) as i64
     }
     fn no_hand(&self, seat: i64) -> i64 {
         self.src.state_get(seat as i32, game_core::state::key::NO_HAND) as i64
     }
-    fn unstoppable(&self, seat: i64) -> i64 {
-        self.src.unstoppable_of(seat as i32) as i64
+    fn state(&self, seat: i64, key: &str) -> i64 {
+        self.src.state_get(seat as i32, key) as i64
+    }
+    fn state_table(&self) -> Vec<(i64, String, i64)> {
+        let mut rows = Vec::new();
+        for s in 0..self.src.player_count() {
+            for (k, v) in self.src.state_entries(s) {
+                rows.push((s as i64, k, v as i64));
+            }
+        }
+        rows
     }
     fn character(&self, seat: i64) -> i64 {
         id_of(&self.src.character_name(seat as i32).unwrap_or_default())
@@ -650,15 +656,14 @@ pub trait SnapSrc {
     fn player_out(&self, player_id: i32) -> i32;
     fn stay_of(&self, player_id: i32) -> i32;
     fn stun_of(&self, player_id: i32) -> i32;
-    /// Pending `[晕眩]` layer (`stunStart`). Sugar over the keyed state.
-    fn stun_start_of(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::STUN_START)
-    }
-    /// `[不可阻挡]` layers. Sugar over the keyed state.
-    fn unstoppable_of(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::UNSTOPPABLE)
-    }
     fn state_get(&self, player_id: i32, key: &str) -> i32;
+    /// The seat's player-state `(key, value)` pairs (`MatchPlayer.state`),
+    /// for the baked `state(p, 'key')` table. Live worlds walk the real map;
+    /// the `CardWorld` blanket probes the well-known status keys via
+    /// [`Self::state_get`] and omits zeros (so a test world that never sets
+    /// state answers empty). Missing keys are simply absent -- `state(p, k)`
+    /// answers 0 for them.
+    fn state_entries(&self, player_id: i32) -> Vec<(String, i32)>;
     fn character_skill_id(&self, player_id: i32) -> Option<String>;
     fn band_skill_id(&self, player_id: i32) -> Option<String>;
     /// The player's character **name** -- the spelling `ctx::character_is`
@@ -794,6 +799,35 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
         CardWorld::state_get(self, player_id, key)
+    }
+    fn state_entries(&self, player_id: i32) -> Vec<(String, i32)> {
+        // No map to walk on a bare `CardWorld` -- probe the well-known status
+        // keys via `state_get` and omit zeros. A test world that never sets
+        // state answers empty; `state(p, k)` still answers 0 for anything
+        // missing. Live worlds override this with the real `MatchPlayer.state`.
+        const KNOWN: &[&str] = &[
+            game_core::state::key::STAY,
+            game_core::state::key::STUN,
+            game_core::state::key::STUN_START,
+            game_core::state::key::EXILE,
+            game_core::state::key::EXILE_TO,
+            game_core::state::key::EXILE_MAIN,
+            game_core::state::key::FIRE,
+            game_core::state::key::NO_HAND,
+            game_core::state::key::UNSTOPPABLE,
+            game_core::state::key::HAND_LIMIT,
+        ];
+        KNOWN
+            .iter()
+            .filter_map(|k| {
+                let v = CardWorld::state_get(self, player_id, k);
+                if v != 0 {
+                    Some((k.to_string(), v))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     #[inline]
     fn character_skill_id(&self, player_id: i32) -> Option<String> {
@@ -1251,10 +1285,13 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             out: world.player_out(p) as i64,
             stay: world.stay_of(p) as i64,
             stun: world.stun_of(p) as i64,
-            stun_start: world.stun_start_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-            unstoppable: world.unstoppable_of(p) as i64,
+            state: world
+                .state_entries(p)
+                .into_iter()
+                .map(|(k, v)| (k, v as i64))
+                .collect(),
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
@@ -1385,10 +1422,13 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             out: world.player_out(p) as i64,
             stay: world.stay_of(p) as i64,
             stun: world.stun_of(p) as i64,
-            stun_start: world.stun_start_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-            unstoppable: world.unstoppable_of(p) as i64,
+            state: world
+                .state_entries(p)
+                .into_iter()
+                .map(|(k, v)| (k, v as i64))
+                .collect(),
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
