@@ -280,7 +280,8 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   };
   const peekHand = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
   // First click selects (highlighted border); clicking the selected card (or
-  // Enter) activates it: discard while over the limit, else play.
+  // Enter) plays it directly; while over the limit it instead opens the detail
+  // popup, whose button discards (discarding needs that confirmation).
   const [picked, setPicked] = useState<string | null>(null);
   const activate = (id: string, k: number) => {
     const key = `${id}:${k}`;
@@ -288,7 +289,10 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
     setPicked(null);
     setHover(null);
     if (sess.readOnly || sheet.open || auto) return;
-    if (m.overHand) return void act(sess, { act: "discard", card: id });
+    if (m.overHand) {
+      const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
+      return void showCard(id, [{ label: tr("board.discardThis"), enabled: true, kind: "white", run: () => act(sess, { act: "discard", card: id }) }], note);
+    }
     if (canPlay && m.v.playable?.[k] !== false) void act(sess, { act: "play", card: id });
   };
   const hc = hover ? D.card(hover.id) : undefined;
