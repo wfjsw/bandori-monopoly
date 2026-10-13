@@ -2684,3 +2684,16 @@ pub fn trig_name<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> 
     let s = c.st().wr().trigger().name.clone().unwrap_or_default();
     write_str(c, &s, p, n)
 }
+
+/// 真奈 join: the seat self-targeted effects of counters answering this link
+/// are redirected to (「改为你」). `-1` outside a join.
+pub fn join_redirect_target<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().wr().trigger_join_redirect().unwrap_or(-1))
+}
+
+/// 真奈 join: mark that a joiner used the redirect (shielded the target), so
+/// the join opener knows not to take its fallback draw.
+pub fn set_join_used<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
+    c.st_mut().w().set_trigger_join_used();
+    Ok(())
+}

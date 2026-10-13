@@ -4513,6 +4513,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             hostfns::move_dir(&mut c).map_err(HostErr::into_err)
         },
     )?;
+    l.func_wrap(
+        m,
+        "join_redirect_target",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::join_redirect_target(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_join_used",
+        |mut c: C<W>| -> Result<(), Error> {
+            hostfns::set_join_used(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
 
     Ok(l)
 }

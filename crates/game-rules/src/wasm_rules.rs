@@ -1990,6 +1990,12 @@ impl CardWorld for Run {
     fn set_trigger_reason(&mut self, reason: &str) {
         self.trigger.reason = Some(reason.to_string());
     }
+    fn set_trigger_join_used(&mut self) {
+        self.trigger.join_used = true;
+    }
+    fn trigger_join_redirect(&self) -> Option<i32> {
+        self.trigger.join_redirect
+    }
 
     // turn plan & scheduling -------------------------------------------------
     fn schedule_turn_end(&mut self, player_id: i32, next_of_player: bool, early: bool) {
@@ -5065,6 +5071,25 @@ impl<M: CardModules> RulesBridge<M> {
         // `MAX_COUNTERACT_PER_VISIT` offers, over `MAX_COUNTERACT_DEPTH + 1`
         // rounds.
         let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
+        // 真奈 join (CH-05): pre-scan hands for a `SELF_REDIRECT` card so the
+        // redirect is set before any body runs -- the join opener may be
+        // declared in a later round (e.g. at an Effect window), and joiners
+        // whose bodies run earlier still see the redirect.
+        for seat in 0..n {
+            for id in hand_of(cx, seat) {
+                if self.ruleset.card(id).is_some_and(|i| {
+                    self.ruleset.cards()[i as usize]
+                        .props
+                        .get(card_sdk::abi::prop::SELF_REDIRECT)
+                        .copied()
+                        .unwrap_or(0)
+                        != 0
+                }) {
+                    chain[0].link.join_redirect = Some(seat as i32);
+                    break;
+                }
+            }
+        }
         self.build_round(cx, &mut chain, 0, depth, &mut budget)?;
         // STACK-01: resolve as a job list so a nested settle can suspend the
         // walk and resume without rebuilding the chain.
@@ -5171,6 +5196,20 @@ impl<M: CardModules> RulesBridge<M> {
                     link.answers = timing as u32;
                     round.push(at);
                     chain[timing].answers.push(at);
+                    // 真奈 join (CH-05): a `SELF_REDIRECT` counter opens a join
+                    // on the link it answers -- self-targeted effects of later
+                    // counters answering the same link redirect to its declarer
+                    // (「改为你」). Declaration-scoped: the redirect lives on the
+                    // link, so it cannot leak into other plays.
+                    if self.ruleset.cards()[idx as usize]
+                        .props
+                        .get(card_sdk::abi::prop::SELF_REDIRECT)
+                        .copied()
+                        .unwrap_or(0)
+                        != 0
+                    {
+                        chain[timing].link.join_redirect = Some(cursor as i32);
+                    }
                     chain.push(ChainLink {
                         seat: cursor,
                         idx,
@@ -6041,6 +6080,8 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         name: t.name.clone(),
         roll_source: t.roll_source,
         reason: t.reason.clone(),
+        join_redirect: None,
+        join_used: false,
     }
 }
 

@@ -77,16 +77,30 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 // `play.Tags["immune"+seat]=1`): cancel the counteractor's own
                 // designation when it has one, else the first named seat. The
                 // rest of the play's designations still land.
-                let seat = designations
-                    .iter()
-                    .copied()
-                    .find(|&s| s == player_id)
-                    .unwrap_or(designations[0]);
-                ctx::cancel_designation(seat);
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("net_error_target")).player_id("who", seat),
-                );
+                let self_seat = designations.iter().copied().find(|&s| s == player_id);
+                // 真奈 join (「改为你」): when played under a join, the
+                // self-targeted cancel is redirected to 真奈's user.
+                if let (Some(_), Some(to)) = (self_seat, ctx::join_redirect_target()) {
+                    ctx::cancel_designation(to);
+                    ctx::set_join_used();
+                    // 真奈's clause: 「若以此种方式使你免于受到该影响，打出那张
+                    // [反击]卡的玩家可抽一张卡」.
+                    // TODO(规则书): this draw is 真奈's effect, not this card's
+                    //   -- once the nested join window reports joiners, move it
+                    //   to 真奈's body.
+                    ctx::draw(player_id, 1)?;
+                    ctx::log(
+                        player_id,
+                        &Msg::new(key!("net_error_target")).player_id("who", to),
+                    );
+                } else {
+                    let seat = self_seat.unwrap_or(designations[0]);
+                    ctx::cancel_designation(seat);
+                    ctx::log(
+                        player_id,
+                        &Msg::new(key!("net_error_target")).player_id("who", seat),
+                    );
+                }
             } else {
                 // （2）「没有[指定]目标则抵消其所有的效果」
                 trigger::set_cancelled();

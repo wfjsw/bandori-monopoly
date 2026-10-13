@@ -683,6 +683,11 @@ pub mod prop {
     /// 「[指定][使用者]以外的所有玩家」 / 「其他玩家[分摊]」 shape). Default `0`
     /// (names nobody).
     pub const DESIGNATES: &str = "designates";
+    /// 真奈 join (「其反击卡中针对打出玩家自身的效果改为你」): `1` = this
+    /// counter opens a join; self-targeted effects of later counters answering
+    /// the **same link** are redirected to the declarer. Declaration-scoped.
+    /// Default `0`.
+    pub const SELF_REDIRECT: &str = "selfRedirect";
     /// 「此卡不受任何其他效果影响」: `1` = the placed instance is immune
     /// (`FieldCard.immune`). Stamped at placement from the card's static props
     /// so a `place_raw` / engine placement sees it without running the play

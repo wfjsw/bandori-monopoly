@@ -2154,6 +2154,25 @@ pub fn designation_cancelled(seat: i32) -> bool {
     unsafe { sys::designation_cancelled(seat) != 0 }
 }
 
+/// 真奈 join (CH-05): the seat self-targeted effects of counters answering
+/// this link are redirected to (「改为你」). `None` outside a join.
+pub fn join_redirect_target() -> Option<i32> {
+    let v = unsafe { sys::join_redirect_target() };
+    (v >= 0).then_some(v)
+}
+
+/// 真奈 join: mark that a joiner used the redirect (shielded the target), so
+/// the join opener knows not to take its fallback draw.
+pub fn set_join_used() {
+    unsafe { sys::set_join_used() }
+}
+
+/// The seat a self-targeted effect of this counter should aim at: the join
+/// redirect target when under a join (「改为你」), else `player_id` itself.
+pub fn self_target(player_id: i32) -> i32 {
+    join_redirect_target().unwrap_or(player_id)
+}
+
 /// Abnormal effects that got through to `player_id`
 /// this turn (reset for every player at each turn start).
 #[cfg_attr(kani, inline(always))]

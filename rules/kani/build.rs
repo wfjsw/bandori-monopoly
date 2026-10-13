@@ -44,6 +44,8 @@ const ARRAY_OPS: &[&str] = &[
     "cancel_designation", "designation_cancelled", "gate", "card_settle_at", "card_offer_build", "do_move_roll", "is_live_house_for", "placed_cards",
     "field_instances", "unplace_at", "tile_at", "set_tile_at", "is_face_down_at", "set_face_down_at", "is_immune_at", "set_immune_at",
     "set_build_cost_pct", "set_card_face_down", "card_face_down",
+    "flash", "no_flash", "flash_card", "flash_card_keyed", "flash_tile",
+    "join_redirect_target", "set_join_used",
 ];
 
 fn main() {

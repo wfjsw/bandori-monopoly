@@ -139,7 +139,6 @@ fn g18_shut_window_blocks_the_negate_one() {
 // Doc error: the design expects "P3 pays 0; P0 and P2 pay X" -- but the sheet
 // says the joiner's self-targeted effect 「改为你」 (to 真奈's user), so P3's
 // cancel drops **P0's** designation and P0 is the one exempted. P3 still pays.
-#[ignore = "DISCREPANCY: 真奈's join + 网络链接异常 negates the whole 武道馆 (everyone keeps 10000); the sheet cancels one designation (P0's via 「改为你」) and P2/P3 still pay X"]
 #[test]
 fn g19_manas_join_window_lets_a_third_party_drop_one() {
     let mut t = Table::new(&["纯田真奈", "仓田真白", "花园多惠", "山吹沙绫"]);
