@@ -77,7 +77,7 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | events::heat_head_01_activation_phase_up | FAILED | B + C | harness read `key_get(0,"crystals")` but `set_crystals` writes the field-instance counter; also `World::self_crystals` fallback for event instances with no field slot | **SUCCESSFUL 423 s** |
 | events::heat_head_03_phase_end_files_away | FAILED | B + C | same | **SUCCESSFUL 692 s** |
 | events::circle_rebuild_01_activation_five_crystals | FAILED | B + C | same crystals read + host fallback | **SUCCESSFUL** (see ev-circle) |
-| events::asukayama_02_status_spread_blocked_neighbor | FAILED | B | harness assumed stub `neighbor` returned tiles; host now returns the next present **player seat** (book 「上一位/下一位玩家」). Rewrote to prev=3 stunStart=2, next=1 noHand=2, seat 2 give_exile(1,-1) | pending re-run |
+| events::asukayama_02_status_spread_blocked_neighbor | FAILED | B + C | harness assumed stub `neighbor` returned tiles; host `neighbor` returned the *last* present seat (not the next). Fixed host to first-match + rewrote harness to the seat split (prev stunStart=2, next noHand=2, remaining give_exile) | **SUCCESSFUL 989 s** |
 | events::pico_swap_01 | FAILED | B + F | `log_is_teleports` exact-length vs latch `SetState`; cover `n_log==3` vacuous for the same reason. Filter `SetState`; cover counts Teleports | **SUCCESSFUL 1767 s** (covers sat) |
 | events::aao_02_hand_veto_is_armed | FAILED | **D GENUINE E-aao-02** | keep failing; do not fix | FAILED (unchanged) |
 | events::embers_03_settle_costs_ten_per_copy | FAILED | OPEN / D? | [触发结算] undefined (OPEN-触发结算); not re-run | pending |
@@ -91,3 +91,11 @@ slot. Events (`heat_head` phase, `circle_rebuild`'s 5 miracle crystals) call
 the fallback for that case; `conf_hostops2::self_crystals_roundtrip_without_field_slot`
 pins it. `conf_fill_diff` / `conf_model` / `conf_hostops2` / `pilot_guards` /
 `model_bounds` stay green (3×).
+
+### Host-model defect fixed (class C) — `Op::neighbor`
+
+The scan kept overwriting `found` and returned the **last** present seat
+(for n=4 all-present that is the far side of the drawer, not 「上一位/下一位玩家」).
+Now `break`s on the first present seat. Pinned by
+`conf_hostops2::neighbor_is_the_next_present_seat`. With the correct
+neighbour, `asukayama_02` proves the full 2-眩晕 / noHand / 1-除外 split.
