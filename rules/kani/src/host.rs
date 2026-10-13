@@ -1899,6 +1899,15 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| w.buy_snap.deal_mortgaged = a0 != 0);
             0
         }
+        // 真奈 join (CH-05), faithful to hostfns: the redirect seat is `-1`
+        // outside a join; `set_join_used` only records the flag. Who sets the
+        // redirect (the join opener's counter window) is PROTOCOL-LEVEL, so a
+        // harness that needs a join arranges `w.trig_join_redirect` itself.
+        Op::join_redirect_target => world::with_world(|w| w.trig_join_redirect) as i64,
+        Op::set_join_used => {
+            world::with_world_mut(|w| w.trig_join_used = true);
+            0
+        }
         Op::trig_set_reason | Op::trig_set_cancelled | Op::trig_set_negate_effect
         | Op::trig_set_spare => {
             // No-arg setters: `sys_kani` packs `[0;6]`. The call **is** the
@@ -1951,7 +1960,6 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile
         | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations
         | Op::cancel_designation | Op::designation_cancelled
-        | Op::join_redirect_target | Op::set_join_used
         | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => {
             // Several of these are read-only queries we did model above; the
             // remaining ones are engine-protocol and return a benign 0. Any

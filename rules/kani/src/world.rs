@@ -620,6 +620,11 @@ pub struct World {
     pub trig_tile: i32,
     pub trig_cancelled: bool,
     pub trig_negate: bool,
+    /// 真奈 join (CH-05): the seat a joiner's self-targeted effects are
+    /// redirected to; `-1` outside a join (hostfns `join_redirect_target`).
+    pub trig_join_redirect: i32,
+    /// A joiner used the redirect (hostfns `set_join_used`).
+    pub trig_join_used: bool,
     /// `Trigger::main` — fired as part of the turn's [主要移动]?
     /// (`hostfns::trig_move_main` reads this, not `mv.main`.)
     pub trig_main: bool,
@@ -732,6 +737,8 @@ impl World {
             trig_tile: -1,
             trig_cancelled: false,
             trig_negate: false,
+            trig_join_redirect: -1,
+            trig_join_used: false,
             trig_main: false,
             trig_roll_source: ROLL_UNATTRIBUTED,
             trig_pay_is_rent: false,

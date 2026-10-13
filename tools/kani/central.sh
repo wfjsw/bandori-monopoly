@@ -31,6 +31,20 @@ run_set() { # unit dir unwind harness...
     || echo "unit $u: non-success rows (see $d/results.md)"
 }
 
+# A toolchain/source break (e.g. another session added a host import that
+# sys_kani.rs lacks) makes every harness "FAIL" in seconds; never burn through
+# the remaining units that way. Abort the whole pass loudly instead.
+build_break() { # unit
+  local d="$OUT/$1/logs" n=0 bad=0 f
+  [[ -d "$d" ]] || return 1
+  for f in "$d"/*.log; do
+    [[ -f "$f" ]] || continue
+    n=$((n+1))
+    grep -qE 'could not compile|error\[E[0-9]+\]' "$f" && bad=$((bad+1))
+  done
+  [[ $n -gt 0 && $bad -eq $n ]]
+}
+
 for u in "${UNITS[@]}"; do
   if [[ ! -f "$OUT/$u/results.json" ]]; then
     echo "=== $u tier1 $(date +%T)"
@@ -42,6 +56,10 @@ for u in "${UNITS[@]}"; do
     [[ ${#todo[@]} -gt 0 ]] && { echo "=== $u retry-$n (${#todo[@]} harnesses) $(date +%T)"; run_set "$u" "$OUT/$u/retry-$n" "$UNWIND" "${todo[@]}"; }
   else
     echo "skip $u (done)"
+  fi
+  if build_break "$u"; then
+    echo "BUILD BREAK: every harness of unit $u failed to compile (see $OUT/$u/logs). Aborting the pass; fix the source, delete $OUT/$u and re-run." >&2
+    exit 2
   fi
   mapfile -t uwf < <(python3 "$H/central_summary.py" --out "$OUT" --unit "$u" --list-unwind-only)
   if [[ ${#uwf[@]} -gt 0 ]]; then
