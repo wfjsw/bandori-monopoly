@@ -1001,58 +1001,65 @@ impl GuardNeeds {
 
 /// Collect what guard `gid`'s program reads from an [`IrCtx`].
 /// The node arena is static and short (every real guard < 16 nodes); the
-/// walk is a fixed 32-iteration chunk so the unwind bound is 8.
+/// walk is a fixed 8×8 chunk over the 32-node ceiling so the unwind bound
+/// is 8 (a bare `while i < 32` forced every harness that calls
+/// `fill_for_guard` to unwind ≥ 32 — that was the fever_04 UNWINDING class).
 pub fn guard_needs(gid: usize) -> GuardNeeds {
     let mut n = GuardNeeds::default();
     n.seat_const = -1;
     let prog = &generated::BY_ID[gid].program;
     let nodes = prog.nodes;
-    let mut i = 0usize;
-    // Guards are tiny; 32 nodes is a generous ceiling with a fixed bound.
-    while i < 32 {
-        if i < nodes.len() {
-            let node = nodes[i];
-            match node.kind {
-                rules_cond_ir::nodes::Kind::Var => n.note_var(node.payload),
-                rules_cond_ir::nodes::Kind::Call => {
-                    n.note_fn(node.payload);
-                    let first = node.a as usize;
-                    let nargs = node.b as usize;
-                    // Constant name / seat arguments are baked at lower time.
-                    let mut k = 0usize;
-                    while k < 3 {
-                        if k < nargs && first + k < nodes.len() {
-                            let arg = nodes[first + k];
-                            if arg.kind == rules_cond_ir::nodes::Kind::ConstInt {
-                                // FnId 0..=4 take a name id; 10..=17 take a seat.
-                                if node.payload <= 4 {
-                                    n.note_named(arg.payload);
-                                } else if (10..=17).contains(&node.payload)
-                                    || node.payload == 18
-                                    || node.payload == 19
-                                    || node.payload == 21
-                                    || node.payload == 24
-                                    || node.payload == 25
-                                    || node.payload == 33
-                                {
-                                    if n.seat_const < 0 {
-                                        n.seat_const = arg.payload;
+    // 8×8 = 64 slots, of which the first 32 are the arena ceiling.
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let i = outer * 8 + k;
+            if i < 32 && i < nodes.len() {
+                let node = nodes[i];
+                match node.kind {
+                    rules_cond_ir::nodes::Kind::Var => n.note_var(node.payload),
+                    rules_cond_ir::nodes::Kind::Call => {
+                        n.note_fn(node.payload);
+                        let first = node.a as usize;
+                        let nargs = node.b as usize;
+                        // Constant name / seat arguments are baked at lower time.
+                        let mut j = 0usize;
+                        while j < 3 {
+                            if j < nargs && first + j < nodes.len() {
+                                let arg = nodes[first + j];
+                                if arg.kind == rules_cond_ir::nodes::Kind::ConstInt {
+                                    // FnId 0..=4 take a name id; 10..=17 take a seat.
+                                    if node.payload <= 4 {
+                                        n.note_named(arg.payload);
+                                    } else if (10..=17).contains(&node.payload)
+                                        || node.payload == 18
+                                        || node.payload == 19
+                                        || node.payload == 21
+                                        || node.payload == 24
+                                        || node.payload == 25
+                                        || node.payload == 33
+                                    {
+                                        if n.seat_const < 0 {
+                                            n.seat_const = arg.payload;
+                                        }
+                                    }
+                                } else {
+                                    // Symbolic seat/name argument.
+                                    if (10..=17).contains(&node.payload) {
+                                        n.seat_arg_symbolic = true;
                                     }
                                 }
-                            } else {
-                                // Symbolic seat/name argument.
-                                if (10..=17).contains(&node.payload) {
-                                    n.seat_arg_symbolic = true;
-                                }
                             }
+                            j += 1;
                         }
-                        k += 1;
                     }
+                    _ => {}
                 }
-                _ => {}
             }
+            k += 1;
         }
-        i += 1;
+        outer += 1;
     }
     n
 }
@@ -1077,29 +1084,35 @@ pub fn fill_for_guard(
     c.tile_count = 60;
 
     // OptInt defaults only for the vars this guard reads.
+    // 8×8 over the 64-bit mask (a bare `while i < 64` forced unwind ≥ 64).
     {
-        let mut i = 0u64;
-        while i < 64 {
-            if (needs.vars >> i) & 1 == 1 {
-                let id = i as u16;
-                // Look up the type via the VARS table (43 entries; 8×8 walk).
-                let mut outer = 0usize;
-                while outer < 8 {
-                    let mut k = 0usize;
-                    while k < 8 {
-                        let vi = outer * 8 + k;
-                        if vi < VARS.len() {
-                            let (vid, _, ty) = VARS[vi];
-                            if (vid as u16) == id && ty == VarTy::OptInt {
-                                c.set_scalar(vid, -1);
+        let mut outer = 0u64;
+        while outer < 8 {
+            let mut k = 0u64;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if (needs.vars >> i) & 1 == 1 {
+                    let id = i as u16;
+                    // Look up the type via the VARS table (43 entries; 8×8 walk).
+                    let mut vo = 0usize;
+                    while vo < 8 {
+                        let mut vk = 0usize;
+                        while vk < 8 {
+                            let vi = vo * 8 + vk;
+                            if vi < VARS.len() {
+                                let (vid, _, ty) = VARS[vi];
+                                if (vid as u16) == id && ty == VarTy::OptInt {
+                                    c.set_scalar(vid, -1);
+                                }
                             }
+                            vk += 1;
                         }
-                        k += 1;
+                        vo += 1;
                     }
-                    outer += 1;
                 }
+                k += 1;
             }
-            i += 1;
+            outer += 1;
         }
     }
 
