@@ -109,6 +109,10 @@ export class Animator {
    *  cue). `uid` is the field instance. */
   pulse: { uid: number; id: number; ms: number } | null = null;
   hop: { playerId: number; id: number } | null = null;
+  /** The walk under way: the tiles still ahead (the last is the landing).
+   *  The board lights them so the destination and path read before and
+   *  while the token steps. */
+  route: number[] | null = null;
   lastDiscard = "";
   log: LogLine[] = [];
   /** Activation event id -> indent depth, for nesting a child activation
@@ -480,11 +484,20 @@ export class Animator {
     const dir = steps >= 0 ? 1 : -1;
     let p = from;
     this.pos[playerId] = from;
+    const ahead: number[] = [];
+    for (let k = 1, q = from; k <= Math.abs(steps); k++) {
+      q = (((q + dir) % n) + n) % n;
+      ahead.push(q);
+    }
+    if (hop > 0) this.route = ahead.slice();
     this.bump();
     try {
+      // A beat to read the lit route before the token sets off.
+      if (hop > 0 && ahead.length > 0) await this.nap(300);
       for (let k = 0; k < Math.abs(steps); k++) {
         p = (((p + dir) % n) + n) % n;
         this.pos[playerId] = p;
+        if (this.route) this.route = this.route.slice(1);
         if (hop > 0) {
           this.hop = { playerId, id: ++this.seq };
           sfx("step");
@@ -494,6 +507,7 @@ export class Animator {
       }
     } finally {
       this.hop = null;
+      this.route = null;
       this.bump();
     }
   }
