@@ -560,8 +560,10 @@ fn l06_one_draw_several_effects() {
 
 // 规则书: 线香花火 (「最后一个奇迹水晶移除后…2层眩晕」 + extra turn on each
 // removal) + 运动的天赋 (700 then 600... re-roll until >= 10).
-// RULING: whether the last removal also grants an extra turn.
-#[ignore = "DISCREPANCY: the last 线香花火 removal nets 1 [眩晕] layer, want 2 — the phase-10 「回合结束时」 status decay runs after the phase-11 「回合结束后」 crystal removal and eats one of the two"]
+// C-Q26a ruling (2026-10-13): the last removal does **not** grant an extra
+// turn -- the terminal effect is discard + 2 [眩晕]. (Granting one would
+// auto-skip it on the stun and its 「每回合结束时移除一层」 tick would eat one
+// of the two, netting 1.)
 #[test]
 fn l07_extra_turn_cascade() {
     let mut t = Table::vanilla(2);

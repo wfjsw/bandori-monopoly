@@ -46,8 +46,18 @@ fn sparkler(player_id: i32) -> card_sdk::Asked {
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合」
     // C# `AddCrystals(-1, "回合结束")` then `H.GiveExtraTurn(Seat, CardName)`.
+    // The burn reads the count *before* the write so the last removal knows it
+    // is last: 「最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]」
+    // is the terminal effect of that removal (discard + 2 [眩晕]), not an extra
+    // turn on top. C-Q26a ruling (this batch): the last removal does **not**
+    // grant 「获得一个额外回合」 -- the 2 [眩晕] it hands out would otherwise
+    // auto-skip that extra turn (`play.rs` `stunned` -> `end_turn`) and its
+    // 「每回合结束时移除一层」 tick would eat one of the two, netting 1.
+    let before = ctx::crystals();
     ctx::add_crystals(-1, 0)?;
-    ctx::give_extra_turn(player_id);
+    if before > 1 {
+        ctx::give_extra_turn(player_id);
+    }
     ctx::log(
         player_id,
         &Msg::new(key!("sparkler_burned")).player_id("who", player_id),
