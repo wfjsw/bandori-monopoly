@@ -296,6 +296,15 @@ symbolic world (money/out/pos of 4 seats), `poorest`'s `0..player_count()`
 `Range::try_fold` (4 unrolls), and `invoke::by_idx` (binary search). The
 string cliff is gone; the proof is now model-bound.
 
+### Per-card body trampolines (batch 3)
+
+`invoke::entry_idx` under `cfg(kani)` dispatches through `call_body_idx` →
+`call_card_N`, generated at build time by `rules/kani/build.rs`
+(`gen_body_dispatch`) into `$OUT_DIR/body_dispatch_fn.rs` (never committed).
+A shared `body_of(on)(player)` `code*` site made CBMC expand an IF-chain over
+every address-taken `fn(i32) -> Asked` (874–4313 targets) — the
+`duobang_01_02` SAT cliff (680 s → TIMEOUT). See TRIAGE-LOG batch 3.
+
 ### Remaining intractable patterns
 
 | pattern | why | affected clauses |

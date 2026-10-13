@@ -174,11 +174,12 @@ Msg facade additionally walked the intern `static mut` table on every
 
 ### Fix (soundness kept: unwinding ON, covers reachable, mutants detected)
 
-1. **Per-card body dispatch** (`generated/body_dispatch_fn.rs`,
-   `tools/kani/gen_body_dispatch.py`). `entry_idx` under `cfg(kani)` goes
-   through `call_body_idx`: one match arm per RULESET index, each
-   `inline(always) call_body(&BAND[i], …)` on a `&'static` constant so
-   LLVM emits a **direct** call (or at worst a 1-target site).
+1. **Per-card body trampolines** (`call_card_N` + `call_body_idx`),
+   generated at build time by `rules/kani/build.rs` (`gen_body_dispatch`)
+   into `$OUT_DIR/body_dispatch_fn.rs` and `include!`d from `src/invoke.rs`.
+   Never committed (same rule as `cond_irs.rs`). Each trampoline is
+   `#[inline(never)]` and loads one constant `&CardDef` so CBMC's
+   points-to set is that card's entries only.
 2. **`Msg::new` skips `intern()`** under `cfg(kani)`. The host's
    `Op::log` / `Op::effect` only bump a narration counter and never read
    the key; `ctx::s()` names the host compares still intern.
@@ -195,7 +196,7 @@ green; `cargo test -p rules-kani` green; `cargo test -p rules-cond
 | `events::duobang_01_02_two_player_iff` | TIMEOUT 1800 s | **SUCCESSFUL 922 s wall / 542 s CBMC** (5/5 covers sat, 0/34678 failed) | formula 605k vars / 732k clauses (was 1.9 GB stuck) |
 | `events::duobang_01_mutant_is_detected` | >4 min | **SUCCESSFUL 714 s** | mutant detected |
 | `events::pico_swap_01_rotates_positions` | 1767 s | **SUCCESSFUL 1287 s** (1/1 cover sat) | was near 1800 s limit |
-| `events::tears_01_same_colour_next_pays_700` | 724 s | pending | |
+| `events::tears_01_same_colour_next_pays_700` | 724 s | **SUCCESSFUL 925 s** (1/1 cover sat) | trampoline goto-instrument overhead |
 
 Dispatch shape after the fix: 285 `#[inline(never)]` `call_card_N`
 trampolines (each loads one constant `&CardDef`) + a thin integer
@@ -215,3 +216,49 @@ trampolines (each loads one constant `&CardDef`) + a thin integer
 
 Every harness that goes through `invoke::event_play_idx` shares the
 IF-chain; the per-card dispatch is a global win for the unit.
+
+### Follow-up (coordinator): derived table is build-time
+
+`body_dispatch_fn.rs` is **not committed**. `rules/kani/build.rs`
+(`gen_body_dispatch`) parses `invoke::BAND_START` and writes
+`$OUT_DIR/body_dispatch_fn.rs` (same rule as `cond_irs.rs`); `invoke.rs`
+`include!`s it. `.gitignore` lists the old source path. Adding a card only
+needs `gen_card_ids.py` + `BAND_START` — trampolines regenerate on build.
+
+Re-verified after the move: `wrong_guard::real_guard_matches_clause_iff`
+**SUCCESSFUL 17 s** (2/2 covers sat);
+`events::duobang_01_02_two_player_iff` **SUCCESSFUL 979 s** (5/5 covers sat,
+same 605k-var formula). `cargo build -p game-rules -p rules-native -p rules-kani`,
+`cargo test -p rules-kani` 3× green, `cargo test -p rules-cond --features lower`,
+wasm32 workspace check green.
+
+## Batch 3 follow-up (coordinator): pp world-setup cliff
+
+Central `pp::same_dream_01_band_plus_3_iff` TIMEOUT 1800 s. Unwind profile
+dominated by `NameMap::get_opt` **144** + `NameMap::set` **80** +
+`sync_views` 8 + `symbolic_play_world` 4 — the per-seat named-counter
+setup, not the card body.
+
+| cut | what |
+|---|---|
+| `NameMap` direct-index | `vals[NameId.0]` over `intern::SLOTS` (64 buckets) + `u64` present bitset. O(1) get/set. Derived MIN/MAX/EXPIRES ids (`key+0x2000/0x4000/0x8000`) use a 16-slot extra list (linear, rare). |
+| pp setup intern once | `symbolic_play_world` interned `FANS_UP`/`FANS_DOWN` per seat (8-probe table walk × 8); now once. |
+
+`conf_fill_diff` / `conf_model` / `conf_hostops2` / `pilot_guards` /
+`model_bounds` green. `cargo build -p game-rules -p rules-native -p rules-kani`
++ wasm32 workspace check green.
+
+### pp dispatch shape (iterate)
+
+First cut (285 `call_card_N` trampolines) kept every IF-chain live —
+`call_body_idx` is a 285-arm match and `idx` is a parameter, so SSA held
+285×874 chains (75 MB goto, 3.4 GB SSA). Replaced with **one** `code*`
+site: match `idx` → `&'static CardDef` constant, one `On` load + call
+(42 MB goto, 1×874 chain). `inline(always)` on `entry_idx` / `play_idx` /
+`event_play_idx` / `call_body_idx` so a `card_id!` constant can fold.
+
+`pp::same_dream_01_band_plus_3_iff` unwind is now only
+`sync_views` 8 + `symbolic_play_world` 4 (NameMap walks gone). Still
+SSA/solver-bound after that (~15 min, no verdict yet) — World copy +
+card-body IR remains. 2-seat variants / lazy `sync_views` / no full
+`reset_world` copy are the next levers (documented, clause-faithful).

@@ -64,3 +64,7 @@ docs/ui-ref
 # into $OUT_DIR by rules/kani/build.rs. Never commit a copy (it drifted every
 # time a guard was edited); the ignore line catches a manual `gen_cond_ir` dump.
 /rules/kani/src/generated/cond_irs.rs
+
+# Derived Kani tables — generated at build time into $OUT_DIR (see
+# rules/kani/build.rs). Never commit them.
+/rules/kani/src/generated/body_dispatch_fn.rs

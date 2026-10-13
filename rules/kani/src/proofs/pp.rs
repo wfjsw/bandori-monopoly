@@ -31,6 +31,10 @@ fn tok_neg() -> u16 {
 /// Symbolic play world: 2..=4 players, bounded money/fans, no [共鸣] in hand.
 fn symbolic_play_world() -> World {
     host::install();
+    // Intern the two fan tokens once — `intern(FANS_*)` per seat walked the
+    // intern table 8× per call (pp setup cliff).
+    let up = crate::intern::intern(FANS_UP);
+    let down = crate::intern::intern(FANS_DOWN);
     let mut w = World::new();
     w.n_players = kani::any();
     kani::assume(w.n_players >= 2 && w.n_players <= 4);
@@ -43,9 +47,9 @@ fn symbolic_play_world() -> World {
         w.fans_neg[p] = kani::any();
         kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
         w.hand_resonance[p] = 0;
-        // keep generic keys in sync with the views
-        w.key_set(p as i32, crate::intern::intern(FANS_UP), w.fans_pos[p]);
-        w.key_set(p as i32, crate::intern::intern(FANS_DOWN), w.fans_neg[p]);
+        // keep generic keys in sync with the views (ids interned once above)
+        w.key_set(p as i32, up, w.fans_pos[p]);
+        w.key_set(p as i32, down, w.fans_neg[p]);
     }
     w.symbolic_answers = true;
     w

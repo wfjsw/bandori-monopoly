@@ -660,18 +660,14 @@ fn fill_named(c: &mut IrCtx, w: &World, owner: i32) {
         return;
     }
     let map = &w.player_keys[owner as usize];
-    let n = map.n as usize;
-    let mut i = 0usize;
     let mut filled = 0usize;
-    while i < n && filled < NAMED_CAP {
-        let slot = map.slots[i];
-        if slot.key != NameId::INVALID {
-            let name_id = id_of_name_id(slot.key);
-            c.named_set(name_id, slot.value as i64);
+    map.for_each(|key, value| {
+        if filled < NAMED_CAP {
+            let name_id = id_of_name_id(key);
+            c.named_set(name_id, value as i64);
             filled += 1;
         }
-        i += 1;
-    }
+    });
     // Pilot fan views (same keys, guaranteed present even if the map is empty).
     c.named_set(
         ID_TOK_PP_POS,
@@ -1317,18 +1313,11 @@ pub fn fill_for_guard(
                 // (Tile-name probe above must cover all 60 board names — see
                 // the 8×8 walk.)
                 let map = &w.player_keys[op];
-                let mut i = 0usize;
-                while i < crate::world::MAX_KEYS {
-                    if i < map.n as usize {
-                        let slot = map.slots[i];
-                        if slot.key != NameId::INVALID
-                            && id_of_name_id(slot.key) == name_id
-                        {
-                            c.named_set(name_id, slot.value as i64);
-                        }
+                map.for_each(|key, value| {
+                    if id_of_name_id(key) == name_id {
+                        c.named_set(name_id, value as i64);
                     }
-                    i += 1;
-                }
+                });
                 if name_id == ID_TOK_PP_POS {
                     c.named_set(name_id, w.fans_pos[op] as i64);
                 }
