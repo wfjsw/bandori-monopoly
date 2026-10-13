@@ -1451,27 +1451,9 @@ pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prom
 // (`docs/STATUS-HOSTS.md`). `give_*` keep their names because they open the
 // abnormal [反击] window (`abnormal_gate`) -- a generic `apply_abnormal`
 // would replace them; until then this is the one place game vocabulary sits
-// in card-sdk, marked hidden so it is not the documented surface.
+// in card-sdk (the 火罐 verbs live in `ruleset-core`), marked hidden so it is not the documented surface.
 // TODO(ABI): genericize to `apply_abnormal` + `marker::gain_capped` /
 // `marker::spend` and delete these (HOST-09/10 style dead-surface removal).
-
-/// 火罐 held. Prefer `rules_status::fire::get`.
-#[doc(hidden)]
-pub fn fire(player_id: i32) -> i32 {
-    unsafe { sys::fire(player_id) }
-}
-
-#[doc(hidden)]
-pub fn fire_max(player_id: i32) -> i32 {
-    unsafe { sys::fire_max(player_id) }
-}
-
-/// Gain fire pots, capped by the player's own cap.
-#[doc(hidden)]
-pub fn gain_fire(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
-    let (p, l) = mj(why);
-    asked(unsafe { sys::gain_fire(player_id, n, p, l) })
-}
 
 #[doc(hidden)]
 pub fn give_stay(player_id: i32, n: i32) {
@@ -1518,18 +1500,6 @@ pub fn cant_move(player_id: i32) -> Option<Msg> {
 /// and the effect continues after it. Like `play_card`, the run pauses for it.
 pub fn card_move(player_id: i32) -> bool {
     unsafe { sys::card_move(player_id) != 0 }
-}
-
-/// Spend `n` [火罐]; false when the player has fewer. Logs
-/// the spend (`why` is the reason message).
-///
-/// Marker window (user ruling 2026-10-07): `markerSpend` opens **before** the
-/// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
-/// counteraction cancelled the link).
-#[doc(hidden)]
-pub fn spend_fire(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
-    let (p, l) = mj(why);
-    asked(unsafe { sys::spend_fire(player_id, n, p, l) }).map(|v| v != 0)
 }
 
 /// `[停留]` layers on the player.
@@ -2154,13 +2124,6 @@ pub fn set_next_steps(player_id: i32, n: i32) {
 /// Steps this turn's [主要移动] walked (0 = none yet).
 pub fn turn_main_steps() -> i32 {
     unsafe { sys::turn_main_steps() }
-}
-
-/// Raise (or, negative, lower) `player_id`'s [火罐] cap;
-/// returns the new cap.
-#[doc(hidden)]
-pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
-    unsafe { sys::add_fire_max(player_id, n) }
 }
 
 /// The trigger a counteraction is being checked against.

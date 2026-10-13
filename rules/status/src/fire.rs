@@ -49,12 +49,12 @@ pub const KEY: &str = "fire";
 
 /// 火罐 held.
 pub fn get(player_id: i32) -> i32 {
-    card_sdk::ctx::fire(player_id)
+    ruleset_core::ctx::fire(player_id)
 }
 
 /// The mandated cap (0 = none declared).
 pub fn max(player_id: i32) -> i32 {
-    card_sdk::ctx::fire_max(player_id)
+    ruleset_core::ctx::fire_max(player_id)
 }
 
 /// Gain `n` pots, at most up to the cap; 0 if nothing. Logs the gain.
@@ -63,7 +63,7 @@ pub fn gain(
     n: i32,
     why: &card_sdk::Msg,
 ) -> Result<i32, card_sdk::Prompt> {
-    card_sdk::ctx::gain_fire(player_id, n, why)
+    ruleset_core::ctx::gain_fire(player_id, n, why)
 }
 
 /// Spend `n` pots. `markerSpend` opens **before** the pots move; a
@@ -73,10 +73,10 @@ pub fn spend(
     n: i32,
     why: &card_sdk::Msg,
 ) -> Result<bool, card_sdk::Prompt> {
-    card_sdk::ctx::spend_fire(player_id, n, why)
+    ruleset_core::ctx::spend_fire(player_id, n, why)
 }
 
 /// Move the cap by `n`; pulls the value down under the new ceiling.
 pub fn add_max(player_id: i32, n: i32) -> i32 {
-    card_sdk::ctx::add_fire_max(player_id, n)
+    ruleset_core::ctx::add_fire_max(player_id, n)
 }

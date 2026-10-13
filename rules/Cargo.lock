@@ -238,6 +238,7 @@ name = "rules-status"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "ruleset-core",
 ]
 
 [[package]]
