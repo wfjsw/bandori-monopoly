@@ -4,7 +4,13 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { ClockOffset, estimateOffset } from "./clockSync.ts";
+import {
+  ClockOffset,
+  estimateOffset,
+  displayRemainingMs,
+  ResyncLimiter,
+  uncertaintyMs,
+} from "./clockSync.ts";
 
 test("estimateOffset is the Cristian/NTP formula", () => {
   // Perfect link, server 1000ms ahead: t1=10, t2=1010, t3=1011, t4=11
@@ -69,4 +75,29 @@ test("rejects nonsense samples", () => {
   // Negative rtt: long server processing that exceeds the client gap.
   assert.ok(!o.push({ t1: 0, t2: 0, t3: 50, t4: 10 }));
   assert.ok(!o.hasSample);
+});
+
+test("displayRemainingMs never races ahead of the server", () => {
+  // deadline 2000, local now 1900, offset 0 -> 100ms real left, displayed
+  // with the 100ms epsilon so zero is never shown early.
+  assert.equal(displayRemainingMs(2_000, 1_900, 0), 200);
+  // 50ms past the deadline: still shows 50ms so we do not hit 0 before the
+  // server expires the turn (sole authority).
+  assert.equal(displayRemainingMs(2_000, 2_050, 0), 50);
+  // 150ms past: past the 100ms epsilon, display is 0.
+  assert.equal(displayRemainingMs(2_000, 2_150, 0), 0);
+});
+
+test("ResyncLimiter is a token bucket", () => {
+  const l = new ResyncLimiter(2, 1_000);
+  assert.ok(l.take(0));
+  assert.ok(l.take(0));
+  assert.ok(!l.take(0), "bucket empty");
+  assert.ok(l.take(1_000), "refills over time");
+});
+
+test("uncertainty is ±RTT/2", () => {
+  assert.equal(uncertaintyMs(20), 10);
+  assert.equal(uncertaintyMs(0), 0);
+  assert.equal(uncertaintyMs(-5), 0);
 });

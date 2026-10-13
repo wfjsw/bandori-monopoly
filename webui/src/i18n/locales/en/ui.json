@@ -97,6 +97,7 @@
   "board.settleOk": "Settle",
   "board.settling": "Settling…",
   "board.baseTime": "Base",
+  "board.waitingServer": "…",
   "board.spectating": "You are bankrupt -- spectating",
   "board.startingSoon": "Match starting soon…",
   "board.stayHint": "[Stay]: cannot move this turn",

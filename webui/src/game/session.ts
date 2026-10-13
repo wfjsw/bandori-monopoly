@@ -8,7 +8,7 @@
 import { D, rules } from "../core/data";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
-import { startClockSync, clockSync } from "./clockSync";
+import { startClockSync, clockSync, resyncLimiter } from "./clockSync";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
 import { SOLO_CAP_MS } from "./botBudget";
@@ -902,8 +902,9 @@ export class OnlineSession extends GameSession {
     if (document.visibilityState === "visible") this.resyncClock();
   };
 
-  /** One forced refresh sample (rate-limited by the estimator's burst). */
+  /** One forced refresh sample (token-bucket rate-limited). */
   resyncClock(): void {
+    if (!resyncLimiter.take()) return;
     void api.clock(performance.now()).then((r) => {
       if (r.ok && r.data) {
         clockSync.refresh({ t1: r.data.t1, t2: r.data.t2, t3: r.data.t3, t4: performance.now() });

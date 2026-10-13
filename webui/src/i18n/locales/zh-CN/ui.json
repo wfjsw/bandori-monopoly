@@ -97,6 +97,7 @@
   "board.settleOk": "结算",
   "board.settling": "结算中…",
   "board.baseTime": "基础",
+  "board.waitingServer": "…",
   "board.spectating": "你破产了，观战中",
   "board.startingSoon": "对局马上开始…",
   "board.stayHint": "[停留]：本回合不能移动",

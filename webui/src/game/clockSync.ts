@@ -50,6 +50,10 @@ export class ClockOffset {
       this.target = offset;
       this.bestRtt = rtt;
       this.sampled = true;
+      // Dev tooling: one line per accepted sample, with the ±RTT/2 band.
+      if (typeof console !== "undefined" && console.debug) {
+        console.debug("[clockSync] offset", this.target.toFixed(2), "rtt", rtt.toFixed(2), "±", uncertaintyMs(rtt).toFixed(2));
+      }
       return true;
     }
     return false;
@@ -108,6 +112,54 @@ export const clockSync = new ClockOffset();
 
 /** How often the background refresh re-pings (ms). */
 export const REFRESH_MS = 45_000;
+
+/**
+ * Never race ahead of the server on expiry: the display does not hit zero
+ * until the local estimate is this far past the deadline. The server remains
+ * the sole authority for actually expiring a turn.
+ */
+export const EXPIRY_EPSILON_MS = 100;
+
+/** Display remaining ms, with the expiry safety epsilon. */
+export function displayRemainingMs(deadlineMs: number, localNow: number, offset: number): number {
+  return Math.max(0, deadlineMs - (localNow + offset) + EXPIRY_EPSILON_MS);
+}
+
+/** Uncertainty band of the current estimate: ±RTT/2. */
+export function uncertaintyMs(rtt: number): number {
+  return Math.max(0, rtt) / 2;
+}
+
+/**
+ * Token bucket for forced re-syncs (visibility / reconnect). One burst of
+ * `BURST` samples costs a token; refills over `REFRESH_MS`. A wedged network
+ * cannot turn a visibility flappy tab into a ping flood.
+ */
+export class ResyncLimiter {
+  private tokens: number;
+  private last = 0;
+  private capacity: number;
+  private refillMs: number;
+  constructor(capacity = 3, refillMs = REFRESH_MS) {
+    this.capacity = capacity;
+    this.refillMs = refillMs;
+    this.tokens = capacity;
+  }
+  /** True when a forced resync is allowed (and one token is taken). */
+  take(now: number = performance.now()): boolean {
+    const elapsed = now - this.last;
+    if (elapsed > 0) {
+      this.tokens = Math.min(this.capacity, this.tokens + elapsed / this.refillMs);
+      this.last = now;
+    }
+    if (this.tokens < 1) return false;
+    this.tokens -= 1;
+    return true;
+  }
+}
+
+/** Shared limiter for `resyncClock`. */
+export const resyncLimiter = new ResyncLimiter();
 /** Samples in the connect burst. */
 export const BURST = 8;
 /** Gap between burst samples (ms). */

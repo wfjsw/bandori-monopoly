@@ -19,7 +19,7 @@ import s from "./Players.module.css";
 import { byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
 import { setHoverSeat } from "./hoverSeat";
-import { clockSync } from "../../game/clockSync";
+import { clockSync, displayRemainingMs } from "../../game/clockSync";
 
 /** A player's status chips: [停留] / [眩晕] / [除外] / 托管 (the engine's takeover). */
 export function statusChips(x: MatchPlayer): string[] {
@@ -51,12 +51,18 @@ function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; cap
   const clock = m.v.clock;
   if (clock) {
     clockSync.step();
-    const now = clockSync.toServer(performance.now());
-    const baseMs = clock.baseDeadlineMs - now;
-    const bonusMs = clock.bonusDeadlineMs - now;
-    if (baseMs > 0) return show(baseMs / 1000, tr("board.baseTime"), s.base, fullBase);
-    if (bonusMs > 0) return show(bonusMs / 1000, tr("board.remain"), bonusMs < 10_000 ? s.low : "", fullBonus);
-    return show(0, tr("board.remain"), s.low, fullBonus);
+    const now = performance.now();
+    // Expiry epsilon: the display never races ahead of the server (which is
+    // the sole authority for actually expiring a turn).
+    const baseMs = displayRemainingMs(clock.baseDeadlineMs, now, clockSync.offset);
+    const bonusMs = displayRemainingMs(clock.bonusDeadlineMs, now, clockSync.offset);
+    const rawBase = clock.baseDeadlineMs - clockSync.toServer(now);
+    const rawBonus = clock.bonusDeadlineMs - clockSync.toServer(now);
+    if (rawBase > 0 && baseMs > 0) return show(baseMs / 1000, tr("board.baseTime"), s.base, fullBase);
+    if (rawBonus > 0 && bonusMs > 0) return show(bonusMs / 1000, tr("board.remain"), bonusMs < 10_000 ? s.low : "", fullBonus);
+    // At / past the local estimate of the deadline: hold at 0 and say so --
+    // the server may not have expired the turn yet.
+    return show(0, tr("board.waitingServer"), s.low, fullBonus);
   }
 
   // Held (paused) or a path with no deadline (replay / older server): show
