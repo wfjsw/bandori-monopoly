@@ -1609,7 +1609,7 @@ L162 "latent bug" on 凑友希那 force-stop may be stale (M4 done / m4_kokoro p
 | skills: Mujica | SETTLE-03, SKILL-04, CH-08 | |
 | HHW cards | SETTLE-01, CRYSTAL-05..07 | |
 | settle stages | SETTLE-04, SETTLE-05, MOVE-08, HOST-02 | |
-| engine: settle recursion / stack safety | STACK-01 **fixed**; SETTLE-01 swap-axes remains | 0 (stack) |
+| engine: settle recursion / stack safety | STACK-01 **fixed**; SETTLE-01 swap-axes **fixed** (reverse still TODO) | 0 (stack) |
 | events | EVENT-01..04, ABI-09 | |
 | fuzz/determinism | FUZZ-01, HOST-03 | 1 high A |
 | tiles | TILE-06, HOST-04, LOW-02 | |
@@ -1696,8 +1696,15 @@ For skills that say 「直到状态2结束为止」 with no clause that ends it 
 **C-Q13 (TILE-01, Anon link + mortgaged partner).**
 Does the Anon Tokyo link add half of a *mortgaged* partner tile's 收费?
 
-**C-Q14 (TILE-02, agent 「同色」).**
-「每种颜色拥有一个地产商格子」 / half-charge 「同色」: does a per-player colour override (`anyColor` / 「该格获得所有颜色」 / `colorFor:<p>`) widen the colour group? (Engine now: board `group` only.)
+**C-Q14 (TILE-02, agent 「同色」) — superseded 2026-10-13.**
+「每种颜色拥有一个地产商格子」 / half-charge 「同色」: a per-player colour
+override (`anyColor` / 「该格获得所有颜色」 / `colorFor:<p>`) **does** widen
+the colour group (`ctx::is_color` / `agent_colour_set`). An ANY_COLOR-only
+member is buyable / rentable but never buildable. The choice set 「无主或玩家
+拥有的」 is unowned **or any player-owned**; another seat's deed settles as the
+agent's 「半价收费的[结算]（向上取整10）」. `t16_soyo_mixed_colors` is live and
+green. Open residue: soyo's 「其他颜色」 (does the extra half apply on a
+same-colour agent?) and the 「视为live house」 half of Ruling 5.
 
 **C-Q15 (TILE-03, RiNG).**
 (15a) The dice-rent table 「地主拥有的 RiNG 数量 × ringMultiplier × 1d20」 and the 「至少1个」 floor are `data/match_rules.json` notes, not rulebook text. Keep them?

@@ -108,12 +108,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // cancel the settle body. First card to claim the settle wins, so bail
         // out once another has (`trigger::cancelled()`).
         TriggerKind::SettleBody => {
-            eprintln!(
-                "PARKING SettleBody: cancelled={} tile={} space={}",
-                trigger::cancelled(),
-                trigger::tile(),
-                ctx::tile_named("Space")
-            );
             if trigger::cancelled() {
                 return Ok(());
             }
