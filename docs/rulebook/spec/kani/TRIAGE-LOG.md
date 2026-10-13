@@ -78,7 +78,7 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | events::heat_head_03_phase_end_files_away | FAILED | B + C | same | **SUCCESSFUL 692 s** |
 | events::circle_rebuild_01_activation_five_crystals | FAILED | B + C | same crystals read + host fallback | **SUCCESSFUL** (see ev-circle) |
 | events::asukayama_02_status_spread_blocked_neighbor | FAILED | B | harness assumed stub `neighbor` returned tiles; host now returns the next present **player seat** (book 「上一位/下一位玩家」). Rewrote to prev=3 stunStart=2, next=1 noHand=2, seat 2 give_exile(1,-1) | pending re-run |
-| events::pico_swap_01/02 | FAILED | B | `log_is_teleports` required exact `Effect` length; latch `set_slot` emits `SetState` around the teleports. Skip `SetState` plumbing | pending re-run |
+| events::pico_swap_01 | FAILED | B + F | `log_is_teleports` exact-length vs latch `SetState`; cover `n_log==3` vacuous for the same reason. Filter `SetState`; cover counts Teleports | **SUCCESSFUL 1767 s** (covers sat) |
 | events::aao_02_hand_veto_is_armed | FAILED | **D GENUINE E-aao-02** | keep failing; do not fix | FAILED (unchanged) |
 | events::embers_03_settle_costs_ten_per_copy | FAILED | OPEN / D? | [触发结算] undefined (OPEN-触发结算); not re-run | pending |
 | events::* TIMEOUT (chart_rush, front_or_back, never_ends, …) | TIMEOUT | E / A | `Vec` drop_glue, symbolic-Vec `for &p in &winners`, fmt recursion; bear_cookie unwind 16→32 | pending |
