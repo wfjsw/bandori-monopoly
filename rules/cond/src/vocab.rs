@@ -1011,6 +1011,60 @@ pub const VOCAB: &[Name] = &[
         },
         doc: "targeted_count(p) -> hostile targetings of p this turn",
     },
+    // -- status-gate layers -------------------------------------------------
+    Name {
+        cel: "stay",
+        aliases: &[],
+        flat: "stay",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatInt {
+            var: "_stay",
+            field: |v, s| v.stay(s),
+        },
+        doc: "stay(p) -> seat's [停留] layers",
+    },
+    Name {
+        cel: "stunned",
+        aliases: &[],
+        flat: "stunned",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatInt {
+            var: "_stunned",
+            // [晕眩] layers including the pending `stunStart` layer.
+            field: |v, s| v.stun(s) + v.stun_start(s),
+        },
+        doc: "stunned(p) -> seat's [晕眩] layers including the pending stunStart layer",
+    },
+    Name {
+        cel: "exile",
+        aliases: &[],
+        flat: "exile",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatInt {
+            var: "_exile",
+            field: |v, s| v.exile(s),
+        },
+        doc: "exile(p) -> seat's [除外] layers",
+    },
+    Name {
+        cel: "unstoppable",
+        aliases: &[],
+        flat: "unstoppable",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatInt {
+            var: "_unstoppable",
+            field: |v, s| v.unstoppable(s),
+        },
+        doc: "unstoppable(p) -> seat's [不可阻挡] layers",
+    },
     // -- pure int predicate -------------------------------------------------
     Name {
         cel: "repeated_digits",

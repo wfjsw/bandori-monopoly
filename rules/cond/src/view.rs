@@ -127,8 +127,12 @@ pub trait CondView {
     fn out(&self, seat: i64) -> i64;
     fn stay(&self, seat: i64) -> i64;
     fn stun(&self, seat: i64) -> i64;
+    /// Pending `[晕眩]` layer (`stunStart`) — starts counting next turn.
+    fn stun_start(&self, seat: i64) -> i64;
     fn exile(&self, seat: i64) -> i64;
     fn no_hand(&self, seat: i64) -> i64;
+    /// `[不可阻挡]` layers.
+    fn unstoppable(&self, seat: i64) -> i64;
     /// Character **name** hash (`character_is(p, "名")` compares this to
     /// `id_of("名")` -- the same name `ctx::character_is` matches).
     fn character(&self, seat: i64) -> i64;

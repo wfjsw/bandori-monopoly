@@ -50,6 +50,13 @@ pub enum FnId {
     TileIs,
     TileAttr,
     TileIn,
+    // Status-gate per-seat layers (appended; earlier discriminants stable).
+    Stay,
+    /// `[晕眩]` layers **including** the pending `stunStart` layer
+    /// (`stun + stunStart`).
+    Stunned,
+    Exile,
+    Unstoppable,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).
@@ -72,9 +79,13 @@ pub enum SeatField {
     Gains,
     Targeted,
     Between,
+    /// Pending `[晕眩]` layer (`stunStart`) — starts counting next turn.
+    StunStart,
+    /// `[不可阻挡]` layers.
+    Unstoppable,
 }
 
-pub const SEAT_FIELD_COUNT: usize = 16;
+pub const SEAT_FIELD_COUNT: usize = 18;
 pub const MAX_PLAYERS: usize = 4;
 
 /// Membership sets backing `is_*` / `chain_has` / `chain_hits` / `blocked`.

@@ -323,11 +323,17 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn stun(&self, seat: i64) -> i64 {
         self.src.stun_of(seat as i32) as i64
     }
+    fn stun_start(&self, seat: i64) -> i64 {
+        self.src.stun_start_of(seat as i32) as i64
+    }
     fn exile(&self, seat: i64) -> i64 {
         self.src.state_get(seat as i32, game_core::state::key::EXILE) as i64
     }
     fn no_hand(&self, seat: i64) -> i64 {
         self.src.state_get(seat as i32, game_core::state::key::NO_HAND) as i64
+    }
+    fn unstoppable(&self, seat: i64) -> i64 {
+        self.src.unstoppable_of(seat as i32) as i64
     }
     fn character(&self, seat: i64) -> i64 {
         id_of(&self.src.character_name(seat as i32).unwrap_or_default())
@@ -644,6 +650,14 @@ pub trait SnapSrc {
     fn player_out(&self, player_id: i32) -> i32;
     fn stay_of(&self, player_id: i32) -> i32;
     fn stun_of(&self, player_id: i32) -> i32;
+    /// Pending `[晕眩]` layer (`stunStart`). Sugar over the keyed state.
+    fn stun_start_of(&self, player_id: i32) -> i32 {
+        self.state_get(player_id, game_core::state::key::STUN_START)
+    }
+    /// `[不可阻挡]` layers. Sugar over the keyed state.
+    fn unstoppable_of(&self, player_id: i32) -> i32 {
+        self.state_get(player_id, game_core::state::key::UNSTOPPABLE)
+    }
     fn state_get(&self, player_id: i32, key: &str) -> i32;
     fn character_skill_id(&self, player_id: i32) -> Option<String>;
     fn band_skill_id(&self, player_id: i32) -> Option<String>;
@@ -1237,8 +1251,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             out: world.player_out(p) as i64,
             stay: world.stay_of(p) as i64,
             stun: world.stun_of(p) as i64,
+            stun_start: world.stun_start_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
+            unstoppable: world.unstoppable_of(p) as i64,
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
@@ -1369,8 +1385,10 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             out: world.player_out(p) as i64,
             stay: world.stay_of(p) as i64,
             stun: world.stun_of(p) as i64,
+            stun_start: world.stun_start_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
+            unstoppable: world.unstoppable_of(p) as i64,
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,

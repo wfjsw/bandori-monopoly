@@ -313,6 +313,80 @@ fn id_at(idx: usize) -> Option<VarId> {
 }
 
 // ---------------------------------------------------------------------------
+// (2b) status-gate per-seat layer functions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn diff_status_layer_functions() {
+    let mut f = fixture_empty();
+    // Seat 0: stay=2, stun=1, stunStart=3, exile=0, unstoppable=0.
+    // Seat 1: stay=0, stun=0, stunStart=1, exile=4, unstoppable=2.
+    f.ir.n_players = 2;
+    f.ir.seat[0][SeatField::Stay as usize] = 2;
+    f.ir.seat[0][SeatField::Stun as usize] = 1;
+    f.ir.seat[0][SeatField::StunStart as usize] = 3;
+    f.ir.seat[0][SeatField::Exile as usize] = 0;
+    f.ir.seat[0][SeatField::Unstoppable as usize] = 0;
+    f.ir.seat[1][SeatField::Stay as usize] = 0;
+    f.ir.seat[1][SeatField::Stun as usize] = 0;
+    f.ir.seat[1][SeatField::StunStart as usize] = 1;
+    f.ir.seat[1][SeatField::Exile as usize] = 4;
+    f.ir.seat[1][SeatField::Unstoppable as usize] = 2;
+    // Mirror into the CEL snapshot (`stay(p)` reads `win.players[p]`).
+    f.win.players = vec![
+        rules_cond::PlayerSnap {
+            stay: 2,
+            stun: 1,
+            stun_start: 3,
+            exile: 0,
+            unstoppable: 0,
+            ..rules_cond::PlayerSnap::default()
+        },
+        rules_cond::PlayerSnap {
+            stay: 0,
+            stun: 0,
+            stun_start: 1,
+            exile: 4,
+            unstoppable: 2,
+            ..rules_cond::PlayerSnap::default()
+        },
+    ];
+    set_scalar(&mut f, VarId::Owner, VarTy::Int, Val::Int(0));
+    set_scalar(&mut f, VarId::Actor, VarTy::Int, Val::Int(1));
+
+    for src in [
+        "stay(owner) > 0 && unstoppable(owner) == 0",
+        "stay(owner) == 2",
+        "stay(actor) == 0",
+        "stunned(owner) == 4",
+        "stunned(actor) == 1",
+        "stunned(owner) > stunned(actor)",
+        "exile(owner) == 0 && exile(actor) == 4",
+        "unstoppable(actor) == 2",
+        "stay(owner) + stunned(owner) == 6",
+        "exile(owner) + unstoppable(owner) == 0",
+        // Out-of-range seats read 0 on both paths.
+        "stay(3) == 0 && stunned(3) == 0 && exile(3) == 0 && unstoppable(3) == 0",
+        "stay(-1) == 0 && unstoppable(-1) == 0",
+    ] {
+        assert_agree(src, &f);
+    }
+
+    // Flip the layers and re-check agreement (not just one truth value).
+    f.ir.seat[0][SeatField::Stay as usize] = 0;
+    f.ir.seat[0][SeatField::Unstoppable as usize] = 5;
+    f.win.players[0].stay = 0;
+    f.win.players[0].unstoppable = 5;
+    for src in [
+        "stay(owner) > 0 && unstoppable(owner) == 0",
+        "stay(owner) == 0 && unstoppable(owner) == 5",
+        "stunned(owner) == 4",
+    ] {
+        assert_agree(src, &f);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // (3) real guards from the repo
 // ---------------------------------------------------------------------------
 

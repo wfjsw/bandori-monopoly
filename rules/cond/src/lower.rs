@@ -238,6 +238,10 @@ fn fn_id_of(name: &str) -> Option<FnId> {
         "owned_within" => FnId::OwnedWithin,
         "on_path" => FnId::OnPath,
         "between" => FnId::Between,
+        "stay" => FnId::Stay,
+        "stunned" => FnId::Stunned,
+        "exile" => FnId::Exile,
+        "unstoppable" => FnId::Unstoppable,
         _ => return None,
     })
 }
@@ -248,7 +252,7 @@ fn fn_arity(fid: FnId) -> usize {
         Slot | Tok | MoveTag | CardCounter | CounterIs | TileNamed | IsCircle | IsRing
         | IsLiveHouse | IsBuyable | Money | Fire | Crystals | Hand | Pos | Character | Band
         | Tiles | Blocked | ChainHas | ChainHits | GainsThisTurn | TargetedCount
-        | RepeatedDigits | Between => 1,
+        | RepeatedDigits | Between | Stay | Stunned | Exile | Unstoppable => 1,
         CharacterIs | BandIs | Neighbor | Dist | PlayersOn | NextDist | OthersWithin
         | OwnedWithin | OnPath | TileIs | TileAttr => 2,
         TileIn => 3,
@@ -417,6 +421,10 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("owned_within", OwnedWithin),
         ("on_path", OnPath),
         ("between", Between),
+        ("stay", Stay),
+        ("stunned", Stunned),
+        ("exile", Exile),
+        ("unstoppable", Unstoppable),
     ]
 }
 

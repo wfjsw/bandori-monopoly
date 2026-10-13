@@ -306,6 +306,42 @@ fn money_function() {
 }
 
 #[test]
+fn status_layer_functions() {
+    // stay / stunned / exile / unstoppable over the window player table.
+    let mut w = win();
+    w.players[0].stay = 2;
+    w.players[0].stun = 1;
+    w.players[0].stun_start = 3;
+    w.players[0].exile = 0;
+    w.players[0].unstoppable = 0;
+    w.players[1].stay = 0;
+    w.players[1].stun = 0;
+    w.players[1].stun_start = 1;
+    w.players[1].exile = 4;
+    w.players[1].unstoppable = 2;
+
+    // stay(owner) > 0 && unstoppable(owner) == 0 — seat 0, not seat 1.
+    let cond = compile("stay(owner) > 0 && unstoppable(owner) == 0").unwrap();
+    assert!(cond.eval(&w, &cand(0)));
+    assert!(!cond.eval(&w, &cand(1)));
+
+    // stunned(p) = stun + stunStart, including the pending layer.
+    let cond = compile("stunned(owner) == 4").unwrap();
+    assert!(cond.eval(&w, &cand(0)));
+    assert!(!cond.eval(&w, &cand(1)));
+    let cond = compile("stunned(actor) == 1").unwrap();
+    // actor = 1: 0 stun + 1 stunStart
+    assert!(cond.eval(&w, &cand(0)));
+
+    // exile / unstoppable of a non-owner seat.
+    let cond = compile("exile(actor) == 4 && unstoppable(actor) == 2").unwrap();
+    assert!(cond.eval(&w, &cand(0)));
+    let cond = compile("exile(owner) == 0").unwrap();
+    assert!(cond.eval(&w, &cand(0)));
+    assert!(!cond.eval(&w, &cand(1)));
+}
+
+#[test]
 fn character_is_and_blocked() {
     let cond = compile("character_is(owner, 3) && blocked(2)").unwrap();
     // owner 0 is character 3; band 2 is blocked on the candidate

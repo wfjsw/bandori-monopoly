@@ -6563,6 +6563,16 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.world.state_get(player_id, game_core::state::key::STUN)
     }
     #[inline]
+    fn stun_start_of(&self, player_id: i32) -> i32 {
+        self.world
+            .state_get(player_id, game_core::state::key::STUN_START)
+    }
+    #[inline]
+    fn unstoppable_of(&self, player_id: i32) -> i32 {
+        self.world
+            .state_get(player_id, game_core::state::key::UNSTOPPABLE)
+    }
+    #[inline]
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
         self.world.state_get(player_id, key)
     }
@@ -6994,6 +7004,10 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn stun(&self, seat: i64) -> i64 {
         self.world.state_get(seat as i32, game_core::state::key::STUN) as i64
     }
+    fn stun_start(&self, seat: i64) -> i64 {
+        self.world
+            .state_get(seat as i32, game_core::state::key::STUN_START) as i64
+    }
     fn exile(&self, seat: i64) -> i64 {
         self.world
             .state_get(seat as i32, game_core::state::key::EXILE) as i64
@@ -7001,6 +7015,10 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn no_hand(&self, seat: i64) -> i64 {
         self.world
             .state_get(seat as i32, game_core::state::key::NO_HAND) as i64
+    }
+    fn unstoppable(&self, seat: i64) -> i64 {
+        self.world
+            .state_get(seat as i32, game_core::state::key::UNSTOPPABLE) as i64
     }
     fn character(&self, seat: i64) -> i64 {
         let name = self

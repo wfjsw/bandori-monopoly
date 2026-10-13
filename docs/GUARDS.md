@@ -653,7 +653,9 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
   native batch adds `dist`, `players_on`, `next_dist`, `others_within`,
   `owned_within`, `on_path`, `between`, `gains_this_turn`, `targeted_count`
   and the pure predicate `repeated_digits` (three new `Fx` shapes:
-  `IntIntConst` / `BinInt` / `IntPred`).
+  `IntIntConst` / `BinInt` / `IntPred`). The status-gate batch adds the
+  per-seat layer counts `stay(p)`, `stunned(p)` ( `[晕眩]` including the
+  pending `stunStart` layer), `exile(p)` and `unstoppable(p)`.
 * Unit tests (`tests/cond_tests.rs`, 29 + 4 wire + doctest): parse errors,
   unknown vars, float / kind rejection, truth tables for the sample
   conditions, function lookups, scope-reuse equivalence, **postcard

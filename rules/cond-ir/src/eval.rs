@@ -281,6 +281,10 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Val {
         34 => FnId::TileIs,
         35 => FnId::TileAttr,
         36 => FnId::TileIn,
+        37 => FnId::Stay,
+        38 => FnId::Stunned,
+        39 => FnId::Exile,
+        40 => FnId::Unstoppable,
         _ => return Val::Err,
     };
     let nargs = n.b as usize;
@@ -419,6 +423,17 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
         FnId::GainsThisTurn => seat_i64(ctx, args, SeatField::Gains),
         FnId::TargetedCount => seat_i64(ctx, args, SeatField::Targeted),
         FnId::Between => seat_i64(ctx, args, SeatField::Between),
+        FnId::Stay => seat_i64(ctx, args, SeatField::Stay),
+        // `[晕眩]` layers including the pending `stunStart` layer.
+        FnId::Stunned => match args.first() {
+            Some(Val::Int(p)) => Val::Int(
+                ctx.seat_field(*p, SeatField::Stun) + ctx.seat_field(*p, SeatField::StunStart),
+            ),
+            Some(Val::Err) => Val::Err,
+            _ => Val::Err,
+        },
+        FnId::Exile => seat_i64(ctx, args, SeatField::Exile),
+        FnId::Unstoppable => seat_i64(ctx, args, SeatField::Unstoppable),
         FnId::CharacterIs | FnId::BandIs => {
             let p = match int(0) {
                 Ok(v) => v,

@@ -79,6 +79,8 @@ rules-cond = { path = "../cond", features = ["lower"] }
 [dev-dependencies]
 game-rules = { path = "../../crates/game-rules" }
 game-core = { path = "../../crates/game-core" }
+# `lower_src` for the status-fn fill differential (conf_fill_diff).
+rules-cond = { path = "../cond", features = ["lower"] }
 
 # The `kani` crate is injected by `cargo kani` / kani-compiler from the Kani
 # sysroot (`~/.kani/kani-<ver>/lib/libkani.rlib`). It is NOT the crates.io
