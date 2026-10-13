@@ -268,7 +268,7 @@ fn gen_body_dispatch() {
             let _ = writeln!(s, "    let card: &'static card_sdk::CardDef = &{path};");
             s.push_str("    let on = match card.on.get(entry_index) {\n");
             s.push_str("        Some(o) => o,\n");
-            s.push_str("        None => fail_entry_oob({idx}, entry_index),\n");
+            let _ = writeln!(s, "        None => fail_entry_oob({idx}, entry_index),");
             s.push_str("    };\n");
             s.push_str("    match on {\n");
             s.push_str("        On::Play(_, _, f)\n");
