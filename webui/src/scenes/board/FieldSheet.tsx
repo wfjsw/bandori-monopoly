@@ -42,7 +42,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const total = rows.reduce((a, [, f]) => a + f.length, 0) + events.length;
   if (!total) return null;
   return (
-    <div className={cx(s.sheet, (dock.raised || !!pulse) && s.up)} {...dock.hover}>
+    <div className={cx(s.sheet, dock.raised && s.up)} {...dock.hover}>
       <div className={s.row} style={rowSpread(total) as CSSProperties}>
         {rows.flatMap(([i, f]) => f.map((fc) => {
           // The frame takes the owner's colour (`fc.owner`), not the field it

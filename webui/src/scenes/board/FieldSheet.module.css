@@ -61,8 +61,8 @@
   filter: var(--peek-lift);
 }
 
-/* 「效果适用」 on a field card: the slot slides out of the row toward the board
-   and blinks with a light halo, like Master Duel's activated card. */
+/* 「效果适用」 on a field card: its slot alone slides out of the row toward the
+   board and blinks with a light halo, like Master Duel's activated card. */
 .pulse {
   z-index: 3;
   animation: pulse-out var(--pulse-ms, 1500ms) ease-in-out both;
@@ -71,9 +71,20 @@
   /* One blink, mid-hold: after the slide-out, before the retract. */
   animation: pulse-glow calc(var(--pulse-ms, 1500ms) * 0.4) ease-in-out calc(var(--pulse-ms, 1500ms) * 0.25) 1 both;
 }
+/* Only this slot comes out: the row stays retracted. A slot's own height is the
+   card's, so dropping it by 100% less the peek brings its whole face into view. */
 @keyframes pulse-out {
   0% { transform: translateY(0) scale(1); }
-  18%, 82% { transform: translateY(46px) scale(1.18); }
+  18%, 82% { transform: translateY(calc(100% - var(--field-peek) + 14px)) scale(1.08); }
+  100% { transform: translateY(0) scale(1); }
+}
+/* Row already lowered by hover: the slot only lifts a little. */
+.up .pulse {
+  animation-name: pulse-lift;
+}
+@keyframes pulse-lift {
+  0% { transform: translateY(0) scale(1); }
+  18%, 82% { transform: translateY(14px) scale(1.08); }
   100% { transform: translateY(0) scale(1); }
 }
 @keyframes pulse-glow {
