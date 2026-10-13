@@ -21,6 +21,25 @@ use crate::ir_fill;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
+/// Symbolic PayAdd world for C-PP-aya-haruka-02.
+///
+/// State restrictions (each is a documented reduction in the clause's terms,
+/// never a silent cut of reachable behaviour):
+///
+/// * **owner's [P✽P粉丝] (either face) fully symbolic in `0..=20`** — that is
+///   the X threshold (「至少10个」). Other seats' fans are **not read** by
+///   `shave_x` / `poorest` / `set_pay_amount`, so they stay at `World::new`'s 0.
+/// * **money of every living seat symbolic in `0..=10_000`** — `poorest` is a
+///   pure comparison (「资金数是所有存活玩家中最少」); the shave amount does
+///   not read money. The upper bound only keeps the host pay-clamp out of
+///   play (same isolation as the other event harnesses).
+/// * **`out[]` symbolic** — 「存活玩家」; `player_out` short-circuits seats
+///   `>= n_players` under the §7 `player_count()==4` model, so this covers
+///   2..=4-player worlds' out-sets.
+/// * **`hand_resonance[] == 0`** — isolation of clause (2)'s stacked 1500
+///   shave (`try_resonance` returns false before any prompt).
+/// * **`trig_value` symbolic in `0..=10_000`** — the guard requires `value > 0`;
+///   including `<= 0` lets the IR reject.
 fn symbolic_pay_world() -> World {
     host::install();
     let mut w = World::new();
@@ -30,22 +49,49 @@ fn symbolic_pay_world() -> World {
         w.money[p] = kani::any();
         kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
         w.out[p] = kani::any();
-        w.fans_pos[p] = kani::any();
-        kani::assume(w.fans_pos[p] >= 0 && w.fans_pos[p] <= 20);
-        w.fans_neg[p] = kani::any();
-        kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
         // clause-(2) isolation
         w.hand_resonance[p] = 0;
     }
     let owner: i32 = kani::any();
     kani::assume(owner >= 0 && owner < w.n_players);
     kani::assume(!w.out[owner as usize]);
+    let o = owner as usize;
+    w.fans_pos[o] = kani::any();
+    kani::assume(w.fans_pos[o] >= 0 && w.fans_pos[o] <= 20);
+    w.fans_neg[o] = kani::any();
+    kani::assume(w.fans_neg[o] >= 0 && w.fans_neg[o] <= 20);
     w.trig_player = owner;
     // `value` is fully symbolic — including `<= 0`. The guard IR decides.
     w.trig_value = kani::any();
     kani::assume(w.trig_value >= 0 && w.trig_value <= 10_000);
     w.pay_amount = w.trig_value;
     w
+}
+
+/// Split helper: assume the owner **is** the poorest living player
+/// (「[拥有者]的资金数是所有存活玩家中最少」). Stated as a money comparison,
+/// not as an engine flag.
+fn assume_poorest(w: &World) {
+    let owner = w.trig_player as usize;
+    let me = w.money[owner];
+    for p in 0..MAX_PLAYERS {
+        if p != owner && !w.out[p] {
+            kani::assume(w.money[p] >= me);
+        }
+    }
+}
+
+/// Split helper: assume some living other player is strictly poorer.
+fn assume_not_poorest(w: &World) {
+    let owner = w.trig_player as usize;
+    let me = w.money[owner];
+    let mut poorer = false;
+    for p in 0..MAX_PLAYERS {
+        if p != owner && !w.out[p] && w.money[p] < me {
+            poorer = true;
+        }
+    }
+    kani::assume(poorer);
 }
 
 /// Post-state + effect log are exactly the clause **when the single-source
@@ -124,6 +170,80 @@ pub fn aya_haruka_02_shave_iff() {
     assert!(post.stay == pre.stay, "frame: stay unchanged");
     assert!(post.hand == pre.hand, "frame: hand unchanged");
     assert!(post.discard == pre.discard, "frame: discard unchanged");
+}
+
+/// SPLIT of `aya_haruka_02_shave_iff` (poorest half). Same clause, narrower
+/// assume — cheaper for the solver, no behaviour hidden: the iff's other half
+/// is `aya_haruka_02_shave_not_poorest_noop`.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn aya_haruka_02_shave_poorest() {
+    let w = symbolic_pay_world();
+    assume_poorest(&w);
+    let owner = w.trig_player;
+    let pre_amount = w.pay_amount;
+    let gid = crate::guard_id!("actor == owner && value > 0");
+    let ctx = ir_fill::fill_pay_add(&w, owner);
+    let admitted = crate::guard!(gid, &ctx);
+    // With trig_value possibly 0 the guard may still reject; cover both.
+    kani::cover!(admitted, "guard admits");
+    kani::cover!(!admitted, "guard rejects");
+    if !admitted {
+        return;
+    }
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    let post = world::snapshot();
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    let x = spec::aya_haruka_02_x(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
+    let expected = spec::aya_haruka_02_amount(pre_amount, x);
+    assert!(
+        post.pay_amount == expected,
+        "C-PP-aya-haruka-02: pay amount must be max(pre-X, 0)"
+    );
+    assert!(
+        spec::aya_haruka_02_log_ok(effects, expected),
+        "C-PP-aya-haruka-02: effect log must be exactly the pay-amount rewrite"
+    );
+    assert!(post.money == pre.money, "frame: money unchanged at rewrite time");
+}
+
+/// SPLIT of `aya_haruka_02_shave_iff` (not-poorest half): the body must
+/// no-op (「如果[拥有者]的资金数是所有存活玩家中最少则…」 — the shave is
+/// gated on the poorest reading).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn aya_haruka_02_shave_not_poorest_noop() {
+    let w = symbolic_pay_world();
+    assume_not_poorest(&w);
+    let owner = w.trig_player;
+    let pre_amount = w.pay_amount;
+    let gid = crate::guard_id!("actor == owner && value > 0");
+    let ctx = ir_fill::fill_pay_add(&w, owner);
+    let admitted = crate::guard!(gid, &ctx);
+    kani::cover!(admitted, "guard admits");
+    if !admitted {
+        return;
+    }
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    let post = world::snapshot();
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    assert!(log_n == 0, "C-PP-aya-haruka-02: non-poorest owner must produce no effects");
+    assert!(
+        post.pay_amount == pre_amount,
+        "C-PP-aya-haruka-02: non-poorest owner must not touch the amount"
+    );
+    assert!(post.money == pre.money, "frame: money");
 }
 
 /// MUTANT: the reference wants X+1. The card does X. Kani must report FAIL.
