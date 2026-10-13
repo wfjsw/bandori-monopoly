@@ -107,6 +107,8 @@ export interface MatchPrompt {
   price: number;
   /** Per-option prices on an agent prompt, parallel to `options`. */
   prices: number[];
+  /** A tile prompt whose pick is walked to; the board lights the path. */
+  walk?: boolean;
 }
 export interface MatchVote { id: number; by: number; players: number[]; answers: number[]; timeLeft: number }
 export interface MatchEvent {

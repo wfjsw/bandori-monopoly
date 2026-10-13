@@ -37,7 +37,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if tiles.is_empty() {
         return Ok(());
     }
-    let to = ctx::ask_tile(
+    let to = ctx::ask_tile_walk(
         player_id,
         &Msg::new(key!("rimi_choco_title")),
         &Msg::new(key!("rimi_choco_ask")),

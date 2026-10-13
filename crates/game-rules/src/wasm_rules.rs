@@ -6188,7 +6188,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
         }
-        PromptKind::Tile | PromptKind::TileId => {
+        PromptKind::Tile | PromptKind::TileId | PromptKind::TileWalk => {
             // Bare-Int options keep the auto `ask.tileOption` labels so
             // existing `ask_tile` callers are unchanged; `PromptOption::Tile`
             // carries its own label (`ask_tiles` / `opt_tile`).
@@ -6212,6 +6212,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
             }
             let mut ask = Ask::tile(player_id as usize, title, text, &tiles, labels);
             ask.view.prices = prices;
+            ask.view.walk = kind == PromptKind::TileWalk;
             if ai_hint >= 0 {
                 ask = ask.with_ai(|_| ai_hint);
             }
