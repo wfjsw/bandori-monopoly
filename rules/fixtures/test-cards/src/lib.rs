@@ -76,7 +76,8 @@ const PROBE: CardDef = CardDef::new(
 /// [反击] a counter's own play -- the 「新的时点」 of clause 89. Answers a
 /// `card` link that is itself a counter (`trigger::seq() >= 2`), never a root
 /// play (`seq` 0), and negates that counter's activation so its body does not
-/// run.
+/// run. The declarer may answer their own link (the rulebook does not forbid
+/// it).
 const DENY: CardDef = CardDef::new(
     "TEST:deny",
     &[On::Counteract(&[ChainKind::Card], "", Some(deny_yes), deny)],
@@ -333,10 +334,12 @@ fn probe(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn deny_yes(player_id: i32) -> bool {
+fn deny_yes(_player_id: i32) -> bool {
     // `trigger::` reads the **answered** link: a counter link (seq >= 2), not a
-    // root play (seq 0).
-    trigger::player_id() != player_id && trigger::seq() >= 2
+    // root play (seq 0). The rulebook does not forbid answering your own link
+    // (ruling 2026-10-07: a counter's own round starts with its declarer), so
+    // the declarer may deny their own counter.
+    trigger::seq() >= 2
 }
 
 fn deny(player_id: i32) -> card_sdk::Asked {
