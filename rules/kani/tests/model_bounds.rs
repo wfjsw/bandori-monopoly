@@ -58,8 +58,15 @@ fn band_starts_match_ruleset() {
     }
 }
 
+/// Serialise tests that touch the process-global intern table (`static mut`).
+fn intern_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[test]
 fn intern_fixed_loop_bounds() {
+    let _g = intern_lock();
     // card-sdk intern: open-addressed, 8 probes, 8×8 byte walks.
     card_sdk::intern::reset();
     let a = card_sdk::intern::intern("PP:[丸山彩]憧憬的前方");
@@ -81,6 +88,7 @@ fn intern_fixed_loop_bounds() {
 /// collision cannot silently alias two of them.
 #[test]
 fn pilot_intern_hashes_are_unique() {
+    let _g = intern_lock();
     use rules_kani::host::PILOT_INTERN_NAMES;
     card_sdk::intern::reset();
     let mut seen = std::collections::BTreeSet::new();
