@@ -13,7 +13,7 @@
 //! ```
 //!
 //! * [`guard_id!`] resolves at **const time** (unknown string = compile
-//!   error via `guard_id_const`).
+//!   error via `cond_irs::const_id`).
 //! * [`guard!`] indexes `generated::BY_ID[id]` — never a 139-way string
 //!   compare (that is a CBMC unwinding / OOM cliff).
 //!
@@ -26,9 +26,9 @@
 //! **Do not** use it to hide a clause condition that the proof is supposed
 //! to establish.
 
-/// `guard_id!` is **generated** (`#[macro_export]` in
-/// `generated/cond_irs.rs`) so its literal-match arms live in the same macro
-/// the user calls. See `rules_cond::gen_ir` (run from build.rs).
+/// `guard_id!` (in `generated/mod.rs`) resolves the guard string to its id in a
+/// `const` via `cond_irs::const_id` over the build-generated `SRCS` table
+/// (see `rules_cond::gen_ir`, run from build.rs).
 ///
 /// ```ignore
 /// let id = guard_id!("actor == owner && value > 0"); // compile-checked

@@ -94,27 +94,21 @@ pub fn generate(rules_dir: &Path) -> (String, usize) {
     out.push_str("/// Every generated guard, for the consistency check.\n");
     out.push_str("pub static ALL: &[&GuardIr] = BY_ID;\n\n");
 
-    // Compile-time string → id via a literal-matching macro (`str` match in
-    // a `const fn` is not stable). Unknown literals are a compile error.
-    // NOTE: the arms must live in the macro the user calls — forwarding a
-    // `literal` fragment through an intermediate macro does **not** match
-    // specific string patterns (it falls through to `$other:literal`).
-    out.push_str("/// Compile-time string → id. Unknown literals are a **compile error**.\n");
-    out.push_str("///\n");
-    out.push_str("/// ```ignore\n");
-    out.push_str("/// let id = guard_id!(\"actor == owner && value > 0\");\n");
-    out.push_str("/// let admitted = guard!(id, &ctx);\n");
-    out.push_str("/// ```\n");
-    out.push_str("#[macro_export]\n");
-    out.push_str("macro_rules! guard_id {\n");
-    for (id, (_idx, src, _prog)) in lowered.iter().enumerate() {
+    // Compile-time string -> id: a `const fn` byte compare over `SRCS` (the
+    // `guard_id!` macro lives in `rules/kani/src/generated/mod.rs`; a
+    // `macro_export` macro cannot be defined by `include!`d code and then
+    // used by absolute path). An unknown string is a const-eval panic, i.e. a
+    // compile error.
+    out.push_str("/// Every lowered guard's CEL source, indexed by guard id.\n");
+    out.push_str("pub const SRCS: &[&str] = &[\n");
+    for (_id, (_idx, src, _prog)) in lowered.iter().enumerate() {
         let lit = src.replace('\\', "\\\\").replace('"', "\\\"");
-        out.push_str(&format!("    (\"{lit}\") => {{ {id}usize }};\n"));
+        out.push_str(&format!("    \"{lit}\",\n"));
     }
-    out.push_str("    ($other:literal) => {\n");
-    out.push_str("        compile_error!(\"guard_id!: unknown guard string; re-run gen_cond_ir\")\n");
-    out.push_str("    };\n");
-    out.push_str("}\n\n");
+    out.push_str("];\n\n");
+    out.push_str("/// Compile-time string -> guard id. Panics (compile error in a `const`)\n");
+    out.push_str("/// on an unknown string.\n");
+    out.push_str("pub const fn const_id(src: &str) -> usize {\n    let s = src.as_bytes();\n    let mut id = 0usize;\n    while id < SRCS.len() {\n        let t = SRCS[id].as_bytes();\n        if t.len() == s.len() {\n            let mut i = 0usize;\n            let mut same = true;\n            while i < s.len() {\n                if t[i] != s[i] {\n                    same = false;\n                    break;\n                }\n                i += 1;\n            }\n            if same {\n                return id;\n            }\n        }\n        id += 1;\n    }\n    panic!(\"guard_id!: unknown guard string (it has no lowering)\")\n}\n\n");
 
     // Runtime lookup for tests / host-side tools (NOT for Kani).
     out.push_str("/// Runtime string → id. `None` if the string is not in the inventory.\n");
