@@ -33,6 +33,7 @@ pub mod mujica;
 pub mod crychic;
 #[cfg(feature = "band-sumimi")]
 pub mod sumimi;
+#[cfg(feature = "band-general")]
 pub mod general;
 #[cfg(feature = "events")]
 pub mod events;
