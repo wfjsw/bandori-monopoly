@@ -37,7 +37,7 @@ pub const MAX_PROBES: usize = 8;
 /// are ≤ 16. The byte walk is chunked 8×8 so the unwind bound is 8, not 56.
 pub const MAX_NAME: usize = 64;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct NameId(pub u16);
 
 impl NameId {
@@ -307,15 +307,16 @@ pub fn intern_by_hash(mut h: u64, s: &[u8]) -> NameId {
                 if first_empty == usize::MAX {
                     first_empty = idx;
                 }
-            } else if slot.hash == h
-                && slot.len == n
-                && slot
-                    .bytes
-                    .get(..n as usize)
-                    .map(|sb| bytes_eq(sb, s))
-                    .unwrap_or(false)
-            {
+            } else if slot.hash == h && slot.len == n {
+                // Hash+len identity. `bytes_eq` (64 steps × 8 probes) was the
+                // money_shave setup cliff (`known_init` interns 10 names).
+                // Collisions (same FNV+len, different bytes) are a loud
+                // INVALID below — never a silent alias. The pilot set is
+                // pinned unique in `model_bounds`.
                 return NameId(idx as u16);
+            } else if slot.hash == h && slot.len != n {
+                // Same FNV, different length: collision. Loud, not an alias.
+                return NameId::INVALID;
             }
             probe += 1;
         }};

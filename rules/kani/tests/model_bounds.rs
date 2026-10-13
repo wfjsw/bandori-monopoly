@@ -74,3 +74,27 @@ fn intern_fixed_loop_bounds() {
     let too_long = "y".repeat(card_sdk::intern::MAX_NAME + 1);
     assert!(!card_sdk::intern::intern(&too_long).is_valid());
 }
+
+/// Kani intern identity is `(FNV-1a, len)` (bytes_eq dropped from the probe
+/// hit — it was the money_shave setup cliff). This pins the proof corpus:
+/// every pilot/known name must intern to a distinct `NameId`, so a 64-bit
+/// collision cannot silently alias two of them.
+#[test]
+fn pilot_intern_hashes_are_unique() {
+    use rules_kani::host::PILOT_INTERN_NAMES;
+    card_sdk::intern::reset();
+    let mut seen = std::collections::BTreeSet::new();
+    for name in PILOT_INTERN_NAMES {
+        let id = card_sdk::intern::intern(name);
+        assert!(id.is_valid(), "pilot name {name:?} failed to intern");
+        assert!(
+            seen.insert(id),
+            "pilot name {name:?} collided with an earlier name (hash+len alias)"
+        );
+        assert_eq!(
+            card_sdk::intern::resolve_str(id),
+            *name,
+            "intern/resolve drift for {name:?}"
+        );
+    }
+}

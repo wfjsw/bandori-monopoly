@@ -25,6 +25,22 @@ use crate::world::{
     TOK_PP_POS,
 };
 
+/// Every name [`known_init`] interns. Pinned unique under `(FNV-1a, len)`
+/// in `model_bounds::pilot_intern_hashes_are_unique` — Kani intern identity
+/// is hash+len (bytes_eq dropped from the probe hit).
+pub const PILOT_INTERN_NAMES: &[&str] = &[
+    TOK_PP_POS,
+    TOK_PP_NEG,
+    world::COUNTER_CRYSTALS,
+    world::COUNTER_CP,
+    world::RENT_HOUSES,
+    world::TILE_SHOP_NAME,
+    world::CARD_AYA,
+    CARD_RESONANCE,
+    world::CARD_OTHER,
+    world::CARD_EXTRA,
+];
+
 /// Pre-interned identities for every name the host compares against a
 /// constant. Built once in [`install`]; comparing two `NameId`s is a `u16`
 /// equality — no hash, no byte walk, no heap.
