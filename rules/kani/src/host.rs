@@ -1485,7 +1485,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let key = name_id(a0, a1);
             world::with_world_mut(|w| {
                 let v = w.key_add(a2, key, a3);
-                w.sync_views();
+                // Per-seat view refresh (was `sync_views` over all 4 seats).
+                w.sync_views_player(a2);
                 w.push(Effect::AddToken {
                     player: a2,
                     key: key.0,
@@ -1500,11 +1501,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             let v = a3;
             world::with_world_mut(|w| {
                 w.key_set(p, key, v);
-                w.sync_views();
+                // Direct view write for the two known fan tokens; other keys
+                // still need the per-seat refresh.
                 if key == known().tok_pp_pos {
                     w.fans_pos[player_idx(p)] = v;
                 } else if key == known().tok_pp_neg {
                     w.fans_neg[player_idx(p)] = v;
+                } else {
+                    w.sync_views_player(p);
                 }
                 w.push(Effect::SetToken {
                     player: p,
