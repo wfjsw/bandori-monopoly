@@ -5,6 +5,7 @@
 import { useEffect, useReducer, useRef } from "react";
 import { useLatestRef } from "./latest.ts";
 import { countdownLeft } from "./pure.ts";
+import { clockSync } from "../game/clockSync";
 
 export { countdownLeft };
 
@@ -106,4 +107,38 @@ export function useRestartAnimation(key: unknown, ref: { current: HTMLElement | 
     void el.offsetHeight; // force a reflow so the reset takes
     el.style.animation = "";
   }, [key, live]);
+}
+/**
+ * Re-render exactly when a server-clock countdown's displayed second flips
+ * (time.is-style): one timeout armed for the instant `remaining` crosses the
+ * next whole second -- never a 500 ms interval. `deadlineMs` is on the server
+ * monotonic clock; pass null when nothing is counting down. Uses
+ * `clockSync.toServer(performance.now())` so the flip tracks the deadline
+ * itself, not a local interval.
+ */
+export function useSecondBoundary(deadlineMs: number | null): number {
+  const [n, bump] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => {
+    if (deadlineMs == null) return;
+    let id = 0;
+    const arm = () => {
+      const left = deadlineMs - clockSync.toServer(performance.now());
+      if (left <= 0) {
+        bump();
+        return;
+      }
+      const frac = left % 1000;
+      // +~5ms so we land just after the boundary rather than racing it.
+      id = window.setTimeout(
+        () => {
+          bump();
+          arm();
+        },
+        Math.max(1, (frac === 0 ? 1000 : frac) + 5),
+      );
+    };
+    arm();
+    return () => clearTimeout(id);
+  }, [deadlineMs]);
+  return n;
 }

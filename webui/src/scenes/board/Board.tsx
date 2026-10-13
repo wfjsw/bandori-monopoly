@@ -10,6 +10,7 @@ import { CommitChip } from "../../ui/CommitChip";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
+import { useSecondBoundary } from "../../hooks/timers";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
@@ -50,6 +51,19 @@ function useMatchDriver(opts: {
   const autoDeed = useRef(-1);
   const autoEnd = useRef(-1);
   const resultsShown = useRef(false);
+  // Once per state version, when the Animator queue has drained: tell the
+  // server the acting seat has caught up so its clock can start (or resume).
+  // Replay / solo have no server clock hold. Debounced by the animating flag
+  // itself -- we only fire on the false edge plus a fresh seq.
+  const ackedSeq = useRef(-1);
+  useEffect(() => {
+    if (anim.animating) return;
+    if (sess.kind !== "online") return;
+    const seq = m?.S.seq;
+    if (seq == null || ackedSeq.current === seq) return;
+    ackedSeq.current = seq;
+    void sess.animDone(seq);
+  }, [anim.animating, m?.S.seq, sess]);
   useEffect(() => {
     if (!m) return;
     const S = m.S;
@@ -94,7 +108,12 @@ function useMatchDriver(opts: {
 
 export function Board({ sess }: { sess: GameSession }) {
   const { view, at, anim } = useBoardSession(sess);
-  useTick(500); // turn timer
+  // Turn timer: online frames carry absolute deadlines, so repaint exactly
+  // when the displayed second flips (not on a 500ms grid). Fallback tick for
+  // paths with no deadline (replay / older server / local countdowns).
+  const clockDeadline = view?.clock ? view.clock.bonusDeadlineMs : null;
+  useSecondBoundary(clockDeadline);
+  useTick(500);
   const auto = useAutoplay(sess); // 托管 -- one shared input-lock
   // The match screen is the one scene that fills the window: no top / bottom
   // letterbox, so the columns stretch and the ring centres in the middle one.

@@ -63,6 +63,12 @@ export const api = {
   roomState: (id: string) => call<{ room: RoomInfo; you: number; game: MatchView | null }>("GET", `/api/rooms/${id}/state`),
   act: (id: string, cmd: Command) => call<unknown>("POST", `/api/rooms/${id}/act`, cmd),
   /**
+   * The acting seat's animation queue drained for state version `seq`.
+   * Releases the turn-clock hold (a 10s cap starts the clock anyway).
+   * Ignored by the server when stale; never sent in replay / solo.
+   */
+  animDone: (id: string, seq: number) => call<{ ok: true; released: boolean }>("POST", `/api/rooms/${id}/anim-done`, { seq }),
+  /**
    * The last finished match's `.bdrec` (docs/SERVER.md). The full record
    * reveals every hand, so the server answers 409 `err.record.live` while the
    * room is playing, 403 `err.record.forbidden` to anyone who was not in it,
@@ -87,6 +93,13 @@ export const api = {
       return { ok: false, error: msg("err.offline"), status: 0 };
     }
   },
+  /**
+   * One NTP-style clock sample (`docs/SERVER.md` §Turn clock). `t1` is the
+   * caller's `performance.now()` at send; the server stamps `t2` at receive
+   * and `t3` just before replying, on the same monotonic clock the turn
+   * deadlines use.
+   */
+  clock: (t1: number) => call<{ t1: number; t2: number; t3: number }>("POST", "/api/clock", { t1 }),
 };
 
 export interface StreamHandlers {

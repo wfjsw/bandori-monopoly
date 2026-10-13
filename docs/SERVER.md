@@ -242,10 +242,39 @@ works, for tools.
 | POST | `/api/rooms/{id}/act` | `NetMessage` | `{ok}` |
 | GET  | `/api/rooms/{id}/record` | | the last finished match's `.bdrec` (see below) |
 | GET  | `/api/rooms/{id}/stream` | | SSE |
+| POST | `/api/clock` | `{t1}` | `{t1, t2, t3}` -- NTP-style sample (see §Turn clock) |
 
 Errors: `{error, reason}`. `error` is the player-facing message from the original
 game; `reason` is set for join rejections: `password` (403), `full`, `playing`,
 `version` (409).
+
+### Turn clock
+
+The engine owns the countdown (`baseTime` then `bonusTime` per acting seat;
+solo never expires). The **server** publishes an absolute deadline so a client
+that is still animating late events does not lose clock time to the lag:
+
+* Every `match` frame carries `clock: { baseDeadlineMs, bonusDeadlineMs }`
+  when a human seat's clock is running, plus `serverTimeMs`. Both are
+  milliseconds on the server's **monotonic** clock (process start = 0), never
+  wall time -- a host clock step cannot slide a live countdown.
+* `clock` is absent while the clock is held for an animation ack
+  (`state.clockPaused`), on a machine seat, in solo, or outside the play
+  phase. The client then shows the clock held at full (or no clock at all).
+* Clients convert with an NTP-style offset over `performance.now()` only
+  (`webui/src/game/clockSync.ts`): `POST /api/clock {t1}` echoes `t2`
+  (receive) and `t3` (send) on the same monotonic clock. Offset =
+  `((T2-T1)+(T3-T4))/2`; keep the lowest-RTT sample; burst at connect and
+  refresh periodically / on reconnect / on `visibilitychange` to visible.
+  Remaining = `deadline - (performance.now() + offset)`, repainted on each
+  whole-second boundary.
+* **Anim hold.** When the acting human's turn / prompt / events commit, the
+  engine holds their clock (`state.clockPaused`, no deadline) until that
+  seat's client posts `POST /api/rooms/{id}/anim-done {seq}` -- sent once per
+  state version when the Animator queue has drained. A hard cap of 10 s of
+  ticks releases the hold anyway (hidden tab / disconnected actor). Bots and
+  Solo never hold. The ack is recorded as `Input::AnimDone` so replays
+  reproduce the same pauses (`docs/REPLAY.md`).
 
 ### Match commands (`/act`)
 

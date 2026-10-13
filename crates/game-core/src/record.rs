@@ -361,6 +361,13 @@ pub enum Input {
     Back {
         m: i32,
     },
+    /// Animation-done ack from seat `m` for state version `seq`. Releases the
+    /// turn-clock hold (see `engine::Match::anim_done`). Recorded so replays
+    /// reproduce the same pauses.
+    AnimDone {
+        m: i32,
+        seq: i32,
+    },
 }
 
 /// A turn-boundary state hash. `at` is how many [`Input`]s had been applied
@@ -894,6 +901,11 @@ impl Recorder {
 
     pub fn push_back(&mut self, member: i32) {
         self.inputs.push(Input::Back { m: member });
+    }
+
+    /// Animation-done ack: releases the acting seat's clock hold.
+    pub fn push_anim_done(&mut self, member: i32, seq: i32) {
+        self.inputs.push(Input::AnimDone { m: member, seq });
     }
 
     /// Turn boundary: `at` is the number of inputs applied so far.
@@ -1458,6 +1470,9 @@ impl Replayer {
             Input::Finish => self.m.finish(),
             Input::Left { m, can_return } => self.m.member_left(m, can_return),
             Input::Back { m } => self.m.member_back(m),
+            Input::AnimDone { m, seq } => {
+                self.m.anim_done(m, seq);
+            }
             Input::Ticks { .. } => unreachable!("tick run handled by apply_one_tick"),
         }
         self.cursor += 1;

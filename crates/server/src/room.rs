@@ -299,6 +299,17 @@ impl MatchHandle {
         self.run(|_| Input::Back { m: member }, |s, e| e.member_back(s, member))
     }
 
+    /// The acting seat's animation queue drained for state version `seq`.
+    /// Recorded as [`Input::AnimDone`] so replays reproduce the clock hold.
+    /// Returns whether the ack released a hold (a stale / foreign ack is
+    /// still recorded, but changes nothing).
+    pub fn anim_done(&self, member: i32, seq: i32) -> Result<bool, String> {
+        self.run(
+            |_| Input::AnimDone { m: member, seq },
+            |s, e| e.anim_done(s, member, seq),
+        )
+    }
+
     /// One member's view frame. `need_extras` = the caller wants the
     /// per-viewer `view_extra` fields (the bot service does; a human client
     /// computes them itself from the seat view).
