@@ -27,8 +27,9 @@ endpoint policy, and the deviations below.
 
 * **The engine is deterministic** given:
   * the start: either `seed` + members + mode + weights, or a `save()` snapshot;
-  * the ordered public calls: `act`, `quick_start`, `finish`, `member_left`
-    and `member_back`;
+  * the ordered public calls: `act`, `quick_start`, `finish`, `member_left`,
+    `member_back` and `anim_done` (the turn-clock anim hold -- see
+    `docs/SERVER.md` §Turn clock);
   * the exact `tick(dt)` f32 sequence.
 * **Randomness and serialization:**
   * Both RNG streams (`World.rng` and `Match.live_rng`) are serialized.
@@ -206,7 +207,7 @@ pub struct RecordHeader { engine: EngineStamp, mode: MatchMode, step: f32, origi
 pub struct MatchSetup { members: Vec<RoomMember> /*incl. mentality*/, seed: u64 /*str*/ /*legacy xoshiro*/, weights: ScoreWeights,
                         #[serde(default)] seed256: Option<rng::Seed256> /*hex; the ChaCha key every new match uses*/ }
 pub enum Init { Seed(MatchSetup), Snapshot { save: String } }
-#[serde(tag="t")] pub enum Input { Ticks{k:u8,n:u32}, Act{m:i32,msg:NetMessage,ok:bool}, QuickStart, Finish, Left{m:i32,can_return:bool}, Back{m:i32} }
+#[serde(tag="t")] pub enum Input { Ticks{k:u8,n:u32}, Act{m:i32,msg:NetMessage,ok:bool}, QuickStart, Finish, Left{m:i32,can_return:bool}, Back{m:i32}, AnimDone{m:i32,seq:i32} }
 pub struct Checkpoint { at: u32, tick: u64, round: i32, turn: i32, hash: String }
 pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpoint>, final_hash: String, #[serde(default)] events: Option<Vec<MatchEvent>> }
 ```
@@ -226,7 +227,7 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
   * `new(data, rules, setup, mode)`;
   * `from_snapshot(m)` (`partial`);
   * `tick_steps(k)`, `act`, `quick_start`, `finish`, `member_left`,
-    `member_back`;
+    `member_back`, `anim_done`;
   * `inner()`, `recorder_json()`, `restore(data, rules, save, rec_json)` and
     `export(stamp, created)`.
 * **`Replayer`**:

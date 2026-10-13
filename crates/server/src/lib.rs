@@ -16,6 +16,7 @@
 //! | POST | `/api/rooms/{id}/leave` | | `{ok}` |
 //! | GET  | `/api/rooms/{id}/state` | | `{room, you, match: {state, hand, handNotes, you, player_id}}` |
 //! | POST | `/api/rooms/{id}/act` | `NetMessage` (`act`, `card`, `cards`, `value`, `prompt`, ...) | `{ok}` or 400 `{error}` |
+//! | POST | `/api/rooms/{id}/anim-done` | `{seq}` | `{ok, released}` -- animation ack, releases the clock hold |
 //! | GET  | `/api/rooms/{id}/record` | | the last finished match's `.bdrec`, participants only |
 //! | GET  | `/api/rooms/{id}/stream` | | SSE, see [`sse`] |
 //! | POST | `/api/clock` | `{t1}` (`performance.now()` at send) | `{t1, t2, t3}` monotonic ms (see [`clock`]) |
@@ -71,6 +72,7 @@ pub fn router(
         .route("/api/rooms/{id}/leave", post(api::leave))
         .route("/api/rooms/{id}/state", get(api::room_state))
         .route("/api/rooms/{id}/act", post(api::act))
+        .route("/api/rooms/{id}/anim-done", post(api::anim_done))
         .route("/api/rooms/{id}/record", get(api::record))
         .route("/api/rooms/{id}/stream", get(sse::stream))
         .route("/api/clock", post(api::clock_ping))

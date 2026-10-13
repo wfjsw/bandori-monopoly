@@ -502,6 +502,35 @@ pub async fn room_state(
     }))
 }
 
+/// `POST /api/rooms/{id}/anim-done` -- the acting seat's animation queue has
+/// drained for state version `seq`. Releases the turn-clock hold (10s cap
+/// applies if this never arrives). Recorded as `Input::AnimDone`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnimDoneReq {
+    pub seq: i32,
+}
+
+pub async fn anim_done(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(req): Json<AnimDoneReq>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let (room, me) = member_room(&s, &sess, &id)?;
+    let m = {
+        let r = room.lock().unwrap();
+        r.match_handle()
+            .ok_or_else(|| ApiError::bad("err.room.no_match"))?
+    };
+    let released = tokio::task::spawn_blocking(move || m.anim_done(me, req.seq))
+        .await
+        .map_err(|e| ApiError::bad(format!("anim_done task: {e}").as_str()))?
+        .map_err(|e| ApiError::bad(e.as_str()))?;
+    room.lock().unwrap().notify();
+    Ok(Json(serde_json::json!({ "ok": true, "released": released })))
+}
+
 /// `POST /api/rooms/{id}/act` -- a match command (`NetMessage` with `act` set).
 pub async fn act(
     State(s): S,

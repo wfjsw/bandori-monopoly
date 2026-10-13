@@ -991,6 +991,7 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
             Input::Finish => "finish",
             Input::Left { .. } => "left",
             Input::Back { .. } => "back",
+            Input::AnimDone { .. } => "anim_done",
         })
         .collect();
     for want in ["ticks", "quick_start", "left", "back", "finish"] {

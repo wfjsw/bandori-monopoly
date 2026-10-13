@@ -195,6 +195,9 @@ const ORDER_WAIT: f32 = 4.0;
 const BASE_TIME: f32 = 15.0;
 const BONUS_REFILL: f32 = 10.0;
 const BONUS_MAX: f32 = 30.0;
+/// Hard cap on how long the acting seat's clock may stay held waiting for
+/// that seat's `anim_done` ack, in seconds. Fed by ticks (never wall time).
+const ANIM_HOLD_CAP: f32 = 10.0;
 /// End-match vote duration and cool-down after a failed vote.
 const VOTE_SECONDS: f32 = 30.0;
 const VOTE_COOLDOWN: f32 = 30.0;
@@ -210,6 +213,20 @@ enum Routine {
     Ai(usize),
     Act(usize, Box<NetMessage>),
     Leftovers(Vec<usize>),
+}
+
+/// The acting seat's clock is held until this seat acks `anim_done` for
+/// `seq` (or [`ANIM_HOLD_CAP`] seconds of ticks elapse). Only the acting
+/// seat's ack matters; bots and Solo never hold. Recorded as
+/// [`crate::record::Input::AnimDone`] so replays reproduce the same pauses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ClockHold {
+    /// Seat that must ack (the acting human).
+    member: i32,
+    /// State version the ack must name. A lower `seq` is stale and ignored.
+    seq: i32,
+    /// Seconds held so far (tick-fed; [`ANIM_HOLD_CAP`] releases).
+    elapsed: f32,
 }
 
 /// The prompt players are currently answering.
@@ -285,6 +302,9 @@ struct Saved {
     vote_cooldown: f32,
     deferred: Vec<Deferred>,
     seq: i32,
+    /// Anim-ack clock hold. `None` when the clock is running.
+    #[serde(default)]
+    clock_hold: Option<ClockHold>,
 }
 
 /// Bumped whenever [`Saved`] changes shape; older saves are rejected.
@@ -299,7 +319,9 @@ struct Saved {
 /// v7: `TurnCtx::plan` (the live `MoveCtx`) is serialized. It carries the roll
 /// tables a card shaped for the pending move; skipping it made save/restore
 /// lose those tables and the next roll diverged.
-pub const SAVE_VERSION: u32 = 7;
+/// v8: turn clock renamed (`base_time` / `bonus_time`) and `clock_hold`
+/// (anim-ack pause) is part of the saved shape. Older saves are refused.
+pub const SAVE_VERSION: u32 = 8;
 
 /// A running match.
 pub struct Match {
@@ -318,6 +340,7 @@ pub struct Match {
     vote_cooldown: f32,
     deferred: Vec<Deferred>,
     seq: i32,
+    clock_hold: Option<ClockHold>,
     changed: bool,
     /// STACK-01: true while [`Self::flush_deferred`] is draining. Nested
     /// `execute` (Leave → start(Act)) must not re-enter the drain.
@@ -353,6 +376,7 @@ impl Match {
             vote_cooldown: self.vote_cooldown,
             deferred: self.deferred.clone(),
             seq: self.seq,
+            clock_hold: self.clock_hold.clone(),
         };
         serde_json::to_string(&saved).expect("match state serializes")
     }
@@ -406,6 +430,7 @@ impl Match {
             vote_cooldown: s.vote_cooldown,
             deferred: s.deferred,
             seq: s.seq,
+            clock_hold: s.clock_hold,
             changed: true,
             provider: None,
             flushing_deferred: false,
@@ -553,6 +578,7 @@ impl Match {
             vote_cooldown: 0.0,
             deferred: vec![],
             seq: 0,
+            clock_hold: None,
             changed: true,
             provider: None,
             flushing_deferred: false,
@@ -698,6 +724,7 @@ impl Match {
             st.base_time = self.base_time;
             st.bonus_time = bonus;
             st.time_left = self.base_time + bonus;
+            st.clock_paused = self.clock_hold.is_some();
             // `why_not_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
@@ -1130,6 +1157,7 @@ impl Match {
             vote_cooldown: self.vote_cooldown,
             deferred: self.deferred.clone(),
             seq: self.seq,
+            clock_hold: self.clock_hold.clone(),
             changed: self.changed,
             provider: None,
             flushing_deferred: false,
@@ -1173,6 +1201,7 @@ impl Match {
         self.world = cx.into_world();
         self.changed = true;
         self.seq += 1;
+        self.arm_clock_hold();
         r
     }
 
@@ -1200,6 +1229,11 @@ impl Match {
         self.provider = prov;
         self.changed = true;
         self.seq += 1;
+        // Anim hold for the acting human: every commit that leaves the seat
+        // something to watch (this one) re-arms against the new seq. The hold
+        // release path (`anim_done` / cap) never comes through here, so it
+        // cannot re-arm itself.
+        self.arm_clock_hold();
         match res {
             Ok(()) | Err(Halt(HaltKind::Ended)) => {
                 let signals = std::mem::take(&mut w.signals);
@@ -1377,6 +1411,67 @@ impl Match {
 
     // ---------------------------------------------------------------- clock
 
+    /// Feed an animation-done ack from seat `member` for state version `seq`.
+    ///
+    /// A matching ack (or one naming a newer seq -- the client is already
+    /// current) releases the hold so the turn clock starts consuming. A stale
+    /// ack (`seq` older than the hold) is ignored and returns `false`. Recorded
+    /// as [`crate::record::Input::AnimDone`] so replays reproduce the pause.
+    pub fn anim_done(&mut self, member: i32, seq: i32) -> bool {
+        let Some(hold) = &self.clock_hold else {
+            return false;
+        };
+        if hold.member != member || seq < hold.seq {
+            return false;
+        }
+        self.clock_hold = None;
+        self.changed = true;
+        self.seq += 1;
+        true
+    }
+
+    /// True while the acting seat's clock is held for an anim ack
+    /// (published as [`MatchState::clock_paused`]).
+    pub fn clock_paused(&self) -> bool {
+        self.clock_hold.is_some()
+    }
+
+    /// Arm (or clear) the anim hold after a game commit. Only the acting
+    /// human's client is waited on; Solo and machine seats never hold. The
+    /// hold is keyed to the just-bumped [`Self::seq`] so a stale ack is
+    /// ignored. Not called from [`Self::anim_done`] -- a hold release must
+    /// not re-arm itself.
+    fn arm_clock_hold(&mut self) {
+        if self.mode == MatchMode::Solo {
+            self.clock_hold = None;
+            return;
+        }
+        let st = &self.world.st;
+        if st.phase != "play" || st.turn < 0 {
+            self.clock_hold = None;
+            return;
+        }
+        let turn = st.turn as usize;
+        let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
+            st.roller as usize
+        } else {
+            turn
+        };
+        let Some(p) = st.players.get(actor) else {
+            self.clock_hold = None;
+            return;
+        };
+        if p.ai {
+            self.clock_hold = None;
+            return;
+        }
+        self.clock_hold = Some(ClockHold {
+            member: actor as i32,
+            seq: self.seq,
+            elapsed: 0.0,
+        });
+    }
+
     /// Advance the match by `dt` seconds (`Tick`).
     pub fn tick(&mut self, dt: f32) {
         let _tg = rtimer::guard(&rtimer::TICK_NS);
@@ -1404,6 +1499,17 @@ impl Match {
             }
             "ban" | "pick" | "deck" => self.tick_choice(dt),
             "play" => {
+                // Anim hold covers the whole play surface (prompts and wait
+                // beats included) so the acting seat never loses clock time
+                // to presentation. Tick-fed; 10s cap releases a stalled tab.
+                if let Some(hold) = &mut self.clock_hold {
+                    hold.elapsed += dt;
+                    if hold.elapsed >= ANIM_HOLD_CAP {
+                        self.clock_hold = None;
+                        self.changed = true;
+                        self.seq += 1;
+                    }
+                }
                 self.tick_vote(dt);
                 if self.world.st.phase == "play" {
                     self.tick_play(dt);
@@ -1557,6 +1663,11 @@ impl Match {
                 return;
             }
             if !self.timed_out {
+                // Still held (anim ack pending, cap not yet fired): do not
+                // consume base/bonus.
+                if self.clock_hold.is_some() {
+                    return;
+                }
                 if self.base_time > 0.0 {
                     self.base_time = (self.base_time - dt).max(0.0);
                 } else {

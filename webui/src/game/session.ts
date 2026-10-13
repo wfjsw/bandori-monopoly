@@ -370,6 +370,14 @@ export abstract class GameSession {
 
   /** Send a command. Resolves to the error message, or null on success. */
   abstract act(cmd: Command): Promise<Msg | null>;
+  /**
+   * The Animator queue has drained and the view is current for `seq`.
+   * Online sessions release the server's turn-clock hold; solo / replay
+   * have no hold and ignore this.
+   */
+  animDone(_seq: number): Promise<void> {
+    return Promise.resolve();
+  }
   abstract leave(): void;
 }
 
@@ -917,6 +925,15 @@ export class OnlineSession extends GameSession {
   async act(cmd: Command): Promise<Msg | null> {
     const r = await api.act(this.id, cmd);
     return r.ok ? null : (r.error ?? { k: "err.unknown_act" });
+  }
+
+  /**
+   * The Animator queue has drained and the view is current for `seq`.
+   * Releases the server's turn-clock hold. Debounced / once per state
+   * version by the caller (Board); no-op on a stale ack.
+   */
+  async animDone(seq: number): Promise<void> {
+    await api.animDone(this.id, seq);
   }
 
   leave(): void {

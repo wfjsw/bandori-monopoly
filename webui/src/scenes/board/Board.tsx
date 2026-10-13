@@ -51,6 +51,19 @@ function useMatchDriver(opts: {
   const autoDeed = useRef(-1);
   const autoEnd = useRef(-1);
   const resultsShown = useRef(false);
+  // Once per state version, when the Animator queue has drained: tell the
+  // server the acting seat has caught up so its clock can start (or resume).
+  // Replay / solo have no server clock hold. Debounced by the animating flag
+  // itself -- we only fire on the false edge plus a fresh seq.
+  const ackedSeq = useRef(-1);
+  useEffect(() => {
+    if (anim.animating) return;
+    if (sess.kind !== "online") return;
+    const seq = m?.S.seq;
+    if (seq == null || ackedSeq.current === seq) return;
+    ackedSeq.current = seq;
+    void sess.animDone(seq);
+  }, [anim.animating, m?.S.seq, sess]);
   useEffect(() => {
     if (!m) return;
     const S = m.S;

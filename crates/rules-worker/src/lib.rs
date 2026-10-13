@@ -268,7 +268,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         // also reports the turn-boundary checkpoint (`cp`) when the turn key
         // moved, so the server can append it to the record log
         // (`docs/REPLAY.md` §4).
-        "act" | "tick" | "quick_start" | "finish" => {
+        "act" | "tick" | "quick_start" | "finish" | "anim_done" => {
             let mut m = restore(ctx, req)?;
             let before = turn_key(&m);
             let out = match op {
@@ -289,6 +289,18 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 "quick_start" => {
                     m.quick_start();
                     Value::Null
+                }
+                "anim_done" => {
+                    let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
+                    let seq = req.get("seq").and_then(Value::as_i64).unwrap_or(0) as i32;
+                    let released = m.anim_done(member, seq);
+                    // Report whether this ack released a hold (a stale one is
+                    // a no-op). Carried as `released`, not `error`.
+                    let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended(), "released": released});
+                    if let Some(cp) = checkpoint(&m, before) {
+                        v["cp"] = cp;
+                    }
+                    return Ok(v);
                 }
                 _ => {
                     m.finish();
