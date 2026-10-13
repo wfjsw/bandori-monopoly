@@ -585,30 +585,57 @@ fn t13_smile_parade() {
     t.give(0, &["HHW:笑容大游行"]);
     t.dice(&[4]);
     t.roll(0).unwrap();
+    // (1) counteract places the card; (2) then offers to move it to the end tile.
+    let mut placed_with_three = false;
     loop {
-        let Some(_) = t.prompt() else { break };
+        let Some(p) = t.prompt() else { break };
         if t.counteract_offered("HHW:笑容大游行") {
             t.counteract(0, "HHW:笑容大游行").unwrap();
+            // （1）: 「可将此卡放置在其上」 + 「为此卡添加3个[奇迹水晶]」 --
+            // still charged before (2) 「并移除其上全部奇迹水晶」.
+            assert!(
+                t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),
+                "（1） places the card: {:?}",
+                t.field_ids(0)
+            );
+            assert_eq!(
+                t.crystals(0, "HHW:笑容大游行"),
+                Some(3),
+                "（1） charges the card with 3 crystals"
+            );
+            placed_with_three = true;
+        } else if let Some(k) = t.option("ask.yes") {
+            // Accept (2): 「可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」.
+            t.answer(0, k).unwrap();
         } else {
             t.decline();
         }
     }
+    assert!(placed_with_three, "（1） counteract ran");
+    let field = t.field(0);
+    let f = field
+        .iter()
+        .find(|f| f.card.contains("笑容大游行"))
+        .expect("card still on the field after (1)/(2)");
+    // (2) 「并移除其上全部奇迹水晶」.
+    assert_eq!(f.crystals, 0, "(2) clears the crystals");
     eprintln!(
-        "t13 record: P0 field = {:?}, crystals = {:?}, marks = {:?}",
-        t.field_ids(0),
-        t.crystals(0, "HHW:笑容大游行"),
-        t.marks()
+        "t13 swap record: card tile = {} (end {}), crystals = {}",
+        f.tile,
+        (t28 + 2) % 60,
+        f.crystals
     );
-    // （1）: 「可将此卡放置在其上」 + 「为此卡添加3个[奇迹水晶]」.
+    // （3）: any player settling on the card's tile discards it. P1 lands there.
+    until_turn(&mut t, 1);
+    let at = f.tile.clamp(0, 59) as usize;
+    t.set_pos(1, (at + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
     assert!(
-        t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),
-        "the card is placed on the field: {:?}",
+        !t.field_ids(0).iter().any(|c| c.contains("笑容大游行")),
+        "（3） discards the card after a settle on its tile: {:?}",
         t.field_ids(0)
-    );
-    assert_eq!(
-        t.crystals(0, "HHW:笑容大游行"),
-        Some(3),
-        "the card is charged with 3 crystals"
     );
 }
 

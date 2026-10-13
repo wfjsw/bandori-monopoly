@@ -357,22 +357,27 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **question**: C-Q7.
 
 ## SETTLE-01 — 笑容大游行 tile-swap overflows the stack
-- **status**: stack overflow half **fixed** by STACK-01 (the work stack flattens the
-  `SettleBody` self-nest); the swap-axes bug (「交换位置」 modeled as colour override /
-  SettleBody instead of a board position exchange) remains. `t13_smile_parade` may
-  still be wrong on the swap, but it no longer aborts the process.
+- **status**: stack overflow half **fixed** by STACK-01; swap-axes half **fixed**
+  (this batch, `fix: SETTLE-01 …`) — (1)/(3) share one `SettleBody` (the host
+  runs only the first hook of a kind), (3) redirects a settle on the card's
+  tile to the 弦卷集团 agent body and then discards the card. `t13_smile_parade`
+  un-ignored, green. **Open:** the reverse direction (a settle on 弦卷集团
+  while the card sits elsewhere should run as the card's tile) is
+  `TODO(规则书)` — a two-way swap re-enters and hits the settle-depth cap;
+  a host-visible re-entrancy flag is needed (`SLOT_REPLAY` guest writes do not
+  cross `card_settle_at`).
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (HHW signature continuous)
 - **suggested batch**: HHW cards / crystal/marker accounting
 - **locations**
-  - `rules/tests/tests/cross_tiles.rs:547` `t13_smile_parade` `#[ignore = "DISCREPANCY: 笑容大游行 overflows the stack when it triggers"]`
-  - `rules/tests/tests/gap_res.rs:281` `g30_smile_parade_swap_with_a_field_card_in_place`
-  - `rules/cards/card-hhw/src/smile_parade.rs:164` (（3） 「交换位置」 is a board *position* exchange, not a colour override / SettleBody)
-  - `rules/card-sdk` / `crates/game-rules/src/wasm_rules.rs:4420` (trait-method recursion overflow note)
+  - `rules/tests/tests/cross_tiles.rs` `t13_smile_parade` (un-ignored)
+  - `rules/tests/tests/gap_res.rs` `g30_smile_parade_swap_with_a_field_card_in_place` (un-ignored)
+  - `rules/cards/card-hhw/src/smile_parade.rs` (`settle_body` / `on_resolved`)
 - **rulebook**: 笑容大游行 (3) 「[持续] 当此卡位于格子上时，那格视为与"弦卷集团"格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
-- **current**: trigger re-enters and overflows the stack; the swap is modeled on the wrong axes (colour override / SettleBody).
-- **expected**: resolve the settle as if the mover landed on 弦卷集团 (rents/ownership exchanged for that settle); discard after; no recursion.
+- **fixed**: (1) end-as-agent via a one-shot move tag; (2) move-to-end + clear
+  crystals; (3) one-way card-tile → agent body + discard after any other
+  player's settle on the card's tile.
 
 ## SETTLE-02 — CRYCHIC band (1) at 6+ hand cards still lets money move
 - **kind**: implementation bug
@@ -744,29 +749,41 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **fixed already**: `On::Hook(&[HookKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half. Nothing to un-ignore.
 
 ## TILE-01 — Anon Tokyo link arrangements (Fire bird / Repaint / ONE OF US / linked rent)
-- **kind**: implementation bug
+- **status**: **fixed** (this batch, 2026-10-13, `closeout-4-tiles`) —
+  t02 (Fire bird needs crystals to survive to the settle), t03 (P0 plays
+  Repaint on P1's roll; plain /2, no ceil-10), t05 (ONE OF US share is a raw
+  `adjust_money` split so FEVER! cannot boost it), t21 (play Anon Tokyo on
+  P1's turn; arm [停留] after `until_turn`). Un-ignored, green.
+- **kind**: implementation bug + test setup
 - **class**: A (arrangements) + C (mortgaged partner half)
 - **severity**: medium
 - **suggested batch**: rent multipliers / tiles
 - **locations**
-  - `rules/tests/tests/cross_tiles.rs:128` `t02_anon_link_plus_fire_bird`
-  - `rules/tests/tests/cross_tiles.rs:163` `t03_anon_link_plus_repaint`
-  - `rules/tests/tests/cross_tiles.rs:199` `t04_anon_link_mortgaged_partner` (RULING)
-  - `rules/tests/tests/cross_tiles.rs:228` `t05_one_of_us_shares`
-  - `rules/tests/tests/cross_tiles.rs:838` `t21_riki_plus_anon_link` (quarter-rent on a linked tile)
-  - `rules/cards/card-ag/src/one_of_us.rs:138,200` (raw money add / 平分 shape)
-- **question**: C-Q13 (mortgaged partner tile's half 收费).
+  - `rules/tests/tests/cross_tiles.rs` `t02_anon_link_plus_fire_bird` (green)
+  - `rules/tests/tests/cross_tiles.rs` `t03_anon_link_plus_repaint` (green)
+  - `rules/tests/tests/cross_tiles.rs` `t04_anon_link_mortgaged_partner` (**RULING** — left ignored)
+  - `rules/tests/tests/cross_tiles.rs` `t05_one_of_us_shares` (green)
+  - `rules/tests/tests/cross_tiles.rs` `t21_riki_plus_anon_link` (green)
+  - `rules/cards/card-ag/src/one_of_us.rs` (`ctx::lose_raw` / `gain_raw`)
+  - `rules/card-sdk/src/ctx.rs` (`adjust_money` — raw money move, no pipeline)
+- **question**: C-Q13 (mortgaged partner tile's half 收费) — still open.
 
 ## TILE-02 — agent half-rent 「同色」 vs colour overrides
-- **kind**: rulebook divergence
+- **status**: **fixed** (this batch, 2026-10-13, `closeout-4-tiles`) —
+  「无主或玩家拥有的」 reads as unowned **or any player-owned**: unowned →
+  buy, own → build, another seat's non-mortgaged deed → the agent's
+  「半价收费的[结算]（向上取整10）」. `ANY_COLOR` still widens the colour set
+  for buy/rent but is never buildable. soyo's PayMul halves again on top.
+  `t16_soyo_mixed_colors` un-ignored, green (R/2/2).
+- **kind**: rulebook divergence (resolved)
 - **class**: C
 - **severity**: medium
 - **suggested batch**: rent multipliers
 - **locations**
-  - `rules/tiles/src/agent.rs:19` (「同色」 = board `group`; book never says whether `anyColor` / `colorFor:<p>` widens it)
-  - `rules/tests/tests/cross_tiles.rs:638` `t16_soyo_mixed_colors` (（soyo）混合的颜色 agent half-rent)
-  - TEST-FINDINGS §6 item 10
-- **question**: C-Q14.
+  - `rules/tiles/src/agent.rs` + `crates/game-core/src/engine/play.rs` (`agent_landing`)
+  - `rules/tests/tests/cross_tiles.rs` `t16_soyo_mixed_colors` (green)
+  - TEST-FINDINGS §6 item 10 / Ruling 4–5
+- **question**: C-Q14 — superseded by the above reading.
 
 ## TILE-03 — RiNG rent table / mortgageability / `ringMultiplier`
 - **kind**: rulebook divergence

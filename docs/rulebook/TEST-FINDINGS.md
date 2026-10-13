@@ -827,12 +827,14 @@ change (black-box side).
 
 * **Ruling 3** (mortgage to fund a buy): engine refuses today; unchanged.
 * **Ruling 4** (agent pick: full [结算] or direct buy/build; 「玩家拥有的」
-  includes others?): today's behaviour kept — a direct buy / build, and
-  「玩家拥有的」 means the picking player's own tiles.
+  includes others?): **superseded 2026-10-13** (`closeout-4-tiles`) —
+  「无主或玩家拥有的」 is unowned or **any** player-owned: unowned → buy,
+  own → build, another seat's non-mortgaged deed → the agent's half-charge.
 * **Ruling 5** (soyo 「所有颜色」 toward half-charge; per-player 「视为live
-  house」 widen the agent set?): today's behaviour kept — `ANY_COLOR` joins
-  the set for buy offers but is never buildable; the half-charge set is the
-  plain `group` match.
+  house」 widen the agent set?): **superseded 2026-10-13** — `ANY_COLOR`
+  widens the colour set for buy **and** rent offers (never buildable); the
+  half-charge set includes `ANY_COLOR`-only members, and soyo's PayMul
+  halves again on top (「地产商的减半收费基础上额外减半」).
 * **Ruling 6** (is 强制购买 a 「购买」 for 「购买…时」 listeners?): no hooks
   today — `bought` / `buyAfter` do not fire on force-buy.
 * **Ruling 7** (auction win a 「购买格子」 for discounts? auction [消耗] through
