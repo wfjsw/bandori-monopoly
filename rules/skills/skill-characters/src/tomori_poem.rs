@@ -67,29 +67,34 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Residual guard for [`before_settle`]: the landing is within five tiles of
-/// the owner, and the pot-cost / fire-balance split holds.
+/// the owner, and the (2)/(3) arm split holds.
 ///
 /// The `dist` scan is live board geometry (docs/GUARDS.md §4.2); it stays out
 /// of the CEL `pre` so the host and the IR fill cannot disagree on
-/// `dist(tile.id, pos(owner))`. The (2)/(3) arm is kept exactly as the body
-/// had it (a dynamic `turn_player` compare plus the live fire count).
+/// `dist(tile.id, pos(owner))`.
+///
+/// The fire balance is **not** a gate: 不再迷茫 (2) 「可移除此卡上的一个
+/// [奇迹水晶]以代替此次技能的火罐消耗」 lets a crystal stand in for the pots,
+/// so a 0-fire owner with a crystal can still press. [`before_settle`]'s
+/// `spend_fire` is what actually collects the cost (fire or the substitution).
 fn before_settle_applies(player_id: i32) -> bool {
     let landing = ctx::trigger::tile();
-    if landing < 0 || ctx::dist(landing, ctx::player_pos(player_id)) > 5 {
+    if landing < 0 {
         return false;
     }
     let mover = ctx::trigger::player_id();
-    let cost = if mover == ctx::turn_player() {
-        // （3） is this player's own landing near someone else.
-        if mover != player_id {
-            return false;
-        }
-        1
-    } else {
-        // （2） is someone else's landing near this player.
-        4
-    };
-    state::get(player_id, state_key::FIRE) >= cost
+    // （2）「当其他玩家的[移动终点]位于您前后5格内时」 -- someone else's
+    // landing within five of this player.
+    if mover != player_id {
+        return ctx::dist(landing, ctx::player_pos(player_id)) <= 5;
+    }
+    // （3）「当你的[移动终点]位于其他玩家的前后五格内时」 -- this player's
+    // landing within five of some other player.
+    (0..ctx::player_count()).any(|p| {
+        p != player_id
+            && !ctx::player_out(p)
+            && ctx::dist(landing, ctx::player_pos(p)) <= 5
+    })
 }
 
 /// （2） and （3） -- the landing is within five tiles of the other party, and a
@@ -98,7 +103,9 @@ fn before_settle_applies(player_id: i32) -> bool {
 /// spends the pot and teleports.
 fn before_settle(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
-    let (cost, theirs) = if mover == ctx::turn_player() {
+    // （3） is this player's own landing (cost 1); （2） is someone else's
+    // landing near this player (cost 4). Same split as the guard.
+    let (cost, theirs) = if mover == player_id {
         (1, ctx::player_pos(player_id))
     } else {
         (4, ctx::player_pos(player_id))
