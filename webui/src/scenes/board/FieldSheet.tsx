@@ -30,7 +30,7 @@ export function rowSpread(n: number): Record<string, string> {
   return { "--row-slot": `${slot.toFixed(1)}px` };
 }
 
-export function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: number } | null }) {
+export function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: number; ms: number } | null }) {
   const S = m.S;
   const names = namesOf(S);
   const dock = useDockRaise();
@@ -56,7 +56,7 @@ export function FieldSheet({ m, pulse }: { m: Model; pulse?: { uid: number; id: 
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
           return (
-            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse)} style={{ ["--own" as string]: m.colorOf(owner) }}>
+            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
