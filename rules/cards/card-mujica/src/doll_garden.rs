@@ -42,7 +42,9 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
                     .card("card", "Mujica:人偶的箱庭"),
                 &[
                     Msg::new(key!("doll_garden_move")),
-                    Msg::new(key!("doll_garden_pay")).n("money", (x * 20) as i64),
+                    Msg::new(key!("doll_garden_pay"))
+                        .player_id("user", player_id)
+                        .n("money", (x * 20) as i64),
                 ],
             )?;
             if pick == 1 {
