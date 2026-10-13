@@ -1237,3 +1237,13 @@ pub fn set_card_face_down(player_id: i32, cp: i32, cl: i32, down: i32) -> i32 {
 pub fn card_face_down(player_id: i32, cp: i32, cl: i32) -> i32 {
     kani_host::call_i32(Op::card_face_down, [player_id, cp, cl, 0, 0, 0])
 }
+
+// 真奈 join (CH-05) -- declaration-scoped self-redirect. Signatures match
+// `sys.rs`'s extern block exactly (the surface inventory is generated from it).
+pub fn join_redirect_target() -> i32 {
+    kani_host::call_i32(Op::join_redirect_target, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn set_join_used() {
+    kani_host::call_unit(Op::set_join_used, [0, 0, 0, 0, 0, 0]);
+}
