@@ -192,14 +192,22 @@ pub fn ir_div_rem_error_class_matches_spec() {
 /// Replaces the old `assert_eq!(eval_binop, spec_arith)` form, which asked
 /// CBMC to prove two independent 64-bit dividers equal (TIMEOUT 1800 s).
 ///
-/// **Proven:** error class (also in `ir_div_rem_error_class_matches_spec`);
-/// on every Ok pair, `q*y + r == x`, `|r| < |y|`, `sign(r) ∈ {0, sign(x)}`;
-/// a floor-rounding mutant is rejected.
+/// **Proven (this harness, bit-width split):** error class on the full i64
+/// grid (`ir_div_rem_error_class_matches_spec` is the full-width twin); on
+/// every Ok pair with `x, y` in the **i16 image** (sign-extended to i64),
+/// `q*y + r == x`, `|r| < |y|`, `sign(r) ∈ {0, sign(x)}`; a floor-rounding
+/// mutant is rejected. The i16 image contains every rounding / sign / bound
+/// class of truncating divmod (exact, inexact ±, `y == ±1`, `|r| = |y|-1`,
+/// opposite-sign quotients). `MIN / -1` is full-width and lives in the error
+/// harness.
 /// **Not proven here:** bit-for-bit identity with `spec_arith`'s second
-/// `checked_div` circuit (intractable); tree-level `eval_node` composition
-/// (covered by `rules-cond/tests/cond_ir_diff.rs` + COND-SINGLE-SOURCE §4).
+/// `checked_div` circuit over the full i64×i64 grid (intractable circuit
+/// equivalence — see COND-SINGLE-SOURCE §5); tree-level `eval_node`
+/// composition (covered by `rules-cond/tests/cond_ir_diff.rs` boundary grid,
+/// which is exhaustive on the real evaluator).
 #[kani::proof]
 #[kani::unwind(4)]
+#[kani::solver(kissat)]
 pub fn ir_div_matches_spec() {
     let x: i64 = kani::any();
     let y: i64 = kani::any();
@@ -211,6 +219,9 @@ pub fn ir_div_matches_spec() {
         assert_eq!(re, Val::Err, "rem error class");
         return;
     }
+    // Bit-width split for the Ok value (see the doc comment).
+    kani::assume(x >= i16::MIN as i64 && x <= i16::MAX as i64);
+    kani::assume(y >= i16::MIN as i64 && y <= i16::MAX as i64);
     let (Val::Int(q), Val::Int(r)) = (de, re) else {
         panic!("non-error div/rem must be Ok(Int)");
     };
@@ -218,10 +229,11 @@ pub fn ir_div_matches_spec() {
     reject_floor_mutant(x, y, q, r);
 }
 
-/// Same characterisation for `%` (kept as its own harness so the unit table
-/// has a rem row; shares the body of the div proof's obligations).
+/// Same characterisation for `%` (its own harness so the unit table has a
+/// rem row). Bit-width split as in `ir_div_matches_spec`.
 #[kani::proof]
 #[kani::unwind(4)]
+#[kani::solver(kissat)]
 pub fn ir_rem_matches_spec() {
     let x: i64 = kani::any();
     let y: i64 = kani::any();
@@ -231,6 +243,8 @@ pub fn ir_rem_matches_spec() {
         assert_eq!(re, Val::Err, "rem error class");
         return;
     }
+    kani::assume(x >= i16::MIN as i64 && x <= i16::MAX as i64);
+    kani::assume(y >= i16::MIN as i64 && y <= i16::MAX as i64);
     let de = eval_binop(Kind::Div, Val::Int(x), Val::Int(y));
     let (Val::Int(q), Val::Int(r)) = (de, re) else {
         panic!("non-error div/rem must be Ok(Int)");
@@ -258,14 +272,18 @@ pub fn ir_div_mutant_wrong_error_case_is_detected() {
 
 /// MUTANT (wrong rounding direction): see `reject_floor_mutant` — the
 /// characterisation must reject floor-style rounding on the disagree region
-/// (opposite signs, non-zero remainder). Non-vacuous cover of that region.
+/// (opposite signs, non-zero remainder). Bit-width split (i16 image) so the
+/// run is cheap; the disagree region is covered.
 #[kani::proof]
 #[kani::unwind(4)]
+#[kani::solver(kissat)]
 pub fn ir_div_mutant_floor_rounding_is_detected() {
     let x: i64 = kani::any();
     let y: i64 = kani::any();
     kani::assume(y != 0);
     kani::assume(!(x == i64::MIN && y == -1));
+    kani::assume(x >= i16::MIN as i64 && x <= i16::MAX as i64);
+    kani::assume(y >= i16::MIN as i64 && y <= i16::MAX as i64);
     let de = eval_binop(Kind::Div, Val::Int(x), Val::Int(y));
     let re = eval_binop(Kind::Rem, Val::Int(x), Val::Int(y));
     let (Val::Int(q), Val::Int(r)) = (de, re) else {

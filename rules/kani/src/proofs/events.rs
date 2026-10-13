@@ -1430,7 +1430,10 @@ pub fn embers_04_clear_on_exile_blocked() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::unwind(16)]
+// all_players() is a `Range::try_fold` over `0..player_count()`; CBMC does
+// not constant-fold the end across try_fold (TUNING §7/§10), so 16 was a
+// silent cut ("Not unwinding … iteration 16"). 32 covers the 4-seat walk.
+#[kani::unwind(32)]
 pub fn bear_cookie_01_push_is_protocol() {
     {
         world::reset_world(base_world());

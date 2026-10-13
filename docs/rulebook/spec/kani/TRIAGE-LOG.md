@@ -17,13 +17,13 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | general::fever_04_turn_start_iff | UNWINDING 314 s (old base; bound at `guard_needs` 32-loop) | A (bound too low; model loop) | 8×8 chunk `guard_needs` + 8×8 OptInt mask walk in `fill_for_guard` | **SUCCESSFUL 652 s** (unwind 24) |
 | general::fever_04_wrong_turn_noop | UNWINDING 266 s | A | same | **SUCCESSFUL 673 s** (unwind 24) |
 | general::fever_04_not_placed_guard_rejects | UNWINDING 103 s | A | same | **SUCCESSFUL 180 s** (unwind 24) |
-| general::fever_04_mutant_is_detected | SUCCESSFUL 417 s | — | re-verify after model cut | running |
+| general::fever_04_mutant_is_detected | SUCCESSFUL 417 s | — | re-verify after model cut | **SUCCESSFUL 474 s** |
 | general::perfect_01_02_03_iff | SUCCESSFUL 416 s (old base; brief said TIMEOUT) | — | re-verify on current master | pending |
 | hostops_smoke::rent_of_property_table | SUCCESSFUL 185 s (old base; string facade) | — | re-verify + record | pending |
 | teleport::tae_sound_teleport_and_fire_iff | FAILED in `teleport/`, SUCCESSFUL 503 s in `verify-fix1/` after fix | — | re-verify fix on current master | pending |
 | teleport::tae_sound_mutant_extra_fire | SUCCESSFUL 526 s (`verify-fix1/`) | — | re-verify | pending |
-| cond_ops::ir_div_matches_spec | TIMEOUT 1800 s | E (intractable two-divider circuit equivalence) | reformulate (error class + Euclidean characterisation + mutants) | pending |
-| cond_ops::ir_rem_matches_spec | TIMEOUT 1800 s | E | same | pending |
+| cond_ops::ir_div_matches_spec | TIMEOUT 1800 s | E (two-divider circuit equivalence) | reformulate: error class (full width) + truncating-divmod characterisation on the i16 image + kissat; mutants | **SUCCESSFUL 152 s** |
+| cond_ops::ir_rem_matches_spec | TIMEOUT 1800 s | E | same (i16 split + kissat) | **SUCCESSFUL** (see results.tsv) |
 
 
 ## money_shave (next)
@@ -49,3 +49,21 @@ New runs: `/home/monopoly/kani-triage1-results/<tag>/`.
 | heat_head_01_activation_phase_up | FAILED | B/C? | expects phase crystals key == 1 |
 | embers_03_settle_costs_ten_per_copy | FAILED | D? | settle cost 10×copies; OPEN-触发结算 |
 | circle_rebuild_01_activation_five_crystals | FAILED | B/C? | activation five crystals |
+
+### cond_ops reformulation — what is and is not proven
+
+**Proven (Kani, unwinding assertions ON):**
+
+| claim | harness | domain |
+|---|---|---|
+| error class exact (`Err` iff non-Int, `y==0`, or `(MIN,-1)`) for `/` and `%` | `ir_div_rem_error_class_matches_spec` | full i64 / all `Val` |
+| error-ness agrees with `spec_arith` (bit, not Ok value) | same | full |
+| Ok value is the unique truncating divmod: `q*y+r==x`, `\|r\|<\|y\|`, `sign(r)∈{0,sign(x)}` | `ir_div_matches_spec`, `ir_rem_matches_spec` | i16 image of x,y (sign-extended); `MIN/-1` covered as Err at full width |
+| floor-rounding mutant rejected (`sign(r)==sign(x)` fails) | `ir_div_mutant_floor_rounding_is_detected` | i16 image, disagree region covered |
+| wrong-error-case mutant rejected (`MIN/-1` not wrapping `MIN`; `x%0` not `0`) | `ir_div_mutant_wrong_error_case_is_detected` | constants |
+
+**Not proven here:**
+
+* bit-for-bit identity with `spec_arith`'s second `checked_div`/`checked_rem` over the full i64×i64 grid (intractable circuit equivalence; the old form timed out at 1800 s).
+* tree-level `eval_node` composition (covered by `rules-cond/tests/cond_ir_diff.rs` + COND-SINGLE-SOURCE §4).
+* Ok-value characterisation outside the i16 image (the i16 image contains every rounding/sign/bound class; full-width identity remains the differential boundary grid's job).
