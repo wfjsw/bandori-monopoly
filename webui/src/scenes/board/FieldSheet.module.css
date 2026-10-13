@@ -97,7 +97,7 @@
    face's own shadow / background. */
 .slot .card {
   box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
-  background: color-mix(in srgb, var(--own, var(--var(--white))) 12%, var(--var(--white)));
+  background: color-mix(in srgb, var(--own, var(--white)) 12%, var(--white));
 }
 
 /* Live markers in the face's bottom zone -- the part that must read while the

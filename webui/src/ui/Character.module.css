@@ -27,7 +27,7 @@
 .empty::after { content: ""; position: absolute; inset: 20% 26% 0; border-radius: 50% 50% 0 0; background: #cfcfd6; }
 
 .plate { display: block; }
-.cssPlate { display: flex; flex-direction: column; justify-content: center; height: 90px; padding: 0 30px; border-radius: 45px; background: linear-gradient(90deg, var(--plate), color-mix(in srgb, var(--plate) 70%, var(--var(--white)))); color: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); }
+.cssPlate { display: flex; flex-direction: column; justify-content: center; height: 90px; padding: 0 30px; border-radius: 45px; background: linear-gradient(90deg, var(--plate), color-mix(in srgb, var(--plate) 70%, var(--white))); color: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); }
 .cssPlate b { font-size: 36px; line-height: 1.1; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.15); }
 .cssPlate small { font-size: 14px; letter-spacing: 2px; }
 .logo { max-width: 210px; max-height: 92px; object-fit: contain; display: block; }

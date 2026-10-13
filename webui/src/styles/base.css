@@ -41,7 +41,7 @@
   --panel: rgba(246, 242, 243, 0.93);
   --backdrop: #f4e4ea;
   --scrim: rgba(60, 40, 50, 0.38);
-  --line: #ddd;
+  --line: #cdc6ca;
 
   /* ---- radius ---- */
   --r-sm: 6px;
@@ -52,13 +52,13 @@
   --r-pill: 999px;
 
   /* ---- shadow ---- */
-  --shadow: 0 4px 14px rgba(80, 40, 60, 0.12);
-  --card-shadow: 0 3px 8px rgba(80, 40, 60, 0.12);
+  --shadow: 0 0 0 1px rgba(80, 40, 60, 0.12), 0 4px 14px rgba(80, 40, 60, 0.22);
+  --card-shadow: 0 0 0 1px rgba(80, 40, 60, 0.18), 0 3px 8px rgba(80, 40, 60, 0.22);
   --float-shadow: 0 12px 30px rgba(60, 20, 40, 0.28);
   --peek-lift: drop-shadow(0 10px 18px rgba(60, 20, 40, 0.28));
   --pop-shadow: 0 20px 60px rgba(60, 20, 40, 0.3);
-  --lift: 0 4px 0 #d9d9df, 0 6px 14px rgba(0, 0, 0, 0.08);
-  --lift-down: 0 1px 0 #d9d9df;
+  --lift: 0 4px 0 #c4bfc7, 0 6px 14px rgba(0, 0, 0, 0.14);
+  --lift-down: 0 1px 0 #c4bfc7;
 
   /* ---- spacing (4px base) ---- */
   --sp-1: 4px;
