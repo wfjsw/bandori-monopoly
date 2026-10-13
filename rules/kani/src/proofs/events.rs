@@ -1211,8 +1211,11 @@ pub fn heat_head_01_activation_phase_up() {
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(dest == 2, "E-heat-head: keep (dest=Field)");
-    let crystals_key = intern::intern("crystals");
-    let phase = world::with_world(|w| w.key_get(0, crystals_key));
+    // `ctx::set_crystals` writes the **field-instance** counter (`Op::
+    // set_counter_self` → `field_crystals(last_uid)`), not a player key.
+    // Reading `key_get(0, "crystals")` was a harness bug (class B) — it
+    // stayed 0 and the assert failed on the old base.
+    let phase = world::with_world(|w| w.field_crystals(w.last_uid));
     assert!(phase == 1, "E-heat-head-01: phase 1 (add 1d6) is armed");
 }
 
@@ -1227,8 +1230,7 @@ pub fn heat_head_03_phase_end_files_away() {
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
     // First AtEnd: phase 1 → 2.
     invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:超燃甩头"), "AtEnd", "", 0));
-    let crystals_key = intern::intern("crystals");
-    let phase = world::with_world(|w| w.key_get(0, crystals_key));
+    let phase = world::with_world(|w| w.field_crystals(w.last_uid));
     assert!(phase == 2, "E-heat-head-02: first turn end arms phase 2");
     // Second AtEnd: expire.
     let n0 = log_n_of();
@@ -1669,8 +1671,8 @@ pub fn circle_rebuild_01_activation_five_crystals() {
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:协助CiRCLE重建"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(dest == 2, "E-circle-rebuild-01: keep");
-    let crystals_key = intern::intern("crystals");
-    let n = world::with_world(|w| w.key_get(0, crystals_key));
+    // Field-instance crystals (see heat_head_01) — not a player key.
+    let n = world::with_world(|w| w.field_crystals(w.last_uid));
     assert!(n == 5, "E-circle-rebuild-01: five miracle crystals on the instance");
     // CiRCLE tile is BLOCKED-HOST(tile_named) — NO_REWARD arm is a no-op dest.
 }
