@@ -309,7 +309,9 @@ pub enum HostRequest {
         tile: i32,
         price: i32,
     },
-    /// v40: the agent offer's chosen branch (buy / build).
+    /// v40: the agent offer's chosen branch. `kind` names it:
+    /// `0` = buy an unowned tile, `1` = build on an own one, `2` = half-rent
+    /// settle on another player's deed (the agent's 「半价收费的[结算]」).
     AgentOffer {
         player_id: i32,
         agent: i32,

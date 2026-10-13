@@ -3375,16 +3375,22 @@ impl<M: CardModules> RulesBridge<M> {
             kind,
         } => {
             // The chosen branch of the agent offer (the post-pick commit):
-            // buy the unowned tile, or build one level on an own one. `kind`
-            // names the branch the body saw (0 = buy, 1 = build); the engine
-            // re-checks the tile's current state so a commit-pass re-run of
-            // the body -- whose options list the just-committed effect already
-            // reshaped -- cannot double-act (the answer is in the log, so this
-            // arm does not re-execute). HOST-06: answers the branch outcome.
+            // buy the unowned tile, build one level on an own one, or half-rent
+            // another player's deed. `kind` names the branch the body saw
+            // (0 = buy, 1 = build, 2 = half-rent); the engine re-checks the
+            // tile's current state so a commit-pass re-run of the body -- whose
+            // options list the just-committed effect already reshaped -- cannot
+            // double-act (the answer is in the log, so this arm does not
+            // re-execute). HOST-06: answers the branch outcome.
             let p = player_id.max(0) as usize;
             let t = tile.max(0) as usize;
             let did = match kind {
                 1 => cx.card_build(p, t)?,
+                2 => {
+                    // The agent's 「半价收费的[结算]」 on another player's deed.
+                    cx.card_pay_rent(p, t, true)?;
+                    true
+                }
                 _ => cx.card_buy(p, t, 1)?, // `BuyKind::Agent`
             };
             return Ok(did as i32);

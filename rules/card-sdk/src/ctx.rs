@@ -2813,9 +2813,10 @@ pub fn acquire(player_id: i32, from: i32, tile: i32, price: i32) -> bool {
     unsafe { sys::acquire(player_id, from, tile, price) != 0 }
 }
 
-/// The agent offer's chosen branch: buy (`kind = 0`) or build (`kind = 1`)
-/// `tile` from the `agent` tile's colour set. `true` only when that branch
-/// actually committed (HOST-06).
+/// The agent offer's chosen branch: buy (`kind = 0`), build (`kind = 1`) or
+/// half-rent settle on another player's deed (`kind = 2`) for `tile` from the
+/// `agent` tile's colour set. `true` only when that branch actually committed
+/// (HOST-06).
 pub fn agent_offer(player_id: i32, agent: i32, tile: i32, kind: i32) -> bool {
     unsafe { sys::agent_offer(player_id, agent, tile, kind) != 0 }
 }

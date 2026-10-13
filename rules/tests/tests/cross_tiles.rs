@@ -678,7 +678,6 @@ fn t15_kkr_on_circle() {
 
 // 规则书: （soyo）: 「该格获得所有颜色…从在其他颜色的地产商格子触发结算的玩家处收费时，
 // 收费在地产商的减半收费基础上额外减半」.
-#[ignore = "DISCREPANCY: （soyo）混合的颜色 agent half-rent"]
 #[test]
 fn t16_soyo_mixed_colors() {
     let mut t = Table::new(&["长崎素世", "花园多惠"]);

@@ -284,7 +284,8 @@ use alloc::{string::String, vec::Vec};
 ///      records the **tile id** (or -1 for 「不选」) in the answer log, so a
 ///      commit-pass re-run of a body whose options the just-committed host
 ///      effect reshaped still maps the pick to the same tile. `agent_offer` --
-///      the chosen branch (buy / build) as one host routine. `raise` --
+///      the chosen branch (buy `0` / build `1` / half-rent `2`) as one host
+///      routine. `raise` --
 ///      guest-raised trigger points (`circleAffected` from `tile:circle`);
 ///      returns whether the link settled. `gain_typed` -- a bank print through
 ///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
