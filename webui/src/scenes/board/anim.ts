@@ -12,7 +12,9 @@ import type { MatchEvent, MatchView } from "../../core/types";
 import { showEffect } from "./Popups";
 
 /** How long a field card's slot stays lit for its 「效果适用」. */
-const PULSE_MS = 1100;
+const PULSE_MS = 1500;
+/** The same, when the queue is deep: still long enough to slide out and blink. */
+const PULSE_FAST_MS = 800;
 
 /** How long the dice face rolls before it lands. */
 const DICE_ROLL_MS = 10 * 55;
@@ -100,7 +102,7 @@ export class Animator {
   /** A field card's 「效果适用」: instead of the centre face, its slot in the
    *  cards-in-play row slides out and lights up (Master Duel's activated-card
    *  cue). `uid` is the field instance. */
-  pulse: { uid: number; id: number } | null = null;
+  pulse: { uid: number; id: number; ms: number } | null = null;
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
   log: LogLine[] = [];
@@ -292,7 +294,9 @@ export class Animator {
         while (this.pulse && !this.disposed) await sleep(30 / Math.max(1, this.speed));
         if (this.disposed) return;
         this.pulseCard = e.card;
-        this.showPulse(uid, fast, !e.negated);
+        // The queue waits out the whole pulse: two same-name cards light one
+        // after the other, never together.
+        await this.showPulse(uid, fast, !e.negated);
         return;
       }
     }
@@ -333,19 +337,23 @@ export class Animator {
     return null;
   }
 
-  /** Slide the field slot out and light it for its hold. */
-  private showPulse(uid: number, fast: boolean, sound: boolean): void {
+  /** Slide the field slot out and light it; resolves when it has retracted. */
+  private showPulse(uid: number, fast: boolean, sound: boolean): Promise<void> {
     const id = ++this.seq;
-    this.pulse = { uid, id };
+    const ms = (fast ? PULSE_FAST_MS : PULSE_MS) / Math.max(1, this.speed);
+    this.pulse = { uid, id, ms };
     if (!fast && sound) sfx("card_play");
     clearTimeout(this.pulseTimer);
-    const hold = (fast ? 350 : PULSE_MS) / Math.max(1, this.speed);
-    this.pulseTimer = setTimeout(() => {
-      if (this.pulse?.id !== id) return;
-      this.pulse = null;
-      this.bump();
-    }, hold);
     this.bump();
+    return new Promise((resolve) => {
+      this.pulseTimer = setTimeout(() => {
+        if (this.pulse?.id === id) {
+          this.pulse = null;
+          this.bump();
+        }
+        resolve();
+      }, ms);
+    });
   }
 
   /** Put a card face up; `armFlash` starts its hold. */
