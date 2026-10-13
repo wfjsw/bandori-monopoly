@@ -1810,25 +1810,53 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
 
-    // Host neighbor(player, ±1) = tile at pos±1, never a seat in 0..4 for
-    // these positions (9 and 11). So the body's prev/next compares miss and
-    // every non-drawer living seat takes GiveExile 1.
+    // Host `neighbor(p, ±1)` is the next **present player in turn order**
+    // (hostfns `neighbor`), not a tile. For n=4, drawer=0: prev=3, next=1.
+    // Book (data/events.json, 飞鸟山之战):
+    //   「上一位玩家获得2层回合开始时减少一层的[眩晕]」  -> state_add stunStart=2
+    //   「下一位玩家在下个自己的回合结束前不可使用手牌」 -> state_set noHand=2
+    //   「其余玩家获得1层在回合开始时移除的[除外]」       -> give_exile(p,1,-1)
+    // stun/noHand are state keys (`state_add`/`state_set`); only exile is an
+    // `Effect::GiveExile`. The old harness expected a tile-valued neighbor and
+    // 3 exiles — that was a class-B stub assumption, superseded.
+    let stun_key = intern::intern("stunStart");
+    let nohand_key = intern::intern("noHand");
+    let (stun_prev, nohand_next, exile_prev, exile_next) = world::with_world(|w| {
+        (
+            w.key_get(3, stun_key),
+            w.key_get(1, nohand_key),
+            w.key_get(3, intern::intern("exile")),
+            w.key_get(1, intern::intern("exile")),
+        )
+    });
+    assert!(
+        stun_prev == 2,
+        "E-asukayama-02: prev (seat 3) takes 2 [眩晕] (stunStart)"
+    );
+    assert!(
+        nohand_next == 2,
+        "E-asukayama-02: next (seat 1) noHand = 2"
+    );
+    assert!(
+        exile_prev == 0 && exile_next == 0,
+        "E-asukayama-02: prev/next do not take [除外]"
+    );
+
     let mut exiles = 0;
     for e in effects {
         if let Effect::GiveExile { player, n, to } = e {
+            assert!(*player == 2, "E-asukayama-02: the remaining seat (2) takes [除外]");
             assert!(*player != 0, "drawer is not in the 「其余」 loop");
             assert!(*n == 1 && *to == -1, "1 [除外] layer, no named return");
             exiles += 1;
         }
     }
-    kani::cover!(exiles == 3, "three non-drawer seats exiled under the host neighbor model");
+    kani::cover!(exiles == 1, "remaining seat exiled");
     assert!(
-        exiles == 3,
-        "E-asukayama-02 BLOCKED-HOST(neighbor): host neighbor returns a tile, so prev/next \
-         miss every seat and all non-drawers take [除外]; the 2-眩晕 / noHand split is NOT proven"
+        exiles == 1,
+        "E-asukayama-02: exactly one exile (the remaining seat, not prev/next)"
     );
 }
-
 // ===========================================================================
 // Unit table — classification per clause id
 // ===========================================================================

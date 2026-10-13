@@ -89,12 +89,12 @@ Partial, still growing (`events` mid-run). Counts from `results.json` /
 
 | unit | SUCCESSFUL | FAILED | TIMEOUT | UNWINDING | VACUOUS | total | non-success names |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `cond_ops` | 12 | 0 | 2 | 0 | 0 | 14 | TIMEOUT `ir_div_matches_spec`, `ir_rem_matches_spec` |
+| `cond_ops` | 16 | 0 | 0 | 0 | 0 | 16 | div/rem reformulated (error class + i16 trunc-divmod characterisation + mutants) — all SUCCESSFUL |
 | `events` | 5 | 3 | 10 | 4 | 0 | 22 | FAILED `aao_02_hand_veto_is_armed` (confirms LESS), `pico_swap_01_rotates_positions`, `pico_swap_02_skips_exiled_players` (CANDIDATE vs unit PROVEN); UNWINDING `tears_01/02`, `tears_mutant`, `moca_01_activation`, `aao_01_activation`; 10 TIMEOUT |
-| `general` | 22 | 0 | 0 | 3 | 0 | 25 | UNWINDING `fever_04_not_placed_guard_rejects`, `fever_04_turn_start_iff`, `fever_04_wrong_turn_noop` |
-| `hostops_smoke` | 7 | 0 | 0 | 0 | 0 | 7 | — |
-| `money_shave` | 0 | 0 | 3 | 0 | 0 | 3 | TIMEOUT `aya_haruka_02_shave_iff`, `aya_haruka_02_mutant_x_off_by_one`, `aya_haruka_02_mutant_is_detected` |
-| `teleport` | 1 | 1 | 0 | 0 | 0 | 2 | FAILED `tae_sound_teleport_and_fire_iff` |
+| `general` | 25 | 0 | 0 | 0 | 0 | 25 | fever_04_* SUCCESSFUL after 8×8 `guard_needs` / OptInt mask walks |
+| `hostops_smoke` | 7 | 0 | 0 | 0 | 0 | 7 | `rent_of_property_table` re-verified SUCCESSFUL 144 s (string facade) |
+| `money_shave` | 0 | 0 | 3+ | 0 | 0 | 5 | still TIMEOUT (solver-bound); state cut + poorest/not-poorest split added; Vec::extend_with 31 remains |
+| `teleport` | 2 | 0 | 0 | 0 | 0 | 2 | fix confirmed on current master: iff SUCCESSFUL 625 s + mutant 465 s |
 | `verify-fix1` | 2 | 0 | 0 | 0 | 0 | 2 | supersedes `teleport/`: `tae_sound_teleport_and_fire_iff` SUCCESSFUL + mutant |
 | `tile_marks` | 6 | 0 | 0 | 0 | 0 | 6 | — |
 | `tiles` | 14 | 0 | 0 | 0 | 0 | 14 | — |
