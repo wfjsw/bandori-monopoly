@@ -16,16 +16,10 @@ pub const SWEET_ESCAPE: CardDef = CardDef::new(
     &[On::Play("", Some(cant_play), sweet_escape)],
 );
 
-/// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
-/// tile-kind surface is `is_buyable` / `is_shop` / `tile_group`, and the RiNG
-/// deeds are exactly the buyable tiles whose rent table is empty (`rent_of`
-/// falls back to the land price). They never hold houses (`H.WhyNotBuildOn`
-/// rejects `kind == "ring"`).
+/// C# `TileData.kind == "ring"` -- `ctx::is_ring` (ABI v9) reads the board's
+/// `TileKind::Ring` directly.
 fn is_ring(t: i32) -> bool {
-    ctx::is_buyable(t)
-        && ctx::tile_price(t) > 0
-        && ctx::houses_of(t) == 0
-        && ctx::rent_of(t) == ctx::tile_price(t)
+    ctx::is_ring(t)
 }
 
 /// C# `H.PriceTag` -- the tile's 「收费标价」.

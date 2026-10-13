@@ -187,6 +187,7 @@
   "log.agent_none": "{{who}} 停在地产商 {{agent}}（没有同色的地）",
   "log.agent_nothing": "{{who}} 停在地产商 {{agent}}：同色没有符合购买 / 加盖条件的地",
   "log.agent_skip": "{{who}} 在地产商没有选格子",
+  "log.agent_offer_commit": "{{who}} 在地产商 {{agent}} 上确认了对 {{tile}} 的选项（分支 {{kind}}）",
   "log.auction_leftovers": "拍卖出局玩家留下的地契：{{tiles}}{{more}}",
   "log.auction_no_bid": "没有人出价，{{tile}} 还是无主",
   "log.auction_nobody": "没有人能参加 {{tile}} 的竞价",

@@ -387,12 +387,18 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   g21 (祥子 (1) absorbs nothing), g23 ([不可阻挡] still gains [除外] from
   无路矢), g28 (Maya (2)'s kept card does not raise `drew`), g30 (t13's
   stack overflow).
-* **fuzz** (`fuzz_found` 14 tests, 8 open): latent shapes the fuzzer
+* **fuzz** (`fuzz_found` 14 tests, 1 open): latent shapes the fuzzer
   found, filed with minimal repros -- see [COVERAGE.md](COVERAGE.md) "Fuzz
-  coverage". Still open: `unknown_card_id`, `determinism_break`,
-  `save_restore_break`, `negation_not_total`, `multiply_order_matters`,
-  `monotonicity_break`. Un-ignored 2026-10-10 (green): `card_trap_reachable`,
-  `immunity_gap`.
+  coverage". Un-ignored 2026-10-13 (green, `closeout-5-engine`):
+  `unknown_card_id`, `determinism_break`, `save_restore_break`,
+  `negation_not_total`, `monotonicity_break`. Still open:
+  `multiply_order_matters` (MONEY-01 / C-Q1 ruling). Un-ignored 2026-10-10
+  (green): `card_trap_reachable`, `immunity_gap`.
+  * `save_restore_break` root cause: `TurnCtx::plan` (`MoveCtx`) was
+    `#[serde(skip)]`, so a restore dropped card-shaped roll tables and the
+    next roll diverged. Serialized now (`SAVE_VERSION` 7).
+  * `negation_not_total` / `monotonicity_break` were harness gaps (hardcoded
+    counteractor seat; net displacement instead of walk length).
   `returns_prompt_storm` (2026-10-08) is fixed and live: a raw
   `state_set("stun", …)` left a permanent [晕眩] that skipped every later
   turn, and PPP:Returns' 「每回合开始时」 band borrow asked once per skipped

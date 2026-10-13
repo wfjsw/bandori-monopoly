@@ -130,10 +130,12 @@ pub struct TurnSnap {
 /// 100), so a fresh turn would build for free; the manual impl keeps full price.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurnCtx {
-    /// The movement being planned / walked. Runtime-only: it carries roll
-    /// tables, so it never reaches the wire (the broadcast summary is
-    /// `MatchState::plan`).
-    #[serde(skip)]
+    /// The movement being planned / walked. The wire still carries only the
+    /// broadcast summary (`MatchState::plan`); this full context is what
+    /// `Match::save` must round-trip -- a shaped `base` / `dice` table or a
+    /// `steps` fix written by a card lives here and dropping it made
+    /// save/restore diverge on the next roll (`fuzz_found::save_restore_break`).
+    #[serde(default)]
     pub plan: crate::engine::move_ctx::MoveCtx,
     pub player_id: usize,
     pub extra: bool,

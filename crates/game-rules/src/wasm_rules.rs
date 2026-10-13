@@ -3333,7 +3333,7 @@ impl<M: CardModules> RulesBridge<M> {
         }
         HostRequest::AgentOffer {
             player_id,
-            agent: _,
+            agent,
             tile,
             kind,
         } => {
@@ -3345,8 +3345,18 @@ impl<M: CardModules> RulesBridge<M> {
             // options list the just-committed effect already reshaped -- cannot
             // double-act (the answer is in the log, so this arm does not
             // re-execute). HOST-06: answers the branch outcome.
+            // HOST-13: `agent` is kept on the audit line -- which agent tile
+            // offered this branch -- instead of being dropped.
             let p = player_id.max(0) as usize;
             let t = tile.max(0) as usize;
+            cx.log(
+                player_id,
+                Msg::new("log.agent_offer_commit")
+                    .player_id("who", player_id)
+                    .tile("agent", agent)
+                    .tile("tile", tile)
+                    .i("kind", kind as i64),
+            );
             let did = match kind {
                 1 => cx.card_build(p, t)?,
                 2 => {

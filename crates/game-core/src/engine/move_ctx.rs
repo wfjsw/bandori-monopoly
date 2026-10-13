@@ -4,13 +4,15 @@
 //! summary the UI reads is [`MovePlan`] ([`MoveCtx::to_plan`]), which is what
 //! `MatchState::plan` holds.
 
+use serde::{Deserialize, Serialize};
+
 use crate::msg::Msg;
 use crate::state::MovePlan;
 
 /// How the player gets there: exactly one per move -- a walk that travels a
 /// [路径], or a [传送] to its destination. Mirrors `card_sdk::abi::MoveKind`
 /// bit-for-bit.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MoveKind {
     #[default]
     Walk,
@@ -39,7 +41,7 @@ impl MoveKind {
 /// 「+2 to the roll」 effect is expressed, instead of a separate `bonus` field;
 /// the roll total is just the sum of the terms. `why` is the log's parenthetical
 /// for this term.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Roll {
     pub count: i32,
     pub sides: i32,
@@ -72,7 +74,7 @@ impl Roll {
 /// settle step actually read, plus what a card needs to shape the move. The
 /// broadcast summary the UI reads is [`MovePlan`] ([`MoveCtx::to_plan`]),
 /// which is what `MatchState::plan` holds.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MoveCtx {
     // -- who ---------------------------------------------------------------
     pub player_id: usize,

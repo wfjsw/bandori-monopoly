@@ -187,6 +187,7 @@
   "log.agent_none": "{{who}} stopped at dealer {{agent}} (no tile of that colour)",
   "log.agent_nothing": "{{who}} stopped at dealer {{agent}}: no eligible tiles of that colour to buy or build",
   "log.agent_skip": "{{who}} skipped the dealer without picking a tile",
+  "log.agent_offer_commit": "{{who}} committed the dealer {{agent}} offer on {{tile}} (branch {{kind}})",
   "log.auction_leftovers": "Auctioning the deeds {{who}} left behind: {{tiles}}{{more}}",
   "log.auction_no_bid": "No bids -- {{tile}} stays unowned",
   "log.auction_nobody": "Nobody can bid on {{tile}}",
