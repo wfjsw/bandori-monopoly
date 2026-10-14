@@ -766,16 +766,21 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // 1-byte facade strings (`String::from` of a 1-char literal — a real
-    // allocation kani's `__rust_dealloc` accepts; `from_raw_parts` over a
-    // static fails that hook and vacuities the covers).
+    // 1-byte facade strings. `from_raw_parts` over a **real 1-byte
+    // allocation** (not a static — kani's `__rust_dealloc` rejects non-malloc
+    // pointers and that vacuities the covers) keeps `len` the constant 1 so
+    // `String::eq` is a 1-byte `memcmp` (v3 profile: memcmp 0). The
+    // allocation is the system allocator kani tracks.
     fn slot_str(buf: &[u8], i: usize) -> String {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
-        match slot {
-            0 => String::from("\x00"),
-            1 => String::from("\x01"),
-            2 => String::from("\x02"),
-            _ => String::from("\x03"),
+        let layout = core::alloc::Layout::from_size_align(1, 1).unwrap();
+        let p = unsafe { std::alloc::alloc(layout) };
+        if p.is_null() {
+            return String::new();
+        }
+        unsafe {
+            *p = slot;
+            String::from_raw_parts(p, 1, 1)
         }
     }
     // Real slots (branch tree, 0..=3 of them).
