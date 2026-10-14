@@ -53,11 +53,14 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const owner = fc.owner >= 0 ? fc.owner : i;
           const note = fc.note ? fmtMsg(fc.note, names) : "";
           const live = [
-            tr("board.fieldOwner", { who: m.nameOf(owner) }),
             note,
             fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "",
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
+          const pills = [
+            { label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner) },
+            { label: tr("board.pillDesignee", { who: m.nameOf(i) }), color: m.colorOf(i) },
+          ];
           return (
             <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
@@ -70,6 +73,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   className={s.card}
                   title={D.card(fc.card)?.name}
                   note={live}
+                  pills={pills}
                   actions={[]}
                 >
                   {fc.crystals > 0 && <span className={s.crystal}>◆{fc.crystals}</span>}

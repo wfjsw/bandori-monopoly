@@ -12,7 +12,7 @@ import type { CardData } from "../core/types";
 import { Btn } from "./Button";
 import s from "./Card.module.css";
 import { openModal } from "./Modal";
-import { previewFrom, previewHide, stickCard } from "./CardPreview";
+import { previewFrom, previewHide, stickCard, type CardPill } from "./CardPreview";
 import { SkillBody } from "./SkillBody";
 import { t as tr } from "../i18n/t";
 
@@ -135,9 +135,9 @@ function CardDetail({ id, actions, note, close }: { id: string; actions: CardAct
 }
 
 /** CardDetailView: big art, kind + tags, effect text, optional action buttons. */
-export function showCard(id: string, actions: CardAction[] = [], note = ""): () => void {
+export function showCard(id: string, actions: CardAction[] = [], note = "", pills?: CardPill[]): () => void {
   // The standing card panel (board) follows every card the user opens.
-  stickCard(id, note);
+  stickCard(id, note, pills);
   return openModal(cardTitle(id), (close) => <CardDetail id={id} actions={actions} note={note} close={close} />, { size: "wide", key: "card" });
 }
 
@@ -146,6 +146,8 @@ export interface InspectCardProps extends CardFaceProps {
   actions?: CardAction[];
   /** Note for the hover preview and the detail sheet (live state, hand notes). */
   note?: string;
+  /** Owner / designee pills for the hover preview and standing panel. */
+  pills?: CardPill[];
   /** Hover also reports the card id (a select grid's own detail panel). */
   onHover?: (id: string | null) => void;
   /** Skip the floating hover preview (the screen shows its own detail panel). */
@@ -157,9 +159,9 @@ export interface InspectCardProps extends CardFaceProps {
  * the detail sheet. Every card shown in a prompt or a card-collection popup
  * goes through this one component -- no per-call-site wiring.
  */
-export const InspectCard = memo(function InspectCard({ id, actions, note, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
+export const InspectCard = memo(function InspectCard({ id, actions, note, pills, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
   const enter = (el: HTMLElement) => {
-    if (preview) previewFrom(el, id, note);
+    if (preview) previewFrom(el, id, note, pills);
     onHover?.(id);
     onMouseEnter?.(el);
   };
@@ -171,7 +173,7 @@ export const InspectCard = memo(function InspectCard({ id, actions, note, onHove
   return (
     <CardFace
       id={id}
-      onClick={onClick ?? (() => void showCard(id, actions, note))}
+      onClick={onClick ?? (() => void showCard(id, actions, note, pills))}
       onMouseEnter={enter}
       onFocus={enter}
       onMouseLeave={() => leave(onMouseLeave)}
