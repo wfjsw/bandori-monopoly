@@ -902,14 +902,19 @@ export class OnlineSession extends GameSession {
     if (document.visibilityState === "visible") this.resyncClock();
   };
 
-  /** One forced refresh sample (token-bucket rate-limited). */
+  /** A forced refresh (token-bucket rate-limited): a few samples, so a server
+   *  that restarted while we were away (its clock epoch changed) is confirmed
+   *  by two agreeing samples at once instead of waiting for the next refresh. */
   resyncClock(): void {
     if (!resyncLimiter.take()) return;
-    void api.clock(performance.now()).then((r) => {
-      if (r.ok && r.data) {
-        clockSync.refresh({ t1: r.data.t1, t2: r.data.t2, t3: r.data.t3, t4: performance.now() });
+    void (async () => {
+      for (let i = 0; i < 3; i++) {
+        const t1 = performance.now();
+        const r = await api.clock(t1);
+        if (r.ok && r.data) clockSync.refresh({ t1, t2: r.data.t2, t3: r.data.t3, t4: performance.now() });
+        if (i < 2) await new Promise((res) => setTimeout(res, 30));
       }
-    });
+    })();
   }
 
   /**
