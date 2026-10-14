@@ -156,7 +156,7 @@ fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
 /// PROBE (ppcost bisect): world setup only — no body. Must finish quickly
 /// if setup is not the BMC cliff. `assert!(false)` after setup so a SUCCESS
 /// is impossible (fail-closed reachability marker).
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(8)]
 pub fn same_dream_01_probe_setup_only() {
     same_dream_world();
@@ -169,7 +169,7 @@ pub fn same_dream_01_probe_setup_only() {
 
 /// PROBE (ppcost bisect): setup + invoke + `assert!(false)`. FAIL means the
 /// body ran (non-vacuity). TIMEOUT vs setup-only locates the cost.
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn same_dream_01_probe_post_invoke() {
     same_dream_world();
@@ -201,7 +201,7 @@ fn floor_concrete_world() {
     });
 }
 
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_a_concrete_body_only() {
     floor_concrete_world();
@@ -211,7 +211,7 @@ pub fn floor_a_concrete_body_only() {
 }
 
 /// (b) + symbolic money/fans (2 seats), concrete n/user.
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_b_sym_fans_money() {
     floor_concrete_world();
@@ -234,7 +234,7 @@ pub fn floor_b_sym_fans_money() {
 }
 
 /// (c) full sparse_play_world (n_players any in 2..=4, used_seats=2).
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_c_sparse_world() {
     same_dream_world();
@@ -244,7 +244,7 @@ pub fn floor_c_sparse_world() {
 }
 
 /// (d) + snapshot pre/post + effect-log scan.
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_d_snapshot_and_log() {
     same_dream_world();
@@ -266,7 +266,7 @@ pub fn floor_d_snapshot_and_log() {
 }
 
 /// (e) + guard_id! / guard! on a real single-source guard (pay-add).
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_e_guard() {
     same_dream_world();
@@ -280,7 +280,7 @@ pub fn floor_e_guard() {
 }
 
 /// (c1) sparse_play_world but **concrete** user=0.
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_c1_sparse_concrete_user() {
     same_dream_world();
@@ -289,7 +289,7 @@ pub fn floor_c1_sparse_concrete_user() {
 }
 
 /// (c2) concrete world + **symbolic** user in 0..2.
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_c2_concrete_sym_user() {
     floor_concrete_world();
@@ -299,7 +299,7 @@ pub fn floor_c2_concrete_sym_user() {
 }
 
 /// (c3) concrete world + `symbolic_answers = true` (try_resonance ask).
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_c3_sym_answers() {
     floor_concrete_world();
@@ -309,7 +309,7 @@ pub fn floor_c3_sym_answers() {
 }
 
 /// (f) + full spec compare (the iff asserts, minus covers).
-#[kani::proof]
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
 #[kani::unwind(32)]
 pub fn floor_f_spec_compare() {
     same_dream_world();

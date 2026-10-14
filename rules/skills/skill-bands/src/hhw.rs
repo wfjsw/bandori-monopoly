@@ -130,3 +130,9 @@ pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
 pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
     before_build(player_id)
 }
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn on_pay_choose_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay_choose(player_id)
+}

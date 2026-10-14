@@ -31,7 +31,7 @@ function fade(el: HTMLAudioElement, to: number, then?: () => void): void {
   const start = performance.now();
   const step = (t: number) => {
     const k = Math.min(1, (t - start) / (FADE * 1000));
-    el.volume = from + (to - from) * k;
+    el.volume = Math.min(1, Math.max(0, from + (to - from) * k));
     if (k < 1) requestAnimationFrame(step);
     else then?.();
   };

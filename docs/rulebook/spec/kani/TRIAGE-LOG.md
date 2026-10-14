@@ -1076,3 +1076,118 @@ sumimi, alphabetical). Times in the 130–300 s band match the ppcost floor
 mygo → ras → skills_* → sumimi. Accumulator
 `/home/monopoly/kani-bands-b-results/results-all.tsv`.
 `cargo build -p rules-kani` + `cargo test -p rules-kani` ×3 green (85 tests).
+## bands-a — concrete-user rollout for ppp / r / ag / hhw + skills_* (branch `kani-bands-a`)
+
+Worktree `/home/monopoly/kani-bands-a-wt`. Propagates the ppcost FLOOR fix
+(symbolic player index is the BMC cliff) across the band units.
+
+### Pattern applied (per ppcost / worked example `proofs/pp.rs` same_dream)
+
+1. `n_players = 2` sparse world (`harness::sparse_play_world`).
+2. Iff harnesses are `*_iff_at(user)` called from two `#[kani::proof]`s with
+   `user = 0` and `user = 1` (clause seat-symmetric 「自己的」). Mutants use a
+   single concrete user. Multi-seat clauses (e.g. `moca_02` owner+src) keep a
+   concrete pair and say so.
+3. Per-body `host_subset!` listing only the ops the unmodified body reaches;
+   outside → `outside_subset` loud FAIL.
+4. Direct `*_kani` body calls (one body in CBMC's call graph).
+5. Composed final-state assertions; covers kept; mutant companions kept.
+6. Fail-closed: no `#[ignore]`, no spec weakening, no silent zeros.
+
+### Host-model changes (small commits, cherry-pickable)
+
+| commit | what |
+|---|---|
+| `host: extract arm_*` | ~50 `arm_*` single-source handlers for `host_subset!` (packing-aware splits for `set_self_prop` / `counter_self` / `add_counter_*`). `dispatch` unchanged (minimal for kani-bands-b). |
+| fire arms | `arm_fire` / `arm_fire_max` / `arm_gain_fire` / `arm_spend_fire` |
+| `arm_inc_slot` | named keyed increment |
+| World `Clone` | proofs read pre-state without a full-struct assign |
+| missing `*_kani` wrappers | popipapapipopa, returns::on_played, aya_with, arisa_bonsai::at_turn_end, poppin::{on_pass,lock_hill}, hhw::on_pay_choose |
+| `run.sh` features | ppp/skills_* pull in `skills-characters`+`skills-bands` so `card_id!` resolves |
+
+### Formula-harness fixes (class A/B)
+
+| id | class | action | after |
+|---|---|---|---|
+| `ppp::door_01_sequence_const` | **A** bound-low (10×60 scan) | `board::tile_named` | **SUCCESSFUL** |
+| `skills_pp::band_idol_02_overflow_formula` | **B** mutant check in agreeing range | disagree when `x-down >= 11` | **SUCCESSFUL** |
+| `skills_ag::firepot_01_tick_formula` | **B** mutant check | disagree exactly at rest 1 | **SUCCESSFUL** |
+| `ppp::maze_01_distance_predicate` | — | (already sound) | **SUCCESSFUL** |
+| `skills_ag::band_01_filter_formula` | — | | **SUCCESSFUL** |
+| `skills_hhw::skills_hhw_smoke_cover` | — | | **SUCCESSFUL** |
+
+### Conversion status (code) vs run status
+
+| unit | conversion | harnesses (approx) | runs |
+|---|---|---:|---|
+| `ppp` | done (concrete user + subset + direct) | 41 | formula rows done; body rows queued (serial CBMC) |
+| `r` | subagent | ~20 | not yet |
+| `ag` | subagent | ~20 | not yet |
+| `hhw` | subagent | ~20 | not yet |
+| `skills_pp` | done | 17 | formula rows done |
+| `skills_ppp` | done (direct + subset; owner already 0) | ~25 | not yet |
+| `skills_r` | done | 10 | not yet |
+| `skills_ag` | done | 10 | formula rows done |
+| `skills_hhw` | done | 20 | smoke done |
+
+Body-row runs are serial (`--jobs 1`, timeout 1800 s, one CBMC at a time,
+slot cap 2 shared with kani-bands-b). Representative body timing from the
+pattern's worked example (pp same_dream): SUCCESSFUL ~560 s per seat.
+
+**First body-row results (this pass):**
+
+| harness | verdict | time | notes |
+|---|---|---:|---|
+| `skills_r::sayo_fire_pass_iff` | **FAILED** | 190.8 s | BMC **returns** (pattern works). Assert `GainFire 2 or 3` fails — log is not exactly one GainFire. Class B/C under investigation (fire_max clamp / body path / log shape). Not skipped. |
+| `skills_r::rinko_fire_pass_iff` | **SUCCESSFUL** | 154.1 s | first green body proof under the pattern |
+| `skills_r::lisa_fire_pass_iff` | queued | | |
+| `skills_ag::firepot_01_tick_iff` | queued | | |
+
+All other body rows (ppp 30, r 32, ag 30, hhw 30, skills_* ~60) are converted
+and queued behind the serial CBMC. Formula rows above are complete.
+
+### Genuine discrepancies (class D)
+
+None newly found in this pass. `aao_02` (triage2, class D E-aao-02) remains
+FAILING on master and is out of bands-a's units.
+
+### Soundness kept
+
+Unwinding assertions ON. No `#[ignore]`. No allowlist. No weakened specs.
+`outside_subset` / untagged `name_id` FAIL loudly. Production `cfg(not(kani))`
+untouched.
+
+### bands-a stub audit — every `arm_plan_stub` use (coordinator soundness follow-up)
+
+A silent-0 stub is only acceptable when the body **provably never** calls the
+op. Otherwise: real arm, or loud `outside_subset`. `arm_plan_stub` is renamed
+`arm_protocol_stub` and documented as "matches `dispatch`'s benign-0 PROTOCOL
+arm" — not a stand-in for real semantics.
+
+| unit::subset | op(s) | body calls? | decision |
+|---|---|---|---|
+| ppp::ppp_dispatch | `unplace_card\|unplace_at\|unplace_card_named` | **yes** (`returns.rs`) | **real** `arm_unplace` (pushes `Effect::UnplaceCard`) |
+| ppp::ppp_dispatch | `targeted_count` | no | `arm_protocol_stub` (dispatch is benign-0) |
+| ppp::ppp_dispatch | plan/settle/offer list (`set_steps`, `set_resolve`, `card_offer_build`, `can_build_on`, …) | **yes** (signpost/star_beat/bang_dream/…) | `arm_protocol_stub` — these ARE the dispatch PROTOCOL-0 arms (KANI.md §6). Not silent stand-ins. |
+| ppp::ppp_dispatch | `card_move` | **yes** | **real** `arm_card_move` (returns 1) |
+| r::ako_dark_dispatch | `play_from_hand` | **yes** (`ako_dark.rs`) | `arm_protocol_stub` (dispatch returns 0 = not-from-hand). **TODO(规则书)** if a proof needs the from-hand path (polarity-sensitive; 0 skips that leg). |
+| r::nfo_play_dispatch | `set_steps\|set_resolve` | **yes** (`nfo.rs`) | `arm_protocol_stub` (PROTOCOL-0) |
+| r::nfo_play_dispatch | `card_move` | **yes** | **real** `arm_card_move` |
+| r::nfo_play_dispatch | `card_replayable\|play_card` | **yes** (`nfo.rs` replay) | `arm_protocol_stub` (0 = not replayable / did not land) |
+| r::council_dispatch | `linger` | yes | `arm_protocol_stub` (PROTOCOL-0) |
+| skills_*::\* | `state_add` | **yes** (rinko_1cm/lisa_goddess/…) | **real** `arm_inc_slot` (same keyed-add as dispatch) |
+| skills_ag::skills_ag_dispatch | `trig_target` | **yes** (`trigger::target`) | **real** `arm_trig_target` |
+| skills_ag::skills_ag_dispatch | `place_mark` | **yes** (tae_police/hagumi) | **real** `arm_place_mark` |
+| skills_pp/hhw/ppp | `card_move` | yes | **real** `arm_card_move` |
+| skills_pp/hhw/ppp | `card_offer_build\|can_build_on\|offer_*\|buy\|acquire` | rimi_resolve offers | `arm_protocol_stub` (PROTOCOL-0 / 0=did-not-land) |
+| hhw::\* | plan setters (`set_kind`, `set_steps`, dice, …) | yes (balloon/hagumi) | `arm_protocol_stub` (PROTOCOL-0) |
+
+**Removed from subsets** (not listed → `outside_subset` loud FAIL if reached):
+none in this pass beyond the above reclassifications. Prefer listing an op
+over stubbing it when unsure.
+
+**Class C found and fixed in this audit:** `state_get`/`state_set` were
+`arm_plan_stub` (silent 0) while `ran_red::tick` writes `REST_TURNS` via
+`state::set` — the rest counter never moved and the iff failed for the wrong
+reason. Replaced with real `arm_state_get` / `arm_state_set` (commits `944dcf5`,
+`bc2e730`).

@@ -111,3 +111,15 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
+    pass_tile(player_id)
+}
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn pay_choose_kani(player_id: i32) -> card_sdk::Asked {
+    pay_choose(player_id)
+}

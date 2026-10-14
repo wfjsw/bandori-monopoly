@@ -64,6 +64,10 @@ pub mod bot_cost {
 /// every machine.
 pub const DEFAULT_FUEL: u64 = 5_000_000;
 
+/// Fuel for the one-off `bandori_metadata` export, which builds the whole
+/// roster (every card, character and band) and so dwarfs a single effect run.
+const METADATA_FUEL: u64 = 500_000_000;
+
 /// Maximum `play_card` nesting (card A plays B plays C ...).
 pub const MAX_NESTING: u32 = 8;
 
@@ -2350,6 +2354,7 @@ fn inspect(
     // on fixtures that declare no `.meta()`. Built only when this is called.
     let mut meta = card_sdk::meta::MetaDoc::default();
     if has_func(&inst, &mut store, export::METADATA) {
+        set_fuel(&mut store, METADATA_FUEL).map_err(load)?;
         let packed = inst
             .get_typed_func::<(), i64>(&mut store, export::METADATA)
             .and_then(|f| f.call(&mut store, ()))

@@ -288,10 +288,10 @@ PY
 unit_features() {
   case "$1" in
     pp|money_shave|prompt) echo "band-pp" ;;
-    ppp|teleport) echo "band-ppp" ;;
-    r) echo "band-roselia" ;;
-    ag) echo "band-ag" ;;
-    hhw) echo "band-hhw" ;;
+    ppp|teleport) echo "band-ppp,skills-characters,skills-bands" ;;
+    r) echo "band-roselia,skills-characters,skills-bands" ;;
+    ag) echo "band-ag,skills-characters,skills-bands" ;;
+    hhw) echo "band-hhw,skills-characters,skills-bands" ;;
     mor) echo "band-morfonica" ;;
     ras) echo "band-ras" ;;
     mygo) echo "band-mygo" ;;
@@ -300,11 +300,11 @@ unit_features() {
     sumimi) echo "band-sumimi,skills-characters" ;;
     events) echo "events" ;;
     tiles|tile_marks) echo "tiles" ;;
-    skills_pp) echo "band-pp,skills-characters" ;;
-    skills_ppp) echo "band-ppp,skills-bands" ;;
-    skills_r) echo "band-roselia,skills-bands" ;;
-    skills_ag) echo "band-ag,skills-bands" ;;
-    skills_hhw) echo "band-hhw,skills-bands" ;;
+    skills_pp) echo "band-pp,skills-characters,skills-bands" ;;
+    skills_ppp) echo "band-ppp,skills-characters,skills-bands" ;;
+    skills_r) echo "band-roselia,skills-characters,skills-bands" ;;
+    skills_ag) echo "band-ag,skills-characters,skills-bands" ;;
+    skills_hhw) echo "band-hhw,skills-characters,skills-bands" ;;
     skills_mor) echo "band-morfonica,skills-bands,skills-characters" ;;
     skills_ras) echo "band-ras,skills-characters" ;;
     skills_mygo) echo "band-mygo,skills-bands" ;;
