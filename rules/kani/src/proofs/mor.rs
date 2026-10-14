@@ -886,13 +886,13 @@ fn toko_swap_iff_at(user: i32) {
 }
 
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(64)]
 pub fn toko_swap_iff_blocked_host() {
     toko_swap_iff_at(0);
 }
 
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(64)]
 pub fn toko_swap_user1_iff_blocked_host() {
     toko_swap_iff_at(1);
 }
