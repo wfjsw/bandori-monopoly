@@ -3,8 +3,14 @@
 //! Spec source is `crate::spec::skills_pp` (sheet text only).
 //! Isolation: no `skillBlock` token; band id is symbolic where the clause
 //! needs both branches.
+//!
+//! Concrete-user pattern (TRIAGE-LOG `ppcost`): symbolic player index is a
+//! BMC cliff. `n_players = 2`, iff harnesses are `*_iff_at(user)` called from
+//! seat-0 and seat-1 proofs. Direct `*_kani` body calls. Per-body host-op
+//! subset (outside → loud FAIL).
 
 use crate::host;
+use crate::harness::{self, SparsePlay};
 use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
@@ -12,43 +18,76 @@ use crate::world::{self, Effect, World, MAX_PLAYERS};
 const FANS_UP: &str = "P✽P粉丝(正)";
 const FANS_DOWN: &str = "P✽P粉丝(反)";
 
-fn symbolic_skill_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
-        w.out[p] = false;
-        w.fans_pos[p] = kani::any();
-        kani::assume(w.fans_pos[p] >= 0 && w.fans_pos[p] <= 20);
-        w.fans_neg[p] = kani::any();
-        kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
-        w.hand_resonance[p] = 0;
-        w.key_set(p as i32, crate::intern::intern(FANS_UP), w.fans_pos[p]);
-        w.key_set(p as i32, crate::intern::intern(FANS_DOWN), w.fans_neg[p]);
-    }
-    w.symbolic_answers = true;
-    w
+// Ops the aya_with / pastel skill bodies reach.
+crate::host_subset!(skills_pp_dispatch {
+    log | effect => arm_log,
+    gain | gain_typed | gain_fixed => arm_gain,
+    money => arm_money,
+    add_held => arm_add_held,
+    count_held | count_held_name => arm_count_held,
+    set_held_name => arm_set_held_name,
+    place_card_at => arm_place_card,
+    set_dest => arm_set_dest,
+    add_band_crystals => arm_add_band_crystals,
+    band_crystals => arm_band_crystals,
+    counter_self => arm_counter_self,
+    add_counter_self => arm_add_counter_self,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    character_is => arm_character_is,
+    in_band => arm_in_band,
+    ask => arm_ask,
+    hand_count => arm_hand_count,
+    take_card => arm_take_card,
+    draw => arm_draw,
+    add_to_deck | add_to_deck_at => arm_add_to_deck_at,
+    slot => arm_slot,
+    set_slot => arm_set_slot,
+    inc_slot => arm_inc_slot,
+    state_get | state_set | state_add => arm_plan_stub,
+    raise => arm_raise,
+    gate => arm_gate,
+    set_steps | set_resolve | set_stop_at | schedule_turn_end | linger
+    | card_move | card_offer_build | can_build_on => arm_plan_stub,
+});
+
+/// Sparse 2-seat world + skills_pp subset. `user` ∈ {0, 1} concrete.
+fn skills_pp_world(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    host::install_backend(skills_pp_dispatch);
+    harness::sparse_play_world(SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    let up = crate::intern::intern(FANS_UP);
+    let down = crate::intern::intern(FANS_DOWN);
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.symbolic_answers = true;
+        // Pin owner as Pastel✽Palettes + 丸山彩 so band_is guards admit
+        // (the sparse world leaves character/band at 0). Overwritten per-harness
+        // when a different character is under proof.
+        w.band_id[user as usize] = crate::intern::intern("Pastel✽Palettes").0;
+        w.character_id[user as usize] = crate::intern::intern("丸山彩").0;
+        w.hand_resonance = [0; MAX_PLAYERS];
+        for p in 0..2 {
+            w.key_set(p as i32, up, w.fans_pos[p]);
+            w.key_set(p as i32, down, w.fans_neg[p]);
+        }
+    });
 }
 
-fn any_player_in(w: &World) -> i32 {
-    let p: i32 = kani::any();
-    kani::assume(p >= 0 && p < w.n_players);
-    p
+fn effects_slice() -> ([Effect; 32], usize) {
+    world::with_world(|w| (w.log, w.log_n))
 }
 
-// ===========================================================================
-// C-PP-aya-with-01 (representative of the shared (1) 5-fan half)
-// 「（1）游戏开始后获得5个正面[P✽P粉丝]，…」
-// ===========================================================================
+/// Shared iff body at a concrete seat (ppcost).
+fn aya_with_01_five_fans_iff_at(user: i32) {
+    let me = user;
 
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn aya_with_01_five_fans_iff() {
-    let mut w = symbolic_skill_world();
-    let me = any_player_in(&w);
+    skills_pp_world(me);
+    let mut w = world::with_world(|ww| ww.clone());
     // Pin the owner as a Pastel✽Palettes character so the hook's guard admits.
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     w.character_id[me as usize] = crate::intern::intern("丸山彩").0;
@@ -92,7 +131,7 @@ pub fn aya_with_01_five_fans_iff() {
         return;
     }
 
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 0, me)  /* Hook DeckAtGameStart */);
+    invoke::unwrap_done(skill_characters::aya_with::at_start_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.fans_pos[me as usize] == spec::skills_pp::char_start_five_fans(pre_pos),
@@ -118,17 +157,31 @@ pub fn aya_with_01_five_fans_iff() {
         "C-PP-aya-with-01: exactly one +5 AddToken on the owner"
     );
 }
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn aya_with_01_five_fans_iff() {
+    aya_with_01_five_fans_iff_at(0);
+}
+
+/// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn aya_with_01_five_fans_user1_iff() {
+    aya_with_01_five_fans_iff_at(1);
+}
+
 
 /// MUTANT: +4 fans.
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn aya_with_01_mutant_is_detected() {
-    let mut w = symbolic_skill_world();
-    let me = any_player_in(&w);
+    let me = 0i32;
+    skills_pp_world(me);
+    let mut w = world::with_world(|ww| ww.clone());
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre_pos = w.fans_pos[me as usize];
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 0, me)  /* Hook DeckAtGameStart */);
+    invoke::unwrap_done(skill_characters::aya_with::at_start_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.fans_pos[me as usize] != spec::skills_pp::char_start_five_fans_mutant(pre_pos),
@@ -143,11 +196,12 @@ pub fn aya_with_01_mutant_is_detected() {
 // Isolation: the actor is a PP character (flip_others branch); no skillBlock.
 // ===========================================================================
 
-#[kani::proof]
-#[kani::unwind(32)]
-pub fn aya_with_02_pay_discount_iff() {
-    let mut w = symbolic_skill_world();
-    let me = any_player_in(&w);
+/// Shared iff body at a concrete seat (ppcost).
+fn aya_with_02_pay_discount_iff_at(user: i32) {
+    let me = user;
+
+    skills_pp_world(me);
+    let mut w = world::with_world(|ww| ww.clone());
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let up = w.fans_pos[me as usize];
     let pre_amount = kani::any();
@@ -157,7 +211,7 @@ pub fn aya_with_02_pay_discount_iff() {
     w.pay_amount = pre_amount;
     world::reset_world(w);
 
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
+    invoke::unwrap_done(skill_characters::aya_with::on_pay_kani(me));
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize]; // fans flipped reverse
     kani::cover!(y > 0, "chose some Y");
@@ -176,13 +230,27 @@ pub fn aya_with_02_pay_discount_iff() {
         "C-PP-aya-with-02: Y positives flipped reverse"
     );
 }
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn aya_with_02_pay_discount_iff() {
+    aya_with_02_pay_discount_iff_at(0);
+}
+
+/// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn aya_with_02_pay_discount_user1_iff() {
+    aya_with_02_pay_discount_iff_at(1);
+}
+
 
 /// MUTANT: discount Y*99.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn aya_with_02_mutant_is_detected() {
-    let mut w = symbolic_skill_world();
-    let me = any_player_in(&w);
+    let me = 0i32;
+    skills_pp_world(me);
+    let mut w = world::with_world(|ww| ww.clone());
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let up = w.fans_pos[me as usize];
     kani::assume(up >= 1);
@@ -192,7 +260,7 @@ pub fn aya_with_02_mutant_is_detected() {
     w.trig_value = pre_amount;
     w.pay_amount = pre_amount;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
+    invoke::unwrap_done(skill_characters::aya_with::on_pay_kani(me));
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize];
     if y >= 1 {
@@ -237,13 +305,14 @@ pub fn band_idol_02_overflow_formula() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn band_idol_02_body_never_overflows() {
-    let mut w = symbolic_skill_world();
-    let me = any_player_in(&w);
+    let me = 0i32;
+    skills_pp_world(me);
+    let mut w = world::with_world(|ww| ww.clone());
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let down = w.fans_neg[me as usize];
     kani::assume(down >= 1);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("skill:Pastel✽Palettes:与偶像一起"), me));
+    invoke::unwrap_done(skill_bands::pastel::at_start_kani(me));
     // Book allows crystals = min(X - down, 10) when X > down. The body's
     // prompt max is `have`, so X > down is impossible and no AddCounter
     // overflow is produced. Assert the gap is reachable in the *spec*:
@@ -262,11 +331,12 @@ pub fn band_idol_02_body_never_overflows() {
 // 「（4）回合开始时此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡。」
 // ===========================================================================
 
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn band_idol_04_tick_iff() {
-    let mut w = symbolic_skill_world();
-    let me = any_player_in(&w);
+/// Shared iff body at a concrete seat (ppcost).
+fn band_idol_04_tick_iff_at(user: i32) {
+    let me = user;
+
+    skills_pp_world(me);
+    let mut w = world::with_world(|ww| ww.clone());
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre = kani::any();
     kani::assume(pre >= 0 && pre <= 10);
@@ -275,7 +345,7 @@ pub fn band_idol_04_tick_iff() {
     w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
     w.trig_player = me;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Pastel✽Palettes:与偶像一起"), 1, me)  /* Hook TurnStartBefore */);
+    invoke::unwrap_done(skill_bands::pastel::at_turn_start_kani(me));
     let post = world::snapshot();
     let _ = post;
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
@@ -289,6 +359,19 @@ pub fn band_idol_04_tick_iff() {
         "C-PP-band-idol-04: +1, optionally -5 and draw 1"
     );
 }
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_idol_04_tick_iff() {
+    band_idol_04_tick_iff_at(0);
+}
+
+/// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_idol_04_tick_user1_iff() {
+    band_idol_04_tick_iff_at(1);
+}
+
 
 // ===========================================================================
 // C-PP-hina-lottery-02 borrow map (pure)
@@ -375,11 +458,12 @@ pub fn chisato_frank_02_formula() {
 // C-PP-band-idol-01 fan grant (pure count) + body hook.
 // ===========================================================================
 
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn band_idol_01_start_grant_iff() {
-    let mut w = symbolic_skill_world();
-    let me = any_player_in(&w);
+/// Shared iff body at a concrete seat (ppcost).
+fn band_idol_01_start_grant_iff_at(user: i32) {
+    let me = user;
+
+    skills_pp_world(me);
+    let mut w = world::with_world(|ww| ww.clone());
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     // Place the band card so `placed_cards` finds it (first copy).
     world::reset_world(w);
@@ -399,7 +483,7 @@ pub fn band_idol_01_start_grant_iff() {
         ww.next_uid = 2;
     });
     let pre_down = world::with_world(|ww| ww.fans_neg);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Pastel✽Palettes:与偶像一起"), 0, me)  /* Hook DeckAtGameStart */);
+    invoke::unwrap_done(skill_bands::pastel::at_start_kani(me));
     let post_down = world::with_world(|ww| ww.fans_neg);
     for p in 0..MAX_PLAYERS {
         let is_pp = world::with_world(|ww| {
@@ -418,6 +502,19 @@ pub fn band_idol_01_start_grant_iff() {
         }
     }
 }
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_idol_01_start_grant_iff() {
+    band_idol_01_start_grant_iff_at(0);
+}
+
+/// Seat 1 (seat-symmetric 「自己的」; symbolic user is a BMC cliff).
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_idol_01_start_grant_user1_iff() {
+    band_idol_01_start_grant_iff_at(1);
+}
+
 
 // ===========================================================================
 // C-PP-band-idol-03 no CiRCLE reward — the clause is a prohibition on the
