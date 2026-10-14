@@ -1042,14 +1042,15 @@ fn bangdream_chan_stays_until_the_drawer_third_turn_start() {
 }
 
 // 免费时间 = `bonus_time`, 恢复时间 = `base_time`: while the event is up each
-// turn starts with 5 s / 0 s; once it is filed away the defaults come back.
+// turn starts with 5 s 免费时间 and no 恢复时间 added (the pool is not reset);
+// once it is filed away the refill comes back.
 #[test]
 fn bangdream_chan_shortens_the_clocks() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "元祖！邦多利酱", &[]);
     pass(&mut t, 0);
     until_turn(&mut t, 1);
-    assert_eq!((t.st().base_time, t.st().bonus_time), (0.0, 5.0), "{:?}", t.st().event_active);
+    assert_eq!((t.st().base_time, t.st().bonus_time), (15.0, 5.0), "{:?}", t.st().event_active);
     until_turn(&mut t, 0);
     pass(&mut t, 0);
     until_turn(&mut t, 0);

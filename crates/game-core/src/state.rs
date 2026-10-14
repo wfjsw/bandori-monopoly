@@ -532,6 +532,9 @@ pub mod prop {
     /// Turn-clock override: `base_time` (恢复时间) = value - 1 seconds, `0` =
     /// none. Mirrors `card_sdk::abi::prop::BASE_TIME_SET`.
     pub const BASE_TIME_SET: &str = "baseTimeSet";
+    /// Turn-clock override: the `base_time` refill = value - 1 seconds, `0` =
+    /// none. Mirrors `card_sdk::abi::prop::BASE_TIME_REFILL_SET`.
+    pub const BASE_TIME_REFILL_SET: &str = "baseTimeRefillSet";
     /// As [`BASE_TIME_SET`] for `bonus_time` (免费时间). Mirrors
     /// `card_sdk::abi::prop::BONUS_TIME_SET`.
     pub const BONUS_TIME_SET: &str = "bonusTimeSet";
