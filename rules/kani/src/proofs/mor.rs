@@ -583,13 +583,23 @@ fn courage_world(user: i32) {
 }
 
 /// Own every tile at the other living seat so the pay branch is taken whenever
-/// the agent bit does not misfire.
+/// the agent bit does not misfire. 8×8 chunk walk (TUNING) keeps the unwind
+/// bound at 8 instead of the 60-trip `0..60` (class A at unwind 32).
 fn courage_world_owned(user: i32) {
     courage_world(user);
     let owner = 1 - user;
     world::with_world_mut(|w| {
-        for t in 0..60 {
-            w.tiles[t].owner = owner;
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < 60 {
+                    w.tiles[i].owner = owner;
+                }
+                k += 1;
+            }
+            outer += 1;
         }
     });
 }

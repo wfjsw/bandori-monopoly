@@ -72,11 +72,10 @@ pub fn rui_demon_01_effects_ok(
     true
 }
 
-/// Post money: every other living seat loses 100 and gains 300 (net +200 to
-/// the user from each); the user pays 100 per other and receives 300 per other.
-/// `pay_to` floors at 0 / saturates, so the post is the host's arithmetic; the
-/// clause pins the face-value legs. We check the **face-value** deltas when no
-/// floor/saturate fires (pre money large enough).
+/// Post money. 规则书: 「向全场玩家支付100资金…之后全场玩家向你支付300资金」 —
+/// the user pays 100 to each other, then each other pays 300 to the user.
+/// Other: +100 (saturating receiver) then -300 (floored payer).
+/// User: -100 per other (floored) then +300 per other (saturating).
 pub fn rui_demon_01_post_ok(
     post: &Snapshot,
     pre: &Snapshot,
@@ -85,23 +84,19 @@ pub fn rui_demon_01_post_ok(
     out: &[bool; MAX_PLAYERS],
 ) -> bool {
     let p = player as usize;
-    let mut want_user = pre.money[p];
     for q in 0..n_players {
         let q = q as usize;
         if (q as i32) == player || out[q] {
             continue;
         }
-        want_user = want_user - 100 + 300;
-        // Other: -100 + 300, floored at 0 on the 100 leg then +300.
-        // The host does (m-100).max(0) then +300.
+        // Other: receives 100, then pays 300 (floored).
         let m0 = pre.money[q];
-        let want_other = (m0 - 100).max(0) + 300;
+        let want_other = (m0.saturating_add(100) - 300).max(0);
         if post.money[q] != want_other {
             return false;
         }
     }
-    // User's 100-outs also floor: (m-100).max(0) per leg, then +300 per leg.
-    // Recompute leg-by-leg in seat order to match the body.
+    // User: pays 100 per other (floored), then receives 300 per other.
     let mut m = pre.money[p];
     for q in 0..n_players {
         let q = q as usize;
@@ -117,7 +112,6 @@ pub fn rui_demon_01_post_ok(
         }
         m = m.saturating_add(300);
     }
-    let _ = want_user;
     post.money[p] == m
 }
 

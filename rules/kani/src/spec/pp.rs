@@ -347,6 +347,8 @@ pub fn ranger_05_draw(count: i32) -> i32 {
 
 /// Effects: PlaceCard(Field) + Draw(1). `add_to_deck` is silent in the
 /// effect log (host does not record it); post-state covers that half.
+/// SetState from the 持续 stacks stamp (`set_slot`) is bookkeeping, not a
+/// clause effect — ignored (class B: the exact-match originally rejected it).
 pub fn no_expect_02_effects_ok(effects: &[Effect], player: i32) -> bool {
     let mut place = 0;
     let mut draw = 0;
@@ -360,6 +362,7 @@ pub fn no_expect_02_effects_ok(effects: &[Effect], player: i32) -> bool {
             Effect::Draw {
                 player: p, n: 1, ..
             } if *p == player => draw += 1,
+            Effect::SetState { .. } => {}
             _ => return false,
         }
     }
@@ -389,6 +392,8 @@ pub fn shine_again_01_fan() -> i32 {
 // ===========================================================================
 
 /// Place + Draw(1). Deck insert is silent in the effect log.
+/// SetToken from the 持续 skill-block stamp (`set_tok`) is bookkeeping —
+/// ignored (class B: the exact-match originally rejected it).
 pub fn first_accident_01_effects_ok(effects: &[Effect], player: i32) -> bool {
     let mut place = 0;
     let mut draw = 0;
@@ -402,6 +407,7 @@ pub fn first_accident_01_effects_ok(effects: &[Effect], player: i32) -> bool {
             Effect::Draw {
                 player: p, n: 1, ..
             } if *p == player => draw += 1,
+            Effect::SetToken { .. } => {}
             _ => return false,
         }
     }
