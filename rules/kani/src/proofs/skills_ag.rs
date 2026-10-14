@@ -4,11 +4,53 @@
 //! ran (2)'s fire spend. OPEN / PROTOCOL halves are listed in
 //! `docs/rulebook/spec/kani/ag.md` and not faked here.
 
+use crate::harness::{self, SparsePlay};
 use crate::host;
 use crate::intern;
 use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
+
+// Ops the ran_red / moca_self skill bodies reach.
+crate::host_subset!(skills_ag_dispatch {
+    log | effect => arm_log,
+    gain | gain_typed | gain_fixed => arm_gain,
+    money => arm_money,
+    pay => arm_pay,
+    gain_fire => arm_gain_fire,
+    fire => arm_fire,
+    fire_max => arm_fire_max,
+    spend_fire => arm_spend_fire,
+    teleport_to => arm_teleport_to,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    player_pos => arm_player_pos,
+    in_band => arm_in_band,
+    character_is => arm_character_is,
+    add_held => arm_add_held,
+    count_held | count_held_name => arm_count_held,
+    set_held_name => arm_set_held_name,
+    ask => arm_ask,
+    raise => arm_raise,
+    gate => arm_gate,
+    slot => arm_slot,
+    set_slot => arm_set_slot,
+    state_get | state_set | state_add => arm_plan_stub,
+});
+
+/// Install sparse 2-seat world + subset. Callers keep concrete seats.
+fn skills_ag_world() {
+    host::install_backend(skills_ag_dispatch);
+    harness::sparse_play_world(SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        money_lo: 0,
+        money_hi: 10_000,
+        fans_lo: 0,
+        fans_hi: 0,
+        resonance_in_hand: false,
+    });
+}
 
 const SKILL_RAN: usize = crate::card_id!("skill:美竹兰:叛逆的红挑染");
 const SKILL_MOCA: usize = crate::card_id!("skill:青叶摩卡:我行我素");
@@ -39,11 +81,11 @@ fn rest_of(w: &World, player: i32) -> i32 {
 // C-AG-firepot-01 — shared (1) rest tick
 // ===========================================================================
 
-fn firepot_tick_world(pre_rest: i32, pre_fire: i32) -> World {
-    host::install();
+fn firepot_tick_world(user: i32, pre_rest: i32, pre_fire: i32) -> World {
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
-    let player = 0i32;
+    let player = user;
     w.trig_player = player;
     w.turn_player = player;
     w.band_id[player as usize] = band_key();
@@ -53,21 +95,20 @@ fn firepot_tick_world(pre_rest: i32, pre_fire: i32) -> World {
     w
 }
 
-/// C-AG-firepot-01 iff on the TurnEnd tick (ran_red entry 2).
-#[kani::proof]
-#[kani::unwind(80)]
-pub fn firepot_01_tick_iff() {
+/// Shared iff body at a concrete seat (ppcost). Seat-symmetric (owner tick).
+fn firepot_01_tick_iff_at(user: i32) {
+    let player = user;
     let pre_rest: i32 = kani::any();
     kani::assume(pre_rest >= 0 && pre_rest <= 2);
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 0 && pre_fire <= 1);
-    let w = firepot_tick_world(pre_rest, pre_fire);
+    let w = firepot_tick_world(user, pre_rest, pre_fire);
     let player = w.trig_player;
     world::reset_world(w);
     // Entry 2 is the TurnEnd hook with residual `afterglow`
     // (`trigger::player_id() == player_id && in_band(player_id, "Afterglow")`).
     // Both hold by construction.
-    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 2, player));
+    invoke::unwrap_done(skill_characters::ran_red::tick_kani(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -102,6 +143,18 @@ pub fn firepot_01_tick_iff() {
     );
 }
 
+#[kani::proof]
+#[kani::unwind(80)]
+pub fn firepot_01_tick_iff() {
+    firepot_01_tick_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::unwind(80)]
+pub fn firepot_01_user1_tick_iff() {
+    firepot_01_tick_iff_at(1);
+}
+
 /// Companion: the every-other-turn mutant must not match.
 #[kani::proof]
 #[kani::unwind(80)]
@@ -119,7 +172,9 @@ pub fn firepot_01_mutant_is_detected() {
 // ===========================================================================
 
 fn moca_offer_world(pre_fire: i32, src_pos: i32, used: i32) -> World {
-    host::install();
+    // NOT seat-symmetric: involves owner and another seat `src`. Covered
+    // concretely at (owner=0, src=1); a second pair is the seat-swap below.
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
     let owner = 0i32;
@@ -164,7 +219,7 @@ pub fn moca_02_teleport_iff() {
     let src = 1i32;
     world::reset_world(w);
     // Entry 2 is CardPlayed (residual `other`: actor != owner). Held by setup.
-    invoke::unwrap_done(invoke::entry_idx(SKILL_MOCA, 2, owner));
+    invoke::unwrap_done(skill_characters::moca_self::on_card_kani(owner));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -215,7 +270,7 @@ pub fn moca_02_mutant_is_detected() {
     w.symbolic_answers = false;
     w.answers[0] = 0; // yes
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(SKILL_MOCA, 2, owner));
+    invoke::unwrap_done(skill_characters::moca_self::on_card_kani(owner));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -239,7 +294,7 @@ pub fn moca_02_mutant_is_detected() {
 pub fn ran_02_spend_fire_iff() {
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 1 && pre_fire <= 1);
-    host::install();
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
     let player = 0i32;
@@ -249,7 +304,7 @@ pub fn ran_02_spend_fire_iff() {
     w.band_id[player as usize] = band_key();
     world::reset_world(w);
     // Entry 0 is the (2) Play (`can_use` residual: not skill_blocked, fire ≥ 1).
-    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 0, player));
+    invoke::unwrap_done(skill_characters::ran_red::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -268,7 +323,7 @@ pub fn ran_02_spend_fire_iff() {
 #[kani::proof]
 #[kani::unwind(80)]
 pub fn ran_02_mutant_is_detected() {
-    host::install();
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
     let player = 0i32;
@@ -277,7 +332,7 @@ pub fn ran_02_mutant_is_detected() {
     w.fire_max = [1, 1, 1, 1];
     w.band_id[player as usize] = band_key();
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 0, player));
+    invoke::unwrap_done(skill_characters::ran_red::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
     crate::kassert!(post_fire == 0, "card spends exactly 1");
     crate::kassert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
