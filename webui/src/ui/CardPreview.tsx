@@ -22,11 +22,16 @@ function PreviewTag({ tag }: { tag: string }) {
   return <span className={cx(s.tagChip, (tag === "手" || tag === "反击") && s.tagRed)}>{key ? tr(key) : tag}</span>;
 }
 
+/** A coloured pill under the preview's title (a field card's owner / designee). */
+export interface CardPill { label: string; color: string }
+
 export interface CardPreviewProps {
   /** The card to preview; `null` hides the panel. */
   id: string | null;
   /** Extra note under the effect text (e.g. live crystals / CP). */
   note?: string;
+  /** Pills under the title (see `CardPill`). */
+  pills?: CardPill[];
   /** Which side of the anchor to sit on. `auto` flips away from that edge. */
   place?: "right" | "left" | "auto";
   className?: string;
@@ -42,7 +47,7 @@ export interface CardPreviewProps {
  * and clipped by nothing -- the prompt window keeps `overflow: visible` so the
  * panel can sit outside the card row without being cut.
  */
-export function CardPreview({ id, note, place = "auto", className, style, scrollable }: CardPreviewProps) {
+export function CardPreview({ id, note, pills, place = "auto", className, style, scrollable }: CardPreviewProps) {
   if (!id) return null;
   const c = D.card(id);
   return (
@@ -56,6 +61,11 @@ export function CardPreview({ id, note, place = "auto", className, style, scroll
         <img src={cardArt(id)} alt="" draggable={false} />
       </div>
       <div className={s.title}>{cardTitle(id)}</div>
+      {!!pills?.length && (
+        <div className={s.pills}>
+          {pills.map((p) => <span key={p.label} className={s.pill} style={{ ["--pill" as string]: p.color }}>{p.label}</span>)}
+        </div>
+      )}
       {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <PreviewTag key={t} tag={t} />)}</div>}
       <div className={s.text} tabIndex={scrollable ? 0 : undefined}><SkillBody text={cardText(id)} /></div>
       {!!note && <div className={s.note}>{note}</div>}
@@ -68,6 +78,7 @@ export function CardPreview({ id, note, place = "auto", className, style, scroll
 interface Anchor {
   id: string;
   note?: string;
+  pills?: CardPill[];
   /** The hovered element; the host maps it into the stage's design pixels. */
   el: HTMLElement;
 }
@@ -75,7 +86,7 @@ interface Anchor {
 let anchor: Anchor | null = null;
 /** The card the standing panel shows: set on hover, click and flash, and it
  *  stays until another card replaces it (hover-out never clears it). */
-let stick: { id: string; note?: string } | null = null;
+let stick: { id: string; note?: string; pills?: CardPill[] } | null = null;
 /** The match screen prefers its standing panel to floating popups. */
 let standing = false;
 const listeners = new Set<() => void>();
@@ -85,9 +96,9 @@ function emit(): void {
 }
 
 /** Float the shared preview beside `el` (hover / keyboard focus). */
-export function previewFrom(el: HTMLElement, id: string, note?: string): void {
-  anchor = { el, id, note };
-  stick = { id, note };
+export function previewFrom(el: HTMLElement, id: string, note?: string, pills?: CardPill[]): void {
+  anchor = { el, id, note, pills };
+  stick = { id, note, pills };
   emit();
 }
 
@@ -100,8 +111,8 @@ export function previewHide(): void {
 }
 
 /** Pin the standing card panel: a click, a card flash, a log reference. */
-export function stickCard(id: string, note = ""): void {
-  stick = { id, note };
+export function stickCard(id: string, note = "", pills?: CardPill[]): void {
+  stick = { id, note, pills };
   emit();
 }
 
@@ -128,7 +139,7 @@ function subscribe(cb: () => void): () => void {
 }
 
 /** The card the standing panel should show (sticky across hover-outs). */
-export function useStickyCard(): { id: string; note?: string } | null {
+export function useStickyCard(): { id: string; note?: string; pills?: CardPill[] } | null {
   return useSyncExternalStore(subscribe, () => stick);
 }
 
@@ -153,6 +164,7 @@ export function InspectPreviewHost(): ReactElement | null {
     <CardPreview
       id={cur.id}
       note={cur.note}
+      pills={cur.pills}
       className={s.hosted}
       style={{ left: place.left, top: place.top }}
     />
