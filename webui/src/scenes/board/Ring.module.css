@@ -356,6 +356,8 @@
    12 x 10 interior grid). Die-styled to sit in the teal pocket: a white disc
    with the d20 face, the running number over it and the caption beneath. */
 .rollDock { position: absolute; left: 41.6667%; top: 30%; width: 16.6667%; height: 40%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.rollDock { flex-direction: column; gap: 8px; }
+.rollHint { max-width: 100%; text-align: center; font-size: 12px; line-height: 1.4; font-weight: 700; color: var(--pink-deep); text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8); pointer-events: none; }
 .roll {
   position: relative; width: 118px; height: 118px; border-radius: 50%;
   background: radial-gradient(circle at 32% 28%, var(--white), #f3e2e8 78%);

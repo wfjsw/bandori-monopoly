@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
+import { namesOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
 import { CommitChip } from "../../ui/CommitChip";
 import { cx } from "../../core/cx";
@@ -158,12 +159,26 @@ export function Board({ sess }: { sess: GameSession }) {
   // The die lives in the board's roll zone (Ring); replays hide it entirely.
   const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
   const advance = control === "end";
+  const names = namesOf(S);
+  const cur = S.players[S.turn];
+  // Why the button is (or is not) live, shown under it.
+  let hint: string;
+  if (S.phase !== "play") hint = "";
+  else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
+  else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
+  else if (S.busy || anim.animating) hint = tr("board.settling");
+  else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: names.playerId(S.turn) });
+  else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
+  else if (advance) hint = tr("board.moved");
+  else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: names.playerId(S.roller) });
+  else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
+  else hint = tr("board.waiting", { who: names.playerId(S.turn), bot: cur?.bot ? tr("board.botSuffix") : "" });
   const roll: RollControl | null = sess.readOnly ? null : {
     enabled: control !== null,
     rolling: anim.rolling,
     dice: anim.dice,
     caption: advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice"),
-    hint: control === "roll" ? tr("board.clickRoll") : advance ? tr(S.skipMove ? "board.stayHint" : "board.moved") : "",
+    hint,
     onClick: () => control && void act(sess, { act: control }),
   };
 
