@@ -297,7 +297,7 @@ unit_features() {
     mygo) echo "band-mygo" ;;
     mujica) echo "band-mujica" ;;
     crychic) echo "band-crychic" ;;
-    sumimi) echo "band-sumimi" ;;
+    sumimi) echo "band-sumimi,skills-characters" ;;
     events) echo "events" ;;
     tiles|tile_marks) echo "tiles" ;;
     skills_pp) echo "band-pp,skills-characters" ;;

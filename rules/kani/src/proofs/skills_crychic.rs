@@ -352,7 +352,7 @@ fn band_01_iff_at(user: i32) {
     let hand: i32 = kani::any();
     kani::assume(hand >= 0 && hand <= 8);
     sparse2(band_turn_start_dispatch, user, |w| {
-        w.hand_n = hand;
+        w.hand_n = hand as u8;
     });
 
     let limit_key = intern::intern("handLimit").0;
