@@ -348,3 +348,15 @@ pub fn before_settle_kani(player_id: i32) -> card_sdk::Asked {
 pub fn press_kani(player_id: i32) -> card_sdk::Asked {
     press(player_id)
 }
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn lock_hill_kani(player_id: i32) -> card_sdk::Asked {
+    lock_hill(player_id)
+}
