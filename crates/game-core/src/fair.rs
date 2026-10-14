@@ -108,6 +108,12 @@ fn sha256_hex(parts: &[&[u8]]) -> String {
 /// formatting never enters), `weights_json` is `serde_json` of
 /// [`ScoreWeights`] in declaration order, and each seat is
 /// `<id>,<player>,<bot 0|1>,<mentality>` in seat order.
+///
+/// When [`CanonSettings::clock`] is not [`crate::clock::ClockSettings::default`]
+/// a trailing line is appended:
+/// `clock,<base_time bits>,<bonus_time bits>,<base_refill bits>,<ban bits>,<pick bits>,<deck bits>,<bankrupt_auction bits>\n`.
+/// A default clock therefore re-encodes to the exact pre-settings string, so
+/// old records keep verifying byte-identically (`docs/FAIRNESS.md` §1.3).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CanonSettings {
     pub mode: MatchMode,
@@ -115,6 +121,10 @@ pub struct CanonSettings {
     pub step_bits: u32,
     pub weights: ScoreWeights,
     pub members: Vec<CanonMember>,
+    /// Match clock / timer settings. Serde-defaulted so a pre-settings
+    /// record re-encodes with the old string (default → no trailing line).
+    #[serde(default)]
+    pub clock: crate::clock::ClockSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,6 +142,7 @@ impl CanonSettings {
             step_bits: step.to_bits(),
             weights: weights.clone(),
             members: members.iter().map(CanonMember::from).collect(),
+            clock: crate::clock::ClockSettings::default(),
         }
     }
 
@@ -151,6 +162,19 @@ impl CanonSettings {
                 m.player,
                 if m.bot { 1 } else { 0 },
                 m.mentality
+            ));
+        }
+        if !self.clock.is_default() {
+            let c = &self.clock;
+            s.push_str(&format!(
+                "clock,{},{},{},{},{},{},{}\n",
+                c.base_time.to_bits(),
+                c.bonus_time.to_bits(),
+                c.base_refill.to_bits(),
+                c.ban_seconds.to_bits(),
+                c.pick_seconds.to_bits(),
+                c.deck_seconds.to_bits(),
+                c.bankrupt_auction_time.to_bits(),
             ));
         }
         s
@@ -405,13 +429,16 @@ pub fn verify(file: &RecordFile) -> VerifyReport {
     // it; a v2 snapshot is a solo/local export with no adversary).
     match &file.body.init {
         crate::record::Init::Seed(setup) => {
-            let want = CanonSettings::new(
+            let mut cs = CanonSettings::new(
                 file.header.mode,
                 file.header.step,
                 &setup.weights,
                 &setup.members,
-            )
-            .canon();
+            );
+            // `None` (pre-settings record) reconstructs with the default clock,
+            // which `canon()` encodes as the exact pre-settings string.
+            cs.clock = setup.clock.unwrap_or_default();
+            let want = cs.canon();
             if want != fair.settings {
                 r.push("settings", false, "canonical settings do not match the record");
             } else {

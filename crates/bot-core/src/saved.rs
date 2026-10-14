@@ -104,7 +104,21 @@ pub struct SavedMirror {
     pub live_rng: Rng,
     pub wait: f32,
     pub bonus_time: Vec<f32>,
-    pub base_time: f32,
+    /// Per-seat 恢复时间 pool (v9). A mirror written when this was a single
+    /// `f32` still loads via [`serde`]'s default (empty) if the field is
+    /// absent -- but `SAVE_VERSION` is exact, so in practice only same-shape
+    /// mirrors restore.
+    #[serde(default)]
+    pub base_time: Vec<f32>,
+    /// Match clock / timer settings (see [`game_core::clock`]). Forks carry
+    /// the parent's knobs so a simulated turn refills the same way; the
+    /// volatile remaining pools above are what `view.rs` zeroes.
+    #[serde(default)]
+    pub clock: game_core::clock::ClockSettings,
+    /// Legacy clock semantics (pre-settings records). See
+    /// `engine::Saved::legacy_clock`.
+    #[serde(default)]
+    pub legacy_clock: bool,
     pub timed_out: bool,
     pub vote: MatchVote,
     pub vote_seq: i32,
@@ -234,11 +248,16 @@ pub fn saved(world: World, pending: Option<PendingMirror>, live_rng: Rng, seq: i
         bonus_time: vec![0.0; n],
         vote_seq: world.st.vote.id,
         vote: world.st.vote.clone(),
+        // Clock settings ride on the World (`World::clock` / `legacy_clock`)
+        // so a fork restores with the parent's knobs; the volatile pools are
+        // zeroed because `view.rs` never publishes them.
+        clock: world.clock,
+        legacy_clock: world.legacy_clock,
+        base_time: vec![0.0; n],
         world,
         pending,
         live_rng,
         wait: 0.0,
-        base_time: 0.0,
         timed_out: false,
         vote_cooldown: 0.0,
         deferred: Vec::new(),

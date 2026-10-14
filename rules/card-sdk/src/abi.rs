@@ -856,11 +856,12 @@ pub mod prop {
     /// refuses a build whose house cost is `>=` this, while the instance is in
     /// play. On a board-owned instance (`ctx::set_prop`); `0` disables.
     pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
-    /// Turn-clock override (v61): every turn start sets the host `base_time`
-    /// (恢复时间) to this many seconds **plus one**; `0` = no override (the
-    /// +1 is what lets "0 seconds" be expressed). On a board-owned instance
-    /// (`tile < 0`); with several, the smallest wins. Use
-    /// [`clock_secs`] to encode.
+    /// Turn-clock override (v61): every turn start **sets** the host
+    /// `base_time` (恢复时间) to this many seconds **plus one**; `0` = no
+    /// override (the +1 is what lets "0 seconds" be expressed). On a
+    /// board-owned instance (`tile < 0`); with several, the smallest wins.
+    /// Use [`clock_secs`] to encode. SET, not refill -- it replaces the
+    /// `turnBaseTime` refill/cap calculation for that turn start (元祖！邦多利酱).
     pub const BASE_TIME_SET: &str = "baseTimeSet";
     /// Turn-clock override (v61): as [`BASE_TIME_SET`], for the acting seat's
     /// `bonus_time` (免费时间): it is **set** to this value at turn start
@@ -1541,8 +1542,19 @@ pub enum TriggerKind {
     /// seconds the acting seat gets as its turn starts (`t.value`; the host
     /// then caps the total). Rewrite with `trigger::set_pay_amount`.
     TurnBonusTime = 99,
-    /// v61: turn-clock modifier -- the 恢复时间 (`base_time`) in seconds the
-    /// turn starts with (`t.value`). Rewrite with `trigger::set_pay_amount`.
+    /// v61: turn-clock modifier -- the 恢复时间 (`base_time`) **refill** in
+    /// seconds the acting seat's turn adds at turn start (`t.value`; the
+    /// default is the match's `turnBaseTime` budget). Rewrite with
+    /// `trigger::set_pay_amount`.
+    ///
+    /// Host application (`engine` `StartTimer`, post-settings clock):
+    /// `base = (base + value).min(max(settings.base_time, value))` -- a refill
+    /// capped at the larger of the configured initial pool and the hook's own
+    /// value, so a hook that grants a bigger refill (e.g. doubling 15 → 30)
+    /// still shows up as base 30 rather than being clipped back. A
+    /// `baseTimeSet` board prop replaces the whole calculation (SET at turn
+    /// start, 元祖！邦多利酱). Pre-settings (`legacy_clock`) matches instead
+    /// *set* `base = value` each turn.
     TurnBaseTime = 100,
 }
 

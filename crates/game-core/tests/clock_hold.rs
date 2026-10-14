@@ -95,7 +95,17 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     let me = to_human_ops(&mut m, 1);
     let st = m.state();
     assert!(st.clock_paused, "a human turn arms the hold");
+    // Default settings refill bonus to 10 at turn start and drain **bonus
+    // first**, so pin the combined pool (`time_left`) rather than raw
+    // `base_time` -- base stays at 15 until the bonus is gone.
+    assert!(
+        st.bonus_time > 0.0,
+        "turn start refills bonus (got {})",
+        st.bonus_time
+    );
+    let total = st.time_left;
     let base = st.base_time;
+    let bonus = st.bonus_time;
     let seq = st.seq;
 
     // Ticking while held must not consume base/bonus.
@@ -104,9 +114,11 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     }
     let st = m.state();
     assert!(st.clock_paused, "still held without an ack");
-    assert_eq!(st.base_time, base, "held clock does not consume");
+    assert_eq!(st.time_left, total, "held clock does not consume");
+    assert_eq!(st.base_time, base, "held clock does not consume base");
+    assert_eq!(st.bonus_time, bonus, "held clock does not consume bonus");
 
-    // A matching ack releases the hold; the clock runs again.
+    // A matching ack releases the hold; the clock runs again, bonus first.
     assert!(m.anim_done(me, seq), "matching ack releases");
     assert!(!m.state().clock_paused);
     for _ in 0..10 {
@@ -115,11 +127,18 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     let st = m.state();
     assert!(!st.clock_paused);
     assert!(
-        st.base_time < base,
-        "released clock consumes base time ({} -> {})",
-        base,
-        st.base_time
+        st.time_left < total,
+        "released clock consumes pool time ({} -> {})",
+        total,
+        st.time_left
     );
+    assert!(
+        st.bonus_time < bonus,
+        "bonus drains first ({} -> {})",
+        bonus,
+        st.bonus_time
+    );
+    assert_eq!(st.base_time, base, "base is untouched while bonus remains");
 }
 
 #[test]
@@ -160,7 +179,8 @@ fn the_anim_hold_cap_releases_after_ten_seconds_of_ticks() {
     let mut m = new_match(&members, 7, MatchMode::Casual);
     let _me = to_human_ops(&mut m, 1);
     assert!(m.state().clock_paused);
-    let base = m.state().base_time;
+    // Bonus-first drain: pin the combined pool, not raw base.
+    let total = m.state().time_left;
 
     // 10s of ticks, no ack: the cap fires and the clock starts.
     // ANIM_HOLD_CAP = 10.0; tick 9.9s first (still held), then over the cap.
@@ -168,14 +188,14 @@ fn the_anim_hold_cap_releases_after_ten_seconds_of_ticks() {
         m.tick(0.1);
     }
     assert!(m.state().clock_paused, "under the cap still holds");
-    assert_eq!(m.state().base_time, base);
+    assert_eq!(m.state().time_left, total);
     for _ in 0..5 {
         m.tick(0.1);
     }
     let st = m.state();
     assert!(!st.clock_paused, "the 10s cap releases the hold");
     // Cap consumed 10s of hold, then the extra ticks drain the clock.
-    assert!(st.base_time < base);
+    assert!(st.time_left < total);
 }
 
 #[test]
