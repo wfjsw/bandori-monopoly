@@ -503,3 +503,14 @@ agent's scope) — leave the proof **FAILING** as the finding.
 
 `fix_note::play` `for t in 0..tile_count()` is a **60-trip** loop
 (`Not unwinding at 16`). Raised harness unwind to **64** (re-timing).
+
+### `fix_note_01` unwind 64 — **TIMEOUT 1200 s** (class E after bound fix)
+
+60-trip `for t in 0..tile_count()` fully unwound is SSA-heavy. Bound is
+now sound (64 ≥ 60); cost is the body loop (cannot edit). **FAIL** —
+no cheap proof-file lever beyond the bound.
+
+### `end_it_all_01_three_picks_and_keep` — dropped unused `picks` scan
+
+`ask_pick` + `Vec<Msg>` fold (String ABI) still class E; pick-count lives
+in `three_picks_counted`. Simplified the keep half (re-timing pending).
