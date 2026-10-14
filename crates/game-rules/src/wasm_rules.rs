@@ -8312,6 +8312,8 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::PayGate
             | TriggerKind::MoveGate
             | TriggerKind::ExclusiveUse
+            | TriggerKind::TurnBonusTime
+            | TriggerKind::TurnBaseTime
             | TriggerKind::Redirect
             | TriggerKind::CounterChanged
     )
@@ -8496,6 +8498,8 @@ mod tests {
             "payGate",
             "moveGate",
             "exclusiveUse",
+            "turnBonusTime",
+            "turnBaseTime",
             // v28 post-commit points (what a committed effect did)
             "fireSpent",
             "skillUsed",
