@@ -160,10 +160,13 @@ export function defaultWorkerCount(): number {
 
 /** Absolute URL of the bot-glue bundle (the worker imports it from there). */
 export function botBaseUrl(): URL {
-  // Resolved against the page, like `/assets/engine/bot-glue/`. The worker
-  // script itself lives beside it (`bot-worker.js`).
-  const base = typeof document !== "undefined" ? document.baseURI : "http://localhost/";
-  return new URL("assets/engine/bot-glue/", base);
+  // Origin-absolute `/assets/engine/bot-glue/`, like the replay worker. Never
+  // resolve against `document.baseURI`: on a `/play/...` page that yields
+  // `/play/assets/...`, which the SPA fallback answers with HTML and the
+  // module worker then fails to load. The worker script itself lives beside
+  // it (`bot-worker.js`).
+  const origin = typeof location !== "undefined" ? location.origin : "http://localhost";
+  return new URL("/assets/engine/bot-glue/", origin);
 }
 
 class WorkerSlot {
