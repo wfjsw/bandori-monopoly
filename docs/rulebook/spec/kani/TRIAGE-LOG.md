@@ -1231,6 +1231,8 @@ specs. Production `cfg(not(kani))` untouched.
 | `mor::rainbow_02_mutant_is_detected` | FAILED 150 s | `mutant: card must not match off-by-one boost` | **D** | same | pending |
 | `mor::courage_01_pay_iff_blocked_host` | UNWINDING 217 s | `unwinding assertion loop 0` at `courage_world_owned` | **A** | 60-trip `for t in 0..60` at unwind 32; 8×8 chunk walk (TUNING) | pending |
 | `mor::courage_01_pay_user1_iff_blocked_host` | UNWINDING 169 s | same loop at `courage_world_owned` | **A** | same fix (shared helper) | pending |
+| `pp::ranger_01_02_steps_by_count_iff` | FAILED 453 s | `C-PP-ranger-01: +500 iff count >= 1` | **B+C** | host `arm_cards_in` had no Field/Deck case (class C); proof counted the Ranger itself (class B, [手] play is not on the field during its body) | pending |
+| `skills_pp::band_idol_02/04` (pre-empted) | (not yet run) | same crystal-storage shape as pp | **B** | `field_crystals` not player key `"奇迹水晶"` | pending |
 
 ### Host-model fixes (commit `2548b2b4`)
 
