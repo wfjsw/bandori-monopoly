@@ -4455,12 +4455,13 @@ impl Cx<'_> {
         if let Some(card) = self.data.card(id) {
             let character = &self.w.st.players[i].character;
             let base = self.data.base_character(character);
-            let crychic = self
+            // Variants of an `own_exclusives_only` band (CRYCHIC) may not use
+            // the base character's exclusives.
+            let own_only = self
                 .data
                 .character(character)
-                .is_some_and(|c| c.band == "CRYCHIC");
-            // CRYCHIC variants may not use the base character's exclusives.
-            if card.exclusive() && card.owner != *character && (card.owner != base || crychic) {
+                .is_some_and(|c| self.data.variant_own_exclusives_only(c));
+            if card.exclusive() && card.owner != *character && (card.owner != base || own_only) {
                 return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
             }
         }

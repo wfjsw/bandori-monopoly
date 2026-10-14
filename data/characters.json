@@ -625,6 +625,7 @@
         {
             "name": "三角初华（Sumimi）",
             "display": "三角初华（Sumimi）",
+            "variantOf": "三角初华",
             "band": "Sumimi",
             "color": "#BB9955",
             "skill": "成为偶像",
@@ -640,6 +641,8 @@
         {
             "name": "高松灯（CRYCHIC）",
             "display": "高松灯（CRYCHIC）",
+            "variantOf": "高松灯",
+            "variantTag": "c",
             "band": "CRYCHIC",
             "color": "#77BBDD",
             "skill": "跌跌撞撞...",
@@ -655,6 +658,8 @@
         {
             "name": "长崎素世（CRYCHIC）",
             "display": "长崎素世（CRYCHIC）",
+            "variantOf": "长崎素世",
+            "variantTag": "c",
             "band": "CRYCHIC",
             "color": "#FFDD88",
             "skill": "雨中祈晴",
@@ -670,6 +675,8 @@
         {
             "name": "椎名立希（CRYCHIC）",
             "display": "椎名立希（CRYCHIC）",
+            "variantOf": "椎名立希",
+            "variantTag": "c",
             "band": "CRYCHIC",
             "color": "#7777AA",
             "skill": "克服劣等感",
@@ -685,6 +692,8 @@
         {
             "name": "丰川祥子（CRYCHIC）",
             "display": "丰川祥子（CRYCHIC）",
+            "variantOf": "丰川祥子",
+            "variantTag": "c",
             "band": "CRYCHIC",
             "color": "#7799CC",
             "skill": "你愿意和我组建乐队吗？",
@@ -700,6 +709,8 @@
         {
             "name": "若叶睦（CRYCHIC）",
             "display": "若叶睦（CRYCHIC）",
+            "variantOf": "若叶睦",
+            "variantTag": "c",
             "band": "CRYCHIC",
             "color": "#779977",
             "skill": "精致的人偶",

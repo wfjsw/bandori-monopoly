@@ -13,6 +13,19 @@ fn data() -> GameData {
 }
 
 #[test]
+fn band_traits_and_variants_come_from_data() {
+    let d = data();
+    assert_eq!(d.base_character("高松灯（CRYCHIC）"), "高松灯");
+    assert_eq!(d.base_character("三角初华（Sumimi）"), "三角初华");
+    assert_eq!(d.base_character("高松灯"), "高松灯");
+    let sumimi = d.character("三角初华（Sumimi）").unwrap();
+    let crychic = d.character("高松灯（CRYCHIC）").unwrap();
+    assert!(d.band_shares_exclusives(sumimi) && !d.band_shares_exclusives(crychic));
+    assert!(d.variant_own_exclusives_only(crychic) && !d.variant_own_exclusives_only(sumimi));
+    assert!(d.bands.iter().all(|b| b.name != "CRYCHIC" || !b.boot_art.is_empty()));
+}
+
+#[test]
 fn game_data_counts_match_the_original() {
     let d = data();
     assert_eq!(d.tiles.len(), 60);
