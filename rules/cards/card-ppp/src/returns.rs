@@ -73,7 +73,20 @@ pub const RETURNS: CardDef = CardDef::new(
         ),
     ],
 )
-    .props(&[(card_sdk::abi::prop::SONG, 1)]);
+    .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Returns"#)
+        .raw_name(r#"Returns"#)
+        .tags(&[r#"手"#, r#"持续"#, r#"特"#])
+        .text(r#"[特]：
+（1）如果此卡被加入初始卡组则卡组卡数添加8。
+（2）游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个其他存活玩家的团卡。
+[持续]：
+（1）无效[拥有者]Poppin' Party团卡的（4）效果。
+（2）[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]。
+（3）使用因此卡获得的团卡的主动效果时需要支付1星星贴纸。
+（4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。"#)
+        .cell(r#"B5"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
 /// first, then band, then general) -- a snapshot of `data/cards.json`; Returns is

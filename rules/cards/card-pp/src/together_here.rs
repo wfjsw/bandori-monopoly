@@ -12,7 +12,14 @@ use card_sdk::{key, CardDef, Msg, On};
 use ruleset_core::ctx;
 
 pub const TOGETHER_HERE: CardDef =
-    CardDef::new("PP:有你与我在这里共度", &[On::Play("", None, together_here)]);
+    CardDef::new("PP:有你与我在这里共度", &[On::Play("", None, together_here)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"有你与我在这里共度"#)
+        .raw_name(r#"有你与我在这里共度"#)
+        .tags(&[r#"手"#])
+        .text(r#"[手]：
+将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。"#)
+        .cell(r#"D9"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";

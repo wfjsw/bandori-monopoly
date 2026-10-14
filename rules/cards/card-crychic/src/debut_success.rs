@@ -12,7 +12,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",
     &[On::Play("", None, debut_success), On::AtEnd("", None, at_end)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"初演大成功"#)
+        .raw_name(r#"初演大成功"#)
+        .tags(&[])
+        .text(r#"打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。"#)
+        .cell(r#"M11"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 fn debut_success(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「打出此卡后，本回合内你的资金不会下降」 -- C# `H._turnCtx.NoMoneyLoss = true`.

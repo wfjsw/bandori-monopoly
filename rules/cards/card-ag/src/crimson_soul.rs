@@ -45,7 +45,19 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
     ],
 )
 .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])
-.props(&[(card_sdk::abi::prop::EST_COST, 500)]);
+.props(&[(card_sdk::abi::prop::EST_COST, 500)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"绯红之魂"#)
+        .raw_name(r#"绯红之魂"#)
+        .tags(&[r#"手"#, r#"反击"#, r#"持续"#])
+        .text(r#"[手]：
+将此卡放置在[使用者]的[场地]，然后选择[消耗]1到5次500资金并在这张卡上放置对应数量的[奇迹水晶]。
+[持续]：
+（1）
+[反击][拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次[消耗]或[支付]金额减少1000（最少为0，若为[支付]则被[支付]玩家[获得]500资金）。
+（2）[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]。
+（3）此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。"#)
+        .cell(r#"C12"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- C# `H.PlaceFromPlay(c, -1, -1, num)`.

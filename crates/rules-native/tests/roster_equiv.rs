@@ -5,19 +5,18 @@
 //! the JSON-loaded `CardData` / `CharacterData` / `BandData` for every entry
 //! that has Rust metadata.
 //!
-//! Coverage is an explicit constant. The JSON-lift phase raises it to the full
-//! `184 / 54 / 12`; until then this test is the gate for deleting the JSON and
-//! fails if a lifted row drifts from its `data/*.json` source.
+//! Coverage is an explicit constant. The JSON-lift phase has raised it to the
+//! full `184 / 54 / 12`; this test is the gate for deleting the JSON and fails
+//! if a lifted row drifts from its `data/*.json` source.
 
 use game_core::data::{BandData, CardData, CharacterData, GameData, Roster};
 
-/// Cards the Rust side currently defines metadata for. Raise to 184 when the
-/// lift covers every `cards.json` row.
-const EXPECTED_CARD_COVERAGE: usize = 12;
-/// Characters with a `CharacterDef`. Raise to 54 at full lift.
-const EXPECTED_CHARACTER_COVERAGE: usize = 2;
-/// Bands with a `BandDef`. Raise to 12 at full lift.
-const EXPECTED_BAND_COVERAGE: usize = 1;
+/// Cards the Rust side currently defines metadata for (full `cards.json` lift).
+const EXPECTED_CARD_COVERAGE: usize = 184;
+/// Characters with a `CharacterDef` (full `characters.json` lift).
+const EXPECTED_CHARACTER_COVERAGE: usize = 54;
+/// Bands with a `BandDef` (full `bands.json` lift).
+const EXPECTED_BAND_COVERAGE: usize = 12;
 
 fn data_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data")

@@ -30,3 +30,19 @@ fn roll_plan(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("kurata_speed_plan")));
     Ok(())
 }
+
+/// `characters.json` row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"仓田真白"#)
+    .display(r#"仓田真白"#)
+    .band(r#"Morfonica"#)
+    .color(r#"#6677CC"#)
+    .skill(r#"向后全速前进"#)
+    .text(r#"（1）[主动移动]时移动掷骰变为2d20（2）反方向移动"#)
+    .cn_id(r#"026"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"（未命名）"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");

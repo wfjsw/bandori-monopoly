@@ -333,7 +333,7 @@ node tools/lift-roster.mjs --all               # every band
 bands). The gate for deleting the JSON later is
 `cargo test -p rules-native --test roster_equiv`: deep equality (order
 included) for every row that has Rust metadata, with coverage an explicit
-constant (`EXPECTED_*_COVERAGE`) the next phase raises to 184 / 54 / 12.
+constant (`EXPECTED_*_COVERAGE`) at the full 184 / 54 / 12.
 
 `cargo run -p rules-native --example dump_roster` prints the roster in the
 JSON shape/order/formatting of `data/{cards,characters,bands}.json` for tools

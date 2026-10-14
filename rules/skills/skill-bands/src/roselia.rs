@@ -100,3 +100,13 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+/// `bands.json` row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Roselia"#)
+    .short_name(r#"R"#)
+    .boot_art(r#"005"#)
+    .color(r#"#3344AA"#)
+    .skill(r#"对音乐的纯粹"#)
+    .text(r#"（1）本局游戏购买的第一个非Live House格子购买价格减半，在你拥有任意初始Live House格子前，那个格子对你视为Live House。（2）购买任何Live House格子的地契时购买价格减半"#)
+    .logo(r#"005"#);

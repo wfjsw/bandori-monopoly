@@ -10,7 +10,13 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SPRECHCHOR: CardDef =
     CardDef::new("R:Sprechchor", &[On::Play("", Some(cant_play), sprechchor)])
-        .props(&[(card_sdk::abi::prop::SONG, 1)]);
+        .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Sprechchor"#)
+        .raw_name(r#"Sprechchor"#)
+        .tags(&[])
+        .text(r#"在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目"#)
+        .cell(r#"E14"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
 
 /// 规则书: 「在Livehouse地块开始回合时」 -- the **turn-start** square, not the
 /// one a mid-turn walk has since reached (C# `H._turnSnap[i].pos`).

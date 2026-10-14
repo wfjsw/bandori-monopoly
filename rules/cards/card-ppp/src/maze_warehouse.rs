@@ -20,7 +20,13 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         On::Hook(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
         On::Hook(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
     ],
-).props(&[(card_sdk::abi::prop::EST_COST, 6000)]);
+).props(&[(card_sdk::abi::prop::EST_COST, 6000)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"迷宫般的仓库"#)
+        .raw_name(r#"迷宫般的仓库"#)
+        .tags(&[])
+        .text(r#"位于“流星堂”前后5格内时，可打出此卡，投掷1d10，从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地，视为你的主要移动且本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋。如果[经过]“流星堂”则[强制停下]且[消耗]6000资金"#)
+        .cell(r#"B10"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 /// 「本回合购买格子不[消耗]资金」 -- `BuySet` is the free / fixed stage
 /// (`docs/PURCHASE.md`), so the hook sets the running price to 0.

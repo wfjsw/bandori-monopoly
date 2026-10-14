@@ -18,7 +18,13 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         None,
         counteract,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"主唱太拼命了"#)
+        .raw_name(r#"主唱太拼命了"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。"#)
+        .cell(r#"M10"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「免除此次支付」

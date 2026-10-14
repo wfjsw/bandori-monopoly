@@ -34,7 +34,15 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
         On::Hook(&[HookKind::PassPlayer], "actor != owner && actor >= 0", None, on_pass),
         On::Hook(&[HookKind::SettleBefore], "", None, grab),
     ],
-).silent(&[1]);
+).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"想要抓住..."#)
+        .raw_name(r#"想要抓住..."#)
+        .tags(&[])
+        .text(r#"（1）获得一层[停留]。
+（2）你的下回合开始前，当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]。
+（3）你的下回合开始前，若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）并[触发结算]，视为你的主要移动。"#)
+        .cell(r#"M5"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 fn want_to_grab(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得一层[停留]。」

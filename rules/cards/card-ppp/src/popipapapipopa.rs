@@ -38,7 +38,16 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
             pay_choose,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Popipapapipopa"#)
+        .raw_name(r#"[衍生]Popipapapipopa"#)
+        .derived(true)
+        .tags(&[r#"持续"#, r#"衍生"#])
+        .text(r#"[持续]
+（1）此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。
+（2）消耗或支付时可使用此卡多个奇迹水晶，每个将资金变动减少150（最少0）。"#)
+        .cell(r#"B4"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 // C# `CardPopipapapipopa.Spots` -- the five tiles that feed a crystal (now the
 // `PassTile` pre's `tile_named` disjunction).

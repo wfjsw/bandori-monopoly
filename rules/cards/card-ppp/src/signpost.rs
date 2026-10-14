@@ -17,7 +17,13 @@ pub const SIGNPOST: CardDef = CardDef::new(
         On::AtEnd("owner.out == 0", None, at_end),
     ],
 )
-.props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
+.props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"向着未来的路标"#)
+        .raw_name(r#"向着未来的路标"#)
+        .tags(&[])
+        .text(r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#)
+        .cell(r#"B14"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

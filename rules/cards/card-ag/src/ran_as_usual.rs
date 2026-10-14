@@ -39,7 +39,14 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         // an abnormal effect this turn (`at_end_something_to_undo`).
         On::AtEnd("owner.out == 0", Some(at_end_something_to_undo), at_end),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"像往常一样"#)
+        .raw_name(r#"(兰) 像往常一样"#)
+        .tags(&[])
+        .text(r#"（1）此卡可以当反击使用
+（2）受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#)
+        .cell(r#"C6"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", r#"美竹兰"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「此卡可以当反击使用」 -- the C# also plays it from hand (`Play`).

@@ -19,7 +19,13 @@ pub const OWN_STAGE: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"选择自己的舞台"#)
+        .raw_name(r#"选择自己的舞台"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动（或无法移动的回合结束时）是否触发结算"#)
+        .cell(r#"E9"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
 
 /// The [异常移动效果] this chain link declared, as its `AbKind`.
 ///

@@ -31,7 +31,13 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         ),
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"夏日合宿"#)
+        .raw_name(r#"夏日合宿"#)
+        .tags(&[])
+        .text(r#"打出此卡，直到下个自己的回合开始前，你只会被自己发动的效果指定。当此卡效果结束，你没有因为此卡效果无效化任何影响则抽一张牌"#)
+        .cell(r#"G3"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
 
 fn summer_camp(player_id: i32) -> card_sdk::Asked {
     // C# `AiPlay => false` -- bots never play this card; `CardDef` has no AiPlay

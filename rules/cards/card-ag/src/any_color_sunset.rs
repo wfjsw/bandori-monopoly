@@ -13,7 +13,13 @@ use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANY_COLOR_SUNSET: CardDef =
-    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, play)]);
+    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, play)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"无论是何种颜色的夕阳"#)
+        .raw_name(r#"无论是何种颜色的夕阳"#)
+        .tags(&[])
+        .text(r#"投掷1d6mod6并根据结果获得对应效果: 若为1则立刻获得1500资金，若为2则从弃牌堆中选择一张牌放置到抽牌堆顶，若为3则抽一张牌，若为4则可选择补满火罐或者获得2000资金，若为5则从弃牌堆中选择一张牌加入手牌，若为6则选择1-5中的3个效果触发（若结果严格大于6，则从1开始重新计数）"#)
+        .cell(r#"C8"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6并根据结果获得对应效果」; 「若结果严格大于6，则从1开始重新计数」

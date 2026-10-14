@@ -22,7 +22,13 @@ pub const YOLO: CardDef = CardDef::new(
         counteract,
     )],
 )
-    .props(&[(card_sdk::abi::prop::SONG, 1)]);
+    .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Y.O.L.O"#)
+        .raw_name(r#"Y.O.L.O"#)
+        .tags(&[])
+        .text(r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#)
+        .cell(r#"C3"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).

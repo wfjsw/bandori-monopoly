@@ -20,7 +20,13 @@ pub const LISA_BOND: CardDef = CardDef::new(
         None,
         counteract,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"必然的联系"#)
+        .raw_name(r#"必然的联系（莉莎）"#)
+        .tags(&[r#"反击"#])
+        .text(r#"【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。"#)
+        .cell(r#"E16"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", r#"今井莉莎"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && players_on(owner.pos, owner) > 0` is the pre.

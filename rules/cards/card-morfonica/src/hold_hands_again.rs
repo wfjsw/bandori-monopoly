@@ -28,7 +28,16 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
         ),
         On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, pay_at),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"再次牵起手来"#)
+        .raw_name(r#"再次牵起手来"#)
+        .tags(&[r#"手"#, r#"反击"#, r#"持续"#])
+        .text(r#"[手]：
+[反击]当[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后将此卡放置在[使用者]的[场地]并[消耗]等量资金。
+[持续]：
+[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区。"#)
+        .cell(r#"G12"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();

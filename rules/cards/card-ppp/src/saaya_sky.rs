@@ -22,7 +22,14 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         On::Hook(&[HookKind::PassTile], "actor == owner && card.placed", None, pass_tile),
         On::Hook(&[HookKind::TurnEndAfter], "card.placed && slot('saaya_sky_passed') != 0", None, turn_end_after),
     ],
-).silent(&[1]);
+).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"总有一天要给这片天空命名"#)
+        .raw_name(r#"（沙绫）总有一天要给这片天空命名"#)
+        .tags(&[])
+        .text(r#"（1）将此卡放置在山吹面包房
+（2）[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上"#)
+        .cell(r#"B18"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", r#"山吹沙绫"#)]));
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
 /// C# `CardSaayaSky._passed` -- the user walked past the card this turn.

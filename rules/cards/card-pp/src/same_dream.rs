@@ -13,7 +13,17 @@
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play("", None, same_dream)]);
+pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play("", None, same_dream)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"同一个梦想"#)
+        .raw_name(r#"同一个梦想"#)
+        .tags(&[r#"手"#])
+        .text(r#"[手]：
+依次进行以下操作：
+1. 为自己的Pastel✽Palettes乐队卡添加3个[奇迹水晶]；
+2. 将所有正面[P✽P粉丝]变反，[获得]变反数量乘100的资金；
+3. 将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有Pastel✽Palettes角色生效。"#)
+        .cell(r#"D3"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";

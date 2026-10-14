@@ -70,7 +70,13 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
         On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"笑容大游行"#)
+        .raw_name(r#"笑容大游行"#)
+        .tags(&[r#"反击"#, r#"持续"#])
+        .text(r#"（1）[反击]经过“弦卷集团”（#29格）时可将此卡放置在其上，当次移动的移动终点视为“弦卷集团”地产商；为此卡添加3个[奇迹水晶]，你的每回合结束时移除一个，奇迹水晶为0时若此卡仍位于“弦卷集团”则将其放入弃牌堆。（2）[持续] [触发结算]后可将“弦卷集团”格子上的此卡放置于[移动终点]格子上并移除其上全部奇迹水晶（3）[持续] 当此卡位于格子上时，那格视为与“弦卷集团”格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。"#)
+        .cell(r#"F3"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardSmileParade.Group` -- `H.TsurumakiAgent` = tile 弦卷集团 (#29).
 fn group_tile() -> i32 {

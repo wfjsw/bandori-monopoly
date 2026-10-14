@@ -13,7 +13,14 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const RIMI_CHOCO: CardDef = CardDef::new(
     "PPP:（里美）我的心就像巧克力螺",
     &[On::Play("", Some(cant_play), play)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"我的心就像巧克力螺"#)
+        .raw_name(r#"（里美）我的心就像巧克力螺"#)
+        .tags(&[r#"手"#])
+        .text(r#"[手]：
+立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子绝对距离1到4格或以内的任何格子并[结算]，期间[不可阻挡]。"#)
+        .cell(r#"B19"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", r#"牛込里美"#)]));
 
 /// C# `CardRimiChoco.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
