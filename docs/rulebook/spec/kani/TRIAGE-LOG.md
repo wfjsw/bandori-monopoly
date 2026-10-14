@@ -524,12 +524,12 @@ plus harness-side fixed arrays. Production wasm/native **byte-identical**
 
 | id | before (batch 3e/4) | after (strvec) |
 |---|---|---|
-| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — `extend_with` 31, `drop_glue<[String]>` 62, `memcmp` 31, `ctx::ask_card` 31 | _re-timing_ (facades in; bump-allocator + fixed arena + ask trees) |
-| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s — same | _re-timing_ |
-| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — `extend_with` 31, `by_idx` 10, `memcmp` 10, `named_set` 8 | _re-timing_ (`by_idx`/`memcmp` already 0 after batch 2; `named_set` now zero-loop; `extend_with` gone) |
-| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | _re-timing_ |
-| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s — body `Vec` + effects iters at 32 | _re-timing_ (spec iters zero-loop; body `Vec` via bump-allocator) |
-| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s — fmt `PadAdapter` + memchr 1193 | _re-timing_ (`kassert!` already applied; `iter().any` now zero-loop) |
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — `extend_with` 31, `drop_glue<[String]>` 62, `memcmp` 31, `ctx::ask_card` 31 | **FAILED 1156 s** (unwind 32) — SDK cliffs gone (0 extend_with / ask_card unwinds); residual `drop_glue<[String]>` 32 + `String fold` 31 + `memcmp` 32 from the body's `ids: Vec<String>`. **CardList fix** (hard 4-bound iterator, `T: From<CardList>`) targets those; re-run pending |
+| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s — same | pending CardList re-run |
+| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — `extend_with` 31, `by_idx` 10, `memcmp` 10, `named_set` 8 | pending (`named_set` now zero-loop; `extend_with`/`by_idx`/`memcmp` already 0 after batch 2) |
+| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | pending |
+| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s — body `Vec` + effects iters at 32 | pending (spec iters zero-loop) |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s — fmt `PadAdapter` + memchr 1193 | pending (`kassert!` + zero-loop `iter().any`) |
 
 Remaining risk: the unmodified bodies still allocate `Vec<String>`
 (`aya_longing` `ids`) and `Vec<i32>` (`front_or_back` `front`/`back`/`winners`).
