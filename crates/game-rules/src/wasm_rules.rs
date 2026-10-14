@@ -566,7 +566,8 @@ impl Run {
         let Some(f) = self.world.field_by_uid(uid) else {
             return;
         };
-        let (owner, card) = (f.owner, f.card.clone());
+        // The holder hears its card's counter change, not the card's owner.
+        let (owner, card) = (self.world.holder_of(uid), f.card.clone());
         self.counter_log.push((owner, card, name.to_string(), now - was));
     }
 
@@ -2516,13 +2517,11 @@ impl<M: CardModules> RulesBridge<M> {
         // An event instance is bound under `event:<id>`; the draw's own event
         // names it without the prefix, so the flash and the two log lines agree.
         let cid = card_id.strip_prefix("event:").unwrap_or(card_id);
-        let owner = if uid >= 0 {
-            w.world
-                .field_by_uid(uid)
-                .map(|f| f.owner)
-                .unwrap_or(call.player_id())
-        } else {
-            call.player_id()
+        // The seat the instance sits on (not `FieldCard::owner`, which names
+        // who the card belongs to).
+        let owner = match if uid >= 0 { w.world.holder_of(uid) } else { -1 } {
+            h if h >= 0 => h,
+            _ => call.player_id(),
         };
         let who = if owner >= 0 { owner } else { target };
         // Entry label (「（1）」 and kin) from the manifest, when the card
