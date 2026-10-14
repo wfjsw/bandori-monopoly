@@ -60,6 +60,108 @@ fn arr4b_eq(a: [bool; 8], b: [bool; 8]) -> bool {
         && a[4] == b[4] && a[5] == b[5] && a[6] == b[6] && a[7] == b[7]
 }
 
+/// Zero-loop effect scans. A `slice::iter().all/any/find_map` unrolls to the
+/// global unwind bound (front_or_back: 31 at unwind 32) and `expect`/`panic!`
+/// pull `panic_fmt` → `PadAdapter` → `memchr` (never_ends / kizuna cliffs).
+/// Fixed 24-step walks over `MAX_LOG` keep the trip count a constant.
+
+/// True iff every effect is `GainMoney` and the log is non-empty.
+fn eff_all_gains(effects: &[Effect]) -> bool {
+    if effects.is_empty() {
+        return false;
+    }
+    let mut ok = true;
+    let mut i = 0;
+    while i < 24 {
+        let ne = effects.len().min(24);
+        if i < ne {
+            if let Some(e) = effects.get(i) {
+                if !matches!(e, Effect::GainMoney { .. }) {
+                    ok = false;
+                }
+            }
+        }
+        i += 1;
+    }
+    ok
+}
+
+/// True iff some effect is `PayTo`.
+fn eff_any_payto(effects: &[Effect]) -> bool {
+    let mut found = false;
+    let mut i = 0;
+    while i < 24 {
+        let ne = effects.len().min(24);
+        if i < ne {
+            if let Some(e) = effects.get(i) {
+                if matches!(e, Effect::PayTo { .. }) {
+                    found = true;
+                }
+            }
+        }
+        i += 1;
+    }
+    found
+}
+
+/// First bank `PayTo` (`from < 0`) with a positive amount — its `to`.
+fn eff_first_bank_payto_to(effects: &[Effect]) -> Option<i32> {
+    let mut out: Option<i32> = None;
+    let mut i = 0;
+    while i < 24 {
+        let ne = effects.len().min(24);
+        if i < ne && out.is_none() {
+            if let Some(e) = effects.get(i) {
+                if let Effect::PayTo { from, to, n } = e {
+                    if *from < 0 && *n > 0 {
+                        out = Some(*to);
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+/// First `Teleport` destination, if any.
+fn eff_first_teleport_tile(effects: &[Effect]) -> Option<i32> {
+    let mut out: Option<i32> = None;
+    let mut i = 0;
+    while i < 24 {
+        let ne = effects.len().min(24);
+        if i < ne && out.is_none() {
+            if let Some(e) = effects.get(i) {
+                if let Effect::Teleport { tile, .. } = e {
+                    out = Some(*tile);
+                }
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+/// True iff some `GiveExile` has `n == want`.
+fn eff_any_exile_n(effects: &[Effect], want: i32) -> bool {
+    let mut found = false;
+    let mut i = 0;
+    while i < 24 {
+        let ne = effects.len().min(24);
+        if i < ne {
+            if let Some(e) = effects.get(i) {
+                if let Effect::GiveExile { n, .. } = e {
+                    if *n == want {
+                        found = true;
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    found
+}
+
 // ===========================================================================
 // E-duobang-01 / 02 — 对邦
 // 「所有人立刻进行一次1d20骰子拼点，所有点数最高者从所有点数最低者获得胜出
@@ -125,7 +227,7 @@ pub fn duobang_01_02_two_player_iff() {
             let _ = spec::events::duobang_each_mutant(18, 16);
             crate::kassert!(spec::events::duobang_sheet_example_is_100(), "spec: sheet example pins 100");
         }
-        _ => panic!("E-duobang: only PayTo effects are legal"),
+        _ => crate::kassert!(false, "E-duobang: only PayTo effects are legal"),
     }
     crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
     crate::kassert!(arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
@@ -565,10 +667,7 @@ pub fn front_or_back_02_same_half_share() {
     let effects = effects_slice(&logbuf, n_log);
 
     // Same-half: never the X=Y branch (Y=0, X>=2).
-    let equal = !effects.is_empty()
-        && effects
-            .iter()
-            .all(|e| matches!(e, Effect::GainMoney { .. }));
+    let equal = eff_all_gains(effects);
     kani::cover!(!equal, "share branch (same half)");
     crate::kassert!(!equal, "E-front-or-back: same half must take the share branch");
 
@@ -603,11 +702,8 @@ pub fn front_or_back_01_equal_iff() {
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
 
-    let is_equal = !effects.is_empty()
-        && effects
-            .iter()
-            .all(|e| matches!(e, Effect::GainMoney { .. }));
-    let is_share = effects.iter().any(|e| matches!(e, Effect::PayTo { .. }));
+    let is_equal = eff_all_gains(effects);
+    let is_share = eff_any_payto(effects);
     kani::cover!(is_equal, "X=Y — all gain 500 (E-front-or-back-01)");
     kani::cover!(is_share, "X≠Y — winning half shares 1000 (E-front-or-back-02)");
 
@@ -624,13 +720,9 @@ pub fn front_or_back_01_equal_iff() {
         // Sole winner takes the whole 1000 (1000/1). Read the winner off the
         // first bank PayTo (the host `pay_total` shaping record names them);
         // `share_legs` then drops that artifact and keeps the 1000 leg.
-        let winner = effects
-            .iter()
-            .find_map(|e| match e {
-                Effect::PayTo { from, to, n } if *from < 0 && *n > 0 => Some(*to),
-                _ => None,
-            })
-            .expect("share branch has a bank PayTo");
+        let winner = eff_first_bank_payto_to(effects);
+        crate::kassert!(winner.is_some(), "share branch has a bank PayTo");
+        let winner = winner.unwrap_or(0);
         let winners = [winner];
         let legs = spec::events::front_or_back_share_legs(effects, &winners);
         crate::kassert!(
@@ -663,25 +755,31 @@ pub fn front_or_back_mutant_swapped_is_detected() {
     let mutant_share = spec::events::front_or_back_mutant_swapped_share_total();
     crate::kassert!(mutant_equal == 1000 && mutant_share == 500, "mutant pins");
 
-    let is_equal = !effects.is_empty()
-        && effects
-            .iter()
-            .all(|e| matches!(e, Effect::GainMoney { .. }));
+    let is_equal = eff_all_gains(effects);
     if is_equal {
         // Card paid 500; mutant wants 1000.
         let matches_mutant = spec::events::log_is_gains(effects, &[(0, mutant_equal), (1, mutant_equal)]);
         crate::kassert!(!matches_mutant, "mutant equal-1000 must not match the card");
     } else {
-        let winner = effects
-            .iter()
-            .find_map(|e| match e {
-                Effect::PayTo { from, to, n } if *from < 0 && *n > 0 => Some(*to),
-                _ => None,
-            })
-            .unwrap_or(0);
+        let winner = eff_first_bank_payto_to(effects).unwrap_or(0);
         let winners = [winner];
         let legs = spec::events::front_or_back_share_legs(effects, &winners);
-        let card_total: i32 = legs.iter().map(|(_, n)| *n).sum();
+        let mut card_total: i32 = 0;
+        {
+            let nl = legs.len().min(4);
+            if 0 < nl {
+                card_total += legs.get(0).map(|(_, n)| *n).unwrap_or(0);
+            }
+            if 1 < nl {
+                card_total += legs.get(1).map(|(_, n)| *n).unwrap_or(0);
+            }
+            if 2 < nl {
+                card_total += legs.get(2).map(|(_, n)| *n).unwrap_or(0);
+            }
+            if 3 < nl {
+                card_total += legs.get(3).map(|(_, n)| *n).unwrap_or(0);
+            }
+        }
         // Card share total is 1000; mutant wants 500.
         if card_total > 0 {
             crate::kassert!(
@@ -700,8 +798,9 @@ pub fn front_or_back_mutant_swapped_is_detected() {
 
 /// IFF: the one-shot resolves with an empty effect log and an unchanged
 /// frame. Cover that it completes for every player count.
+/// Body `for &p in &all_players()` unrolls past 16 (class A bound).
 #[kani::proof]
-#[kani::unwind(16)]
+#[kani::unwind(24)]
 pub fn ex_quest_01_rolls_and_files() {
     let w = base_world();
     let pre = {
@@ -758,28 +857,8 @@ pub fn habinel_01_grants_exiles() {
         "E-habinel-01: one GiveExile per player, n in 1..=2, to = 微笑号 (tile 26)"
     );
     // Zero-loop X∈{1,2} covers (body rolls 1d2 per seat).
-    let mut saw1 = false;
-    let mut saw2 = false;
-    {
-        let ne = effects.len().min(4);
-        macro_rules! step {
-            ($i:expr) => {
-                if $i < ne {
-                    if let Some(Effect::GiveExile { n, .. }) = effects.get($i) {
-                        if *n == 1 {
-                            saw1 = true;
-                        }
-                        if *n == 2 {
-                            saw2 = true;
-                        }
-                    }
-                }
-            };
-        }
-        step!(0); step!(1); step!(2); step!(3);
-    }
-    kani::cover!(saw1, "X=1");
-    kani::cover!(saw2, "X=2");
+    kani::cover!(eff_any_exile_n(effects, 1), "X=1");
+    kani::cover!(eff_any_exile_n(effects, 2), "X=2");
 }
 
 // ===========================================================================
@@ -810,22 +889,9 @@ pub fn never_ends_01_teleport_and_exile() {
     let living = &players[..n];
 
     // Reconstruct the shared dest from the first Teleport (X = 1d4 face).
-    let mut dest = -1;
-    {
-        let ne = effects.len().min(8);
-        macro_rules! step {
-            ($i:expr) => {
-                if $i < ne && dest < 0 {
-                    if let Some(Effect::Teleport { tile, .. }) = effects.get($i) {
-                        dest = *tile;
-                    }
-                }
-            };
-        }
-        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
-    }
+    let dest = eff_first_teleport_tile(effects).unwrap_or(-1);
     crate::kassert!(
-        RING_TILES.contains(&dest),
+        dest == RING_TILES[0] || dest == RING_TILES[1] || dest == RING_TILES[2] || dest == RING_TILES[3],
         "E-never-ends-01: dest is RiNG 1..4 (board 8/16/36/53)"
     );
     kani::cover!(dest == 8, "RiNG 1");
@@ -929,7 +995,7 @@ pub fn chart_rush_02_yes_2000() {
             Effect::Draw { n, .. } => {
                 crate::kassert!(*n == 1, "draw-one only on the OR leg");
             }
-            other => panic!("E-chart-rush-02: unexpected effect {:?}", other),
+            _ => crate::kassert!(false, "E-chart-rush-02: unexpected effect kind"),
         }
     }
     // At least one purse is paid (the body always ranks everyone).
@@ -1724,11 +1790,9 @@ pub fn kizuna_01_teleport_and_exile() {
     let living = &players[..n as usize];
 
     // Reconstruct dest from the first Teleport (face = X+1d20 with X=0 ⇒ 1..20).
-    let dest = effects.iter().find_map(|e| match e {
-        Effect::Teleport { tile, .. } => Some(*tile),
-        _ => None,
-    });
-    let dest = dest.expect("E-kizuna: every player teleports");
+    let dest = eff_first_teleport_tile(effects);
+    crate::kassert!(dest.is_some(), "E-kizuna: every player teleports");
+    let dest = dest.unwrap_or(-1);
     kani::cover!(dest >= 1 && dest <= 20, "X=0, face 1..20");
     crate::kassert!(
         spec::events::kizuna_01_ok(effects, living, dest),
@@ -1741,8 +1805,7 @@ pub fn kizuna_01_teleport_and_exile() {
 // 「将此卡放置于场地中央，为其放置5个奇迹水晶…」
 // On:: 0=Play, 1=Hook(PassTile), 2=Hook(SettleBody).
 // set_crystals IS modeled. Pass countdown / settle replace involve
-// unmodeled trig_move_* on the pass path and tile_named(CiRCLE)=-1 —
-// PROTOCOL / BLOCKED-HOST for the rest.
+// unmodeled trig_move_* on the pass path — PROTOCOL / BLOCKED-HOST for the rest.
 // ===========================================================================
 
 #[kani::proof]
@@ -1758,7 +1821,8 @@ pub fn circle_rebuild_01_activation_five_crystals() {
     // Field-instance crystals (see heat_head_01) — not a player key.
     let n = world::with_world(|w| w.field_crystals(w.last_uid));
     crate::kassert!(n == 5, "E-circle-rebuild-01: five miracle crystals on the instance");
-    // CiRCLE tile is BLOCKED-HOST(tile_named) — NO_REWARD arm is a no-op dest.
+    // CiRCLE tile is board index 0 — the pass-reward arm is still
+// BLOCKED-HOST(trig_move_*).
 }
 
 // ===========================================================================
@@ -1770,8 +1834,9 @@ pub fn circle_rebuild_01_activation_five_crystals() {
 // ===========================================================================
 
 /// E-estate-02: every bid 0 ⇒ nobody pays. steps[0] = 0 for each seat.
+/// Body `for t in 0..tile_count()` is a 60-trip scan (class A bound: 64).
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(64)]
 pub fn estate_02_all_pass_no_pay() {
     let mut w = base_world();
     w.n_players = 2;
@@ -1796,8 +1861,9 @@ pub fn estate_02_all_pass_no_pay() {
 
 /// E-estate-01: a positive bid is paid. P0 bids 1000 (steps index 1), P1
 /// bids 0 (index 0) ⇒ P0 pays 1000. The deed is PROTOCOL (raise_bought stub).
+/// Body `for t in 0..tile_count()` is a 60-trip scan (class A bound: 64).
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(64)]
 pub fn estate_01_auction_pay() {
     let mut w = base_world();
     w.n_players = 2;
@@ -1866,7 +1932,7 @@ pub fn this_hand_01_move_is_protocol() {
 // 「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20，…上一位玩家
 // 获得2层…[眩晕]，下一位玩家在下个自己的回合结束前不可使用手牌，其余玩家
 // 获得1层…[除外]」
-// tile_named(飞鸟山公园) = -1 (BLOCKED-HOST). card_move is a stub.
+// tile_named(飞鸟山公园) = 56. card_move is a stub.
 // state::add / set IS modeled; give_exile IS modeled (log only).
 // On:: 0=Play.
 // ===========================================================================
@@ -1949,16 +2015,16 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-estate-01              PROVEN (pay) + PROTOCOL-LEVEL (deed / raise_bought)
 // E-estate-02              PROVEN
 // E-estate-03              PROTOCOL-LEVEL (raise_bought stub)
-// E-lulu-01                PROVEN (pay-500 leg) + BLOCKED-HOST(tile_named:快餐店)
+// E-lulu-01                PROVEN (pay-500 + teleport to 快餐店 tile 33)
 // E-lulu-02                PROVEN
-// E-habinel-01             PROVEN (GiveExile n∈1..=2, to=-1)
+// E-habinel-01             PROVEN (GiveExile n∈1..=2, to=微笑号 tile 26)
 // E-habinel-02             PROTOCOL-LEVEL (engine status tick)
-// E-habinel-03             OPEN-habinel-end + BLOCKED-HOST(tile_named:微笑号)
+// E-habinel-03             OPEN-habinel-end (return is stored on the exile grant)
 // E-this-hand-01/02/03     PROTOCOL-LEVEL (card_move stub)
 // E-pico-swap-01/02        PROVEN
 // E-circle-rebuild-01      PROVEN (keep + 5 crystals)
 // E-circle-rebuild-02      PROTOCOL-LEVEL (counter mirror is the same key)
-// E-circle-rebuild-03/04/05 PROTOCOL-LEVEL / BLOCKED-HOST(tile_named:CiRCLE, trig_move_*)
+// E-circle-rebuild-03/04/05 PROTOCOL-LEVEL / BLOCKED-HOST(trig_move_*)
 // E-front-or-back-01       PROVEN (X=Y ⇒ 500 each)
 // E-front-or-back-02       PROVEN (share legs; OPEN-分摊 remainder dropped)
 // E-ex-quest-01            PROVEN (empty effect log, frame)
@@ -1966,11 +2032,11 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-bear-cookie-01         PROTOCOL-LEVEL (event_deck_push stub) — proof FAILS
 // E-bear-cookie-02         PROTOCOL-LEVEL (draw of the pushed card)
 // E-bear-cookie-03         cannot test (skill-gated X/cap; card_text_mentions=0)
-// E-asukayama-01           PROTOCOL-LEVEL (card_move) + BLOCKED-HOST(tile_named:飞鸟山公园)
+// E-asukayama-01           PROTOCOL-LEVEL (card_move); tile_named(飞鸟山公园)=56
 // E-asukayama-02           BLOCKED-HOST(neighbor returns a tile, not a seat) + partial
 //                          (non-drawer GiveExile leg); stun/noHand split NOT proven
 // E-asukayama-03           PROTOCOL-LEVEL (status tick)
-// E-school-time-01/02      PROVEN (exile leg) + BLOCKED-HOST(tile_named:周边学区)
+// E-school-time-01/02      PROVEN (exile leg); dest = school / 周边学区 (17)
 // E-tears-01/02            PROVEN
 // E-kizuna-01              PROVEN (X=0, dest=face%60; OPEN-kizuna-song)
 // E-chart-rush-01          PROVEN (fire spent; spend_fire has no log)
@@ -2002,4 +2068,4 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-lost-chase-01/02       PROTOCOL-LEVEL (event_deck_push stub) + guard PROVEN
 // E-end-it-all-01          PROVEN (3 picks + permanent keep) / banish PROTOCOL
 // E-end-it-all-02          PROVEN (guard: no second push while up)
-// E-never-ends-01          BLOCKED-HOST(tile_named:RiNG) — body no-op; book NOT proven
+// E-never-ends-01          PROVEN (teleport to RiNG 1..4 + 1 exile) / body format! is class E

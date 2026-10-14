@@ -42,11 +42,11 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-estate-01 | 随机指定可购买格子…出价最大…获得地契 | PROTOCOL-LEVEL | — | — | `raise_bought` stub; sealed-bid stand-in is not a raise auction | OPEN-estate-tie, OPEN-estate-empty |
 | E-estate-02 | 全员出价 0 → 无人支付 | PROTOCOL-LEVEL | — | — | same | — |
 | E-estate-03 | 仅指定格子易主 | PROTOCOL-LEVEL | — | — | `raise_bought` stub | — |
-| E-lulu-01 | 可选择[传送]至快餐店…支付500 | BLOCKED-HOST | — | — | `tile_named(快餐店)` → -1; pay-500 leg modelled | shout = out-of-game |
-| E-lulu-02 | 拒绝则不动不付 | PROVEN | (lulu decline) | TBD | — | under-500 reading = no teleport |
-| E-habinel-01 | 每人获得X层[除外] X=1d2 | PROVEN (log) | `habinel_01_grants_x_exile` | TBD | `GiveExile.to` = -1 (tile blocked); no EXILE key in world | — |
+| E-lulu-01 | 可选择[传送]至快餐店…支付500 | PROVEN | `lulu_01_pay_500_leg` | TBD | pay-500 + teleport to 快餐店 (tile 33) | shout = out-of-game |
+| E-lulu-02 | 拒绝则不动不付 | PROVEN | `lulu_02_decline_leaves_put` SUCCESSFUL | TBD | — | under-500 reading = no teleport |
+| E-habinel-01 | 每人获得X层[除外] X=1d2 | PROVEN (log) | `habinel_01_grants_exiles` | TBD | `GiveExile.to` = 微笑号 (26); no EXILE key in world | — |
 | E-habinel-02 | 回合开始时移除1层 | PROTOCOL-LEVEL | — | — | engine status tick | — |
-| E-habinel-03 | 结束后传送到微笑号 | OPEN | — | — | 「结束后」 timing unbound; `tile_named(微笑号)` → -1 | OPEN-habinel-end |
+| E-habinel-03 | 结束后传送到微笑号 | OPEN | — | — | 「结束后」 timing unbound; return stored on the exile grant | OPEN-habinel-end |
 | E-this-hand-01 | 移动X，X=1d20-1d20+1d20 | PROTOCOL-LEVEL | — | — | `card_move` + `plan::set_*` stubs; no pos change | — |
 | E-this-hand-02 | X负数则反方向 | PROTOCOL-LEVEL | — | — | `plan::set_reverse` stub | — |
 | E-this-hand-03 | 不触发场地效果 | PROTOCOL-LEVEL | — | — | settle suppression is engine | — |
@@ -67,8 +67,8 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-asukayama-01 | 全员传送到飞鸟山公园，抽卡者移动1d20 | BLOCKED-HOST | — | — | `tile_named(飞鸟山公园)`; `card_move` stub | — |
 | E-asukayama-02 | 上一位2眩晕 / 下一位锁手 / 其余1除外 | PROVEN (status, seat neighbour) | `asukayama_02_status_spread_blocked_neighbor` SUCCESSFUL 989 s | host `neighbor` fixed to next present seat | — |
 | E-asukayama-03 | 状态回合开始衰减 | PROTOCOL-LEVEL | — | — | engine status tick | — |
-| E-school-time-01 | 移到学校格并+1除外 | BLOCKED-HOST | — | — | `tile_named(school / 周边学区)` → -1 | — |
-| E-school-time-02 | 无学校 → 周边学区 | BLOCKED-HOST | — | — | same | — |
+| E-school-time-01 | 移到学校格并+1除外 | PROVEN (exile leg) | `school_time_01_exile_leg` | TBD | dest = school / 周边学区 (17); `give_exile` modeled | — |
+| E-school-time-02 | 无学校 → 周边学区 | PROVEN (exile leg) | same | TBD | same | — |
 | E-tears-01 | 同色 ⇒ 下一位付当前700 | PROVEN | `tears_01_same_colour_next_pays_700` **SUCCESSFUL 724 s** (covers sat) | class A 60-tile clear deleted | — | OPEN-tears-colour |
 | E-tears-02 | 否则当前付下一位300 | PROVEN | `tears_02_different_colour_current_pays_300` **SUCCESSFUL 761 s**, `tears_mutant_is_detected` **SUCCESSFUL 609 s** | same | — | — |
 | E-kizuna-01 | 投X+1d20，全员传送 mod60 +1除外 | PARTIAL / BLOCKED-HOST | — | — | teleport dest is `face%60` (no `tile_named`) — effect log of `Teleport`+`GiveExile` provable; song X undefined | OPEN-kizuna-song |
@@ -97,13 +97,13 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-moca-02 | 下回合结束永久移除 | PROVEN (activation+expiry) | `moca_02_expiry_tick_files_away`, `moca_02_mutant_is_detected` | TBD | host ignores `removed` flag on `event_expire` | — |
 | E-embers-01 | 复制品放在所有玩家所在格 | PROVEN | `embers_01_*` | TBD | `place_mark` modeled | — |
 | E-embers-02 | 回合开始时前后各一格 | PROVEN (hook) | `embers_02_*` | TBD | `set_prop(spread)` no-op | — |
-| E-embers-03 | 触发结算每张-10 | OPEN + PROVEN (pay leg) | `embers_03_*` | TBD | [触发结算] undefined | OPEN-触发结算 |
-| E-embers-04 | 获得[除外]或破产时移除复制品 | BLOCKED-HOST | — | — | `remove_marks_f` stub; `give_exile` sets no EXILE key | — |
+| E-embers-03 | 触发结算每张-10 | OPEN + PROVEN (pay leg) | `embers_03_settle_costs_ten_per_copy` | TBD | SettleBody is On index **3** (was 2 = spread); pay 10×copies | OPEN-触发结算 |
+| E-embers-04 | 获得[除外]或破产时移除复制品 | BLOCKED-HOST | `embers_04_clear_on_exile_blocked` SUCCESSFUL | TBD | Exile is On index **4**; `remove_marks` stub; `give_exile` sets no EXILE key | — |
 | E-lost-chase-01 | 抽卡者严格最高 → 让我来结束一切置顶 | PROTOCOL-LEVEL | — | — | `event_deck_push` stub (dice + `event_is_active` guard modelled) | — |
 | E-lost-chase-02 | 否则一切不会结束置顶 | PROTOCOL-LEVEL | — | — | same | — |
 | E-end-it-all-01 | 选3个非衍生移除，永久在场 | PROVEN (keep + 3 picks) / PROTOCOL (banish) | `end_it_all_01_*` | TBD | `event_banish` stub | — |
 | E-end-it-all-02 | 在场时迷子不再推让我来结束一切 | PROVEN | `end_it_all_02_*` | TBD | `event_is_active` modeled | — |
-| E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | BLOCKED-HOST | `never_ends_01_noop_under_stub_tile_named` | TBD | `tile_named("RiNG {n}")` → -1; body early-returns | — |
+| E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | PROVEN (log) / class E cost | `never_ends_01_teleport_and_exile` | TBD | dest RiNG 1..4 = 8/16/36/53; body `format!` is a class-E cliff | — |
 
 ## Summary counts (clause-level)
 
