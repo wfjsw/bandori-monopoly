@@ -22,7 +22,7 @@
 .art img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; object-position: center; }
 .title { font-size: 17px; font-weight: 700; margin: 6px 2px 2px; }
 .pills { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 2px 4px; }
-.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; line-height: 18px; padding: 0 8px 0 0; border-radius: 9px; background: var(--pill, var(--line)); color: #fff; font-weight: 700; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 28px; padding: 0 10px 0 0; border-radius: 14px; border: 1.5px solid var(--pill, var(--line)); background: color-mix(in srgb, var(--pill, var(--line)) 14%, #fff); color: var(--text); font-weight: 700; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 2px 4px; }
 .text { font-size: 13px; line-height: 1.6; max-height: 240px; overflow: hidden; white-space: pre-wrap; }
 .note { margin-top: 4px; font-size: 12px; color: var(--sub); }

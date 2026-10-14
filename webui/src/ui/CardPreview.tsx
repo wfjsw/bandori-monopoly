@@ -65,7 +65,7 @@ export function CardPreview({ id, note, pills, place = "auto", className, style,
       <div className={s.title}>{cardTitle(id)}</div>
       {!!pills?.length && (
         <div className={s.pills}>
-          {pills.map((p) => <span key={p.label} className={s.pill} style={{ ["--pill" as string]: p.color }}>{p.char && <Avatar c={p.char} size={18} />}{p.label}</span>)}
+          {pills.map((p) => <span key={p.label} className={s.pill} style={{ ["--pill" as string]: p.color }}>{p.char && <Avatar c={p.char} size={28} />}{p.label}</span>)}
         </div>
       )}
       {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <PreviewTag key={t} tag={t} />)}</div>}
