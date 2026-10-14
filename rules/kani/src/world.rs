@@ -1151,10 +1151,15 @@ fn world_mut() -> &'static mut World {
     }
 }
 
+/// Read the global world. `inline(always)` so a host arm's closure is a
+/// direct field access — no `World` copy per host call (op-subset batch).
+#[inline(always)]
 pub fn with_world<R>(f: impl FnOnce(&World) -> R) -> R {
     f(world_mut())
 }
 
+/// Mutate the global world. See [`with_world`].
+#[inline(always)]
 pub fn with_world_mut<R>(f: impl FnOnce(&mut World) -> R) -> R {
     f(world_mut())
 }
