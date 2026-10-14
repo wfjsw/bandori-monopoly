@@ -819,3 +819,61 @@ no weakened specs. `aao_02` remains FAILING as the genuine book/body gap.
 
 **Host-model change needed (not applied — `host.rs` is kani-ppcost's):**
 `Op::set_self_prop` key packing (see Class C section above).
+
+### ppcost: host packing mismatch (class C, fixed first per coordinator)
+
+After the `name_id` loud-FAIL cut, shared `Op` arms decoded `name_id(a1,a2)`
+for every sibling. Packings differ:
+
+| op | packing | key pair | value |
+|---|---|---|---|
+| `set_self_prop(kp,kl,v)` | `[kp,kl,v]` | `(a0,a1)` | `a2` |
+| `set_tile_prop(tile,kp,kl,v)` | `[tile,kp,kl,v]` | `(a1,a2)` | `a3` |
+| `set_prop_at(uid,kp,kl,v)` | `[uid,kp,kl,v]` | `(a1,a2)` | `a3` |
+| `self_prop(kp,kl)` | `[kp,kl]` | `(a0,a1)` | — |
+| `counter_self(np,nl)` | `[np,nl]` | `(a0,a1)` | — |
+| `card_counter(p,cp,cl,np,nl)` | `[p,cp,cl,np,nl]` | `(a3,a4)` | — |
+| `add_card_counter(…,np,nl,n)` | name `(a3,a4)`, `n=a5`, no max | | |
+
+The wrong pair is an untagged handle → hard FAIL. Blast radius: every
+body calling `ctx::set_prop` (aao, embers, fix_note, hallucination,
+surprise_duel, marina_box, bangdream_chan). Fixed in `host.rs` + four
+`conf_hostops2` pins (22/22 green). Separate commit.
+
+### ppcost: body dispatch cuts (goto shape)
+
+| lever | call_card_N | other bodies reachable? | verdict |
+|---|---|---|---|
+| baseline (op-subset) | 379-IF `code*` chain | all 379 targets | TIMEOUT 1800 s, BMC never finishes |
+| + `NAME_kani` direct calls | 1 direct call | 19 trampolines × their bodies via `call_body_idx` match | TIMEOUT 1800 s |
+| + `play_c::<IDX>` const-generic | 1 direct call; match is `IF 12=0…` | still all 19 — reachability-slice keeps them (CALL on a const-false arm) | TIMEOUT 1800 s |
+| + harness calls `same_dream_kani` directly | n/a | **one** body in the call graph | re-timing |
+
+Production hashes (fresh master build vs worktree, `build-ruleset.mjs`
+without `CARGO_TARGET_DIR`): **identical** — card_all wasm
+`8d2cdd3e…`, conds `a76f4eab…`, fixtures `c502fceb…`.
+Tests: `rules-kani` ×3 green; `rules-cond --features lower` 58 green;
+wasm32 workspace check green; `game-rules`/`rules-native`/`server` build green.
+
+
+### ppcost timing table (one serial CBMC, unwind 32, `--features band-pp`)
+
+| run | change | goto | call graph | verdict |
+|---|---|---|---|---|
+| central | op-subset + sparse + name_id | 8.5 MB | 379-IF `code*` × 19 trampolines | TIMEOUT 1800 s (BMC never reaches `Generated N VCC(s)`) |
+| 1 | + `NAME_kani` direct calls in trampolines | 7.6 MB | 19 trampolines, 1 body each; `call_body_idx` match keeps all reachable | TIMEOUT 1800 s |
+| 2 | + `play_c::<12>` const-generic | 7.6 MB | match is `IF 12=0…` (constants) but CALL arms still make all 19 reachable (reachability-slice 7.6→7.1 MB) | TIMEOUT 1800 s |
+| 3 | + harness `same_dream_kani` direct | 7.6 MB | **one** body | TIMEOUT 1800 s |
+
+Unrolls stay clean (`sparse_play_world` 2 only). Remaining cost is
+**symex / formula of the single-body model** (World + 14-op subset +
+`same_dream`/`try_resonance` + snapshot + effect-log scan) — not a
+multi-target IF-chain. Next levers (not landed): zero-loop the
+`effects.iter().filter_map` scan; shrink `Snapshot`; split iff into
+per-step harnesses; calibrate unwind below 32.
+
+Non-vacuity: not reached (TIMEOUT before any property verdict). Probes
+`same_dream_01_probe_setup_only` / `same_dream_01_probe_post_invoke`
+added for the next pass; `assert!(false)` probe must FAIL once a run
+finishes.
+
