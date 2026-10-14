@@ -288,7 +288,7 @@ PY
 unit_features() {
   case "$1" in
     pp|money_shave|prompt) echo "band-pp" ;;
-    ppp|teleport) echo "band-ppp" ;;
+    ppp|teleport) echo "band-ppp,skills-characters,skills-bands" ;;
     r) echo "band-roselia" ;;
     ag) echo "band-ag" ;;
     hhw) echo "band-hhw" ;;
@@ -301,7 +301,7 @@ unit_features() {
     events) echo "events" ;;
     tiles|tile_marks) echo "tiles" ;;
     skills_pp) echo "band-pp,skills-characters" ;;
-    skills_ppp) echo "band-ppp,skills-bands" ;;
+    skills_ppp) echo "band-ppp,skills-characters,skills-bands" ;;
     skills_r) echo "band-roselia,skills-bands" ;;
     skills_ag) echo "band-ag,skills-bands" ;;
     skills_hhw) echo "band-hhw,skills-bands" ;;

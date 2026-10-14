@@ -3055,6 +3055,19 @@ pub fn arm_set_counter_self(a: Args) -> i64 {
     v as i64
 }
 
+/// `Op::inc_slot` — named keyed increment (packing name at a1,a2).
+pub fn arm_inc_slot(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a3, a4, a5);
+    let key = name_id(a1, a2);
+    let by = a3;
+    world::with_world_mut(|w| {
+        let v = w.key_add(a0, key, by);
+        w.sync_views_player(a0);
+        v as i64
+    })
+}
+
 /// Move-plan / settle / offer protocol stubs (PROTOCOL-LEVEL; return 0).
 /// Same benign-0 list as `dispatch`'s plan/settle and offers arms.
 pub fn arm_plan_stub(_a: Args) -> i64 {

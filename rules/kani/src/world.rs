@@ -606,6 +606,7 @@ impl Mark {
 // World
 // ---------------------------------------------------------------------------
 
+#[derive(Clone)]
 pub struct World {
     // ---- players ----
     pub n_players: i32,
