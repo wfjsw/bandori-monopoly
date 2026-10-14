@@ -477,3 +477,40 @@ macro). Production `rules/` restored to master.
 
 Branch is **docs + crychic static kassert message only** (production
 `rules/` matches master; dist hashes identical).
+
+## Batch 3e continued — proof-file triage (parallel: op-subset + strvec agents)
+
+Scope: `rules/kani/src/{proofs,spec}/*.rs` + docs only.
+
+### `events::chart_rush_01_spends_fire` FAILED — **class C host-model defect**
+
+Assert `E-chart-rush-01: all fire pots spent` fails. Root cause chain:
+
+1. Body: `fire::spend(p, lost, …)` → `ruleset_core::spend_fire`.
+2. `spend_fire` opens the `FirePaying` link first:
+   `if !ctx::raise(…, FirePaying, n)? { return Ok(true); }`
+   (`raise` = true when the link **settled**, false when **cancelled**).
+3. Model `host.rs` `Op::raise` is in the benign-0 unmodeled list → returns **0**.
+4. `raise` → `Ok(false)` («cancelled») → `spend_fire` returns `Ok(true)`
+   **without subtracting** `w.fire[p]`.
+
+So the model reports the spend as satisfied but leaves the pots. The proof
+is correct; the **host model's `Op::raise` must return 1 (settled)** for
+`FirePaying` when no hook substitutes. Fix belongs in `host.rs` (not this
+agent's scope) — leave the proof **FAILING** as the finding.
+
+### `events::fix_note_01_activation_keeps` UNWINDING — class A
+
+`fix_note::play` `for t in 0..tile_count()` is a **60-trip** loop
+(`Not unwinding at 16`). Raised harness unwind to **64** (re-timing).
+
+### `fix_note_01` unwind 64 — **TIMEOUT 1200 s** (class E after bound fix)
+
+60-trip `for t in 0..tile_count()` fully unwound is SSA-heavy. Bound is
+now sound (64 ≥ 60); cost is the body loop (cannot edit). **FAIL** —
+no cheap proof-file lever beyond the bound.
+
+### `end_it_all_01_three_picks_and_keep` — dropped unused `picks` scan
+
+`ask_pick` + `Vec<Msg>` fold (String ABI) still class E; pick-count lives
+in `three_picks_counted`. Simplified the keep half (re-timing pending).
