@@ -809,3 +809,25 @@ without `CARGO_TARGET_DIR`): **identical** — card_all wasm
 Tests: `rules-kani` ×3 green; `rules-cond --features lower` 58 green;
 wasm32 workspace check green; `game-rules`/`rules-native`/`server` build green.
 
+
+### ppcost timing table (one serial CBMC, unwind 32, `--features band-pp`)
+
+| run | change | goto | call graph | verdict |
+|---|---|---|---|---|
+| central | op-subset + sparse + name_id | 8.5 MB | 379-IF `code*` × 19 trampolines | TIMEOUT 1800 s (BMC never reaches `Generated N VCC(s)`) |
+| 1 | + `NAME_kani` direct calls in trampolines | 7.6 MB | 19 trampolines, 1 body each; `call_body_idx` match keeps all reachable | TIMEOUT 1800 s |
+| 2 | + `play_c::<12>` const-generic | 7.6 MB | match is `IF 12=0…` (constants) but CALL arms still make all 19 reachable (reachability-slice 7.6→7.1 MB) | TIMEOUT 1800 s |
+| 3 | + harness `same_dream_kani` direct | 7.6 MB | **one** body | TIMEOUT 1800 s |
+
+Unrolls stay clean (`sparse_play_world` 2 only). Remaining cost is
+**symex / formula of the single-body model** (World + 14-op subset +
+`same_dream`/`try_resonance` + snapshot + effect-log scan) — not a
+multi-target IF-chain. Next levers (not landed): zero-loop the
+`effects.iter().filter_map` scan; shrink `Snapshot`; split iff into
+per-step harnesses; calibrate unwind below 32.
+
+Non-vacuity: not reached (TIMEOUT before any property verdict). Probes
+`same_dream_01_probe_setup_only` / `same_dream_01_probe_post_invoke`
+added for the next pass; `assert!(false)` probe must FAIL once a run
+finishes.
+
