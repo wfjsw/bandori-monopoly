@@ -94,6 +94,9 @@ export class Live2DRenderer {
   private model: ModelJson | null = null;
   private buffers: MeshBuffers[] = [];
   private textures: WebGLTexture[] = [];
+  /** Bumped by every model swap / dispose; a progressive upload that sees a
+   *  different value has been superseded. */
+  private uploadToken = 0;
   /** Fitted viewport into the drawing buffer, in device pixels. */
   private view: [number, number, number, number] = [0, 0, 1, 1];
   private disposed = false;
@@ -146,6 +149,72 @@ export class Live2DRenderer {
    * per frame from the deform pipeline; UVs and indices stay fixed.
    */
   setModel(model: ModelJson, textures: readonly TexImageSource[]): void {
+    this.uploadGeometry(model);
+    const gl = this.gl;
+    this.textures = textures.map((src) => {
+      const tex = this.newTexture();
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      return tex;
+    });
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  /**
+   * [`setModel`] with the texture upload spread over several frames: one
+   * `TEXTURE_BAND_ROWS`-row band per animation frame instead of one
+   * synchronous `texImage2D` of the whole atlas (a 4 MB RGBA upload stalls the
+   * main thread for 100+ ms on a software GL stack). Geometry goes up at once;
+   * the returned promise resolves when every texel is in, so the caller keeps
+   * the model "loading" until then and nothing is drawn half-textured. A newer
+   * `setModel*` / `dispose` supersedes this upload (it resolves `false`).
+   */
+  async setModelProgressive(model: ModelJson, textures: readonly TexImageSource[]): Promise<boolean> {
+    this.uploadGeometry(model);
+    const token = this.uploadToken;
+    const gl = this.gl;
+    const targets = textures.map((src) => ({ src, tex: this.newTexture() }));
+    this.textures = targets.map((t) => t.tex);
+    for (const { src, tex } of targets) {
+      const { width: w, height: h } = sourceSize(src);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      for (let y = 0; y < h; y += TEXTURE_BAND_ROWS) {
+        await nextFrame();
+        if (token !== this.uploadToken || this.disposed) return false;
+        const rows = Math.min(TEXTURE_BAND_ROWS, h - y);
+        const band = typeof createImageBitmap === "function" ? await createImageBitmap(src, 0, y, w, rows) : null;
+        if (token !== this.uploadToken || this.disposed) {
+          band?.close();
+          return false;
+        }
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        if (band) {
+          gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, y, gl.RGBA, gl.UNSIGNED_BYTE, band);
+          band.close();
+        } else {
+          // No crop API: fall back to one whole-image upload.
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+          break;
+        }
+      }
+    }
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return true;
+  }
+
+  private newTexture(): WebGLTexture {
+    const gl = this.gl;
+    const tex = gl.createTexture();
+    if (!tex) throw new Error("createTexture failed");
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return tex;
+  }
+
+  private uploadGeometry(model: ModelJson): void {
     const gl = this.gl;
     this.disposeModel();
 
@@ -164,18 +233,6 @@ export class Live2DRenderer {
       return { pos, uv, idx, nIdx: m.indices.length };
     });
 
-    this.textures = textures.map((src) => {
-      const tex = gl.createTexture();
-      if (!tex) throw new Error("createTexture failed");
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-      return tex;
-    });
-    gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
   /** Fit the canvas box into a `css × dpr` drawing buffer (letterboxed). */
@@ -340,6 +397,7 @@ export class Live2DRenderer {
   }
 
   private disposeModel(): void {
+    this.uploadToken++;
     const gl = this.gl;
     for (const b of this.buffers) {
       gl.deleteBuffer(b.pos);
@@ -358,4 +416,18 @@ export class Live2DRenderer {
     this.disposeModel();
     this.gl.deleteProgram(this.program);
   }
+}
+/** Rows per frame of a progressive texture upload. */
+const TEXTURE_BAND_ROWS = 128;
+
+function nextFrame(): Promise<void> {
+  return new Promise((ok) => {
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => ok());
+    else setTimeout(ok, 16);
+  });
+}
+
+function sourceSize(src: TexImageSource): { width: number; height: number } {
+  const s = src as { width?: number; height?: number; naturalWidth?: number; naturalHeight?: number; videoWidth?: number; videoHeight?: number };
+  return { width: s.naturalWidth ?? s.videoWidth ?? s.width ?? 0, height: s.naturalHeight ?? s.videoHeight ?? s.height ?? 0 };
 }

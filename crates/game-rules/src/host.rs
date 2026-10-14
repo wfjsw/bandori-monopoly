@@ -650,8 +650,21 @@ impl RulesetBuilder {
     /// Compile and validate one card module (ABI version, exports, manifest) and add
     /// its cards. Returns the module's SHA-256.
     pub fn add(&mut self, wasm: &[u8]) -> Result<String, RuleError> {
+        self.add_inner(wasm, None)
+    }
+
+    /// [`Self::add`] with the module's lowercase-hex SHA-256 supplied by the
+    /// caller, who computed it over exactly `wasm` (the browser has a native
+    /// `crypto.subtle.digest`; hashing 0.5 MB in wasm cost ~30 ms of main
+    /// thread). The hash names the module in the ruleset identity, so a wrong
+    /// one would mislabel the set -- only pass a digest you just computed.
+    pub fn add_hashed(&mut self, wasm: &[u8], sha256: String) -> Result<String, RuleError> {
+        self.add_inner(wasm, Some(sha256))
+    }
+
+    fn add_inner(&mut self, wasm: &[u8], sha256: Option<String>) -> Result<String, RuleError> {
         let (module, cards, meta) = inspect(&self.engine, wasm)?;
-        let sha256 = hex_sha256(wasm);
+        let sha256 = sha256.unwrap_or_else(|| hex_sha256(wasm));
         let m = self.modules.len();
         for (local, c) in cards.into_iter().enumerate() {
             self.slots.push(Slot {

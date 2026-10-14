@@ -84,7 +84,7 @@ export function useLive2DModel(opts: {
     setStatus("loading");
     animRef.current = null;
     Promise.all([loadLive2D(id), animate ? loadLive2DAnim(id) : Promise.resolve(null)])
-      .then(([data, bundle]) => {
+      .then(async ([data, bundle]) => {
         if (cancelled) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -98,8 +98,11 @@ export function useLive2DModel(opts: {
           setStatus("gl-error");
           return;
         }
-        modelRef.current = data;
-        renderer.setModel(data.model, data.textures);
+        // Textures go up a band per frame (see `setModelProgressive`); the model
+        // stays "loading" (and undrawn: `modelRef` is cleared, the renderer's old
+        // buffers are gone) until the last band is in.
+        modelRef.current = null;
+        const uploaded = renderer.setModelProgressive(data.model, data.textures);
         const wrap = wrapRef.current;
         if (wrap) {
           renderer.resize(wrap.clientWidth, wrap.clientHeight, window.devicePixelRatio || 1);
@@ -119,6 +122,8 @@ export function useLive2DModel(opts: {
           ? evalPose(data.model, animValues(animRef.current))
           : evalPose(data.model, current);
         evaluatedRef.current = current;
+        if (!(await uploaded) || cancelled) return;
+        modelRef.current = data;
         dirtyRef.current = true;
         setStatus("ready");
       })

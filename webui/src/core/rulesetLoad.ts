@@ -12,6 +12,8 @@
 
 export interface RulesetGlue {
   ruleset_add(bytes: Uint8Array): void;
+  /** `ruleset_add` with a caller-computed SHA-256 (hex) of the same bytes. */
+  ruleset_add_hashed?(bytes: Uint8Array, sha256: string): void;
   ruleset_precompiled(bytes: Uint8Array): void;
   ruleset_build(): number;
 }
@@ -41,7 +43,16 @@ export async function loadRulesetInto(
   }
   const index: RulesetIndex = JSON.parse(indexText);
   for (const m of index.modules) {
-    glue.ruleset_add(await read(m.file));
+    const bytes = await read(m.file);
+    // The native digest is ~30 ms cheaper per 0.5 MB module than the glue's
+    // own SHA-256 (wasm). `crypto.subtle` needs a secure context; fall back.
+    const subtle = globalThis.crypto?.subtle;
+    if (glue.ruleset_add_hashed && subtle) {
+      const sum = new Uint8Array(await subtle.digest("SHA-256", bytes as BufferSource));
+      glue.ruleset_add_hashed(bytes, Array.from(sum, (b) => b.toString(16).padStart(2, "0")).join(""));
+    } else {
+      glue.ruleset_add(bytes);
+    }
   }
   if (index.conds?.file) {
     glue.ruleset_precompiled(await read(index.conds.file));
