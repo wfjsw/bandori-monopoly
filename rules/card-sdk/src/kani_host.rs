@@ -341,11 +341,31 @@ pub type Backend = fn(Op, Args) -> i64;
 static mut BACKEND: Option<Backend> = None;
 
 /// Install the symbolic host. Call once at the top of every proof.
+///
+/// Under `cfg(kani)` `call` is a **direct** `extern "Rust"` into
+/// `rules_kani::host::dispatch` (no fn-ptr); `install` is kept so native
+/// conformance tests can still swap a backend.
 pub fn install(f: Backend) {
     unsafe { BACKEND = Some(f); }
 }
 
-/// Dispatch one import to the installed backend.
+/// Under Kani every host import is a direct `extern "Rust"` call into
+/// `rules_kani::host::dispatch` — no `BACKEND` fn-ptr (that expanded to an
+/// 874-target IF-chain at every `ctx::*` site and was the pp SSA cliff).
+#[cfg(kani)]
+extern "Rust" {
+    #[link_name = "rules_kani_host_dispatch"]
+    fn host_dispatch(op: Op, a: Args) -> i64;
+}
+
+/// Dispatch one import to the host.
+#[cfg(kani)]
+pub fn call(op: Op, a: Args) -> i64 {
+    unsafe { host_dispatch(op, a) }
+}
+
+/// Dispatch one import to the installed backend (native / tests).
+#[cfg(not(kani))]
 pub fn call(op: Op, a: Args) -> i64 {
     let f = unsafe { BACKEND };
     let f = f.expect("rules-kani host backend not installed");
