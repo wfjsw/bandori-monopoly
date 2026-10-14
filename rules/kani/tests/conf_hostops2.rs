@@ -349,3 +349,45 @@ fn neighbor_is_the_next_present_seat() {
     let fwd2 = rules_kani::host::dispatch(Op::neighbor, [0, 1, 0, 0, 0, 0]);
     assert_eq!(fwd2, 2, "skip the out seat");
 }
+
+/// `Op::raise` returns `(!cancelled)`: **1 = the link settled**. Returning 0
+/// makes `spend_fire` treat the cost as substituted and skip the real spend
+/// (class C — `chart_rush` lost no [火罐]). Pin the settled polarity.
+#[test]
+fn raise_returns_settled_not_cancelled() {
+    let _g = model_lock();
+    install(base());
+    let settled = rules_kani::host::dispatch(Op::raise, [0, 0, 0, 0, 0, 0]);
+    assert_eq!(settled, 1, "raise must report settled (1), not cancelled (0)");
+}
+
+/// `Op::gate` returns `allowed`: **1 = may land**. 0 means guarded / immune /
+/// out and callers skip the effect — same polarity class as `raise`.
+#[test]
+fn gate_returns_allowed_for_living_seat() {
+    let _g = model_lock();
+    install(base());
+    let ok = rules_kani::host::dispatch(Op::gate, [0, 0, 0, 0, 0, 0]);
+    assert_eq!(ok, 1, "living seat with no guard: effect may land");
+    // Seat 3 is `out` in `base()`.
+    let blocked = rules_kani::host::dispatch(Op::gate, [3, 0, 0, 0, 0, 0]);
+    assert_eq!(blocked, 0, "out seat: gate refuses");
+}
+
+/// `Op::raise_bought` returns HOST-06 `did`: **1 = the hand-over landed**.
+#[test]
+fn raise_bought_reports_landed() {
+    let _g = model_lock();
+    install(base());
+    let did = rules_kani::host::dispatch(Op::raise_bought, [0, 0, 0, 0, 0, 0]);
+    assert_eq!(did, 1, "hand-over landed when no hook denies");
+}
+
+/// `Op::ring_multiplier` is a multiplier: 0 would zero rent. Identity is 1.
+#[test]
+fn ring_multiplier_is_never_zero() {
+    let _g = model_lock();
+    install(base());
+    let mult = rules_kani::host::dispatch(Op::ring_multiplier, [0, 0, 0, 0, 0, 0]);
+    assert!(mult >= 1, "ring multiplier must be >= 1, got {mult}");
+}

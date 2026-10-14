@@ -1809,16 +1809,24 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::move_parity | Op::move_resolve | Op::move_steps | Op::move_remaining
         | Op::move_total | Op::move_dir | Op::fixed_roll | Op::do_move_roll
         | Op::turn_main_steps | Op::turn_rolls | Op::turn_snap | Op::turn_start_pos
-        | Op::schedule_turn_end | Op::linger | Op::gate
+        | Op::schedule_turn_end | Op::linger
         | Op::targeted_count => 0,
+
+        // ---- hook-status flags (polarity-sensitive; see arm_*) ----
+        // 0 on these means "cancelled / blocked / substituted", which makes
+        // callers skip the real effect (class C — chart_rush spent no fire).
+        Op::raise => arm_raise(a),
+        Op::raise_bought => arm_raise_bought(a),
+        Op::gate => arm_gate(a),
+        Op::ring_multiplier => arm_ring_multiplier(a),
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
         Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build
         | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at
         | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::buy
         | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice
-        | Op::raise | Op::raise_bought | Op::play_card | Op::play_from_hand
-        | Op::can_build_on | Op::ring_multiplier | Op::add_ring_bonus
+        | Op::play_card | Op::play_from_hand
+        | Op::can_build_on | Op::add_ring_bonus
         | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat
         | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile
         | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations
@@ -1828,6 +1836,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             // remaining ones are engine-protocol and return a benign 0. Any
             // op that must fail loudly is handled by the catch-all below if
             // it is missing from this arm — keep this list honest.
+            //
+            // Polarity note (TRIAGE-LOG `op-subset` / class C): 0 here is
+            // only safe when the caller treats 0 as "no data" / "did not
+            // happen". Ops whose 0 means "cancelled — skip the real effect"
+            // live in the arm_* block above. Reported leftovers with that
+            // shape: `play_from_hand` (0 = not from hand), `can_build_on`
+            // (0 = cannot), `card_*` / `buy` / `acquire` (0 = did not land).
             0
         }
 
@@ -2092,4 +2107,49 @@ pub fn arm_ask(a: Args) -> i64 {
 pub fn arm_money(a: Args) -> i64 {
     let [a0, ..] = a;
     world::with_world(|w| w.money[player_idx(a0)]) as i64
+}
+
+/// `Op::raise` — guest-raised trigger point (`ctx::raise`).
+///
+/// Returns `(!cancelled)` per `wasm_rules` `HostRequest::Raise`: **1 = the
+/// link settled** (nobody cancelled it), 0 = a counteraction cancelled it.
+/// A 0 here makes callers like `spend_fire` treat the cost as substituted
+/// and **skip the real effect** (class C — `chart_rush` spent no [火罐]).
+/// No [反击] substitute model under Kani (the window is PROTOCOL-LEVEL):
+/// with no hook substituting, the link settles.
+pub fn arm_raise(_a: Args) -> i64 {
+    1
+}
+
+/// `Op::raise_bought` — announce a hand-over outside the buy routine.
+/// HOST-06: **1 = the hand-over landed**. No hook denies under Kani.
+pub fn arm_raise_bought(_a: Args) -> i64 {
+    1
+}
+
+/// `Op::gate` — abnormal-effect [反击] gate (`ctx::gate`).
+///
+/// Returns `allowed` per `HostRequest::Gate`: **1 = may land**, 0 = a field
+/// card guarded it / immune / unstoppable / out. Callers skip the effect on
+/// 0 — the same polarity class as [`arm_raise`]. With no standing guard and
+/// a living seat the effect is allowed.
+pub fn arm_gate(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        let out_of_range = a0 < 0 || a0 as usize >= MAX_PLAYERS || a0 >= w.n_players;
+        let dead = !out_of_range && w.out[player_idx(a0)];
+        if out_of_range || dead {
+            0
+        } else {
+            1
+        }
+    })
+}
+
+/// `Op::ring_multiplier` — RiNG rent multiplier (`match_rules.ring_multiplier
+/// + bonus`, floored at 1). **0 is not a legal value** (it zeroes rent); the
+/// multiplicative identity is 1. The Kani `World` has no RiNG-rule field, so
+/// this is the neutral floor. `TODO(规则书)` if a proof needs the stock 10.
+pub fn arm_ring_multiplier(_a: Args) -> i64 {
+    1
 }
