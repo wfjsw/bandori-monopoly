@@ -724,9 +724,9 @@ facades. Central rows older than those fixes are re-timed, not re-derived.
 
 | id | before (central-results3) | phase split / dominant cost | class | action | after |
 |---|---|---|---|---|---|
-| `moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → `memcmp.unwind` 16 (16-byte `==`) | **A** | `arr4_eq` already on master | re-timing |
-| `aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | same `memcmp.unwind` 16 | **A** | `arr4_eq` already on master | pending |
-| `this_hand_01_move_is_protocol` | UNWINDING 571 s (unwind 16) | `memcmp.unwind` 16 | **A** | `arr4_eq` already on master | pending |
+| `moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → `memcmp.unwind` 16 (16-byte `==`) | **A** | `arr4_eq` already on master | **SUCCESSFUL 322 s** (unwind 16) |
+| `aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | memcmp 16 (A) **and** `host::name_id` untagged (C) | **A + C** | `arr4_eq` on master; `set_self_prop` packing bug is host — **FAILED 260 s** | FAILED (class C, host) |
+| `this_hand_01_move_is_protocol` | UNWINDING 571 s (unwind 16) | `memcmp.unwind` 16 | **A** | `arr4_eq` already on master | **SUCCESSFUL 315 s** (unwind 16) |
 | `ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | `ex_quest::play` 15 + `memcmp` 45 | **A** | `arr4_eq` + raise attr to **24** (body `for &p in &all_players()`) | pending |
 | `fix_note_01_activation_keeps` | UNWINDING 838 s (unwind 16) | `fix_note::play` 60-trip `for t in 0..tile_count()` | **A** | attr already **64** on master (sound bound) | pending (expect E cost) |
 | `chart_rush_01_spends_fire` | FAILED 846 s | assert `all fire pots spent`; `Op::raise` was benign-0 → `spend_fire` skipped | **C** | `arm_raise` → 1 on master (op-subset) | pending re-time |
@@ -747,6 +747,28 @@ facades. Central rows older than those fixes are re-timed, not re-derived.
 | `lost_chase_end_it_all_guard` | TIMEOUT 1800 s | same | **A/E** | same | pending |
 | `school_time_01_exile_leg` | TIMEOUT 1800 s (unwind 24) | `board::tile_named_bytes` 6 × SCHOOLS scan + character_is | **E** | dest is now 17 (周边学区) not -1; comment fixed | pending |
 | `bear_cookie_01_push_is_protocol` | TIMEOUT 1800 s (unwind 32) | `event_deck_push` stub + `all_players` Range | **A/E** | PROTOCOL-LEVEL assert is intentional (FAIL expected if push is stub) | pending |
+
+### Class C host-model defect found (NOT fixed — `host.rs` is the other agent's)
+
+**`Op::set_self_prop` key packing vs the shared prop arm.**
+
+`sys_kani::set_self_prop(kp, kl, v)` packs `[kp, kl, v, 0, 0, 0]`.
+`host::dispatch`'s shared arm for `set_self_prop | set_prop_at | set_tile_prop`
+first does `name_id(a1, a2)` — for `set_self_prop` that is `name_id(kl, v)`,
+an **untagged** handle. `name_id` (cfg(kani)) is a loud
+`kani::assert(false, "untagged name handle")`. The correct decode
+`name_id(a0, a1)` on the `set_self_prop` branch is then unreachable.
+
+Blast radius (every body that calls `ctx::set_prop`):
+`aao`, `embers`, `fix_note`, `hallucination`, `surprise_duel`, `marina_box`,
+`bangdream_chan`. On the older central base this was silent; master's
+`name_id` cut makes it a hard FAIL (`aao_01` FAILED 260 s on this).
+**Needed host fix:** only decode `(a1,a2)` for the ops whose packing is
+`(uid/tile, kp, kl, …)`; for `set_self_prop` use `(a0,a1)` / `a2` as the
+value (the inner code already has the right parse — drop the eager outer one).
+
+Until that lands, set_prop-using events rows are class **C** (host), not
+proof bugs. No host.rs edit on this branch (owned by kani-ppcost).
 
 ### Class-B setup bugs fixed on this branch
 
