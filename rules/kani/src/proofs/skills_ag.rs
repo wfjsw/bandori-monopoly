@@ -356,9 +356,12 @@ pub fn firepot_01_tick_formula() {
         crate::kassert!(!grants, "first/second idle turn grants nothing");
         crate::kassert!(next == pre_rest + 1, "counter advances");
     }
+    // Mutant is `pre+1 >= 2` (grants at rest 1 and 2); card is `pre+1 >= 3`
+    // (grants only at rest 2). They disagree exactly at rest 1.
+    kani::cover!(pre_rest == 1, "reachable disagreement (rest 1)");
     crate::kassert!(
-        grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest == 2,
-        "mutant disagrees on rest 0/1"
+        grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest != 1,
+        "mutant disagrees at rest 1"
     );
 }
 

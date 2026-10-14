@@ -471,21 +471,14 @@ pub const DOOR_SEQUENCE_NAMES: [&str; 10] = [
 ];
 
 /// Every entry of the sequence exists on the board under the printed name.
+/// Uses `board::tile_named` (FNV + binary search) rather than a 10×60 scan —
+/// the scan needed unwind 600+ (class A bound-low; TUNING zero-loop style).
 pub fn door_sequence_names_on_board() -> bool {
     let mut i = 0;
     while i < 10 {
         let want = DOOR_SEQUENCE_NAMES[i];
-        let mut found = false;
-        let mut t = 0;
-        while t < 60 {
-            if crate::ir_fill::TILE_NAMES[t].1 == want
-                && crate::ir_fill::TILE_NAMES[t].0 == DOOR_SEQUENCE[i]
-            {
-                found = true;
-            }
-            t += 1;
-        }
-        if !found {
+        let idx = crate::board::tile_named(want);
+        if idx < 0 || idx != DOOR_SEQUENCE[i] {
             return false;
         }
         i += 1;

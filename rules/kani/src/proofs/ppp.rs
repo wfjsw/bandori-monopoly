@@ -854,7 +854,7 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
 // ===========================================================================
 
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(40)]
 pub fn door_01_sequence_const() {
     crate::kassert!(
         spec::ppp::DOOR_SEQUENCE.len() == 10,

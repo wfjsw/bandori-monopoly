@@ -78,7 +78,7 @@ fn skills_pp_world(user: i32) {
     });
 }
 
-fn effects_slice() -> ([Effect; 32], usize) {
+fn effects_slice() -> ([Effect; 24], usize) {
     world::with_world(|w| (w.log, w.log_n))
 }
 
@@ -293,8 +293,12 @@ pub fn band_idol_02_overflow_formula() {
     } else {
         crate::kassert!(over == 0, "no overflow when X <= down");
     }
+    // Mutant caps at 11 vs the book's 10 — they disagree only when
+    // x-down >= 11 (in 1..=10 both are x-down). Class B: the old check
+    // asserted disagreement in the agreeing range.
     let m = spec::skills_pp::band_idol_02_overflow_mutant(x, down);
-    if x > down && (x - down) < 10 {
+    kani::cover!(x > down && (x - down) >= 11, "reachable disagreement (cap 11)");
+    if x > down && (x - down) >= 11 {
         crate::kassert!(m != over, "mutant cap 11 vs 10");
     }
 }
