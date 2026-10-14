@@ -1052,7 +1052,7 @@ pattern's worked example (pp same_dream): SUCCESSFUL ~560 s per seat.
 | harness | verdict | time | notes |
 |---|---|---:|---|
 | `skills_r::sayo_fire_pass_iff` | **FAILED** | 190.8 s | BMC **returns** (pattern works). Assert `GainFire 2 or 3` fails — log is not exactly one GainFire. Class B/C under investigation (fire_max clamp / body path / log shape). Not skipped. |
-| `skills_r::rinko_fire_pass_iff` | queued | | serial CBMC |
+| `skills_r::rinko_fire_pass_iff` | **SUCCESSFUL** | 154.1 s | first green body proof under the pattern |
 | `skills_r::lisa_fire_pass_iff` | queued | | |
 | `skills_ag::firepot_01_tick_iff` | queued | | |
 
