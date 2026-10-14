@@ -47,12 +47,6 @@ pub const STEP: f32 = 0.05;
 /// `RecordFile::magic`.
 pub const MAGIC: &str = "bdrec";
 
-/// Keyframe store cap: a seek restores the nearest keyframe and re-simulates
-/// forward, so the index holds `save()` strings and nothing else. 4 MiB of
-/// saves is roughly a hundred frames -- plenty for a scrub bar, small enough
-/// for the wasm heap.
-pub const MAX_KEYFRAME_BYTES: usize = 4 * 1024 * 1024;
-
 // ---------------------------------------------------------------- u64 as string
 
 /// u64 fields travel as JSON strings: `JSON.parse` would silently round
@@ -1213,7 +1207,7 @@ pub struct Status {
 }
 
 /// How far the background index pass has got. `budget` on [`Replayer::index`]
-/// bounds one call's work; keyframes stop at [`MAX_KEYFRAME_BYTES`].
+/// bounds one call's work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexStatus {
     pub done: bool,
@@ -1260,17 +1254,13 @@ pub struct Replayer {
     last_act: Option<Result<(), Msg>>,
     /// Background keyframe pass (built lazily by [`Replayer::index`]).
     idx: Option<Box<Replayer>>,
-    keyframes: Vec<Keyframe>,
+    keyframes: Vec<Arc<Keyframe>>,
     keyframe_bytes: usize,
     /// Keyframe capture (only on the index pass).
     capture: bool,
     /// Turn boundaries since the last keyframe.
     turns_since_kf: u32,
     last_kf_time: f32,
-    /// Index pass: least ticks between keyframes, sized from the first save so
-    /// the byte cap lasts the whole record rather than its first stretch.
-    kf_gap_ticks: u64,
-    last_kf_tick: u64,
 }
 
 impl Replayer {
@@ -1374,8 +1364,6 @@ impl Replayer {
             capture: false,
             turns_since_kf: 0,
             last_kf_time: 0.0,
-            kf_gap_ticks: 0,
-            last_kf_tick: 0,
         };
         rp.drain_events();
         Ok(rp)
@@ -1545,7 +1533,7 @@ impl Replayer {
     }
 
     /// Index pass only: keep a `save()` about every 4 turn boundaries or 20 s
-    /// of game time, up to [`MAX_KEYFRAME_BYTES`].
+    /// of game time.
     fn maybe_keyframe(&mut self) {
         if !self.capture {
             return;
@@ -1559,35 +1547,29 @@ impl Replayer {
             self.turns_since_kf += 1;
         }
         let due = self.keyframes.is_empty()
-            || ((self.turns_since_kf >= 4 || self.time - self.last_kf_time >= 20.0)
-                && self.tick - self.last_kf_tick >= self.kf_gap_ticks);
-        if !due || self.keyframe_bytes >= MAX_KEYFRAME_BYTES {
+            || self.turns_since_kf >= 4
+            || self.time - self.last_kf_time >= 20.0;
+        if !due {
             return;
         }
         let save = self.m.save();
-        // Spread what is left of the byte budget over the ticks left. Saves
-        // grow through a game (the first is tiny), so budget for 1.5x this one.
-        let room = MAX_KEYFRAME_BYTES.saturating_sub(self.keyframe_bytes + save.len());
-        let fit = (room / (save.len() * 3 / 2).max(1)).max(1) as u64;
-        self.kf_gap_ticks = self.total_ticks().saturating_sub(self.tick) / fit;
         self.keyframe_bytes += save.len();
-        self.last_kf_tick = self.tick;
         self.turns_since_kf = 0;
         self.last_kf_time = self.time;
-        self.keyframes.push(Keyframe {
+        self.keyframes.push(Arc::new(Keyframe {
             tick: self.tick,
             time: self.time,
             input: self.cursor,
             last_event_id: self.last_event_id,
             save,
-        });
+        }));
     }
 
     // ------------------------------------------------------------ indexing
 
     /// Advance the background keyframe pass by at most `budget` inputs.
     /// Keyframes are `save()` blobs about every 4 turn boundaries or 20 s of
-    /// game time, capped at [`MAX_KEYFRAME_BYTES`].
+    /// game time.
     pub fn index(&mut self, budget: usize) -> IndexStatus {
         if self.idx.is_none() {
             let mut fresh = match Self::from_body(
@@ -1629,12 +1611,8 @@ impl Replayer {
                     break; // no progress
                 }
                 used += 1;
-                // Keyframes stop at the cap; replaying the rest would only burn CPU.
-                if idx.keyframe_bytes >= MAX_KEYFRAME_BYTES {
-                    break;
-                }
             }
-            // Tiny chunks are the norm; copy the (up to 4 MB) keyframes only
+            // Tiny chunks are the norm; copy the keyframes (shared, so cheap) only
             // when a new one landed.
             if idx.keyframes.len() != self.keyframes.len() {
                 self.keyframes = idx.keyframes.clone();
@@ -1644,7 +1622,7 @@ impl Replayer {
         let done = self
             .idx
             .as_ref()
-            .is_some_and(|i| i.cursor >= total || i.ended() || i.keyframe_bytes >= MAX_KEYFRAME_BYTES);
+            .is_some_and(|i| i.cursor >= total || i.ended());
         IndexStatus {
             done,
             inputs: self.idx.as_ref().map_or(0, |i| i.cursor as u32),
