@@ -189,6 +189,7 @@ export function Board({ sess }: { sess: GameSession }) {
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
         onBack={leave}
+        right={<></>}
       />
       <AutoBanner sess={sess} />
       <div className={s.body}>
