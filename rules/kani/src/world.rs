@@ -691,6 +691,9 @@ pub struct World {
     /// 真奈 join (CH-05): the seat a joiner's self-targeted effects are
     /// redirected to; `-1` outside a join (hostfns `join_redirect_target`).
     pub trig_join_redirect: i32,
+    /// When non-zero, `roll_dice` returns this value instead of a symbolic
+    /// face (harness control for dice-clause proofs; 0 = symbolic).
+    pub forced_roll: i32,
     /// A joiner used the redirect (hostfns `set_join_used`).
     pub trig_join_used: bool,
     /// `Trigger::main` — fired as part of the turn's [主要移动]?
@@ -806,6 +809,7 @@ impl World {
             trig_cancelled: false,
             trig_negate: false,
             trig_join_redirect: -1,
+            forced_roll: 0,
             trig_join_used: false,
             trig_main: false,
             trig_roll_source: ROLL_UNATTRIBUTED,

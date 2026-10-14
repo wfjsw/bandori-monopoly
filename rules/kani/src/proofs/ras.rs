@@ -61,7 +61,9 @@ crate::host_subset!(pareo_dispatch {
 });
 
 /// In-place 2-seat world for UNSTOPPABLE (stay=0 so cant_move admits).
-fn unstoppable_world(user: i32) {
+/// `face` pins the die via `forced_roll` (0 = symbolic) — `tile_named(SPOTS[sym])`
+/// is a symex cliff (see board `tile_hash` zero-loop + TRIAGE-LOG `bands-b`).
+fn unstoppable_world(user: i32, face: i32) {
     host::install_backend(unstoppable_dispatch);
     crate::harness::sparse_play_world(crate::harness::SparsePlay {
         used_seats: 2,
@@ -72,6 +74,7 @@ fn unstoppable_world(user: i32) {
     world::with_world_mut(|w| {
         w.stay = [0; MAX_PLAYERS];
         w.out[user as usize] = false;
+        w.forced_roll = face;
     });
 }
 
@@ -126,33 +129,21 @@ fn pareo_world(user: i32, pre_marks: i32) {
 // Seat-symmetric (the user gains the rolled face money).
 // ===========================================================================
 
-/// Shared iff at a **concrete** user seat.
-fn unstoppable_card_03_money_iff_at(user: i32) {
+/// Shared iff at a **concrete** user seat and a **concrete** die face.
+fn unstoppable_card_03_money_iff_at(user: i32, face: i32) {
     debug_assert!(user == 0 || user == 1);
-    unstoppable_world(user);
+    debug_assert!(face >= 1 && face <= 6);
+    unstoppable_world(user, face);
     let pre = world::snapshot();
     invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));
+    kani::cover!(true, "body returned");
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    // The roll is symbolic 1..=6 inside `ctx::roll(1, 6)`. Recover the face
-    // from the money amount the body granted (the only observable).
     let gained = post.money[user as usize] - pre.money[user as usize];
-    kani::cover!(gained == 2000, "face 1-3 grants 2000");
-    kani::cover!(gained == 1000, "face 4-6 grants 1000");
-
-    let r = if gained == 2000 {
-        1
-    } else if gained == 1000 {
-        4
-    } else {
-        // Must not happen: the body only grants those two figures.
-        crate::kassert!(false, "C-RAS-unstoppable-card-03: unexpected money delta");
-        0
-    };
-    let expected = spec::unstoppable_card_03_money(r);
+    let expected = spec::unstoppable_card_03_money(face);
     crate::kassert!(
         gained == expected,
         "C-RAS-unstoppable-card-03: money must be 2000 / 1000 by face"
@@ -176,25 +167,32 @@ fn unstoppable_card_03_money_iff_at(user: i32) {
     }
 }
 
-/// Iff at seat 0.
+/// Iff at seat 0, face 1 (low band → 2000).
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_money_iff() {
-    unstoppable_card_03_money_iff_at(0);
+    unstoppable_card_03_money_iff_at(0, 1);
 }
 
-/// Iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
+/// Iff at seat 0, face 4 (high band → 1000) — the two faces cover both legs.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn unstoppable_card_03_face4_money_iff() {
+    unstoppable_card_03_money_iff_at(0, 4);
+}
+
+/// Iff at seat 1, face 1 — the two user seats of the 2-seat world.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_user1_money_iff() {
-    unstoppable_card_03_money_iff_at(1);
+    unstoppable_card_03_money_iff_at(1, 1);
 }
 
 /// No-op: an out player gains nothing. (Concrete user, forced `out`.)
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_money_noop_when_out() {
-    unstoppable_world(0);
+    unstoppable_world(0, 1);
     let user = 0i32;
     world::with_world_mut(|w| w.out[0] = true);
     let pre = world::snapshot();
@@ -215,7 +213,7 @@ pub fn unstoppable_card_03_money_noop_when_out() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn unstoppable_card_03_money_mutant_is_detected() {
-    unstoppable_world(0);
+    unstoppable_world(0, 4);
     let user = 0i32;
     let pre = world::snapshot();
     invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));

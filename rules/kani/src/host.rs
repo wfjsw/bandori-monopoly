@@ -264,11 +264,16 @@ fn tile_idx(t: i32) -> usize {
 }
 
 /// Die roll within `count` d `sides` — symbolic under Kani, mid-value native.
+/// `World::forced_roll != 0` pins the face (harness control for dice clauses).
 fn roll_dice(count: i32, sides: i32) -> i32 {
     let c = count.max(0).min(8);
     let s = sides.max(1).min(1000);
     #[cfg(kani)]
     {
+        let forced = world::with_world(|w| w.forced_roll);
+        if forced != 0 {
+            return forced;
+        }
         // Explore every face of a single die; for multi-dice take a symbolic
         // sum bounded by the true range (CBMC stays small).
         if c == 1 {
