@@ -2085,7 +2085,7 @@ impl Match {
         let mut bid_grant = false;
         // Force-default a pending human seat whose pool is exhausted past the
         // grace window. Shared by the auction and ordinary-prompt branches.
-        let mut force_exhausted = |l: &mut Live| {
+        let force_exhausted = |l: &mut Live| {
             if !uses_pool || hold {
                 return;
             }
