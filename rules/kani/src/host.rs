@@ -1377,6 +1377,24 @@ pub fn arm_cards_in(a: Args) -> i64 {
                         }
                         s += 1;
                     }
+                } else if a1 == 3 {
+                    // Field: cards placed by `a0`, in placement order.
+                    let mut i = 0usize;
+                    while i < w.field_n as usize && n < world::MAX_CARDS {
+                        if w.field[i].player == a0 {
+                            ids[n] = card_slot_of_id(intern::NameId(w.field[i].card));
+                            n += 1;
+                        }
+                        i += 1;
+                    }
+                } else if a1 == 2 {
+                    // Deck: draw pile, top card first.
+                    let mut i = 0usize;
+                    while i < w.deck_n as usize && n < world::MAX_CARDS {
+                        ids[n] = card_slot_of_id(intern::NameId(w.deck_pile[i]));
+                        n += 1;
+                        i += 1;
+                    }
                 }
             });
             let mut encoded = [0u8; 16];
