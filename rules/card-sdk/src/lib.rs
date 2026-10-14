@@ -141,6 +141,18 @@ pub struct CardDef {
     /// [`abi::Flash::Always`] / [`abi::Flash::Never`] are the rule's own
     /// opinion and win over the Auto classification. `CardDef::flash`.
     pub flash: &'static [(i32, crate::abi::Flash)],
+    /// Per-entry **tile text** -- the deed-popup description this entry speaks
+    /// for, as `(entry index, slot, tile, key)`.
+    /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
+    /// - `tile`: `""` = the instance's own tile (a `tile:*` rule bound to one
+    ///   tile); otherwise a board tile *name* (`"CiRCLE"`, `"CiRCLE 咖啡厅"`) for
+    ///   a tile-bound text on a tile-less instance (`event:*`).
+    /// - `key`: i18n key in the `ui` namespace (`deed.note.*`); `""` means this
+    ///   entry **suppresses** the slot (the effective text is nothing).
+    ///
+    /// `CardDef::texts`. The view composes per-tile speakers in
+    /// body-precedence order (docs/TILES.md 「Tile text」).
+    pub texts: &'static [(i32, &'static str, &'static str, &'static str)],
 }
 
 impl CardDef {
@@ -154,6 +166,7 @@ impl CardDef {
             silent: &[],
             quiet_when_empty: &[],
             flash: &[],
+            texts: &[],
         }
     }
 
@@ -169,6 +182,7 @@ impl CardDef {
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts: self.texts,
         }
     }
 
@@ -185,6 +199,7 @@ impl CardDef {
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts: self.texts,
         }
     }
 
@@ -213,6 +228,7 @@ impl CardDef {
             silent: entries,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts: self.texts,
         }
     }
 
@@ -232,6 +248,7 @@ impl CardDef {
             silent: self.silent,
             quiet_when_empty: entries,
             flash: self.flash,
+            texts: self.texts,
         }
     }
 
@@ -258,6 +275,7 @@ impl CardDef {
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: entries,
+            texts: self.texts,
         }
     }
 
@@ -305,6 +323,38 @@ impl CardDef {
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts: self.texts,
+        }
+    }
+
+    /// Declare the deed-popup **tile text** these entries speak for --
+    /// `(entry index, slot, tile, key)`. See [`Self::texts`] for the shape.
+    /// Replaces any earlier `texts` call.
+    ///
+    /// ```ignore
+    /// use card_sdk::abi::text_slot;
+    /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
+    ///     On::Settle("", None, settle),                                       // 0
+    ///     On::Hook(&[HookKind::PassTile], "", Some(pass_pays), on_pass),      // 1
+    /// ]).texts(&[
+    ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
+    ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
+    /// ]);
+    /// ```
+    pub const fn texts(
+        self,
+        texts: &'static [(i32, &'static str, &'static str, &'static str)],
+    ) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            legacy: self.legacy,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts,
         }
     }
 

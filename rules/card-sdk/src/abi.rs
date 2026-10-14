@@ -379,6 +379,16 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v59: `ManifestEntry::texts` -- per-entry **tile text** declarations
+///      (`CardDef::texts`): the deed-popup description an entry speaks for,
+///      as `(entry, slot, tile, key)`. `slot` is [`text_slot`] (settle /
+///      pass); `tile` is `""` = the instance's own tile or a board tile name
+///      for a tile-bound text on a tile-less instance; `key` is a `ui`
+///      namespace i18n key (`deed.note.*`), `""` = suppress the slot. The
+///      view composes per-tile speakers in body-precedence order (docs/TILES.md
+///      「Tile text」). Trailing field on `ManifestEntry` (postcard is not
+///      self-describing, so this is the bump); `MatchState::tile_texts` is a
+///      view-only field and needs no SAVE_VERSION change.
 /// v58: **status gates** -- `TriggerKind::{ActGate = 95, PayGate = 96,
 ///      MoveGate = 97}` (also `GateKind`): CEL-only `On::Gate` questions the
 ///      `status:*` pseudo cards answer; the host evaluates the condition
@@ -399,7 +409,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 58;
+pub const ABI_VERSION: i32 = 59;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -475,6 +485,19 @@ pub struct EntryPresentation {
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.
 pub const COUNTERACT_MOVE_EXTENSION: &str = "counteract.moveExtension";
+
+/// Tile-text slots (`CardDef::texts`, [`ManifestTileText::slot`], v59): which
+/// half of a deed popup an entry speaks for. The settle slot is the [结算]
+/// description; the pass slot is the [经过] one. Mirrors the body's
+/// `On::Settle` / `HookKind::PassTile` split -- the text an entry declares is
+/// the description that entry speaks for, so a rule that replaces one half
+/// only replaces that half's text.
+pub mod text_slot {
+    /// The [结算] / landing description (`On::Settle`).
+    pub const SETTLE: &str = "settle";
+    /// The [经过] / pass description (`HookKind::PassTile`).
+    pub const PASS: &str = "pass";
+}
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -2318,6 +2341,29 @@ pub struct ManifestEntry {
     /// declare reads as its default (`0`). Host side becomes a `BTreeMap`.
     #[serde(default)]
     pub props: Vec<(String, i32)>,
+    /// Tile texts this card's entries speak (`CardDef::texts`). v59.
+    /// Trailing field -- postcard is not self-describing, so adding it is an
+    /// ABI bump.
+    #[serde(default)]
+    pub texts: Vec<ManifestTileText>,
+}
+
+/// One per-entry **tile text** declaration (`CardDef::texts`, v59): the
+/// deed-popup description an entry speaks for.
+///
+/// * `entry` -- the manifest `on` index the text hangs off.
+/// * `slot` -- [`text_slot`] (`"settle"` / `"pass"`).
+/// * `tile` -- `""` = the instance's own tile (a `tile:*` rule bound to one
+///   tile); otherwise a board tile *name* (`"CiRCLE"`, `"CiRCLE 咖啡厅"`) for a
+///   tile-bound text on a tile-less instance (`event:*`).
+/// * `key` -- i18n key in the `ui` namespace (`deed.note.*`); `""` suppresses
+///   the slot (the effective text is nothing).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ManifestTileText {
+    pub entry: i32,
+    pub slot: String,
+    pub tile: String,
+    pub key: String,
 }
 
 /// One entry point in the manifest: what it is and which trigger kinds it

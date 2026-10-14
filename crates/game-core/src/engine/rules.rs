@@ -493,6 +493,24 @@ macro_rules! raise {
 }
 pub(crate) use raise;
 
+/// One declared **tile text** (`CardRules::card_texts`): the deed-popup
+/// description an entry speaks for. `game-core`'s own shape -- this crate does
+/// not depend on `card-sdk` types (same pattern as [`crate::state::prop`] vs
+/// `card_sdk::abi::prop`); the host's `ManifestTileText` carries the same
+/// `slot` / `tile` / `key` plus the entry index, which the loader folds into
+/// the Vec's order.
+///
+/// * `slot` -- `"settle"` or `"pass"` (the [结算] / [经过] half).
+/// * `tile` -- `""` = the instance's own tile; otherwise a board tile *name*
+///   (`"CiRCLE"`) for a tile-bound text on a tile-less instance.
+/// * `key` -- `ui` namespace i18n key (`deed.note.*`); `""` suppresses the slot.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TileTextDecl {
+    pub slot: String,
+    pub tile: String,
+    pub key: String,
+}
+
 pub trait CardRules: Send + Sync {
     /// Hex SHA-256 of the built ruleset, when the implementation has one.
     /// `None` (the default) means "unknown" and is skipped by
@@ -542,6 +560,20 @@ pub trait CardRules: Send + Sync {
     /// is `0` for every key the engine reads.
     fn card_prop(&self, card: &str, key: &str) -> i32 {
         self.card_props(card).get(key).copied().unwrap_or(0)
+    }
+
+    /// The card rule's declared **tile texts** (`CardDef::texts`): the
+    /// deed-popup description each entry speaks for, **in declaration order**
+    /// (sorted by entry index, then declaration position -- that order is the
+    /// third component of the view's text precedence key, `docs/ENGINE.md`
+    /// 「Effect ordering」). Empty when the card declares none.
+    ///
+    /// [`TileTextDecl`] is `game-core`'s own shape (this crate does not depend
+    /// on `card-sdk` types); the host's `ManifestTileText` carries the same
+    /// `slot` / `tile` / `key` plus the entry index the loader folds into this
+    /// Vec's order. See `docs/TILES.md` 「Tile text」.
+    fn card_texts(&self, _card: &str) -> Vec<TileTextDecl> {
+        Vec::new()
     }
 
     /// Does this ruleset declare a rule with this id (a card id or a

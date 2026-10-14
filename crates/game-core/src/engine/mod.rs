@@ -27,8 +27,11 @@ mod ops;
 mod play;
 pub mod rules;
 mod setup;
+mod tile_text;
 mod work;
 mod world;
+
+pub use tile_text::compose as compose_tile_texts;
 
 pub use ai::{
     bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_play_card, bot_wants_redeem,
@@ -40,8 +43,8 @@ pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::{Paid, Pay, PayEvent, PayKind};
 pub use play::purchase;
 pub use rules::{
-    CardRules, Dest, Dir, Effect, Gate, Negation, Payee, RollSource, StubRules, Trigger, TriggerBuy,
-    TriggerMove, TriggerPay,
+    CardRules, Dest, Dir, Effect, Gate, Negation, Payee, RollSource, StubRules, TileTextDecl,
+    Trigger, TriggerBuy, TriggerMove, TriggerPay,
 };
 pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, World};
 pub use play::MAX_SETTLE_DEPTH;
@@ -754,6 +757,10 @@ impl Match {
                     && !over_hand;
             }
         }
+        // Deed-popup tile texts (`docs/TILES.md` 「Tile text」): composed from
+        // the rule instances' declared texts, in body-precedence order. View
+        // only -- never part of `Match::save`.
+        st.tile_texts = tile_text::compose(&self.world, &self.data, self.rules.as_ref());
         st
     }
 

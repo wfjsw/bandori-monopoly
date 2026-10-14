@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
-use card_sdk::abi::{export, ManifestOn, OnKind, ABI_VERSION};
+use card_sdk::abi::{export, ManifestOn, ManifestTileText, OnKind, ABI_VERSION};
 use card_sdk::On;
 use game_rules::{
     Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome,
@@ -161,6 +161,16 @@ impl NativeRulesHandle {
                     id: card.id.to_string(),
                     on,
                     props,
+                    texts: card
+                        .texts
+                        .iter()
+                        .map(|(e, slot, tile, key)| ManifestTileText {
+                            entry: *e,
+                            slot: (*slot).to_string(),
+                            tile: (*tile).to_string(),
+                            key: (*key).to_string(),
+                        })
+                        .collect(),
                 });
             }
         }
@@ -614,6 +624,14 @@ impl CardModules for NativeModules {
     }
     fn card_prop(&self, id: &str, key: &str) -> i32 {
         self.card_props(id).get(key).copied().unwrap_or(0)
+    }
+    fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
+        let mut texts = self
+            .card(id)
+            .and_then(|i| self.index.card(i))
+            .map_or_else(Default::default, |c| c.texts.clone());
+        texts.sort_by_key(|t| t.entry);
+        texts
     }
     fn declares(&self, kind: TriggerKind) -> bool {
         self.index.declares(kind)
