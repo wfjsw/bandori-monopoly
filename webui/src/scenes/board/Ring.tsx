@@ -580,6 +580,7 @@ function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
             <div className={s.diceNum}>{roll.dice || ""}</div>
             <div className={s.diceCap}>{roll.caption}</div>
           </button>
+          {roll.hint && <div className={s.rollHint}>{roll.hint}</div>}
         </div>
       )}
       {/* The shared event deck sits in the bottom-left pocket of the fold; your
