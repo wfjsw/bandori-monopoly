@@ -1037,3 +1037,34 @@ and the `bands-b` rows below. Runner: `tools/kani/run.sh --unit <u>
 --harness <h> --timeout 1800` serially, `CARGO_TARGET_DIR=/home/monopoly/kani-target-bands-b`,
 `CARGO_BUILD_JOBS=3`, machine slot cap 2 shared with `kani-bands-a`.
 
+### bands-b proof results (running sweep; update as rows land)
+
+Runner: `tools/kani/bands-b-sweep.sh` (per-harness, jobs=1, timeout 1800).
+Accumulator: `/home/monopoly/kani-bands-b-results/results-all.tsv`.
+
+**Class E fix (unstoppable TIMEOUT → SUCCESSFUL):** `tile_named(SPOTS[sym])`
+hashed a slice of symbolic length (`board::tile_hash` while-loop). Two fixes:
+(1) zero-loop `tile_hash` under cfg(kani) (64-way step macro);
+(2) `World::forced_roll` pin so dice clauses cover concrete faces —
+`tile_named` of a symbolic index is still a symex cliff.
+
+| unit | harness | verdict | time (s) | class | note |
+|---|---|---|---|---|---|
+| ras | unstoppable_card_03_money_iff (u=0, face=1) | **SUCCESSFUL** | 292 | — | 2000 leg |
+| ras | unstoppable_card_03_face4_money_iff (u=0, face=4) | **SUCCESSFUL** | ~300 | — | 1000 leg |
+| ras | unstoppable_card_03_user1_money_iff (u=1, face=1) | **SUCCESSFUL** | 251 | — | |
+| ras | unstoppable_card_03_money_noop_when_out | **SUCCESSFUL** | 268 | — | out player |
+| skills_ras | masking_01_fire_gain_leaf | **SUCCESSFUL** | 134 | — | +1 fire |
+| crychic | soyoreturn_02_hand_iff | **SUCCESSFUL** | 222 | — | |
+| crychic | soyoreturn_02_user1_hand_iff | **SUCCESSFUL** | 246 | — | |
+| crychic | soyoreturn_02_mutant_is_detected | **SUCCESSFUL** | 160 | — | |
+| crychic | vocalist_01_waive_iff | **SUCCESSFUL** | 164 | — | |
+| crychic | vocalist_01_user1_waive_iff | **SUCCESSFUL** | 168 | — | |
+| crychic | vocalist_01_mutant_is_detected | **SUCCESSFUL** | 145 | — | |
+| crychic | grab_01_stay_iff | **SUCCESSFUL** | 235 | — | |
+
+**12/12 SUCCESSFUL so far (0 FAILED / TIMEOUT).** Sweep continues over the
+remaining ~220 harnesses (crychic → mor → mujica → mygo → ras → skills_* →
+sumimi, alphabetical). Times in the 130–300 s band match the ppcost floor
+(concrete user) once the tile_named / forced_roll cliffs are gone.
+
