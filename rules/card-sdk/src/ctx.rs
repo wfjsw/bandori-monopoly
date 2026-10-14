@@ -96,11 +96,20 @@ fn mj(m: &Msg) -> (i32, i32) {
 /// an arena slot and `scratch` is a dummy of the same length (the real bytes
 /// come back through [`out_read`]).
 fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
+    #[cfg(kani)]
+    {
+        // Fixed arena slot — never `vec![0u8; cap]` (`extend_with` cliff when
+        // `cap` is a host return). Scratch is empty: `out_read` pulls the bytes.
+        let (h, _l) = crate::native::reserve(cap);
+        (h, alloc::vec::Vec::new())
+    }
+    #[cfg(not(kani))]
     #[cfg(target_arch = "wasm32")]
     {
         let mut buf = alloc::vec![0u8; cap];
         (buf.as_mut_ptr() as i32, buf)
     }
+    #[cfg(not(kani))]
     #[cfg(not(target_arch = "wasm32"))]
     {
         let (h, l) = crate::native::reserve(cap);
@@ -112,11 +121,18 @@ fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
 /// On wasm the scratch already holds the bytes; on native they live in the
 /// arena and `scratch` is discarded.
 fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
+    #[cfg(kani)]
+    {
+        let _ = scratch;
+        crate::native::read(p, n.max(0) as usize)
+    }
+    #[cfg(not(kani))]
     #[cfg(target_arch = "wasm32")]
     {
         let _ = p;
         scratch
     }
+    #[cfg(not(kani))]
     #[cfg(not(target_arch = "wasm32"))]
     {
         let _ = scratch;
@@ -1654,12 +1670,42 @@ pub fn ask_tiles(
 
 /// Returns the chosen option index.
 pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Result<usize, Prompt> {
-    for o in options {
-        let (p, l) = mj(o);
-        unsafe { sys::opt_str(p, l) }
+    #[cfg(kani)]
+    {
+        // Zero-loop option list: fixed 4-slot branch tree. A `for o in options`
+        // unrolls to the global bound when `options.len()` is not folded (the
+        // prompt profile's `ctx::ask_card` 31).
+        if let Some(o) = options.get(0) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if let Some(o) = options.get(1) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if let Some(o) = options.get(2) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if let Some(o) = options.get(3) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if options.len() > 4 {
+            kani::assert(false, "ask_pick: more than 4 options under Kani");
+        }
+        let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
+        return Ok((i.max(0) as usize).min(options.len().saturating_sub(1)));
     }
-    let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
-    Ok((i.max(0) as usize).min(options.len().saturating_sub(1)))
+    #[cfg(not(kani))]
+    {
+        for o in options {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
+        Ok((i.max(0) as usize).min(options.len().saturating_sub(1)))
+    }
 }
 
 /// A yes/no ask.
@@ -1669,11 +1715,34 @@ pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> Result<bool, Prompt> 
 
 /// Returns the chosen player.
 pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> Result<i32, Prompt> {
-    for &x in players {
-        unsafe { sys::opt_int(x) }
+    #[cfg(kani)]
+    {
+        if let Some(&x) = players.get(0) {
+            unsafe { sys::opt_int(x) }
+        }
+        if let Some(&x) = players.get(1) {
+            unsafe { sys::opt_int(x) }
+        }
+        if let Some(&x) = players.get(2) {
+            unsafe { sys::opt_int(x) }
+        }
+        if let Some(&x) = players.get(3) {
+            unsafe { sys::opt_int(x) }
+        }
+        if players.len() > 4 {
+            kani::assert(false, "ask_player: more than 4 players under Kani");
+        }
+        let i = ask_raw(PromptKind::Player, player_id, title, text)?;
+        return Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))]);
     }
-    let i = ask_raw(PromptKind::Player, player_id, title, text)?;
-    Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
+    #[cfg(not(kani))]
+    {
+        for &x in players {
+            unsafe { sys::opt_int(x) }
+        }
+        let i = ask_raw(PromptKind::Player, player_id, title, text)?;
+        Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
+    }
 }
 
 /// A player ask where each option also names a **card** to show with it (returns
@@ -1691,28 +1760,79 @@ pub fn ask_player_cards(
     players: &[i32],
     cards: &[&str],
 ) -> Result<i32, Prompt> {
-    let n = players.len().min(cards.len());
-    let mut options: Vec<Msg> = Vec::with_capacity(n);
-    for (p, c) in players.iter().zip(cards.iter()).take(n) {
-        options.push(Msg::new("ask.player").player_id("who", *p).card("card", c));
+    #[cfg(kani)]
+    {
+        // Fixed 4-slot option array — no `Vec<Msg>` grow/drop.
+        let mut options: [Msg; 4] = [Msg::new("ask.player"); 4];
+        let mut n = 0usize;
+        macro_rules! push {
+            ($i:expr) => {
+                if n < 4 {
+                    if let (Some(&p), Some(&c)) = (players.get($i), cards.get($i)) {
+                        options[n] = Msg::new("ask.player").player_id("who", p).card("card", c);
+                        n += 1;
+                    }
+                }
+            };
+        }
+        push!(0); push!(1); push!(2); push!(3);
+        if n == 0 {
+            return Ok(-1);
+        }
+        let i = ask_pick(player_id, title, text, &options[..n])?;
+        return Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))]);
     }
-    if options.is_empty() {
-        return Ok(-1);
+    #[cfg(not(kani))]
+    {
+        let n = players.len().min(cards.len());
+        let mut options: Vec<Msg> = Vec::with_capacity(n);
+        for (p, c) in players.iter().zip(cards.iter()).take(n) {
+            options.push(Msg::new("ask.player").player_id("who", *p).card("card", c));
+        }
+        if options.is_empty() {
+            return Ok(-1);
+        }
+        let i = ask_pick(player_id, title, text, &options)?;
+        Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
     }
-    let i = ask_pick(player_id, title, text, &options)?;
-    Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
 }
 
 /// Pick one of `cards` (ids); returns the index.
 pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Result<usize, Prompt> {
-    for c in cards {
-        // `opt_str` takes a serialized `Msg`, not a raw string -- a card id
-        // wrapped as `{{card}}` is the label.
-        let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
-        unsafe { sys::opt_str(p, l) }
+    #[cfg(kani)]
+    {
+        // Zero-loop option list (same 4-slot tree as `ask_pick`). The prompt
+        // profile showed `ctx::ask_card` 31 — the `for c in cards` over a
+        // symbolic-length slice.
+        macro_rules! opt {
+            ($i:expr) => {
+                if let Some(c) = cards.get($i) {
+                    // `opt_str` takes a serialized `Msg`, not a raw string -- a
+                    // card id wrapped as `{{card}}` is the label. Under kani
+                    // `Msg` is Copy and `mj` is two ints (no postcard Vec).
+                    let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
+                    unsafe { sys::opt_str(p, l) }
+                }
+            };
+        }
+        opt!(0); opt!(1); opt!(2); opt!(3);
+        if cards.len() > 4 {
+            kani::assert(false, "ask_card: more than 4 cards under Kani");
+        }
+        let i = ask_raw(PromptKind::Card, player_id, title, text)?;
+        return Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)));
     }
-    let i = ask_raw(PromptKind::Card, player_id, title, text)?;
-    Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)))
+    #[cfg(not(kani))]
+    {
+        for c in cards {
+            // `opt_str` takes a serialized `Msg`, not a raw string -- a card id
+            // wrapped as `{{card}}` is the label.
+            let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
+            unsafe { sys::opt_str(p, l) }
+        }
+        let i = ask_raw(PromptKind::Card, player_id, title, text)?;
+        Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)))
+    }
 }
 
 /// A number in `min..=max`, built as an [`ask_pick`] over the range (ranges in
@@ -1727,15 +1847,52 @@ pub fn ask_number(
 ) -> Result<i32, Prompt> {
     let min = min.min(max);
     let max = max.max(min);
-    let mut options: Vec<Msg> = Vec::new();
-    for n in min..=max {
-        options.push(Msg::new("ask.intOption").i("n", n as i64));
+    #[cfg(kani)]
+    {
+        // Fixed 4-slot options (card-pool ranges are small).
+        let mut options: [Msg; 4] = [Msg::new("ask.intOption"); 4];
+        let mut n = 0usize;
+        macro_rules! push {
+            ($v:expr) => {
+                if n < 4 {
+                    options[n] = Msg::new("ask.intOption").i("n", ($v) as i64);
+                    n += 1;
+                }
+            };
+        }
+        if min <= max {
+            push!(min);
+            if min + 1 <= max {
+                push!(min + 1);
+                if min + 2 <= max {
+                    push!(min + 2);
+                    if min + 3 <= max {
+                        push!(min + 3);
+                        if min + 4 <= max {
+                            kani::assert(false, "ask_number: range wider than 4 under Kani");
+                        }
+                    }
+                }
+            }
+        }
+        if n == 0 {
+            return Ok(min);
+        }
+        let i = ask_pick(player_id, title, text, &options[..n])?;
+        return Ok(min + i as i32);
     }
-    if options.is_empty() {
-        return Ok(min);
+    #[cfg(not(kani))]
+    {
+        let mut options: Vec<Msg> = Vec::new();
+        for n in min..=max {
+            options.push(Msg::new("ask.intOption").i("n", n as i64));
+        }
+        if options.is_empty() {
+            return Ok(min);
+        }
+        let i = ask_pick(player_id, title, text, &options)?;
+        Ok(min + i as i32)
     }
-    let i = ask_pick(player_id, title, text, &options)?;
-    Ok(min + i as i32)
 }
 
 /// Run another card's `play` inside this run, as that card.

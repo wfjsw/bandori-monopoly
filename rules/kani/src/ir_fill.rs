@@ -979,15 +979,11 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
         c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
         p += 1;
     }
-    // Fan tokens the shave clause reads.
-    c.named_set(
-        ID_TOK_PP_POS,
-        w.fans_pos[op] as i64,
-    );
-    c.named_set(
-        ID_TOK_PP_NEG,
-        w.fans_neg[op] as i64,
-    );
+    // Fan tokens the shave clause reads. Direct fixed slots (no named_set
+    // scan) — this is a light fill with exactly two known names.
+    c.named[0] = (ID_TOK_PP_POS, w.fans_pos[op] as i64);
+    c.named[1] = (ID_TOK_PP_NEG, w.fans_neg[op] as i64);
+    c.named_n = 2;
     c
 }
 

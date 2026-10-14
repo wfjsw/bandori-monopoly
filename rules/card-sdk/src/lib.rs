@@ -41,6 +41,10 @@ pub mod msg;
 /// vocabulary lives in `rules-kani`, not here.
 pub mod intern;
 
+/// `cfg(kani)` bump allocator (heap-free `String`/`Vec` for unmodified bodies).
+#[cfg(kani)]
+mod kani_alloc;
+
 /// Host-import dispatch used by the Kani verifier crate (see module docs).
 /// Compiled always so `rules-kani` typechecks outside `cargo kani`; production
 /// builds never call it (`sys` still uses the `extern` block).
