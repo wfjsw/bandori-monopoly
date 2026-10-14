@@ -173,6 +173,9 @@ pub struct Run {
     /// uid is. It is the one the dispatch named, and it follows the card if
     /// this run re-places it (the same object moves with it).
     current_uid: i32,
+    /// The owner of the instance this run took off the field (`unplace_self`),
+    /// so a card that hops to another field (re-placing itself) keeps its owner.
+    carried_owner: Option<i32>,
     /// Where this card goes when the run finishes, set by `set_dest`.
     dest: i32,
     /// Whose pile the fate lands in, set by `set_transfer_to_dest`. `None` is
@@ -563,7 +566,8 @@ impl Run {
         let Some(f) = self.world.field_by_uid(uid) else {
             return;
         };
-        let (owner, card) = (f.owner, f.card.clone());
+        // The holder hears its card's counter change, not the card's owner.
+        let (owner, card) = (self.world.holder_of(uid), f.card.clone());
         self.counter_log.push((owner, card, name.to_string(), now - was));
     }
 
@@ -1014,6 +1018,7 @@ impl CardWorld for Run {
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32 {
         let props = props_of(&self.props, card);
         let uid = self.world.place_card_on(&self.data, player_id, tile, card, note, props);
+        self.stamp_owner(uid, card);
         if uid >= 0 {
             self.outcome(
                 player_id,
@@ -1030,6 +1035,7 @@ impl CardWorld for Run {
     fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32 {
         let props = props_of(&self.props, card);
         let uid = self.world.place_card(&self.data, player_id, card, note, props);
+        self.stamp_owner(uid, card);
         if uid >= 0 {
             self.outcome(
                 player_id,
@@ -1071,6 +1077,7 @@ impl CardWorld for Run {
     }
     fn unplace_card(&mut self) -> i32 {
         let card = self.current_card.clone();
+        self.carried_owner = self.world.field_by_uid(self.current_uid).map(|f| f.owner);
         let owner = self.world.unplace_at(self.current_uid);
         if owner >= 0 {
             self.current_uid = -1;
@@ -2205,6 +2212,21 @@ impl CardWorld for Run {
 }
 
 impl Run {
+    /// A card placing *itself* keeps its owner whichever field it lands on:
+    /// the owner it carried off the field (a hop), else the player whose
+    /// activation this is (a hand play). Placement alone stamps the field
+    /// holder, which loses the owner of a card parked on another player.
+    fn stamp_owner(&mut self, uid: i32, card: &str) {
+        if uid < 0 || card != self.current_card {
+            return;
+        }
+        let held = self.world.field_by_uid(self.current_uid).map(|f| f.owner);
+        let owner = self.carried_owner.take().or(held).unwrap_or(self.trigger.player_id);
+        if owner >= 0 {
+            self.world.set_field_owner(uid, owner);
+        }
+    }
+
     /// In the game and not exiled.
     fn present(&self, s: i32) -> bool {
         self.world
@@ -2495,13 +2517,11 @@ impl<M: CardModules> RulesBridge<M> {
         // An event instance is bound under `event:<id>`; the draw's own event
         // names it without the prefix, so the flash and the two log lines agree.
         let cid = card_id.strip_prefix("event:").unwrap_or(card_id);
-        let owner = if uid >= 0 {
-            w.world
-                .field_by_uid(uid)
-                .map(|f| f.owner)
-                .unwrap_or(call.player_id())
-        } else {
-            call.player_id()
+        // The seat the instance sits on (not `FieldCard::owner`, which names
+        // who the card belongs to).
+        let owner = match if uid >= 0 { w.world.holder_of(uid) } else { -1 } {
+            h if h >= 0 => h,
+            _ => call.player_id(),
         };
         let who = if owner >= 0 { owner } else { target };
         // Entry label (「（1）」 and kin) from the manifest, when the card
@@ -2726,6 +2746,7 @@ impl<M: CardModules> RulesBridge<M> {
                 trigger: trigger.clone(),
                 current_card: card_id.to_string(),
                 current_uid: uid,
+                carried_owner: None,
                 dest: DEST_UNSET,
                 dest_to: None,
                 paid_log: vec![],
@@ -2926,6 +2947,7 @@ impl<M: CardModules> RulesBridge<M> {
                         trigger: trigger.clone(),
                         current_card: card_id.to_string(),
                         current_uid: uid,
+                        carried_owner: None,
                         dest: DEST_UNSET,
                         dest_to: None,
                         paid_log: vec![],
@@ -5578,6 +5600,7 @@ impl<M: CardModules> RulesBridge<M> {
             trigger: top.clone(),
             current_card: card.to_string(),
             current_uid: -1,
+            carried_owner: None,
             dest: DEST_UNSET,
             dest_to: None,
             paid_log: vec![],
@@ -5801,6 +5824,7 @@ impl<M: CardModules> RulesBridge<M> {
                 trigger: top.clone(),
                 current_card: String::new(),
                 current_uid: -1,
+                carried_owner: None,
                 dest: DEST_UNSET,
                 dest_to: None,
                 paid_log: vec![],
@@ -7711,6 +7735,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             trigger: Trigger::default(),
             current_card: card.to_string(),
             current_uid: uid,
+            carried_owner: None,
             dest: DEST_UNSET,
             dest_to: None,
             paid_log: vec![],
@@ -7800,6 +7825,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             trigger: Trigger::default(),
             current_card: String::new(),
             current_uid: -1,
+            carried_owner: None,
             dest: DEST_UNSET,
             dest_to: None,
             paid_log: vec![],

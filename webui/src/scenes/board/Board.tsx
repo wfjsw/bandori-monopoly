@@ -7,7 +7,6 @@ import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
 import { namesOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
-import { CommitChip } from "../../ui/CommitChip";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
@@ -190,7 +189,7 @@ export function Board({ sess }: { sess: GameSession }) {
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
         onBack={leave}
-        right={sess.kind === "online" && sess.room?.fair ? <CommitChip commit={sess.room.fair.commit} /> : <></>}
+        right={<></>}
       />
       <AutoBanner sess={sess} />
       <div className={s.body}>

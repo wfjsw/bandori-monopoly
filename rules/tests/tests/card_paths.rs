@@ -249,6 +249,9 @@ fn tomoe_savior_buy_listener_pays_the_chuchu_bonus() {
         "the chuchu card is on P0: {:?}",
         t.field_ids(0)
     );
+    // The card sits on P0's field but belongs to the player who played it.
+    let fc = t.field(0).into_iter().find(|f| f.card == "RAS:（chuchu）演奏我的音乐吧").unwrap();
+    assert_eq!((fc.owner, fc.user), (2, 2), "owner kept on placement");
     // P1 mortgages; P0 buys the deed back through tomoe_savior.
     t.begin_turn(1);
     drain(&mut t);
@@ -268,6 +271,9 @@ fn tomoe_savior_buy_listener_pays_the_chuchu_bonus() {
         "the chuchu 「购买」 listener paid its user: events {:?}",
         t.recent_keys(16)
     );
+    // It hopped to P1 (next in order, skipping its user P2) and is still P2's.
+    let fc = t.field(1).into_iter().find(|f| f.card == "RAS:（chuchu）演奏我的音乐吧").expect("hopped to P1");
+    assert_eq!((fc.owner, fc.user), (2, 2), "owner kept across the hop");
 }
 
 // 规则书: same card, the [反击] is only for 「商店街地契」 -- a deed outside the
