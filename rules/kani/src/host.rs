@@ -945,9 +945,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             n + w.hand_n as i32
         }) as i64,
         Op::discard_count => {
-            let slot = card_slot(a0, a1);
+            // `discard_count(player, ptr, len)` → [player, ptr, len]: name (a1,a2).
+            let slot = card_slot(a1, a2);
             world::with_world(|w| {
-                let id = card_u16(a0, a1);
+                let id = card_u16(a1, a2);
                 let in_pile = world::pile_count(&w.discard_pile, w.discard_n, id);
                 let in_bits = if (slot as usize) < 4 {
                     w.discard[slot as usize] as i32
@@ -2018,13 +2019,15 @@ pub fn arm_set_held_name(a: Args) -> i64 {
 
 /// `Op::hand_count` — copies of a card in hand (resonance uses the view).
 pub fn arm_hand_count(a: Args) -> i64 {
+    // `hand_count(player, ptr, len)` → [player, ptr, len]: name is (a1,a2),
+    // seat is a0. (Was (a0,a1) = (player, ptr) — untagged name_id loud-FAIL.)
     let [a0, a1, a2, ..] = a;
-    let slot = card_slot(a0, a1);
+    let slot = card_slot(a1, a2);
     world::with_world(|w| {
         if slot == 1 {
-            w.hand_resonance[player_idx(a2)]
+            w.hand_resonance[player_idx(a0)]
         } else {
-            let id = card_u16(a0, a1);
+            let id = card_u16(a1, a2);
             let in_pile = world::pile_count(&w.hand_pile, w.hand_n, id);
             let in_bits = if (slot as usize) < 4 {
                 w.hand[slot as usize] as i32
