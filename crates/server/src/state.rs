@@ -60,6 +60,9 @@ pub struct Server {
     pub bot_budget_ms: Option<u64>,
     pub bot_ask_timeout: Option<Duration>,
     pub bot_ponder_budget_ms: Option<u64>,
+    /// Interval between empty-comment keep-alives on SSE streams
+    /// (`--sse-keepalive` / `BM_SSE_KEEPALIVE`, seconds).
+    pub sse_keepalive: Duration,
 }
 
 impl Server {
@@ -88,6 +91,7 @@ impl Server {
             bot_budget_ms: None,
             bot_ask_timeout: None,
             bot_ponder_budget_ms: None,
+            sse_keepalive: Duration::from_secs(30),
         })
     }
 

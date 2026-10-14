@@ -1,7 +1,7 @@
 //! `server [--port 8080] [--data data] [--static webui/dist] [--workers N] [--redis URL] [--bot-service PATH] [--bot-threads N] [--bot-search-threads N]`
 //!
 //! Environment: `PORT`, `BM_DATA`, `BM_STATIC`, `BM_WORKER`, `BM_WORKERS`, `BM_REDIS`,
-//! `BM_BOT_SERVICE`, `BOT_THREADS`, `BOT_SEARCH_THREADS`.
+//! `BM_BOT_SERVICE`, `BOT_THREADS`, `BOT_SEARCH_THREADS`, `BM_SSE_KEEPALIVE` (seconds, default 30).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -134,6 +134,10 @@ async fn main() {
     {
         let s = Arc::get_mut(&mut server).expect("fresh server handle");
         s.bots = bots;
+        let secs: u64 = arg("--sse-keepalive", "BM_SSE_KEEPALIVE", "30")
+            .parse()
+            .expect("sse-keepalive must be a number of seconds");
+        s.sse_keepalive = std::time::Duration::from_secs(secs.max(1));
     }
     // Bring back anything the store still knows about, so a restart is silent.
     server.restore_rooms();
