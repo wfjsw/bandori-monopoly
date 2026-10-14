@@ -83,3 +83,15 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 //   (`sharesExclusives`); a hand-composition filter (holding a second
 //   character's exclusive without it being in the starting deck) still has no
 //   form.
+
+/// `bands.json` row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Sumimi"#)
+    .short_name(r#"Sumimi"#)
+    .boot_art("")
+    .color(r#"#FFFF66"#)
+    .skill(r#"人气偶像组合"#)
+    .text(r#"（1）若你在一回合内从其他玩家处获得过资金，你的回合结束时为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶。（2）此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。（3）你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出。"#)
+    .logo("")
+    .shares_exclusives(true);
+

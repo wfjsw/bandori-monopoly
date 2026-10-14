@@ -279,6 +279,91 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 `(prop::PLAYABLE_STUNNED, 1)`; the twenty song-title cards declare
 `(prop::SONG, 1)`.
 
+## Card metadata (ABI v63) -- data lives with the rule
+
+The deck-builder / gallery / home-screen rows of `data/cards.json`,
+`data/characters.json` and `data/bands.json` are **authored beside the rule
+code** and exported from the ruleset, not hand-maintained as flat JSON.
+
+* **Cards** -- `CardDef::meta(&CardMeta::new()...)` on the card's `CardDef`
+  (`rules/cards/card-*/src/*.rs`). Carries `name` / `rawName` / `text` /
+  `tags` / `derived` / `cell`, plus a generic `fields` map for the game slots
+  `band` and `owner` (`ruleset_core::roster::meta_key`). Multi-line CJK text is
+  a raw string literal -- byte-exact newlines, full-width punctuation and
+  trailing spaces round-trip untouched.
+* **Characters** -- `ruleset_core::roster::CharacterDef` beside each character
+  skill (`rules/skills/skill-characters/src/*.rs`), collected in that crate's
+  `roster_table::CHARACTERS`.
+* **Bands** -- `ruleset_core::roster::BandDef` beside each band skill
+  (`rules/skills/skill-bands/src/*.rs`), collected in `roster_table::BANDS`.
+
+`card-sdk` stays vocabulary-free: `CardMeta` is the generic card-row shape and
+`MetaRow` / `MetaDoc` the wire form. `CharacterDef` / `BandDef` name this
+game's concepts and live in `ruleset-core` / the skill crates.
+
+### Transport
+
+`bandori_metadata` (`export::METADATA`) returns a packed postcard
+`meta::MetaDoc` -- **not** through `ManifestEntry`, so the match path and the
+per-card manifest stay lean. The blob is built only when the host asks (load
+time, never per run). Host: `Ruleset::metadata()` / `::roster()`, then
+`game_core::data::GameData::load_with_roster(get_file, roster)`. Native
+(`rules-native`): `rules_native::roster_metadata()` / `::roster()`.
+
+### Canonical order
+
+The Rust crates register cards alphabetically inside each band, while
+`GameData` iterates the JSON files in their own order (deck pools, presets).
+A shared generated table (`rules/ruleset-core/src/roster_order.rs`, written
+**once** by `tools/lift-roster.mjs --ordinals`) maps id → ordinal; the export
+sorts by `(kind, ordinal)` so the rebuilt vectors equal the JSON order exactly.
+Per-band lift runs never touch that table.
+
+### Lifting + equivalence gate
+
+```sh
+node tools/lift-roster.mjs --ordinals          # generate roster_order.rs
+node tools/lift-roster.mjs --band Sumimi       # one band crate + its skills
+node tools/lift-roster.mjs --card 通用:GREAT    # one card outside band mode
+node tools/lift-roster.mjs --tables            # rebuild CHARACTERS / BANDS
+node tools/lift-roster.mjs --all               # every band
+```
+
+`--band` touches only that band's files (safe to run concurrently across
+bands). The gate for deleting the JSON later is
+`cargo test -p rules-native --test roster_equiv`: deep equality (order
+included) for every row that has Rust metadata, with coverage an explicit
+constant (`EXPECTED_*_COVERAGE`) the next phase raises to 184 / 54 / 12.
+
+`cargo run -p rules-native --example dump_roster` prints the roster in the
+JSON shape/order/formatting of `data/{cards,characters,bands}.json` for tools
+to read.
+
+### Next phase: consumers switch off JSON
+
+Until the lift covers every row, `GameData::load` (JSON) stays the default.
+The following load `data/{cards,characters,bands}.json` today and will switch
+to `load_with_roster` + ruleset metadata in the next phase:
+
+| File | Role |
+| --- | --- |
+| `crates/game-core/src/data.rs` | `GameData::load` parses the three files |
+| `crates/game-core/src/deck.rs` | documents `cards.json` order as the deck pool |
+| `crates/server/src/main.rs` | `GameData::load` from `data/` |
+| `crates/rules-worker/src/lib.rs` | `GameData::load` |
+| `crates/web-glue/src/lib.rs` | `GameData::load` from fetched files |
+| `crates/game-rules/tests/common/mod.rs` | test harness `GameData::load` |
+| `crates/game-rules/examples/deckbook.rs` | character names in file order |
+| `webui/src/core/data.ts` | client deck builder / gallery / home |
+| `webui/src/core/cards.test.ts` | reads `cards.json` |
+| `tools/asset-pipe/check.py` | band / character inventory |
+| `tools/asset-pipe/extract.py` | skill-simple extraction |
+| `tools/rulebook/{extract,check,cite}.py` | rulebook cite/check vs card ids |
+| `tools/lift-roster.mjs` | lifts JSON → Rust (this phase) |
+
+`data/skill_simple.json` (display-only) and the other `data/*.json` files
+(tiles / events / schools / voice / home / board / match_rules) stay JSON.
+
 ## The vocabulary (`card_sdk::ctx` vs `ruleset_core::ctx`)
 
 **Split (ABI v56).** `card-sdk` is only generalized card-runtime mechanisms
