@@ -109,7 +109,7 @@
 }
 
 /* Live markers in the face's bottom zone -- the part that must read while the
-   row is retracted: crystals, on-card CP, the note dot. */
+   row is retracted: crystals and on-card CP. */
 .crystal,
 .cp,
 .count {
@@ -127,14 +127,6 @@
 }
 .cp {
   background: var(--teal);
-}
-.noteDot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--pink);
-  box-shadow: 0 0 0 1.5px #fff;
 }
 
 /* Face-down: a card back in the owner's frame (no name or markers leak). */

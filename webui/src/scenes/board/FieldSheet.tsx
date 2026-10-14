@@ -78,7 +78,6 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                 >
                   {fc.crystals > 0 && <span className={s.crystal}>◆{fc.crystals}</span>}
                   {fc.cp > 0 && <span className={s.cp} title={tr("board.cp", { n: fc.cp })}>CP{fc.cp}</span>}
-                  {!!note && <span className={s.noteDot} title={note} />}
                 </InspectCard>
               )}
               <Avatar c={m.charOf(i)} size={28} className={s.holder} />
@@ -105,7 +104,6 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   <div className={s.marks}>
                     {e.counter > 0 && <span className={s.count}>×{e.counter}</span>}
                     {e.counter2 > 0 && <span className={s.count}>×{e.counter2}</span>}
-                    {!!note && <span className={s.noteDot} title={note} />}
                   </div>
                 </button>
               )}
