@@ -1628,3 +1628,14 @@ fn embers_copies_are_removed_on_exile() {
         t.marks()
     );
 }
+
+// The turn clock is a modifier point (`TurnBonusTime` / `TurnBaseTime`): a
+// placed card's hooks rewrite the refill / base before the host applies them.
+#[test]
+fn turn_clock_hooks_rewrite_the_refill_and_base() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "TEST:clockHook").unwrap();
+    pass(&mut t, 0);
+    until_turn(&mut t, 1);
+    assert_eq!((t.st().base_time, t.st().bonus_time), (30.0, 17.0));
+}

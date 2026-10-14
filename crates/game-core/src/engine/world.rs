@@ -298,7 +298,8 @@ fn no_card_uid() -> i32 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Signal {
     /// A turn began for this player: refill its bonus time and start the clock.
-    StartTimer(usize),
+    /// Carries the hooked (`turnBonusTime` / `turnBaseTime`) refill and base.
+    StartTimer(usize, f32, f32),
     /// A new turn record was created (clears the host's time-out flag).
     TurnBegan,
 }

@@ -992,6 +992,33 @@ fn deck_once(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A field card that bends the turn clock through the modifier hooks:
+/// 免费时间 refill +7 s, 恢复时间 doubled.
+const CLOCK_HOOK: CardDef = CardDef::new(
+    "TEST:clockHook",
+    &[
+        On::Play("", None, clock_hook_play),
+        On::Hook(&[HookKind::TurnBonusTime], "", None, clock_bonus),
+        On::Hook(&[HookKind::TurnBaseTime], "", None, clock_base),
+    ],
+);
+
+fn clock_hook_play(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:clockHook", &Msg::new(key!("deck_once_note")));
+    Ok(())
+}
+
+fn clock_bonus(_player_id: i32) -> card_sdk::Asked {
+    trigger::set_pay_amount(trigger::value() + 7);
+    Ok(())
+}
+
+fn clock_base(_player_id: i32) -> card_sdk::Asked {
+    trigger::set_pay_amount(trigger::value() * 2);
+    Ok(())
+}
+
 /// Reads money, pays (host effect changes money), reads money again.
 /// Pins HostRequest replay semantics: the second read sees the post-pay
 /// amount (replay re-run rebases onto live+host_effects) or the pre-pay
@@ -1357,7 +1384,7 @@ card_sdk::bandori_ruleset!(&[
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
-    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
+    ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
     SILENT_PAIR, SILENT_NEST, SILENT_PAY, SILENT_QUIET, SILENT_ASK,
     FLASH_ALWAYS, FLASH_NEVER, FLASH_THEN_ASK, FLASH_TWO_ASKS, FLASH_KEYED_TWICE,
     FLASH_CARD_EARLY, FLASH_SUPPRESS, FLASH_AUTO_SELF, FLASH_OUTER, FLASH_INNER
