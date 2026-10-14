@@ -36,6 +36,9 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
         (first.from, first.to, first.value, first.dice),
         (from as i32, 0, segment, steps)
     );
+    // The client lights the whole route at once: the head event says how many
+    // steps the walk still has after this CiRCLE-cut segment.
+    assert_eq!(first.ahead, steps - segment.abs(), "steps left after the segment");
     let first_id = first.id;
     t.m.tick(0.5);
     assert_eq!(t.pos(0), 0, "wait at CiRCLE until the reward is chosen");
@@ -68,6 +71,7 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
         assert_eq!(walks.len(), 2);
         let rest = walks[1];
         assert_eq!(rest.r#type, "move");
+        assert_eq!(rest.ahead, 0, "the last segment ends the walk");
         assert_eq!(
             (rest.from, rest.to, rest.value),
             (

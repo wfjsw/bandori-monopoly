@@ -478,22 +478,25 @@ export class Animator {
     sfx("dice_result");
   }
 
-  private async walk(playerId: number, from: number, steps: number, hop: number): Promise<void> {
+  private async walk(playerId: number, from: number, steps: number, hop: number, more = 0): Promise<void> {
     if (!this.pos) return;
     const n = D.tiles.length;
     const dir = steps >= 0 ? 1 : -1;
     let p = from;
     this.pos[playerId] = from;
+    // The whole walk is lit at once: this segment plus the `more` steps the
+    // engine will publish after it (a walk is cut into one event per CiRCLE).
     const ahead: number[] = [];
-    for (let k = 1, q = from; k <= Math.abs(steps); k++) {
+    for (let k = 1, q = from; k <= Math.abs(steps) + more; k++) {
       q = (((q + dir) % n) + n) % n;
       ahead.push(q);
     }
+    const continued = this.route !== null;
     if (hop > 0) this.route = ahead.slice();
     this.bump();
     try {
       // A beat to read the lit route before the token sets off.
-      if (hop > 0 && ahead.length > 0) await this.nap(300);
+      if (hop > 0 && !continued && ahead.length > 0) await this.nap(300);
       for (let k = 0; k < Math.abs(steps); k++) {
         p = (((p + dir) % n) + n) % n;
         this.pos[playerId] = p;
@@ -507,7 +510,8 @@ export class Animator {
       }
     } finally {
       this.hop = null;
-      this.route = null;
+      // Between segments (CiRCLE settles here) the rest of the route stays lit.
+      this.route = more > 0 && this.route && this.route.length > 0 ? this.route : null;
       this.bump();
     }
   }
@@ -520,6 +524,8 @@ export class Animator {
     const playerId = e.playerId;
     const ok = playerId >= 0 && !!v && playerId < v.state.players.length;
     const wait = (ms: number) => (fast ? Promise.resolve() : this.nap(ms));
+    // A route left lit between walk segments is dropped by a turn change or a teleport.
+    if (e.type === "turn" || e.type === "teleport") this.route = null;
     switch (e.type) {
       case "turn":
         // The queued new-turn marker announces whose turn it is once.
@@ -539,7 +545,7 @@ export class Animator {
         await wait(450);
         // A burst of reward/card events may fast-forward the log, but must
         // still show the path. Only explicit 4x replay skips movement frames.
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130, e.ahead ?? 0);
         break;
       }
       case "dice": {
@@ -573,7 +579,7 @@ export class Animator {
       case "move":
         if (!ok) break;
         this.showBanner(this.player(playerId), body);
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90, e.ahead ?? 0);
         break;
       case "teleport":
         if (!ok || !this.pos) break;

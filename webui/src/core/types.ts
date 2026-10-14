@@ -124,6 +124,8 @@ export interface MatchEvent {
    *  nests it beneath that header). `-1` / absent = top-level. Absent on
    *  records written before the field existed. */
   parent?: number;
+  /** On a walk event: steps the same walk still takes after `to` (0 = it ends here). */
+  ahead?: number;
   /** Presentational outcome lines on a `"card"` activation -- the explicit
    *  「无事发生」 / 「被…无效」 notes and the flash's one-line summary. Absent
    *  on old records. */

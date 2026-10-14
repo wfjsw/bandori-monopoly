@@ -1441,6 +1441,7 @@ impl Cx<'_> {
             from: pos,
             to: pos,
             value: 0,
+            ahead: steps.max(0) + m.extra_steps.max(0),
             pending_first: true,
             main: m.main,
             roll: m.roll,
@@ -1482,6 +1483,7 @@ impl Cx<'_> {
             if let Some(seg) = self.w.walk_seg_mut() {
                 seg.to = next;
                 seg.value += m.dir();
+                seg.ahead = remaining as i32;
             }
             if passes_circle || last {
                 // Publish the approach before `passTile`: CiRCLE's rule can
