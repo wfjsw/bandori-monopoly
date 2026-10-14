@@ -58,6 +58,8 @@ def parse_on_bodies(src: str) -> list[str]:
                 cur.append(c)
         if cur:
             parts.append("".join(cur).strip())
+        # Trailing comma in On::Ctor(...) leaves an empty last part — drop it.
+        parts = [p for p in parts if p]
         if not parts:
             continue
         last = parts[-1]

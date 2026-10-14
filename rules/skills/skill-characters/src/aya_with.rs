@@ -163,3 +163,16 @@ ruleset_core::roster::CharacterDef::new(r#"丸山彩"#)
     .preset(&[])
     .variant_of("")
     .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay(player_id)
+}

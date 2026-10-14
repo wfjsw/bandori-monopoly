@@ -137,3 +137,10 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
     //   digit. Left as-is pending the ruling.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn no_breakup_kani(player_id: i32) -> card_sdk::Asked {
+    no_breakup(player_id)
+}

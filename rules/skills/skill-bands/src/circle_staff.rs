@@ -96,3 +96,10 @@ ruleset_core::roster::BandDef::new(r#"CiRCLE"#)
     .skill(r#"后勤人员的努力"#)
     .text(r#"（1）只能在卡组中加入“通用”卡（2）在你打出的“通用”卡生效时，可额外弃一张牌，将打出的那张卡[手]效果中的一个数字变为两倍（除将牌加入卡组的效果以外）。"#)
     .logo("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_played_kani(player_id: i32) -> card_sdk::Asked {
+    on_played(player_id)
+}
