@@ -91,26 +91,26 @@ pub fn unstoppable_card_03_money_iff() {
         4
     } else {
         // Must not happen: the body only grants those two figures.
-        kassert!(false, "C-RAS-unstoppable-card-03: unexpected money delta");
+        crate::kassert!(false, "C-RAS-unstoppable-card-03: unexpected money delta");
         0
     };
     let expected = spec::unstoppable_card_03_money(r);
-    kassert!(
+    crate::kassert!(
         gained == expected,
         "C-RAS-unstoppable-card-03: money must be 2000 / 1000 by face"
     );
-    kassert!(
+    crate::kassert!(
         spec::unstoppable_card_03_log_ok(effects, player, expected),
         "C-RAS-unstoppable-card-03: effect log is exactly one GainMoney"
     );
     // Frame: nothing but the money moved.
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: no movement (teleport is BLOCKED-HOST)");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
-    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
-    kassert!(post.discard == pre.discard, "frame: discard unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: no movement (teleport is BLOCKED-HOST)");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
+    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
+    crate::kassert!(post.discard == pre.discard, "frame: discard unchanged");
     for q in 0..MAX_PLAYERS {
         if q != player as usize {
-            kassert!(
+            crate::kassert!(
                 post.money[q] == pre.money[q],
                 "frame: other players' money unchanged"
             );
@@ -139,11 +139,11 @@ pub fn unstoppable_card_03_money_noop_when_out() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    kassert!(
+    crate::kassert!(
         spec::unstoppable_card_03_out_log_ok(effects),
         "C-RAS-unstoppable-card-03: out player produces no effects"
     );
-    kassert!(post == pre, "C-RAS-unstoppable-card-03: out player leaves the frame");
+    crate::kassert!(post == pre, "C-RAS-unstoppable-card-03: out player leaves the frame");
 }
 
 /// Mutant companion: the off-by-one money spec does NOT match the card.
@@ -167,7 +167,7 @@ pub fn unstoppable_card_03_money_mutant_is_detected() {
     kani::assume(gained == 1000);
     let r = 4;
     let wrong = spec::unstoppable_card_03_money_mutant(r);
-    kassert!(
+    crate::kassert!(
         gained != wrong,
         "mutant: card must not match the off-by-one money spec"
     );
@@ -242,11 +242,11 @@ pub fn riot_02_03_cycle_iff() {
         "holder hand non-empty (cycle + extra)"
     );
 
-    kassert!(
+    crate::kassert!(
         spec::riot_cycle_log_ok(effects, &hands, &hand_ns, &pre.out, n, holder),
         "C-RAS-riot-02/03: discard-all then redraw h (+1 for holder)"
     );
-    kassert!(
+    crate::kassert!(
         spec::riot_cycle_frame_ok(&pre, &post),
         "C-RAS-riot-02: the cycle itself moves no money / pos / fire"
     );
@@ -315,7 +315,7 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
     if i != effects.len() {
         ok = false;
     }
-    kassert!(!ok, "mutant: card must not match the no-extra-draw spec");
+    crate::kassert!(!ok, "mutant: card must not match the no-extra-draw spec");
 }
 
 // ===========================================================================
@@ -377,15 +377,15 @@ pub fn pareo_01_marks_iff() {
     kani::cover!(pre_marks == 0, "start at 0 marks");
     kani::cover!(pre_marks == 1, "start at 1 mark");
 
-    kassert!(
+    crate::kassert!(
         spec::pareo_01_log_ok(effects, player, pareo_key),
         "C-RAS-pareo-01: effect log is exactly one +2 PAREO AddToken"
     );
-    kassert!(
+    crate::kassert!(
         marks_after == pre_marks + spec::pareo_01_mark_delta(),
         "C-RAS-pareo-01: marks must be pre+2"
     );
-    kassert!(
+    crate::kassert!(
         spec::pareo_01_frame_ok(&pre, &post),
         "C-RAS-pareo-01: frame untouched"
     );
@@ -407,7 +407,7 @@ pub fn pareo_01_marks_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    kassert!(
+    crate::kassert!(
         !spec::pareo_01_log_ok_mutant(effects, player, pareo_key),
         "mutant: card must not match the +3 marks spec"
     );

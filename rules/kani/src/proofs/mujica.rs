@@ -71,18 +71,18 @@ pub fn black_bday_low_pays_800_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "low bracket exercised");
-    kassert!(
+    crate::kassert!(
         spec::mujica::black_bday_low_effects(effects, other, user),
         "C-MUJICA-黑色生日-01: exactly one PayTo(other→user, 800)"
     );
-    kassert!(
+    crate::kassert!(
         spec::mujica::black_bday_low_post_ok(&post, other, user, pre.money[1], pre.money[0]),
         "C-MUJICA-黑色生日-01: money moved 800"
     );
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
-    kassert!(post.stay == pre.stay, "frame: stay");
-    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
 }
 
 /// High bracket: the other player (money > 1000) pays 200 twice (total 400).
@@ -102,11 +102,11 @@ pub fn black_bday_high_pays_400_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "high bracket exercised");
-    kassert!(
+    crate::kassert!(
         spec::mujica::black_bday_high_effects(effects, other, user),
         "C-MUJICA-黑色生日-02: exactly two PayTo(other→user, 200)"
     );
-    kassert!(
+    crate::kassert!(
         spec::mujica::black_bday_high_post_ok(&post, other, user, pre.money[1], pre.money[0]),
         "C-MUJICA-黑色生日-02: money moved 400"
     );
@@ -124,7 +124,7 @@ pub fn black_bday_low_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // Card matches the true spec (800) and therefore must NOT match 801.
-    kassert!(
+    crate::kassert!(
         !spec::mujica::black_bday_low_effects_mutant(effects, other, user),
         "mutant: card must not match the 801 spec"
     );
@@ -142,7 +142,7 @@ pub fn black_bday_low_mutant_panics() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:黑色生日"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    kassert!(
+    crate::kassert!(
         spec::mujica::black_bday_low_effects_mutant(effects, other, user),
         "mutant: card must not match the 801 spec"
     );
@@ -165,7 +165,7 @@ pub fn heart_rain_stay_layers_iff() {
     kani::cover!(roll <= 3, "roll ≤ 3 → 2 layers");
     kani::cover!(roll >= 4 && roll <= 12, "roll 4–12 → 1 layer");
     kani::cover!(roll >= 13, "roll ≥ 13 → 0 layers");
-    kassert!(
+    crate::kassert!(
         (layers == 2 && roll <= 3)
             || (layers == 1 && (4..=12).contains(&roll))
             || (layers == 0 && roll >= 13),
@@ -179,7 +179,7 @@ pub fn heart_rain_stay_layers_iff() {
 pub fn heart_rain_stay_layers_mutant_is_detected() {
     let roll: i32 = kani::any();
     kani::assume((1..=3).contains(&roll));
-    kassert!(
+    crate::kassert!(
         spec::mujica::heart_rain_stay_layers(roll) != spec::mujica::heart_rain_stay_layers_mutant(roll),
         "mutant: 2 layers must differ from 3"
     );
@@ -212,14 +212,14 @@ pub fn heart_rain_fallback_stun_and_money_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "empty window → fallback");
-    kassert!(
+    crate::kassert!(
         spec::mujica::heart_rain_fallback_effects(effects, user),
         "C-MUJICA-心の雨-03: fallback is GiveStun(user,1) + GainMoney(user,1000)"
     );
-    kassert!(post.stay[0] == pre.stay[0] + 1, "user stun layer (shared stay counter)");
-    kassert!(post.money[0] == pre.money[0] + 1000, "user +1000");
-    kassert!(post.money[1] == pre.money[1], "frame: other money");
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(post.stay[0] == pre.stay[0] + 1, "user stun layer (shared stay counter)");
+    crate::kassert!(post.money[0] == pre.money[0] + 1000, "user +1000");
+    crate::kassert!(post.money[1] == pre.money[1], "frame: other money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// In-window player with a symbolic roll: stay layers match the book, and
@@ -253,21 +253,21 @@ pub fn heart_rain_in_window_roll_stay_iff() {
     kani::cover!(gained == 2, "roll ≤ 3");
     kani::cover!(gained == 1, "roll 4–12");
     kani::cover!(gained == 0, "roll ≥ 13 (fallback)");
-    kassert!(
+    crate::kassert!(
         gained == 0 || gained == 1 || gained == 2,
         "C-MUJICA-心の雨-02: stay gain is 0, 1, or 2"
     );
     if gained > 0 {
-        kassert!(
+        crate::kassert!(
             spec::mujica::heart_rain_stay_effect(effects, 1, gained),
             "C-MUJICA-心の雨-02: exactly one GiveStay for the in-window player"
         );
-        kassert!(
+        crate::kassert!(
             spec::mujica::stay_frame_ok(&pre, &post, &[1], pre.n_players),
             "frame: only the in-window player's stay moves"
         );
     } else {
-        kassert!(
+        crate::kassert!(
             spec::mujica::heart_rain_fallback_effects(effects, user),
             "C-MUJICA-心の雨-03: no stay gained → fallback stun+1000"
         );
@@ -300,13 +300,13 @@ pub fn dice_cast_places_on_own_field_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "play places the card");
-    kassert!(
+    crate::kassert!(
         spec::mujica::dice_cast_place_effects(effects, user, 2),
         "C-MUJICA-骰子-01: PlaceCard(user, Field) plus the latch SetState"
     );
-    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand (play leaves hand outside this body)");
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand (play leaves hand outside this body)");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT: demands a GainMoney as well — the card must not match.
@@ -322,7 +322,7 @@ pub fn dice_cast_mutant_extra_money_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:骰子已经掷下"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    kassert!(
+    crate::kassert!(
         !effects
             .iter()
             .any(|e| matches!(e, Effect::GainMoney { .. })),
@@ -355,12 +355,12 @@ pub fn sparkler_places_two_crystals_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "play places with 2 crystals");
-    kassert!(
+    crate::kassert!(
         spec::mujica::sparkler_place_effects(effects, user, 2),
         "C-MUJICA-花火-01: PlaceCard + AddCounter(+2)"
     );
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT: demands 3 crystals.
@@ -375,7 +375,7 @@ pub fn sparkler_crystal_count_mutant_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:燃尽前的线香花火"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    kassert!(
+    crate::kassert!(
         !effects
             .iter()
             .any(|e| matches!(e, Effect::AddCounter { n, .. } if *n == 3)),
@@ -409,16 +409,16 @@ pub fn sparkler_last_crystal_stun_two_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "last-crystal body");
-    kassert!(
+    crate::kassert!(
         spec::mujica::sparkler_last_crystal_effects(effects, user),
         "C-MUJICA-花火-03: GiveStun(user, 2)"
     );
     let dest = world::with_world(|ww| ww.dest);
-    kassert!(
+    crate::kassert!(
         spec::mujica::sparkler_last_crystal_dest(dest),
         "C-MUJICA-花火-03: dest becomes Graveyard"
     );
-    kassert!(post.stay[0] == pre.stay[0] + 2, "user gains 2 stun layers");
+    crate::kassert!(post.stay[0] == pre.stay[0] + 2, "user gains 2 stun layers");
 }
 
 /// MUTANT: last crystal grants 1 stun, not 2.
@@ -433,11 +433,11 @@ pub fn sparkler_last_crystal_mutant_is_detected() {
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mujica:燃尽前的线香花火"), 2, user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    kassert!(
+    crate::kassert!(
         spec::mujica::sparkler_last_crystal_effects(effects, user),
         "body grants 2 stun"
     );
-    kassert!(
+    crate::kassert!(
         !spec::mujica::sparkler_last_crystal_effects_mutant(effects, user),
         "mutant: 2 ≠ 1"
     );
@@ -490,13 +490,13 @@ pub fn doll_garden_pay_amount_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "pay branch");
-    kassert!(
+    crate::kassert!(
         spec::mujica::doll_garden_pay_effects(effects, other, user, x),
         "C-MUJICA-人偶的箱庭-01: PayTo(other→user, X*20)"
     );
     let amount = spec::mujica::doll_garden_pay_amount(x);
-    kassert!(post.money[1] == pre.money[1] - amount, "payer debited X*20");
-    kassert!(post.money[0] == pre.money[0] + amount, "user credited X*20");
+    crate::kassert!(post.money[1] == pre.money[1] - amount, "payer debited X*20");
+    crate::kassert!(post.money[0] == pre.money[0] + amount, "user credited X*20");
 }
 
 /// MUTANT: X*20 + 10.
@@ -509,7 +509,7 @@ pub fn doll_garden_pay_amount_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:人偶的箱庭"), user));
     let post = world::snapshot();
-    kassert!(
+    crate::kassert!(
         post.money[1] != 5_000 - spec::mujica::doll_garden_pay_amount_mutant(x),
         "mutant: card pays X*20, not X*20+10"
     );
@@ -540,12 +540,12 @@ pub fn welcome_toggle_arithmetic_iff() {
     kani::cover!(!has_state2, "no 状态2 → no-op");
     let to = spec::mujica::welcome_next_state(cur, has_state2);
     if has_state2 {
-        kassert!(
+        crate::kassert!(
             to == if cur == 1 { 2 } else if cur == 2 { 1 } else { cur },
             "C-MUJICA-欢迎-02: skillState toggles 1↔2"
         );
     } else {
-        kassert!(to == cur, "C-MUJICA-欢迎-02: no 状态2 → no effect");
+        crate::kassert!(to == cur, "C-MUJICA-欢迎-02: no 状态2 → no effect");
     }
 }
 
@@ -553,15 +553,15 @@ pub fn welcome_toggle_arithmetic_iff() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn welcome_no_state2_mutant_is_detected() {
-    kassert!(
+    crate::kassert!(
         spec::mujica::welcome_next_state(0, false) == 0,
         "no 状态2 → no-op"
     );
-    kassert!(
+    crate::kassert!(
         spec::mujica::welcome_next_state_mutant(0, false) == 2,
         "mutant would force 状态2"
     );
-    kassert!(
+    crate::kassert!(
         spec::mujica::welcome_next_state(0, false) != spec::mujica::welcome_next_state_mutant(0, false),
         "mutant: forced toggle must differ from the required no-op"
     );
@@ -589,11 +589,11 @@ pub fn nyamu_places_on_field_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "place");
-    kassert!(
+    crate::kassert!(
         spec::mujica::nyamu_place_effects(effects, user, 2),
         "C-MUJICA-喵梦-01: PlaceCard(user, Field)"
     );
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 // ===========================================================================
@@ -623,11 +623,11 @@ pub fn umiri_places_on_next_actors_field_iff() {
 
     let next = spec::mujica::umiri_next_actor(user, 2);
     kani::cover!(next == 1, "next actor is seat 1");
-    kassert!(
+    crate::kassert!(
         spec::mujica::umiri_place_effects(effects, next, 2),
         "C-MUJICA-海铃-01: PlaceCard on the next actor's field"
     );
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 // ===========================================================================
@@ -654,11 +654,11 @@ pub fn mortis_nothing_to_copy_is_inert() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(true, "no copyable target");
-    kassert!(
+    crate::kassert!(
         spec::mujica::mortis_inert_is_noop(effects),
         "C-MUJICA-睦-01: no prior copyable card → empty effect log"
     );
-    kassert!(post == pre || post.log_n == 0, "frame untouched (log empty)");
+    crate::kassert!(post == pre || post.log_n == 0, "frame untouched (log empty)");
 }
 
 // ===========================================================================
@@ -679,7 +679,7 @@ pub fn saki_move_dest_is_three_tiles() {
     let dest = spec::mujica::saki_move_dest(from, dir, 60);
     kani::cover!(dir == 1, "clockwise 3");
     kani::cover!(dir == -1, "counter-clockwise 3");
-    kassert!(
+    crate::kassert!(
         spec::mujica::saki_move_steps() == 3,
         "C-MUJICA-祥移动-01: walk length is exactly 3"
     );
@@ -688,7 +688,7 @@ pub fn saki_move_dest_is_three_tiles() {
     } else {
         (((from - 3) % 60) + 60) % 60
     };
-    kassert!(dest == expected, "C-MUJICA-祥移动-01: dest is from±3 mod 60");
+    crate::kassert!(dest == expected, "C-MUJICA-祥移动-01: dest is from±3 mod 60");
 }
 
 /// MUTANT: 4-tile walk.
@@ -698,7 +698,7 @@ pub fn saki_move_dest_mutant_is_detected() {
     let from: i32 = kani::any();
     kani::assume((0..60).contains(&from));
     let dir = 1i32;
-    kassert!(
+    crate::kassert!(
         spec::mujica::saki_move_dest(from, dir, 60) != spec::mujica::saki_move_dest_mutant(from, dir, 60),
         "mutant: 3-tile dest ≠ 4-tile dest"
     );
@@ -717,7 +717,7 @@ pub fn saki_move_halve_pay_amount() {
     kani::assume((0..=2_000).contains(&amount));
     kani::cover!(amount == 320, "even 320 → 160");
     kani::cover!(amount == 321, "odd 321 → 160 (OPEN-取整 floor)");
-    kassert!(
+    crate::kassert!(
         spec::mujica::saki_move_halve_pay(amount) == amount / 2,
         "C-MUJICA-祥移动-03: payment price halved"
     );

@@ -64,11 +64,11 @@ pub fn sayo_fire_pass_iff() {
 
     kani::cover!(someone_out, "someone out (gain 3)");
     kani::cover!(!someone_out, "nobody out (gain 2)");
-    kassert!(
+    crate::kassert!(
         spec::sayo_gain_fire_log_ok(effects, player, n),
         "C-R-踏上荆棘之路的觉悟-01: GainFire 2 or 3"
     );
-    kassert!(
+    crate::kassert!(
         post.fire[player as usize] == pre.fire[player as usize] + n,
         "C-R-踏上荆棘之路的觉悟-01: fire +n"
     );
@@ -91,7 +91,7 @@ pub fn sayo_fire_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::sayo_circle_gain(false) + 1;
-    kassert!(
+    crate::kassert!(
         !matches!(effects.first(), Some(Effect::GainFire { n, .. }) if *n == wrong),
         "mutant: gain is not 3 when nobody is out"
     );
@@ -116,11 +116,11 @@ pub fn rinko_fire_pass_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    kassert!(
+    crate::kassert!(
         spec::rinko_gain_fire_log_ok(effects, player),
         "C-R-即使1cm也要前进-01: exactly GainFire 3"
     );
-    kassert!(
+    crate::kassert!(
         post.fire[player as usize] == pre.fire[player as usize] + spec::rinko_circle_gain(),
         "C-R-即使1cm也要前进-01: fire +3"
     );
@@ -140,7 +140,7 @@ pub fn rinko_fire_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::rinko_circle_gain() + 1;
-    kassert!(
+    crate::kassert!(
         !matches!(effects.first(), Some(Effect::GainFire { n, .. }) if *n == wrong),
         "mutant: gain is not 4"
     );
@@ -165,11 +165,11 @@ pub fn lisa_fire_pass_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    kassert!(
+    crate::kassert!(
         spec::lisa_gain_fire_log_ok(effects, player),
         "C-R-慈爱女神-01: exactly GainFire 1"
     );
-    kassert!(
+    crate::kassert!(
         post.fire[player as usize] == pre.fire[player as usize] + spec::lisa_circle_gain(),
         "C-R-慈爱女神-01: fire +1"
     );
@@ -189,7 +189,7 @@ pub fn lisa_fire_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::lisa_circle_gain() + 1;
-    kassert!(
+    crate::kassert!(
         !matches!(effects.first(), Some(Effect::GainFire { n, .. }) if *n == wrong),
         "mutant: gain is not 2"
     );

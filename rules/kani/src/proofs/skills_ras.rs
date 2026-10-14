@@ -72,16 +72,16 @@ pub fn masking_01_fire_gain_leaf() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    kassert!(
+    crate::kassert!(
         spec::fire_pass_log_ok(effects, player),
         "C-RAS-masking-01: leaf is exactly one +1 GainFire"
     );
-    kassert!(
+    crate::kassert!(
         post.fire[player as usize] == pre.fire[player as usize] + spec::fire_pass_gain(),
         "C-RAS-masking-01: fire is pre+1"
     );
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
 }
 
 /// C-RAS-rio-01 leaf: `skill:和奏瑞依` `on_pass` requests +1 [火罐].
@@ -107,15 +107,15 @@ pub fn rio_01_fire_gain_leaf() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    kassert!(
+    crate::kassert!(
         spec::fire_pass_log_ok(effects, player),
         "C-RAS-rio-01: leaf is exactly one +1 GainFire"
     );
-    kassert!(
+    crate::kassert!(
         post.fire[player as usize] == pre.fire[player as usize] + spec::fire_pass_gain(),
         "C-RAS-rio-01: fire is pre+1"
     );
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
 }
 
 /// Mutant companion for the fire-pass leaf (+2 ≠ +1).
@@ -133,7 +133,7 @@ pub fn fire_pass_gain_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    kassert!(
+    crate::kassert!(
         !spec::fire_pass_log_ok_mutant(effects, player),
         "mutant: card must not match the +2 GainFire spec"
     );

@@ -81,11 +81,11 @@ pub fn popipa_01_iff() {
     let deck_pipopa = world::with_world(|ww| spec::ppp::deck_count_named(ww, spec::ppp::CARD_PIPOPA));
     let hand_n = world::with_world(|ww| ww.hand_n as i32);
 
-    kassert!(
+    crate::kassert!(
         spec::ppp::popipa_effects_ok(effects_of(&logbuf, log_n), player),
         "popipa: effect log must be exactly GainMoney(1000), Draw(1)"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::popipa_post_ok(
             pre_money,
             pre_deck_pipopa,
@@ -97,7 +97,7 @@ pub fn popipa_01_iff() {
         ),
         "popipa: money+1000, deck+1 Pipopa, hand+1, dest Banished"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::frame_others_money(&pre, &post, player),
         "popipa: other players' money is frame"
     );
@@ -113,7 +113,7 @@ pub fn popipa_01_mutant_money_off_by_100() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Popipa"), player));
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         spec::ppp::popipa_effects_ok_mutant(effects_of(&logbuf, log_n), player),
         "mutant: card must not match the +1100 spec"
     );
@@ -149,11 +149,11 @@ pub fn pipopa_01_iff() {
     let dest = world::with_world(|ww| ww.dest);
     let field_has_new = world::with_world(|ww| ww.field_n > pre_field_n);
 
-    kassert!(
+    crate::kassert!(
         spec::ppp::pipopa_effects_ok(effects_of(&logbuf, log_n), player, POPIPAPAPIPOPA_SLOT),
         "pipopa: log must be exactly GainMoney(1000), PlaceCard(Popipapapipopa, Field)"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::pipopa_post_ok(pre_money, post.money[player as usize], dest, field_has_new),
         "pipopa: money+1000, field+1, dest Banished"
     );
@@ -169,7 +169,7 @@ pub fn pipopa_01_mutant_money_2000() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:[衍生]Pipopa"), player));
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         spec::ppp::pipopa_effects_ok_mutant(effects_of(&logbuf, log_n), player, POPIPAPAPIPOPA_SLOT),
         "mutant: card must not match the +2000 spec"
     );
@@ -201,7 +201,7 @@ pub fn signpost_02_lose_1000_at_end_iff() {
     if !admitted {
         // host would not call the body; world untouched
         let (logbuf, log_n) = log_slice();
-        kassert!(log_n == 0, "guard reject must be a no-op");
+        crate::kassert!(log_n == 0, "guard reject must be a no-op");
         let _ = logbuf;
         return;
     }
@@ -215,19 +215,19 @@ pub fn signpost_02_lose_1000_at_end_iff() {
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         spec::ppp::signpost_02_effects_ok(effects_of(&logbuf, log_n), player),
         "signpost-02: log must be exactly PayMoney(1000)"
     );
     // Book: 「失去]1000. Host pay clamps at 0; assert the amount and the
     // unclamped case, cover the clamp.
     if pre_money >= 1000 {
-        kassert!(
+        crate::kassert!(
             spec::ppp::signpost_02_post_ok(pre_money, post.money[player as usize]),
             "signpost-02: money falls by exactly 1000"
         );
     } else {
-        kassert!(
+        crate::kassert!(
             post.money[player as usize] == 0,
             "signpost-02: host pay clamps at 0 when money < 1000"
         );
@@ -249,7 +249,7 @@ pub fn signpost_02_mutant_lose_500() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::hook_idx(crate::card_id!("PPP:向着未来的路标"), "AtEnd", "", player));
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         spec::ppp::signpost_02_effects_ok_mutant(effects_of(&logbuf, log_n), player),
         "mutant: card must not match the 500-loss spec"
     );
@@ -284,15 +284,15 @@ pub fn bang_dream_01_crystal_iff() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Bang Dream!"), player));
 
     let post_crystals = world::with_world(|ww| ww.band_crystals[player as usize]);
-    kassert!(
+    crate::kassert!(
         post_crystals == spec::ppp::bang_dream_01_crystals_after(pre_crystals),
         "bang-dream-01: band crystals rise by exactly 1"
     );
     // Frame on this leg: money / pos / fire untouched *by the crystal add*.
     // The (02) teleport leg may move `pos`; that is not this clause's effect.
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-01: money is frame");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-01: fire is frame");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-01: money is frame");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-01: fire is frame");
 }
 
 /// MUTANT: reference wants +2 crystals. Card must not match.
@@ -306,7 +306,7 @@ pub fn bang_dream_01_mutant_plus_2() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Bang Dream!"), player));
     let post_crystals = world::with_world(|ww| ww.band_crystals[player as usize]);
-    kassert!(
+    crate::kassert!(
         post_crystals == pre_crystals + 2,
         "mutant: card must not match the +2 spec"
     );
@@ -359,11 +359,11 @@ pub fn bang_dream_02_teleport_owned_iff() {
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     // Leg (01) logs nothing typed; leg (02) logs exactly one Teleport.
-    kassert!(
+    crate::kassert!(
         spec::ppp::bang_dream_02_log_ok(effects_of(&logbuf, log_n), player),
         "bang-dream-02: log must be exactly Teleport to the pick"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::bang_dream_02_pos_is_owned(post.pos[player as usize], &owned, n_owned),
         "bang-dream-02: pos must be one of the owned tiles"
     );
@@ -378,11 +378,11 @@ pub fn bang_dream_02_teleport_owned_iff() {
     // Frame: other players unmoved; money / fire untouched.
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
-            kassert!(post.pos[p] == pre.pos[p], "bang-dream-02: others unmoved");
+            crate::kassert!(post.pos[p] == pre.pos[p], "bang-dream-02: others unmoved");
         }
     }
-    kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-02: money is frame");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-02: fire is frame");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-02: money is frame");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-02: fire is frame");
 }
 
 /// MUTANT: reference wants an extra GainMoney(1) on the teleport leg.
@@ -399,7 +399,7 @@ pub fn bang_dream_02_mutant_extra_money() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Bang Dream!"), player));
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         spec::ppp::bang_dream_02_log_ok_mutant(effects_of(&logbuf, log_n), player),
         "mutant: card must not match the extra-money spec"
     );
@@ -474,11 +474,11 @@ pub fn popipapapipopa_c1_crystal_on_pass_iff() {
 
     let post_crystals = world::with_world(|ww| ww.key_get(player, key));
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         post_crystals == spec::ppp::popipapapipopa_c1_crystals_after(pre_crystals),
         "popipapapipopa-c1: crystals rise by exactly 1 under the cap"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::popipapapipopa_c1_log_ok(effects_of(&logbuf, log_n), player, key.0, pre_crystals),
         "popipapapipopa-c1: log is exactly AddCounter(+1) under the cap"
     );
@@ -498,7 +498,7 @@ pub fn popipapapipopa_c1_mutant_plus_2() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PPP:[衍生]Popipapapipopa"), "PassTile", player));
     let post_crystals = world::with_world(|ww| ww.key_get(player, key));
-    kassert!(
+    crate::kassert!(
         post_crystals == pre_crystals + 2,
         "mutant: card must not match the +2 spec"
     );
@@ -573,11 +573,11 @@ pub fn popipapapipopa_c2_pay_reduce_iff() {
         k > 0 && pre_amount - 150 * k <= 0,
         "cut reaches the floor at 0"
     );
-    kassert!(
+    crate::kassert!(
         post_amount == expected_to,
         "popipapapipopa-c2: pay_amount is max(pre-150k, 0)"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::popipapapipopa_c2_log_ok(
             effects_of(&logbuf, log_n),
             player,
@@ -587,7 +587,7 @@ pub fn popipapapipopa_c2_pay_reduce_iff() {
         ),
         "popipapapipopa-c2: log is exactly crystals-k + SetPayAmount"
     );
-    kassert!(k >= 0 && k <= pre_crystals, "popipapapipopa-c2: k in range");
+    crate::kassert!(k >= 0 && k <= pre_crystals, "popipapapipopa-c2: k in range");
 }
 
 /// MUTANT: reference floors the cut at 1 instead of 0.
@@ -623,7 +623,7 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
     let post_amount = world::with_world(|ww| ww.pay_amount);
     let post_crystals = world::with_world(|ww| ww.key_get(player, key));
     let k = pre_crystals - post_crystals;
-    kassert!(
+    crate::kassert!(
         post_amount == spec::ppp::popipapapipopa_c2_amount_after_mutant(amount, k),
         "mutant: card must not match the floor-1 spec"
     );
@@ -638,16 +638,16 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn door_01_sequence_const() {
-    kassert!(
+    crate::kassert!(
         spec::ppp::DOOR_SEQUENCE.len() == 10,
         "door-01: sequence has exactly 10 entries"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::door_sequence_names_on_board(),
         "door-01: every printed name sits at its board slot"
     );
     // Mutant shape: a 9-entry reading is distinguishable.
-    kassert!(
+    crate::kassert!(
         spec::ppp::DOOR_SEQUENCE_MUTANT_LEN != spec::ppp::DOOR_SEQUENCE.len(),
         "door-01: the 9-entry mutant disagrees with the book"
     );
@@ -686,18 +686,18 @@ pub fn auction_off_01_blocked_noop() {
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         log_n == 0,
         "auction-off-01 (blocked): identity gate fails ⇒ no effects"
     );
     let _ = logbuf;
     let post_field_n = world::with_world(|ww| ww.field_n);
     let post_fire_max = world::with_world(|ww| ww.fire_max[player as usize]);
-    kassert!(
+    crate::kassert!(
         post_field_n == pre_field_n && post_fire_max == pre_fire_max,
         "auction-off-01 (blocked): field / fire_max untouched"
     );
-    kassert!(world::arr4_eq(post.money, pre.money), "auction-off-01 (blocked): money frame");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "auction-off-01 (blocked): money frame");
 }
 
 // ===========================================================================
@@ -727,14 +727,14 @@ pub fn star_beat_01_layer_iff() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:STAR BEAT!"), player));
 
     let post_layers = world::with_world(|ww| ww.key_get(player, key));
-    kassert!(
+    crate::kassert!(
         post_layers == spec::ppp::star_beat_01_layers_after(pre_layers),
         "star-beat-01: layers rise by exactly 1"
     );
     // Money is not moved by the layer grant itself (option 1 may grant
     // stickers; option 2 may walk — both are other clauses).
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.money, pre.money), "star-beat-01: money is frame");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "star-beat-01: money is frame");
 }
 
 /// MUTANT: reference wants +2 layers.
@@ -749,7 +749,7 @@ pub fn star_beat_01_mutant_plus_2() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:STAR BEAT!"), player));
     let post_layers = world::with_world(|ww| ww.key_get(player, key));
-    kassert!(
+    crate::kassert!(
         post_layers == spec::ppp::star_beat_01_layers_after_mutant(pre_layers),
         "mutant: card must not match the +2 layers spec"
     );
@@ -783,11 +783,11 @@ pub fn wait_aoki_01_place_on_field_iff() {
     let (logbuf, log_n) = log_slice();
     let dest = world::with_world(|ww| ww.dest);
     let field_n = world::with_world(|ww| ww.field_n);
-    kassert!(
+    crate::kassert!(
         spec::ppp::wait_aoki_01_effects_ok(effects_of(&logbuf, log_n), player, PPP_SLOT),
         "wait-aoki-01: log must be exactly PlaceCard(self, Field)"
     );
-    kassert!(
+    crate::kassert!(
         dest == spec::ppp::DEST_FIELD && field_n as i32 == pre_field_n as i32 + 1,
         "wait-aoki-01: card sits on the user's field"
     );
@@ -803,7 +803,7 @@ pub fn wait_aoki_01_mutant_banished() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:（有咲）等等等一下"), player));
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         spec::ppp::wait_aoki_01_effects_ok_mutant(effects_of(&logbuf, log_n), player, PPP_SLOT),
         "mutant: card must not match the banished spec"
     );
@@ -848,15 +848,15 @@ pub fn random_star_01_place_and_deck_bottom_iff() {
             ww.deck_pile[ww.deck_n as usize - 1]
         }
     });
-    kassert!(
+    crate::kassert!(
         spec::ppp::random_star_01_effects_ok(effects_of(&logbuf, log_n), player, PPP_SLOT, PPP_SLOT),
         "random-star-01: log must be exactly PlaceCard(self, Field)"
     );
-    kassert!(
+    crate::kassert!(
         dest == spec::ppp::DEST_FIELD && field_n as i32 == pre_field_n as i32 + 1,
         "random-star-01: card sits on the owner's field"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::random_star_01_deck_bottom_ok(deck_n, last, auction_id),
         "random-star-01: one auction card at the deck bottom"
     );
@@ -885,7 +885,7 @@ pub fn random_star_01_mutant_two_auctions() {
     let last_two_equal = world::with_world(|ww| {
         ww.deck_n >= 2 && ww.deck_pile[ww.deck_n as usize - 1] == ww.deck_pile[ww.deck_n as usize - 2]
     });
-    kassert!(
+    crate::kassert!(
         spec::ppp::random_star_01_deck_bottom_ok_mutant(deck_n, last_two_equal, auction_id, last),
         "mutant: card must not match the two-auction spec"
     );
@@ -920,11 +920,11 @@ pub fn star_beat_03_stickers_iff() {
     let picked_teleport = delta == 2;
     kani::cover!(picked_teleport, "option 1: teleport + 2 stickers");
     kani::cover!(delta == 0, "option 2: walk, no stickers");
-    kassert!(
+    crate::kassert!(
         delta == 0 || delta == 2,
         "star-beat-03: sticker delta is 0 or 2"
     );
-    kassert!(
+    crate::kassert!(
         spec::ppp::star_beat_03_stickers_ok(
             effects_of(&logbuf, log_n),
             player,
@@ -934,7 +934,7 @@ pub fn star_beat_03_stickers_iff() {
         "star-beat-03: AddToken(+2) iff option 1 was picked"
     );
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.money, pre.money), "star-beat-03: money is frame");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "star-beat-03: money is frame");
 }
 
 /// MUTANT: reference wants +1 sticker on option 1.
@@ -953,7 +953,7 @@ pub fn star_beat_03_mutant_one_sticker() {
     // With symbolic picks this is a reachable-disagreement: whenever option 1
     // is taken the +1 spec disagrees. When option 2 is taken both say 0, so
     // this harness relies on `should_panic` firing on the option-1 path.
-    kassert!(
+    crate::kassert!(
         post_tok - pre_tok == 1,
         "mutant: card must not match the +1 sticker spec"
     );
@@ -987,12 +987,12 @@ pub fn returns_c4_blocked_residual_noop() {
 
     let post_tok = world::with_world(|ww| ww.key_get(player, tok));
     let (logbuf, log_n) = log_slice();
-    kassert!(
+    crate::kassert!(
         post_tok == pre_tok,
         "returns-c4 (blocked): residual rejects ⇒ no sticker"
     );
     let _ = logbuf;
-    kassert!(log_n == 0, "returns-c4 (blocked): empty effect log");
+    crate::kassert!(log_n == 0, "returns-c4 (blocked): empty effect log");
 }
 
 // ===========================================================================
@@ -1012,12 +1012,12 @@ pub fn maze_01_distance_predicate() {
     kani::cover!(d == 0, "on 流星堂");
     kani::cover!(d == 5, "exactly 5 away (inside)");
     kani::cover!(d == 6, "6 away (outside)");
-    kassert!(
+    crate::kassert!(
         spec::ppp::maze_01_playable(pos) == (d <= 5),
         "maze-01: playable iff absolute distance ≤ 5"
     );
     // Mutant shape: a ≤4 reading is distinguishable at d==5.
-    kassert!(
+    crate::kassert!(
         !(d == 5 && spec::ppp::maze_01_playable(pos) == (d <= 4)),
         "maze-01: the ≤4 mutant disagrees at distance 5"
     );
@@ -1049,7 +1049,7 @@ pub fn name_sky_01_blocked_tile_named() {
         }
     });
     // Book wants 山吹面包房 (slot 48). Host `tile_named` yields -1.
-    kassert!(
+    crate::kassert!(
         tile == spec::ppp::TILE_YAMABUKI,
         "name-sky-01: card must sit on 山吹面包房 (slot 48)"
     );
@@ -1071,7 +1071,7 @@ pub fn name_sky_01_mutant_hill() {
             ww.field[ww.field_n as usize - 1].tile
         }
     });
-    kassert!(
+    crate::kassert!(
         tile == spec::ppp::TILE_HILL,
         "mutant: card must not match the hill spec"
     );
@@ -1095,7 +1095,7 @@ pub fn everyone_01_blocked_tile_named() {
         }
     });
     // Book wants 星之鼓动山丘 (slot 44). Host `tile_named` yields -1.
-    kassert!(
+    crate::kassert!(
         tile == spec::ppp::TILE_HILL,
         "everyone-01: card must sit on 星之鼓动山丘 (slot 44)"
     );

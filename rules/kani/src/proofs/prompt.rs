@@ -82,23 +82,23 @@ pub fn aya_haruka_01_prompt_all_picks_iff() {
                 seen_take = true;
             }
         }
-        kassert!(seen_take, "must take exactly one discard card");
+        crate::kassert!(seen_take, "must take exactly one discard card");
 
         kani::cover!(pick == 0, "offered index 0");
         kani::cover!(pick == 1, "offered index 1");
         kani::cover!(picked == 2, "pick OTHER");
         kani::cover!(picked == 3, "pick EXTRA");
 
-        kassert!(
+        crate::kassert!(
             spec::aya_haruka_01_effects_ok(effects, player, 0, picked, &pre_discard),
             "C-PP-aya-haruka-01: place + exactly one discard->hand"
         );
-        kassert!(
+        crate::kassert!(
             spec::aya_haruka_01_post_ok(&post, player, picked, &pre_discard),
             "C-PP-aya-haruka-01: post hand/discard move exactly the picked card"
         );
-        kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-        kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     }
 }
 
@@ -116,7 +116,7 @@ pub fn aya_haruka_01_empty_discard() {
     invoke::unwrap_done(invoke::aya_longing_play(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
-    kassert!(
+    crate::kassert!(
         spec::aya_haruka_01_empty_discard_ok(&logbuf[..log_n], player, 0),
         "empty discard: place only"
     );

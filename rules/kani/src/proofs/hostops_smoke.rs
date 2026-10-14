@@ -53,7 +53,7 @@ pub fn rent_of_property_table() {
     kani::cover!(houses == 0, "0 houses");
     kani::cover!(houses == 2, "2 houses");
     kani::cover!(houses >= 4, "clamped at 3+");
-    kassert!(got == expect, "rent_of must equal table_rent at counted houses");
+    crate::kassert!(got == expect, "rent_of must equal table_rent at counted houses");
 }
 
 /// RiNG rent quotes the tile's base `price` (the rolled figure is a pay-time
@@ -66,7 +66,7 @@ pub fn rent_of_ring_is_price() {
     kani::assume(board::data_at(ring).map_or(false, board::is_ring));
     let got = call(Op::rent_of, [ring, 0, 0, 0, 0, 0]);
     let price = board::data_at(ring).unwrap().price as i64;
-    kassert!(got == price, "RiNG rent_of is the tile's base price");
+    crate::kassert!(got == price, "RiNG rent_of is the tile's base price");
 }
 
 // ---------------------------------------------------------------------------
@@ -96,12 +96,12 @@ pub fn tile_at_set_tile_at_roundtrip() {
         };
         w.field_n = 1;
     });
-    kassert!(call(Op::tile_at, [uid, 0, 0, 0, 0, 0]) == from as i64);
-    kassert!(call(Op::set_tile_at, [uid, to, 0, 0, 0, 0]) == 1);
-    kassert!(call(Op::tile_at, [uid, 0, 0, 0, 0, 0]) == to as i64);
+    crate::kassert!(call(Op::tile_at, [uid, 0, 0, 0, 0, 0]) == from as i64);
+    crate::kassert!(call(Op::set_tile_at, [uid, to, 0, 0, 0, 0]) == 1);
+    crate::kassert!(call(Op::tile_at, [uid, 0, 0, 0, 0, 0]) == to as i64);
     // Missing uid: set_tile_at is a false no-op.
-    kassert!(call(Op::set_tile_at, [uid + 500, 0, 0, 0, 0, 0]) == 0);
-    kassert!(call(Op::tile_at, [uid + 500, 0, 0, 0, 0, 0]) == -1);
+    crate::kassert!(call(Op::set_tile_at, [uid + 500, 0, 0, 0, 0, 0]) == 0);
+    crate::kassert!(call(Op::tile_at, [uid + 500, 0, 0, 0, 0, 0]) == -1);
 }
 
 // ---------------------------------------------------------------------------
@@ -117,15 +117,15 @@ pub fn trig_move_sentinels() {
         w.move_snap = MoveSnap::NONE;
         w.trig_main = true;
     });
-    kassert!(call(Op::trig_move_kind, [0; 6]) == -1);
-    kassert!(call(Op::trig_move_dir, [0; 6]) == 1);
-    kassert!(call(Op::trig_move_from, [0; 6]) == -1);
-    kassert!(call(Op::trig_move_roll, [0; 6]) == -1);
-    kassert!(call(Op::trig_move_remaining, [0; 6]) == 0);
-    kassert!(call(Op::trig_move_total, [0; 6]) == 0);
-    kassert!(call(Op::trig_move_resolve, [0; 6]) == 0);
+    crate::kassert!(call(Op::trig_move_kind, [0; 6]) == -1);
+    crate::kassert!(call(Op::trig_move_dir, [0; 6]) == 1);
+    crate::kassert!(call(Op::trig_move_from, [0; 6]) == -1);
+    crate::kassert!(call(Op::trig_move_roll, [0; 6]) == -1);
+    crate::kassert!(call(Op::trig_move_remaining, [0; 6]) == 0);
+    crate::kassert!(call(Op::trig_move_total, [0; 6]) == 0);
+    crate::kassert!(call(Op::trig_move_resolve, [0; 6]) == 0);
     // `trig_move_main` is `Trigger::main`, independent of the move payload.
-    kassert!(call(Op::trig_move_main, [0; 6]) == 1);
+    crate::kassert!(call(Op::trig_move_main, [0; 6]) == 1);
 }
 
 /// Payload getters return the stored `MoveSnap`.
@@ -157,13 +157,13 @@ pub fn trig_move_payload_reads() {
         m.resolve = resolve;
         w.move_snap = m;
     });
-    kassert!(call(Op::trig_move_kind, [0; 6]) == kind as i64);
-    kassert!(call(Op::trig_move_dir, [0; 6]) == dir as i64);
-    kassert!(call(Op::trig_move_from, [0; 6]) == from as i64);
-    kassert!(call(Op::trig_move_remaining, [0; 6]) == remaining as i64);
-    kassert!(call(Op::trig_move_total, [0; 6]) == total as i64);
-    kassert!(call(Op::trig_move_roll, [0; 6]) == roll as i64);
-    kassert!(call(Op::trig_move_resolve, [0; 6]) == resolve as i64);
+    crate::kassert!(call(Op::trig_move_kind, [0; 6]) == kind as i64);
+    crate::kassert!(call(Op::trig_move_dir, [0; 6]) == dir as i64);
+    crate::kassert!(call(Op::trig_move_from, [0; 6]) == from as i64);
+    crate::kassert!(call(Op::trig_move_remaining, [0; 6]) == remaining as i64);
+    crate::kassert!(call(Op::trig_move_total, [0; 6]) == total as i64);
+    crate::kassert!(call(Op::trig_move_roll, [0; 6]) == roll as i64);
+    crate::kassert!(call(Op::trig_move_resolve, [0; 6]) == resolve as i64);
 }
 
 // ---------------------------------------------------------------------------
@@ -195,15 +195,15 @@ pub fn trig_buy_payload_reads() {
             deal_mortgaged,
         };
     });
-    kassert!(call(Op::trig_buy_kind, [0; 6]) == kind as i64);
-    kassert!(call(Op::trig_seller, [0; 6]) == seller as i64);
-    kassert!(call(Op::trig_price, [0; 6]) == price as i64);
-    kassert!(call(Op::trig_deal_owner, [0; 6]) == deal_owner as i64);
-    kassert!(call(Op::trig_deal_houses, [0; 6]) == deal_houses as i64);
-    kassert!(call(Op::trig_deal_mortgaged, [0; 6]) == deal_mortgaged as i64);
+    crate::kassert!(call(Op::trig_buy_kind, [0; 6]) == kind as i64);
+    crate::kassert!(call(Op::trig_seller, [0; 6]) == seller as i64);
+    crate::kassert!(call(Op::trig_price, [0; 6]) == price as i64);
+    crate::kassert!(call(Op::trig_deal_owner, [0; 6]) == deal_owner as i64);
+    crate::kassert!(call(Op::trig_deal_houses, [0; 6]) == deal_houses as i64);
+    crate::kassert!(call(Op::trig_deal_mortgaged, [0; 6]) == deal_mortgaged as i64);
     // Setters rewrite the snap.
     call(Op::trig_set_price, [price + 1, 0, 0, 0, 0, 0]);
-    kassert!(call(Op::trig_price, [0; 6]) == (price + 1) as i64);
+    crate::kassert!(call(Op::trig_price, [0; 6]) == (price + 1) as i64);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +218,7 @@ pub fn trig_roll_source_reads() {
     kani::assume((0..=3).contains(&src));
     world::with_world_mut(|w| w.trig_roll_source = src);
     let got = call(Op::trig_roll_source, [0; 6]);
-    kassert!(got == src as i64);
+    crate::kassert!(got == src as i64);
     kani::cover!(src == ROLL_FIRE, "fire pot");
     kani::cover!(src == ROLL_CARD, "card");
     kani::cover!(src == ROLL_SKILL, "skill");

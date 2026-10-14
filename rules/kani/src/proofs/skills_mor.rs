@@ -154,22 +154,22 @@ pub fn band_01_draw_iff() {
     kani::cover!(!want, "no draw (below 2000 or not a loss)");
 
     if want {
-        kassert!(
+        crate::kassert!(
             spec::band_01_log_ok(effects, player),
             "C-MOR-band-01: effect log must be exactly Draw(player, 1)"
         );
     } else {
-        kassert!(
+        crate::kassert!(
             log_n == 0,
             "C-MOR-band-01: false trigger must produce no effects"
         );
     }
 
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
-    kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
 /// NO-OP: a move that is not a ≥2000 loss leaves the world untouched even if
@@ -189,9 +189,9 @@ pub fn band_01_noop_below_or_gain() {
     invoke::unwrap_done(invoke::hook_only_idx(SKILL_BAND, "PayAfter", player));
     kani::cover!(true, "body returned");
     let (_logbuf, log_n) = effects();
-    kassert!(log_n == 0, "C-MOR-band-01 noop: log must stay empty");
+    crate::kassert!(log_n == 0, "C-MOR-band-01 noop: log must stay empty");
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.money, pre.money) && post.pay_amount == pre.pay_amount);
+    crate::kassert!(world::arr4_eq(post.money, pre.money) && post.pay_amount == pre.pay_amount);
 }
 
 /// MUTANT companion: the card must disagree with a spec that draws at 1999.
@@ -214,11 +214,11 @@ pub fn band_01_mutant_is_detected() {
     let mutant_wants_draw = spec::band_01_should_draw_mutant(value, target, player);
     let card_draws = spec::band_01_log_ok(effects, player);
     kani::cover!(mutant_wants_draw && !card_draws, "mutant wants a draw, card silent");
-    kassert!(
+    crate::kassert!(
         mutant_wants_draw && !card_draws,
         "C-MOR-band-01 mutant: card must not match the 1999-draw spec"
     );
-    kassert!(log_n == 0, "1999 loss draws nothing");
+    crate::kassert!(log_n == 0, "1999 loss draws nothing");
 }
 
 // ===========================================================================
@@ -285,18 +285,18 @@ pub fn band_02_cycle_iff() {
     kani::cover!(taken % 3 == 2, "3rd → 2000");
 
     if money_opt {
-        kassert!(
+        crate::kassert!(
             spec::band_02_log_ok(effects, player, taken),
             "C-MOR-band-02: SetState(taken+1) + GainMoney(cycle amount)"
         );
     } else {
-        kassert!(log_n == 0, "C-MOR-band-02: non-money option must be a no-op");
+        crate::kassert!(log_n == 0, "C-MOR-band-02: non-money option must be a no-op");
     }
 
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
-    kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
 /// NO-OP: the card half of [CiRCLE奖励] must not touch money or the counter.
@@ -315,11 +315,11 @@ pub fn band_02_noop_card_option() {
     invoke::unwrap_done(invoke::entry_idx(SKILL_BAND, 1, player));
     kani::cover!(true, "body returned");
     let (_logbuf, log_n) = effects();
-    kassert!(log_n == 0, "C-MOR-band-02 noop: log empty on card option");
+    crate::kassert!(log_n == 0, "C-MOR-band-02 noop: log empty on card option");
     let post_taken = world::with_world(|ww| ww.key_get(player, key));
-    kassert!(post_taken == pre_taken, "counter unchanged");
+    crate::kassert!(post_taken == pre_taken, "counter unchanged");
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.money, pre.money), "money unchanged");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "money unchanged");
 }
 
 /// MUTANT companion: cycle rotated by one must be distinguishable.
@@ -343,10 +343,10 @@ pub fn band_02_mutant_is_detected() {
         card && card_amount != mutant_amount,
         "reachable disagreement on the cycle"
     );
-    kassert!(card, "first-of-cycle must pay 1000");
-    kassert!(card_amount == 1000, "book: 1st = 1000");
-    kassert!(mutant_amount == 1500, "mutant rotates to 1500");
-    kassert!(
+    crate::kassert!(card, "first-of-cycle must pay 1000");
+    crate::kassert!(card_amount == 1000, "book: 1st = 1000");
+    crate::kassert!(mutant_amount == 1500, "mutant rotates to 1500");
+    crate::kassert!(
         card_amount != mutant_amount,
         "C-MOR-band-02 mutant: card must not match the rotated cycle"
     );
@@ -409,11 +409,11 @@ fn pass_gain_iff(skill: usize, fire_max_pin: i32, label: &str) {
     kani::cover!(!below, "at cap (book: no-op)");
 
     if below {
-        kassert!(
+        crate::kassert!(
             spec::touko_01_log_ok(effects, player),
             "{label}: effect log must be exactly GainFire{{player,1}}"
         );
-        kassert!(
+        crate::kassert!(
             spec::touko_01_post_below_cap(post_fire, pre_fire),
             "{label}: fire must increase by one below cap"
         );
@@ -425,9 +425,9 @@ fn pass_gain_iff(skill: usize, fire_max_pin: i32, label: &str) {
         let _ = effects;
     }
 
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
 /// C-MOR-touko-01 IFF (below-cap asserted; at-cap covered, host gap).
@@ -458,7 +458,7 @@ pub fn touko_01_noop_not_circle() {
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
     let ctx = fill_pass_circle(&w, w.trig_player);
     let admitted = crate::guard!(gid, &ctx);
-    kassert!(!admitted, "non-CiRCLE tile must reject the Pass guard");
+    crate::kassert!(!admitted, "non-CiRCLE tile must reject the Pass guard");
     let player = w.trig_player;
     let pre = {
         world::reset_world(w);
@@ -500,8 +500,8 @@ pub fn touko_01_mutant_is_detected() {
     let card = spec::touko_01_log_ok(effects, player);
     let mutant = spec::touko_01_log_ok_mutant(effects, player);
     kani::cover!(card && !mutant, "card matches book, not the n=2 mutant");
-    kassert!(card, "below-cap path must gain exactly one");
-    kassert!(!mutant, "C-MOR-touko-01 mutant: card must not match GainFire(2)");
+    crate::kassert!(card, "below-cap path must gain exactly one");
+    crate::kassert!(!mutant, "C-MOR-touko-01 mutant: card must not match GainFire(2)");
 }
 
 // ===========================================================================
@@ -574,36 +574,36 @@ pub fn rui_crit_02_roll_iff() {
     let is_miss = x_after == miss_expected_x;
     kani::cover!(is_hit, "hit (n ≤ X): X reset");
     kani::cover!(is_miss, "miss (n > X): X+1");
-    kassert!(
+    crate::kassert!(
         is_hit != is_miss,
         "C-MOR-rui-crit-02: post X is either 0 (hit) or x+1 (miss)"
     );
 
     if is_hit {
         let after = spec::rui_crit_02_amount_on_hit(amount);
-        kassert!(
+        crate::kassert!(
             spec::rui_crit_02_log_hit_ok(effects, player, after),
             "C-MOR-rui-crit-02 hit: SetState(0) + SetPayAmount(rewritten)"
         );
-        kassert!(
+        crate::kassert!(
             world::with_world(|ww| ww.pay_amount) == after,
             "C-MOR-rui-crit-02 hit: pay amount rewritten"
         );
     } else {
-        kassert!(
+        crate::kassert!(
             spec::rui_crit_02_log_miss_ok(effects, player, miss_expected_x),
             "C-MOR-rui-crit-02 miss: SetState(x+1) only"
         );
-        kassert!(
+        crate::kassert!(
             world::with_world(|ww| ww.pay_amount) == amount,
             "C-MOR-rui-crit-02 miss: amount unchanged"
         );
     }
 
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.money, pre.money), "frame: money at rewrite time");
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money at rewrite time");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// NO-OP: a zero amount (or a move that does not touch this seat) is a no-op.
@@ -624,11 +624,11 @@ pub fn rui_crit_02_noop() {
     invoke::unwrap_done(invoke::hook_only_idx(SKILL_YURI, "PayChoose", player));
     kani::cover!(true, "body returned");
     let (_logbuf, log_n) = effects();
-    kassert!(log_n == 0, "C-MOR-rui-crit-02 noop: log empty at amount 0");
+    crate::kassert!(log_n == 0, "C-MOR-rui-crit-02 noop: log empty at amount 0");
     let post_x = world::with_world(|ww| ww.key_get(player, key));
-    kassert!(post_x == pre_x, "X unchanged");
+    crate::kassert!(post_x == pre_x, "X unchanged");
     let post = world::snapshot();
-    kassert!(post.pay_amount == pre.pay_amount, "amount unchanged");
+    crate::kassert!(post.pay_amount == pre.pay_amount, "amount unchanged");
 }
 
 /// MUTANT companion: a strict `n < x` threshold must be distinguishable at
@@ -653,7 +653,7 @@ pub fn rui_crit_02_mutant_is_detected() {
     let book_miss = x_after == 2;
     kani::cover!(book_hit, "book hit at n == 1 (inclusive)");
     kani::cover!(book_miss, "miss at n ≥ 2");
-    kassert!(
+    crate::kassert!(
         book_hit || book_miss,
         "C-MOR-rui-crit-02: post X at x=1 is 0 (hit) or 2 (miss)"
     );
@@ -661,12 +661,12 @@ pub fn rui_crit_02_mutant_is_detected() {
     // book hit, the mutant disagrees.
     let mutant_x_after = spec::rui_crit_02_x_after_mutant(1, 1);
     kani::cover!(book_hit && mutant_x_after == 2, "reachable disagreement at n == 1");
-    kassert!(
+    crate::kassert!(
         mutant_x_after == 2,
         "mutant threshold is strict: n == 1 is a miss for it"
     );
     if book_hit {
-        kassert!(
+        crate::kassert!(
             spec::rui_crit_02_x_after(1, 1) == 0,
             "book inclusive threshold resets X at n == x"
         );
@@ -731,14 +731,14 @@ pub fn tsukushi_01_redirect_iff() {
     let effects = &logbuf[..log_n];
 
     if n_others == 0 {
-        kassert!(log_n == 0, "C-MOR-tsukushi-01: no target ⇒ no redirect");
+        crate::kassert!(log_n == 0, "C-MOR-tsukushi-01: no target ⇒ no redirect");
         return;
     }
 
     if log_n == 0 {
         // Declined the yes/no (or the pick collapsed). Book: the original
         // gain stays.
-        kassert!(
+        crate::kassert!(
             spec::tsukushi_01_decline_ok(effects),
             "C-MOR-tsukushi-01 decline: empty log"
         );
@@ -749,15 +749,15 @@ pub fn tsukushi_01_redirect_iff() {
             _ => -99,
         };
         kani::cover!(who != player, "redirected to another seat");
-        kassert!(
+        crate::kassert!(
             spec::tsukushi_01_log_ok(effects, player, who, amount),
             "C-MOR-tsukushi-01: zero original, mark+record+forward amount"
         );
     }
 
     let post = world::snapshot();
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: forwarding `2×amount` must be distinguishable.
@@ -799,7 +799,7 @@ pub fn tsukushi_01_mutant_is_detected() {
         let card = spec::tsukushi_01_log_ok(effects, player, who, amount);
         let mutant = spec::tsukushi_01_log_ok_mutant(effects, player, who, amount);
         kani::cover!(card && !mutant, "card forwards amount, not 2×amount");
-        kassert!(
+        crate::kassert!(
             !(card && mutant),
             "C-MOR-tsukushi-01 mutant: card must not match the 2× spec"
         );
@@ -895,27 +895,27 @@ pub fn tsukushi_03_sweep_iff() {
     let effects = &logbuf[..log_n];
     let holders_slice = &holders[..n_holders];
 
-    kassert!(
+    crate::kassert!(
         spec::tsukushi_03_log_ok(effects, player, holders_slice, n_marks, pre_rate),
         "C-MOR-tsukushi-03: clear marks, GainMoney(n×rate), SetState(rate-200 floor 200)"
     );
 
     let post = world::snapshot();
-    kassert!(
+    crate::kassert!(
         spec::tsukushi_03_gain(n_marks, pre_rate) == want_gain,
         "gain arithmetic pinned"
     );
     let post_rate = world::with_world(|ww| ww.key_get(player, rk));
-    kassert!(post_rate == want_rate_after, "rate decayed as the book says");
+    crate::kassert!(post_rate == want_rate_after, "rate decayed as the book says");
     // Marks cleared on every holder.
     for i in 0..n_holders {
         let (h, _, _) = holders[i];
         let u = world::with_world(|ww| ww.key_get(h, up));
         let d = world::with_world(|ww| ww.key_get(h, down));
-        kassert!(u == 0 && d == 0, "X marks removed");
+        crate::kassert!(u == 0 && d == 0, "X marks removed");
     }
-    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: floor at 0 instead of 200 must be distinguishable.
@@ -946,9 +946,9 @@ pub fn tsukushi_03_mutant_is_detected() {
     let book = spec::tsukushi_03_rate_after(pre_rate);
     let mutant = spec::tsukushi_03_rate_after_mutant(pre_rate);
     kani::cover!(book != mutant, "book floors at 200, mutant at 0");
-    kassert!(book == 200 && mutant == 0, "witness: book 200 vs mutant 0");
-    kassert!(post_rate == book, "rate stays at the 200 floor");
-    kassert!(post_rate != mutant, "C-MOR-tsukushi-03 mutant: 0-floor is wrong");
+    crate::kassert!(book == 200 && mutant == 0, "witness: book 200 vs mutant 0");
+    crate::kassert!(post_rate == book, "rate stays at the 200 floor");
+    crate::kassert!(post_rate != mutant, "C-MOR-tsukushi-03 mutant: 0-floor is wrong");
 }
 
 // ===========================================================================

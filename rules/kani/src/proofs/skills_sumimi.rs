@@ -83,20 +83,20 @@ pub fn band_02_rent_bonus_iff() {
     let effects = effects_of(&logbuf, log_n);
 
     let expected = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
-    kassert!(
+    crate::kassert!(
         spec::sumimi::band_rent_bonus_log_ok(effects, crystals, expected),
         "C-SUMIMI-band-02: exactly one SetPayAmount to pre + crystals*100 (or empty at 0)"
     );
-    kassert!(
+    crate::kassert!(
         post.pay_amount == expected || crystals <= 0,
         "C-SUMIMI-band-02: post pay_amount must be pre + crystals*100"
     );
     if crystals <= 0 {
-        kassert!(post.pay_amount == pre_amount, "no crystals: amount untouched");
+        crate::kassert!(post.pay_amount == pre_amount, "no crystals: amount untouched");
     }
     // Frame: money of every seat untouched at rewrite time.
     for p in 0..MAX_PLAYERS {
-        kassert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
     }
 }
 
@@ -119,7 +119,7 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
     let post = world::snapshot();
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
     kani::cover!(post.pay_amount != wrong, "disagreement live");
-    kassert!(
+    crate::kassert!(
         post.pay_amount != wrong,
         "mutant: bonus is +100 per crystal, not +100 total"
     );
@@ -170,20 +170,20 @@ pub fn band_01_clear_iff() {
     // only GOT == 0, so the add half can never run. This assert is the
     // plain FAILING proof of that LESS.
     if got != 0 {
-        kassert!(
+        crate::kassert!(
             admitted,
             "C-SUMIMI-band-01 add half: book demands a turn-end add when money was gained; the entry guard never admits"
         );
         return;
     }
 
-    kassert!(admitted, "clear half must be admitted when GOT == 0");
+    crate::kassert!(admitted, "clear half must be admitted when GOT == 0");
     invoke::unwrap_done(invoke::hook_only_idx(BAND, "TurnEndBefore", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    kassert!(
+    crate::kassert!(
         spec::sumimi::band_crystal_clear_ok(effects, owner, ckey.0, crystals),
         "C-SUMIMI-band-01 clear: remove every crystal when the latch is clear"
     );
@@ -208,7 +208,7 @@ pub fn band_01_clear_mutant_is_detected() {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     let wrong = spec::sumimi::band_crystal_clear_ok_mutant(effects, owner, ckey.0, 3);
-    kassert!(!wrong, "mutant: clear removes all crystals, not one");
+    crate::kassert!(!wrong, "mutant: clear removes all crystals, not one");
 }
 
 // ===========================================================================
@@ -236,7 +236,7 @@ pub fn mana_02_decline_is_empty() {
     // accept amount); this harness documents the declined-side contract and
     // is a pure-spec cover of `mana_shop_pay_declined`.
     let empty: [Effect; 0] = [];
-    kassert!(
+    crate::kassert!(
         spec::skills_sumimi::mana_shop_pay_declined(&empty),
         "declined offer must be a no-op"
     );
@@ -255,12 +255,12 @@ pub fn band_03_exclusive_gate_predicate() {
     let user_is_owner: bool = kani::any();
     kani::cover!(user_is_owner, "matching character — play allowed");
     kani::cover!(!user_is_owner, "mismatch — play denied");
-    kassert!(
+    crate::kassert!(
         spec::skills_sumimi::band_exclusive_play_allowed(user_is_owner) == user_is_owner,
         "C-SUMIMI-band-03: play iff the character matches the exclusive's owner"
     );
     // Mutant: the dual must be distinguishable.
-    kassert!(
+    crate::kassert!(
         spec::skills_sumimi::band_exclusive_play_allowed(user_is_owner) != !user_is_owner,
         "mutant: gate is identity, not negation"
     );
