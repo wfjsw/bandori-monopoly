@@ -1,4 +1,4 @@
-//! Unit `pp`: reference specs FROM the clause docs / cards.json only.
+//! Unit `pp`: reference specs FROM the clause docs / roster card text only.
 //!
 //! Sources: `docs/rulebook/cards.json` keys `PP:*` (verbatim quotes in
 //! `docs/rulebook/spec/cards/pp.md`). Never derived from engine behaviour.

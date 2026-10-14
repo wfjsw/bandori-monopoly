@@ -64,7 +64,7 @@ as `rules/cards/card-*`, `rules/skills/*`, `rules/tiles` and `rules/tile_marks`:
 | `event:火种燃尽之后会怎么样呢？` | `embers.rs` | active | A29 |
 
 The crate is a **rule crate**, not a card crate: its ids are `event:*`, not
-`data/cards.json` ids. `tools/rules-aggregate.mjs` scans `rules/events` as one
+roster card ids. `tools/rules-aggregate.mjs` scans `rules/events` as one
 of its roots (alongside `rules/cards`, `rules/skills`, `rules/tiles` and
 `rules/tile_marks`) so `card-all` links it; `tools/build-ruleset.mjs` runs that
 aggregate first.
@@ -166,6 +166,7 @@ Checked: `card_sdk::abi::ABI_VERSION = 39`,
 |---|---|---|
 | **ABI → 37** | the migration | `ctx::event_expire` / `event_is_active` / `event_deck_push` / `event_banish`, and the `event:*` rule-id convention |
 | **ABI → 39** | the discrepancy pass | `plan::set_roller` (幻觉来了's roll substitution) and `prop::NO_BUILD_ABOVE` (卡池BUG's build gate) |
+| **ABI → 64** | turn clock | modifier hooks `TurnBonusTime` / `TurnBaseTime` (value = seconds, rewritten with `trigger::set_pay_amount`), then `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET` override (元祖！邦多利酱: 免费时间 5 s, 恢复时间 0 s uses the props) |
 | **SAVE_VERSION** | unchanged | `MatchState::event_active` and `World::board_field` were already in the v3 save. A v2 save is still rejected; a v3 save with an empty active list still loads (it simply has no event in play). |
 
 ## Conventions
@@ -190,7 +191,6 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
   over `ask_pick` (narrowed candidates), not the engine's raise-and-bend
   auction. A tie goes to the earliest seat.
 * **No global hand-effect veto** (A！A！O！'s 「不能使用卡牌的[手]效果」).
-* **No clock surface** (元祖！邦多利酱's 免费时间 / 恢复时间) -- host clocks.
 * **No skin change** (EX任务挑战) -- cosmetic only, so the body logs eligibility.
 * **优先权 claim** (协助CiRCLE重建's 「该改变[触发结算]的效果优先于其他任何
   改变[触发结算]的效果」): `TODO(规则书)` -- instances run in placement order,

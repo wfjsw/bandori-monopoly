@@ -1,7 +1,7 @@
 //! Unit `r`: reference specs FROM the clause docs only.
 //!
 //! Sources: `docs/rulebook/spec/cards/r.md`, `docs/rulebook/cards.json`,
-//! `data/characters.json`, `data/bands.json`. Never derive a spec from engine
+//! the roster character / band rows. Never derive a spec from engine
 //! behaviour. OPEN items stay unasserted; see the unit table in
 //! `docs/rulebook/spec/kani/r.md`.
 //!

@@ -2,7 +2,7 @@
 //! skills, and the band skill 迷途之星).
 //!
 //! Derived only from the live sheet (`docs/rulebook/cards.json`,
-//! `data/characters.json`, `data/bands.json`) and the glossary in
+//! the roster character / band rows) and the glossary in
 //! `docs/rulebook/rulebook-doc.md`. Never from engine behaviour.
 //!
 //! Clause doc: `docs/rulebook/spec/cards/mygo.md`. IDs are `C-MYGO-<slug>-<n>`.
@@ -250,13 +250,13 @@ pub fn c_mygo_anon_tokyo_link_frame(step: &Step<'_>) -> Result<(), String> {
 pub const CLAUSES: &[Clause] = &[
     Clause::new(
         "C-MYGO-anon-tokyo-03",
-        "cards.json#MyGO:[千早爱音]Anon Tokyo",
+        "roster#MyGO:[千早爱音]Anon Tokyo",
         "1. [使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半并在上述的两个格子间放置1个[奇迹水晶]（上限1）",
         c_mygo_anon_tokyo_link_pay,
     ),
     Clause::new(
         "C-MYGO-anon-tokyo-frame",
-        "cards.json#MyGO:[千早爱音]Anon Tokyo",
+        "roster#MyGO:[千早爱音]Anon Tokyo",
         "1. ...放置1个[奇迹水晶]（上限1）",
         c_mygo_anon_tokyo_link_frame,
     ),
@@ -547,13 +547,13 @@ fn journey_place_and_settle_gain() {
         t.observe(&[
             Clause::new(
                 "C-MYGO-journey-01",
-                "cards.json#MyGO:哪怕这旅程没有终点",
+                "roster#MyGO:哪怕这旅程没有终点",
                 "[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶",
                 c_mygo_journey_place,
             ),
             Clause::new(
                 "C-MYGO-journey-frame",
-                "cards.json#MyGO:哪怕这旅程没有终点",
+                "roster#MyGO:哪怕这旅程没有终点",
                 "[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶",
                 c_mygo_journey_frame,
             ),
@@ -700,7 +700,7 @@ fn rainday_place_and_zone_stay() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-MYGO-rainday-01",
-            "cards.json#MyGO:那天的雨",
+            "roster#MyGO:那天的雨",
             "将此卡放置于自己场上并为其放置5个奇迹水晶",
             c_mygo_rainday_place,
         )]);
@@ -883,7 +883,7 @@ fn miracle_transfers_band_crystals_and_ineffective_discard() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-MYGO-miracle-01",
-            "cards.json#MyGO:难以复刻的奇迹",
+            "roster#MyGO:难以复刻的奇迹",
             "（1）[手] 将此卡置于场上，将你乐队技能上的奇迹水晶全部转移至此卡上",
             c_mygo_miracle_place,
         )]);
@@ -1184,7 +1184,7 @@ fn tomori_card_place_x_plus_1_and_remove() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-MYGO-tomori-card-01",
-            "cards.json#MyGO:（灯）不再迷茫",
+            "roster#MyGO:（灯）不再迷茫",
             "（1）获得两层仅能被自然流失效果移除的[停留]",
             c_mygo_tomori_card_place,
         )]);
@@ -1426,7 +1426,7 @@ fn hitoshizuku_clear_charge_and_stun_play() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-MYGO-hitoshizuku-01",
-            "cards.json#MyGO:壱雫空",
+            "roster#MyGO:壱雫空",
             "清除场上所有[停留]与[眩晕]效果",
             c_mygo_hitoshizuku_clear,
         )]);
@@ -1845,7 +1845,7 @@ fn rinpuu_gives_one_stay() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-MYGO-rinpuu-01",
-            "cards.json#MyGO:轮符雨",
+            "roster#MyGO:轮符雨",
             "使自己获得一层[停留]",
             c_mygo_rinpuu_stay,
         )]);

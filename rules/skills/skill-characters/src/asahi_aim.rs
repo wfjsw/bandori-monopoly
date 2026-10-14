@@ -91,7 +91,7 @@ fn is_initial_livehouse(t: i32) -> bool {
     ctx::is_buyable(t) && ctx::tile_group(t) == 6
 }
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"朝日六花"#)
     .display(r#"朝日六花"#)

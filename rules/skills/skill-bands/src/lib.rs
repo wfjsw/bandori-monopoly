@@ -4,7 +4,7 @@
 //! [`skill-characters`](../skill_characters): these are abilities a band comes
 //! with, not cards you draw. Same rule language ([`CardDef`]), separate crate.
 //!
-//! The rule text lives in `data/bands.json` (`skill` is the name, `text` /
+//! The rule text lives in the roster band row (`skill` is the name, `text` /
 //! `simple` the wording). A band skill's [奇迹水晶] live on its own field
 //! instance (`FieldCard::crystals`) -- `ctx::crystals` / `ctx::add_crystals`
 //! from inside this rule, `ctx::band_crystals` / `ctx::add_band_crystals` from
@@ -51,7 +51,7 @@ pub mod roster_table;
 // The 规则书 text for these is a Google Sheet (see `skill-rulebook-sheets` in
 // the project memory, or fetch `export?format=csv&gid=1398197110` on the
 // `1xZ3avBsNBXbl3bQ74lmPs0YQFgZkPD0Sdzmx7ZGGEDY` document), column `技能`.
-// `data/bands.json` (`text`) is a faithful copy of it -- 12/12 rows match modulo
+// the roster band row (`text`) is a faithful copy of it -- 12/12 rows match modulo
 // the sheet's literal backslash-n escapes -- so the JSON is safe to code against.
 //
 // All 12 band skills are written and bound (`bind_skills`). What is left on

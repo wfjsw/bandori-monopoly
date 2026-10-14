@@ -1,7 +1,7 @@
 //! Unit `skills_mygo`: reference specs FROM the clause docs only.
 //!
 //! Sources: `docs/rulebook/spec/cards/mygo.md` (Character skill / Band skill
-//! sections), `data/characters.json` (band `MyGO!!!!!`), `data/bands.json`
+//! sections), `the roster` (band `MyGO!!!!!`), `the roster`
 //! (skill 「迷途之星」). Never derived from engine behaviour.
 
 use crate::world::Effect;

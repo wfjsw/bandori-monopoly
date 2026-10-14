@@ -87,7 +87,7 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
 // TODO(规则书)（2）: 「（除将牌加入卡组的效果以外）」 -- a per-number carve-out the
 //   cards do not tag, so the player can name a number the clause excludes.
 
-/// `bands.json` row for this band skill (ABI v63).
+/// Roster band row for this band skill (ABI v63).
 pub const BAND: ruleset_core::roster::BandDef =
 ruleset_core::roster::BandDef::new(r#"CiRCLE"#)
     .short_name(r#"CiRCLE"#)

@@ -101,7 +101,7 @@ shape as `rules/cards/card-*` and `rules/skills/*`:
 | `tile:event` | `event.rs` | `cafe`, `ryuseido` | lines 97–99 |
 
 The crate is a **rule crate**, not a card crate: its ids are `tile:*`, not
-`data/cards.json` ids. `tools/rules-aggregate.mjs` gains `rules/tiles` as a
+roster card ids. `tools/rules-aggregate.mjs` gains `rules/tiles` as a
 scan root (alongside `rules/cards`, `rules/skills`, `rules/tile_marks` and
 `rules/events`) so `card-all` links it; `tools/build-ruleset.mjs` needs no
 change.
@@ -602,7 +602,7 @@ than the only path. Phase 3 landed the following (2026-10-06):
   card effects shape it (a rent-region expansion, a forced stop-and-pay).
 * **`tools/rulebook/check.py`** now checks `rules/tiles/*` and
   `rules/tile_marks/*` against
-  `data/rules.txt` the way it checks `rules/cards/*` against `cards.json`.
+  `data/rules.txt` the way it checks `rules/cards/*` against the roster fixture.
 
 Concretely still short:
 

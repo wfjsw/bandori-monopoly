@@ -122,7 +122,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
 //   is shared with the band skill and 「只有洗牌时可以…添加奇迹水晶」 carves a
 //   class of crystal gains the engine does not tag.
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"若叶睦（CRYCHIC）"#)
     .display(r#"若叶睦（CRYCHIC）"#)

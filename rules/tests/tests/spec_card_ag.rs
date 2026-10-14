@@ -2,7 +2,7 @@
 //!
 //! Unit 12. Spec doc: `docs/rulebook/spec/cards/ag.md`. Clauses are derived
 //! from the live sheet texts (`docs/rulebook/cards.json`,
-//! `data/characters.json`, `data/bands.json`), never from engine behaviour.
+//! the roster character / band rows), never from engine behaviour.
 //! A discrepancy is a plain failing test -- no `#[ignore]`, no allowlist.
 //!
 //! Shape (copy of `example_card.rs`): quote the text, `forall` over randomized
@@ -39,7 +39,7 @@ fn skip_all(t: &mut Table) {
 
 /// C-AG-declaration-03 -- 「被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。」
 ///
-/// * **Source:** `cards.json#AG:宣战布告`
+/// * **Source:** `roster#AG:宣战布告`
 /// * **Trigger:** the [反击] resolving after another player's card targeted
 ///   the user / a deed they own.
 /// * **Effect:** the designated player pays exactly 500 to the user; the user
@@ -71,7 +71,7 @@ fn declaration_consumes_the_card(step: &Step<'_>) -> Result<(), String> {
 pub const CLAUSES: &[Clause] = &[
     Clause::new(
         "C-AG-declaration-03",
-        "cards.json#AG:宣战布告",
+        "roster#AG:宣战布告",
         "被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。",
         declaration_consumes_the_card,
     ),
@@ -1350,7 +1350,7 @@ fn moca_skill_teleports_to_the_actor() {
 }
 
 // =====================================================================
-// Exclusive-card gates (characters.json.exclusiveCards)
+// Exclusive-card gates (the roster.exclusiveCards)
 // =====================================================================
 
 /// AG character-locked cards refuse a foreign character.

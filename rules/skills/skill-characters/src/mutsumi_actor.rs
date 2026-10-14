@@ -86,7 +86,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 //   「上一位打出过手牌的玩家」 needs a last-player-to-play latch the engine does
 //   not carry, and 「角色卡堆」 is a pile the vocabulary has no read for.
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"若叶睦"#)
     .display(r#"若叶睦"#)

@@ -142,7 +142,7 @@ fn nudge(who: i32, goal: i32) {
 //   shared with the Ave Mujica band skill, and 「只有洗牌时可以…添加奇迹水晶」
 //   carves a class of gains the engine does not tag.
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"丰川祥子（CRYCHIC）"#)
     .display(r#"丰川祥子（CRYCHIC）"#)

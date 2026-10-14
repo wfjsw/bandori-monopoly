@@ -109,7 +109,7 @@ fn _group(player_id: i32) -> i32 {
     state::get(player_id, GROUP)
 }
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"奥泽美咲"#)
     .display(r#"奥泽美咲"#)

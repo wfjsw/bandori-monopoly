@@ -1,7 +1,7 @@
 //! Unit `skills_mujica`: reference specs FROM the clause docs only.
 //!
-//! Sources: `data/characters.json` (band == "Ave Mujica") and
-//! `data/bands.json` `Ave Mujica` / 假面之下的真实. Quotes live in
+//! Sources: `the roster` (band == "Ave Mujica") and
+//! `the roster` `Ave Mujica` / 假面之下的真实. Quotes live in
 //! `docs/rulebook/spec/cards/mujica.md` § Character skills / Band skill.
 //! Never derived from engine behaviour.
 

@@ -4,7 +4,7 @@
 //! `RAS:（PAREO）渐渐远去的你` (pareo_far).
 //!
 //! Spec: the cards sheet (`docs/rulebook/cards-sheet.csv`) plus the skill text
-//! in `data/bands.json` / `data/characters.json`. Behaviour is observed through
+//! in the roster / `the roster`. Behaviour is observed through
 //! the shared harness only -- no card implementation is read. Disagreements
 //! with the rulebook keep the book's assertion and are marked
 //! `#[ignore = "DISCREPANCY: ..."]`.

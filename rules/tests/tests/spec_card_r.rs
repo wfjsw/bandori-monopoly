@@ -1,7 +1,7 @@
 //! Group R (Roselia) card / skill / band-skill contracts.
 //!
 //! Derived from the live sheet only (`docs/rulebook/cards.json`,
-//! `data/characters.json`, `data/bands.json`), never from engine behaviour.
+//! the roster character / band rows), never from engine behaviour.
 //! Clause IDs are `C-R-<slug>-<n>`; the doc is
 //! `docs/rulebook/spec/cards/r.md`.
 //!
@@ -118,13 +118,13 @@ pub fn cookie_pay(step: &Step<'_>) -> Result<(), String> {
 pub const COOKIE_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-R-曲奇时间-01",
-        "cards.json#R:曲奇时间",
+        "roster#R:曲奇时间",
         "将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。",
         cookie_return,
     ),
     Clause::new(
         "C-R-曲奇时间-02",
-        "cards.json#R:曲奇时间",
+        "roster#R:曲奇时间",
         "获得500*X资金，X为返回卡的总数。",
         cookie_pay,
     ),
@@ -237,13 +237,13 @@ pub fn resolve_hand_removes(step: &Step<'_>) -> Result<(), String> {
 pub const RESOLVE_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-R-觉悟-01",
-        "cards.json#R:[衍生] 觉悟",
+        "roster#R:[衍生] 觉悟",
         "[特]：此卡[移除]时获得1000资金。",
         resolve_removed_pays,
     ),
     Clause::new(
         "C-R-觉悟-02",
-        "cards.json#R:[衍生] 觉悟",
+        "roster#R:[衍生] 觉悟",
         "[手]：[移除]此卡。",
         resolve_hand_removes,
     ),
@@ -312,7 +312,7 @@ pub fn louder_mult(step: &Step<'_>) -> Result<(), String> {
 
 pub const LOUDER_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-louder-01",
-    "cards.json#R:（ykn）louder",
+    "roster#R:（ykn）louder",
     "每次打出此卡时使ring的价格基础乘数+5",
     louder_mult,
 )];
@@ -381,7 +381,7 @@ pub fn sprechchor_pay(step: &Step<'_>) -> Result<(), String> {
 
 pub const SPRECH_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-Sprechchor-02",
-    "cards.json#R:Sprechchor",
+    "roster#R:Sprechchor",
     "并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目",
     sprechchor_pay,
 )];
@@ -496,13 +496,13 @@ pub fn fire_bird_exhaust(step: &Step<'_>) -> Result<(), String> {
 pub const FIRE_BIRD_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-R-Fire bird-01",
-        "cards.json#R:Fire bird",
+        "roster#R:Fire bird",
         "支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶",
         fire_bird_place,
     ),
     Clause::new(
         "C-R-Fire bird-04",
-        "cards.json#R:Fire bird",
+        "roster#R:Fire bird",
         "奇迹水晶耗尽时将此卡放入弃牌堆",
         fire_bird_exhaust,
     ),
@@ -743,16 +743,16 @@ pub fn nfo_face1(step: &Step<'_>) -> Result<(), String> {
 }
 
 pub const NFO_CLAUSES: &[Clause] = &[
-    Clause::new("C-R-NFO-01", "cards.json#R:NFO", "投掷1d6", nfo_roll),
+    Clause::new("C-R-NFO-01", "roster#R:NFO", "投掷1d6", nfo_roll),
     Clause::new(
         "C-R-NFO-02",
-        "cards.json#R:NFO",
+        "roster#R:NFO",
         "并在回合结束后获得一层[停留]",
         nfo_stay,
     ),
     Clause::new(
         "C-R-NFO-03",
-        "cards.json#R:NFO",
+        "roster#R:NFO",
         "若投掷结果为1，获得1500资金",
         nfo_face1,
     ),
@@ -904,7 +904,7 @@ pub fn live_prep_stop(step: &Step<'_>) -> Result<(), String> {
 
 pub const LIVE_PREP_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-live前的准备-02",
-    "cards.json#R:live前的准备",
+    "roster#R:live前的准备",
     "使自己在江户川乐器店强制停下并触发结算",
     live_prep_stop,
 )];
@@ -963,7 +963,7 @@ pub fn toward_top_move(step: &Step<'_>) -> Result<(), String> {
 
 pub const TOP_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-向着顶点-01",
-    "cards.json#R:向着顶点",
+    "roster#R:向着顶点",
     "移动到下一个可被购买的livehouse格子，视为你的主要移动。",
     toward_top_move,
 )];
@@ -1018,7 +1018,7 @@ pub fn blue_rose_payout(step: &Step<'_>) -> Result<(), String> {
 
 pub const BLUE_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-蓝玫瑰的骄傲-01",
-    "cards.json#R:蓝玫瑰的骄傲",
+    "roster#R:蓝玫瑰的骄傲",
     "（1）若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些Livehouse格子地契价值20%的资金 。",
     blue_rose_payout,
 )];
@@ -1139,7 +1139,7 @@ pub fn student_council_add_resolve(step: &Step<'_>) -> Result<(), String> {
 
 pub const COUNCIL_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-学生会的检查-02",
-    "cards.json#R:学生会的检查",
+    "roster#R:学生会的检查",
     "向抽牌堆中加入一张“觉悟”",
     student_council_add_resolve,
 )];
@@ -1292,7 +1292,7 @@ pub fn ako_dark_stun(step: &Step<'_>) -> Result<(), String> {
 
 pub const AKO_DARK_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-黑暗大魔姬亚子-02",
-    "cards.json#R:（亚子）黑暗大魔姬亚子",
+    "roster#R:（亚子）黑暗大魔姬亚子",
     "（1）[反击] 当你即将向其他玩家支付资金时可打出此卡，使自己获得一层[眩晕]。",
     ako_dark_stun,
 )];
@@ -1361,7 +1361,7 @@ pub fn ringing_bloom_place(step: &Step<'_>) -> Result<(), String> {
 
 pub const RINGING_CLAUSES: &[Clause] = &[Clause::new(
     "C-R-Ringing Bloom-01",
-    "cards.json#R:（燐子）Ringing Bloom",
+    "roster#R:（燐子）Ringing Bloom",
     "（1）将此卡放置于自身场上",
     ringing_bloom_place,
 )];

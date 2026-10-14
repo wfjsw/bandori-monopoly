@@ -263,7 +263,7 @@ pub struct RosterList {
 /// and the non-card roster lists. Defined at the ruleset assembly site
 /// (`card-all`), which is the one place that sees every skill table.
 pub struct RosterSources {
-    /// Canonical `cards.json` order: card id -> index.
+    /// Canonical roster order: card id -> index.
     pub card_ordinals: OrdinalTable,
     pub lists: &'static [RosterList],
 }

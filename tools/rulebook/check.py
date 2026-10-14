@@ -9,7 +9,7 @@ sentents they implement (`// 规则书: …`). A card the sheet omits must say s
 cite the C# class it was translated from instead.
 
 Tile rules (rules/tiles/src/*.rs) and tile-mark rules
-(rules/tile_marks/src/*.rs) have no ids in cards.json, so their quotes live in
+(rules/tile_marks/src/*.rs) have no ids in the roster, so their quotes live in
 the file header and must appear in `data/rules.txt` -- the authoritative
 rulebook text (「基础[结算]规则」 + 「专有名词」) -- verbatim (whitespace aside).
 Each file must also carry at least one `// 规则书: …` citation line.
@@ -17,7 +17,7 @@ Each file must also carry at least one `// 规则书: …` citation line.
 inline rather than as `//! > ` -- e.g. the 该清CP了 text on `mark:cp` -- is
 fine; only `//! > ` runs are checked.)
 
-Event rules (rules/events/src/*.rs) are `event:*` ids with no cards.json entry
+Event rules (rules/events/src/*.rs) are `event:*` ids with no roster card entry
 either; their quote is the event's `text` in `data/events.json` (the sheet's
 中立事件 tab), matched the same way.
 
@@ -99,7 +99,7 @@ def main() -> int:
     print(f"{checked} cards checked, {card_bad} problem(s).")
 
     # Tile rules and tile-mark rules cite data/rules.txt from the file header
-    # (cards.json has no `tile:*` / `mark:*` ids). Every quoted passage must
+    # (the roster has no `tile:*` / `mark:*` ids). Every quoted passage must
     # appear there; TODO(规则书) notes do not excuse a missing or non-verbatim
     # quote.
     tiles = 0
@@ -126,7 +126,7 @@ def main() -> int:
             print(f"{rel}: quotes the passage but no code line cites it (// 规则书: ...)")
     print(f"{tiles} tiles + tile marks checked, {bad - card_bad} problem(s).")
 
-    # Event rules cite data/events.json from the file header (cards.json has no
+    # Event rules cite data/events.json from the file header (the roster has no
     # `event:*` ids). The quote is the event's `text` field, matched the same
     # way a tile's quote is matched against data/rules.txt.
     events = 0

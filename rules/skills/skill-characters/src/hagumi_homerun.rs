@@ -127,7 +127,7 @@ fn on_plan(player_id: i32) -> card_sdk::Asked {
 // 「育美经过其他角色时，可以把自己身上的可乐饼转移给该角色」 -- never built.
 // 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- never built.
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"北泽育美"#)
     .display(r#"北泽育美"#)

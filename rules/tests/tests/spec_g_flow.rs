@@ -201,7 +201,7 @@ impl Setup {
     }
 }
 
-/// Character names, first `n` of `data/characters.json`.
+/// Character names, first `n` of the roster.
 fn chars(n: usize) -> Vec<String> {
     rules_spec::characters().into_iter().take(n).collect()
 }

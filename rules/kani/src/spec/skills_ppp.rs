@@ -3,8 +3,8 @@
 //! Sources (re-read; never derived from engine bodies):
 //! - `docs/rulebook/spec/cards/ppp.md` sections 户山香澄 / 花园多惠 /
 //!   牛込里美 / 山吹沙绫 / 市谷有咲 / Poppin' Party band skill 星之鼓动
-//! - primary: `data/characters.json` (`band == "Poppin' Party"`),
-//!   `data/bands.json` (`text` for 星之鼓动)
+//! - primary: `the roster` (`band == "Poppin' Party"`),
+//!   the roster band row (`text` for 星之鼓动)
 //!
 //! Precedence: live sheet > rulebook-doc. OPEN items prove only what the
 //! text determines and record `OPEN-<ID>`.

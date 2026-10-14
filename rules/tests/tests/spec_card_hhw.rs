@@ -1,7 +1,7 @@
 //! Per-card contracts for Hello, Happy World! (unit 13, `C-HHW-*`).
 //!
 //! Derived only from the live sheet (`docs/rulebook/cards.json`,
-//! `data/characters.json` / `data/bands.json`) and `rulebook-doc.md`.
+//! the roster character / band rows) and `rulebook-doc.md`.
 //! Never from engine behaviour. Discrepancies are plain failing tests.
 //!
 //! Doc: `docs/rulebook/spec/cards/hhw.md`. Clause IDs match the doc.
@@ -99,13 +99,13 @@ pub fn believe_frame(step: &Step<'_>) -> Result<(), String> {
 pub const BELIEVE_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-HHW-believe-02",
-        "cards.json#HHW:因为我一直相信着你",
+        "roster#HHW:因为我一直相信着你",
         "至少有另一张手牌时可发动，消耗800资金…",
         believe_cost,
     ),
     Clause::new(
         "C-HHW-believe-frame",
-        "cards.json#HHW:因为我一直相信着你",
+        "roster#HHW:因为我一直相信着你",
         "至少有另一张手牌时可发动，消耗800资金…",
         believe_frame,
     ),
@@ -238,7 +238,7 @@ pub fn backstage_gain(step: &Step<'_>) -> Result<(), String> {
 
 pub const BACKSTAGE_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-backstage-02",
-    "cards.json#HHW:出发！后台之旅！",
+    "roster#HHW:出发！后台之旅！",
     "看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金",
     backstage_gain,
 )];
@@ -330,7 +330,7 @@ pub fn athletic_three_crystals(step: &Step<'_>) -> Result<(), String> {
 
 pub const ATHLETIC_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-athletic-01",
-    "cards.json#HHW:运动的天赋",
+    "roster#HHW:运动的天赋",
     "将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。",
     athletic_three_crystals,
 )];
@@ -446,7 +446,7 @@ pub fn patrol_frame(step: &Step<'_>) -> Result<(), String> {
 
 pub const PATROL_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-patrol-frame",
-    "cards.json#HHW:微笑巡逻队",
+    "roster#HHW:微笑巡逻队",
     "付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）",
     patrol_frame,
 )];
@@ -538,7 +538,7 @@ pub fn hlsy_frame(step: &Step<'_>) -> Result<(), String> {
 
 pub const HLSY_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-hlsy-02",
-    "cards.json#HHW:Happy, Lucky, Smile, Yeah！",
+    "roster#HHW:Happy, Lucky, Smile, Yeah！",
     "投掷1d4mod4，对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子…视为你的主要移动。",
     hlsy_frame,
 )];
@@ -598,7 +598,7 @@ pub fn balloon_frame(step: &Step<'_>) -> Result<(), String> {
 
 pub const BALLOON_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-balloon-02",
-    "cards.json#HHW:热气球演出",
+    "roster#HHW:热气球演出",
     "投掷4次3d20mod60并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动",
     balloon_frame,
 )];
@@ -656,7 +656,7 @@ pub fn charity_halve(step: &Step<'_>) -> Result<(), String> {
 
 pub const CHARITY_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-charity-02",
-    "cards.json#HHW:爱心义演",
+    "roster#HHW:爱心义演",
     "打出此卡的回合内…本回合中向其他玩家支付时你的付款减半（向上取整10）",
     charity_halve,
 )];
@@ -736,7 +736,7 @@ pub fn kkr_cost(step: &Step<'_>) -> Result<(), String> {
 
 pub const KKR_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-kkr-01",
-    "cards.json#HHW:（kkr）前往笑容集结的地方！",
+    "roster#HHW:（kkr）前往笑容集结的地方！",
     "支付10000资金（视为买地花费）并将此卡置于CiRCLE上…",
     kkr_cost,
 )];
@@ -830,7 +830,7 @@ pub fn wacha_place(step: &Step<'_>) -> Result<(), String> {
 
 pub const WACHA_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-wacha-01",
-    "cards.json#HHW:（花音）Wacha Mocha 啪嗒进行曲",
+    "roster#HHW:（花音）Wacha Mocha 啪嗒进行曲",
     "[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记…",
     wacha_place,
 )];
@@ -934,7 +934,7 @@ pub fn supply_seeds(step: &Step<'_>) -> Result<(), String> {
 
 pub const SUPPLY_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-supply-01",
-    "cards.json#HHW:黑衣人的补给",
+    "roster#HHW:黑衣人的补给",
     "[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶…",
     supply_seeds,
 )];
@@ -999,7 +999,7 @@ pub fn return_window(step: &Step<'_>) -> Result<(), String> {
 
 pub const RETURN_CLAUSES: &[Clause] = &[Clause::new(
     "C-HHW-return-01",
-    "cards.json#HHW:梦幻的回礼",
+    "roster#HHW:梦幻的回礼",
     "[反击] 在场上其他玩家即将被不属于你的格子收费时打出…",
     return_window,
 )];

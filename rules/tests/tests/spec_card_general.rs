@@ -9,7 +9,7 @@
 //! from `docs/rulebook/TEST-FINDINGS.md` §6 apply unless the sheet text
 //! supersedes them. Never derived from engine behaviour.
 //!
-//! Card texts (cards.json keys under `通用:`):
+//! Card texts (roster keys under `通用:`):
 //!
 //! ```text
 //! 通用:GREAT：
@@ -154,7 +154,7 @@ fn user_card_frame(step: &Step<'_>, card: &str) -> Result<(), String> {
 /// C-GEN-great-01 -- [移除]此卡.
 ///
 /// * **ID:** `C-GEN-great-01`
-/// * **Source:** `cards.json#通用:GREAT`
+/// * **Source:** `roster#通用:GREAT`
 /// * **Quote:** 「1. [移除]此卡；」
 /// * **Trigger:** the [手] effect of this card, played from hand.
 /// * **Condition:** the card was in the user's hand (legal play).
@@ -181,7 +181,7 @@ pub fn c_gen_great_01(step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-great-02 -- 将一张“PERFECT“加入抽卡区并洗切.
 ///
 /// * **ID:** `C-GEN-great-02`
-/// * **Source:** `cards.json#通用:GREAT`
+/// * **Source:** `roster#通用:GREAT`
 /// * **Quote:** 「2. 将一张“PERFECT“加入抽卡区并洗切；」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** none beyond the play.
@@ -210,7 +210,7 @@ pub fn c_gen_great_02(step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-great-03 -- [获得]2000资金.
 ///
 /// * **ID:** `C-GEN-great-03`
-/// * **Source:** `cards.json#通用:GREAT`
+/// * **Source:** `roster#通用:GREAT`
 /// * **Quote:** 「3. [获得]2000资金。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** none beyond the play (「[获得]」 = print money).
@@ -239,25 +239,25 @@ pub fn c_gen_great_frame(step: &Step<'_>) -> Result<(), String> {
 pub const GREAT_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-GEN-great-01",
-        "cards.json#通用:GREAT",
+        "roster#通用:GREAT",
         "1. [移除]此卡；",
         c_gen_great_01,
     ),
     Clause::new(
         "C-GEN-great-02",
-        "cards.json#通用:GREAT",
+        "roster#通用:GREAT",
         "2. 将一张“PERFECT“加入抽卡区并洗切；",
         c_gen_great_02,
     ),
     Clause::new(
         "C-GEN-great-03",
-        "cards.json#通用:GREAT",
+        "roster#通用:GREAT",
         "3. [获得]2000资金。",
         c_gen_great_03,
     ),
     Clause::new(
         "C-GEN-great-frame",
-        "cards.json#通用:GREAT",
+        "roster#通用:GREAT",
         "依次进行以下操作：1. [移除]此卡；2. 将一张“PERFECT“加入抽卡区并洗切；3. [获得]2000资金。",
         c_gen_great_frame,
     ),
@@ -318,7 +318,7 @@ fn great_contract() {
 /// C-GEN-perfect-01 -- [移除]此卡.
 ///
 /// * **ID:** `C-GEN-perfect-01`
-/// * **Source:** `cards.json#通用:[衍生]PERFECT`
+/// * **Source:** `roster#通用:[衍生]PERFECT`
 /// * **Quote:** 「1. [移除]此卡；」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** the card is in the user's hand.
@@ -348,7 +348,7 @@ pub fn c_gen_perfect_01(step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-perfect-02 -- 将一张“FEVER!“加入弃卡区.
 ///
 /// * **ID:** `C-GEN-perfect-02`
-/// * **Source:** `cards.json#通用:[衍生]PERFECT`
+/// * **Source:** `roster#通用:[衍生]PERFECT`
 /// * **Quote:** 「2. 将一张“FEVER!“加入弃卡区；」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** none beyond the play.
@@ -393,7 +393,7 @@ pub fn c_gen_perfect_02(step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-perfect-03 -- [获得]3000资金.
 ///
 /// * **ID:** `C-GEN-perfect-03`
-/// * **Source:** `cards.json#通用:[衍生]PERFECT`
+/// * **Source:** `roster#通用:[衍生]PERFECT`
 /// * **Quote:** 「3. [获得]3000资金。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** none beyond the play.
@@ -422,25 +422,25 @@ pub fn c_gen_perfect_frame(step: &Step<'_>) -> Result<(), String> {
 pub const PERFECT_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-GEN-perfect-01",
-        "cards.json#通用:[衍生]PERFECT",
+        "roster#通用:[衍生]PERFECT",
         "1. [移除]此卡；",
         c_gen_perfect_01,
     ),
     Clause::new(
         "C-GEN-perfect-02",
-        "cards.json#通用:[衍生]PERFECT",
+        "roster#通用:[衍生]PERFECT",
         "2. 将一张“FEVER!“加入弃卡区；",
         c_gen_perfect_02,
     ),
     Clause::new(
         "C-GEN-perfect-03",
-        "cards.json#通用:[衍生]PERFECT",
+        "roster#通用:[衍生]PERFECT",
         "3. [获得]3000资金。",
         c_gen_perfect_03,
     ),
     Clause::new(
         "C-GEN-perfect-frame",
-        "cards.json#通用:[衍生]PERFECT",
+        "roster#通用:[衍生]PERFECT",
         "依次进行以下操作：1. [移除]此卡；2. 将一张“FEVER!“加入弃卡区；3. [获得]3000资金。",
         c_gen_perfect_frame,
     ),
@@ -500,7 +500,7 @@ fn perfect_contract() {
 /// C-GEN-fever-01 -- 将此卡放置在[使用者]的[场地].
 ///
 /// * **ID:** `C-GEN-fever-01`
-/// * **Source:** `cards.json#通用:[衍生]FEVER!`
+/// * **Source:** `roster#通用:[衍生]FEVER!`
 /// * **Quote:** 「[手]：将此卡放置在[使用者]的[场地]。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** the card is in the user's hand.
@@ -535,7 +535,7 @@ pub fn fever_x(owner_field_len: usize) -> i64 {
 /// C-GEN-fever-02/03 -- the [获得] / [支付] boost, same X.
 ///
 /// * **ID:** `C-GEN-fever-02` / `C-GEN-fever-03`
-/// * **Source:** `cards.json#通用:[衍生]FEVER!`
+/// * **Source:** `roster#通用:[衍生]FEVER!`
 /// * **Quote:** 「（1）[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）。」
 /// * **Trigger:** any [获得] (print) or [支付] (transfer) **to** the [拥有者]
 ///   while FEVER! is on their field.
@@ -558,7 +558,7 @@ pub fn c_gen_fever_03(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-fever-04 -- （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区.
 ///
 /// * **ID:** `C-GEN-fever-04`
-/// * **Source:** `cards.json#通用:[衍生]FEVER!`
+/// * **Source:** `roster#通用:[衍生]FEVER!`
 /// * **Quote:** 「（2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。」
 /// * **Trigger:** the owner's turn start, while the card is on their field.
 /// * **Condition:** the card is placed.
@@ -601,13 +601,13 @@ pub fn c_gen_fever_frame(step: &Step<'_>) -> Result<(), String> {
 pub const FEVER_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-GEN-fever-01",
-        "cards.json#通用:[衍生]FEVER!",
+        "roster#通用:[衍生]FEVER!",
         "[手]：将此卡放置在[使用者]的[场地]。",
         c_gen_fever_01,
     ),
     Clause::new(
         "C-GEN-fever-frame",
-        "cards.json#通用:[衍生]FEVER!",
+        "roster#通用:[衍生]FEVER!",
         "（1）[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）。",
         c_gen_fever_frame,
     ),
@@ -774,7 +774,7 @@ pub fn budokan_x(alive_others: usize) -> i64 {
 /// C-GEN-budokan-01 -- X formula and the payments.
 ///
 /// * **ID:** `C-GEN-budokan-01`
-/// * **Source:** `cards.json#通用:登上武道馆`
+/// * **Source:** `roster#通用:登上武道馆`
 /// * **Quote:** 「将X设为2000÷“[使用者]以外的[存活]玩家数量”向上取整10，Y设为[存活]玩家数量减1。[指定][使用者]以外的所有玩家，被[指定]的玩家[支付][使用者]X资金。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** `alive_others` = number of [存活] players other than the user.
@@ -843,13 +843,13 @@ pub fn c_gen_budokan_frame(step: &Step<'_>) -> Result<(), String> {
 pub const BUDOKAN_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-GEN-budokan-01",
-        "cards.json#通用:登上武道馆",
+        "roster#通用:登上武道馆",
         "将X设为2000÷“[使用者]以外的[存活]玩家数量”向上取整10，Y设为[存活]玩家数量减1。[指定][使用者]以外的所有玩家，被[指定]的玩家[支付][使用者]X资金。",
         c_gen_budokan_01,
     ),
     Clause::new(
         "C-GEN-budokan-frame",
-        "cards.json#通用:登上武道馆",
+        "roster#通用:登上武道馆",
         "被[指定]的玩家[支付][使用者]X资金。",
         c_gen_budokan_frame,
     ),
@@ -906,7 +906,7 @@ fn budokan_contract() {
 /// C-GEN-tsugu-01 -- 「结果至少为22则抽1张卡」.
 ///
 /// * **ID:** `C-GEN-tsugu-01`
-/// * **Source:** `cards.json#通用:@Tsugu ycm`
+/// * **Source:** `roster#通用:@Tsugu ycm`
 /// * **Quote:** 「1. 结果至少为22则抽1张卡；」
 /// * **Trigger:** the [手] effect, after the 3d10 roll.
 /// * **Condition:** `sum(3d10) >= 22`.
@@ -923,7 +923,7 @@ pub fn c_gen_tsugu_01(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-tsugu-02 -- 「结果至少为26则…[传送]到“bandori车站”并不[结算]」.
 ///
 /// * **ID:** `C-GEN-tsugu-02`
-/// * **Source:** `cards.json#通用:@Tsugu ycm`
+/// * **Source:** `roster#通用:@Tsugu ycm`
 /// * **Quote:** 「2. 结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并不[结算]，且可选择购买任意无主的[可购买格子]；」
 /// * **Trigger:** the [手] effect, after the 3d10 roll.
 /// * **Condition:** `sum(3d10) >= 26`.
@@ -944,7 +944,7 @@ pub fn c_gen_tsugu_02(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-tsugu-03 -- 「结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）」.
 ///
 /// * **ID:** `C-GEN-tsugu-03`
-/// * **Source:** `cards.json#通用:@Tsugu ycm`
+/// * **Source:** `roster#通用:@Tsugu ycm`
 /// * **Quote:** 「3. 结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）；」
 /// * **Trigger:** the [手] effect (sets a turn-long modifier), then any buy.
 /// * **Condition:** `sum(3d10) >= 28`.
@@ -961,7 +961,7 @@ pub fn c_gen_tsugu_03(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-tsugu-04 -- 「结果小于26则选择[获得]1000资金或…[传送]…并[结算]」.
 ///
 /// * **ID:** `C-GEN-tsugu-04`
-/// * **Source:** `cards.json#通用:@Tsugu ycm`
+/// * **Source:** `roster#通用:@Tsugu ycm`
 /// * **Quote:** 「4. 结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。」
 /// * **Trigger:** the [手] effect, after the 3d10 roll.
 /// * **Condition:** `sum(3d10) < 26`.
@@ -1004,7 +1004,7 @@ pub fn c_gen_tsugu_frame(step: &Step<'_>) -> Result<(), String> {
 /// The clause set a Tsugu contract arms on `Table::observe`.
 pub const TSUGU_CLAUSES: &[Clause] = &[Clause::new(
     "C-GEN-tsugu-frame",
-    "cards.json#通用:@Tsugu ycm",
+    "roster#通用:@Tsugu ycm",
     "投掷3d10并根据结果依次进行以下操作：…",
     c_gen_tsugu_frame,
 )];
@@ -1183,7 +1183,7 @@ pub fn party_x(others_who_spent: usize) -> i64 {
 /// C-GEN-party-01 -- 「所有其他玩家可选择[消耗]500资金，你消耗500资金」.
 ///
 /// * **ID:** `C-GEN-party-01`
-/// * **Source:** `cards.json#通用:CiRCLE THANKS PARTY!`
+/// * **Source:** `roster#通用:CiRCLE THANKS PARTY!`
 /// * **Quote:** 「[手]：所有其他玩家可选择[消耗]500资金，你消耗500资金，将X设为因此卡[消耗]资金的玩家数量加1。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** each other player may accept or decline the 500.
@@ -1198,7 +1198,7 @@ pub fn c_gen_party_01(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-party-02 -- the X≥2 roll branch.
 ///
 /// * **ID:** `C-GEN-party-02`
-/// * **Source:** `cards.json#通用:CiRCLE THANKS PARTY!`
+/// * **Source:** `roster#通用:CiRCLE THANKS PARTY!`
 /// * **Quote:** 「1. X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；」
 /// * **Trigger:** the [手] effect, after X is set.
 /// * **Condition:** `X >= 2`.
@@ -1214,7 +1214,7 @@ pub fn c_gen_party_02(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-party-03 -- the X=1 extra-turn branch.
 ///
 /// * **ID:** `C-GEN-party-03`
-/// * **Source:** `cards.json#通用:CiRCLE THANKS PARTY!`
+/// * **Source:** `roster#通用:CiRCLE THANKS PARTY!`
 /// * **Quote:** 「2. X等于1则[使用者]的本回合结束后获得一个额外回合。」
 /// * **Trigger:** the [手] effect, after X is set.
 /// * **Condition:** `X == 1`.
@@ -1253,7 +1253,7 @@ pub fn c_gen_party_frame(step: &Step<'_>) -> Result<(), String> {
 /// The clause set a THANKS PARTY contract arms on `Table::observe`.
 pub const PARTY_CLAUSES: &[Clause] = &[Clause::new(
     "C-GEN-party-frame",
-    "cards.json#通用:CiRCLE THANKS PARTY!",
+    "roster#通用:CiRCLE THANKS PARTY!",
     "[手]：所有其他玩家可选择[消耗]500资金，你消耗500资金，…",
     c_gen_party_frame,
 )];
@@ -1481,7 +1481,7 @@ fn party_x2_roll_pays() {
 /// C-GEN-marina-01 -- the [反击] on an extra effect over #1格子.
 ///
 /// * **ID:** `C-GEN-marina-01`
-/// * **Source:** `cards.json#通用:[月岛麻里奈]今天也要加油工作喔`
+/// * **Source:** `roster#通用:[月岛麻里奈]今天也要加油工作喔`
 /// * **Quote:** 「[反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。」
 /// * **Trigger:** a [反击] window opened because the user is [经过]ing #1格子
 ///   (engine index 0, CiRCLE) **and** that tile carries another effect.
@@ -1501,7 +1501,7 @@ pub fn c_gen_marina_01(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-marina-exclusive -- the card is 月岛麻里奈's exclusive.
 ///
 /// * **ID:** `C-GEN-marina-exclusive`
-/// * **Source:** `cards.json#通用:[月岛麻里奈]今天也要加油工作喔` + `rulebook-doc.md:112`
+/// * **Source:** `roster#通用:[月岛麻里奈]今天也要加油工作喔` + `rulebook-doc.md:112`
 /// * **Quote:** 「角色专属卡在卡名里会有角色名（例：[丸山彩] 憧憬的前方）。」
 /// * **Trigger:** a play of this card.
 /// * **Condition:** the user's character is not 月岛麻里奈.
@@ -1599,7 +1599,7 @@ fn marina_exclusive_refused() {
 /// C-GEN-parking-01 -- place on Space and redistribute houses.
 ///
 /// * **ID:** `C-GEN-parking-01`
-/// * **Source:** `cards.json#通用:[都筑诗船]Parking Space`
+/// * **Source:** `roster#通用:[都筑诗船]Parking Space`
 /// * **Quote:** 「[手]：将此卡放置于“Space”格子上，将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** the user is 都筑诗船 (name exclusive); Space may hold houses.
@@ -1616,7 +1616,7 @@ pub fn c_gen_parking_01(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-parking-02 -- （1） settle replaced by a turn-end [停留].
 ///
 /// * **ID:** `C-GEN-parking-02`
-/// * **Source:** `cards.json#通用:[都筑诗船]Parking Space`
+/// * **Source:** `roster#通用:[都筑诗船]Parking Space`
 /// * **Quote:** 「（1）此卡所在格子的[结算]改为回合结束后获得一层[停留]。」
 /// * **Trigger:** a player [结算]s the tile the card sits on.
 /// * **Condition:** the card is placed on Space.
@@ -1634,7 +1634,7 @@ pub fn c_gen_parking_02(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-parking-03 -- （2） skills blocked on the tile.
 ///
 /// * **ID:** `C-GEN-parking-03`
-/// * **Source:** `cards.json#通用:[都筑诗船]Parking Space`
+/// * **Source:** `roster#通用:[都筑诗船]Parking Space`
 /// * **Quote:** 「（2）位于此卡所在格子上的玩家无法使用角色及乐队技能。」
 /// * **Trigger:** a skill use by a player standing on the card's tile.
 /// * **Condition:** the card is placed; the player is on that tile.
@@ -1699,7 +1699,7 @@ fn parking_moves_houses() {
         t.give(0, &["通用:[都筑诗船]Parking Space"]);
         t.observe(&[Clause::new(
             "C-GEN-parking-frame",
-            "cards.json#通用:[都筑诗船]Parking Space",
+            "roster#通用:[都筑诗船]Parking Space",
             "将此卡放置于“Space”格子上，将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）。",
             c_gen_parking_frame,
         )]);
@@ -1784,7 +1784,7 @@ fn parking_replaces_settle_and_blocks_skills() {
 /// C-GEN-encore-01 -- negate an [异常移动效果] on the user.
 ///
 /// * **ID:** `C-GEN-encore-01`
-/// * **Source:** `cards.json#通用:安可`
+/// * **Source:** `roster#通用:安可`
 /// * **Quote:** 「[反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次[异常移动效果]和其导致的所有效果。」
 /// * **Trigger:** a [反击] window opened because the user is about to receive
 ///   an [异常移动效果].
@@ -1846,7 +1846,7 @@ fn encore_negates_stay() {
 /// C-GEN-harvest-01 -- move 1..=6 and [结算].
 ///
 /// * **ID:** `C-GEN-harvest-01`
-/// * **Source:** `cards.json#通用:尽力后的收获`
+/// * **Source:** `roster#通用:尽力后的收获`
 /// * **Quote:** 「[手]：立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** none beyond the play.
@@ -1897,7 +1897,7 @@ fn harvest_moves_and_settles() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-GEN-harvest-frame",
-            "cards.json#通用:尽力后的收获",
+            "roster#通用:尽力后的收获",
             "立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。",
             c_gen_harvest_frame,
         )]);
@@ -1952,7 +1952,7 @@ fn harvest_moves_and_settles() {
 /// C-GEN-net-02 -- negate an untargeted hand [手] effect.
 ///
 /// * **ID:** `C-GEN-net-02`
-/// * **Source:** `cards.json#通用:网络链接异常`
+/// * **Source:** `roster#通用:网络链接异常`
 /// * **Quote:** 「2. 手卡的[手]效果且没有[指定]目标则抵消其所有的效果；」
 /// * **Trigger:** a [反击] window before a hand card's [手] effect resolves.
 /// * **Condition:** the target effect is a hand [手] with no [指定] targets.
@@ -1968,7 +1968,7 @@ pub fn c_gen_net_02(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-net-01 -- cancel one target of a targeted hand [手] effect.
 ///
 /// * **ID:** `C-GEN-net-01`
-/// * **Source:** `cards.json#通用:网络链接异常`
+/// * **Source:** `roster#通用:网络链接异常`
 /// * **Quote:** 「1. 手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]；」
 /// * **Trigger:** a [反击] window before a targeted hand [手] effect resolves.
 /// * **Condition:** the target effect designates one or more targets.
@@ -2065,7 +2065,7 @@ fn net_cancels_one_target() {
 /// C-GEN-clearcp-01 -- [手]: one tile [CP点] + six on-card [CP点].
 ///
 /// * **ID:** `C-GEN-clearcp-01`
-/// * **Source:** `cards.json#通用:该清CP了`
+/// * **Source:** `roster#通用:该清CP了`
 /// * **Quote:** 「[手]：在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** the chosen tile has no character and no [CP点].
@@ -2083,7 +2083,7 @@ pub fn c_gen_clearcp_01(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-clearcp-02 -- settle on a [CP] tile spends 1+1 and pays 800.
 ///
 /// * **ID:** `C-GEN-clearcp-02`
-/// * **Source:** `cards.json#通用:该清CP了`
+/// * **Source:** `roster#通用:该清CP了`
 /// * **Quote:** 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。」
 /// * **Trigger:** any player's [结算] on a tile carrying a [CP点].
 /// * **Condition:** the mark's `src` card still holds ≥1 on-card [CP点].
@@ -2102,7 +2102,7 @@ pub fn c_gen_clearcp_02(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-clearcp-03 -- （1） spread to adjacent tiles for two turn starts.
 ///
 /// * **ID:** `C-GEN-clearcp-03`
-/// * **Source:** `cards.json#通用:该清CP了`
+/// * **Source:** `roster#通用:该清CP了`
 /// * **Quote:** 「（1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。」
 /// * **Trigger:** each of the next two turn starts after the play.
 /// * **Condition:** the source marks (this card's tile [CP点] and their
@@ -2121,7 +2121,7 @@ pub fn c_gen_clearcp_03(_step: &Step<'_>) -> Result<(), String> {
 /// C-GEN-clearcp-04 -- graveyard when the on-card [CP点] hits 0.
 ///
 /// * **ID:** `C-GEN-clearcp-04`
-/// * **Source:** `cards.json#通用:该清CP了` + TEST-FINDINGS §6 (2026-10-07)
+/// * **Source:** `roster#通用:该清CP了` + TEST-FINDINGS §6 (2026-10-07)
 /// * **Quote:** 「The card is graveyarded as soon as its on-card [CP点] is empty.」
 /// * **Trigger:** the on-card count drops to 0 however it drops.
 /// * **Condition:** this instance is on the field.
@@ -2338,7 +2338,7 @@ fn clearcp_graveyards_at_zero() {
 /// C-GEN-rain-01 -- 2d2 = X; designate X players including the user; [停留].
 ///
 /// * **ID:** `C-GEN-rain-01`
-/// * **Source:** `cards.json#通用:雨啊，快点来吧`
+/// * **Source:** `roster#通用:雨啊，快点来吧`
 /// * **Quote:** 「[手]：投掷2d2并记录结果为X。[指定]X名玩家（其中必须包括[使用者]），被[指定]的玩家获得一层[停留]。」
 /// * **Trigger:** the [手] effect of this card.
 /// * **Condition:** X = sum of 2d2 (in 2..=4); the player designates X distinct
@@ -2391,7 +2391,7 @@ fn rain_stays_x() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-GEN-rain-frame",
-            "cards.json#通用:雨啊，快点来吧",
+            "roster#通用:雨啊，快点来吧",
             "投掷2d2并记录结果为X。[指定]X名玩家（其中必须包括[使用者]），被[指定]的玩家获得一层[停留]。",
             c_gen_rain_frame,
         )]);

@@ -708,6 +708,118 @@ in `three_picks_counted`. Simplified the keep half (re-timing pending).
 `kassert!` (no `panic_fmt`/`memchr`) removed the fmt cliff that dominated
 the 1193-unroll memchr/PadAdapter profile. Class **E → fixed**.
 
+## triage2 — events unit, central-results3 non-success rows
+
+Branch `kani-triage2` · Worktree `/home/monopoly/kani-triage2-wt`.
+Old base: `/home/monopoly/kani-central-results3/events/` (unit finished on an
+older base). New runs: `/home/monopoly/kani-triage2-results/`.
+One serial CBMC (`KANI_GLOBAL_SLOTS=3`, slot2 = this agent); unwinding
+assertions ON. Classes A–F per the user rule.
+
+Master already contained (before this branch): `arr4_eq` / `kassert!`,
+op-subset host (`arm_raise` = 1 etc.), sparse World, `cfg(kani)` String/Vec
+facades. Central rows older than those fixes are re-timed, not re-derived.
+
+### Per-row table (before → after)
+
+| id | before (central-results3) | phase split / dominant cost | class | action | after |
+|---|---|---|---|---|---|
+| `moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → `memcmp.unwind` 16 (16-byte `==`) | **A** | `arr4_eq` already on master | **SUCCESSFUL 322 s** (unwind 16) |
+| `aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | memcmp 16 (A) **and** `host::name_id` untagged (C) | **A + C** | `arr4_eq` on master; `set_self_prop` packing bug is host — **FAILED 260 s** | FAILED (class C, host) |
+| `this_hand_01_move_is_protocol` | UNWINDING 571 s (unwind 16) | `memcmp.unwind` 16 | **A** | `arr4_eq` already on master | **SUCCESSFUL 315 s** (unwind 16) |
+| `ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | `ex_quest::play` + `memcmp` | **A** | `arr4_eq` + unwind **24** | **SUCCESSFUL 778 s** (unwind assert at 24 holds) |
+| `fix_note_01_activation_keeps` | UNWINDING 838 s (unwind 16) | 60-trip body loop (A) + `set_self_prop` (C) + SSA cost | **A → E** | unwind **64** (sound); body loop cannot shrink | **TIMEOUT 1800 s** (unwind 64) |
+| `chart_rush_01_spends_fire` | FAILED 846 s | assert `all fire pots spent`; `Op::raise` was benign-0 → `spend_fire` skipped | **C** | `arm_raise` → 1 on master (op-subset) | **SUCCESSFUL 654 s** (2/2 covers sat) |
+| `embers_03_settle_costs_ten_per_copy` | FAILED 1139 s | wrong On index (B) **and** `set_self_prop` packing (C) | **B + C** | entry 3 fixed; still **FAILED 232 s** on `name_id` | FAILED (class C, host) |
+| `lulu_01_pay_500_leg` | FAILED 647 s | assert `Teleport tile == -1`; `tile_named(快餐店)` now **33** | **B** | assert pay+teleport to 33 via `lulu_01_pay_ok` | **SUCCESSFUL 366 s** |
+| `aao_02_hand_veto_is_armed` | FAILED 550 s | assert `[手] veto armed`; body arms nothing (D) + `set_self_prop` packing (C) | **D** GENUINE E-aao-02 | **keep FAILING** (not a perf/setup bug) | **FAILED 239 s** (class D assert still fires; also name_id C) |
+| `moca_02_mutant_is_detected` | TIMEOUT 1800 s (old base) | fmt `PadAdapter` + `memchr` 1193 from `assert!` msgs | **E** | `kassert!` already on master | **SUCCESSFUL 249 s** (unwind 16) |
+| `never_ends_01_noop_blocked_host` | TIMEOUT 1800 s | body `format!("RiNG {n}")` → PadAdapter + memchr; **and** stale no-op assert (`tile_named` now resolves 8/16/36/53) | **E + B** | renamed `never_ends_01_teleport_and_exile`; prove TP+exile; `expect`/`panic!` → `kassert!` | pending |
+| `front_or_back_01_equal_iff` | TIMEOUT 1800 s (unwind 32) | body `Vec` at 32 + harness `iter().all/any/find_map` 31 + `expect` fmt | **A/E** | zero-loop scans; `expect`/`panic!` → `kassert!` | pending |
+| `front_or_back_02_same_half_share` | TIMEOUT 1800 s | same | **A/E** | same | pending |
+| `front_or_back_mutant_swapped_is_detected` | TIMEOUT 1800 s | same | **A/E** | same + zero-loop leg sum | pending |
+| `habinel_01_grants_exiles` | TIMEOUT 1800 s (unwind 24) | body+spec loops 24; 7.8M vars / 30.8M clauses; **stale `to=-1`** (`tile_named(微笑号)` now **26**) | **A/E + B** | assert `to=26`; drop harness cover loop | pending |
+| `kizuna_01_teleport_and_exile` | TIMEOUT 1800 s (unwind 24) | `Vec::extend_with` 24 (old base) + `find_map` + `expect` fmt | **E + A** | strvec facades on master; zero-loop dest scan; no `expect` | pending |
+| `end_it_all_01_three_picks_and_keep` | TIMEOUT 1800 s (unwind 32) | `ask_pick` + `Vec<Msg>` / String ABI | **E** | no cheap proof-file lever (body ABI) | pending |
+| `estate_01_auction_pay` | TIMEOUT 1800 s (unwind 32) | body `for t in 0..tile_count()` 60-trip (log at iter 19/22) | **A/E** | raise attr to **64** (sound; cost is the body loop) | pending |
+| `estate_02_all_pass_no_pay` | TIMEOUT 1800 s | same 60-trip scan | **A/E** | same | pending |
+| `lost_chase_rolls_and_pushes_stub` | TIMEOUT 1800 s (unwind 24) | body `for p` + `faces.iter().find/all` 24; 7.3M vars / 28.4M clauses | **A/E** | no cheap proof-file lever (body Vec iters) | pending |
+| `lost_chase_end_it_all_guard` | TIMEOUT 1800 s | same | **A/E** | same | pending |
+| `school_time_01_exile_leg` | TIMEOUT 1800 s (unwind 24) | `board::tile_named_bytes` 6 × SCHOOLS scan + character_is | **E** | dest is now 17 (周边学区) not -1; comment fixed | pending |
+| `bear_cookie_01_push_is_protocol` | TIMEOUT 1800 s (unwind 32) | `event_deck_push` stub + `all_players` Range | **A/E** | PROTOCOL-LEVEL assert is intentional (FAIL expected if push is stub) | pending |
+
+### Class C host-model defect found (NOT fixed — `host.rs` is the other agent's)
+
+**`Op::set_self_prop` key packing vs the shared prop arm.**
+
+`sys_kani::set_self_prop(kp, kl, v)` packs `[kp, kl, v, 0, 0, 0]`.
+`host::dispatch`'s shared arm for `set_self_prop | set_prop_at | set_tile_prop`
+first does `name_id(a1, a2)` — for `set_self_prop` that is `name_id(kl, v)`,
+an **untagged** handle. `name_id` (cfg(kani)) is a loud
+`kani::assert(false, "untagged name handle")`. The correct decode
+`name_id(a0, a1)` on the `set_self_prop` branch is then unreachable.
+
+Blast radius (every body that calls `ctx::set_prop`):
+`aao`, `embers`, `fix_note`, `hallucination`, `surprise_duel`, `marina_box`,
+`bangdream_chan`. On the older central base this was silent; master's
+`name_id` cut makes it a hard FAIL (`aao_01` FAILED 260 s on this).
+**Needed host fix:** only decode `(a1,a2)` for the ops whose packing is
+`(uid/tile, kp, kl, …)`; for `set_self_prop` use `(a0,a1)` / `a2` as the
+value (the inner code already has the right parse — drop the eager outer one).
+
+Until that lands, set_prop-using events rows are class **C** (host), not
+proof bugs. No host.rs edit on this branch (owned by kani-ppcost).
+
+### Class-B setup bugs fixed on this branch
+
+1. **embers On-index off-by-one.** `On` is
+   `0=Play, 1=TurnStartBefore/clear, 2=TurnStartBefore/spread, 3=SettleBody, 4=Exile`.
+   Proofs used 2 for SettleBody and 3 for Exile (comment had missed the
+   spread hook). `embers_03` was invoking the spread hook (no pay);
+   `embers_04` was invoking SettleBody (marks never cleared — **vacuous**
+   for the clear-on-exile claim).
+2. **tile_named is no longer a stub.** `board::tile_named` resolves every
+   `data/board.json` name. Stale `-1` dest pins were wrong:
+   快餐店=33, 微笑号=26, 周边学区=17, 飞鸟山公园=56, CiRCLE=0, RiNG 1..4=8/16/36/53.
+   `lulu_01`, `habinel_01`, `never_ends_01` asserted the old stub shape.
+3. **`expect` / `panic!` in proofs pull `panic_fmt` → PadAdapter → memchr**
+   (same cliff as the old `assert!` messages). Replaced with `kassert!` /
+   `unwrap_or` + an explicit predicate. Zero-loop `eff_*` scanners replace
+   `slice::iter().all/any/find_map` on `MAX_LOG`.
+
+### Host-model notes (not edited here — `host.rs` is the other agent's)
+
+| gap | who needs it | note |
+|---|---|---|
+| `Op::raise` polarity | `chart_rush_01` | **already fixed** on master (`arm_raise` = 1) |
+| `tile_named` full board | lulu / habinel / never_ends / school_time | **already fixed** on master |
+| `remove_marks` stub | embers_04 | still a stub — proof documents it |
+| `event_deck_push` / `event_banish` | bear_cookie / lost_chase / end_it_all | still stubs |
+| `card_move` / `plan::set_*` | this_hand / asukayama-01 | still stubs |
+| `trig_move_*` unmodeled | moca halve / heat_head / circle_rebuild | still unmodeled |
+| `format!` in `never_ends` body | never_ends_01 | **card-body** cost (cannot edit); class E |
+
+### Soundness kept
+
+Unwinding assertions ON; no `#[ignore]`; no allowlist; no weakened specs;
+`aao_02` stays FAILING as the genuine book/body discrepancy (class D).
+
+### triage2 summary (re-timed on this branch)
+
+| verdict | count | ids |
+|---|---:|---|
+| SUCCESSFUL | 6 | moca_01 322 s, this_hand_01 315 s, chart_rush_01 654 s (2/2 covers), lulu_01 366 s, moca_02_mutant 249 s, ex_quest_01 778 s |
+| FAILED | 3 | aao_01 (C set_self_prop), embers_03 (C set_self_prop), aao_02 (**D GENUINE E-aao-02**, keep) |
+| TIMEOUT | 1 | fix_note_01 1800 s (60-trip body loop at unwind 64) |
+| in queue | 13 | habinel, never_ends, kizuna, front_or_back ×3, end_it_all keep, estate ×2, lost_chase ×2, school_time, bear_cookie |
+
+Soundness: unwinding assertions ON throughout. No `#[ignore]`, no allowlist,
+no weakened specs. `aao_02` remains FAILING as the genuine book/body gap.
+`cargo build -p rules-kani` + `cargo test -p rules-kani` ×3 green.
+
+**Host-model change needed (not applied — `host.rs` is kani-ppcost's):**
+`Op::set_self_prop` key packing (see Class C section above).
+
 ## ppcost — `pp::same_dream_01_band_plus_3_iff` root cause + fix (branch `kani-ppcost`)
 
 Goal: move `pp::same_dream_01_band_plus_3_iff` (features `band-pp`) under

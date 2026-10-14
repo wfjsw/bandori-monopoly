@@ -379,11 +379,19 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v64: **turn-clock props** -- `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET`
+///      on a board-owned instance override the host turn clock (`base_time`
+///      = 恢复时间, `bonus_time` = 免费时间) as each turn starts (元祖！邦多利酱).
+///      Also the turn-clock **modifier hooks** `TriggerKind` / `HookKind`
+///      `{TurnBonusTime = 99, TurnBaseTime = 100}`: raised as each turn starts
+///      with `value` = the seconds the host would use (免费时间 refill / 恢复时间);
+///      a hook rewrites it with `trigger::set_pay_amount`. The props then
+///      override the hooked result. No new import, no SAVE_VERSION change.
 /// v63: **roster metadata export** (`docs/CARDS.md` 「Card metadata」).
 ///      `CardDef::meta` carries the card's data-set row (name / rawName /
 ///      text / tags / derived / cell + a generic `fields` map for game slots
 ///      `band` / `owner`); the skill crates' `CharacterDef` / `BandDef`
-///      tables carry `characters.json` / `bands.json`. A new guest export
+///      tables carry the character / band rows. A new guest export
 ///      `bandori_metadata` (`export::METADATA`, `() -> i64` packed
 ///      postcard `meta::MetaDoc`) hands the whole roster to the host on
 ///      request -- **not** through `ManifestEntry` (the match path is
@@ -449,7 +457,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 63;
+pub const ABI_VERSION: i32 = 64;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -848,6 +856,20 @@ pub mod prop {
     /// refuses a build whose house cost is `>=` this, while the instance is in
     /// play. On a board-owned instance (`ctx::set_prop`); `0` disables.
     pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
+    /// Turn-clock override (v61): every turn start sets the host `base_time`
+    /// (恢复时间) to this many seconds **plus one**; `0` = no override (the
+    /// +1 is what lets "0 seconds" be expressed). On a board-owned instance
+    /// (`tile < 0`); with several, the smallest wins. Use
+    /// [`clock_secs`] to encode.
+    pub const BASE_TIME_SET: &str = "baseTimeSet";
+    /// Turn-clock override (v61): as [`BASE_TIME_SET`], for the acting seat's
+    /// `bonus_time` (免费时间): it is **set** to this value at turn start
+    /// instead of refilled.
+    pub const BONUS_TIME_SET: &str = "bonusTimeSet";
+    /// Encode `secs` for [`BASE_TIME_SET`] / [`BONUS_TIME_SET`].
+    pub const fn clock_secs(secs: i32) -> i32 {
+        secs + 1
+    }
 
     // ------------------------------------------------------ purchase surface
     // v40 (`docs/PURCHASE.md`). Tile props that decide eligibility, price and
@@ -1515,6 +1537,13 @@ pub enum TriggerKind {
     /// (`card.owner` / base-`variant_of` / band-skill denial)? CEL-only, like
     /// [`Self::ActGate`]. Window carries the card in `trigger_card` / `name`.
     ExclusiveUse = 98,
+    /// v61: turn-clock modifier -- the 免费时间 (`bonus_time`) **refill** in
+    /// seconds the acting seat gets as its turn starts (`t.value`; the host
+    /// then caps the total). Rewrite with `trigger::set_pay_amount`.
+    TurnBonusTime = 99,
+    /// v61: turn-clock modifier -- the 恢复时间 (`base_time`) in seconds the
+    /// turn starts with (`t.value`). Rewrite with `trigger::set_pay_amount`.
+    TurnBaseTime = 100,
 }
 
 impl TriggerKind {
@@ -1619,6 +1648,8 @@ impl TriggerKind {
             96 => Self::PayGate,
             97 => Self::MoveGate,
             98 => Self::ExclusiveUse,
+            99 => Self::TurnBonusTime,
+            100 => Self::TurnBaseTime,
             _ => Self::None,
         }
     }
@@ -1726,6 +1757,8 @@ impl TriggerKind {
             Self::PayGate => "payGate",
             Self::MoveGate => "moveGate",
             Self::ExclusiveUse => "exclusiveUse",
+            Self::TurnBonusTime => "turnBonusTime",
+            Self::TurnBaseTime => "turnBaseTime",
         }
     }
 
@@ -1831,6 +1864,8 @@ impl TriggerKind {
             "payGate" => Self::PayGate,
             "moveGate" => Self::MoveGate,
             "exclusiveUse" => Self::ExclusiveUse,
+            "turnBonusTime" => Self::TurnBonusTime,
+            "turnBaseTime" => Self::TurnBaseTime,
             _ => Self::None,
         }
     }
@@ -2277,6 +2312,10 @@ declare_kinds! {
         /// See [`TriggerKind::FlipEffect`] -- a face-down counter is being
         /// flipped face-up. Hook-only.
         FlipEffect = 94,
+        /// v61: see [`TriggerKind::TurnBonusTime`].
+        TurnBonusTime = 99,
+        /// v61: see [`TriggerKind::TurnBaseTime`].
+        TurnBaseTime = 100,
         /// v40: the buy price's first modifier stage (`docs/PURCHASE.md`) --
         /// fixed ±, before [`Self::BuyMul`] / [`Self::BuySet`]. `t.value` /
         /// `set_price` on the run; each stage floors the price at 0.

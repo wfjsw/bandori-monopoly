@@ -109,7 +109,7 @@ pub mod rt;
 /// ```
 #[derive(Clone, Copy)]
 pub struct CardDef {
-    /// Exact id from `game-data/cards.json`, e.g. `"AG:Y.O.L.O"`.
+    /// Exact id from `game-the roster`, e.g. `"AG:Y.O.L.O"`.
     pub id: &'static str,
     pub on: &'static [On],
     /// The card's declared static properties, `(key, value)` in declaration

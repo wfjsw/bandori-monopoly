@@ -1,7 +1,7 @@
 //! Official cards of band `mujica` (C# `Card*` classes in MatchHost.cs).
 //!
 //! One crate per band, one module per card; the card id is a data key from
-//! `data/cards.json`. Message keys are namespaced by the crate name and
+//! the roster. Message keys are namespaced by the crate name and
 //! translated in `locales/`.
 
 #![cfg_attr(target_arch = "wasm32", no_std)]

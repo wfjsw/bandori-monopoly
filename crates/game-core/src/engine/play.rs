@@ -564,7 +564,19 @@ impl Cx<'_> {
         if self.out(i) {
             return Ok(());
         }
-        self.w.signals.push(Signal::StartTimer(i));
+        // The turn clock is a modifier point: hooks rewrite the 免费时间
+        // refill and the 恢复时间 (seconds) before the host applies them.
+        let refill = raise!(
+            self,
+            "turnBonusTime",
+            i,
+            value = super::BONUS_REFILL as i32
+        )?
+        .value;
+        let base = raise!(self, "turnBaseTime", i, value = super::BASE_TIME as i32)?.value;
+        self.w
+            .signals
+            .push(Signal::StartTimer(i, refill.max(0) as f32, base.max(0) as f32));
         // The status hosts' act / move gates (`docs/STATUS-HOSTS.md` §4).
         // [晕眩] closes the whole turn; [停留] (unless [不可阻挡]) closes only
         // the main move.

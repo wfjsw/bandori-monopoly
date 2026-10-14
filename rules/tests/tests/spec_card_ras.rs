@@ -105,7 +105,7 @@ fn any_in_play(t: &Table, card: &str) -> bool {
 /// C-RAS-change-the-world-01 -- place on an owned livehouse with houses.
 ///
 /// * **ID:** `C-RAS-change-the-world-01`
-/// * **Source:** `cards.json#RAS:Change the world`
+/// * **Source:** `roster#RAS:Change the world`
 /// * **Quote:** 「将此卡放置于你的一个有房屋的livehouse格子上」
 /// * **Trigger:** play from hand.
 /// * **Condition:** the user owns a livehouse tile with `houses ≥ 1`.
@@ -219,13 +219,13 @@ fn change_the_world_contract() {
         t.observe(&[
             Clause::new(
                 "C-RAS-change-the-world-01",
-                "cards.json#RAS:Change the world",
+                "roster#RAS:Change the world",
                 "将此卡放置于你的一个有房屋的livehouse格子上",
                 c_ras_change_the_world_place,
             ),
             Clause::new(
                 "C-RAS-change-the-world-frame",
-                "cards.json#RAS:Change the world",
+                "roster#RAS:Change the world",
                 "将此卡放置于你的一个有房屋的livehouse格子上",
                 change_the_world_frame,
             ),
@@ -359,7 +359,7 @@ fn exist_contract() {
         drain(&mut t);
         t.observe(&[Clause::new(
             "C-RAS-exist-01",
-            "cards.json#RAS:EXIST",
+            "roster#RAS:EXIST",
             "将此卡放置于自己场上",
             c_ras_exist_place,
         )]);
@@ -369,7 +369,7 @@ fn exist_contract() {
             t.place_raw(1, "RAS:EXIST");
             t.observe(&[Clause::new(
                 "C-RAS-exist-02",
-                "cards.json#RAS:EXIST",
+                "roster#RAS:EXIST",
                 "场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你",
                 c_ras_exist_redirect,
             )]);
@@ -578,7 +578,7 @@ fn riot_contract() {
         drain(&mut t);
         t.observe(&[Clause::new(
             "C-RAS-riot-02",
-            "cards.json#RAS:R. I. O. T.",
+            "roster#RAS:R. I. O. T.",
             "所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。",
             c_ras_riot_cycle,
         )]);
@@ -780,7 +780,7 @@ fn unstoppable_card_contract() {
         t.dice(&[face]);
         t.observe(&[Clause::new(
             "C-RAS-unstoppable-card-01",
-            "cards.json#RAS:UNSTOPPABLE",
+            "roster#RAS:UNSTOPPABLE",
             "投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。",
             c_ras_unstoppable_card_teleport,
         )]);
@@ -838,7 +838,7 @@ fn become_strongest_contract() {
         t.dice(&[face]);
         t.observe(&[Clause::new(
             "C-RAS-become-strongest-01",
-            "cards.json#RAS:成为最强",
+            "roster#RAS:成为最强",
             "roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到\"Live House\"）",
             c_ras_become_strongest_map,
         )]);
@@ -1083,7 +1083,7 @@ fn storm_contract() {
         drain(&mut t);
         t.observe(&[Clause::new(
             "C-RAS-storm-01",
-            "cards.json#RAS:练习室里的风暴",
+            "roster#RAS:练习室里的风暴",
             "当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上",
             c_ras_storm_place,
         )]);
@@ -1407,7 +1407,7 @@ fn layer_press_contract() {
 
 /// C-RAS-rio-01 -- [经过]CiRCLE +1 [火罐], initial 1, cap 1.
 ///
-/// Quote (characters.json#和奏瑞依): 「（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」
+/// Quote (the roster#和奏瑞依): 「（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」
 #[test]
 fn rio_fire_contract() {
     forall(4, 0xC0A5_0010, |rng: &mut Rng, _i| {
@@ -1457,7 +1457,7 @@ fn rio_reroll_contract() {
 
 /// C-RAS-masking-01 -- [经过] 白雪学园 +1 [火罐], cap 2.
 ///
-/// Quote (characters.json#佐藤益木): 「（1）每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]（初始0，上限2）」
+/// Quote (the roster#佐藤益木): 「（1）每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]（初始0，上限2）」
 #[test]
 fn masking_fire_contract() {
     let mut t = Table::new(&["佐藤益木", "和奏瑞依"]);
@@ -1476,7 +1476,7 @@ fn masking_fire_contract() {
 
 /// C-RAS-masking-02 -- spend X fire → +Xd10 on the main roll.
 ///
-/// Quote (characters.json#佐藤益木): 「（2）移动阶段前可使用X个[火罐]，本回合主要移动掷骰额外添加Xd10」
+/// Quote (the roster#佐藤益木): 「（2）移动阶段前可使用X个[火罐]，本回合主要移动掷骰额外添加Xd10」
 #[test]
 fn masking_dice_contract() {
     let mut t = Table::new(&["佐藤益木", "和奏瑞依"]);
@@ -1505,7 +1505,7 @@ fn masking_dice_contract() {
 
 /// C-RAS-chuchu-skill-01 -- build at half price.
 ///
-/// Quote (characters.json#珠手知由): 「加盖房屋时半价」
+/// Quote (the roster#珠手知由): 「加盖房屋时半价」
 #[test]
 fn chuchu_skill_half_contract() {
     forall(4, 0xC0A5_0011, |rng: &mut Rng, _i| {
@@ -1632,7 +1632,7 @@ fn chuchu_skill_half_on_a_later_turn() {
 
 /// C-RAS-rokka-01 -- first non-旭汤澡堂 / non-Live-House deed gains the colour.
 ///
-/// Quote (characters.json#朝日六花): 「（1）你购买的第一个非"旭汤澡堂"或任意"Live House"格子获得"Live House"的颜色」
+/// Quote (the roster#朝日六花): 「（1）你购买的第一个非"旭汤澡堂"或任意"Live House"格子获得"Live House"的颜色」
 #[test]
 fn rokka_first_deed_contract() {
     let mut t = Table::new(&["朝日六花", "和奏瑞依"]);
@@ -1669,7 +1669,7 @@ fn rokka_first_deed_contract() {
 /// C-RAS-band-02 -- a livehouse settle leaves a teleport offer for the next
 /// main move.
 ///
-/// Quote (bands.json#RAISE A SUILEN): 「（2）因该技能以外的效果在livehouse格子
+/// Quote (roster#RAISE A SUILEN): 「（2）因该技能以外的效果在livehouse格子
 /// [触发结算]时，若你的下回合开始时仍在那个格子上，你的下一次主要移动可变为传送至
 /// 你拥有的一个livehouse格子。」
 #[test]
@@ -1767,31 +1767,31 @@ fn band_skill_present() {
 pub const CLAUSES: &[Clause] = &[
     Clause::new(
         "C-RAS-change-the-world-01",
-        "cards.json#RAS:Change the world",
+        "roster#RAS:Change the world",
         "将此卡放置于你的一个有房屋的livehouse格子上",
         c_ras_change_the_world_place,
     ),
     Clause::new(
         "C-RAS-exist-01",
-        "cards.json#RAS:EXIST",
+        "roster#RAS:EXIST",
         "将此卡放置于自己场上",
         c_ras_exist_place,
     ),
     Clause::new(
         "C-RAS-unstoppable-card-01",
-        "cards.json#RAS:UNSTOPPABLE",
+        "roster#RAS:UNSTOPPABLE",
         "投掷1d6mod6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。",
         c_ras_unstoppable_card_teleport,
     ),
     Clause::new(
         "C-RAS-become-strongest-01",
-        "cards.json#RAS:成为最强",
+        "roster#RAS:成为最强",
         "roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到\"Live House\"）",
         c_ras_become_strongest_map,
     ),
     Clause::new(
         "C-RAS-storm-01",
-        "cards.json#RAS:练习室里的风暴",
+        "roster#RAS:练习室里的风暴",
         "当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上",
         c_ras_storm_place,
     ),

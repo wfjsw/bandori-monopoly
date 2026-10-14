@@ -529,6 +529,12 @@ pub mod prop {
     /// refuses a build whose house cost is `>=` this. On a board-owned instance;
     /// `0` disables. Mirrors `card_sdk::abi::prop::NO_BUILD_ABOVE`.
     pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
+    /// Turn-clock override: `base_time` (恢复时间) = value - 1 seconds, `0` =
+    /// none. Mirrors `card_sdk::abi::prop::BASE_TIME_SET`.
+    pub const BASE_TIME_SET: &str = "baseTimeSet";
+    /// As [`BASE_TIME_SET`] for `bonus_time` (免费时间). Mirrors
+    /// `card_sdk::abi::prop::BONUS_TIME_SET`.
+    pub const BONUS_TIME_SET: &str = "bonusTimeSet";
 
     // ------------------------------------------------------ purchase surface
     // v40 (`docs/PURCHASE.md`). Mirrors `card_sdk::abi::prop`; keep in step.

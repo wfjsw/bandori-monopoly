@@ -1155,7 +1155,7 @@ fn rana_cat_space_teleport_spends_three_fire() {
 #[test]
 fn rana_cat_overlap_takes_800_and_gives_a_parfait() {
     // 规则书: 「（3）你与其他玩家重合时，获得其800资金并使那个玩家获得一个"抹茶芭菲"」.
-    // Sheet / characters.json name 800 (the older rulebook.txt prose says 1000).
+    // Sheet / the roster name 800 (the older rulebook.txt prose says 1000).
     let mut t = Table::new(&["要乐奈", "高松灯"]);
     t.clean();
     t.begin_turn(0);

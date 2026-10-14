@@ -1,12 +1,12 @@
 //! Per-card / per-skill contracts for the **Sumimi** group.
 //!
 //! Spec: `docs/rulebook/spec/cards/sumimi.md`. Derived from the live sheet
-//! text (`docs/rulebook/cards.json`, `data/characters.json`, `data/bands.json`)
+//! text (`docs/rulebook/cards.json`, the roster character / band rows)
 //! and `docs/rulebook/rulebook-doc.md` -- never from implementation behaviour.
 //!
 //! Scope: the 9 `Sumimi:` cards in `docs/rulebook/cards.json`, the skills of
 //! both Sumimi-band characters, and the band skill `人气偶像组合`.
-//! (`data/cards.json` lists two extras `Sumimi:#L11` / `#L12` that the sheet
+//! (`the roster` lists two extras `Sumimi:#L11` / `#L12` that the sheet
 //! export does not -- out of scope; see the doc's source-discrepancy note.)
 
 use rules_spec::{forall, frame, Clause, Step, Table};
@@ -128,13 +128,13 @@ pub fn c_sumimi_idolband_frame(step: &Step<'_>) -> Result<(), String> {
 pub const IDOL_BAND_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-SUMIMI-idolband-02",
-        "cards.json#Sumimi:兼顾偶像与乐队",
+        "roster#Sumimi:兼顾偶像与乐队",
         "将你的资金重设为3000。（若你的资金为3000以上则无效果）",
         c_sumimi_idolband_reset,
     ),
     Clause::new(
         "C-SUMIMI-idolband-frame",
-        "cards.json#Sumimi:兼顾偶像与乐队",
+        "roster#Sumimi:兼顾偶像与乐队",
         "将你的资金重设为3000。（若你的资金为3000以上则无效果）",
         c_sumimi_idolband_frame,
     ),
@@ -236,7 +236,7 @@ pub fn c_sumimi_nobreakup_gate(step: &Step<'_>) -> Result<(), String> {
 
 pub const NO_BREAKUP_CLAUSES: &[Clause] = &[Clause::new(
     "C-SUMIMI-nobreakup-01",
-    "cards.json#Sumimi:Sumimi不会解散哦",
+    "roster#Sumimi:Sumimi不会解散哦",
     "当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，",
     c_sumimi_nobreakup_gate,
 )];
@@ -340,13 +340,13 @@ pub fn c_sumimi_twoinone_fire(step: &Step<'_>) -> Result<(), String> {
 pub const TWO_IN_ONE_CLAUSES: &[Clause] = &[
     Clause::new(
         "C-SUMIMI-twoinone-01",
-        "cards.json#Sumimi:Sumimi是二人一体的",
+        "roster#Sumimi:Sumimi是二人一体的",
         "（1）打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数",
         c_sumimi_twoinone_character,
     ),
     Clause::new(
         "C-SUMIMI-twoinone-01b",
-        "cards.json#Sumimi:Sumimi是二人一体的",
+        "roster#Sumimi:Sumimi是二人一体的",
         "（1）打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数",
         c_sumimi_twoinone_fire,
     ),
@@ -474,7 +474,7 @@ pub fn c_sumimi_twodonuts_exile(step: &Step<'_>) -> Result<(), String> {
 
 pub const TWO_DONUTS_CLAUSES: &[Clause] = &[Clause::new(
     "C-SUMIMI-twodonuts-01",
-    "cards.json#Sumimi:一人两个甜甜圈",
+    "roster#Sumimi:一人两个甜甜圈",
     "（1）获得[除外]直至你原本所在格子被其他玩家经过。",
     c_sumimi_twodonuts_exile,
 )];
@@ -577,7 +577,7 @@ pub fn c_sumimi_sweetescape_gate(step: &Step<'_>) -> Result<(), String> {
 
 pub const SWEET_ESCAPE_CLAUSES: &[Clause] = &[Clause::new(
     "C-SUMIMI-sweetescape-01",
-    "cards.json#Sumimi:Sweet Escape",
+    "roster#Sumimi:Sweet Escape",
     "回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，",
     c_sumimi_sweetescape_gate,
 )];

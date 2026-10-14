@@ -89,7 +89,7 @@ pub const RETURNS: CardDef = CardDef::new(
         .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
-/// first, then band, then general) -- a snapshot of `data/cards.json`; Returns is
+/// first, then band, then general) -- a snapshot of the roster; Returns is
 /// a Poppin' Party band card so only that band's pool can hold it. The exclusive
 /// entry is the player's own character card (`exclusive_of`).
 const BAND_POOL: [&str; 10] = [

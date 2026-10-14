@@ -140,7 +140,7 @@ fn ceil_hundred(x: i32) -> i32 {
     }
 }
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"桐谷透子"#)
     .display(r#"桐谷透子"#)

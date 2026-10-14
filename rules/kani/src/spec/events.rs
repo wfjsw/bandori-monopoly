@@ -444,7 +444,7 @@ pub fn ex_quest_01_no_state_effects(effects: &[Effect]) -> bool {
 // ===========================================================================
 
 /// One `GiveExile` per living player with `n ∈ 1..=2`, destination `to`
-/// (the book's 微笑号; -1 under the Kani tile_named stub).
+/// (the book's 微笑号; board index 26).
 pub fn habinel_01_exiles_ok(effects: &[Effect], players: &[i32], to: i32) -> bool {
     if effects.len() != players.len() {
         return false;
@@ -469,13 +469,27 @@ pub fn habinel_01_exiles_ok(effects: &[Effect], players: &[i32], to: i32) -> boo
 // ===========================================================================
 // E-never-ends-01 — 一切不会结束
 // 「抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层…[除外]。」
-// BLOCKED-HOST(tile_named:RiNG N) — the body early-returns; under Kani this
-// is always a no-op. The book effect is NOT proven.
+// tile_named("RiNG {n}") resolves to board 8 / 16 / 36 / 53.
 // ===========================================================================
 
-/// Under the tile_named stub the body is a no-op: empty effect log.
-pub fn never_ends_01_noop(effects: &[Effect]) -> bool {
-    effects.is_empty()
+/// One `Teleport` to `dest` + one `GiveExile` of 1 (`to` = -1, turn-start tick)
+/// per living player, in seat order.
+pub fn never_ends_01_ok(effects: &[Effect], players: &[i32], dest: i32) -> bool {
+    if effects.len() != players.len() * 2 {
+        return false;
+    }
+    for (i, &p) in players.iter().enumerate() {
+        let a = &effects[i * 2];
+        let b = &effects[i * 2 + 1];
+        if !matches!(a, Effect::Teleport { player, tile } if *player == p && *tile == dest) {
+            return false;
+        }
+        if !matches!(b, Effect::GiveExile { player, n, to } if *player == p && *n == 1 && *to == -1)
+        {
+            return false;
+        }
+    }
+    true
 }
 
 // ===========================================================================
@@ -628,11 +642,11 @@ pub fn end_it_all_01_picked_three(picks: usize) -> bool {
 // ===========================================================================
 // E-lulu / E-school-time / E-kizuna — pay / exile legs
 // 「如果选择[传送]需支付500资金」 / 「获得1层[除外]」
-// Destinations 快餐店 / 周边学区 are BLOCKED-HOST(tile_named); Kizuna's dest
-// is `roll mod 60` and is modeled.
+// Destinations 快餐店 (33) / 周边学区 (17) resolve via `tile_named`;
+// Kizuna's dest is `roll mod 60` and is modeled.
 // ===========================================================================
 
-/// Lulu accept: the chooser pays exactly 500 (Teleport dest is BLOCKED-HOST).
+/// Lulu accept: the chooser pays exactly 500 and teleports to `dest` (快餐店).
 pub fn lulu_01_pay_ok(effects: &[Effect], who: i32, dest: i32) -> bool {
     effects.len() == 2
         && matches!(

@@ -1,7 +1,7 @@
 //! Unit `skills_ag`: Afterglow character + band skill specs FROM the sheet.
 //!
-//! Sources: `data/characters.json` `text` (band == "Afterglow"),
-//! `data/bands.json` `text` (Afterglow), clause doc
+//! Sources: the roster character row `text` (band == "Afterglow"),
+//! the roster band row `text` (Afterglow), clause doc
 //! `docs/rulebook/spec/cards/ag.md` § Character skills / Band skill.
 
 use crate::world::Effect;

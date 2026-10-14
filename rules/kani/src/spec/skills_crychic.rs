@@ -2,7 +2,7 @@
 //!
 //! Quotes: `docs/rulebook/spec/cards/crychic.md` (C-CRYCHIC-{tomoriskill,
 //! soyoskill,rikiskill,sakiskill,mutsumiskill,band}-*), live sheets
-//! `data/characters.json` / `data/bands.json`.
+//! the roster character / band rows.
 //!
 //! Host dual-store note (see `spec/crychic.rs`): `give_stay`/`spend_fire` write
 //! `World::stay`/`fire`; `state::{get,set,add}` on `state_key::{STAY,FIRE}`
