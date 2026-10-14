@@ -17,6 +17,7 @@
 
 import type { Command, MatchView, SkillAction } from "../core/types.ts";
 import { outerDeadlineMs, seedForThread } from "./botBudget.ts";
+import { describeWorkerError } from "./workerError.ts";
 
 // ---------------------------------------------------------------- extras
 
@@ -184,7 +185,8 @@ class WorkerSlot {
     if (this.w) return this.w;
     // `this.base` is the bot-glue bundle dir; the worker script is its
     // sibling (`docs/BOT.md` B6: `webui/public/assets/engine/bot-worker.js`).
-    const w = this.factory(new URL("../bot-worker.js", this.base), this.index);
+    const workerUrl = new URL("../bot-worker.js", this.base);
+    const w = this.factory(workerUrl, this.index);
     w.onmessage = (e) => {
       const r = e.data as WorkerReply;
       const p = this.pending.get(r.id);
@@ -195,7 +197,7 @@ class WorkerSlot {
       else p.reject(new Error(r.error ?? "bot worker error"));
     };
     w.onerror = (e) => {
-      const err = new Error(String((e as { message?: string })?.message ?? e));
+      const err = new Error(`bot worker ${this.index}: ${describeWorkerError(e, workerUrl)}`);
       for (const [, p] of this.pending) {
         clearTimeout(p.timer);
         p.reject(err);

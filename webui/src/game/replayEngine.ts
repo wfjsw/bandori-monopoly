@@ -10,6 +10,7 @@
 
 import type { MatchEvent, MatchView } from "../core/types";
 import { rules } from "../core/data";
+import { describeWorkerError } from "./workerError";
 import {
   bundleBase,
   bundleNotDeployedMessage,
@@ -225,7 +226,7 @@ export class WorkerReplayHandle implements ReplayHandle {
       else p.err(new Error(r.error));
     };
     w.onerror = (e) => {
-      const err = new Error(`replay worker: ${e.message || "failed"}`);
+      const err = new Error(`replay worker: ${describeWorkerError(e, "/assets/engine/replay-worker.js")}`);
       for (const p of this.pending.values()) p.err(err);
       this.pending.clear();
     };
