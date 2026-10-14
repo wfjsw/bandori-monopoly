@@ -129,3 +129,23 @@ pub fn any_player(_n: i32) -> i32 {
 pub fn any_in(lo: i32, _hi: i32) -> i32 {
     lo
 }
+
+/// `assert!` without Rust's fmt machinery (a static message still pulls
+/// `panic_fmt` → `PadAdapter` → `memchr` — 1193 unrolls on moca_02_mutant).
+/// Under Kani this is `kani::assert` (a CBMC property, no fmt).
+#[macro_export]
+macro_rules! kassert {
+    ($c:expr) => {
+        $crate::kassert!($c, "assertion failed")
+    };
+    ($c:expr, $msg:expr) => {{
+        #[cfg(kani)]
+        {
+            kani::assert($c, $msg);
+        }
+        #[cfg(not(kani))]
+        {
+            assert!($c, $msg);
+        }
+    }};
+}

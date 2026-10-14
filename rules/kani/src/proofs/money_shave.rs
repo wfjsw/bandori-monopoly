@@ -119,7 +119,7 @@ pub fn aya_haruka_02_shave_iff() {
         let actor = ctx.scalars[VarId::Actor as usize];
         let owner = ctx.scalars[VarId::Owner as usize];
         let value = ctx.scalars[VarId::Value as usize];
-        assert!(
+        kassert!(
             !(actor == owner && value > 0),
             "guard rejected but actor==owner && value>0 — translator bug"
         );
@@ -145,31 +145,31 @@ pub fn aya_haruka_02_shave_iff() {
 
     if poorest {
         let expected = spec::aya_haruka_02_amount(pre_amount, x);
-        assert!(
+        kassert!(
             post.pay_amount == expected,
             "C-PP-aya-haruka-02: pay amount must be max(pre-X, 0)"
         );
-        assert!(
+        kassert!(
             spec::aya_haruka_02_log_ok(effects, expected),
             "C-PP-aya-haruka-02: effect log must be exactly the pay-amount rewrite"
         );
     } else {
-        assert!(
+        kassert!(
             log_n == 0,
             "C-PP-aya-haruka-02: non-poorest owner must produce no effects"
         );
-        assert!(
+        kassert!(
             post.pay_amount == pre_amount,
             "C-PP-aya-haruka-02: non-poorest owner must not touch the amount"
         );
     }
 
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
-    assert!(post.stay == pre.stay, "frame: stay unchanged");
-    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
-    assert!(post.discard == pre.discard, "frame: discard unchanged");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
+    kassert!(post.stay == pre.stay, "frame: stay unchanged");
+    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
+    kassert!(post.discard == pre.discard, "frame: discard unchanged");
 }
 
 /// SPLIT of `aya_haruka_02_shave_iff` (poorest half). Same clause, narrower
@@ -205,15 +205,15 @@ pub fn aya_haruka_02_shave_poorest() {
     let effects = &logbuf[..log_n];
     let x = spec::aya_haruka_02_x(pre.fans_pos[owner as usize], pre.fans_neg[owner as usize]);
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
-    assert!(
+    kassert!(
         post.pay_amount == expected,
         "C-PP-aya-haruka-02: pay amount must be max(pre-X, 0)"
     );
-    assert!(
+    kassert!(
         spec::aya_haruka_02_log_ok(effects, expected),
         "C-PP-aya-haruka-02: effect log must be exactly the pay-amount rewrite"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
 }
 
 /// SPLIT of `aya_haruka_02_shave_iff` (not-poorest half): the body must
@@ -238,12 +238,12 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
-    assert!(log_n == 0, "C-PP-aya-haruka-02: non-poorest owner must produce no effects");
-    assert!(
+    kassert!(log_n == 0, "C-PP-aya-haruka-02: non-poorest owner must produce no effects");
+    kassert!(
         post.pay_amount == pre_amount,
         "C-PP-aya-haruka-02: non-poorest owner must not touch the amount"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// MUTANT: the reference wants X+1. The card does X. Kani must report FAIL.
@@ -274,7 +274,7 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
         pre.fans_neg[owner as usize],
     );
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
-    assert!(post.pay_amount == expected);
+    kassert!(post.pay_amount == expected);
 }
 
 /// Companion (no `should_panic`): the mutant spec does NOT match the card.
@@ -304,5 +304,5 @@ pub fn aya_haruka_02_mutant_is_detected() {
     );
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
     // The card does X, the mutant wants X+1: they must differ.
-    assert!(post.pay_amount != expected);
+    kassert!(post.pay_amount != expected);
 }

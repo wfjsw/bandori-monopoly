@@ -119,26 +119,26 @@ pub fn mark_cp_land_gain_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(log_n == 1, "exactly one observable effect (gain 800)");
-    assert!(
+    kassert!(
         spec::mark_cp_land_gain_ok(effects, settler),
         "mark:cp on_land: observable effect must be exactly GainMoney{settler, 800}"
     );
-    assert!(
+    kassert!(
         post.money[settler as usize] == pre_money + spec::CP_REWARD,
         "mark:cp on_land: settler gains exactly 800"
     );
     // Frame: no other seat's money moves; positions / fire / stay untouched.
     for p in 0..MAX_PLAYERS {
         if p != settler as usize {
-            assert!(
+            kassert!(
                 post.money[p] == pre.money[p],
                 "mark:cp on_land: frame — other seats' money unchanged"
             );
         }
     }
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
-    assert!(post.stay == pre.stay, "frame: stay");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    kassert!(post.stay == pre.stay, "frame: stay");
 }
 
 /// MUTANT: the reference wants 900. Must be distinguishable.
@@ -154,7 +154,7 @@ pub fn mark_cp_land_mutant_900() {
     call_mark_cp_land(settler);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         spec::mark_cp_land_gain_ok_mutant_900(effects, settler),
         "mutant: the reward is 800, not 900"
     );
@@ -173,7 +173,7 @@ pub fn mark_cp_land_mutant_wrong_seat() {
     call_mark_cp_land(settler);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         spec::mark_cp_land_gain_ok_mutant_wrong_seat(effects, settler),
         "mutant: the 800 goes to the settling player"
     );
@@ -199,7 +199,7 @@ pub fn mark_cp_land_guard_rejects_without_tile_cp() {
 
     let admitted = mark_cp_guard(settler);
     kani::cover!(!admitted, "guard rejects: no [CP点] on the tile");
-    assert!(
+    kassert!(
         !admitted,
         "mark:cp guard must reject when the tile carries no [CP点]"
     );
@@ -219,7 +219,7 @@ pub fn mark_cp_land_guard_rejects_when_cancelled() {
 
     let admitted = mark_cp_guard(settler);
     kani::cover!(!admitted, "guard rejects: settle cancelled");
-    assert!(!admitted, "mark:cp guard must reject on a cancelled settle");
+    kassert!(!admitted, "mark:cp guard must reject on a cancelled settle");
 }
 
 /// Guard / BLOCKED-HOST note: even with a [CP点] on the tile the shipped
@@ -239,7 +239,7 @@ pub fn mark_cp_land_tile_cp_visible_to_count_marks() {
 
     // `count_marks` is modeled: the mark we installed must be visible.
     let n = card_sdk::ctx::count_marks(tile, &card_sdk::abi::MarkFilter::any());
-    assert!(n >= 1, "the installed [CP点] must be visible to count_marks");
+    kassert!(n >= 1, "the installed [CP点] must be visible to count_marks");
     kani::cover!(n == 1, "exactly one unit");
 
     // The full guard still cannot admit while `mark_src_at` is a stub.

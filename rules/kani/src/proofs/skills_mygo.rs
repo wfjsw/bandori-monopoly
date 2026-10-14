@@ -73,17 +73,17 @@ pub fn band_02_crystal_on_16_iff() {
 
     // `add_crystals(1, 1)` clamps at max=1. Host `add_counter_self` logs the
     // raw `n` (not the clamped delta) and clamps the stored value.
-    assert!(
+    kassert!(
         spec::skills_mygo::band_02_log_ok(effects, player),
         "C-MYGO-band-02: effect log must be exactly one AddCounter(+1)"
     );
-    assert!(
+    kassert!(
         post_c == spec::skills_mygo::band_02_crystals_after(pre_c),
         "C-MYGO-band-02: crystals must be min(pre+1, 1) under the roll cap"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
-    assert!(post.stay == pre.stay, "frame: stay unchanged");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    kassert!(post.stay == pre.stay, "frame: stay unchanged");
 
     kani::cover!(pre_c == 0, "pre crystals 0 (gain lands)");
     kani::cover!(pre_c >= 1, "pre crystals at cap (gain refused by max)");
@@ -100,7 +100,7 @@ pub fn band_02_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         !spec::skills_mygo::band_02_log_ok_mutant(effects, player),
         "mutant: +2 spec must not match the +1 card"
     );
@@ -143,18 +143,18 @@ pub fn band_04_ineffective_overcap_iff() {
     kani::cover!(pre_c == 1 && over == 0, "at roll cap, over=0 (book: must still grow)");
     kani::cover!(pre_c < expected, "gain fires");
 
-    assert!(
+    kassert!(
         post_c == expected,
         "C-MYGO-band-04: ineffective discard must add one over-cap crystal (max 2 over)"
     );
     if post_c > pre_c {
-        assert!(
+        kassert!(
             spec::skills_mygo::band_04_log_ok(effects, player),
             "C-MYGO-band-04: gain logs exactly one AddCounter(+1)"
         );
     }
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 
 /// Mutant: empty log when the gain should fire.
@@ -175,7 +175,7 @@ pub fn band_04_mutant_is_detected() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     if log_n > 0 {
-        assert!(
+        kassert!(
             !spec::skills_mygo::band_04_log_ok_mutant(effects, player),
             "mutant: empty-log spec must not match a gaining card"
         );

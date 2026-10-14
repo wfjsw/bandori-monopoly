@@ -53,20 +53,20 @@ pub fn tae_sound_teleport_and_fire_iff() {
     kani::cover!(pre.fire[player as usize] == 0, "pre fire 0");
     kani::cover!(pre.pos[player as usize] != TILE_SHOP, "pre not on shop");
 
-    assert!(
+    kassert!(
         spec::tae_sound_effects_ok(effects, player, TILE_SHOP),
         "teleport+fire: effect log must be exactly Teleport(shop), GainFire(1)"
     );
-    assert!(
+    kassert!(
         spec::tae_sound_post_ok(&post, player, TILE_SHOP, pre.fire[player as usize]),
         "teleport+fire: post must be on shop with fire+1"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    assert!(post.stay == pre.stay, "frame: stay");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(post.stay == pre.stay, "frame: stay");
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
-            assert!(post.pos[p] == pre.pos[p], "frame: other players unmoved");
-            assert!(post.fire[p] == pre.fire[p], "frame: other players' fire");
+            kassert!(post.pos[p] == pre.pos[p], "frame: other players unmoved");
+            kassert!(post.fire[p] == pre.fire[p], "frame: other players' fire");
         }
     }
 }
@@ -82,7 +82,7 @@ pub fn tae_sound_mutant_extra_fire() {
     invoke::unwrap_done(invoke::tae_sound_play(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
-    assert!(
+    kassert!(
         spec::tae_sound_effects_ok_mutant(&logbuf[..log_n], player, TILE_SHOP),
         "mutant: card must not match the extra-fire spec"
     );

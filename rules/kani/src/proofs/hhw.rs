@@ -62,17 +62,17 @@ pub fn kkr_pay_10000_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(pre_money == 10_000, "exact 10000 on hand");
-    assert!(
+    kassert!(
         spec::hhw::kkr_01_log_ok(effects, player),
         "C-HHW-kkr-01: PayMoney(player, 10000) is in the log"
     );
-    assert!(
+    kassert!(
         spec::hhw::kkr_01_post_ok(&pre, &post, player),
         "C-HHW-kkr-01: money falls by exactly 10000"
     );
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
-    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
 }
 
 #[kani::proof]
@@ -110,7 +110,7 @@ pub fn kkr_place_on_circle_iff() {
     kani::cover!(placed_circle, "PlaceCard dest is CiRCLE");
     kani::cover!(!placed_circle, "PlaceCard dest is not CiRCLE (host finding)");
     // Pin the weaker determined fact: a PlaceCard by this player happens.
-    assert!(
+    kassert!(
         effects
             .iter()
             .any(|e| matches!(e, Effect::PlaceCard { player: p, .. } if *p == player)),
@@ -130,7 +130,7 @@ pub fn kkr_mutant_pay_1000() {
     };
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:（kkr）前往笑容集结的地方！"), player));
     let post = world::snapshot();
-    assert!(
+    kassert!(
         post.money[player as usize] == pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
         "mutant: card must not pay only 1000"
     );
@@ -147,7 +147,7 @@ pub fn kkr_mutant_is_detected() {
     };
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:（kkr）前往笑容集结的地方！"), player));
     let post = world::snapshot();
-    assert!(
+    kassert!(
         post.money[player as usize] != pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
         "mutant -1000 must disagree with the card's -10000"
     );
@@ -176,7 +176,7 @@ pub fn athletic_place_three_crystals_iff() {
     // Book: place on own field + 3 crystals. `set_crystals(3)` is a counter
     // write (host: `set_counter_self`, no Effect variant) — the log is the
     // PlaceCard. The crystal count is the keyed counter `crystals`.
-    assert!(
+    kassert!(
         effects
             .iter()
             .any(|e| matches!(e, Effect::PlaceCard { player: p, dest: 2, .. } if *p == player)),
@@ -184,12 +184,12 @@ pub fn athletic_place_three_crystals_iff() {
     );
     let crystals = world::with_world(|w| w.key_get(player, crate::intern::intern("crystals")));
     kani::cover!(crystals == 3, "crystals == 3");
-    assert!(
+    kassert!(
         crystals == spec::hhw::athletic_01_crystals(),
         "C-HHW-athletic-01: exactly 3 crystals"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// Turn-end decay: the owner's TurnEnd with the card placed logs exactly one
@@ -228,16 +228,16 @@ pub fn athletic_turn_end_decay_iff() {
 
     let crystals = world::with_world(|w| w.key_get(player, crate::intern::intern("crystals")));
     kani::cover!(crystals == 2, "decayed to 2");
-    assert!(
+    kassert!(
         crystals == spec::hhw::athletic_02_after_decay(pre_crystals),
         "C-HHW-athletic-02: crystals fall by exactly 1"
     );
     // At 2 the card stays on the field (「为0时」 is the discard trigger).
-    assert!(
+    kassert!(
         !spec::hhw::athletic_02_discard_ok(effects),
         "C-HHW-athletic-02: non-zero count does not discard"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 #[kani::proof]
@@ -268,7 +268,7 @@ pub fn athletic_decay_to_zero_discards() {
     // Decay takes 1 → 0. The book then 「置入弃牌堆」. The crystals-changed
     // hook is a separate entry; this harness pins the decay half. The
     // discard half is `athletic_empty_discards` below.
-    assert!(crystals == 0, "decay from 1 reaches 0");
+    kassert!(crystals == 0, "decay from 1 reaches 0");
     let _ = pre;
 }
 
@@ -308,7 +308,7 @@ pub fn athletic_empty_discards() {
     kani::cover!(!discarded, "card NOT unplaced (LESS finding)");
     // Fail-closed: the book demands the discard. If this assert fires the
     // body is LESS than the book — that is a real finding, not a spec bug.
-    assert!(
+    kassert!(
         discarded,
         "C-HHW-athletic-02: 「为0时置入弃牌堆」 requires the card to leave the field"
     );
@@ -356,16 +356,16 @@ pub fn believe_cost_800_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::hhw::believe_02_log_ok(effects, player),
         "C-HHW-believe-02: PayMoney(player, 800) is in the log"
     );
-    assert!(
+    kassert!(
         post.money[player as usize] == pre_money - 800,
         "C-HHW-believe-02: money falls by exactly 800"
     );
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 #[kani::proof]
@@ -382,15 +382,15 @@ pub fn believe_discard_one_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::hhw::believe_03_log_ok(effects, player),
         "C-HHW-believe-03: exactly one DiscardFromHand"
     );
-    assert!(
+    kassert!(
         spec::hhw::believe_04_log_ok(effects, player),
         "C-HHW-believe-04: two deck→hand transfers"
     );
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -403,7 +403,7 @@ pub fn believe_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:因为我一直相信着你"), player));
     let post = world::snapshot();
-    assert!(
+    kassert!(
         post.money[player as usize] != pre_money - spec::hhw::believe_02_amount_paid_mutant(pre_money),
         "mutant cost 80 must disagree with the card's 800"
     );
@@ -449,16 +449,16 @@ pub fn backstage_pays_1000_per_discard_iff() {
     kani::cover!(flipped == 0, "both kept");
     kani::cover!(flipped == 1, "one flipped");
     kani::cover!(flipped == 2, "both flipped");
-    assert!(
+    kassert!(
         flipped >= 0 && flipped <= 2,
         "C-HHW-backstage-01: at most two flips"
     );
-    assert!(
+    kassert!(
         post.money[player as usize] == pre.money[player as usize] + spec::hhw::backstage_02_gain(flipped),
         "C-HHW-backstage-02: money rises by exactly 1000 per flip"
     );
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 #[kani::proof]
@@ -480,7 +480,7 @@ pub fn backstage_mutant_is_detected() {
             flipped += 1;
         }
     }
-    assert!(
+    kassert!(
         post.money[player as usize]
             != pre.money[player as usize] + spec::hhw::backstage_02_gain_mutant(flipped),
         "mutant 500-per-flip must disagree"
@@ -525,16 +525,16 @@ pub fn balloon_teleports_to_a_chosen_result_iff() {
         }
     }
     kani::cover!(dest >= 0, "teleport happened");
-    assert!(dest >= 0, "C-HHW-balloon-02: the player is teleported");
+    kassert!(dest >= 0, "C-HHW-balloon-02: the player is teleported");
     // Destination must be a legal board tile (0..60). The 序号 wrap is the
     // spec's `balloon_02_dest`; with symbolic rolls the host's `roll` covers
     // the face range, so any in-range dest is a legal pick of some result.
-    assert!(
+    kassert!(
         dest < 60,
         "C-HHW-balloon-02: dest is a board tile (序号 1..=60 → 0..60)"
     );
-    assert!(post.pos[player as usize] == dest, "post pos is the dest");
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(post.pos[player as usize] == dest, "post pos is the dest");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 #[kani::proof]
@@ -542,7 +542,7 @@ pub fn balloon_teleports_to_a_chosen_result_iff() {
 pub fn balloon_mutant_is_detected() {
     // Spec unit check: dest(r) vs dest_mutant(r) differ for r=0 (wrap).
     let r = 0;
-    assert!(
+    kassert!(
         spec::hhw::balloon_02_dest(r) != spec::hhw::balloon_02_dest_mutant(r),
         "mutant raw-result dest disagrees on the mod-60 wrap"
     );
@@ -589,18 +589,18 @@ pub fn hagumi_over_60_gains_and_draws_iff() {
     kani::cover!(!over && has_mark, "mark branch");
     kani::cover!(!over && !has_mark && !has_gain, "neither (short pile / no pick)");
     if over {
-        assert!(
+        kassert!(
             post.money[player as usize] == pre.money[player as usize] + 1000,
             "C-HHW-hagumi-02: over-60 grants exactly 1000"
         );
     }
     if has_gain {
-        assert!(
+        kassert!(
             post.money[player as usize] == pre.money[player as usize] + 1000,
             "C-HHW-hagumi-02: money grant is 1000, not 2000"
         );
     }
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 // ===========================================================================

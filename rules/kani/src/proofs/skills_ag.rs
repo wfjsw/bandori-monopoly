@@ -78,25 +78,25 @@ pub fn firepot_01_tick_iff() {
     kani::cover!(grants, "third idle turn grants a pot");
     kani::cover!(!grants, "first/second idle turn grants nothing");
     if grants {
-        assert!(
+        kassert!(
             spec::skills_ag::firepot_01_grant_log_ok(effects, player),
             "C-AG-firepot-01: granting tick is exactly GainFire(1)"
         );
         // Host `gain_fire` is saturating_add with no fire_max clamp (the cap
         // is declared by `fire_pot` but not enforced under Kani). Pin the
         // body's +1; the cap is recorded as a host gap in the unit table.
-        assert!(
+        kassert!(
             post_fire == pre_fire + 1,
             "C-AG-firepot-01: fire rises by 1"
         );
     } else {
-        assert!(
+        kassert!(
             spec::skills_ag::firepot_01_idle_log_ok(effects),
             "C-AG-firepot-01: idle tick is a no-op in the log"
         );
-        assert!(post_fire == pre_fire, "C-AG-firepot-01: fire unchanged");
+        kassert!(post_fire == pre_fire, "C-AG-firepot-01: fire unchanged");
     }
-    assert!(
+    kassert!(
         post_rest == spec::skills_ag::firepot_01_next_rest(pre_rest),
         "C-AG-firepot-01: rest counter is next_rest(pre)"
     );
@@ -107,8 +107,8 @@ pub fn firepot_01_tick_iff() {
 #[kani::unwind(80)]
 pub fn firepot_01_mutant_is_detected() {
     // pre_rest = 0: the card does not grant; the mutant (grant at +1>=2) does.
-    assert!(spec::skills_ag::firepot_01_grants(0) == false, "card: no grant at rest 0");
-    assert!(
+    kassert!(spec::skills_ag::firepot_01_grants(0) == false, "card: no grant at rest 0");
+    kassert!(
         spec::skills_ag::firepot_01_grants_mutant(0),
         "mutant: claims a grant at rest 0"
     );
@@ -178,29 +178,29 @@ pub fn moca_02_teleport_iff() {
     kani::cover!(pre_fire == 0, "no fire pot");
 
     if gated {
-        assert!(
+        kassert!(
             spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: CD / no-fire gate is a no-op"
         );
-        assert!(post.pos[owner as usize] != src_pos || pre_fire == 0, "no teleport when gated");
+        kassert!(post.pos[owner as usize] != src_pos || pre_fire == 0, "no teleport when gated");
         return;
     }
     // Not gated: the body asks yes/no (symbolic). Both answers are legal.
     if accepted {
-        assert!(
+        kassert!(
             spec::skills_ag::moca_02_log_ok(effects, owner, src_pos),
             "C-AG-moca-02: exactly Teleport(owner → src tile)"
         );
-        assert!(
+        kassert!(
             spec::skills_ag::moca_02_post_ok(post.pos[owner as usize], post.fire[owner as usize], src_pos, pre_fire),
             "C-AG-moca-02: on the actor's tile with fire −1"
         );
     } else {
-        assert!(
+        kassert!(
             spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: declined offer is a no-op"
         );
-        assert!(post.fire[owner as usize] == pre_fire, "decline leaves fire");
+        kassert!(post.fire[owner as usize] == pre_fire, "decline leaves fire");
         let _ = src;
     }
 }
@@ -219,11 +219,11 @@ pub fn moca_02_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         !spec::skills_ag::moca_02_log_ok_mutant(effects, owner, 10),
         "mutant (tile+1) must not match"
     );
-    assert!(
+    kassert!(
         spec::skills_ag::moca_02_log_ok(effects, owner, 10),
         "card teleports to the actor's tile"
     );
@@ -254,11 +254,11 @@ pub fn ran_02_spend_fire_iff() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         spec::skills_ag::ran_02_spend_log_empty(effects),
         "C-AG-ran-02: fire spend is not an Effect (spend_fire mutates fire only)"
     );
-    assert!(
+    kassert!(
         spec::skills_ag::ran_02_fire_ok(post_fire, pre_fire),
         "C-AG-ran-02: exactly one [火罐] spent"
     );
@@ -279,8 +279,8 @@ pub fn ran_02_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 0, player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
-    assert!(post_fire == 0, "card spends exactly 1");
-    assert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
+    kassert!(post_fire == 0, "card spends exactly 1");
+    kassert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
 }
 // ===========================================================================
 // Pure formula harnesses (no invoke) — cheap, run first under the slot cap.
@@ -295,13 +295,13 @@ pub fn firepot_01_tick_formula() {
     let grants = spec::skills_ag::firepot_01_grants(pre_rest);
     let next = spec::skills_ag::firepot_01_next_rest(pre_rest);
     if pre_rest == 2 {
-        assert!(grants, "third idle turn grants");
-        assert!(next == 0, "counter resets");
+        kassert!(grants, "third idle turn grants");
+        kassert!(next == 0, "counter resets");
     } else {
-        assert!(!grants, "first/second idle turn grants nothing");
-        assert!(next == pre_rest + 1, "counter advances");
+        kassert!(!grants, "first/second idle turn grants nothing");
+        kassert!(next == pre_rest + 1, "counter advances");
     }
-    assert!(
+    kassert!(
         grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest == 2,
         "mutant disagrees on rest 0/1"
     );
@@ -315,12 +315,12 @@ pub fn band_01_filter_formula() {
     let price: i32 = kani::any();
     kani::assume(price >= 0 && price <= 5000);
     let applies = spec::skills_ag::band_01_applies(is_shop, price);
-    assert!(
+    kassert!(
         applies == (is_shop || price <= 1200),
         "shop-street OR price <= 1200"
     );
     if !is_shop && price > 1200 && price <= 5000 {
-        assert!(
+        kassert!(
             !spec::skills_ag::band_01_applies_mutant(is_shop, price) || price <= 1000,
             "mutant (<=1000) is strictly tighter"
         );

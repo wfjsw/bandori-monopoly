@@ -82,22 +82,22 @@ pub fn tomoriskill_02_spend_iff() {
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::skills_crychic::tomoriskill_02_log_ok(effects),
         "C-CRYCHIC-tomoriskill-02: both spends are unlogged — log must stay empty"
     );
     if pre_w_fire >= 1 {
-        assert!(
+        kassert!(
             post.fire[player as usize] == pre_w_fire - 1,
             "C-CRYCHIC-tomoriskill-02: fire -1"
         );
     }
-    assert!(
+    kassert!(
         key_get(player, stay_key) == pk_stay - 1,
         "C-CRYCHIC-tomoriskill-02: player_keys STAY -1 (state::add)"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     kani::cover!(pre_w_fire >= 1, "fire available");
     kani::cover!(pre_w_fire == 0, "fire empty (spend no-op)");
 }
@@ -118,13 +118,13 @@ pub fn tomoriskill_02_mutant_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("skill:高松灯（CRYCHIC）:跌跌撞撞..."), player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         spec::skills_crychic::tomoriskill_02_log_ok(effects),
         "card matches book (empty log)"
     );
     let wrong = spec::skills_crychic::tomoriskill_02_log_ok_mutant(effects);
     kani::cover!(!wrong, "one-effect mutant disagrees");
-    assert!(!wrong, "mutant (non-empty log) must NOT match");
+    kassert!(!wrong, "mutant (non-empty log) must NOT match");
 }
 
 // ===========================================================================
@@ -172,18 +172,18 @@ pub fn soyoskill_01_cancel_iff() {
     // book-correct (`state::set(TILE, t)` / `state::set(ARMED, 1)`); the
     // SetState log cannot carry those values. Assert the waive, which is the
     // book's primary effect and is host-faithful.
-    assert!(
+    kassert!(
         effects
             .iter()
             .any(|e| matches!(e, Effect::SetPayAmount { to: 0 })),
         "C-CRYCHIC-soyoskill-01: payment waived (SetPayAmount{0})"
     );
-    assert!(
+    kassert!(
         post.pay_amount == 0,
         "C-CRYCHIC-soyoskill-01: pending pay amount is 0"
     );
     // The latch writes are visible as SetState entries (values host-broken).
-    assert!(
+    kassert!(
         effects
             .iter()
             .filter(|e| matches!(e, Effect::SetState { .. }))
@@ -192,8 +192,8 @@ pub fn soyoskill_01_cancel_iff() {
         "C-CRYCHIC-soyoskill-01: two latch writes (TILE + ARMED)"
     );
     let _ = (tile_key, armed_key, tile);
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money (waive at rewrite time)");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money (waive at rewrite time)");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// No branch: empty log (the body returns before any write).
@@ -217,7 +217,7 @@ pub fn soyoskill_01_decline_noop() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:长崎素世（CRYCHIC）:雨中祈晴"), "PayChoose", owner));
     let (logbuf, log_n) = effects();
-    assert!(
+    kassert!(
         spec::skills_crychic::soyoskill_01_noop_log_ok(&logbuf[..log_n]),
         "C-CRYCHIC-soyoskill-01 no: empty log"
     );
@@ -242,7 +242,7 @@ pub fn soyoskill_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:长崎素世（CRYCHIC）:雨中祈晴"), "PayChoose", owner));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         effects
             .iter()
             .any(|e| matches!(e, Effect::SetPayAmount { to: 0 })),
@@ -252,7 +252,7 @@ pub fn soyoskill_01_mutant_is_detected() {
         .iter()
         .any(|e| matches!(e, Effect::SetPayAmount { to: 1 }));
     kani::cover!(!wrong, "SetPayAmount{1} mutant disagrees");
-    assert!(!wrong, "mutant waive-to-1 must NOT match");
+    kassert!(!wrong, "mutant waive-to-1 must NOT match");
 }
 
 // ===========================================================================
@@ -278,11 +278,11 @@ pub fn band_01_hand_limit_host_gap() {
 
     // Body: `state::set(HAND_LIMIT, NO_HAND_LIMIT)` + `state::set(SEEN, hand)`.
     // Host logs SetState twice but with `n = field id` (0), not the value.
-    assert!(
+    kassert!(
         effects.len() == 2,
         "C-CRYCHIC-band-01: two state writes (HAND_LIMIT + SEEN)"
     );
-    assert!(
+    kassert!(
         effects
             .iter()
             .all(|e| matches!(e, Effect::SetState { .. })),
@@ -338,17 +338,17 @@ pub fn band_03_crystal_on_four_to_five_iff() {
     let effects = &logbuf[..log_n];
     let post_crystals = key_get(player, crystal_key);
 
-    assert!(
+    kassert!(
         spec::skills_crychic::band_03_crystal_log_ok(effects, player, crystal_key.0),
         "C-CRYCHIC-band-03: exactly AddCounter{+1 crystal}"
     );
-    assert!(
+    kassert!(
         post_crystals == pre_crystals + spec::skills_crychic::band_03_crystal_delta(),
         "C-CRYCHIC-band-03: crystal +1"
     );
     // The body also rewrites SEEN (host drops the value) — the log carries a
     // second SetState.
-    assert!(
+    kassert!(
         effects.len() == 2
             && matches!(effects[1], Effect::SetState { .. }),
         "C-CRYCHIC-band-03: SEEN rewrite is a SetState (value host-broken)"
@@ -373,7 +373,7 @@ pub fn band_03_no_crossing_noop() {
     let has_crystal = logbuf[..log_n]
         .iter()
         .any(|e| matches!(e, Effect::AddCounter { .. }));
-    assert!(
+    kassert!(
         !has_crystal,
         "C-CRYCHIC-band-03: no crystal when SEEN != 4"
     );
@@ -408,13 +408,13 @@ pub fn band_03_mutant_is_detected() {
         i += 1;
     }
     let crystal_slice = &crystal_effects[..cn];
-    assert!(
+    kassert!(
         spec::skills_crychic::band_03_crystal_log_ok(crystal_slice, player, crystal_key.0),
         "card places exactly 1 crystal"
     );
     let wrong = spec::skills_crychic::band_03_crystal_log_ok_mutant(crystal_slice, player, crystal_key.0);
     kani::cover!(!wrong, "two-crystal mutant disagrees");
-    assert!(!wrong, "mutant +2 must NOT match");
+    kassert!(!wrong, "mutant +2 must NOT match");
 }
 
 // ===========================================================================

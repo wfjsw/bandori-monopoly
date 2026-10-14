@@ -96,16 +96,16 @@ pub fn idolband_reset_iff() {
     kani::cover!(pre.money[player as usize] < 3000, "pre money < 3000");
     kani::cover!(pre.money[player as usize] >= 3000, "pre money >= 3000");
 
-    assert!(
+    kassert!(
         playable == (redeemed == 0),
         "C-SUMIMI-idolband-01: gate must allow exactly the not-redeemed case"
     );
 
     if !playable {
         let post = world::snapshot();
-        assert!(world::arr4_eq(post.money, pre.money), "rejected play must not touch money");
+        kassert!(world::arr4_eq(post.money, pre.money), "rejected play must not touch money");
         let (logbuf, log_n) = log_slice();
-        assert!(log_n == 0, "rejected play must not log");
+        kassert!(log_n == 0, "rejected play must not log");
         let _ = effects_of(&logbuf, log_n);
         return;
     }
@@ -116,24 +116,24 @@ pub fn idolband_reset_iff() {
     let effects = effects_of(&logbuf, log_n);
 
     let pre_money = pre.money[player as usize];
-    assert!(
+    kassert!(
         spec::sumimi::idolband_money_ok(effects, player, pre_money),
         "C-SUMIMI-idolband-02/03: money path must be a set-to-3000 or a no-op"
     );
-    assert!(
+    kassert!(
         post.money[player as usize] == spec::sumimi::idolband_post_money(pre_money),
         "C-SUMIMI-idolband-02: post money must be exactly 3000 when pre < 3000"
     );
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
-            assert!(post.money[p] == pre.money[p], "frame: other players' money");
+            kassert!(post.money[p] == pre.money[p], "frame: other players' money");
         }
-        assert!(post.fire[p] == pre.fire[p], "frame: fire");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
-        assert!(post.stay[p] == pre.stay[p], "frame: stay");
+        kassert!(post.fire[p] == pre.fire[p], "frame: fire");
+        kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        kassert!(post.stay[p] == pre.stay[p], "frame: stay");
     }
-    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
-    assert!(post.discard == pre.discard, "frame: discard bitset");
+    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
+    kassert!(post.discard == pre.discard, "frame: discard bitset");
 }
 
 /// Mutant companion: the off-by-one target (2999) must NOT match the card.
@@ -153,7 +153,7 @@ pub fn idolband_mutant_is_detected() {
     let pre_money = pre.money[player as usize];
     let wrong = spec::sumimi::idolband_post_money_mutant(pre_money);
     kani::cover!(pre_money < 3000, "mutant region live");
-    assert!(
+    kassert!(
         post.money[player as usize] != wrong,
         "mutant: card must not match the 2999 target"
     );
@@ -198,9 +198,9 @@ pub fn hina_01_pass_circle_iff() {
     if !admitted {
         // Host would not call the body. Untouched.
         let post = world::snapshot();
-        assert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
+        kassert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
         let (logbuf, log_n) = log_slice();
-        assert!(log_n == 0, "rejected hook must not log");
+        kassert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);
         return;
     }
@@ -215,20 +215,20 @@ pub fn hina_01_pass_circle_iff() {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    assert!(
+    kassert!(
         spec::sumimi::pass_circle_fire_ok(effects, player, pre_fire, cap),
         "C-SUMIMI-hina-01: effect log must be exactly +1 fire under the cap"
     );
-    assert!(
+    kassert!(
         post.fire[player as usize] == spec::sumimi::pass_circle_fire_post(pre_fire, cap),
         "C-SUMIMI-hina-01: post fire must be pre+1 under the cap and unchanged at the cap"
     );
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
-            assert!(post.fire[p] == pre.fire[p], "frame: other players' fire");
+            kassert!(post.fire[p] == pre.fire[p], "frame: other players' fire");
         }
-        assert!(post.money[p] == pre.money[p], "frame: money");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
+        kassert!(post.money[p] == pre.money[p], "frame: money");
+        kassert!(post.pos[p] == pre.pos[p], "frame: pos");
     }
 }
 
@@ -249,7 +249,7 @@ pub fn hina_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::hook_only_idx(HINA, "Pass", player));
     let post = world::snapshot();
     let wrong = spec::sumimi::pass_circle_fire_post_mutant(pre.fire[player as usize], spec::sumimi::FIRE_CAP_SUMIMI);
-    assert!(
+    kassert!(
         post.fire[player as usize] != wrong,
         "mutant: card must not match the +2 spec"
     );
@@ -288,9 +288,9 @@ pub fn childhood_02_fire_iff() {
 
     if !admitted {
         let post = world::snapshot();
-        assert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
+        kassert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
         let (logbuf, log_n) = log_slice();
-        assert!(log_n == 0, "rejected hook must not log");
+        kassert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);
         return;
     }
@@ -305,20 +305,20 @@ pub fn childhood_02_fire_iff() {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    assert!(
+    kassert!(
         spec::sumimi::childhood_fire_ok(effects, player, pre_fire, cap),
         "C-SUMIMI-childhood-02: after-move must be exactly +1 fire under the cap"
     );
-    assert!(
+    kassert!(
         post.fire[player as usize] == spec::sumimi::childhood_fire_post(pre_fire, cap),
         "C-SUMIMI-childhood-02: post fire"
     );
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
-            assert!(post.fire[p] == pre.fire[p], "frame: other fire");
+            kassert!(post.fire[p] == pre.fire[p], "frame: other fire");
         }
-        assert!(post.money[p] == pre.money[p], "frame: money");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
+        kassert!(post.money[p] == pre.money[p], "frame: money");
+        kassert!(post.pos[p] == pre.pos[p], "frame: pos");
     }
 }
 
@@ -334,7 +334,7 @@ pub fn childhood_02_mutant_is_detected() {
     invoke::unwrap_done(invoke::hook_only_idx(CHILDHOOD, "MoveAfter", player));
     let post = world::snapshot();
     let wrong = spec::sumimi::childhood_fire_post(0, spec::sumimi::FIRE_CAP_SUMIMI) + 1;
-    assert!(
+    kassert!(
         post.fire[player as usize] != wrong,
         "mutant: after-move is +1, not +2"
     );
@@ -364,14 +364,14 @@ pub fn twodonuts_01_exile_iff() {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    assert!(
+    kassert!(
         spec::sumimi::twodonuts_exile_ok(effects, player),
         "C-SUMIMI-twodonuts-01: exactly one [除外] grant and no money/pos/fire side effects"
     );
     for p in 0..MAX_PLAYERS {
-        assert!(post.money[p] == pre.money[p], "frame: money");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
-        assert!(post.fire[p] == pre.fire[p], "frame: fire");
+        kassert!(post.money[p] == pre.money[p], "frame: money");
+        kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        kassert!(post.fire[p] == pre.fire[p], "frame: fire");
     }
 }
 
@@ -388,7 +388,7 @@ pub fn twodonuts_01_mutant_is_detected() {
     let effects = effects_of(&logbuf, log_n);
     // Mutant: no exile grant at all. The card does grant — disagreement is live.
     let wrong = !spec::sumimi::twodonuts_exile_grant_in(effects, player);
-    assert!(!wrong, "mutant: card does grant [除外]");
+    kassert!(!wrong, "mutant: card does grant [除外]");
 }
 
 // ===========================================================================
@@ -431,7 +431,7 @@ pub fn twoinone_01b_fire_iff() {
     kani::cover!(is_hina, "from 三角初华（Sumimi） → 纯田真奈 fire 1");
     kani::cover!(!is_hina, "from 纯田真奈 → 三角初华（Sumimi） fire 2");
 
-    assert!(
+    kassert!(
         spec::sumimi::twoinone_fire_effects_ok(effects, player, fire_key, to),
         "C-SUMIMI-twoinone-01b: fire must be set to the other character's 初始火罐数"
     );
@@ -468,7 +468,7 @@ pub fn twoinone_01b_mutant_is_detected() {
             }
         }
     }
-    assert!(!saw_wrong, "mutant: fire is not set to 初始+1");
+    kassert!(!saw_wrong, "mutant: fire is not set to 初始+1");
 }
 // ===========================================================================
 // Cheap pure-formula harnesses (spec math, no host invoke) — run these first.
@@ -482,13 +482,13 @@ pub fn idolband_money_formula() {
     kani::assume(pre >= 0 && pre <= 10_000);
     let post = spec::sumimi::idolband_post_money(pre);
     if pre >= 3000 {
-        assert!(post == pre, "no-effect region keeps money");
+        kassert!(post == pre, "no-effect region keeps money");
     } else {
-        assert!(post == 3000, "under-3000 region sets exactly 3000");
+        kassert!(post == 3000, "under-3000 region sets exactly 3000");
     }
     let wrong = spec::sumimi::idolband_post_money_mutant(pre);
     if pre < 3000 {
-        assert!(wrong == 2999 && post != wrong, "mutant 2999 is distinguishable");
+        kassert!(wrong == 2999 && post != wrong, "mutant 2999 is distinguishable");
     }
     kani::cover!(pre < 3000, "under 3000");
     kani::cover!(pre >= 3000, "at/over 3000");
@@ -503,12 +503,12 @@ pub fn pass_circle_fire_formula() {
     let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     let post = spec::sumimi::pass_circle_fire_post(pre_fire, cap);
     if pre_fire < cap {
-        assert!(post == pre_fire + 1, "under cap: +1");
+        kassert!(post == pre_fire + 1, "under cap: +1");
     } else {
-        assert!(post == pre_fire, "at cap: no-op (global hold-cap)");
+        kassert!(post == pre_fire, "at cap: no-op (global hold-cap)");
     }
     let wrong = spec::sumimi::pass_circle_fire_post_mutant(pre_fire, cap);
-    assert!(post != wrong, "mutant +2 / past-cap is distinguishable");
+    kassert!(post != wrong, "mutant +2 / past-cap is distinguishable");
     kani::cover!(pre_fire < cap, "under cap");
     kani::cover!(pre_fire >= cap, "at cap");
 }
@@ -522,10 +522,10 @@ pub fn band_02_rent_bonus_formula() {
     let crystals: i32 = kani::any();
     kani::assume(crystals >= 0 && crystals <= 8);
     let post = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
-    assert!(post == pre_amount + crystals * 100, "bonus is +100 per crystal");
+    kassert!(post == pre_amount + crystals * 100, "bonus is +100 per crystal");
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, crystals);
     if crystals != 1 {
-        assert!(post != wrong, "mutant +100-total distinguishable when c != 1");
+        kassert!(post != wrong, "mutant +100-total distinguishable when c != 1");
     }
     kani::cover!(crystals == 0, "c=0");
     kani::cover!(crystals >= 2, "c>=2");

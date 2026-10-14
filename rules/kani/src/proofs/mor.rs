@@ -82,20 +82,20 @@ pub fn rui_demon_01_iff() {
     kani::cover!(n_others == 1, "one other living seat");
     kani::cover!(n_others >= 2, "two or more other living seats");
 
-    assert!(
+    kassert!(
         spec::rui_demon_01_effects_ok(&effects, player, n, &out),
         "C-MOR-rui-demon-01: effect log must be 100-out + X=5 per other, then 300-in + X=5, then X=5"
     );
-    assert!(
+    kassert!(
         spec::rui_demon_01_post_ok(&post, &pre, player, n, &out),
         "C-MOR-rui-demon-01: post money must match the face-value legs (floored/saturated)"
     );
     // Frame: no positions / fire / stay / piles from the money legs.
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
-    assert!(post.stay == pre.stay, "frame: stay");
-    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
-    assert!(post.discard == pre.discard, "frame: discard");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    kassert!(post.stay == pre.stay, "frame: stay");
+    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
+    kassert!(post.discard == pre.discard, "frame: discard");
 }
 
 /// MUTANT companion: a 200-out leg is NOT what the card does.
@@ -120,7 +120,7 @@ pub fn rui_demon_01_mutant_is_detected() {
     let effects = &ebuf[..log_n];
     let mutant = spec::rui_demon_01_effects_ok_mutant(&effects, player, pre.n_players, &pre.out);
     kani::cover!(!mutant, "mutant disagrees with the card");
-    assert!(!mutant, "mutant: card must not match the 200-leg spec");
+    kassert!(!mutant, "mutant: card must not match the 200-leg spec");
 }
 
 /// C-MOR-rui-demon-02: X (`skill.yuriCrit.x`) is set to 5 during the body.
@@ -143,7 +143,7 @@ pub fn rui_demon_02_x_set_to_5() {
     let last = effects.last();
     let ok = matches!(last, Some(Effect::SetState { player: p, n, .. }) if *p == player && *n == 5);
     let _ = &pre;
-    assert!(ok, "C-MOR-rui-demon-02: X must end at 5");
+    kassert!(ok, "C-MOR-rui-demon-02: X must end at 5");
 }
 
 // ===========================================================================
@@ -189,24 +189,24 @@ pub fn xiaobai_01_iff() {
     kani::cover!(amount >= 2 && amount % 2 == 0, "even amount");
     kani::cover!(amount % 2 == 1, "odd amount");
 
-    assert!(
+    kassert!(
         spec::xiaobai_01_effects_ok(&effects, payee, amount),
         "C-MOR-xiaobai-01: exactly PayMoney(payee, amount/2)"
     );
-    assert!(
+    kassert!(
         spec::xiaobai_01_post_ok(&post, &pre, payee, amount),
         "C-MOR-xiaobai-01: payee loses amount/2"
     );
     // The rewrite lands on the pending trigger target.
     let trig_target = world::with_world(|w| w.trig_target);
-    assert!(
+    kassert!(
         trig_target == -1,
         "C-MOR-xiaobai-01: payment becomes a pure loss (target = bank)"
     );
     // Frame: the counteruser's money is untouched by this body.
-    assert!(post.money[player as usize] == pre.money[player as usize], "frame: counteruser money");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    kassert!(post.money[player as usize] == pre.money[player as usize], "frame: counteruser money");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: the full amount is NOT what the card takes from the payee.
@@ -226,7 +226,7 @@ pub fn xiaobai_01_mutant_is_detected() {
     let mutant = spec::xiaobai_01_effects_ok_mutant(&effects, payee, amount);
     let _ = &pre;
     kani::cover!(!mutant, "mutant disagrees");
-    assert!(!mutant, "mutant: card must not take the full amount from the payee");
+    kassert!(!mutant, "mutant: card must not take the full amount from the payee");
 }
 
 // ===========================================================================
@@ -283,15 +283,15 @@ pub fn rainbow_01_half_iff() {
     kani::cover!(amount % 2 == 0, "even amount");
     kani::cover!(amount % 10 == 0, "multiple of 10");
 
-    assert!(
+    kassert!(
         spec::rainbow_log_ok(&effects, expected),
         "C-MOR-rainbow-01: effect log must be exactly SetPayAmount(amount/2)"
     );
-    assert!(
+    kassert!(
         post.pay_amount == expected,
         "C-MOR-rainbow-01: pay amount must be the integer half"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// IFF （2）: pay amount becomes `amount * 3 / 2` (clause pin).
@@ -315,15 +315,15 @@ pub fn rainbow_02_boost_iff() {
     kani::cover!(amount == 140, "doc example 140 → 210");
     kani::cover!(amount % 2 == 1, "odd amount");
 
-    assert!(
+    kassert!(
         spec::rainbow_log_ok(&effects, expected),
         "C-MOR-rainbow-02: effect log must be exactly SetPayAmount(1.5×amount)"
     );
-    assert!(
+    kassert!(
         post.pay_amount == expected,
         "C-MOR-rainbow-02: pay amount must be the integer 1.5×"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// MUTANT companion （1）.
@@ -341,7 +341,7 @@ pub fn rainbow_01_mutant_is_detected() {
     let post = world::snapshot();
     let _ = &pre;
     kani::cover!(post.pay_amount != wrong, "mutant disagrees");
-    assert!(
+    kassert!(
         post.pay_amount != wrong,
         "mutant: card must not match off-by-one half"
     );
@@ -362,7 +362,7 @@ pub fn rainbow_02_mutant_is_detected() {
     let post = world::snapshot();
     let _ = &pre;
     kani::cover!(post.pay_amount != wrong, "mutant disagrees");
-    assert!(
+    kassert!(
         post.pay_amount != wrong,
         "mutant: card must not match off-by-one boost"
     );
@@ -413,13 +413,13 @@ pub fn garden_01_gain_iff() {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::garden_01_first_effect_ok(&effects, player),
         "C-MOR-garden-01: first effect must be GainMoney(player, 100)"
     );
     // The gain always lands; later legs must not undo it. Post money is at
     // least the gain (settle/rent is OPEN-触发结算 and may move more).
-    assert!(
+    kassert!(
         post.money[player as usize] >= pre.money[player as usize] + 100,
         "C-MOR-garden-01: user gains 100 (at least)"
     );
@@ -444,7 +444,7 @@ pub fn garden_01_mutant_is_detected() {
     let mutant_first = !effects.is_empty()
         && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == 200);
     kani::cover!(!mutant_first, "mutant disagrees");
-    assert!(!mutant_first, "mutant: gain must not be 200");
+    kassert!(!mutant_first, "mutant: gain must not be 200");
 }
 // ===========================================================================
 // C-MOR-courage-01 / -02 / -03  `Mor:勇气展翅高飞之时`
@@ -505,7 +505,7 @@ pub fn courage_03_unowned_iff() {
     // The empty limb is sound whenever it fires; the non-empty limb is the
     // BLOCKED-HOST divergence and is reported, not hidden.
     if effects.is_empty() {
-        assert!(
+        kassert!(
             spec::courage_03_post_ok(&post, &pre),
             "C-MOR-courage-03: unowned tile must move no money"
         );
@@ -528,13 +528,13 @@ pub fn courage_03_empty_when_no_agent_misfire() {
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
     if log_n == 0 {
-        assert!(spec::courage_03_effects_ok(&ebuf[..0]), "empty log");
-        assert!(
+        kassert!(spec::courage_03_effects_ok(&ebuf[..0]), "empty log");
+        kassert!(
             spec::courage_03_post_ok(&post, &pre),
             "C-MOR-courage-03: frame money unchanged on the empty branch"
         );
-        assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+        kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     }
 }
 
@@ -573,7 +573,7 @@ pub fn courage_01_pay_iff_blocked_host() {
     kani::cover!(log_n == 0, "agent misfire or empty");
     if log_n == 1 {
         // Shape check only (the amount cannot be pinned — see BLOCKED-HOST).
-        assert!(
+        kassert!(
             matches!(effects[0], Effect::PayTo { from, to, .. } if from == owner && to == player),
             "C-MOR-courage-01: exactly one PayTo(owner → user)"
         );
@@ -604,7 +604,7 @@ pub fn courage_02_agent_iff_blocked_host() {
     kani::cover!(spec::courage_02_effects_ok(effects, player), "agent arm (host bit)");
     kani::cover!(!spec::courage_02_effects_ok(effects, player), "not the agent arm");
     if spec::courage_02_effects_ok(effects, player) {
-        assert!(
+        kassert!(
             post.money[player as usize] == pre.money[player as usize] + 1000
                 || pre.money[player as usize] > i32::MAX - 1000,
             "C-MOR-courage-02: user gains 1000 on the agent arm"
@@ -682,12 +682,12 @@ pub fn toko_no_pair_noop() {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::toko_no_pair_ok(effects),
         "C-MOR-toko-swap-01: no swappable pair ⇒ no effects"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// Swap multiset (book): two SetOwner, one PayTo(diff), one SetMortgaged(off)
@@ -743,7 +743,7 @@ pub fn toko_swap_iff_blocked_host() {
                 _ => {}
             }
         }
-        assert!(
+        kassert!(
             n_set_owner == 2 && n_pay == 1 && n_unmort == 1,
             "C-MOR-toko-swap-01: swap multiset = 2 SetOwner + PayTo + SetMortgaged(off)"
         );
@@ -795,20 +795,20 @@ pub fn starry_01_place_iff() {
     kani::cover!(x == 5, "X = 5");
     kani::cover!(x >= 2 && x <= 4, "X ∈ 2..=4");
 
-    assert!(
+    kassert!(
         spec::starry_01_x_in_range(x, pre.money[player as usize]),
         "C-MOR-starry-01: X must be in the engine's 1..=max offer (OPEN-X)"
     );
-    assert!(
+    kassert!(
         spec::starry_01_effects_ok(effects, player, x),
         "C-MOR-starry-01: PayMoney(1000X) + PlaceCard + AddCounter(X)"
     );
-    assert!(
+    kassert!(
         spec::starry_01_post_ok(&post, &pre, player, x),
         "C-MOR-starry-01: user pays 1000·X (floored at 0)"
     );
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: the pay is not 1000·X+1.
@@ -838,7 +838,7 @@ pub fn starry_01_mutant_is_detected() {
         Some(Effect::PayMoney { n, .. }) if *n == wrong
     );
     kani::cover!(!mutant, "mutant disagrees");
-    assert!(!mutant, "mutant: pay must not be 1000·X+1");
+    kassert!(!mutant, "mutant: pay must not be 1000·X+1");
 }
 
 // ===========================================================================
@@ -892,19 +892,19 @@ pub fn starry_06_payout_iff() {
     kani::cover!(after > 0, "crystals remain");
 
     // -06: one GainMoney per crystal removed.
-    assert!(
+    kassert!(
         spec::starry_06_effects_ok(effects, player, removed),
         "C-MOR-starry-06: owner gains 1000 per crystal removed"
     );
     // -02: empty crystals send the card to the discard (dest write).
     let dest = world::with_world(|w| w.dest);
     if after == 0 {
-        assert!(
+        kassert!(
             spec::starry_02_dest_is_graveyard(dest),
             "C-MOR-starry-02: empty crystals ⇒ dest = Graveyard"
         );
     }
-    assert!(post.money[player as usize] == pre.money[player as usize] + 1000 * removed
+    kassert!(post.money[player as usize] == pre.money[player as usize] + 1000 * removed
         || pre.money[player as usize] > i32::MAX - 1000 * removed,
         "C-MOR-starry-06: post money = pre + 1000·removed");
 }
@@ -928,7 +928,7 @@ pub fn starry_06_mutant_is_detected() {
     let _ = &pre;
     let mutant = spec::starry_06_effects_ok_mutant(effects, player, removed);
     kani::cover!(!mutant, "mutant disagrees");
-    assert!(!mutant, "mutant: payout must not be 500 per crystal");
+    kassert!(!mutant, "mutant: payout must not be 500 per crystal");
 }
 
 // ===========================================================================
@@ -977,7 +977,7 @@ pub fn starry_05_circle_iff() {
     kani::cover!(crystals == 1, "last crystal");
     kani::cover!(crystals > 1, "not the last crystal");
 
-    assert!(
+    kassert!(
         spec::starry_05_effects_ok(effects, player),
         "C-MOR-starry-05: owner passing CiRCLE removes one crystal"
     );
@@ -985,11 +985,11 @@ pub fn starry_05_circle_iff() {
         let key = crate::intern::intern_or_fail("crystals");
         w.key_get(player, key)
     });
-    assert!(
+    kassert!(
         after == crystals - 1,
         "C-MOR-starry-05: crystal count drops by 1"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// NO-OP: a non-owner pass, or a non-CiRCLE tile, removes nothing.
@@ -1011,16 +1011,16 @@ pub fn starry_05_noop() {
     let log_n = effects_of(&mut ebuf);
     let _ = &pre;
 
-    assert!(
+    kassert!(
         log_n == 0,
         "C-MOR-starry-05: non-CiRCLE pass must not remove a crystal"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     let after = world::with_world(|w| {
         let key = crate::intern::intern_or_fail("crystals");
         w.key_get(player, key)
     });
-    assert!(after == crystals, "C-MOR-starry-05: crystals unchanged");
+    kassert!(after == crystals, "C-MOR-starry-05: crystals unchanged");
 }
 
 // ===========================================================================
@@ -1080,7 +1080,7 @@ pub fn nnm_05_empty_discard_iff_fails_less() {
     let dest = world::with_world(|w| w.dest);
 
     // Book pin: empty crystals ⇒ the card goes to the discard.
-    assert!(
+    kassert!(
         spec::nnm_05_wants_discard(dest),
         "C-MOR-nnm-05 FAILS(LESS): book wants dest=Graveyard when crystals hit 0"
     );
@@ -1111,13 +1111,13 @@ pub fn nnm_05_body_leaves_card_is_reachable() {
         spec::nnm_05_body_leaves_card(effects, dest, pre_dest),
         "LESS reachable: empty crystals, card stays"
     );
-    assert!(
+    kassert!(
         spec::nnm_05_body_leaves_card(effects, dest, pre_dest),
         "C-MOR-nnm-05 LESS witness: body leaves the empty card on the field"
     );
-    assert!(!spec::nnm_05_wants_discard(dest), "book pin is not met (LESS)");
+    kassert!(!spec::nnm_05_wants_discard(dest), "book pin is not met (LESS)");
     let post = world::snapshot();
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// nnm-05 companion: the AtEnd entry (discard-down-to-five) also does not
@@ -1140,11 +1140,11 @@ pub fn nnm_05_atend_leaves_field_card() {
     let _ = &pre;
 
     // AtEnd only touches the hand; the field card stays (LESS for -05).
-    assert!(
+    kassert!(
         !effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. })),
         "C-MOR-nnm-05: AtEnd must not be the discard-on-empty path (and is not)"
     );
-    assert!(
+    kassert!(
         dest == 2 || log_n == 0,
         "C-MOR-nnm-05: no Graveyard dest from AtEnd for the field card"
     );
@@ -1168,7 +1168,7 @@ pub fn nnm_03_amount_iff_fails_wrong() {
     kani::cover!(reward == 1500, "cycle step 1500");
     kani::cover!(reward == 2000, "cycle step 2000");
     // Book pin: the body must pay x · reward.
-    assert!(
+    kassert!(
         book == body,
         "C-MOR-nnm-03 FAILS(WRONG): body pays x·2000, book wants x·reward (G7)"
     );
@@ -1184,7 +1184,7 @@ pub fn nnm_03_wrong_is_reachable() {
     let book = spec::nnm_03_amount(x, reward);
     let body = spec::nnm_03_amount_body(x);
     kani::cover!(book != body, "book ≠ body on reward=1000");
-    assert!(
+    kassert!(
         book != body,
         "C-MOR-nnm-03 WRONG witness: x·1000 ≠ x·2000"
     );
@@ -1232,7 +1232,7 @@ pub fn tritone_01_gain_place_iff() {
     kani::cover!(amount == 1, "smallest loan");
     kani::cover!(amount == 5_000, "large loan");
 
-    assert!(
+    kassert!(
         spec::tritone_01_effects_ok(effects, player, amount),
         "C-MOR-tritone-01: GainMoney(amount) + PlaceCard + SetState(owed=amount)"
     );
@@ -1240,11 +1240,11 @@ pub fn tritone_01_gain_place_iff() {
         let key = crate::intern::intern_or_fail("crystals");
         w.key_get(player, key)
     });
-    assert!(
+    kassert!(
         spec::tritone_01_crystals_ok(crystals),
         "C-MOR-tritone-01: card is placed with 3 crystals"
     );
-    assert!(
+    kassert!(
         post.money[player as usize] == pre.money[player as usize] + amount
             || pre.money[player as usize] > i32::MAX - amount,
         "C-MOR-tritone-01: user gains the lost amount"
@@ -1288,26 +1288,26 @@ pub fn tritone_02_tick_iff() {
     kani::cover!(pre_crystals == 1, "last crystal → payback");
     kani::cover!(pre_crystals > 1, "decay only");
 
-    assert!(
+    kassert!(
         spec::tritone_02_tick_effects_ok(effects, player, pre_crystals, owed),
         "C-MOR-tritone-02: tick is decay-only, or decay + payback(owed)"
     );
     let after = world::with_world(|w| w.key_get(player, key));
-    assert!(
+    kassert!(
         after == pre_crystals - 1,
         "C-MOR-tritone-02: one crystal removed per owner turn end"
     );
     if pre_crystals == 1 {
-        assert!(
+        kassert!(
             post.money[player as usize] == (pre.money[player as usize] - owed).max(0),
             "C-MOR-tritone-02: owner pays back the loan (OPEN-三全音收款人: bank)"
         );
         let dest = world::with_world(|w| w.dest);
-        assert!(dest == 0, "C-MOR-tritone-02: empty crystals ⇒ dest = Graveyard");
+        kassert!(dest == 0, "C-MOR-tritone-02: empty crystals ⇒ dest = Graveyard");
     } else {
-        assert!(world::arr4_eq(post.money, pre.money), "frame: money on a decay-only tick");
+        kassert!(world::arr4_eq(post.money, pre.money), "frame: money on a decay-only tick");
         let dest = world::with_world(|w| w.dest);
-        assert!(dest == 2, "frame: dest unchanged on a decay-only tick");
+        kassert!(dest == 2, "frame: dest unchanged on a decay-only tick");
     }
 }
 
@@ -1341,7 +1341,7 @@ pub fn tritone_02_mutant_is_detected() {
     let _ = &pre;
     let mutant = spec::tritone_02_tick_effects_ok_mutant(effects, player, 1, owed);
     kani::cover!(!mutant, "mutant disagrees");
-    assert!(!mutant, "mutant: payback must not be owed+1");
+    kassert!(!mutant, "mutant: payback must not be owed+1");
 }
 
 // ===========================================================================
@@ -1389,16 +1389,16 @@ pub fn noble_02_mark_iff() {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::noble_02_effects_ok(effects, pos),
         "C-MOR-noble-02: exactly one PlaceMark on the user's tile"
     );
-    assert!(
+    kassert!(
         spec::noble_02_mark_ok(effects, pos),
         "C-MOR-noble-02: mark lands on the tile (OPEN-触发结算 not pinned)"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money (settle is a stub)");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money (settle is a stub)");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// NO-OP (not yours): no effects.
@@ -1417,12 +1417,12 @@ pub fn noble_02_not_yours_noop() {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::noble_02_not_yours_ok(effects),
         "C-MOR-noble-02: tile not yours ⇒ no effects"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT companion (mark): a mark on tile 0 is NOT the card when the user
@@ -1445,7 +1445,7 @@ pub fn noble_02_mutant_is_detected() {
     let mutant = log_n == 1
         && matches!(effects[0], Effect::PlaceMark { tile, .. } if tile == 0);
     kani::cover!(!mutant, "mutant disagrees");
-    assert!(!mutant, "mutant: mark must not land on tile 0");
+    kassert!(!mutant, "mutant: mark must not land on tile 0");
 }
 
 // ===========================================================================
@@ -1479,20 +1479,20 @@ pub fn again_02_cancel_iff() {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::again_02_effects_ok(effects),
         "C-MOR-again-02: exactly SetPayAmount(0)"
     );
     let dest = world::with_world(|w| w.dest);
-    assert!(
+    kassert!(
         dest == 0,
         "C-MOR-again-02: card is sent to the discard (dest = Graveyard)"
     );
-    assert!(
+    kassert!(
         post.pay_amount == 0,
         "C-MOR-again-02: the money change is cancelled"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money (cancel only)");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money (cancel only)");
 }
 
 /// MUTANT companion: cancel-to-1 is NOT the card.
@@ -1519,7 +1519,7 @@ pub fn again_02_mutant_is_detected() {
     let _ = &pre;
     let mutant = spec::again_02_effects_ok_mutant(effects);
     kani::cover!(!mutant, "mutant disagrees");
-    assert!(!mutant, "mutant: cancel must go to 0, not 1");
+    kassert!(!mutant, "mutant: cancel must go to 0, not 1");
 }
 
 // ===========================================================================
@@ -1569,15 +1569,15 @@ pub fn wing_01_teleport_iff_blocked_host() {
     kani::cover!(want == pos, "stub dir=0 lands on the current tile");
     kani::cover!(want != pos, "would move (dir ≠ 0)");
 
-    assert!(
+    kassert!(
         spec::wing_01_effects_ok(effects, player, want),
         "C-MOR-wing-01: exactly Teleport(user, pos+20·dir) (dir stubbed to 0)"
     );
-    assert!(
+    kassert!(
         post.pos[player as usize] == want,
         "C-MOR-wing-01: user lands on the teleport destination"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money (no settle)");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money (no settle)");
 }
 
 /// Book-vs-stub differential: with a real forward direction the destination
@@ -1591,7 +1591,7 @@ pub fn wing_01_dir_stub_gap() {
     let book = spec::wing_01_dest(pos, 1); // forward
     let stub = spec::wing_01_dest(pos, 0); // Op::move_dir stub
     kani::cover!(book != stub, "book forward ≠ stub (BLOCKED-HOST on Op::move_dir)");
-    assert!(
+    kassert!(
         book != stub,
         "C-MOR-wing-01 BLOCKED-HOST: move_dir stub cannot express 「移动方向」"
     );

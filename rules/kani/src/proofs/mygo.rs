@@ -70,11 +70,11 @@ pub fn rinpuu_01_give_stay_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    assert!(
+    kassert!(
         spec::mygo::rinpuu_01_log_ok(effects, player),
         "C-MYGO-rinpuu-01: effect log must be exactly one GiveStay(player, 1)"
     );
-    assert!(
+    kassert!(
         spec::mygo::rinpuu_01_post_ok(&pre, &post, player),
         "C-MYGO-rinpuu-01: post must be pre + 1 stay on the user, frame unchanged"
     );
@@ -98,7 +98,7 @@ pub fn rinpuu_01_mutant_is_detected() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     // The card does n=1; the mutant wants n=2. They must disagree.
-    assert!(
+    kassert!(
         !spec::mygo::rinpuu_01_log_ok_mutant(effects, player),
         "mutant: two-layer spec must not match the one-layer card"
     );
@@ -120,7 +120,7 @@ pub fn rinpuu_01_mutant_two_layers() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         spec::mygo::rinpuu_01_log_ok_mutant(effects, player),
         "mutant: card must not match the two-layer spec"
     );
@@ -165,16 +165,16 @@ pub fn journey_01_place_four_crystals_iff() {
     let field_n = world::with_world(|ww| ww.field_n);
 
     // Host `card_slot` maps unknown card names to slot 2 (pilot CARD_OTHER).
-    assert!(
+    kassert!(
         spec::mygo::journey_01_log_ok(effects, player, 2),
         "C-MYGO-journey-01: effect log must be exactly one PlaceCard(Field)"
     );
-    assert!(post_c == 4, "C-MYGO-journey-01: card must hold exactly 4 crystals");
-    assert!(field_n == 1, "C-MYGO-journey-01: exactly one field instance");
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
-    assert!(post.stay == pre.stay, "frame: stay unchanged");
-    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged (play body does not draw)");
+    kassert!(post_c == 4, "C-MYGO-journey-01: card must hold exactly 4 crystals");
+    kassert!(field_n == 1, "C-MYGO-journey-01: exactly one field instance");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    kassert!(post.stay == pre.stay, "frame: stay unchanged");
+    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged (play body does not draw)");
     let _ = pre_c;
 
     kani::cover!(pre.stay[player as usize] == 0, "clean pre");
@@ -191,7 +191,7 @@ pub fn journey_01_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         !spec::mygo::journey_01_log_ok_mutant(effects, player, 2),
         "mutant: two-PlaceCard spec must not match the one-place card"
     );
@@ -268,24 +268,24 @@ pub fn haneoka_thresholds_iff() {
 
     // Shape consistency: draw only with house; place only with draw.
     if has_draw {
-        assert!(has_house, "C-MYGO-haneoka: draw implies house (r>=15 ⊇ r>=10)");
+        kassert!(has_house, "C-MYGO-haneoka: draw implies house (r>=15 ⊇ r>=10)");
     }
     if has_place {
-        assert!(has_draw, "C-MYGO-haneoka: place implies draw (r>=20 ⊇ r>=15)");
-        assert!(has_house, "C-MYGO-haneoka: place implies house");
+        kassert!(has_draw, "C-MYGO-haneoka: place implies draw (r>=20 ⊇ r>=15)");
+        kassert!(has_house, "C-MYGO-haneoka: place implies house");
     }
     if has_house {
-        assert!(
+        kassert!(
             post_houses == pre_houses.saturating_add(1),
             "C-MYGO-haneoka-02: exactly one free house"
         );
-        assert!(world::arr4_eq(post.money, pre.money), "C-MYGO-haneoka-02: 免费 — money unchanged");
+        kassert!(world::arr4_eq(post.money, pre.money), "C-MYGO-haneoka-02: 免费 — money unchanged");
     } else {
-        assert!(post_houses == pre_houses, "C-MYGO-haneoka-05: no house on r<10");
-        assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+        kassert!(post_houses == pre_houses, "C-MYGO-haneoka-05: no house on r<10");
+        kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
     }
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
-    assert!(post.stay == pre.stay, "frame: stay unchanged");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    kassert!(post.stay == pre.stay, "frame: stay unchanged");
 }
 
 /// Mutant: the ineffective band must not match a one-effect spec.
@@ -306,7 +306,7 @@ pub fn haneoka_05_mutant_is_detected() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     if effects.is_empty() {
-        assert!(
+        kassert!(
             !spec::mygo::haneoka_effects_ok_mutant(effects, player, pos, 5, 2),
             "mutant: empty-log ineffective band must not match a 1-effect spec"
         );
@@ -343,13 +343,13 @@ pub fn rainday_01_place_five_crystals_iff() {
     let effects = &logbuf[..log_n];
     let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
 
-    assert!(
+    kassert!(
         spec::mygo::rainday_01_place_ok(effects, player, 2),
         "C-MYGO-rainday-01: first effect must be PlaceCard(Field)"
     );
-    assert!(post_c == 5, "C-MYGO-rainday-01: card must hold exactly 5 crystals");
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    kassert!(post_c == 5, "C-MYGO-rainday-01: card must hold exactly 5 crystals");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 
     kani::cover!(
         effects.iter().any(|e| matches!(e, Effect::GiveStay { .. })),
@@ -370,7 +370,7 @@ pub fn rainday_01_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(RAINDAY_ID, player));
     let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
-    assert!(
+    kassert!(
         post_c != spec::mygo::rainday_01_crystals_mutant(),
         "mutant: 4-crystal spec must not match the 5-crystal card"
     );
@@ -429,7 +429,7 @@ pub fn hitoshizuku_money_iff() {
 
     if global_kinds == 0 {
         // no money leg
-        assert!(
+        kassert!(
             !effects.iter().any(|e| matches!(e, Effect::PayTo { .. } | Effect::GainMoney { .. })),
             "C-MYGO-hitoshizuku: no clear ⇒ no money"
         );
@@ -440,16 +440,16 @@ pub fn hitoshizuku_money_iff() {
         let body_ok =
             spec::mygo::hitoshizuku_body_global_pay_ok(effects, player, global_kinds, pre.n_players);
         kani::cover!(body_ok, "body matches global-kinds reading");
-        assert!(
+        kassert!(
             book_ok,
             "C-MYGO-hitoshizuku-02: book wants 1000 per type per affected player"
         );
         let _ = body_ok;
     }
 
-    assert!(post.stay.iter().zip(pre.stay.iter()).all(|(a, b)| a <= b),
+    kassert!(post.stay.iter().zip(pre.stay.iter()).all(|(a, b)| a <= b),
         "C-MYGO-hitoshizuku-01: stay never rises");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 
 /// Diagnostic companion: the body's global-kinds reading is what it does.
@@ -478,7 +478,7 @@ pub fn hitoshizuku_body_global_pay_observed() {
     }
     let global_kinds: i32 = kinds.iter().sum();
     if global_kinds > 0 {
-        assert!(
+        kassert!(
             spec::mygo::hitoshizuku_body_global_pay_ok(effects, player, global_kinds, pre.n_players),
             "diagnostic: body charges 1000 * global kinds from every living player"
         );
@@ -519,22 +519,22 @@ pub fn tomori_card_02_empty_hand_iff() {
     let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
     let locked = world::with_world(|ww| ww.key_get(player, crate::intern::intern("lockedStay")));
 
-    assert!(
+    kassert!(
         spec::mygo::tomori_card_02_empty_hand_log_ok(effects, player, 2),
         "C-MYGO-tomori-card-02: empty-hand log must be GiveStay(2) + PlaceCard"
     );
-    assert!(
+    kassert!(
         post_c == spec::mygo::tomori_card_02_crystals(0),
         "C-MYGO-tomori-card-02: X=0 ⇒ exactly 1 crystal"
     );
-    assert!(locked >= 2, "C-MYGO-tomori-card-01: lockedStay marks the 2 layers");
-    assert!(
+    kassert!(locked >= 2, "C-MYGO-tomori-card-01: lockedStay marks the 2 layers");
+    kassert!(
         post.stay[player as usize] == pre.stay[player as usize].saturating_add(2),
         "C-MYGO-tomori-card-01: exactly 2 stay layers"
     );
-    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
-    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
-    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged (empty)");
+    kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged (empty)");
 }
 
 /// Mutant: 1 stay layer must not match.
@@ -550,7 +550,7 @@ pub fn tomori_card_02_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    kassert!(
         !spec::mygo::tomori_card_02_empty_hand_log_ok_mutant(effects, player, 2),
         "mutant: 1-stay spec must not match the 2-stay card"
     );
