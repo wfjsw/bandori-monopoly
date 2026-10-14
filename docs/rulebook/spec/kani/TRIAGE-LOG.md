@@ -547,10 +547,10 @@ constant length without a body type-annotation change.
 
 | id | before (batch 3e/4) | after (strvec) |
 |---|---|---|
-| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — extend_with 31, drop_glue 62, memcmp 31, ask_card 31 | **FAILED 1156 s** (v1) / **FAILED 476 s vacuous** (v3) — extend_with/ask_card/drop_glue/fold **gone**; `memcmp` residual (see above) |
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — extend_with 31, drop_glue 62, memcmp 31, ask_card 31 | **FAILED 1156 s** (v1) / **FAILED 476 s vacuous** (v3) / **TIMEOUT 1800 s** (v5) — extend_with/ask_card **gone**; body `Vec<String>` memcmp/drop_glue/fold residual (see above) |
 | `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s — same | same stack as iff; residual memcmp |
-| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — extend_with 31, by_idx 10, memcmp 10, named_set 8 | named_set 0, extend_with 0 (batch 2 + strvec); solver-bound on the symbolic world (batch-2 diagnosis) |
-| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | same |
+| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — extend_with 31, by_idx 10, memcmp 10, named_set 8 | **TIMEOUT 1800 s**, unwind profile **clean** (`symbolic_pay_world` 4 + `fill_pay_add` 4 + `poorest` 4 + `hook_kind` 1; **zero** extend_with/named_set/by_idx/memcmp/drop_glue). Solver-bound on the 4-seat symbolic world — the String/Vec cliffs are gone |
+| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | same (clean profile, solver-bound) |
 | `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s — body `Vec` + effects iters at 32 | effects iters 0 (spec step macros); body `Vec<i32>` loops remain (same wall) |
 | `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s — fmt PadAdapter + memchr 1193 | `kassert!` + zero-loop `iter().any`; re-time pending |
 
