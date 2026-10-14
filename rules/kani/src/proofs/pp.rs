@@ -153,6 +153,34 @@ fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
 // user-only half; this harness pins step 1's band delta.)
 // ===========================================================================
 
+/// PROBE (ppcost bisect): world setup only — no body. Must finish quickly
+/// if setup is not the BMC cliff. `assert!(false)` after setup so a SUCCESS
+/// is impossible (fail-closed reachability marker).
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn same_dream_01_probe_setup_only() {
+    same_dream_world();
+    let user = any_player_in();
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    crate::kassert!(false, "probe: setup reached");
+}
+
+/// PROBE (ppcost bisect): setup + invoke + `assert!(false)`. FAIL means the
+/// body ran (non-vacuity). TIMEOUT vs setup-only locates the cost.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn same_dream_01_probe_post_invoke() {
+    same_dream_world();
+    let user = any_player_in();
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "probe: post-invoke reached");
+}
+
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn same_dream_01_band_plus_3_iff() {
@@ -167,10 +195,11 @@ pub fn same_dream_01_band_plus_3_iff() {
     let pre_down = fans_neg_of(user as usize);
 
     let pre = world::snapshot();
-    // Const-generic play: monomorphizes one trampoline (ppcost).
-    invoke::unwrap_done(invoke::play_c::<{ crate::generated::card_id_const("PP:同一个梦想") }>(
-        user,
-    ));
+    // DIRECT body call (ppcost): `call_body_idx_c` still lists every
+    // `call_card_N` in its match arms, so reachability-slice keeps all 19
+    // trampolines (and their bodies) alive. The cfg(kani) `*_kani` wrapper
+    // is a real function — call it so CBMC's call graph has ONE body.
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -240,9 +269,7 @@ pub fn same_dream_02_money_mutant_is_detected() {
     let pre_up = fans_pos_of(user as usize);
     let pre_band = 0;
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
-    invoke::unwrap_done(invoke::play_c::<{ crate::generated::card_id_const("PP:同一个梦想") }>(
-        user,
-    ));
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects
