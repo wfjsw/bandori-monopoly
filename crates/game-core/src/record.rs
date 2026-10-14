@@ -1218,6 +1218,10 @@ pub struct IndexStatus {
     pub keyframes: u32,
     #[serde(with = "u64_str")]
     pub bytes: u64,
+    /// Tick the index pass has reached: seeks up to here are fast. Absent in
+    /// frames from older bundles (read as 0 -- the UI treats that as "unknown").
+    #[serde(default, with = "u64_str")]
+    pub tick: u64,
 }
 
 #[derive(Clone)]
@@ -1586,6 +1590,7 @@ impl Replayer {
                         total: self.body.inputs.len() as u32,
                         keyframes: self.keyframes.len() as u32,
                         bytes: self.keyframe_bytes as u64,
+                        tick: 0,
                     };
                 }
             };
@@ -1629,6 +1634,7 @@ impl Replayer {
             total: total as u32,
             keyframes: self.keyframes.len() as u32,
             bytes: self.keyframe_bytes as u64,
+            tick: self.idx.as_ref().map_or(0, |i| i.tick),
         }
     }
 

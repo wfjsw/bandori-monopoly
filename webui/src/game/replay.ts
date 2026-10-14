@@ -315,9 +315,20 @@ export class ReplaySession extends GameSession {
     this.emitOther();
   }
 
-  /** Jump to `tick` (clamped). Bumps `epoch` so the Board remounts. */
+  /** How far a seek may go: as far as the keyframe index has covered, or the
+   *  current position if that is later. Past it a seek would re-simulate a long
+   *  stretch, so it is not offered until the index gets there. An older bundle
+   *  reports no index tick; it has no limit. */
+  seekLimit(): number {
+    const st = this.indexStatus;
+    if (st?.done || (st && st.tick === undefined)) return this.totalTicks;
+    return Math.max(this.now(), st?.tick ? Number(st.tick) : 0);
+  }
+
+  /** Jump to `tick` (clamped to what is ready). Bumps `epoch` so the Board remounts. */
   seek(tick: number): void {
     if (this.closed) return;
+    tick = Math.min(tick, this.seekLimit());
     void this.run(async (h) => {
       this.lastStatus = await h.seek(Math.max(0, Math.round(tick)));
       // The Board's event log is re-seeded from the state's tail on remount,
@@ -338,7 +349,7 @@ export class ReplaySession extends GameSession {
     if (!marks.length) return null;
     if (dir > 0) {
       const next = marks.find((m) => m.tick > tick + 0.5);
-      return next ? next.tick : null;
+      return next && next.tick <= this.seekLimit() ? next.tick : null;
     }
     const prev = [...marks].reverse().find((m) => m.tick < tick - 0.5);
     // One step back from the very start of a turn lands on the turn before it;

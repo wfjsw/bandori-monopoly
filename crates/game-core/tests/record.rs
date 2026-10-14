@@ -1163,3 +1163,14 @@ fn small_index_chunks_match_one_pass() {
     whole.seek(t).unwrap();
     assert_eq!(chunked.match_ref().save(), whole.match_ref().save());
 }
+
+#[test]
+fn index_reports_how_far_it_has_reached() {
+    let (file, _) = run_bot_game(9, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
+    let first = rp.index(5);
+    assert!(!first.done && first.tick > 0 && first.tick <= 5, "tick {}", first.tick);
+    let last = rp.index(10_000_000);
+    assert!(last.done);
+    assert_eq!(last.tick, file.header.total_ticks);
+}
