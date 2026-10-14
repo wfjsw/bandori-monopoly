@@ -368,3 +368,21 @@ does not offer today.
 | id | verdict | class | note |
 |---|---|---|---|
 | `events::moca_01_activation_keeps_the_card` | UNWINDING 507 s | A | `memcmp` 38 unrolls (host tag compare) — same class as the old hook-dispatch cliff |
+
+## Batch 3d — events per-proof root-cause (user decision: TIMEOUT stays FAIL)
+
+One entry per failing proof: phase split, unwind profile, dominant cost,
+class A–F, fix or why none.
+
+| id | verdict (central) | phase split | dominant cost | class | action |
+|---|---|---|---|---|---|
+| `events::moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → unwind `base_world` 4 + **memcmp 38** (`Not unwinding at 16`) | `[i32;4]::eq` on `post.money == pre.money` → 16-byte `memcmp` | **A** | element-wise `arr4_eq` / `arr4b_eq` (no memcmp). **SUCCESSFUL 394 s** |
+| `events::aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | same — memcmp 30 (`Not unwinding at 16`) | same `post.money == pre.money && post.pos == pre.pos` | **A** | same fix (re-timed) |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s | BMC → **8725 VCC** / 719 after simp → SSA 4.5 s → SAT **703k vars / 761k clauses** (first SAT 0.04 s, then many) | unwind **memchr_naive 1193** + memchr_aligned 284 + memcmp 237; `PadAdapter::write_str` recursion 81 — fmt of `kani::assert` / `fail_*` message strings | **E** (fmt/memchr) | no cheap fix without dropping assert-message fmt; mutant has extra `iter().any` paths into it. **remains TIMEOUT (FAIL)** |
+| `events::aao_02_hand_veto_is_armed` | FAILED 550 s | (see prior) | body LESS — no [手] veto surface | **D GENUINE E-aao-02** | keep FAILING (not a perf bug) |
+| `events::front_or_back_01_equal_iff` | TIMEOUT 1800 s (unwind 32) | BMC → unwind `front_or_back::play` **31** (`Not unwinding at 32`) + `log_is_gains` 31 + slice `all`/`any`/`find_map` 31 | `for &p in &winners` over a **symbolic-length `Vec<i32>`** (body, cannot edit) + `effects.iter().all/any` over `MAX_LOG=24` | **A/E** | body Vec length not a constant bound; raising unwind past 32 explodes. **remains TIMEOUT (FAIL)** — no cheap fix without body edit |
+| `events::front_or_back_02_same_half_share` | TIMEOUT 1800 s (unwind 32) | same + `slice_contains` 24 | same | **A/E** | same — **remains TIMEOUT (FAIL)** |
+
+Phase markers used: `Starting Bounded Model Checking`, `Generated N VCC(s)`,
+`Running propositional reduction`, `N variables, M clauses`, `SAT checker`,
+`Runtime Solver`.
