@@ -16,7 +16,7 @@ import type { LogLine } from "./anim";
 import type { Model } from "./model";
 import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
-import { byTitle, showGraveyard, showPlayerInfo } from "./Popups";
+import { borrowedBand, byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
 import { setHoverSeat } from "./hoverSeat";
 import { clockSync, displayRemainingMs } from "../../game/clockSync";
@@ -157,6 +157,11 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
             <div className={s.money}><img src={sceneImg("icon_coin")} alt="" /><b>{n0(x.money)}</b></div>
             <div className={s.sub}>
               {status.map((t) => <span key={t} className={s.status}>{t}</span>)}
+              {(() => {
+                const bb = borrowedBand(x);
+                const who = bb ? m.charOf(bb.from)?.display ?? "" : "";
+                return bb && <span className={s.status} title={tr("board.borrowedTip", { skill: cardTitle(bb.skill), who })}>{tr("board.borrowed", { who })}</span>;
+              })()}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
               <span className={s.fire} onMouseEnter={() => setFirePeek(i)} onMouseLeave={() => setFirePeek(null)}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be

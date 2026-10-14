@@ -35,6 +35,9 @@ const ID: &str = "PPP:Returns";
 /// Index into `SKILLS` of the currently borrowed band, on the Returns instance
 /// (`FieldCard::props`) -- scoped to this card, not the player's state map.
 const PROP_BAND: &str = "returns.band";
+/// Seat the borrowed band card was copied from, on the Returns instance -- the
+/// board reads it to say whose card the owner holds. -1 = nothing borrowed.
+const PROP_FROM: &str = "returns.from";
 
 pub const RETURNS: CardDef = CardDef::new(
     "PPP:Returns",
@@ -202,6 +205,7 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     // -1 = no borrow yet (the prop's defined default is 0, which is a valid
     // `SKILLS` index -- Poppin' Party -- so it cannot serve as the sentinel).
     ctx::set_prop(PROP_BAND, -1);
+    ctx::set_prop(PROP_FROM, -1);
     // [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果」 -- arm the token
     // `skill-bands::poppin` reads to skip its no-build-on-main-settle rule.
     ctx::set_tok(player_id, "returns.noBuild4", 1);
@@ -409,6 +413,7 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     }
     ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
     ctx::set_prop(PROP_BAND, idx);
+    ctx::set_prop(PROP_FROM, who);
     ctx::set_tok(player_id, "returns.copied", 1);
     ctx::log(
         player_id,
