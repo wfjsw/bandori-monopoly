@@ -45,6 +45,21 @@ test("lowest-RTT sample wins; a noisier one is ignored", () => {
   assert.equal(o.bestRoundTrip, 0);
 });
 
+test("the first sample is taken whole, however far off", () => {
+  const o = new ClockOffset();
+  // Server clock 5 minutes behind the page (server restarted after page load).
+  o.push({ t1: 400_000, t2: 100_000, t3: 100_000, t4: 400_000 });
+  assert.equal(o.offset, -300_000);
+});
+
+test("a change over SNAP_MS snaps on the next step", () => {
+  const o = new ClockOffset();
+  o.push({ t1: 0, t2: 0, t3: 0, t4: 10 }); // rtt 10, offset -5
+  o.push({ t1: 0, t2: 100_000, t3: 100_000, t4: 0 }); // rtt 0, offset 100000
+  assert.equal(o.offset, -5);
+  assert.equal(o.step(2), 100_000);
+});
+
 test("slew approaches the target without jumping", () => {
   const o = new ClockOffset();
   // offset 0, rtt 4: t1=0, t4=4, t2=2, t3=2
