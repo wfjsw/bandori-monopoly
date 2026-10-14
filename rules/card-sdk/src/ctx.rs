@@ -708,16 +708,20 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         // bound when `need` (fn-ptr return) is not folded, and a 32-iteration
         // Vec-grow × String path is the time cliff. The host only ever emits
         // `need = 1 + n` for `n = 0..=4` pilot slots.
+        //
+        // Facade strings are **static 1-byte buffers** (no `String::from`
+        // heap). `Drop` calls the kani bump's no-op `dealloc`, so drop glue
+        // is a function call per element, not a CBMC free. Length is the
+        // compile-time constant 1, so `String::eq` is one byte.
         fn slot_str(buf: &[u8], i: usize) -> String {
-            let slot = if 1 + i < buf.len() { buf[1 + i] & 3 } else { 2 };
-            // Fixed 1-char literals: `len` is a compile-time constant so
-            // `String::eq` / `memcmp` is one byte.
-            match slot {
-                0 => String::from("\x00"),
-                1 => String::from("\x01"),
-                2 => String::from("\x02"),
-                _ => String::from("\x03"),
-            }
+            // Four 1-byte storages, distinct so `eq` discriminates the slot.
+            static B: [[u8; 1]; 4] = [[0], [1], [2], [3]];
+            let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
+            let b = &B[slot as usize];
+            // SAFETY: `b` is a `'static` 1-byte buffer; the kani allocator's
+            // `dealloc` is a no-op so `String::drop` never frees it. This
+            // helper is `cfg(kani)`-only.
+            unsafe { String::from_raw_parts(b.as_ptr() as *mut u8, 1, 1) }
         }
         let mut out = Vec::new();
         if need >= 2 {
