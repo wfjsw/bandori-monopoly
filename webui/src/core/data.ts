@@ -184,7 +184,9 @@ export function cardText(id: string): string {
   if (!id || !D) return "";
   const c = D.card(id);
   if (c) return skillText(c);
-  return skillCard(id)?.text ?? "";
+  const sk = skillCard(id);
+  if (sk) return sk.text;
+  return D.event(id.startsWith("event:") ? id.slice(6) : id)?.text ?? "";
 }
 
 /** Why a [反击] card may be declared: its own trigger-condition clause
