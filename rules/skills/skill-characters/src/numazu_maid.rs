@@ -133,7 +133,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"鳰原令王那"#)
     .display(r#"鳰原令王那"#)

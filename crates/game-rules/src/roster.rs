@@ -2,9 +2,9 @@
 //!
 //! The ruleset exports a generic [`card_sdk::meta::MetaDoc`]; this module maps
 //! it onto [`game_core::data::Roster`] -- the plain `CardData` / `CharacterData`
-//! / `BandData` vectors `GameData` iterates in file order. The field keys are
-//! this game's data-contract names (`cards.json` / `characters.json` /
-//! `bands.json` columns), mirrored by `ruleset_core::roster::meta_key`.
+//! / `BandData` vectors `GameData` iterates in roster order. The field keys are
+//! this game's data-contract names (the roster row columns), mirrored by
+//! `ruleset_core::roster::meta_key`.
 
 use card_sdk::meta::{MetaDoc, MetaRow};
 use game_core::data::{BandData, CardData, CharacterData, Roster};
@@ -17,7 +17,7 @@ pub fn decode_metadata(bytes: &[u8]) -> Result<MetaDoc, String> {
 /// Convert the generic rows into the game's roster vectors, one row kind each.
 ///
 /// Rows arrive sorted by `(kind, ordinal)`; this function keeps that order so
-/// the rebuilt vectors equal today's JSON file order exactly. A kind this
+/// the rebuilt vectors equal the roster order exactly. A kind this
 /// converter does not know is ignored (the host may carry other lists).
 pub fn roster_from_meta(doc: &MetaDoc) -> Roster {
     let mut cards = Vec::new();

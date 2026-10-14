@@ -3,7 +3,7 @@
 //! Owned by unit 5. Append to [`CLAUSES`]; do not edit other areas.
 //!
 //! Source precedence: live sheet (`docs/rulebook/cards.json`,
-//! `data/characters.json` / `bands.json`) > `docs/rulebook/rulebook-doc.md`.
+//! `the roster` / `bands.json`) > `docs/rulebook/rulebook-doc.md`.
 //! `rulebook.txt` is not authoritative. Specs come from the book text;
 //! `docs/rulebook/SETTLE-STAGES.md` stage names are **observability only**.
 //!

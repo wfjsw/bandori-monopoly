@@ -1,4 +1,5 @@
-//! Static game data (`data/*.json`) and the lookups [`GameData`] provides.
+//! Static game data (`data/*.json`, minus the roster) and the lookups
+//! [`GameData`] provides.
 //!
 //! Field names and defaults mirror the JSON the data files already carry:
 //! missing fields take `#[serde(default)]`, and unknown keys (e.g. the
@@ -275,8 +276,8 @@ pub struct BandData {
 /// The roster half of [`GameData`] -- cards / characters / bands -- handed over
 /// by the ruleset host (ABI v63 `bandori_metadata`, converted in `game-rules`).
 /// `game-core` stays free of the card crates; this is the plain struct of
-/// vectors it already iterates in canonical (former data-file) order.
-#[derive(Debug, Clone, Default, PartialEq)]
+/// vectors it already iterates in roster order (the Rust ordinal table).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Roster {
     pub cards: Vec<CardData>,
     pub characters: Vec<CharacterData>,
@@ -284,29 +285,50 @@ pub struct Roster {
 }
 
 impl Roster {
-    /// Parse the three legacy `data/{cards,characters,bands}.json` file texts
-    /// into a [`Roster`]. **Not a runtime path** -- the live host gets its
-    /// roster from the ruleset (ABI v63). This exists so tests and tools that
-    /// still read the authored JSON can build a [`GameData`] without
-    /// `game-core` depending on the card crates. When those files retire,
-    /// switch the call sites to a `dump_roster` fixture.
-    pub fn from_json_files(
-        cards: &str,
-        characters: &str,
-        bands: &str,
-    ) -> Result<Self, String> {
+    /// Parse the generated test fixture (`crates/game-core/tests/fixtures/
+    /// roster.json`, written by `cargo run -p rules-native --example
+    /// dump_roster -- --fixture`). One JSON object `{cards, characters, bands}`
+    /// in the same camelCase row shapes the roster metadata carries. Tests of
+    /// crates that have no ruleset (game-core / game-rules / bot-core / server)
+    /// load this instead of depending on the card crates.
+    pub fn from_fixture(text: &str) -> Result<Self, String> {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            #[serde(default)]
+            cards: Vec<CardData>,
+            #[serde(default)]
+            characters: Vec<CharacterData>,
+            #[serde(default)]
+            bands: Vec<BandData>,
+        }
+        let f: Fixture = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+            .map_err(|e| format!("roster fixture: {e}"))?;
         Ok(Roster {
-            cards: parse::<CardFile>("cards.json", cards)?.cards,
-            characters: parse::<CharacterFile>("characters.json", characters)?.characters,
-            bands: parse::<BandFile>("bands.json", bands)?.bands,
+            cards: f.cards,
+            characters: f.characters,
+            bands: f.bands,
         })
     }
 
-    /// [`Self::from_json_files`] over a directory holding the three legacy
-    /// roster JSON files (tests / examples pointed at `data/`).
-    pub fn from_json_dir(dir: &std::path::Path) -> Result<Self, String> {
-        let read = |f: &str| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string());
-        Self::from_json_files(&read("cards.json")?, &read("characters.json")?, &read("bands.json")?)
+    /// Serialize back to the fixture document (`{cards, characters, bands}`),
+    /// the byte-stable form `cargo run -p rules-native --example dump_roster --
+    /// --fixture` writes. The rules-native gate compares this against the
+    /// checked-in fixture so the two can never drift.
+    pub fn to_fixture_json(&self) -> String {
+        #[derive(serde::Serialize)]
+        struct Fixture<'a> {
+            cards: &'a [CardData],
+            characters: &'a [CharacterData],
+            bands: &'a [BandData],
+        }
+        let mut s = serde_json::to_string_pretty(&Fixture {
+            cards: &self.cards,
+            characters: &self.characters,
+            bands: &self.bands,
+        })
+        .expect("roster fixture serializes");
+        s.push('\n');
+        s
     }
 }
 
@@ -321,8 +343,8 @@ pub struct EventData {
     pub cell: String,
 }
 
-/// `band` value of the cards every character may take. A data key from
-/// roster band key (the data set is Chinese), not display text.
+/// `band` value of the cards every character may take. A roster band key (the
+/// data set is Chinese), not display text.
 pub const GENERAL_BAND: &str = "通用";
 
 /// Character → school tile-name map.
@@ -415,24 +437,6 @@ struct BoardFile {
 }
 
 #[derive(Deserialize)]
-struct CardFile {
-    #[serde(default)]
-    cards: Vec<CardData>,
-}
-
-#[derive(Deserialize)]
-struct CharacterFile {
-    #[serde(default)]
-    characters: Vec<CharacterData>,
-}
-
-#[derive(Deserialize)]
-struct BandFile {
-    #[serde(default)]
-    bands: Vec<BandData>,
-}
-
-#[derive(Deserialize)]
 struct EventFile {
     #[serde(default)]
     events: Vec<EventData>,
@@ -491,10 +495,11 @@ pub struct GameData {
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`. The roster (`cards.json` /
-/// `characters.json` / `bands.json`) is **not** here: it comes from the ruleset
-/// (ABI v63 `bandori_metadata`) and is covered by the ruleset hash, not this
-/// one. `skill_simple.json` and the card display overlay stay because they are
+/// Data files, as named in `web/data/`. The roster (`cards` / `characters` /
+/// `bands`) is **not** here: it comes from the ruleset (ABI v63
+/// `bandori_metadata`) or, in tests, from the generated fixture
+/// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
+/// `skill_simple.json` and the card display overlay stay because they are
 /// display-only and the client merges them.
 pub const DATA_FILES: [&str; 8] = [
     "board.json",
@@ -547,8 +552,9 @@ impl GameData {
 
     /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`,
     /// plus the [`Roster`] the ruleset host supplies (ABI v63 `bandori_metadata`
-    /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`).
-    /// There is no JSON-roster path left in the runtime.
+    /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`),
+    /// or, in tests, [`Roster::from_fixture`]. There is no JSON-roster path
+    /// left in the runtime.
     ///
     /// The deck book / strategy book are loaded here so every entry point
     /// shares that path.

@@ -168,7 +168,7 @@ fn is_my_turn(player_id: i32) -> bool {
 // board's own start, so the per-player start is a plain position write at the
 // same moment (`teleport_to`).
 
-/// `bands.json` row for this band skill (ABI v63).
+/// Roster band row for this band skill (ABI v63).
 pub const BAND: ruleset_core::roster::BandDef =
 ruleset_core::roster::BandDef::new(r#"MyGO!!!!!"#)
     .short_name(r#"MyGO"#)

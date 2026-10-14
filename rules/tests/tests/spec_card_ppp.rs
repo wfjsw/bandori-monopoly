@@ -135,7 +135,7 @@ fn set_sticker(t: &mut Table, who: usize, n: i32) {
 /// C-PPP-popipa-01 -- 「获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]」
 ///
 /// * **ID:** `C-PPP-popipa-01`
-/// * **Source:** `cards.json#PPP:Popipa`
+/// * **Source:** `roster#PPP:Popipa`
 /// * **Quote:** 「获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]」
 /// * **Trigger:** [手] play of `PPP:Popipa`.
 /// * **Effect:** money +1000; one Pipopa in the draw multiset; one card drawn;
@@ -160,7 +160,7 @@ pub fn c_ppp_popipa_01(step: &Step<'_>) -> Result<(), String> {
 
 pub const POPIPA_CLAUSES: &[Clause] = &[Clause::new(
     "C-PPP-popipa-01",
-    "cards.json#PPP:Popipa",
+    "roster#PPP:Popipa",
     "获得1000资金并将一张“Pipopa”加入抽牌堆，然后抽一张牌，然后此卡[移除]",
     c_ppp_popipa_01,
 )];
@@ -233,7 +233,7 @@ pub fn c_ppp_pipopa_01(step: &Step<'_>) -> Result<(), String> {
 
 pub const PIPOPA_CLAUSES: &[Clause] = &[Clause::new(
     "C-PPP-pipopa-01",
-    "cards.json#PPP:[衍生]Pipopa",
+    "roster#PPP:[衍生]Pipopa",
     "获得1000资金，然后将一张“Popipapapipopa”放置在自身场上，然后此卡[移除]",
     c_ppp_pipopa_01,
 )];
@@ -315,7 +315,7 @@ pub fn c_ppp_bang_dream_01(step: &Step<'_>) -> Result<(), String> {
 
 pub const BANG_CLAUSES: &[Clause] = &[Clause::new(
     "C-PPP-bang-dream-01",
-    "cards.json#PPP:Bang Dream!",
+    "roster#PPP:Bang Dream!",
     "为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房",
     c_ppp_bang_dream_01,
 )];
@@ -398,7 +398,7 @@ pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
 
 pub const BETTER_CLAUSES: &[Clause] = &[Clause::new(
     "C-PPP-better-sound-01",
-    "cards.json#PPP:（多惠）寻找更好的声音",
+    "roster#PPP:（多惠）寻找更好的声音",
     "传送到“江户川乐器店”并获得一个[火罐]",
     c_ppp_better_sound_01,
 )];
@@ -514,7 +514,7 @@ pub fn c_ppp_caught_01(step: &Step<'_>) -> Result<(), String> {
 
 pub const CAUGHT_CLAUSES: &[Clause] = &[Clause::new(
     "C-PPP-caught-01",
-    "cards.json#PPP:抓到了",
+    "roster#PPP:抓到了",
     "移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。",
     c_ppp_caught_01,
 )];
@@ -714,7 +714,7 @@ pub fn c_ppp_popipapapipopa_c1(step: &Step<'_>) -> Result<(), String> {
 
 pub const POPIPAPAPIPOPA_CLAUSES: &[Clause] = &[Clause::new(
     "C-PPP-popipapapipopa-c1",
-    "cards.json#PPP:[衍生]Popipapapipopa",
+    "roster#PPP:[衍生]Popipapapipopa",
     "此卡拥有者每次[经过]“东京外”，“江户川乐器店”，“山吹面包房”，“星之鼓动山丘”或“流星堂”时为此卡添加1个[奇迹水晶]（上限10个）。",
     c_ppp_popipapapipopa_c1,
 )];
@@ -842,7 +842,7 @@ pub fn c_ppp_random_star_01(step: &Step<'_>) -> Result<(), String> {
 
 pub const RANDOM_STAR_CLAUSES: &[Clause] = &[Clause::new(
     "C-PPP-random-star-01",
-    "cards.json#PPP:仓库里的Random Star",
+    "roster#PPP:仓库里的Random Star",
     "将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”放置在卡组底端",
     c_ppp_random_star_01,
 )];

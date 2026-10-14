@@ -1,7 +1,7 @@
 //! Unit `skills_pp`: reference specs FROM the clause docs / sheet text only.
 //!
-//! Sources: `data/characters.json` band `Pastel✽Palettes` (`text` field),
-//! `data/bands.json` skill `与偶像一起`. Quotes in
+//! Sources: `the roster` band `Pastel✽Palettes` (`text` field),
+//! `the roster` skill `与偶像一起`. Quotes in
 //! `docs/rulebook/spec/cards/pp.md` § Character skills / Band skill.
 //! Never derived from engine behaviour.
 

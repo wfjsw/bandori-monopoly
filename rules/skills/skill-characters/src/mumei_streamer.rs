@@ -138,7 +138,7 @@ fn at_turn_end_exit(player_id: i32) -> card_sdk::Asked {
 //   no moment of its own to fire at. Taken to mean: whatever else clears
 //   `skillState` also un-flips, which is what `at_turn_end_exit` keys on.
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"祐天寺若麦"#)
     .display(r#"祐天寺若麦"#)

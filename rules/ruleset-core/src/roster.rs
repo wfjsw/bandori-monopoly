@@ -1,5 +1,5 @@
-//! Game roster metadata (ABI v63): the typed `characters.json` / `bands.json`
-//! rows and the `cards.json` field keys, beside the rule code.
+//! Game roster metadata (ABI v63): the typed character / band
+//! rows and the card field keys, beside the rule code.
 //!
 //! `card-sdk` stays vocabulary-free -- [`card_sdk::meta::CardMeta`] carries the
 //! shared card-row shape plus a generic `fields` map, and this module names the
@@ -17,9 +17,9 @@ use card_sdk::meta::{MetaRow, ToMetaRow};
 /// generic maps. Mirrored by the host converter in `game-rules`
 /// (`roster_from_meta`) and by the JSON field names the data files use.
 pub mod meta_key {
-    /// Card row: the band the card belongs to (`cards.json` `band`).
+    /// Card row: the band the card belongs to (`band`).
     pub const BAND: &str = "band";
-    /// Card row: the exclusive owner character name (`cards.json` `owner`);
+    /// Card row: the exclusive owner character name (`owner`);
     /// `""` = not exclusive.
     pub const OWNER: &str = "owner";
     /// Character row: compact display label (`display`).
@@ -52,7 +52,7 @@ pub mod meta_key {
     pub const SHARES_EXCLUSIVES: &str = "sharesExclusives";
 }
 
-/// One playable character from `characters.json`, beside its skill rule
+/// One playable character from `the roster`, beside its skill rule
 /// (`rules/skills/skill-characters`). Byte-exact text: use raw string literals.
 #[derive(Clone, Copy)]
 pub struct CharacterDef {
@@ -187,7 +187,7 @@ impl ToMetaRow for CharacterDef {
     }
 }
 
-/// One band from `bands.json`, beside its skill rule
+/// One band roster row, beside its skill rule
 /// (`rules/skills/skill-bands`). Byte-exact text: use raw string literals.
 #[derive(Clone, Copy)]
 pub struct BandDef {

@@ -56,8 +56,10 @@ async function loadBotGlue(tag: string): Promise<DirectBotGlue> {
     const p = join(DATA_DIR, n);
     if (existsSync(p)) files[n] = readFileSync(p, "utf8");
   }
-  glue.load_data(JSON.stringify(files));
+  // Ruleset first (the roster comes from its metadata), then load_data binds
+  // the two -- same order as `webui/src/core/data.ts`.
   await loadRulesetInto(glue as unknown as RulesetGlue, reader(rulesDir()));
+  glue.load_data(JSON.stringify(files));
   return glue;
 }
 
@@ -74,8 +76,8 @@ async function loadWebGlue(tag: string): Promise<Record<string, any>> {
     const p = join(DATA_DIR, n);
     if (existsSync(p)) files[n] = readFileSync(p, "utf8");
   }
-  glue.load_data(JSON.stringify(files));
   await loadRulesetInto(glue as unknown as RulesetGlue, reader(rulesDir()));
+  glue.load_data(JSON.stringify(files));
   return glue;
 }
 

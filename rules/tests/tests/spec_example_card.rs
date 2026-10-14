@@ -4,7 +4,7 @@
 //! card's own text in `docs/rulebook/cards.json`, never from implementation
 //! behaviour.
 //!
-//! Card text (cards.json key `通用:10次招募（1回限定）`):
+//! Card text (roster key `通用:10次招募（1回限定）`):
 //!
 //! ```text
 //! [手]：
@@ -37,7 +37,7 @@ const CARD: &str = "通用:10次招募（1回限定）";
 /// C-GENERAL-10次招募-01 -- [消耗]1500资金.
 ///
 /// * **ID:** `C-GENERAL-10次招募-01`
-/// * **Source:** `cards.json#通用:10次招募（1回限定）`
+/// * **Source:** `roster#通用:10次招募（1回限定）`
 /// * **Quote:** 「[消耗]1500资金，抽1张卡。」
 /// * **Trigger:** the [手] effect of this card, played from hand.
 /// * **Condition:** the user has at least 1500 money (the engine mortgages /
@@ -92,13 +92,13 @@ pub fn card_10draw_frame(step: &Step<'_>) -> Result<(), String> {
 pub const CLAUSES: &[Clause] = &[
     Clause::new(
         "C-GENERAL-10次招募-01",
-        "cards.json#通用:10次招募（1回限定）",
+        "roster#通用:10次招募（1回限定）",
         "[消耗]1500资金，抽1张卡。",
         g_general_10draw_money,
     ),
     Clause::new(
         "C-GENERAL-10次招募-frame",
-        "cards.json#通用:10次招募（1回限定）",
+        "roster#通用:10次招募（1回限定）",
         "[消耗]1500资金，抽1张卡。",
         card_10draw_frame,
     ),
