@@ -11,6 +11,9 @@ publish = false
 # workspace). Run proofs from the repo root: `cargo kani -p rules-kani`.
 
 [features]
+# Diagnostic bisect harnesses that FAIL BY DESIGN (kassert!(false) probes) are
+# only compiled as proofs with this feature, so a unit pass never reports them.
+diag-probes = []
 # Default = every band/skill/event/tile so conformance tests and other
 # tools see the full RULESET. A unit run (`tools/kani/run.sh --unit pp`)
 # enables only that unit's crates so CBMC's function-pointer removal sees
