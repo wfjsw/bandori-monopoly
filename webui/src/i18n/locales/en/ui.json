@@ -647,5 +647,7 @@
   "prompt.addToDraw": "Select {{n}} cards to add to the draw pile together",
   "prompt.confirmDraw": "Add to draw pile ({{n}}/{{total}})",
   "prompt.addingToDraw": "Adding to draw pile ({{n}}/{{total}})",
-  "prompt.pickRetry": "The selection was not completed. Choose the remaining cards and retry."
+  "prompt.pickRetry": "The selection was not completed. Choose the remaining cards and retry.",
+  "rotate.hint": "Turn your phone sideways to play",
+  "rotate.why": "The board needs a landscape screen"
 }

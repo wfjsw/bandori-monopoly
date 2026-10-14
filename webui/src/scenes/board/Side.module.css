@@ -8,7 +8,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(22px + var(--replay-bar-bottom, 0px));
+  bottom: calc(var(--actions-bottom, 22px) + var(--replay-bar-bottom, 0px));
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;

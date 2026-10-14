@@ -1,5 +1,7 @@
 // Player panels on the left; the match log is placed in the right column.
 
+import { useCompactValue } from "../../app/Stage";
+import { COMPACT_PLAYERS_H } from "../../styles/layout";
 import { stateOf, stateMax } from "../../core/names";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
@@ -111,9 +113,11 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
 
 export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {
   const S = m.S;
+  // The seat list's height: 548 on the 900px stage, what the phone canvas leaves otherwise.
+  const avail = useCompactValue() ? COMPACT_PLAYERS_H : 548;
   const n = S.players.length;
   const gap = n > 6 ? 5 : 8;
-  const height = Math.min(70, Math.floor((548 - gap * (n - 1)) / n));
+  const height = Math.min(70, Math.floor((avail - gap * (n - 1)) / n));
   const t = timerOf(m, solo, elapsed);
   const order = turnOrder(S);
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its

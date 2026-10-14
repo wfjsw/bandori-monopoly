@@ -47,3 +47,28 @@ export const SKILL_STEP = 34;
 export const SKILL_FAN_GAP = 24;
 /** Map window's top margin (Board `.mapSlot`). */
 export const MAP_MARGIN_TOP = 18;
+
+// ---- compact (phone) stage ----
+// A phone-sized landscape window keeps the desktop composition but is laid out
+// on a shorter design canvas, so the effective scale (and with it every font
+// and touch target) is ~1.7x what 900px of design height would give. Nothing is
+// hidden: the side columns just narrow (tokens below, mirrored in base.css
+// `:root[data-compact]`) and the centre column keeps what is left.
+
+/** The compact design canvas' height (the board fills it; width follows the window). */
+export const COMPACT_H = 540;
+/** The narrowest design width the compact stage allows (scale is capped by it). */
+export const COMPACT_MIN_W = 980;
+export const COMPACT_INSET_X = 14;
+export const COMPACT_COL_LEFT = 266;
+export const COMPACT_COL_RIGHT = 232;
+/** Seat list height on the compact stage (540 - top bar - actions). */
+export const COMPACT_PLAYERS_H = 372;
+/** Centre column width on the narrowest compact stage. */
+export const COMPACT_MID = COMPACT_MIN_W - COMPACT_INSET_X * 2 - COMPACT_COL_LEFT - COMPACT_COL_RIGHT - BOARD_GAP * 2;
+
+/** Is this window a phone held in landscape (or `?compact=1`, for desktop testing)? */
+export function isCompactWindow(w: number, h: number, coarse: boolean, forced: boolean | null): boolean {
+  if (forced !== null) return forced;
+  return coarse && Math.min(w, h) <= 560 && w > h;
+}

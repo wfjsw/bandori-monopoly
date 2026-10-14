@@ -647,5 +647,7 @@
   "prompt.addToDraw": "勾选 {{n}} 张卡，一次加入抽卡区",
   "prompt.confirmDraw": "确认加入抽卡区（{{n}}/{{total}}）",
   "prompt.addingToDraw": "正在加入抽卡区（{{n}}/{{total}}）",
-  "prompt.pickRetry": "提交未完成，请选择剩余的卡牌重试"
+  "prompt.pickRetry": "提交未完成，请选择剩余的卡牌重试",
+  "rotate.hint": "请将手机横过来玩",
+  "rotate.why": "棋盘需要横屏才能完整显示"
 }

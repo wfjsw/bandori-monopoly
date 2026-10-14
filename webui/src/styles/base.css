@@ -140,6 +140,18 @@
   color: var(--text);
 }
 
+/* Phone landscape (Stage sets data-compact; styles/layout.ts mirrors these). */
+:root[data-compact] {
+  --board-inset-x: 14px;
+  --board-col-left: 266px;
+  --topbar-h: 62px;
+  --players-top: 64px;
+  --players-bottom: 80px;
+  --actions-bottom: 8px;
+  --board-col-right: 232px;
+  --map-margin-top: 8px;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; overflow: hidden; background: var(--backdrop); }
 /* Pin the document. Mobile browsers still scroll an `overflow: hidden` body
