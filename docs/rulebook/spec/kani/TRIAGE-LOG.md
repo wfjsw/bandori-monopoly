@@ -522,14 +522,37 @@ plus harness-side fixed arrays. Production wasm/native **byte-identical**
 
 ### Before / after (target rows)
 
+Iterative re-runs of `prompt::aya_haruka_01_prompt_all_picks_iff` (one CBMC
+slot, 1800 s cap, unwind 32):
+
+| run | change on top of the facades | verdict | profile |
+|---|---|---|---|
+| v1 | facades only (ask trees, fixed arena, named_set 0, out_buf) | **FAILED 1156 s** | SDK cliffs gone (0 extend_with / ask_card); residual body `drop_glue<[String]>` 32, `String fold` 31, `memcmp` 32 |
+| v2 | `cards_in` generic `T: From<CardList>` | compile fail (type-param default is a hard error) | — |
+| v3 | `cards_in` len 0-or-4 + `from_raw_parts` static strings | **FAILED 476 s, 0/4 covers UNREACHABLE** | profile clean (no memcmp/drop_glue) but `__rust_dealloc` rejects static pointers → every String-drop path aborts → vacuous |
+| v4 | `String::from` facade (valid alloc) + len 0-or-4 | killed mid-run | `memcmp` 414+ (heap `len` not folded); drop_glue/fold **gone** |
+| v5 | `from_raw_parts` over a real 1-byte `alloc` (constant `len=1`) + len 0-or-4 | _running_ | memcmp still unrolling — CBMC does not constant-fold `from_raw_parts` len through the heap either |
+
+**What is gone for good (all runs after v1):** `Vec<u8>::extend_with`,
+`ctx::ask_card` / `ask_pick` / `ask_player` / `ask_tile` loops,
+`named_set` 8, `by_idx` 10, `drop_glue<[String]>` (constant-length
+`cards_in`), the `String` `map().collect()` fold.
+
+**What remains:** `memcmp` inside `String::eq` (`ids.contains`). CBMC
+treats a heap `String`'s `len` as symbolic even when built via
+`from_raw_parts(p, 1, 1)`, so `memcmp` unrolls to the global bound (32).
+That is the unmodified body's `Vec<String>` ABI — the TUNING §10 wall.
+No `cfg(kani)` facade can make `alloc::string::String`'s Drop/eq see a
+constant length without a body type-annotation change.
+
 | id | before (batch 3e/4) | after (strvec) |
 |---|---|---|
-| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — `extend_with` 31, `drop_glue<[String]>` 62, `memcmp` 31, `ctx::ask_card` 31 | **FAILED 1156 s** (unwind 32) — SDK cliffs gone (0 extend_with / ask_card unwinds); residual `drop_glue<[String]>` 32 + `String fold` 31 + `memcmp` 32 from the body's `ids: Vec<String>`. **CardList fix** (hard 4-bound iterator, `T: From<CardList>`) targets those; re-run pending |
-| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s — same | pending CardList re-run |
-| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — `extend_with` 31, `by_idx` 10, `memcmp` 10, `named_set` 8 | pending (`named_set` now zero-loop; `extend_with`/`by_idx`/`memcmp` already 0 after batch 2) |
-| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | pending |
-| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s — body `Vec` + effects iters at 32 | pending (spec iters zero-loop) |
-| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s — fmt `PadAdapter` + memchr 1193 | pending (`kassert!` + zero-loop `iter().any`) |
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — extend_with 31, drop_glue 62, memcmp 31, ask_card 31 | **FAILED 1156 s** (v1) / **FAILED 476 s vacuous** (v3) — extend_with/ask_card/drop_glue/fold **gone**; `memcmp` residual (see above) |
+| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s — same | same stack as iff; residual memcmp |
+| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — extend_with 31, by_idx 10, memcmp 10, named_set 8 | named_set 0, extend_with 0 (batch 2 + strvec); solver-bound on the symbolic world (batch-2 diagnosis) |
+| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | same |
+| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s — body `Vec` + effects iters at 32 | effects iters 0 (spec step macros); body `Vec<i32>` loops remain (same wall) |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s — fmt PadAdapter + memchr 1193 | `kassert!` + zero-loop `iter().any`; re-time pending |
 
 Remaining risk: the unmodified bodies still allocate `Vec<String>`
 (`aya_longing` `ids`) and `Vec<i32>` (`front_or_back` `front`/`back`/`winners`).
