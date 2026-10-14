@@ -401,7 +401,30 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
         if let On::Hook(kinds, _, _, _) = on {
-            if kinds.iter().any(|k| *k == want) {
+            // Zero-loop kind match (`iter().any` over a short slice unrolls
+            // to the global bound under CBMC).
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k2) = kinds.get(2) {
+                if k2 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k3) = kinds.get(3) {
+                if k3 == want {
+                    hit = true;
+                }
+            }
+            if hit {
                 return entry_idx(idx, i, player);
             }
         }
@@ -497,7 +520,31 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool {
     let want = hook_kind_parse(hook_name);
     match want {
-        Some(w) => kinds.iter().any(|k| *k == w),
+        Some(w) => {
+            // Zero-loop (see `hook_kind_only_idx`).
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == w {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == w {
+                    hit = true;
+                }
+            }
+            if let Some(&k2) = kinds.get(2) {
+                if k2 == w {
+                    hit = true;
+                }
+            }
+            if let Some(&k3) = kinds.get(3) {
+                if k3 == w {
+                    hit = true;
+                }
+            }
+            hit
+        }
         None => false,
     }
 }
