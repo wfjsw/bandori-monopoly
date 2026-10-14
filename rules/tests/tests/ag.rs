@@ -747,7 +747,23 @@ fn himari_rest_tick_logs_gain() {
 #[test]
 fn himari_rest_tick_logs_cap() {
     let keys = himari_end_turn_keys(2, 1);
-    assert!(keys.iter().any(|k| k.contains("afterglow_rest_capped")), "{keys:?}");
+    assert!(keys.iter().any(|k| k.contains("log.gain_fire_capped")), "{keys:?}");
+}
+
+// 规则书: 白金燐子「（1）每次[经过]CiRCLE时获得三个[火罐]（上限3）」 -- at the cap the
+// pass still logs that the gain was refused.
+#[test]
+fn rinko_pass_circle_at_cap_logs_refusal() {
+    let mut t = Table::new(&["白金燐子", "美竹兰"]);
+    t.clean();
+    t.set_fire(0, 3, 3);
+    t.begin_turn(0);
+    t.set_pos(0, common::data().tiles.len() - 1);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    let keys = t.recent_keys(24);
+    assert!(keys.iter().any(|k| k.contains("log.gain_fire_capped")), "{keys:?}");
 }
 
 // 规则书: 羽泽鸫「（2）当你进行主要移动时，你可以失去一个[火罐]使本次移动反向」

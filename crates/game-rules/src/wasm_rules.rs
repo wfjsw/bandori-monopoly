@@ -1517,6 +1517,19 @@ impl CardWorld for Run {
                 .i("fire", fire as i64)
                 .i("max", cap as i64);
             self.post_log_value("fire", player_id, msg, "", got);
+        } else if n > 0 {
+            // 「不能超过持有上限」: the effect applied and the cap refused it.
+            if let Some(p) = self.world.st.players.get(player_id.max(0) as usize) {
+                let (cap, fire) = (p.fire_max(), p.fire());
+                if cap > 0 && fire >= cap && !p.out() {
+                    let msg = Msg::new("log.gain_fire_capped")
+                        .player_id("who", player_id)
+                        .msg("why", why)
+                        .i("fire", fire as i64)
+                        .i("max", cap as i64);
+                    self.post_log_value("fire", player_id, msg, "", 0);
+                }
+            }
         }
         got
     }

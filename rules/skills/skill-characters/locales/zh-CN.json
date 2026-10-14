@@ -1,5 +1,4 @@
 {
-  "afterglow_rest_capped": "Afterglow：三回合未使用（2）技能，但 [火罐] 已达上限（{{max}}），未获得",
   "afterglow_rest_count": "Afterglow：连续第 {{n}}/3 回合未使用（2）技能",
   "afterglow_rest_gain": "Afterglow：三回合未使用（2）技能，+1 [火罐]",
   "akao_cool_ask": "选哪张加入手牌？",
@@ -182,6 +181,7 @@
   "mutsumi_crychic_spend": "精致的人偶",
   "mutsumi_crychic_title": "精致的人偶",
   "nanami_ordinary_ask": "支付 1 个[火罐]，获得该角色的标记？",
+  "nanami_ordinary_cd": "这是很普通的事吧？：冷却还剩 {{n}} 回合",
   "nanami_ordinary_gain": "这是很普通的事吧？：+1 [火罐]",
   "nanami_ordinary_mark": "获得「{{card}}」标记",
   "nanami_ordinary_no_mark": "你没有角色标记。",

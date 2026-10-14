@@ -51,7 +51,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」, run at each
 /// Afterglow owner's turn end. Every outcome is logged: the count, the pot
-/// gained (the engine's own gain line), or a gain the cap refused.
+/// gained (the engine's own gain line), or the engine's cap-refused line.
 pub fn rest_tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
     if n < 3 {
@@ -60,13 +60,6 @@ pub fn rest_tick(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);
-    if rules_status::fire::get(player_id) >= rules_status::fire::max(player_id) {
-        ctx::log(
-            player_id,
-            &Msg::new(key!("afterglow_rest_capped")).i("max", rules_status::fire::max(player_id) as i64),
-        );
-        return Ok(());
-    }
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     Ok(())
 }

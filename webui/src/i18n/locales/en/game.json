@@ -318,6 +318,7 @@
   "log.forfeit": "{{who}} left the match (forfeit) -- out, like a bankruptcy",
   "log.gain": "{{who}} gained {{amount}}{{src}}",
   "log.gain_fire": "{{who}} gains {{n}} [Fire] ({{why}}, now {{fire}}/{{max}})",
+  "log.gain_fire_capped": "{{who}} is at the fire pot cap ({{fire}}/{{max}}); nothing gained ({{why}})",
   "log.immune_all": "{{who}} is unaffected by other players' effects",
   "log.kind.wire": "{{name}}",
   "log.land": "{{who}} stopped on {{tile}}",
