@@ -742,113 +742,6 @@ pub fn take_from_hand(player_id: i32, card: &str) -> bool {
     take_card(player_id, CardPile::Hand, card)
 }
 
-/// Fixed-capacity card-id list for `cfg(kani)` [`cards_in`].
-///
-/// `IntoIterator` is a **hard 4-step** walk (`i >= 4 ⇒ None`), so an
-/// unmodified body's `for c in cards_in(..)` terminates in 5 unrolls and its
-/// `ids: Vec<String>` (pushed at most 4 times) has `len ∈ 0..=4` — the
-/// subsequent `contains` / `map().collect()` / `drop_glue` then unwind to 5
-/// instead of the global bound (prompt profile: fold 31, drop_glue 62).
-#[cfg(kani)]
-#[derive(Clone)]
-pub struct CardList {
-    items: [String; 4],
-    n: u8,
-}
-
-#[cfg(kani)]
-impl CardList {
-    pub fn empty() -> Self {
-        CardList {
-            items: [
-                String::new(),
-                String::new(),
-                String::new(),
-                String::new(),
-            ],
-            n: 0,
-        }
-    }
-
-    pub fn push(&mut self, s: String) {
-        if (self.n as usize) < 4 {
-            self.items[self.n as usize] = s;
-            self.n += 1;
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.n as usize
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.n == 0
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &String> {
-        let n = self.n as usize;
-        self.items.iter().take(n)
-    }
-}
-
-/// Bodies that annotate `let hand: Vec<String> = ctx::cards_in(..)` convert
-/// through this. The resulting `Vec` still has `len ∈ 0..=4`.
-#[cfg(kani)]
-impl From<CardList> for alloc::vec::Vec<String> {
-    fn from(c: CardList) -> alloc::vec::Vec<String> {
-        let mut v = alloc::vec::Vec::new();
-        let n = c.n as usize;
-        macro_rules! step {
-            ($i:expr) => {
-                if $i < n {
-                    v.push(c.items[$i].clone());
-                }
-            };
-        }
-        step!(0); step!(1); step!(2); step!(3);
-        v
-    }
-}
-
-#[cfg(kani)]
-impl IntoIterator for CardList {
-    type Item = String;
-    type IntoIter = CardIter;
-    fn into_iter(self) -> CardIter {
-        CardIter { list: self, i: 0 }
-    }
-}
-
-/// Hard-bounded iterator: `next` returns `None` at `i >= 4` (and at
-/// `i >= n`). CBMC unwinds the caller's `for` to 5, not 32.
-#[cfg(kani)]
-pub struct CardIter {
-    list: CardList,
-    i: u8,
-}
-
-#[cfg(kani)]
-impl Iterator for CardIter {
-    type Item = String;
-    fn next(&mut self) -> Option<String> {
-        if self.i >= 4 {
-            return None;
-        }
-        let i = self.i;
-        self.i += 1;
-        if i >= self.list.n {
-            return None;
-        }
-        // Take (no clone): move the facade string out.
-        let slot = i as usize;
-        if slot < 4 {
-            Some(core::mem::take(&mut self.list.items[slot]))
-        } else {
-            None
-        }
-    }
-}
-
 /// Every card id in a player's `pile`, in pile order (the deck's top card
 /// first). Duplicates are listed once per copy.
 ///
@@ -863,7 +756,8 @@ impl Iterator for CardIter {
 #[cfg(kani)]
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
-    if need <= 0 {
+    if need < 2 {
+        // 0 cards (`need = 1 + n`, n=0) or a host error — empty (constant len 0).
         return Vec::new();
     }
     let (p, scratch) = out_buf(need as usize);
