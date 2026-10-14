@@ -192,3 +192,11 @@ turn-start (not every hand-size movement), so a non-draw 4→5 is missed
 | OPEN-两个X差值 | 「两个X差值*120」 formula | tomoricry-01 |
 | OPEN-四到五 | does a 3→5 jump count as 「从4增加至5」? | band-03 |
 | OPEN-分摊 | 分摊 undefined | vocalist-01 (「一次性」 excludes it) |
+
+## bands-b concrete-user rollout (branch `kani-bands-b`)
+
+Verdicts below marked **bands-b** use the ppcost pattern: `n_players=2`,
+concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
+body calls, per-harness `host_subset!`, sparse in-place world. See
+TRIAGE-LOG.md `bands-b`. Results accumulate in
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.

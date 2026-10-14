@@ -136,3 +136,11 @@ Harness inventory: 15 `#[kani::proof]` functions (12 in `proofs/sumimi.rs`,
    `actor == owner && slot('skill.sumimi.got') == 0`, so the add half is never
    admitted. Matches the black-box finding
    `band_turn_end_adds_crystal_after_inbound_money`.
+
+## bands-b concrete-user rollout (branch `kani-bands-b`)
+
+Verdicts below marked **bands-b** use the ppcost pattern: `n_players=2`,
+concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
+body calls, per-harness `host_subset!`, sparse in-place world. See
+TRIAGE-LOG.md `bands-b`. Results accumulate in
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.

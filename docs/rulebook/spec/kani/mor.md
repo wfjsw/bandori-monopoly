@@ -186,3 +186,11 @@ OPEN-场地中央, OPEN-重骰次数, OPEN-三全音收款人, OPEN-触发结算
 OPEN-角色标记, OPEN-多分支选择, OPEN-借用技能, OPEN-地租档, OPEN-被动CD,
 OPEN-行动条, OPEN-异常移动, OPEN-X标记, OPEN-复制, OPEN-双方影响,
 OPEN-主动移动.
+
+## bands-b concrete-user rollout (branch `kani-bands-b`)
+
+Verdicts below marked **bands-b** use the ppcost pattern: `n_players=2`,
+concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
+body calls, per-harness `host_subset!`, sparse in-place world. See
+TRIAGE-LOG.md `bands-b`. Results accumulate in
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.
