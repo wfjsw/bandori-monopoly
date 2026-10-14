@@ -137,8 +137,6 @@ name = "card-sdk"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "kani-model",
- "kani-ops",
  "postcard",
  "serde",
 ]
@@ -187,17 +185,6 @@ name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
-
-[[package]]
-name = "kani-model"
-version = "0.1.0"
-dependencies = [
- "kani-ops",
-]
-
-[[package]]
-name = "kani-ops"
-version = "0.1.0"
 
 [[package]]
 name = "memchr"

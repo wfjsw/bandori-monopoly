@@ -436,38 +436,27 @@ Rust ABI imports.
 `arr4_eq`/`arr8b_eq`/`arr4b_eq` across proofs+spec. Re-timed
 `moca_01` 394 s / `aao_01` 310 s (batch 3d).
 
-## Batch 4 — direct host dispatch (kani-ops + kani-model)
+## Batch 4 — direct host dispatch: **not merged** (docs-only record)
 
-Design (coordinator): extract `Op`/`Args`/intern/arena into leaf
-`rules/kani-ops`; move `world`/`host`/`board` dispatch into
-`rules/kani-model` (depends only on kani-ops); `card_sdk::kani_host::call`
-is `kani_model::dispatch` under `cfg(all(kani, feature = "kani-model"))`
-(`inline(always)`); `rules-kani` re-exports the model.
+The `kani-ops` / `kani-model` split (direct `kani_model::dispatch` call)
+was implemented and then **rejected**:
 
-| check | result |
-|---|---|
-| `cargo build -p rules-kani` | green |
-| `cargo test -p rules-kani` (conf_*, model_bounds, pilot_guards) | **green** |
-| `cargo build -p game-rules -p rules-native -p server` | green |
-| wasm workspace `cargo check --target wasm32-unknown-unknown` | green |
-| `wrong_guard::real_guard_matches_clause_iff` | **SUCCESSFUL 22 s** (2/2 covers) — cargo kani compiles the new graph |
-| `pp::same_dream_01_band_plus_3_iff` | **still SSA-bound** (~25 min, killed; not vacuous this time — `kani_model::dispatch` is in the goto) |
+* **Production wasm hashes change** (`3aedcf2b…` vs master `493c2ffe…`)
+  — intern/arena moved crates, so codegen is not bit-identical.
+* **No proof speedup** — `pp::same_dream_01_band_plus_3_iff` remains
+  **symex-bound** inside the model itself (300-op `dispatch` match,
+  `World` copy, `native::read`/`to_vec`), ~25 min / TIMEOUT.
 
 **Correction to the 244 s "breakthrough":** that run used `extern "Rust"`
 which Kani **aborts** (`call to foreign "Rust" function is not currently
-supported`) — every property UNDETERMINED. It did **not** verify the
-clause. The direct *Rust* call (this batch) is sound and compiles, but
-`same_dream_01` is still SSA-bound: the remaining cost is the **model**
-(300-op `dispatch` match, `World` copy, `native::read`/`to_vec`), not the
-fn-ptr IF-chain.
+supported`) — every property UNDETERMINED, 0/4 covers. It did **not**
+verify the clause. Class **E** for the pp rows.
 
-| dist hash | value |
-|---|---|
-| our `ruleset_sha256` | `3aedcf2b…` (abi 58) |
-| main-tree (master) | `493c2ffe…` (abi 58) |
+| id | class | dominant cost | next idea |
+|---|---|---|---|
+| `pp::same_dream_01_band_plus_3_iff` | **E** | model: 300-op `dispatch` match, `World` copy, `native::read`/`to_vec` (not the body `code*` IF-chain — direct-call experiment) | shrink `dispatch` match per proof (op subsets); smaller `World` for band proofs; allocation-free `native::read` for intern-tagged handles |
 
-**Not bit-identical:** intern/arena moved to `kani-ops` (crate split
-changes wasm codegen). Logic is identical; a dual-path (prod original +
-kani shared) split the arena and broke `conf_hostops2`, so we share one
-table. If bit-identical dist is required, intern must stay in `card-sdk`
-and the model must stop needing `NameId` — larger ABI change.
+**Kept (independent of crate layout):** `kassert!` / `arr4_eq` (batch 3e);
+crychic static assert message (format-arg `kassert!` did not match the
+macro). Production `rules/` restored to master.
+
