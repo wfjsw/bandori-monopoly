@@ -417,3 +417,21 @@ all proofs.
 `rules_kani::host::dispatch`. No fn-ptr (was 874-target IF-chain at every
 `ctx::*` site). Native/tests keep `BACKEND`. Production card-sdk
 `cfg(not(kani))` unchanged (dist hashes: only `cfg(kani)` code moved).
+
+### BACKEND direct extern — **not supported by Kani** (reverted)
+
+`extern "Rust" { rules_kani_host_dispatch }` made `same_dream_01` finish
+in **244 s** (388k vars / 396k clauses, SSA 1.7 s) — but Kani aborts with
+`call to foreign "Rust" function is not currently supported` so every
+property is UNDETERMINED (FAILED, vacuous). Same limitation as
+`extern "C-unwind"` (kani#2423). **Reverted** (`cf1e112`). The 244 s run
+is still evidence: the `BACKEND` fn-ptr IF-chain at every `ctx::*` site is
+the dominant SSA cost. A viable cut needs the host dispatch **in**
+`card-sdk` under `cfg(kani)` (no cross-crate call), or a Kani feature for
+Rust ABI imports.
+
+### kassert! + arr4_eq (kept)
+
+`assert!` → `kassert!` (no `panic_fmt`/`memchr`) across proofs;
+`arr4_eq`/`arr8b_eq`/`arr4b_eq` across proofs+spec. Re-timed
+`moca_01` 394 s / `aao_01` 310 s (batch 3d).
