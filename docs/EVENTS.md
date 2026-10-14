@@ -193,9 +193,11 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
 * **No clock surface** (元祖！邦多利酱's 免费时间 / 恢复时间) -- host clocks.
 * **No skin change** (EX任务挑战) -- cosmetic only, so the body logs eligibility.
 * **优先权 claim** (协助CiRCLE重建's 「该改变[触发结算]的效果优先于其他任何
-  改变[触发结算]的效果」): instances run in placement order, not by priority.
-  The CiRCLE settle replacement, the cafe override (「CiRCLE原本的所有效果
-  迁移至CiRCLE咖啡厅」 -- including the [经过] reward) are implemented.
+  改变[触发结算]的效果」): `TODO(规则书)` -- instances run in placement order,
+  not by priority. The CiRCLE settle replacement, the cafe override (「CiRCLE
+  原本的所有效果迁移至CiRCLE咖啡厅」 -- including the [经过] reward) are
+  implemented. The deed-popup text rides the same instance declarations
+  ([TILES.md](TILES.md) 「Tile text」).
 * **「减少1d6」 as a subtraction** (超燃甩头 phase 2) rather than a negative die
   in the pool -- the dice plan has no negative-die op.
 * **Song-card count** (Kizuna Music's X) is a duplicated id table (from
