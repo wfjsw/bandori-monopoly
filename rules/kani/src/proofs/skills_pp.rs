@@ -44,7 +44,9 @@ crate::host_subset!(skills_pp_dispatch {
     slot => arm_slot,
     set_slot => arm_set_slot,
     inc_slot => arm_inc_slot,
-    state_get | state_set | state_add => arm_plan_stub,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_plan_stub,
     raise => arm_raise,
     gate => arm_gate,
     set_steps | set_resolve | set_stop_at | schedule_turn_end | linger

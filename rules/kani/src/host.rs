@@ -3383,6 +3383,51 @@ pub fn arm_trig_player(_a: Args) -> i64 {
 
 
 
+/// `Op::state_get` — keyed state column (VALUE / MAX / MIN / EXPIRES).
+pub fn arm_state_get(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a4, a5);
+    let key = name_id(a1, a2);
+    let field = a3;
+    world::with_world(|w| match field {
+        1 => w.key_max(a0, key),
+        2 => w.key_min(a0, key),
+        3 => w.key_expires(a0, key),
+        _ => w.key_get(a0, key),
+    }) as i64
+}
+
+/// `Op::state_set` — write a keyed state column. Packing: name (a1,a2),
+/// field a3 (0 VALUE / 1 MAX / 2 MIN / 3 EXPIRES), value a4.
+pub fn arm_state_set(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = a5;
+    let key = name_id(a1, a2);
+    let field = a3;
+    let v = a4;
+    world::with_world_mut(|w| {
+        let out = match field {
+            1 => {
+                w.key_set_max(a0, key, v);
+                v
+            }
+            2 => {
+                w.key_set_min(a0, key, v);
+                v
+            }
+            3 => {
+                w.key_set_expires(a0, key, v);
+                v
+            }
+            _ => {
+                w.key_set(a0, key, v);
+                v
+            }
+        };
+        out
+    })
+}
+
 /// Move-plan / settle / offer protocol stubs (PROTOCOL-LEVEL; return 0).
 /// Same benign-0 list as `dispatch`'s plan/settle and offers arms.
 pub fn arm_plan_stub(_a: Args) -> i64 {

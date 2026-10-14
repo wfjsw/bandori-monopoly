@@ -37,7 +37,9 @@ crate::host_subset!(skills_hhw_dispatch {
     slot => arm_slot,
     set_slot => arm_set_slot,
     inc_slot => arm_inc_slot,
-    state_get | state_set | state_add => arm_plan_stub,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_plan_stub,
     set_steps | set_resolve | schedule_turn_end | linger | card_move
     | card_offer_build | can_build_on => arm_plan_stub,
 });
