@@ -107,3 +107,13 @@ fn before_build(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("hhw_built")).i("n", saved as i64));
     Ok(())
 }
+
+/// `bands.json` row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Hello, Happy World!"#)
+    .short_name(r#"HHW"#)
+    .boot_art(r#"003"#)
+    .color(r#"#FFDD00"#)
+    .skill(r#"传播笑容"#)
+    .text(r#"（1）向他人的格子付款时可选择支付双倍价格，若如此做，记录该玩家并使此卡获得一个奇迹水晶。（2）被记录的玩家的格子产生收款时，移除此卡的一个奇迹水晶，记录该次收款的价格（可累加）。（3）你进行盖房时，可从盖房花费中减去所记录的数字，然后将记录数字归零。"#)
+    .logo(r#"003"#);

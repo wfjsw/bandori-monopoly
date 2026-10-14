@@ -24,7 +24,13 @@ pub const NO_ROAD: CardDef = CardDef::new(
         On::Play("", Some(cant_play), no_road),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]);
+.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"无路矢"#)
+        .raw_name(r#"无路矢"#)
+        .tags(&[])
+        .text(r#"指定场上自己以外的一位玩家所在格子，获得2层[除外]并在[除外]层数归0后[传送]至该格子，视为当回合的主要移动。[除外]期间本应获得的格子收入由此前指定的那名玩家获得。"#)
+        .cell(r#"I6"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 /// 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `CardNoRoad.WhyNot`
 /// refuses the card with no other player alive ("没有别的玩家").

@@ -14,7 +14,13 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const TAKI_SERIOUS: CardDef = CardDef::new(
     "MyGO:（立希）想认真去做",
     &[On::Play("", Some(cant_play), taki_serious)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"想认真去做"#)
+        .raw_name(r#"（立希）想认真去做"#)
+        .tags(&[])
+        .text(r#"使场上所有拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为原价的四分之一"#)
+        .cell(r#"I10"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"椎名立希"#)]));
 
 /// C# `CardTakiSerious.Stayers` -- present players holding [停留].
 fn stayers() -> Vec<i32> {

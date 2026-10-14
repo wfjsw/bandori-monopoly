@@ -22,7 +22,14 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
         On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"0.5倍速"#)
+        .raw_name(r#"（摩卡）0.5倍速"#)
+        .tags(&[])
+        .text(r#"(1) 将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。
+(2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。"#)
+        .cell(r#"C7"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", r#"青叶摩卡"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(1): 「将此卡放置在场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.

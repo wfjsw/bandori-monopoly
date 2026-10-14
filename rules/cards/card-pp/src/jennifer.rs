@@ -30,7 +30,19 @@ pub const JENNIFER: CardDef = CardDef::new(
             pass_tile,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"找回珍妮弗"#)
+        .raw_name(r#"找回珍妮弗"#)
+        .tags(&[r#"手"#, r#"持续"#])
+        .text(r#"[手]：
+将此卡放置在除[使用者]以外的一名玩家的[场地]。
+[持续]：
+[拥有者][经过]“偶像经纪公司”时依次进行以下操作：
+1. [使用者][支付][拥有者]400资金；
+2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
+3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#)
+        .cell(r#"D13"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Stand-in for C# `Card.User` (per-card Mem): the player who played the card,
 /// stored on the owner's player while it is in play.

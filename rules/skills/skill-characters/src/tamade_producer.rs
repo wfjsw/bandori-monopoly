@@ -55,3 +55,19 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, BUILT_THIS, 0);
     Ok(())
 }
+
+/// `characters.json` row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"珠手知由"#)
+    .display(r#"珠手知由"#)
+    .band(r#"RAISE A SUILEN"#)
+    .color(r#"#00BBFF"#)
+    .skill(r#"天才制作人"#)
+    .text(r#"加盖房屋时半价，如果你上回合进行过房屋加盖，本回合加盖房屋变为免费"#)
+    .cn_id(r#"035"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"演奏我的音乐吧"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");

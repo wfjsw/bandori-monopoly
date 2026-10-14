@@ -29,7 +29,19 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
         On::Play("", Some(cant_play), strong_flower),
         On::Hook(&[HookKind::PassTile], "actor == owner", None, pass_tile),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"可爱又强壮的花朵"#)
+        .raw_name(r#"可爱又强壮的花朵"#)
+        .tags(&[r#"手"#, r#"持续"#])
+        .text(r#"[手]：
+[指定][使用者]拥有的一个格子，将此卡放置在被[指定]格子上并为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]。
+[持续]：
+[使用者][经过]此卡所在格子时依次进行以下操作：
+1. [强制停下]，此次移动变为[结算]；
+2. 如果[共鸣]则获得1500资金；
+3. 此卡放入[使用者]弃卡区。"#)
+        .cell(r#"D12"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- nothing to point at without

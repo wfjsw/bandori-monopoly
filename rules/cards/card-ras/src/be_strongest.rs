@@ -10,7 +10,13 @@ use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BE_STRONGEST: CardDef =
-    CardDef::new("RAS:成为最强", &[On::Play("", Some(cant_play), be_strongest)]);
+    CardDef::new("RAS:成为最强", &[On::Play("", Some(cant_play), be_strongest)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"成为最强"#)
+        .raw_name(r#"成为最强"#)
+        .tags(&[])
+        .text(r#"roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”），若你没有Livehouse格子，传送到“Live House”。视为你的主要移动。"#)
+        .cell(r#"H6"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 /// C# `CardBeStrongest.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.

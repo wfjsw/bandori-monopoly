@@ -10,7 +10,14 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play("", Some(cant_play), play)]);
+pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"尽力后的收获"#)
+        .raw_name(r#"尽力后的收获"#)
+        .tags(&[r#"手"#])
+        .text(r#"[手]：
+立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#)
+        .cell(r#"A11"#)
+        .fields(&[("band", r#"通用"#), ("owner", "")]));
 
 /// C# `CardEffort.WhyNot` defers to `H.MoveWhyNot`: refuses after the main move
 /// (`这回合已经移动过了`) and while `H.State.skipMove` (`本回合不能移动`).

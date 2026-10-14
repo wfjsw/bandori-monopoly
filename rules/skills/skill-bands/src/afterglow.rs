@@ -34,3 +34,13 @@ fn on_bought(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+/// `bands.json` row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Afterglow"#)
+    .short_name(r#"AG"#)
+    .boot_art(r#"002"#)
+    .color(r#"#EE3344"#)
+    .skill(r#"商店街的宠儿"#)
+    .text(r#"你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子"#)
+    .logo(r#"002"#);

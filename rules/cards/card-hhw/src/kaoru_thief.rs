@@ -50,7 +50,13 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
             on_crystals_changed,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"怪盗hello happy"#)
+        .raw_name(r#"（薰）怪盗hello happy"#)
+        .tags(&[])
+        .text(r#"将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。"#)
+        .cell(r#"F5"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", r#"濑田薰"#)]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardKaoruThief.WhyNot`: refuses the play with no other player alive.

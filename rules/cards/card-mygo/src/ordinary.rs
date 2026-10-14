@@ -19,7 +19,13 @@ pub const ORDINARY: CardDef = CardDef::new(
         None,
         counteract,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"普通与理所当然"#)
+        .raw_name(r#"普通与理所当然"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 受到异常移动效果影响后可打出，使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的移动格数。"#)
+        .cell(r#"I16"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的

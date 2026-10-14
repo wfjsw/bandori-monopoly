@@ -168,6 +168,23 @@ function scanToken(src, i) {
   return i + 1;
 }
 
+/** Resolve `const NAME: &str = "…"` / `pub const NAME: &str = "…"` in `src`. */
+function resolveStrConst(src, name) {
+  const re = new RegExp(
+    `(?:pub\\s+)?const\\s+${name.replace(/[$]/g, "\\$")}\\s*:\\s*&str\\s*=\\s*`,
+    "g",
+  );
+  let m;
+  while ((m = re.exec(src))) {
+    const at = m.index + m[0].length;
+    const s = readRustString(src, at);
+    if (s !== "" || src[at] === '"' || src.startsWith('r"', at) || src.startsWith("r#", at)) {
+      return s;
+    }
+  }
+  return null;
+}
+
 /** Find `CardDef::new(` occurrences and the `;` that ends each `const`/`static`. */
 function findCardDefs(src) {
   const out = [];
@@ -176,6 +193,17 @@ function findCardDefs(src) {
   while ((m = re.exec(src))) {
     const start = m.index;
     let i = m.index + m[0].length;
+    // Id: first argument is a string literal or a `const ID: &str` identifier.
+    i = skipTrivia(src, i);
+    let id = null;
+    if (i < src.length && (src[i] === '"' || src.startsWith('r"', i) || src.startsWith("r#", i))) {
+      id = readRustString(src, i);
+    } else if (i < src.length && /[A-Za-z_]/.test(src[i])) {
+      let j = i;
+      while (j < src.length && /[A-Za-z0-9_]/.test(src[j])) j++;
+      id = resolveStrConst(src, src.slice(i, j));
+    }
+    // Walk the `CardDef::new( … )` paren group.
     let depth = 1;
     while (i < src.length && depth > 0) {
       i = skipTrivia(src, i);
@@ -224,12 +252,7 @@ function findCardDefs(src) {
     }
     i = skipTrivia(src, i);
     const end = i; // position of `;`
-    // Extract the id string: first string literal inside `CardDef::new(`.
-    const head = src.slice(start, start + 300);
-    const idm = head.match(/CardDef::new\s*\(\s*(r#+)?"/);
-    if (!idm) continue;
-    const idStart = start + idm.index + idm[0].length - (idm[1] ? idm[1].length + 1 : 1);
-    const id = readRustString(src, idStart);
+    if (id == null) continue;
     out.push({ id, start, end });
   }
   return out;
@@ -298,20 +321,24 @@ function replaceMetaInFile(path, rows) {
     const metaAt = span.indexOf(".meta(");
     const call = metaCall(row);
     if (metaAt >= 0) {
-      // Replace the whole `.meta(...)` call: find its parens.
+      // Replace the whole `.meta(...)` call: find its parens. Token scan so
+      // raw strings (`r##"…"##`, bodies may contain `"` / `"#` / parens) and
+      // comments do not desync the depth counter.
       const abs = d.start + metaAt;
       let i = abs + ".meta(".length;
       let depth = 1;
-      let s = null;
       while (i < src.length && depth > 0) {
-        const c = src[i];
-        if (s) {
-          if (s === '"' && c === "\\") i++;
-          else if (c === s) s = null;
-        } else if (c === '"' || c === "'") s = c;
-        else if (c === "(") depth++;
-        else if (c === ")") depth--;
-        i++;
+        i = skipTrivia(src, i);
+        if (i >= src.length) break;
+        if (src[i] === "(") {
+          depth++;
+          i++;
+        } else if (src[i] === ")") {
+          depth--;
+          i++;
+        } else {
+          i = scanToken(src, i);
+        }
       }
       const prev = src.slice(abs, i);
       if (prev === call) continue;
@@ -362,14 +389,16 @@ function bandDefCall(b) {
   return `ruleset_core::roster::BandDef::new(${rustString(b.name)})\n${parts.join("\n")}`;
 }
 
-/** Find the skill-card source file whose CardDef id equals `id`. */
+/** Find the skill-card source file whose `CardDef::new` id equals `id`.
+ *  A bare `text.includes(id)` is not enough: other skills reference a skill id
+ *  as a string (CRYCHIC grants MyGO's, Hina's lottery pool lists Maya's) and
+ *  would steal the CharacterDef / BandDef. */
 function findSkillFile(root, id) {
   for (const f of readdirSync(join(root, "src"))) {
     if (!f.endsWith(".rs") || f === "lib.rs" || f === "roster_table.rs") continue;
     const text = readFileSync(join(root, "src", f), "utf8");
-    if (text.includes(`"${id}"`) || text.includes(`r#""${id}""#`)) {
-      if (text.includes("CardDef::new")) return join(root, "src", f);
-    }
+    if (!text.includes("CardDef::new")) continue;
+    if (findCardDefs(text).some((d) => d.id === id)) return join(root, "src", f);
   }
   return null;
 }
@@ -383,6 +412,30 @@ function upsertConst(path, constName, call, doc) {
   const decl = `${doc}pub const ${constName}: ${constName === "CHARACTER" ? "ruleset_core::roster::CharacterDef" : "ruleset_core::roster::BandDef"} =\n${call};\n`;
   const at = src.indexOf(marker);
   if (at >= 0) {
+    // Guard: this file already carries a def for a *different* row. That means
+    // findSkillFile picked the wrong file (or two skill Cards share a module);
+    // do not clobber -- fail loudly so the mapping can be fixed.
+    const existing = src
+      .slice(at)
+      .match(/(?:CharacterDef|BandDef)::new\(\s*(?:r#+)?"/);
+    if (existing) {
+      const nameAt = at + existing.index + existing[0].length - 1;
+      const existingName = readRustString(src, nameAt);
+      const wanted = call.match(/::new\(\s*(?:r#+)?"/);
+      if (wanted) {
+        const wantedName = readRustString(
+          call,
+          wanted.index + wanted[0].length - 1,
+        );
+        if (existingName !== wantedName) {
+          // Leftover from a wrong-file write (or a module rename): the file
+          // owns `wantedName`'s skill CardDef, so replace the stale const.
+          console.warn(
+            `WARNING: ${path}: replacing stale ${constName} ${existingName} with ${wantedName}`,
+          );
+        }
+      }
+    }
     // Replace from the doc line (if any) through the terminating `;` of the const.
     let start = at;
     // Walk back over `///` lines.
@@ -396,23 +449,26 @@ function upsertConst(path, constName, call, doc) {
         lineStart = prevLineStart;
       } else break;
     }
-    // Find the `;` that ends this const (paren-balanced).
+    // Find the `;` that ends this const (paren-balanced, token-aware so raw
+    // strings / comments cannot desync the depth counter).
     let i = at + marker.length;
     let depth = 0;
-    let s = null;
     while (i < src.length) {
+      i = skipTrivia(src, i);
+      if (i >= src.length) break;
       const c = src[i];
-      if (s) {
-        if (s === '"' && c === "\\") i++;
-        else if (c === s) s = null;
-      } else if (c === '"' || c === "'") s = c;
-      else if (c === "(") depth++;
-      else if (c === ")") depth--;
-      else if (c === ";" && depth === 0) {
+      if (c === "(") {
+        depth++;
+        i++;
+      } else if (c === ")") {
+        depth--;
+        i++;
+      } else if (c === ";" && depth === 0) {
         i++;
         break;
+      } else {
+        i = scanToken(src, i);
       }
-      i++;
     }
     const prev = src.slice(start, i);
     // `decl` ends with `;\n`; extraction stops just past `;`. Compare without
@@ -526,7 +582,9 @@ function ensureLibModule(libPath, mod) {
 // ---------------------------------------------------------------------------
 
 function crateForBand(bandName) {
-  // JSON band name -> crate directory.
+  // JSON band name -> crate directory. `通用` is the general-card band (not in
+  // bands.json); `CiRCLE` is a real band whose exclusive cards live in
+  // `card-general` (band field `通用`), so it has no card crate of its own.
   const map = {
     "Poppin' Party": "card-ppp",
     Afterglow: "card-ag",
@@ -546,9 +604,18 @@ function crateForBand(bandName) {
 
 function liftBandCards(bandName) {
   const crate = crateForBand(bandName);
-  if (!crate) throw new Error(`no crate mapping for band ${bandName}`);
-  const dir = join(CARDS, crate, "src");
   const rows = new Map(cards.filter((c) => c.band === bandName).map((c) => [c.id, c]));
+  if (!crate) {
+    // No card crate (e.g. CiRCLE). Its exclusive cards are `通用:*` rows and
+    // are lifted by the general pass; a band with rows but no crate is a bug.
+    if (rows.size) {
+      throw new Error(
+        `no crate mapping for band ${bandName} (${rows.size} card(s): ${[...rows.keys()].join(", ")})`,
+      );
+    }
+    return 0;
+  }
+  const dir = join(CARDS, crate, "src");
   let n = 0;
   for (const f of readdirSync(dir)) {
     if (!f.endsWith(".rs")) continue;
@@ -578,6 +645,7 @@ function liftCard(id) {
   const row = cards.find((c) => c.id === id);
   if (!row) throw new Error(`no cards.json row for ${id}`);
   const crate = crateForBand(row.band);
+  if (!crate) throw new Error(`no crate mapping for band ${row.band} (card ${id})`);
   const dir = join(CARDS, crate, "src");
   const rows = new Map([[id, row]]);
   let hit = false;
@@ -647,14 +715,18 @@ function main() {
   const card = get("--card");
   if (card) liftCard(card);
 
-  if (has("--tables") || has("--all")) rebuildTables();
-
   if (has("--all")) {
+    // Every bands.json row, then the general-card band (`通用`, not a band).
+    // Tables rebuild after the lifts so new CHARACTER / BAND consts are
+    // collected on the same run.
     for (const b of bands) {
       liftBandCards(b.name);
       liftBandSkills(b.name);
     }
+    liftBandCards("通用");
   }
+
+  if (has("--tables") || has("--all")) rebuildTables();
 
   if (!args.length) {
     // Default: ordinals only, and remind about the rest.

@@ -41,7 +41,14 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
             settle_before,
         ),
     ],
-).silent(&[2]);
+).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"追逐梦想的步伐"#)
+        .raw_name(r#"（LOCK）追逐梦想的步伐"#)
+        .tags(&[])
+        .text(r#"（1）抽取游戏开始的2手牌前将此卡从卡组展示给所有玩家并放置在自身场上，游戏开始时[传送]到“东京外”获得3层[除外]
+（2）如果此卡拥有者的主要移动[经过]了“Bandori车站”则在触发结算前将行动终点改为“旭汤澡堂”，然后此卡[移除]"#)
+        .cell(r#"H13"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"朝日六花"#)]));
 
 /// C# `m.Tags["lockStation"]` -- the owner's main move passed Bandori车站.
 const SLOT_TAG: &str = "lock_dream_tag";

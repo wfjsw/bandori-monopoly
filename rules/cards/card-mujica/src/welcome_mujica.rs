@@ -20,7 +20,14 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Counteract(&[ChainKind::State], "actor != owner", None, counteract),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"欢迎来到ave mujica的世界"#)
+        .raw_name(r#"欢迎来到ave mujica的世界"#)
+        .tags(&[r#"反击"#])
+        .text(r#"选择以下效果其一发动：
+（1）转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）；（2）[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态"#)
+        .cell(r#"J3"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」

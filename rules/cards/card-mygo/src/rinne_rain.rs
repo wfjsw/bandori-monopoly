@@ -20,7 +20,13 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         On::AtEnd("owner.pos >= 0", None, settle_now),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]);
+.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"轮符雨"#)
+        .raw_name(r#"轮符雨"#)
+        .tags(&[])
+        .text(r#"使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]"#)
+        .cell(r#"I4"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn rinne_rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使自己获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, CardName)`.

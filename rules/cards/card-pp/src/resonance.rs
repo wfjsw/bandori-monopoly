@@ -21,7 +21,15 @@ use card_sdk::{key, CardDef, Msg};
 
 /// The [共鸣] fuel card. Empty `On`: it has no hand play and no hook of its own
 /// -- it is fuel for other cards' [共鸣] branches, offered by [`try_resonance`].
-pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]);
+pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"共鸣"#)
+        .raw_name(r#"[衍生]共鸣"#)
+        .derived(true)
+        .tags(&[r#"特"#, r#"衍生"#])
+        .text(r#"[特]：
+拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。"#)
+        .cell(r#"D8"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Offer the [共鸣] cost. Returns whether the player paid it, which is the
 /// caller's signal to run its own [共鸣] branch.

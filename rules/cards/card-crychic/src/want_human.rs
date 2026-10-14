@@ -24,7 +24,13 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
             counteract,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"想要成为人类"#)
+        .raw_name(r#"想要成为人类"#)
+        .tags(&[])
+        .text(r#"（1）将此卡置于场上并从1-20间选择并声明X，将其写下。每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶。（2）[自动]若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部奇迹水晶并使你下次的移动掷骰结果额外增加20-X；若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶。"#)
+        .cell(r#"M2"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 /// Where the declared X is written down (C# `CardWantHuman.Mem["x"]`).
 /// A per-player slot stands in for the per-field-card `Mem` map; 0 means

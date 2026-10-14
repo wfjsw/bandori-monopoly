@@ -22,7 +22,13 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         None,
         counteract,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name(r#"（美咲）"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。"#)
+        .cell(r#"F15"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", r#"奥泽美咲"#)]));
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
 /// in the direction the move actually travels (`t.Move.Dir`).

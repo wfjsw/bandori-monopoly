@@ -31,7 +31,13 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
             counter_fire,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"寄于指尖的执念"#)
+        .raw_name(r#"（和奏瑞依）寄于指尖的执念"#)
+        .tags(&[])
+        .text(r#"当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。"#)
+        .cell(r#"H16"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"和奏瑞依"#)]));
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 

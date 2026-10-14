@@ -27,7 +27,14 @@ pub const DETOUR: CardDef = CardDef::new(
         On::AtEnd("", None, clear_no_reward),
     ],
 )
-    .silent(&[3]);
+    .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"回家的路上绕个道"#)
+        .raw_name(r#"回家的路上绕个道"#)
+        .tags(&[])
+        .text(r#"(1)此卡可作为反击使用
+(2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#)
+        .cell(r#"C9"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
 
 /// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

@@ -12,7 +12,14 @@ use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BANG_DREAM: CardDef =
-    CardDef::new("PPP:Bang Dream!", &[On::Play("", Some(cant_play), bang_dream)]);
+    CardDef::new("PPP:Bang Dream!", &[On::Play("", Some(cant_play), bang_dream)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Bang Dream!"#)
+        .raw_name(r#"Bang Dream!"#)
+        .tags(&[r#"手"#])
+        .text(r#"[手]：
+为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房。"#)
+        .cell(r#"B7"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBangDream.WhyNot`: refuses with 「你还没有地」 when the player owns no tile.

@@ -20,7 +20,13 @@ use card_sdk::{key, CardDef, Msg, On};
 const PAREO: &str = "PAREO标记";
 
 pub const PAREO_FAR: CardDef =
-    CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play("", None, pareo_far)]);
+    CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play("", None, pareo_far)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"渐渐远去的你"#)
+        .raw_name(r#"（PAREO）渐渐远去的你"#)
+        .tags(&[])
+        .text(r#"获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋"#)
+        .cell(r#"H15"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"鳰原令王那"#)]));
 
 fn pareo_far(player_id: i32) -> card_sdk::Asked {
     let got = ctx::add_tok(player_id, PAREO, 2, 3)?;

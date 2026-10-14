@@ -17,7 +17,13 @@ pub const TRAJECTORY: CardDef = CardDef::new(
     "R:轨迹",
     &[On::Counteract(&[ChainKind::Bankrupt], "", Some(can_counteract), counteract)],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]);
+.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"轨迹"#)
+        .raw_name(r#"轨迹"#)
+        .tags(&[r#"反击"#, r#"特"#])
+        .text(r#"[反击] [特]（1）在场上有玩家破产时，展示此卡，你获得那名玩家的任意一张地契（自动免费赎回），并拆除那个对应格子的所有房屋。"#)
+        .cell(r#"E15"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
 
 /// 规则书（1）[反击]: 「在场上有玩家破产时，展示此卡」
 fn can_counteract(player_id: i32) -> bool {

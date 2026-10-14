@@ -36,7 +36,13 @@ pub const DICE_CAST: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
     ],
 )
-.props(&[(card_sdk::abi::prop::SONG, 1)]);
+.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"骰子已经掷下"#)
+        .raw_name(r#"骰子已经掷下"#)
+        .tags(&[r#"反击"#])
+        .text(r#"将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）"#)
+        .cell(r#"J6"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 /// C# `CardDiceCast.WhyNot` -- 「已经在场上了」 while the lock is yours.
 fn cant_play(player_id: i32) -> Option<Msg> {
