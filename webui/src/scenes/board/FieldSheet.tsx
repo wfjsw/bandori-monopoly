@@ -16,6 +16,7 @@ import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
 import { InspectCard } from "../../ui/Card";
+import { Avatar } from "../../ui/Character";
 import { showEvent } from "./Popups";
 import { useHoverSeat } from "./hoverSeat";
 import { t as tr } from "../../i18n/t";
@@ -76,6 +77,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   {!!note && <span className={s.noteDot} title={note} />}
                 </InspectCard>
               )}
+              <Avatar c={m.charOf(i)} size={28} className={s.holder} />
             </div>
           );
         }))}
