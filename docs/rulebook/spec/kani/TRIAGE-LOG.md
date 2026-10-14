@@ -1230,6 +1230,7 @@ specs. Production `cfg(not(kani))` untouched.
 | `mor::rainbow_01_mutant_is_detected` | FAILED 157 s | `mutant: card must not match off-by-one half` | **D** | same root: CeilTo-10 body collides with `amount/2+1` on e.g. amount∈{18,38,…} | pending |
 | `mor::rainbow_02_mutant_is_detected` | FAILED 150 s | `mutant: card must not match off-by-one boost` | **D** | same | pending |
 | `mor::courage_01_pay_iff_blocked_host` | UNWINDING 217 s | `unwinding assertion loop 0` at `courage_world_owned` | **A** | 60-trip `for t in 0..60` at unwind 32; 8×8 chunk walk (TUNING) | pending |
+| `mor::courage_01_pay_user1_iff_blocked_host` | UNWINDING 169 s | same loop at `courage_world_owned` | **A** | same fix (shared helper) | pending |
 
 ### Host-model fixes (commit `2548b2b4`)
 
@@ -1242,9 +1243,12 @@ specs. Production `cfg(not(kani))` untouched.
    to the named pile). The Kani arm only stored `w.dest`. A play from hand
    names the *hand card's* fate (applied by the play pipeline); a field
    effect names the instance's fate. Now applies immediately when the
-   instance is live on the field. `arm_unplace` / `arm_unplace_card` likewise
-   drop the field slot and push to discard instead of effect-only.
-   `World::remove_field` does the swap-remove.
+   instance is live on the field — **world state only** (field slot drops,
+   pile gains the card), **not** an in-run `UnplaceCard` effect: specs
+   `again_02_effects_ok` / `starry_06_effects_ok` / `tritone_02_tick_effects_ok`
+   pin "exactly N effects" and the engine's post-body unplace is outside the
+   effect log. `arm_unplace` / `arm_unplace_card` (explicit unplace) still
+   push `UnplaceCard`. `World::remove_field` does the swap-remove.
 
 ### Proof/spec fixes (commit `0b25d27d`)
 

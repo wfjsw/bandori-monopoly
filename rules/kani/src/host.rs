@@ -2241,6 +2241,12 @@ pub fn arm_set_dest(a: Args) -> i64 {
                 // A play from hand names the *hand card's* fate instead and is
                 // applied by the play pipeline, so only apply here when the
                 // instance is live on the field. `Dest::Field` (2) = stay.
+                //
+                // The commit is **not** an in-run effect (specs such as
+                // `again_02_effects_ok` / `starry_06_effects_ok` pin "exactly
+                // one effect" and the engine's post-body unplace is outside
+                // the effect log). World state only: field slot drops, pile
+                // gains the card.
                 if a0 != 2 {
                     let uid = w.last_uid;
                     if let Some(card) = w.remove_field(uid) {
@@ -2250,7 +2256,6 @@ pub fn arm_set_dest(a: Args) -> i64 {
                             // 3 = Banished 「[移除]」: left the field, goes nowhere.
                             _ => {}
                         }
-                        w.push(Effect::UnplaceCard { uid });
                     }
                 }
             });
