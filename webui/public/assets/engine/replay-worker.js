@@ -61,6 +61,10 @@ async function init(base) {
     if (r.ok) files[name] = keepBom.decode(await r.arrayBuffer());
   }
   glue.load_data(JSON.stringify(files));
+  // Data-then-ruleset is the archived-bundle order and stays valid: pre-ABI-63
+  // glues read the roster from their own `dataFiles` (cards.json etc.); current
+  // glues rebuild GameData from these tables plus the set's roster at
+  // `ruleset_build`, so the replay still sees cards / characters / bands.
   const indexUrl = new URL(L.rulesIndex, root);
   const index = await (await fetch(indexUrl)).json();
   for (const m of index.modules ?? []) {

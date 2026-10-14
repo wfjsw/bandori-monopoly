@@ -883,6 +883,40 @@ impl Ruleset {
         b.build()
     }
 
+    /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh)
+    /// without binding to a [`game_core::data::GameData`]. `Ok(None)` when the
+    /// directory or index is missing -- the caller falls back to no card
+    /// effects. Hosts use this to take [`Self::roster`] *before* loading the
+    /// game tables (the tables' roster comes from the ruleset).
+    pub fn load_dir(dir: &std::path::Path) -> Result<Option<Self>, RuleError> {
+        let index = dir.join("index.json");
+        let Ok(text) = std::fs::read_to_string(&index) else {
+            return Ok(None);
+        };
+        let v: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| RuleError::Load(format!("bad index: {e}")))?;
+        let mut builder = Self::builder();
+        let mut any = false;
+        for m in v["modules"]
+            .as_array()
+            .map(|a| a.iter())
+            .into_iter()
+            .flatten()
+        {
+            let file = m["file"]
+                .as_str()
+                .ok_or_else(|| RuleError::Load("module entry has no file".into()))?;
+            let bytes = std::fs::read(dir.join(file))
+                .map_err(|e| RuleError::Load(format!("{file}: {e}")))?;
+            builder.add(&bytes)?;
+            any = true;
+        }
+        if !any {
+            return Ok(None);
+        }
+        Ok(Some(builder.build()?))
+    }
+
     /// Override the per-run fuel limit.
     pub fn with_fuel(mut self, fuel: u64) -> Self {
         self.fuel = fuel;
@@ -918,7 +952,7 @@ impl Ruleset {
     }
 
     /// The same rows as [`Self::metadata`], as the game's `Roster` (ready for
-    /// [`game_core::data::GameData::load_with_roster`]).
+    /// [`game_core::data::GameData::load`]).
     pub fn roster(&self) -> game_core::data::Roster {
         crate::roster::roster_from_meta(self.metadata())
     }

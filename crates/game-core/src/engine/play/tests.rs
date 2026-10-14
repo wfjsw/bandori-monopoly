@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::data::GameData;
+use crate::data::{GameData, Roster};
 use crate::engine::cx::{Answered, HaltKind};
 use crate::engine::world::World;
 use crate::engine::{Match, StubRules};
@@ -14,9 +14,13 @@ use crate::MatchMode;
 use crate::data::TileKind;
 
 fn data() -> Arc<GameData> {
+    // Unit tests live inside the crate, so they cannot use the integration-test
+    // `common` harness. Least-invasive roster: the three legacy JSON files
+    // still on disk (see `Roster::from_json_dir`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_json_dir(&dir).expect("data/{cards,characters,bands}.json");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
+        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
             .unwrap(),
     )
 }

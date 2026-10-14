@@ -39,12 +39,13 @@ export let rulesetLoaded = false;
 
 /** The card / skill / tile rule modules `tools/build-ruleset.mjs` copies to
  *  `/assets/rules/`. Without them every solo match runs on the engine's
- *  `StubRules` (plain-Monopoly tiles, no card or skill effects), so this has to
- *  run after `load_data` (the ruleset binds to the game data) and before any
- *  `SoloMatch` is built. Online play runs the rules on the server, so a failure
- *  here is not fatal -- but it **is** shown, because a match recorded without
- *  card rules and replayed with them (or the other way round) diverges at the
- *  first checkpoint and looks like engine drift. */
+ *  `StubRules` (plain-Monopoly tiles, no card or skill effects) and the roster
+ *  is empty, so this runs **before** `roster_json()` / `load_data` (the
+ *  ruleset is the roster source) and before any `SoloMatch` is built. Online
+ *  play runs the rules on the server, so a failure here is not fatal -- it is
+ *  toasted and the page continues with an empty roster / StubRules -- but a
+ *  match recorded without card rules and replayed with them (or the other way
+ *  round) diverges at the first checkpoint and looks like engine drift. */
 async function loadRuleset(): Promise<void> {
   try {
     // The sequence lives in `rulesetLoad.ts` and is shared with the node gate
@@ -64,6 +65,26 @@ async function loadRuleset(): Promise<void> {
   }
 }
 
+/** Display-only overlay of `skill_simple.json`: newcomer skill bodies and the
+ *  card `counterReason` column (once in `cards.json`, no longer fetched). */
+interface SkillSimple {
+  characters: { name: string; text: string }[];
+  bands: { name: string; text: string }[];
+  cards?: { id: string; counterReason: string }[];
+}
+
+/**
+ * The one boot gate for the typed `D`. Order matters:
+ *
+ * 1. wasm init + glue identity;
+ * 2. **ruleset first** -- `roster_json()` is empty until `ruleset_build`, and
+ *    deck builder / gallery / home read `D` as soon as this resolves;
+ * 3. `roster_json()` for cards / characters / bands;
+ * 4. the remaining `data_files()` tables + optional bot books, `load_data`;
+ * 5. merge the display-only overlay (`skill_simple.json`) and assign `D` here,
+ *    only at the end, so a throw leaves `D` untouched and Boot shows the error
+ *    stage instead of a half-initialized table.
+ */
 export async function loadGameData(progress: (p: number) => void): Promise<void> {
   await init();
   // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9): every
@@ -72,6 +93,15 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   if (typeof glue.set_glue_sha === "function" && engineId?.glueSha256) {
     glue.set_glue_sha(engineId.glueSha256);
   }
+  // Ruleset before the tables: the roster rides on the built set. Failure is
+  // degraded (empty roster + StubRules), not fatal -- `loadRuleset` toasts.
+  await loadRuleset();
+
+  const roster = JSON.parse(glue.roster_json()) as {
+    cards: CardData[];
+    characters: CharacterData[];
+    bands: BandData[];
+  };
   const names: string[] = JSON.parse(glue.data_files());
   const files: Record<string, string> = {};
   let done = 0;
@@ -102,24 +132,29 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     /* absent book is fine */
   }
   glue.load_data(JSON.stringify(files));
-  await loadRuleset();
 
   const j = (n: string) => JSON.parse(files[n].replace(/^﻿/, ""));
-  const cards: CardData[] = j("cards.json").cards;
-  const characters: CharacterData[] = j("characters.json").characters;
-  const bands: BandData[] = j("bands.json").bands;
+  // Cards / characters / bands come from the ruleset roster (was
+  // `cards.json` / `characters.json` / `bands.json`; those stay on disk for
+  // authoring tools until they retire).
+  const cards = roster.cards;
+  const characters = roster.characters;
+  const bands = roster.bands;
   const events: EventData[] = j("events.json").events;
   const homeLines = j("home_lines.json").characters ?? [];
-  // `skill_simple.json` is the hand-written newcomer version of each skill body
-  // (`· ` bullets). It rides on the character/band record as `simple`, which is
-  // what `skillText` picks when the setting is on -- the originals in
-  // characters.json / bands.json stay the `text` fallback.
-  const simple = j("skill_simple.json") as {
-    characters: { name: string; text: string }[];
-    bands: { name: string; text: string }[];
-  };
+  // `skill_simple.json` is the display-only overlay: the hand-written newcomer
+  // version of each skill body (`· ` bullets) rides on the character/band
+  // record as `simple` (what `skillText` picks when the setting is on -- the
+  // roster's `text` is the fallback), and the card `counterReason` column
+  // (the [反击] prompt's "why this card may be declared") rides on each card.
+  const simple = j("skill_simple.json") as SkillSimple;
   for (const c of characters) c.simple = simple.characters.find((x) => x.name === c.name)?.text;
   for (const b of bands) b.simple = simple.bands.find((x) => x.name === b.name)?.text;
+  const reasonById = new Map((simple.cards ?? []).map((x) => [x.id, x.counterReason]));
+  for (const c of cards) {
+    const reason = reasonById.get(c.id);
+    if (reason) c.counterReason = reason;
+  }
   const byId = new Map(cards.map((c) => [c.id, c]));
   D = {
     tiles: j("board.json").tiles,
@@ -139,8 +174,8 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   };
 }
 
-/** `band` value of the cards every character may take. A data key from
- *  `cards.json` (the data set is Chinese), not display text. */
+/** `band` value of the cards every character may take. A data key from the
+ *  roster (the data set is Chinese), not display text. */
 export const GENERAL_BAND = "通用";
 
 export function cardTitle(id: string): string {
@@ -149,8 +184,8 @@ export function cardTitle(id: string): string {
   if (!id || !D) return tr("common.unnamed");
   const name = D.card(id)?.name;
   if (name) return name;
-  // Skills use card-typed message arguments too, but their names live in
-  // bands.json / characters.json. Match the engine's skill:<owner>:<skill> id.
+  // Skills use card-typed message arguments too, but their names live in the
+  // roster's bands / characters. Match the engine's skill:<owner>:<skill> id.
   const skill = skillCard(id);
   if (skill) return skill.title;
   // An event's activation names it as `event:<id>` (the rule id) or as the
@@ -168,8 +203,8 @@ export function cardTitle(id: string): string {
 
 /** A `skill:<owner>:<skill>` id (the engine's band / character skill stand-in,
  *  e.g. the 团卡 `skill:Poppin' Party:星之鼓动`) resolved for display: title and
- *  body come from bands.json / characters.json, art from the band logo or the
- *  character's art. Undefined for anything that is not a skill id. */
+ *  body come from the roster's bands / characters, art from the band logo or
+ *  the character's art. Undefined for anything that is not a skill id. */
 export function skillCard(id: string): { title: string; text: string; band?: string; color: string; art: string } | undefined {
   if (!id || !D || !id.startsWith("skill:")) return undefined;
   const band = D.bands.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);

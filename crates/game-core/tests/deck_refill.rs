@@ -5,13 +5,11 @@ use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 use std::sync::{Arc, Mutex};
+mod common;
+use common::data_arc;
 
 fn setup() -> (Arc<GameData>, World) {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let data = Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
-    );
+    let data = data_arc();
     let members = (1..=2)
         .map(|id| RoomMember {
             id,

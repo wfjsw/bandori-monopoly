@@ -1,16 +1,11 @@
 //! P2 tests against the real game data in `web/data/` (copied by the asset pipeline).
 
-use game_core::data::GameData;
 use game_core::net::{clean_name, NetMessage};
 use game_core::profile::{PlayerProfile, Seen};
 use game_core::state::{MatchEvent, MatchPlayer, MatchState};
 use game_core::{deck, MatchMode};
-
-fn data() -> GameData {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-        .expect("web/data should load -- run tools/asset-pipe/extract.py")
-}
+mod common;
+use common::data;
 
 #[test]
 fn band_traits_and_variants_come_from_data() {

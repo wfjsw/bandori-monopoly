@@ -9,8 +9,8 @@
 //! cite/check, Kani generator) can read it later.
 //!
 //! Display-only columns that live outside the engine structs (`simple`,
-//! `counterReason`) stay in `data/*.json` and are **not** printed here -- they
-//! are not part of `CardData` / `CharacterData` / `BandData`.
+//! `counterReason`) stay in `data/skill_simple.json` and are **not** printed
+//! here -- they are not part of `CardData` / `CharacterData` / `BandData`.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;

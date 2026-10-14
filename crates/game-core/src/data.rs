@@ -8,6 +8,14 @@
 //!
 //! `game-core` never touches the filesystem: [`GameData::load`] takes a reader so the
 //! server (fs) and the browser (fetch) can both supply the files.
+//!
+//! **Roster (ABI v63).** `cards` / `characters` / `bands` no longer come from
+//! `data/{cards,characters,bands}.json`. They are authored beside the rule code
+//! and handed over as [`Roster`] (ruleset `bandori_metadata` ->
+//! [`crate::data::Roster`]). [`DATA_FILES`] covers only the remaining tables
+//! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
+//! roster is covered by the ruleset hash (`EngineStamp::ruleset_sha256`),
+//! which already names the modules the metadata lives in.
 
 use std::collections::HashMap;
 
@@ -176,7 +184,7 @@ pub fn status_rule_ids() -> &'static [&'static str] {
     ]
 }
 
-/// One card row from `cards.json`.
+/// One card row of the roster (was `cards.json`; now ruleset metadata).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CardData {
@@ -213,7 +221,7 @@ impl CardData {
     }
 }
 
-/// One playable character from `characters.json`.
+/// One playable character of the roster (was `characters.json`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CharacterData {
@@ -246,7 +254,7 @@ impl CharacterData {
     }
 }
 
-/// One band from `bands.json` (skill text + branding).
+/// One band of the roster (was `bands.json`; skill text + branding).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct BandData {
@@ -264,15 +272,42 @@ pub struct BandData {
     pub boot_art: String,
 }
 
-/// The roster half of [`GameData`] -- `cards.json` / `characters.json` /
-/// `bands.json` -- handed over by the ruleset host (ABI v63 `bandori_metadata`,
-/// converted in `game-rules`). `game-core` stays free of the card crates; this
-/// is the plain struct of vectors it already iterates in file order.
+/// The roster half of [`GameData`] -- cards / characters / bands -- handed over
+/// by the ruleset host (ABI v63 `bandori_metadata`, converted in `game-rules`).
+/// `game-core` stays free of the card crates; this is the plain struct of
+/// vectors it already iterates in canonical (former data-file) order.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Roster {
     pub cards: Vec<CardData>,
     pub characters: Vec<CharacterData>,
     pub bands: Vec<BandData>,
+}
+
+impl Roster {
+    /// Parse the three legacy `data/{cards,characters,bands}.json` file texts
+    /// into a [`Roster`]. **Not a runtime path** -- the live host gets its
+    /// roster from the ruleset (ABI v63). This exists so tests and tools that
+    /// still read the authored JSON can build a [`GameData`] without
+    /// `game-core` depending on the card crates. When those files retire,
+    /// switch the call sites to a `dump_roster` fixture.
+    pub fn from_json_files(
+        cards: &str,
+        characters: &str,
+        bands: &str,
+    ) -> Result<Self, String> {
+        Ok(Roster {
+            cards: parse::<CardFile>("cards.json", cards)?.cards,
+            characters: parse::<CharacterFile>("characters.json", characters)?.characters,
+            bands: parse::<BandFile>("bands.json", bands)?.bands,
+        })
+    }
+
+    /// [`Self::from_json_files`] over a directory holding the three legacy
+    /// roster JSON files (tests / examples pointed at `data/`).
+    pub fn from_json_dir(dir: &std::path::Path) -> Result<Self, String> {
+        let read = |f: &str| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string());
+        Self::from_json_files(&read("cards.json")?, &read("characters.json")?, &read("bands.json")?)
+    }
 }
 
 /// One event card from `events.json`.
@@ -287,7 +322,7 @@ pub struct EventData {
 }
 
 /// `band` value of the cards every character may take. A data key from
-/// `cards.json` (the data set is Chinese), not display text.
+/// roster band key (the data set is Chinese), not display text.
 pub const GENERAL_BAND: &str = "通用";
 
 /// Character → school tile-name map.
@@ -456,21 +491,23 @@ pub struct GameData {
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`.
-pub const DATA_FILES: [&str; 11] = [
+/// Data files, as named in `web/data/`. The roster (`cards.json` /
+/// `characters.json` / `bands.json`) is **not** here: it comes from the ruleset
+/// (ABI v63 `bandori_metadata`) and is covered by the ruleset hash, not this
+/// one. `skill_simple.json` and the card display overlay stay because they are
+/// display-only and the client merges them.
+pub const DATA_FILES: [&str; 8] = [
     "board.json",
-    "cards.json",
-    "characters.json",
-    "bands.json",
     "events.json",
     "schools.json",
     "home_lines.json",
     "voice_lines.json",
     "match_rules.json",
     "rules.txt",
-    // Hand-written simplified skill bodies, for the client's skill-text
-    // setting. Display-only: the engine reads the originals in `characters.json`
-    // / `bands.json`.
+    // Hand-written simplified skill bodies (and the card `counterReason`
+    // overlay), for the client's skill-text setting and the [反击] prompt
+    // reason. Display-only: the engine reads the full skill text from the
+    // roster.
     "skill_simple.json",
 ];
 
@@ -499,7 +536,7 @@ impl GameData {
     }
 
     /// Is `id` a **band** skill rule (`skill:<band>:<skill>` for some band in
-    /// `bands.json`), as against a character skill (`skill:<character>:<skill>`)?
+    /// roster bands), as against a character skill (`skill:<character>:<skill>`)?
     /// This is what stamps `FieldCard::band_skill` at placement, and through it
     /// what 「乐队卡 / 团卡」 crystal reads and writes land on.
     pub fn is_band_skill(&self, id: &str) -> bool {
@@ -508,24 +545,14 @@ impl GameData {
             .any(|b| !b.skill.is_empty() && skill_id(&b.name, &b.skill) == id)
     }
 
-    /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`.
-    pub fn load(mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Self, String> {
-        let mut get = |f: &str| read(f).map_err(|e| format!("{f}: {e}"));
-        let roster = Roster {
-            cards: parse::<CardFile>("cards.json", &get("cards.json")?)?.cards,
-            characters: parse::<CharacterFile>("characters.json", &get("characters.json")?)?
-                .characters,
-            bands: parse::<BandFile>("bands.json", &get("bands.json")?)?.bands,
-        };
-        Self::load_with_roster(&mut read, roster)
-    }
-
-    /// Like [`Self::load`], but the roster (`cards` / `characters` / `bands`)
-    /// is handed over by the ruleset host (ABI v63 `bandori_metadata` ->
-    /// `Roster`) instead of read from JSON. Every other file still comes
-    /// through `read`. The deck book / strategy book are loaded here so both
-    /// entry points share that path.
-    pub fn load_with_roster(
+    /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`,
+    /// plus the [`Roster`] the ruleset host supplies (ABI v63 `bandori_metadata`
+    /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`).
+    /// There is no JSON-roster path left in the runtime.
+    ///
+    /// The deck book / strategy book are loaded here so every entry point
+    /// shares that path.
+    pub fn load(
         mut read: impl FnMut(&str) -> Result<String, String>,
         roster: Roster,
     ) -> Result<Self, String> {

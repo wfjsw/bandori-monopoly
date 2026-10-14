@@ -70,6 +70,8 @@ async function init(base) {
   }
   glue.load_data(JSON.stringify(files));
   // The ruleset the page loads (`/assets/rules/`) -- same bytes, same sequence.
+  // Data-then-ruleset is safe: the glue rebuilds GameData from the kept tables
+  // plus the set's roster at `ruleset_build` (was `cards.json` etc.).
   const rulesBase = new URL("../../../assets/rules/", baseHref);
   const n = await loadRulesetInto(glue, async (rel) => {
     const r = await fetch(new URL(rel, rulesBase));

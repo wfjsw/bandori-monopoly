@@ -39,7 +39,9 @@ use bot_core::{
     action, Ismcts, MatchSim, SearchConfig, SearchOutcome, SeatView,
 };
 use game_core::data::GameData;
-use game_core::engine::{CardRules, StubRules};
+use game_core::engine::CardRules;
+#[cfg(not(feature = "native-rules"))]
+use game_core::engine::StubRules;
 use game_core::net::NetMessage;
 #[cfg(not(feature = "native-rules"))]
 use game_rules::WasmRules;
@@ -234,57 +236,77 @@ impl Ctx {
     /// `rules-worker` and the server do (`data/` + `dist/cards` via
     /// [`WasmRules`]). Falls back to [`StubRules`] (cards have no effect)
     /// when no modules load, exactly like the match shell.
-    pub fn load(data_dir: &std::path::Path, rules_dir: &std::path::Path) -> Self {
+    ///
+    /// The ruleset loads first (it does not need the tables) and its
+    /// [`game_rules::Ruleset::roster`] supplies the tables' roster (ABI v63).
+    /// With `native-rules` the linked `rules_native::roster()` supplies it
+    /// instead -- same rows, no wasm load.
+    ///
+    /// B1 (`docs/BOT.md` §3.1): with `--features native-rules` the
+    /// search's simulations run the card rules as plain native Rust --
+    /// no wasmtime Store per run. Advisory only: the match shell keeps
+    /// running the sandboxed modules, so a drift makes the bot weaker,
+    /// never the match wrong. On by default (the drift check is closed,
+    /// rules-native/tests/drift.rs); `--no-default-features` restores
+    /// the sandbox.
+    #[cfg(feature = "native-rules")]
+    pub fn load(data_dir: &std::path::Path, _rules_dir: &std::path::Path) -> Self {
+        let roster = rules_native::roster();
         let data = Arc::new(
-            GameData::load(|f| {
-                std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string())
-            })
+            GameData::load(
+                |f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()),
+                roster,
+            )
             .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
         );
-        let rules: Arc<dyn CardRules> = {
-            // B1 (`docs/BOT.md` §3.1): with `--features native-rules` the
-            // search's simulations run the card rules as plain native Rust --
-            // no wasmtime Store per run. Advisory only: the match shell keeps
-            // running the sandboxed modules, so a drift makes the bot weaker,
-            // never the match wrong. On by default (the drift check is closed,
-            // rules-native/tests/drift.rs); `--no-default-features` restores
-            // the sandbox.
-            #[cfg(feature = "native-rules")]
-            {
-                let n = rules_native::native_rules(data.clone());
-                eprintln!(
-                    "card rules: native (rules-native, {} cards) -- simulations only, not the match",
-                    n.ruleset().cards().len()
-                );
-                return Self {
-                    data,
-                    rules: Arc::new(n),
-                    opts: SearchOpts::default(),
-                    cache: Mutex::new(Cache::default()),
-                };
-            }
-            #[cfg(not(feature = "native-rules"))]
-            match WasmRules::load_dir(data.clone(), rules_dir) {
-            Ok(Some(r)) => {
+        let n = rules_native::native_rules(data.clone());
+        eprintln!(
+            "card rules: native (rules-native, {} cards) -- simulations only, not the match",
+            n.ruleset().cards().len()
+        );
+        Self {
+            data,
+            rules: Arc::new(n),
+            opts: SearchOpts::default(),
+            cache: Mutex::new(Cache::default()),
+        }
+    }
+
+    /// See the `native-rules` twin above. This is the sandboxed path.
+    #[cfg(not(feature = "native-rules"))]
+    pub fn load(data_dir: &std::path::Path, rules_dir: &std::path::Path) -> Self {
+        let ruleset = match game_rules::Ruleset::load_dir(rules_dir) {
+            Ok(Some(set)) => {
                 eprintln!(
                     "card modules: {} loaded from {}",
-                    r.ruleset().module_count(),
+                    set.module_count(),
                     rules_dir.display()
                 );
-                Arc::new(r)
+                Some(set)
             }
             Ok(None) => {
                 eprintln!(
                     "no card modules in {} -- search runs on no-effect cards",
                     rules_dir.display()
                 );
-                Arc::new(StubRules)
+                None
             }
             Err(e) => {
                 eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
-                Arc::new(StubRules)
+                None
             }
-            }
+        };
+        let roster = ruleset.as_ref().map(|s| s.roster()).unwrap_or_default();
+        let data = Arc::new(
+            GameData::load(
+                |f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()),
+                roster,
+            )
+            .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
+        );
+        let rules: Arc<dyn CardRules> = match ruleset {
+            Some(set) => Arc::new(WasmRules::new(set, data.clone())),
+            None => Arc::new(StubRules),
         };
         Self {
             data,

@@ -71,8 +71,10 @@ async function ensureInit(): Promise<EngineBoot> {
 }
 let initOnce: Promise<EngineBoot> | null = null;
 
-/** The page's `loadGameData` + `loadRuleset` sequence, minus the display data:
- *  same tables, same optional bot books, same ruleset (and conds blob). */
+/** The page's `loadGameData` sequence, minus the display data: ruleset first
+ *  (so the roster is non-empty), then the same tables and optional bot books.
+ *  Mirrors `core/data.ts`'s order -- a real match needs the roster for
+ *  characters, skills and card names. */
 async function boot(): Promise<EngineBoot> {
   await init();
   // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9) -- the same
@@ -80,6 +82,22 @@ async function boot(): Promise<EngineBoot> {
   // for the same bundle.
   if (typeof glue.set_glue_sha === "function" && engineId?.glueSha256) {
     glue.set_glue_sha(engineId.glueSha256);
+  }
+  // Ruleset before `load_data`: the roster rides on the built set (was
+  // `cards.json` / `characters.json` / `bands.json`). Failure is loud but not
+  // fatal -- see the catch below.
+  try {
+    await loadRulesetInto(glue, async (rel) => {
+      const r = await fetch("/assets/rules/" + rel);
+      if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+      return new Uint8Array(await r.arrayBuffer());
+    });
+  } catch (e) {
+    // Same policy as the page (`core/data.ts`): a solo match may run on the
+    // engine's StubRules with an empty roster, but it is loud about it -- a
+    // record written without card rules and replayed with them diverges at
+    // the first checkpoint.
+    console.error("[solo-worker] card modules failed to load; the match runs without card, skill or tile rules", e);
   }
   const names: string[] = JSON.parse(glue.data_files());
   const files: Record<string, string> = {};
@@ -101,18 +119,6 @@ async function boot(): Promise<EngineBoot> {
     }
   }
   glue.load_data(JSON.stringify(files));
-  try {
-    await loadRulesetInto(glue, async (rel) => {
-      const r = await fetch("/assets/rules/" + rel);
-      if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
-      return new Uint8Array(await r.arrayBuffer());
-    });
-  } catch (e) {
-    // Same policy as the page (`core/data.ts`): a solo match may run on the
-    // engine's StubRules, but it is loud about it -- a record written without
-    // card rules and replayed with them diverges at the first checkpoint.
-    console.error("[solo-worker] card modules failed to load; the match runs without card, skill or tile rules", e);
-  }
   let stamp: EngineStampJson | null = null;
   try {
     stamp = JSON.parse(glue.engine_stamp()) as EngineStampJson;

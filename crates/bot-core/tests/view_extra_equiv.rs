@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use bot_core::{view_extras, SeatView};
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -27,9 +27,16 @@ use game_core::state::{BotMentality, MatchState};
 use game_core::MatchMode;
 
 fn data() -> Arc<GameData> {
+    // bot-core must not grow a hard dep on the card crates, so the roster
+    // comes from the three legacy JSON files (see `Roster::from_json_dir`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_json_dir(&dir).expect("data/{cards,characters,bands}.json");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())).unwrap(),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap(),
     )
 }
 
