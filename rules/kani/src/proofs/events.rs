@@ -728,10 +728,14 @@ pub fn ex_quest_01_rolls_and_files() {
 // ===========================================================================
 // E-habinel-01 — 前往哈比内尔王国旅游 (PROVE effect log)
 // 「每个玩家获得X层[除外]…X=1d2（每个玩家独立投掷1d2）」
-// BLOCKED-HOST(tile_named:微笑号): `to` is always -1 under Kani.
+// tile_named(微笑号) = 26 — `exile_to` is that board index (class C fixed).
 // E-habinel-02 turn-start tick = engine status machinery → PROTOCOL-LEVEL.
-// E-habinel-03 「结束后」 timing is OPEN-habinel-end; teleport NOT claimed.
+// E-habinel-03 「结束后」 timing is OPEN-habinel-end; the return is stored on
+// the exile grant, not an immediate teleport.
 // ===========================================================================
+
+/// Board index of 「微笑号」.
+const HABINEL_SMILE: i32 = 26;
 
 #[kani::proof]
 #[kani::unwind(24)]
@@ -750,43 +754,88 @@ pub fn habinel_01_grants_exiles() {
 
     kani::cover!(n_log == n as usize, "one GiveExile per living player");
     crate::kassert!(
-        spec::events::habinel_01_exiles_ok(effects, living, -1),
-        "E-habinel-01: one GiveExile per player, n in 1..=2, to = -1 (BLOCKED-HOST 微笑号)"
+        spec::events::habinel_01_exiles_ok(effects, living, HABINEL_SMILE),
+        "E-habinel-01: one GiveExile per player, n in 1..=2, to = 微笑号 (tile 26)"
     );
-    for e in effects {
-        if let Effect::GiveExile { n, .. } = e {
-            kani::cover!(*n == 1, "X=1");
-            kani::cover!(*n == 2, "X=2");
+    // Zero-loop X∈{1,2} covers (body rolls 1d2 per seat).
+    let mut saw1 = false;
+    let mut saw2 = false;
+    {
+        let ne = effects.len().min(4);
+        macro_rules! step {
+            ($i:expr) => {
+                if $i < ne {
+                    if let Some(Effect::GiveExile { n, .. }) = effects.get($i) {
+                        if *n == 1 {
+                            saw1 = true;
+                        }
+                        if *n == 2 {
+                            saw2 = true;
+                        }
+                    }
+                }
+            };
         }
+        step!(0); step!(1); step!(2); step!(3);
     }
+    kani::cover!(saw1, "X=1");
+    kani::cover!(saw2, "X=2");
 }
 
 // ===========================================================================
 // E-never-ends-01 — 一切不会结束
-// BLOCKED-HOST(tile_named:RiNG N): the body early-returns when the named
-// tile is missing. Under Kani `tile_named("RiNG {n}")` is always -1, so the
-// body is a no-op. The book's teleport+exile is NOT proven.
+// 「抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层在回合
+// 开始时移除的[除外]。」
+// tile_named("RiNG {n}") resolves to board indices 8 / 16 / 36 / 53.
+// The body's `format!("RiNG {n}")` is a card-body fmt cost (class E).
 // ===========================================================================
 
+/// Board indices of 「RiNG 1」..「RiNG 4」.
+const RING_TILES: [i32; 4] = [8, 16, 36, 53];
+
 #[kani::proof]
-#[kani::unwind(16)]
-pub fn never_ends_01_noop_blocked_host() {
-    let w = base_world();
-    let pre = {
+#[kani::unwind(24)]
+pub fn never_ends_01_teleport_and_exile() {
+    let mut w = base_world();
+    w.n_players = 2;
+    {
         world::reset_world(w);
-        world::snapshot()
-    };
+    }
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:一切不会结束"), 0));
-    let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
+    let n = world::with_world(|w| w.n_players) as usize;
+    let players: [i32; 4] = [0, 1, 2, 3];
+    let living = &players[..n];
 
+    // Reconstruct the shared dest from the first Teleport (X = 1d4 face).
+    let mut dest = -1;
+    {
+        let ne = effects.len().min(8);
+        macro_rules! step {
+            ($i:expr) => {
+                if $i < ne && dest < 0 {
+                    if let Some(Effect::Teleport { tile, .. }) = effects.get($i) {
+                        dest = *tile;
+                    }
+                }
+            };
+        }
+        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    }
     crate::kassert!(
-        spec::events::never_ends_01_noop(effects),
-        "E-never-ends-01 BLOCKED-HOST(tile_named:RiNG): body is a no-op under Kani"
+        RING_TILES.contains(&dest),
+        "E-never-ends-01: dest is RiNG 1..4 (board 8/16/36/53)"
     );
-    crate::kassert!(arr4_eq(post.money, pre.money) && arr4_eq(post.pos, pre.pos), "frame");
+    kani::cover!(dest == 8, "RiNG 1");
+    kani::cover!(dest == 16, "RiNG 2");
+    kani::cover!(dest == 36, "RiNG 3");
+    kani::cover!(dest == 53, "RiNG 4");
+    crate::kassert!(
+        spec::events::never_ends_01_ok(effects, living, dest),
+        "E-never-ends-01: teleport to the rolled RiNG and 1 [除外] each"
+    );
 }
 
 // ===========================================================================
@@ -1367,7 +1416,8 @@ pub fn end_it_all_01_three_picks_counted() {
 // 「（1）将此卡的复制品放置于所有玩家所在格子上…触发结算时，格子上每有一张
 // 此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡
 // 的复制品。」
-// On:: 0=Play, 1=Hook(TurnStartBefore), 2=Hook(SettleBody), 3=Hook(Exile…).
+// On:: 0=Play, 1=Hook(TurnStartBefore/clear), 2=Hook(TurnStartBefore/spread),
+//     3=Hook(SettleBody), 4=Hook(Exile/Bankrupt/Abnormal).
 // place_mark IS modeled. remove_marks is a stub (E-embers-04 BLOCKED).
 // give_exile does not set EXILE (clear-on-exile cannot observe the grant).
 // ===========================================================================
@@ -1401,7 +1451,8 @@ pub fn embers_01_places_copies() {
 }
 
 /// E-embers-03: SettleBody hook — settler pays 10 per copy on their tile.
-/// On:: index 2. Trigger kind SettleBody = 64.
+/// On:: index 3 (SettleBody). Trigger kind SettleBody = 64.
+/// (Index 2 is the TurnStartBefore spread hook — off-by-one was class B.)
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn embers_03_settle_costs_ten_per_copy() {
@@ -1420,7 +1471,7 @@ pub fn embers_03_settle_costs_ten_per_copy() {
     }
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 0));
     let n0 = log_n_of();
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 2, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 3, 0));
     let logbuf = effects_of();
     let n1 = log_n_of();
     let effects = &effects_slice(&logbuf, n1)[n0..];
@@ -1446,12 +1497,14 @@ pub fn embers_04_clear_on_exile_blocked() {
     }
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 0));
     let marks_before = world::with_world(|w| w.marks_n);
-    // Exile hook (On:: index 3) with TriggerKind::Exile = 21.
+    // Exile hook (On:: index 4) with TriggerKind::Exile = 21.
+    // (Index 3 is SettleBody — off-by-one left this proof vacuous on the
+    // clear-on-exile path; class B.)
     world::with_world_mut(|w| {
         w.trig_kind = 21;
         w.trig_player = 0;
     });
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 3, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 4, 0));
     let marks_after = world::with_world(|w| w.marks_n);
     // remove_marks is a stub: marks survive. Book says they leave.
     crate::kassert!(
@@ -1551,12 +1604,15 @@ pub fn lost_chase_end_it_all_guard() {
 }
 
 // ===========================================================================
-// E-lulu-01 / 02 — 很噜的感觉 (partial; dest BLOCKED-HOST)
+// E-lulu-01 / 02 — 很噜的感觉
 // 「所有玩家可选择[传送]至快餐店（不触发场地效果），如果选择[传送]需支付
 // 500资金并喊出“噜噜噜！”…」
-// tile_named(快餐店) = -1 under Kani. The pay-500 leg is determined.
-// The shout is out-of-game (cannot test).
+// tile_named(快餐店) = 33 (board index). The pay-500 + teleport legs are
+// determined. The shout is out-of-game (cannot test).
 // ===========================================================================
+
+/// Board index of 「快餐店」 (`board::tile_named` / `data/board.json`).
+const LULU_SHOP: i32 = 33;
 
 #[kani::proof]
 #[kani::unwind(24)]
@@ -1573,27 +1629,17 @@ pub fn lulu_01_pay_500_leg() {
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
-    // Always-yes path (symbolic ask_yes degenerates to 0).
-    let expected = [
-        (0i32, -1i32, 500i32), // PayMoney is not PayTo; check by hand below
-    ];
-    let _ = expected;
-    // PayMoney 500 + Teleport to -1 for each living player.
+    // PayMoney 500 + Teleport to 快餐店 for each living player.
     let n = world::with_world(|w| w.n_players) as usize;
     crate::kassert!(
         effects.len() == n * 2,
-        "E-lulu-01: each accepting player pays 500 and teleports (BLOCKED-HOST 快餐店)"
+        "E-lulu-01: each accepting player pays 500 and teleports to 快餐店"
     );
     for i in 0..n {
-        let pay = &effects[i * 2];
-        let tp = &effects[i * 2 + 1];
+        let who = i as i32;
         crate::kassert!(
-            matches!(pay, Effect::PayMoney { player, n: 500 } if *player == i as i32),
-            "E-lulu-01: pay 500"
-        );
-        crate::kassert!(
-            matches!(tp, Effect::Teleport { player, tile: -1 } if *player == i as i32),
-            "E-lulu-01 BLOCKED-HOST(tile_named:快餐店): teleport dest is -1"
+            spec::events::lulu_01_pay_ok(&effects[i * 2..i * 2 + 2], who, LULU_SHOP),
+            "E-lulu-01: pay 500 then teleport to 快餐店 (tile 33)"
         );
     }
 }
@@ -1624,10 +1670,11 @@ pub fn lulu_02_decline_leaves_put() {
 }
 
 // ===========================================================================
-// E-school-time-01 / 02 — 上学时间 (exile leg; dest BLOCKED-HOST)
+// E-school-time-01 / 02 — 上学时间 (exile leg)
 // 「全体玩家移动到操作角色当前上学的学校的格子然后获得1层[除外]（如果剧情
 // 没有明说则移动到周边学区）。」
-// tile_named(周边学区 / school) = -1 under Kani. give_exile IS modeled.
+// tile_named(周边学区) = 17; character schools come from schools.rs. give_exile
+// IS modeled (`to` = -1, no named return).
 // ===========================================================================
 
 #[kani::proof]
@@ -1645,11 +1692,11 @@ pub fn school_time_01_exile_leg() {
     let players: [i32; 4] = [0, 1, 2, 3];
     let living = &players[..n as usize];
 
-    // Teleport to -1 (BLOCKED-HOST) + GiveExile 1 per living player.
+    // Teleport to the school / 周边学区 tile + GiveExile 1 per living player.
     let exiles_ok = spec::events::exile_one_each(effects, living);
     crate::kassert!(
         exiles_ok,
-        "E-school-time-01: one [除外] layer per player (dest BLOCKED-HOST 周边学区)"
+        "E-school-time-01: one [除外] layer per player (dest = school / 周边学区)"
     );
     kani::cover!(n_log == n as usize * 2, "teleport + exile per player");
 }
