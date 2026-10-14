@@ -28,6 +28,35 @@ fn tok_neg() -> u16 {
     crate::intern::intern(FANS_DOWN).0
 }
 
+// ---------------------------------------------------------------------------
+// Per-harness host-op subset for `PP:同一个梦想` (TRIAGE-LOG `op-subset`).
+//
+// Unmodified body (`same_dream.rs` + `resonance::try_resonance`) reaches:
+//   add_band_crystals, tok→count_held_name, add_tok→add_held, log, gain,
+//   player_count, hand_count (try_resonance entry).
+// Isolation (no [共鸣] in hand) keeps try_resonance at `hand_count <= 0`, so
+// ask / take_card / to_discard / in_band are on a dead path — still declared
+// so that if isolation breaks the proof FAILS loudly (outside_subset) rather
+// than silently passing. `effect` / `gain_typed` / `count_held` ride the same
+// handlers as their siblings.
+// ---------------------------------------------------------------------------
+crate::host_subset!(same_dream_dispatch {
+    add_band_crystals => arm_add_band_crystals,
+    count_held | count_held_name => arm_count_held,
+    add_held => arm_add_held,
+    set_held_name => arm_set_held_name,
+    log | effect => arm_log,
+    gain | gain_typed | gain_fixed => arm_gain,
+    player_count => arm_player_count,
+    hand_count => arm_hand_count,
+    take_card => arm_take_card,
+    to_discard => arm_to_discard,
+    ask => arm_ask,
+    in_band => arm_in_band,
+    band_crystals => arm_band_crystals,
+    money => arm_money,
+});
+
 /// Install the symbolic play world **in place** (2..=4 players, bounded
 /// money/fans, no [共鸣] in hand).
 ///
@@ -65,6 +94,22 @@ fn symbolic_play_world() {
 fn pin_two_seats() {
     world::with_world_mut(|w| {
         w.n_players = 2;
+    });
+}
+
+/// `PP:同一个梦想` world: narrow host dispatch + sparse seats.
+///
+/// Steps 1–2 are seat-count independent (step 3 isolated, no 共鸣). Only the
+/// two used seats carry symbolic money/fans; seats 2..4 stay concrete.
+/// `ctx::player_count()` is still the constant 4 (TUNING §7) — the body's
+/// `0..4` loop is four cheap iterations, and with `widen == false` only
+/// `p == user` is processed.
+fn same_dream_world() {
+    host::install_backend(same_dream_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
     });
 }
 
@@ -112,9 +157,8 @@ fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
 #[kani::unwind(32)]
 pub fn same_dream_01_band_plus_3_iff() {
     // Steps 1–2 read only the user's band/fans (step 3 isolated, no 共鸣).
-    // Seat-count independent → pin 2 seats.
-    symbolic_play_world();
-    pin_two_seats();
+    // Seat-count independent → sparse 2-seat world + narrow host subset.
+    same_dream_world();
     let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
@@ -186,9 +230,8 @@ pub fn same_dream_01_band_plus_3_iff() {
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn same_dream_02_money_mutant_is_detected() {
-    // Money leg is per-user; seat-count independent → pin 2 seats.
-    symbolic_play_world();
-    pin_two_seats();
+    // Money leg is per-user; seat-count independent → sparse 2-seat world.
+    same_dream_world();
     let user = any_player_in();
     kani::assume(fans_pos_of(user as usize) >= 1);
     let pre_up = fans_pos_of(user as usize);
