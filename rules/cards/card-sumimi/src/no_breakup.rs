@@ -21,7 +21,13 @@ pub const NO_BREAKUP: CardDef = CardDef::new(
         Some(cant_play),
         no_breakup,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Sumimi不会解散哦"#)
+        .raw_name(r#"Sumimi不会解散哦"#)
+        .tags(&[])
+        .text(r#"当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，进行一次可使你的资金变动为拥有相同数字的传送，视为你的主要移动；若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果"#)
+        .cell(r#"L3"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
 fn repeated_digits(money: i32) -> bool {

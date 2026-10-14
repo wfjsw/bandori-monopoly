@@ -34,6 +34,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 pub mod abi;
+pub mod meta;
 pub mod msg;
 
 /// Generic interned-name table (`u16` ids). Under `cfg(kani)` the ctx boundary
@@ -148,6 +149,11 @@ pub struct CardDef {
     /// `CardDef::texts`. The view composes per-tile speakers in
     /// body-precedence order (docs/TILES.md 「Tile text」).
     pub texts: &'static [(i32, &'static str, &'static str, &'static str)],
+    /// Deck/gallery metadata for this card (`CardDef::meta`, ABI v63). Lives
+    /// beside the rule so the roster is authored with the rule; rides the
+    /// separate `bandori_metadata` export, **not** [`abi::ManifestEntry`].
+    /// `None` = the card has no Rust metadata yet (partial lift).
+    pub meta: Option<&'static crate::meta::CardMeta>,
 }
 
 impl CardDef {
@@ -161,6 +167,7 @@ impl CardDef {
             quiet_when_empty: &[],
             flash: &[],
             texts: &[],
+            meta: None,
         }
     }
 
@@ -176,6 +183,7 @@ impl CardDef {
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
             texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -192,6 +200,7 @@ impl CardDef {
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
             texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -220,6 +229,7 @@ impl CardDef {
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
             texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -239,6 +249,7 @@ impl CardDef {
             quiet_when_empty: entries,
             flash: self.flash,
             texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -265,6 +276,7 @@ impl CardDef {
             quiet_when_empty: self.quiet_when_empty,
             flash: entries,
             texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -325,6 +337,36 @@ impl CardDef {
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
             texts,
+            meta: self.meta,
+        }
+    }
+
+    /// Deck/gallery metadata for this card (`docs/CARDS.md` 「Card metadata」).
+    /// Lives beside the rule; exported through `bandori_metadata`, never
+    /// through [`abi::ManifestEntry`]. Replaces any earlier `meta` call.
+    ///
+    /// ```ignore
+    /// use card_sdk::meta::CardMeta;
+    /// pub const CARD: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[...])
+    ///     .meta(&CardMeta::new()
+    ///         .name("Sumimi不会解散哦")
+    ///         .raw_name("Sumimi不会解散哦")
+    ///         .text("...")
+    ///         .tags(&["手"])
+    ///         .cell("B2")
+    ///         .fields(&[("band", "Sumimi"), ("owner", "")]));
+    /// ```
+    pub const fn meta(self, meta: &'static crate::meta::CardMeta) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: Some(meta),
         }
     }
 
