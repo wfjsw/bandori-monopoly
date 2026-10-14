@@ -374,6 +374,7 @@ name = "card-sdk"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "kani-model",
  "kani-ops",
  "postcard",
  "serde",
@@ -1266,6 +1267,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kani-model"
+version = "0.1.0"
+dependencies = [
+ "kani-ops",
+]
+
+[[package]]
 name = "kani-ops"
 version = "0.1.0"
 
@@ -1739,6 +1747,8 @@ dependencies = [
  "card-sumimi",
  "game-core",
  "game-rules",
+ "kani-model",
+ "kani-ops",
  "postcard",
  "rules-cond",
  "rules-cond-ir",

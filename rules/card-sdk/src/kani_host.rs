@@ -30,7 +30,20 @@ pub fn install(f: Backend) {
     unsafe { BACKEND = Some(f); }
 }
 
-/// Dispatch one import to the installed backend.
+/// Dispatch one import to the host.
+///
+/// Under `cfg(all(kani, feature = "kani-model"))` this is a **direct**
+/// Rust call into [`kani_model::dispatch`] — no `BACKEND` fn-ptr (that
+/// expanded to an 874-target IF-chain at every `ctx::*` site and was the
+/// pp SSA cliff). `inline(always)` so `Op` is constant at each call site.
+#[cfg(all(kani, feature = "kani-model"))]
+#[inline(always)]
+pub fn call(op: Op, a: Args) -> i64 {
+    kani_model::dispatch(op, a)
+}
+
+/// Dispatch one import to the installed backend (native tests / no model).
+#[cfg(not(all(kani, feature = "kani-model")))]
 pub fn call(op: Op, a: Args) -> i64 {
     let f = unsafe { BACKEND };
     let f = f.expect("rules-kani host backend not installed");

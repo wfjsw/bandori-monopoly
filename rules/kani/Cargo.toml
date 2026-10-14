@@ -41,7 +41,9 @@ tiles = ["dep:rules-tiles", "dep:rules-tile-marks"]
 events = ["dep:rules-events"]
 
 [dependencies]
-card-sdk = { workspace = true, features = ["guest"] }
+card-sdk = { workspace = true, features = ["guest", "kani-model"] }
+kani-model = { path = "../kani-model" }
+kani-ops = { path = "../kani-ops" }
 ruleset-core = { path = "../ruleset-core" }
 # Unmodified card / skill / event bodies under proof. Optional per unit
 # (see [features]) so a single-unit kani build links only that unit's crates.

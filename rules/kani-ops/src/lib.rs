@@ -4,8 +4,16 @@
 //! from here under `cfg(kani)` so the model crate can depend on this
 //! without a cycle. Production (`cfg(not(kani))`) `card-sdk` is unchanged.
 
-#![no_std]
+#![cfg_attr(target_arch = "wasm32", no_std)]
 #![allow(missing_docs)]
+
+#[cfg(target_arch = "wasm32")]
+extern crate alloc;
+#[cfg(not(target_arch = "wasm32"))]
+extern crate alloc;
+
+pub mod intern;
+pub mod native;
 
 /// Opcodes, one per `bandori_*` import (see `ctx/sys.rs`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
