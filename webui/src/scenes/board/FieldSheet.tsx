@@ -58,8 +58,8 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
           const pills = [
-            { label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner) },
-            { label: tr("board.pillDesignee", { who: m.nameOf(i) }), color: m.colorOf(i) },
+            { label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) },
+            { label: tr("board.pillDesignee", { who: m.nameOf(i) }), color: m.colorOf(i), char: m.charOf(i) },
           ];
           return (
             <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
