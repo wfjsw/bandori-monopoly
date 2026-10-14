@@ -59,11 +59,13 @@ export interface RingProps {
   roll?: RollControl | null;
 }
 
-/** The roll-zone die button: same action as the old side-column one. */
+/** The roll-zone button: rolls, or skips movement / continues the turn. */
 export interface RollControl {
   enabled: boolean;
   rolling: boolean;
   dice: number;
+  /** Caption under the die; "skip movement" / "continue" when the same button advances instead of rolling. */
+  caption: string;
   hint: string;
   onClick: () => void;
 }
@@ -576,7 +578,7 @@ function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
           >
             <img className={s.diceImg} src={sceneImg("dice_d20")} alt="" />
             <div className={s.diceNum}>{roll.dice || ""}</div>
-            <div className={s.diceCap}>{tr("board.dice")}</div>
+            <div className={s.diceCap}>{roll.caption}</div>
           </button>
         </div>
       )}
