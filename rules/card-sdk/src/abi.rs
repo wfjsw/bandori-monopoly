@@ -389,6 +389,10 @@ use alloc::{string::String, vec::Vec};
 ///      character name; `counter_is`), `value` (1 = owner is the actor's base
 ///      character), `step` (1 = owner is the actor's own character). No new
 ///      host import, no SAVE_VERSION change.
+/// v61: **turn-clock props** -- `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET`
+///      on a board-owned instance override the host turn clock (`base_time`
+///      = 恢复时间, `bonus_time` = 免费时间) as each turn starts (元祖！邦多利酱).
+///      No new import, no SAVE_VERSION change.
 /// v59: `ManifestEntry::texts` -- per-entry **tile text** declarations
 ///      (`CardDef::texts`): the deed-popup description an entry speaks for,
 ///      as `(entry, slot, tile, key)`. `slot` is [`text_slot`] (settle /
@@ -419,7 +423,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 60;
+pub const ABI_VERSION: i32 = 61;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -814,6 +818,20 @@ pub mod prop {
     /// refuses a build whose house cost is `>=` this, while the instance is in
     /// play. On a board-owned instance (`ctx::set_prop`); `0` disables.
     pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
+    /// Turn-clock override (v61): every turn start sets the host `base_time`
+    /// (恢复时间) to this many seconds **plus one**; `0` = no override (the
+    /// +1 is what lets "0 seconds" be expressed). On a board-owned instance
+    /// (`tile < 0`); with several, the smallest wins. Use
+    /// [`clock_secs`] to encode.
+    pub const BASE_TIME_SET: &str = "baseTimeSet";
+    /// Turn-clock override (v61): as [`BASE_TIME_SET`], for the acting seat's
+    /// `bonus_time` (免费时间): it is **set** to this value at turn start
+    /// instead of refilled.
+    pub const BONUS_TIME_SET: &str = "bonusTimeSet";
+    /// Encode `secs` for [`BASE_TIME_SET`] / [`BONUS_TIME_SET`].
+    pub const fn clock_secs(secs: i32) -> i32 {
+        secs + 1
+    }
 
     // ------------------------------------------------------ purchase surface
     // v40 (`docs/PURCHASE.md`). Tile props that decide eligibility, price and

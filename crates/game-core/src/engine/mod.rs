@@ -1274,8 +1274,22 @@ impl Match {
                 for s in signals {
                     match s {
                         Signal::StartTimer(i) => {
-                            self.bonus_time[i] = (self.bonus_time[i] + BONUS_REFILL).min(BONUS_MAX);
-                            self.base_time = BASE_TIME;
+                            // `prop::{BASE,BONUS}_TIME_SET` on a board-owned
+                            // instance (元祖！邦多利酱) replace the defaults.
+                            let set = |key: &str| {
+                                self.world
+                                    .st
+                                    .board_field
+                                    .iter()
+                                    .filter(|f| f.tile < 0)
+                                    .filter_map(|f| f.props.get(key).copied())
+                                    .filter(|&v| v > 0)
+                                    .map(|v| (v - 1) as f32)
+                                    .reduce(f32::min)
+                            };
+                            self.bonus_time[i] = set(crate::state::prop::BONUS_TIME_SET)
+                                .unwrap_or_else(|| (self.bonus_time[i] + BONUS_REFILL).min(BONUS_MAX));
+                            self.base_time = set(crate::state::prop::BASE_TIME_SET).unwrap_or(BASE_TIME);
                         }
                         Signal::TurnBegan => self.timed_out = false,
                     }

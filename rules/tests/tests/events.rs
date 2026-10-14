@@ -1041,14 +1041,20 @@ fn bangdream_chan_stays_until_the_drawer_third_turn_start() {
     );
 }
 
-// The clocks (免费时间 / 恢复时间) are host-side; there is no match state for
-// them. Only the expiry is assertable black-box.
+// 免费时间 = `bonus_time`, 恢复时间 = `base_time`: while the event is up each
+// turn starts with 5 s / 0 s; once it is filed away the defaults come back.
 #[test]
-#[ignore = "RULING: 元祖！邦多利酱's 免费时间/恢复时间 are host clocks -- no match-state seam"]
 fn bangdream_chan_shortens_the_clocks() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "元祖！邦多利酱", &[]);
-    panic!("no clock surface to assert");
+    pass(&mut t, 0);
+    until_turn(&mut t, 1);
+    assert_eq!((t.st().base_time, t.st().bonus_time), (0.0, 5.0), "{:?}", t.st().event_active);
+    until_turn(&mut t, 0);
+    pass(&mut t, 0);
+    until_turn(&mut t, 0);
+    assert!(!t.event_in_play("元祖！邦多利酱"));
+    assert_eq!(t.st().base_time, 15.0, "defaults return");
 }
 
 // =====================================================================
