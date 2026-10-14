@@ -256,11 +256,10 @@ pub struct BandData {
     pub skill: String,
     pub text: String,
     pub logo: String,
-    /// Band-skill trait: members may play each other's exclusive cards.
+    /// Band-skill trait: members may carry each other's exclusive cards in a
+    /// starting deck. Deck-legal only -- the in-match play gate is the
+    /// band-skill card's `ExclusiveUse` entry (or the generic own/base rule).
     pub shares_exclusives: bool,
-    /// Band-skill trait: its variant characters may not play the base
-    /// character's exclusive cards, only their own.
-    pub own_exclusives_only: bool,
     /// Boot-screen art id for a home character of this band; empty = default.
     pub boot_art: String,
 }
@@ -567,15 +566,10 @@ impl GameData {
             .unwrap_or(name)
     }
 
-    /// Whether `c`'s band lets its members use each other's exclusive cards.
+    /// Whether `c`'s band lets its members carry each other's exclusive cards
+    /// in a starting deck (deck-building only; see [`crate::deck`]).
     pub fn band_shares_exclusives(&self, c: &CharacterData) -> bool {
         self.band(&c.band).is_some_and(|b| b.shares_exclusives)
-    }
-
-    /// Whether `c` is a variant that must not use its base character's
-    /// exclusive cards (its band's `own_exclusives_only`).
-    pub fn variant_own_exclusives_only(&self, c: &CharacterData) -> bool {
-        !c.variant_of.is_empty() && self.band(&c.band).is_some_and(|b| b.own_exclusives_only)
     }
 
     /// Band by `name`, first match.

@@ -4440,6 +4440,40 @@ impl Cx<'_> {
         }
     }
 
+    /// The exclusive-use check (`docs/GUARDS.md` §ExclusiveUse). The generic
+    /// rule is the engine's own: an exclusive is playable iff `card.owner` is
+    /// the actor's character or its base (`variant_of`). A band-skill card may
+    /// then close the CEL-only `ExclusiveUse` gate to deny the base case
+    /// (CRYCHIC). Memoized per `(player, card)` under the world stamp, like
+    /// [`Self::rules_cant_play`] -- the gate is a ruleset query, not a field
+    /// read.
+    fn exclusive_play(
+        &self,
+        i: usize,
+        id: &str,
+        card: &crate::data::CardData,
+    ) -> Option<Msg> {
+        let character = &self.w.st.players[i].character;
+        let base = self.data.base_character(character);
+        let owner_is_self = card.owner == *character;
+        let owner_is_base = card.owner == base;
+        if !owner_is_self && !owner_is_base {
+            return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+        }
+        let ask = super::ExclusiveAsk {
+            card: id,
+            owner: &card.owner,
+            owner_is_self,
+            owner_is_base,
+        };
+        // Band-skill denial (`ExclusiveUse` gates), memoized under the world
+        // stamp like `rules_cant_play`.
+        if self.exclusive_gate_denied(i, id, &ask) {
+            return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+        }
+        None
+    }
+
     /// Why this card cannot be played from hand, or `None` when it can.
     pub(crate) fn cant_play(&self, i: usize, id: &str, asking: bool) -> Option<Msg> {
         if !self.w.hidden[i].hand.iter().any(|c| c == id) {
@@ -4453,16 +4487,10 @@ impl Cx<'_> {
             return Some(Msg::new(why));
         }
         if let Some(card) = self.data.card(id) {
-            let character = &self.w.st.players[i].character;
-            let base = self.data.base_character(character);
-            // Variants of an `own_exclusives_only` band (CRYCHIC) may not use
-            // the base character's exclusives.
-            let own_only = self
-                .data
-                .character(character)
-                .is_some_and(|c| self.data.variant_own_exclusives_only(c));
-            if card.exclusive() && card.owner != *character && (card.owner != base || own_only) {
-                return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+            if card.exclusive() {
+                if let Some(why) = self.exclusive_play(i, id, card) {
+                    return Some(why);
+                }
             }
         }
         if !self.rules.normal(id) {

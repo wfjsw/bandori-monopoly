@@ -21,7 +21,6 @@ fn band_traits_and_variants_come_from_data() {
     let sumimi = d.character("三角初华（Sumimi）").unwrap();
     let crychic = d.character("高松灯（CRYCHIC）").unwrap();
     assert!(d.band_shares_exclusives(sumimi) && !d.band_shares_exclusives(crychic));
-    assert!(d.variant_own_exclusives_only(crychic) && !d.variant_own_exclusives_only(sumimi));
     assert!(d.bands.iter().all(|b| b.name != "CRYCHIC" || !b.boot_art.is_empty()));
 }
 

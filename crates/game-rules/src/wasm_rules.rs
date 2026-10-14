@@ -7617,6 +7617,21 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         let win = crate::gate::window_of_world(w, player);
         Some(self.ruleset.gate_open(kind, &win))
     }
+    fn exclusive_use(
+        &self,
+        w: &game_core::engine::World,
+        player: usize,
+        ask: &game_core::engine::ExclusiveAsk<'_>,
+    ) -> Option<bool> {
+        let kind = crate::TriggerKind::ExclusiveUse;
+        // No card declares this gate: the ruleset has no opinion (the engine's
+        // own/base default stands).
+        if !self.ruleset.declares(kind) {
+            return None;
+        }
+        let win = crate::gate::window_of_exclusive(w, &self.data, player, ask);
+        Some(self.ruleset.gate_open(kind, &win))
+    }
     fn ruleset_sha256(&self) -> Option<&str> {
         self.ruleset.sha256()
     }
@@ -8300,6 +8315,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::ActGate
             | TriggerKind::PayGate
             | TriggerKind::MoveGate
+            | TriggerKind::ExclusiveUse
             | TriggerKind::Redirect
             | TriggerKind::CounterChanged
     )
@@ -8483,6 +8499,7 @@ mod tests {
             "actGate",
             "payGate",
             "moveGate",
+            "exclusiveUse",
             // v28 post-commit points (what a committed effect did)
             "fireSpent",
             "skillUsed",

@@ -102,7 +102,6 @@
         {
             "name": "CRYCHIC",
             "shortName": "CRYCHIC",
-            "ownExclusivesOnly": true,
             "bootArt": "045",
             "color": "#5AC7BE",
             "skill": "美好的往日幻影",

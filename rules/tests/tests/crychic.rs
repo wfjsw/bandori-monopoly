@@ -861,3 +861,61 @@ fn interaction_vocalist_counter_vs_big_payment() {
     }
     let _ = r;
 }
+// =====================================================================
+// ExclusiveUse gate (ABI 59) -- CRYCHIC variants vs base character's exclusives
+// =====================================================================
+
+/// CRYCHIC variants may play their own exclusives but not the base
+/// character's. A non-CRYCHIC variant (三角初华（Sumimi）) still may play the
+/// base 三角初华's exclusive. Everyone else is on the generic own/base rule.
+#[test]
+fn crychic_variants_cannot_use_base_exclusives() {
+    // 高松灯（CRYCHIC） -- own exclusive is fine.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "高松灯（CRYCHIC）");
+    let r = t.give_play(0, "CRYCHIC:（灯）内心的呐喊");
+    drain(&mut t);
+    assert!(
+        r.is_ok(),
+        "高松灯（CRYCHIC） plays her own exclusive: {r:?}"
+    );
+
+    // 高松灯（CRYCHIC） -- base 高松灯's exclusive is denied.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "高松灯（CRYCHIC）");
+    let r = t.give_play(0, "MyGO:（灯）不再迷茫");
+    drain(&mut t);
+    assert_eq!(
+        r,
+        Err("err.play_exclusive".to_string()),
+        "CRYCHIC variant must not play the base character's exclusive"
+    );
+
+    // 三角初华（Sumimi） -- base 三角初华's exclusive stays playable.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "三角初华（Sumimi）");
+    let r = t.give_play(0, "Mujica:（初华）我，无畏悲伤");
+    drain(&mut t);
+    assert!(
+        r.is_ok(),
+        "non-CRYCHIC variant still plays the base character's exclusive: {r:?}"
+    );
+
+    // 高松灯 (MyGO) -- own exclusive unchanged.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "高松灯");
+    let r = t.give_play(0, "MyGO:（灯）不再迷茫");
+    drain(&mut t);
+    assert!(r.is_ok(), "base character plays her own exclusive: {r:?}");
+
+    // Someone else's exclusive is still denied (generic rule).
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "高松灯（CRYCHIC）");
+    let r = t.give_play(0, "通用:[月岛麻里奈]今天也要加油工作喔");
+    drain(&mut t);
+    assert_eq!(
+        r,
+        Err("err.play_exclusive".to_string()),
+        "another character's exclusive stays denied"
+    );
+}

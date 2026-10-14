@@ -379,6 +379,16 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v59: **exclusive-use gate** -- `TriggerKind::ExclusiveUse = 98` (also
+///      `GateKind`): a CEL-only `On::Gate` question the band-skill cards answer
+///      (CRYCHIC's 「variants may not use the base character's exclusives」).
+///      The engine's default verdict is the generic exclusive rule (playable
+///      iff `card.owner` is the actor's character or its base `variant_of`);
+///      a closing gate entry denies the base case. Window: `actor`,
+///      `trigger_card` (the exclusive's id hash), `name` (the card's `owner`
+///      character name; `counter_is`), `value` (1 = owner is the actor's base
+///      character), `step` (1 = owner is the actor's own character). No new
+///      host import, no SAVE_VERSION change.
 /// v58: **status gates** -- `TriggerKind::{ActGate = 95, PayGate = 96,
 ///      MoveGate = 97}` (also `GateKind`): CEL-only `On::Gate` questions the
 ///      `status:*` pseudo cards answer; the host evaluates the condition
@@ -399,7 +409,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 58;
+pub const ABI_VERSION: i32 = 59;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1444,6 +1454,10 @@ pub enum TriggerKind {
     PayGate = 96,
     /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
     MoveGate = 97,
+    /// v59: **exclusive-use gate**. May `t.player_id` play this exclusive card
+    /// (`card.owner` / base-`variant_of` / band-skill denial)? CEL-only, like
+    /// [`Self::ActGate`]. Window carries the card in `trigger_card` / `name`.
+    ExclusiveUse = 98,
 }
 
 impl TriggerKind {
@@ -1547,6 +1561,7 @@ impl TriggerKind {
             95 => Self::ActGate,
             96 => Self::PayGate,
             97 => Self::MoveGate,
+            98 => Self::ExclusiveUse,
             _ => Self::None,
         }
     }
@@ -1653,6 +1668,7 @@ impl TriggerKind {
             Self::ActGate => "actGate",
             Self::PayGate => "payGate",
             Self::MoveGate => "moveGate",
+            Self::ExclusiveUse => "exclusiveUse",
         }
     }
 
@@ -1757,6 +1773,7 @@ impl TriggerKind {
             "actGate" => Self::ActGate,
             "payGate" => Self::PayGate,
             "moveGate" => Self::MoveGate,
+            "exclusiveUse" => Self::ExclusiveUse,
             _ => Self::None,
         }
     }
@@ -2291,6 +2308,9 @@ declare_kinds! {
         PayGate = 96,
         /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
         MoveGate = 97,
+        /// v59: **exclusive-use gate**. May `t.player_id` play this exclusive
+        /// card? CEL-only. See [`TriggerKind::ExclusiveUse`].
+        ExclusiveUse = 98,
     }
 }
 

@@ -31,7 +31,6 @@ export interface BandData {
   logo: string;
   /** Band-skill traits the deck rules read. */
   sharesExclusives?: boolean;
-  ownExclusivesOnly?: boolean;
   /** Boot-screen art id for a home character of this band. */
   bootArt?: string;
 }
