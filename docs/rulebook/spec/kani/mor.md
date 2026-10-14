@@ -48,15 +48,15 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-light-02 | 「此次移动以"月之森女子学院"为起点（不触发起点地块效果）」 | PROTOCOL-LEVEL | — | — | `plan::set_start` scheduling | OPEN-移动起点 |
 | C-MOR-again-01 | 「[反击]当…前一名玩家[消耗]或[支付]大于0资金后…并[消耗]等量资金」 | PROTOCOL-LEVEL | — | — | [反击] window (KANI.md §6) | — |
 | C-MOR-again-02 | 「[持续]：[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 | PROVEN | `again_02_cancel_iff`, `again_02_mutant_is_detected` | (pending) | SetPayAmount(0) + dest=Graveyard | OPEN-取消范围 |
-| C-MOR-courage-01 | 「…所有者向你支付…购买价格+…房子的建造价格总额的一半」 | BLOCKED-HOST | `courage_01_pay_iff_blocked_host`, `courage_01_mutant_is_detected` | (pending) | `tile_price`/`buy_price` 0/1-based split; `buy_price` ignores houses | — |
+| C-MOR-courage-01 | 「…所有者向你支付…购买价格+…房子的建造价格总额的一半」 | BLOCKED-HOST | `courage_01_pay_iff_blocked_host`, `courage_01_mutant_is_detected` | triage3: UNWINDING was **A** 60-trip loop at u=32; 8×8 chunk walk, re-time pending | `tile_price`/`buy_price` 0/1-based split; `buy_price` ignores houses | — |
 | C-MOR-courage-02 | 「若为地产商地块，获得1000资金」 | BLOCKED-HOST | `courage_02_agent_iff_blocked_host` | (pending) | `is_agent` off-by-one (tile 5 property reads as agent) | — |
 | C-MOR-courage-03 | unowned tile ⇒ nobody pays | PROVEN | `courage_03_unowned_iff`, `courage_03_empty_when_no_agent_misfire` | (pending) | empty-effect limb + money frame | — |
 | C-MOR-summer-01 | 「直到下个自己的回合开始前，你只会被自己发动的效果指定」 | PROTOCOL-LEVEL | — | — | multi-turn designation window | OPEN-指定 |
 | C-MOR-summer-02 | 「当此卡效果结束…则抽一张牌」 | PROTOCOL-LEVEL | — | — | window end + negation counter | — |
 | C-MOR-centrifuge-01 | 「[反击]…第二次成为…目标时」 | PROTOCOL-LEVEL | — | — | [反击] + targeting count | OPEN-目标计数 |
 | C-MOR-centrifuge-02 | 「直到下个你的回合开始时，无效化你受到的所有效果」 | PROTOCOL-LEVEL | — | — | multi-turn negate shield | OPEN-无效化 |
-| C-MOR-rainbow-01 | 「当你向学妹或同级生支付时…此次支付金额减半」 | PROVEN candidate | `rainbow_01_half_iff`, `rainbow_01_mutant_is_detected` | (pending) | watch: body CeilTo-10 vs clause integer half | grade table ruling 2026-10-06 |
-| C-MOR-rainbow-02 | 「当学姐或同级生向你支付…变成1.5倍」 | PROVEN candidate | `rainbow_02_boost_iff`, `rainbow_02_mutant_is_detected` | (pending) | watch: body CeilTo-10 vs clause integer 1.5× | grade table ruling 2026-10-06 |
+| C-MOR-rainbow-01 | 「当你向学妹或同级生支付时…此次支付金额减半」 | **FAILS (D GENUINE)** | `rainbow_01_half_iff`, `rainbow_01_mutant_is_detected` | keep FAILING | book 减半 (integer half); body C# `CeilTo(half, 10)`. Mutant collides on amounts like 18/38 | grade table ruling 2026-10-06 |
+| C-MOR-rainbow-02 | 「当学姐或同级生向你支付…变成1.5倍」 | **FAILS (D GENUINE)** | `rainbow_02_boost_iff`, `rainbow_02_mutant_is_detected` | keep FAILING | book 1.5倍; body CeilTo-10 | grade table ruling 2026-10-06 |
 | C-MOR-wing-01 | 「传送到移动方向20格后（不触发结算）」 | BLOCKED-HOST | `wing_01_teleport_iff_blocked_host`, `wing_01_dir_stub_gap` | (pending) | `Op::move_dir` stub = 0 | OPEN-移动方向 |
 | C-MOR-wing-02 | 「立刻进行移动掷骰」 | PROTOCOL-LEVEL | — | — | `card_move` scheduling stub | — |
 | C-MOR-starry-01 | 「支付X次1000…放置X个[奇迹水晶]」 | PROVEN | `starry_01_place_iff`, `starry_01_mutant_is_detected` | (pending) | X symbolic 1..=5 | OPEN-X, OPEN-场地中央 |
@@ -74,7 +74,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-nnm-03 | 「获得x次经过CiRCLE时的资金奖励」 | **FAILS(WRONG)** | `nnm_03_amount_iff_fails_wrong`, `nnm_03_wrong_is_reachable` | (pending) | body hard-codes `x*2000`; sheet G7 says x × current cycle reward (1000/1500/2000) | — |
 | C-MOR-nnm-04 | 「放置x个奇迹水晶…视为发动你的（2）技能」 | BLOCKED-HOST | — (spec ready) | — | `placed_cards` is a count, not a name list | OPEN-借用技能 |
 | C-MOR-nnm-05 | 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 | **FAILS(LESS)** | `nnm_05_empty_discard_iff_fails_less`, `nnm_05_body_leaves_card_is_reachable`, `nnm_05_atend_leaves_field_card` | (pending) | last-crystal press leaves card on field with 0 crystals; no discard | — |
-| C-MOR-rui-demon-01 | 「向全场玩家支付100…之后全场玩家向你支付300」 | PROVEN candidate | `rui_demon_01_iff`, `rui_demon_01_mutant_is_detected` | (pending) | 100 leg face-value (immunity is pipeline) | — |
+| C-MOR-rui-demon-01 | 「向全场玩家支付100…之后全场玩家向你支付300」 | PROVEN candidate | `rui_demon_01_iff`, `rui_demon_01_mutant_is_detected` | triage3: FAILED was **B** post_ok other-seat legs swapped (+100/−300, not −100/+300); fixed, re-time pending | 100 leg face-value (immunity is pipeline) | — |
 | C-MOR-rui-demon-02 | 「每当你的技能被触发后，立即将x设置为5」 | PROVEN candidate | `rui_demon_02_x_set_to_5` | (pending) | X ends at 5 | — |
 | C-MOR-toko-swap-01 | 「交换…支付差价…免费赎回」 | PROVEN (no-pair) + BLOCKED-HOST (swap) | `toko_no_pair_noop`, `toko_swap_iff_blocked_host` | (pending) | index split wrecks pair enumeration; `buy_price` ignores houses | 「颜色」 = group |
 | C-MOR-xiaobai-01 | 「此次支付改为失去同等的资金并令…对象失去…一半」 | PROVEN | `xiaobai_01_iff`, `xiaobai_01_mutant_is_detected` | see harness table | — | odd-half rounding |
