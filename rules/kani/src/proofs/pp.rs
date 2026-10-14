@@ -1168,10 +1168,11 @@ pub fn jennifer_01_place_other_iff() {
 pub fn ranger_01_02_steps_by_count_iff() {
     symbolic_play_world();
     let user = any_player_in();
-    // Isolation: no [共鸣]; pre-place 0..=2 other owned field cards so the
-    // Ranger itself (placed by the play) makes count ∈ 1..=3.
+    // Isolation: no [共鸣]; pre-place 0..=3 other owned field cards. The
+    // Ranger is a [手] play (default dest = discard) and is NOT on the field
+    // during its own body — 「场上你拥有的卡数量」 counts the others only.
     let others: i32 = kani::any();
-    kani::assume(others >= 0 && others <= 2);
+    kani::assume(others >= 0 && others <= 3);
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
@@ -1199,7 +1200,7 @@ pub fn ranger_01_02_steps_by_count_iff() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]魔法战队Pastel✽Ranger"), user));
     let post_money = world::with_world(|ww| ww.money[user as usize]);
     let band = band_crystals_of(user);
-    let count = others + 1; // the Ranger itself
+    let count = others; // the Ranger itself is not on the field during Play
     kani::cover!(count >= 3, "count >= 3: band +3");
     kani::cover!(count < 3, "count < 3: no band bump");
     crate::kassert!(
