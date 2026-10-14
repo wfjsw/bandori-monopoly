@@ -157,7 +157,7 @@ fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
 /// if setup is not the BMC cliff. `assert!(false)` after setup so a SUCCESS
 /// is impossible (fail-closed reachability marker).
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(8)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(8))]
 pub fn same_dream_01_probe_setup_only() {
     same_dream_world();
     let user = any_player_in();
@@ -170,7 +170,7 @@ pub fn same_dream_01_probe_setup_only() {
 /// PROBE (ppcost bisect): setup + invoke + `assert!(false)`. FAIL means the
 /// body ran (non-vacuity). TIMEOUT vs setup-only locates the cost.
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn same_dream_01_probe_post_invoke() {
     same_dream_world();
     // Concrete user — symbolic user is a BMC cliff (see floor bisect).
@@ -202,7 +202,7 @@ fn floor_concrete_world() {
 }
 
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_a_concrete_body_only() {
     floor_concrete_world();
     let user = 0i32;
@@ -212,7 +212,7 @@ pub fn floor_a_concrete_body_only() {
 
 /// (b) + symbolic money/fans (2 seats), concrete n/user.
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_b_sym_fans_money() {
     floor_concrete_world();
     world::with_world_mut(|w| {
@@ -235,7 +235,7 @@ pub fn floor_b_sym_fans_money() {
 
 /// (c) full sparse_play_world (n_players any in 2..=4, used_seats=2).
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_c_sparse_world() {
     same_dream_world();
     let user = any_player_in();
@@ -245,7 +245,7 @@ pub fn floor_c_sparse_world() {
 
 /// (d) + snapshot pre/post + effect-log scan.
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_d_snapshot_and_log() {
     same_dream_world();
     let user = any_player_in();
@@ -267,7 +267,7 @@ pub fn floor_d_snapshot_and_log() {
 
 /// (e) + guard_id! / guard! on a real single-source guard (pay-add).
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_e_guard() {
     same_dream_world();
     let user = any_player_in();
@@ -281,7 +281,7 @@ pub fn floor_e_guard() {
 
 /// (c1) sparse_play_world but **concrete** user=0.
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_c1_sparse_concrete_user() {
     same_dream_world();
     invoke::unwrap_done(card_pp::same_dream::same_dream_kani(0));
@@ -290,7 +290,7 @@ pub fn floor_c1_sparse_concrete_user() {
 
 /// (c2) concrete world + **symbolic** user in 0..2.
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_c2_concrete_sym_user() {
     floor_concrete_world();
     let user = any_player_in();
@@ -300,7 +300,7 @@ pub fn floor_c2_concrete_sym_user() {
 
 /// (c3) concrete world + `symbolic_answers = true` (try_resonance ask).
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_c3_sym_answers() {
     floor_concrete_world();
     world::with_world_mut(|w| w.symbolic_answers = true);
@@ -310,7 +310,7 @@ pub fn floor_c3_sym_answers() {
 
 /// (f) + full spec compare (the iff asserts, minus covers).
 #[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
-#[kani::unwind(32)]
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
 pub fn floor_f_spec_compare() {
     same_dream_world();
     let user = any_player_in();
