@@ -3424,7 +3424,7 @@ pub fn arm_state_set(a: Args) -> i64 {
                 v
             }
         };
-        out
+        out as i64
     })
 }
 
