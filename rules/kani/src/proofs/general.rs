@@ -87,8 +87,8 @@ pub fn recruit_01_iff() {
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-recruit-01: frame other money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-recruit-01: frame pos");
-    assert!(post.fire == pre.fire, "C-GEN-recruit-01: frame fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-recruit-01: frame pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "C-GEN-recruit-01: frame fire");
     assert!(post.stay == pre.stay, "C-GEN-recruit-01: frame stay");
 }
 
@@ -158,7 +158,7 @@ pub fn great_01_02_03_iff() {
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-great: frame other money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-great: frame pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-great: frame pos");
     assert!(post.stay == pre.stay, "C-GEN-great: frame stay");
 }
 
@@ -226,7 +226,7 @@ pub fn perfect_01_02_03_iff() {
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-perfect: frame other money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-perfect: frame pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-perfect: frame pos");
     assert!(post.stay == pre.stay, "C-GEN-perfect: frame stay");
 }
 
@@ -275,7 +275,7 @@ pub fn fever_01_iff() {
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-fever-01: frame money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-fever-01: frame pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-fever-01: frame pos");
     assert!(post.stay == pre.stay, "C-GEN-fever-01: frame stay");
     // Post: one field instance owned by the player.
     let (field_n, owner0) = world::with_world(|ww| {
@@ -372,8 +372,8 @@ pub fn fever_04_turn_start_iff() {
         post_dest == spec::DEST_GRAVEYARD,
         "C-GEN-fever-04: dest must be Graveyard (弃卡区)"
     );
-    assert!(post.money == pre.money, "C-GEN-fever-04: frame money");
-    assert!(post.pos == pre.pos, "C-GEN-fever-04: frame pos");
+    assert!(world::arr4_eq(post.money, pre.money), "C-GEN-fever-04: frame money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-fever-04: frame pos");
     assert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
 }
 
@@ -399,7 +399,7 @@ pub fn fever_04_wrong_turn_noop() {
     let post_dest = world::with_world(|ww| ww.dest);
     assert!(log_n == 0, "C-GEN-fever-04: wrong turn start is a no-op");
     assert!(post_dest == pre_dest, "C-GEN-fever-04: dest untouched");
-    assert!(post.money == pre.money, "C-GEN-fever-04: frame money");
+    assert!(world::arr4_eq(post.money, pre.money), "C-GEN-fever-04: frame money");
     assert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
 }
 
@@ -626,8 +626,8 @@ pub fn encore_01_leaf_quiet_frame() {
         spec::encore_01_log_ok(&logbuf[..log_n]),
         "C-GEN-encore-01: no Effect entries (negation is trig_negate)"
     );
-    assert!(post.money == pre.money, "C-GEN-encore-01: frame money");
-    assert!(post.pos == pre.pos, "C-GEN-encore-01: frame pos");
+    assert!(world::arr4_eq(post.money, pre.money), "C-GEN-encore-01: frame money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-encore-01: frame pos");
     assert!(post.stay == pre.stay, "C-GEN-encore-01: frame stay");
     // Documented host gap (not a body finding):
     let negate = world::with_world(|ww| ww.trig_negate);

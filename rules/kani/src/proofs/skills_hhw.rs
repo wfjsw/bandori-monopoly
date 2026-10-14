@@ -73,9 +73,9 @@ pub fn kokoro_01_opening_1000_iff() {
         post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount(),
         "C-HHW-kokoro-01: money rises by exactly 1000"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.hand == pre.hand, "frame: hand");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
     assert!(post.discard == pre.discard, "frame: discard");
 }
 
@@ -173,8 +173,8 @@ pub fn kokoro_02_circle_pass_1500_iff() {
         post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount(),
         "C-HHW-kokoro-02: money rises by exactly 1500 extra"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// No-op: passing a non-CiRCLE tile must not fire the extra.
@@ -275,8 +275,8 @@ pub fn misaki_skill_01_pass_fire_iff() {
         post.fire[owner as usize] == expected,
         "C-HHW-misaki-skill-01: fire rises by +2, capped at 2"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// No-op: a non-弦卷集团 pass does not admit the grant.
@@ -355,8 +355,8 @@ pub fn kaoru_01_pot_arm_iff() {
         let delta = post.fire[owner as usize] - pre_fire;
         assert!(delta <= 1, "C-HHW-kaoru-01: at most +1 火罐 per step");
     }
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -410,7 +410,7 @@ pub fn band_01_declined_is_noop() {
         "C-HHW-band-01: decline produces no effects"
     );
     assert!(post.pay_amount == pre_amount, "decline leaves the amount");
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 #[kani::proof]
@@ -464,7 +464,7 @@ pub fn band_01_accepted_doubles_iff() {
         post.pay_amount == spec::skills_hhw::band_01_amount(pre_amount),
         "C-HHW-band-01: post pay_amount is double"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 #[kani::proof]

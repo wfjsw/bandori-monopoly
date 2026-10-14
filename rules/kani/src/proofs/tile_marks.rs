@@ -136,8 +136,8 @@ pub fn mark_cp_land_gain_iff() {
             );
         }
     }
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.stay == pre.stay, "frame: stay");
 }
 

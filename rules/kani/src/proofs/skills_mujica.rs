@@ -96,7 +96,7 @@ pub fn band_starts_in_state1() {
         spec::skills_mujica::band_init_effects(effects, user, skill_state.0),
         "C-MUJICA-团技能-00: SetState(skillState, 1)"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 // ===========================================================================
@@ -191,8 +191,8 @@ pub fn band_state2_bend_hook_rewrites_amount() {
             "C-MUJICA-团技能-01: PayMul rewrites the amount to 1.5x"
         );
     }
-    assert!(post.money == pre.money, "frame: money (hook only rewrites the amount)");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money (hook only rewrites the amount)");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT: the hook must not leave the amount unchanged when the user is a side.

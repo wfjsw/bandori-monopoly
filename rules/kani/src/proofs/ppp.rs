@@ -291,8 +291,8 @@ pub fn bang_dream_01_crystal_iff() {
     // Frame on this leg: money / pos / fire untouched *by the crystal add*.
     // The (02) teleport leg may move `pos`; that is not this clause's effect.
     let post = world::snapshot();
-    assert!(post.money == pre.money, "bang-dream-01: money is frame");
-    assert!(post.fire == pre.fire, "bang-dream-01: fire is frame");
+    assert!(world::arr4_eq(post.money, pre.money), "bang-dream-01: money is frame");
+    assert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-01: fire is frame");
 }
 
 /// MUTANT: reference wants +2 crystals. Card must not match.
@@ -381,8 +381,8 @@ pub fn bang_dream_02_teleport_owned_iff() {
             assert!(post.pos[p] == pre.pos[p], "bang-dream-02: others unmoved");
         }
     }
-    assert!(post.money == pre.money, "bang-dream-02: money is frame");
-    assert!(post.fire == pre.fire, "bang-dream-02: fire is frame");
+    assert!(world::arr4_eq(post.money, pre.money), "bang-dream-02: money is frame");
+    assert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-02: fire is frame");
 }
 
 /// MUTANT: reference wants an extra GainMoney(1) on the teleport leg.
@@ -697,7 +697,7 @@ pub fn auction_off_01_blocked_noop() {
         post_field_n == pre_field_n && post_fire_max == pre_fire_max,
         "auction-off-01 (blocked): field / fire_max untouched"
     );
-    assert!(post.money == pre.money, "auction-off-01 (blocked): money frame");
+    assert!(world::arr4_eq(post.money, pre.money), "auction-off-01 (blocked): money frame");
 }
 
 // ===========================================================================
@@ -734,7 +734,7 @@ pub fn star_beat_01_layer_iff() {
     // Money is not moved by the layer grant itself (option 1 may grant
     // stickers; option 2 may walk — both are other clauses).
     let post = world::snapshot();
-    assert!(post.money == pre.money, "star-beat-01: money is frame");
+    assert!(world::arr4_eq(post.money, pre.money), "star-beat-01: money is frame");
 }
 
 /// MUTANT: reference wants +2 layers.
@@ -934,7 +934,7 @@ pub fn star_beat_03_stickers_iff() {
         "star-beat-03: AddToken(+2) iff option 1 was picked"
     );
     let post = world::snapshot();
-    assert!(post.money == pre.money, "star-beat-03: money is frame");
+    assert!(world::arr4_eq(post.money, pre.money), "star-beat-03: money is frame");
 }
 
 /// MUTANT: reference wants +1 sticker on option 1.

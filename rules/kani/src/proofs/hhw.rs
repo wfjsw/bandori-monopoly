@@ -70,9 +70,9 @@ pub fn kkr_pay_10000_iff() {
         spec::hhw::kkr_01_post_ok(&pre, &post, player),
         "C-HHW-kkr-01: money falls by exactly 10000"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.hand == pre.hand, "frame: hand");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
 }
 
 #[kani::proof]
@@ -188,8 +188,8 @@ pub fn athletic_place_three_crystals_iff() {
         crystals == spec::hhw::athletic_01_crystals(),
         "C-HHW-athletic-01: exactly 3 crystals"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// Turn-end decay: the owner's TurnEnd with the card placed logs exactly one
@@ -237,7 +237,7 @@ pub fn athletic_turn_end_decay_iff() {
         !spec::hhw::athletic_02_discard_ok(effects),
         "C-HHW-athletic-02: non-zero count does not discard"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 #[kani::proof]
@@ -364,8 +364,8 @@ pub fn believe_cost_800_iff() {
         post.money[player as usize] == pre_money - 800,
         "C-HHW-believe-02: money falls by exactly 800"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 #[kani::proof]
@@ -390,7 +390,7 @@ pub fn believe_discard_one_iff() {
         spec::hhw::believe_04_log_ok(effects, player),
         "C-HHW-believe-04: two deck→hand transfers"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -457,8 +457,8 @@ pub fn backstage_pays_1000_per_discard_iff() {
         post.money[player as usize] == pre.money[player as usize] + spec::hhw::backstage_02_gain(flipped),
         "C-HHW-backstage-02: money rises by exactly 1000 per flip"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 #[kani::proof]
@@ -534,7 +534,7 @@ pub fn balloon_teleports_to_a_chosen_result_iff() {
         "C-HHW-balloon-02: dest is a board tile (序号 1..=60 → 0..60)"
     );
     assert!(post.pos[player as usize] == dest, "post pos is the dest");
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 #[kani::proof]
@@ -600,7 +600,7 @@ pub fn hagumi_over_60_gains_and_draws_iff() {
             "C-HHW-hagumi-02: money grant is 1000, not 2000"
         );
     }
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 // ===========================================================================

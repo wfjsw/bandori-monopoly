@@ -85,9 +85,9 @@ pub fn half_speed_01_place_iff() {
         spec::ag::half_speed_01_post_ok(post_crystals),
         "C-AG-half-speed-01: exactly 3 crystals on the card"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: the 4-crystal spec must disagree with the card.
@@ -327,7 +327,7 @@ pub fn sky_02_03_play_iff() {
             "C-AG-sky-03: no money on the draw branch"
         );
     }
-    assert!(post.pos == [0, 0, 0, 0], "frame: pos");
+    assert!(world::arr4_eq(post.pos, [0, 0, 0, 0]), "frame: pos");
 }
 
 /// MUTANT companion: n*601 must not match.
@@ -455,7 +455,7 @@ pub fn colors_01_02_03_04_play_iff() {
     if is_draw_1 {
         assert!(post.money[player as usize] == 0, "C-AG-colors-04 no money");
     }
-    assert!(post.pos == [0, 0, 0, 0], "frame: pos");
+    assert!(world::arr4_eq(post.pos, [0, 0, 0, 0]), "frame: pos");
 }
 
 /// C-AG-colors-02 dedicated mutant (off-by-one).

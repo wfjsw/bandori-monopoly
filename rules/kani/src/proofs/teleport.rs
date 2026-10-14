@@ -61,7 +61,7 @@ pub fn tae_sound_teleport_and_fire_iff() {
         spec::tae_sound_post_ok(&post, player, TILE_SHOP, pre.fire[player as usize]),
         "teleport+fire: post must be on shop with fire+1"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
     assert!(post.stay == pre.stay, "frame: stay");
     for p in 0..MAX_PLAYERS {
         if p != player as usize {

@@ -164,11 +164,11 @@ pub fn aya_haruka_02_shave_iff() {
         );
     }
 
-    assert!(post.money == pre.money, "frame: money unchanged at rewrite time");
-    assert!(post.pos == pre.pos, "frame: positions unchanged");
-    assert!(post.fire == pre.fire, "frame: fire unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
     assert!(post.stay == pre.stay, "frame: stay unchanged");
-    assert!(post.hand == pre.hand, "frame: hand unchanged");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
     assert!(post.discard == pre.discard, "frame: discard unchanged");
 }
 
@@ -213,7 +213,7 @@ pub fn aya_haruka_02_shave_poorest() {
         spec::aya_haruka_02_log_ok(effects, expected),
         "C-PP-aya-haruka-02: effect log must be exactly the pay-amount rewrite"
     );
-    assert!(post.money == pre.money, "frame: money unchanged at rewrite time");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
 }
 
 /// SPLIT of `aya_haruka_02_shave_iff` (not-poorest half): the body must
@@ -243,7 +243,7 @@ pub fn aya_haruka_02_shave_not_poorest_noop() {
         post.pay_amount == pre_amount,
         "C-PP-aya-haruka-02: non-poorest owner must not touch the amount"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// MUTANT: the reference wants X+1. The card does X. Kani must report FAIL.

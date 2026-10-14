@@ -104,9 +104,9 @@ pub fn unstoppable_card_03_money_iff() {
         "C-RAS-unstoppable-card-03: effect log is exactly one GainMoney"
     );
     // Frame: nothing but the money moved.
-    assert!(post.pos == pre.pos, "frame: no movement (teleport is BLOCKED-HOST)");
-    assert!(post.fire == pre.fire, "frame: fire unchanged");
-    assert!(post.hand == pre.hand, "frame: hand unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: no movement (teleport is BLOCKED-HOST)");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
     assert!(post.discard == pre.discard, "frame: discard unchanged");
     for q in 0..MAX_PLAYERS {
         if q != player as usize {

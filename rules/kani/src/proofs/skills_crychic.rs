@@ -96,8 +96,8 @@ pub fn tomoriskill_02_spend_iff() {
         key_get(player, stay_key) == pk_stay - 1,
         "C-CRYCHIC-tomoriskill-02: player_keys STAY -1 (state::add)"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     kani::cover!(pre_w_fire >= 1, "fire available");
     kani::cover!(pre_w_fire == 0, "fire empty (spend no-op)");
 }
@@ -192,8 +192,8 @@ pub fn soyoskill_01_cancel_iff() {
         "C-CRYCHIC-soyoskill-01: two latch writes (TILE + ARMED)"
     );
     let _ = (tile_key, armed_key, tile);
-    assert!(post.money == pre.money, "frame: money (waive at rewrite time)");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money (waive at rewrite time)");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// No branch: empty log (the body returns before any write).

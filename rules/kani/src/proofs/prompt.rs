@@ -97,8 +97,8 @@ pub fn aya_haruka_01_prompt_all_picks_iff() {
             spec::aya_haruka_01_post_ok(&post, player, picked, &pre_discard),
             "C-PP-aya-haruka-01: post hand/discard move exactly the picked card"
         );
-        assert!(post.money == pre.money, "frame: money");
-        assert!(post.pos == pre.pos, "frame: pos");
+        assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+        assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     }
 }
 

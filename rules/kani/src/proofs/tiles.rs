@@ -106,9 +106,9 @@ pub fn edogawa_settle_draw_one_iff() {
         "G-SETTLE-02 edogawa: hand count must rise by 1"
     );
     // Frame: money / pos / fire / stay untouched (draw is the only write).
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.stay == pre.stay, "frame: stay");
 }
 
@@ -179,9 +179,9 @@ pub fn circle_settle_draw_one_iff() {
         post_hand_n as i32 == pre_hand_n as i32 + 1,
         "G-SETTLE-02 circle: hand count must rise by 1"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.stay == pre.stay, "frame: stay");
 }
 
@@ -256,9 +256,9 @@ pub fn event_settle_draw_one_iff() {
         post_hand_n as i32 == pre_hand_n as i32 + 1,
         "G-SETTLE-03: hand count must rise by 1"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.stay == pre.stay, "frame: stay");
 }
 

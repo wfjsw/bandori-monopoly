@@ -103,7 +103,7 @@ pub fn idolband_reset_iff() {
 
     if !playable {
         let post = world::snapshot();
-        assert!(post.money == pre.money, "rejected play must not touch money");
+        assert!(world::arr4_eq(post.money, pre.money), "rejected play must not touch money");
         let (logbuf, log_n) = log_slice();
         assert!(log_n == 0, "rejected play must not log");
         let _ = effects_of(&logbuf, log_n);
@@ -132,7 +132,7 @@ pub fn idolband_reset_iff() {
         assert!(post.pos[p] == pre.pos[p], "frame: pos");
         assert!(post.stay[p] == pre.stay[p], "frame: stay");
     }
-    assert!(post.hand == pre.hand, "frame: hand bitset");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
     assert!(post.discard == pre.discard, "frame: discard bitset");
 }
 
@@ -198,7 +198,7 @@ pub fn hina_01_pass_circle_iff() {
     if !admitted {
         // Host would not call the body. Untouched.
         let post = world::snapshot();
-        assert!(post.fire == pre.fire, "rejected hook must not touch fire");
+        assert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
         let (logbuf, log_n) = log_slice();
         assert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);
@@ -288,7 +288,7 @@ pub fn childhood_02_fire_iff() {
 
     if !admitted {
         let post = world::snapshot();
-        assert!(post.fire == pre.fire, "rejected hook must not touch fire");
+        assert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
         let (logbuf, log_n) = log_slice();
         assert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);

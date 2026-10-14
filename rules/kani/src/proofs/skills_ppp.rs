@@ -147,7 +147,7 @@ pub fn kasumi_skill_01_iff() {
         spec::frame_others_fire(&pre, &post, owner),
         "C-PPP-kasumi-skill-01: frame others' fire"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// NO-OP: own settle on the hill must not pay out. Host residual excludes it.
@@ -315,8 +315,8 @@ pub fn megumi_skill_01a_rabbit_iff() {
             "C-PPP-megumi-skill-01a: empty log when landing is 星空齿科"
         );
     }
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// Spec-level: `#S格` mapping and the 星空齿科 veto.
@@ -1154,7 +1154,7 @@ pub fn band_skill_01a_sticker_iff() {
         spec::band_01a_log_ok(effects_of(&logbuf, log_n), me, key),
         "C-PPP-band-01a: sticker +1"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// NO-OP: actor ≠ owner ⇒ guard rejects.

@@ -91,10 +91,10 @@ pub fn soyoreturn_02_hand_iff() {
         "C-CRYCHIC-soyoreturn-02: money +500"
     );
     // frame
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     assert!(post.stay == pre.stay, "frame: stay");
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.hand == pre.hand, "frame: hand bitset");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
     assert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
@@ -174,8 +174,8 @@ pub fn vocalist_01_waive_iff() {
         post.pay_amount == 0,
         "C-CRYCHIC-vocalist-01: payment waived"
     );
-    assert!(post.money == pre.money, "frame: money (waive is at rewrite time)");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money (waive is at rewrite time)");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT companion: SetPayAmount{1} is not what the body does.
@@ -238,8 +238,8 @@ pub fn grab_01_stay_iff() {
     let passer_val = key_get(player, intern::NameId(passer_key));
     kani::cover!(passer_val == -1, "book value -1 visible (fixed host)");
     kani::cover!(passer_val == 0, "host stores field id 0");
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -299,8 +299,8 @@ pub fn debut_02_turn_end_iff() {
         post.stay[player as usize] == pre.stay[player as usize] + 1,
         "C-CRYCHIC-debut-02: stun layer +1 (host models stun on stay)"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -380,7 +380,7 @@ pub fn ifonly_01_cashout_iff() {
     );
     kani::cover!(x == 0, "X = 0");
     kani::cover!(x >= 1, "X >= 1");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -483,8 +483,8 @@ pub fn ifonly_02_discard_at_seven_iff() {
         field0,
         field_n()
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 // ===========================================================================
@@ -528,5 +528,5 @@ pub fn soyoreturn_01_branch2_iff() {
             "C-CRYCHIC-soyoreturn-01 branch 2: exactly GainMoney{1000}"
         );
     }
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }

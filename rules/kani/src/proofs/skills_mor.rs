@@ -166,9 +166,9 @@ pub fn band_01_draw_iff() {
     }
 
     let post = world::snapshot();
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
@@ -191,7 +191,7 @@ pub fn band_01_noop_below_or_gain() {
     let (_logbuf, log_n) = effects();
     assert!(log_n == 0, "C-MOR-band-01 noop: log must stay empty");
     let post = world::snapshot();
-    assert!(post.money == pre.money && post.pay_amount == pre.pay_amount);
+    assert!(world::arr4_eq(post.money, pre.money) && post.pay_amount == pre.pay_amount);
 }
 
 /// MUTANT companion: the card must disagree with a spec that draws at 1999.
@@ -294,8 +294,8 @@ pub fn band_02_cycle_iff() {
     }
 
     let post = world::snapshot();
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
@@ -319,7 +319,7 @@ pub fn band_02_noop_card_option() {
     let post_taken = world::with_world(|ww| ww.key_get(player, key));
     assert!(post_taken == pre_taken, "counter unchanged");
     let post = world::snapshot();
-    assert!(post.money == pre.money, "money unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "money unchanged");
 }
 
 /// MUTANT companion: cycle rotated by one must be distinguishable.
@@ -425,8 +425,8 @@ fn pass_gain_iff(skill: usize, fire_max_pin: i32, label: &str) {
         let _ = effects;
     }
 
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     assert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
@@ -601,9 +601,9 @@ pub fn rui_crit_02_roll_iff() {
     }
 
     let post = world::snapshot();
-    assert!(post.money == pre.money, "frame: money at rewrite time");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money at rewrite time");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// NO-OP: a zero amount (or a move that does not touch this seat) is a no-op.
@@ -756,8 +756,8 @@ pub fn tsukushi_01_redirect_iff() {
     }
 
     let post = world::snapshot();
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: forwarding `2×amount` must be distinguishable.
@@ -914,8 +914,8 @@ pub fn tsukushi_03_sweep_iff() {
         let d = world::with_world(|ww| ww.key_get(h, down));
         assert!(u == 0 && d == 0, "X marks removed");
     }
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: floor at 0 instead of 200 must be distinguishable.

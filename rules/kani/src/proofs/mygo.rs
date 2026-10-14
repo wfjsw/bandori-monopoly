@@ -171,10 +171,10 @@ pub fn journey_01_place_four_crystals_iff() {
     );
     assert!(post_c == 4, "C-MYGO-journey-01: card must hold exactly 4 crystals");
     assert!(field_n == 1, "C-MYGO-journey-01: exactly one field instance");
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     assert!(post.stay == pre.stay, "frame: stay unchanged");
-    assert!(post.hand == pre.hand, "frame: hand unchanged (play body does not draw)");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged (play body does not draw)");
     let _ = pre_c;
 
     kani::cover!(pre.stay[player as usize] == 0, "clean pre");
@@ -279,12 +279,12 @@ pub fn haneoka_thresholds_iff() {
             post_houses == pre_houses.saturating_add(1),
             "C-MYGO-haneoka-02: exactly one free house"
         );
-        assert!(post.money == pre.money, "C-MYGO-haneoka-02: 免费 — money unchanged");
+        assert!(world::arr4_eq(post.money, pre.money), "C-MYGO-haneoka-02: 免费 — money unchanged");
     } else {
         assert!(post_houses == pre_houses, "C-MYGO-haneoka-05: no house on r<10");
-        assert!(post.money == pre.money, "frame: money unchanged");
+        assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
     }
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     assert!(post.stay == pre.stay, "frame: stay unchanged");
 }
 
@@ -348,8 +348,8 @@ pub fn rainday_01_place_five_crystals_iff() {
         "C-MYGO-rainday-01: first effect must be PlaceCard(Field)"
     );
     assert!(post_c == 5, "C-MYGO-rainday-01: card must hold exactly 5 crystals");
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 
     kani::cover!(
         effects.iter().any(|e| matches!(e, Effect::GiveStay { .. })),
@@ -449,7 +449,7 @@ pub fn hitoshizuku_money_iff() {
 
     assert!(post.stay.iter().zip(pre.stay.iter()).all(|(a, b)| a <= b),
         "C-MYGO-hitoshizuku-01: stay never rises");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 
 /// Diagnostic companion: the body's global-kinds reading is what it does.
@@ -532,9 +532,9 @@ pub fn tomori_card_02_empty_hand_iff() {
         post.stay[player as usize] == pre.stay[player as usize].saturating_add(2),
         "C-MYGO-tomori-card-01: exactly 2 stay layers"
     );
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
-    assert!(post.hand == pre.hand, "frame: hand unchanged (empty)");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged (empty)");
 }
 
 /// Mutant: 1 stay layer must not match.

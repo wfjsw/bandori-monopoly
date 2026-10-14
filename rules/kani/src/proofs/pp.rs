@@ -179,7 +179,7 @@ pub fn same_dream_01_band_plus_3_iff() {
             );
         }
     }
-    assert!(post.money != pre.money || pre_up == 0, "money moves iff step 2 fired");
+    assert!(!world::arr4_eq(post.money, pre.money) || pre_up == 0, "money moves iff step 2 fired");
 }
 
 /// MUTANT companion: money formula `up * 101` disagrees with the card.

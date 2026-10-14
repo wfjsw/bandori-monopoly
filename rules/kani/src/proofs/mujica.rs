@@ -79,10 +79,10 @@ pub fn black_bday_low_pays_800_iff() {
         spec::mujica::black_bday_low_post_ok(&post, other, user, pre.money[1], pre.money[0]),
         "C-MUJICA-黑色生日-01: money moved 800"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.stay == pre.stay, "frame: stay");
-    assert!(post.hand == pre.hand, "frame: hand");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
 }
 
 /// High bracket: the other player (money > 1000) pays 200 twice (total 400).
@@ -219,7 +219,7 @@ pub fn heart_rain_fallback_stun_and_money_iff() {
     assert!(post.stay[0] == pre.stay[0] + 1, "user stun layer (shared stay counter)");
     assert!(post.money[0] == pre.money[0] + 1000, "user +1000");
     assert!(post.money[1] == pre.money[1], "frame: other money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// In-window player with a symbolic roll: stay layers match the book, and
@@ -304,9 +304,9 @@ pub fn dice_cast_places_on_own_field_iff() {
         spec::mujica::dice_cast_place_effects(effects, user, 2),
         "C-MUJICA-骰子-01: PlaceCard(user, Field) plus the latch SetState"
     );
-    assert!(post.hand == pre.hand, "frame: hand (play leaves hand outside this body)");
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand (play leaves hand outside this body)");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT: demands a GainMoney as well — the card must not match.
@@ -359,8 +359,8 @@ pub fn sparkler_places_two_crystals_iff() {
         spec::mujica::sparkler_place_effects(effects, user, 2),
         "C-MUJICA-花火-01: PlaceCard + AddCounter(+2)"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT: demands 3 crystals.
@@ -593,7 +593,7 @@ pub fn nyamu_places_on_field_iff() {
         spec::mujica::nyamu_place_effects(effects, user, 2),
         "C-MUJICA-喵梦-01: PlaceCard(user, Field)"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 // ===========================================================================
@@ -627,7 +627,7 @@ pub fn umiri_places_on_next_actors_field_iff() {
         spec::mujica::umiri_place_effects(effects, next, 2),
         "C-MUJICA-海铃-01: PlaceCard on the next actor's field"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 // ===========================================================================

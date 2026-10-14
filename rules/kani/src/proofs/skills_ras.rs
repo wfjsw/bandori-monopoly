@@ -80,8 +80,8 @@ pub fn masking_01_fire_gain_leaf() {
         post.fire[player as usize] == pre.fire[player as usize] + spec::fire_pass_gain(),
         "C-RAS-masking-01: fire is pre+1"
     );
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: positions unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
 }
 
 /// C-RAS-rio-01 leaf: `skill:和奏瑞依` `on_pass` requests +1 [火罐].
@@ -115,7 +115,7 @@ pub fn rio_01_fire_gain_leaf() {
         post.fire[player as usize] == pre.fire[player as usize] + spec::fire_pass_gain(),
         "C-RAS-rio-01: fire is pre+1"
     );
-    assert!(post.money == pre.money, "frame: money unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
 }
 
 /// Mutant companion for the fire-pass leaf (+2 ≠ +1).

@@ -81,8 +81,8 @@ pub fn band_02_crystal_on_16_iff() {
         post_c == spec::skills_mygo::band_02_crystals_after(pre_c),
         "C-MYGO-band-02: crystals must be min(pre+1, 1) under the roll cap"
     );
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
     assert!(post.stay == pre.stay, "frame: stay unchanged");
 
     kani::cover!(pre_c == 0, "pre crystals 0 (gain lands)");
@@ -153,8 +153,8 @@ pub fn band_04_ineffective_overcap_iff() {
             "C-MYGO-band-04: gain logs exactly one AddCounter(+1)"
         );
     }
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 
 /// Mutant: empty log when the gain should fire.

@@ -91,10 +91,10 @@ pub fn rui_demon_01_iff() {
         "C-MOR-rui-demon-01: post money must match the face-value legs (floored/saturated)"
     );
     // Frame: no positions / fire / stay / piles from the money legs.
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     assert!(post.stay == pre.stay, "frame: stay");
-    assert!(post.hand == pre.hand, "frame: hand");
+    assert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
     assert!(post.discard == pre.discard, "frame: discard");
 }
 
@@ -205,8 +205,8 @@ pub fn xiaobai_01_iff() {
     );
     // Frame: the counteruser's money is untouched by this body.
     assert!(post.money[player as usize] == pre.money[player as usize], "frame: counteruser money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: the full amount is NOT what the card takes from the payee.
@@ -291,7 +291,7 @@ pub fn rainbow_01_half_iff() {
         post.pay_amount == expected,
         "C-MOR-rainbow-01: pay amount must be the integer half"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// IFF （2）: pay amount becomes `amount * 3 / 2` (clause pin).
@@ -323,7 +323,7 @@ pub fn rainbow_02_boost_iff() {
         post.pay_amount == expected,
         "C-MOR-rainbow-02: pay amount must be the integer 1.5×"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// MUTANT companion （1）.
@@ -533,8 +533,8 @@ pub fn courage_03_empty_when_no_agent_misfire() {
             spec::courage_03_post_ok(&post, &pre),
             "C-MOR-courage-03: frame money unchanged on the empty branch"
         );
-        assert!(post.pos == pre.pos, "frame: pos");
-        assert!(post.fire == pre.fire, "frame: fire");
+        assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+        assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
     }
 }
 
@@ -686,8 +686,8 @@ pub fn toko_no_pair_noop() {
         spec::toko_no_pair_ok(effects),
         "C-MOR-toko-swap-01: no swappable pair ⇒ no effects"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// Swap multiset (book): two SetOwner, one PayTo(diff), one SetMortgaged(off)
@@ -807,8 +807,8 @@ pub fn starry_01_place_iff() {
         spec::starry_01_post_ok(&post, &pre, player, x),
         "C-MOR-starry-01: user pays 1000·X (floored at 0)"
     );
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    assert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: the pay is not 1000·X+1.
@@ -989,7 +989,7 @@ pub fn starry_05_circle_iff() {
         after == crystals - 1,
         "C-MOR-starry-05: crystal count drops by 1"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// NO-OP: a non-owner pass, or a non-CiRCLE tile, removes nothing.
@@ -1015,7 +1015,7 @@ pub fn starry_05_noop() {
         log_n == 0,
         "C-MOR-starry-05: non-CiRCLE pass must not remove a crystal"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
     let after = world::with_world(|w| {
         let key = crate::intern::intern_or_fail("crystals");
         w.key_get(player, key)
@@ -1117,7 +1117,7 @@ pub fn nnm_05_body_leaves_card_is_reachable() {
     );
     assert!(!spec::nnm_05_wants_discard(dest), "book pin is not met (LESS)");
     let post = world::snapshot();
-    assert!(post.money == pre.money, "frame: money");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// nnm-05 companion: the AtEnd entry (discard-down-to-five) also does not
@@ -1305,7 +1305,7 @@ pub fn tritone_02_tick_iff() {
         let dest = world::with_world(|w| w.dest);
         assert!(dest == 0, "C-MOR-tritone-02: empty crystals ⇒ dest = Graveyard");
     } else {
-        assert!(post.money == pre.money, "frame: money on a decay-only tick");
+        assert!(world::arr4_eq(post.money, pre.money), "frame: money on a decay-only tick");
         let dest = world::with_world(|w| w.dest);
         assert!(dest == 2, "frame: dest unchanged on a decay-only tick");
     }
@@ -1397,8 +1397,8 @@ pub fn noble_02_mark_iff() {
         spec::noble_02_mark_ok(effects, pos),
         "C-MOR-noble-02: mark lands on the tile (OPEN-触发结算 not pinned)"
     );
-    assert!(post.money == pre.money, "frame: money (settle is a stub)");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money (settle is a stub)");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// NO-OP (not yours): no effects.
@@ -1421,8 +1421,8 @@ pub fn noble_02_not_yours_noop() {
         spec::noble_02_not_yours_ok(effects),
         "C-MOR-noble-02: tile not yours ⇒ no effects"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    assert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT companion (mark): a mark on tile 0 is NOT the card when the user
@@ -1492,7 +1492,7 @@ pub fn again_02_cancel_iff() {
         post.pay_amount == 0,
         "C-MOR-again-02: the money change is cancelled"
     );
-    assert!(post.money == pre.money, "frame: money (cancel only)");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money (cancel only)");
 }
 
 /// MUTANT companion: cancel-to-1 is NOT the card.
@@ -1577,7 +1577,7 @@ pub fn wing_01_teleport_iff_blocked_host() {
         post.pos[player as usize] == want,
         "C-MOR-wing-01: user lands on the teleport destination"
     );
-    assert!(post.money == pre.money, "frame: money (no settle)");
+    assert!(world::arr4_eq(post.money, pre.money), "frame: money (no settle)");
 }
 
 /// Book-vs-stub differential: with a real forward direction the destination
