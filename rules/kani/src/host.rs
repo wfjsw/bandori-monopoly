@@ -363,17 +363,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             0
         }
-        Op::add_house => {
-            world::with_world_mut(|w| {
-                let t = tile_idx(a0);
-                w.tiles[t].houses = w.tiles[t].houses.saturating_add(a1);
-                w.push(Effect::SetHouses {
-                    tile: a0,
-                    n: w.tiles[t].houses,
-                });
-                w.tiles[t].houses as i64
-            })
-        }
+                Op::add_house => arm_add_house(a),
                 Op::mortgaged_of => arm_mortgaged_of(a),
                 Op::set_mortgaged => arm_set_mortgaged(a),
                 Op::set_owner => arm_set_owner(a),
@@ -899,14 +889,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- band / skills ----
         Op::band_crystals => arm_band_crystals(a),
         Op::add_band_crystals => arm_add_band_crystals(a),
-        Op::band_skill | Op::character_skill => {
-            // Return 0 = no skill id (string returns go through out-buffers in
-            // the real ABI; the model answers "none").
-            0
-        }
-        Op::band_skills => 0,
-        Op::add_band_skill => 0,
-        Op::invoke_skill => 0,
+                Op::band_skill | Op::character_skill => arm_band_skill(a),
+                Op::band_skills => arm_band_skills(a),
+                Op::add_band_skill => arm_add_band_skill(a),
+                Op::invoke_skill => arm_invoke_skill(a),
 
         // ---- events ----
         Op::event_is_active => {
@@ -934,10 +920,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
         // ---- prompts ----
                 Op::opt_int | Op::opt_str | Op::opt_tile => arm_opt(a),
-        Op::opt_price | Op::opt_ai => {
-            world::with_world_mut(|w| w.opt_n += 1);
-            0
-        }
+                Op::opt_price | Op::opt_ai => arm_opt_price(a),
         Op::ask => arm_ask(a),
 
         // ---- trigger context ----
@@ -2654,4 +2637,58 @@ pub fn arm_trig_set_negate_effect(a: Args) -> i64 {
         w.trig_negate = true;
     });
     0
+}
+
+// ---- ras/pareo subset arms ----
+/// `Op::add_house` — extracted from `dispatch`.
+pub fn arm_add_house(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                let t = tile_idx(a0);
+                w.tiles[t].houses = w.tiles[t].houses.saturating_add(a1);
+                w.push(Effect::SetHouses {
+                    tile: a0,
+                    n: w.tiles[t].houses,
+                });
+                w.tiles[t].houses as i64
+            })
+        }
+}
+
+/// `Op::band_skill | Op::character_skill` — extracted from `dispatch`.
+pub fn arm_band_skill(a: Args) -> i64 {
+    let _ = a;
+{
+            // Return 0 = no skill id (string returns go through out-buffers in
+            // the real ABI; the model answers "none").
+            0
+        }
+}
+
+/// `Op::band_skills` — extracted from `dispatch`.
+pub fn arm_band_skills(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
+/// `Op::add_band_skill` — extracted from `dispatch`.
+pub fn arm_add_band_skill(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
+/// `Op::invoke_skill` — extracted from `dispatch`.
+pub fn arm_invoke_skill(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
+/// `Op::opt_price | Op::opt_ai` — extracted from `dispatch`.
+pub fn arm_opt_price(a: Args) -> i64 {
+    let _ = a;
+{
+            world::with_world_mut(|w| w.opt_n += 1);
+            0
+        }
 }
