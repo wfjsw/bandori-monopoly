@@ -7,7 +7,7 @@ import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D } from "../../core/data";
 import { getProfile } from "../../core/store";
-import type { RoomInfo, ScoreWeights } from "../../core/types";
+import type { ClockSettings, RoomInfo, ScoreWeights } from "../../core/types";
 import { OnlineSession, session, startOnline } from "../../game/session";
 import { api, ensureSession } from "../../net/api";
 import { fmtMsg } from "../../i18n/msg";
@@ -17,6 +17,7 @@ import { Chips } from "../../ui/Chips";
 import { Center, Form, FormRow, TextInput } from "../../ui/Form";
 import { Icon } from "../../ui/Icon";
 import { openModal } from "../../ui/Modal";
+import { DEFAULT_CLOCK, showClockSettings } from "../../ui/ClockSettings";
 import { DEFAULT_WEIGHTS, showScoreWeights } from "../../ui/ScoreWeights";
 import { toast } from "../../ui/Toast";
 import { TopBar } from "../../ui/TopBar";
@@ -179,9 +180,10 @@ function CreateRoom({ close }: { close: () => void }) {
   const [max, setMax] = useState(6);
   const [pw, setPw] = useState("");
   const [weights, setWeights] = useState<ScoreWeights>({ ...DEFAULT_WEIGHTS });
+  const [clock, setClock] = useState<ClockSettings>({ ...DEFAULT_CLOCK });
   const [lo, hi] = ranked ? [5, 6] : [3, 10];
   const submit = async () => {
-    const r = await api.createRoom({ name, ranked, maxPlayers: max, password: pw, weights });
+    const r = await api.createRoom({ name, ranked, maxPlayers: max, password: pw, weights, clock });
     if (!r.ok) return toast(fmtMsg(r.error!), "error");
     close();
     enter(r.data!.room, r.data!.you);
@@ -202,6 +204,7 @@ function CreateRoom({ close }: { close: () => void }) {
       </FormRow>
       <FormRow label={tr("lobby.password")}><TextInput placeholder={tr("lobby.passwordPlaceholder")} maxLength={16} value={pw} onChange={(e) => setPw(e.target.value)} /></FormRow>
       <FormRow label={tr("common.score")}><span><Btn size="small" icon="leaderboard" onClick={() => showScoreWeights(weights, true, setWeights)}>{tr("solo.scoreRules")}</Btn></span></FormRow>
+      <FormRow label={tr("clock.title")}><span><Btn size="small" icon="schedule" onClick={() => showClockSettings(clock, true, setClock)}>{tr("clock.title")}</Btn></span></FormRow>
       <Center><Btn kind="pink" type="submit" wide>{tr("lobby.create")}</Btn></Center>
     </Form>
   );

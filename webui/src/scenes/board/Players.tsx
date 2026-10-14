@@ -32,13 +32,15 @@ export function statusChips(x: MatchPlayer): string[] {
   ].filter(Boolean);
 }
 
-/** The turn clock of the player whose turn it is: the base time first, then the
- *  bonus time. Solo has no deadlines (the engine never expires one), and a
- *  machine-driven turn has none either, so both show no clock. Online, the
- *  server publishes absolute deadlines (`m.v.clock`) on its monotonic clock;
- *  remaining is `deadline - (performance.now() + offset)` -- never counted
- *  from the view's arrival -- so animation lag cannot eat the display. While
- *  the clock is held (`clockPaused` / no deadline) it sits at full. */
+/** The turn clock of the player whose turn it is: **bonus first, then base**
+ *  (`docs/SERVER.md` §Turn clock). Solo has no deadlines (the engine never
+ *  expires one), and a machine-driven turn has none either, so both show no
+ *  clock. Online, the server publishes absolute deadlines (`m.v.clock`) on its
+ *  monotonic clock; remaining is `deadline - (performance.now() + offset)` --
+ *  never counted from the view's arrival -- so animation lag cannot eat the
+ *  display. While the clock is held (`clockPaused` / no deadline) it sits at
+ *  full. `bonusDeadlineMs` is when the bonus pool empties (the sooner of the
+ *  two); `baseDeadlineMs` is when the whole clock is gone. */
 function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; caption: string; frac: number; cls: string } | null {
   const S = m.S;
   const cur = S.players[S.turn];
@@ -58,8 +60,10 @@ function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; cap
     const bonusMs = displayRemainingMs(clock.bonusDeadlineMs, now, clockSync.offset);
     const rawBase = clock.baseDeadlineMs - clockSync.toServer(now);
     const rawBonus = clock.bonusDeadlineMs - clockSync.toServer(now);
+    // Bonus drains first: show 免费时间 while the bonus pool has anything left,
+    // then 恢复时间 for the base pool underneath it.
+    if (rawBonus > 0 && bonusMs > 0) return show(bonusMs / 1000, tr("board.bonusTime"), bonusMs < 10_000 ? s.low : "", fullBonus);
     if (rawBase > 0 && baseMs > 0) return show(baseMs / 1000, tr("board.baseTime"), s.base, fullBase);
-    if (rawBonus > 0 && bonusMs > 0) return show(bonusMs / 1000, tr("board.remain"), bonusMs < 10_000 ? s.low : "", fullBonus);
     // At / past the local estimate of the deadline: hold at 0 and say so --
     // the server may not have expired the turn yet.
     return show(0, tr("board.waitingServer"), s.low, fullBonus);
@@ -67,16 +71,16 @@ function timerOf(m: Model, solo: boolean, elapsed: number): { value: string; cap
 
   // Held (paused) or a path with no deadline (replay / older server): show
   // the snapshot's remaining, frozen while busy/asking. When held at full,
-  // `clockPaused` pins the display to the un-consumed base/bonus.
+  // `clockPaused` pins the display to the un-consumed bonus/base (bonus first).
   if (S.clockPaused) {
-    if (S.baseTime > 0 || S.bonusTime <= 0) return show(S.baseTime || fullBase, tr("board.baseTime"), s.base, fullBase);
-    return show(S.bonusTime, tr("board.remain"), s.low, fullBonus);
+    if (S.bonusTime > 0) return show(S.bonusTime, tr("board.bonusTime"), s.low, fullBonus);
+    return show(S.baseTime || fullBase, tr("board.baseTime"), s.base, fullBase);
   }
   const e = !S.busy && !m.asking ? elapsed : 0;
-  const base = Math.max(0, S.baseTime - e);
-  const bonus = Math.max(0, S.bonusTime - Math.max(0, e - S.baseTime));
-  if (base > 0) return show(base, tr("board.baseTime"), s.base, fullBase);
-  return show(bonus, tr("board.remain"), bonus < 10 ? s.low : "", fullBonus);
+  const bonus = Math.max(0, S.bonusTime - e);
+  const base = Math.max(0, S.baseTime - Math.max(0, e - S.bonusTime));
+  if (bonus > 0) return show(bonus, tr("board.bonusTime"), bonus < 10 ? s.low : "", fullBonus);
+  return show(base, tr("board.baseTime"), s.base, fullBase);
 }
 
 /** Seats in the order they act from now: the current turn first, then the
