@@ -33,11 +33,7 @@ pub const RAISE_EFFORT: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

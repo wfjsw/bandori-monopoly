@@ -6,7 +6,7 @@
 //!
 //! force-move the player who [反击]'d you this turn 1-4 tiles with settle.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -29,18 +29,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
             counteract,
         ),
     ],
-)
-    .legacy(&[(1, legacy_can_counteract)]);
-
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- C#
-    // `t.Kind == "counteracted" && t.Target == seat && t.Seat != seat`.
-    (trigger::kind() == TriggerKind::Counteracted
-        || trigger::kind() == TriggerKind::Card
-        || trigger::kind() == TriggerKind::SkillUsed)
-        && trigger::target() == player_id
-        && trigger::player_id() != player_id
-}
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     run(player_id)?;

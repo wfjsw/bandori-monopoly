@@ -52,12 +52,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
             on_plan,
         ),
     ],
-)
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」.
 /// Applicability is the entry's condition (`actor != owner && tile.owner ==

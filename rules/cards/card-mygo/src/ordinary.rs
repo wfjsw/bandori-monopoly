@@ -7,8 +7,8 @@
 //! after an abnormal-move effect, copy the step count of your last non-teleport
 //! main move onto the next one.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ORDINARY: CardDef = CardDef::new(
@@ -19,28 +19,7 @@ pub const ORDINARY: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「受到异常移动效果影响后可打出」 -- C# `t.Kind == "abnormal"
-    // && t.Target == player`.
-    if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {
-        return false;
-    }
-    // 规则书[反击]: 「异常移动效果」 -- the abnormal family, carried as the
-    // chain's `abnormal` effect entry. Not just any effect aimed at the player:
-    // the money pipeline declares a `pay` effect on every [支付]/[获得] and must
-    // not open this window.
-    if !ctx::effect::has(TriggerKind::Abnormal) {
-        return false;
-    }
-    // C# also requires `H.V(seat, "lastWalk") > 0` -- there must be a previous
-    // non-teleport main move whose length can be copied. The engine writes the
-    // slot (`NoteWalk`: `SetV(player_id, "lastWalk", steps + 1)` after each
-    // non-teleport main walk; 0 means "none").
-    ctx::slot(player_id, "lastWalk") > 0
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的

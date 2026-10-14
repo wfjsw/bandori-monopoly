@@ -32,7 +32,7 @@ Destination: `card-sdk` (generic) | `rules/ruleset-core` (new game crate) | `rul
 | 24 | `pay_rent` / `offer_buy` / `offer_force_buy` / `offer_build` / buy-kind conventions | game | `ruleset-core` | this ruleset's purchase verbs |
 | 25 | `pre::MINE` (`actor == owner`) | generic | `card-sdk` | card-ownership pre, not game vocab |
 | 26 | shared guards `crystals_changed_guard` (x11), `mine` (x7), `always` (x4), `any` (x3) | game | `ruleset-core` | dedupe into shared fns |
-| 27 | `legacy_*` audit copies (~60) | game | delete if audit clean | NEGATION-AUDIT.md; do not port |
+| 27 | `legacy_*` audit copies (~60) | game | deleted 2026-10-14 (ABI 61) | was NEGATION-AUDIT.md / GUARDS.md §5.1; do not port |
 | 28 | `HookKind`/`TriggerKind`/`ChainKind`/`GateKind` wire enums | generic (stay) | `card-sdk` | host needs the codes; document game-named variants' ownership |
 | 29 | `HookKind::CircleAffected` / `CpChanged` / `CrystalsChanged` / `FireSpent` etc. | game-named wire | stay in `card-sdk` + doc | keep code; ownership note |
 | 30 | `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` / `prop::ALL_COLORS` | game data keys | stay as wire strings; class membership via generic `tile_in` | brief: overrides become generic class marks/props |

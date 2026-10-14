@@ -11,7 +11,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
+use card_sdk::abi::{ChainKind, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -94,18 +94,7 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed && slot('here_held_len') > 0", None, turn_start),
     ],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书（1）[反击]: 「当有人同一回合内打出两张卡时」 -- C# `t.Kind == "twoCards" && t.Seat != seat`.
-    if trigger::kind() != TriggerKind::TwoCards {
-        return false;
-    }
-    let them = trigger::player_id();
-    them != player_id && !ctx::player_out(them)
-}
+);
 
 /// Residual the condition cannot express: the actor is still in the game
 /// (`actor != owner` is the `pre`).

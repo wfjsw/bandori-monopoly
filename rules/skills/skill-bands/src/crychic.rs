@@ -41,7 +41,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Play("", Some(can_transform), transform_now),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
+    .silent(&[0]);
 
 /// The condition under which this band skill closes the exclusive-use gate.
 /// CRYCHIC variants may play their own exclusives (`step == 1`) but not the
@@ -54,10 +54,6 @@ pub const EXCLUSIVE_USE_DENIED: &str =
 fn refuse(_owner: i32) -> card_sdk::Asked {
     ctx::trigger::set_cancelled();
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// （1）「任何时刻拥有手牌数大于等于6时」.

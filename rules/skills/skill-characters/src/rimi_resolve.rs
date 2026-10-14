@@ -33,11 +33,7 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.rimiResolve.passed') != 0", None, at_turn_end),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[1, 2]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1, 2]);
 
 /// 「初始1，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

@@ -1102,50 +1102,6 @@ pub mod guard_cost {
     }
 }
 
-/// G3 (docs/GUARDS.md §5.1): the migration audit. On every probe the host
-/// evaluates the card's pre-migration `legacy_*` guard and
-/// `kind ∧ pre(ctx) ∧ guard(ctx)` and **panics** with card id + trigger dump on
-/// any mismatch (equivalence, both directions). Compiled out unless the
-/// `guard-audit` feature is on; once a card is clean its `legacy_*` copy is
-/// deleted and the check is a no-op for it.
-///
-/// `legacy == None` means the entry has no legacy copy (`has_legacy == false`)
-/// and the check is skipped. `trigger` is a one-line dump of the window.
-#[cfg(feature = "guard-audit")]
-pub fn legacy_audit(
-    card: &str,
-    entry: i32,
-    legacy: Option<bool>,
-    migrated: bool,
-    trigger: &str,
-) {
-    let Some(legacy) = legacy else {
-        return;
-    };
-    if legacy != migrated {
-        panic!(
-            "GUARDS G3 audit mismatch: card {card:?} entry {entry}\n\
-             trigger: {trigger}\n\
-             legacy(ctx) = {legacy}, category ∧ pre(ctx) ∧ guard(ctx) = {migrated}\n\
-             The two must be equivalent (docs/GUARDS.md §5.1). Either the \
-             condition drops a clause the legacy guard kept, or the residual \
-             guard / condition rejects what the legacy guard admitted."
-        );
-    }
-}
-
-/// No-op when the `guard-audit` feature is off (the production shape).
-#[cfg(not(feature = "guard-audit"))]
-#[inline]
-pub fn legacy_audit(
-    _card: &str,
-    _entry: i32,
-    _legacy: Option<bool>,
-    _migrated: bool,
-    _trigger: &str,
-) {
-}
-
 #[inline]
 fn bump(stat: &std::sync::atomic::AtomicU64) {
     stat.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

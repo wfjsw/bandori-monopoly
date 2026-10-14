@@ -64,7 +64,7 @@ pub const POPPIN: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]).silent(&[0]);
+    .silent(&[0]);
 
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].
@@ -83,10 +83,6 @@ fn lock_hill(player_id: i32) -> card_sdk::Asked {
 /// residual guard of [`lock_hill`] (docs/GUARDS.md §4.2c).
 fn lock_hill_applies(_player_id: i32) -> bool {
     (0..ctx::player_count()).any(|p| ctx::in_band(p, "Poppin' Party") && !ctx::player_out(p))
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// `SettleBefore`'s applicability: the owner's own settle (the （2）/（4）

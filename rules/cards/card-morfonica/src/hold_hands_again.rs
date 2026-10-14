@@ -11,7 +11,7 @@
 //!
 //! Counteraction-only (`Normal => false`).
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
+use card_sdk::abi::{ChainKind, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,21 +28,7 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
         ),
         On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, pay_at),
     ],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「当[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后」
-    // C# `t.Kind == "paid" && t.Seat == H.Neighbor(seat, -1) && t.Seat != seat && t.Value > 0`.
-    if trigger::kind() != TriggerKind::Paid {
-        return false;
-    }
-    let payer = trigger::player_id();
-    // C# takes the player-index neighbour (`H.Neighbor(seat, -1)`), not a true
-    // action-order predecessor -- `ctx::neighbor` is that same hook.
-    payer != player_id && payer == ctx::neighbor(player_id, -1) && trigger::value() > 0
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();

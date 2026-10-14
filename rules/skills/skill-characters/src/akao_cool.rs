@@ -24,12 +24,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const AKAO_COOL: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
     &[On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle)],
-).props(&[(card_sdk::abi::prop::EST_COST, 500)])
-    .legacy(&[(0, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 /// Face-down cards this player has on the field.
 fn face_down(player_id: i32) -> alloc::vec::Vec<(i32, String)> {

@@ -27,14 +27,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         // the hook's applicability (the residual guard).
         On::Hook(&[HookKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
-
-/// The instance this card lingers as only answers for its own player's buys
-/// (「本回合购买格子时」 is the turn player's purchase).
-fn legacy_mine(player_id: i32) -> bool {
-    trigger::player_id() == player_id
-}
+);
 
 /// 「购买格子时」 -- the `BuyAdd` hook's applicability: there is a tile being
 /// bought. (`pre::MINE` already states the actor.)

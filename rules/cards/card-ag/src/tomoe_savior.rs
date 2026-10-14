@@ -21,21 +21,7 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    let t = trigger::tile();
-    if !is_shop(t) {
-        return false;
-    }
-    if trigger::player_id() != player_id {
-        ctx::money_of(player_id) >= ctx::tile_price(t) / 2
-    } else {
-        true
-    }
-}
+);
 
 /// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
 fn is_shop(t: i32) -> bool {

@@ -8,7 +8,7 @@
 //! movement-locked turn) settles.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger, AbKind};
+use ruleset_core::ctx::{self, AbKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(
@@ -19,8 +19,7 @@ pub const OWN_STAGE: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
+);
 
 /// The [异常移动效果] this chain link declared, as its `AbKind`.
 ///
@@ -40,14 +39,6 @@ fn abnormal_kind() -> Option<AbKind> {
 fn can_counteract(_player_id: i32) -> bool {
     // G4: the actor rel is the condition (`target == owner`); 「[除外]以外」 is
     // a derived chain lookup (GUARDS.md §6) and stays here.
-    abnormal_kind().is_some_and(|k| k != AbKind::Exile)
-}
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {
-        return false;
-    }
     abnormal_kind().is_some_and(|k| k != AbKind::Exile)
 }
 

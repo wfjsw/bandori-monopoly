@@ -26,12 +26,7 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
         Some(is_general_card),
         on_played,
     )],
-)
-    .legacy(&[(0, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// Residual guard for [`on_played`]: the played card is a 通用 one (a card's
 /// band is the prefix of its id). String match, outside the CEL schema.

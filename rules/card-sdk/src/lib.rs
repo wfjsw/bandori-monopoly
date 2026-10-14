@@ -116,11 +116,6 @@ pub struct CardDef {
     /// Keys are [`abi::prop`] constants; a key not declared reads as its
     /// default (`0`).
     pub props: &'static [(&'static str, i32)],
-    /// G3 migration audit (docs/GUARDS.md §5.1): the card's pre-migration
-    /// guard(s), as `(entry index, legacy fn)`. Kept beside the migrated entry
-    /// while the `guard-audit` host feature is in play; deleted once the card
-    /// is clean. Empty for a card that is not under audit.
-    pub legacy: &'static [(i32, fn(i32) -> bool)],
     /// Per-entry labels -- the rulebook's numbered clauses, 「（1）」 / 「（2）」
     /// and kin -- as `(entry index, label)`. Rides the manifest so the
     /// 「效果适用」 line can name which clause of a multi-entry card ran.
@@ -161,7 +156,6 @@ impl CardDef {
             id,
             on,
             props: &[],
-            legacy: &[],
             labels: &[],
             silent: &[],
             quiet_when_empty: &[],
@@ -177,7 +171,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
@@ -194,7 +187,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
@@ -223,7 +215,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: entries,
             quiet_when_empty: self.quiet_when_empty,
@@ -243,7 +234,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: entries,
@@ -270,7 +260,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
@@ -309,24 +298,6 @@ impl CardDef {
         crate::abi::EntryPresentation { header, flash }
     }
 
-    /// Keep the pre-migration guard of entry `entry` as `legacy` for the G3
-    /// equivalence audit (docs/GUARDS.md §5.1). The `guard-audit` host calls it
-    /// through `export::OP_LEGACY_GUARD` and panics on any mismatch with
-    /// `pre ∧ guard`. Delete the copy once the card's audit is clean.
-    pub const fn legacy(self, legacy: &'static [(i32, fn(i32) -> bool)]) -> Self {
-        Self {
-            id: self.id,
-            on: self.on,
-            props: self.props,
-            legacy,
-            labels: self.labels,
-            silent: self.silent,
-            quiet_when_empty: self.quiet_when_empty,
-            flash: self.flash,
-            texts: self.texts,
-        }
-    }
-
     /// Declare the deed-popup **tile text** these entries speak for --
     /// `(entry index, slot, tile, key)`. See [`Self::texts`] for the shape.
     /// Replaces any earlier `texts` call.
@@ -349,7 +320,6 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
