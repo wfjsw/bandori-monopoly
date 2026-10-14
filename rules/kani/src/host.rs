@@ -507,8 +507,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::others_count => arm_others_count(a),
                 Op::others_at => arm_others_at(a),
                 Op::turn_player => arm_turn_player(a),
-        Op::round_no => world::with_world(|w| w.round_no) as i64,
-        Op::turn_key => world::with_world(|w| w.turn_key) as i64,
+                Op::round_no => arm_round_no(a),
+                Op::turn_key => arm_turn_key(a),
         // `target(player, tile, single)` is engine scheduling (hooks + the
         // `target` [反击] window). Model the **admission** half only: a living
         // seat in range is targeted and returned; out / OOB answers -1.
@@ -824,9 +824,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             0
         }
-        Op::stay_of => world::with_world(|w| w.stay[player_idx(a0)]) as i64,
-        Op::stun_of => world::with_world(|w| w.stun[player_idx(a0)]) as i64,
-        Op::exile_of => world::with_world(|w| w.exile[player_idx(a0)]) as i64,
+                Op::stay_of => arm_stay_of(a),
+                Op::stun_of => arm_stun_of(a),
+                Op::exile_of => arm_exile_of(a),
         Op::cant_move => world::with_world(|w| {
             (w.stay[player_idx(a0)] > 0
                 || w.stun[player_idx(a0)] > 0
@@ -2710,4 +2710,35 @@ pub fn arm_field_instances(a: Args) -> i64 {
             // return count.
             world::with_world(|w| w.field_n as i32) as i64
         }
+}
+
+// ---- stay/stun/turn arms ----
+/// `Op::round_no` — extracted from `dispatch`.
+pub fn arm_round_no(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.round_no) as i64
+}
+
+/// `Op::turn_key` — extracted from `dispatch`.
+pub fn arm_turn_key(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.turn_key) as i64
+}
+
+/// `Op::stay_of` — extracted from `dispatch`.
+pub fn arm_stay_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.stay[player_idx(a0)]) as i64
+}
+
+/// `Op::stun_of` — extracted from `dispatch`.
+pub fn arm_stun_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.stun[player_idx(a0)]) as i64
+}
+
+/// `Op::exile_of` — extracted from `dispatch`.
+pub fn arm_exile_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.exile[player_idx(a0)]) as i64
 }
