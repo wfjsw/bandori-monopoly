@@ -786,28 +786,7 @@ pub const VOCAB: &[Name] = &[
         get: NO_GET,
         fx: Fx::TileIn {
             var: "_tile_in",
-            fill: |v| {
-                let n = v.tile_count();
-                let seats = v.seat_count();
-                let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect();
-                for g in -2..=32 {
-                    classes.push(format!("color:{}", g));
-                }
-                let mut rows = Vec::new();
-                for t in 0..n {
-                    for p in std::iter::once(-1).chain(0..seats) {
-                        for c in &classes {
-                            if v.tile_in(p, t, c) {
-                                rows.push((p, t, c.clone()));
-                            }
-                        }
-                    }
-                }
-                rows
-            },
+            fill: |v| v.tile_in_rows(),
         },
         doc: "tile_in(p, t, class) -> ruleset class membership (buyable/shop/livehouse/color:<g>)",
     },
@@ -1275,6 +1254,7 @@ pub enum Val {
 
 /// The eager function-table shape a [`Fx`] bakes from the view. The evaluator
 /// turns this into the hidden CEL variable (`_<var>`) the closure reads.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Table {
     /// seat -> int (also the `int -> int` case, keyed by the fill list).
     IntMap(Vec<(i64, i64)>),

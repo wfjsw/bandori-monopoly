@@ -637,6 +637,20 @@ pub fn ruleset_add(bytes: &[u8]) -> Result<(), JsError> {
     })
 }
 
+/// [`ruleset_add`] with the module's SHA-256 (lowercase hex) computed by the
+/// caller over the same bytes (`crypto.subtle.digest` -- native, off the wasm
+/// interpreter). Same result as `ruleset_add`, ~30 ms less main-thread time.
+#[wasm_bindgen]
+pub fn ruleset_add_hashed(bytes: &[u8], sha256: &str) -> Result<(), JsError> {
+    PENDING.with(|p| {
+        let mut p = p.borrow_mut();
+        let b = p.get_or_insert_with(game_rules::Ruleset::builder);
+        b.add_hashed(bytes, sha256.to_string())
+            .map_err(|e| JsError::new(&format!("{e:?}")))?;
+        Ok(())
+    })
+}
+
 /// Feed the precompiled-condition blob (`conds-<sha>.bin`, postcard) that
 /// `tools/build-ruleset.mjs` ships beside `index.json` (`docs/GUARDS.md` §8.2).
 /// Required whenever any loaded card declares a `pre`: this build links

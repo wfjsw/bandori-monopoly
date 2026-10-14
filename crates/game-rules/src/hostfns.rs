@@ -2240,7 +2240,7 @@ pub fn card_replayable<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) ->
     // Scope only when a condition exists (`pre == None` never reads it).
     let scope;
     let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
-        scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(
+        scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
             c.st().wr(),
             player_id,
         ));

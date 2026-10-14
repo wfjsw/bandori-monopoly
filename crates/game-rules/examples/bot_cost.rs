@@ -57,7 +57,7 @@ impl CardRules for CountingRules {
     fn card_props(&self, card: &str) -> BTreeMap<String, i32> {
         self.inner.card_props(card)
     }
-    fn card_texts(&self, card: &str) -> Vec<game_core::engine::TileTextDecl> {
+    fn card_texts(&self, card: &str) -> std::sync::Arc<[game_core::engine::TileTextDecl]> {
         self.inner.card_texts(card)
     }
     fn has_rule(&self, id: &str) -> bool {
