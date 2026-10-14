@@ -374,6 +374,7 @@ name = "card-sdk"
 version = "0.1.0"
 dependencies = [
  "bitflags",
+ "kani-ops",
  "postcard",
  "serde",
 ]
@@ -1263,6 +1264,10 @@ dependencies = [
  "futures-util",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "kani-ops"
+version = "0.1.0"
 
 [[package]]
 name = "lazy_static"

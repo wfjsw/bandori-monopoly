@@ -1,0 +1,12 @@
+[package]
+name = "kani-ops"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Host-import opcodes + shared Kani model types (leaf crate; no deps)."
+publish = false
+
+# NOT a member of rules/Cargo.toml (wasm guest workspace). card-sdk depends
+# on it optionally behind the `kani-model` feature (never enabled for
+# wasm/native production builds).
+[dependencies]

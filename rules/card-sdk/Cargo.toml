@@ -9,13 +9,16 @@ description = "Card authoring SDK + host/guest ABI for the BandoriMonopoly WASM 
 #  * rules/ruleset (guest, wasm32)  -> constants + `ctx` host imports + `bandori_ruleset!`
 #  * crates/game-rules (host, native and wasm32) -> constants only (`abi`)
 [dependencies]
-
+# Leaf crate: Op / Args for the host ABI (also used by the Kani model).
+# Lives outside the wasm workspace members list; it is no_std-safe (an enum).
+kani-ops = { path = "../kani-ops" }
 serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 # no_std: flags type for the t.Move bitset (default features off).
 bitflags = { version = "2", default-features = false }
 
 [features]
+# Symbolic-host model (never on for wasm/native production).
 # Guest builds (no_std cdylibs): panic handler + bump allocator. Enable it in
 # the card crate AND put `#![cfg_attr(target_arch = "wasm32", no_std)]` there too.
 guest = []
