@@ -13,7 +13,7 @@
 //! shielded.
 
 use card_sdk::abi::{prop, ChainKind};
-use ruleset_core::ctx::{self, trigger};
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MANA_CHAMPION: CardDef = CardDef::new(
@@ -25,29 +25,7 @@ pub const MANA_CHAMPION: CardDef = CardDef::new(
         counteract,
     )],
 )
-.props(&[(prop::SELF_REDIRECT, 1)])
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「当你或你的格子即将受到来自你以外的效果影响时打出此卡」
-    // C# `H.HitByOtherCard(t, seat)` (MatchHost.cs:19235-19255) =
-    // `t.ByCard >= 0 && t.ByCard != seat` and (kind "target"/"abnormal" ->
-    // `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
-    // Re-verified against the v26 pipeline: a tile hit lands as
-    // `t.Target = owner` (H.TargetTile, MatchHost.cs:19178-19216), so
-    // 「或你的格子」 is covered by `target() == player_id`.
-    if !trigger::by_card().is_some_and(|by| by != player_id) {
-        return false;
-    }
-    // 规则书[反击]: 「被其他人的卡的效果影响」 is one condition on the *effect*,
-    // and now reads as one: any effect another player's card declared at me. It
-    // used to be reconstructed by unioning `Target`/`Abnormal` (via `t.Target`)
-    // with `Pay` (via `t.Pay.from`) and matching on two different fields.
-    // `effect::hits` covers both because a payment touches its payer *and* its
-    // payee.
-    ctx::effect::hits(player_id)
-}
+.props(&[(prop::SELF_REDIRECT, 1)]);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」

@@ -561,3 +561,149 @@ grow/drop into array arithmetic; the loops still unroll to the global bound if
 `Vec::len` is not folded. If a row stays TIMEOUT the profile will say whether
 the residual is still `drop_glue`/`extend_with` or solver-bound on the symbolic
 world (the money_shave post-batch-2 diagnosis).
+## op-subset — per-harness host-op subset + sparse World (branch `kani-opsubset`)
+
+Goal (coordinator): `pp::same_dream_01_band_plus_3_iff` well under 1800 s,
+non-vacuous. Levers named in Batch 4: shrink the ~300-op `dispatch` match per
+proof, smaller `World`, allocation-free `native::read`.
+
+### What landed
+
+| lever | what | files |
+|---|---|---|
+| (1) **Per-harness host-op subset** | `harness::host_subset!` builds a tiny `fn(Op, Args) -> i64` match covering only the `host::arm_*` handlers the card body reaches. Every other `Op` → `host::outside_subset` = **`kani::assert(false)`** (loud FAIL — never `assume(false)`, so an undeclared op cannot silently pass). `host::install_backend(f)` installs it. | `host.rs`, `harness.rs` |
+| **arm_\* single-source handlers** | `arm_log`, `arm_gain`, `arm_count_held`, `arm_add_held`, `arm_player_count`, `arm_in_band`, `arm_hand_count`, `arm_take_card`, `arm_to_discard`, `arm_ask`, `arm_add_band_crystals`, … — `dispatch` and subset dispatchers share them. | `host.rs` |
+| (2) **Sparse play world** | `harness::sparse_play_world(SparsePlay)`: only `used_seats` get symbolic money/fans; seats `used..4` stay at `World::new()` defaults (concrete). `n_players` concrete. Isolation `hand_resonance = 0` default. `with_world`/`with_world_mut` `#[inline(always)]` (no `World` copy per host call). | `harness.rs`, `world.rs` |
+| **`name_id` no alloc** | Untagged name handle under `cfg(kani)` = loud FAIL (`kani::assert(false)`), not `native::read`/`to_vec`. The `ctx::s`/`key!` facade always tags. `cfg(not(kani))` keeps the byte fallback. | `host.rs` |
+| **pp wiring** | `same_dream_dispatch` declares 14 ops (body + `try_resonance` entry); `same_dream_world()` = subset + sparse 2-seat. Harnesses: `same_dream_01_band_plus_3_iff`, `same_dream_02_money_mutant_is_detected`. | `proofs/pp.rs` (kit declaration only) |
+
+`player_count()` semantics unchanged (TUNING §7): `ctx::player_count()` still
+returns the constant 4 under `cfg(kani)` after asserting `n_players ∈ 2..=4`;
+`player_out(p)` is true for `p >= n_players`. Sparse world only makes **2**
+seats symbolic — the body's `0..4` loop is four cheap iterations and with
+`widen == false` only `p == user` is processed.
+
+### Class C: hook-status polarity (`raise` / `gate` / `raise_bought` / `ring_multiplier`)
+
+**Fixed here** — the parallel triage pass ("Batch 3e continued") diagnosed
+`chart_rush_01_spends_fire` as a class C host-model defect (`Op::raise`
+benign-0 → cancelled → `spend_fire` skipped the real spend) and left the
+proof FAILING for a `host.rs` fix. This branch is that fix.
+
+`events::chart_rush_01_spends_fire` spent no [火罐]: `spend_fire` calls
+`ctx::raise(FirePaying)`, and a **0** return means *cancelled / substituted*
+→ `return Ok(true)` without the real spend. `Op::raise` sat in the benign-0
+list (returned 0). Engine contract (`wasm_rules` `HostRequest::Raise`):
+return `(!cancelled)` — **1 = settled**.
+
+Same polarity class, same fix (all pinned in `conf_hostops2`):
+
+| op | 0 means | correct default | was | now |
+|---|---|---|---|---|
+| `Op::raise` | cancelled → caller skips effect | 1 = settled | 0 | **1** (`arm_raise`) |
+| `Op::gate` | guarded/immune/out → skip effect | 1 = allowed | 0 | **1** (`arm_gate`, 0 for out seats) |
+| `Op::raise_bought` | hand-over did not land | 1 = landed (HOST-06) | 0 | **1** (`arm_raise_bought`) |
+| `Op::ring_multiplier` | 0 zeroes rent | ≥ 1 (identity 1; game default 10) | 0 | **1** (`arm_ring_multiplier`, `TODO(规则书)` for the stock 10) |
+
+Reported leftovers with the 0-means-skip shape (still benign-0, not yet
+armed): `play_from_hand` (0 = not from hand), `can_build_on` (0 = cannot),
+`card_*` / `buy` / `acquire` / `agent_offer` (0 = did not land).
+`designation_cancelled` (0 = not cancelled) is the correct polarity.
+
+### Measurements (one serial CBMC, unwinding assertions ON, `tools/kani/run.sh`)
+
+| harness | before | after | verdict |
+|---|---|---|---|
+| `pp::same_dream_01_band_plus_3_iff` | TIMEOUT 1800 s (central; NameMap 144+80 unrolls, 42 MB goto) | **TIMEOUT 1800 s** ×2 (op-subset + sparse world; then + `name_id` cut) | **TIMEOUT** — target **not met** |
+| `events::chart_rush_01_spends_fire` | TIMEOUT 1800 s (old base, class E) + **genuine class C** (no fire spent — `raise` returned cancelled) | **SUCCESSFUL 909 s** (unwind 24, **2/2 covers sat**: "no pots" + "some pots spent") | **SUCCESSFUL** |
+
+Profile deltas for `same_dream_01_band_plus_3_iff` (`--features band-pp`,
+unwind 32):
+
+| metric | pre-op-subset (central) | op-subset + sparse | + `name_id` cut |
+|---|---|---|---|
+| goto binary | 42–106 MB | **8.8 MB** | 8.8 MB |
+| unwind loops | NameMap 144+80, sync_views 8, setup 4 | **`sparse_play_world` 2 only** | same |
+| aborting paths | (alloc-heavy) | 29 (incl. `native::read`, `RawVec`, `slice_index_fail`) | **14** (Option::unwrap_or ×6, `name_id` ×3, `Result::branch` ×3; **zero alloc / to_vec / RawVec**) |
+| verdict | TIMEOUT 1800 s | TIMEOUT 1800 s | TIMEOUT 1800 s |
+
+Unrolls are clean. The remaining cost is **SSA/solver after symbolic
+execution** — not a model loop, not an alloc cliff. Named in Batch 4 after the
+direct-call experiment: the **BACKEND `fn(Op, Args) -> i64` IF-chain** at every
+`ctx::*` site, plus the body `fn(i32) -> Asked` `code*` chain (388 targets with
+`--features band-pp`). Those live in `card-sdk::kani_host::call` (fn-ptr) and
+`invoke.rs` trampolines — **outside this task's edit scope** (`host.rs` /
+`world.rs` / `harness.rs` / `shim.rs` only). The rejected `extern "Rust"` run
+(244 s, UNDETERMINED) is still the evidence that the host-call fn-ptr is the
+dominant SSA cost.
+
+### Non-vacuity
+
+Not reached: both runs hit TIMEOUT before any property verdict, so covers /
+`assert!(false)` probes were not evaluated. The subset trap is fail-closed by
+construction (`outside_subset` = `kani::assert(false)`), and `sparse_play_world`
+uses no `assume` that hides body behaviour (isolation `hand_resonance = 0` is
+stated and matches the pp module doc). A post-invoke `assert!(false)` probe
+must be run when the proof first finishes.
+
+### Soundness kept
+
+* Unwinding assertions ON; no `--no-unwinding-checks`.
+* No `#[ignore]`, no allowlist, no weakened specs.
+* `outside_subset` / untagged `name_id` **FAIL** the proof — never `assume`.
+* Card bodies unmodified. `rules/` production (non-kani) untouched by the
+  op-subset / sparse-world work (`name_id` keeps its byte fallback
+  `cfg(not(kani))`). `cargo test -p rules-kani` green (incl. 4 new
+  `conf_hostops2` polarity pins).
+* `player_count()=4` / `player_out` semantics documented and unchanged
+  (TUNING §7).
+
+### Next levers (out of this task's file scope)
+
+1. Fold the `kani_host::BACKEND` fn-ptr (put the dispatch **in** `card-sdk`
+   under `cfg(kani)`, or a Kani feature for Rust-ABI imports) — the 244 s
+   direct-call experiment says this is the dominant cost.
+2. Body `code*` → integer body-id match (`invoke.rs` / `build.rs` trampolines)
+   so the call is not a 388-target IF-chain.
+3. `native::read` tagged path still `to_vec`s in `card-sdk` (other agent).
+## Batch 3e continued — proof-file triage (parallel: op-subset + strvec agents)
+
+Scope: `rules/kani/src/{proofs,spec}/*.rs` + docs only.
+
+### `events::chart_rush_01_spends_fire` FAILED — **class C host-model defect**
+
+Assert `E-chart-rush-01: all fire pots spent` fails. Root cause chain:
+
+1. Body: `fire::spend(p, lost, …)` → `ruleset_core::spend_fire`.
+2. `spend_fire` opens the `FirePaying` link first:
+   `if !ctx::raise(…, FirePaying, n)? { return Ok(true); }`
+   (`raise` = true when the link **settled**, false when **cancelled**).
+3. Model `host.rs` `Op::raise` is in the benign-0 unmodeled list → returns **0**.
+4. `raise` → `Ok(false)` («cancelled») → `spend_fire` returns `Ok(true)`
+   **without subtracting** `w.fire[p]`.
+
+So the model reports the spend as satisfied but leaves the pots. The proof
+is correct; the **host model's `Op::raise` must return 1 (settled)** for
+`FirePaying` when no hook substitutes. Fix belongs in `host.rs` (not this
+agent's scope) — leave the proof **FAILING** as the finding.
+
+### `events::fix_note_01_activation_keeps` UNWINDING — class A
+
+`fix_note::play` `for t in 0..tile_count()` is a **60-trip** loop
+(`Not unwinding at 16`). Raised harness unwind to **64** (re-timing).
+
+### `fix_note_01` unwind 64 — **TIMEOUT 1200 s** (class E after bound fix)
+
+60-trip `for t in 0..tile_count()` fully unwound is SSA-heavy. Bound is
+now sound (64 ≥ 60); cost is the body loop (cannot edit). **FAIL** —
+no cheap proof-file lever beyond the bound.
+
+### `end_it_all_01_three_picks_and_keep` — dropped unused `picks` scan
+
+`ask_pick` + `Vec<Msg>` fold (String ABI) still class E; pick-count lives
+in `three_picks_counted`. Simplified the keep half (re-timing pending).
+
+### `moca_02_mutant_is_detected` — **SUCCESSFUL 340 s** (was TIMEOUT 1800 s)
+
+`kassert!` (no `panic_fmt`/`memchr`) removed the fmt cliff that dominated
+the 1193-unroll memchr/PadAdapter profile. Class **E → fixed**.

@@ -16,7 +16,7 @@ pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", N
     // 规则书: 「（此卡可在眩晕时打出）」 -- the `playableStunned` property
     // (C# `Card.PlayableStunned`), skips the stun gate. The exile and no-hand
     // gates have no such exception.
-    .props(&[(prop::PLAYABLE_STUNNED, 1)]);
+    .props(&[(prop::PLAYABLE_STUNNED, 1), (card_sdk::abi::prop::SONG, 1)]);
 
 fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s

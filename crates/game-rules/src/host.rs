@@ -1079,15 +1079,12 @@ impl Ruleset {
         cand: &crate::cond_pre::CandidateCtx,
         answers: &[i32],
     ) -> Result<bool, RuleError> {
-        let info = &self.inner.cards[card as usize];
         let pre = self
             .inner
             .pre
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        #[cfg(feature = "guard-audit")]
-        let audit = self.legacy_probe(world, card, entry, player_id);
         let admitted = if self.guard_is_none(card, entry) {
             crate::cond_pre::admits_pre(pre, Some(scope), cand)
         } else {
@@ -1110,16 +1107,6 @@ impl Ruleset {
             });
             matches!(asked, Ok(true))
         };
-        #[cfg(feature = "guard-audit")]
-        if let Some(legacy) = audit {
-            crate::cond_pre::legacy_audit(
-                &info.id,
-                entry,
-                Some(legacy),
-                admitted,
-                &trigger_dump(&world.trigger()),
-            );
-        }
         Ok(admitted)
     }
 
@@ -1273,8 +1260,6 @@ impl Ruleset {
             &self.inner.cards[card as usize].id,
             false,
         );
-        #[cfg(feature = "guard-audit")]
-        let audit = self.legacy_probe(world, card, entry, player_id);
         let ok = if self.guard_is_none(card, entry) {
             // G4 deleted the residual: the condition alone decides.
             crate::cond_pre::admits_pre(pre, Some(scope), &cand)
@@ -1290,16 +1275,6 @@ impl Ruleset {
                 }
             })?
         };
-        #[cfg(feature = "guard-audit")]
-        if let Some(legacy) = audit {
-            crate::cond_pre::legacy_audit(
-                &self.inner.cards[card as usize].id,
-                entry,
-                Some(legacy),
-                ok,
-                &trigger_dump(&world.trigger()),
-            );
-        }
         Ok(ok)
     }
 
@@ -1349,37 +1324,6 @@ impl Ruleset {
             .get(card as usize)
             .and_then(|c| c.on.get(entry as usize))
             .is_some_and(|o| !o.has_guard)
-    }
-
-    /// G3 migration audit: ask the guest for the entry's `legacy_*` guard
-    /// (`export::OP_LEGACY_GUARD`). `None` when the entry has no legacy copy.
-    #[cfg(feature = "guard-audit")]
-    fn legacy_probe<W: CardWorld>(
-        &self,
-        world: &W,
-        card: i32,
-        entry: i32,
-        player_id: i32,
-    ) -> Option<bool> {
-        let info = self.inner.cards.get(card as usize)?;
-        if !info.on.get(entry as usize)?.has_legacy {
-            return None;
-        }
-        let mut store = self.store(world.clone(), &[]).ok()?;
-        match crate::inline::with_no_inline(|| {
-            call_card(
-                &self.inner,
-                &mut store,
-                card,
-                entry,
-                export::OP_LEGACY_GUARD,
-                player_id,
-            )
-        }) {
-            // rt.rs returns -1 for "no legacy copy".
-            Ok(v) if v >= 0 => Some(v != 0),
-            _ => None,
-        }
     }
 
     /// `Card.WhyNot` -- the reason the card cannot be played now, or `None` when
@@ -1487,8 +1431,6 @@ impl Ruleset {
             &self.inner.cards[card as usize].id,
             false,
         );
-        #[cfg(feature = "guard-audit")]
-        let audit = self.legacy_probe(world, card, entry, player_id);
         let why = if self.guard_is_none(card, entry) {
             // G4 deleted the gate: the condition alone decides. A rejecting
             // condition is still a block; an admitting one is playable.
@@ -1522,16 +1464,6 @@ impl Ruleset {
                 },
             )?
         };
-        #[cfg(feature = "guard-audit")]
-        if let Some(legacy) = audit {
-            crate::cond_pre::legacy_audit(
-                &self.inner.cards[card as usize].id,
-                entry,
-                Some(legacy),
-                why.is_none(),
-                &format!("cant_play player={player_id}"),
-            );
-        }
         Ok(why)
     }
 
@@ -1561,25 +1493,6 @@ impl Ruleset {
         );
         Ok(store)
     }
-}
-
-/// One-line dump of a trigger for the G3 audit panic message.
-fn trigger_dump(t: &crate::Trigger) -> String {
-    format!(
-        "kind={:?} actor={} target={} tile={} value={} step={} by={} pay_is_rent={} move_roll={:?} move_kind={:?} main={} abnormal={}",
-        t.kind,
-        t.player_id,
-        t.target,
-        t.tile,
-        t.value,
-        t.step,
-        t.by_card.unwrap_or(-1),
-        t.pay.map(|p| p.is_rent).unwrap_or(false),
-        t.mv.as_ref().and_then(|m| m.roll),
-        t.mv.as_ref().map(|m| m.kind),
-        t.main,
-        matches!(t.kind, crate::TriggerKind::Abnormal),
-    )
 }
 
 fn trap(e: Error) -> RuleError {
@@ -1973,6 +1886,16 @@ pub enum CallOut {
 pub trait RulesHandle: Clone + Send + Sync + 'static {
     fn by_id(&self, id: &str) -> Option<i32>;
     fn card(&self, i: i32) -> Option<&CardInfo>;
+    /// One declared static property of the card rule `id`
+    /// (`CardInfo::props`); `0` when the card does not declare it (the
+    /// defined default). Mirrors [`crate::Ruleset::card_prop`] /
+    /// `game_core::engine::CardRules::card_prop`.
+    fn card_prop(&self, id: &str, key: &str) -> i32 {
+        self.by_id(id)
+            .and_then(|i| self.card(i))
+            .and_then(|c| c.props.get(key).copied())
+            .unwrap_or(0)
+    }
     /// The compiled condition of card `i`'s `entry` (docs/GUARDS.md G0), if
     /// any. Default `None` (no condition) so a stub handle need not care.
     fn pre(&self, i: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
@@ -3328,6 +3251,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "card_text_mentions",
         |mut c: C<W>, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
             hostfns::card_text_mentions(&mut c, cp, cl, np, nl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_prop",
+        |mut c: C<W>, ip: i32, il: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            hostfns::card_prop(&mut c, ip, il, kp, kl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -5041,7 +4971,6 @@ mod gate_tests {
             triggers: vec![crate::TriggerKind::PayGate as i32],
             pre: pre.map(str::to_string),
             has_guard,
-            has_legacy: false,
             messages: vec![],
             label: None,
             presentation: Default::default(),

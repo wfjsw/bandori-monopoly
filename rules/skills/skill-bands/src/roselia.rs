@@ -36,11 +36,7 @@ pub const ROSELIA: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", Some(at_turn_start_applies), at_turn_start),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[1]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1]);
 
 /// Residual guard for [`half_price`]: a Live House (always halves) or the
 /// first not-yet-taken non-Live-House buy. `is_live_house_for` is a

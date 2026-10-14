@@ -30,8 +30,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
             on_pass,
         ),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
+);
 
 /// Combined gate: not yet placed (the placement branch), or placed with the
 /// 「至少9个水母标记」 the jump needs. A placement is always available from
@@ -63,10 +62,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     jump(player_id)
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// 「花音每次倒走获得一个水母标记」 -- C# `CardKanonMarch.Arrive`

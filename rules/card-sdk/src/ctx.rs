@@ -2969,6 +2969,17 @@ pub fn card_text_mentions(card: &str, needle: &str) -> bool {
     unsafe { sys::card_text_mentions(cp, cl, np, nl) != 0 }
 }
 
+/// One declared static property of the card rule `id` (`CardDef::props`,
+/// [`crate::abi::prop`]); `0` when the card does not declare it (the defined
+/// default for every key). Generic: the key is a wire name, no game
+/// vocabulary in the query itself.
+#[cfg_attr(kani, inline(always))]
+pub fn card_prop(id: &str, key: &str) -> i32 {
+    let (ip, il) = s(id);
+    let (kp, kl) = s(key);
+    unsafe { sys::card_prop(ip, il, kp, kl) }
+}
+
 /// A gain that goes through the full money pipeline.
 ///
 /// `NEGATION-AUDIT` V4 (user ruling 2026-10-07): Tritone's 「立刻获得此次失去

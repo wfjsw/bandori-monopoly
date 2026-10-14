@@ -8,7 +8,7 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{prop, ChainKind, MoveKind, TriggerKind};
+use card_sdk::abi::{prop, ChainKind};
 use card_sdk::ctx::plan;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -27,15 +27,7 @@ pub const DETOUR: CardDef = CardDef::new(
         On::AtEnd("", None, clear_no_reward),
     ],
 )
-    .legacy(&[(1, legacy_can_counteract)]).silent(&[3]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    trigger::kind() == TriggerKind::MoveRoll
-        && trigger::player_id() == player_id
-        && trigger::move_roll().is_some()
-        && trigger::move_kind() != Some(MoveKind::Teleport)
-}
+    .silent(&[3]);
 
 /// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

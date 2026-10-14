@@ -330,6 +330,8 @@ pub enum Op {
     set_join_used = 312,
     // Raw money adjustment (v57 closeout) -- no payment pipeline.
     adjust_money = 313,
+    // Static card property read (v62) -- `CardRules::card_prop` guest face.
+    card_prop = 314,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

@@ -7,9 +7,9 @@
 //! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{roll_source, ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind};
 
-use ruleset_core::ctx::{self, trigger};
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LAYER_KEEP: CardDef = CardDef::new(
@@ -31,13 +31,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
             counter_fire,
         ),
     ],
-)
-.legacy(&[(2, legacy_can_counter_fire)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counter_fire(player_id: i32) -> bool {
-    trigger::player_id() == player_id && trigger::roll_source() == roll_source::FIRE
-}
+);
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
@@ -92,8 +86,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// `actor == owner && card.placed` is the pre.
 /// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
 /// source is `roll_source::FIRE` (the fire-pot reroll).
-// (the live guard is the `pre` on the Counteract entry; `legacy_can_counter_fire`
-// above is the G4 audit oracle)
 
 /// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
 /// is played from hand; its `play` body places it on the field. The unchosen

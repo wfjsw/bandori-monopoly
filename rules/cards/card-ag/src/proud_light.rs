@@ -25,18 +25,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    if trigger::player_id() != player_id {
-        return false;
-    }
-    ctx::players_on(trigger::tile(), player_id)
-        .into_iter()
-        .any(|o| o >= 0 && !ctx::player_out(o))
-}
+);
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).
 fn best_price(player_id: i32) -> i32 {

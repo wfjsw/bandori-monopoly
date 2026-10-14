@@ -1283,7 +1283,7 @@ fn tears_all_different_pays_300_around_the_table() {
 #[test]
 fn kizuna_music_counts_song_cards_and_teleports() {
     let mut t = Table::vanilla(2);
-    // Song-card names (data/song_cards.json): Returns / STAR BEAT! / 宣战布告.
+    // Song-card names (prop::SONG): Returns / STAR BEAT! / 宣战布告.
     // The cafe draws a non-song card first, leaving 2 in P0's draw pile and
     // 1 in P1's → X = 3. Plus 1d20 = 7 → tile 10.
     t.set_draw(0, &["通用:GREAT", "PPP:Returns", "PPP:STAR BEAT!"]);

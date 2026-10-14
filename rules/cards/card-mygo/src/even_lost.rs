@@ -10,7 +10,7 @@
 //! discards it to move as many tiles as your hand size.
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx::{self, trigger};
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(
@@ -24,24 +24,7 @@ pub const EVEN_LOST: CardDef = CardDef::new(
             counteract,
         ),
     ],
-)
-.legacy(&[(1, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
-    // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
-    if !trigger::by_card().is_some_and(|by| by != player_id) {
-        return false;
-    }
-    // 规则书[反击]: 「被其他人的卡的效果影响」 is one condition on the *effect*,
-    // and now reads as one: any effect another player's card declared at me. It
-    // used to be reconstructed by unioning `Target`/`Abnormal` (via `t.Target`)
-    // with `Pay` (via `t.Pay.from`) and matching on two different fields.
-    // `effect::hits` covers both because a payment touches its payer *and* its
-    // payee.
-    ctx::effect::hits(player_id)
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（1）: 「你将此卡放置在自己场上」 -- C# `H.PlaceFromPlay(c)`.

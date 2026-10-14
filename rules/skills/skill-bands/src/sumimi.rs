@@ -26,11 +26,7 @@ pub const SUMIMI: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEndBefore], "actor == owner && slot('skill.sumimi.got') == 0", None, at_turn_end),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// （1）'s latch.
 fn after_pay(player_id: i32) -> card_sdk::Asked {

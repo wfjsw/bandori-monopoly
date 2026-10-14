@@ -9,7 +9,7 @@
 //! The C# realises 「视为使用一次此卡使用者的技能」
 //! as H.AnnounceSkill plus SkillSayo's extension (+1 or +2, no fire cost).
 
-use card_sdk::abi::{prop, ChainKind, MoveKind, TriggerKind};
+use card_sdk::abi::{prop, ChainKind};
 use ruleset_core::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -26,7 +26,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
     ],
 )
 .props(&[(prop::COUNTERACT_GROUP, 1)])
-.legacy(&[(0, legacy_can_counteract)]).silent(&[1]);
+.silent(&[1]);
 
 fn counter_only(_player_id: i32) -> Option<Msg> {
     Some(Msg::new(key!("sayo_play_timing")))
@@ -40,23 +40,6 @@ fn no_play(_player_id: i32) -> card_sdk::Asked {
 /// yet in the condition vocabulary).
 fn can_counteract(player_id: i32) -> bool {
     !ctx::skill_blocked(player_id, "")
-}
-
-/// 规则书: 「[反击] 时机合适时打出」 -- counteraction-only (C# `Normal => false`).
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard (kept full, including
-/// the clauses now in the pre).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    if trigger::kind() != TriggerKind::MoveBefore || trigger::player_id() != player_id {
-        return false;
-    }
-    // C# `!t.Move.Teleport` -- a teleport roll is not 「时机合适」. (The old
-    // `TeleportWalk` check folded in here: it is a teleport now.)
-    if trigger::move_kind() != Some(MoveKind::Walk) {
-        return false;
-    }
-    trigger::move_is_main()
-        && state::get(player_id, "skill.sayoThorns.used") != ctx::turn_key()
-        && !ctx::skill_blocked(player_id, "")
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

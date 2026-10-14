@@ -13,12 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const AFTERGLOW: CardDef = CardDef::new(
     "skill:Afterglow:商店街的宠儿",
     &[On::Hook(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought)],
-)
-    .legacy(&[(0, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.
 fn on_bought(player_id: i32) -> card_sdk::Asked {

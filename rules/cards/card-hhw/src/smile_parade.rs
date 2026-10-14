@@ -308,7 +308,3 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
 // move, and `place_card_on` is what put it on 弦卷集团 in the first place.
 // （3） is `swap_body` / `discard_after_settle` above: a board position
 // exchange for the settle body/ownership/rent reads, then the discard.
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}

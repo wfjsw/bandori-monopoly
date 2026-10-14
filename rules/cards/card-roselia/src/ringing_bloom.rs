@@ -22,7 +22,8 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Hook(&[HookKind::PayAfter], "card.placed && pay_is_rent && target == owner", None, pay_after),
     ],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 const ID: &str = "R:（燐子）Ringing Bloom";
 

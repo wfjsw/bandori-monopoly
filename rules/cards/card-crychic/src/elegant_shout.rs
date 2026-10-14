@@ -6,8 +6,8 @@
 //!
 //! on an out-of-turn draw, draw 1 at the end of your next turn.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
@@ -16,18 +16,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
         On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract),
         On::AtEnd("", None, at_end),
     ],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1): the pre-migration guard, kept until
-/// the `guard-audit` run over the whole corpus is clean.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「当你在回合外受到抽卡效果时打出」 -- C#
-    // `t.Kind == "drawOut" && t.Seat == seat`. The "回合外" window is what the
-    // `drawOut` trigger means (a draw that hit you outside your own turn); the
-    // ABI cannot see the turn context, so the kind + player check mirrors the C#.
-    trigger::kind() == TriggerKind::DrawOut && trigger::player_id() == player_id
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」

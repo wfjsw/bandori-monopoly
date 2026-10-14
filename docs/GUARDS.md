@@ -1,11 +1,12 @@
 # Guard prefilter — design (2026-10-07)
 
-Status: **G0 + G1 + G2 + G3 + G4 landed** (2026-10-07; §8 the G1 measurements
-and the CEL fork, §9 the G0/G2 wiring, §10 the G3 audit + G4 authoring pass,
-§11 batch 2 + workspace hygiene). ABI **45 → 46** (`On::Counteract`/`On::Hook`
-guards become `Option<fn>` (`None` = G4-deleted), `ManifestOn` gains
-`has_guard`/`has_legacy`, `CardDef::legacy` + `export::OP_LEGACY_GUARD` for the
-audit). The **cached counteraction index** (BOT-RESEARCH.md #1) is in
+Status: **G0 + G1 + G2 + G3 + G4 landed, G3 scaffolding removed** (2026-10-07
+G0–G4; §8 the G1 measurements and the CEL fork, §9 the G0/G2 wiring, §10 the
+G3 audit + G4 authoring pass, §11 batch 2 + workspace hygiene). The G3
+migration-audit scaffolding (`legacy_*` copies, `CardDef::legacy`,
+`ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`, the `guard-audit` feature)
+was removed 2026-10-14 after one final equivalence run (ABI **60 → 61**;
+see §5.1 / §10). The **cached counteraction index** (BOT-RESEARCH.md #1) is in
 `declare_one`: per-card kind bitmask + condition pre-filter before any
 `Run`/`world_copy`.
 
@@ -430,13 +431,20 @@ clauses move out of the guards, a wrong condition now changes behaviour in both
 directions (wrongly admits as well as wrongly rejects), so the check is
 equivalence, not necessity.
 
-1. **Migration audit** (`guard-audit` feature, G3–G4 only): the authoring pass
-   keeps each card's pre-migration guard as `legacy_*` under the feature; on
-   every probe the host evaluates both `legacy(ctx)` and
-   `kind ∧ pre(ctx) ∧ guard(ctx)` and **panics** with card id + trigger dump on
-   any mismatch. Run over the `rules/tests/tests/*.rs` suite, the seeded
-   `engine`/`mentality` tests, a fuzz sim (N random games), and the local
-   `.bdrec` corpus. Once a card is clean, its `legacy_*` copy is deleted.
+1. **Migration audit (finished 2026-10-14)**: during G3–G4 each migrated card
+   kept its pre-migration guard as `legacy_*` under the `guard-audit` feature;
+   on every probe the host evaluated both `legacy(ctx)` and
+   `kind ∧ pre(ctx) ∧ guard(ctx)` and **panicked** with card id + trigger dump
+   on any mismatch. The final equivalence run on 2026-10-14
+   (`cargo test -p game-rules --features guard-audit` and
+   `cargo test -p ruleset-tests --features game-rules/guard-audit`) found the
+   remaining `legacy_*` copies were stale `mine`-only snapshots (they omitted
+   body-top clauses the migrated `pre` correctly carries), not condition bugs;
+   the new `pre` text matched the rulebook on every mismatch. The scaffolding
+   (`legacy_*`, `CardDef::legacy`, `has_legacy`, `OP_LEGACY_GUARD`,
+   `legacy_probe` / `legacy_audit`, the `guard-audit` feature) was then deleted
+   and ABI bumped to 61. The invariant below was therefore verified once, at
+   removal time, over the ruleset-tests / game-rules suites and a fuzz sim.
 2. **`precheck` tool** (rules/ or game-rules example): loads the ruleset,
    reports per-entry condition/guard split, rejects parse errors / unknown vars
    / float literals, and flags guards that still read the kind for rejection
@@ -446,7 +454,7 @@ equivalence, not necessity.
    error, never "treat as true" — the clauses it carries are gone from the guard.
    An absent condition means "no clauses beyond the guard".
 4. The rulebook suites (`rules/tests/tests/*` (game suite)) stay the behavioural spec; they must stay
-   green with the audit off after each card's legacy copy is removed.
+   green.
 
 ## 6. Savings estimate
 
@@ -494,8 +502,8 @@ guard -- they are play gates whose refusal `Msg` is specific (§4.4).
 | G0 | ABI bump (42): `ManifestOn.pre/exact`, `On` trailing field or `.pre()` builder, `rt.rs` serialise | ~200 | manifest round-trip test |
 | G1 | **done** (2026-10-07, isolated `crates/rules-cond` — §8): `cel` 0.15.0 features off, wasm32 ok; `WindowCtx`/`CandidateCtx` + `compile`/`eval`; load-time errors; int-only lint; kind rejection | ~400 | load-time errors; int-only lint |
 | G2 | single `admits()` entry; evaluate at §4.4 (1)–(5); counters for skipped probes | ~250 | no direct guard calls left; no behaviour change with `pre` absent |
-| G3 | migration audit (`legacy_*` equivalence) + fuzz + replay corpus + `precheck` | ~300 | rb suite green under audit |
-| G4 | authoring pass: **move** clauses from guards into conditions and delete the kind checks (category filter owns them); 50 counteract + 62 `cant_play` + 35 skill gates; `mine` → `pre::MINE`, `always` guards deleted | ~150 sites | audit clean on corpus, then `legacy_*` removed |
+| G3 | migration audit (`legacy_*` equivalence) + fuzz + replay corpus + `precheck` — **scaffolding removed 2026-10-14** after the final audit run (§5.1/§10.1) | ~300 | rb suite green under audit |
+| G4 | authoring pass: **move** clauses from guards into conditions and delete the kind checks (category filter owns them); 50 counteract + 62 `cant_play` + 35 skill gates; `mine` → `pre::MINE`, `always` guards deleted; **`legacy_*` removed 2026-10-14** | ~150 sites | audit clean on corpus, then `legacy_*` removed |
 | G5 | optional: lower the atom grammar to a match-ladder fast path / dep-free browser build (option C); re-run `bot_cost` | ~200 | BOT.md §5 numbers updated |
 
 Ordering note: G0–G2 must rebase over purchasing's host.rs/wasm_rules.rs edits;
@@ -701,8 +709,7 @@ trigger / chain window (`cond_pre::fill_window`, `WindowScope`) and reused
 across candidates; `CandidateCtx` is filled per (card, seat) from `World`.
 Counters in `cond_pre::guard_cost` (`COND_EVALS` / `SKIPPED_BY_CONDITION` /
 `GUARD_ASKED` / `COND_EVAL_NS`) are ready for G3/G4 measurement, same style as
-`bot_cost`. The G3 `legacy_*` audit hook point is `cond_pre::legacy_audit`
-(`guard-audit` feature; the call is already inside `admits`).
+`bot_cost`.
 
 ### 9.2 Guard call sites now routed through `admits()`
 
@@ -753,7 +760,7 @@ unaffected either way.
 * `crates/game-rules/src/cond_pre.rs` (new) — `CompiledPre`, `PrecompiledConds`
   (the shipped `conds-*.bin` envelope, §8.2), `admits` /
   `admits_gate` / `admits_pre`, `fill_window` / `fill_window_ambient` /
-  `fill_candidate`, `guard_cost`, `legacy_audit` hook point.
+  `fill_candidate`, `guard_cost`.
 * `crates/game-rules/src/{host.rs,hostfns.rs,wasm_rules.rs,lib.rs}` —
   `RuleError::BadPre`, `Inner.pre`, `RulesetBuilder::build` compile +
   `precompiled()`, `RulesHandle::pre`, the three guard methods through
@@ -776,20 +783,18 @@ unaffected either way.
 
 ## 10. G3 + G4 status (2026-10-07)
 
-### 10.1 G3 — migration audit + `precheck`
+### 10.1 G3 — migration audit + `precheck` (scaffolding removed 2026-10-14)
 
-* **`cond_pre::legacy_audit`** (`guard-audit` feature) panics with card id +
-  trigger dump on any mismatch between the entry's `legacy_*` copy and
-  `kind ∧ pre(ctx) ∧ guard(ctx)` (equivalence, both directions). The host calls
-  `export::OP_LEGACY_GUARD` (= 2) for every entry whose `ManifestOn::has_legacy`
-  is set; `rt.rs` returns `-1` for "no legacy copy" and the check is skipped.
-* Each migrated card keeps its pre-migration guard as `fn legacy_*` registered
-  via `CardDef::legacy(&[(entry, fn)])`. Once a card's audit is clean the copy
-  is deleted (next increment).
+* The G3 migration audit (`cond_pre::legacy_audit` under the `guard-audit`
+  feature, `export::OP_LEGACY_GUARD`, `CardDef::legacy` / `legacy_*` copies,
+  `ManifestOn::has_legacy`, host `legacy_probe`) ran its final equivalence pass
+  on **2026-10-14** over `ruleset-tests` + `game-rules` and a fuzz sim. The
+  remaining mismatches were all stale `mine`-only `legacy_*` snapshots (the
+  migrated `pre` correctly carried body-top clauses the copy omitted); no
+  condition bugs. The scaffolding was deleted and ABI bumped 60 → 61.
 * **`precheck`** (`cargo run -p game-rules --example precheck`) loads the
   ruleset and reports the per-entry condition/guard split; flags guards that
-  still reject on the trigger kind (the category owns that). Skips `legacy_*`
-  bodies (they intentionally keep the pre-migration checks).
+  still reject on the trigger kind (the category owns that).
 * `fill_window` now filters negative `move_roll` to `null` (matching the
   guest's `trigger::move_roll()`, which treats the pre-cast `value = -1`
   sentinel as "no face yet") — this was a G3 audit catch.
@@ -863,23 +868,23 @@ moved — the next batch. `cargo run -p game-core --release --example sim --
 50 4 200` is **320.1 ms/game** (≤ 323 budget) with counts identical to the
 required set (buy 2899 / forcebuy 392 / auctions 255 / rent 19567 / bankrupt 96).
 
-### 10.5 Files (G3/G4)
+### 10.5 Files (G3/G4; legacy scaffolding removed 2026-10-14)
 
 * `rules/card-sdk/src/{lib.rs,abi.rs,rt.rs}` — `On::*` guard `Option<fn>`,
-  `On::has_guard`/`no_guard`/`guard`, `CardDef::legacy`, `ManifestOn
-  ::has_guard`/`has_legacy`, `export::OP_LEGACY_GUARD`, `ABI_VERSION = 46`.
-* `crates/game-rules/src/cond_pre.rs` — `legacy_audit` (panic on mismatch),
-  `move.roll` sentinel filter in `fill_window`.
+  `On::has_guard`/`no_guard`/`guard`, `ManifestOn::has_guard`. The G3 audit
+  pieces (`CardDef::legacy`, `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`)
+  shipped with G3 and were deleted at removal time (ABI **61**).
+* `crates/game-rules/src/cond_pre.rs` — `move.roll` sentinel filter in
+  `fill_window` (the `legacy_audit` hook is gone).
 * `crates/game-rules/src/host.rs` — `counteract_mask`/`hook_mask`,
-  `counteracts_to`/`hooks_to`/`counteract_pre_allows`/`guard_is_none`/
-  `legacy_probe`, `CardModules::{counteracts_to,counteract_pre_allows,pre}`.
+  `counteracts_to`/`hooks_to`/`counteract_pre_allows`/`guard_is_none`,
+  `CardModules::{counteracts_to,counteract_pre_allows,pre}` (no `legacy_probe`).
 * `crates/game-rules/src/wasm_rules.rs` — `declare_one` index + condition
   pre-filter before `Run`.
 * `crates/game-rules/examples/precheck.rs` — the §5.2 lint.
-* `crates/rules-native/src/lib.rs` — `has_guard`/`has_legacy`, `pre` on
-  `CardModules`.
-* `rules/**` — 111 `mine` → `pre::MINE` + `.legacy`, 111 `always` deleted,
-  12 counteract clause moves with `legacy_can_counteract`.
+* `crates/rules-native/src/lib.rs` — `has_guard`, `pre` on `CardModules`.
+* `rules/**` — 111 `mine` → `pre::MINE`, 111 `always` deleted,
+  12 counteract clause moves; every `legacy_*` audit copy deleted 2026-10-14.
 
 ### 10.6 Replay re-run cache (considered, deferred)
 
@@ -975,10 +980,10 @@ in a `pre`.
 | residual guard kept | 258 | 250 |
 | guard deleted (`None`) | 342 | **350** |
 | kind re-checks (precheck) | 34 | **0** |
-| `legacy_*` audit copies | 128 | 137 |
+| `legacy_*` audit copies | 128 | 137 (all deleted 2026-10-14) |
 
 Counteract entries migrated in batch 2 (expressible clauses into `pre`,
-`legacy_*` kept for the audit): `elegant_shout`, `taki_even_if`, `marina_work`,
+`legacy_*` kept for the audit until 2026-10-14): `elegant_shout`, `taki_even_if`, `marina_work`,
 `layer_keep` (`roll_source == 1`), `two_in_one` (`character_is`), `hold_hands_again`
 (`actor == neighbor(owner, -1)`), `even_lost` / `mana_champion`
 (`by != owner && by >= 0 && effect.hits(owner)`), `here_the_world` (prefix

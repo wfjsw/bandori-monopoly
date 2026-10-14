@@ -33,14 +33,10 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
         On::Hook(&[HookKind::RollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
     ],
 )
-    .legacy(&[(3, legacy_mine)]).silent(&[1]);
+    .silent(&[1]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// 「初始1，上限1」.

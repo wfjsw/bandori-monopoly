@@ -66,7 +66,6 @@ fn lookups() {
 
     assert_eq!(d.school_of("户山香澄"), "花咲川女子学院");
     assert_eq!(d.school_of("nobody"), "周边学区");
-    assert!(d.cards.iter().any(|c| d.is_song_card(c)));
     assert_eq!(d.band("Poppin' Party").unwrap().short_name, "PPP");
     assert!(d.band("nope").is_none());
 }

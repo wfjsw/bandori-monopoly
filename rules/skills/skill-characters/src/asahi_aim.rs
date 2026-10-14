@@ -41,12 +41,7 @@ pub const ASAHI_AIM: CardDef = CardDef::new(
         ),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, Some(owns_bath_with_lh), at_turn_start),
     ],
-)
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// Residual guard for [`on_bought`]: the tile is not already a Live House for
 /// this player (`ctx::is_live_house_for` -- per-player colour, not CEL's

@@ -1115,6 +1115,10 @@ pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
     kani_host::call_i32(Op::card_text_mentions, [cp, cl, np, nl, 0, 0])
 }
 
+pub fn card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32 {
+    kani_host::call_i32(Op::card_prop, [ip, il, kp, kl, 0, 0])
+}
+
 pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::gain_fixed, [player_id, amount, ptr, len, 0, 0])
 }

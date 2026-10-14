@@ -15,8 +15,7 @@ pub const L11: CardDef = CardDef::new(
         On::Play("", None, l11),
         On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') <= 0", None, sweep),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
+);
 
 fn l11(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡置于自身场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 2)`.
@@ -36,10 +35,6 @@ fn l11(player_id: i32) -> card_sdk::Asked {
     // inside `Cover`, so it also catches a spend from another card.
     // C# `NoteText` shows the crystal count; CardDef has no NoteText hook.
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// 「此卡[奇迹水晶]数为0时放入弃牌堆」.

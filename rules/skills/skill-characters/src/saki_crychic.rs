@@ -44,11 +44,7 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(1, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// Residual guard for 「若在你的前后5格内」 -- `dist` stays here (not yet in
 /// the condition vocabulary). `move.main && tile.id >= 0` is the pre.

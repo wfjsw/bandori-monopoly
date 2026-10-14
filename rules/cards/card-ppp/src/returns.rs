@@ -73,7 +73,7 @@ pub const RETURNS: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
+    .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
 /// first, then band, then general) -- a snapshot of `data/cards.json`; Returns is
@@ -249,10 +249,6 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("returns_sticker")));
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 const BANDS: [&str; 12] = [

@@ -47,11 +47,7 @@ pub const RAS: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0, 2]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0, 2]);
 
 /// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
 /// landing memory when the player has moved off it.

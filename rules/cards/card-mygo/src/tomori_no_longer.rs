@@ -42,8 +42,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // condition vocabulary).
         On::Hook(&[HookKind::CounterChanged], card_sdk::pre::MINE, Some(refill_guard), refill),
     ],
-)
-    .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine)]);
+);
 
 /// Set while (2)'s substitution is running, so [`refill`] knows the decrease
 /// is the skill-cost swap and must not be refunded.
@@ -140,10 +139,6 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
     // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept at the turn end rather
     // than inside the spend, so it also catches a spend from another card.
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// Guard for [`sweep`] -- the count emptied (the write was a decrease and the

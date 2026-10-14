@@ -1292,8 +1292,11 @@ pub fn heat_head_03_phase_end_files_away() {
 // set_build_discount is a PROTOCOL stub; set_prop tile ids are no-ops.
 // OPEN-fix-note-count.
 
+// Class A: body `for t in 0..tile_count()` is a 60-trip loop (fix_note.rs:50);
+// unwind 16 tripped `Not unwinding at 16`. Bound 64 covers the static trip
+// count with margin (early break does not shrink the unwind assertion).
 #[kani::proof]
-#[kani::unwind(16)]
+#[kani::unwind(64)]
 pub fn fix_note_01_activation_keeps() {
     let w = base_world();
     {
@@ -1311,22 +1314,18 @@ pub fn fix_note_01_activation_keeps() {
 // 「触发事件的玩家从所有非衍生事件中选择3个移除，并将此卡永久放置于场上…」
 // On:: 0=Play. event_banish is a PROTOCOL stub; the 3 asks are determined.
 
+// Class E: `ask_pick` + `Vec<Msg>` fold (String ABI) dominate the SSA cost.
+// This half only needs dest=Field; pick-count lives in
+// `end_it_all_01_three_picks_counted`. Dropped the unused `picks` scan.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn end_it_all_01_three_picks_and_keep() {
     let mut w = base_world();
+    // 3 `ask_pick`s must not hit `Err(Prompt)` — symbolic answers satisfy them.
     w.symbolic_answers = true;
-    {
-        world::reset_world(w);
-    }
-    let before = world::with_world(|w| w.next_answer);
+    world::reset_world(w);
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:让我来结束一切"), 0));
-    let after = world::with_world(|w| w.next_answer);
     let dest = world::with_world(|w| w.dest);
-    let picks = after.saturating_sub(before);
-    // symbolic_answers=true does not consume `answers`; count via a second
-    // run with concrete answers instead when `picks` is 0.
-    let _ = picks;
     crate::kassert!(
         spec::events::permanent_keep(dest),
         "E-end-it-all-01: permanent keep (dest=Field, no expiry)"

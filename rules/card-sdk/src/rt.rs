@@ -30,7 +30,6 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                         }
                     },
                     has_guard: o.has_guard(),
-                    has_legacy: c.legacy.iter().any(|(e, _)| *e == ei as i32),
                     messages: match o {
                         On::Message(names, ..) => names.iter().map(|s| String::from(*s)).collect(),
                         _ => Vec::new(),
@@ -139,21 +138,6 @@ pub fn on(
             None => 1,
             Some(g) => g(player_id) as i64,
         },
-        (_, export::OP_LEGACY_GUARD) => {
-            // G3 migration audit: the pre-migration guard kept on the card.
-            let card = card(bands, idx);
-            match card
-                .legacy
-                .iter()
-                .find(|(e, _)| *e == entry.max(0))
-                .map(|(_, f)| *f)
-            {
-                Some(legacy) => legacy(player_id) as i64,
-                // No legacy copy: trap-free "no legacy" so the host skips the
-                // check for this entry (the same contract as `has_legacy=false`).
-                None => -1,
-            }
-        }
         (On::Play(_, why, _), export::OP_GUARD) => match why {
             Some(why) => match why(player_id) {
                 None => 0,

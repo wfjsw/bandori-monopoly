@@ -43,11 +43,7 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// Residual guard for 「经过该格」 with a pot on it -- `count_marks` stays here
 /// (not yet in the condition vocabulary).

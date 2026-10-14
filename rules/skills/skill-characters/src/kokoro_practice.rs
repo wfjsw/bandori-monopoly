@@ -64,16 +64,12 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(1, legacy_mine), (3, legacy_mine)]).silent(&[4]);
+    .silent(&[4]);
 
 /// （3）「获得一个火罐（上限1）」 -- no 「初始N」, so initial is 0 and the cap is 1.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id, 0, 1);
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// 「当其他玩家移动[经过]您时」 -- another player's step onto **my** tile.

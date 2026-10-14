@@ -27,7 +27,7 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
     ],
 )
-    .legacy(&[(0, legacy_mine)]);
+    .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -160,8 +160,4 @@ fn after_settle(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("star_beat_built")).tile("tile", t),
     );
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }

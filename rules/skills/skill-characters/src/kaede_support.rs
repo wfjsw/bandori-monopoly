@@ -65,7 +65,7 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0, 3]);
+    .silent(&[0, 3]);
 
 /// Residual guard for [`split_rent`]: the tile is one of 状态2's named deeds.
 /// The SPLIT marker is keyed on the tile (a dynamic state key), so it is not
@@ -103,10 +103,6 @@ fn offer_support_open(player_id: i32) -> bool {
     let other = ctx::trigger::player_id();
     let key = format!("{}{}", COOLDOWN, other);
     state::get(player_id, &key) <= ctx::turn_key()
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// 「初始0，上限4」.

@@ -44,7 +44,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // share's logs and accuse this bookkeeping of hiding a real effect.
         On::Hook(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, clear_measured_rent),
     ],
-).silent(&[2]).quiet_when_empty(&[4]);
+).props(&[(card_sdk::abi::prop::SONG, 1)]).silent(&[2]).quiet_when_empty(&[4]);
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.

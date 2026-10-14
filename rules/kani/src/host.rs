@@ -85,9 +85,19 @@ fn known() -> &'static Known {
     }
 }
 
-/// Call this at the top of every proof.
+/// Install the **full** host dispatch (every modeled op). Prefer
+/// [`install_backend`] with a per-harness op-subset dispatcher in proofs —
+/// the full 300-op match is an SSA cliff under CBMC (see TRIAGE-LOG
+/// `op-subset`). Conformance tests keep using this.
 pub fn install() {
-    kani_host::install(dispatch);
+    install_backend(dispatch);
+}
+
+/// Install an arbitrary backend (typically a **narrow** per-harness
+/// dispatcher built by [`crate::harness::host_subset!`]). Always warms
+/// [`Known`] so name compares stay `u16` equality.
+pub fn install_backend(f: kani_host::Backend) {
+    kani_host::install(f);
     let k = known_init();
     // Loud: every constant name must intern (table has room for the pilot set).
     #[cfg(kani)]
@@ -108,6 +118,12 @@ pub fn install() {
 /// Decode a guest name handle. Under the string facade the handle *is* the
 /// `NameId` (`intern::INTERN_TAG | id`); otherwise fall back to reading the
 /// arena bytes and interning (legacy / non-`s()` producers).
+///
+/// Under `cfg(kani)` an **untagged** name handle is a loud FAIL (same rule as
+/// [`outside_subset`]): the facade (`ctx::s` / `key!`) always tags, so an
+/// untagged handle means the body bypassed it. We do **not** `assume` the
+/// path away, and we do **not** `native::read`/`to_vec` (the alloc is an SSA
+/// cliff — TRIAGE-LOG `op-subset`).
 #[inline(always)]
 fn name_id(handle: i32, len: i32) -> NameId {
     if let Some(id) = intern::decode_handle(handle) {
@@ -115,8 +131,17 @@ fn name_id(handle: i32, len: i32) -> NameId {
         kani::assert(id.is_valid(), "name handle carries INVALID NameId");
         return id;
     }
-    let b = card_sdk::native::read(handle, len.max(0) as usize);
-    intern::intern_bytes(&b)
+    #[cfg(kani)]
+    {
+        let _ = len;
+        kani::assert(false, "untagged name handle (expected ctx::s facade)");
+        return intern::NameId::INVALID;
+    }
+    #[cfg(not(kani))]
+    {
+        let b = card_sdk::native::read(handle, len.max(0) as usize);
+        intern::intern_bytes(&b)
+    }
 }
 
 /// Bytes of a guest name, from the intern table (static, no heap).
@@ -275,6 +300,24 @@ fn unmodeled(op: Op) -> i64 {
     0
 }
 
+/// A harness-declared op-subset was violated: the card body reached a host
+/// op outside its declared set.
+///
+/// **Never** `kani::assume(false)` — that would silently drop the path and
+/// let a proof pass while the body used an undeclared op. This is a **loud
+/// FAIL** (`kani::assert(false)`), so the proof cannot be vacuous about an
+/// undeclared op. Native builds panic so conformance tests catch the gap.
+pub fn outside_subset(op: Op) -> i64 {
+    let n = op as i32;
+    world::with_world_mut(|w| w.unmodeled_op = n);
+    #[cfg(kani)]
+    kani::assert(false, "host op outside declared per-harness subset");
+    #[cfg(not(kani))]
+    panic!("host op outside declared subset: {:?} ({})", op, n);
+    #[allow(unreachable_code)]
+    0
+}
+
 /// The one dispatch entry. Args are the ABI's six i32 slots, in declaration order.
 pub fn dispatch(op: Op, a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
@@ -283,10 +326,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::roll => roll_dice(a1, a2) as i64,
         Op::roll_ask => roll_dice(a1, a2) as i64,
         Op::do_move_roll => roll_dice(2, 6) as i64,
-        Op::log | Op::effect => {
-            world::with_world_mut(|w| w.push_narration(a0, 0));
-            0
-        }
+        Op::log | Op::effect => arm_log(a),
 
         // ---- tiles (static data from board.json + runtime state) ----
         Op::tile_count => world::TILE_COUNT as i64,
@@ -604,19 +644,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
         // ---- players ----
         Op::player_pos => world::with_world(|w| w.pos[player_idx(a0)]) as i64,
-        Op::player_count => {
-            // Pin N ∈ 2..=4 at the ABI. Unmodified card bodies write
-            // `(0..ctx::player_count()).all(…)`; an unconstrained `i32` Range
-            // is an unwinding cliff (the money-shave profile stalled at
-            // `poorest`'s try_fold). The model already assumes this bound in
-            // every symbolic world — this makes it visible where the Range
-            // is constructed.
-            let n = world::with_world(|w| w.n_players) as i64;
-            #[cfg(kani)]
-            kani::assume(n >= 2 && n <= 4);
-            n
-        }
-        Op::player_out => world::with_world(|w| w.out[player_idx(a0)]) as i64,
+        Op::player_count => arm_player_count(a),
+        Op::player_out => arm_player_out(a),
         Op::others_count => world::with_world(|w| {
             let me = a0;
             let mut n = 0;
@@ -665,37 +694,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 }
             })
         }
-        Op::character_is => {
-            // Compare interned character name.
-            let want = name_id(a1, a2);
-            world::with_world(|w| (w.character_id[player_idx(a0)] == want.0) as i64)
-        }
-        Op::in_band => {
-            let want = name_id(a1, a2);
-            world::with_world(|w| (w.band_id[player_idx(a0)] == want.0) as i64)
-        }
+        Op::character_is => arm_character_is(a),
+        Op::in_band => arm_in_band(a),
         Op::self_uid => world::with_world(|w| w.last_uid) as i64,
 
         // ---- money ----
-        Op::money => world::with_world(|w| w.money[player_idx(a0)]) as i64,
-        Op::gain => {
-            // hostfns::gain is a Money pipeline (Pay from bank). Model as an
-            // immediate credit + effect record (no chain window under Kani).
-            if a1 > 0 {
-                world::with_world_mut(|w| {
-                    let p = player_idx(a0);
-                    w.money[p] = w.money[p].saturating_add(a1);
-                    w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(a1);
-                    w.push(Effect::GainMoney {
-                        player: a0,
-                        n: a1,
-                    });
-                });
-            }
-            a1 as i64
-        }
-        Op::gain_typed => dispatch(Op::gain, a),
-        Op::gain_fixed => dispatch(Op::gain, a),
+        Op::money => arm_money(a),
+        Op::gain | Op::gain_typed | Op::gain_fixed => arm_gain(a),
         Op::adjust_money => {
             // Raw money adjustment: `money += delta` with **no** payment
             // pipeline (no payAdd/payMul, no effect window). Mirrors
@@ -850,53 +855,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
             0
         }
-        Op::take_card => {
-            // ABI: take_card(player, pile, name_ptr, name_len)
-            let id = card_u16(a2, a3);
-            let slot = card_slot(a2, a3);
-            let player_id = a0;
-            let pile = a1;
-            world::with_world_mut(|w| {
-                let ok = if pile == 1 {
-                    world::pile_take(&mut w.discard_pile, &mut w.discard_n, id)
-                        || {
-                            if (slot as usize) < 4 && w.discard[slot as usize] {
-                                w.discard[slot as usize] = false;
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                } else if pile == 0 {
-                    if slot == 1 && w.hand_resonance[player_idx(player_id)] > 0 {
-                        w.hand_resonance[player_idx(player_id)] -= 1;
-                        true
-                    } else {
-                        world::pile_take(&mut w.hand_pile, &mut w.hand_n, id)
-                            || {
-                                if (slot as usize) < 4 && w.hand[slot as usize] {
-                                    w.hand[slot as usize] = false;
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                    }
-                } else {
-                    false
-                };
-                if ok {
-                    w.push(Effect::TakeFromPile {
-                        player: player_id,
-                        pile,
-                        card: slot,
-                    });
-                    1
-                } else {
-                    0
-                }
-            })
-        }
+        Op::take_card => arm_take_card(a),
         Op::cards_in => {
             // Bounded layout `[n, id…]` under Kani (see ctx::cards_in). The
             // guest rebuilds names from interned ids via the same table.
@@ -971,34 +930,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             card_sdk::native::write(a2, &encoded[..need as usize]);
             need as i64
         }
-        Op::to_discard => {
-            let slot = card_slot(a1, a2);
-            let id = card_u16(a1, a2);
-            world::with_world_mut(|w| {
-                world::pile_push(&mut w.discard_pile, &mut w.discard_n, id);
-                if (slot as usize) < 4 {
-                    w.discard[slot as usize] = true;
-                }
-            });
-            0
-        }
-        Op::hand_count => {
-            let slot = card_slot(a0, a1);
-            world::with_world(|w| {
-                if slot == 1 {
-                    w.hand_resonance[player_idx(a2)]
-                } else {
-                    let id = card_u16(a0, a1);
-                    let in_pile = world::pile_count(&w.hand_pile, w.hand_n, id);
-                    let in_bits = if (slot as usize) < 4 {
-                        w.hand[slot as usize] as i32
-                    } else {
-                        0
-                    };
-                    in_pile.max(in_bits)
-                }
-            }) as i64
-        }
+        Op::to_discard => arm_to_discard(a),
+        Op::hand_count => arm_hand_count(a),
         Op::hand_size => world::with_world(|w| {
             let p = player_idx(a0);
             let mut n = w.hand_resonance[p];
@@ -1466,58 +1399,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             v as i64
         }
-        Op::count_held | Op::count_held_name => {
-            // count_held_name(name_ptr, name_len, player)
-            let key = name_id(a0, a1);
-            let p = if op == Op::count_held_name { a2 } else { a2 };
-            world::with_world(|w| {
-                let pp = player_idx(p);
-                if key == known().tok_pp_pos {
-                    w.fans_pos[pp]
-                } else if key == known().tok_pp_neg {
-                    w.fans_neg[pp]
-                } else {
-                    w.key_get(p, key)
-                }
-            }) as i64
-        }
-        Op::add_held => {
-            let key = name_id(a0, a1);
-            world::with_world_mut(|w| {
-                let v = w.key_add(a2, key, a3);
-                // Per-seat view refresh (was `sync_views` over all 4 seats).
-                w.sync_views_player(a2);
-                w.push(Effect::AddToken {
-                    player: a2,
-                    key: key.0,
-                    n: a3,
-                });
-                v as i64
-            })
-        }
-        Op::set_held_name => {
-            let key = name_id(a0, a1);
-            let p = a2;
-            let v = a3;
-            world::with_world_mut(|w| {
-                w.key_set(p, key, v);
-                // Direct view write for the two known fan tokens; other keys
-                // still need the per-seat refresh.
-                if key == known().tok_pp_pos {
-                    w.fans_pos[player_idx(p)] = v;
-                } else if key == known().tok_pp_neg {
-                    w.fans_neg[player_idx(p)] = v;
-                } else {
-                    w.sync_views_player(p);
-                }
-                w.push(Effect::SetToken {
-                    player: p,
-                    key: key.0,
-                    n: v,
-                });
-            });
-            0
-        }
+        Op::count_held | Op::count_held_name => arm_count_held(a),
+        Op::add_held => arm_add_held(a),
+        Op::set_held_name => arm_set_held_name(a),
         Op::state_get => {
             // hostfns `state_get(player, ptr, len, field)`: field 1/2/3 read
             // the declared MAX / MIN / EXPIRES column; anything else is VALUE.
@@ -1757,12 +1641,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::card_move => 1,
 
         // ---- band / skills ----
-        Op::band_crystals => world::with_world(|w| w.band_crystals[player_idx(a0)]) as i64,
-        Op::add_band_crystals => world::with_world_mut(|w| {
-            let p = player_idx(a0);
-            w.band_crystals[p] = (w.band_crystals[p] + a1).clamp(0, 99);
-            w.band_crystals[p] as i64
-        }),
+        Op::band_crystals => arm_band_crystals(a),
+        Op::add_band_crystals => arm_add_band_crystals(a),
         Op::band_skill | Op::character_skill => {
             // Return 0 = no skill id (string returns go through out-buffers in
             // the real ABI; the model answers "none").
@@ -1805,28 +1685,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| w.opt_n += 1);
             0
         }
-        Op::ask => {
-            let n = world::with_world(|w| w.opt_n.max(1));
-            world::with_world_mut(|w| w.opt_n = 0);
-            #[cfg(kani)]
-            {
-                if world::with_world(|w| w.symbolic_answers) {
-                    let x: i32 = kani::any();
-                    kani::assume(x >= 0 && x < n);
-                    return x as i64;
-                }
-            }
-            world::with_world_mut(|w| {
-                let i = w.next_answer;
-                if i < world::MAX_ANSWERS {
-                    let v = w.answers[i];
-                    w.next_answer = i + 1;
-                    v as i64
-                } else {
-                    0
-                }
-            })
-        }
+        Op::ask => arm_ask(a),
 
         // ---- trigger context ----
         Op::trig_kind => world::with_world(|w| w.trig_kind) as i64,
@@ -1950,16 +1809,24 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::move_parity | Op::move_resolve | Op::move_steps | Op::move_remaining
         | Op::move_total | Op::move_dir | Op::fixed_roll | Op::do_move_roll
         | Op::turn_main_steps | Op::turn_rolls | Op::turn_snap | Op::turn_start_pos
-        | Op::schedule_turn_end | Op::linger | Op::gate
+        | Op::schedule_turn_end | Op::linger
         | Op::targeted_count => 0,
+
+        // ---- hook-status flags (polarity-sensitive; see arm_*) ----
+        // 0 on these means "cancelled / blocked / substituted", which makes
+        // callers skip the real effect (class C — chart_rush spent no fire).
+        Op::raise => arm_raise(a),
+        Op::raise_bought => arm_raise_bought(a),
+        Op::gate => arm_gate(a),
+        Op::ring_multiplier => arm_ring_multiplier(a),
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
         Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build
         | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at
-        | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::buy
+        | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy
         | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice
-        | Op::raise | Op::raise_bought | Op::play_card | Op::play_from_hand
-        | Op::can_build_on | Op::ring_multiplier | Op::add_ring_bonus
+        | Op::play_card | Op::play_from_hand
+        | Op::can_build_on | Op::add_ring_bonus
         | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat
         | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile
         | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations
@@ -1969,6 +1836,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             // remaining ones are engine-protocol and return a benign 0. Any
             // op that must fail loudly is handled by the catch-all below if
             // it is missing from this arm — keep this list honest.
+            //
+            // Polarity note (TRIAGE-LOG `op-subset` / class C): 0 here is
+            // only safe when the caller treats 0 as "no data" / "did not
+            // happen". Ops whose 0 means "cancelled — skip the real effect"
+            // live in the arm_* block above. Reported leftovers with that
+            // shape: `play_from_hand` (0 = not from hand), `can_build_on`
+            // (0 = cannot), `card_*` / `buy` / `acquire` (0 = did not land).
             0
         }
 
@@ -1978,3 +1852,304 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
 #[allow(dead_code)]
 fn _w(_w: World) {}
+
+// ===========================================================================
+// Per-harness op-subset handlers
+// ===========================================================================
+//
+// Each `arm_*` is the single implementation of one (group of) host op(s).
+// `dispatch` calls them; a **narrow** per-harness dispatcher built by
+// [`crate::harness::host_subset!`] calls only the ones the card body can
+// reach and sends everything else to [`outside_subset`] (loud FAIL — never
+// `assume(false)`). That keeps the CBMC match at a handful of arms instead of
+// the full ~300-op `dispatch` (TRIAGE-LOG `op-subset`).
+
+/// `Op::log` / `Op::effect` — narration counter only (not the effect frame).
+pub fn arm_log(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| w.push_narration(a0, 0));
+    0
+}
+
+/// `Op::player_count` — the host's real `n_players` (2..=4). Note
+/// `ctx::player_count()` under `cfg(kani)` **returns the constant 4** after
+/// asserting this value is in range (TUNING §7): bodies loop `0..4` and
+/// `player_out(p)` is true for `p >= n_players`.
+pub fn arm_player_count(a: Args) -> i64 {
+    let _ = a;
+    let n = world::with_world(|w| w.n_players) as i64;
+    #[cfg(kani)]
+    kani::assume(n >= 2 && n <= 4);
+    n
+}
+
+/// `Op::player_out` — out of the game, or not a live seat (`p >= n_players`).
+pub fn arm_player_out(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.out[player_idx(a0)]) as i64
+}
+
+/// `Op::in_band` — seat's band name id equals `want`.
+pub fn arm_in_band(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let want = name_id(a1, a2);
+    world::with_world(|w| (w.band_id[player_idx(a0)] == want.0) as i64)
+}
+
+/// `Op::character_is` — seat's character name id equals `want`.
+pub fn arm_character_is(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let want = name_id(a1, a2);
+    world::with_world(|w| (w.character_id[player_idx(a0)] == want.0) as i64)
+}
+
+/// `Op::band_crystals` / `Op::add_band_crystals` — band miracle-crystal pool.
+pub fn arm_band_crystals(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.band_crystals[player_idx(a0)]) as i64
+}
+
+pub fn arm_add_band_crystals(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        let p = player_idx(a0);
+        w.band_crystals[p] = (w.band_crystals[p] + a1).clamp(0, 99);
+        w.band_crystals[p] as i64
+    })
+}
+
+/// `Op::gain` / `Op::gain_typed` / `Op::gain_fixed` — immediate credit + effect
+/// record (no chain window under Kani).
+pub fn arm_gain(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    if a1 > 0 {
+        world::with_world_mut(|w| {
+            let p = player_idx(a0);
+            w.money[p] = w.money[p].saturating_add(a1);
+            w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(a1);
+            w.push(Effect::GainMoney {
+                player: a0,
+                n: a1,
+            });
+        });
+    }
+    a1 as i64
+}
+
+/// `Op::count_held` / `Op::count_held_name` — named counter (fan tokens live
+/// in the `fans_*` views; everything else in `player_keys`).
+pub fn arm_count_held(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let key = name_id(a0, a1);
+    let p = a2;
+    world::with_world(|w| {
+        let pp = player_idx(p);
+        if key == known().tok_pp_pos {
+            w.fans_pos[pp]
+        } else if key == known().tok_pp_neg {
+            w.fans_neg[pp]
+        } else {
+            w.key_get(p, key)
+        }
+    }) as i64
+}
+
+/// `Op::add_held` — add `n` units of a named counter (clamped by the map).
+pub fn arm_add_held(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let key = name_id(a0, a1);
+    world::with_world_mut(|w| {
+        let v = w.key_add(a2, key, a3);
+        w.sync_views_player(a2);
+        w.push(Effect::AddToken {
+            player: a2,
+            key: key.0,
+            n: a3,
+        });
+        v as i64
+    })
+}
+
+/// `Op::set_held_name` — set a named counter outright.
+pub fn arm_set_held_name(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let key = name_id(a0, a1);
+    let p = a2;
+    let v = a3;
+    world::with_world_mut(|w| {
+        w.key_set(p, key, v);
+        if key == known().tok_pp_pos {
+            w.fans_pos[player_idx(p)] = v;
+        } else if key == known().tok_pp_neg {
+            w.fans_neg[player_idx(p)] = v;
+        } else {
+            w.sync_views_player(p);
+        }
+        w.push(Effect::SetToken {
+            player: p,
+            key: key.0,
+            n: v,
+        });
+    });
+    0
+}
+
+/// `Op::hand_count` — copies of a card in hand (resonance uses the view).
+pub fn arm_hand_count(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let slot = card_slot(a0, a1);
+    world::with_world(|w| {
+        if slot == 1 {
+            w.hand_resonance[player_idx(a2)]
+        } else {
+            let id = card_u16(a0, a1);
+            let in_pile = world::pile_count(&w.hand_pile, w.hand_n, id);
+            let in_bits = if (slot as usize) < 4 {
+                w.hand[slot as usize] as i32
+            } else {
+                0
+            };
+            in_pile.max(in_bits)
+        }
+    }) as i64
+}
+
+/// `Op::take_card` — move one copy out of a pile (hand / discard).
+pub fn arm_take_card(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let id = card_u16(a2, a3);
+    let slot = card_slot(a2, a3);
+    let player_id = a0;
+    let pile = a1;
+    world::with_world_mut(|w| {
+        let ok = if pile == 1 {
+            world::pile_take(&mut w.discard_pile, &mut w.discard_n, id)
+                || {
+                    if (slot as usize) < 4 && w.discard[slot as usize] {
+                        w.discard[slot as usize] = false;
+                        true
+                    } else {
+                        false
+                    }
+                }
+        } else if pile == 0 {
+            if slot == 1 && w.hand_resonance[player_idx(player_id)] > 0 {
+                w.hand_resonance[player_idx(player_id)] -= 1;
+                true
+            } else {
+                world::pile_take(&mut w.hand_pile, &mut w.hand_n, id)
+                    || {
+                        if (slot as usize) < 4 && w.hand[slot as usize] {
+                            w.hand[slot as usize] = false;
+                            true
+                        } else {
+                            false
+                        }
+                    }
+            }
+        } else {
+            false
+        };
+        if ok {
+            w.push(Effect::TakeFromPile {
+                player: player_id,
+                pile,
+                card: slot,
+            });
+            1
+        } else {
+            0
+        }
+    })
+}
+
+/// `Op::to_discard` — put a card into the discard pile.
+pub fn arm_to_discard(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let _ = a0;
+    let slot = card_slot(a1, a2);
+    let id = card_u16(a1, a2);
+    world::with_world_mut(|w| {
+        world::pile_push(&mut w.discard_pile, &mut w.discard_n, id);
+        if (slot as usize) < 4 {
+            w.discard[slot as usize] = true;
+        }
+    });
+    0
+}
+
+/// `Op::ask` — symbolic (or scripted) prompt answer.
+pub fn arm_ask(a: Args) -> i64 {
+    let _ = a;
+    let n = world::with_world(|w| w.opt_n.max(1));
+    world::with_world_mut(|w| w.opt_n = 0);
+    #[cfg(kani)]
+    {
+        if world::with_world(|w| w.symbolic_answers) {
+            let x: i32 = kani::any();
+            kani::assume(x >= 0 && x < n);
+            return x as i64;
+        }
+    }
+    world::with_world_mut(|w| {
+        let i = w.next_answer;
+        if i < world::MAX_ANSWERS {
+            let v = w.answers[i];
+            w.next_answer = i + 1;
+            v as i64
+        } else {
+            0
+        }
+    })
+}
+
+/// `Op::money` — seat's cash.
+pub fn arm_money(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.money[player_idx(a0)]) as i64
+}
+
+/// `Op::raise` — guest-raised trigger point (`ctx::raise`).
+///
+/// Returns `(!cancelled)` per `wasm_rules` `HostRequest::Raise`: **1 = the
+/// link settled** (nobody cancelled it), 0 = a counteraction cancelled it.
+/// A 0 here makes callers like `spend_fire` treat the cost as substituted
+/// and **skip the real effect** (class C — `chart_rush` spent no [火罐]).
+/// No [反击] substitute model under Kani (the window is PROTOCOL-LEVEL):
+/// with no hook substituting, the link settles.
+pub fn arm_raise(_a: Args) -> i64 {
+    1
+}
+
+/// `Op::raise_bought` — announce a hand-over outside the buy routine.
+/// HOST-06: **1 = the hand-over landed**. No hook denies under Kani.
+pub fn arm_raise_bought(_a: Args) -> i64 {
+    1
+}
+
+/// `Op::gate` — abnormal-effect [反击] gate (`ctx::gate`).
+///
+/// Returns `allowed` per `HostRequest::Gate`: **1 = may land**, 0 = a field
+/// card guarded it / immune / unstoppable / out. Callers skip the effect on
+/// 0 — the same polarity class as [`arm_raise`]. With no standing guard and
+/// a living seat the effect is allowed.
+pub fn arm_gate(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        let out_of_range = a0 < 0 || a0 as usize >= MAX_PLAYERS || a0 >= w.n_players;
+        let dead = !out_of_range && w.out[player_idx(a0)];
+        if out_of_range || dead {
+            0
+        } else {
+            1
+        }
+    })
+}
+
+/// `Op::ring_multiplier` — RiNG rent multiplier (`match_rules.ring_multiplier
+/// + bonus`, floored at 1). **0 is not a legal value** (it zeroes rent); the
+/// multiplicative identity is 1. The Kani `World` has no RiNG-rule field, so
+/// this is the neutral floor. `TODO(规则书)` if a proof needs the stock 10.
+pub fn arm_ring_multiplier(_a: Args) -> i64 {
+    1
+}
