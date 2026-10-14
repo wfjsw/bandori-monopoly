@@ -943,3 +943,49 @@ Non-vacuity: not reached (TIMEOUT before any property verdict). Probes
 added for the next pass; `assert!(false)` probe must FAIL once a run
 finishes.
 
+
+## ppcost FLOOR bisect + fix (branch `kani-ppcost`, post master merge)
+
+Progressive harnesses, **300 s** cap each, direct `same_dream_kani` body.
+Each ends in `kassert!(false)` so SUCCESS is impossible (probe = FAIL
+means BMC returned and the body ran).
+
+| step | what | verdict | time | notes |
+|---|---|---|---|---|
+| (a) | fully concrete world + body | **FAILED** (probe) | **172 s** | BMC returns |
+| (b) | + symbolic money/fans (2 seats) | **FAILED** | **219 s** | |
+| (c1) | sparse_play_world + **concrete user=0** | **FAILED** | **223 s** | |
+| (c2) | concrete world + **symbolic user** | **TIMEOUT** | 300 s | **FLOOR** |
+| (c3) | concrete + `symbolic_answers=true` | **FAILED** | **166 s** | not the cliff |
+| (c) | sparse + symbolic user (old iff) | **TIMEOUT** | 300 s / 1800 s | |
+| (d/e/f) | not needed once (c2) isolated | | | |
+
+**Dominating piece: symbolic player index** (`any_player_in()`). Concrete
+user returns in ~220 s; a free `user` never returns. `n_players=2` →
+seats `{0,1}`; two harnesses cover every seat exactly (clause is
+seat-symmetric: 「自己的」).
+
+### Fixes on the way to SUCCESSFUL
+
+1. **concrete seats 0/1** replace `any_player_in()` in the iff + mutant.
+2. **`arm_hand_count` / `discard_count` packing** — `hand_count(player,ptr,len)`
+   packs `[player,ptr,len]`; the arm decoded `card_slot(a0,a1)=(player,ptr)`
+   and loud-FAILED untagged name_id (same class as `set_self_prop`).
+   `try_resonance`'s `hand_count` is on this path. Pinned in conf_hostops2.
+3. **composed final faces** — play runs steps 1–3 together; step 3 flips the
+   user's reverse fans back to positive. Assert `(up+down, 0)`, not step 2's
+   intermediate `(0, up+down)`. (The old harness asserted the intermediate
+   state after the full body.)
+
+### Timing (unwind 32, `--features band-pp`, direct body, concrete user)
+
+| harness | before | after | verdict |
+|---|---|---|---|
+| `same_dream_01_band_plus_3_iff` (user=0) | TIMEOUT 1800 s | **SUCCESSFUL 563 s** | **4/4 covers SATISFIED** |
+| `same_dream_01_user1_band_plus_3_iff` (user=1) | — | **SUCCESSFUL 660 s** | **4/4 covers SATISFIED** |
+| `same_dream_02_money_mutant_is_detected` | TIMEOUT 1800 s | **SUCCESSFUL 475 s** | disagreement companion (card ≠ up*101) |
+
+Non-vacuity: 4/4 covers on both iff rows; `floor_a` / post-invoke
+`kassert!(false)` probes **FAILED** (body ran). Production hashes
+unchanged (wrappers are cfg(kani)-only; host.rs packing is model-only).
+

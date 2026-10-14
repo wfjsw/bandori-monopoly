@@ -173,7 +173,8 @@ pub fn same_dream_01_probe_setup_only() {
 #[kani::unwind(32)]
 pub fn same_dream_01_probe_post_invoke() {
     same_dream_world();
-    let user = any_player_in();
+    // Concrete user — symbolic user is a BMC cliff (see floor bisect).
+    let user = 0i32;
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
