@@ -50,6 +50,16 @@ fn effects_slice(buf: &[Effect; world::MAX_LOG], n: usize) -> &[Effect] {
     &buf[..n]
 }
 
+/// Element-wise array equality — avoids `memcmp` (16-byte `==` unrolls past
+/// unwind 16; class A on moca_01 / aao_01).
+fn arr4_eq(a: [i32; 4], b: [i32; 4]) -> bool {
+    a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
+}
+fn arr4b_eq(a: [bool; 8], b: [bool; 8]) -> bool {
+    a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
+        && a[4] == b[4] && a[5] == b[5] && a[6] == b[6] && a[7] == b[7]
+}
+
 // ===========================================================================
 // E-duobang-01 / 02 — 对邦
 // 「所有人立刻进行一次1d20骰子拼点，所有点数最高者从所有点数最低者获得胜出
@@ -83,8 +93,8 @@ pub fn duobang_01_02_two_player_iff() {
 
     if n_log == 0 {
         // E-duobang no-op leg: gap 0 ⇒ nothing moves.
-        assert!(post.money == pre.money, "E-duobang: tie must not move money");
-        assert!(post.pos == pre.pos, "frame: positions");
+        assert!(arr4_eq(post.money, pre.money), "E-duobang: tie must not move money");
+        assert!(arr4_eq(post.pos, pre.pos), "frame: positions");
         return;
     }
 
@@ -117,9 +127,9 @@ pub fn duobang_01_02_two_player_iff() {
         }
         _ => panic!("E-duobang: only PayTo effects are legal"),
     }
-    assert!(post.pos == pre.pos, "frame: positions unchanged");
-    assert!(post.fire == pre.fire, "frame: fire unchanged");
-    assert!(post.hand == pre.hand, "frame: hand unchanged");
+    assert!(arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
+    assert!(arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
+    assert!(arr4b_eq(post.hand, pre.hand), "frame: hand unchanged");
 }
 
 /// MUTANT companion: the off-by-one spec (`each+50`) does not match the card.
@@ -213,7 +223,7 @@ pub fn tears_01_same_colour_next_pays_700() {
         post.money[0] == pre.money[0] && post.money[1] == pre.money[1],
         "E-tears-01: symmetric 700s net out"
     );
-    assert!(post.pos == pre.pos, "frame: positions");
+    assert!(arr4_eq(post.pos, pre.pos), "frame: positions");
 }
 
 #[kani::proof]
@@ -242,7 +252,7 @@ pub fn tears_02_different_colour_current_pays_300() {
         post.money[0] == pre.money[0] && post.money[1] == pre.money[1],
         "E-tears-02: symmetric 300s net out"
     );
-    assert!(post.pos == pre.pos, "frame: positions");
+    assert!(arr4_eq(post.pos, pre.pos), "frame: positions");
 }
 
 /// MUTANT: 700/300 swapped is distinguishable.
@@ -316,7 +326,7 @@ pub fn pico_swap_01_rotates_positions() {
         "E-pico-swap-01: rotate onto the next ring member's pre-position"
     );
     assert!(post.pos[0] == 20 && post.pos[1] == 30 && post.pos[2] == 10, "post positions");
-    assert!(post.money == pre.money, "frame: money");
+    assert!(arr4_eq(post.money, pre.money), "frame: money");
     let _ = pre_pos;
 }
 
@@ -347,7 +357,7 @@ pub fn pico_swap_02_skips_exiled_players() {
         "E-pico-swap-02: exiled player skipped and not a destination source"
     );
     assert!(post.pos[0] == 30 && post.pos[1] == 20 && post.pos[2] == 10, "post");
-    assert!(post.pos == [30, 20, 10, 40], "exiled seat stays put");
+    assert!(arr4_eq(post.pos, [30, 20, 10, 40]), "exiled seat stays put");
 }
 
 /// MUTANT: a naive cascade (each reads the *new* position) is distinguishable
@@ -401,9 +411,9 @@ pub fn moca_01_activation_keeps_the_card() {
     );
     // No money / pos / hand movement on activation.
     assert!(effects.is_empty(), "E-moca-01 activation: no money/pos effects");
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: positions");
-    assert!(post.hand == pre.hand, "frame: hand");
+    assert!(arr4_eq(post.money, pre.money), "frame: money");
+    assert!(arr4_eq(post.pos, pre.pos), "frame: positions");
+    assert!(arr4b_eq(post.hand, pre.hand), "frame: hand");
 }
 
 /// Expiry tick: `AtEnd` body permanently removes the event (`EventExpire`).
@@ -465,7 +475,7 @@ pub fn aao_01_activation_keeps_the_card() {
         spec::events::aao_activation_dest_is_field(dest),
         "E-aao-01 activation: keep (dest=Field)"
     );
-    assert!(post.money == pre.money && post.pos == pre.pos, "frame");
+    assert!(arr4_eq(post.money, pre.money) && arr4_eq(post.pos, pre.pos), "frame");
 }
 
 #[kani::proof]
@@ -611,7 +621,7 @@ pub fn front_or_back_01_equal_iff() {
             "E-front-or-back-02: sole winner of the higher half takes 1000"
         );
     }
-    assert!(post.pos == pre.pos, "frame: positions");
+    assert!(arr4_eq(post.pos, pre.pos), "frame: positions");
 }
 
 /// MUTANT: swapped 500 / 1000. On the split setup the equal branch pays 500
@@ -692,9 +702,9 @@ pub fn ex_quest_01_rolls_and_files() {
         spec::events::ex_quest_01_no_state_effects(effects),
         "E-ex-quest-01: only dice — no money/pos/mark effects"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: positions");
-    assert!(post.fire == pre.fire, "frame: fire");
+    assert!(arr4_eq(post.money, pre.money), "frame: money");
+    assert!(arr4_eq(post.pos, pre.pos), "frame: positions");
+    assert!(arr4_eq(post.fire, pre.fire), "frame: fire");
     // Cosmetic skin (E-ex-quest-02) cannot test — no match-state seam.
 }
 
@@ -759,7 +769,7 @@ pub fn never_ends_01_noop_blocked_host() {
         spec::events::never_ends_01_noop(effects),
         "E-never-ends-01 BLOCKED-HOST(tile_named:RiNG): body is a no-op under Kani"
     );
-    assert!(post.money == pre.money && post.pos == pre.pos, "frame");
+    assert!(arr4_eq(post.money, pre.money) && arr4_eq(post.pos, pre.pos), "frame");
 }
 
 // ===========================================================================
@@ -1594,7 +1604,7 @@ pub fn lulu_02_decline_leaves_put() {
         effects.is_empty(),
         "E-lulu-02: decline pays nothing and does not teleport"
     );
-    assert!(post.money == pre.money && post.pos == pre.pos, "frame");
+    assert!(arr4_eq(post.money, pre.money) && arr4_eq(post.pos, pre.pos), "frame");
 }
 
 // ===========================================================================
@@ -1718,7 +1728,7 @@ pub fn estate_02_all_pass_no_pay() {
         effects.is_empty(),
         "E-estate-02: a 0 bid costs 0 (raise_bought is a PROTOCOL stub)"
     );
-    assert!(post.money == pre.money, "frame: money");
+    assert!(arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// E-estate-01: a positive bid is paid. P0 bids 1000 (steps index 1), P1
@@ -1783,7 +1793,7 @@ pub fn this_hand_01_move_is_protocol() {
         "E-this-hand PROTOCOL-LEVEL(card_move): stub produces no effect log"
     );
     assert!(
-        post.pos == pre.pos,
+        arr4_eq(post.pos, pre.pos),
         "E-this-hand-01 PROTOCOL-LEVEL: card_move does not move pos under Kani"
     );
 }
