@@ -989,3 +989,71 @@ Non-vacuity: 4/4 covers on both iff rows; `floor_a` / post-invoke
 `kassert!(false)` probes **FAILED** (body ran). Production hashes
 unchanged (wrappers are cfg(kani)-only; host.rs packing is model-only).
 
+## bands-a — concrete-user rollout for ppp / r / ag / hhw + skills_* (branch `kani-bands-a`)
+
+Worktree `/home/monopoly/kani-bands-a-wt`. Propagates the ppcost FLOOR fix
+(symbolic player index is the BMC cliff) across the band units.
+
+### Pattern applied (per ppcost / worked example `proofs/pp.rs` same_dream)
+
+1. `n_players = 2` sparse world (`harness::sparse_play_world`).
+2. Iff harnesses are `*_iff_at(user)` called from two `#[kani::proof]`s with
+   `user = 0` and `user = 1` (clause seat-symmetric 「自己的」). Mutants use a
+   single concrete user. Multi-seat clauses (e.g. `moca_02` owner+src) keep a
+   concrete pair and say so.
+3. Per-body `host_subset!` listing only the ops the unmodified body reaches;
+   outside → `outside_subset` loud FAIL.
+4. Direct `*_kani` body calls (one body in CBMC's call graph).
+5. Composed final-state assertions; covers kept; mutant companions kept.
+6. Fail-closed: no `#[ignore]`, no spec weakening, no silent zeros.
+
+### Host-model changes (small commits, cherry-pickable)
+
+| commit | what |
+|---|---|
+| `host: extract arm_*` | ~50 `arm_*` single-source handlers for `host_subset!` (packing-aware splits for `set_self_prop` / `counter_self` / `add_counter_*`). `dispatch` unchanged (minimal for kani-bands-b). |
+| fire arms | `arm_fire` / `arm_fire_max` / `arm_gain_fire` / `arm_spend_fire` |
+| `arm_inc_slot` | named keyed increment |
+| World `Clone` | proofs read pre-state without a full-struct assign |
+| missing `*_kani` wrappers | popipapapipopa, returns::on_played, aya_with, arisa_bonsai::at_turn_end, poppin::{on_pass,lock_hill}, hhw::on_pay_choose |
+| `run.sh` features | ppp/skills_* pull in `skills-characters`+`skills-bands` so `card_id!` resolves |
+
+### Formula-harness fixes (class A/B)
+
+| id | class | action | after |
+|---|---|---|---|
+| `ppp::door_01_sequence_const` | **A** bound-low (10×60 scan) | `board::tile_named` | **SUCCESSFUL** |
+| `skills_pp::band_idol_02_overflow_formula` | **B** mutant check in agreeing range | disagree when `x-down >= 11` | **SUCCESSFUL** |
+| `skills_ag::firepot_01_tick_formula` | **B** mutant check | disagree exactly at rest 1 | **SUCCESSFUL** |
+| `ppp::maze_01_distance_predicate` | — | (already sound) | **SUCCESSFUL** |
+| `skills_ag::band_01_filter_formula` | — | | **SUCCESSFUL** |
+| `skills_hhw::skills_hhw_smoke_cover` | — | | **SUCCESSFUL** |
+
+### Conversion status (code) vs run status
+
+| unit | conversion | harnesses (approx) | runs |
+|---|---|---:|---|
+| `ppp` | done (concrete user + subset + direct) | 41 | formula rows done; body rows queued (serial CBMC) |
+| `r` | subagent | ~20 | not yet |
+| `ag` | subagent | ~20 | not yet |
+| `hhw` | subagent | ~20 | not yet |
+| `skills_pp` | done | 17 | formula rows done |
+| `skills_ppp` | done (direct + subset; owner already 0) | ~25 | not yet |
+| `skills_r` | done | 10 | not yet |
+| `skills_ag` | done | 10 | formula rows done |
+| `skills_hhw` | done | 20 | smoke done |
+
+Body-row runs are serial (`--jobs 1`, timeout 1800 s, one CBMC at a time,
+slot cap 2 shared with kani-bands-b). Representative body timing from the
+pattern's worked example (pp same_dream): SUCCESSFUL ~560 s per seat.
+
+### Genuine discrepancies (class D)
+
+None newly found in this pass. `aao_02` (triage2, class D E-aao-02) remains
+FAILING on master and is out of bands-a's units.
+
+### Soundness kept
+
+Unwinding assertions ON. No `#[ignore]`. No allowlist. No weakened specs.
+`outside_subset` / untagged `name_id` FAIL loudly. Production `cfg(not(kani))`
+untouched.
