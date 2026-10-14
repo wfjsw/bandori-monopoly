@@ -716,6 +716,40 @@ fn himari_skill_parity_move() {
     eprintln!("pos={} fire={}", t.pos(0), t.fire(0));
 }
 
+// 规则书: 上原绯玛丽「（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」
+// -- the turn-end tick logs its outcome (count / gain / cap) instead of nothing.
+fn himari_end_turn_keys(rest: i32, fire: i32) -> Vec<String> {
+    let mut t = Table::new(&["上原绯玛丽", "美竹兰"]);
+    t.clean();
+    t.set_fire(0, fire, 1);
+    t.m.world_mut().st.players[0].state_set("skill.afterglow.restTurns", rest);
+    t.begin_turn(0);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    t.end(0).unwrap();
+    skip_all(&mut t);
+    t.recent_keys(24)
+}
+
+#[test]
+fn himari_rest_tick_logs_count() {
+    let keys = himari_end_turn_keys(0, 0);
+    assert!(keys.iter().any(|k| k.contains("afterglow_rest_count")), "{keys:?}");
+}
+
+#[test]
+fn himari_rest_tick_logs_gain() {
+    let keys = himari_end_turn_keys(2, 0);
+    assert!(keys.iter().any(|k| k.contains("log.gain_fire")), "{keys:?}");
+}
+
+#[test]
+fn himari_rest_tick_logs_cap() {
+    let keys = himari_end_turn_keys(2, 1);
+    assert!(keys.iter().any(|k| k.contains("afterglow_rest_capped")), "{keys:?}");
+}
+
 // 规则书: 羽泽鸫「（2）当你进行主要移动时，你可以失去一个[火罐]使本次移动反向」
 #[test]
 fn tsuzushi_skill_reverses_a_move() {

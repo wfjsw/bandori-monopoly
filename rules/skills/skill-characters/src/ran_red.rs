@@ -46,12 +46,28 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     // （2）'s 「向后移动[经过]CiRCLE时不获得CiRCLE奖励」 ends with the turn (the
     // reward step consumes the prop if the move did pass CiRCLE).
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 0);
+    rest_tick(player_id)
+}
+
+/// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」, run at each
+/// Afterglow owner's turn end. Every outcome is logged: the count, the pot
+/// gained (the engine's own gain line), or a gain the cap refused.
+pub fn rest_tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
-    state::set(player_id, REST_TURNS, n);
-    if n >= 3 {
-        state::set(player_id, REST_TURNS, 0);
-        rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
+    if n < 3 {
+        state::set(player_id, REST_TURNS, n);
+        ctx::log(player_id, &Msg::new(key!("afterglow_rest_count")).i("n", n as i64));
+        return Ok(());
     }
+    state::set(player_id, REST_TURNS, 0);
+    if rules_status::fire::get(player_id) >= rules_status::fire::max(player_id) {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("afterglow_rest_capped")).i("max", rules_status::fire::max(player_id) as i64),
+        );
+        return Ok(());
+    }
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     Ok(())
 }
 

@@ -1,4 +1,6 @@
 {
+  "afterglow_rest_capped": "Afterglow：三回合未使用（2）技能，但 [火罐] 已达上限（{{max}}），未获得",
+  "afterglow_rest_count": "Afterglow：连续第 {{n}}/3 回合未使用（2）技能",
   "afterglow_rest_gain": "Afterglow：三回合未使用（2）技能，+1 [火罐]",
   "akao_cool_ask": "选哪张加入手牌？",
   "akao_cool_note": "背面朝上放置",

@@ -1,4 +1,6 @@
 {
+  "afterglow_rest_capped": "Afterglow: three turns without a (2), but fire pots are at the cap ({{max}}); none gained",
+  "afterglow_rest_count": "Afterglow: turn {{n}}/3 without a (2)",
   "afterglow_rest_gain": "Afterglow: three turns without a (2), +1 fire pot",
   "akao_cool_ask": "Which card goes to hand?",
   "akao_cool_note": "placed face-down",
