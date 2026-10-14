@@ -9,7 +9,7 @@ import { D, cardTitle, skillText } from "../../core/data";
 import { isLight, n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView } from "../../core/hooks";
 import { useCloseWhen } from "../../hooks/mount";
-import type { MatchState } from "../../core/types";
+import type { MatchPlayer, MatchState } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
 import { InspectCard } from "../../ui/Card";
@@ -161,6 +161,15 @@ export function showDeedList(sess: GameSession): void {
   openModal(tr("board.deeds"), (close) => <DeedList sess={sess} close={close} />, { size: "mid" });
 }
 
+/** The band skill a player holds through PPP:Returns, and the seat it was
+ *  copied from (`returns.from` on the Returns instance); null when none. */
+export function borrowedBand(x: MatchPlayer | undefined): { from: number; skill: string } | null {
+  const from = x?.field?.find((f) => f.card === "PPP:Returns")?.props?.["returns.from"] ?? -1;
+  if (!x || from < 0) return null;
+  const bands = x.field.filter((f) => f.bandSkill);
+  return bands.length > 1 ? { from, skill: bands[bands.length - 1].card } : null;
+}
+
 export function showPlayerInfo(m: Model, i: number): void {
   const S = m.S;
   const x = S.players[i];
@@ -171,6 +180,7 @@ export function showPlayerInfo(m: Model, i: number): void {
     tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: stateOf(x, "fire"), fireMax: stateMax(x, "fire") }),
     tr("player.zones", { draw: x.draw, discard: x.discard.length }),
     stateOf(x, "stay") ? tr("player.stayN", { n: stateOf(x, "stay") }) : "", stateOf(x, "stun") + stateOf(x, "stunStart") ? tr("player.stunned") : "", stateOf(x, "exile") ? tr("player.exileN", { n: stateOf(x, "exile") }) : "",
+    (() => { const bb = borrowedBand(x); return bb ? tr("player.borrowed", { skill: cardTitle(bb.skill), who: m.charOf(bb.from)?.display ?? "" }) : ""; })(),
     x.skillNote?.k ? tr("player.skillNote", { note: fmtMsg(x.skillNote, namesOf(S)) }) : "",
     ...(x.tokens ?? []).map((tok) => `${tok.name} ×${tok.value}`),
   ].filter(Boolean);
