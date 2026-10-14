@@ -176,12 +176,9 @@ fn agent_quote_carries_the_tsugu_buy_add() {
 }
 
 fn data() -> std::sync::Arc<game_core::data::GameData> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("../../crates/game-core/tests/fixtures/roster.json")).expect("roster fixture"),
-    )
-    .expect("roster fixture parses");
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster =
+        game_core::data::Roster::from_fixture(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/game-core/tests/fixtures/roster.json")).expect("roster fixture")).expect("roster fixture parses");
     std::sync::Arc::new(
         game_core::data::GameData::load(
             |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),

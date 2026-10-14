@@ -118,7 +118,10 @@ pub struct EngineStamp {
     pub abi: u32,
     /// Sha256 of the built ruleset, or `"stub"`.
     pub ruleset_sha256: String,
-    /// Sha256 of the `DATA_FILES` contents in order.
+    /// Sha256 of the `DATA_FILES` contents in order (the remaining game tables
+    /// only -- board / events / schools / home / voice / match_rules / rules /
+    /// skill_simple). The roster (cards / characters / bands) lives in the
+    /// ruleset and is covered by `ruleset_sha256`, not this field.
     pub data_sha256: String,
     /// Engine identity (`"game-core"`).
     pub engine: String,

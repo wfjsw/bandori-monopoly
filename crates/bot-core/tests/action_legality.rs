@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use bot_core::action::{self, Action};
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -19,14 +19,20 @@ use game_core::state::{stage, MatchState};
 use game_core::MatchMode;
 
 fn data() -> Arc<GameData> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("../game-core/tests/fixtures/roster.json")).expect("roster fixture"),
+    // bot-core must not grow a hard dep on the card crates, so the roster
+    // comes from the generated roster fixture (see `Roster::from_fixture`).
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_fixture(&std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
     )
+    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster).unwrap(),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap(),
     )
 }
 

@@ -5,7 +5,8 @@
 //
 // `text` / `tags` come from the generated roster fixture (the Rust metadata
 // dump, `crates/game-core/tests/fixtures/roster.json`); `counterReason` is
-// display-only and lives in `data/skill_simple.json`.
+// display-only and lives in `data/skill_simple.json` (the runtime merges it
+// onto the ruleset roster).
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -14,7 +15,11 @@ interface CardRow {
   id: string;
   tags: string[];
   text: string;
-  counterReason?: string;
+}
+
+interface CounterRow {
+  id: string;
+  counterReason: string;
 }
 
 const fixture = JSON.parse(
@@ -26,20 +31,15 @@ const fixture = JSON.parse(
 
 const simple = JSON.parse(
   readFileSync(new URL("../../../data/skill_simple.json", import.meta.url), "utf-8"),
-) as { cards?: { id: string; counterReason: string }[] };
+) as { cards?: CounterRow[] };
 
-const reasonById = new Map((simple.cards ?? []).map((c) => [c.id, c.counterReason]));
-const cards: CardRow[] = fixture.cards.map((c) => ({
-  id: c.id,
-  tags: c.tags,
-  text: c.text,
-  counterReason: reasonById.get(c.id),
-}));
+const reasonById = new Map((simple.cards ?? []).map((x) => [x.id, x.counterReason]));
+const cards: CardRow[] = fixture.cards;
 
 test("every [反击] card names its trigger-condition clause", () => {
   const tagged = cards.filter((c) => c.tags.includes("反击"));
   assert.ok(tagged.length > 0, "the set does carry [反击] cards");
-  const missing = tagged.filter((c) => !c.counterReason?.trim()).map((c) => c.id);
+  const missing = tagged.filter((c) => !reasonById.get(c.id)?.trim()).map((c) => c.id);
   assert.deepEqual(missing, [], "each needs a `counterReason` (why it is offered)");
 });
 
@@ -47,10 +47,10 @@ test("a counterReason is a clause of the card's own prose, not a new sentence", 
   // The field is extracted from / hand-written against `text`; it must appear
   // there (punctuation and the 「当…时」 wrapper may be stripped off).
   const off = cards
-    .filter((c) => c.counterReason)
+    .filter((c) => reasonById.get(c.id))
     .filter((c) => {
       const t = c.text.replace(/【/g, "[").replace(/】/g, "]");
-      const r = c.counterReason!.replace(/【/g, "[").replace(/】/g, "]");
+      const r = reasonById.get(c.id)!.replace(/【/g, "[").replace(/】/g, "]");
       return !t.includes(r.replace(/^(任意时刻当|任意时刻|当)/, "").replace(/时$/, ""));
     })
     .map((c) => c.id);

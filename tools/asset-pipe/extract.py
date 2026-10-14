@@ -370,8 +370,14 @@ def run(args) -> int:
         # The source export is the base; web/data is extended by hand (bot
         # names, presets, ...). Copy only files we do not have -- overwriting
         # would silently drop those extensions.
+        # `cards.json` / `characters.json` / `bands.json` are NOT generated
+        # here any more: the roster lives in the Rust rule code (ABI v63) and
+        # tools read it via tools/roster-dump.mjs (docs/ROSTER-TOOLS.md).
+        skip = {"cards.json", "characters.json", "bands.json"}
         for f in GAME_DATA.iterdir():
             if f.suffix not in (".json", ".txt") or f.name.startswith("LineBreaking"):
+                continue
+            if f.name in skip:
                 continue
             dst = DATA_OUT / f.name
             if dst.exists():
@@ -379,10 +385,10 @@ def run(args) -> int:
                 continue
             shutil.copy2(f, dst)
             p.stats.add("data", dst)
-        # 6b) the build's `skill_simple` TextAsset (C# GameDataLoader.WithSimple)
-        # used to be merged into the roster JSONs as `simple`. The roster now
-        # lives in the Rust rule code (ABI v63) and the simplified bodies stay
-        # hand-written in `data/skill_simple.json` -- nothing to merge here.
+        # skill_simple.json (display-only `simple` skill text, C#
+        # GameDataLoader.WithSimple) is a normal game-data file -- copied above.
+        # It used to be merged into characters.json / bands.json as `simple`;
+        # those files are gone, so no merge.
 
     p.drain()
     p.pool.shutdown()

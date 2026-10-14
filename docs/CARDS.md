@@ -309,37 +309,24 @@ game's concepts and live in `ruleset-core` / the skill crates.
 `meta::MetaDoc` -- **not** through `ManifestEntry`, so the match path and the
 per-card manifest stay lean. The blob is built only when the host asks (load
 time, never per run). Host: `Ruleset::metadata()` / `::roster()`, then
-`game_core::data::GameData::load_with_roster(get_file, roster)`. Native
+`game_core::data::GameData::load(get_file, roster)`. Native
 (`rules-native`): `rules_native::roster_metadata()` / `::roster()`.
 
 ### Canonical order
 
 The Rust crates register cards alphabetically inside each band, while
 `GameData` iterates the roster in its own order (deck pools, presets).
-A shared generated table (`rules/ruleset-core/src/roster_order.rs`, written
-**once** by `tools/lift-roster.mjs --ordinals`) maps id → ordinal; the export
-sorts by `(kind, ordinal)` so the rebuilt vectors equal the roster order
-exactly. Per-band lift runs never touch that table.
+A shared generated table (`rules/ruleset-core/src/roster_order.rs`) maps
+id → ordinal; the export sorts by `(kind, ordinal)` so the rebuilt vectors
+equal the roster order exactly.
 
-### Lifting + fixture gate
+### Fixture gate
 
-The lift is **complete** (184 cards / 54 characters / 12 bands). The tool
-still runs for a re-lift / tweak, reading the generated fixture as its row
-table:
-
-```sh
-node tools/lift-roster.mjs --ordinals          # generate roster_order.rs
-node tools/lift-roster.mjs --band Sumimi       # one band crate + its skills
-node tools/lift-roster.mjs --card 通用:GREAT    # one card outside band mode
-node tools/lift-roster.mjs --tables            # rebuild CHARACTERS / BANDS
-node tools/lift-roster.mjs --all               # every band
-```
-
-`--band` touches only that band's files (safe to run concurrently across
-bands).
-
-The test fixture `crates/game-core/tests/fixtures/roster.json` is a generated
-dump of the Rust roster (one `{cards, characters, bands}` document), used by
+The lift is **complete** (184 cards / 54 characters / 12 bands) and the
+`tools/lift-roster.mjs` lifter is retired (deleted; see `docs/ROSTER-TOOLS.md`
+for the dump tooling). The test fixture `crates/game-core/tests/fixtures/
+roster.json` is a generated dump of the Rust roster (one
+`{cards, characters, bands}` document), used by
 crates that have no ruleset (game-core / game-rules / bot-core / server) and by
 `webui/src/core/cards.test.ts`. Regenerate it with:
 
@@ -354,13 +341,33 @@ the cutover (commit `7c3d115`, the last tree with those files as the baseline).
 
 ### Cutover complete: consumers take the roster from the ruleset
 
-`GameData::load(read, roster)` takes the roster from the ruleset host (ABI v63
-`bandori_metadata` -> `Roster`) or, in tests, from `Roster::from_fixture`.
-Runtime consumers (server, rules-worker, bot-service, web-glue, bot-glue) load
-the ruleset first and hand `Ruleset::roster()` over. `data/skill_simple.json`
-(display-only: simplified skill bodies + per-card `counterReason`) and the
-other `data/*.json` files (tiles / events / schools / voice / home / board /
-match_rules) stay JSON.
+Runtime hosts no longer read `data/{cards,characters,bands}.json` (those files
+are deleted). The roster is ruleset metadata end to end:
+
+| Host | Roster source |
+| --- | --- |
+| `crates/server`, `crates/rules-worker` | `Ruleset::roster()` after loading `dist/cards` (load the ruleset first -- it does not need `GameData`) |
+| `crates/web-glue` | `Ruleset::roster()` / `roster_json()`; `load_data` pairs it with the remaining `DATA_FILES` |
+| `webui` (`core/data.ts`, workers) | `glue.roster_json()` after `ruleset_build`, before `load_data` |
+| `crates/bot-glue`, `crates/bot-service` | ruleset / `rules_native::roster()` |
+| tests / examples (game-core, game-rules, bot-core, server, rules-worker) | `Roster::from_fixture` over `crates/game-core/tests/fixtures/roster.json` |
+| `webui/src/core/cards.test.ts` | the same fixture for `text` / `tags` |
+
+`GameData::load(read, roster)` is the one constructor. `DATA_FILES` is the
+remaining eight tables (board / events / schools / home_lines / voice_lines /
+match_rules / rules.txt / skill_simple.json). The data hash
+(`EngineStamp::data_sha256`) covers exactly those; the roster is covered by
+`ruleset_sha256` (the metadata lives in the modules that hash names).
+
+Display-only overlays stay JSON and are merged by the client:
+`skill_simple.json` (simplified skill bodies + the card `counterReason` list).
+The engine still does not read it; it is hashed via `DATA_FILES` so a record
+names the display tables it was sealed against.
+
+Tools that need JSON rows use `tools/roster.py` against a dump written by
+`tools/roster-dump.mjs` (see `docs/ROSTER-TOOLS.md`); they do not read
+`data/{cards,characters,bands}.json` either. The other `data/*.json` files
+(tiles / events / schools / voice / home / board / match_rules) stay JSON.
 
 ## The vocabulary (`card_sdk::ctx` vs `ruleset_core::ctx`)
 

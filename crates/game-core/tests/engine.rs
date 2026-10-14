@@ -9,19 +9,8 @@ use game_core::scoring::ScoreWeights;
 use game_core::state::stage;
 use game_core::state::MatchState;
 use game_core::MatchMode;
-
-fn data() -> Arc<GameData> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
-    )
-    .expect("roster fixture parses");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-            .unwrap(),
-    )
-}
+mod common;
+use common::data_arc as data;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {

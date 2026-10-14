@@ -11,7 +11,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::Match;
 use game_core::msg::Arg;
 use game_core::net::{NetMessage, RoomMember};
@@ -21,15 +21,18 @@ use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
 
 fn data() -> Arc<GameData> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("../../crates/game-core/tests/fixtures/roster.json")).expect("roster fixture"),
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_fixture(&std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/game-core/tests/fixtures/roster.json"),
     )
+    .expect("roster fixture"))
     .expect("roster fixture parses");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-            .unwrap(),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap(),
     )
 }
 

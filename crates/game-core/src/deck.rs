@@ -46,7 +46,7 @@ pub fn shares_exclusives(data: &GameData, c: &CharacterData, card: &CardData) ->
 }
 
 /// Cards `c` may use: exclusives first, then band cards, then general cards
-/// (each group in roster order -- the Rust ordinal table).
+/// (each group in the roster's canonical deck-pool order).
 pub fn pool<'a>(data: &'a GameData, c: &CharacterData) -> Vec<&'a CardData> {
     let usable: Vec<&CardData> = data.cards.iter().filter(|k| can_use(data, c, k)).collect();
     let excl = usable.iter().copied().filter(|k| k.exclusive());

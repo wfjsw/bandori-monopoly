@@ -391,7 +391,7 @@ use alloc::{string::String, vec::Vec};
 ///      ordinal comes from a shared generated table
 ///      (`ruleset_core::roster_order`) so the rebuilt vectors equal the JSON
 ///      file order exactly even though the Rust crates register alphabetically.
-///      Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load_with_roster`
+///      Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load`
 ///      consumes the converted `Roster`. No host-function change; SAVE_VERSION
 ///      unchanged (no save field).
 /// v62: **static card property + guest query** -- `prop::SONG` (`"song"`,

@@ -54,18 +54,34 @@ impl Ctx {
     /// The tables' sha256 (in [`DATA_FILES`] order) is captured here too, so a
     /// record written by this worker says which board / card data it saw.
     ///
-    /// The roster (cards / characters / bands) comes from the ruleset metadata
-    /// (ABI v63) -- modules are loaded first so `Roster` can be handed to
-    /// [`GameData::load`]. No modules = empty roster = the degraded boot.
+    /// Order matters: the ruleset loads first (it does not need the tables) and
+    /// its [`game_rules::Ruleset::roster`] supplies the tables' roster (ABI v63).
     pub fn load(data_dir: &std::path::Path, rules_dir: &std::path::Path) -> Self {
-        let ruleset = match WasmRules::load_ruleset(rules_dir) {
-            Ok(r) => r,
+        let ruleset = match game_rules::Ruleset::load_dir(rules_dir) {
+            Ok(Some(set)) => {
+                eprintln!(
+                    "card modules: {} loaded from {}",
+                    set.module_count(),
+                    rules_dir.display()
+                );
+                Some(set)
+            }
+            Ok(None) => {
+                eprintln!(
+                    "no card modules in {} -- cards have no effect",
+                    rules_dir.display()
+                );
+                None
+            }
             Err(e) => {
                 eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
                 None
             }
         };
-        let roster = ruleset.as_ref().map(|r| r.roster()).unwrap_or_default();
+        let roster = ruleset
+            .as_ref()
+            .map(|s| s.roster())
+            .unwrap_or_default();
         let mut contents: Vec<(String, String)> = Vec::new();
         let data = Arc::new(
             GameData::load(
@@ -87,7 +103,9 @@ impl Ctx {
             // (`skill_simple.json` is display-only and the engine never reads
             // it), so read the ones it skipped -- otherwise this hash disagrees
             // with the browser's and the record names an engine bundle the
-            // replay loader has never seen.
+            // replay loader has never seen. The roster (`cards.json` /
+            // `characters.json` / `bands.json`) is no longer in `DATA_FILES`:
+            // it comes from the ruleset and is covered by the ruleset hash.
             let owned;
             let text: Option<&str> = match contents.iter().find(|(f, _)| f == name) {
                 Some((_, text)) => Some(text),
@@ -105,21 +123,8 @@ impl Ctx {
         }
         let data_sha256 = hex(&hasher.finalize());
         let rules: Arc<dyn CardRules> = match ruleset {
-            Some(set) => {
-                eprintln!(
-                    "card modules: {} loaded from {}",
-                    set.module_count(),
-                    rules_dir.display()
-                );
-                Arc::new(WasmRules::new(set, data.clone()))
-            }
-            None => {
-                eprintln!(
-                    "no card modules in {} -- cards have no effect",
-                    rules_dir.display()
-                );
-                Arc::new(StubRules)
-            }
+            Some(set) => Arc::new(WasmRules::new(set, data.clone())),
+            None => Arc::new(StubRules),
         };
         Self {
             data,

@@ -16,7 +16,7 @@
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::Match;
 use game_core::engine::CardRules;
 use game_core::msg::{Arg, Msg};
@@ -34,15 +34,18 @@ pub const SEED: u64 = 20261006;
 pub fn data() -> Arc<GameData> {
     static DATA: OnceLock<Arc<GameData>> = OnceLock::new();
     DATA.get_or_init(|| {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dir = root.join("../../data");
-        let roster = game_core::data::Roster::from_fixture(
-            &std::fs::read_to_string(root.join("../../crates/game-core/tests/fixtures/roster.json")).expect("roster fixture"),
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let roster = Roster::from_fixture(&std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/game-core/tests/fixtures/roster.json"),
         )
+        .expect("roster fixture"))
         .expect("roster fixture parses");
         Arc::new(
-            GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-                .unwrap(),
+            GameData::load(
+                |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+                roster,
+            )
+            .unwrap(),
         )
     })
     .clone()
@@ -82,7 +85,7 @@ pub fn tile(name: &str) -> usize {
         .unwrap_or_else(|| panic!("no tile named {name:?}"))
 }
 
-/// Every character name in the roster, in file order.
+/// Every character name in the roster, in roster order.
 pub fn characters() -> Vec<String> {
     data().characters.iter().map(|c| c.name.clone()).collect()
 }

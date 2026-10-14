@@ -19,11 +19,13 @@ use game_rules::WasmRules;
 use rules_native::native_rules;
 
 fn data() -> Arc<GameData> {
+    // Native-rules drift probe: take the linked ruleset's roster (ABI v63).
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = rules_native::roster();
     Arc::new(
         GameData::load(
             |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
-            rules_native::roster(),
+            roster,
         )
         .expect("game data"),
     )

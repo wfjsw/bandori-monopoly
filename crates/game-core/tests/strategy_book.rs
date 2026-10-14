@@ -14,22 +14,13 @@ use game_core::data::{CharacterData, GameData};
 use game_core::engine::{Match, StubRules, BUY_RESERVE};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
+mod common;
+use common::data;
 use game_core::strategy::{
     self, CardPlayParams, CounterParams, SkillParams, StrategyBook, StrategyEntry, StrategyParams,
     DEFAULT_COUNTERACT_PROPENSITY_MILLI, PARAMS_VERSION, POLICY_STANDARD, STRATEGY_BOOK_VERSION,
 };
 use game_core::MatchMode;
-
-fn data() -> GameData {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
-    )
-    .expect("roster fixture parses");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-        .expect("web/data should load -- run tools/asset-pipe/extract.py")
-}
 
 fn me<'a>(d: &'a GameData) -> &'a CharacterData {
     d.character("户山香澄").unwrap()
@@ -327,8 +318,7 @@ fn parses_the_documented_shape_and_merges_partial_params() {
 
 #[test]
 fn the_shipped_book_is_empty_and_inert() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     let text = std::fs::read_to_string(dir.join("strategy_book.json")).expect("shipped placeholder");
     let b = StrategyBook::parse(&text).unwrap();
     assert!(b.is_empty(), "S2/S3 have not derived entries yet");

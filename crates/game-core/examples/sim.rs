@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -26,11 +26,13 @@ fn main() {
     let players = args.get(1).copied().unwrap_or(4) as i32;
     let max_rounds = args.get(2).copied().unwrap_or(200) as i32;
 
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
+    // game-core examples cannot ask a ruleset for the roster (no card-crate
+    // dep); the three legacy JSON files still on disk are the bridge.
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_fixture(&std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/roster.json"),
     )
+    .expect("roster fixture"))
     .expect("roster fixture parses");
     let data = Arc::new(
         GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)

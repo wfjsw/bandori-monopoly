@@ -25,7 +25,7 @@
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::Match;
 use game_core::engine::CardRules;
 use game_core::msg::{Arg, Msg};
@@ -40,18 +40,26 @@ use game_rules::{Ruleset, WasmRules};
 
 pub const SEED: u64 = 20261006;
 
+/// The shared tables. The roster comes from the three legacy JSON files
+/// (`Roster::from_fixture`) rather than the ruleset: `data()` is a `OnceLock`
+/// that `rules()` itself calls, so it cannot ask the ruleset without inverting
+/// that dependency. Least invasive and matches the game-core tests; swap for a
+/// `dump_roster` fixture when `data/{cards,characters,bands}.json` retire.
 pub fn data() -> Arc<GameData> {
     static DATA: OnceLock<Arc<GameData>> = OnceLock::new();
     DATA.get_or_init(|| {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dir = root.join("../../data");
-        let roster = game_core::data::Roster::from_fixture(
-            &std::fs::read_to_string(root.join("../game-core/tests/fixtures/roster.json")).expect("roster fixture"),
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let roster = Roster::from_fixture(&std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
         )
+        .expect("roster fixture"))
         .expect("roster fixture parses");
         Arc::new(
-            GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-                .unwrap(),
+            GameData::load(
+                |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+                roster,
+            )
+            .unwrap(),
         )
     })
     .clone()
@@ -91,7 +99,7 @@ pub fn tile(name: &str) -> usize {
         .unwrap_or_else(|| panic!("no tile named {name:?}"))
 }
 
-/// Every character name in the roster, in file order.
+/// Every character name in the roster, in roster order.
 pub fn characters() -> Vec<String> {
     data().characters.iter().map(|c| c.name.clone()).collect()
 }

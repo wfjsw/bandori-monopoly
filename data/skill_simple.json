@@ -1,5 +1,5 @@
 {
- "note": "角色技能 / 团技能的简明说明（给新手看的版本）和 [反击] 卡的触发条件（counterReason，给提示框的「why this card may be declared」）。原文在 roster metadata（CardData/CharacterData/BandData text，从设计表导出，不要改）；这里手写，导出脚本不会覆盖。",
+ "note": "角色技能 / 团技能的简明说明（给新手看的版本），以及卡牌的 counterReason 显示字段（[反击] 卡的触发条件摘要）。原文在 characters.json / bands.json / cards.json（从设计表导出，不要改）；这里手写，导出脚本不会覆盖。",
  "characters": [
   {
    "name": "户山香澄",

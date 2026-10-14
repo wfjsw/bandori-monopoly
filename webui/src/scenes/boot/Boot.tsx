@@ -27,6 +27,9 @@ const TIPS = [
 
 let loading: Promise<void> | null = null;
 function loadAll(progress: (p: number) => void): Promise<void> {
+  // `loadGameData` is the single gate: it loads the ruleset first (the roster
+  // source), then the tables, and assigns `D` only at the end. Deck builder /
+  // gallery / home may read `D` as soon as this resolves -- never before.
   loading ??= (async () => {
     await loadManifest();
     installFonts();
@@ -42,9 +45,11 @@ function loadAll(progress: (p: number) => void): Promise<void> {
 type Stage = "loading" | "tap" | "create" | "error";
 
 /**
- * One-shot boot: manifest, fonts, game data and the wasm rules, with a
- * progress meter. On success it plays the boot BGM and either hands back to
- * the shell (`resume`) or offers the tap / create screens.
+ * One-shot boot: manifest, fonts, then `loadGameData` (ruleset + tables + the
+ * typed `D`), with a progress meter. On success it plays the boot BGM and
+ * either hands back to the shell (`resume`) or offers the tap / create screens.
+ * A throw leaves `D` unset and lands on the error stage -- `loadGameData`
+ * assigns `D` only after every piece is in.
  */
 function useBootAssets(opts: {
   resume: boolean;

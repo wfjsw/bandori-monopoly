@@ -8,14 +8,14 @@
 //!   (`{cards, characters, bands}`) that `Roster::from_fixture` loads. This is
 //!   the checked-in gate artifact: `crates/rules-native/tests/roster_equiv.rs`
 //!   asserts it is byte-equal to a fresh dump.
-//! * A bare directory argument writes the legacy three-file shape
-//!   (`{cards,characters,bands}.json`) for tools that still want one file per
-//!   kind.
-//! * No argument prints both forms' rows to stdout.
+//! * A bare directory argument writes the three-file shape
+//!   (`{cards,characters,bands}.json`) that `tools/roster-dump.mjs` caches
+//!   under `target/roster-dump/` for `tools/roster.py`.
+//! * No argument prints the three files' rows to stdout.
 //!
 //! Display-only columns that live outside the engine structs (`simple`,
-//! `counterReason`) are **not** printed here -- they are not part of
-//! `CardData` / `CharacterData` / `BandData` and live in `data/skill_simple.json`.
+//! `counterReason`) stay in `data/skill_simple.json` and are **not** printed
+//! here -- they are not part of `CardData` / `CharacterData` / `BandData`.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -49,7 +49,7 @@ fn main() {
             let bands = bands_json(&roster.bands);
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(dir.join("cards.json"), &cards).unwrap();
-            std::fs::write(dir.join("the roster"), &characters).unwrap();
+            std::fs::write(dir.join("characters.json"), &characters).unwrap();
             std::fs::write(dir.join("bands.json"), &bands).unwrap();
             eprintln!(
                 "wrote {}/{{cards,characters,bands}}.json ({} cards, {} characters, {} bands)",
@@ -60,9 +60,8 @@ fn main() {
             );
         }
         None => {
-            print!("// ===== fixture =====\n{}", roster.to_fixture_json());
             print!("// ===== cards.json =====\n{}", cards_json(&roster.cards));
-            print!("// ===== the roster =====\n{}", characters_json(&roster.characters));
+            print!("// ===== characters.json =====\n{}", characters_json(&roster.characters));
             print!("// ===== bands.json =====\n{}", bands_json(&roster.bands));
         }
     }
@@ -116,7 +115,7 @@ fn key_str_array(k: &str, vs: &[String], level: usize) -> String {
     out
 }
 
-/// Legacy three-file row order: id, band, rawName, name, owner, derived, tags, text, cell.
+/// `cards.json` row order: id, band, rawName, name, owner, derived, tags, text, cell.
 fn cards_json(cards: &[CardData]) -> String {
     let mut out = String::from("{\n    \"cards\": [\n");
     for (i, c) in cards.iter().enumerate() {
@@ -143,7 +142,7 @@ fn cards_json(cards: &[CardData]) -> String {
     out
 }
 
-/// `the roster` row order: name, display, [variantOf], [variantTag], band,
+/// `characters.json` row order: name, display, [variantOf], [variantTag], band,
 /// color, skill, text, cnId, [art], [costume], exclusiveCards, [preset].
 fn characters_json(chars: &[CharacterData]) -> String {
     let mut out = String::from("{\n    \"characters\": [\n");
@@ -185,7 +184,7 @@ fn characters_json(chars: &[CharacterData]) -> String {
     out
 }
 
-/// Legacy three-file row order: name, shortName, [sharesExclusives], [bootArt],
+/// `bands.json` row order: name, shortName, [sharesExclusives], [bootArt],
 /// color, skill, text, logo.
 fn bands_json(bands: &[BandData]) -> String {
     let mut out = String::from("{\n    \"bands\": [\n");

@@ -1,20 +1,10 @@
 //! Named decks: arbitrary count per character, rename / duplicate / delete /
 //! reorder, and lossless migration of the old fixed-slot profile JSON.
 
-use game_core::data::GameData;
 use game_core::deck;
 use game_core::profile::{sanitize_deck_name, PlayerProfile, SavedDeck, DECK_NAME_MAX};
-
-fn data() -> GameData {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
-    )
-    .expect("roster fixture parses");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-        .expect("data/ should load -- run tools/asset-pipe/extract.py")
-}
+mod common;
+use common::data;
 
 #[test]
 fn create_duplicate_rename_delete_and_reorder() {

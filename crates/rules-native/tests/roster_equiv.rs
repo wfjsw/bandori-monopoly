@@ -25,8 +25,12 @@ const REGENERATE: &str =
      crates/game-core/tests/fixtures/roster.json";
 
 fn checked_in_fixture() -> String {
-    std::fs::read_to_string(fixture_path())
-        .unwrap_or_else(|e| panic!("roster fixture missing ({}): {e}\n  {REGENERATE}", fixture_path().display()))
+    std::fs::read_to_string(fixture_path()).unwrap_or_else(|e| {
+        panic!(
+            "roster fixture missing ({}): {e}\n  {REGENERATE}",
+            fixture_path().display()
+        )
+    })
 }
 
 #[test]
@@ -46,7 +50,10 @@ fn fixture_is_byte_equal_to_fresh_dump() {
 fn fixture_preserves_order_and_fields() {
     let fixture = Roster::from_fixture(&checked_in_fixture()).expect("fixture parses");
     let rust = rules_native::roster();
-    assert_eq!(fixture, rust, "fixture roster differs from the live ruleset roster");
+    assert_eq!(
+        fixture, rust,
+        "fixture roster differs from the live ruleset roster"
+    );
     assert_eq!(fixture.cards.len(), 184, "full card coverage");
     assert_eq!(fixture.characters.len(), 54, "full character coverage");
     assert_eq!(fixture.bands.len(), 12, "full band coverage");

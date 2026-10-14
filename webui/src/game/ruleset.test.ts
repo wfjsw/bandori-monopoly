@@ -47,7 +47,8 @@ function rulesDir(): string {
 /** One glue instance: import under a unique query (node's ESM cache keys on
  *  the URL, so `?tag` gives a fresh wasm instance), init it, feed the game
  *  tables. Mirrors `webui/public/assets/engine/replay-worker.js` and
- *  `tools/test-replay-archive.mjs`. */
+ *  `tools/test-replay-archive.mjs` (data-then-ruleset; the glue rebuilds
+ *  `GameData` with the set's roster at `ruleset_build`). */
 async function loadGlue(tag: string): Promise<{ glue: Record<string, any>; dir: string }> {
   const glueJs = join(WASM_DIR, "glue.js");
   const glueWasm = join(WASM_DIR, "glue_bg.wasm");

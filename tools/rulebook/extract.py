@@ -4,9 +4,11 @@
 The sheet (docs/rulebook/cards-sheet.csv, one column per band) holds one cell per
 card: "卡名：[标签]：效果文本". Cells encode line breaks as the two-character
 sequence `\\n`, and the name is the id's text after "BAND:" (with its prefix).
-Matching is by prefix against each card in the roster fixture
-(`crates/game-core/tests/fixtures/roster.json`, the generated dump of the Rust
-metadata).
+Matching is by prefix against each card in the ruleset roster dump
+(tools/roster-dump.mjs; not data/cards.json -- that file is gone).
+
+Note: docs/rulebook/cards.json here is the rulebook sheet extract, a different
+file from the retired data/cards.json.
 
 Usage: python tools/rulebook/extract.py
 """
@@ -14,12 +16,15 @@ Usage: python tools/rulebook/extract.py
 import csv
 import json
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from roster import load_cards  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 SHEET = ROOT / "docs" / "rulebook" / "cards-sheet.csv"
 OUT = ROOT / "docs" / "rulebook" / "cards.json"
-ROSTER = ROOT / "crates" / "game-core" / "tests" / "fixtures" / "roster.json"
 
 
 def cells():
@@ -53,17 +58,17 @@ def names_of(card):
 
 
 def main() -> int:
-    data = json.load(open(ROSTER, encoding="utf-8"))
+    cards = load_cards()
     all_cells = list(cells())
     found, missing = {}, []
-    for card in data["cards"]:
+    for card in cards:
         hit = next((cell for cell in all_cells if any(cell.startswith(n) for n in names_of(card))), None)
         if hit:
             found[card["id"]] = hit
         else:
             missing.append(f'{card["id"]} ({card.get("name", "")})')
     OUT.write_text(json.dumps(dict(sorted(found.items())), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"rulebook cards.json: {len(found)} ids matched, {len(missing)} unmatched")
+    print(f"cards.json: {len(found)} ids matched, {len(missing)} unmatched")
     for m in missing:
         print("   ", m)
     return 0

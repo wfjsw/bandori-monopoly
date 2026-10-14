@@ -9,6 +9,14 @@
 //!
 //! `game-core` never touches the filesystem: [`GameData::load`] takes a reader so the
 //! server (fs) and the browser (fetch) can both supply the files.
+//!
+//! **Roster (ABI v63).** `cards` / `characters` / `bands` no longer come from
+//! `data/{cards,characters,bands}.json`. They are authored beside the rule code
+//! and handed over as [`Roster`] (ruleset `bandori_metadata` ->
+//! [`crate::data::Roster`]). [`DATA_FILES`] covers only the remaining tables
+//! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
+//! roster is covered by the ruleset hash (`EngineStamp::ruleset_sha256`),
+//! which already names the modules the metadata lives in.
 
 use std::collections::HashMap;
 
@@ -177,7 +185,7 @@ pub fn status_rule_ids() -> &'static [&'static str] {
     ]
 }
 
-/// One card row of the roster.
+/// One card row of the roster (was `cards.json`; now ruleset metadata).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CardData {
@@ -214,7 +222,7 @@ impl CardData {
     }
 }
 
-/// One playable character of the roster.
+/// One playable character of the roster (was `characters.json`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CharacterData {
@@ -247,7 +255,7 @@ impl CharacterData {
     }
 }
 
-/// One band of the roster (skill text + branding).
+/// One band of the roster (was `bands.json`; skill text + branding).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct BandData {
@@ -335,8 +343,8 @@ pub struct EventData {
     pub cell: String,
 }
 
-/// `band` value of the cards every character may take. A roster key (the data
-/// set is Chinese), not display text.
+/// `band` value of the cards every character may take. A roster band key (the
+/// data set is Chinese), not display text.
 pub const GENERAL_BAND: &str = "通用";
 
 /// Character → school tile-name map.
@@ -487,10 +495,12 @@ pub struct GameData {
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`. The roster (cards / characters / bands)
-/// is **not** here: it comes from the ruleset host ([`Roster`], ABI v63
+/// Data files, as named in `web/data/`. The roster (`cards` / `characters` /
+/// `bands`) is **not** here: it comes from the ruleset (ABI v63
 /// `bandori_metadata`) or, in tests, from the generated fixture
-/// (`Roster::from_fixture`).
+/// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
+/// `skill_simple.json` and the card display overlay stay because they are
+/// display-only and the client merges them.
 pub const DATA_FILES: [&str; 8] = [
     "board.json",
     "events.json",
@@ -499,9 +509,10 @@ pub const DATA_FILES: [&str; 8] = [
     "voice_lines.json",
     "match_rules.json",
     "rules.txt",
-    // Hand-written display-only extras for the client: simplified skill bodies
-    // and per-card `counterReason`. The engine reads the originals on the
-    // roster (`CharacterData::text` / `BandData::text` / `CardData::text`).
+    // Hand-written simplified skill bodies (and the card `counterReason`
+    // overlay), for the client's skill-text setting and the [反击] prompt
+    // reason. Display-only: the engine reads the full skill text from the
+    // roster.
     "skill_simple.json",
 ];
 
@@ -530,7 +541,7 @@ impl GameData {
     }
 
     /// Is `id` a **band** skill rule (`skill:<band>:<skill>` for some band in
-    /// the roster), as against a character skill (`skill:<character>:<skill>`)?
+    /// roster bands), as against a character skill (`skill:<character>:<skill>`)?
     /// This is what stamps `FieldCard::band_skill` at placement, and through it
     /// what 「乐队卡 / 团卡」 crystal reads and writes land on.
     pub fn is_band_skill(&self, id: &str) -> bool {
@@ -540,10 +551,13 @@ impl GameData {
     }
 
     /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`,
-    /// with the roster (`cards` / `characters` / `bands`) handed over by the
-    /// ruleset host (ABI v63 `bandori_metadata` -> [`Roster`]) or, in tests, by
-    /// [`Roster::from_fixture`]. The deck book / strategy book are loaded here
-    /// too (optional files, outside [`DATA_FILES`]).
+    /// plus the [`Roster`] the ruleset host supplies (ABI v63 `bandori_metadata`
+    /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`),
+    /// or, in tests, [`Roster::from_fixture`]. There is no JSON-roster path
+    /// left in the runtime.
+    ///
+    /// The deck book / strategy book are loaded here so every entry point
+    /// shares that path.
     pub fn load(
         mut read: impl FnMut(&str) -> Result<String, String>,
         roster: Roster,

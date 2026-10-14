@@ -5,9 +5,10 @@
 //! `cfg(debug_assertions)`), so the cheat tests are gated the same way and a
 //! release test pins the compiled-out path instead.
 use std::sync::Arc;
+mod common;
+use common::data_arc as data;
 
 use game_core::{
-    data::GameData,
     engine::{Match, StubRules},
     net::{NetMessage, RoomMember},
     scoring::ScoreWeights,
@@ -15,19 +16,6 @@ use game_core::{
 };
 #[cfg(debug_assertions)]
 use game_core::record::{EngineStamp, RecordedMatch, Replayer, RECORD_VERSION};
-
-fn data() -> Arc<GameData> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
-    )
-    .expect("roster fixture parses");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-            .unwrap(),
-    )
-}
 
 fn game(mode: MatchMode) -> Match {
     let mut m = Match::new(

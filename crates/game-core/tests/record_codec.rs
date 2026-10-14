@@ -8,9 +8,10 @@
 
 use std::sync::Arc;
 
-use game_core::data::GameData;
 use game_core::engine::{CardRules, StubRules, SAVE_VERSION};
 use game_core::net::RoomMember;
+mod common;
+use common::data_arc as data;
 use game_core::record::{
     decode_record, encode_record_gz, encode_record_json, encode_record_zst, expand_record,
     is_gzip, is_zstd, parse_header_bytes, parse_record, sniff_record, EngineStamp, MatchSetup,
@@ -19,19 +20,6 @@ use game_core::record::{
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
 use game_core::MatchMode;
-
-fn data() -> Arc<GameData> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dir = root.join("../../data");
-    let roster = game_core::data::Roster::from_fixture(
-        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
-    )
-    .expect("roster fixture parses");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
-            .unwrap(),
-    )
-}
 
 fn rules() -> Arc<dyn CardRules> {
     Arc::new(StubRules)
