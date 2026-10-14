@@ -40,7 +40,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let call = Call::Play { card, player_id: 1 };
 
     // Pass 1: no answers -> blocked on the tile prompt, nothing committed.
-    let Outcome::NeedInput(p) = r.run(&world, call, &[], None).unwrap() else {
+    let Outcome::NeedInput(p, _) = r.run(&world, call, &[], None).unwrap() else {
         panic!("expected a prompt")
     };
     assert_eq!(p.kind, PromptKind::Tile);
@@ -50,7 +50,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     assert!(!p.options.is_empty() && p.options.len() <= 2);
 
     // The prompt is reproducible: same snapshot -> same options.
-    let Outcome::NeedInput(again) = r.run(&world, call, &[], None).unwrap() else {
+    let Outcome::NeedInput(again, _) = r.run(&world, call, &[], None).unwrap() else {
         panic!()
     };
     assert_eq!(p, again);
@@ -174,7 +174,7 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     };
 
     // The prompt raised inside the *nested* card aborts the whole outer run.
-    let Outcome::NeedInput(p) = r.run(&world, call, &[], None).unwrap() else {
+    let Outcome::NeedInput(p, _) = r.run(&world, call, &[], None).unwrap() else {
         panic!("expected a prompt")
     };
     assert_eq!(
@@ -239,7 +239,7 @@ fn fire_up_cost() {
     // host (`NeedHost`); any of Done / NeedInput / NeedHost proves the entry ran.
     assert!(matches!(
         r.run(&world, call, &[], None),
-        Ok(Outcome::Done(_)) | Ok(Outcome::NeedInput(_)) | Ok(Outcome::NeedHost(_, _))
+        Ok(Outcome::Done(_)) | Ok(Outcome::NeedInput(_, _)) | Ok(Outcome::NeedHost(_, _))
     ));
 
     let n = 100;

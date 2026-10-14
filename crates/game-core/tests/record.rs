@@ -1140,3 +1140,37 @@ fn checkpoint_cost_breakdown() {
         (save_ns + hash_ns) as f64 / 1e6 / game * 100.0,
     );
 }
+
+#[test]
+fn small_index_chunks_match_one_pass() {
+    let (file, _) = run_bot_game(9, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let mut whole = Replayer::new(data(), rules(), &file, false).unwrap();
+    let want = whole.index(1_000_000);
+    let mut chunked = Replayer::new(data(), rules(), &file, false).unwrap();
+    let mut calls = 0u32;
+    let got = loop {
+        let st = chunked.index(3);
+        calls += 1;
+        assert!(calls < 1_000_000, "index never finished");
+        if st.done {
+            break st;
+        }
+    };
+    assert!(calls > 10, "a budget of 3 quanta must take many calls");
+    assert_eq!((got.keyframes, got.bytes), (want.keyframes, want.bytes));
+    let t = file.header.total_ticks / 2;
+    chunked.seek(t).unwrap();
+    whole.seek(t).unwrap();
+    assert_eq!(chunked.match_ref().save(), whole.match_ref().save());
+}
+
+#[test]
+fn index_reports_how_far_it_has_reached() {
+    let (file, _) = run_bot_game(9, 4, BotMentality::Chaos, &mut |r| 1 + r.below(6) as u8, 10);
+    let mut rp = Replayer::new(data(), rules(), &file, false).unwrap();
+    let first = rp.index(5);
+    assert!(!first.done && first.tick > 0 && first.tick <= 5, "tick {}", first.tick);
+    let last = rp.index(10_000_000);
+    assert!(last.done);
+    assert_eq!(last.tick, file.header.total_ticks);
+}

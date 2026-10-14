@@ -112,6 +112,8 @@ export interface IndexStatus {
   total: number;
   keyframes: number;
   bytes: string;
+  /** Tick the index has reached (u64 string); absent from older bundles. */
+  tick?: string;
 }
 
 // ---------------------------------------------------------------- framing

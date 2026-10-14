@@ -297,7 +297,7 @@ fn no_card_uid() -> i32 {
 /// Things a routine asks the host to do once it commits.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Signal {
-    /// A turn began for this player: refill its time bank and start the clock.
+    /// A turn began for this player: refill its bonus time and start the clock.
     StartTimer(usize),
     /// A new turn record was created (clears the host's time-out flag).
     TurnBegan,

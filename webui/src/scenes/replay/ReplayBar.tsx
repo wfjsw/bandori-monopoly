@@ -63,6 +63,8 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
   const total = Math.max(1, rs.totalTicks);
   const marks = rs.turns;
   const seats = rs.header.seats;
+  // Only what the index has reached is offered; the rest comes online as it builds.
+  const ready = Math.min(total, rs.seekLimit());
 
   const patch = (p: Partial<BarPrefs>) =>
     setPrefs((old) => {
@@ -209,12 +211,14 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
           onChange={(e) => seekTo(Number(e.target.value))}
           aria-label={tr("replay.scrub")}
         />
+        <div className={s.ready} style={{ width: `${(ready / total) * 100}%` }} aria-hidden />
         <div className={s.marks} aria-hidden>
           {marks.map((m) => (
             <button
               key={`${m.round}:${m.turn}:${m.tick}`}
               type="button"
-              className={s.mark}
+              className={cx(s.mark, m.tick > ready && s.markOff)}
+              disabled={m.tick > ready}
               style={{ left: `${(m.tick / total) * 100}%` }}
               title={tr("replay.turnMark", { round: m.round, turn: m.turn })}
               onClick={() => seekTo(m.tick)}

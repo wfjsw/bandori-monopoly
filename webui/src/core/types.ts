@@ -171,7 +171,9 @@ export interface MatchState {
   canEndHere: boolean;
   /** The movement this turn is taking. */
   plan: MovePlan;
-  timeLeft: number; shield: number; bank: number;
+  timeLeft: number; baseTime: number; bonusTime: number;
+  /** True while the acting seat's clock is held for an anim ack. */
+  clockPaused?: boolean;
   bought: boolean; built: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
@@ -233,6 +235,15 @@ export interface MatchView {
    * engine bundle predates the field.
    */
   skills?: SkillAction[];
+  /**
+   * Absolute turn-clock deadlines on the server's monotonic clock (ms), for
+   * the acting seat. Absent while the clock is held (`state.clockPaused`), on
+   * a machine seat, in solo, or outside the play phase. See
+   * `game/clockSync.ts` -- remaining = deadline - (performance.now() + offset).
+   */
+  clock?: { baseDeadlineMs: number; bonusDeadlineMs: number } | null;
+  /** Server monotonic ms when this frame was built (piggybacked sync stamp). */
+  serverTimeMs?: number;
 }
 
 export interface ScoreWeights { money: number; property: number; houses: number }

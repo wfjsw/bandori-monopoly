@@ -51,7 +51,10 @@ fn strip_events(save: &str) -> String {
         // differ; game state is not. `walk_flush` is the walk-approach flush
         // stack + owed delay -- `PartialEq` ignores it, and so must `--state`.
         obj.remove("wait");
+        obj.remove("baseTime");
+        obj.remove("bonusTime");
         obj.remove("shield");
+        obj.remove("bank");
         obj.remove("walk_flush");
     }
     fn scrub(v: &mut serde_json::Value) {

@@ -291,3 +291,98 @@ at 12–18 min (no verdict inside 10 min target).
 smaller). next lever: reduce World SSA (NameMap `SLOTS` 64 → packed
 dense id) or a `cfg(kani)` body-enum in `card-sdk` so the call is a match
 on an integer, not a `code*`.
+
+### Named-const trampolines — CBMC still 874 targets (measurement)
+
+Tried the pilot invoker shape (`git show 91fe463:rules/kani/src/invoke.rs`):
+
+```rust
+let card = &card_pp::same_dream::SAME_DREAM;
+match &card.on[0] { On::Play(_, _, f) => f(player), … }
+```
+
+`parse_cards` in `build.rs` names each pub const
+(`&{crate}::{module}::{CONST}`) from the band `lib.rs` `use mod::CONST` +
+`CARDS` order. **Literal** `on[0]` index (not `on.get(sym)`).
+
+| shape | goto size | `address_of` / IFs per `code*` site |
+|---|---|---|
+| `&CARDS[i]` single site | 42 MB | 874 |
+| named const + `on.get(sym)` ×285 trampolines | 75 MB | **874 per trampoline** |
+| named const + `on[0]` pilot arm + `on.get` fallback | 105 MB | **1747 per trampoline** (2 sites × 874) |
+
+`goto-instrument --show-goto-functions` on
+`pp::same_dream_01_band_plus_3_iff`: every `invoke::call_card_N` has
+**874 `address_of` IF-branches** for `f(player)`. The value set does **not**
+collapse to 1. CBMC's function-pointer removal is **type-based** over
+every `fn(i32) -> Asked` in the binary (874 today; the pilot era had far
+fewer address-taken bodies), not value-based on the named const's
+initialiser.
+
+**Conclusion:** naming the pub const + literal `on[0]` is not enough on
+this CBMC. A 1-target resolve needs either (a) a **named** `play` symbol
+(`pub fn` in the card module — currently a card-body edit), or (b) a
+`card-sdk` `On` body **integer id** so the call is `match body_id` with
+direct wrappers, not a `code*` load.
+
+Unrolls remain clean (`symbolic_play_world` 4 only) after the 3c setup
+cuts.
+
+### Lever A — per-unit crate features (address-taken set)
+
+`rules-kani` optional features `band-*` / `skills-*` / `events` / `tiles`
+(`default = all`). `run.sh --unit` maps to `--no-default-features --features
+…`. `RULESET` / `BAND_START` / `card_ids` / body-dispatch generate from the
+**enabled** set (`card_id!` = const-fn byte compare; disabled id = compile
+error).
+
+`pp::same_dream_01_band_plus_3_iff` with `--features band-pp` only:
+
+| metric | all crates (285) | band-pp (19) |
+|---|---:|---:|
+| goto binary | 42–106 MB | **11 MB** |
+| `call_card_*` trampolines | 285 | **19** |
+| `address_of` IFs per `code*` site | **874** | **388** |
+| verdict | TIMEOUT 1800 s | **TIMEOUT 1800 s** (SSA-bound after clean unwind) |
+
+~2.3× fewer targets per site, 15× fewer sites. Still not 1 target —
+CBMC removal is type-based over every `fn(i32)->Asked` **in the linked
+binary** (pp bodies + shared runtime ≈ 388).
+
+### Lever B — `goto-instrument --restrict-function-pointer`
+
+Exists (`--restrict-function-pointer pointer_name/target[,targets]*`,
+`--restrict-function-pointer-by-name`). CBMC itself has no such flag;
+Kani exposes `--cbmc-args` but not a goto-instrument hook, so pinning the
+site needs a pipeline wrap (goto-cc → restrict → cbmc) that `cargo kani`
+does not offer today.
+
+### Plain answer
+
+**Neither lever gets pp under ~10–15 min.** Unrolls are clean
+(`symbolic_play_world` 4); SSA/solver after symbolic execution is still
+>18 min / TIMEOUT at 1800 s even with 19 cards and 388-target sites.
+
+### events backlog (central pass)
+
+| id | verdict | class | note |
+|---|---|---|---|
+| `events::moca_01_activation_keeps_the_card` | UNWINDING 507 s | A | `memcmp` 38 unrolls (host tag compare) — same class as the old hook-dispatch cliff |
+
+## Batch 3d — events per-proof root-cause (user decision: TIMEOUT stays FAIL)
+
+One entry per failing proof: phase split, unwind profile, dominant cost,
+class A–F, fix or why none.
+
+| id | verdict (central) | phase split | dominant cost | class | action |
+|---|---|---|---|---|---|
+| `events::moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → unwind `base_world` 4 + **memcmp 38** (`Not unwinding at 16`) | `[i32;4]::eq` on `post.money == pre.money` → 16-byte `memcmp` | **A** | element-wise `arr4_eq` / `arr4b_eq` (no memcmp). **SUCCESSFUL 394 s** |
+| `events::aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | same — memcmp 30 (`Not unwinding at 16`) | same `post.money == pre.money && post.pos == pre.pos` | **A** | same fix. **SUCCESSFUL 310 s** |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s | BMC → **8725 VCC** / 719 after simp → SSA 4.5 s → SAT **703k vars / 761k clauses** (first SAT 0.04 s, then many) | unwind **memchr_naive 1193** + memchr_aligned 284 + memcmp 237; `PadAdapter::write_str` recursion 81 — fmt of `kani::assert` / `fail_*` message strings | **E** (fmt/memchr) | no cheap fix without dropping assert-message fmt; mutant has extra `iter().any` paths into it. **remains TIMEOUT (FAIL)** |
+| `events::aao_02_hand_veto_is_armed` | FAILED 550 s | (see prior) | body LESS — no [手] veto surface | **D GENUINE E-aao-02** | keep FAILING (not a perf bug) |
+| `events::front_or_back_01_equal_iff` | TIMEOUT 1800 s (unwind 32) | BMC → unwind `front_or_back::play` **31** (`Not unwinding at 32`) + `log_is_gains` 31 + slice `all`/`any`/`find_map` 31 | `for &p in &winners` over a **symbolic-length `Vec<i32>`** (body, cannot edit) + `effects.iter().all/any` over `MAX_LOG=24` | **A/E** | body Vec length not a constant bound; raising unwind past 32 explodes. **remains TIMEOUT (FAIL)** — no cheap fix without body edit |
+| `events::front_or_back_02_same_half_share` | TIMEOUT 1800 s (unwind 32) | same + `slice_contains` 24 | same | **A/E** | same — **remains TIMEOUT (FAIL)** |
+
+Phase markers used: `Starting Bounded Model Checking`, `Generated N VCC(s)`,
+`Running propositional reduction`, `N variables, M clauses`, `SAT checker`,
+`Runtime Solver`.

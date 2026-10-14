@@ -1742,3 +1742,26 @@ fn every_pp_card_key_resolves() {
     }
     assert_eq!(t.field_ids(0).len(), CARDS.len(), "{:?}", t.field_ids(0));
 }
+
+/// A body that logs and then prompts (the band skill's crystal gain, then the
+/// 5-crystal draw offer) must show its 「效果适用」 header and outcome once --
+/// the answered re-run replaces the pre-prompt lines instead of appending a
+/// second copy.
+#[test]
+fn band_turn_start_with_prompt_logs_once() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.place_raw(0, BAND_SKILL);
+    set_band_xtal(&mut t, 0, 4);
+    let mark = t.mark();
+    t.begin_turn(0);
+    assert!(t.prompt().is_some(), "5 crystals offers the draw");
+    drain(&mut t);
+    let evs = t.events_since(mark);
+    let heads = evs
+        .iter()
+        .filter(|e| e.r#type == "card" && e.card == BAND_SKILL)
+        .count();
+    let outcomes = evs.iter().filter(|e| e.msg.key() == "log.outcome.counter").count();
+    assert_eq!((heads, outcomes), (1, 1), "{:?}", t.keys_since(mark));
+}

@@ -103,8 +103,8 @@ pub struct SavedMirror {
     pub pending: Option<PendingMirror>,
     pub live_rng: Rng,
     pub wait: f32,
-    pub bank: Vec<f32>,
-    pub shield: f32,
+    pub bonus_time: Vec<f32>,
+    pub base_time: f32,
     pub timed_out: bool,
     pub vote: MatchVote,
     pub vote_seq: i32,
@@ -112,6 +112,10 @@ pub struct SavedMirror {
     /// `Deferred` is private and never reconstructed: the fork starts clean.
     pub deferred: Vec<serde_json::Value>,
     pub seq: i32,
+    /// Anim-ack clock hold. Optional so a mirror written before the field
+    /// still loads; forks start with the hold cleared (no presentation).
+    #[serde(default)]
+    pub clock_hold: Option<serde_json::Value>,
 }
 
 impl SavedMirror {
@@ -227,17 +231,18 @@ pub fn saved(world: World, pending: Option<PendingMirror>, live_rng: Rng, seq: i
     SavedMirror {
         version: SAVE_VERSION,
         mode,
-        bank: vec![0.0; n],
+        bonus_time: vec![0.0; n],
         vote_seq: world.st.vote.id,
         vote: world.st.vote.clone(),
         world,
         pending,
         live_rng,
         wait: 0.0,
-        shield: 0.0,
+        base_time: 0.0,
         timed_out: false,
         vote_cooldown: 0.0,
         deferred: Vec::new(),
         seq,
+        clock_hold: None,
     }
 }

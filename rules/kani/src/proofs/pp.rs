@@ -1030,6 +1030,7 @@ pub fn chisato_mask_01_total_iff() {
 
 #[kani::proof]
 #[kani::unwind(32)]
+#[cfg(feature = "skills-characters")]
 pub fn first_accident_02_blocks_pp_skill_2_iff() {
     symbolic_play_world();
     let me = any_player_in();

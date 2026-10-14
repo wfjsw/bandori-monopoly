@@ -617,7 +617,7 @@ into a replayable input log; `Match` itself is untouched.
   re-deriving every checkpoint. `Status.divged` is sticky: the first mismatched
   checkpoint (or an act whose Ok/Err bit disagreed) flags the rest of the
   replay. `seek` restores the nearest keyframe (`save()` every ~4 turn
-  boundaries or 20 s of game time, capped at `MAX_KEYFRAME_BYTES`) and
+  boundaries or 20 s of game time) and
   re-simulates forward. `export_with_events` bundles the public event log by
   re-simulating, because `world.recent` is only a 400-event tail.
 * **`EngineStamp`** names the writer: `format` (the record version),
