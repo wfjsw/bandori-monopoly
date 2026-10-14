@@ -159,3 +159,15 @@ fn shuffle_in(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn shuffle_in_kani(player_id: i32) -> card_sdk::Asked {
+    shuffle_in(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn tomori_inner_shout_kani(player_id: i32) -> card_sdk::Asked {
+    tomori_inner_shout(player_id)
+}

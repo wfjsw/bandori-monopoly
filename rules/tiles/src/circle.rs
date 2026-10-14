@@ -208,3 +208,16 @@ pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_kani(player_id: i32) -> card_sdk::Asked {
+    settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}

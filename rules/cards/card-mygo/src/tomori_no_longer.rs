@@ -164,3 +164,22 @@ fn sweep(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn tomori_no_longer_kani(player_id: i32) -> card_sdk::Asked {
+    tomori_no_longer(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn sweep_kani(player_id: i32) -> card_sdk::Asked {
+    sweep(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn refill_kani(player_id: i32) -> card_sdk::Asked {
+    refill(player_id)
+}

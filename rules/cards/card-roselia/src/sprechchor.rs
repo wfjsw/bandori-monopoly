@@ -34,3 +34,10 @@ fn sprechchor(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1000 + n * 120, &Msg::new(key!("sprechchor_why")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn sprechchor_kani(player_id: i32) -> card_sdk::Asked {
+    sprechchor(player_id)
+}

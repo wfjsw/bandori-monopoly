@@ -122,3 +122,22 @@ fn after_build(_owner: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
+    before_build(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_build_kani(player_id: i32) -> card_sdk::Asked {
+    after_build(player_id)
+}

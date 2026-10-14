@@ -74,3 +74,16 @@ fn event_after(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn arisa_wait_kani(player_id: i32) -> card_sdk::Asked {
+    arisa_wait(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn event_after_kani(player_id: i32) -> card_sdk::Asked {
+    event_after(player_id)
+}

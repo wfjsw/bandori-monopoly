@@ -276,39 +276,47 @@ fn gen_body_dispatch() {
             let idx = base + off;
             let (module, konst) = &cards[off];
             let path = format!("{crate_name}::{module}::{konst}");
-            let _ = writeln!(s, "/// `{path}` — named const so CBMC resolves one target.");
+            // Integer body-id match → DIRECT calls through the cfg(kani)
+            // `NAME_kani` wrappers (same-module). A shared `code*` /
+            // `f(player)` call makes CBMC expand a ~379-target IF-chain over
+            // every address-taken `fn(i32) -> Asked` in the binary (ppcost
+            // root cause: BMC never finishes; goto 8.5 MB but symex walks
+            // every arm). Direct calls are one body.
+            let bodies = parse_on_bodies(crate_name, &rules_dir, module, konst);
+            // Empty `On` is legal (e.g. `PP:[衍生]共鸣` is fuel-only).
+            let _ = writeln!(
+                s,
+                "/// `{path}` — integer body-id match, direct calls (no code* IF-chain)."
+            );
             s.push_str("#[cfg(kani)]\n#[inline(never)]\n");
-            let _ = writeln!(s, "fn call_card_{idx}(entry_index: usize, player: i32) -> Asked {{");
-            // EXACT pilot pattern (91fe463): match `&CONST.on[0]` (literal
-            // index) and call `f(player)` inside the arm.
-            let _ = writeln!(s, "    let card = &{path};");
-            s.push_str("    if entry_index == 0 {\n");
-            s.push_str("        return match &card.on[0] {\n");
-            s.push_str("            On::Play(_, _, f) => f(player),\n");
-            s.push_str("            On::Counteract(_, _, _, f) => f(player),\n");
-            s.push_str("            On::Hook(_, _, _, f) => f(player),\n");
-            s.push_str("            On::Gate(_, _, _, f) => f(player),\n");
-            s.push_str("            On::RollPlan(_, _, f) => f(player),\n");
-            s.push_str("            On::AtEnd(_, _, f) => f(player),\n");
-            s.push_str("            On::Settle(_, _, f) => f(player),\n");
-            s.push_str("            On::Message(_, _, _, f) => f(player),\n");
-            s.push_str("        };\n");
-            s.push_str("    }\n");
-            s.push_str("    match card.on.get(entry_index) {\n");
-            s.push_str("        Some(On::Play(_, _, f))\n");
-            s.push_str("        | Some(On::Counteract(_, _, _, f))\n");
-            s.push_str("        | Some(On::Hook(_, _, _, f))\n");
-            s.push_str("        | Some(On::Gate(_, _, _, f))\n");
-            s.push_str("        | Some(On::RollPlan(_, _, f))\n");
-            s.push_str("        | Some(On::AtEnd(_, _, f))\n");
-            s.push_str("        | Some(On::Settle(_, _, f))\n");
-            s.push_str("        | Some(On::Message(_, _, _, f)) => f(player),\n");
-            let _ = writeln!(s, "        None => fail_entry_oob({idx}, entry_index),");
-            s.push_str("    }\n");
+            let _ = writeln!(
+                s,
+                "fn call_card_{idx}(entry_index: usize, player: i32) -> Asked {{"
+            );
+            if bodies.is_empty() {
+                let _ = writeln!(s, "    let _ = (entry_index, player);");
+                let _ = writeln!(s, "    fail_entry_oob({idx}, entry_index)");
+            } else {
+                s.push_str("    match entry_index {\n");
+                for (ei, body) in bodies.iter().enumerate() {
+                    let _ = writeln!(
+                        s,
+                        "        {ei} => {crate_name}::{module}::{body}_kani(player),"
+                    );
+                }
+                let _ = writeln!(s, "        _ => fail_entry_oob({idx}, entry_index),");
+                s.push_str("    }\n");
+            }
             s.push_str("}\n\n");
         }
     }
     s.push_str("/// Per-card body dispatch (Kani). Integer match → named-const trampoline.\n");
+    s.push_str("///\n");
+    s.push_str("/// `call_body_idx_c::<IDX>` is the preferred entry: the const generic\n");
+    s.push_str("/// monomorphizes to ONE trampoline so CBMC never walks the other cards'\n");
+    s.push_str("/// bodies (a runtime `match idx` keeps every arm live — the ppcost\n");
+    s.push_str("/// residual after the code* cut). `call_body_idx` stays for call sites\n");
+    s.push_str("/// that only have a runtime index.\n");
     s.push_str("#[cfg(kani)]\n#[inline(always)]\n");
     s.push_str("fn call_body_idx(idx: usize, entry_index: usize, player: i32) -> Asked {\n");
     s.push_str("    match idx {\n");
@@ -323,9 +331,106 @@ fn gen_body_dispatch() {
     s.push_str("        _ => fail_unknown_idx(idx),\n");
     s.push_str("    }\n");
     s.push_str("}\n");
+    s.push_str("\n/// Const-generic body dispatch: `IDX` folds to a single trampoline.\n");
+    s.push_str("#[cfg(kani)]\n#[inline(always)]\n");
+    s.push_str("fn call_body_idx_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {\n");
+    s.push_str("    match IDX {\n");
+    for (i, _c) in BANDS.iter().enumerate() {
+        let base = starts[i];
+        let count = starts[i + 1] - starts[i];
+        for off in 0..count {
+            let idx = base + off;
+            let _ = writeln!(s, "        {idx} => call_card_{idx}(entry_index, player),");
+        }
+    }
+    s.push_str("        _ => fail_unknown_idx(IDX),\n");
+    s.push_str("    }\n");
+    s.push_str("}\n");
 
     let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("body_dispatch_fn.rs");
     fs::write(out, s).unwrap();
+}
+
+/// Parse every `On::*` constructor in a card source and return the body fn
+/// name (last argument) in declaration order. Matches
+/// `tools/kani/add_kani_wrappers.py` so `NAME_kani` exists for each.
+fn parse_on_bodies(
+    crate_name: &str,
+    rules_dir: &PathBuf,
+    module: &str,
+    konst: &str,
+) -> Vec<String> {
+    let lib = crate_dir(rules_dir, crate_name)
+        .join("src")
+        .join(format!("{module}.rs"));
+    let src = fs::read_to_string(&lib).unwrap_or_else(|e| panic!("read {lib:?}: {e}"));
+    let mut bodies = Vec::new();
+    let mut search_from = 0;
+    while let Some(rel) = src[search_from..].find("On::") {
+        let start = search_from + rel;
+        let after = start + 4;
+        let mut name_end = after;
+        while name_end < src.len()
+            && (src.as_bytes()[name_end].is_ascii_alphanumeric() || src.as_bytes()[name_end] == b'_')
+        {
+            name_end += 1;
+        }
+        let _ = &src[after..name_end]; // variant name
+        // skip whitespace to '('
+        let mut p = name_end;
+        while p < src.len() && src.as_bytes()[p].is_ascii_whitespace() {
+            p += 1;
+        }
+        if p >= src.len() || src.as_bytes()[p] != b'(' {
+            search_from = name_end;
+            continue;
+        }
+        // balanced parens
+        let mut depth = 0usize;
+        let mut j = p;
+        while j < src.len() {
+            let c = src.as_bytes()[j];
+            if c == b'(' {
+                depth += 1;
+            } else if c == b')' {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            j += 1;
+        }
+        let inner = &src[p + 1..j];
+        // split top-level commas; last part is the body ident
+        let mut parts: Vec<&str> = Vec::new();
+        let mut depth2 = 0i32;
+        let mut cur = 0usize;
+        for (k, c) in inner.char_indices() {
+            match c {
+                '(' | '[' | '{' => depth2 += 1,
+                ')' | ']' | '}' => depth2 -= 1,
+                ',' if depth2 == 0 => {
+                    parts.push(inner[cur..k].trim());
+                    cur = k + 1;
+                }
+                _ => {}
+            }
+        }
+        parts.push(inner[cur..].trim());
+        if let Some(last) = parts.last() {
+            let last = last.trim();
+            if !last.is_empty()
+                && last
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && last.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
+            {
+                bodies.push(last.to_string());
+            }
+        }
+        search_from = j + 1;
+    }
+    bodies
 }
 
 /// Parse `pub const BAND_START: [usize; 18] = [ … ];` from `invoke.rs`.

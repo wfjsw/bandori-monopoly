@@ -71,3 +71,16 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     ctx::to_discard(player_id, ID);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn return_at_opening_kani(player_id: i32) -> card_sdk::Asked {
+    return_at_opening(player_id)
+}

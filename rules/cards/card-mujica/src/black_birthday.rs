@@ -63,3 +63,10 @@ fn black_birthday(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, latch, 0); // clear for a later play
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn black_birthday_kani(player_id: i32) -> card_sdk::Asked {
+    black_birthday(player_id)
+}

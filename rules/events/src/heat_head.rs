@@ -93,3 +93,28 @@ fn phase_end(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn add_die_kani(player_id: i32) -> card_sdk::Asked {
+    add_die(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn sub_die_kani(player_id: i32) -> card_sdk::Asked {
+    sub_die(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn phase_end_kani(player_id: i32) -> card_sdk::Asked {
+    phase_end(player_id)
+}

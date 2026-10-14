@@ -89,3 +89,22 @@ fn grab(player_id: i32) -> card_sdk::Asked {
 //   the board grid geometry (C# `Grid` / `FromGrid` ray-nearest search over
 //   the four axis directions) and `plan::set_teleport_to` (the
 //   teleport-with-settle shape for `H.MainMoveAs`).
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn want_to_grab_kani(player_id: i32) -> card_sdk::Asked {
+    want_to_grab(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn grab_kani(player_id: i32) -> card_sdk::Asked {
+    grab(player_id)
+}

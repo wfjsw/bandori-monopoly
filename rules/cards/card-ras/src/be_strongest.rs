@@ -78,3 +78,10 @@ fn be_strongest(player_id: i32) -> card_sdk::Asked {
     ctx::card_move(player_id);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn be_strongest_kani(player_id: i32) -> card_sdk::Asked {
+    be_strongest(player_id)
+}

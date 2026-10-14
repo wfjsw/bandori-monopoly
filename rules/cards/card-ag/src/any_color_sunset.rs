@@ -153,3 +153,10 @@ fn pick_from_discard(
     let id = ids.swap_remove(pick.min(ids.len() - 1));
     Ok(ctx::take_card(player_id, ctx::CardPile::Discard, &id).then_some(id))
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}

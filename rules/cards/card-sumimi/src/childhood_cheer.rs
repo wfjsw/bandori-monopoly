@@ -93,3 +93,22 @@ fn at_end(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn childhood_cheer_kani(player_id: i32) -> card_sdk::Asked {
+    childhood_cheer(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_move_kani(player_id: i32) -> card_sdk::Asked {
+    after_move(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
+}

@@ -38,3 +38,10 @@ fn great(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, ctx::n(1, 2000), &Msg::new(key!("great_why")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn great_kani(player_id: i32) -> card_sdk::Asked {
+    great(player_id)
+}

@@ -127,3 +127,10 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     ctx::set_transfer_to_dest(owner, ctx::Dest::Graveyard);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn rana_funny_kani(player_id: i32) -> card_sdk::Asked {
+    rana_funny(player_id)
+}

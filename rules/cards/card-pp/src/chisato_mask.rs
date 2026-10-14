@@ -118,3 +118,16 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
     }
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn chisato_mask_kani(player_id: i32) -> card_sdk::Asked {
+    chisato_mask(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn reshuffled_kani(player_id: i32) -> card_sdk::Asked {
+    reshuffled(player_id)
+}

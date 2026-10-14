@@ -137,3 +137,28 @@ ruleset_core::roster::CharacterDef::new(r#"若叶睦（CRYCHIC）"#)
     .preset(&[])
     .variant_of(r#"若叶睦"#)
     .variant_tag(r#"c"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn latch_kani(player_id: i32) -> card_sdk::Asked {
+    latch(player_id)
+}

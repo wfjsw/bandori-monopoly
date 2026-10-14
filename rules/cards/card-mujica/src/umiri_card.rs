@@ -202,3 +202,10 @@ fn next_of(holder: i32) -> i32 {
     }
     holder
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn umiri_card_kani(player_id: i32) -> card_sdk::Asked {
+    umiri_card(player_id)
+}

@@ -210,3 +210,16 @@ fn record(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn shine_again_kani(player_id: i32) -> card_sdk::Asked {
+    shine_again(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_resonance_kani(player_id: i32) -> card_sdk::Asked {
+    offer_resonance(player_id)
+}

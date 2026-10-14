@@ -177,3 +177,28 @@ ruleset_core::roster::BandDef::new(r#"MyGO!!!!!"#)
     .skill(r#"迷途之星"#)
     .text(r#"（1）开局时投掷3d20，并取出目作为你本局游戏的起始点 （2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶] （3）每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶] （最多超出2个）；你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡。"#)
     .logo(r#"045"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_roll_kani(player_id: i32) -> card_sdk::Asked {
+    after_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_discarded_kani(player_id: i32) -> card_sdk::Asked {
+    on_discarded(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn press_kani(player_id: i32) -> card_sdk::Asked {
+    press(player_id)
+}

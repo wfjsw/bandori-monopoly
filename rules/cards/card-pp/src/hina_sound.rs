@@ -77,3 +77,10 @@ fn hina_sound(player_id: i32) -> card_sdk::Asked {
     // while keeping its crystals (`H.Unplace` + `H.PlaceCard(..., crystals, ...)`).
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn hina_sound_kani(player_id: i32) -> card_sdk::Asked {
+    hina_sound(player_id)
+}

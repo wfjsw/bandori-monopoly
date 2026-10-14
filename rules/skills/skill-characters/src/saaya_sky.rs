@@ -160,3 +160,28 @@ ruleset_core::roster::CharacterDef::new(r#"山吹沙绫"#)
     .preset(&[])
     .variant_of("")
     .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_after_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay_after(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay(player_id)
+}

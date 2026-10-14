@@ -108,3 +108,16 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
     // settled; 「其他颜色」 is that group differing from this tile's.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn soyo_colors_kani(player_id: i32) -> card_sdk::Asked {
+    soyo_colors(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn half_again_kani(player_id: i32) -> card_sdk::Asked {
+    half_again(player_id)
+}

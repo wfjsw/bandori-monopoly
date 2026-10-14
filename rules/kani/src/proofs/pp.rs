@@ -153,11 +153,165 @@ fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
 // user-only half; this harness pins step 1's band delta.)
 // ===========================================================================
 
+/// PROBE (ppcost bisect): world setup only — no body. Must finish quickly
+/// if setup is not the BMC cliff. `assert!(false)` after setup so a SUCCESS
+/// is impossible (fail-closed reachability marker).
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn same_dream_01_probe_setup_only() {
+    same_dream_world();
+    let user = any_player_in();
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    crate::kassert!(false, "probe: setup reached");
+}
+
+/// PROBE (ppcost bisect): setup + invoke + `assert!(false)`. FAIL means the
+/// body ran (non-vacuity). TIMEOUT vs setup-only locates the cost.
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn same_dream_01_band_plus_3_iff() {
-    // Steps 1–2 read only the user's band/fans (step 3 isolated, no 共鸣).
-    // Seat-count independent → sparse 2-seat world + narrow host subset.
+pub fn same_dream_01_probe_post_invoke() {
+    same_dream_world();
+    // Concrete user — symbolic user is a BMC cliff (see floor bisect).
+    let user = 0i32;
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "probe: post-invoke reached");
+}
+
+// ===========================================================================
+// FLOOR bisect (ppcost): progressive harnesses, 300 s each, find where BMC
+// stops returning. Each ends in `kassert!(false)` so SUCCESS is impossible.
+// ===========================================================================
+
+/// (a) fully concrete world + direct body. No symbolic money/fans, no spec.
+fn floor_concrete_world() {
+    host::install_backend(same_dream_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        w.out = [false; MAX_PLAYERS];
+        w.money = [100, 100, 0, 0];
+        w.fans_pos = [3, 1, 0, 0];
+        w.fans_neg = [0, 2, 0, 0];
+        w.hand_resonance = [0; MAX_PLAYERS];
+        w.symbolic_answers = false;
+    });
+}
+
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_a_concrete_body_only() {
+    floor_concrete_world();
+    let user = 0i32;
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-a: body ran on concrete world");
+}
+
+/// (b) + symbolic money/fans (2 seats), concrete n/user.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_b_sym_fans_money() {
+    floor_concrete_world();
+    world::with_world_mut(|w| {
+        for p in 0..2 {
+            w.money[p] = kani::any();
+            kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
+            w.fans_pos[p] = kani::any();
+            kani::assume(w.fans_pos[p] >= 0 && w.fans_pos[p] <= 20);
+            w.fans_neg[p] = kani::any();
+            kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
+            let up = crate::intern::intern(FANS_UP);
+            let down = crate::intern::intern(FANS_DOWN);
+            w.key_set(p as i32, up, w.fans_pos[p]);
+            w.key_set(p as i32, down, w.fans_neg[p]);
+        }
+    });
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(0));
+    crate::kassert!(false, "floor-b: body + sym fans/money");
+}
+
+/// (c) full sparse_play_world (n_players any in 2..=4, used_seats=2).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_c_sparse_world() {
+    same_dream_world();
+    let user = any_player_in();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-c: sparse world + body");
+}
+
+/// (d) + snapshot pre/post + effect-log scan.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_d_snapshot_and_log() {
+    same_dream_world();
+    let user = any_player_in();
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    let gained: i32 = effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::GainMoney { player: p, n } if *p == user => Some(*n),
+            _ => None,
+        })
+        .sum();
+    let _ = (pre, post, gained);
+    crate::kassert!(false, "floor-d: snapshot + log scan");
+}
+
+/// (e) + guard_id! / guard! on a real single-source guard (pay-add).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_e_guard() {
+    same_dream_world();
+    let user = any_player_in();
+    let gid = crate::guard_id!("actor == owner && value > 0");
+    let ctx = world::with_world(|w| crate::ir_fill::fill_pay_add(w, user));
+    let admitted = crate::guard!(gid, &ctx);
+    let _ = admitted;
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-e: guard + body");
+}
+
+/// (c1) sparse_play_world but **concrete** user=0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_c1_sparse_concrete_user() {
+    same_dream_world();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(0));
+    crate::kassert!(false, "floor-c1: sparse + concrete user");
+}
+
+/// (c2) concrete world + **symbolic** user in 0..2.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_c2_concrete_sym_user() {
+    floor_concrete_world();
+    let user = any_player_in();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-c2: concrete world + sym user");
+}
+
+/// (c3) concrete world + `symbolic_answers = true` (try_resonance ask).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_c3_sym_answers() {
+    floor_concrete_world();
+    world::with_world_mut(|w| w.symbolic_answers = true);
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(0));
+    crate::kassert!(false, "floor-c3: symbolic_answers");
+}
+
+/// (f) + full spec compare (the iff asserts, minus covers).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn floor_f_spec_compare() {
     same_dream_world();
     let user = any_player_in();
     let pre_band = kani::any();
@@ -165,9 +319,65 @@ pub fn same_dream_01_band_plus_3_iff() {
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
     let pre_up = fans_pos_of(user as usize);
     let pre_down = fans_neg_of(user as usize);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    let band = band_crystals_of(user);
+    crate::kassert!(
+        band == spec::pp::same_dream_01_band_after(pre_band),
+        "floor-f step1"
+    );
+    crate::kassert!(post.fans_pos[user as usize] == 0, "floor-f step2");
+    crate::kassert!(
+        post.fans_neg[user as usize] == pre_down + pre_up,
+        "floor-f step2b"
+    );
+    let gained: i32 = effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::GainMoney { player: p, n } if *p == user => Some(*n),
+            _ => None,
+        })
+        .sum();
+    crate::kassert!(
+        gained == spec::pp::same_dream_02_money(pre_up),
+        "floor-f money"
+    );
+    crate::kassert!(post.fans_neg[user as usize] == 0, "floor-f step3");
+    crate::kassert!(
+        post.fans_pos[user as usize] == pre_up + pre_down,
+        "floor-f step3b"
+    );
+    let _ = pre;
+    crate::kassert!(false, "floor-f: spec compare reached");
+}
+
+/// Shared iff body for `PP:同一个梦想` steps 1–3 (isolation: no [共鸣]).
+///
+/// **`user` is a concrete seat.** The floor bisect (TRIAGE-LOG `ppcost`)
+/// showed a symbolic player index is the BMC cliff: concrete user returns
+/// in ~220 s, `any_player_in()` never returns (300 s / 1800 s). With
+/// `n_players = 2` the seats are `{0, 1}` — two harnesses cover every
+/// seat exactly (the clause is seat-symmetric: 「自己的」).
+fn same_dream_01_iff_at(user: i32) {
+    // Steps 1–2 read only the user's band/fans (step 3 isolated, no 共鸣).
+    // Seat-count independent → sparse 2-seat world + narrow host subset.
+    same_dream_world();
+    debug_assert!(user == 0 || user == 1);
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    let pre_up = fans_pos_of(user as usize);
+    let pre_down = fans_neg_of(user as usize);
 
     let pre = world::snapshot();
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
+    // DIRECT body call (ppcost): `call_body_idx_c` still lists every
+    // `call_card_N` in its match arms, so reachability-slice keeps all 19
+    // trampolines (and their bodies) alive. The cfg(kani) `*_kani` wrapper
+    // is a real function — call it so CBMC's call graph has ONE body.
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -183,14 +393,17 @@ pub fn same_dream_01_band_plus_3_iff() {
     kani::cover!(pre_down > 0, "step 3 has reverses to flip");
     kani::cover!(pre_down == 0, "step 3 no reverses");
 
-    // step 2 (isolation: no [共鸣])
+    // Play runs steps 1–3 together. Step 2 flips up→down and pays `up*100`;
+    // step 3 then flips the user's down→up (no [共鸣] widen). **Final** faces
+    // are step 3's post: `(up+down, 0)`. Asserting step 2's intermediate
+    // faces after the full body would be wrong (the old harness did that).
     crate::kassert!(
-        post.fans_pos[user as usize] == 0,
-        "C-PP-same-dream-02: all positive fans flip reverse"
+        post.fans_pos[user as usize] == pre_up + pre_down,
+        "C-PP-same-dream-02+03: faces end all-positive (up+down)"
     );
     crate::kassert!(
-        post.fans_neg[user as usize] == pre_down + pre_up,
-        "C-PP-same-dream-02: reverse count absorbs every flipped fan"
+        post.fans_neg[user as usize] == 0,
+        "C-PP-same-dream-02+03: no reverse fans remain on the user"
     );
     let gained: i32 = effects
         .iter()
@@ -202,16 +415,6 @@ pub fn same_dream_01_band_plus_3_iff() {
     crate::kassert!(
         gained == spec::pp::same_dream_02_money(pre_up),
         "C-PP-same-dream-02: gain = flipped * 100"
-    );
-
-    // step 3 user-only (no [共鸣])
-    crate::kassert!(
-        post.fans_neg[user as usize] == 0,
-        "C-PP-same-dream-03: user's reverse fans all flip positive"
-    );
-    crate::kassert!(
-        post.fans_pos[user as usize] == pre_up + pre_down,
-        "C-PP-same-dream-03: user's positives absorb every reverse"
     );
 
     // frame: other players' fans untouched (no [共鸣] widen)
@@ -226,18 +429,34 @@ pub fn same_dream_01_band_plus_3_iff() {
     crate::kassert!(!world::arr4_eq(post.money, pre.money) || pre_up == 0, "money moves iff step 2 fired");
 }
 
+/// C-PP-same-dream-01/02/03 iff at seat 0 (`n_players = 2`).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn same_dream_01_band_plus_3_iff() {
+    same_dream_01_iff_at(0);
+}
+
+/// Same iff at seat 1 — with `n_players = 2` the two harnesses cover every
+/// seat. Seat-symmetric clause (「自己的」); a symbolic `user` is a BMC cliff.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn same_dream_01_user1_band_plus_3_iff() {
+    same_dream_01_iff_at(1);
+}
+
 /// MUTANT companion: money formula `up * 101` disagrees with the card.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn same_dream_02_money_mutant_is_detected() {
     // Money leg is per-user; seat-count independent → sparse 2-seat world.
+    // Concrete user (symbolic user is a BMC cliff — see `same_dream_01_iff_at`).
     same_dream_world();
-    let user = any_player_in();
+    let user = 0i32;
     kani::assume(fans_pos_of(user as usize) >= 1);
     let pre_up = fans_pos_of(user as usize);
     let pre_band = 0;
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects

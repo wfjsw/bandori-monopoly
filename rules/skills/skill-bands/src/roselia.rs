@@ -110,3 +110,16 @@ ruleset_core::roster::BandDef::new(r#"Roselia"#)
     .skill(r#"对音乐的纯粹"#)
     .text(r#"（1）本局游戏购买的第一个非Live House格子购买价格减半，在你拥有任意初始Live House格子前，那个格子对你视为Live House。（2）购买任何Live House格子的地契时购买价格减半"#)
     .logo(r#"005"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn half_price_kani(player_id: i32) -> card_sdk::Asked {
+    half_price(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}

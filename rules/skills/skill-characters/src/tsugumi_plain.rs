@@ -114,3 +114,28 @@ ruleset_core::roster::CharacterDef::new(r#"羽泽鸫"#)
     .preset(&[])
     .variant_of("")
     .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
+    tick(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan(player_id)
+}

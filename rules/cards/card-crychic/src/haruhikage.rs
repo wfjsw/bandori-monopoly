@@ -246,3 +246,16 @@ fn cancel_pay_skill(player_id: i32) {
     //   `m.TeleportTo = t.Pay.tile`) -- needs the Fx.MoveBefore hook and a
     //   remembered tile (C# `H.SetV(i, "soyoC", tile + 1)`).
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}

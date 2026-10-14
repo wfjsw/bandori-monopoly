@@ -179,3 +179,16 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn two_donuts_kani(player_id: i32) -> card_sdk::Asked {
+    two_donuts(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn fx_kani(player_id: i32) -> card_sdk::Asked {
+    fx(player_id)
+}

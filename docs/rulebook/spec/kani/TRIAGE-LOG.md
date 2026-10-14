@@ -820,6 +820,72 @@ no weakened specs. `aao_02` remains FAILING as the genuine book/body gap.
 **Host-model change needed (not applied — `host.rs` is kani-ppcost's):**
 `Op::set_self_prop` key packing (see Class C section above).
 
+## ppcost — `pp::same_dream_01_band_plus_3_iff` root cause + fix (branch `kani-ppcost`)
+
+Goal: move `pp::same_dream_01_band_plus_3_iff` (features `band-pp`) under
+1800 s after op-subset / sparse-world / strvec left it TIMEOUT. Profile
+first (goto binary + BMC phases), then fix. One CBMC at a time; central
+pass holds the other slot.
+
+### Phase split (central log, unwind 32, `--features band-pp`)
+
+`/home/monopoly/kani-central-results3/pp/logs/pp__same_dream_01_band_plus_3_iff.log`
+(6520 lines, killed at 1800 s):
+
+| phase | reached? | evidence |
+|---|---|---|
+| compile / codegen | yes | `Finished dev profile in 13.86s`, goto binary **8.5 MB** (`b14b385a…/…same_dream_01….out`) |
+| BMC / symex | **started, never finished** | last lines are `Unwinding loop sparse_play_world` ×2 + 14 `aborting path`; **no** `size of program expression`, **no** `Generated N VCC(s)` |
+| SSA / SAT | **not reached** | — |
+
+Unwind profile is clean (only `sparse_play_world` 2). Remaining cost is
+**symex over the goto program**, not a model loop, not SAT. Earlier
+"SSA/solver after symex" labels were wrong for this row — BMC itself
+never returns.
+
+### Goto-binary shape (same run's `.out`, `goto-instrument --show-goto-functions`)
+
+| site | shape |
+|---|---|
+| `card_sdk::kani_host::call` | **1-target** after fn-ptr removal: `IF f = &same_dream_dispatch THEN CALL …` else `ASSUME false`. BACKEND is **not** an N-way IF-chain here. |
+| `invoke::call_card_N` (19 trampolines) | **379 `IF` / 362 `CALL`** each — the `code*` / `f(player)` chain over every address-taken `fn(i32)->Asked` **and** gate fns (cast to `code*`). Sample targets: `same_dream`, `pay_add`, `drew_guard`, `hina_sound`, … |
+| `invoke::call_body_idx` | 26 IFs (integer match → trampoline) |
+
+**Root cause (class E, SAT/symex instance size):** the body `code*`
+IF-chain. One live body still means CBMC symex walks ~379 guarded calls
+per trampoline. That matches the log dying inside BMC with a tiny
+unwind profile.
+
+The 244 s `extern "Rust"` "breakthrough" (batch 3e) is **not** evidence
+that BACKEND is the cost: `kani_host::call` already resolves to one
+target on this binary. Batch 4's "direct call did not help" run still
+had the body `code*` chain (and the pre-op-subset World/dispatch).
+
+### Fix (this branch)
+
+Integer **body-id** match with **DIRECT** calls (task candidate #1):
+
+1. `tools/kani/add_kani_wrappers.py` — append `#[cfg(kani)] pub fn
+   NAME_kani(player_id) -> card_sdk::Asked { NAME(player_id) }` after
+   every `On::*` body in `rules/{cards,skills,events,tiles,tile_marks}`
+   (248 files). Production `cfg(not(kani))` does not see these.
+2. `rules/kani/build.rs` `gen_body_dispatch` — parse each `On::*`
+   constructor's last argument (the body ident) and emit
+   `match entry_index { i => crate::module::body_kani(player), _ => fail_entry_oob }`.
+   Empty `On` (e.g. `PP:[衍生]共鸣`) is `fail_entry_oob` for every index.
+
+No `code*` load, no fn-ptr, one body per card. Card bodies themselves
+unmodified (logic untouched). Production wasm is unaffected: wrappers
+are `cfg(kani)` only.
+
+### Next steps (in this pass)
+
+- time `same_dream_01` / `same_dream_02` under `tools/kani/run.sh`
+- non-vacuity: covers SATISFIED + post-invoke `assert!(false)` probe
+- production hash check (`build-ruleset` without `CARGO_TARGET_DIR`)
+- `cargo test -p rules-kani` ×3, `rules-cond --features lower`, wasm check
+
+
 ### ppcost: host packing mismatch (class C, fixed first per coordinator)
 
 After the `name_id` loud-FAIL cut, shared `Op` arms decoded `name_id(a1,a2)`
@@ -876,4 +942,50 @@ Non-vacuity: not reached (TIMEOUT before any property verdict). Probes
 `same_dream_01_probe_setup_only` / `same_dream_01_probe_post_invoke`
 added for the next pass; `assert!(false)` probe must FAIL once a run
 finishes.
+
+
+## ppcost FLOOR bisect + fix (branch `kani-ppcost`, post master merge)
+
+Progressive harnesses, **300 s** cap each, direct `same_dream_kani` body.
+Each ends in `kassert!(false)` so SUCCESS is impossible (probe = FAIL
+means BMC returned and the body ran).
+
+| step | what | verdict | time | notes |
+|---|---|---|---|---|
+| (a) | fully concrete world + body | **FAILED** (probe) | **172 s** | BMC returns |
+| (b) | + symbolic money/fans (2 seats) | **FAILED** | **219 s** | |
+| (c1) | sparse_play_world + **concrete user=0** | **FAILED** | **223 s** | |
+| (c2) | concrete world + **symbolic user** | **TIMEOUT** | 300 s | **FLOOR** |
+| (c3) | concrete + `symbolic_answers=true` | **FAILED** | **166 s** | not the cliff |
+| (c) | sparse + symbolic user (old iff) | **TIMEOUT** | 300 s / 1800 s | |
+| (d/e/f) | not needed once (c2) isolated | | | |
+
+**Dominating piece: symbolic player index** (`any_player_in()`). Concrete
+user returns in ~220 s; a free `user` never returns. `n_players=2` →
+seats `{0,1}`; two harnesses cover every seat exactly (clause is
+seat-symmetric: 「自己的」).
+
+### Fixes on the way to SUCCESSFUL
+
+1. **concrete seats 0/1** replace `any_player_in()` in the iff + mutant.
+2. **`arm_hand_count` / `discard_count` packing** — `hand_count(player,ptr,len)`
+   packs `[player,ptr,len]`; the arm decoded `card_slot(a0,a1)=(player,ptr)`
+   and loud-FAILED untagged name_id (same class as `set_self_prop`).
+   `try_resonance`'s `hand_count` is on this path. Pinned in conf_hostops2.
+3. **composed final faces** — play runs steps 1–3 together; step 3 flips the
+   user's reverse fans back to positive. Assert `(up+down, 0)`, not step 2's
+   intermediate `(0, up+down)`. (The old harness asserted the intermediate
+   state after the full body.)
+
+### Timing (unwind 32, `--features band-pp`, direct body, concrete user)
+
+| harness | before | after | verdict |
+|---|---|---|---|
+| `same_dream_01_band_plus_3_iff` (user=0) | TIMEOUT 1800 s | **SUCCESSFUL 563 s** | **4/4 covers SATISFIED** |
+| `same_dream_01_user1_band_plus_3_iff` (user=1) | — | **SUCCESSFUL 660 s** | **4/4 covers SATISFIED** |
+| `same_dream_02_money_mutant_is_detected` | TIMEOUT 1800 s | **SUCCESSFUL 475 s** | disagreement companion (card ≠ up*101) |
+
+Non-vacuity: 4/4 covers on both iff rows; `floor_a` / post-invoke
+`kassert!(false)` probes **FAILED** (body ran). Production hashes
+unchanged (wrappers are cfg(kani)-only; host.rs packing is model-only).
 

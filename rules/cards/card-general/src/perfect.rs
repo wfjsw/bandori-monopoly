@@ -37,3 +37,10 @@ fn perfect(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 3000, &Msg::new(key!("perfect_why")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn perfect_kani(player_id: i32) -> card_sdk::Asked {
+    perfect(player_id)
+}

@@ -50,3 +50,10 @@ fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     ctx::draw(player_id, 1)?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn first_live_accident_kani(player_id: i32) -> card_sdk::Asked {
+    first_live_accident(player_id)
+}

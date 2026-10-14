@@ -212,3 +212,22 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn buy_one_kani(player_id: i32) -> card_sdk::Asked {
+    buy_one(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn deck_before_game_kani(player_id: i32) -> card_sdk::Asked {
+    deck_before_game(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
+    drew(player_id)
+}

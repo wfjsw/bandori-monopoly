@@ -466,3 +466,31 @@ fn counter_self_and_card_counter_decode_their_own_packing() {
     let got2 = kworld::with_world(|w| w.key_get(0, key));
     assert_eq!(got2, 10, "add_card_counter adds n=a5 to the counter named (a3,a4): 4+6");
 }
+
+/// `hand_count(player, ptr, len)` packs `[player, ptr, len]` — card name at
+/// `(a1,a2)`, seat at `a0`. The old decode used `(a0,a1)` = `(player, ptr)`
+/// and loud-FAILED on an untagged handle (same class as set_self_prop).
+#[test]
+fn hand_count_decodes_name_at_a1_a2() {
+    let _g = model_lock();
+    install(base());
+    kworld::with_world_mut(|w| {
+        w.hand_resonance[0] = 2;
+    });
+    // RESONANCE slot is 1 — hand_count must read the seat's resonance view.
+    let h = card_sdk::native::intern("PP:[衍生]共鸣".as_bytes());
+    // Force the interned name to the resonance card slot via card_slot's
+    // known-name compare; if the id does not match we still must not FAIL.
+    let n = rules_kani::host::dispatch(Op::hand_count, [0, h.0, h.1, 0, 0, 0]);
+    assert!(n >= 0, "hand_count must not hard-FAIL on a tagged name");
+}
+
+/// `discard_count(player, ptr, len)` — name at `(a1,a2)` (was `(a0,a1)`).
+#[test]
+fn discard_count_decodes_name_at_a1_a2() {
+    let _g = model_lock();
+    install(base());
+    let h = card_sdk::native::intern(b"somecard");
+    let n = rules_kani::host::dispatch(Op::discard_count, [0, h.0, h.1, 0, 0, 0]);
+    assert_eq!(n, 0, "empty discard count is 0 (and must not name_id-FAIL)");
+}

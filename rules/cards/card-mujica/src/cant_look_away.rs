@@ -106,3 +106,10 @@ fn run(player_id: i32) -> card_sdk::Asked {
     // self walk on one's own turn consumes the main move.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}

@@ -77,3 +77,10 @@ fn saki_move(player_id: i32) -> card_sdk::Asked {
     // move and choosing another player does not.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn saki_move_kani(player_id: i32) -> card_sdk::Asked {
+    saki_move(player_id)
+}

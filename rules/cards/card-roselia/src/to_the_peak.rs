@@ -182,3 +182,10 @@ fn ceil_to(x: i64, unit: i64) -> i32 {
     }
     (((x + unit - 1) / unit) * unit) as i32
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}

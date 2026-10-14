@@ -101,3 +101,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::card_offer_build(player_id, &far_tiles);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}

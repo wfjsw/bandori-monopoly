@@ -272,3 +272,28 @@ fn gain_bump(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("nfo_bumped")));
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn gain_bump_kani(player_id: i32) -> card_sdk::Asked {
+    gain_bump(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
+}

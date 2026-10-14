@@ -112,3 +112,28 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     )?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn endless_journey_kani(player_id: i32) -> card_sdk::Asked {
+    endless_journey(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
+    settle_body(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
+}

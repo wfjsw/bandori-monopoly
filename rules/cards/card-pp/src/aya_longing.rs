@@ -117,3 +117,16 @@ fn pay_add(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn aya_longing_kani(player_id: i32) -> card_sdk::Asked {
+    aya_longing(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_add_kani(player_id: i32) -> card_sdk::Asked {
+    pay_add(player_id)
+}

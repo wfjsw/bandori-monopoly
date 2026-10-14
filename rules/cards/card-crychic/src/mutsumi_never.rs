@@ -123,3 +123,10 @@ fn branch_shuffle(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_start(0, "（睦）从没有觉得...");
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn mutsumi_never_kani(player_id: i32) -> card_sdk::Asked {
+    mutsumi_never(player_id)
+}

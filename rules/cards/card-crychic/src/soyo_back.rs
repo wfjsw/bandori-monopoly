@@ -133,3 +133,16 @@ fn branch_keep(player_id: i32) -> card_sdk::Asked {
     // and is skipped so the draw's copy is the one kept.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn soyo_back_kani(player_id: i32) -> card_sdk::Asked {
+    soyo_back(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_drawn_kani(player_id: i32) -> card_sdk::Asked {
+    on_drawn(player_id)
+}

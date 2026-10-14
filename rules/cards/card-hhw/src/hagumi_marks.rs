@@ -190,3 +190,10 @@ fn counteract2(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「此卡的投掷次数+1」 per gain, on top of (1)'s 「投掷2次」.
     rolls(player_id, 2 + gains)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}

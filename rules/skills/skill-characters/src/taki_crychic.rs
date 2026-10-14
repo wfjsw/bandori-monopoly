@@ -128,3 +128,22 @@ ruleset_core::roster::CharacterDef::new(r#"椎名立希（CRYCHIC）"#)
     .preset(&[])
     .variant_of(r#"椎名立希"#)
     .variant_tag(r#"c"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_skill_used_kani(player_id: i32) -> card_sdk::Asked {
+    on_skill_used(player_id)
+}
