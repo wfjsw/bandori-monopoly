@@ -727,13 +727,13 @@ facades. Central rows older than those fixes are re-timed, not re-derived.
 | `moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → `memcmp.unwind` 16 (16-byte `==`) | **A** | `arr4_eq` already on master | **SUCCESSFUL 322 s** (unwind 16) |
 | `aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | memcmp 16 (A) **and** `host::name_id` untagged (C) | **A + C** | `arr4_eq` on master; `set_self_prop` packing bug is host — **FAILED 260 s** | FAILED (class C, host) |
 | `this_hand_01_move_is_protocol` | UNWINDING 571 s (unwind 16) | `memcmp.unwind` 16 | **A** | `arr4_eq` already on master | **SUCCESSFUL 315 s** (unwind 16) |
-| `ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | `ex_quest::play` 15 + `memcmp` 45 | **A** | `arr4_eq` + raise attr to **24** (body `for &p in &all_players()`) | pending |
+| `ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | `ex_quest::play` + `memcmp` | **A** | `arr4_eq` + unwind **24** | **SUCCESSFUL 778 s** (unwind assert at 24 holds) |
 | `fix_note_01_activation_keeps` | UNWINDING 838 s (unwind 16) | `fix_note::play` 60-trip `for t in 0..tile_count()` | **A** | attr already **64** on master (sound bound) | pending (expect E cost) |
 | `chart_rush_01_spends_fire` | FAILED 846 s | assert `all fire pots spent`; `Op::raise` was benign-0 → `spend_fire` skipped | **C** | `arm_raise` → 1 on master (op-subset) | **SUCCESSFUL 654 s** (2/2 covers sat) |
 | `embers_03_settle_costs_ten_per_copy` | FAILED 1139 s | wrong On index (B) **and** `set_self_prop` packing (C) | **B + C** | entry 3 fixed; still **FAILED 232 s** on `name_id` | FAILED (class C, host) |
 | `lulu_01_pay_500_leg` | FAILED 647 s | assert `Teleport tile == -1`; `tile_named(快餐店)` now **33** | **B** | assert pay+teleport to 33 via `lulu_01_pay_ok` | **SUCCESSFUL 366 s** |
-| `aao_02_hand_veto_is_armed` | FAILED 550 s | assert `[手] veto armed`; body arms nothing | **D** GENUINE E-aao-02 | **keep FAILING** (not a perf/setup bug) | FAILED (unchanged) |
-| `moca_02_mutant_is_detected` | TIMEOUT 1800 s (old base) | fmt `PadAdapter` + `memchr` 1193 from `assert!` msgs | **E** | `kassert!` already on master (prior batch: SUCCESSFUL 340 s) | pending re-time |
+| `aao_02_hand_veto_is_armed` | FAILED 550 s | assert `[手] veto armed`; body arms nothing (D) + `set_self_prop` packing (C) | **D** GENUINE E-aao-02 | **keep FAILING** (not a perf/setup bug) | **FAILED 239 s** (class D assert still fires; also name_id C) |
+| `moca_02_mutant_is_detected` | TIMEOUT 1800 s (old base) | fmt `PadAdapter` + `memchr` 1193 from `assert!` msgs | **E** | `kassert!` already on master | **SUCCESSFUL 249 s** (unwind 16) |
 | `never_ends_01_noop_blocked_host` | TIMEOUT 1800 s | body `format!("RiNG {n}")` → PadAdapter + memchr; **and** stale no-op assert (`tile_named` now resolves 8/16/36/53) | **E + B** | renamed `never_ends_01_teleport_and_exile`; prove TP+exile; `expect`/`panic!` → `kassert!` | pending |
 | `front_or_back_01_equal_iff` | TIMEOUT 1800 s (unwind 32) | body `Vec` at 32 + harness `iter().all/any/find_map` 31 + `expect` fmt | **A/E** | zero-loop scans; `expect`/`panic!` → `kassert!` | pending |
 | `front_or_back_02_same_half_share` | TIMEOUT 1800 s | same | **A/E** | same | pending |
