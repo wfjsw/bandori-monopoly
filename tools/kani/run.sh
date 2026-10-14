@@ -305,11 +305,11 @@ unit_features() {
     skills_r) echo "band-roselia,skills-bands" ;;
     skills_ag) echo "band-ag,skills-bands" ;;
     skills_hhw) echo "band-hhw,skills-bands" ;;
-    skills_mor) echo "band-morfonica,skills-bands" ;;
-    skills_ras) echo "band-ras,skills-bands" ;;
+    skills_mor) echo "band-morfonica,skills-bands,skills-characters" ;;
+    skills_ras) echo "band-ras,skills-characters" ;;
     skills_mygo) echo "band-mygo,skills-bands" ;;
     skills_mujica) echo "band-mujica,skills-bands" ;;
-    skills_crychic) echo "band-crychic,skills-bands" ;;
+    skills_crychic) echo "band-crychic,skills-bands,skills-characters" ;;
     skills_sumimi) echo "band-sumimi,skills-bands" ;;
     skills_general|general) echo "band-general" ;;
     skills_characters) echo "skills-characters" ;;
