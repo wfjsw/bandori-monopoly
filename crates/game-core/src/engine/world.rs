@@ -655,6 +655,17 @@ pub struct World {
     /// before the prompt must not play again after the answer. Transient.
     #[serde(skip)]
     pub flash: SharedFlash,
+    /// Match clock / timer settings (see [`crate::clock`]). Constant for the
+    /// life of the match; rides here so a routine's [`super::Cx`] can read the
+    /// setup windows and refill caps. `#[serde(default)]` so a World snapshot
+    /// written before this field still loads (pre-settings values).
+    #[serde(default)]
+    pub clock: crate::clock::ClockSettings,
+    /// Legacy clock semantics -- see `engine::Match` / `record::MatchSetup::clock`.
+    /// `true` only on a pre-settings record restore: base-first drain, base
+    /// reset-to-hook-value, prompts never draw on a pool.
+    #[serde(default)]
+    pub legacy_clock: bool,
 }
 
 /// Once-per-flash state (ABI v55), shared across `World::clone` via [`Arc`].
@@ -723,6 +734,8 @@ impl World {
             skip_log: false,
             stub: MatchEvent::default(),
             flash: SharedFlash::default(),
+            clock: crate::clock::ClockSettings::default(),
+            legacy_clock: false,
         }
     }
 

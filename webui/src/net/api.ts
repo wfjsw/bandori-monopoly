@@ -1,7 +1,7 @@
 // REST client and SSE stream for the Rust server (docs/SERVER.md).
 
 import type { Msg } from "../i18n/msg";
-import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, ScoreWeights } from "../core/types";
+import type { BotMentality, ClockSettings, Command, MatchEvent, MatchView, RoomInfo, ScoreWeights } from "../core/types";
 
 const TOKEN_KEY = "bm.token";
 let token = sessionStorage.getItem(TOKEN_KEY) ?? "";
@@ -50,12 +50,13 @@ export const api = {
   health: () => call<{ version: string; rooms: number }>("GET", "/api/health"),
   session: () => call<{ room: string | null; member: number }>("GET", "/api/session"),
   rooms: () => call<RoomInfo[]>("GET", "/api/rooms"),
-  createRoom: (o: { name: string; ranked: boolean; maxPlayers: number; password: string; weights?: ScoreWeights }) => call<{ room: RoomInfo; you: number }>("POST", "/api/rooms", o),
+  createRoom: (o: { name: string; ranked: boolean; maxPlayers: number; password: string; weights?: ScoreWeights; clock?: ClockSettings }) => call<{ room: RoomInfo; you: number }>("POST", "/api/rooms", o),
   join: (id: string, password = "") => call<{ room: RoomInfo; you: number }>("POST", `/api/rooms/${id}/join`, { password, version: "9" }),
   ready: (id: string, on: boolean) => call<RoomInfo>("POST", `/api/rooms/${id}/ready`, { on }),
   bot: (id: string, op: "add" | "remove", member = 0, mentality: BotMentality = "standard") =>
     call<RoomInfo>("POST", `/api/rooms/${id}/bots`, { op, member, mentality }),
   weights: (id: string, w: ScoreWeights) => call<RoomInfo>("POST", `/api/rooms/${id}/weights`, w),
+  setClock: (id: string, c: ClockSettings) => call<RoomInfo>("POST", `/api/rooms/${id}/clock`, c),
   start: (id: string, force: boolean) => call<RoomInfo>("POST", `/api/rooms/${id}/start`, { force }),
   /** This seat's commit-reveal nonce (32 random bytes, hex) -- `docs/FAIRNESS.md`. */
   nonce: (id: string, nonce: string) => call<RoomInfo>("POST", `/api/rooms/${id}/nonce`, { nonce }),

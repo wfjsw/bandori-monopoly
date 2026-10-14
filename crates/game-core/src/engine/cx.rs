@@ -74,6 +74,17 @@ pub struct Ask {
     pub ai_picked: Vec<Vec<String>>,
     /// Auction: most each player's AI is willing to bid.
     pub worth: Vec<i32>,
+    /// Whether answering this prompt draws on the answering seats' time pools
+    /// (ordinary prompts under the post-settings clock) or runs on its own
+    /// fixed window (`view.time_left`, e.g. the bankruptcy leftover auction --
+    /// see [`crate::clock::ClockSettings::bankrupt_auction_time`]). Serde
+    /// default `true` so an `Ask` written before this field stays ordinary.
+    #[serde(default = "default_use_pool")]
+    pub use_pool: bool,
+}
+
+fn default_use_pool() -> bool {
+    true
 }
 
 impl Ask {
@@ -92,6 +103,7 @@ impl Ask {
             ai: vec![AI_UNSET; n],
             ai_picked: vec![vec![]; n],
             worth: vec![0; n],
+            use_pool: true,
         }
     }
 
@@ -153,22 +165,29 @@ impl Ask {
         a
     }
 
-    /// `Auction`: open bidding on a tile.
+    /// `Auction`: open bidding on a tile. `time` is the prompt's own window
+    /// (the AI-schedule / all-bot fallback deadline); `use_pool` selects
+    /// whether the answering seats also spend their time pools (ordinary
+    /// auctions) or not (the bankruptcy leftover auction's dedicated timer --
+    /// [`crate::clock::ClockSettings::bankrupt_auction_time`]).
     pub fn auction(
         tile: usize,
         players: Vec<usize>,
         title: Msg,
         text: Msg,
         worth: Vec<i32>,
+        time: f32,
+        use_pool: bool,
     ) -> Self {
         let n = players.len();
-        let mut a = Self::new("auction", players, title, text, 10.0);
+        let mut a = Self::new("auction", players, title, text, time);
         a.view.tile = tile as i32;
         a.view.bid = 0;
         a.view.bidder = -1;
         // Bidding reads `worth` (already mentality-aware); `ai` is unused.
         a.ai = vec![0; n];
         a.worth = worth;
+        a.use_pool = use_pool;
         a
     }
 

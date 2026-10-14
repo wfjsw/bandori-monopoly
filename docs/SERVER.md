@@ -230,11 +230,12 @@ works, for tools.
 | POST | `/api/session` | `{player, character?, cnId?}` | `{token, player}` |
 | GET  | `/api/session` | | `{token, player, room, member}` |
 | GET  | `/api/rooms` | | `RoomInfo[]` |
-| POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?}` | `{room, you}` |
+| POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?, clock?}` | `{room, you}` |
 | POST | `/api/rooms/{id}/join` | `{password, version?}` | `{room, you}` |
 | POST | `/api/rooms/{id}/ready` | `{on}` | `RoomInfo` |
 | POST | `/api/rooms/{id}/bots` | `{op: "add" \| "remove", member?, mentality?}` | `RoomInfo` (host) |
 | POST | `/api/rooms/{id}/weights` | `{money, property, houses}` | `RoomInfo` (host) |
+| POST | `/api/rooms/{id}/clock` | `ClockSettings` (`baseTime`, `bonusTime`, `baseRefill`, `banSeconds`, `pickSeconds`, `deckSeconds`, `bankruptAuctionTime`) | `RoomInfo` (host) |
 | POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host) -- publishes the fairness `commit` and opens the nonce window (`docs/FAIRNESS.md`) |
 | POST | `/api/rooms/{id}/nonce` | `{nonce}` (32 bytes hex) | `RoomInfo` -- this human's entropy contribution; a missing nonce is simply absent |
 | POST | `/api/rooms/{id}/leave` | | `{ok}` |
@@ -250,14 +251,42 @@ game; `reason` is set for join rejections: `password` (403), `full`, `playing`,
 
 ### Turn clock
 
-The engine owns the countdown (`baseTime` then `bonusTime` per acting seat;
-solo never expires). The **server** publishes an absolute deadline so a client
+The engine owns the countdown. Each seat has a **time pool** = `baseTime` +
+`bonusTime` (恢复时间 + 免费时间), consumed for ordinary turn waiting *and*
+ordinary prompts. Drain order is **bonus first, then base**. Solo never
+expires. Ban / pick / deck and the bankruptcy leftover auction keep their own
+fixed windows and never touch a seat pool.
+
+**Match settings** (host-editable before start, `POST /api/rooms/{id}/clock`,
+also `clock` on `POST /api/rooms`):
+
+| field | default | meaning |
+|---|---|---|
+| `baseTime` | 15 | initial per-seat 恢复时间 pool (s); also the per-turn refill cap |
+| `bonusTime` | 0 | initial per-seat 免费时间 pool (s) |
+| `baseRefill` | 15 | per-turn base refill (s); `turnBaseTime` hook default |
+| `banSeconds` | 20 | Ranked ban window (s) |
+| `pickSeconds` | 25 | pick window (s) |
+| `deckSeconds` | 45 | deck-build window (s) |
+| `bankruptAuctionTime` | 10 | bankruptcy leftover-auction window (s), dedicated |
+
+Sanitized server-side to 0..=300 s (`ClockSettings::sanitized`). Bonus refill
+stays 10 s/turn (`turnBonusTime`, cap [`BONUS_MAX` = 30]; the cap lifts to the
+initial `bonusTime` when that is deliberately larger). At each turn start the
+acting seat's base is refilled by `baseRefill` (or a `turnBaseTime` hook /
+`BASE_TIME_SET` prop) and its bonus by 10 (or `turnBonusTime` /
+`BONUS_TIME_SET`). Ordinary prompts drain the *prompted* seat's own pool;
+when it runs out the existing default-answer / timeout behaviour applies.
+
+The **server** publishes an absolute deadline so a client
 that is still animating late events does not lose clock time to the lag:
 
 * Every `match` frame carries `clock: { baseDeadlineMs, bonusDeadlineMs }`
   when a human seat's clock is running, plus `serverTimeMs`. Both are
   milliseconds on the server's **monotonic** clock (process start = 0), never
-  wall time -- a host clock step cannot slide a live countdown.
+  wall time -- a host clock step cannot slide a live countdown. **Bonus
+  drains first:** `bonusDeadlineMs = now + bonus` (when 免费时间 empties),
+  `baseDeadlineMs = now + bonus + base` (when the whole clock is gone).
 * `clock` is absent while the clock is held for an animation ack
   (`state.clockPaused`), on a machine seat, in solo, or outside the play
   phase. The client then shows the clock held at full (or no clock at all).

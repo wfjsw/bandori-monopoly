@@ -740,19 +740,25 @@ impl SoloMatch {
     /// `seed_hex`: the derived 256-bit match seed (`docs/FAIRNESS.md` -- the
     /// solo driver runs the commit-reveal recipe locally and passes what
     /// `fair_derive_seed` returns); `mode`: 0 solo, 1 casual, 2 ranked;
-    /// `weights_json`: `ScoreWeights` (empty = default).
+    /// `weights_json`: `ScoreWeights` (empty = default);
+    /// `clock_json`: optional `ClockSettings` (absent/empty = default).
     #[wasm_bindgen(constructor)]
     pub fn new(
         members_json: &str,
         seed_hex: &str,
         mode: i32,
         weights_json: &str,
+        clock_json: Option<String>,
     ) -> Result<SoloMatch, JsError> {
         let members: Vec<RoomMember> = parse("members", members_json)?;
         let weights: ScoreWeights = if weights_json.is_empty() {
             ScoreWeights::default()
         } else {
             parse("weights", weights_json)?
+        };
+        let clock: game_core::clock::ClockSettings = match clock_json.as_deref() {
+            None | Some("") => Default::default(),
+            Some(s) => parse("clock", s)?,
         };
         let mode = MatchMode::from_i32(mode).unwrap_or_default();
         let seed = Seed256::from_hex(seed_hex).map_err(|e| JsError::new(&e))?;
@@ -761,6 +767,7 @@ impl SoloMatch {
             seed: 0,
             seed256: Some(seed),
             weights,
+            clock: Some(clock),
         };
         Ok(SoloMatch {
             m: RecordedMatch::new(data()?, rules()?, setup, mode),
@@ -1079,12 +1086,15 @@ pub fn record_header_bytes(bytes: &[u8]) -> Result<String, JsError> {
 
 /// The canonical room settings string a commitment hashes
 /// (`game_core::fair::CanonSettings::canon`, `docs/FAIRNESS.md`).
+/// `clock_json` is optional `ClockSettings` (absent/empty = default, which
+/// keeps the pre-settings canon string byte-identical).
 #[wasm_bindgen]
 pub fn fair_canon_settings(
     mode: i32,
     step: f32,
     weights_json: &str,
     members_json: &str,
+    clock_json: Option<String>,
 ) -> Result<String, JsError> {
     let members: Vec<RoomMember> = parse("members", members_json)?;
     let weights: ScoreWeights = if weights_json.is_empty() {
@@ -1092,8 +1102,14 @@ pub fn fair_canon_settings(
     } else {
         parse("weights", weights_json)?
     };
+    let clock: game_core::clock::ClockSettings = match clock_json.as_deref() {
+        None | Some("") => Default::default(),
+        Some(s) => parse("clock", s)?,
+    };
     let mode = MatchMode::from_i32(mode).ok_or_else(|| JsError::new("bad mode"))?;
-    Ok(game_core::fair::CanonSettings::new(mode, step, &weights, &members).canon())
+    let mut canon = game_core::fair::CanonSettings::new(mode, step, &weights, &members);
+    canon.clock = clock;
+    Ok(canon.canon())
 }
 
 /// `commit = SHA-256(...)` (`docs/FAIRNESS.md` §1.1): the openings plus the

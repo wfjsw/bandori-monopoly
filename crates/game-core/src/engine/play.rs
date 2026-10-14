@@ -566,6 +566,9 @@ impl Cx<'_> {
         }
         // The turn clock is a modifier point: hooks rewrite the 免费时间
         // refill and the 恢复时间 (seconds) before the host applies them.
+        // `turnBaseTime`'s default is the match's per-turn base refill
+        // (`ClockSettings::base_refill`), not a fixed constant -- the host
+        // then refills/caps it at `StartTimer` (see `engine::Signal`).
         let refill = raise!(
             self,
             "turnBonusTime",
@@ -573,7 +576,13 @@ impl Cx<'_> {
             value = super::BONUS_REFILL as i32
         )?
         .value;
-        let base = raise!(self, "turnBaseTime", i, value = super::BASE_TIME as i32)?.value;
+        let base = raise!(
+            self,
+            "turnBaseTime",
+            i,
+            value = self.w.clock.base_refill as i32
+        )?
+        .value;
         self.w
             .signals
             .push(Signal::StartTimer(i, refill.max(0) as f32, base.max(0) as f32));
@@ -4185,6 +4194,12 @@ impl Cx<'_> {
             Msg::new("ask.auction.title").tile("tile", t),
             text,
             worth,
+            // Bankruptcy leftover auction (`auction_leftovers`) is the only
+            // caller today and runs on its own dedicated timer -- never a
+            // seat pool. A future ordinary auction would pass `use_pool: true`
+            // and a pool-backed window instead.
+            self.w.clock.bankrupt_auction_time,
+            false,
         );
         let r = self.ask(ask)?;
         if r.a.bidder < 0 {

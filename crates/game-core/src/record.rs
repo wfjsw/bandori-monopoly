@@ -312,6 +312,14 @@ pub struct MatchSetup {
     /// so an old record's body `check` re-serializes byte-identically.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed256: Option<crate::rng::Seed256>,
+    /// Match clock / timer settings. `None` on records written before the
+    /// per-seat pool landed -- those replay with **legacy** clock semantics
+    /// (base-first drain, base reset-to-constant, prompts on fixed windows).
+    /// Every record this build writes carries `Some(...)` and runs the new
+    /// pool. Serde-skipped when absent so an old record's body `check`
+    /// re-serializes byte-identically.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clock: Option<crate::clock::ClockSettings>,
 }
 
 impl Default for MatchSetup {
@@ -321,6 +329,7 @@ impl Default for MatchSetup {
             seed: 0,
             weights: ScoreWeights::default(),
             seed256: None,
+            clock: None,
         }
     }
 }
@@ -949,6 +958,17 @@ pub struct RecordedMatch {
     rec_done: bool,
 }
 
+/// The clock a `MatchSetup` names: `Some(c)` is the post-settings clock with
+/// those knobs; `None` (every pre-settings record) restores **legacy**
+/// semantics on the default knobs (base-first drain, base reset-to-hook-value,
+/// prompts on fixed windows -- see [`MatchSetup::clock`]).
+fn setup_clock(setup: &MatchSetup) -> (crate::clock::ClockSettings, bool) {
+    match setup.clock {
+        Some(c) => (c, false),
+        None => (crate::clock::ClockSettings::default(), true),
+    }
+}
+
 impl RecordedMatch {
     /// Built from `(members, seed, mode, weights)`, recorded from the start.
     pub fn new(
@@ -958,16 +978,28 @@ impl RecordedMatch {
         mode: MatchMode,
     ) -> Self {
         let rec = Recorder::new_seed(setup.clone());
+        let (clock, legacy) = setup_clock(&setup);
         let m = match setup.seed256 {
-            Some(seed) => Match::new_seeded(
+            Some(seed) => Match::new_seeded_with_clock(
                 data,
                 rules,
                 &setup.members,
                 seed,
                 mode,
                 setup.weights,
+                clock,
+                legacy,
             ),
-            None => Match::new(data, rules, &setup.members, setup.seed, mode, setup.weights),
+            None => Match::new_with_clock(
+                data,
+                rules,
+                &setup.members,
+                setup.seed,
+                mode,
+                setup.weights,
+                clock,
+                legacy,
+            ),
         };
         let turn_key = turn_key(&m);
         Self {
@@ -1335,24 +1367,31 @@ impl Replayer {
         body: RecordBody,
     ) -> Result<Self, ReplayError> {
         let m = match &body.init {
-            Init::Seed(setup) => match setup.seed256 {
-                Some(seed) => Match::new_seeded(
-                    data.clone(),
-                    rules.clone(),
-                    &setup.members,
-                    seed,
-                    header.mode,
-                    setup.weights,
-                ),
-                None => Match::new(
-                    data.clone(),
-                    rules.clone(),
-                    &setup.members,
-                    setup.seed,
-                    header.mode,
-                    setup.weights,
-                ),
-            },
+            Init::Seed(setup) => {
+                let (clock, legacy) = setup_clock(setup);
+                match setup.seed256 {
+                    Some(seed) => Match::new_seeded_with_clock(
+                        data.clone(),
+                        rules.clone(),
+                        &setup.members,
+                        seed,
+                        header.mode,
+                        setup.weights,
+                        clock,
+                        legacy,
+                    ),
+                    None => Match::new_with_clock(
+                        data.clone(),
+                        rules.clone(),
+                        &setup.members,
+                        setup.seed,
+                        header.mode,
+                        setup.weights,
+                        clock,
+                        legacy,
+                    ),
+                }
+            }
             Init::Snapshot { save } => Match::restore(data.clone(), rules.clone(), save)
                 .map_err(|e| ReplayError::Corrupt(e.to_string()))?,
         };

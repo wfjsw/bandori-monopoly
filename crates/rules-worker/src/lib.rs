@@ -248,6 +248,17 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     serde_json::from_value(w.clone()).map_err(|e| format!("weights: {e}"))?
                 }
             };
+            // Optional match clock / timer settings (camelCase `ClockSettings`).
+            // Absent = defaults with the new semantics (the pre-settings
+            // legacy path is record restore only -- `MatchSetup::clock: None`).
+            let clock: game_core::clock::ClockSettings = match req.get("clock") {
+                None | Some(Value::Null) => Default::default(),
+                Some(c) => {
+                    serde_json::from_value::<game_core::clock::ClockSettings>(c.clone())
+                        .map_err(|e| format!("clock: {e}"))?
+                        .sanitized()
+                }
+            };
             // Prefer the derived 256-bit seed (every new match,
             // `docs/FAIRNESS.md`); a bare u64 `seed` is the legacy path, kept
             // for pre-fairness callers and tests only.
@@ -255,24 +266,28 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 Some(hex) => {
                     let key = game_core::fair::unhex32(hex)
                         .map_err(|e| format!("seed256: {e}"))?;
-                    Match::new_seeded(
+                    Match::new_seeded_with_clock(
                         ctx.data.clone(),
                         ctx.rules.clone(),
                         &members,
                         game_core::rng::Seed256(key),
                         MatchMode::from_i32(mode).unwrap_or_default(),
                         weights,
+                        clock,
+                        false,
                     )
                 }
                 None => {
                     let seed = req.get("seed").and_then(Value::as_u64).unwrap_or(1);
-                    Match::new(
+                    Match::new_with_clock(
                         ctx.data.clone(),
                         ctx.rules.clone(),
                         &members,
                         seed,
                         MatchMode::from_i32(mode).unwrap_or_default(),
                         weights,
+                        clock,
+                        false,
                     )
                 }
             };
@@ -367,7 +382,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 .get("needExtras")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
-            let state = m.state();
+            let mut state = m.state();
+            // Per-member prompt countdown: the table-wide `state()` reports the
+            // tightest pending human pool; each client sees its own.
+            m.personalize_prompt_time(&mut state, member);
             let player_id = state.player_of(member);
             let extra = if need_extras {
                 m.view_extra(member)
