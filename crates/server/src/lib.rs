@@ -6,11 +6,12 @@
 //! | POST | `/api/session` | `{player, character?, cnId?}` | `{token, player}` + cookie |
 //! | GET  | `/api/session` | | `{token, player, room, member}` |
 //! | GET  | `/api/rooms` | | `RoomInfo[]` |
-//! | POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?}` | `{room, you}` |
+//! | POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?, clock?}` | `{room, you}` |
 //! | POST | `/api/rooms/{id}/join` | `{password, version?}` | `{room, you}` or 403/409 `{error, reason}` |
 //! | POST | `/api/rooms/{id}/ready` | `{on}` | `RoomInfo` |
 //! | POST | `/api/rooms/{id}/bots` | `{op: "add"\|"remove", member?}` | `RoomInfo` (host) |
 //! | POST | `/api/rooms/{id}/weights` | `ScoreWeights` | `RoomInfo` (host) |
+//! | POST | `/api/rooms/{id}/clock` | `ClockSettings` (`baseTime`, `bonusTime`, `baseRefill`, `banSeconds`, `pickSeconds`, `deckSeconds`, `bankruptAuctionTime`) | `RoomInfo` (host) |
 //! | POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host; creates the match immediately) |
 //! | POST | `/api/rooms/{id}/nonce` | `{nonce}` | `RoomInfo` (`docs/FAIRNESS.md` -- on room entry) |
 //! | POST | `/api/rooms/{id}/leave` | | `{ok}` |
@@ -67,6 +68,7 @@ pub fn router(
         .route("/api/rooms/{id}/ready", post(api::ready))
         .route("/api/rooms/{id}/bots", post(api::bots))
         .route("/api/rooms/{id}/weights", post(api::weights))
+        .route("/api/rooms/{id}/clock", post(api::clock))
         .route("/api/rooms/{id}/start", post(api::start))
         .route("/api/rooms/{id}/nonce", post(api::nonce))
         .route("/api/rooms/{id}/leave", post(api::leave))
