@@ -237,6 +237,50 @@ pub fn play_idx(idx: usize, player: i32) -> Asked {
     fail_no_kind("Play")
 }
 
+/// Const-generic play: `IDX` monomorphizes `call_body_idx_c` to ONE card
+/// trampoline. Prefer this over [`play_idx`] in proofs — a runtime `idx`
+/// keeps every trampoline arm live in CBMC (ppcost residual after the
+/// code* IF-chain cut).
+#[inline(always)]
+pub fn play_c<const IDX: usize>(player: i32) -> Asked {
+    let card = by_idx(IDX);
+    for (i, on) in card.on.iter().enumerate() {
+        if matches!(on, On::Play(..)) {
+            #[cfg(kani)]
+            {
+                return call_body_idx_c::<IDX>(i, player);
+            }
+            #[cfg(not(kani))]
+            {
+                let on = match card.on.get(i) {
+                    Some(o) => o,
+                    None => fail_entry_oob(IDX, i),
+                };
+                return body_of(on)(player);
+            }
+        }
+    }
+    fail_no_kind("Play")
+}
+
+/// Const-generic entry (Play / Hook / …) of card `IDX`.
+#[inline(always)]
+pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
+    #[cfg(kani)]
+    {
+        return call_body_idx_c::<IDX>(entry_index, player);
+    }
+    #[cfg(not(kani))]
+    {
+        let card = by_idx(IDX);
+        let on = match card.on.get(entry_index) {
+            Some(o) => o,
+            None => fail_entry_oob(IDX, entry_index),
+        };
+        body_of(on)(player)
+    }
+}
+
 /// First entry of card `idx` whose kind matches `kind` / `hook_name`.
 ///
 /// `kind` is one of `"Play"`, `"Counteract"`, `"Hook"`, `"Gate"`, `"AtEnd"`,

@@ -167,7 +167,10 @@ pub fn same_dream_01_band_plus_3_iff() {
     let pre_down = fans_neg_of(user as usize);
 
     let pre = world::snapshot();
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
+    // Const-generic play: monomorphizes one trampoline (ppcost).
+    invoke::unwrap_done(invoke::play_c::<{ crate::generated::card_id_const("PP:同一个梦想") }>(
+        user,
+    ));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -237,7 +240,9 @@ pub fn same_dream_02_money_mutant_is_detected() {
     let pre_up = fans_pos_of(user as usize);
     let pre_band = 0;
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
+    invoke::unwrap_done(invoke::play_c::<{ crate::generated::card_id_const("PP:同一个梦想") }>(
+        user,
+    ));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects

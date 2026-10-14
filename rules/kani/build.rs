@@ -311,6 +311,12 @@ fn gen_body_dispatch() {
         }
     }
     s.push_str("/// Per-card body dispatch (Kani). Integer match → named-const trampoline.\n");
+    s.push_str("///\n");
+    s.push_str("/// `call_body_idx_c::<IDX>` is the preferred entry: the const generic\n");
+    s.push_str("/// monomorphizes to ONE trampoline so CBMC never walks the other cards'\n");
+    s.push_str("/// bodies (a runtime `match idx` keeps every arm live — the ppcost\n");
+    s.push_str("/// residual after the code* cut). `call_body_idx` stays for call sites\n");
+    s.push_str("/// that only have a runtime index.\n");
     s.push_str("#[cfg(kani)]\n#[inline(always)]\n");
     s.push_str("fn call_body_idx(idx: usize, entry_index: usize, player: i32) -> Asked {\n");
     s.push_str("    match idx {\n");
@@ -323,6 +329,21 @@ fn gen_body_dispatch() {
         }
     }
     s.push_str("        _ => fail_unknown_idx(idx),\n");
+    s.push_str("    }\n");
+    s.push_str("}\n");
+    s.push_str("\n/// Const-generic body dispatch: `IDX` folds to a single trampoline.\n");
+    s.push_str("#[cfg(kani)]\n#[inline(always)]\n");
+    s.push_str("fn call_body_idx_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {\n");
+    s.push_str("    match IDX {\n");
+    for (i, _c) in BANDS.iter().enumerate() {
+        let base = starts[i];
+        let count = starts[i + 1] - starts[i];
+        for off in 0..count {
+            let idx = base + off;
+            let _ = writeln!(s, "        {idx} => call_card_{idx}(entry_index, player),");
+        }
+    }
+    s.push_str("        _ => fail_unknown_idx(IDX),\n");
     s.push_str("    }\n");
     s.push_str("}\n");
 
