@@ -460,3 +460,20 @@ verify the clause. Class **E** for the pp rows.
 crychic static assert message (format-arg `kassert!` did not match the
 macro). Production `rules/` restored to master.
 
+
+## Batch 3e/4 triage — remaining rows
+
+| id | verdict | class | dominant cost | action |
+|---|---|---|---|---|
+| `events::ex_quest_01_rolls_and_files` | UNWINDING 937 s → **SUCCESSFUL 724 s** (1/1 cover) | **A** | array `==` memcmp at unwind 16 | `arr4_eq` (kept) |
+| `events::habinel_01_grants_exiles` | TIMEOUT 1800 s | **A/E** | body/spec/harness loops at 24; 7.8M vars / 30.8M clauses; `tile_named_bytes` 6 | no cheap fix — **FAIL** |
+| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s | **A/E** | body `Vec` + effects iters at 32 | no cheap fix — **FAIL** |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s | **E** | fmt `PadAdapter` + memchr 1193 (assert messages) | `kassert!` applied; re-time pending |
+| `events::aao_02_hand_veto_is_armed` | FAILED | **D** | GENUINE E-aao-02 (LESS) | keep FAILING |
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s | **E** | `Vec<u8>::extend_with` 31, `drop_glue<[String]>` 62, `memcmp` 31, `ctx::ask_card` 31 | card-body `String`/`Vec<String>` ABI (TUNING §10) — no cheap fix |
+| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s | **E** | same | same |
+| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s | **E** | `Vec<u8>::extend_with` 31, `by_idx` 10, `memcmp` 10, `named_set` 8 | same |
+| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s | **E** | same | same |
+
+Branch is **docs + crychic static kassert message only** (production
+`rules/` matches master; dist hashes identical).
