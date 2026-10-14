@@ -773,3 +773,39 @@ are `cfg(kani)` only.
 - production hash check (`build-ruleset` without `CARGO_TARGET_DIR`)
 - `cargo test -p rules-kani` ×3, `rules-cond --features lower`, wasm check
 
+
+### ppcost: host packing mismatch (class C, fixed first per coordinator)
+
+After the `name_id` loud-FAIL cut, shared `Op` arms decoded `name_id(a1,a2)`
+for every sibling. Packings differ:
+
+| op | packing | key pair | value |
+|---|---|---|---|
+| `set_self_prop(kp,kl,v)` | `[kp,kl,v]` | `(a0,a1)` | `a2` |
+| `set_tile_prop(tile,kp,kl,v)` | `[tile,kp,kl,v]` | `(a1,a2)` | `a3` |
+| `set_prop_at(uid,kp,kl,v)` | `[uid,kp,kl,v]` | `(a1,a2)` | `a3` |
+| `self_prop(kp,kl)` | `[kp,kl]` | `(a0,a1)` | — |
+| `counter_self(np,nl)` | `[np,nl]` | `(a0,a1)` | — |
+| `card_counter(p,cp,cl,np,nl)` | `[p,cp,cl,np,nl]` | `(a3,a4)` | — |
+| `add_card_counter(…,np,nl,n)` | name `(a3,a4)`, `n=a5`, no max | | |
+
+The wrong pair is an untagged handle → hard FAIL. Blast radius: every
+body calling `ctx::set_prop` (aao, embers, fix_note, hallucination,
+surprise_duel, marina_box, bangdream_chan). Fixed in `host.rs` + four
+`conf_hostops2` pins (22/22 green). Separate commit.
+
+### ppcost: body dispatch cuts (goto shape)
+
+| lever | call_card_N | other bodies reachable? | verdict |
+|---|---|---|---|
+| baseline (op-subset) | 379-IF `code*` chain | all 379 targets | TIMEOUT 1800 s, BMC never finishes |
+| + `NAME_kani` direct calls | 1 direct call | 19 trampolines × their bodies via `call_body_idx` match | TIMEOUT 1800 s |
+| + `play_c::<IDX>` const-generic | 1 direct call; match is `IF 12=0…` | still all 19 — reachability-slice keeps them (CALL on a const-false arm) | TIMEOUT 1800 s |
+| + harness calls `same_dream_kani` directly | n/a | **one** body in the call graph | re-timing |
+
+Production hashes (fresh master build vs worktree, `build-ruleset.mjs`
+without `CARGO_TARGET_DIR`): **identical** — card_all wasm
+`8d2cdd3e…`, conds `a76f4eab…`, fixtures `c502fceb…`.
+Tests: `rules-kani` ×3 green; `rules-cond --features lower` 58 green;
+wasm32 workspace check green; `game-rules`/`rules-native`/`server` build green.
+
