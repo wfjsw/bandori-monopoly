@@ -21,6 +21,7 @@ pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
+        On::Hook(&[HookKind::TurnBaseTime], "", None, no_recovery),
     ],
 );
 
@@ -32,19 +33,26 @@ fn always(_player_id: i32) -> bool {
 /// -- keep the event and remember who drew it; the turn-start hook below counts
 /// their turns and files it away on the third.
 /// 规则书: 「所有玩家的回合免费时间变为5秒，且回合恢复时间变为0秒」
-/// 免费时间 is the host's `bonus_time`, 恢复时间 its `base_time`; this instance
-/// arms `prop::BONUS_TIME_SET` / `prop::BASE_TIME_SET` and the host applies
-/// them as every turn starts.
+/// 免费时间 is the host's `bonus_time`: this instance arms
+/// `prop::BONUS_TIME_SET` and the host sets it as every turn starts. 恢复时间
+/// is the per-turn *increment* of the host's `base_time`; [`no_recovery`]
+/// zeroes that increment, so the pool itself is left as it is.
 fn play(player_id: i32) -> card_sdk::Asked {
     keep();
     ctx::set_prop(DRAWER, player_id);
     ctx::set_prop(TURNS, 0);
     ctx::set_prop(prop::BONUS_TIME_SET, prop::clock_secs(5));
-    ctx::set_prop(prop::BASE_TIME_SET, prop::clock_secs(0));
     ctx::log(
         player_id,
         &Msg::new("log.event.bangdream_on").player_id("who", player_id),
     );
+    Ok(())
+}
+
+/// 规则书: 「回合恢复时间变为0秒」 -- the `base_time` refill each turn start
+/// adds becomes 0; whatever is left in the pool stays.
+fn no_recovery(_player_id: i32) -> card_sdk::Asked {
+    trigger::set_pay_amount(0);
     Ok(())
 }
 
