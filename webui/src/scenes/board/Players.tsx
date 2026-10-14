@@ -131,17 +131,17 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
         const c = m.charOf(i);
         const out = x.bankrupt || x.left;
         const status = statusChips(x);
-        // The seat number doubles as the turn clock while it is this seat's turn.
+        // The acting seat's turn clock rides its avatar, for every viewer; the
+        // seat number keeps its own badge.
         const clock = i === S.turn ? t : null;
         return (
           <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)} onMouseEnter={() => setHoverSeat(i)} onMouseLeave={() => setHoverSeat(-1)}>
-            {clock ? (
-              <span className={cx(s.n, s.clock, clock.cls)} style={{ ["--frac" as string]: clock.frac }} title={clock.caption}>{clock.value}</span>
-            ) : (
-              <span className={s.n}>{i + 1}</span>
-            )}
+            <span className={s.n}>{i + 1}</span>
             <div className={s.av}>
               <Avatar c={c} size={height < 58 ? 40 : 54} />
+              {clock && (
+                <span className={cx(s.clock, clock.cls)} style={{ ["--frac" as string]: clock.frac }} title={clock.caption}>{clock.value}</span>
+              )}
               {x.bot && (
                 <span
                   className={cx(s.bot, x.mentality === "chaos" && s.chaos)}
