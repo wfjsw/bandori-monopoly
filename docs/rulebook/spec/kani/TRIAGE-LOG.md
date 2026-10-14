@@ -531,7 +531,7 @@ slot, 1800 s cap, unwind 32):
 | v2 | `cards_in` generic `T: From<CardList>` | compile fail (type-param default is a hard error) | — |
 | v3 | `cards_in` len 0-or-4 + `from_raw_parts` static strings | **FAILED 476 s, 0/4 covers UNREACHABLE** | profile clean (no memcmp/drop_glue) but `__rust_dealloc` rejects static pointers → every String-drop path aborts → vacuous |
 | v4 | `String::from` facade (valid alloc) + len 0-or-4 | killed mid-run | `memcmp` 414+ (heap `len` not folded); drop_glue/fold **gone** |
-| v5 | `from_raw_parts` over a real 1-byte `alloc` (constant `len=1`) + len 0-or-4 | _running_ | memcmp still unrolling — CBMC does not constant-fold `from_raw_parts` len through the heap either |
+| v5 | `from_raw_parts` over a real 1-byte `alloc` (constant `len=1`) + len 0-or-4 | **TIMEOUT 1800 s** | `memcmp` 2015 (`slice_contains` 63 × 32); drop_glue only 13 (constant-len helps); 187 `__rust_dealloc`/`same_allocation` path aborts |
 
 **What is gone for good (all runs after v1):** `Vec<u8>::extend_with`,
 `ctx::ask_card` / `ask_pick` / `ask_player` / `ask_tile` loops,
