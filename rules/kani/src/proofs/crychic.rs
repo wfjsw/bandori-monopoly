@@ -477,11 +477,7 @@ pub fn ifonly_02_discard_at_seven_iff() {
             .any(|e| matches!(e, Effect::UnplaceCard { .. }));
     crate::kassert!(
         unplaced,
-        "C-CRYCHIC-ifonly-02: card must go to discard (UnplaceCard / field drop); \
-         log={:?} field {} -> {}",
-        effects,
-        field0,
-        field_n()
+        "C-CRYCHIC-ifonly-02: card must go to discard (UnplaceCard / field drop)"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
