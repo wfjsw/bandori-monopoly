@@ -3068,6 +3068,60 @@ pub fn arm_inc_slot(a: Args) -> i64 {
     })
 }
 
+/// `Op::fire` — seat's fire pots.
+pub fn arm_fire(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.fire[player_idx(a0)]) as i64
+}
+
+/// `Op::fire_max` — seat's fire cap.
+pub fn arm_fire_max(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.fire_max[player_idx(a0)]) as i64
+}
+
+/// `Op::gain_fire` — clamped fire gain (same as dispatch).
+pub fn arm_gain_fire(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        let p = player_idx(a0);
+        let n = a1;
+        if n <= 0 || w.out[p] {
+            return 0;
+        }
+        let cap = w.fire_max[p];
+        if cap <= 0 {
+            return 0;
+        }
+        let got = n.clamp(0, (cap - w.fire[p]).max(0));
+        if got <= 0 {
+            return 0;
+        }
+        w.fire[p] += got;
+        w.push(Effect::GainFire {
+            player: a0,
+            n: got,
+        });
+        got as i64
+    })
+}
+
+/// `Op::spend_fire` — 1 = spent, 0 = not enough.
+pub fn arm_spend_fire(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    let p = player_idx(a0);
+    world::with_world_mut(|w| {
+        if w.fire[p] >= a1 && a1 > 0 {
+            w.fire[p] -= a1;
+            1
+        } else if a1 == 0 {
+            1
+        } else {
+            0
+        }
+    })
+}
+
 /// Move-plan / settle / offer protocol stubs (PROTOCOL-LEVEL; return 0).
 /// Same benign-0 list as `dispatch`'s plan/settle and offers arms.
 pub fn arm_plan_stub(_a: Args) -> i64 {
