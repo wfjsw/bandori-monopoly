@@ -13,6 +13,7 @@
 
 import type { Command, MatchView } from "../core/types.ts";
 import type { Msg } from "../i18n/msg.ts";
+import { describeWorkerError } from "./workerError.ts";
 import type { EngineBoot, SaveSnap, SoloOpen, SoloPush, SoloRestore, SoloWorkerLike } from "./soloProtocol.ts";
 
 /**
@@ -40,7 +41,7 @@ export class SoloEngine {
         }) as unknown as SoloWorkerLike);
     this.w.onmessage = (e: { data: unknown }) => this.onMessage(e.data);
     this.w.onerror = (e: unknown) => {
-      const err = new Error(`solo engine worker: ${String((e as { message?: string })?.message ?? e)}`);
+      const err = new Error(`solo engine worker: ${describeWorkerError(e, "soloWorker.ts")}`);
       for (const p of this.pending.values()) p.err(err);
       this.pending.clear();
     };
