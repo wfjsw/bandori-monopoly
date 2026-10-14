@@ -1208,7 +1208,7 @@ specs. Production `cfg(not(kani))` untouched.
 
 | id | before | failing assertion (CBMC log) | class | action | after |
 |---|---|---|---|---|---|
-| `pp::together_01_mutant_is_detected` | FAILED 543 s | `mutant: card must not match the +1 bonus` | **B** | `min(X,down)` collapses body+mutant to `down` when `down<=6`; assume `down>=7` | pending |
+| `pp::together_01_mutant_is_detected` | FAILED 543 s | `mutant: card must not match the +1 bonus` | **B** | `min(X,down)` collapses body+mutant to `down` when `down<=6`; assume `down>=7` | **SUCCESSFUL 499 s** |
 | `pp::guide_01_band_and_crystals_iff` | FAILED 659 s | `C-PP-guide-01: card carries owned/3 crystals` | **B** | read on-card `crystals` (`field_crystals`), not player key `"奇迹水晶"` | pending |
 | `pp::guide_01_mutant_is_detected` | SUCCESSFUL (vacuous) | — | **F→B** | same wrong read made `cry==0` always; now reads the real counter | pending |
 | `pp::eve_bushido_01_gain_iff` | FAILED 332 s | `C-PP-eve-bushido-01: 12d4 sum in 12..=48` | **C** | `roll_dice` clamped count to `min(8)` → 8d4 (8..=32); raise to `min(100)` (engine `1..=100`) | pending |
