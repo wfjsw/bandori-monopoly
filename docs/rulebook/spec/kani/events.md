@@ -151,3 +151,12 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 - Activation (`On::Play`) and expiry tick (`On::AtEnd` / turn-start hooks) are proven **separately** where the model allows; the link between them (`schedule_turn_end`) is a protocol stub.
 - Mutants use reachable-disagreement companions (`*_mutant_is_detected`) unless `#[kani::should_panic]` is reliable.
 - Isolation assumes (ample money, empty piles, frozen seat counts) are in the harness module docs and `kani::assume`d.
+## Failures (batch 3d root-cause)
+
+| id | verdict | class | finding |
+|---|---|---|---|
+| moca_01 | SUCCESSFUL 394 s (was UNWINDING) | A | array `==` → 16-byte memcmp at unwind 16; `arr4_eq` fix |
+| aao_01 | re-timing after same fix | A | same |
+| moca_02_mutant | TIMEOUT 1800 s | E | fmt `PadAdapter` + memchr 1193 unrolls from assert messages |
+| aao_02 | FAILED | D | GENUINE E-aao-02 (LESS) — keep failing |
+| front_or_back_01/02 | TIMEOUT 1800 s | A/E | body `Vec` + effects iters hit unwind 32; no cheap fix |
