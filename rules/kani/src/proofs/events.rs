@@ -1275,8 +1275,11 @@ pub fn heat_head_03_phase_end_files_away() {
 // set_build_discount is a PROTOCOL stub; set_prop tile ids are no-ops.
 // OPEN-fix-note-count.
 
+// Class A: body `for t in 0..tile_count()` is a 60-trip loop (fix_note.rs:50);
+// unwind 16 tripped `Not unwinding at 16`. Bound 64 covers the static trip
+// count with margin (early break does not shrink the unwind assertion).
 #[kani::proof]
-#[kani::unwind(16)]
+#[kani::unwind(64)]
 pub fn fix_note_01_activation_keeps() {
     let w = base_world();
     {
