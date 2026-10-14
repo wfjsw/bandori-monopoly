@@ -6,7 +6,7 @@ license = "MIT"
 description = "Card authoring SDK + host/guest ABI for the BandoriMonopoly WASM ruleset."
 
 # Used from two places:
-#  * rules/ruleset (guest, wasm32)  -> constants + `ctx` host imports + `bandori_ruleset!`
+#  * rules/ruleset (guest, wasm32)  -> constants + `ctx` host imports + `ruleset!`
 #  * crates/game-rules (host, native and wasm32) -> constants only (`abi`)
 [dependencies]
 

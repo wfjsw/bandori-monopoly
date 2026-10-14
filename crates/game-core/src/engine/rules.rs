@@ -4,7 +4,7 @@
 //! structure needs them; an implementation decides what cards and events
 //! actually do. `game-rules` will implement this over the WASM card modules.
 //! [`StubRules`] gives every card and event no effect, which leaves a complete,
-//! playable game of plain BanG Dream Monopoly.
+//! playable game of plain Monopoly.
 
 use super::cx::{Cx, Flow};
 use crate::msg::Msg;
@@ -600,7 +600,7 @@ pub trait CardRules: Send + Sync {
 
     /// Resolve the tile `player` stopped on -- the **settle body**.
     ///
-    /// The default is the built-in plain-BanG Dream Monopoly settlement
+    /// The default is the built-in plain-Monopoly settlement
     /// (`land_at`'s body): buyable / circle / edogawa / cafe / ryuseido /
     /// agent. `WasmRules` overrides this to run the tile's **rule instances**
     /// (`docs/TILES.md`) and falls back to this default for a tile with none.

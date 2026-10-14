@@ -279,7 +279,7 @@ async fn auth_is_required() {
         .json()
         .await
         .unwrap();
-    assert_eq!(health["game"], "bandori-monopoly");
+    assert_eq!(health["game"], "monopoly");
 }
 
 #[tokio::test]

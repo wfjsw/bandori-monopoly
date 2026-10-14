@@ -4,7 +4,7 @@
 //! Layers:
 //! * [`world`] / [`board`] -- general symbolic model of the host world + tiles.
 //! * [`intern`] -- u16 interned names (no `String`/`memcmp` under `cfg(kani)`).
-//! * [`host`] -- `bandori_*` backend over that model (installed via `kani_host`).
+//! * [`host`] -- `ruleset_*` backend over that model (installed via `kani_host`).
 //! * [`invoke`] -- registry lookup of shipped `CardDef` / skill / event entries.
 //! * [`spec`] -- reference specifications written FROM the clause docs only.
 //! * [`harness`] / [`shim`] -- clause-proof kit and temporary guard assumes.

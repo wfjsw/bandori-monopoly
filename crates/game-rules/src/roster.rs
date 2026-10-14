@@ -9,7 +9,7 @@
 use card_sdk::meta::{MetaDoc, MetaRow};
 use game_core::data::{BandData, CardData, CharacterData, Roster};
 
-/// Decode a `bandori_metadata` postcard blob into [`MetaDoc`].
+/// Decode a `ruleset_metadata` postcard blob into [`MetaDoc`].
 pub fn decode_metadata(bytes: &[u8]) -> Result<MetaDoc, String> {
     postcard::from_bytes(bytes).map_err(|e| format!("metadata: {e}"))
 }

@@ -23,9 +23,9 @@ mod host;
 pub mod gate;
 pub mod hostfns;
 pub mod inline;
-/// Roster metadata (ABI v63): `bandori_metadata` -> [`game_core::data::Roster`].
+/// Roster metadata (ABI v63): `ruleset_metadata` -> [`game_core::data::Roster`].
 pub mod roster;
-/// The `bandori_*` host-import shims (native only). Lives here, not in
+/// The `ruleset_*` host-import shims (native only). Lives here, not in
 /// `rules-native`, so every native binary that links `card-sdk` with `guest`
 /// on -- including a server test binary in a unified `cargo test` -- resolves
 /// the symbols (`docs/BOT.md` B1, the `LNK2019` fix).

@@ -1,4 +1,4 @@
-//! wasmi host: loading a set of card modules, the `bandori` import table, replay,
+//! wasmi host: loading a set of card modules, the `ruleset` import table, replay,
 //! and nested cross-module card calls.
 
 use std::collections::HashMap;
@@ -64,7 +64,7 @@ pub mod bot_cost {
 /// every machine.
 pub const DEFAULT_FUEL: u64 = 5_000_000;
 
-/// Fuel for the one-off `bandori_metadata` export, which builds the whole
+/// Fuel for the one-off `ruleset_metadata` export, which builds the whole
 /// roster (every card, character and band) and so dwarfs a single effect run.
 const METADATA_FUEL: u64 = 500_000_000;
 
@@ -550,7 +550,7 @@ pub(crate) struct Inner {
     /// can never fire at a kind.
     hook_mask: Vec<u128>,
     /// Roster metadata (ABI v63) gathered from every module's
-    /// `bandori_metadata`. Empty on pre-v63 / meta-less sets.
+    /// `ruleset_metadata`. Empty on pre-v63 / meta-less sets.
     metadata: card_sdk::meta::MetaDoc,
     /// The CEL-only gates (`TriggerKind::{ActGate, PayGate, MoveGate,
     /// ExclusiveUse}`): per gate kind, the `(card, entry)` pairs whose
@@ -636,7 +636,7 @@ pub struct RulesetBuilder {
     modules: Vec<LoadedModule>,
     cards: Vec<CardInfo>,
     slots: Vec<Slot>,
-    /// Roster metadata rows gathered from every module's `bandori_metadata`
+    /// Roster metadata rows gathered from every module's `ruleset_metadata`
     /// (ABI v63). Merged in [`RulesetBuilder::build`].
     metadata: Vec<card_sdk::meta::MetaRow>,
     /// Lean compiled condition blobs (`Cond::to_bytes(false)`), keyed by
@@ -2215,7 +2215,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
 }
 
 /// A card stops for a prompt by **returning** [`abi::EXIT_NEED_INPUT`] from
-/// `bandori_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
+/// `ruleset_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
 /// value. Fold it back into the host's own [`need_input`] marker so every
 /// caller's `is_need_input` check (`Outcome::NeedInput` / `Outcome::NeedHost` /
 /// [`RuleError::GuardPrompted`]) keeps working unchanged.
@@ -2309,7 +2309,7 @@ fn call_card_msg<W: CardWorld>(
 }
 
 /// Validate one module and read its manifest. Also reads the optional
-/// `bandori_metadata` roster blob (ABI v63) when the module exports it.
+/// `ruleset_metadata` roster blob (ABI v63) when the module exports it.
 fn inspect(
     engine: &Engine,
     wasm: &[u8],

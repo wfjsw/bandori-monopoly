@@ -929,12 +929,12 @@ Result: **sim 182 ms/game** (≤ 323 budget, target ~270), counts identical
 remaining loop cost is `tick()`'s routine bookkeeping and the sim's own
 per-event `msg.to_string()` scan.
 
-### 11.2 `LNK2019` on `bandori_*` — shim table moved to `game-rules`
+### 11.2 `LNK2019` on `ruleset_*` — shim table moved to `game-rules`
 
 `cargo test -p server -p rules-native` (any multi-crate run building both)
-failed LNK2019 on 289 `bandori_*` symbols: feature unification turns
+failed LNK2019 on 289 `ruleset_*` symbols: feature unification turns
 `card-sdk/guest` on for the server's copy of `card-sdk`, which compiles `ctx`'s
-`#[link_name = "bandori_*"]` externs, while the `#[no_mangle]` shims lived in
+`#[link_name = "ruleset_*"]` externs, while the `#[no_mangle]` shims lived in
 `rules-native/src/symbols.rs` — a crate the server never links.
 
 The shim table now lives in **`game-rules/src/native_shims.rs`** (the crate

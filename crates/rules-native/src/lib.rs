@@ -2,7 +2,7 @@
 //!
 //! `docs/BOT.md` §3.1 (B1). The same `rules/*` crates the sandboxed
 //! `WasmRules` loads as wasm modules are **linked** into this binary; the
-//! `bandori` host imports become `#[no_mangle]` shims over a thread-local
+//! `ruleset` host imports become `#[no_mangle]` shims over a thread-local
 //! [`NativeHost`], and the guest entry point is a direct call to
 //! `card_sdk::rt::on` -- no wasmtime/wasmi `Store`, no instantiation.
 //!
@@ -31,7 +31,7 @@ use game_rules::{
 use game_rules::hostfns;
 use game_rules::{CardWorld, Msg, RulesBridge};
 
-/// The linked ruleset table, as `bandori_ruleset!` publishes it on a native
+/// The linked ruleset table, as `ruleset!` publishes it on a native
 /// build (one band table per rule crate, in `card-all`'s aggregation order).
 pub static RULESET: &[&[card_sdk::CardDef]] = &[
     card_ag::CARDS,
@@ -230,8 +230,8 @@ impl Default for NativeRulesHandle {
 }
 
 /// Roster metadata (ABI v63) from the linked rule tables -- the native
-/// counterpart of the sandbox's `bandori_metadata` export. Same sources the
-/// wasm module's `card-all` passes to `bandori_ruleset!(; roster:)`.
+/// counterpart of the sandbox's `ruleset_metadata` export. Same sources the
+/// wasm module's `card-all` passes to `ruleset!(; roster:)`.
 pub fn roster_metadata() -> card_sdk::meta::MetaDoc {
     static SOURCES: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
         card_ordinals: ruleset_core::roster_order::CARDS,
@@ -345,7 +345,7 @@ impl HostCtx for NativeHost {
     }
 }
 
-/// The `#[no_mangle] bandori_*` shims live in `game_rules::native_shims`
+/// The `#[no_mangle] ruleset_*` shims live in `game_rules::native_shims`
 /// (the crate every `card-sdk/guest` consumer links) and dispatch into this
 /// crate's [`NativeHost`] through the [`game_rules::native_shims::HostOps`]
 /// blanket impl. See `docs/BOT.md` B1.

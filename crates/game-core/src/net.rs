@@ -13,7 +13,7 @@ use crate::state::BotMentality;
 use crate::MatchMode;
 
 /// Game name the protocol handshake checks.
-pub const GAME: &str = "bandori-monopoly";
+pub const GAME: &str = "monopoly";
 /// Protocol version. The pre-port TCP/Steam protocol spoke `"8"`; this port
 /// speaks HTTP + SSE, so it starts a new number to keep old clients from
 /// half-working.

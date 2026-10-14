@@ -2,7 +2,7 @@
 
 `data/{cards,characters,bands}.json` are **gone**. Card / character / band
 metadata is defined in the Rust rule code and exported from the ruleset
-(ABI v63 `bandori_metadata`). Tools that need JSON rows read a dump of that
+(ABI v63 `ruleset_metadata`). Tools that need JSON rows read a dump of that
 export instead.
 
 ## Produce the dump

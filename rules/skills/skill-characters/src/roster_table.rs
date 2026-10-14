@@ -118,7 +118,7 @@ pub const CHARACTERS: &[CharacterDef] = &[
     YURI_CRIT,
 ];
 
-/// Wire rows for `bandori_metadata`.
+/// Wire rows for `ruleset_metadata`.
 pub fn meta_rows() -> Vec<MetaRow> {
     card_sdk::meta::rows_of(CHARACTERS)
 }

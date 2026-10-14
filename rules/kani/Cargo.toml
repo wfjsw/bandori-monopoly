@@ -72,7 +72,7 @@ serde = { workspace = true }
 
 # Conformance tests (`tests/conf_model.rs`): thin adapter over the real host
 # (`game_rules::hostfns`) so the symbolic model can be diffed against it.
-# `native_shims` supplies the `bandori_*` symbols card bodies link against on
+# `native_shims` supplies the `ruleset_*` symbols card bodies link against on
 # native, so `invoke::play` runs unmodified guest code against either backend.
 # `build.rs` generates the guard IR table (`generated::cond_irs`) from the guard
 # condition strings on every build; it is never committed.

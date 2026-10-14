@@ -81,7 +81,7 @@ pub mod rt;
 /// One card: its id and its entry points, declared as a table keyed by trigger
 /// kind -- the same shape the engine's triggers have. The host reads the table
 /// from the manifest and calls only the entries that match what is happening,
-/// through one export (`bandori_on`).
+/// through one export (`ruleset_on`).
 ///
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
@@ -151,7 +151,7 @@ pub struct CardDef {
     pub texts: &'static [(i32, &'static str, &'static str, &'static str)],
     /// Deck/gallery metadata for this card (`CardDef::meta`, ABI v63). Lives
     /// beside the rule so the roster is authored with the rule; rides the
-    /// separate `bandori_metadata` export, **not** [`abi::ManifestEntry`].
+    /// separate `ruleset_metadata` export, **not** [`abi::ManifestEntry`].
     /// `None` = the card has no Rust metadata yet (partial lift).
     pub meta: Option<&'static crate::meta::CardMeta>,
 }
@@ -342,7 +342,7 @@ impl CardDef {
     }
 
     /// Deck/gallery metadata for this card (`docs/CARDS.md` 「Card metadata」).
-    /// Lives beside the rule; exported through `bandori_metadata`, never
+    /// Lives beside the rule; exported through `ruleset_metadata`, never
     /// through [`abi::ManifestEntry`]. Replaces any earlier `meta` call.
     ///
     /// ```ignore

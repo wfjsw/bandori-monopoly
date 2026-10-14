@@ -36,7 +36,7 @@
 The card content itself lives in `game-rules`: `wasm_rules.rs` is the
 `CardRules` bridge (`RulesBridge<M>`, with `WasmRules = RulesBridge<Ruleset>`
 for the sandboxed modules and `rules-native`'s `NativeRules` for the bot's
-sandbox-free simulations — `docs/BOT.md` §3.1). The `bandori` host imports
+sandbox-free simulations — `docs/BOT.md` §3.1). The `ruleset` host imports
 are backend-neutral functions in `game-rules/src/hostfns.rs` over a
 `HostCtx` (guest memory + fuel + nested calls); `host.rs`'s linker and
 `rules-native`'s `#[no_mangle]` shims both call them, so the two cannot

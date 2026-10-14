@@ -1,4 +1,4 @@
-//! Export runtime used by [`bandori_ruleset!`](crate::bandori_ruleset).
+//! Export runtime used by [`ruleset!`](crate::ruleset).
 
 use crate::abi::{export, pack, ManifestEntry, ManifestOn, ManifestTileText};
 #[cfg(target_arch = "wasm32")]
@@ -73,7 +73,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
     leak(postcard::to_allocvec(&entries).unwrap_or_default())
 }
 
-/// `bandori_metadata` -- the roster metadata blob (ABI v63), built only when
+/// `ruleset_metadata` -- the roster metadata blob (ABI v63), built only when
 /// the host asks. Card rows come from every `CardDef` that declares
 /// [`crate::meta::CardMeta`]; non-card rows ride `sources.lists`. Sorted by
 /// `(kind, ordinal)` so the bytes are deterministic regardless of registration
@@ -129,7 +129,7 @@ fn leak(bytes: Vec<u8>) -> i64 {
 }
 
 /// A card handle is an index into the *flattened* manifest: every band's
-/// table in the order they were passed to `bandori_ruleset!`.
+/// table in the order they were passed to `ruleset!`.
 fn card(bands: &'static [&'static [CardDef]], idx: i32) -> &'static CardDef {
     let mut i = idx;
     for band in bands {
@@ -141,7 +141,7 @@ fn card(bands: &'static [&'static [CardDef]], idx: i32) -> &'static CardDef {
     panic!("bad card handle {idx}")
 }
 
-/// `bandori_on` -- call one entry point. See [`export::ON`] for the encoding.
+/// `ruleset_on` -- call one entry point. See [`export::ON`] for the encoding.
 pub fn on(
     bands: &'static [&'static [CardDef]],
     idx: i32,
@@ -207,33 +207,33 @@ pub fn on(
 ///
 /// ```ignore
 /// pub static CARDS: &[CardDef] = &[cards::yolo::CARD, cards::hagumi_marks::CARD];
-/// card_sdk::bandori_ruleset!(CARDS);
+/// card_sdk::ruleset!(CARDS);
 /// ```
 ///
-/// On `wasm32` this emits the `bandori_*` exports the sandbox host calls. On a
+/// On `wasm32` this emits the `ruleset_*` exports the sandbox host calls. On a
 /// native build (the `rules-native` bot path) it instead publishes a plain
 /// `RULESET` table so every rule crate can link into one binary without
 /// `#[no_mangle]` clashes; `rules-native` calls [`crate::rt::on`] over the
 /// concatenated tables.
 ///
-/// A trailing `; roster $sources` clause (ABI v63) points `bandori_metadata`
+/// A trailing `; roster $sources` clause (ABI v63) points `ruleset_metadata`
 /// at this game's [`crate::meta::RosterSources`] (card ordinals + the skill
 /// crates' character / band tables). Without the clause the export still
 /// exists but carries only cards that declare [`crate::meta::CardMeta`].
 ///
 /// ```ignore
-/// card_sdk::bandori_ruleset!(CARDS; roster: &RosterSources {
+/// card_sdk::ruleset!(CARDS; roster: &RosterSources {
 ///     card_ordinals: ruleset_core::roster_order::CARDS,
 ///     lists: &[...],
 /// });
 /// ```
 #[macro_export]
-macro_rules! bandori_ruleset {
+macro_rules! ruleset {
     ($($cards:expr),+ $(,)?) => {
-        $crate::bandori_ruleset!(@body [$($cards),+] ; &$crate::meta::EMPTY_ROSTER);
+        $crate::ruleset!(@body [$($cards),+] ; &$crate::meta::EMPTY_ROSTER);
     };
     ($($cards:expr),+ ; roster: $sources:expr $(,)?) => {
-        $crate::bandori_ruleset!(@body [$($cards),+] ; $sources);
+        $crate::ruleset!(@body [$($cards),+] ; $sources);
     };
     (@body [$($cards:expr),+] ; $sources:expr) => {
         /// Every band's table, in the order given. `static` so the export
@@ -248,40 +248,40 @@ macro_rules! bandori_ruleset {
         /// Native call entry -- same body as the wasm export, no `#[no_mangle]`
         /// so every rule crate can link into one binary.
         #[cfg(not(target_arch = "wasm32"))]
-        pub fn bandori_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
+        pub fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
             $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
         }
 
         /// Native manifest -- same body as the wasm export.
         #[cfg(not(target_arch = "wasm32"))]
-        pub fn bandori_manifest() -> i64 {
+        pub fn ruleset_manifest() -> i64 {
             $crate::rt::manifest(BAND_TABLE)
         }
 
         /// Native roster metadata (ABI v63) -- same body as the wasm export.
         #[cfg(not(target_arch = "wasm32"))]
-        pub fn bandori_metadata() -> i64 {
+        pub fn ruleset_metadata() -> i64 {
             $crate::rt::metadata(BAND_TABLE, $sources)
         }
 
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
-        pub extern "C" fn bandori_abi_version() -> i32 {
+        pub extern "C" fn ruleset_abi_version() -> i32 {
             $crate::abi::ABI_VERSION
         }
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
-        pub extern "C" fn bandori_manifest() -> i64 {
+        pub extern "C" fn ruleset_manifest() -> i64 {
             $crate::rt::manifest(BAND_TABLE)
         }
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
-        pub extern "C" fn bandori_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
+        pub extern "C" fn ruleset_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
             $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
         }
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
-        pub extern "C" fn bandori_metadata() -> i64 {
+        pub extern "C" fn ruleset_metadata() -> i64 {
             $crate::rt::metadata(BAND_TABLE, $sources)
         }
     };
@@ -291,12 +291,12 @@ macro_rules! bandori_ruleset {
 ///
 /// ```ignore
 /// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)]);
-/// card_sdk::bandori_card!(CARD);
+/// card_sdk::ruleset_card!(CARD);
 /// ```
 #[macro_export]
-macro_rules! bandori_card {
+macro_rules! ruleset_card {
     ($card:expr) => {
-        $crate::bandori_ruleset!(&[$card]);
+        $crate::ruleset!(&[$card]);
     };
 }
 

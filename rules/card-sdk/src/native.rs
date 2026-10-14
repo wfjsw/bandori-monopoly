@@ -1,4 +1,4 @@
-//! Native (non-wasm) ABI support: guest buffers cross the `bandori` boundary as
+//! Native (non-wasm) ABI support: guest buffers cross the `ruleset` boundary as
 //! 32-bit arena handles, not raw pointers.
 //!
 //! The host ABI is `ptr: i32, len: i32` because wasm32 pointers are 32-bit. A

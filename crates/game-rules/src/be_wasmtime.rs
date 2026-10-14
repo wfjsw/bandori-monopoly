@@ -37,7 +37,7 @@ impl std::error::Error for NeedInputTrap {}
 /// This is **not** raised into the guest for the imports a card reads as
 /// `Result` -- those return `card_sdk::abi::EXIT_NEED_INPUT` as their value, and
 /// `host::fold_exit` turns that sentinel back into this marker at the
-/// `bandori_on` boundary. It is still raised by the imports whose guest wrappers
+/// `ruleset_on` boundary. It is still raised by the imports whose guest wrappers
 /// read a plain `bool`/`Option` (`gate`, `target`, `card_move`, the buy/build
 /// routines): those have nowhere to carry a sentinel without it reading as
 /// `true`/`Some(..)`, so the trap -- which tears the stack and therefore cannot

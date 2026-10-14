@@ -7,7 +7,7 @@
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use card_sdk::kani_host::Op;
-// Pull in `native_shims` so the `bandori_*` host-import symbols link
+// Pull in `native_shims` so the `ruleset_*` host-import symbols link
 // (unmodified card bodies / ctx:: call them on native).
 use game_rules::native_shims as _;
 use rules_kani::world::{self as kworld, World as KWorld};

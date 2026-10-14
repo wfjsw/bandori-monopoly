@@ -6,7 +6,7 @@ Destination: `card-sdk` (generic) | `rules/ruleset-core` (new game crate) | `rul
 
 | # | Item | Kind | Destination | Notes |
 |---|------|------|-------------|-------|
-| 1 | `CardDef` / `On` entry kinds / manifest / `bandori_on` export | generic | `card-sdk` | wire + authoring mechanism |
+| 1 | `CardDef` / `On` entry kinds / manifest / `ruleset_on` export | generic | `card-sdk` | wire + authoring mechanism |
 | 2 | condition-pre plumbing (`On::pre`, guard fn plumbing) | generic | `card-sdk` | not the game's sugar |
 | 3 | `Msg` + i18n key mechanism | generic | `card-sdk` | keys only; game strings live in card locales |
 | 4 | `Prompt` / `ask_*` | generic | `card-sdk` | |
@@ -16,7 +16,7 @@ Destination: `card-sdk` (generic) | `rules/ruleset-core` (new game crate) | `rul
 | 8 | `On::Message` / `send` / `message::*` | generic | `card-sdk` | |
 | 9 | generic state map (`state::{get,set,add,min,max,expires}`) | generic | `card-sdk` | |
 | 10 | board/tile/seat/money primitives (`tile_count`, `tile_owner`, `money_of`, `gain`/`pay`/`transfer`, piles) | generic | `card-sdk` | monopoly-shaped but runtime mechanism |
-| 11 | `ctx`/`sys` raw imports + guest ABI codes (`IMPORT_MODULE`, `bandori_*` linker names) | generic | `card-sdk` | wire must stay host-decodable |
+| 11 | `ctx`/`sys` raw imports + guest ABI codes (`IMPORT_MODULE`, `ruleset_*` linker names) | generic | `card-sdk` | wire must stay host-decodable |
 | 12 | `is_placed` / `is_face_down_at` / `is_immune_at` | generic | `card-sdk` | card-instance state |
 | 13 | `tile_is` / `tile_attr` / `tile_in` (NEW) | generic | `card-sdk` | Host ABI part: kind / field / class |
 | 14 | `state_key::FIRE` name | game | `ruleset-core` | wire string `"fire"` value unchanged |

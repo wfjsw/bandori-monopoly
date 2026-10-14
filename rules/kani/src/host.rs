@@ -1,7 +1,7 @@
 //! Symbolic host backend, installed into `card_sdk::kani_host`.
 //!
 //! Under `cfg(kani)` the card-sdk `sys` surface is ordinary Rust that funnels
-//! every `bandori_*` import through [`card_sdk::kani_host::call`]. This module
+//! every `ruleset_*` import through [`card_sdk::kani_host::call`]. This module
 //! is that backend: a general model of the world ([`crate::world`]) plus an
 //! effect log. Game vocabulary lives here, not in card-sdk.
 //!

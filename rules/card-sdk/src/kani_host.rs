@@ -1,6 +1,6 @@
 //! Generic host-import dispatch for Kani verification (no game vocabulary).
 //!
-//! Under `cfg(kani)` the `extern "C-unwind"` `bandori_*` imports cannot be
+//! Under `cfg(kani)` the `extern "C-unwind"` `ruleset_*` imports cannot be
 //! linked to host shims (Kani treats them as foreign C calls; see
 //! kani#2423). Instead `super::sys` becomes ordinary Rust that funnels every
 //! import through [`call`]. The verifier crate (`rules-kani`) installs a
@@ -10,7 +10,7 @@
 
 #![allow(missing_docs)]
 
-/// Opcodes, one per `bandori_*` import (see `ctx/sys.rs`).
+/// Opcodes, one per `ruleset_*` import (see `ctx/sys.rs`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u16)]
 pub enum Op {

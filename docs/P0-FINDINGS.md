@@ -152,7 +152,7 @@ The same engine runs on the server (native) and in the browser (inside our wasm3
 
 ```
 rules/                      guest workspace (wasm32 only)
-  card-sdk/                 ABI (shared with host) + ctx imports + bandori_card! macro
+  card-sdk/                 ABI (shared with host) + ctx imports + ruleset_card! macro
   cards/<slug>/             one crate per card -> one .wasm
   fixtures/test-cards/      test-only cards (cross-module, recursion)
 crates/game-rules/          host: Ruleset/RulesetBuilder, replay, play_card nesting

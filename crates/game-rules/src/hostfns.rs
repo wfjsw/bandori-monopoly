@@ -1,4 +1,4 @@
-//! Backend-neutral `bandori` host import bodies.
+//! Backend-neutral `ruleset` host import bodies.
 //!
 //! Extracted once from `host.rs`'s `build_linker` closures and maintained by
 //! hand since. Every import is a plain function over [`HostCtx`]; the sandbox

@@ -80,7 +80,7 @@ export function Console() {
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bandori-console-${Date.now()}.log`;
+    a.download = `monopoly-console-${Date.now()}.log`;
     a.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };

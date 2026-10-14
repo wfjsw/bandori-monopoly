@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Write the ruleset roster as JSON files for tools.
 //
-// The roster is authored in the Rust rule code (ABI v63 `bandori_metadata`).
+// The roster is authored in the Rust rule code (ABI v63 `ruleset_metadata`).
 // This wraps `cargo run -p rules-native --example dump_roster` and caches the
 // three JSON-shaped files (same shape / key order / formatting as the retired
 // `data/{cards,characters,bands}.json`) under a build dir -- NOT `data/`.

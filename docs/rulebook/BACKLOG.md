@@ -1516,7 +1516,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 ## HOST-09 — `set_bonus` dead guest import + native trap
 - **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-09 …`) —
   deleted. No `ctx` wrapper, never called, absent from the built wasm (GC).
-  Import + `native_shims` stub + `bandori_set_bonus` symbol removed. Nothing
+  Import + `native_shims` stub + `ruleset_set_bonus` symbol removed. Nothing
   to implement: no card text names a move-plan / dice bonus buffer.
 - **kind**: ABI defect (dead surface)
 - **class**: D (dead)
@@ -1524,7 +1524,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **suggested batch**: guest imports vs host registration
 - **locations** (removed)
   - `rules/card-sdk/src/ctx/sys.rs` `set_bonus`
-  - `crates/game-rules/src/native_shims.rs` `op_set_bonus` / `bandori_set_bonus`
+  - `crates/game-rules/src/native_shims.rs` `op_set_bonus` / `ruleset_set_bonus`
 - **expected**: delete the import + native stub. **Confirmed.**
 
 ## HOST-10 — host linker names with no guest import (dead registrations)

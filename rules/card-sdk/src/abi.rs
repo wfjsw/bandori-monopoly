@@ -10,7 +10,7 @@ use alloc::{string::String, vec::Vec};
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
 /// v7: board/hand/status query + op wave (is_buyable ... in_band, spend_fire,
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
-/// v8: `bandori_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
+/// v8: `ruleset_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
 /// v9: `cant_move`, `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
 /// v10: `trig_step` (`Trigger.step`) so a counteraction can tell which turn step
 ///      (0/1/2/3) it fired in, for kinds that aren't step-specific (e.g.
@@ -58,8 +58,8 @@ use alloc::{string::String, vec::Vec};
 ///      points (`Play(gate, effect)`, `Counteract(kinds, guard, effect)`,
 ///      `Hook(kinds, effect)`, `AtEnd`). The manifest lists each entry with
 ///      its trigger kinds, so the host dispatches only to cards that declared
-///      the kind at hand; one export `bandori_on(card, entry, op, player_id)`
-///      replaces `bandori_play` / `_can_react` / `_react` / `_cant_play` (the
+///      the kind at hand; one export `ruleset_on(card, entry, op, player_id)`
+///      replaces `ruleset_play` / `_can_react` / `_react` / `_cant_play` (the
 ///      pre-v21 names, kept here as history).
 /// v23: hook kinds for the remaining raise points -- TurnEndBefore / TurnEndAfter,
 ///      PayAdd / PayMul / PayAt (the Money pipeline), Discarded, DeckBeforeGame /
@@ -379,6 +379,14 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v65: **import-module rename** -- the wasm import module and every guest
+///      export / native `link_name` drop the game prefix: module `"bandori"` →
+///      `"ruleset"`, `bandori_<name>` → `ruleset_<name>` (`ruleset_on`,
+///      `ruleset_metadata`, `ruleset_abi_version`, `ruleset_manifest`, and
+///      every `link_name = "ruleset_*"` host import). The Rust macros become
+///      `ruleset!` / `ruleset_card!`. Wire-visible names change, so old modules
+///      do not load on a new host (replays use archived engine bundles).
+///      Semantics of every import/export are unchanged. SAVE_VERSION unchanged.
 /// v64: **turn-clock props** -- `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET`
 ///      on a board-owned instance override the host turn clock (`base_time`
 ///      = 恢复时间, `bonus_time` = 免费时间) as each turn starts (元祖！邦多利酱).
@@ -392,7 +400,7 @@ use alloc::{string::String, vec::Vec};
 ///      text / tags / derived / cell + a generic `fields` map for game slots
 ///      `band` / `owner`); the skill crates' `CharacterDef` / `BandDef`
 ///      tables carry the character / band rows. A new guest export
-///      `bandori_metadata` (`export::METADATA`, `() -> i64` packed
+///      `ruleset_metadata` (`export::METADATA`, `() -> i64` packed
 ///      postcard `meta::MetaDoc`) hands the whole roster to the host on
 ///      request -- **not** through `ManifestEntry` (the match path is
 ///      unchanged and unbloomed). Rows sort by `(kind, ordinal)` where the
@@ -457,7 +465,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 64;
+pub const ABI_VERSION: i32 = 65;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -548,26 +556,26 @@ pub mod text_slot {
 }
 
 /// Wasm import module name for every host function.
-pub const IMPORT_MODULE: &str = "bandori";
+pub const IMPORT_MODULE: &str = "ruleset";
 
 /// Guest exports.
 pub mod export {
-    pub const ABI_VERSION: &str = "bandori_abi_version";
+    pub const ABI_VERSION: &str = "ruleset_abi_version";
     /// `() -> i64` packed `(ptr << 32) | len` pointing at a UTF-8 JSON manifest.
-    pub const MANIFEST: &str = "bandori_manifest";
+    pub const MANIFEST: &str = "ruleset_manifest";
     /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
     /// `entry` (an index into the card's manifest `on` list). `op` is
     /// [`OP_RUN`] or [`OP_GUARD`]. Returns 0, the guard's
     /// 0/1, or (for a `Play` gate) a packed `(ptr << 32) | len` postcard `Msg`
     /// reason with 0 meaning "playable".
-    pub const ON: &str = "bandori_on";
+    pub const ON: &str = "ruleset_on";
     pub const OP_RUN: i32 = 0;
     pub const OP_GUARD: i32 = 1;
     pub const MEMORY: &str = "memory";
     /// `() -> i64` packed `(ptr << 32) | len` pointing at a postcard
     /// [`crate::meta::MetaDoc`] (ABI v63). Built only when called; absent on
     /// pre-v63 modules (the host then reports empty roster metadata).
-    pub const METADATA: &str = "bandori_metadata";
+    pub const METADATA: &str = "ruleset_metadata";
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the
@@ -2438,7 +2446,7 @@ pub fn unpack(v: i64) -> (u32, u32) {
 pub struct ManifestEntry {
     pub id: String,
     /// The card's entry points, in declaration order (the `entry` index the
-    /// host passes back to `bandori_on`).
+    /// host passes back to `ruleset_on`).
     pub on: Vec<ManifestOn>,
     /// The card's declared static **properties** (`CardDef::props`), as
     /// `(key, value)` pairs sorted by key for deterministic wire bytes. The

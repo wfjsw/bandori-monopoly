@@ -12,7 +12,7 @@
 //!
 //! **Roster (ABI v63).** `cards` / `characters` / `bands` no longer come from
 //! `data/{cards,characters,bands}.json`. They are authored beside the rule code
-//! and handed over as [`Roster`] (ruleset `bandori_metadata` ->
+//! and handed over as [`Roster`] (ruleset `ruleset_metadata` ->
 //! [`crate::data::Roster`]). [`DATA_FILES`] covers only the remaining tables
 //! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
 //! roster is covered by the ruleset hash (`EngineStamp::ruleset_sha256`),
@@ -274,7 +274,7 @@ pub struct BandData {
 }
 
 /// The roster half of [`GameData`] -- cards / characters / bands -- handed over
-/// by the ruleset host (ABI v63 `bandori_metadata`, converted in `game-rules`).
+/// by the ruleset host (ABI v63 `ruleset_metadata`, converted in `game-rules`).
 /// `game-core` stays free of the card crates; this is the plain struct of
 /// vectors it already iterates in roster order (the Rust ordinal table).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -497,7 +497,7 @@ pub struct GameData {
 
 /// Data files, as named in `web/data/`. The roster (`cards` / `characters` /
 /// `bands`) is **not** here: it comes from the ruleset (ABI v63
-/// `bandori_metadata`) or, in tests, from the generated fixture
+/// `ruleset_metadata`) or, in tests, from the generated fixture
 /// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
 /// `skill_simple.json` and the card display overlay stay because they are
 /// display-only and the client merges them.
@@ -551,7 +551,7 @@ impl GameData {
     }
 
     /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`,
-    /// plus the [`Roster`] the ruleset host supplies (ABI v63 `bandori_metadata`
+    /// plus the [`Roster`] the ruleset host supplies (ABI v63 `ruleset_metadata`
     /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`),
     /// or, in tests, [`Roster::from_fixture`]. There is no JSON-roster path
     /// left in the runtime.

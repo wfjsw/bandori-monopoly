@@ -13,7 +13,7 @@
 //!
 //! ## Per-harness host-op subset (TRIAGE-LOG `op-subset`)
 //!
-//! A card body only reaches a handful of `bandori_*` ops. Installing the
+//! A card body only reaches a handful of `ruleset_*` ops. Installing the
 //! full ~300-op [`crate::host::dispatch`] match makes CBMC build that match
 //! at every `ctx::*` site — the dominant SSA cost on band proofs. Declare
 //! the subset instead:
