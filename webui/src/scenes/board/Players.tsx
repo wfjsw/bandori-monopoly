@@ -243,13 +243,13 @@ export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: 
           const bar = g.head && g.head.who != null && g.head.who >= 0 ? colorOf?.(g.head.who) : undefined;
           return (
             <div
-              key={g.head?.id ?? "pre"}
+              key={g.head ? `h${g.head.id}` : "pre"}
               className={cx(g.head && s.turnGroup)}
               style={bar ? { ["--bar" as string]: bar } : undefined}
             >
               {g.head && <div className={s.groupHead}>{g.head.text}</div>}
-              {g.body.map((l) => (
-                <div key={l.id} className={cx(l.stage && s.stageLine)}>
+              {g.body.map((l, n) => (
+                <div key={`${l.id}:${n}`} className={cx(l.stage && s.stageLine)}>
                   {l.parts?.length
                     ? l.parts.map((p, k) =>
                         typeof p === "string" ? (
