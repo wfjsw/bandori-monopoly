@@ -21,6 +21,7 @@ pub const RIOT: CardDef = CardDef::new(
         counteract,
     )],
 )
+    .props(&[(card_sdk::abi::prop::SONG, 1)])
     .legacy(&[(0, legacy_can_counteract)]);
 
 /// 规则书[反击]: 「当你被其他人的卡效果影响时打出此卡」 -- C# `H.HitByOtherCard`.

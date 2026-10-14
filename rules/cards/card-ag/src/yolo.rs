@@ -22,6 +22,7 @@ pub const YOLO: CardDef = CardDef::new(
         counteract,
     )],
 )
+    .props(&[(card_sdk::abi::prop::SONG, 1)])
     .legacy(&[(0, legacy_can_counteract)]);
 
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.

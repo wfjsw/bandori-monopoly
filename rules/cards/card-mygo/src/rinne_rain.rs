@@ -19,7 +19,8 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         // player not standing on a square has nothing to settle.
         On::AtEnd("owner.pos >= 0", None, settle_now),
     ],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 fn rinne_rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使自己获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, CardName)`.

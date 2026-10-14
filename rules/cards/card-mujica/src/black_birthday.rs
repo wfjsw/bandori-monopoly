@@ -12,7 +12,8 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
     "Mujica:黑色生日",
     &[On::Play("", Some(cant_play), black_birthday)],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// C# `CardBlackBirthday.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {

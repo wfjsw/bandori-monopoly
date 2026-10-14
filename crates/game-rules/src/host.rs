@@ -1973,6 +1973,16 @@ pub enum CallOut {
 pub trait RulesHandle: Clone + Send + Sync + 'static {
     fn by_id(&self, id: &str) -> Option<i32>;
     fn card(&self, i: i32) -> Option<&CardInfo>;
+    /// One declared static property of the card rule `id`
+    /// (`CardInfo::props`); `0` when the card does not declare it (the
+    /// defined default). Mirrors [`crate::Ruleset::card_prop`] /
+    /// `game_core::engine::CardRules::card_prop`.
+    fn card_prop(&self, id: &str, key: &str) -> i32 {
+        self.by_id(id)
+            .and_then(|i| self.card(i))
+            .and_then(|c| c.props.get(key).copied())
+            .unwrap_or(0)
+    }
     /// The compiled condition of card `i`'s `entry` (docs/GUARDS.md G0), if
     /// any. Default `None` (no condition) so a stub handle need not care.
     fn pre(&self, i: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
@@ -3328,6 +3338,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "card_text_mentions",
         |mut c: C<W>, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
             hostfns::card_text_mentions(&mut c, cp, cl, np, nl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_prop",
+        |mut c: C<W>, ip: i32, il: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            hostfns::card_prop(&mut c, ip, il, kp, kl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

@@ -937,6 +937,20 @@ pub fn card_text_mentions<C: HostCtx>(c: &mut C, cp: i32, cl: i32, np: i32, nl: 
             Ok(c.st().wr().card_text_mentions(&card, &needle) as i32)
 }
 
+/// One declared static property of the card rule `id` (`CardDef::props`);
+/// `0` when the card does not declare it. The generic guest face of
+/// `CardRules::card_prop` / `Ruleset::card_prop`.
+pub fn card_prop<C: HostCtx>(c: &mut C, ip: i32, il: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
+    let id = guest_str(c, ip, il)?;
+    let key = guest_str(c, kp, kl)?;
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostErr::trap("card_prop unavailable here"))?;
+    Ok(rules.card_prop(&id, &key))
+}
+
 
 
 pub fn is_placed<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {

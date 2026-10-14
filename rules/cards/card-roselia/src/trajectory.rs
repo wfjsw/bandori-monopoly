@@ -16,7 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TRAJECTORY: CardDef = CardDef::new(
     "R:轨迹",
     &[On::Counteract(&[ChainKind::Bankrupt], "", Some(can_counteract), counteract)],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// 规则书（1）[反击]: 「在场上有玩家破产时，展示此卡」
 fn can_counteract(player_id: i32) -> bool {

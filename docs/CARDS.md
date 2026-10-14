@@ -240,6 +240,7 @@ cannot share a definition, so they are mirrored -- keep them in step):
 |---|---|---|---|---|
 | `handLimitDelta` | `prop::HAND_LIMIT_DELTA` | 「手卡上限数量减1」 (`-1`) | `Card.HandLimitDelta` | stamped onto the field instance at placement (`FieldCard::props`) and summed into the owner's hand limit while it sits there; gone with the card. A `place_raw` test arrangement sees it too. |
 | `playableStunned` | `prop::PLAYABLE_STUNNED` | 「（此卡可在眩晕时打出）」 (`1`) | `Card.PlayableStunned` | the card skips the stun gate in `cannot_play`. The exile and no-hand gates have no such exception in the pool. |
+| `song` | `prop::SONG` | 「卡名为歌名的卡」 (`1`) | -- | a song-title card (Kizuna Music's X). A ruleset-level marker other rules read via `ctx::card_prop`; the engine itself never reads it. Declared on exactly the twenty song cards. |
 
 **Tile-rule properties** (the same map, on a *board-owned* tile rule instance --
 [TILES.md](TILES.md)): `price` / `house` / `group` / `buildMax` / `rentLen` /
@@ -275,7 +276,8 @@ and serialization stay deterministic) → `CardRules::card_props(card)` /
 Each declaration cites its clause like any other line (see below). The current
 holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习生解密指南` and
 `Sumimi:#L12` declare `(prop::HAND_LIMIT_DELTA, -1)`; `MyGO:壱雫空` declares
-`(prop::PLAYABLE_STUNNED, 1)`.
+`(prop::PLAYABLE_STUNNED, 1)`; the twenty song-title cards declare
+`(prop::SONG, 1)`.
 
 ## The vocabulary (`card_sdk::ctx` vs `ruleset_core::ctx`)
 

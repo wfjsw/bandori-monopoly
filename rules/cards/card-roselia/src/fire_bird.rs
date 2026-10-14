@@ -24,7 +24,7 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
-).props(&[(card_sdk::abi::prop::EST_COST, 1600)]);
+).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]);
 
 const ID: &str = "R:Fire bird";
 

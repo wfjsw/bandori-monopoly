@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `Kizuna Music`）:
 //! > 触发此卡的玩家投掷X+1d20并所有玩家依次[传送]到投掷结果mod60所对应的格子并获得1层[除外]，X为所有玩家卡组里卡名为歌名的卡数量的总数
 
-use card_sdk::abi::CardPile;
+use card_sdk::abi::{prop, CardPile};
 use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
@@ -11,44 +11,16 @@ use crate::util::{all_players, roll};
 
 pub const KIZUNA_MUSIC: CardDef = CardDef::new("event:Kizuna Music", &[On::Play("", None, play)]);
 
-/// Song-title card rule ids (`data/cards.json` `id`, for every title in
-/// `data/song_cards.json`).
-/// TODO(规则书)/TODO(engine): `GameData.song_cards` (the title list in
-/// `data/song_cards.json`) is not reachable from `ctx`, so the ids are
-/// duplicated here. The data file says it is meant to stay editable; this
-/// table has to be kept in step by hand.
-const SONG_CARDS: &[&str] = &[
-    "PPP:Returns",
-    "PPP:STAR BEAT!",
-    "AG:宣战布告",
-    "AG:Y.O.L.O",
-    "AG:ONE OF US",
-    "PP:TITLE IDOL",
-    "R:（ykn）louder",
-    "R:Fire bird",
-    "R:（燐子）Ringing Bloom",
-    "R:Sprechchor",
-    "R:轨迹",
-    "RAS:R. I. O. T.",
-    "RAS:狂乱Hey Kids!!",
-    "RAS:UNSTOPPABLE",
-    "MyGO:壱雫空",
-    "MyGO:无路矢",
-    "MyGO:轮符雨",
-    "Mujica:黑色生日",
-    "Mujica:骰子已经掷下",
-    "CRYCHIC:春日影",
-];
-
 /// 「X为所有玩家卡组里卡名为歌名的卡数量的总数」 -- every song-title card in
-/// every player's draw pile.
+/// every player's draw pile. The song marker is the static card property
+/// [`prop::SONG`] on the twenty song-title cards.
 /// TODO(规则书): 「卡组」 is read as the draw pile (`CardPile::Deck`). If it
 /// means the player's whole card pool, hand / discard / field are short here.
 fn song_count() -> i32 {
     let mut n = 0;
     for p in all_players() {
         for c in ctx::cards_in(p, CardPile::Deck) {
-            if SONG_CARDS.contains(&c.as_str()) {
+            if ctx::card_prop(&c, prop::SONG) != 0 {
                 n += 1;
             }
         }

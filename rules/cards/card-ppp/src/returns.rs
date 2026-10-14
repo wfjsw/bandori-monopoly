@@ -73,6 +73,7 @@ pub const RETURNS: CardDef = CardDef::new(
         ),
     ],
 )
+    .props(&[(card_sdk::abi::prop::SONG, 1)])
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive

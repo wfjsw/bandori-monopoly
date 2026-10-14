@@ -27,6 +27,7 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
     ],
 )
+    .props(&[(card_sdk::abi::prop::SONG, 1)])
     .legacy(&[(0, legacy_mine)]);
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.

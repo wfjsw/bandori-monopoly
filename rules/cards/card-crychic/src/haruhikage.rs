@@ -44,6 +44,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         ),
     ],
 )
+.props(&[(card_sdk::abi::prop::SONG, 1)])
 .legacy(&[(1, legacy_can_counteract)]);
 
 const ID: &str = "CRYCHIC:春日影";

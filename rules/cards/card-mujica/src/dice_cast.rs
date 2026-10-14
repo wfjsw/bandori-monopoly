@@ -35,7 +35,8 @@ pub const DICE_CAST: CardDef = CardDef::new(
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
         On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
     ],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// C# `CardDiceCast.WhyNot` -- 「已经在场上了」 while the lock is yours.
 fn cant_play(player_id: i32) -> Option<Msg> {
