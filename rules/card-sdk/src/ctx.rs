@@ -579,25 +579,70 @@ pub fn pay_leg(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt
 /// rather than each share (`PIPELINE-AUDIT` Q2 / `rb_money::
 /// pre_split_modifier_shapes_the_total_not_each_leg`).
 pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i32>, Prompt> {
-    let list: Vec<i32> = payers
-        .iter()
-        .copied()
-        .filter(|&p| p != to && !player_out(p))
-        .collect();
-    if list.is_empty() || total <= 0 {
-        return Ok(Vec::new());
+    #[cfg(kani)]
+    {
+        // Zero-loop filter + leg walk (a `filter().collect()` + `for p in list`
+        // over a symbolic-length slice is the extend_with / drop_glue cliff).
+        let mut list: [i32; 4] = [0; 4];
+        let mut n = 0usize;
+        macro_rules! push {
+            ($i:expr) => {
+                if n < 4 {
+                    if let Some(&p) = payers.get($i) {
+                        if p != to && !player_out(p) {
+                            list[n] = p;
+                            n += 1;
+                        }
+                    }
+                }
+            };
+        }
+        push!(0); push!(1); push!(2); push!(3);
+        if payers.len() > 4 {
+            kani::assert(false, "split_pay: more than 4 payers under Kani");
+        }
+        if n == 0 || total <= 0 {
+            return Ok(Vec::new());
+        }
+        let Some(shaped) = pay_total(list[0], to, total, src)? else {
+            return Ok(Vec::new());
+        };
+        let ln = n as i32;
+        let per = (shaped + ln - 1) / ln;
+        let share = (per + 9) / 10 * 10;
+        let mut moved = Vec::new();
+        macro_rules! leg {
+            ($i:expr) => {
+                if $i < n {
+                    moved.push(pay_leg(list[$i], to, share, src)?);
+                }
+            };
+        }
+        leg!(0); leg!(1); leg!(2); leg!(3);
+        return Ok(moved);
     }
-    let Some(shaped) = pay_total(list[0], to, total, src)? else {
-        return Ok(Vec::new());
-    };
-    let n = list.len() as i32;
-    let per = (shaped + n - 1) / n;
-    let share = (per + 9) / 10 * 10;
-    let mut moved = Vec::with_capacity(list.len());
-    for p in list {
-        moved.push(pay_leg(p, to, share, src)?);
+    #[cfg(not(kani))]
+    {
+        let list: Vec<i32> = payers
+            .iter()
+            .copied()
+            .filter(|&p| p != to && !player_out(p))
+            .collect();
+        if list.is_empty() || total <= 0 {
+            return Ok(Vec::new());
+        }
+        let Some(shaped) = pay_total(list[0], to, total, src)? else {
+            return Ok(Vec::new());
+        };
+        let n = list.len() as i32;
+        let per = (shaped + n - 1) / n;
+        let share = (per + 9) / 10 * 10;
+        let mut moved = Vec::with_capacity(list.len());
+        for p in list {
+            moved.push(pay_leg(p, to, share, src)?);
+        }
+        Ok(moved)
     }
-    Ok(moved)
 }
 
 // ------------------------------------------------------------- hand / deck
@@ -610,11 +655,34 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 /// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
 /// does; the body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
-    let mut got = 0;
-    for _ in 0..n.max(0) {
-        got += asked(unsafe { sys::draw(player_id, 1) })?;
+    #[cfg(kani)]
+    {
+        // Zero-loop (card-pool draws are 1..=3; a `for _ in 0..n` unrolls to
+        // the global bound when `n` is a register value).
+        let mut got = 0;
+        let mut taken = 0i32;
+        macro_rules! draw1 {
+            () => {
+                if taken < n.max(0) {
+                    got += asked(unsafe { sys::draw(player_id, 1) })?;
+                    taken += 1;
+                }
+            };
+        }
+        draw1!(); draw1!(); draw1!(); draw1!();
+        if n.max(0) > 4 {
+            kani::assert(false, "draw: more than 4 cards under Kani");
+        }
+        return Ok(got);
     }
-    Ok(got)
+    #[cfg(not(kani))]
+    {
+        let mut got = 0;
+        for _ in 0..n.max(0) {
+            got += asked(unsafe { sys::draw(player_id, 1) })?;
+        }
+        Ok(got)
+    }
 }
 
 /// Draw the top event and resolve it (「抽取一个事件卡」).
@@ -1627,21 +1695,68 @@ fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<
 /// Returns the chosen **tile**, not the index.
 /// Falls back to the first option if the answer is out of range.
 pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
-    for &t in tiles {
-        unsafe { sys::opt_int(t) }
+    #[cfg(kani)]
+    {
+        // Zero-loop option list (see `ask_pick`).
+        if let Some(&t) = tiles.get(0) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(1) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(2) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(3) {
+            unsafe { sys::opt_int(t) }
+        }
+        if tiles.len() > 4 {
+            kani::assert(false, "ask_tile: more than 4 tiles under Kani");
+        }
+        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
+        return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
     }
-    let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
-    Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    #[cfg(not(kani))]
+    {
+        for &t in tiles {
+            unsafe { sys::opt_int(t) }
+        }
+        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
+        Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    }
 }
 
 /// [`ask_tile`] for a pick the player then walks to: the board lights the
 /// path to the hovered tile as well as the tile itself.
 pub fn ask_tile_walk(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
-    for &t in tiles {
-        unsafe { sys::opt_int(t) }
+    #[cfg(kani)]
+    {
+        if let Some(&t) = tiles.get(0) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(1) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(2) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(3) {
+            unsafe { sys::opt_int(t) }
+        }
+        if tiles.len() > 4 {
+            kani::assert(false, "ask_tile_walk: more than 4 tiles under Kani");
+        }
+        let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
+        return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
     }
-    let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
-    Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    #[cfg(not(kani))]
+    {
+        for &t in tiles {
+            unsafe { sys::opt_int(t) }
+        }
+        let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
+        Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    }
 }
 
 /// Tile ask with per-option labels, prices, and an AI choice hint
