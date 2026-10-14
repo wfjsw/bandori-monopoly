@@ -728,7 +728,7 @@ facades. Central rows older than those fixes are re-timed, not re-derived.
 | `aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | memcmp 16 (A) **and** `host::name_id` untagged (C) | **A + C** | `arr4_eq` on master; `set_self_prop` packing bug is host — **FAILED 260 s** | FAILED (class C, host) |
 | `this_hand_01_move_is_protocol` | UNWINDING 571 s (unwind 16) | `memcmp.unwind` 16 | **A** | `arr4_eq` already on master | **SUCCESSFUL 315 s** (unwind 16) |
 | `ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | `ex_quest::play` + `memcmp` | **A** | `arr4_eq` + unwind **24** | **SUCCESSFUL 778 s** (unwind assert at 24 holds) |
-| `fix_note_01_activation_keeps` | UNWINDING 838 s (unwind 16) | `fix_note::play` 60-trip `for t in 0..tile_count()` | **A** | attr already **64** on master (sound bound) | pending (expect E cost) |
+| `fix_note_01_activation_keeps` | UNWINDING 838 s (unwind 16) | 60-trip body loop (A) + `set_self_prop` (C) + SSA cost | **A → E** | unwind **64** (sound); body loop cannot shrink | **TIMEOUT 1800 s** (unwind 64) |
 | `chart_rush_01_spends_fire` | FAILED 846 s | assert `all fire pots spent`; `Op::raise` was benign-0 → `spend_fire` skipped | **C** | `arm_raise` → 1 on master (op-subset) | **SUCCESSFUL 654 s** (2/2 covers sat) |
 | `embers_03_settle_costs_ten_per_copy` | FAILED 1139 s | wrong On index (B) **and** `set_self_prop` packing (C) | **B + C** | entry 3 fixed; still **FAILED 232 s** on `name_id` | FAILED (class C, host) |
 | `lulu_01_pay_500_leg` | FAILED 647 s | assert `Teleport tile == -1`; `tile_named(快餐店)` now **33** | **B** | assert pay+teleport to 33 via `lulu_01_pay_ok` | **SUCCESSFUL 366 s** |
@@ -803,3 +803,19 @@ proof bugs. No host.rs edit on this branch (owned by kani-ppcost).
 
 Unwinding assertions ON; no `#[ignore]`; no allowlist; no weakened specs;
 `aao_02` stays FAILING as the genuine book/body discrepancy (class D).
+
+### triage2 summary (re-timed on this branch)
+
+| verdict | count | ids |
+|---|---:|---|
+| SUCCESSFUL | 6 | moca_01 322 s, this_hand_01 315 s, chart_rush_01 654 s (2/2 covers), lulu_01 366 s, moca_02_mutant 249 s, ex_quest_01 778 s |
+| FAILED | 3 | aao_01 (C set_self_prop), embers_03 (C set_self_prop), aao_02 (**D GENUINE E-aao-02**, keep) |
+| TIMEOUT | 1 | fix_note_01 1800 s (60-trip body loop at unwind 64) |
+| in queue | 13 | habinel, never_ends, kizuna, front_or_back ×3, end_it_all keep, estate ×2, lost_chase ×2, school_time, bear_cookie |
+
+Soundness: unwinding assertions ON throughout. No `#[ignore]`, no allowlist,
+no weakened specs. `aao_02` remains FAILING as the genuine book/body gap.
+`cargo build -p rules-kani` + `cargo test -p rules-kani` ×3 green.
+
+**Host-model change needed (not applied — `host.rs` is kani-ppcost's):**
+`Op::set_self_prop` key packing (see Class C section above).
