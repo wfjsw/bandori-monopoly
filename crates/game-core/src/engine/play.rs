@@ -1949,16 +1949,13 @@ impl Cx<'_> {
     /// A card- or skill-driven dice roll. Sums `count`d`sides` the
     /// same way `roll_tables` does (a flat `count` when `sides <= 0`); the
     /// caller raises the `Roll` chain link so 「掷骰结算前」 [反击]s see it.
-    pub fn card_roll(&mut self, _player_id: usize, count: i32, sides: i32) -> i32 {
-        let mut total = 0;
+    pub fn card_roll(&mut self, player_id: usize, count: i32, sides: i32) -> i32 {
         if sides <= 0 {
-            total += count;
-        } else {
-            for _ in 0..count.max(0) {
-                total += self.w.rng.d(sides.max(1));
-            }
+            return count;
         }
-        total
+        // Each roll gets its own `dice` line (faces included), so a card that
+        // rolls several times (热气球演出's four 3d20) shows every roll.
+        self.roll(player_id as i32, count.max(0), sides.max(1), None)
     }
 
     /// A card-driven reroll (「使用火罐进行掷骰」): sum the
