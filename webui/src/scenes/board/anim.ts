@@ -55,6 +55,10 @@ export interface LogLine {
   /** The line split around its card references, so the log can render them
    *  hoverable. Absent on plain lines. */
   parts?: LogPart[];
+  /** A collapsed run of identical 「继续前进」 lines: how many it stands for. */
+  repeat?: number;
+  /** The line before the ` ×n` suffix (set only on collapsible rows). */
+  base?: string;
 }
 
 /** A turn-stage change, queued behind the events that led to it. `step` is the
@@ -199,11 +203,20 @@ export class Animator {
     if (e.type === "card") this.actDepth.set(e.id, depth);
     const indent = "  ".repeat(depth);
     const rows: LogLine[] = [];
+    // A walk interrupted at every step republishes 「X 继续前进」 each time;
+    // fold a run of them into one row with a count.
+    const last = this.log[this.log.length - 1];
+    if (e.msg?.k === "log.move_on" && !e.results?.length && last?.base === indent + line) {
+      const n = (last.repeat ?? 1) + 1;
+      this.log = [...this.log.slice(0, -1), { ...last, repeat: n, text: `${last.base} ×${n}` }];
+      return;
+    }
     if (line) {
       rows.push({
         id: e.id, text: indent + line, turn: e.type === "turn",
         who: e.type === "turn" ? e.playerId : undefined,
         parts: parts.length ? parts : undefined,
+        base: e.msg?.k === "log.move_on" ? indent + line : undefined,
       });
     }
     for (const r of e.results ?? []) {
