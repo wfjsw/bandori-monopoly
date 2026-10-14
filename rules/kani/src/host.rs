@@ -275,14 +275,6 @@ fn unmodeled(op: Op) -> i64 {
     0
 }
 
-/// Direct `extern "Rust"` entry for `card_sdk::kani_host::call` under
-/// `cfg(kani)` — one symbol, no fn-ptr at the call sites.
-#[cfg(kani)]
-#[no_mangle]
-pub extern "Rust" fn rules_kani_host_dispatch(op: Op, a: [i32; 6]) -> i64 {
-    dispatch(op, a)
-}
-
 /// The one dispatch entry. Args are the ABI's six i32 slots, in declaration order.
 pub fn dispatch(op: Op, a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
