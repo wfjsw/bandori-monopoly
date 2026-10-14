@@ -57,9 +57,12 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "",
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
+          // A card on its owner's own field designates no one else: only a card
+          // parked on another player's field has a designee.
+          const designee = i !== owner ? i : -1;
           const pills = [
             { label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) },
-            { label: tr("board.pillDesignee", { who: m.nameOf(i) }), color: m.colorOf(i), char: m.charOf(i) },
+            ...(designee >= 0 ? [{ label: tr("board.pillDesignee", { who: m.nameOf(designee) }), color: m.colorOf(designee), char: m.charOf(designee) }] : []),
           ];
           return (
             <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
@@ -80,7 +83,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   {fc.cp > 0 && <span className={s.cp} title={tr("board.cp", { n: fc.cp })}>CP{fc.cp}</span>}
                 </InspectCard>
               )}
-              <Avatar c={m.charOf(i)} size={28} className={s.holder} />
+              {designee >= 0 && <Avatar c={m.charOf(designee)} size={28} className={s.holder} />}
             </div>
           );
         }))}
