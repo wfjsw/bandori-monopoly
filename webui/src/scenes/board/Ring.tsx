@@ -7,7 +7,7 @@ import { memo, useCallback, useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
-import { isLight, plain } from "../../core/format";
+import { isLight, plain, prefersDarkInk } from "../../core/format";
 import type { TileData, TileQuote } from "../../core/types";
 import type { Animator } from "./anim";
 import type { Model } from "./model";
@@ -349,7 +349,7 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
         <div className={s.desig}>
           {designations.slice(0, 1).map((x) => {
             const { title, lines } = markTip(x);
-            const ink = x.owner >= 0 && isLight(m.colorOf(x.owner)) ? s.lightInk : undefined;
+            const ink = x.owner >= 0 && prefersDarkInk(m.colorOf(x.owner)) ? s.lightInk : undefined;
             return (
               <span
                 key={x.uid}

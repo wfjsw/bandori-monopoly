@@ -261,7 +261,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  /* White hairline + drop shadow lift the tab off a same-coloured band. */
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-top: 0;
+  border-right: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
   cursor: help;
 }
@@ -269,7 +273,7 @@
    legible on a busy face. */
 .markDesignate.lightInk {
   color: #17221e;
-  text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 .desigMore {
   flex: 0 0 auto;
