@@ -440,12 +440,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 0
             }
         }
-        Op::dist | Op::tile_forward => {
-            // Forward distance on a 60-tile ring (hostfns `dist`).
-            let n = world::TILE_COUNT;
-            let d = (a1 - a0).rem_euclid(n);
-            d as i64
-        }
+                Op::dist | Op::tile_forward => arm_dist(a),
         Op::neighbor => {
             // hostfns `neighbor`: the **next** present player in turn order,
             // wrapping. `dir < 0` walks backwards. Not a board tile.
@@ -570,39 +565,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::discard_from_hand => arm_discard_from_hand(a),
                 Op::shuffle_into_deck => arm_shuffle_into_deck(a),
                 Op::place_card_at => arm_place_card_at(a),
-        Op::place_card_on => {
-            // ABI `[player, tile, cp, cl, ptr, len]` — card name at (a2, a3),
-            // landing tile at a1 (HHW kkr-02 「放置在CiRCLE」). The old arm
-            // read the name from (a1, a2) = (tile, cp) and used `dest`.
-            let tile = a1;
-            let id = card_u16(a2, a3);
-            let slot = card_slot(a2, a3);
-            world::with_world_mut(|w| {
-                let uid = w.next_uid;
-                w.next_uid += 1;
-                w.last_uid = uid;
-                let fi = w.field_n as usize;
-                if fi < world::MAX_FIELD {
-                    w.field[fi] = world::FieldCard {
-                        uid,
-                        card: id,
-                        player: a0,
-                        tile,
-                        face_down: false,
-                        immune: false,
-                        crystals: 0,
-                        props: world::NameMap::new(),
-                    };
-                    w.field_n += 1;
-                }
-                w.push(Effect::PlaceCard {
-                    player: a0,
-                    dest: tile,
-                    card: slot,
-                });
-                uid as i64
-            })
-        }
+                Op::place_card_on => arm_place_card_on(a),
                 Op::set_dest => arm_set_dest(a),
         Op::set_transfer_to_dest => 0,
         Op::send_to_dest => {
@@ -620,11 +583,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::teleport_to => arm_teleport_to(a),
                 Op::unplace_card | Op::unplace_at | Op::unplace_card_named => arm_unplace_card(a),
                 Op::is_placed => arm_is_placed(a),
-        Op::field_instances => {
-            // Write uid list into out-buffer: [n, uid…] as i32s is overkill;
-            // return count.
-            world::with_world(|w| w.field_n as i32) as i64
-        }
+                Op::field_instances => arm_field_instances(a),
                 Op::placed_cards => arm_placed_cards(a),
         Op::placed_tile => world::with_world(|w| {
             if w.field_n == 0 {
@@ -2690,5 +2649,65 @@ pub fn arm_opt_price(a: Args) -> i64 {
 {
             world::with_world_mut(|w| w.opt_n += 1);
             0
+        }
+}
+
+// ---- remaining bands-b arms ----
+/// `Op::dist | Op::tile_forward` — extracted from `dispatch`.
+pub fn arm_dist(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // Forward distance on a 60-tile ring (hostfns `dist`).
+            let n = world::TILE_COUNT;
+            let d = (a1 - a0).rem_euclid(n);
+            d as i64
+        }
+}
+
+/// `Op::place_card_on` — extracted from `dispatch`.
+pub fn arm_place_card_on(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // ABI `[player, tile, cp, cl, ptr, len]` — card name at (a2, a3),
+            // landing tile at a1 (HHW kkr-02 「放置在CiRCLE」). The old arm
+            // read the name from (a1, a2) = (tile, cp) and used `dest`.
+            let tile = a1;
+            let id = card_u16(a2, a3);
+            let slot = card_slot(a2, a3);
+            world::with_world_mut(|w| {
+                let uid = w.next_uid;
+                w.next_uid += 1;
+                w.last_uid = uid;
+                let fi = w.field_n as usize;
+                if fi < world::MAX_FIELD {
+                    w.field[fi] = world::FieldCard {
+                        uid,
+                        card: id,
+                        player: a0,
+                        tile,
+                        face_down: false,
+                        immune: false,
+                        crystals: 0,
+                        props: world::NameMap::new(),
+                    };
+                    w.field_n += 1;
+                }
+                w.push(Effect::PlaceCard {
+                    player: a0,
+                    dest: tile,
+                    card: slot,
+                });
+                uid as i64
+            })
+        }
+}
+
+/// `Op::field_instances` — extracted from `dispatch`.
+pub fn arm_field_instances(a: Args) -> i64 {
+    let _ = a;
+{
+            // Write uid list into out-buffer: [n, uid…] as i32s is overkill;
+            // return count.
+            world::with_world(|w| w.field_n as i32) as i64
         }
 }
