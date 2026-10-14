@@ -392,14 +392,17 @@ fn same_dream_01_iff_at(user: i32) {
     kani::cover!(pre_down > 0, "step 3 has reverses to flip");
     kani::cover!(pre_down == 0, "step 3 no reverses");
 
-    // step 2 (isolation: no [共鸣])
+    // Play runs steps 1–3 together. Step 2 flips up→down and pays `up*100`;
+    // step 3 then flips the user's down→up (no [共鸣] widen). **Final** faces
+    // are step 3's post: `(up+down, 0)`. Asserting step 2's intermediate
+    // faces after the full body would be wrong (the old harness did that).
     crate::kassert!(
-        post.fans_pos[user as usize] == 0,
-        "C-PP-same-dream-02: all positive fans flip reverse"
+        post.fans_pos[user as usize] == pre_up + pre_down,
+        "C-PP-same-dream-02+03: faces end all-positive (up+down)"
     );
     crate::kassert!(
-        post.fans_neg[user as usize] == pre_down + pre_up,
-        "C-PP-same-dream-02: reverse count absorbs every flipped fan"
+        post.fans_neg[user as usize] == 0,
+        "C-PP-same-dream-02+03: no reverse fans remain on the user"
     );
     let gained: i32 = effects
         .iter()
@@ -411,16 +414,6 @@ fn same_dream_01_iff_at(user: i32) {
     crate::kassert!(
         gained == spec::pp::same_dream_02_money(pre_up),
         "C-PP-same-dream-02: gain = flipped * 100"
-    );
-
-    // step 3 user-only (no [共鸣])
-    crate::kassert!(
-        post.fans_neg[user as usize] == 0,
-        "C-PP-same-dream-03: user's reverse fans all flip positive"
-    );
-    crate::kassert!(
-        post.fans_pos[user as usize] == pre_up + pre_down,
-        "C-PP-same-dream-03: user's positives absorb every reverse"
     );
 
     // frame: other players' fans untouched (no [共鸣] widen)
