@@ -437,3 +437,9 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
 pub fn deck_before_game_kani(player_id: i32) -> card_sdk::Asked {
     deck_before_game(player_id)
 }
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn on_played_kani(player_id: i32) -> card_sdk::Asked {
+    on_played(player_id)
+}

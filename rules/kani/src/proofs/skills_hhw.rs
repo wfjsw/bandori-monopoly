@@ -9,6 +9,57 @@ use crate::ir_fill::{self, TriggerOverlay};
 use crate::spec;
 use crate::world::{self, Effect, Snapshot, World, MAX_PLAYERS};
 
+// Concrete-user pattern (TRIAGE-LOG `ppcost`): owner is already a concrete
+// seat 0 in this unit. Per-body host-op subset (outside → loud FAIL).
+crate::host_subset!(skills_hhw_dispatch {
+    log | effect => arm_log,
+    gain | gain_typed | gain_fixed => arm_gain,
+    money => arm_money,
+    pay | pay_to | pay_total => arm_pay,
+    gain_fire => arm_gain_fire,
+    fire => arm_fire,
+    fire_max => arm_fire_max,
+    spend_fire => arm_spend_fire,
+    teleport_to => arm_teleport_to,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    player_pos => arm_player_pos,
+    in_band => arm_in_band,
+    character_is => arm_character_is,
+    tile_named => arm_tile_named,
+    tile_count => arm_tile_count,
+    add_held => arm_add_held,
+    count_held | count_held_name => arm_count_held,
+    set_held_name => arm_set_held_name,
+    ask => arm_ask,
+    raise => arm_raise,
+    gate => arm_gate,
+    slot => arm_slot,
+    set_slot => arm_set_slot,
+    inc_slot => arm_inc_slot,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_inc_slot,
+    set_steps | set_resolve | schedule_turn_end | linger
+    | card_offer_build | can_build_on => arm_protocol_stub,
+    card_move => arm_card_move,
+});
+
+/// Install sparse 2-seat world + subset (concrete owner seat).
+fn skills_hhw_world(owner: i32) {
+    debug_assert!(owner == 0 || owner == 1);
+    host::install_backend(skills_hhw_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    crate::world::with_world_mut(|w| {
+        w.trig_player = owner;
+        w.symbolic_answers = true;
+    });
+}
+
 /// Shared world shape for a `Pass` hook on a named tile.
 fn symbolic_pass_world(owner: i32, tile: i32) -> World {
     host::install();
@@ -42,6 +93,7 @@ fn effects_of() -> ([Effect; 24], usize) {
 #[kani::unwind(24)]
 pub fn kokoro_01_opening_1000_iff() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     // Latch starts at 0 (「开局时」 pays once).
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 0);
@@ -59,7 +111,7 @@ pub fn kokoro_01_opening_1000_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "", owner));
+    invoke::unwrap_done(skill_characters::kasumi_group::at_start_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -84,13 +136,14 @@ pub fn kokoro_01_opening_1000_iff() {
 #[kani::should_panic]
 pub fn kokoro_01_mutant_500() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 0);
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "", owner));
+    invoke::unwrap_done(skill_characters::kasumi_group::at_start_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
@@ -102,13 +155,14 @@ pub fn kokoro_01_mutant_500() {
 #[kani::unwind(24)]
 pub fn kokoro_01_mutant_is_detected() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 0);
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "", owner));
+    invoke::unwrap_done(skill_characters::kasumi_group::at_start_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
@@ -122,6 +176,7 @@ pub fn kokoro_01_mutant_is_detected() {
 #[kani::unwind(24)]
 pub fn kokoro_01_noop_when_latch_set() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     w.key_set(owner, crate::intern::intern("skill.kasumiGroup.start"), 1);
     let gid = crate::guard_id!("slot('skill.kasumiGroup.start') == 0");
@@ -144,6 +199,7 @@ pub const CIRCLE: i32 = 0;
 #[kani::unwind(24)]
 pub fn kokoro_02_circle_pass_1500_iff() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
 
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
@@ -160,7 +216,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "Pass", owner));
+    invoke::unwrap_done(skill_characters::kasumi_group::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -182,6 +238,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
 #[kani::unwind(24)]
 pub fn kokoro_02_noop_non_circle() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     // A non-CiRCLE tile (index 5).
     let w = symbolic_pass_world(owner, 5);
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
@@ -197,12 +254,13 @@ pub fn kokoro_02_noop_non_circle() {
 #[kani::should_panic]
 pub fn kokoro_02_mutant_2000() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "Pass", owner));
+    invoke::unwrap_done(skill_characters::kasumi_group::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
@@ -214,12 +272,13 @@ pub fn kokoro_02_mutant_2000() {
 #[kani::unwind(24)]
 pub fn kokoro_02_mutant_is_detected() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "Pass", owner));
+    invoke::unwrap_done(skill_characters::kasumi_group::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
@@ -240,6 +299,7 @@ pub const TSUZUMI_GROUP: i32 = 28;
 #[kani::unwind(24)]
 pub fn misaki_skill_01_pass_fire_iff() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, TSUZUMI_GROUP);
     // Pre fire is symbolic in 0..=cap so the clamp is exercised.
     w.fire[owner as usize] = kani::any();
@@ -259,7 +319,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:奥泽美咲:另一个我"), "Hook", "Pass", owner));
+    invoke::unwrap_done(skill_characters::misaki_other::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -284,6 +344,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
 #[kani::unwind(24)]
 pub fn misaki_skill_01_noop_other_tile() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
     let gid = crate::guard_id!("actor == owner && tile.id == tile_named('弦卷集团')");
     let ov = TriggerOverlay::default();
@@ -297,11 +358,12 @@ pub fn misaki_skill_01_noop_other_tile() {
 #[kani::unwind(24)]
 pub fn misaki_skill_01_mutant_is_detected() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, TSUZUMI_GROUP);
     w.fire[owner as usize] = 0;
     let pre_fire = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:奥泽美咲:另一个我"), "Hook", "Pass", owner));
+    invoke::unwrap_done(skill_characters::misaki_other::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.fire[owner as usize] != spec::skills_hhw::misaki_skill_01_gain_mutant(pre_fire),
@@ -320,6 +382,7 @@ pub fn misaki_skill_01_mutant_is_detected() {
 #[kani::unwind(24)]
 pub fn kaoru_01_pot_arm_iff() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     w.fire[owner as usize] = kani::any();
     kani::assume(w.fire[owner as usize] >= 0 && w.fire[owner as usize] <= 7);
@@ -332,7 +395,7 @@ pub fn kaoru_01_pot_arm_iff() {
         world::snapshot()
     };
     // `On::Hook(Pass)` with `card_sdk::pre::MINE`.
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:濑田薰:梦幻的王子殿下"), "Hook", "Pass", owner));
+    invoke::unwrap_done(skill_characters::kaoru_prince::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -363,10 +426,11 @@ pub fn kaoru_01_pot_arm_iff() {
 #[kani::unwind(24)]
 pub fn kaoru_01_mutant_is_detected() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
     w.fire[owner as usize] = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:濑田薰:梦幻的王子殿下"), "Hook", "Pass", owner));
+    invoke::unwrap_done(skill_characters::kaoru_prince::on_pass_kani(owner));
     let post = world::snapshot();
     // Mutant demands GainFire + a second effect (both arms at once).
     let (logbuf, log_n) = effects_of();
@@ -388,6 +452,7 @@ pub fn kaoru_01_mutant_is_detected() {
 #[kani::unwind(24)]
 pub fn band_01_declined_is_noop() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = World::new();
     w.n_players = 3;
     w.trig_player = owner;
@@ -401,7 +466,7 @@ pub fn band_01_declined_is_noop() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:Hello, Happy World!:传播笑容"), "Hook", "PayChoose", owner));
+    invoke::unwrap_done(skill_bands::hhw::on_pay_choose_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -417,6 +482,7 @@ pub fn band_01_declined_is_noop() {
 #[kani::unwind(24)]
 pub fn band_01_accepted_doubles_iff() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = World::new();
     w.n_players = 3;
     w.trig_player = owner;
@@ -430,7 +496,7 @@ pub fn band_01_accepted_doubles_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:Hello, Happy World!:传播笑容"), "Hook", "PayChoose", owner));
+    invoke::unwrap_done(skill_bands::hhw::on_pay_choose_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -471,6 +537,7 @@ pub fn band_01_accepted_doubles_iff() {
 #[kani::unwind(24)]
 pub fn band_01_mutant_is_detected() {
     let owner: i32 = 0;
+    skills_hhw_world(owner);
     let mut w = World::new();
     w.n_players = 3;
     w.trig_player = owner;
@@ -481,7 +548,7 @@ pub fn band_01_mutant_is_detected() {
     w.answers[0] = 1;
     let pre_amount = w.pay_amount;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:Hello, Happy World!:传播笑容"), "Hook", "PayChoose", owner));
+    invoke::unwrap_done(skill_bands::hhw::on_pay_choose_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
         post.pay_amount != spec::skills_hhw::band_01_amount_mutant(pre_amount),

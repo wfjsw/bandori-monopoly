@@ -188,12 +188,12 @@ pub fn ako_dark_offhand_log_ok(effects: &[Effect], player: i32) -> bool {
         && matches!(effects[2], Effect::Draw { player: p, n } if p == player && n == ako_dark_offhand_draw_n())
 }
 
-/// Post: stun layer +1 (host writes [眩晕] into the shared stay slot), money
+/// Post: stun layer +1 ([眩晕] is `stun`, distinct from [停留]), money
 /// unchanged at activation, pay_amount zeroed.
 pub fn ako_dark_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let me = player as usize;
     me < MAX_PLAYERS
-        && post.stay[me] == pre.stay[me].saturating_add(1)
+        && post.stun[me] == pre.stun[me].saturating_add(1)
         && crate::world::arr4_eq(post.money, pre.money)
         && post.pay_amount == 0
 }
@@ -244,11 +244,10 @@ pub fn fire_bird_crystals(x: i32) -> i32 {
     }
 }
 
-/// Pay + place effects. Crystals are a silent counter write (`set_crystals`)
-/// and are not an effect-log entry under the current host -- the post-state
-/// predicate carries them.
+/// Pay + place effects. The crystal write (`set_crystals` → `set_counter_self`)
+/// lands as a trailing `AddCounter` under the current host.
 pub fn fire_bird_place_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
-    if effects.len() != 2 {
+    if effects.len() < 2 || effects.len() > 3 {
         return false;
     }
     matches!(effects[0], Effect::PayMoney { player: p, n } if p == player && n == fire_bird_cost())
@@ -260,6 +259,8 @@ pub fn fire_bird_place_log_ok(effects: &[Effect], player: i32, card: u8) -> bool
                 card: c
             } if p == player && c == card
         )
+        && (effects.len() == 2
+            || matches!(effects[2], Effect::AddCounter { .. }))
 }
 
 /// Post: money -1600, card on the user's field.
@@ -269,7 +270,7 @@ pub fn fire_bird_place_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> 
 
 /// MUTANT: wants a 1600 gain instead of a pay.
 pub fn fire_bird_place_log_ok_mutant(effects: &[Effect], player: i32, card: u8) -> bool {
-    if effects.len() != 2 {
+    if effects.len() < 2 || effects.len() > 3 {
         return false;
     }
     matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == fire_bird_cost())
@@ -296,10 +297,17 @@ pub fn fire_bird_burn_crystals() -> i32 {
     1
 }
 
-/// Exactly one PayMoney of 400 (the crystal decay is a silent counter write
-/// under the current host; `add_counter` would log `AddCounter`).
+/// PayMoney of 400; the crystal decay (`add_counter_self`) rides along as
+/// `AddCounter` under the current host.
 pub fn fire_bird_burn_log_ok(effects: &[Effect], player: i32) -> bool {
-    only_pay_money(effects, player, fire_bird_burn_pay())
+    let pay = fire_bird_burn_pay();
+    effects.iter().any(|e| matches!(e, Effect::PayMoney { player: p, n } if *p == player && *n == pay))
+        && effects.iter().all(|e| {
+            matches!(
+                e,
+                Effect::PayMoney { .. } | Effect::AddCounter { .. }
+            )
+        })
 }
 
 /// MUTANT: wants a 400 gain.

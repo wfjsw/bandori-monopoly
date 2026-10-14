@@ -124,3 +124,9 @@ pub fn on_event_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
 }
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}

@@ -202,6 +202,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn pay_choose_kani(player_id: i32) -> card_sdk::Asked {
+    pay_choose(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn skill_used_kani(player_id: i32) -> card_sdk::Asked {
     skill_used(player_id)
 }
