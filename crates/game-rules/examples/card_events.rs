@@ -9,34 +9,35 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::{CardRules, Match};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::{BotMentality, MatchEvent};
 use game_core::MatchMode;
-use game_rules::WasmRules;
+use game_rules::{Ruleset, WasmRules};
 
 /// The four seats: the owners of the two cards this batch touched, plus the
 /// first two roster characters.
 const CHARS: [&str; 4] = ["朝日六花", "纯田真奈", "户山香澄", "花园多惠"];
 const SEEDS: [u64; 5] = [1, 2, 3, 5, 8];
 
-fn load_data() -> Arc<GameData> {
+fn load_data(roster: Roster) -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .expect("game data"),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .expect("game data"),
     )
 }
 
-fn load_rules(data: &Arc<GameData>) -> Arc<dyn CardRules> {
+fn load_ruleset() -> Ruleset {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/cards");
-    let rules: Arc<WasmRules> = WasmRules::load_dir(data.clone(), &dir)
+    Ruleset::load_dir(&dir)
         .expect("read dist/cards")
         .expect("run `node tools/build-ruleset.mjs` first")
-        .into();
-    rules
 }
 
 fn main() {
@@ -52,8 +53,9 @@ fn main() {
         .next()
         .unwrap_or(40);
 
-    let data = load_data();
-    let rules = load_rules(&data);
+    let ruleset = load_ruleset();
+    let data = load_data(ruleset.roster());
+    let rules: Arc<dyn CardRules> = Arc::new(WasmRules::new(ruleset, data.clone()));
 
     let mut lines: Vec<String> = Vec::new();
     let mut total: BTreeMap<String, usize> = BTreeMap::new();

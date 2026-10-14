@@ -4,18 +4,13 @@
 
 use std::sync::Arc;
 
-use game_core::data::GameData;
 use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 
-fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())).unwrap(),
-    )
-}
+mod common;
+use common::data_arc as data;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {

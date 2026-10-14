@@ -22,15 +22,11 @@ fn data_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data")
 }
 
+/// The authored-JSON baseline: the three legacy `data/{cards,characters,
+/// bands}.json` files. This test compares that baseline against the lifted
+/// ruleset rows, so it must keep reading the JSON.
 fn json_roster() -> Roster {
-    let dir = data_dir();
-    let read = |f: &str| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string());
-    let d = GameData::load(read).expect("data/*.json");
-    Roster {
-        cards: d.cards,
-        characters: d.characters,
-        bands: d.bands,
-    }
+    Roster::from_json_dir(&data_dir()).expect("data/{cards,characters,bands}.json")
 }
 
 fn rust_roster() -> Roster {
@@ -169,15 +165,15 @@ fn roster_metadata_matches_json() {
     );
 }
 
-/// `load_with_roster` must accept the converted roster and produce the same
-/// lookups `load` does for the lifted slice.
+/// `GameData::load` must accept the converted ruleset roster and produce the
+/// same lookups the JSON baseline does for the lifted slice.
 #[test]
 fn load_with_roster_sees_lifted_rows() {
     let dir = data_dir();
     let mut read = |f: &str| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string());
-    let json = GameData::load(&mut read).unwrap();
+    let json = GameData::load(&mut read, json_roster()).unwrap();
     let rust = rust_roster();
-    let d = GameData::load_with_roster(&mut read, rust).unwrap();
+    let d = GameData::load(&mut read, rust).unwrap();
     // The lifted Sumimi card is visible by id and carries its band.
     let card = d.card("Sumimi:Sumimi不会解散哦").expect("lifted card");
     assert_eq!(card.band, "Sumimi");

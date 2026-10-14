@@ -30,9 +30,41 @@ async fn main() {
     let workers: usize = arg("--workers", "BM_WORKERS", "4")
         .parse()
         .expect("workers must be a number");
+    // Card effects: one wasm module per card (tools/build-ruleset.sh), served to
+    // the match shell through `WasmRules`. Load the ruleset first -- it does not
+    // need the game tables, and the tables' roster comes from it (ABI v63).
+    // Without modules the match still plays, every card just has no effect.
+    let ruleset = match game_rules::Ruleset::load_dir(&rules_dir) {
+        Ok(Some(set)) => {
+            eprintln!(
+                "card modules: {} loaded from {}",
+                set.module_count(),
+                rules_dir.display()
+            );
+            Some(set)
+        }
+        Ok(None) => {
+            eprintln!(
+                "no card modules in {} (run tools/build-ruleset.sh) -- cards have no effect",
+                rules_dir.display()
+            );
+            None
+        }
+        Err(e) => {
+            eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
+            None
+        }
+    };
+    let roster = ruleset
+        .as_ref()
+        .map(|s| s.roster())
+        .unwrap_or_default();
     let data = Arc::new(
-        GameData::load(|f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
+        GameData::load(
+            |f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
     );
     eprintln!(
         "loaded {} tiles, {} cards, {} characters",
@@ -40,31 +72,9 @@ async fn main() {
         data.cards.len(),
         data.characters.len()
     );
-
-    // Card effects: one wasm module per card (tools/build-ruleset.sh), served to
-    // the match shell through `WasmRules`. Without modules the match still plays,
-    // every card just has no effect.
-    let rules: Arc<dyn CardRules> = match game_rules::WasmRules::load_dir(data.clone(), &rules_dir)
-    {
-        Ok(Some(r)) => {
-            eprintln!(
-                "card modules: {} loaded from {}",
-                r.ruleset().module_count(),
-                rules_dir.display()
-            );
-            Arc::new(r)
-        }
-        Ok(None) => {
-            eprintln!(
-                "no card modules in {} (run tools/build-ruleset.sh) -- cards have no effect",
-                rules_dir.display()
-            );
-            Arc::new(StubRules)
-        }
-        Err(e) => {
-            eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
-            Arc::new(StubRules)
-        }
+    let rules: Arc<dyn CardRules> = match ruleset {
+        Some(set) => Arc::new(game_rules::WasmRules::new(set, data.clone())),
+        None => Arc::new(StubRules),
     };
     // Matches run in `rules-worker` processes, not here: long-running, one per
     // slot, holding no match state between requests. See `server::pool`.

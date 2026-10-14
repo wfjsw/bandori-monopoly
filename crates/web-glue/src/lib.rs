@@ -3,7 +3,8 @@
 //! Everything crosses the boundary as JSON strings in the same shapes the server
 //! uses, so the web client has one set of types for online and solo play.
 //!
-//! * `load_data` -- once, with the contents of `/data/*.json`
+//! * `load_data` -- the contents of `/data/*` (`DATA_FILES`, no roster)
+//! * `roster_json` -- cards / characters / bands from the built ruleset
 //! * deck rules and saved deck slots (`deck_*`)
 //! * profile and progression (`profile_*`), persisted by the client
 //! * [`SoloMatch`] -- the full match engine running locally
@@ -12,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{CharacterData, GameData, DATA_FILES};
+use game_core::data::{BandData, CardData, CharacterData, GameData, Roster, DATA_FILES};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
@@ -42,10 +43,18 @@ static ALLOC: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocat
 
 thread_local! {
     static DATA: RefCell<Option<Arc<GameData>>> = const { RefCell::new(None) };
+    /// The raw [`load_data`] payload, kept so [`ruleset_build`] can rebuild
+    /// `GameData` with the ruleset roster when the tables landed first.
+    static FILES: RefCell<Option<HashMap<String, String>>> = const { RefCell::new(None) };
     /// Sha256 over the `DATA_FILES` contents in order, captured by [`load_data`].
     static DATA_SHA: RefCell<String> = const { RefCell::new(String::new()) };
-    /// `Ruleset::sha256()` of the last [`ruleset_build`]; `"stub"` when the
-    /// page runs without card modules.
+    /// The built ruleset, bound or not: the roster source for [`load_data`] /
+    /// [`roster_json`], and the set [`load_data`] binds against.
+    static SET: RefCell<Option<game_rules::Ruleset>> = const { RefCell::new(None) };
+    /// `Ruleset::sha256()` of the last *bound* [`ruleset_build`] / [`load_data`];
+    /// `"stub"` when the page runs without card modules **or** the set has not
+    /// been bound to a `GameData` yet. Never write it before a bind: the stamp
+    /// must not claim a ruleset the engine is not actually running (`docs/REPLAY.md`).
     static RULESET_SHA: RefCell<String> = const { RefCell::new(String::new()) };
     /// sha256 of this build's `glue.js` + `glue_bg.wasm` (hex), pushed by
     /// [`set_glue_sha`] from `webui/src/wasm/engine_id.json`. The last input
@@ -110,14 +119,46 @@ fn character<'a>(d: &'a GameData, name: &str) -> Result<&'a CharacterData, JsErr
         .ok_or_else(|| JsError::new(&format!("unknown character {name}")))
 }
 
+/// Build `GameData` from a [`load_data`] payload plus a roster, and install it.
+fn build_data(
+    files: &HashMap<String, String>,
+    roster: Roster,
+) -> Result<Arc<GameData>, JsError> {
+    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()), roster)
+        .map_err(|e| JsError::new(&e))?;
+    Ok(Arc::new(d))
+}
+
+/// Bind `set` to `data` as the live [`WasmRules`] and record its hash. The
+/// stamp's `ruleset_sha256` is written **here** and only here: it must never
+/// claim a set the engine is not actually running (`docs/REPLAY.md`).
+fn bind_rules(set: game_rules::Ruleset, data: Arc<GameData>) {
+    let sha = set.sha256().to_string();
+    let rules = WasmRules::new(set, data);
+    RULESET_SHA.with(|s| *s.borrow_mut() = sha);
+    RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
+}
+
+/// Roster of the built ruleset, or empty when none is built yet.
+fn roster() -> Roster {
+    SET.with(|s| s.borrow().as_ref().map(|set| set.roster()).unwrap_or_default())
+}
+
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
-/// `DATA_FILES`, plus the optional `deck_book.json` (bot deck book,
-/// `docs/BOT.md` §3.7) when the client has one.
+/// `DATA_FILES` (the remaining tables -- the roster is **not** in here; it
+/// comes from the ruleset via [`roster_json`]), plus the optional
+/// `deck_book.json` (bot deck book, `docs/BOT.md` §3.7) when the client has one.
+///
+/// Either call order works with [`ruleset_build`]:
+/// * ruleset first: this builds `GameData` with that set's roster and binds;
+/// * data first: this builds with an empty roster and keeps `files`, and the
+///   later [`ruleset_build`] **rebuilds** `GameData` from the kept payload plus
+///   the set's roster (so tools that load data-then-ruleset still get cards).
+///
+/// A second `load_data` replaces the tables and rebinds to the new data.
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()))
-        .map_err(|e| JsError::new(&e))?;
     // Stamp input: sha256 over the contents in `DATA_FILES` order, so a record
     // can tell whether the board / card data it was written against is here.
     // A leading UTF-8 BOM is not content: the browser's decoder strips it and
@@ -129,9 +170,38 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
         }
     }
     let sha = hex(&hasher.finalize());
+    let d = build_data(&files, roster())?;
     DATA_SHA.with(|s| *s.borrow_mut() = sha);
-    DATA.with(|slot| *slot.borrow_mut() = Some(Arc::new(d)));
+    FILES.with(|f| *f.borrow_mut() = Some(files));
+    DATA.with(|slot| *slot.borrow_mut() = Some(d.clone()));
+    if let Some(set) = SET.with(|s| s.borrow().clone()) {
+        bind_rules(set, d);
+    }
     Ok(())
+}
+
+/// The ruleset roster in the three legacy data-file shapes, one object:
+/// `{"cards":[...],"characters":[...],"bands":[...]}` with camelCase rows
+/// (the old `cards.json` / `characters.json` / `bands.json` shapes minus the
+/// display-only overlay fields, which live in `skill_simple.json`).
+///
+/// Empty arrays when no ruleset is built -- does not throw. Call
+/// [`ruleset_build`] first for a real roster; hosts that only need the tables
+/// (`load_data` without card modules) get empty arrays and run on `StubRules`.
+#[wasm_bindgen]
+pub fn roster_json() -> String {
+    #[derive(Serialize)]
+    struct RosterJson {
+        cards: Vec<CardData>,
+        characters: Vec<CharacterData>,
+        bands: Vec<BandData>,
+    }
+    let r = roster();
+    json(&RosterJson {
+        cards: r.cards,
+        characters: r.characters,
+        bands: r.bands,
+    })
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -587,28 +657,31 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
     })
 }
 
-/// Build the ruleset from the modules added so far.
+/// Build the ruleset from the modules added so far, and make it the roster
+/// source ([`roster_json`] answers immediately, even before [`load_data`]).
+///
+/// Either call order works with [`load_data`]:
+/// * data already loaded: **rebuild** `GameData` from the kept payload plus
+///   this set's roster (replacing any empty-roster stand-in) and bind
+///   [`WasmRules`] to it;
+/// * data not loaded yet: keep the set unbound (`RULES` stays empty /
+///   `StubRules`, stamp stays `"stub"` until a later [`load_data`] binds).
 #[wasm_bindgen]
 pub fn ruleset_build() -> Result<usize, JsError> {
-    PENDING.with(|p| {
-        let built = p
-            .borrow_mut()
-            .take()
-            .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
-        let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
-        let n = set.module_count();
-        let sha = set.sha256().to_string();
-        // `data()` first: if it fails, `RULES` stays empty (StubRules) and the
-        // stamp must say `"stub"` too. Writing the hash before this point would
-        // make `engine_stamp` claim a ruleset the engine is not actually running,
-        // so a record sealed here would pass `compat` against a later session
-        // that really does run those rules -- and then diverge at the first
-        // checkpoint with no stamp warning. See `docs/REPLAY.md`.
-        let rules = WasmRules::new(set, data()?);
-        RULESET_SHA.with(|s| *s.borrow_mut() = sha);
-        RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
-        Ok(n)
-    })
+    let built = PENDING
+        .with(|p| p.borrow_mut().take())
+        .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
+    let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
+    let n = set.module_count();
+    SET.with(|s| *s.borrow_mut() = Some(set.clone()));
+    // Tables already in? Rebuild them with this roster -- a prior `load_data`
+    // ran against no set (or an older one) and its `GameData` must not stick.
+    if let Some(files) = FILES.with(|f| f.borrow().clone()) {
+        let d = build_data(&files, set.roster())?;
+        DATA.with(|slot| *slot.borrow_mut() = Some(d.clone()));
+        bind_rules(set, d);
+    }
+    Ok(n)
 }
 
 /// Evaluate the compiled guard condition of `card`'s guarded `entry` against

@@ -6,8 +6,9 @@
 
 use std::sync::Arc;
 
-use game_core::data::GameData;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
+mod common;
+use common::data_arc as data;
 use game_core::fair::{
     commit_hex, commit_hex_v1, derive_match_seed, hex32, live_seed, unhex32, verify, verify_replay,
     CanonSettings, Fairness, NonceEntry, FAIR_VERSION,
@@ -20,14 +21,6 @@ use game_core::rng::{Rng, Seed256};
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
 use game_core::MatchMode;
-
-fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
-    )
-}
 
 fn rules() -> Arc<dyn CardRules> {
     Arc::new(StubRules)

@@ -15,12 +15,8 @@ use game_core::state::{prop, FieldCard, MoneyFlow, TileQuote, TileQuoteKind};
 use game_core::MatchMode;
 use game_core::data::TileKind;
 
-fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())).unwrap(),
-    )
-}
+mod common;
+use common::data_arc as data;
 
 fn members(n: i32) -> Vec<RoomMember> {
     (1..=n)

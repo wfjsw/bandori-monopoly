@@ -22,7 +22,7 @@ pub mod table;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_rules::{Ruleset, WasmRules};
 
 // Re-export the generic kit so a test can `use rules_spec::...` only.
@@ -37,9 +37,13 @@ pub fn data() -> Arc<GameData> {
     static DATA: OnceLock<Arc<GameData>> = OnceLock::new();
     DATA.get_or_init(|| {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let roster = Roster::from_json_dir(&dir).expect("data/{cards,characters,bands}.json");
         Arc::new(
-            GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-                .expect("load data/"),
+            GameData::load(
+                |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+                roster,
+            )
+            .expect("load data/"),
         )
     })
     .clone()

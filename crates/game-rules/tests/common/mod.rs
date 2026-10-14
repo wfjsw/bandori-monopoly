@@ -25,7 +25,7 @@
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::Match;
 use game_core::engine::CardRules;
 use game_core::msg::{Arg, Msg};
@@ -40,13 +40,22 @@ use game_rules::{Ruleset, WasmRules};
 
 pub const SEED: u64 = 20261006;
 
+/// The shared tables. The roster comes from the three legacy JSON files
+/// (`Roster::from_json_dir`) rather than the ruleset: `data()` is a `OnceLock`
+/// that `rules()` itself calls, so it cannot ask the ruleset without inverting
+/// that dependency. Least invasive and matches the game-core tests; swap for a
+/// `dump_roster` fixture when `data/{cards,characters,bands}.json` retire.
 pub fn data() -> Arc<GameData> {
     static DATA: OnceLock<Arc<GameData>> = OnceLock::new();
     DATA.get_or_init(|| {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let roster = Roster::from_json_dir(&dir).expect("data/{cards,characters,bands}.json");
         Arc::new(
-            GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-                .unwrap(),
+            GameData::load(
+                |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+                roster,
+            )
+            .unwrap(),
         )
     })
     .clone()

@@ -307,7 +307,7 @@ game's concepts and live in `ruleset-core` / the skill crates.
 `meta::MetaDoc` -- **not** through `ManifestEntry`, so the match path and the
 per-card manifest stay lean. The blob is built only when the host asks (load
 time, never per run). Host: `Ruleset::metadata()` / `::roster()`, then
-`game_core::data::GameData::load_with_roster(get_file, roster)`. Native
+`game_core::data::GameData::load(get_file, roster)`. Native
 (`rules-native`): `rules_native::roster_metadata()` / `::roster()`.
 
 ### Canonical order
@@ -339,27 +339,41 @@ constant (`EXPECTED_*_COVERAGE`) at the full 184 / 54 / 12.
 JSON shape/order/formatting of `data/{cards,characters,bands}.json` for tools
 to read.
 
-### Next phase: consumers switch off JSON
+### Consumers off JSON (done) / tools still on JSON
 
-Until the lift covers every row, `GameData::load` (JSON) stays the default.
-The following load `data/{cards,characters,bands}.json` today and will switch
-to `load_with_roster` + ruleset metadata in the next phase:
+Runtime hosts no longer read `data/{cards,characters,bands}.json`. The roster
+is ruleset metadata end to end:
+
+| Host | Roster source |
+| --- | --- |
+| `crates/server`, `crates/rules-worker` | `Ruleset::roster()` after loading `dist/cards` (load the ruleset first -- it does not need `GameData`) |
+| `crates/web-glue` | `Ruleset::roster()` / `roster_json()`; `load_data` pairs it with the remaining `DATA_FILES` |
+| `webui` (`core/data.ts`, workers) | `glue.roster_json()` after `ruleset_build`, before `load_data` |
+| `crates/bot-glue`, `crates/bot-service` | ruleset / `rules_native::roster()` |
+| `game-core` tests / examples | `Roster::from_json_dir(data/)` -- no ruleset and no card-crate dep (legacy JSON side-load until those files retire) |
+
+`GameData::load(read, roster)` is the one constructor. `DATA_FILES` is the
+remaining eight tables (board / events / schools / home_lines / voice_lines /
+match_rules / rules.txt / skill_simple.json). The data hash
+(`EngineStamp::data_sha256`) covers exactly those; the roster is covered by
+`ruleset_sha256` (the metadata lives in the modules that hash names).
+
+Display-only overlays stay JSON and are merged by the client:
+`skill_simple.json` (simplified skill bodies + the card `counterReason` list).
+The engine still does not read it; it is hashed via `DATA_FILES` so a record
+names the display tables it was sealed against.
+
+Still reading the three files (not runtime; retire after the tools switch):
 
 | File | Role |
 | --- | --- |
-| `crates/game-core/src/data.rs` | `GameData::load` parses the three files |
-| `crates/game-core/src/deck.rs` | documents `cards.json` order as the deck pool |
-| `crates/server/src/main.rs` | `GameData::load` from `data/` |
-| `crates/rules-worker/src/lib.rs` | `GameData::load` |
-| `crates/web-glue/src/lib.rs` | `GameData::load` from fetched files |
-| `crates/game-rules/tests/common/mod.rs` | test harness `GameData::load` |
-| `crates/game-rules/examples/deckbook.rs` | character names in file order |
-| `webui/src/core/data.ts` | client deck builder / gallery / home |
-| `webui/src/core/cards.test.ts` | reads `cards.json` |
+| `crates/game-core/src/data.rs` (`Roster::from_json_*`) | test / tooling bridge |
+| `crates/rules-native/tests/roster_equiv.rs` | equivalence gate vs the authored JSON |
+| `webui/src/core/cards.test.ts` | data-authoring gate (text/tags from `cards.json`) |
 | `tools/asset-pipe/check.py` | band / character inventory |
 | `tools/asset-pipe/extract.py` | skill-simple extraction |
-| `tools/rulebook/{extract,check,cite}.py` | rulebook cite/check vs card ids |
-| `tools/lift-roster.mjs` | lifts JSON → Rust (this phase) |
+| `tools/rulebook/extract.py` | card ids vs the rulebook sheet |
+| `tools/lift-roster.mjs` | lifts JSON → Rust |
 
 `data/skill_simple.json` (display-only) and the other `data/*.json` files
 (tiles / events / schools / voice / home / board / match_rules) stay JSON.

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::deck;
 use game_core::engine::StubRules;
 use reqwest::StatusCode;
@@ -12,10 +12,15 @@ use serde_json::{json, Value};
 use server::Server;
 
 fn data() -> Arc<GameData> {
+    // No ruleset in this harness: the three legacy JSON files are the bridge.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_json_dir(&dir).expect("data/{cards,characters,bands}.json");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap(),
     )
 }
 

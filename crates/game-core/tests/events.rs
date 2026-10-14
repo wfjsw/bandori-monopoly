@@ -9,20 +9,14 @@
 
 use std::sync::Arc;
 
-use game_core::data::{event_rule_id, GameData};
+use game_core::data::{event_rule_id};
 use game_core::engine::{CardRules, Cx, Dest, Flow, Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::BOARD_OWNER;
 use game_core::MatchMode;
-
-fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
-    )
-}
+mod common;
+use common::data_arc as data;
 
 /// A rules stand-in with exactly one event rule: `event:对邦` stays in play
 /// (「将此卡放置于场地中央」) and every other event falls through the built-in

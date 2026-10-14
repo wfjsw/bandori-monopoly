@@ -42,10 +42,10 @@ use bot_core::{
     action, heuristic_message_view, view_extras, Ismcts, MatchSim, SearchConfig, SearchOutcome,
     SeatView,
 };
-use game_core::data::{GameData, DATA_FILES};
+use game_core::data::{GameData, Roster, DATA_FILES};
 use game_core::engine::{CardRules, StubRules};
 use game_core::net::NetMessage;
-use game_rules::WasmRules;
+use game_rules::{Ruleset, WasmRules};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -68,6 +68,12 @@ thread_local! {
     static DATA: RefCell<Option<Arc<GameData>>> = const { RefCell::new(None) };
     static RULES: RefCell<Option<Arc<WasmRules>>> = const { RefCell::new(None) };
     static PENDING: RefCell<Option<game_rules::RulesetBuilder>> = const { RefCell::new(None) };
+    /// Built ruleset, waiting for (or already bound to) the game tables.
+    /// Either load order works: `load_data` before `ruleset_build` or after.
+    static RULESET: RefCell<Option<Ruleset>> = const { RefCell::new(None) };
+    /// The `DATA_FILES` contents [`load_data`] was given, kept so a later
+    /// `ruleset_build` can rebuild the tables with the ruleset's roster.
+    static FILES: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
     static RULESET_SHA: RefCell<String> = const { RefCell::new(String::new()) };
     static OPTS: RefCell<SearchOpts> = RefCell::new(SearchOpts::default());
     static CACHE: RefCell<Cache> = RefCell::new(Cache::default());
@@ -185,16 +191,46 @@ fn rules() -> Result<Arc<dyn CardRules>, JsError> {
 
 // ------------------------------------------------------------------ load
 
+/// Build the tables from the stored files + the stored ruleset's roster (or an
+/// empty roster when no ruleset is up yet), then bind `WasmRules` when a
+/// ruleset is present. Either load order works:
+///
+/// * `ruleset_build` then `load_data` -- the tables take the ruleset's roster.
+/// * `load_data` then `ruleset_build` -- the tables are rebuilt here with the
+///   roster the ruleset brings (ABI v63), so they are never stuck empty.
+fn assemble() -> Result<(), JsError> {
+    let files = FILES.with(|f| f.borrow().clone());
+    if files.is_empty() {
+        // `load_data` has not run yet; a lone `ruleset_build` just stores the
+        // set and waits for the tables.
+        return Ok(());
+    }
+    let roster: Roster = RULESET.with(|r| {
+        r.borrow()
+            .as_ref()
+            .map(|s| s.roster())
+            .unwrap_or_default()
+    });
+    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()), roster)
+        .map_err(|e| JsError::new(&e))?;
+    let data = Arc::new(d);
+    let rules = RULESET
+        .with(|r| r.borrow().clone())
+        .map(|set| WasmRules::new(set, data.clone()));
+    RULES.with(|slot| *slot.borrow_mut() = rules.map(Arc::new));
+    DATA.with(|slot| *slot.borrow_mut() = Some(data));
+    Ok(())
+}
+
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
 /// `DATA_FILES`, plus the optional `deck_book.json`. Same shape as
-/// `web-glue::load_data`.
+/// `web-glue::load_data`. The roster is **not** among them: it comes from the
+/// ruleset ([`ruleset_build`]), whichever order the two are called in.
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()))
-        .map_err(|e| JsError::new(&e))?;
-    DATA.with(|slot| *slot.borrow_mut() = Some(Arc::new(d)));
-    Ok(())
+    FILES.with(|slot| *slot.borrow_mut() = files);
+    assemble()
 }
 
 /// The file names `load_data` needs.
@@ -231,21 +267,19 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
 }
 
 /// Build the ruleset from the modules added so far. Returns the module count.
+/// Either load order works with [`load_data`] (see [`assemble`]).
 #[wasm_bindgen]
 pub fn ruleset_build() -> Result<usize, JsError> {
-    PENDING.with(|p| {
-        let built = p
-            .borrow_mut()
-            .take()
-            .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
-        let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
-        let n = set.module_count();
-        let sha = set.sha256().to_string();
-        let rules = WasmRules::new(set, data()?);
-        RULESET_SHA.with(|s| *s.borrow_mut() = sha);
-        RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
-        Ok(n)
-    })
+    let built = PENDING
+        .with(|p| p.borrow_mut().take())
+        .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
+    let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
+    let n = set.module_count();
+    let sha = set.sha256().to_string();
+    RULESET.with(|r| *r.borrow_mut() = Some(set));
+    RULESET_SHA.with(|s| *s.borrow_mut() = sha);
+    assemble()?;
+    Ok(n)
 }
 
 // ------------------------------------------------------------------ config

@@ -27,8 +27,9 @@ const DATA_DIR = join(ROOT, "data");
 /** One glue instance: import under a unique query (node's ESM cache keys on
  *  the URL, so `?tag` gives a fresh wasm instance), init it, feed the game
  *  tables and the glue identity. Mirrors `ruleset.test.ts` /
- *  `tools/test-replay-archive.mjs` and the page's own boot
- *  (`webui/src/core/data.ts`). */
+ *  `tools/test-replay-archive.mjs` (data-then-ruleset; the glue rebuilds
+ *  `GameData` with the set's roster at `ruleset_build`). The card ruleset is
+ *  NOT loaded here -- StubRules plays a complete game. */
 async function loadGlue(tag: string): Promise<Record<string, any>> {
   const glueJs = join(WASM_DIR, "glue.js");
   const glueWasm = join(WASM_DIR, "glue_bg.wasm");
