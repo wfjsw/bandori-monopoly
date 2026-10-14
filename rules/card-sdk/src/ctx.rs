@@ -766,13 +766,17 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // Static 1-byte facade strings (no heap).
+    // 1-byte facade strings (`String::from` of a 1-char literal — a real
+    // allocation kani's `__rust_dealloc` accepts; `from_raw_parts` over a
+    // static fails that hook and vacuities the covers).
     fn slot_str(buf: &[u8], i: usize) -> String {
-        static B: [[u8; 1]; 4] = [[0], [1], [2], [3]];
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
-        let b = &B[slot as usize];
-        // SAFETY: `'static` 1-byte buffer; kani bump `dealloc` is a no-op.
-        unsafe { String::from_raw_parts(b.as_ptr() as *mut u8, 1, 1) }
+        match slot {
+            0 => String::from("\x00"),
+            1 => String::from("\x01"),
+            2 => String::from("\x02"),
+            _ => String::from("\x03"),
+        }
     }
     // Real slots (branch tree, 0..=3 of them).
     let s0 = slot_str(&buf, 0);
