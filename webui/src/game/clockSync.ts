@@ -32,6 +32,9 @@ export function estimateOffset(s: ClockSample): { offset: number; rtt: number } 
  * displayed offset toward the target so the countdown never visibly runs
  * backwards.
  */
+/** An offset change larger than this is applied at once instead of slewed. */
+export const SNAP_MS = 500;
+
 export class ClockOffset {
   private target = 0;
   private shown = 0;
@@ -47,6 +50,12 @@ export class ClockOffset {
     // Keep the lowest-RTT sample. A later sample only wins when its RTT is
     // better, or when we have no estimate yet.
     if (!this.sampled || rtt < this.bestRtt) {
+      // The first estimate has nothing to be continuous with: take it whole.
+      // Slewing from 0 would take ages -- the server clock counts from its own
+      // start, so the first offset can be minutes of milliseconds, and a
+      // negative one (server restarted after page load) reads every deadline
+      // as already passed.
+      if (!this.sampled) this.shown = offset;
       this.target = offset;
       this.bestRtt = rtt;
       this.sampled = true;
@@ -64,16 +73,18 @@ export class ClockOffset {
     const { offset, rtt } = estimateOffset(s);
     if (rtt < 0 || !Number.isFinite(rtt) || !Number.isFinite(offset) || s.t3 < s.t2) return;
     if (!this.sampled || rtt <= this.bestRtt * 1.25) {
+      if (!this.sampled) this.shown = offset;
       this.target = offset;
       this.bestRtt = Math.min(this.bestRtt, rtt);
       this.sampled = true;
     }
   }
 
-  /** Slew `shown` toward `target` (call once per frame / tick). */
+  /** Slew `shown` toward `target` (call once per frame / tick). A gap over
+   *  [`SNAP_MS`] is a different clock (server restart, sleep), not drift: snap. */
   step(maxDeltaMs = 2): number {
     const d = this.target - this.shown;
-    if (Math.abs(d) <= maxDeltaMs) this.shown = this.target;
+    if (Math.abs(d) <= maxDeltaMs || Math.abs(d) > SNAP_MS) this.shown = this.target;
     else this.shown += Math.sign(d) * maxDeltaMs;
     return this.shown;
   }
