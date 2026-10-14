@@ -152,7 +152,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
               )}
             </div>
             <div className={s.who}>
-              <b>{c?.display.replace(/[（(]CRYCHIC[）)]$/i, "(c)") ?? "—"}</b>
+              <b>{c ? (c.variantTag ? `${c.variantOf}(${c.variantTag})` : c.display) : "—"}</b>
             </div>
             <div className={s.money}><img src={sceneImg("icon_coin")} alt="" /><b>{n0(x.money)}</b></div>
             <div className={s.sub}>

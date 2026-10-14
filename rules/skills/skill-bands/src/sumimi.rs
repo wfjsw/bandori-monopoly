@@ -76,10 +76,14 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 // （3）「你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出」 --
-// a hand-composition rule (two characters' exclusive cards may be held) plus a
-// play gate that reads the *character* the card belongs to.
+// a deck-composition rule (two characters' exclusive cards may be carried) plus
+// the generic in-match play gate. The carry half is **data** (`bands.json`
+// `sharesExclusives`, `deck::shares_exclusives`) -- deck building has no rules
+// handle (docs/GUARDS.md §ExclusiveUse). The play half is the engine's generic
+// own/base exclusive rule (「角色卡为对应角色」, with a variant counted as its
+// base); this card needs no `ExclusiveUse` entry of its own.
 // TODO(规则书)（3）: 「你可携带两个角色的专属卡牌」 -- carrying two characters'
-//   exclusive cards is a deck/hand building rule the engine has no form for
-//   (there is no per-card 「this belongs to character X」 field to filter the hand
-//   on, and no hand-slot rule). The play half -- 「仅有在你的角色卡为对应角色时
-//   才可打出」 -- would be `ctx::character_is` in each exclusive card's own gate.
+//   exclusive cards is a deck/hand building rule. The deck half is data
+//   (`sharesExclusives`); a hand-composition filter (holding a second
+//   character's exclusive without it being in the starting deck) still has no
+//   form.

@@ -1045,3 +1045,62 @@ their clauses as `state(actor,'stay') > 0 && state(actor,'unstoppable') == 0`,
 `ActGate` / `PayGate` / `MoveGate` entries of the `status:*` rules
 (`docs/STATUS-HOSTS.md` §9) can read each other's statuses. Those gate entries
 carry **no** residual guard (the load refuses one): the condition is the answer.
+
+
+## Exclusive-use gate (ABI 60)
+
+A band skill may further restrict **which exclusive cards its members play**.
+The question is the CEL-only `On::Gate` kind
+`TriggerKind::ExclusiveUse` / `GateKind::ExclusiveUse` (wire name
+`exclusiveUse`), asked of the ruleset whenever an exclusive card is about to be
+played from hand. Same CEL-only rule as the status gates: the condition is the
+whole answer; a residual guard or a missing condition is refused at load.
+
+### Window shape
+
+| name | meaning |
+|---|---|
+| `actor` | the player wanting to play |
+| `trigger_card` | the exclusive card's id hash (comparable to a card-id literal) |
+| `name` / `counter_name` / `counter_is('名')` | the card's `owner` character name |
+| `value` | `1` when that owner is the actor's **base** character (`variant_of`), else `0` |
+| `step` | `1` when that owner is the actor's **own** character, else `0` |
+| `band_is(p, 'Band')` / `character_is(p, '名')` | the asked seat's identity (the character row's band -- stable across a CRYCHIC transform) |
+
+### Default verdict (the engine)
+
+An exclusive is playable iff `card.owner` is the actor's character **or** its
+base (`variant_of`). That is the generic exclusive rule
+(「角色专属卡在卡名里会有角色名」 plus the variant/base exception) and it stays
+in the engine -- it is not band knowledge. Only a closing gate entry can
+further deny.
+
+### Band-skill denial (the card)
+
+CRYCHIC's 「variants may not use the base character's exclusives」 is an
+`On::Gate` entry on `skill:CRYCHIC:美好的往日幻影`
+(`rules/skills/skill-bands/src/crychic.rs`):
+
+```
+band_is(actor, 'CRYCHIC') && value == 1 && step == 0
+```
+
+i.e. the owner is the base (a foreign base exclusive when `step == 0`) and the
+asked seat is in CRYCHIC. A new band declares its own exclusive rule the same
+way: a CEL-only `ExclusiveUse` entry on its band-skill card. The engine
+contains no band names and no `ownExclusivesOnly` data lookup.
+
+### Deck building is data, not a gate
+
+Starting-deck legality (`game_core::deck`) runs with **no ruleset / wasm
+handle** -- `web-glue`'s deck endpoints, `deck_book` suggestions and the
+server's saved-deck storage all take `GameData` alone. Routing the carry rule
+through an `ExclusiveUse` gate would need a rules instance at deck-build time
+on every one of those paths, so it is **not** done. Sumimi's
+「你可携带两个角色的专属卡牌」 stays the data trait `bands.json`
+`sharesExclusives` / `GameData::band_shares_exclusives`, used by
+`deck::shares_exclusives` **only**. The in-match play half of Sumimi (3) --
+「仅有在你的角色卡为对应角色时才可打出」 -- is the engine's generic own/base
+rule; Sumimi declares no `ExclusiveUse` entry. One source of truth per rule:
+carry = data, play = engine default + band gate. (`ownExclusivesOnly` is
+deleted; the CRYCHIC denial lives only on the band-skill card.)

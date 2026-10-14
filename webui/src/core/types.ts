@@ -19,12 +19,20 @@ export interface CharacterData {
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
+  /** Base character of an alternate form (`高松灯（CRYCHIC）` -> `高松灯`). */
+  variantOf?: string;
+  /** Short label for compact displays of a variant. */
+  variantTag?: string;
 }
 export interface BandData {
   name: string; shortName: string; color: string; skill: string; text: string;
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
   logo: string;
+  /** Band-skill traits the deck rules read. */
+  sharesExclusives?: boolean;
+  /** Boot-screen art id for a home character of this band. */
+  bootArt?: string;
 }
 export interface EventData { id: string; name: string; derived: boolean; text: string; cell: string }
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }

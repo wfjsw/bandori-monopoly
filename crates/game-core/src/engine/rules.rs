@@ -535,6 +535,20 @@ pub trait CardRules: Send + Sync {
         None
     }
 
+    /// An [`Gate::Exclusive`] question (`docs/GUARDS.md`): `Some(true)` = the
+    /// ruleset's CEL-only `ExclusiveUse` `On::Gate` entries all allow this
+    /// exclusive play. `None` (the default) means "no ruleset opinion": the
+    /// engine's generic own/base verdict stands. A band-skill card (CRYCHIC)
+    /// closes the gate to deny a variant its base character's exclusives.
+    fn exclusive_use(
+        &self,
+        _w: &super::World,
+        _player: usize,
+        _ask: &ExclusiveAsk<'_>,
+    ) -> Option<bool> {
+        None
+    }
+
     /// Extra card-specific reason it can't be played right now.
     fn cant_play(&self, _cx: &Cx, _player: usize, _card: &str) -> Option<Msg> {
         None
@@ -664,6 +678,22 @@ pub enum Gate {
     Pay,
     /// This turn's [主要移动].
     Move,
+    /// May this exclusive card be played? Context rides along as an
+    /// [`ExclusiveAsk`] on [`CardRules::exclusive_use`].
+    Exclusive,
+}
+
+/// The card-side context of a [`Gate::Exclusive`] question.
+#[derive(Debug, Clone, Copy)]
+pub struct ExclusiveAsk<'a> {
+    /// The exclusive card's id.
+    pub card: &'a str,
+    /// The card's `owner` character name.
+    pub owner: &'a str,
+    /// `owner == actor.character`.
+    pub owner_is_self: bool,
+    /// `owner == base_character(actor.character)`.
+    pub owner_is_base: bool,
 }
 
 /// Every card and event has no effect yet.

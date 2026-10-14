@@ -2122,7 +2122,23 @@ impl World {
             super::Gate::Act => g.act,
             super::Gate::Pay => g.pay,
             super::Gate::Move => g.r#move,
+            // [`Self::exclusive_use`] owns this question (it needs the card).
+            super::Gate::Exclusive => true,
         }
+    }
+
+    /// Is the exclusive-use gate open for this player and card? The engine's
+    /// generic own/base verdict is the caller's business (it is the default);
+    /// this asks the ruleset's CEL-only `ExclusiveUse` entries (a band-skill
+    /// card denying a variant its base character's exclusives). `true` = no
+    /// entry closed it.
+    pub fn exclusive_use(
+        &self,
+        rules: &dyn super::CardRules,
+        player: usize,
+        ask: &super::ExclusiveAsk<'_>,
+    ) -> bool {
+        rules.exclusive_use(self, player, ask).unwrap_or(true)
     }
 
     /// `status:stay` count-changed clause (rules.txt 48): when the last [停留]

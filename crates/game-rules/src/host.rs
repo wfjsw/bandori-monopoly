@@ -545,18 +545,19 @@ pub(crate) struct Inner {
     /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
     /// can never fire at a kind.
     hook_mask: Vec<u128>,
-    /// The CEL-only status gates (`TriggerKind::{ActGate, PayGate, MoveGate}`):
-    /// per gate kind, the `(card, entry)` pairs whose condition closes it.
-    /// Built once at load so a gate read walks only these.
+    /// The CEL-only gates (`TriggerKind::{ActGate, PayGate, MoveGate,
+    /// ExclusiveUse}`): per gate kind, the `(card, entry)` pairs whose
+    /// condition closes it. Built once at load so a gate read walks only these.
     gates: [Vec<(i32, i32)>; GATE_KINDS.len()],
 }
 
 /// The gate kinds answered natively from conditions alone (see
 /// [`gate_open_over`]). Index = position in this array.
-pub const GATE_KINDS: [crate::TriggerKind; 3] = [
+pub const GATE_KINDS: [crate::TriggerKind; 4] = [
     crate::TriggerKind::ActGate,
     crate::TriggerKind::PayGate,
     crate::TriggerKind::MoveGate,
+    crate::TriggerKind::ExclusiveUse,
 ];
 
 fn gate_index(kind: crate::TriggerKind) -> Option<usize> {
@@ -591,7 +592,7 @@ pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
             }
             if o.has_guard || o.pre.is_none() {
                 return Err(RuleError::Load(format!(
-                    "{}/{ei}: an ActGate/PayGate/MoveGate entry must be CEL-only (a condition, no residual guard)",
+                    "{}/{ei}: an ActGate/PayGate/MoveGate/ExclusiveUse entry must be CEL-only (a condition, no residual guard)",
                     c.id
                 )));
             }

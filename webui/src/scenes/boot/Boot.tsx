@@ -15,12 +15,6 @@ import { toast } from "../../ui/Toast";
 import s from "./Boot.module.css";
 import { t as tr } from "../../i18n/t";
 
-/** BootController.BandKeys -- boot art per home character's band. */
-const BAND_KEYS: Record<string, string> = {
-  "Poppin' Party": "001", Afterglow: "002", "Hello, Happy World!": "003", "Pastel✽Palettes": "004",
-  Roselia: "005", "RAISE A SUILEN": "018", Morfonica: "021", "MyGO!!!!!": "045", CRYCHIC: "045",
-};
-
 const TIPS = [
   tr("boot.tip.circle"),
   tr("boot.tip.dealer"),
@@ -68,7 +62,7 @@ function useBootAssets(opts: {
         if (!alive) return;
         playSceneBgm("boot");
         const home = hasProfile() ? D.character(getProfile().homeCharacter) : undefined;
-        setArt(res(`BandoriBoot/${BAND_KEYS[home?.band ?? ""] ?? "045"}`));
+        setArt(res(`BandoriBoot/${(home && D.band(home.band)?.bootArt) || "045"}`));
         if (!hasProfile()) setStage("create");
         else if (resume) onReady();
         else setStage("tap");

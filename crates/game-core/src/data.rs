@@ -228,6 +228,11 @@ pub struct CharacterData {
     pub costume: String,
     pub exclusive_cards: Vec<String>,
     pub preset: Vec<String>,
+    /// The character this one is an alternate form of (`高松灯（CRYCHIC）` ->
+    /// `高松灯`); empty when it is a base character.
+    pub variant_of: String,
+    /// Short label for compact displays of a variant (`c`).
+    pub variant_tag: String,
 }
 
 impl CharacterData {
@@ -251,6 +256,12 @@ pub struct BandData {
     pub skill: String,
     pub text: String,
     pub logo: String,
+    /// Band-skill trait: members may carry each other's exclusive cards in a
+    /// starting deck. Deck-legal only -- the in-match play gate is the
+    /// band-skill card's `ExclusiveUse` entry (or the generic own/base rule).
+    pub shares_exclusives: bool,
+    /// Boot-screen art id for a home character of this band; empty = default.
+    pub boot_art: String,
 }
 
 /// One event card from `events.json`.
@@ -546,14 +557,19 @@ impl GameData {
         self.characters.iter().find(|c| c.name == name)
     }
 
-    /// The base character of a variant (`X（CRYCHIC）` -> `X`): the longest other
-    /// character name this one starts with. Itself when it is not a variant.
+    /// The base character of a variant (`variant_of`). Itself when it is not
+    /// a variant.
     pub fn base_character<'a>(&'a self, name: &'a str) -> &'a str {
-        self.characters
-            .iter()
-            .filter(|c| c.name != name && name.starts_with(c.name.as_str()))
-            .max_by_key(|c| c.name.len())
-            .map_or(name, |c| c.name.as_str())
+        self.character(name)
+            .map(|c| c.variant_of.as_str())
+            .filter(|b| !b.is_empty())
+            .unwrap_or(name)
+    }
+
+    /// Whether `c`'s band lets its members carry each other's exclusive cards
+    /// in a starting deck (deck-building only; see [`crate::deck`]).
+    pub fn band_shares_exclusives(&self, c: &CharacterData) -> bool {
+        self.band(&c.band).is_some_and(|b| b.shares_exclusives)
     }
 
     /// Band by `name`, first match.

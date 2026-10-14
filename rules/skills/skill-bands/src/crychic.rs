@@ -13,7 +13,7 @@
 //! can be played from hand. （2） is the hand-emptying reshuffle that turns the
 //! player into a MyGO or Ave Mujica player. （3） is a crystal on a 4→5 crossing.
 
-use card_sdk::abi::{state_key, CardPile, HookKind};
+use card_sdk::abi::{state_key, CardPile, GateKind, HookKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -32,10 +32,29 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
         On::Hook(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
         On::Hook(&[HookKind::CircleAffected], "", Some(in_lock), force_card),
+        // 「CRYCHIC variants may not use base character's exclusives」 -- a
+        // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
+        // is the generic own/base rule; this entry closes the base case for
+        // CRYCHIC variants. `value` = the card's owner is the actor's base
+        // character; `step` = the owner is the actor's own character.
+        On::Gate(&[GateKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
         On::Play("", Some(can_transform), transform_now),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
+
+/// The condition under which this band skill closes the exclusive-use gate.
+/// CRYCHIC variants may play their own exclusives (`step == 1`) but not the
+/// base character's (`value == 1 && step == 0`).
+pub const EXCLUSIVE_USE_DENIED: &str =
+    "band_is(actor, 'CRYCHIC') && value == 1 && step == 0";
+
+/// The answer of a closed exclusive-use gate (only run if a gate is ever
+/// raised; pure reads use the condition alone).
+fn refuse(_owner: i32) -> card_sdk::Asked {
+    ctx::trigger::set_cancelled();
+    Ok(())
+}
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

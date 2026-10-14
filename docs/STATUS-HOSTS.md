@@ -507,7 +507,7 @@ Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
 
 ---
 
-## 9. Gates are CEL-only `On::Gate` entries (ABI 58)
+## 9. Gates are CEL-only `On::Gate` entries (ABI 58+)
 
 The act / pay / move gates are no longer `MatchPlayer::status_gates()` read at
 policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
@@ -541,3 +541,9 @@ policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
 * **No guest `ActGate` reader.** `rules_status::can_act` was removed (it was an
   alias of `can_pay` with no caller). `TODO(ABI)`: a generic
   `gate_open(kind, player)` import would serve both.
+* **ABI 60 `ExclusiveUse`.** The same CEL-only shape, one more gate kind, asked
+  when an exclusive card is about to be played. It is a **band-skill** rule
+  host (CRYCHIC's variant/base denial lives on `skill:CRYCHIC:…`), not a status
+  host -- see `docs/GUARDS.md` §Exclusive-use gate for the window shape, the
+  engine's default own/base verdict, and why deck building keeps the
+  `sharesExclusives` data trait instead of a second gate.

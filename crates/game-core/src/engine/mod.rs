@@ -43,8 +43,8 @@ pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::{Paid, Pay, PayEvent, PayKind};
 pub use play::purchase;
 pub use rules::{
-    CardRules, Dest, Dir, Effect, Gate, Negation, Payee, RollSource, StubRules, TileTextDecl,
-    Trigger, TriggerBuy, TriggerMove, TriggerPay,
+    CardRules, Dest, Dir, Effect, ExclusiveAsk, Gate, Negation, Payee, RollSource, StubRules,
+    TileTextDecl, Trigger, TriggerBuy, TriggerMove, TriggerPay,
 };
 pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, World};
 pub use play::MAX_SETTLE_DEPTH;

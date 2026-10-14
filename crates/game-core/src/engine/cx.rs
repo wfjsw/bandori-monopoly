@@ -18,7 +18,7 @@ use crate::data::{GameData, TileData};
 use crate::msg::Msg;
 use crate::state::MatchPrompt;
 
-use super::rules::CardRules;
+use super::rules::{CardRules, ExclusiveAsk};
 use super::world::World;
 
 /// Why a routine stopped before finishing. Opaque to card rules: they only pass it
@@ -449,11 +449,14 @@ pub struct Cx<'a> {
 /// The play-gate memo: verdicts keyed by `(player, card id)`, valid only for
 /// the [`crate::engine::world::SharedWorld`] stamp they were computed under.
 /// A small linear map (a hand scan has few unique ids) -- no hashing on the
-/// hot path.
+/// hot path. Two verdicts ride along: the ruleset's `cant_play` and the
+/// `ExclusiveUse` gate denial (both pure within one stamp).
 #[derive(Default)]
 struct PlayMemo {
     stamp: u64,
     entries: Vec<((usize, String), Option<Msg>)>,
+    exclusive_stamp: u64,
+    exclusive: Vec<((usize, String), bool)>,
 }
 
 impl PlayMemo {
@@ -481,6 +484,29 @@ impl PlayMemo {
             self.entries.clear();
         }
         self.entries.push(((player, card.to_string()), why));
+    }
+    fn clear_exclusive(&mut self) {
+        self.exclusive.clear();
+    }
+    fn get_exclusive(&self, player: usize, card: &str) -> Option<bool> {
+        self.exclusive
+            .iter()
+            .find(|((p, c), _)| *p == player && c == card)
+            .map(|(_, v)| *v)
+    }
+    fn insert_exclusive(&mut self, player: usize, card: &str, denied: bool) {
+        if let Some(slot) = self
+            .exclusive
+            .iter_mut()
+            .find(|((p, c), _)| *p == player && c == card)
+        {
+            slot.1 = denied;
+            return;
+        }
+        if self.exclusive.len() >= 64 {
+            self.exclusive.clear();
+        }
+        self.exclusive.push(((player, card.to_string()), denied));
     }
 }
 
@@ -889,8 +915,10 @@ impl<'a> Cx<'a> {
     /// verdict instead of re-running the gate body.
     ///
     /// This is the **rules** gate only -- the engine's own cheap gates (hand
-    /// membership, phase, `CannotPlay`, exclusivity, `normal`) run every time
-    /// in [`Self::cant_play`] and are pure field reads.
+    /// membership, phase, `CannotPlay`, `normal`) run every time in
+    /// [`Self::cant_play`] and are pure field reads. The exclusive-use check
+    /// (`ExclusiveUse` gate) has its own half of this memo
+    /// ([`Self::exclusive_play`]).
     pub fn rules_cant_play(&self, player: usize, card: &str) -> Option<Msg> {
         #[cfg(feature = "bot-cost")]
         use std::sync::atomic::Ordering::Relaxed;
@@ -912,6 +940,31 @@ impl<'a> Cx<'a> {
         let why = self.rules.cant_play(self, player, card);
         self.play_memo.borrow_mut().insert(player, card, why.clone());
         why
+    }
+
+    /// The `ExclusiveUse` gate with the per-world memo (same stamp rule as
+    /// [`Self::rules_cant_play`]). `true` = a band-skill gate entry closed this
+    /// exclusive play. The engine's generic own/base verdict is the caller's
+    /// cheap pre-check; this only asks the ruleset.
+    pub fn exclusive_gate_denied(&self, player: usize, card: &str, ask: &ExclusiveAsk<'_>) -> bool {
+        let stamp = self.w.stamp();
+        {
+            let mut memo = self.play_memo.borrow_mut();
+            if memo.exclusive_stamp != stamp {
+                memo.clear_exclusive();
+                memo.exclusive_stamp = stamp;
+            }
+            if let Some(denied) = memo.get_exclusive(player, card) {
+                #[cfg(feature = "bot-cost")]
+                crate::engine::bot_cost::CANT_PLAY_MEMO_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return denied;
+            }
+        }
+        let denied = !self.w.exclusive_use(self.rules, player, ask);
+        self.play_memo
+            .borrow_mut()
+            .insert_exclusive(player, card, denied);
+        denied
     }
 
     /// Simulation mode: answer every prompt through `p` instead of halting
