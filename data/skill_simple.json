@@ -1,5 +1,5 @@
 {
- "note": "角色技能 / 团技能的简明说明（给新手看的版本）。原文在 characters.json / bands.json（从设计表导出，不要改）；这里手写，导出脚本不会覆盖。",
+ "note": "角色技能 / 团技能的简明说明（给新手看的版本）和 [反击] 卡的触发条件（counterReason，给提示框的「why this card may be declared」）。原文在 roster metadata（CardData/CharacterData/BandData text，从设计表导出，不要改）；这里手写，导出脚本不会覆盖。",
  "characters": [
   {
    "name": "户山香澄",
@@ -266,6 +266,204 @@
   {
    "name": "CiRCLE",
    "text": "· 卡组只能放「通用」卡。\n· 打出的「通用」卡生效时，可以多弃 1 张手牌，把这张卡效果里的一个数字变成两倍（往卡组里加卡的效果不行）。"
+  }
+ ],
+ "cards": [
+  {
+   "id": "AG:宣战布告",
+   "counterReason": "你或你拥有的格子被其他玩家的卡效果影响"
+  },
+  {
+   "id": "PP:再次闪耀",
+   "counterReason": "[拥有者][消耗]或[支付]并当前资金不够"
+  },
+  {
+   "id": "Mor:迷茫之蝶们的三全音",
+   "counterReason": "你将要失去或支付资金"
+  },
+  {
+   "id": "RAS:R. I. O. T.",
+   "counterReason": "你被其他人的卡效果影响"
+  },
+  {
+   "id": "MyGO:即使迷茫着",
+   "counterReason": "你被其他人的卡的效果影响"
+  },
+  {
+   "id": "Mujica:（睦/mortis）表演的本能",
+   "counterReason": "此卡复制[反击]卡时可在符合条件时打出"
+  },
+  {
+   "id": "HHW:笑容大游行",
+   "counterReason": "经过“弦卷集团”（#29格）"
+  },
+  {
+   "id": "Mujica:欢迎来到ave mujica的世界",
+   "counterReason": "有其他玩家切换状态"
+  },
+  {
+   "id": "CRYCHIC:春日影",
+   "counterReason": "可作为[反击]打出"
+  },
+  {
+   "id": "RAS:狂乱Hey Kids!!",
+   "counterReason": "在属于你的格子上结算"
+  },
+  {
+   "id": "Sumimi:现在她是Sumimi的小初啦",
+   "counterReason": "你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]"
+  },
+  {
+   "id": "Mujica:骰子已经掷下",
+   "counterReason": "本回合内所有其他玩家无法从手牌中使用[反击]"
+  },
+  {
+   "id": "Sumimi:Sumimi是二人一体的",
+   "counterReason": "你的移动掷骰后"
+  },
+  {
+   "id": "CRYCHIC:优雅的呐喊",
+   "counterReason": "你在回合外受到抽卡效果"
+  },
+  {
+   "id": "RAS:PLEASE CHOOSE",
+   "counterReason": "有玩家在livehouse格子上结算"
+  },
+  {
+   "id": "Mujica:无法将视线移开",
+   "counterReason": "有玩家对你使用[反击]后"
+  },
+  {
+   "id": "Sumimi:Here the world",
+   "counterReason": "有人同一回合内打出两张卡"
+  },
+  {
+   "id": "CRYCHIC:是我自己的问题",
+   "counterReason": "主要移动结束时，[触发结算]前"
+  },
+  {
+   "id": "R:live前的准备",
+   "counterReason": "经过江户川乐器店"
+  },
+  {
+   "id": "HHW:黑衣人的补给",
+   "counterReason": "经过“CiRCLE”格子（#1）"
+  },
+  {
+   "id": "R:选择自己的舞台",
+   "counterReason": "受到[除外]以外的异常移动效果影响"
+  },
+  {
+   "id": "Mor:（小白）",
+   "counterReason": "你将要向其他玩家支付"
+  },
+  {
+   "id": "RAS:游击演出",
+   "counterReason": "你经过属于其他玩家的livehouse格子"
+  },
+  {
+   "id": "通用:网络链接异常",
+   "counterReason": "1张手卡的[手]效果或事件卡的效果生效前"
+  },
+  {
+   "id": "PP:梦在前方，结彩当下",
+   "counterReason": "[拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]"
+  },
+  {
+   "id": "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
+   "counterReason": "时机合适"
+  },
+  {
+   "id": "Mor:离心力，不为所动",
+   "counterReason": "你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标"
+  },
+  {
+   "id": "Sumimi:（真奈）歌唱大赛5连冠",
+   "counterReason": "你或你的格子即将受到来自你以外的效果影响"
+  },
+  {
+   "id": "CRYCHIC:主唱太拼命了",
+   "counterReason": "一次性向其他玩家支付5000以上资金"
+  },
+  {
+   "id": "AG:朝同一片天空迈进",
+   "counterReason": "抽出此卡"
+  },
+  {
+   "id": "R:（亚子）黑暗大魔姬亚子",
+   "counterReason": "你即将向其他玩家支付资金"
+  },
+  {
+   "id": "RAS:Repaint",
+   "counterReason": "任意其他玩家进行移动掷骰并进入移动阶段"
+  },
+  {
+   "id": "AG:绯红之魂",
+   "counterReason": "[拥有者]因导致的[消耗]或[支付]"
+  },
+  {
+   "id": "Mor:再次牵起手来",
+   "counterReason": "[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后"
+  },
+  {
+   "id": "通用:安可",
+   "counterReason": "[使用者]即将因任何原因受到[异常移动效果]影响"
+  },
+  {
+   "id": "AG:刻入天穹傲岸的烈光",
+   "counterReason": "你经过一名角色"
+  },
+  {
+   "id": "MyGO:若能再次交汇",
+   "counterReason": "移动掷骰后，且场上有可被经过的玩家"
+  },
+  {
+   "id": "通用:[月岛麻里奈]今天也要加油工作喔",
+   "counterReason": "[使用者][经过]#1格子且#1格子受到其他效果影响"
+  },
+  {
+   "id": "AG:（巴）商店街的救世主",
+   "counterReason": "其他玩家抵押商店街地契"
+  },
+  {
+   "id": "Mor:秘密与青春的虹彩",
+   "counterReason": "你向学妹或同级生支付"
+  },
+  {
+   "id": "AG:（绯玛丽）如果并非没问题",
+   "counterReason": "你的一次掷骰小于6"
+  },
+  {
+   "id": "R:轨迹",
+   "counterReason": "在场上有玩家破产"
+  },
+  {
+   "id": "HHW:（美咲）",
+   "counterReason": "使用火罐进行移动掷骰"
+  },
+  {
+   "id": "AG:（鸫）微小的『能做到』的事",
+   "counterReason": "时机合适"
+  },
+  {
+   "id": "PP:[丸山彩]憧憬的前方",
+   "counterReason": "[消耗]或[支付]"
+  },
+  {
+   "id": "R:必然的联系（莉莎）",
+   "counterReason": "你使用技能进行传送"
+  },
+  {
+   "id": "HHW:梦幻的回礼",
+   "counterReason": "在场上其他玩家即将被不属于你的格子收费"
+  },
+  {
+   "id": "MyGO:普通与理所当然",
+   "counterReason": "受到异常移动效果影响"
+  },
+  {
+   "id": "CRYCHIC:（立希）即便比不上...",
+   "counterReason": "进入移动阶段"
   }
  ]
 }

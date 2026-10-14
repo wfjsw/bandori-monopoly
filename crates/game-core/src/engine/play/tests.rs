@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::data::GameData;
+use crate::data::{GameData, Roster};
 use crate::engine::cx::{Answered, HaltKind};
 use crate::engine::world::World;
 use crate::engine::{Match, StubRules};
@@ -14,10 +14,18 @@ use crate::MatchMode;
 use crate::data::TileKind;
 
 fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("../../data");
+    let roster = Roster::from_fixture(
+        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
+    )
+    .expect("roster fixture parses");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap(),
     )
 }
 

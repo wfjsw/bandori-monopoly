@@ -26,9 +26,14 @@ fn main() {
     let players = args.get(1).copied().unwrap_or(4) as i32;
     let max_rounds = args.get(2).copied().unwrap_or(200) as i32;
 
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("../../data");
+    let roster = game_core::data::Roster::from_fixture(
+        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
+    )
+    .expect("roster fixture parses");
     let data = Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
+        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
             .unwrap(),
     );
 

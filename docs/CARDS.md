@@ -50,7 +50,7 @@ guard + the effect, `On::Hook` the field-hook kinds (`passTile`, `payAdd`,
 `drawn`, `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) in the same
 shape. An empty kind list is never dispatched.
 
-* `id` is the **data** card id from `data/cards.json` (Chinese; an identifier,
+* `id` is the **data** card id from the roster (Chinese; an identifier,
   not display text).
 * every string a card produces is a message key: `key!("...")` namespaces it as
   `cards:<crate>.<key>`, and the translation lives in the crate's
@@ -281,9 +281,11 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 
 ## Card metadata (ABI v63) -- data lives with the rule
 
-The deck-builder / gallery / home-screen rows of `data/cards.json`,
-`data/characters.json` and `data/bands.json` are **authored beside the rule
-code** and exported from the ruleset, not hand-maintained as flat JSON.
+The deck-builder / gallery / home-screen rows (cards / characters / bands) are
+**authored beside the rule code** and exported from the ruleset. There is no
+flat `data/{cards,characters,bands}.json` any more: the Rust metadata is the
+single source (cutover complete; equivalence to the old JSON was verified at
+commit `7c3d115`).
 
 * **Cards** -- `CardDef::meta(&CardMeta::new()...)` on the card's `CardDef`
   (`rules/cards/card-*/src/*.rs`). Carries `name` / `rawName` / `text` /
@@ -313,13 +315,17 @@ time, never per run). Host: `Ruleset::metadata()` / `::roster()`, then
 ### Canonical order
 
 The Rust crates register cards alphabetically inside each band, while
-`GameData` iterates the JSON files in their own order (deck pools, presets).
+`GameData` iterates the roster in its own order (deck pools, presets).
 A shared generated table (`rules/ruleset-core/src/roster_order.rs`, written
 **once** by `tools/lift-roster.mjs --ordinals`) maps id → ordinal; the export
-sorts by `(kind, ordinal)` so the rebuilt vectors equal the JSON order exactly.
-Per-band lift runs never touch that table.
+sorts by `(kind, ordinal)` so the rebuilt vectors equal the roster order
+exactly. Per-band lift runs never touch that table.
 
-### Lifting + equivalence gate
+### Lifting + fixture gate
+
+The lift is **complete** (184 cards / 54 characters / 12 bands). The tool
+still runs for a re-lift / tweak, reading the generated fixture as its row
+table:
 
 ```sh
 node tools/lift-roster.mjs --ordinals          # generate roster_order.rs
@@ -330,39 +336,31 @@ node tools/lift-roster.mjs --all               # every band
 ```
 
 `--band` touches only that band's files (safe to run concurrently across
-bands). The gate for deleting the JSON later is
-`cargo test -p rules-native --test roster_equiv`: deep equality (order
-included) for every row that has Rust metadata, with coverage an explicit
-constant (`EXPECTED_*_COVERAGE`) at the full 184 / 54 / 12.
+bands).
 
-`cargo run -p rules-native --example dump_roster` prints the roster in the
-JSON shape/order/formatting of `data/{cards,characters,bands}.json` for tools
-to read.
+The test fixture `crates/game-core/tests/fixtures/roster.json` is a generated
+dump of the Rust roster (one `{cards, characters, bands}` document), used by
+crates that have no ruleset (game-core / game-rules / bot-core / server) and by
+`webui/src/core/cards.test.ts`. Regenerate it with:
 
-### Next phase: consumers switch off JSON
+```sh
+cargo run -p rules-native --example dump_roster -- --fixture crates/game-core/tests/fixtures/roster.json
+```
 
-Until the lift covers every row, `GameData::load` (JSON) stays the default.
-The following load `data/{cards,characters,bands}.json` today and will switch
-to `load_with_roster` + ruleset metadata in the next phase:
+`cargo test -p rules-native --test roster_equiv` is the gate: the fixture must
+be byte-equal to a fresh dump (ordering / field fidelity included). Equivalence
+to the retired `data/{cards,characters,bands}.json` baseline was verified at
+the cutover (commit `7c3d115`, the last tree with those files as the baseline).
 
-| File | Role |
-| --- | --- |
-| `crates/game-core/src/data.rs` | `GameData::load` parses the three files |
-| `crates/game-core/src/deck.rs` | documents `cards.json` order as the deck pool |
-| `crates/server/src/main.rs` | `GameData::load` from `data/` |
-| `crates/rules-worker/src/lib.rs` | `GameData::load` |
-| `crates/web-glue/src/lib.rs` | `GameData::load` from fetched files |
-| `crates/game-rules/tests/common/mod.rs` | test harness `GameData::load` |
-| `crates/game-rules/examples/deckbook.rs` | character names in file order |
-| `webui/src/core/data.ts` | client deck builder / gallery / home |
-| `webui/src/core/cards.test.ts` | reads `cards.json` |
-| `tools/asset-pipe/check.py` | band / character inventory |
-| `tools/asset-pipe/extract.py` | skill-simple extraction |
-| `tools/rulebook/{extract,check,cite}.py` | rulebook cite/check vs card ids |
-| `tools/lift-roster.mjs` | lifts JSON → Rust (this phase) |
+### Cutover complete: consumers take the roster from the ruleset
 
-`data/skill_simple.json` (display-only) and the other `data/*.json` files
-(tiles / events / schools / voice / home / board / match_rules) stay JSON.
+`GameData::load(read, roster)` takes the roster from the ruleset host (ABI v63
+`bandori_metadata` -> `Roster`) or, in tests, from `Roster::from_fixture`.
+Runtime consumers (server, rules-worker, bot-service, web-glue, bot-glue) load
+the ruleset first and hand `Ruleset::roster()` over. `data/skill_simple.json`
+(display-only: simplified skill bodies + per-card `counterReason`) and the
+other `data/*.json` files (tiles / events / schools / voice / home / board /
+match_rules) stay JSON.
 
 ## The vocabulary (`card_sdk::ctx` vs `ruleset_core::ctx`)
 

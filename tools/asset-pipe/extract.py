@@ -379,26 +379,10 @@ def run(args) -> int:
                 continue
             shutil.copy2(f, dst)
             p.stats.add("data", dst)
-        # 6b) the build's `skill_simple` TextAsset (C# GameDataLoader.WithSimple):
-        # a simplified skill text per character / band, merged into the data JSONs
-        # as `simple` (the full `text` stays as-is).
-        simple = read_text_asset("skill_simple")
-        if simple:
-            for fname, key in (("characters.json", "characters"), ("bands.json", "bands")):
-                dst = DATA_OUT / fname
-                if not dst.exists():
-                    continue
-                doc = json.loads(dst.read_text(encoding="utf-8-sig"))
-                rows = doc.get(key) if isinstance(doc, dict) else doc
-                by_name = {e.get("name"): e.get("text") for e in simple.get(key, [])}
-                n = 0
-                for row in rows:
-                    text = by_name.get(row.get("name"))
-                    if text and row.get("simple") != text:
-                        row["simple"] = text
-                        n += 1
-                dst.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-                print(f"   data: {fname} += simple skill text on {n} {key}")
+        # 6b) the build's `skill_simple` TextAsset (C# GameDataLoader.WithSimple)
+        # used to be merged into the roster JSONs as `simple`. The roster now
+        # lives in the Rust rule code (ABI v63) and the simplified bodies stay
+        # hand-written in `data/skill_simple.json` -- nothing to merge here.
 
     p.drain()
     p.pool.shutdown()

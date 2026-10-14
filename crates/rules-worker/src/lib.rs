@@ -53,15 +53,30 @@ impl Ctx {
     /// Load the game tables and card modules once. Read-only from here on.
     /// The tables' sha256 (in [`DATA_FILES`] order) is captured here too, so a
     /// record written by this worker says which board / card data it saw.
+    ///
+    /// The roster (cards / characters / bands) comes from the ruleset metadata
+    /// (ABI v63) -- modules are loaded first so `Roster` can be handed to
+    /// [`GameData::load`]. No modules = empty roster = the degraded boot.
     pub fn load(data_dir: &std::path::Path, rules_dir: &std::path::Path) -> Self {
+        let ruleset = match WasmRules::load_ruleset(rules_dir) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
+                None
+            }
+        };
+        let roster = ruleset.as_ref().map(|r| r.roster()).unwrap_or_default();
         let mut contents: Vec<(String, String)> = Vec::new();
         let data = Arc::new(
-            GameData::load(|f| {
-                let text =
-                    std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string())?;
-                contents.push((f.to_string(), text.clone()));
-                Ok(text)
-            })
+            GameData::load(
+                |f| {
+                    let text =
+                        std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string())?;
+                    contents.push((f.to_string(), text.clone()));
+                    Ok(text)
+                },
+                roster,
+            )
             .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
         );
         let mut hasher = Sha256::new();
@@ -89,24 +104,20 @@ impl Ctx {
             }
         }
         let data_sha256 = hex(&hasher.finalize());
-        let rules: Arc<dyn CardRules> = match WasmRules::load_dir(data.clone(), rules_dir) {
-            Ok(Some(r)) => {
+        let rules: Arc<dyn CardRules> = match ruleset {
+            Some(set) => {
                 eprintln!(
                     "card modules: {} loaded from {}",
-                    r.ruleset().module_count(),
+                    set.module_count(),
                     rules_dir.display()
                 );
-                Arc::new(r)
+                Arc::new(WasmRules::new(set, data.clone()))
             }
-            Ok(None) => {
+            None => {
                 eprintln!(
                     "no card modules in {} -- cards have no effect",
                     rules_dir.display()
                 );
-                Arc::new(StubRules)
-            }
-            Err(e) => {
-                eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
                 Arc::new(StubRules)
             }
         };

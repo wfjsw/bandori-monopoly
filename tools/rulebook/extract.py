@@ -4,7 +4,9 @@
 The sheet (docs/rulebook/cards-sheet.csv, one column per band) holds one cell per
 card: "卡名：[标签]：效果文本". Cells encode line breaks as the two-character
 sequence `\\n`, and the name is the id's text after "BAND:" (with its prefix).
-Matching is by prefix against each card in data/cards.json.
+Matching is by prefix against each card in the roster fixture
+(`crates/game-core/tests/fixtures/roster.json`, the generated dump of the Rust
+metadata).
 
 Usage: python tools/rulebook/extract.py
 """
@@ -17,6 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SHEET = ROOT / "docs" / "rulebook" / "cards-sheet.csv"
 OUT = ROOT / "docs" / "rulebook" / "cards.json"
+ROSTER = ROOT / "crates" / "game-core" / "tests" / "fixtures" / "roster.json"
 
 
 def cells():
@@ -50,7 +53,7 @@ def names_of(card):
 
 
 def main() -> int:
-    data = json.load(open(ROOT / "data" / "cards.json", encoding="utf-8-sig"))
+    data = json.load(open(ROSTER, encoding="utf-8"))
     all_cells = list(cells())
     found, missing = {}, []
     for card in data["cards"]:
@@ -60,7 +63,7 @@ def main() -> int:
         else:
             missing.append(f'{card["id"]} ({card.get("name", "")})')
     OUT.write_text(json.dumps(dict(sorted(found.items())), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"cards.json: {len(found)} ids matched, {len(missing)} unmatched")
+    print(f"rulebook cards.json: {len(found)} ids matched, {len(missing)} unmatched")
     for m in missing:
         print("   ", m)
     return 0

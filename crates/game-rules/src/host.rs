@@ -918,7 +918,7 @@ impl Ruleset {
     }
 
     /// The same rows as [`Self::metadata`], as the game's `Roster` (ready for
-    /// [`game_core::data::GameData::load_with_roster`]).
+    /// [`game_core::data::GameData::load`]).
     pub fn roster(&self) -> game_core::data::Roster {
         crate::roster::roster_from_meta(self.metadata())
     }
@@ -999,7 +999,7 @@ impl Ruleset {
                 .is_some_and(|m| (m >> v) & 1 != 0)
     }
 
-    /// Handle for a card id from `cards.json`, e.g. `"AG:Y.O.L.O"`.
+    /// Handle for a card id from the roster, e.g. `"AG:Y.O.L.O"`.
     pub fn card(&self, id: &str) -> Option<i32> {
         self.inner.by_id.get(id).copied()
     }

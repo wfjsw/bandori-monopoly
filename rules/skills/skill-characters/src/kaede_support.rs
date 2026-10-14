@@ -321,7 +321,7 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
 //   (The band skill's fire-pot drain is the engine's stand-in exit; it does not
 //   clear the SPLIT keys or the designation marks -- see `enter_two`.)
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"八幡海铃"#)
     .display(r#"八幡海铃"#)

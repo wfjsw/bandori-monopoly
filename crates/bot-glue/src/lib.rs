@@ -68,6 +68,7 @@ thread_local! {
     static DATA: RefCell<Option<Arc<GameData>>> = const { RefCell::new(None) };
     static RULES: RefCell<Option<Arc<WasmRules>>> = const { RefCell::new(None) };
     static PENDING: RefCell<Option<game_rules::RulesetBuilder>> = const { RefCell::new(None) };
+    static PENDING_RULESET: RefCell<Option<game_rules::Ruleset>> = const { RefCell::new(None) };
     static RULESET_SHA: RefCell<String> = const { RefCell::new(String::new()) };
     static OPTS: RefCell<SearchOpts> = RefCell::new(SearchOpts::default());
     static CACHE: RefCell<Cache> = RefCell::new(Cache::default());
@@ -187,12 +188,24 @@ fn rules() -> Result<Arc<dyn CardRules>, JsError> {
 
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
 /// `DATA_FILES`, plus the optional `deck_book.json`. Same shape as
-/// `web-glue::load_data`.
+/// `web-glue::load_data`. The roster comes from the ruleset built by
+/// [`ruleset_build`] (call that first); no ruleset = empty roster.
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()))
-        .map_err(|e| JsError::new(&e))?;
+    let set = PENDING_RULESET.with(|p| p.borrow_mut().take());
+    let roster = set.as_ref().map(|r| r.roster()).unwrap_or_default();
+    let d = GameData::load(
+        |f| files.get(f).cloned().ok_or_else(|| "missing".to_string()),
+        roster,
+    )
+    .map_err(|e| JsError::new(&e))?;
+    if let Some(set) = set {
+        let sha = set.sha256().to_string();
+        let rules = WasmRules::new(set, Arc::new(d.clone()));
+        RULESET_SHA.with(|s| *s.borrow_mut() = sha);
+        RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
+    }
     DATA.with(|slot| *slot.borrow_mut() = Some(Arc::new(d)));
     Ok(())
 }
@@ -231,6 +244,8 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
 }
 
 /// Build the ruleset from the modules added so far. Returns the module count.
+/// The built set is held for [`load_data`] to bind (the roster comes from its
+/// metadata) -- call [`load_data`] after this.
 #[wasm_bindgen]
 pub fn ruleset_build() -> Result<usize, JsError> {
     PENDING.with(|p| {
@@ -240,10 +255,7 @@ pub fn ruleset_build() -> Result<usize, JsError> {
             .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
         let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
         let n = set.module_count();
-        let sha = set.sha256().to_string();
-        let rules = WasmRules::new(set, data()?);
-        RULESET_SHA.with(|s| *s.borrow_mut() = sha);
-        RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
+        PENDING_RULESET.with(|s| *s.borrow_mut() = Some(set));
         Ok(n)
     })
 }

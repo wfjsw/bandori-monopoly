@@ -1102,7 +1102,7 @@ handle** -- `web-glue`'s deck endpoints, `deck_book` suggestions and the
 server's saved-deck storage all take `GameData` alone. Routing the carry rule
 through an `ExclusiveUse` gate would need a rules instance at deck-build time
 on every one of those paths, so it is **not** done. Sumimi's
-「你可携带两个角色的专属卡牌」 stays the data trait `bands.json`
+「你可携带两个角色的专属卡牌」 stays the roster band trait
 `sharesExclusives` / `GameData::band_shares_exclusives`, used by
 `deck::shares_exclusives` **only**. The in-match play half of Sumimi (3) --
 「仅有在你的角色卡为对应角色时才可打出」 -- is the engine's generic own/base

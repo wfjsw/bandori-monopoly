@@ -99,7 +99,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 //   checkable. 「（抵押或赎回以外）」 carves out a class of resets the engine
 //   does not tag either.
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"八潮瑠唯"#)
     .display(r#"八潮瑠唯"#)

@@ -3,7 +3,9 @@
 //! Everything crosses the boundary as JSON strings in the same shapes the server
 //! uses, so the web client has one set of types for online and solo play.
 //!
-//! * `load_data` -- once, with the contents of `/data/*.json`
+//! * `ruleset_add` / `ruleset_build` then `load_data` -- once; the roster
+//!   (cards / characters / bands) comes from the built ruleset's metadata
+//!   (ABI v63), the other tables from the contents of `/data/*.json`
 //! * deck rules and saved deck slots (`deck_*`)
 //! * profile and progression (`profile_*`), persisted by the client
 //! * [`SoloMatch`] -- the full match engine running locally
@@ -47,6 +49,9 @@ thread_local! {
     /// `Ruleset::sha256()` of the last [`ruleset_build`]; `"stub"` when the
     /// page runs without card modules.
     static RULESET_SHA: RefCell<String> = const { RefCell::new(String::new()) };
+    /// The ruleset built by [`ruleset_build`], waiting for [`load_data`] to
+    /// bind it to a [`GameData`] (the roster comes from its metadata).
+    static PENDING_RULESET: RefCell<Option<game_rules::Ruleset>> = const { RefCell::new(None) };
     /// sha256 of this build's `glue.js` + `glue_bg.wasm` (hex), pushed by
     /// [`set_glue_sha`] from `webui/src/wasm/engine_id.json`. The last input
     /// of the engine-bundle id (`game_core::record::bundle_id`); empty means
@@ -113,11 +118,22 @@ fn character<'a>(d: &'a GameData, name: &str) -> Result<&'a CharacterData, JsErr
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in
 /// `DATA_FILES`, plus the optional `deck_book.json` (bot deck book,
 /// `docs/BOT.md` §3.7) when the client has one.
+///
+/// The roster (cards / characters / bands) is **not** in these files: it comes
+/// from the ruleset built by [`ruleset_build`] (ABI v63 `bandori_metadata`).
+/// Call `ruleset_add` / `ruleset_build` first; with no ruleset the roster is
+/// empty (the degraded no-effects boot). Binds [`WasmRules`] to the new
+/// [`GameData`] when a ruleset is pending.
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()))
-        .map_err(|e| JsError::new(&e))?;
+    let set = PENDING_RULESET.with(|p| p.borrow_mut().take());
+    let roster = set.as_ref().map(|r| r.roster()).unwrap_or_default();
+    let d = GameData::load(
+        |f| files.get(f).cloned().ok_or_else(|| "missing".to_string()),
+        roster,
+    )
+    .map_err(|e| JsError::new(&e))?;
     // Stamp input: sha256 over the contents in `DATA_FILES` order, so a record
     // can tell whether the board / card data it was written against is here.
     // A leading UTF-8 BOM is not content: the browser's decoder strips it and
@@ -130,8 +146,34 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
     }
     let sha = hex(&hasher.finalize());
     DATA_SHA.with(|s| *s.borrow_mut() = sha);
+    // Bind the ruleset (if any) to the data. Writing RULESET_SHA here, after
+    // `data()` succeeds, keeps `engine_stamp` from claiming a ruleset the
+    // engine is not actually running (`docs/REPLAY.md`).
+    if let Some(set) = set {
+        let sha = set.sha256().to_string();
+        let rules = WasmRules::new(set, Arc::new(d.clone()));
+        RULESET_SHA.with(|s| *s.borrow_mut() = sha);
+        RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
+    }
     DATA.with(|slot| *slot.borrow_mut() = Some(Arc::new(d)));
     Ok(())
+}
+
+/// The roster the built ruleset declared (ABI v63), as `{cards, characters,
+/// bands}` JSON in the same camelCase row shapes [`load_data`] hands to
+/// [`GameData`]. Empty vectors when no ruleset is loaded. The client uses this
+/// for the deck builder / gallery / home screen.
+#[wasm_bindgen]
+pub fn roster_json() -> Result<String, JsError> {
+    let pending = PENDING_RULESET.with(|p| p.borrow().as_ref().map(|r| r.roster()));
+    let roster = pending.or_else(|| {
+        RULES.with(|r| {
+            r.borrow().as_ref().map(|rules| {
+                game_rules::roster::roster_from_meta(rules.ruleset().metadata())
+            })
+        })
+    });
+    Ok(json(&roster.unwrap_or_default()))
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -587,7 +629,9 @@ pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
     })
 }
 
-/// Build the ruleset from the modules added so far.
+/// Build the ruleset from the modules added so far. The built set is held for
+/// [`load_data`] to bind to a [`GameData`] (the roster comes from its metadata)
+/// -- call [`load_data`] after this, before any match.
 #[wasm_bindgen]
 pub fn ruleset_build() -> Result<usize, JsError> {
     PENDING.with(|p| {
@@ -597,16 +641,7 @@ pub fn ruleset_build() -> Result<usize, JsError> {
             .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
         let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
         let n = set.module_count();
-        let sha = set.sha256().to_string();
-        // `data()` first: if it fails, `RULES` stays empty (StubRules) and the
-        // stamp must say `"stub"` too. Writing the hash before this point would
-        // make `engine_stamp` claim a ruleset the engine is not actually running,
-        // so a record sealed here would pass `compat` against a later session
-        // that really does run those rules -- and then diverge at the first
-        // checkpoint with no stamp warning. See `docs/REPLAY.md`.
-        let rules = WasmRules::new(set, data()?);
-        RULESET_SHA.with(|s| *s.borrow_mut() = sha);
-        RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
+        PENDING_RULESET.with(|s| *s.borrow_mut() = Some(set));
         Ok(n)
     })
 }

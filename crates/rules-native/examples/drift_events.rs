@@ -23,8 +23,11 @@ use rules_native::native_rules;
 fn data() -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .expect("game data"),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            rules_native::roster(),
+        )
+        .expect("game data"),
     )
 }
 

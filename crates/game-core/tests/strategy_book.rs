@@ -21,8 +21,13 @@ use game_core::strategy::{
 use game_core::MatchMode;
 
 fn data() -> GameData {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("../../data");
+    let roster = game_core::data::Roster::from_fixture(
+        &std::fs::read_to_string(root.join("tests/fixtures/roster.json")).expect("roster fixture"),
+    )
+    .expect("roster fixture parses");
+    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
         .expect("web/data should load -- run tools/asset-pipe/extract.py")
 }
 
@@ -322,7 +327,8 @@ fn parses_the_documented_shape_and_merges_partial_params() {
 
 #[test]
 fn the_shipped_book_is_empty_and_inert() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dir = root.join("../../data");
     let text = std::fs::read_to_string(dir.join("strategy_book.json")).expect("shipped placeholder");
     let b = StrategyBook::parse(&text).unwrap();
     assert!(b.is_empty(), "S2/S3 have not derived entries yet");

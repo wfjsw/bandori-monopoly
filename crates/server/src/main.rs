@@ -30,9 +30,26 @@ async fn main() {
     let workers: usize = arg("--workers", "BM_WORKERS", "4")
         .parse()
         .expect("workers must be a number");
+    // Roster (cards / characters / bands) comes from the ruleset metadata
+    // (ABI v63), so load the modules first. No modules = empty roster = the
+    // degraded no-effects boot.
+    let ruleset = match game_rules::WasmRules::load_ruleset(&rules_dir) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
+            None
+        }
+    };
+    let roster = ruleset
+        .as_ref()
+        .map(|r| r.roster())
+        .unwrap_or_default();
     let data = Arc::new(
-        GameData::load(|f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
+        GameData::load(
+            |f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
     );
     eprintln!(
         "loaded {} tiles, {} cards, {} characters",
@@ -44,25 +61,20 @@ async fn main() {
     // Card effects: one wasm module per card (tools/build-ruleset.sh), served to
     // the match shell through `WasmRules`. Without modules the match still plays,
     // every card just has no effect.
-    let rules: Arc<dyn CardRules> = match game_rules::WasmRules::load_dir(data.clone(), &rules_dir)
-    {
-        Ok(Some(r)) => {
+    let rules: Arc<dyn CardRules> = match ruleset {
+        Some(set) => {
             eprintln!(
                 "card modules: {} loaded from {}",
-                r.ruleset().module_count(),
+                set.module_count(),
                 rules_dir.display()
             );
-            Arc::new(r)
+            Arc::new(game_rules::WasmRules::new(set, data.clone()))
         }
-        Ok(None) => {
+        None => {
             eprintln!(
                 "no card modules in {} (run tools/build-ruleset.sh) -- cards have no effect",
                 rules_dir.display()
             );
-            Arc::new(StubRules)
-        }
-        Err(e) => {
-            eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
             Arc::new(StubRules)
         }
     };

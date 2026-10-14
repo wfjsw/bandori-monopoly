@@ -24,6 +24,9 @@ from pathlib import Path
 WEB = Path(__file__).resolve().parents[2]
 ASSETS = WEB / "webui" / "public" / "assets"
 DATA = WEB / "data"
+# Card / character / band metadata lives in the Rust rule code; the generated
+# fixture is the checked-in dump (see docs/CARDS.md 「Card metadata」).
+ROSTER = WEB / "crates" / "game-core" / "tests" / "fixtures" / "roster.json"
 
 # BgmPlayer.cs:10-17 (SceneTracks)
 BGM_TRACKS = {"Boot": "21_Enjoy", "MainMenu": "21_Enjoy", "Lobby": "20_LiveLobby",
@@ -62,12 +65,13 @@ def main() -> int:
     missing = [f for f in files if not (ASSETS / f).exists()]
     errors += [f"manifest points to missing file {f}" for f in missing]
 
-    # 2. game data coverage
-    cards = load(DATA / "cards.json")["cards"]
+    # 2. game data coverage (roster fixture)
+    roster = load(ROSTER)
+    cards = roster["cards"]
     no_art = [c["id"] for c in cards if c["id"] not in m["cards"]]
     errors += [f"card without art: {i}" for i in no_art]
 
-    chars = load(DATA / "characters.json")["characters"]
+    chars = roster["characters"]
     for c in chars:
         art_id = c.get("art") or c["cnId"]  # CharacterData.cs:34-38 (art ?? cnId)
         art = m["characters"].get(art_id)
@@ -81,7 +85,7 @@ def main() -> int:
             if kind not in art:
                 warnings.append(f"character {c['name']} ({art_id}) has no {kind}")
 
-    band_names = {b["name"] for b in load(DATA / "bands.json")["bands"]}
+    band_names = {b["name"] for b in roster["bands"]}
     no_logo = sorted(band_names - set(m["bands"]))
     warnings += [f"band without logo in BandoriDatabase: {b}" for b in no_logo]
 

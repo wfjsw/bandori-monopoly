@@ -73,7 +73,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 
 // （3）「你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出」 --
 // a deck-composition rule (two characters' exclusive cards may be carried) plus
-// the generic in-match play gate. The carry half is **data** (`bands.json`
+// the generic in-match play gate. The carry half is **data** (the roster band row
 // `sharesExclusives`, `deck::shares_exclusives`) -- deck building has no rules
 // handle (docs/GUARDS.md §ExclusiveUse). The play half is the engine's generic
 // own/base exclusive rule (「角色卡为对应角色」, with a variant counted as its
@@ -84,7 +84,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 //   character's exclusive without it being in the starting deck) still has no
 //   form.
 
-/// `bands.json` row for this band skill (ABI v63).
+/// Roster band row for this band skill (ABI v63).
 pub const BAND: ruleset_core::roster::BandDef =
 ruleset_core::roster::BandDef::new(r#"Sumimi"#)
     .short_name(r#"Sumimi"#)

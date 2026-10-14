@@ -2,6 +2,10 @@
 // The card data's [反击] trigger clauses, checked against the prose they were
 // generated from: every 反击-tagged card must carry the `counterReason` the
 // prompt shows as "why this card may be declared".
+//
+// `text` / `tags` come from the generated roster fixture (the Rust metadata
+// dump, `crates/game-core/tests/fixtures/roster.json`); `counterReason` is
+// display-only and lives in `data/skill_simple.json`.
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -13,9 +17,24 @@ interface CardRow {
   counterReason?: string;
 }
 
-const cards: CardRow[] = JSON.parse(
-  readFileSync(new URL("../../../data/cards.json", import.meta.url), "utf-8"),
-).cards;
+const fixture = JSON.parse(
+  readFileSync(
+    new URL("../../../crates/game-core/tests/fixtures/roster.json", import.meta.url),
+    "utf-8",
+  ),
+) as { cards: { id: string; tags: string[]; text: string }[] };
+
+const simple = JSON.parse(
+  readFileSync(new URL("../../../data/skill_simple.json", import.meta.url), "utf-8"),
+) as { cards?: { id: string; counterReason: string }[] };
+
+const reasonById = new Map((simple.cards ?? []).map((c) => [c.id, c.counterReason]));
+const cards: CardRow[] = fixture.cards.map((c) => ({
+  id: c.id,
+  tags: c.tags,
+  text: c.text,
+  counterReason: reasonById.get(c.id),
+}));
 
 test("every [反击] card names its trigger-condition clause", () => {
   const tagged = cards.filter((c) => c.tags.includes("反击"));

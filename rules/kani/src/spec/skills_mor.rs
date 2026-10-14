@@ -1,7 +1,7 @@
 //! Unit `skills_mor`: reference specs FROM the clause docs only.
 //!
 //! Sources: `docs/rulebook/spec/cards/mor.md` sections "Character skills" and
-//! "Band skill"; the live sheet text in `data/characters.json` / `data/bands.json`.
+//! "Band skill"; the live sheet text in the roster / `the roster`.
 //! Never derived from engine behaviour. Quotes are copied into each clause's
 //! section below.
 //!

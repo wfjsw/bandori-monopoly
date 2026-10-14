@@ -1,4 +1,5 @@
-//! Static game data (`data/*.json`) and the lookups [`GameData`] provides.
+//! Static game data (`data/*.json`, minus the roster) and the lookups
+//! [`GameData`] provides.
 //!
 //! Field names and defaults mirror the JSON the data files already carry:
 //! missing fields take `#[serde(default)]`, and unknown keys (e.g. the
@@ -176,7 +177,7 @@ pub fn status_rule_ids() -> &'static [&'static str] {
     ]
 }
 
-/// One card row from `cards.json`.
+/// One card row of the roster.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CardData {
@@ -213,7 +214,7 @@ impl CardData {
     }
 }
 
-/// One playable character from `characters.json`.
+/// One playable character of the roster.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CharacterData {
@@ -246,7 +247,7 @@ impl CharacterData {
     }
 }
 
-/// One band from `bands.json` (skill text + branding).
+/// One band of the roster (skill text + branding).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct BandData {
@@ -264,15 +265,63 @@ pub struct BandData {
     pub boot_art: String,
 }
 
-/// The roster half of [`GameData`] -- `cards.json` / `characters.json` /
-/// `bands.json` -- handed over by the ruleset host (ABI v63 `bandori_metadata`,
-/// converted in `game-rules`). `game-core` stays free of the card crates; this
-/// is the plain struct of vectors it already iterates in file order.
-#[derive(Debug, Clone, Default, PartialEq)]
+/// The roster half of [`GameData`] -- cards / characters / bands -- handed over
+/// by the ruleset host (ABI v63 `bandori_metadata`, converted in `game-rules`).
+/// `game-core` stays free of the card crates; this is the plain struct of
+/// vectors it already iterates in roster order (the Rust ordinal table).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Roster {
     pub cards: Vec<CardData>,
     pub characters: Vec<CharacterData>,
     pub bands: Vec<BandData>,
+}
+
+impl Roster {
+    /// Parse the generated test fixture (`crates/game-core/tests/fixtures/
+    /// roster.json`, written by `cargo run -p rules-native --example
+    /// dump_roster -- --fixture`). One JSON object `{cards, characters, bands}`
+    /// in the same camelCase row shapes the roster metadata carries. Tests of
+    /// crates that have no ruleset (game-core / game-rules / bot-core / server)
+    /// load this instead of depending on the card crates.
+    pub fn from_fixture(text: &str) -> Result<Self, String> {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            #[serde(default)]
+            cards: Vec<CardData>,
+            #[serde(default)]
+            characters: Vec<CharacterData>,
+            #[serde(default)]
+            bands: Vec<BandData>,
+        }
+        let f: Fixture = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+            .map_err(|e| format!("roster fixture: {e}"))?;
+        Ok(Roster {
+            cards: f.cards,
+            characters: f.characters,
+            bands: f.bands,
+        })
+    }
+
+    /// Serialize back to the fixture document (`{cards, characters, bands}`),
+    /// the byte-stable form `cargo run -p rules-native --example dump_roster --
+    /// --fixture` writes. The rules-native gate compares this against the
+    /// checked-in fixture so the two can never drift.
+    pub fn to_fixture_json(&self) -> String {
+        #[derive(serde::Serialize)]
+        struct Fixture<'a> {
+            cards: &'a [CardData],
+            characters: &'a [CharacterData],
+            bands: &'a [BandData],
+        }
+        let mut s = serde_json::to_string_pretty(&Fixture {
+            cards: &self.cards,
+            characters: &self.characters,
+            bands: &self.bands,
+        })
+        .expect("roster fixture serializes");
+        s.push('\n');
+        s
+    }
 }
 
 /// One event card from `events.json`.
@@ -286,8 +335,8 @@ pub struct EventData {
     pub cell: String,
 }
 
-/// `band` value of the cards every character may take. A data key from
-/// `cards.json` (the data set is Chinese), not display text.
+/// `band` value of the cards every character may take. A roster key (the data
+/// set is Chinese), not display text.
 pub const GENERAL_BAND: &str = "通用";
 
 /// Character → school tile-name map.
@@ -380,24 +429,6 @@ struct BoardFile {
 }
 
 #[derive(Deserialize)]
-struct CardFile {
-    #[serde(default)]
-    cards: Vec<CardData>,
-}
-
-#[derive(Deserialize)]
-struct CharacterFile {
-    #[serde(default)]
-    characters: Vec<CharacterData>,
-}
-
-#[derive(Deserialize)]
-struct BandFile {
-    #[serde(default)]
-    bands: Vec<BandData>,
-}
-
-#[derive(Deserialize)]
 struct EventFile {
     #[serde(default)]
     events: Vec<EventData>,
@@ -456,21 +487,21 @@ pub struct GameData {
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`.
-pub const DATA_FILES: [&str; 11] = [
+/// Data files, as named in `web/data/`. The roster (cards / characters / bands)
+/// is **not** here: it comes from the ruleset host ([`Roster`], ABI v63
+/// `bandori_metadata`) or, in tests, from the generated fixture
+/// (`Roster::from_fixture`).
+pub const DATA_FILES: [&str; 8] = [
     "board.json",
-    "cards.json",
-    "characters.json",
-    "bands.json",
     "events.json",
     "schools.json",
     "home_lines.json",
     "voice_lines.json",
     "match_rules.json",
     "rules.txt",
-    // Hand-written simplified skill bodies, for the client's skill-text
-    // setting. Display-only: the engine reads the originals in `characters.json`
-    // / `bands.json`.
+    // Hand-written display-only extras for the client: simplified skill bodies
+    // and per-card `counterReason`. The engine reads the originals on the
+    // roster (`CharacterData::text` / `BandData::text` / `CardData::text`).
     "skill_simple.json",
 ];
 
@@ -499,7 +530,7 @@ impl GameData {
     }
 
     /// Is `id` a **band** skill rule (`skill:<band>:<skill>` for some band in
-    /// `bands.json`), as against a character skill (`skill:<character>:<skill>`)?
+    /// the roster), as against a character skill (`skill:<character>:<skill>`)?
     /// This is what stamps `FieldCard::band_skill` at placement, and through it
     /// what 「乐队卡 / 团卡」 crystal reads and writes land on.
     pub fn is_band_skill(&self, id: &str) -> bool {
@@ -508,24 +539,12 @@ impl GameData {
             .any(|b| !b.skill.is_empty() && skill_id(&b.name, &b.skill) == id)
     }
 
-    /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`.
-    pub fn load(mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Self, String> {
-        let mut get = |f: &str| read(f).map_err(|e| format!("{f}: {e}"));
-        let roster = Roster {
-            cards: parse::<CardFile>("cards.json", &get("cards.json")?)?.cards,
-            characters: parse::<CharacterFile>("characters.json", &get("characters.json")?)?
-                .characters,
-            bands: parse::<BandFile>("bands.json", &get("bands.json")?)?.bands,
-        };
-        Self::load_with_roster(&mut read, roster)
-    }
-
-    /// Like [`Self::load`], but the roster (`cards` / `characters` / `bands`)
-    /// is handed over by the ruleset host (ABI v63 `bandori_metadata` ->
-    /// `Roster`) instead of read from JSON. Every other file still comes
-    /// through `read`. The deck book / strategy book are loaded here so both
-    /// entry points share that path.
-    pub fn load_with_roster(
+    /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`,
+    /// with the roster (`cards` / `characters` / `bands`) handed over by the
+    /// ruleset host (ABI v63 `bandori_metadata` -> [`Roster`]) or, in tests, by
+    /// [`Roster::from_fixture`]. The deck book / strategy book are loaded here
+    /// too (optional files, outside [`DATA_FILES`]).
+    pub fn load(
         mut read: impl FnMut(&str) -> Result<String, String>,
         roster: Roster,
     ) -> Result<Self, String> {

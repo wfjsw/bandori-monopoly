@@ -1,7 +1,7 @@
 //! Unit `skills_ras`: reference specs FROM the clause docs only.
 //!
-//! Sources: `data/characters.json` `text` (band = RAISE A SUILEN) and
-//! `data/bands.json` `text` (`RAISE A SUILEN` / `UNSTOPPABLE`), quoted in
+//! Sources: the roster character row `text` (band = RAISE A SUILEN) and
+//! the roster band row `text` (`RAISE A SUILEN` / `UNSTOPPABLE`), quoted in
 //! `docs/rulebook/spec/cards/ras.md`. Never derived from engine behaviour.
 
 use crate::world::Effect;

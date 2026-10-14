@@ -39,12 +39,12 @@ export let rulesetLoaded = false;
 
 /** The card / skill / tile rule modules `tools/build-ruleset.mjs` copies to
  *  `/assets/rules/`. Without them every solo match runs on the engine's
- *  `StubRules` (plain-Monopoly tiles, no card or skill effects), so this has to
- *  run after `load_data` (the ruleset binds to the game data) and before any
- *  `SoloMatch` is built. Online play runs the rules on the server, so a failure
- *  here is not fatal -- but it **is** shown, because a match recorded without
- *  card rules and replayed with them (or the other way round) diverges at the
- *  first checkpoint and looks like engine drift. */
+ *  `StubRules` (plain-Monopoly tiles, no card or skill effects). Must run
+ *  before `load_data` (the roster comes from the ruleset metadata, and
+ *  `load_data` binds the two). Online play runs the rules on the server, so a
+ *  failure here is not fatal -- but it **is** shown, because a match recorded
+ *  without card rules and replayed with them (or the other way round) diverges
+ *  at the first checkpoint and looks like engine drift. */
 async function loadRuleset(): Promise<void> {
   try {
     // The sequence lives in `rulesetLoad.ts` and is shared with the node gate
@@ -101,25 +101,39 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   } catch {
     /* absent book is fine */
   }
-  glue.load_data(JSON.stringify(files));
+  // Roster (cards / characters / bands) comes from the ruleset metadata
+  // (ABI v63). Build the ruleset first, then hand the roster to `load_data`,
+  // which binds the two. No modules = empty roster = the degraded no-effects
+  // boot (same as a solo match on StubRules).
   await loadRuleset();
+  glue.load_data(JSON.stringify(files));
 
   const j = (n: string) => JSON.parse(files[n].replace(/^﻿/, ""));
-  const cards: CardData[] = j("cards.json").cards;
-  const characters: CharacterData[] = j("characters.json").characters;
-  const bands: BandData[] = j("bands.json").bands;
+  const roster = JSON.parse(glue.roster_json()) as {
+    cards: CardData[];
+    characters: CharacterData[];
+    bands: BandData[];
+  };
+  const cards: CardData[] = roster.cards;
+  const characters: CharacterData[] = roster.characters;
+  const bands: BandData[] = roster.bands;
   const events: EventData[] = j("events.json").events;
   const homeLines = j("home_lines.json").characters ?? [];
-  // `skill_simple.json` is the hand-written newcomer version of each skill body
-  // (`· ` bullets). It rides on the character/band record as `simple`, which is
-  // what `skillText` picks when the setting is on -- the originals in
-  // characters.json / bands.json stay the `text` fallback.
+  // `skill_simple.json` is hand-written display-only extras: the newcomer
+  // version of each skill body (`· ` bullets, rides on the record as `simple`)
+  // and each [反击] card's `counterReason`. The originals stay the roster
+  // `text` fallback.
   const simple = j("skill_simple.json") as {
     characters: { name: string; text: string }[];
     bands: { name: string; text: string }[];
+    cards?: { id: string; counterReason: string }[];
   };
   for (const c of characters) c.simple = simple.characters.find((x) => x.name === c.name)?.text;
   for (const b of bands) b.simple = simple.bands.find((x) => x.name === b.name)?.text;
+  for (const c of cards) {
+    const hit = simple.cards?.find((x) => x.id === c.id);
+    if (hit) c.counterReason = hit.counterReason;
+  }
   const byId = new Map(cards.map((c) => [c.id, c]));
   D = {
     tiles: j("board.json").tiles,
@@ -139,8 +153,8 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   };
 }
 
-/** `band` value of the cards every character may take. A data key from
- *  `cards.json` (the data set is Chinese), not display text. */
+/** `band` value of the cards every character may take. A roster key (the data
+ *  set is Chinese), not display text. */
 export const GENERAL_BAND = "通用";
 
 export function cardTitle(id: string): string {
@@ -150,7 +164,7 @@ export function cardTitle(id: string): string {
   const name = D.card(id)?.name;
   if (name) return name;
   // Skills use card-typed message arguments too, but their names live in
-  // bands.json / characters.json. Match the engine's skill:<owner>:<skill> id.
+  // bands / characters of the roster. Match the engine's skill:<owner>:<skill> id.
   const skill = skillCard(id);
   if (skill) return skill.title;
   // An event's activation names it as `event:<id>` (the rule id) or as the
@@ -168,7 +182,7 @@ export function cardTitle(id: string): string {
 
 /** A `skill:<owner>:<skill>` id (the engine's band / character skill stand-in,
  *  e.g. the 团卡 `skill:Poppin' Party:星之鼓动`) resolved for display: title and
- *  body come from bands.json / characters.json, art from the band logo or the
+ *  body come from the roster's band / character rows, art from the band logo or the
  *  character's art. Undefined for anything that is not a skill id. */
 export function skillCard(id: string): { title: string; text: string; band?: string; color: string; art: string } | undefined {
   if (!id || !D || !id.startsWith("skill:")) return undefined;

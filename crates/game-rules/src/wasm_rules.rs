@@ -1125,7 +1125,7 @@ impl CardWorld for Run {
         if let Some(c) = self.data.card(card) {
             return c.text.contains(needle);
         }
-        // A `skill:<owner>:<skill>` rule id is not in `cards.json`; the skill's
+        // A `skill:<owner>:<skill>` rule id is not a roster card id; the skill's
         // text is the owner's (character's or band's) `text` field
         // (发送熊饼表情 「所有技能中含有火罐的玩家」).
         if let Some(rest) = card.strip_prefix("skill:") {
@@ -2264,10 +2264,12 @@ pub struct RulesBridge<M: CardModules> {
 pub type WasmRules = RulesBridge<Ruleset>;
 
 impl RulesBridge<Ruleset> {
-    /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh).
-    /// `Ok(None)` when the directory or index is missing -- the caller falls back
-    /// to no card effects.
-    pub fn load_dir(data: Arc<GameData>, dir: &std::path::Path) -> Result<Option<Self>, RuleError> {
+    /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh)
+    /// into a [`Ruleset`], without binding [`GameData`] yet. `Ok(None)` when
+    /// the directory or index is missing. Callers that need the roster first
+    /// (it lives on the built set -- ABI v63 `bandori_metadata`) use this, then
+    /// [`Self::new`]; [`Self::load_dir`] is the one-shot form.
+    pub fn load_ruleset(dir: &std::path::Path) -> Result<Option<Ruleset>, RuleError> {
         let index = dir.join("index.json");
         let Ok(text) = std::fs::read_to_string(&index) else {
             return Ok(None);
@@ -2293,9 +2295,15 @@ impl RulesBridge<Ruleset> {
         if !any {
             return Ok(None);
         }
-        Ok(Some(Self::new(builder.build()?, data)))
+        Ok(Some(builder.build()?))
     }
 
+    /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh).
+    /// `Ok(None)` when the directory or index is missing -- the caller falls back
+    /// to no card effects.
+    pub fn load_dir(data: Arc<GameData>, dir: &std::path::Path) -> Result<Option<Self>, RuleError> {
+        Ok(Self::load_ruleset(dir)?.map(|set| Self::new(set, data)))
+    }
 }
 
 /// The inline host one drive installs around its guest call in simulation

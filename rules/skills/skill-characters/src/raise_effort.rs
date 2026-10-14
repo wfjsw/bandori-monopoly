@@ -89,7 +89,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"和奏瑞依"#)
     .display(r#"和奏瑞依"#)

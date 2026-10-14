@@ -1,6 +1,6 @@
 //! Unit `r` / Roselia skills: reference specs FROM the skill sheet text only.
 //!
-//! Sources: `data/characters.json` `text` (band == "Roselia"), `data/bands.json`
+//! Sources: the roster character row `text` (band == "Roselia"), `the roster`
 //! Roselia band skill 对音乐的纯粹, and `docs/rulebook/spec/cards/r.md`
 //! (clause IDs `C-R-*`). OPEN items stay unasserted.
 

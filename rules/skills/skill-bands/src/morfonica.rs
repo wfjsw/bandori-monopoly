@@ -72,7 +72,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
 // pick and the payout, with `t.value` = 0 (money) / 1 (card). The guard keys on
 // the money half only, so the draw option is left alone.
 
-/// `bands.json` row for this band skill (ABI v63).
+/// Roster band row for this band skill (ABI v63).
 pub const BAND: ruleset_core::roster::BandDef =
 ruleset_core::roster::BandDef::new(r#"Morfonica"#)
     .short_name(r#"Mor"#)

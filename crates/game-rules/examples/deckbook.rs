@@ -444,7 +444,7 @@ impl Task {
     }
 }
 
-/// The character names, in `characters.json` order.
+/// The character names, in `the roster` order.
 fn char_names(data: &GameData) -> Vec<String> {
     data.characters.iter().map(|c| c.name.clone()).collect()
 }
@@ -1092,10 +1092,15 @@ fn entry(task: &Task, cards: &[String]) -> DeckBookEntry {
 
 fn main() {
     let cfg = parse_args();
-    let data_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let data_dir = root.join("../../data");
+    let roster = game_core::data::Roster::from_fixture(
+        &std::fs::read_to_string(root.join("../game-core/tests/fixtures/roster.json")).expect("roster fixture"),
+    )
+    .expect("roster fixture parses");
     let ruleset_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/cards");
     let data: Arc<GameData> = Arc::new(
-        GameData::load(|f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()))
+        GameData::load(|f| std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string()), roster)
             .expect("game data"),
     );
     // Compile the card modules once; workers wrap clones of this `Ruleset`.

@@ -383,7 +383,7 @@ use alloc::{string::String, vec::Vec};
 ///      `CardDef::meta` carries the card's data-set row (name / rawName /
 ///      text / tags / derived / cell + a generic `fields` map for game slots
 ///      `band` / `owner`); the skill crates' `CharacterDef` / `BandDef`
-///      tables carry `characters.json` / `bands.json`. A new guest export
+///      tables carry the character / band rows. A new guest export
 ///      `bandori_metadata` (`export::METADATA`, `() -> i64` packed
 ///      postcard `meta::MetaDoc`) hands the whole roster to the host on
 ///      request -- **not** through `ManifestEntry` (the match path is
