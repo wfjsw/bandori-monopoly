@@ -1248,7 +1248,16 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
 
         // ---- props / counters / tokens / state ----
         Op::self_prop | Op::prop_at | Op::tile_prop => {
-            let key = name_id(a1, a2);
+            // Packings differ (name_id pair must match, never the other one —
+            // untagged handles loud-FAIL):
+            //   self_prop(kp, kl)           -> [kp, kl, 0, …]      name (a0,a1)
+            //   prop_at(uid, kp, kl)        -> [uid, kp, kl, …]    name (a1,a2)
+            //   tile_prop(tile, kp, kl)     -> [tile, kp, kl, …]   name (a1,a2)
+            let key = if op == Op::self_prop {
+                name_id(a0, a1)
+            } else {
+                name_id(a1, a2)
+            };
             if op == Op::tile_prop {
                 world::with_world(|w| w.tiles[tile_idx(a0)].props.get(key)) as i64
             } else {
@@ -1257,20 +1266,16 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         Op::set_self_prop | Op::set_prop_at | Op::set_tile_prop => {
             // hostfns: `set_self_prop(kp, kl, v)` writes the running instance's
-            // prop; `set_tile_prop(tile, kp, kl, v)` writes the tile's. The old
-            // model only wrote the tile prop (`set_self_prop` was a no-op).
-            let key = name_id(a1, a2);
-            if op == Op::set_tile_prop {
-                let val = a3;
-                world::with_world_mut(|w| {
-                    w.tiles[tile_idx(a0)].props.set(key, val);
-                });
-            } else if op == Op::set_self_prop {
-                // `set_self_prop(kp, kl, v)` — packing is [kp, kl, v, 0, 0, 0]
-                // so a2 is the key-len and a3 is the value? sys_kani:
-                // `set_self_prop(kp, kl, v)` → [kp, kl, v, 0, 0, 0].
-                // name_id takes (ptr,len) = (a1,a2) only when a1 is ptr.
-                // Real packing: a0=kp, a1=kl, a2=v.
+            // prop; `set_tile_prop(tile, kp, kl, v)` / `set_prop_at(uid, kp, kl, v)`
+            // write the tile / instance's. Packings differ — decode per op.
+            // Never call `name_id` on the wrong pair: untagged handles now
+            // loud-FAIL (ppcost / name_id cut).
+            //
+            // sys_kani:
+            //   set_self_prop(kp, kl, v) -> [kp, kl, v, 0, 0, 0]
+            //   set_tile_prop(tile, kp, kl, v) -> [tile, kp, kl, v, 0, 0]
+            //   set_prop_at(uid, kp, kl, v) -> [uid, kp, kl, v, 0, 0]
+            if op == Op::set_self_prop {
                 let key = name_id(a0, a1);
                 let val = a2;
                 world::with_world_mut(|w| {
@@ -1278,6 +1283,12 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                         let i = (w.field_n as usize) - 1;
                         w.field[i].props.set(key, val);
                     }
+                });
+            } else if op == Op::set_tile_prop {
+                let key = name_id(a1, a2);
+                let val = a3;
+                world::with_world_mut(|w| {
+                    w.tiles[tile_idx(a0)].props.set(key, val);
                 });
             } else {
                 // set_prop_at(uid, kp, kl, v)
@@ -1297,7 +1308,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::counter_self | Op::card_counter => {
-            let key = name_id(a0, a1);
+            //   counter_self(np, nl)                  -> [np, nl, 0, …]           name (a0,a1)
+            //   card_counter(player, cp, cl, np, nl)  -> [player, cp, cl, np, nl] name (a3,a4)
+            let key = if op == Op::counter_self {
+                name_id(a0, a1)
+            } else {
+                name_id(a3, a4)
+            };
             world::with_world(|w| {
                 if key == known().crystals {
                     w.field_crystals(w.last_uid)
@@ -1320,9 +1337,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         Op::add_counter_self | Op::add_card_counter => {
             // `(was+n).clamp(0,max)` when `max > 0`, else floor at 0.
-            let key = name_id(a0, a1);
-            let n = a2;
-            let max = a3;
+            //   add_counter_self(np, nl, n, max)              -> [np, nl, n, max]         name (a0,a1) n=a2 max=a3
+            //   add_card_counter(player, cp, cl, np, nl, n)   -> [player, cp, cl, np, nl, n] name (a3,a4) n=a5 max=0
+            // (add_card_counter has no max slot in the 6-word ABI.)
+            let (key, n, max) = if op == Op::add_counter_self {
+                (name_id(a0, a1), a2, a3)
+            } else {
+                (name_id(a3, a4), a5, 0)
+            };
             world::with_world_mut(|w| {
                 let p = w.trig_player;
                 let was = if key == known().crystals {
