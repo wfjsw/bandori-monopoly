@@ -19,7 +19,7 @@ import { InspectCard } from "../../ui/Card";
 import { previewFrom, previewHide } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
 import { showEvent } from "./Popups";
-import { useHoverSeat } from "./hoverSeat";
+import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { t as tr } from "../../i18n/t";
 import s from "./FieldSheet.module.css";
 
@@ -43,6 +43,11 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
     .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
     .filter(([, f]) => f.length);
   const events = S.eventActive ?? [];
+  // Hovering a card that designates tiles lights those and fades the rest.
+  const hoverTiles = (uid: number) => {
+    const ts = (S.marks ?? []).filter((x) => x.category === "designate" && (x.src === uid || x.instance === uid)).map((x) => x.tile);
+    setHoverCardTiles(ts.length ? new Set(ts) : null);
+  };
   const total = rows.reduce((a, [, f]) => a + f.length, 0) + events.length;
   if (!total) return null;
   return (
@@ -66,7 +71,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
             ...(designee >= 0 ? [{ label: tr("board.pillDesignee", { who: m.nameOf(designee) }), color: m.colorOf(designee), char: m.charOf(designee) }] : []),
           ];
           return (
-            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
+            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} onMouseEnter={() => hoverTiles(fc.uid)} onMouseLeave={() => setHoverCardTiles(null)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
