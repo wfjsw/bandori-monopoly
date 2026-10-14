@@ -138,6 +138,11 @@ export class Animator {
   private disposed = false;
   private bump: () => void;
   private view: () => MatchView | null;
+  /** The view the board is drawing: the state as of before the events being
+   *  played. Walks start from its positions. */
+  shownView: () => MatchView | null = () => this.view();
+  /** Called when the queue has drained: the board catches up with the state. */
+  onDrain: () => void = () => undefined;
   private readonly replay: boolean;
 
   constructor(bump: () => void, view: () => MatchView | null, replay = false) {
@@ -448,7 +453,7 @@ export class Animator {
   private async run(): Promise<void> {
     if (this.animating) return;
     this.animating = true;
-    this.pos = this.view()?.state.players.map((x) => x.pos) ?? null;
+    this.pos = this.shownView()?.state.players.map((x) => x.pos) ?? null;
     this.bump();
     while (this.queue.length && !this.disposed) {
       const it = this.queue.shift()!;
@@ -466,6 +471,7 @@ export class Animator {
     // Caught up: the last stage played is the state's own.
     this.stage = null;
     this.turn = null;
+    this.onDrain();
     this.bump();
   }
 
@@ -715,11 +721,21 @@ export class Animator {
 export function useBoardSession(sess: GameSession): { view: MatchView | null; at: number; anim: Animator } {
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const [state, set] = useState<{ view: MatchView | null; at: number }>(() => ({ view: sess.view, at: performance.now() }));
+  // `viewRef` is the newest view from the session; `state.view` is what the
+  // board draws. A view that arrives while events are still playing is held
+  // (the events precede their view), so every panel -- player bars, tile
+  // owners, field cards, money -- changes only once the animation has caught
+  // up, instead of running ahead of it. The drain below releases it.
   const viewRef = useRef(state.view);
-  viewRef.current = state.view;
+  const shownRef = useRef(state.view);
+  shownRef.current = state.view;
   const animRef = useRef<Animator | null>(null);
   if (!animRef.current) {
     const a = new Animator(bump, () => viewRef.current, sess.kind === "replay");
+    a.shownView = () => shownRef.current;
+    a.onDrain = () => {
+      if (viewRef.current !== shownRef.current) set({ view: viewRef.current, at: performance.now() });
+    };
     for (const e of sess.view?.state.events ?? []) a.addLog(e, { history: true });
     animRef.current = a;
   }
@@ -734,7 +750,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
       (v) => {
         const prev = viewRef.current?.state;
         viewRef.current = v;
-        set({ view: v, at: performance.now() });
+        if (!a.animating) set({ view: v, at: performance.now() });
         // Queue stage changes for the match log after their events. Only a
         // new turn gets an announcement over the board.
         const now = v.state;
