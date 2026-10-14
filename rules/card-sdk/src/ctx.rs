@@ -742,8 +742,159 @@ pub fn take_from_hand(player_id: i32, card: &str) -> bool {
     take_card(player_id, CardPile::Hand, card)
 }
 
+/// Fixed-capacity card-id list for `cfg(kani)` [`cards_in`].
+///
+/// `IntoIterator` is a **hard 4-step** walk (`i >= 4 ⇒ None`), so an
+/// unmodified body's `for c in cards_in(..)` terminates in 5 unrolls and its
+/// `ids: Vec<String>` (pushed at most 4 times) has `len ∈ 0..=4` — the
+/// subsequent `contains` / `map().collect()` / `drop_glue` then unwind to 5
+/// instead of the global bound (prompt profile: fold 31, drop_glue 62).
+#[cfg(kani)]
+#[derive(Clone)]
+pub struct CardList {
+    items: [String; 4],
+    n: u8,
+}
+
+#[cfg(kani)]
+impl CardList {
+    pub fn empty() -> Self {
+        CardList {
+            items: [
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+            ],
+            n: 0,
+        }
+    }
+
+    pub fn push(&mut self, s: String) {
+        if (self.n as usize) < 4 {
+            self.items[self.n as usize] = s;
+            self.n += 1;
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.n as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &String> {
+        let n = self.n as usize;
+        self.items.iter().take(n)
+    }
+}
+
+/// Bodies that annotate `let hand: Vec<String> = ctx::cards_in(..)` convert
+/// through this. The resulting `Vec` still has `len ∈ 0..=4`.
+#[cfg(kani)]
+impl From<CardList> for alloc::vec::Vec<String> {
+    fn from(c: CardList) -> alloc::vec::Vec<String> {
+        let mut v = alloc::vec::Vec::new();
+        let n = c.n as usize;
+        macro_rules! step {
+            ($i:expr) => {
+                if $i < n {
+                    v.push(c.items[$i].clone());
+                }
+            };
+        }
+        step!(0); step!(1); step!(2); step!(3);
+        v
+    }
+}
+
+#[cfg(kani)]
+impl IntoIterator for CardList {
+    type Item = String;
+    type IntoIter = CardIter;
+    fn into_iter(self) -> CardIter {
+        CardIter { list: self, i: 0 }
+    }
+}
+
+/// Hard-bounded iterator: `next` returns `None` at `i >= 4` (and at
+/// `i >= n`). CBMC unwinds the caller's `for` to 5, not 32.
+#[cfg(kani)]
+pub struct CardIter {
+    list: CardList,
+    i: u8,
+}
+
+#[cfg(kani)]
+impl Iterator for CardIter {
+    type Item = String;
+    fn next(&mut self) -> Option<String> {
+        if self.i >= 4 {
+            return None;
+        }
+        let i = self.i;
+        self.i += 1;
+        if i >= self.list.n {
+            return None;
+        }
+        // Take (no clone): move the facade string out.
+        let slot = i as usize;
+        if slot < 4 {
+            Some(core::mem::take(&mut self.list.items[slot]))
+        } else {
+            None
+        }
+    }
+}
+
 /// Every card id in a player's `pile`, in pile order (the deck's top card
 /// first). Duplicates are listed once per copy.
+///
+/// Under `cfg(kani)` this builds a [`CardList`] (fixed 4-slot, zero-loop
+/// iterator) and converts to `T` (`CardList` by default, or `Vec<String>`
+/// where a body annotates that type). The unmodified body's
+/// `for c in cards_in(..)` then has a **hard 4-iteration bound**, so its
+/// subsequent `ids: Vec<String>` push/contains/fold/drop unrolls to 5 —
+/// not 32 (the prompt profile's `drop_glue<[String]>` 62 / `String fold` 31).
+#[cfg(kani)]
+pub fn cards_in<T = CardList>(player_id: i32, pile: CardPile) -> T
+where
+    T: From<CardList>,
+{
+    let mut out = CardList::empty();
+    let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
+    if need <= 0 {
+        return T::from(out);
+    }
+    let (p, scratch) = out_buf(need as usize);
+    let got = unsafe { sys::cards_in(player_id, pile as i32, p, need) };
+    if got != need {
+        return T::from(out);
+    }
+    let buf = out_read(p, got, scratch);
+    // Static 1-byte facade strings (see `slot_str`).
+    fn slot_str(buf: &[u8], i: usize) -> String {
+        static B: [[u8; 1]; 4] = [[0], [1], [2], [3]];
+        let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
+        let b = &B[slot as usize];
+        // SAFETY: `'static` 1-byte buffer; kani bump `dealloc` is a no-op.
+        unsafe { String::from_raw_parts(b.as_ptr() as *mut u8, 1, 1) }
+    }
+    if need >= 2 {
+        out.push(slot_str(&buf, 0));
+        if need >= 3 {
+            out.push(slot_str(&buf, 1));
+            if need >= 4 {
+                out.push(slot_str(&buf, 2));
+            }
+        }
+    }
+    T::from(out)
+}
+
+#[cfg(not(kani))]
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     if need <= 0 {
@@ -755,58 +906,7 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // Under Kani the host writes `[n, slot…]` where slot is a small card
-    // slot (see rules-kani). postcard + String does not unwind under CBMC.
-    //
-    // Interned-str facade: each returned `String` is a **single byte** whose
-    // value is the slot id (0..3). Card bodies still see `Vec<String>`
-    // (unmodified), but `String::eq` / `Vec::contains` degrade to a 1-byte
-    // compare. The previous full-name encoding made `ids.contains(&c)` in
-    // play bodies blow CBMC's `memcmp` unwind (the prompt OOM cliff — see
-    // `KANI.md` §5). The host's `card_slot` / `card_u16` recognise this
-    // 1-byte form and map it back to the well-known name id.
-    //
-    // Length comes from the host's **integer return** (`need = 1 + n`), not
-    // from `buf[0]`: the heap buffer's metadata is symbolic to CBMC and a
-    // symbolic `n` unwinds `Vec::contains` to the full bound. `need` is an
-    // i64 in a register, concrete whenever the pile contents are.
-    #[cfg(kani)]
-    {
-        // Branch tree, not a loop: CBMC unwinds `while i < n` to the global
-        // bound when `need` (fn-ptr return) is not folded, and a 32-iteration
-        // Vec-grow × String path is the time cliff. The host only ever emits
-        // `need = 1 + n` for `n = 0..=4` pilot slots.
-        //
-        // Facade strings are **static 1-byte buffers** (no `String::from`
-        // heap). `Drop` calls the kani bump's no-op `dealloc`, so drop glue
-        // is a function call per element, not a CBMC free. Length is the
-        // compile-time constant 1, so `String::eq` is one byte.
-        fn slot_str(buf: &[u8], i: usize) -> String {
-            // Four 1-byte storages, distinct so `eq` discriminates the slot.
-            static B: [[u8; 1]; 4] = [[0], [1], [2], [3]];
-            let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
-            let b = &B[slot as usize];
-            // SAFETY: `b` is a `'static` 1-byte buffer; the kani allocator's
-            // `dealloc` is a no-op so `String::drop` never frees it. This
-            // helper is `cfg(kani)`-only.
-            unsafe { String::from_raw_parts(b.as_ptr() as *mut u8, 1, 1) }
-        }
-        let mut out = Vec::new();
-        if need >= 2 {
-            out.push(slot_str(&buf, 0));
-            if need >= 3 {
-                out.push(slot_str(&buf, 1));
-                if need >= 4 {
-                    out.push(slot_str(&buf, 2));
-                }
-            }
-        }
-        return out;
-    }
-    #[cfg(not(kani))]
-    {
-        postcard::from_bytes(&buf).unwrap_or_default()
-    }
+    postcard::from_bytes(&buf).unwrap_or_default()
 }
 
 #[cfg_attr(kani, inline(always))]
