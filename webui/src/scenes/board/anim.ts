@@ -462,6 +462,7 @@ export class Animator {
     if (this.disposed) return;
     this.animating = false;
     this.pos = null;
+    this.route = null;
     // Caught up: the last stage played is the state's own.
     this.stage = null;
     this.turn = null;
@@ -491,6 +492,33 @@ export class Animator {
     sfx("dice_result");
   }
 
+  /**
+   * The tiles the same walk goes on to cover in the segments queued behind
+   * the one ending at `end`. The engine publishes a new `move` each time a
+   * per-step hook logs (薰's 火罐 every step), so one walk arrives in many
+   * pieces with card / fire events between; reading ahead lets the route stay
+   * lit for the whole walk, as it does for a walk published in one piece.
+   */
+  private routeAhead(playerId: number, end: number): number[] {
+    const n = D.tiles.length;
+    const out: number[] = [];
+    let at = end;
+    for (const it of this.queue) {
+      if ("mark" in it) break;
+      const q = it.ev;
+      if (q.type === "move" && q.playerId === playerId && q.from === at && q.value) {
+        const dir = q.value > 0 ? 1 : -1;
+        for (let k = 0; k < Math.abs(q.value); k++) {
+          at = (((at + dir) % n) + n) % n;
+          out.push(at);
+        }
+      } else if (["move", "roll", "teleport", "turn"].includes(q.type) && (q.playerId === playerId || q.type === "turn")) {
+        break;
+      }
+    }
+    return out;
+  }
+
   private async walk(playerId: number, from: number, steps: number, hop: number): Promise<void> {
     if (!this.pos) return;
     const n = D.tiles.length;
@@ -502,11 +530,14 @@ export class Animator {
       q = (((q + dir) % n) + n) % n;
       ahead.push(q);
     }
-    if (hop > 0) this.route = ahead.slice();
+    const more = hop > 0 ? this.routeAhead(playerId, ahead.length ? ahead[ahead.length - 1] : from) : [];
+    // A continuation of a walk whose route is already lit: keep it as is.
+    const carried = hop > 0 && !!this.route && this.route.length > 0 && this.route[0] === ahead[0];
+    if (hop > 0 && !carried) this.route = ahead.concat(more);
     this.bump();
     try {
       // A beat to read the lit route before the token sets off.
-      if (hop > 0 && ahead.length > 0) await this.nap(300);
+      if (hop > 0 && !carried && ahead.length > 0) await this.nap(300);
       for (let k = 0; k < Math.abs(steps); k++) {
         p = (((p + dir) % n) + n) % n;
         this.pos[playerId] = p;
@@ -520,7 +551,7 @@ export class Animator {
       }
     } finally {
       this.hop = null;
-      this.route = null;
+      if (!more.length) this.route = null;
       this.bump();
     }
   }
