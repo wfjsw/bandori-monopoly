@@ -16,6 +16,7 @@ import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
 import { InspectCard } from "../../ui/Card";
+import { previewFrom, previewHide } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
 import { showEvent } from "./Popups";
 import { useHoverSeat } from "./hoverSeat";
@@ -101,7 +102,9 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
               {e.faceDown ? (
                 <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
-                <button type="button" className={s.event} title={tr("board.activeEvents")} onClick={() => showEvent(e.id, note)}>
+                <button type="button" className={s.event} title={tr("board.activeEvents")} onClick={() => showEvent(e.id, note)}
+                  onMouseEnter={(x) => previewFrom(x.currentTarget, e.id, note)} onFocus={(x) => previewFrom(x.currentTarget, e.id, note)}
+                  onMouseLeave={previewHide} onBlur={previewHide}>
                   <div className={s.eventArt}><img src={sceneImg("card_back")} alt="" /></div>
                   <div className={s.eventName}>{ev?.name ?? e.id}</div>
                   <div className={s.marks}>
