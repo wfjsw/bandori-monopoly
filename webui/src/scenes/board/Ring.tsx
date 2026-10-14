@@ -315,7 +315,8 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   const [col, row] = cell(i);
   const owner = S.owners[i] ?? -1;
   const cardFocus = useCardTileFocus(i);
-  const focus = cardFocus || useSeatFocus(owner);
+  const seatFocus = useSeatFocus(owner);
+  const focus = cardFocus || seatFocus;
   const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail, dest && s.dest);
   const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
   const tileMarks = S.marks ?? [];
