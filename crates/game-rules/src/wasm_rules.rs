@@ -7627,6 +7627,23 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.card_props(card)
     }
 
+    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// [`game_core::engine::CardRules::card_texts`]. Sorted by entry index
+    /// (stable, so declaration order within an entry is kept) -- that order is
+    /// the third component of the view's text-precedence key.
+    fn card_texts(&self, card: &str) -> Vec<game_core::engine::TileTextDecl> {
+        let mut texts = self.ruleset.card_texts(card);
+        texts.sort_by_key(|t| t.entry);
+        texts
+            .into_iter()
+            .map(|t| game_core::engine::TileTextDecl {
+                slot: t.slot,
+                tile: t.tile,
+                key: t.key,
+            })
+            .collect()
+    }
+
     fn has_rule(&self, id: &str) -> bool {
         self.ruleset.card(id).is_some()
     }

@@ -8,9 +8,15 @@
 //! Both board tiles share one rule -- the book gives them one sentence.
 
 use ruleset_core::ctx;
+use card_sdk::abi::text_slot;
 use card_sdk::{CardDef, Msg, On};
 
-pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle("", None, settle)]);
+pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle("", None, settle)]).texts(&[(
+    0,
+    text_slot::SETTLE,
+    "",
+    "deed.note.drawEvent",
+)]);
 
 /// 规则书: 「[结算]是：抽取一张手卡，然后抽取一个事件卡。」
 fn settle(player_id: i32) -> card_sdk::Asked {

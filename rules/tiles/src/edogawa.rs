@@ -11,9 +11,15 @@
 //! the two shops ever diverge, this body is the one to split further.
 
 use ruleset_core::ctx;
+use card_sdk::abi::text_slot;
 use card_sdk::{CardDef, Msg, On};
 
-pub const EDOGAWA: CardDef = CardDef::new("tile:edogawa", &[On::Settle("", None, settle)]);
+pub const EDOGAWA: CardDef = CardDef::new("tile:edogawa", &[On::Settle("", None, settle)]).texts(&[(
+    0,
+    text_slot::SETTLE,
+    "",
+    "deed.note.draw",
+)]);
 
 /// 规则书: 「江户川乐器店的[结算]是：抽取一张手卡。」
 fn settle(player_id: i32) -> card_sdk::Asked {

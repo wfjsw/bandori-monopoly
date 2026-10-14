@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `协助CiRCLE重建`）:
 //! > 将此卡放置于场地中央，为其放置5个奇迹水晶，每次有人经过CiRCLE时移除一个，为0时放入事件弃牌，期间CiRCLE的[触发结算]改为选择获得2层[停留]或失去500资金（该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果），CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果
 
-use card_sdk::abi::{prop, HookKind};
+use card_sdk::abi::{prop, text_slot, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -36,7 +36,21 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
             on_settle_body,
         ),
     ],
-);
+)
+// Deed-popup text (`docs/TILES.md` 「Tile text」): one hook covers both tiles,
+// so the text hangs off the hook entries and names its tile. While the event
+// is up these replace `tile:circle` / `tile:event`'s base texts -- CiRCLE's
+// settle becomes the rebuild choice, its [经过] reward is suppressed (it is
+// re-homed onto the cafe), and the cafe inherits CiRCLE's original texts.
+// When the event expires its instance disappears and the base texts win again.
+.texts(&[
+    // PassTile (entry 1) speaks for the [经过] half.
+    (1, text_slot::PASS, "CiRCLE", ""),
+    (1, text_slot::PASS, CAFE, "deed.note.circlePass"),
+    // SettleBody (entry 2) speaks for the [结算] half.
+    (2, text_slot::SETTLE, "CiRCLE", "deed.note.rebuildSettle"),
+    (2, text_slot::SETTLE, CAFE, "deed.note.draw"),
+]);
 
 /// The settle not already claimed by an earlier replacement in the chain
 /// (the `cancelled` bail below). The tile is the entry's condition.

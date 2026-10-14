@@ -25,11 +25,16 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::BuyKind;
+use card_sdk::abi::{text_slot, BuyKind};
 use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
-pub const AGENT: CardDef = CardDef::new("tile:agent", &[On::Settle("", None, settle)]);
+pub const AGENT: CardDef = CardDef::new("tile:agent", &[On::Settle("", None, settle)]).texts(&[(
+    0,
+    text_slot::SETTLE,
+    "",
+    "deed.note.dealer",
+)]);
 
 /// 规则书: 「[地产商]的[结算]为：若…则需向…依次进行一次半价收费的[结算]…，
 /// 否则可选择…之一进行一次[结算]。」

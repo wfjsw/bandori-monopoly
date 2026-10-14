@@ -6,7 +6,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use card_sdk::abi::{
-    self, export, AbKind, ManifestOn, OnKind, PromptKind, ABI_VERSION, IMPORT_MODULE,
+    self, export, AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind, ABI_VERSION,
+    IMPORT_MODULE,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -80,6 +81,10 @@ pub struct CardInfo {
     /// serialization stay deterministic.
     #[serde(default)]
     pub props: std::collections::BTreeMap<String, i32>,
+    /// Tile texts this card's entries speak (`CardDef::texts`, ABI v59), in
+    /// declaration order. See [`ManifestTileText`].
+    #[serde(default)]
+    pub texts: Vec<ManifestTileText>,
 }
 
 impl CardInfo {
@@ -975,6 +980,14 @@ impl Ruleset {
             .map_or_else(Default::default, |c| c.props.clone())
     }
 
+    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// [`CardInfo::texts`]. Empty when the card declares none.
+    pub fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
+        self.card(id)
+            .and_then(|i| self.inner.cards.get(i as usize))
+            .map_or_else(Default::default, |c| c.texts.clone())
+    }
+
     /// One declared property; `0` when the card does not declare it (the
     /// defined default for every key the engine reads).
     pub fn card_prop(&self, id: &str, key: &str) -> i32 {
@@ -1629,6 +1642,9 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     fn card(&self, id: &str) -> Option<i32>;
     fn card_props(&self, id: &str) -> std::collections::BTreeMap<String, i32>;
     fn card_prop(&self, id: &str, key: &str) -> i32;
+    /// Tile texts this card's entries speak (`CardDef::texts`), in declaration
+    /// order. Empty when the card declares none.
+    fn card_texts(&self, id: &str) -> Vec<ManifestTileText>;
     fn declares(&self, kind: crate::TriggerKind) -> bool;
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
     /// a [反击] at `kind`? Default scans the entry table; [`Ruleset`] uses the
@@ -1812,6 +1828,9 @@ impl CardModules for Ruleset {
     }
     fn card_prop(&self, id: &str, key: &str) -> i32 {
         Ruleset::card_prop(self, id, key)
+    }
+    fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
+        Ruleset::card_texts(self, id)
     }
     fn declares(&self, kind: crate::TriggerKind) -> bool {
         Ruleset::declares(self, kind)
@@ -2319,6 +2338,7 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
             id: e.id,
             on: e.on,
             props: e.props.into_iter().collect(),
+            texts: e.texts,
         })
         .collect();
     if cards.is_empty() {
@@ -5010,6 +5030,7 @@ mod gate_tests {
             id: "t:gate".into(),
             on,
             props: Default::default(),
+            texts: Default::default(),
         }
     }
 

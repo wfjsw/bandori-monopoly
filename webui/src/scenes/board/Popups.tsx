@@ -17,6 +17,7 @@ import { Avatar } from "../../ui/Character";
 import { openModal } from "../../ui/Modal";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, buyable, canBuildOn, type Model, model, mortgageValue, RING_MULTIPLIER, redeemCost } from "./model";
+import { winningTileText } from "./tileText";
 import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
@@ -60,15 +61,30 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
   const mortgaged = !!S.mortgaged[i];
   const deedKind = t.kind === "property" || t.kind === "ring";
   const notes: string[] = [];
-  switch (t.kind) {
-    case "circle": notes.push(tr("deed.note.circle")); break;
-    case "cafe": case "ryuseido": notes.push(tr("deed.note.drawEvent")); break;
-    case "edogawa": notes.push(tr("deed.note.draw")); break;
-    case "agent": notes.push(tr("deed.note.dealer")); break;
-    case "ring":
-      notes.push(tr("deed.rentRing", { mult: RING_MULTIPLIER }));
-      for (let k = 1; k <= 4; k++) notes.push(tr("deed.rentRingN", { n: k, min: n0(k * RING_MULTIPLIER), max: n0(k * RING_MULTIPLIER * 20) }));
-      break;
+  // Per-slot winning texts from the rule instances' declared tile texts
+  // (`docs/TILES.md` 「Tile text」). Fall back to the hard-coded notes only
+  // when the view carries no speakers for this tile (StubRules / old engine),
+  // so the popup never goes blank.
+  const speakers = S.tileTexts?.[i];
+  if (speakers && speakers.length > 0) {
+    const win = winningTileText(speakers);
+    if (win.settle) notes.push(tr(win.settle));
+    if (win.pass) notes.push(tr(win.pass));
+  } else {
+    switch (t.kind) {
+      case "circle":
+        notes.push(tr("deed.note.circleSettle"));
+        notes.push(tr("deed.note.circlePass"));
+        break;
+      case "cafe": case "ryuseido": notes.push(tr("deed.note.drawEvent")); break;
+      case "edogawa": notes.push(tr("deed.note.draw")); break;
+      case "agent": notes.push(tr("deed.note.dealer")); break;
+    }
+  }
+  // RiNG's dice-rent grid is webui-owned (not a tile rule text).
+  if (t.kind === "ring") {
+    notes.push(tr("deed.rentRing", { mult: RING_MULTIPLIER }));
+    for (let k = 1; k <= 4; k++) notes.push(tr("deed.rentRingN", { n: k, min: n0(k * RING_MULTIPLIER), max: n0(k * RING_MULTIPLIER * 20) }));
   }
   if (owner < 0 && houses > 0) notes.unshift(tr("deed.note.leftHouses", { n: houses, total: n0(t.price + houses * t.house) }));
   const names = namesOf(S);

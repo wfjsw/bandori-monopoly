@@ -110,6 +110,21 @@ pub struct TileQuote {
     pub max: Option<i32>,
 }
 
+/// One speaking declaration in a tile's deed-text list
+/// ([`MatchState::tile_texts`]). Ordered by body precedence; the consumer
+/// takes the first entry of each [`Self::slot`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TileTextEntry {
+    /// Rule id that speaks (`tile:circle`, `event:协助CiRCLE重建`, ...).
+    pub from: String,
+    /// `"settle"` or `"pass"` (the [结算] / [经过] half).
+    pub slot: String,
+    /// i18n key in the `ui` namespace (`deed.note.*`); `""` = this speaker
+    /// suppresses the slot (renders nothing).
+    pub key: String,
+}
+
 /// The public match snapshot: board, players, phase, and the recent events.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -206,6 +221,16 @@ pub struct MatchState {
     /// bump rather than 80 event clones -- the view builder is on the sim's
     /// per-tick loop and the server's broadcast path.
     pub events: Arc<Vec<MatchEvent>>,
+    /// Per-tile effective deed-text speakers, in body-precedence order.
+    /// Composed by the view from board-owned (and tile-carrying player) rule
+    /// instances' declared texts. See `docs/TILES.md` 「Tile text」. Index is
+    /// the board tile; each inner list is ordered replacements-first, base
+    /// last. The consumer takes the first entry of each `slot`; a `key` of
+    /// `""` suppresses that slot. Serde-defaulted so a client or save from
+    /// before this field still loads (the deed popup falls back to its
+    /// hard-coded notes).
+    #[serde(default)]
+    pub tile_texts: Vec<Vec<TileTextEntry>>,
     pub end_reason: String,
     pub winner: i32,
     pub score_money: f32,
@@ -259,6 +284,7 @@ impl Default for MatchState {
             prompt: MatchPrompt::default(),
             vote: MatchVote::default(),
             events: Arc::default(),
+            tile_texts: vec![],
             end_reason: String::new(),
             winner: -1,
             score_money: 1.0,

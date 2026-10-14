@@ -88,6 +88,17 @@ export interface FieldCard {
  */
 export interface SkillAction { id: string; source: string; title: Msg; text: Msg; enabled: boolean; reason: Msg }
 export interface ActiveEvent { id: string; playerId: number; counter: number; counter2: number; note: Msg; faceDown: boolean }
+/** One speaking declaration in a tile's deed-text list (`MatchState.tileTexts`).
+ *  Ordered by body precedence; take the first entry of each `slot`. An empty
+ *  `key` suppresses that slot (renders nothing). See `docs/TILES.md`. */
+export interface TileTextEntry {
+  /** Rule id that speaks (`tile:circle`, `event:协助CiRCLE重建`, ...). */
+  from: string;
+  /** `"settle"` or `"pass"` (the [结算] / [经过] half). */
+  slot: string;
+  /** i18n key in the `ui` namespace (`deed.note.*`); `""` = suppress. */
+  key: string;
+}
 /** A tile marker. `category` sorts it: `""` is a player/generic mark (coloured
  *  by `owner`'s seat), `"cp"` is a neutral [CP点] -- `owner` is then -1 and the
  *  provenance is `src` (the placing card instance) / `card` (its id, 「来自」). */
@@ -177,6 +188,10 @@ export interface MatchState {
   bought: boolean; built: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
+  /** Per-tile deed-text speakers, in body-precedence order (optional: absent
+   *  on an old engine / StubRules -- the deed popup falls back to its
+   *  hard-coded notes). See {@link TileTextEntry}. */
+  tileTexts?: TileTextEntry[][];
   endReason: string; winner: number; scoreMoney: number; scoreProperty: number; scoreHouses: number;
 }
 /**

@@ -1,6 +1,6 @@
 //! Export runtime used by [`bandori_ruleset!`](crate::bandori_ruleset).
 
-use crate::abi::{export, pack, ManifestEntry, ManifestOn};
+use crate::abi::{export, pack, ManifestEntry, ManifestOn, ManifestTileText};
 #[cfg(target_arch = "wasm32")]
 use alloc::{boxed::Box, string::String, vec::Vec};
 
@@ -55,6 +55,19 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                 p.sort_by(|a, b| a.0.cmp(&b.0));
                 p
             },
+            // Declaration order -- the view's text precedence uses this as the
+            // third component of its order key (docs/ENGINE.md 「Effect
+            // ordering」).
+            texts: c
+                .texts
+                .iter()
+                .map(|(e, slot, tile, key)| ManifestTileText {
+                    entry: *e,
+                    slot: String::from(*slot),
+                    tile: String::from(*tile),
+                    key: String::from(*key),
+                })
+                .collect(),
         })
         .collect();
     leak(postcard::to_allocvec(&entries).unwrap_or_default())
