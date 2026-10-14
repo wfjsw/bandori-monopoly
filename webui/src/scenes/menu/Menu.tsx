@@ -26,18 +26,21 @@ function randomLine(cnId: string) {
 export function Menu() {
   const p = useProfile()!;
   const c = D.character(p.homeCharacter) ?? D.characters[0];
-  const first = useMemo(() => randomLine(c.cnId), [c.cnId]);
+  const first = useMemo(() => randomLine(c?.cnId ?? ""), [c?.cnId]);
   const [line, setLine] = useState(first?.text.replace(/\n/g, "") ?? tr("menu.talk"));
   const [bounce, setBounce] = useState(0);
   const badge = (on: boolean) => on && <img className={s.badge} src={sceneImg("badge_new")} alt="NEW" />;
 
   const talk = () => {
+    if (!c) return;
     const l = randomLine(c.cnId);
     if (!l) return;
     setLine(l.text.replace(/\n/g, ""));
     setBounce((b) => b + 1);
     if (settings().voice > 0) playVoice(c.cnId, l.voice);
   };
+
+  if (!c) return null; // roster failed to load
 
   return (
     <>
