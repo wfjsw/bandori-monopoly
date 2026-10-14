@@ -353,6 +353,17 @@ pub trait CardWorld: Clone + 'static {
         let _ = (player_id, tile, class);
         false
     }
+    /// All true `(player, tile, class)` triples for `tile` at once, when the
+    /// world can produce them exactly; `false` = use per-probe `tile_in`.
+    fn tile_class_rows(
+        &self,
+        tile: i32,
+        classes: &[String],
+        out: &mut Vec<(i64, i64, String)>,
+    ) -> bool {
+        let _ = (tile, classes, out);
+        false
+    }
     /// What this turn's [触发结算]s have cost the player so far.
     fn paid_in_settle(&self) -> i32 {
         0

@@ -647,6 +647,19 @@ pub trait SnapSrc {
         let _ = (player_id, tile, class);
         false
     }
+    /// Fast path for `fill_tile_generic`: push every true `(player, tile,
+    /// class)` triple for `tile` in one pass and return `true`, or return
+    /// `false` to fall back to per-probe [`Self::tile_in`] (the default; a
+    /// world says `true` only when it can answer exactly).
+    fn tile_class_rows(
+        &self,
+        tile: i32,
+        classes: &[String],
+        out: &mut Vec<(i64, i64, String)>,
+    ) -> bool {
+        let _ = (tile, classes, out);
+        false
+    }
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
     fn fire(&self, player_id: i32) -> i32;
@@ -759,6 +772,10 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
         CardWorld::tile_in(self, player_id, tile, class)
+    }
+    #[inline]
+    fn tile_class_rows(&self, tile: i32, classes: &[String], out: &mut Vec<(i64, i64, String)>) -> bool {
+        CardWorld::tile_class_rows(self, tile, classes, out)
     }
     #[inline]
     fn player_count(&self) -> i32 {
@@ -1466,23 +1483,35 @@ fn fill_tile_generic<S: SnapSrc>(
 
     // Classes: the ruleset vocabulary plus `color:<g>` for groups present on
     // the board. `player = -1` plus each live seat.
-    let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    for g in -2..=32 {
-        classes.push(format!("color:{g}"));
+    let classes = class_names();
+    if world.tile_class_rows(tile, classes, tile_classes) {
+        return;
     }
     let players: Vec<i32> = std::iter::once(-1)
         .chain(0..world.player_count())
         .collect();
     for &p in &players {
-        for c in &classes {
+        for c in classes {
             if world.tile_in(p, tile, c) {
                 tile_classes.push((p as i64, tile as i64, c.clone()));
             }
         }
     }
+}
+
+/// The class vocabulary `tile_in` is probed over (built once).
+fn class_names() -> &'static [String] {
+    static NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        for g in -2..=32 {
+            classes.push(format!("color:{g}"));
+        }
+        classes
+    })
 }
 
 /// Every board name -> id, so `tile_named('Bandori车站')` / `tile_named('CiRCLE')`
@@ -1668,4 +1697,9 @@ pub fn fill_candidate_extras<S: SnapSrc>(
 /// A window scope helper: build once, evaluate every candidate against it.
 pub fn window_scope(win: &WindowCtx) -> WindowScope {
     WindowScope::new(win)
+}
+
+/// [`window_scope`] for a snapshot built just for it (no copy of the tables).
+pub fn window_scope_owned(win: WindowCtx) -> WindowScope {
+    WindowScope::from_owned(win)
 }

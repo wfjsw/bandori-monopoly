@@ -275,6 +275,27 @@ impl CondView for SnapshotView<'_> {
                 .any(|&(p, t, ref c)| p == player && t == tile && c == class),
         }
     }
+    fn tile_in_rows(&self) -> Vec<(i64, i64, String)> {
+        // Same set as probing `tile_in` over every (player, tile, class): the
+        // baked triples, except that the player-less `buyable` / `livehouse`
+        // answer from the kind lists (see `tile_in`) rather than the triples.
+        let mut rows: Vec<(i64, i64, String)> = self
+            .win
+            .tile_classes
+            .iter()
+            .filter(|(p, _, c)| !(*p < 0 && (c == "buyable" || c == "livehouse")))
+            .cloned()
+            .collect();
+        for t in 0..self.tile_count() {
+            if self.is_buyable(t) {
+                rows.push((-1, t, "buyable".to_string()));
+            }
+            if self.is_live_house(t) {
+                rows.push((-1, t, "livehouse".to_string()));
+            }
+        }
+        rows
+    }
     fn slot_table(&self) -> Vec<(String, i64)> {
         self.cand.slots.iter().map(|(k, v)| (k.clone(), *v)).collect()
     }

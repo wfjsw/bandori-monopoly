@@ -1113,7 +1113,7 @@ impl Ruleset {
             call,
             Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
         ) {
-            let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+            let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
             let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
             if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {
                 return Ok(Outcome::Done(world.clone()));
@@ -1211,7 +1211,7 @@ impl Ruleset {
         if entries.is_empty() {
             return Ok(None);
         }
-        let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+        let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
         // `card.placed` must answer for the **running instance** (the guest's
         // `ctx::is_placed()`): a game-start hook also fires for the same id
         // while it sits in a pile / hand (`uid = -1`).
@@ -1299,7 +1299,7 @@ impl Ruleset {
         card: i32,
         player_id: i32,
     ) -> Result<bool, RuleError> {
-        let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+        let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
         self.can_counteract_scoped(world, card, player_id, &scope)
     }
 
@@ -1431,7 +1431,7 @@ impl Ruleset {
             let pre = self.pre_at(card, entry);
             let scope;
             let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
-                scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(
+                scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
                     world, player_id,
                 ));
                 Some(&scope)
@@ -1488,7 +1488,7 @@ impl Ruleset {
         // `cant_play` hot path (ai_step / view extras ask it per hand card).
         let scope;
         let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
-            scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(
+            scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
                 world, player_id,
             ));
             Some(&scope)

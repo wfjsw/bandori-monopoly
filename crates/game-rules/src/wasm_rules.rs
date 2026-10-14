@@ -1578,6 +1578,9 @@ impl CardWorld for Run {
             |k| self.world.tile_prop(tile, k),
         )
     }
+    fn tile_class_rows(&self, tile: i32, classes: &[String], out: &mut Vec<(i64, i64, String)>) -> bool {
+        crate::tile_class::class_rows(&self.world, self.data.tiles.get(tile.max(0) as usize), tile, classes, out)
+    }
     fn paid_in_settle(&self) -> i32 {
         self.world.turn.paid_in_settle
     }
@@ -2258,7 +2261,16 @@ impl Run {
 pub struct RulesBridge<M: CardModules> {
     ruleset: M,
     data: Arc<GameData>,
+    /// Every card's declared props, snapshotted once: a [`Run`] needs the whole
+    /// table, and the ruleset is immutable for the bridge's life.
+    props: std::sync::OnceLock<Arc<CardPropsTable>>,
+    /// `card_texts` per card, converted and sorted once (the view asks per
+    /// board field on every `state()`).
+    texts: std::sync::RwLock<std::collections::HashMap<String, Arc<[game_core::engine::TileTextDecl]>>>,
 }
+
+/// Card id -> declared static props (the per-[`Run`] snapshot).
+type CardPropsTable = std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>;
 
 /// The sandboxed bridge: `CardRules` over wasmi/wasmtime card modules.
 pub type WasmRules = RulesBridge<Ruleset>;
@@ -2394,7 +2406,12 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
 
 impl<M: CardModules> RulesBridge<M> {
     pub fn new(ruleset: M, data: Arc<GameData>) -> Self {
-        Self { ruleset, data }
+        Self {
+            ruleset,
+            data,
+            props: std::sync::OnceLock::new(),
+            texts: Default::default(),
+        }
     }
 
     /// The ruleset (module list, hashes) for inspection.
@@ -2406,11 +2423,15 @@ impl<M: CardModules> RulesBridge<M> {
     fn modules_props(
         &self,
     ) -> Arc<std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>> {
-        let mut m = std::collections::HashMap::new();
-        for c in self.ruleset.cards() {
-            m.insert(c.id.clone(), c.props.clone());
-        }
-        Arc::new(m)
+        self.props
+            .get_or_init(|| {
+                let mut m = std::collections::HashMap::new();
+                for c in self.ruleset.cards() {
+                    m.insert(c.id.clone(), c.props.clone());
+                }
+                Arc::new(m)
+            })
+            .clone()
     }
 
     /// Does this drive's log lines name their source (「<卡名> 的效果：…」)?
@@ -5696,7 +5717,7 @@ impl<M: CardModules> RulesBridge<M> {
                 };
                 let cand = crate::cond_pre::fill_candidate(&live, s as i32, id, false);
                 let sc = scope.get_or_insert_with(|| {
-                    crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&live))
+                    crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(&live))
                 });
                 if crate::cond_pre::condition_allows(Some(pre), Some(sc), &cand) {
                     return true;
@@ -5830,7 +5851,7 @@ impl<M: CardModules> RulesBridge<M> {
                 flash_policy: card_sdk::abi::Flash::Auto,
                 flash_ordinal: 0,
             };
-            let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
+            let win_scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(&win_run));
             let mut options: Vec<(String, i32, i32)> = Vec::new();
             let mut order: Vec<(u8, u32, u32)> = Vec::new();
             for (key, id, idx, uid) in candidates {
@@ -6525,6 +6546,9 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
             class,
             |k| self.world.tile_prop(tile, k),
         )
+    }
+    fn tile_class_rows(&self, tile: i32, classes: &[String], out: &mut Vec<(i64, i64, String)>) -> bool {
+        crate::tile_class::class_rows(&self.world, self.data.tiles.get(tile.max(0) as usize), tile, classes, out)
     }
     fn player_count(&self) -> i32 {
         self.world.st.players.len() as i32
@@ -7621,21 +7645,34 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.card_props(card)
     }
 
+    /// One prop without cloning the card's whole table (the trait default
+    /// goes through [`Self::card_props`]).
+    fn card_prop(&self, card: &str, key: &str) -> i32 {
+        self.ruleset.card_prop(card, key)
+    }
+
     /// The card rule's declared **tile texts** (`CardDef::texts`), see
     /// [`game_core::engine::CardRules::card_texts`]. Sorted by entry index
     /// (stable, so declaration order within an entry is kept) -- that order is
     /// the third component of the view's text-precedence key.
-    fn card_texts(&self, card: &str) -> Vec<game_core::engine::TileTextDecl> {
+    fn card_texts(&self, card: &str) -> Arc<[game_core::engine::TileTextDecl]> {
+        if let Some(t) = self.texts.read().ok().and_then(|m| m.get(card).cloned()) {
+            return t;
+        }
         let mut texts = self.ruleset.card_texts(card);
         texts.sort_by_key(|t| t.entry);
-        texts
+        let built: Arc<[game_core::engine::TileTextDecl]> = texts
             .into_iter()
             .map(|t| game_core::engine::TileTextDecl {
                 slot: t.slot,
                 tile: t.tile,
                 key: t.key,
             })
-            .collect()
+            .collect();
+        if let Ok(mut m) = self.texts.write() {
+            m.insert(card.to_string(), built.clone());
+        }
+        built
     }
 
     fn has_rule(&self, id: &str) -> bool {

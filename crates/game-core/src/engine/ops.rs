@@ -1256,6 +1256,16 @@ impl World {
             .unwrap_or(0)
     }
 
+    /// Every prop key set on a board-owned rule instance governing `tile`
+    /// (the keys [`Self::tile_prop`] can answer non-zero for).
+    pub fn tile_prop_keys(&self, tile: i32) -> impl Iterator<Item = &str> {
+        self.st
+            .board_field
+            .iter()
+            .filter(move |f| f.tile == tile)
+            .flat_map(|f| f.props.keys().map(String::as_str))
+    }
+
     /// Write [`Self::tile_prop`] on every board-owned rule instance governing
     /// `tile`; returns the stored value. The source owns the arming and the
     /// disarming; the reader is the tile instance.

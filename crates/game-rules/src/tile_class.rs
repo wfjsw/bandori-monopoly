@@ -111,13 +111,87 @@ pub fn class_matches(
 /// When `player_id < 0`, per-player `colorFor` is ignored (still honour
 /// `ANY_COLOR` and the tile's own group).
 pub fn is_color(player_id: i32, t: &TileData, group: i32, prop: &impl Fn(&str) -> i32) -> bool {
-    let any = prop(prop::ANY_COLOR) != 0;
+    is_color_lazy(player_id, t, group, prop(prop::ANY_COLOR) != 0, || {
+        prop(&format!("{}{}", prop::COLOR_FOR_PREFIX, player_id))
+    })
+}
+
+/// [`is_color`] with the two prop reads supplied by the caller: `any` is
+/// `prop::ANY_COLOR != 0`, `color_for` reads `colorFor:<player>` (only called
+/// when it can matter).
+fn is_color_lazy(
+    player_id: i32,
+    t: &TileData,
+    group: i32,
+    any: bool,
+    color_for: impl FnOnce() -> i32,
+) -> bool {
     if t.group == group || t.group == prop::ALL_COLORS || any {
         return true;
     }
     if player_id < 0 {
         return false;
     }
-    let color_for = prop(&format!("{}{}", prop::COLOR_FOR_PREFIX, player_id));
+    let color_for = color_for();
     color_for == group || color_for == prop::ALL_COLORS
+}
+
+/// Whether a tile prop key can change a class answer: the per-player override
+/// marks (`class:*` / `classFor:*`), `anyColor` and `colorFor:*`.
+pub fn is_class_prop(key: &str) -> bool {
+    key.starts_with("class") || key == prop::ANY_COLOR || key.starts_with(prop::COLOR_FOR_PREFIX)
+}
+
+/// [`class_rows_plain`] for a live world, or `false` when the tile carries a
+/// class prop (the caller then probes [`tile_in`] one by one).
+pub fn class_rows(
+    world: &game_core::engine::World,
+    data: Option<&TileData>,
+    tile: i32,
+    classes: &[String],
+    out: &mut Vec<(i64, i64, String)>,
+) -> bool {
+    if world.tile_prop_keys(tile).any(is_class_prop) {
+        return false;
+    }
+    class_rows_plain(data, tile as i64, world.st.players.len() as i32, classes, out);
+    true
+}
+
+/// Every `(player, tile, class)` triple `tile_in` answers true for, over
+/// `players = -1, 0..player_count`, **assuming the tile carries no class prop**
+/// (see [`is_class_prop`]; the caller checks). Same answers as probing
+/// [`tile_in`] with every prop reading 0, but allocation-free per probe.
+pub fn class_rows_plain(
+    data: Option<&TileData>,
+    tile: i64,
+    player_count: i32,
+    classes: &[String],
+    out: &mut Vec<(i64, i64, String)>,
+) {
+    let Some(t) = data else {
+        return;
+    };
+    for p in std::iter::once(-1).chain(0..player_count) {
+        for c in classes {
+            let hit = match c.as_str() {
+                "buyable" => t.is_buyable(),
+                "shop" => t.is_buyable() && t.group == 10,
+                "livehouse" => {
+                    if p < 0 {
+                        t.is_buyable() && t.group == 6
+                    } else {
+                        t.is_buyable() && is_color_lazy(p, t, 6, false, || 0)
+                    }
+                }
+                other => match other.strip_prefix("color:").and_then(|g| g.parse::<i32>().ok()) {
+                    Some(g) => is_color_lazy(p, t, g, false, || 0),
+                    None => false,
+                },
+            };
+            if hit {
+                out.push((p as i64, tile, c.clone()));
+            }
+        }
+    }
 }

@@ -586,8 +586,8 @@ pub trait CardRules: Send + Sync {
     /// on `card-sdk` types); the host's `ManifestTileText` carries the same
     /// `slot` / `tile` / `key` plus the entry index the loader folds into this
     /// Vec's order. See `docs/TILES.md` 「Tile text」.
-    fn card_texts(&self, _card: &str) -> Vec<TileTextDecl> {
-        Vec::new()
+    fn card_texts(&self, _card: &str) -> std::sync::Arc<[TileTextDecl]> {
+        std::sync::Arc::from(Vec::new())
     }
 
     /// Does this ruleset declare a rule with this id (a card id or a
