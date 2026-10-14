@@ -527,7 +527,7 @@ armed): `play_from_hand` (0 = not from hand), `can_build_on` (0 = cannot),
 | harness | before | after | verdict |
 |---|---|---|---|
 | `pp::same_dream_01_band_plus_3_iff` | TIMEOUT 1800 s (central; NameMap 144+80 unrolls, 42 MB goto) | **TIMEOUT 1800 s** ×2 (op-subset + sparse world; then + `name_id` cut) | **TIMEOUT** — target **not met** |
-| `events::chart_rush_01_spends_fire` | TIMEOUT 1800 s (old base, class E) + **genuine class C** (no fire spent) | re-timed after `arm_raise` | see below |
+| `events::chart_rush_01_spends_fire` | TIMEOUT 1800 s (old base, class E) + **genuine class C** (no fire spent — `raise` returned cancelled) | **SUCCESSFUL 909 s** (unwind 24, **2/2 covers sat**: "no pots" + "some pots spent") | **SUCCESSFUL** |
 
 Profile deltas for `same_dream_01_band_plus_3_iff` (`--features band-pp`,
 unwind 32):
