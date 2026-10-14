@@ -26,6 +26,9 @@ import type {
   TurnMark,
 } from "./record";
 
+/** Tick quanta per keyframe-index call (see `Replayer::index`). */
+const INDEX_CHUNK = 40;
+
 /** `TurnMark` with the u64 tick already converted to a number. */
 export interface Turn {
   round: number;
@@ -248,17 +251,20 @@ export class ReplaySession extends GameSession {
     }
   }
 
-  /** Keyframes for `seek`, built in `setTimeout` chunks so the UI stays up. */
+  /** Keyframes for `seek`, built in the background. The engine runs in a
+   *  worker, so this never blocks the UI; it is chunked (by tick quanta) only
+   *  so a step or a seek queued behind it waits for one short chunk, not the
+   *  whole pass. */
   private runIndex(): void {
     if (this.indexing) return;
     this.indexing = true;
     const step = () => {
       if (this.closed) return;
-      void this.run((h) => h.index(250))
+      void this.run((h) => h.index(INDEX_CHUNK))
         .then((st) => {
           this.indexStatus = st;
           this.emitOther();
-          if (!st.done && !this.closed) window.setTimeout(step, 16);
+          if (!st.done && !this.closed) window.setTimeout(step, 0);
           else this.indexing = false;
         })
         .catch((e) => {
@@ -309,9 +315,20 @@ export class ReplaySession extends GameSession {
     this.emitOther();
   }
 
-  /** Jump to `tick` (clamped). Bumps `epoch` so the Board remounts. */
+  /** How far a seek may go: as far as the keyframe index has covered, or the
+   *  current position if that is later. Past it a seek would re-simulate a long
+   *  stretch, so it is not offered until the index gets there. An older bundle
+   *  reports no index tick; it has no limit. */
+  seekLimit(): number {
+    const st = this.indexStatus;
+    if (st?.done || (st && st.tick === undefined)) return this.totalTicks;
+    return Math.max(this.now(), st?.tick ? Number(st.tick) : 0);
+  }
+
+  /** Jump to `tick` (clamped to what is ready). Bumps `epoch` so the Board remounts. */
   seek(tick: number): void {
     if (this.closed) return;
+    tick = Math.min(tick, this.seekLimit());
     void this.run(async (h) => {
       this.lastStatus = await h.seek(Math.max(0, Math.round(tick)));
       // The Board's event log is re-seeded from the state's tail on remount,
@@ -332,7 +349,7 @@ export class ReplaySession extends GameSession {
     if (!marks.length) return null;
     if (dir > 0) {
       const next = marks.find((m) => m.tick > tick + 0.5);
-      return next ? next.tick : null;
+      return next && next.tick <= this.seekLimit() ? next.tick : null;
     }
     const prev = [...marks].reverse().find((m) => m.tick < tick - 0.5);
     // One step back from the very start of a turn lands on the turn before it;

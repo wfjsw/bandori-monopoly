@@ -36,8 +36,8 @@ import {
 import {
   currentStamp,
   openOnOwnEngine,
-  PageReplayHandle,
   WorkerReplayHandle,
+  openCurrent,
   type ReplayHandle,
 } from "./replayEngine";
 import type { RecordHeader } from "./record";
@@ -210,9 +210,8 @@ export async function openRecordOnEngine(bytes: Uint8Array, force = false): Prom
       policy.trusted.has(prep.manifest!.glueSha256);
     if (want === now?.bundle && now?.bundle) {
       // Same engine as the page: play here, no worker, no note.
-      const m = rules.ReplayMatch.from_record_bytes(prep.record, force);
       return {
-        handle: new PageReplayHandle(m, typeof rules.replay_api_version === "function" ? rules.replay_api_version() : 1, want),
+        handle: await openCurrent(want, prep.record, force),
         source: "page",
         bundle: want,
         note: null,

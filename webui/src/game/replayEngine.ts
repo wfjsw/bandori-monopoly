@@ -250,6 +250,28 @@ export class WorkerReplayHandle implements ReplayHandle {
   }
 
   /**
+   * Boot a worker on the **running** build's engine (`replayWorker.ts`), so a
+   * record this build wrote plays without touching the UI thread. Rejects when
+   * the worker cannot start or its tables fail to load; callers fall back to
+   * the page's own instance ({@link openCurrent}).
+   */
+  static async openCurrentWorker(bundleId: string, bytes: Uint8Array, force: boolean): Promise<WorkerReplayHandle> {
+    // The `new Worker(new URL(...))` shape is what the bundler turns into a
+    // worker chunk -- keep it literal.
+    const w = new Worker(new URL("./replayWorker.ts", import.meta.url), { type: "module", name: "replay-current" });
+    const h = new WorkerReplayHandle(w, 1, bundleId);
+    try {
+      const boot = await h.rpc<{ api: number }>("init");
+      (h as { apiVersion: number }).apiVersion = boot.api ?? 1;
+      await h.rpc("open", { bytes, force });
+    } catch (e) {
+      await h.free().catch(() => {});
+      throw e instanceof Error ? e : new Error(String(e));
+    }
+    return h;
+  }
+
+  /**
    * Boot a worker on a record's **embedded** engine (`docs/REPLAY.md` §10).
    *
    * Security: `loaderUrl` must be one of our own shipped loaders (the caller
@@ -355,6 +377,18 @@ export class WorkerReplayHandle implements ReplayHandle {
 
 // ---------------------------------------------------------------- open
 
+/** The running engine, off the UI thread when a worker will start, else the
+ *  page's own instance (a record is never refused for lack of a worker). */
+export async function openCurrent(bundle: string, bytes: Uint8Array, force: boolean): Promise<ReplayHandle> {
+  try {
+    return await WorkerReplayHandle.openCurrentWorker(bundle, bytes, force);
+  } catch (e) {
+    console.warn("replay: current-engine worker unavailable, playing on the page:", e);
+    const m = rules.ReplayMatch.from_record_bytes(bytes, force);
+    return new PageReplayHandle(m, pageApiVersion(), bundle);
+  }
+}
+
 /**
  * Open a record on the engine that wrote it: the running instance when the
  * record names this page's bundle, otherwise an archived bundle in a worker.
@@ -368,8 +402,7 @@ export async function openOnOwnEngine(
   if (choice.kind === "missing") throw new Error(missingBundleMessage(choice.bundle));
   if (choice.kind === "unknown") throw new Error(choice.reason);
   if (choice.kind === "current") {
-    const m = rules.ReplayMatch.from_record_bytes(bytes, force);
-    return new PageReplayHandle(m, typeof rules.replay_api_version === "function" ? rules.replay_api_version() : 1, choice.bundle);
+    return openCurrent(choice.bundle, bytes, force);
   }
   return WorkerReplayHandle.open(bundleBase(choice.bundle), choice.bundle, bytes, force);
 }
