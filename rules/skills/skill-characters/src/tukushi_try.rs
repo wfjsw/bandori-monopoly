@@ -34,12 +34,7 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayChoose], "", Some(paired), on_pay),
         On::Hook(&[HookKind::HouseAdded], "", Some(partner), on_built),
     ],
-)
-    .legacy(&[(2, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// Either half of the pair is under the spell.
 fn paired(player_id: i32) -> bool {
@@ -171,4 +166,57 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
         )?;
     }
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"都筑诗船"#)
+    .display(r#"都筑诗船"#)
+    .band(r#"CiRCLE"#)
+    .color(r#"#77DD77"#)
+    .skill(r#"尽力了吗"#)
+    .text(r#"（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限2）（2）你的主要阶段中可消耗1火罐使你与一名其他玩家接下来的两次移动掷骰先后-1d6与+1d6，若由于此效果导致移动数为0，则视为原地进行一次结算。在此技能效果影响下触发结算时，除购买地契外支付或消耗的资金减半，若其他玩家在此技能效果影响下触发结算时加盖了房屋，你获得相当于那层房屋造价原价的资金。（3）初始获得“Space”。"#)
+    .cn_id("")
+    .art(r#"215"#)
+    .costume(r#"215_casual"#)
+    .exclusive_cards(&[r#"Parking Space"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_built_kani(player_id: i32) -> card_sdk::Asked {
+    on_built(player_id)
 }

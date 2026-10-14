@@ -10,8 +10,8 @@
 //! toggle one player's skill state; as [反击], re-toggle everyone who switched.
 
 use card_sdk::abi::state_key;
-use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const WELCOME_MUJICA: CardDef = CardDef::new(
@@ -20,8 +20,14 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Counteract(&[ChainKind::State], "actor != owner", None, counteract),
     ],
-)
-    .legacy(&[(1, legacy_can_counteract)]);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"欢迎来到ave mujica的世界"#)
+        .raw_name(r#"欢迎来到ave mujica的世界"#)
+        .tags(&[r#"反击"#])
+        .text(r#"选择以下效果其一发动：
+（1）转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）；（2）[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态"#)
+        .cell(r#"J3"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」
@@ -65,12 +71,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书（2）[反击]: 「当有其他玩家切换状态时」 -- C# `t.Kind == "state" &&
-    // t.Seat != player`.
-    trigger::kind() == TriggerKind::State && trigger::player_id() != player_id
-}
-
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）[反击]: 「你与所有本回合切换了状态的玩家同时切换一次状态」
     // C# lists `p == c.Seat || H.V(p, "switchedRound") == H.TurnKey`, then
@@ -101,4 +101,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         ctx::state::set(t, "switchedRound", key);
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

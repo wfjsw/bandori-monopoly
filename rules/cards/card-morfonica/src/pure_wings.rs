@@ -7,7 +7,13 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play("", None, pure_wings)]);
+pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play("", None, pure_wings)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"纯真振翅"#)
+        .raw_name(r#"纯真振翅"#)
+        .tags(&[])
+        .text(r#"传送到移动方向20格后（不触发结算），立刻进行移动掷骰"#)
+        .cell(r#"G13"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
 
 fn pure_wings(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
@@ -46,4 +52,11 @@ fn pure_wings(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("pure_wings_roll")).player_id("who", player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn pure_wings_kani(player_id: i32) -> card_sdk::Asked {
+    pure_wings(player_id)
 }

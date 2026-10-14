@@ -45,7 +45,19 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         //   turn-start offer is a stand-in for the C# action window.
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, offer_resonance),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"再次闪耀"#)
+        .raw_name(r#"再次闪耀"#)
+        .tags(&[r#"手"#, r#"反击"#, r#"持续"#, r#"特"#])
+        .text(r#"[特]：
+此卡不受除拥有此卡的玩家以外的玩家的效果影响。
+[手]：
+将此卡放置在[使用者]的[场地]。
+[持续]：
+（1）[反击][拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡未记录且[拥有者]拥有同色地契的颜色，[拥有者][获得]“[拥有者]拥有的1个同色地契的购买价格”÷5的资金和1个正面[P✽P粉丝]。
+（2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。"#)
+        .cell(r#"D2"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset of the
 /// colour groups already recorded, kept on the owner's player while in play.
@@ -197,4 +209,17 @@ fn record(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("shine_again_recorded")).i("n", g as i64),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn shine_again_kani(player_id: i32) -> card_sdk::Asked {
+    shine_again(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_resonance_kani(player_id: i32) -> card_sdk::Asked {
+    offer_resonance(player_id)
 }

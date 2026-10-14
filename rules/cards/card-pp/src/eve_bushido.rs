@@ -27,7 +27,20 @@ pub const EVE_BUSHIDO: CardDef = CardDef::new(
         On::Hook(&[HookKind::Drew], "", Some(drew_guard), drew),
         On::Hook(&[HookKind::SettleBefore], "", None, settle_before),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"属于我的武士道！"#)
+        .raw_name(r#"[若宫伊芙]属于我的武士道！"#)
+        .tags(&[r#"手"#, r#"持续"#])
+        .text(r#"[手]：
+将此卡放置在[使用者]场上并投掷12d4，获得投掷结果*60的资金。
+[持续]：
+（1）[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）。
+（2）[结算]前如果此卡上有[奇迹水晶]且[拥有者]所在格子的地契主人为其他玩家则使用1个[奇迹水晶]并依次进行以下操作：
+1. 地契主人投掷1d6；
+2. [拥有者]投掷3d4；
+3. 投掷点数低的玩家[支付]投掷点数高的玩家[拥有者]所在格子的房屋数量加1×100（如果平局则双方互不支付），如果[共鸣]则[支付]金额改为“投掷点差”×50。"#)
+        .cell(r#"D20"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", r#"若宫伊芙"#)]));
 
 fn eve_bushido(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]场上」
@@ -112,4 +125,23 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("eve_bushido_why")).i("n", amount as i64),
     )?;
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn eve_bushido_kani(player_id: i32) -> card_sdk::Asked {
+    eve_bushido(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
+    drew(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_before_kani(player_id: i32) -> card_sdk::Asked {
+    settle_before(player_id)
 }

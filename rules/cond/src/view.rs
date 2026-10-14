@@ -129,6 +129,12 @@ pub trait CondView {
     fn stun(&self, seat: i64) -> i64;
     fn exile(&self, seat: i64) -> i64;
     fn no_hand(&self, seat: i64) -> i64;
+    /// The seat's player-state value for `key` (`state(p, 'key')` /
+    /// `MatchPlayer.state`). Missing = 0.
+    fn state(&self, seat: i64, key: &str) -> i64;
+    /// Every `(seat, key, value)` row for the baked `state` table. The eager
+    /// evaluator copies this into `_state`; missing pairs answer 0.
+    fn state_table(&self) -> Vec<(i64, String, i64)>;
     /// Character **name** hash (`character_is(p, "名")` compares this to
     /// `id_of("名")` -- the same name `ctx::character_is` matches).
     fn character(&self, seat: i64) -> i64;
@@ -158,6 +164,32 @@ pub trait CondView {
     /// ABI v56: `tile_in(player, tile, class)` -- ruleset class membership
     /// (`buyable` / `shop` / `livehouse` / `color:<g>`).
     fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool;
+    /// Every `(player, tile, class)` for which [`Self::tile_in`] is true, over
+    /// `player = -1, 0..seat_count`, every tile and the ruleset class
+    /// vocabulary. The default probes `tile_in` one by one; a view that holds
+    /// the true triples already overrides this with a direct read.
+    fn tile_in_rows(&self) -> Vec<(i64, i64, String)> {
+        let n = self.tile_count();
+        let seats = self.seat_count();
+        let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        for g in -2..=32 {
+            classes.push(format!("color:{}", g));
+        }
+        let mut rows = Vec::new();
+        for t in 0..n {
+            for p in std::iter::once(-1).chain(0..seats) {
+                for c in &classes {
+                    if self.tile_in(p, t, c) {
+                        rows.push((p, t, c.clone()));
+                    }
+                }
+            }
+        }
+        rows
+    }
 
     // -- eager function tables (docs/GUARDS.md §4.2b: why eager) ------------
     /// Every `slot(name)` latch the host knows. Baked into `_<var>` for the

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::data::GameData;
+use crate::data::{GameData, Roster};
 use crate::engine::cx::{Answered, HaltKind};
 use crate::engine::world::World;
 use crate::engine::{Match, StubRules};
@@ -14,9 +14,17 @@ use crate::MatchMode;
 use crate::data::TileKind;
 
 fn data() -> Arc<GameData> {
+    // Unit tests live inside the crate, so they cannot use the integration-test
+    // `common` harness. Least-invasive roster: the three legacy JSON files
+    // from the generated fixture (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_fixture(&std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/roster.json"),
+    )
+    .expect("roster fixture"))
+    .expect("roster fixture parses");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
+        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()), roster)
             .unwrap(),
     )
 }
@@ -243,6 +251,12 @@ fn bankrupt_land_is_freed_and_auctioned() {
     let p = p.expect("auction prompt");
     assert_eq!((p.kind.as_str(), p.tile), ("auction", mine as i32));
     assert_eq!(p.players, vec![1, 2], "remaining players bid");
+    // Bankruptcy leftover auction runs on its own dedicated timer and never
+    // draws on a seat pool (`Ask::use_pool` -- see `auction_tile`).
+    assert_eq!(
+        p.time_left, w.clock.bankrupt_auction_time,
+        "its window is ClockSettings::bankrupt_auction_time"
+    );
 
     let won = Answered {
         answers: vec![1, -1],

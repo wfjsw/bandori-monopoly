@@ -281,6 +281,7 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Val {
         34 => FnId::TileIs,
         35 => FnId::TileAttr,
         36 => FnId::TileIn,
+        37 => FnId::State,
         _ => return Val::Err,
     };
     let nargs = n.b as usize;
@@ -419,6 +420,18 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
         FnId::GainsThisTurn => seat_i64(ctx, args, SeatField::Gains),
         FnId::TargetedCount => seat_i64(ctx, args, SeatField::Targeted),
         FnId::Between => seat_i64(ctx, args, SeatField::Between),
+        // `state(p, 'key')`: seat + `id_of(key)` (baked at lower time).
+        FnId::State => {
+            let p = match int(0) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            let key_id = match int(1) {
+                Ok(v) => v,
+                Err(()) => return Val::Err,
+            };
+            Val::Int(ctx.state_get(p, key_id))
+        }
         FnId::CharacterIs | FnId::BandIs => {
             let p = match int(0) {
                 Ok(v) => v,

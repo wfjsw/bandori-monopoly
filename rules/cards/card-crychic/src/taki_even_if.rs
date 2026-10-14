@@ -6,7 +6,7 @@
 //!
 //! until the face is new this turn.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,16 +18,13 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「进入移动阶段后，触发结算前可打出」
-    trigger::kind() == TriggerKind::MoveRoll
-        && trigger::player_id() == player_id
-        && trigger::move_roll().is_some()
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"即便比不上..."#)
+        .raw_name(r#"（立希）即便比不上..."#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 进入移动阶段后，触发结算前可打出，进行一次重骰，你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止。"#)
+        .cell(r#"M16"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", r#"椎名立希（CRYCHIC）"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(before) = trigger::move_roll() else {
@@ -70,4 +67,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     trigger::set_move_roll(x); // 规则书[反击]: 「进行一次重骰」-- the move uses the new face
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

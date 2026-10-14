@@ -40,11 +40,7 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[1]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1]);
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -111,4 +107,39 @@ fn use_exile(player_id: i32) -> card_sdk::Asked {
 #[allow(dead_code)]
 fn _group(player_id: i32) -> i32 {
     state::get(player_id, GROUP)
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"奥泽美咲"#)
+    .display(r#"奥泽美咲"#)
+    .band(r#"Hello, Happy World!"#)
+    .color(r#"#006699"#)
+    .skill(r#"另一个我"#)
+    .text(r#"（1）每次经过“弦卷集团”（#29）格子后获得2火罐（初始0，上限2），若你在传送时CiRCLE位于你正向移动的移动起点和移动终点之间，则你下次经过“弦卷集团”前可将“弦卷集团”格子额外视为CiRCLE。（2）你的回合开始时，你可以消耗一个火罐，使你的移动掷骰额外获得一个1d10，且你的移动视为[传送]。（3）使用火罐进行移动掷骰后，触发结算前，你可以消耗1火罐，获得一层在你的下回合开始前移除的[除外]。"#)
+    .cn_id(r#"015"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"（未命名）"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_exile_kani(player_id: i32) -> card_sdk::Asked {
+    use_exile(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }

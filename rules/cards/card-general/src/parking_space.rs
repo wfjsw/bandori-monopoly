@@ -29,7 +29,17 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
         On::Hook(&[HookKind::SettleBody, HookKind::TurnEndAfter], "", Some(counteract_guard), counteract),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Parking Space"#)
+        .raw_name(r#"[都筑诗船]Parking Space"#)
+        .tags(&[r#"手"#, r#"持续"#])
+        .text(r#"[手]：
+将此卡放置于“Space”格子上，将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）。
+[持续]：
+（1）此卡所在格子的[结算]改为回合结束后获得一层[停留]。
+（2）位于此卡所在格子上的玩家无法使用角色及乐队技能。"#)
+        .cell(r#"A15"#)
+        .fields(&[("band", r#"通用"#), ("owner", r#"都筑诗船"#)]));
 
 /// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile
 /// (`没有 Space`).
@@ -154,4 +164,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         _ => {}
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

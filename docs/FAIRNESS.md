@@ -134,6 +134,8 @@ bd-fair-settings-v1\n
 <step f32 bit pattern as decimal>\n
 <ScoreWeights JSON, serde declaration order>\n
 <id>,<player>,<bot 0|1>,<mentality as i32>\n   -- one line per seat, seat order
+clock,<base_time bits>,<bonus_time bits>,<base_refill bits>,<ban bits>,<pick bits>,<deck bits>,<bankrupt_auction bits>\n
+                                                              -- ONLY when ClockSettings != default
 ```
 
 `step` is the tick quantum (`0.05 * time_scale`, `docs/REPLAY.md` §1); its
@@ -141,6 +143,14 @@ bd-fair-settings-v1\n
 never disagree across platforms. Seats are the roster as the match was built
 (after the advanced→standard bot rewrite the server applies when no bot
 service is attached).
+
+**Clock settings** (`game_core::clock::ClockSettings` -- base/bonus/refill
+pools plus the ban / pick / deck / bankrupt-auction windows) are appended as a
+trailing `clock,…` line of `f32` bit patterns **only when they are not all
+default**. A match that runs on defaults therefore re-encodes to the exact
+pre-settings string, so old records keep verifying byte-identically. The
+verifier rebuilds the string from the record's own `MatchSetup.clock`
+(`None`/default → no trailing line).
 
 Under v2 this string is **not** part of the commitment (it is not known when
 the commitment is drawn). It is sealed into the record header

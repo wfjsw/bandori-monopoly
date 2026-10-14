@@ -5,20 +5,13 @@
 
 use std::sync::Arc;
 
-use game_core::data::GameData;
 use game_core::engine::{Match, StubRules};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::stage;
 use game_core::MatchMode;
-
-fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
-    )
-}
+mod common;
+use common::data_arc as data;
 
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember {
@@ -72,37 +65,47 @@ fn answer_first(m: &mut Match, member: i32) {
     m.act(member, &msg).unwrap();
 }
 
-/// Drive to the human's OPS turn (member 1, seat `me`).
-fn to_human_ops(m: &mut Match) -> i32 {
+/// Drive to the human's OPS turn; returns the human's member id (what `anim_done` takes).
+fn to_human_ops(m: &mut Match, human: i32) -> i32 {
     m.quick_start();
     for _ in 0..40 {
         m.tick(0.1);
     }
-    answer_first(m, 1);
+    answer_first(m, human);
     let me = m
         .state()
         .players
         .iter()
-        .position(|s| s.member == 1)
+        .position(|s| s.member == human)
         .unwrap() as i32;
     let mut guard = 0;
     while !(m.state().turn == me && m.state().step == stage::OPS && !m.state().busy) {
         m.tick(0.25);
-        answer_first(m, 1);
+        answer_first(m, human);
         guard += 1;
         assert!(guard < 10_000, "never got a human OPS turn");
     }
-    me
+    human
 }
 
 #[test]
 fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     let members = [member(1, false), member(2, true), member(3, true)];
     let mut m = new_match(&members, 7, MatchMode::Casual);
-    let me = to_human_ops(&mut m);
+    let me = to_human_ops(&mut m, 1);
     let st = m.state();
     assert!(st.clock_paused, "a human turn arms the hold");
+    // Default settings refill bonus to 10 at turn start and drain **bonus
+    // first**, so pin the combined pool (`time_left`) rather than raw
+    // `base_time` -- base stays at 15 until the bonus is gone.
+    assert!(
+        st.bonus_time > 0.0,
+        "turn start refills bonus (got {})",
+        st.bonus_time
+    );
+    let total = st.time_left;
     let base = st.base_time;
+    let bonus = st.bonus_time;
     let seq = st.seq;
 
     // Ticking while held must not consume base/bonus.
@@ -111,9 +114,11 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     }
     let st = m.state();
     assert!(st.clock_paused, "still held without an ack");
-    assert_eq!(st.base_time, base, "held clock does not consume");
+    assert_eq!(st.time_left, total, "held clock does not consume");
+    assert_eq!(st.base_time, base, "held clock does not consume base");
+    assert_eq!(st.bonus_time, bonus, "held clock does not consume bonus");
 
-    // A matching ack releases the hold; the clock runs again.
+    // A matching ack releases the hold; the clock runs again, bonus first.
     assert!(m.anim_done(me, seq), "matching ack releases");
     assert!(!m.state().clock_paused);
     for _ in 0..10 {
@@ -122,18 +127,40 @@ fn the_clock_holds_until_the_acting_seat_acks_anim_done() {
     let st = m.state();
     assert!(!st.clock_paused);
     assert!(
-        st.base_time < base,
-        "released clock consumes base time ({} -> {})",
-        base,
-        st.base_time
+        st.time_left < total,
+        "released clock consumes pool time ({} -> {})",
+        total,
+        st.time_left
     );
+    assert!(
+        st.bonus_time < bonus,
+        "bonus drains first ({} -> {})",
+        bonus,
+        st.bonus_time
+    );
+    assert_eq!(st.base_time, base, "base is untouched while bonus remains");
+}
+
+#[test]
+fn the_ack_names_the_room_member_not_the_seat_index() {
+    // Member ids that cannot equal any seat index: an ack by seat number would
+    // never match and the hold would always ride out the 10s cap.
+    let members = [member(11, false), member(12, true), member(13, true)];
+    let mut m = new_match(&members, 7, MatchMode::Casual);
+    let human = to_human_ops(&mut m, 11);
+    assert_eq!(human, 11);
+    let seq = m.state().seq;
+    assert!(m.state().clock_paused);
+    assert!(!m.anim_done(0, seq), "a seat index is not a member id");
+    assert!(m.anim_done(11, seq), "the member id releases");
+    assert!(!m.state().clock_paused);
 }
 
 #[test]
 fn a_stale_anim_done_ack_is_ignored() {
     let members = [member(1, false), member(2, true), member(3, true)];
     let mut m = new_match(&members, 7, MatchMode::Casual);
-    let me = to_human_ops(&mut m);
+    let me = to_human_ops(&mut m, 1);
     let seq = m.state().seq;
 
     // An ack naming an older seq (or the wrong seat) must not release.
@@ -150,9 +177,10 @@ fn a_stale_anim_done_ack_is_ignored() {
 fn the_anim_hold_cap_releases_after_ten_seconds_of_ticks() {
     let members = [member(1, false), member(2, true), member(3, true)];
     let mut m = new_match(&members, 7, MatchMode::Casual);
-    let _me = to_human_ops(&mut m);
+    let _me = to_human_ops(&mut m, 1);
     assert!(m.state().clock_paused);
-    let base = m.state().base_time;
+    // Bonus-first drain: pin the combined pool, not raw base.
+    let total = m.state().time_left;
 
     // 10s of ticks, no ack: the cap fires and the clock starts.
     // ANIM_HOLD_CAP = 10.0; tick 9.9s first (still held), then over the cap.
@@ -160,14 +188,14 @@ fn the_anim_hold_cap_releases_after_ten_seconds_of_ticks() {
         m.tick(0.1);
     }
     assert!(m.state().clock_paused, "under the cap still holds");
-    assert_eq!(m.state().base_time, base);
+    assert_eq!(m.state().time_left, total);
     for _ in 0..5 {
         m.tick(0.1);
     }
     let st = m.state();
     assert!(!st.clock_paused, "the 10s cap releases the hold");
     // Cap consumed 10s of hold, then the extra ticks drain the clock.
-    assert!(st.base_time < base);
+    assert!(st.time_left < total);
 }
 
 #[test]
@@ -222,7 +250,7 @@ fn a_bot_seat_never_holds_the_clock() {
 fn anim_done_replay_input_is_recorded() {
     let members = [member(1, false), member(2, true), member(3, true)];
     let mut m = new_match(&members, 7, MatchMode::Casual);
-    let me = to_human_ops(&mut m);
+    let me = to_human_ops(&mut m, 1);
     let seq = m.state().seq;
     assert!(m.anim_done(me, seq));
     // The ack is part of the match's public call log shape: save/restore

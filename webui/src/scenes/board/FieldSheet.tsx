@@ -16,8 +16,10 @@ import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
 import { InspectCard } from "../../ui/Card";
+import { previewFrom, previewHide } from "../../ui/CardPreview";
+import { Avatar } from "../../ui/Character";
 import { showEvent } from "./Popups";
-import { useHoverSeat } from "./hoverSeat";
+import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { t as tr } from "../../i18n/t";
 import s from "./FieldSheet.module.css";
 
@@ -41,6 +43,11 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
     .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
     .filter(([, f]) => f.length);
   const events = S.eventActive ?? [];
+  // Hovering a card that designates tiles lights those and fades the rest.
+  const hoverTiles = (uid: number) => {
+    const ts = (S.marks ?? []).filter((x) => x.category === "designate" && (x.src === uid || x.instance === uid)).map((x) => x.tile);
+    setHoverCardTiles(ts.length ? new Set(ts) : null);
+  };
   const total = rows.reduce((a, [, f]) => a + f.length, 0) + events.length;
   if (!total) return null;
   return (
@@ -52,13 +59,19 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const owner = fc.owner >= 0 ? fc.owner : i;
           const note = fc.note ? fmtMsg(fc.note, names) : "";
           const live = [
-            tr("board.fieldOwner", { who: m.nameOf(owner) }),
             note,
             fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "",
             fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
           ].filter(Boolean).join(" · ");
+          // A card on its owner's own field designates no one else: only a card
+          // parked on another player's field has a designee.
+          const designee = i !== owner ? i : -1;
+          const pills = [
+            { label: tr("board.pillOwner", { who: m.nameOf(owner) }), color: m.colorOf(owner), char: m.charOf(owner) },
+            ...(designee >= 0 ? [{ label: tr("board.pillDesignee", { who: m.nameOf(designee) }), color: m.colorOf(designee), char: m.charOf(designee) }] : []),
+          ];
           return (
-            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
+            <div key={fc.uid} className={cx(s.slot, pulse?.uid === fc.uid && s.pulse, hoverSeat >= 0 && s[owner === hoverSeat ? "hot" : "dim"])} onMouseEnter={() => hoverTiles(fc.uid)} onMouseLeave={() => setHoverCardTiles(null)} style={{ ["--own" as string]: m.colorOf(owner), ...(pulse?.uid === fc.uid ? { ["--pulse-ms" as string]: `${pulse.ms}ms` } : {}) }}>
               {fc.faceDown ? (
                 <div className={s.back} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
@@ -69,13 +82,14 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   className={s.card}
                   title={D.card(fc.card)?.name}
                   note={live}
+                  pills={pills}
                   actions={[]}
                 >
                   {fc.crystals > 0 && <span className={s.crystal}>◆{fc.crystals}</span>}
                   {fc.cp > 0 && <span className={s.cp} title={tr("board.cp", { n: fc.cp })}>CP{fc.cp}</span>}
-                  {!!note && <span className={s.noteDot} title={note} />}
                 </InspectCard>
               )}
+              {designee >= 0 && <Avatar c={m.charOf(designee)} size={28} className={s.holder} />}
             </div>
           );
         }))}
@@ -93,13 +107,14 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
               {e.faceDown ? (
                 <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
-                <button type="button" className={s.event} title={tr("board.activeEvents")} onClick={() => showEvent(e.id, note)}>
+                <button type="button" className={s.event} title={tr("board.activeEvents")} onClick={() => showEvent(e.id, note)}
+                  onMouseEnter={(x) => previewFrom(x.currentTarget, e.id, note)} onFocus={(x) => previewFrom(x.currentTarget, e.id, note)}
+                  onMouseLeave={previewHide} onBlur={previewHide}>
                   <div className={s.eventArt}><img src={sceneImg("card_back")} alt="" /></div>
                   <div className={s.eventName}>{ev?.name ?? e.id}</div>
                   <div className={s.marks}>
                     {e.counter > 0 && <span className={s.count}>×{e.counter}</span>}
                     {e.counter2 > 0 && <span className={s.count}>×{e.counter2}</span>}
-                    {!!note && <span className={s.noteDot} title={note} />}
                   </div>
                 </button>
               )}

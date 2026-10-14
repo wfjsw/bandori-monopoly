@@ -18,7 +18,15 @@ pub const SOYO_BACK: CardDef = CardDef::new(
         On::Play("", None, soyo_back),
         On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"回到曾经"#)
+        .raw_name(r#"（soyo）回到曾经"#)
+        .tags(&[r#"手"#, r#"特"#])
+        .text(r#"（1）[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一 ：
+1. 将你的所有手牌放入弃牌堆，然后获得弃牌数*500的资金，抽1张卡，为你的一个格子付费加盖一间房屋，然后[移除]此卡；
+2. 获得1000资金并将此卡加入手牌 （2）[手] 获得500资金"#)
+        .cell(r#"M15"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", r#"长崎素世（CRYCHIC）"#)]));
 
 const ID: &str = "CRYCHIC:（soyo）回到曾经";
 
@@ -124,4 +132,17 @@ fn branch_keep(player_id: i32) -> card_sdk::Asked {
     // (C# leaves it there); `add_to_hand` is a no-op-looking second copy guard
     // and is skipped so the draw's copy is the one kept.
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn soyo_back_kani(player_id: i32) -> card_sdk::Asked {
+    soyo_back(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_drawn_kani(player_id: i32) -> card_sdk::Asked {
+    on_drawn(player_id)
 }

@@ -44,7 +44,13 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // share's logs and accuse this bookkeeping of hiding a real effect.
         On::Hook(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, clear_measured_rent),
     ],
-).silent(&[2]).quiet_when_empty(&[4]);
+).props(&[(card_sdk::abi::prop::SONG, 1)]).silent(&[2]).quiet_when_empty(&[4]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"ONE OF US"#)
+        .raw_name(r#"ONE OF US"#)
+        .tags(&[])
+        .text(r#"将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契，触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契"#)
+        .cell(r#"C10"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.
@@ -293,4 +299,23 @@ fn before_out(owner: i32) -> card_sdk::Asked {
     // C# `Mem["partner"] = -1` -- the pair is done.
     ctx::set_slot(owner, "one_of_us_partner", 0);
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn measure_rent_kani(player_id: i32) -> card_sdk::Asked {
+    measure_rent(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_measured_rent_kani(player_id: i32) -> card_sdk::Asked {
+    clear_measured_rent(player_id)
 }

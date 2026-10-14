@@ -6,7 +6,7 @@
 //!
 //! that cancels one 5,000+ payment to another player.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,30 +18,13 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「一次性向其他玩家支付5000以上资金时」 -- C#
-    // `t.Kind == "pay" && t.Pay.from == seat && t.Pay.PayToOther && t.Pay.amount >= 5000`.
-    if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
-        return false;
-    }
-    // 规则书[反击]: 「支付资金」 -- the `pay` effect entry (the causer's own
-    // `abnormal` also rides an `effect` link and must not open this window).
-    if !ctx::effect::has(TriggerKind::Pay) {
-        return false;
-    }
-    // 规则书[反击]: 「向其他玩家支付」 -- C# `t.Pay.PayToOther` (`Pay.from >= 0
-    // && Pay.to >= 0`); on pay triggers `t.Pay.to` is `trigger::target()`.
-    if trigger::target() < 0 {
-        return false;
-    }
-    // 规则书[反击]: 「5000以上」
-    trigger::value() >= 5000
-    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
-    // reads as `value() == 0`, so the ≥5000 guard covers it.
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"主唱太拼命了"#)
+        .raw_name(r#"主唱太拼命了"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。"#)
+        .cell(r#"M10"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「免除此次支付」
@@ -51,4 +34,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("vocal_too_hard_note")).player_id("who", player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

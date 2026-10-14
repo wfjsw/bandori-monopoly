@@ -378,7 +378,10 @@ pub fn tile_quotes(
                         value: redeem_cost(data, t),
                         max: None,
                     });
-                } else if w.why_not_build_on(data, me as i32, t as i32).is_none() {
+                } else if w.why_not_build_on(data, me as i32, t as i32).is_none()
+                    && w.gate_open(rules, crate::engine::Gate::Pay, me)
+                    && !st.players.get(me).is_some_and(|p| p.out())
+                {
                     out[t] = Some(TileQuote {
                         kind: TileQuoteKind::Build,
                         flow: MoneyFlow::MayPay,

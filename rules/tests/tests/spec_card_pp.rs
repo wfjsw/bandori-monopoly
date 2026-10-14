@@ -2,7 +2,7 @@
 //!
 //! Spec doc: `docs/rulebook/spec/cards/pp.md`. Clause IDs `C-PP-<slug>-<n>`.
 //! Derived only from the live sheet text in `docs/rulebook/cards.json`,
-//! `data/characters.json`, `data/bands.json` (never from implementation
+//! the roster character / band rows (never from implementation
 //! behaviour).
 //!
 //! Fan tokens are `P✽P粉丝(正)` / `P✽P粉丝(反)`. The band-skill crystal pool
@@ -165,19 +165,19 @@ fn eve_bushido_played(step: &Step<'_>) -> Result<(), String> {
 pub const CLAUSES: &[Clause] = &[
     Clause::new(
         "C-PP-title-idol-01",
-        "cards.json#PP:TITLE IDOL",
+        "roster#PP:TITLE IDOL",
         "1. 为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；",
         title_idol_band_plus_2,
     ),
     Clause::new(
         "C-PP-same-dream-01",
-        "cards.json#PP:同一个梦想",
+        "roster#PP:同一个梦想",
         "1. 为自己的Pastel✽Palettes乐队卡添加3个[奇迹水晶]；",
         same_dream_band_plus_3,
     ),
     Clause::new(
         "C-PP-eve-bushido-01",
-        "cards.json#PP:[若宫伊芙]属于我的武士道！",
+        "roster#PP:[若宫伊芙]属于我的武士道！",
         "将此卡放置在[使用者]场上并投掷12d4，获得投掷结果*60的资金。",
         eve_bushido_played,
     ),

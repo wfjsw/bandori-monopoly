@@ -67,3 +67,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new("log.event.bear_cookie_push").card("event", "event:冲榜"));
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}

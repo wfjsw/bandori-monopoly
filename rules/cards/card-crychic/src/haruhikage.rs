@@ -44,7 +44,13 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         ),
     ],
 )
-.legacy(&[(1, legacy_can_counteract)]);
+.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"春日影"#)
+        .raw_name(r#"春日影"#)
+        .tags(&[r#"反击"#, r#"特"#])
+        .text(r#"（1）[特] 若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。（2）（此卡可作为[反击]打出）使用一次Crychic角色的技能"#)
+        .cell(r#"M3"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 const ID: &str = "CRYCHIC:春日影";
 
@@ -156,38 +162,6 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    match trigger::kind() {
-        // 规则书（2）[反击]: 「使用一次Crychic角色的技能」 -- C# `t.Kind == "moveRoll"
-        // && t.Seat == player` runs 椎名立希（CRYCHIC）'s skill.
-        TriggerKind::MoveRoll => {
-            trigger::player_id() == player_id && trigger::move_roll().is_some()
-        }
-        // 规则书（2）[反击]: same, C# `t.Kind == "settleBefore" && t.Seat == seat &&
-        // H.Within(player, 5, includeSame: false).Count > 0` runs 丰川祥子（CRYCHIC）'s
-        // skill (needs a player to step toward).
-        TriggerKind::SettleBefore => {
-            trigger::player_id() == player_id && !within5(player_id).is_empty()
-        }
-        // 规则书（2）[反击]: same, C# `t.Kind == "pay" && t.Pay.IsRent && t.Pay.to ==
-        // player && t.Pay.from != player && t.Pay.tile >= 0 && !t.Pay.cancel` runs
-        // 长崎素世（CRYCHIC）'s skill (cancels the rent).
-        //
-        // The payment is now declared as an `effect`; `pay_is_rent` on the link
-        // is what tells it apart from a targeting or an abnormal.
-        TriggerKind::Effect => {
-            // on a payment effect `from` is the payer and `target` the payee.
-            trigger::pay_is_rent()
-                && trigger::player_id() != player_id
-                && trigger::target() == player_id
-                && trigger::tile() >= 0
-                && trigger::value() > 0
-        }
-        _ => false,
-    }
-}
-
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::MoveRoll => reroll_skill(player_id),
@@ -271,4 +245,17 @@ fn cancel_pay_skill(player_id: i32) {
     //   the clause under-specifies -- see the note above it
     //   `m.TeleportTo = t.Pay.tile`) -- needs the Fx.MoveBefore hook and a
     //   remembered tile (C# `H.SetV(i, "soyoC", tile + 1)`).
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

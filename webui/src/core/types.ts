@@ -19,12 +19,20 @@ export interface CharacterData {
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
+  /** Base character of an alternate form (`高松灯（CRYCHIC）` -> `高松灯`). */
+  variantOf?: string;
+  /** Short label for compact displays of a variant. */
+  variantTag?: string;
 }
 export interface BandData {
   name: string; shortName: string; color: string; skill: string; text: string;
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
   logo: string;
+  /** Band-skill traits the deck rules read. */
+  sharesExclusives?: boolean;
+  /** Boot-screen art id for a home character of this band. */
+  bootArt?: string;
 }
 export interface EventData { id: string; name: string; derived: boolean; text: string; cell: string }
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }
@@ -88,6 +96,17 @@ export interface FieldCard {
  */
 export interface SkillAction { id: string; source: string; title: Msg; text: Msg; enabled: boolean; reason: Msg }
 export interface ActiveEvent { id: string; playerId: number; counter: number; counter2: number; note: Msg; faceDown: boolean }
+/** One speaking declaration in a tile's deed-text list (`MatchState.tileTexts`).
+ *  Ordered by body precedence; take the first entry of each `slot`. An empty
+ *  `key` suppresses that slot (renders nothing). See `docs/TILES.md`. */
+export interface TileTextEntry {
+  /** Rule id that speaks (`tile:circle`, `event:协助CiRCLE重建`, ...). */
+  from: string;
+  /** `"settle"` or `"pass"` (the [结算] / [经过] half). */
+  slot: string;
+  /** i18n key in the `ui` namespace (`deed.note.*`); `""` = suppress. */
+  key: string;
+}
 /** A tile marker. `category` sorts it: `""` is a player/generic mark (coloured
  *  by `owner`'s seat), `"cp"` is a neutral [CP点] -- `owner` is then -1 and the
  *  provenance is `src` (the placing card instance) / `card` (its id, 「来自」). */
@@ -179,6 +198,10 @@ export interface MatchState {
   bought: boolean; built: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
+  /** Per-tile deed-text speakers, in body-precedence order (optional: absent
+   *  on an old engine / StubRules -- the deed popup falls back to its
+   *  hard-coded notes). See {@link TileTextEntry}. */
+  tileTexts?: TileTextEntry[][];
   endReason: string; winner: number; scoreMoney: number; scoreProperty: number; scoreHouses: number;
 }
 /**
@@ -250,6 +273,27 @@ export interface MatchView {
 
 export interface ScoreWeights { money: number; property: number; houses: number }
 /**
+ * Match clock / timer settings, host-editable before start (the ScoreWeights
+ * sibling). Defaults reproduce the pre-settings constants. Wire shape is
+ * camelCase nested under `RoomInfo.clock` / `CreateRoom.clock`.
+ */
+export interface ClockSettings {
+  /** Initial per-seat 恢复时间 pool, seconds (default 15). */
+  baseTime: number;
+  /** Initial per-seat 免费时间 pool, seconds (default 0). */
+  bonusTime: number;
+  /** Per-turn base refill, seconds (default 15). */
+  baseRefill: number;
+  /** Ranked ban decision window, seconds (default 20). */
+  banSeconds: number;
+  /** Pick decision window, seconds (default 25). */
+  pickSeconds: number;
+  /** Deck-build window, seconds (default 45). */
+  deckSeconds: number;
+  /** Bankruptcy leftover-auction window, seconds (default 10). */
+  bankruptAuctionTime: number;
+}
+/**
  * Bot decision policy: `standard` is the ported C# bot, `chaos` is legal but
  * maximally disruptive, `advanced` is the server-side search bot
  * (`docs/BOT.md` B5 -- online rooms only; solo stays standard / chaos until
@@ -267,6 +311,8 @@ export interface RoomMember {
 export interface RoomInfo {
   id: string; name: string; ranked: boolean; maxPlayers: number; locked: boolean;
   playing: boolean; theme: string; weights: ScoreWeights; members: RoomMember[];
+  /** Match clock / timer settings (host-editable before start). */
+  clock?: ClockSettings;
   /** Commit-reveal fairness (`docs/FAIRNESS.md`): the commitment is public
    *  from the moment the room is created (and a fresh one after every match);
    *  the openings never travel here. */

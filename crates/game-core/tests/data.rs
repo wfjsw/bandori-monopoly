@@ -1,15 +1,22 @@
 //! P2 tests against the real game data in `web/data/` (copied by the asset pipeline).
 
-use game_core::data::GameData;
 use game_core::net::{clean_name, NetMessage};
 use game_core::profile::{PlayerProfile, Seen};
 use game_core::state::{MatchEvent, MatchPlayer, MatchState};
 use game_core::{deck, MatchMode};
+mod common;
+use common::data;
 
-fn data() -> GameData {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-        .expect("web/data should load -- run tools/asset-pipe/extract.py")
+#[test]
+fn band_traits_and_variants_come_from_data() {
+    let d = data();
+    assert_eq!(d.base_character("高松灯（CRYCHIC）"), "高松灯");
+    assert_eq!(d.base_character("三角初华（Sumimi）"), "三角初华");
+    assert_eq!(d.base_character("高松灯"), "高松灯");
+    let sumimi = d.character("三角初华（Sumimi）").unwrap();
+    let crychic = d.character("高松灯（CRYCHIC）").unwrap();
+    assert!(d.band_shares_exclusives(sumimi) && !d.band_shares_exclusives(crychic));
+    assert!(d.bands.iter().all(|b| b.name != "CRYCHIC" || !b.boot_art.is_empty()));
 }
 
 #[test]
@@ -54,7 +61,6 @@ fn lookups() {
 
     assert_eq!(d.school_of("户山香澄"), "花咲川女子学院");
     assert_eq!(d.school_of("nobody"), "周边学区");
-    assert!(d.cards.iter().any(|c| d.is_song_card(c)));
     assert_eq!(d.band("Poppin' Party").unwrap().short_name, "PPP");
     assert!(d.band("nope").is_none());
 }

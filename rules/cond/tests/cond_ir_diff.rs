@@ -313,6 +313,80 @@ fn id_at(idx: usize) -> Option<VarId> {
 }
 
 // ---------------------------------------------------------------------------
+// (2b) `state(p, 'key')` player-state lookup
+// ---------------------------------------------------------------------------
+
+#[test]
+fn diff_state_function() {
+    use rules_cond_ir::ctx::id_of;
+    let mut f = fixture_empty();
+    // Seat 0: stay=2, stun=1, stunStart=3, exile=0, unstoppable=0.
+    // Seat 1: stay=0, stun=0, stunStart=1, exile=4, unstoppable=2.
+    f.ir.n_players = 2;
+    let keys0 = [("stay", 2i64), ("stun", 1), ("stunStart", 3), ("exile", 0), ("unstoppable", 0)];
+    let keys1 = [("stay", 0i64), ("stun", 0), ("stunStart", 1), ("exile", 4), ("unstoppable", 2)];
+    for (k, v) in keys0 {
+        f.ir.state_set(0, id_of(k), v);
+    }
+    for (k, v) in keys1 {
+        f.ir.state_set(1, id_of(k), v);
+    }
+    // Mirror into the CEL snapshot (`state(p, 'key')` reads `win.players[p].state`).
+    let snap = |rows: &[(&str, i64)]| {
+        let mut m = std::collections::BTreeMap::new();
+        for (k, v) in rows {
+            m.insert(k.to_string(), *v);
+        }
+        m
+    };
+    f.win.players = vec![
+        rules_cond::PlayerSnap {
+            state: snap(&keys0),
+            ..rules_cond::PlayerSnap::default()
+        },
+        rules_cond::PlayerSnap {
+            state: snap(&keys1),
+            ..rules_cond::PlayerSnap::default()
+        },
+    ];
+    set_scalar(&mut f, VarId::Owner, VarTy::Int, Val::Int(0));
+    set_scalar(&mut f, VarId::Actor, VarTy::Int, Val::Int(1));
+
+    for src in [
+        "state(actor,'stay') > 0 && state(actor,'unstoppable') == 0",
+        "state(owner,'stay') == 2",
+        "state(actor,'stay') == 0",
+        "state(owner,'stun') + state(owner,'stunStart') == 4",
+        "state(actor,'stun') + state(actor,'stunStart') == 1",
+        "state(owner,'stun') + state(owner,'stunStart') > state(actor,'stun') + state(actor,'stunStart')",
+        "state(owner,'exile') == 0 && state(actor,'exile') == 4",
+        "state(actor,'unstoppable') == 2",
+        "state(owner,'stay') + state(owner,'stun') + state(owner,'stunStart') == 6",
+        "state(owner,'exile') + state(owner,'unstoppable') == 0",
+        // Missing key = 0 on both paths.
+        "state(owner,'nowhere') == 0 && state(actor,'nowhere') == 0",
+        // Out-of-range seats read 0 on both paths.
+        "state(3,'stay') == 0 && state(3,'stunStart') == 0 && state(3,'exile') == 0 && state(3,'unstoppable') == 0",
+        "state(-1,'stay') == 0 && state(-1,'unstoppable') == 0",
+    ] {
+        assert_agree(src, &f);
+    }
+
+    // Flip the layers and re-check agreement (not just one truth value).
+    f.ir.state_set(0, id_of("stay"), 0);
+    f.ir.state_set(0, id_of("unstoppable"), 5);
+    f.win.players[0].state.insert("stay".into(), 0);
+    f.win.players[0].state.insert("unstoppable".into(), 5);
+    for src in [
+        "state(actor,'stay') > 0 && state(actor,'unstoppable') == 0",
+        "state(owner,'stay') == 0 && state(owner,'unstoppable') == 5",
+        "state(owner,'stun') + state(owner,'stunStart') == 4",
+    ] {
+        assert_agree(src, &f);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // (3) real guards from the repo
 // ---------------------------------------------------------------------------
 

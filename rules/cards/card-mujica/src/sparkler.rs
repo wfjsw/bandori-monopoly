@@ -22,7 +22,13 @@ pub const SPARKLER: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
         On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"燃尽前的线香花火"#)
+        .raw_name(r#"燃尽前的线香花火"#)
+        .tags(&[])
+        .text(r#"将此卡放置于场上并放置2个奇迹水晶（上限2），你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合，最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。"#)
+        .cell(r#"J5"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 fn sparkler(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于场上并放置2个奇迹水晶（上限2）」
@@ -90,4 +96,23 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("sparkler_out")).player_id("who", player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn sparkler_kani(player_id: i32) -> card_sdk::Asked {
+    sparkler(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
 }

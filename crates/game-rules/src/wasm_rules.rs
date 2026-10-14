@@ -173,6 +173,9 @@ pub struct Run {
     /// uid is. It is the one the dispatch named, and it follows the card if
     /// this run re-places it (the same object moves with it).
     current_uid: i32,
+    /// The owner of the instance this run took off the field (`unplace_self`),
+    /// so a card that hops to another field (re-placing itself) keeps its owner.
+    carried_owner: Option<i32>,
     /// Where this card goes when the run finishes, set by `set_dest`.
     dest: i32,
     /// Whose pile the fate lands in, set by `set_transfer_to_dest`. `None` is
@@ -563,7 +566,8 @@ impl Run {
         let Some(f) = self.world.field_by_uid(uid) else {
             return;
         };
-        let (owner, card) = (f.owner, f.card.clone());
+        // The holder hears its card's counter change, not the card's owner.
+        let (owner, card) = (self.world.holder_of(uid), f.card.clone());
         self.counter_log.push((owner, card, name.to_string(), now - was));
     }
 
@@ -1014,6 +1018,7 @@ impl CardWorld for Run {
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32 {
         let props = props_of(&self.props, card);
         let uid = self.world.place_card_on(&self.data, player_id, tile, card, note, props);
+        self.stamp_owner(uid, card);
         if uid >= 0 {
             self.outcome(
                 player_id,
@@ -1030,6 +1035,7 @@ impl CardWorld for Run {
     fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32 {
         let props = props_of(&self.props, card);
         let uid = self.world.place_card(&self.data, player_id, card, note, props);
+        self.stamp_owner(uid, card);
         if uid >= 0 {
             self.outcome(
                 player_id,
@@ -1071,6 +1077,7 @@ impl CardWorld for Run {
     }
     fn unplace_card(&mut self) -> i32 {
         let card = self.current_card.clone();
+        self.carried_owner = self.world.field_by_uid(self.current_uid).map(|f| f.owner);
         let owner = self.world.unplace_at(self.current_uid);
         if owner >= 0 {
             self.current_uid = -1;
@@ -1570,6 +1577,9 @@ impl CardWorld for Run {
             class,
             |k| self.world.tile_prop(tile, k),
         )
+    }
+    fn tile_class_rows(&self, tile: i32, classes: &[String], out: &mut Vec<(i64, i64, String)>) -> bool {
+        crate::tile_class::class_rows(&self.world, self.data.tiles.get(tile.max(0) as usize), tile, classes, out)
     }
     fn paid_in_settle(&self) -> i32 {
         self.world.turn.paid_in_settle
@@ -2205,6 +2215,21 @@ impl CardWorld for Run {
 }
 
 impl Run {
+    /// A card placing *itself* keeps its owner whichever field it lands on:
+    /// the owner it carried off the field (a hop), else the player whose
+    /// activation this is (a hand play). Placement alone stamps the field
+    /// holder, which loses the owner of a card parked on another player.
+    fn stamp_owner(&mut self, uid: i32, card: &str) {
+        if uid < 0 || card != self.current_card {
+            return;
+        }
+        let held = self.world.field_by_uid(self.current_uid).map(|f| f.owner);
+        let owner = self.carried_owner.take().or(held).unwrap_or(self.trigger.player_id);
+        if owner >= 0 {
+            self.world.set_field_owner(uid, owner);
+        }
+    }
+
     /// In the game and not exiled.
     fn present(&self, s: i32) -> bool {
         self.world
@@ -2236,42 +2261,30 @@ impl Run {
 pub struct RulesBridge<M: CardModules> {
     ruleset: M,
     data: Arc<GameData>,
+    /// Every card's declared props, snapshotted once: a [`Run`] needs the whole
+    /// table, and the ruleset is immutable for the bridge's life.
+    props: std::sync::OnceLock<Arc<CardPropsTable>>,
+    /// `card_texts` per card, converted and sorted once (the view asks per
+    /// board field on every `state()`).
+    texts: std::sync::RwLock<std::collections::HashMap<String, Arc<[game_core::engine::TileTextDecl]>>>,
 }
+
+/// Card id -> declared static props (the per-[`Run`] snapshot).
+type CardPropsTable = std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>;
 
 /// The sandboxed bridge: `CardRules` over wasmi/wasmtime card modules.
 pub type WasmRules = RulesBridge<Ruleset>;
 
 impl RulesBridge<Ruleset> {
-    /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh).
-    /// `Ok(None)` when the directory or index is missing -- the caller falls back
-    /// to no card effects.
+    /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh)
+    /// and bind the tables. `Ok(None)` when the directory or index is missing --
+    /// the caller falls back to no card effects.
+    ///
+    /// Hosts that need the roster *before* the tables (the tables' roster comes
+    /// from the ruleset) should call [`Ruleset::load_dir`] first, take
+    /// [`Ruleset::roster`], then [`Self::new`].
     pub fn load_dir(data: Arc<GameData>, dir: &std::path::Path) -> Result<Option<Self>, RuleError> {
-        let index = dir.join("index.json");
-        let Ok(text) = std::fs::read_to_string(&index) else {
-            return Ok(None);
-        };
-        let v: serde_json::Value =
-            serde_json::from_str(&text).map_err(|e| RuleError::Load(format!("bad index: {e}")))?;
-        let mut builder = Ruleset::builder();
-        let mut any = false;
-        for m in v["modules"]
-            .as_array()
-            .map(|a| a.iter())
-            .into_iter()
-            .flatten()
-        {
-            let file = m["file"]
-                .as_str()
-                .ok_or_else(|| RuleError::Load("module entry has no file".into()))?;
-            let bytes = std::fs::read(dir.join(file))
-                .map_err(|e| RuleError::Load(format!("{file}: {e}")))?;
-            builder.add(&bytes)?;
-            any = true;
-        }
-        if !any {
-            return Ok(None);
-        }
-        Ok(Some(Self::new(builder.build()?, data)))
+        Ok(Ruleset::load_dir(dir)?.map(|ruleset| Self::new(ruleset, data)))
     }
 
 }
@@ -2393,7 +2406,12 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
 
 impl<M: CardModules> RulesBridge<M> {
     pub fn new(ruleset: M, data: Arc<GameData>) -> Self {
-        Self { ruleset, data }
+        Self {
+            ruleset,
+            data,
+            props: std::sync::OnceLock::new(),
+            texts: Default::default(),
+        }
     }
 
     /// The ruleset (module list, hashes) for inspection.
@@ -2405,11 +2423,15 @@ impl<M: CardModules> RulesBridge<M> {
     fn modules_props(
         &self,
     ) -> Arc<std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>> {
-        let mut m = std::collections::HashMap::new();
-        for c in self.ruleset.cards() {
-            m.insert(c.id.clone(), c.props.clone());
-        }
-        Arc::new(m)
+        self.props
+            .get_or_init(|| {
+                let mut m = std::collections::HashMap::new();
+                for c in self.ruleset.cards() {
+                    m.insert(c.id.clone(), c.props.clone());
+                }
+                Arc::new(m)
+            })
+            .clone()
     }
 
     /// Does this drive's log lines name their source (「<卡名> 的效果：…」)?
@@ -2495,13 +2517,11 @@ impl<M: CardModules> RulesBridge<M> {
         // An event instance is bound under `event:<id>`; the draw's own event
         // names it without the prefix, so the flash and the two log lines agree.
         let cid = card_id.strip_prefix("event:").unwrap_or(card_id);
-        let owner = if uid >= 0 {
-            w.world
-                .field_by_uid(uid)
-                .map(|f| f.owner)
-                .unwrap_or(call.player_id())
-        } else {
-            call.player_id()
+        // The seat the instance sits on (not `FieldCard::owner`, which names
+        // who the card belongs to).
+        let owner = match if uid >= 0 { w.world.holder_of(uid) } else { -1 } {
+            h if h >= 0 => h,
+            _ => call.player_id(),
         };
         let who = if owner >= 0 { owner } else { target };
         // Entry label (「（1）」 and kin) from the manifest, when the card
@@ -2726,6 +2746,7 @@ impl<M: CardModules> RulesBridge<M> {
                 trigger: trigger.clone(),
                 current_card: card_id.to_string(),
                 current_uid: uid,
+                carried_owner: None,
                 dest: DEST_UNSET,
                 dest_to: None,
                 paid_log: vec![],
@@ -2926,6 +2947,7 @@ impl<M: CardModules> RulesBridge<M> {
                         trigger: trigger.clone(),
                         current_card: card_id.to_string(),
                         current_uid: uid,
+                        carried_owner: None,
                         dest: DEST_UNSET,
                         dest_to: None,
                         paid_log: vec![],
@@ -5578,6 +5600,7 @@ impl<M: CardModules> RulesBridge<M> {
             trigger: top.clone(),
             current_card: card.to_string(),
             current_uid: -1,
+            carried_owner: None,
             dest: DEST_UNSET,
             dest_to: None,
             paid_log: vec![],
@@ -5694,7 +5717,7 @@ impl<M: CardModules> RulesBridge<M> {
                 };
                 let cand = crate::cond_pre::fill_candidate(&live, s as i32, id, false);
                 let sc = scope.get_or_insert_with(|| {
-                    crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&live))
+                    crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(&live))
                 });
                 if crate::cond_pre::condition_allows(Some(pre), Some(sc), &cand) {
                     return true;
@@ -5801,6 +5824,7 @@ impl<M: CardModules> RulesBridge<M> {
                 trigger: top.clone(),
                 current_card: String::new(),
                 current_uid: -1,
+                carried_owner: None,
                 dest: DEST_UNSET,
                 dest_to: None,
                 paid_log: vec![],
@@ -5827,7 +5851,7 @@ impl<M: CardModules> RulesBridge<M> {
                 flash_policy: card_sdk::abi::Flash::Auto,
                 flash_ordinal: 0,
             };
-            let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
+            let win_scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(&win_run));
             let mut options: Vec<(String, i32, i32)> = Vec::new();
             let mut order: Vec<(u8, u32, u32)> = Vec::new();
             for (key, id, idx, uid) in candidates {
@@ -6523,6 +6547,9 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
             |k| self.world.tile_prop(tile, k),
         )
     }
+    fn tile_class_rows(&self, tile: i32, classes: &[String], out: &mut Vec<(i64, i64, String)>) -> bool {
+        crate::tile_class::class_rows(&self.world, self.data.tiles.get(tile.max(0) as usize), tile, classes, out)
+    }
     fn player_count(&self) -> i32 {
         self.world.st.players.len() as i32
     }
@@ -6565,6 +6592,19 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
     #[inline]
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
         self.world.state_get(player_id, key)
+    }
+    fn state_entries(&self, player_id: i32) -> Vec<(String, i32)> {
+        self.world
+            .st
+            .players
+            .get(player_id.max(0) as usize)
+            .map(|p| {
+                p.state
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.value))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
     #[inline]
     fn character_skill_id(&self, player_id: i32) -> Option<String> {
@@ -7001,6 +7041,18 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn no_hand(&self, seat: i64) -> i64 {
         self.world
             .state_get(seat as i32, game_core::state::key::NO_HAND) as i64
+    }
+    fn state(&self, seat: i64, key: &str) -> i64 {
+        self.world.state_get(seat as i32, key) as i64
+    }
+    fn state_table(&self) -> Vec<(i64, String, i64)> {
+        let mut rows = Vec::new();
+        for (s, p) in self.world.st.players.iter().enumerate() {
+            for (k, v) in &p.state {
+                rows.push((s as i64, k.clone(), v.value as i64));
+            }
+        }
+        rows
     }
     fn character(&self, seat: i64) -> i64 {
         let name = self
@@ -7554,6 +7606,35 @@ impl<M: CardModules> RulesBridge<M> {
 }
 
 impl<M: CardModules> CardRules for RulesBridge<M> {
+    fn gate_open(
+        &self,
+        w: &game_core::engine::World,
+        gate: game_core::engine::Gate,
+        player: usize,
+    ) -> Option<bool> {
+        let kind = crate::gate::kind_of(gate);
+        // No card declares this gate: the ruleset has no opinion.
+        if !self.ruleset.declares(kind) {
+            return None;
+        }
+        let win = crate::gate::window_of_world(w, player);
+        Some(self.ruleset.gate_open(kind, &win))
+    }
+    fn exclusive_use(
+        &self,
+        w: &game_core::engine::World,
+        player: usize,
+        ask: &game_core::engine::ExclusiveAsk<'_>,
+    ) -> Option<bool> {
+        let kind = crate::TriggerKind::ExclusiveUse;
+        // No card declares this gate: the ruleset has no opinion (the engine's
+        // own/base default stands).
+        if !self.ruleset.declares(kind) {
+            return None;
+        }
+        let win = crate::gate::window_of_exclusive(w, &self.data, player, ask);
+        Some(self.ruleset.gate_open(kind, &win))
+    }
     fn ruleset_sha256(&self) -> Option<&str> {
         self.ruleset.sha256()
     }
@@ -7562,6 +7643,36 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     /// [`game_core::engine::CardRules::card_props`].
     fn card_props(&self, card: &str) -> std::collections::BTreeMap<String, i32> {
         self.ruleset.card_props(card)
+    }
+
+    /// One prop without cloning the card's whole table (the trait default
+    /// goes through [`Self::card_props`]).
+    fn card_prop(&self, card: &str, key: &str) -> i32 {
+        self.ruleset.card_prop(card, key)
+    }
+
+    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// [`game_core::engine::CardRules::card_texts`]. Sorted by entry index
+    /// (stable, so declaration order within an entry is kept) -- that order is
+    /// the third component of the view's text-precedence key.
+    fn card_texts(&self, card: &str) -> Arc<[game_core::engine::TileTextDecl]> {
+        if let Some(t) = self.texts.read().ok().and_then(|m| m.get(card).cloned()) {
+            return t;
+        }
+        let mut texts = self.ruleset.card_texts(card);
+        texts.sort_by_key(|t| t.entry);
+        let built: Arc<[game_core::engine::TileTextDecl]> = texts
+            .into_iter()
+            .map(|t| game_core::engine::TileTextDecl {
+                slot: t.slot,
+                tile: t.tile,
+                key: t.key,
+            })
+            .collect();
+        if let Ok(mut m) = self.texts.write() {
+            m.insert(card.to_string(), built.clone());
+        }
+        built
     }
 
     fn has_rule(&self, id: &str) -> bool {
@@ -7672,6 +7783,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             trigger: Trigger::default(),
             current_card: card.to_string(),
             current_uid: uid,
+            carried_owner: None,
             dest: DEST_UNSET,
             dest_to: None,
             paid_log: vec![],
@@ -7761,6 +7873,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             trigger: Trigger::default(),
             current_card: String::new(),
             current_uid: -1,
+            carried_owner: None,
             dest: DEST_UNSET,
             dest_to: None,
             paid_log: vec![],
@@ -8232,6 +8345,12 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::AbnormalGuard
             | TriggerKind::ImmuneAll
             | TriggerKind::Untargetable
+            | TriggerKind::ActGate
+            | TriggerKind::PayGate
+            | TriggerKind::MoveGate
+            | TriggerKind::ExclusiveUse
+            | TriggerKind::TurnBonusTime
+            | TriggerKind::TurnBaseTime
             | TriggerKind::Redirect
             | TriggerKind::CounterChanged
     )
@@ -8412,6 +8531,12 @@ mod tests {
             "immuneAll",
             "untargetable",
             "redirect",
+            "actGate",
+            "payGate",
+            "moveGate",
+            "exclusiveUse",
+            "turnBonusTime",
+            "turnBaseTime",
             // v28 post-commit points (what a committed effect did)
             "fireSpent",
             "skillUsed",

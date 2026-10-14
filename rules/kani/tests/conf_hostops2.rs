@@ -349,3 +349,148 @@ fn neighbor_is_the_next_present_seat() {
     let fwd2 = rules_kani::host::dispatch(Op::neighbor, [0, 1, 0, 0, 0, 0]);
     assert_eq!(fwd2, 2, "skip the out seat");
 }
+
+/// `Op::raise` returns `(!cancelled)`: **1 = the link settled**. Returning 0
+/// makes `spend_fire` treat the cost as substituted and skip the real spend
+/// (class C — `chart_rush` lost no [火罐]). Pin the settled polarity.
+#[test]
+fn raise_returns_settled_not_cancelled() {
+    let _g = model_lock();
+    install(base());
+    let settled = rules_kani::host::dispatch(Op::raise, [0, 0, 0, 0, 0, 0]);
+    assert_eq!(settled, 1, "raise must report settled (1), not cancelled (0)");
+}
+
+/// `Op::gate` returns `allowed`: **1 = may land**. 0 means guarded / immune /
+/// out and callers skip the effect — same polarity class as `raise`.
+#[test]
+fn gate_returns_allowed_for_living_seat() {
+    let _g = model_lock();
+    install(base());
+    let ok = rules_kani::host::dispatch(Op::gate, [0, 0, 0, 0, 0, 0]);
+    assert_eq!(ok, 1, "living seat with no guard: effect may land");
+    // Seat 3 is `out` in `base()`.
+    let blocked = rules_kani::host::dispatch(Op::gate, [3, 0, 0, 0, 0, 0]);
+    assert_eq!(blocked, 0, "out seat: gate refuses");
+}
+
+/// `Op::raise_bought` returns HOST-06 `did`: **1 = the hand-over landed**.
+#[test]
+fn raise_bought_reports_landed() {
+    let _g = model_lock();
+    install(base());
+    let did = rules_kani::host::dispatch(Op::raise_bought, [0, 0, 0, 0, 0, 0]);
+    assert_eq!(did, 1, "hand-over landed when no hook denies");
+}
+
+/// `Op::ring_multiplier` is a multiplier: 0 would zero rent. Identity is 1.
+#[test]
+fn ring_multiplier_is_never_zero() {
+    let _g = model_lock();
+    install(base());
+    let mult = rules_kani::host::dispatch(Op::ring_multiplier, [0, 0, 0, 0, 0, 0]);
+    assert!(mult >= 1, "ring multiplier must be >= 1, got {mult}");
+}
+
+/// `set_self_prop(kp, kl, v)` packs `[kp, kl, v, 0, 0, 0]` (sys_kani).
+/// The shared `set_self_prop|set_prop_at|set_tile_prop` arm must decode the
+/// key as `name_id(a0, a1)` and the value as `a2` — never `name_id(a1, a2)`,
+/// which is `name_id(kl, v)` and an untagged handle (loud FAIL after the
+/// name_id cut). Blast radius: every body calling `ctx::set_prop`.
+#[test]
+fn set_self_prop_decodes_key_at_a0_a1_value_a2() {
+    let _g = model_lock();
+    install(base());
+    // Place a field instance so set_self_prop has a target.
+    kworld::with_world_mut(|w| {
+        w.field_n = 1;
+        w.field[0].uid = 42;
+        w.field[0].player = 0;
+    });
+    let h = card_sdk::native::intern(b"cost");
+    // packing [kp, kl, v, 0, 0, 0]
+    let ret = rules_kani::host::dispatch(Op::set_self_prop, [h.0, h.1, 77, 0, 0, 0]);
+    assert_eq!(ret, 0, "set_self_prop returns 0");
+    let key = rules_kani::intern::intern("cost");
+    let got = kworld::with_world(|w| w.field[0].props.get(key));
+    assert_eq!(got, 77, "self prop must be key=(a0,a1), value=a2");
+}
+
+/// `set_tile_prop(tile, kp, kl, v)` packs `[tile, kp, kl, v, 0, 0]` —
+/// key is `name_id(a1, a2)`, value `a3`.
+#[test]
+fn set_tile_prop_decodes_key_at_a1_a2_value_a3() {
+    let _g = model_lock();
+    install(base());
+    let h = card_sdk::native::intern(b"rentHouses");
+    let ret = rules_kani::host::dispatch(Op::set_tile_prop, [3, h.0, h.1, 5, 0, 0]);
+    assert_eq!(ret, 0, "set_tile_prop returns 0");
+    let key = rules_kani::intern::intern("rentHouses");
+    let got = kworld::with_world(|w| w.tiles[3].props.get(key));
+    assert_eq!(got, 5, "tile prop must be key=(a1,a2), value=a3");
+}
+
+/// `set_prop_at(uid, kp, kl, v)` packs `[uid, kp, kl, v, 0, 0]` —
+/// key is `name_id(a1, a2)`, value `a3`.
+#[test]
+fn set_prop_at_decodes_key_at_a1_a2_value_a3() {
+    let _g = model_lock();
+    install(base());
+    kworld::with_world_mut(|w| {
+        w.field_n = 1;
+        w.field[0].uid = 9;
+    });
+    let h = card_sdk::native::intern(b"tag");
+    let ret = rules_kani::host::dispatch(Op::set_prop_at, [9, h.0, h.1, 3, 0, 0]);
+    assert_eq!(ret, 0, "set_prop_at returns 0");
+    let key = rules_kani::intern::intern("tag");
+    let got = kworld::with_world(|w| w.field[0].props.get(key));
+    assert_eq!(got, 3, "prop_at must be key=(a1,a2), value=a3");
+}
+
+/// `counter_self(np, nl)` packs `[np, nl, 0, …]` — key `name_id(a0, a1)`.
+/// `card_counter(player, cp, cl, np, nl)` packs `[player, cp, cl, np, nl]` —
+/// key `name_id(a3, a4)`. Same class as set_self_prop.
+#[test]
+fn counter_self_and_card_counter_decode_their_own_packing() {
+    let _g = model_lock();
+    install(base());
+    let h = card_sdk::native::intern(b"tok");
+    // counter_self: [np, nl, …]
+    rules_kani::host::dispatch(Op::add_counter_self, [h.0, h.1, 4, 0, 0, 0]);
+    let key = rules_kani::intern::intern("tok");
+    let got = kworld::with_world(|w| w.key_get(0, key));
+    assert_eq!(got, 4, "counter_self key is (a0,a1)");
+    // card_counter: [player, cp, cl, np, nl] — name at a3,a4
+    rules_kani::host::dispatch(Op::add_card_counter, [0, 0, 0, h.0, h.1, 6]);
+    let got2 = kworld::with_world(|w| w.key_get(0, key));
+    assert_eq!(got2, 10, "add_card_counter adds n=a5 to the counter named (a3,a4): 4+6");
+}
+
+/// `hand_count(player, ptr, len)` packs `[player, ptr, len]` — card name at
+/// `(a1,a2)`, seat at `a0`. The old decode used `(a0,a1)` = `(player, ptr)`
+/// and loud-FAILED on an untagged handle (same class as set_self_prop).
+#[test]
+fn hand_count_decodes_name_at_a1_a2() {
+    let _g = model_lock();
+    install(base());
+    kworld::with_world_mut(|w| {
+        w.hand_resonance[0] = 2;
+    });
+    // RESONANCE slot is 1 — hand_count must read the seat's resonance view.
+    let h = card_sdk::native::intern("PP:[衍生]共鸣".as_bytes());
+    // Force the interned name to the resonance card slot via card_slot's
+    // known-name compare; if the id does not match we still must not FAIL.
+    let n = rules_kani::host::dispatch(Op::hand_count, [0, h.0, h.1, 0, 0, 0]);
+    assert!(n >= 0, "hand_count must not hard-FAIL on a tagged name");
+}
+
+/// `discard_count(player, ptr, len)` — name at `(a1,a2)` (was `(a0,a1)`).
+#[test]
+fn discard_count_decodes_name_at_a1_a2() {
+    let _g = model_lock();
+    install(base());
+    let h = card_sdk::native::intern(b"somecard");
+    let n = rules_kani::host::dispatch(Op::discard_count, [0, h.0, h.1, 0, 0, 0]);
+    assert_eq!(n, 0, "empty discard count is 0 (and must not name_id-FAIL)");
+}

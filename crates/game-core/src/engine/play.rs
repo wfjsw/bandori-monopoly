@@ -564,12 +564,36 @@ impl Cx<'_> {
         if self.out(i) {
             return Ok(());
         }
-        self.w.signals.push(Signal::StartTimer(i));
+        // The turn clock is a modifier point: hooks rewrite the 免费时间
+        // refill and the 恢复时间 (seconds) before the host applies them.
+        // `turnBaseTime`'s default is the match's per-turn base refill
+        // (`ClockSettings::base_refill`), not a fixed constant -- the host
+        // then refills/caps it at `StartTimer` (see `engine::Signal`).
+        let refill = raise!(
+            self,
+            "turnBonusTime",
+            i,
+            value = super::BONUS_REFILL as i32
+        )?
+        .value;
+        let base = raise!(
+            self,
+            "turnBaseTime",
+            i,
+            value = self.w.clock.base_refill as i32
+        )?
+        .value;
+        self.w
+            .signals
+            .push(Signal::StartTimer(i, refill.max(0) as f32, base.max(0) as f32));
         // The status hosts' act / move gates (`docs/STATUS-HOSTS.md` §4).
         // [晕眩] closes the whole turn; [停留] (unless [不可阻挡]) closes only
         // the main move.
-        let gates = self.w.st.players[i].status_gates();
-        if !gates.act {
+        let (act, mv) = (
+            self.w.gate_open(self.rules, super::Gate::Act, i),
+            self.w.gate_open(self.rules, super::Gate::Move, i),
+        );
+        if !act {
             self.w.log(
                 "status",
                 i as i32,
@@ -579,7 +603,7 @@ impl Cx<'_> {
             self.wait(1.2);
             return self.end_turn(i);
         }
-        if !gates.r#move {
+        if !mv {
             self.w.st.skip_move = true;
             self.w.log(
                 "status",
@@ -1948,16 +1972,13 @@ impl Cx<'_> {
     /// A card- or skill-driven dice roll. Sums `count`d`sides` the
     /// same way `roll_tables` does (a flat `count` when `sides <= 0`); the
     /// caller raises the `Roll` chain link so 「掷骰结算前」 [反击]s see it.
-    pub fn card_roll(&mut self, _player_id: usize, count: i32, sides: i32) -> i32 {
-        let mut total = 0;
+    pub fn card_roll(&mut self, player_id: usize, count: i32, sides: i32) -> i32 {
         if sides <= 0 {
-            total += count;
-        } else {
-            for _ in 0..count.max(0) {
-                total += self.w.rng.d(sides.max(1));
-            }
+            return count;
         }
-        total
+        // Each roll gets its own `dice` line (faces included), so a card that
+        // rolls several times (热气球演出's four 3d20) shows every roll.
+        self.roll(player_id as i32, count.max(0), sides.max(1), None)
     }
 
     /// A card-driven reroll (「使用火罐进行掷骰」): sum the
@@ -2425,11 +2446,19 @@ impl Cx<'_> {
             )
         };
         let mut half_part = None;
+        let mut half_only = None;
         if half {
             let full = amount;
             amount = ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10;
             half_part = Some(
                 Msg::new("log.part.rent_half")
+                    .n("full", full)
+                    .n("cut", amount),
+            );
+            // Bare in its own parens: no leading comma (`rent_half` is the
+            // tail of a house / ring note).
+            half_only = Some(
+                Msg::new("log.part.rent_half_only")
                     .n("full", full)
                     .n("cut", amount),
             );
@@ -2442,8 +2471,7 @@ impl Cx<'_> {
         // (`docs/TILES.md`, 「支付减半」 ruling 2026-10-06).
         let note = match (detail, half_part) {
             (Some(d), h) => Some(d.opt("half", h)),
-            (None, Some(h)) => Some(Msg::new("log.part.rent_half_only").msg("half", h)),
-            (None, None) => None,
+            (None, _) => half_only,
         };
         let mut p = Pay::new(amount, PayKind::Rent);
         p.from = Some(i);
@@ -2888,7 +2916,11 @@ impl Cx<'_> {
     /// The rule lives on [`super::ops`] so a card asking
     /// "where may I build?" gets the same answer the build step does.
     pub(crate) fn why_not_build_on(&self, i: usize, t: usize) -> Option<Msg> {
-        self.w.why_not_build_on(self.data, i as i32, t as i32)
+        self.w
+            .why_not_build_on(self.data, i as i32, t as i32)
+            // The payer's gate ([晕眩]/[除外] 「无法收付款」) -- `can_pay` also
+            // refuses an out seat.
+            .or_else(|| (!self.can_pay(i)).then(|| Msg::new("err.cannot_spend")))
     }
 
     /// The quoted price for one tile, through the rules crate's `buy_quote`
@@ -4164,6 +4196,12 @@ impl Cx<'_> {
             Msg::new("ask.auction.title").tile("tile", t),
             text,
             worth,
+            // Bankruptcy leftover auction (`auction_leftovers`) is the only
+            // caller today and runs on its own dedicated timer -- never a
+            // seat pool. A future ordinary auction would pass `use_pool: true`
+            // and a pool-backed window instead.
+            self.w.clock.bankrupt_auction_time,
+            false,
         );
         let r = self.ask(ask)?;
         if r.a.bidder < 0 {
@@ -4420,7 +4458,7 @@ impl Cx<'_> {
         let gates = s.status_gates();
         if !gates.on_board {
             Some("err.play_exiled")
-        } else if !gates.act && !stun_ok {
+        } else if !self.w.gate_open(self.rules, super::Gate::Act, i) && !stun_ok {
             // [晕眩] 「无法使用…手卡的[手]效果」; `playableStunned` is the one
             // exception in the pool.
             Some("err.play_stunned")
@@ -4429,6 +4467,40 @@ impl Cx<'_> {
         } else {
             None
         }
+    }
+
+    /// The exclusive-use check (`docs/GUARDS.md` §ExclusiveUse). The generic
+    /// rule is the engine's own: an exclusive is playable iff `card.owner` is
+    /// the actor's character or its base (`variant_of`). A band-skill card may
+    /// then close the CEL-only `ExclusiveUse` gate to deny the base case
+    /// (CRYCHIC). Memoized per `(player, card)` under the world stamp, like
+    /// [`Self::rules_cant_play`] -- the gate is a ruleset query, not a field
+    /// read.
+    fn exclusive_play(
+        &self,
+        i: usize,
+        id: &str,
+        card: &crate::data::CardData,
+    ) -> Option<Msg> {
+        let character = &self.w.st.players[i].character;
+        let base = self.data.base_character(character);
+        let owner_is_self = card.owner == *character;
+        let owner_is_base = card.owner == base;
+        if !owner_is_self && !owner_is_base {
+            return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+        }
+        let ask = super::ExclusiveAsk {
+            card: id,
+            owner: &card.owner,
+            owner_is_self,
+            owner_is_base,
+        };
+        // Band-skill denial (`ExclusiveUse` gates), memoized under the world
+        // stamp like `rules_cant_play`.
+        if self.exclusive_gate_denied(i, id, &ask) {
+            return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+        }
+        None
     }
 
     /// Why this card cannot be played from hand, or `None` when it can.
@@ -4444,15 +4516,10 @@ impl Cx<'_> {
             return Some(Msg::new(why));
         }
         if let Some(card) = self.data.card(id) {
-            let character = &self.w.st.players[i].character;
-            let base = self.data.base_character(character);
-            let crychic = self
-                .data
-                .character(character)
-                .is_some_and(|c| c.band == "CRYCHIC");
-            // CRYCHIC variants may not use the base character's exclusives.
-            if card.exclusive() && card.owner != *character && (card.owner != base || crychic) {
-                return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+            if card.exclusive() {
+                if let Some(why) = self.exclusive_play(i, id, card) {
+                    return Some(why);
+                }
             }
         }
         if !self.rules.normal(id) {

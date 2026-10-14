@@ -26,7 +26,14 @@ pub const RANDOM_STAR: CardDef = CardDef::new(
             pass_tile,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"仓库里的Random Star"#)
+        .raw_name(r#"仓库里的Random Star"#)
+        .tags(&[])
+        .text(r#"（1）将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”放置在卡组底端
+（2）[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]"#)
+        .cell(r#"B12"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 fn random_star(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置自身场上」
@@ -84,4 +91,11 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
             .tile("tile", ryuseido),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn random_star_kani(player_id: i32) -> card_sdk::Asked {
+    random_star(player_id)
 }

@@ -18,7 +18,18 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
     "PP:[衍生]明天见",
     &[On::Play("", Some(cant_play), see_you_tomorrow)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"明天见"#)
+        .raw_name(r#"[衍生]明天见"#)
+        .derived(true)
+        .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
+        .text(r#"[特]：
+（1）只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可使用。
+（2）[共鸣]无视此卡的[特]效果（1）。
+[手]：
+将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#)
+        .cell(r#"D6"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -60,4 +71,11 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
         );
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn see_you_tomorrow_kani(player_id: i32) -> card_sdk::Asked {
+    see_you_tomorrow(player_id)
 }

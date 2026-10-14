@@ -58,11 +58,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
     (prop::COUNTERACT_GROUP, 1),
     (prop::COUNTERACT_FIRE_COST, 6),
 ])
-.legacy(&[(2, legacy_mine)]).silent(&[1]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+.silent(&[1]);
 
 /// 「初始10，上限10」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -137,4 +133,33 @@ fn offer(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("sayo_thorns_added")).i("n", n as i64),
     );
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"冰川纱夜"#)
+    .display(r#"冰川纱夜"#)
+    .band(r#"Roselia"#)
+    .color(r#"#00AABB"#)
+    .skill(r#"踏上荆棘之路的觉悟"#)
+    .text(r#"（1）每次[经过]CiRCLE时获得2个[火罐]，每次被别的玩家[经过]时获得1个[火罐]（初始10，上限10）（2）你可以消耗6个[火罐]将非[传送]的主要移动添加1或2格（3）第一个玩家被淘汰，经过Circle时获得的火罐加1"#)
+    .cn_id(r#"022"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"弹奏弹奏弹奏，继续弹奏"#])
+    .preset(&[r#"R:（纱夜）弹奏弹奏弹奏，继续弹奏"#, r#"R:学生会的检查"#, r#"R:曲奇时间"#, r#"R:NFO"#, r#"R:live前的准备"#, r#"R:蓝玫瑰的骄傲"#, r#"R:Sprechchor"#, r#"通用:登上武道馆"#, r#"通用:网络链接异常"#, r#"通用:尽力后的收获"#])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_kani(player_id: i32) -> card_sdk::Asked {
+    offer(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }

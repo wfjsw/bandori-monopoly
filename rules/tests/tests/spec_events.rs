@@ -11,6 +11,7 @@
 //! A discrepancy is a plain failing test. No `#[ignore]`.
 
 use game_core::msg::Arg;
+use game_core::state::TileTextEntry;
 use rules_spec::{forall, frame, tile, Clause, Step, Table};
 
 // ---------------------------------------------------------------- helpers
@@ -822,6 +823,257 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
         Ok(())
     })
     .expect("E-circle-rebuild-03");
+}
+
+/// The winning entry for `slot` in a tile's speaker list -- first claim wins,
+/// same as the settle body's `cancelled` bail (`docs/TILES.md` 「Tile text」).
+fn tile_text_winner<'a>(
+    speakers: &'a [TileTextEntry],
+    slot: &str,
+) -> Option<&'a TileTextEntry> {
+    speakers.iter().find(|e| e.slot == slot)
+}
+
+/// The winning key for `slot` (`None` = nobody speaks; `Some("")` = the winner
+/// suppresses the slot). Deed-popup contract: nothing renders either way.
+fn tile_text_key<'a>(speakers: &'a [TileTextEntry], slot: &str) -> Option<&'a str> {
+    tile_text_winner(speakers, slot).map(|e| e.key.as_str())
+}
+
+/// E-circle-rebuild-06 -- while the event is live it swaps CiRCLE's and
+/// CiRCLE 咖啡厅's per-slot deed notes (「CiRCLE的[触发结算]改为…」 /
+/// 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」).
+#[test]
+fn circle_rebuild_swaps_tile_texts_on_play() -> Result<(), String> {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT"]);
+    draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
+    if !t.event_in_play("协助CiRCLE重建") {
+        return Err("E-circle-rebuild-06: setup: event not active".into());
+    }
+    let st = t.st();
+    let circle = &st.tile_texts[tile("CiRCLE")];
+    let cafe = &st.tile_texts[tile("CiRCLE 咖啡厅")];
+
+    // CiRCLE [结算] becomes the rebuild choice; its [经过] is suppressed (the
+    // reward is re-homed onto the cafe).
+    let settle = tile_text_winner(circle, "settle")
+        .ok_or("E-circle-rebuild-06: CiRCLE has no settle speaker")?;
+    if settle.from != "event:协助CiRCLE重建" || settle.key != "deed.note.rebuildSettle" {
+        return Err(format!(
+            "E-circle-rebuild-06: CiRCLE settle {}/{} , expected event:协助CiRCLE重建/deed.note.rebuildSettle",
+            settle.from, settle.key
+        ));
+    }
+    match tile_text_key(circle, "pass") {
+        None | Some("") => {}
+        Some(k) => {
+            return Err(format!(
+                "E-circle-rebuild-06: CiRCLE pass must be suppressed, winning key {k:?}"
+            ))
+        }
+    }
+
+    // The cafe inherits CiRCLE's originals (draw a hand card + the [经过]
+    // reward), covering its own base text.
+    let settle = tile_text_winner(cafe, "settle")
+        .ok_or("E-circle-rebuild-06: cafe has no settle speaker")?;
+    if settle.from != "event:协助CiRCLE重建" || settle.key != "deed.note.draw" {
+        return Err(format!(
+            "E-circle-rebuild-06: cafe settle {}/{} , expected event:协助CiRCLE重建/deed.note.draw",
+            settle.from, settle.key
+        ));
+    }
+    let pass = tile_text_winner(cafe, "pass")
+        .ok_or("E-circle-rebuild-06: cafe has no pass speaker")?;
+    if pass.from != "event:协助CiRCLE重建" || pass.key != "deed.note.circlePass" {
+        return Err(format!(
+            "E-circle-rebuild-06: cafe pass {}/{} , expected event:协助CiRCLE重建/deed.note.circlePass",
+            pass.from, pass.key
+        ));
+    }
+    Ok(())
+}
+
+/// E-circle-rebuild-07 -- when the event files away the `tile:*` bases speak
+/// again (the event instance is gone, so its replacements vanish with it).
+#[test]
+fn circle_rebuild_reverts_tile_texts_on_expire() -> Result<(), String> {
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT"]);
+    draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
+    // Arranging a 1-crystal instance and walking through CiRCLE is a
+    // transition (the pass), so arm after the arrange write -- same as
+    // E-circle-rebuild-03.
+    t.m.world_mut().st.event_active.iter_mut().for_each(|e| {
+        if e.id == "协助CiRCLE重建" {
+            e.counter = 1;
+        }
+    });
+    if let Some(f) = t
+        .m
+        .world_mut()
+        .st
+        .board_field
+        .iter_mut()
+        .find(|f| f.card == "event:协助CiRCLE重建")
+    {
+        f.crystals = 1;
+    }
+    until_turn(&mut t, 1);
+    t.set_pos(1, 58);
+    t.dice(&[3]); // 58 -> 0 (CiRCLE) -> 1 -> 2
+    t.observe(DRAW_CLAUSES);
+    let _ = t.roll(1);
+    drain(&mut t);
+    if t.event_in_play("协助CiRCLE重建") {
+        return Err(format!(
+            "E-circle-rebuild-07: event still active (crystals {:?})",
+            t.event_crystals("协助CiRCLE重建")
+        ));
+    }
+    if !t.event_discard().iter().any(|e| e == "协助CiRCLE重建") {
+        return Err(format!(
+            "E-circle-rebuild-07: not in event_discard: {:?}",
+            t.event_discard()
+        ));
+    }
+    let st = t.st();
+    let circle = &st.tile_texts[tile("CiRCLE")];
+    let cafe = &st.tile_texts[tile("CiRCLE 咖啡厅")];
+    let settle = tile_text_winner(circle, "settle")
+        .ok_or("E-circle-rebuild-07: CiRCLE has no settle speaker")?;
+    if settle.from != "tile:circle" || settle.key != "deed.note.circleSettle" {
+        return Err(format!(
+            "E-circle-rebuild-07: CiRCLE settle {}/{} , expected tile:circle/deed.note.circleSettle",
+            settle.from, settle.key
+        ));
+    }
+    let pass = tile_text_winner(circle, "pass")
+        .ok_or("E-circle-rebuild-07: CiRCLE has no pass speaker")?;
+    if pass.from != "tile:circle" || pass.key != "deed.note.circlePass" {
+        return Err(format!(
+            "E-circle-rebuild-07: CiRCLE pass {}/{} , expected tile:circle/deed.note.circlePass",
+            pass.from, pass.key
+        ));
+    }
+    let settle = tile_text_winner(cafe, "settle")
+        .ok_or("E-circle-rebuild-07: cafe has no settle speaker")?;
+    if settle.from != "tile:event" || settle.key != "deed.note.drawEvent" {
+        return Err(format!(
+            "E-circle-rebuild-07: cafe settle {}/{} , expected tile:event/deed.note.drawEvent",
+            settle.from, settle.key
+        ));
+    }
+    if let Some(pass) = tile_text_winner(cafe, "pass") {
+        return Err(format!(
+            "E-circle-rebuild-07: cafe must have no pass speaker after expire, got {}/{}",
+            pass.from, pass.key
+        ));
+    }
+    Ok(())
+}
+
+/// E-circle-rebuild-08 -- body-precedence order: the event's replacements sort
+/// before the tile base while it is live (the consumer takes the first entry
+/// per slot), and without the event the `tile:*` base is the winner.
+#[test]
+fn circle_rebuild_tile_text_precedence() -> Result<(), String> {
+    // --- without the event: the `tile:*` bases win, frozen key names ---
+    let t = Table::vanilla(2);
+    let st = t.st();
+    let cases: [(&str, &str, &str, &str, Option<&str>); 5] = [
+        // (tile name, settle from, settle key, pass key, pass from)
+        ("CiRCLE", "tile:circle", "deed.note.circleSettle", "deed.note.circlePass", Some("tile:circle")),
+        ("CiRCLE 咖啡厅", "tile:event", "deed.note.drawEvent", "", None),
+        ("流星堂", "tile:event", "deed.note.drawEvent", "", None),
+        ("江户川乐器店", "tile:edogawa", "deed.note.draw", "", None),
+        ("主要街道", "tile:agent", "deed.note.dealer", "", None),
+    ];
+    for (name, settle_from, settle_key, pass_key, pass_from) in cases {
+        let speakers = &st.tile_texts[tile(name)];
+        let settle = tile_text_winner(speakers, "settle")
+            .ok_or_else(|| format!("E-circle-rebuild-08: {name} has no settle speaker"))?;
+        if settle.from != settle_from || settle.key != settle_key {
+            return Err(format!(
+                "E-circle-rebuild-08: {name} settle {}/{} , expected {settle_from}/{settle_key}",
+                settle.from, settle.key
+            ));
+        }
+        match pass_from {
+            // No [经过] half: nobody speaks the pass slot (or a suppressor --
+            // either way nothing renders).
+            None => match tile_text_key(speakers, "pass") {
+                None | Some("") => {}
+                Some(k) => {
+                    return Err(format!(
+                        "E-circle-rebuild-08: {name} pass must be empty, winning key {k:?}"
+                    ))
+                }
+            },
+            Some(from) => {
+                let pass = tile_text_winner(speakers, "pass")
+                    .ok_or_else(|| format!("E-circle-rebuild-08: {name} has no pass speaker"))?;
+                if pass.from != from || pass.key != pass_key {
+                    return Err(format!(
+                        "E-circle-rebuild-08: {name} pass {}/{} , expected {from}/{pass_key}",
+                        pass.from, pass.key
+                    ));
+                }
+            }
+        }
+    }
+
+    // --- with the event: replacements first, base still listed after ---
+    let mut t = Table::vanilla(2);
+    t.set_draw(0, &["通用:GREAT"]);
+    draw_event_quiet(&mut t, 0, "协助CiRCLE重建", &[]);
+    if !t.event_in_play("协助CiRCLE重建") {
+        return Err("E-circle-rebuild-08: setup: event not active".into());
+    }
+    let st = t.st();
+    let circle = &st.tile_texts[tile("CiRCLE")];
+    let settles: Vec<&TileTextEntry> = circle.iter().filter(|e| e.slot == "settle").collect();
+    if settles.len() < 2 {
+        return Err(format!(
+            "E-circle-rebuild-08: CiRCLE settle speakers {:?}, expected event then base",
+            settles
+        ));
+    }
+    if settles[0].from != "event:协助CiRCLE重建" || settles[0].key != "deed.note.rebuildSettle" {
+        return Err(format!(
+            "E-circle-rebuild-08: first CiRCLE settle {}/{} , expected event:协助CiRCLE重建/deed.note.rebuildSettle",
+            settles[0].from, settles[0].key
+        ));
+    }
+    if !settles.iter().skip(1).any(|e| e.from == "tile:circle" && e.key == "deed.note.circleSettle")
+    {
+        return Err(format!(
+            "E-circle-rebuild-08: tile:circle base not listed after the event: {:?}",
+            settles
+        ));
+    }
+    let cafe = &st.tile_texts[tile("CiRCLE 咖啡厅")];
+    let settles: Vec<&TileTextEntry> = cafe.iter().filter(|e| e.slot == "settle").collect();
+    if settles.len() < 2 {
+        return Err(format!(
+            "E-circle-rebuild-08: cafe settle speakers {:?}, expected event then base",
+            settles
+        ));
+    }
+    if settles[0].from != "event:协助CiRCLE重建" || settles[0].key != "deed.note.draw" {
+        return Err(format!(
+            "E-circle-rebuild-08: first cafe settle {}/{} , expected event:协助CiRCLE重建/deed.note.draw",
+            settles[0].from, settles[0].key
+        ));
+    }
+    if !settles.iter().skip(1).any(|e| e.from == "tile:event" && e.key == "deed.note.drawEvent") {
+        return Err(format!(
+            "E-circle-rebuild-08: tile:event base not listed after the event: {:?}",
+            settles
+        ));
+    }
+    Ok(())
 }
 
 // =====================================================================

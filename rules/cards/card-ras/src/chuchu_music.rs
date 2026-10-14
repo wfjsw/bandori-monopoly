@@ -23,7 +23,13 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
         // 「收购该地契」) does not raise -- so the bonus never fired there.
         On::Hook(&[HookKind::Bought], "", Some(buy_after_guard), buy_after),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"演奏我的音乐吧"#)
+        .raw_name(r#"（chuchu）演奏我的音乐吧"#)
+        .tags(&[])
+        .text(r#"将此卡放置于你以外的一名玩家场上并为其添加3个奇迹水晶，那名玩家的每个回合结束时失去一个；场上存在此卡的玩家下次购买地契时，[使用者]获得100资金，将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个；此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）。此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡。"#)
+        .cell(r#"H12"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"珠手知由"#)]));
 
 const ID: &str = "RAS:（chuchu）演奏我的音乐吧";
 
@@ -162,4 +168,23 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
             .i("n", pay as i64),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn buy_after_kani(player_id: i32) -> card_sdk::Asked {
+    buy_after(player_id)
 }

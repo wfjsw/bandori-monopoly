@@ -25,6 +25,70 @@ use crate::invoke;
 use crate::spec::skills_ppp as spec;
 use crate::world::{self, Effect, World, MAX_LOG, MAX_PLAYERS};
 
+// Concrete-user pattern (TRIAGE-LOG `ppcost`): owner/me already concrete 0.
+// Per-body host-op subset (outside → loud FAIL).
+crate::host_subset!(skills_ppp_dispatch {
+    log | effect => arm_log,
+    gain | gain_typed | gain_fixed => arm_gain,
+    money => arm_money,
+    pay | pay_to | pay_total | pay_leg => arm_pay,
+    gain_fire => arm_gain_fire,
+    fire => arm_fire,
+    fire_max => arm_fire_max,
+    spend_fire => arm_spend_fire,
+    draw => arm_draw,
+    add_to_hand => arm_add_to_hand,
+    add_to_deck | add_to_deck_at => arm_add_to_deck_at,
+    take_card => arm_take_card,
+    to_discard => arm_to_discard,
+    place_card_at => arm_place_card,
+    set_dest => arm_set_dest,
+    teleport_to => arm_teleport_to,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    player_pos => arm_player_pos,
+    in_band => arm_in_band,
+    character_is => arm_character_is,
+    tile_named => arm_tile_named,
+    tile_count => arm_tile_count,
+    add_held => arm_add_held,
+    count_held | count_held_name => arm_count_held,
+    set_held_name => arm_set_held_name,
+    add_band_crystals => arm_add_band_crystals,
+    band_crystals => arm_band_crystals,
+    counter_self => arm_counter_self,
+    add_counter_self => arm_add_counter_self,
+    ask => arm_ask,
+    hand_count => arm_hand_count,
+    raise => arm_raise,
+    gate => arm_gate,
+    slot => arm_slot,
+    set_slot => arm_set_slot,
+    inc_slot => arm_inc_slot,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_inc_slot,
+    set_steps | set_resolve | schedule_turn_end | linger
+    | card_offer_build | can_build_on | card_build | card_buy | acquire
+    | offer_buy | offer_build | buy | acquire => arm_protocol_stub,
+    card_move => arm_card_move,
+});
+
+/// Install sparse 2-seat world + subset (concrete owner seat).
+fn skills_ppp_world(owner: i32) {
+    debug_assert!(owner == 0 || owner == 1);
+    host::install_backend(skills_ppp_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    crate::world::with_world_mut(|w| {
+        w.trig_player = owner;
+        w.symbolic_answers = true;
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Skill ids / entry indices (READ for entry points only; body ≠ spec)
 // ---------------------------------------------------------------------------
@@ -94,6 +158,7 @@ fn tok_key(name: &str) -> u16 {
 
 fn kasumi_01_world() -> (World, i32, i32) {
     let owner: i32 = 0;
+    skills_ppp_world(owner);
     let settler: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
@@ -129,25 +194,25 @@ pub fn kasumi_skill_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_SETTLE, owner));
+    invoke::unwrap_done(skill_characters::extraordinary_star::on_settle_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
 
     let expected = spec::kasumi_01_fire_after(pre_fire);
-    assert!(
+    crate::kassert!(
         post.fire[owner as usize] == expected,
         "C-PPP-kasumi-skill-01: fire must rise by 1 under cap 1"
     );
-    assert!(
+    crate::kassert!(
         spec::kasumi_01_log_ok(effects, owner, pre_fire),
         "C-PPP-kasumi-skill-01: log exactly GainFire(+1) (or empty at cap)"
     );
-    assert!(
+    crate::kassert!(
         spec::frame_others_fire(&pre, &post, owner),
         "C-PPP-kasumi-skill-01: frame others' fire"
     );
-    assert!(post.money == pre.money, "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// NO-OP: own settle on the hill must not pay out. Host residual excludes it.
@@ -155,13 +220,14 @@ pub fn kasumi_skill_01_iff() {
 #[kani::unwind(16)]
 pub fn kasumi_skill_01_noop_own_settle() {
     let owner: i32 = 0;
+    skills_ppp_world(owner);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[owner as usize] = 0;
         w.trig_player = owner;
         w.trig_tile = spec::TILE_HILL;
     });
-    assert!(
+    crate::kassert!(
         !spec::kasumi_01_applies(owner, owner, spec::TILE_HILL),
         "own settle must not admit"
     );
@@ -175,9 +241,9 @@ pub fn kasumi_skill_01_noop_own_settle() {
 pub fn kasumi_skill_01_mutant_extra_fire() {
     let (w, owner, _settler) = kasumi_01_world();
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_SETTLE, owner));
+    invoke::unwrap_done(skill_characters::extraordinary_star::on_settle_kani(owner));
     let (logbuf, log_n) = take_log();
-    assert!(
+    crate::kassert!(
         spec::kasumi_01_effects_ok_mutant(effects_of(&logbuf, log_n), owner),
         "mutant: card must not match the +2 spec"
     );
@@ -191,6 +257,7 @@ pub fn kasumi_skill_01_mutant_extra_fire() {
 
 fn kasumi_02_world() -> (World, i32) {
     let owner: i32 = 0;
+    skills_ppp_world(owner);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[owner as usize] = kani::any();
@@ -217,13 +284,13 @@ pub fn kasumi_skill_02_spend_fire_iff() {
     };
     // symbolic pick among owned tiles
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_PLAY, owner));
+    invoke::unwrap_done(skill_characters::extraordinary_star::use_skill_kani(owner));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         spec::kasumi_02_fire_ok(pre_fire, post.fire[owner as usize]),
         "C-PPP-kasumi-skill-02: must spend exactly 1 fire"
     );
-    assert!(
+    crate::kassert!(
         spec::frame_others_fire(&pre, &post, owner),
         "C-PPP-kasumi-skill-02: frame others' fire"
     );
@@ -234,6 +301,7 @@ pub fn kasumi_skill_02_spend_fire_iff() {
 #[kani::unwind(16)]
 pub fn kasumi_skill_02_noop_no_fire() {
     let owner: i32 = 0;
+    skills_ppp_world(owner);
     let w = install_world(|w| {
         w.fire[owner as usize] = 0;
         w.player_keys[owner as usize].set(crate::intern::intern("fire"), 0);
@@ -243,9 +311,9 @@ pub fn kasumi_skill_02_noop_no_fire() {
     // Gate: `state::get(FIRE) < 1` refuses. Invoking the body still spends
     // only if the pot has 1 — both stay 0, so post.fire is unchanged.
     let pre_fire = 0;
-    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_PLAY, owner));
+    invoke::unwrap_done(skill_characters::extraordinary_star::use_skill_kani(owner));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.fire[owner as usize] == pre_fire,
         "C-PPP-kasumi-skill-02: no fire, no spend"
     );
@@ -260,9 +328,9 @@ pub fn kasumi_skill_02_mutant_no_spend() {
     let pre_fire = w.fire[owner as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_PLAY, owner));
+    invoke::unwrap_done(skill_characters::extraordinary_star::use_skill_kani(owner));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.fire[owner as usize] == pre_fire,
         "mutant: card must not match a no-spend spec"
     );
@@ -279,6 +347,7 @@ pub fn kasumi_skill_02_mutant_no_spend() {
 #[kani::unwind(24)]
 pub fn megumi_skill_01a_rabbit_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
@@ -289,7 +358,7 @@ pub fn megumi_skill_01a_rabbit_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_CIRCLE, me));
+    invoke::unwrap_done(skill_characters::tae_police::on_circle_kani(me));
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
     let post = world::snapshot();
@@ -299,24 +368,24 @@ pub fn megumi_skill_01a_rabbit_iff() {
     if log_n == 1 {
         if let Effect::PlaceMark { tile, .. } = effects[0] {
             kani::cover!(tile != spec::TILE_STARDUST, "rabbit placed");
-            assert!(
+            crate::kassert!(
                 tile != spec::TILE_STARDUST,
                 "C-PPP-megumi-skill-01a: never place on 星空齿科"
             );
-            assert!(
+            crate::kassert!(
                 (0..60).contains(&tile),
                 "C-PPP-megumi-skill-01a: tile is a board index"
             );
         }
     } else {
         kani::cover!(log_n == 0, "no rabbit (星空齿科)");
-        assert!(
+        crate::kassert!(
             log_n == 0,
             "C-PPP-megumi-skill-01a: empty log when landing is 星空齿科"
         );
     }
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.money == pre.money, "frame: money");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// Spec-level: `#S格` mapping and the 星空齿科 veto.
@@ -326,10 +395,10 @@ pub fn megumi_skill_01a_tile_map() {
     let s: i32 = kani::any();
     kani::assume((3..=60).contains(&s));
     let t = spec::megumi_01a_tile(s);
-    assert!(t == s - 1, "「#S格」 = board index S-1");
+    crate::kassert!(t == s - 1, "「#S格」 = board index S-1");
     kani::cover!(t == spec::TILE_STARDUST, "lands on 星空齿科");
     kani::cover!(t != spec::TILE_STARDUST, "lands elsewhere");
-    assert!(spec::megumi_01a_should_place(s) == (t != spec::TILE_STARDUST));
+    crate::kassert!(spec::megumi_01a_should_place(s) == (t != spec::TILE_STARDUST));
 }
 
 /// MUTANT: wants a rabbit even on 星空齿科 (wrong). Companion covers the
@@ -338,8 +407,8 @@ pub fn megumi_skill_01a_tile_map() {
 #[kani::unwind(8)]
 pub fn megumi_skill_01a_mutant_stardust_is_reachable() {
     let s = 7; // #7格 = 星空齿科
-    assert!(spec::megumi_01a_tile(s) == spec::TILE_STARDUST);
-    assert!(
+    crate::kassert!(spec::megumi_01a_tile(s) == spec::TILE_STARDUST);
+    crate::kassert!(
         !spec::megumi_01a_should_place(s),
         "mutant companion: 星空齿科 must not place"
     );
@@ -357,6 +426,7 @@ pub fn megumi_skill_01a_mutant_stardust_is_reachable() {
 #[kani::unwind(24)]
 pub fn megumi_skill_01b_fire_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let rabbits: i32 = kani::any();
     kani::assume((1..=3).contains(&rabbits));
     let w = install_world(|w| {
@@ -386,7 +456,7 @@ pub fn megumi_skill_01b_fire_iff() {
         world::snapshot()
     };
     // Residual: tile holds ≥1 rabbit (we seeded it).
-    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_PASS, me));
+    invoke::unwrap_done(skill_characters::tae_police::on_pass_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
@@ -405,16 +475,16 @@ pub fn megumi_skill_01b_fire_iff() {
     };
     kani::cover!(rabbits == 1, "one rabbit");
     kani::cover!(rabbits == 2, "two rabbits");
-    assert!(
+    crate::kassert!(
         gain == rabbits,
         "C-PPP-megumi-skill-01b: 「等量」 = one pot per rabbit"
     );
     let expected = pre_fire + rabbits;
-    assert!(
+    crate::kassert!(
         post.fire[me as usize] == expected,
         "C-PPP-megumi-skill-01b: fire rises by the rabbit count"
     );
-    assert!(
+    crate::kassert!(
         spec::frame_others_fire(&pre, &post, me),
         "C-PPP-megumi-skill-01b: frame others' fire"
     );
@@ -430,8 +500,8 @@ pub fn megumi_skill_01b_fire_amount_spec() {
     let pre: i32 = kani::any();
     kani::assume((0..=4).contains(&pre));
     let n = spec::megumi_01b_fire_gain(rabbits, pre, 4);
-    assert!(n <= 4 - pre);
-    assert!(n == rabbits.min((4 - pre).max(0)));
+    crate::kassert!(n <= 4 - pre);
+    crate::kassert!(n == rabbits.min((4 - pre).max(0)));
 }
 
 /// MUTANT: wants 2 pots per rabbit. Companion at rabbits=1.
@@ -440,7 +510,7 @@ pub fn megumi_skill_01b_fire_amount_spec() {
 pub fn megumi_skill_01b_mutant_double_gain_reachable() {
     let rabbits = 1;
     let pre = 2;
-    assert!(
+    crate::kassert!(
         spec::megumi_01b_fire_gain(rabbits, pre, 4) == 1,
         "mutant companion: one rabbit = one pot"
     );
@@ -456,6 +526,7 @@ pub fn megumi_skill_01b_mutant_double_gain_reachable() {
 #[kani::unwind(24)]
 pub fn megumi_skill_02_leaf_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let other: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
@@ -474,17 +545,17 @@ pub fn megumi_skill_02_leaf_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_COUNTERACT, me));
+    invoke::unwrap_done(skill_characters::tae_police::negate_kani(me));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.fire[me as usize] == spec::megumi_02_fire_after(pre_fire),
         "C-PPP-megumi-skill-02: spend 4 fire"
     );
-    assert!(
+    crate::kassert!(
         spec::megumi_02_money_ok(pre_money[0], pre_money[1], post.money[me as usize], post.money[other as usize]),
         "C-PPP-megumi-skill-02: +500 / +2000"
     );
-    assert!(
+    crate::kassert!(
         world::with_world(|w| w.trig_cancelled),
         "C-PPP-megumi-skill-02: target effect is negated"
     );
@@ -496,6 +567,7 @@ pub fn megumi_skill_02_leaf_iff() {
 #[kani::should_panic]
 pub fn megumi_skill_02_mutant_money_swap() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let other: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
@@ -506,9 +578,9 @@ pub fn megumi_skill_02_mutant_money_swap() {
         w.field_n = 1;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_COUNTERACT, me));
+    invoke::unwrap_done(skill_characters::tae_police::negate_kani(me));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.money[me as usize] == 2000 && post.money[other as usize] == 500,
         "mutant: money split must not be swapped"
     );
@@ -545,6 +617,7 @@ fn rimi_turn_end_guard() -> bool {
 #[kani::unwind(24)]
 pub fn rimi_skill_01_turn_end_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = kani::any();
@@ -565,18 +638,18 @@ pub fn rimi_skill_01_turn_end_iff() {
     if !admitted {
         return;
     }
-    invoke::unwrap_done(invoke::entry_idx(RIMI, RIMI_TURN_END, me));
+    invoke::unwrap_done(skill_characters::rimi_resolve::at_turn_end_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
-    assert!(
+    crate::kassert!(
         spec::rimi_01_log_ok(effects_of(&logbuf, log_n), me, pre_fire),
         "C-PPP-rimi-skill-01: turn-end +1 fire (cap 3)"
     );
-    assert!(
+    crate::kassert!(
         post.fire[me as usize] == spec::rimi_01_fire_after(pre_fire),
         "C-PPP-rimi-skill-01: fire after payout"
     );
-    assert!(spec::frame_others_fire(&pre, &post, me), "frame others' fire");
+    crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame others' fire");
 }
 
 /// NO-OP: latch 0 ⇒ guard rejects.
@@ -584,6 +657,7 @@ pub fn rimi_skill_01_turn_end_iff() {
 #[kani::unwind(16)]
 pub fn rimi_skill_01_noop_no_latch() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = 1;
@@ -591,7 +665,7 @@ pub fn rimi_skill_01_noop_no_latch() {
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_RIMI_PASSED), 0);
     });
     world::reset_world(w);
-    assert!(
+    crate::kassert!(
         !rimi_turn_end_guard(),
         "C-PPP-rimi-skill-01: no latch ⇒ no payout"
     );
@@ -603,6 +677,7 @@ pub fn rimi_skill_01_noop_no_latch() {
 #[kani::should_panic]
 pub fn rimi_skill_01_mutant_plus_two() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = 1;
@@ -612,9 +687,9 @@ pub fn rimi_skill_01_mutant_plus_two() {
     });
     let pre_fire = 1;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(RIMI, RIMI_TURN_END, me));
+    invoke::unwrap_done(skill_characters::rimi_resolve::at_turn_end_kani(me));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.fire[me as usize] == pre_fire + 2,
         "mutant: card must not match +2 fire"
     );
@@ -636,7 +711,7 @@ pub fn rimi_skill_02_abs_dist_spec() {
     let b: i32 = kani::any();
     kani::assume((0..60).contains(&a) && (0..60).contains(&b));
     let d = spec::rimi_02_abs_dist(a, b);
-    assert!(d >= 0 && d <= 30);
+    crate::kassert!(d >= 0 && d <= 30);
     kani::cover!(d == 0, "same tile");
     kani::cover!(d == 30, "opposite");
 }
@@ -646,6 +721,7 @@ pub fn rimi_skill_02_abs_dist_spec() {
 #[kani::unwind(32)]
 pub fn rimi_skill_02_spend_fire_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = kani::any();
@@ -657,9 +733,9 @@ pub fn rimi_skill_02_spend_fire_iff() {
     let pre_fire = w.fire[me as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(invoke::entry_idx(RIMI, RIMI_PLAY, me));
+    invoke::unwrap_done(skill_characters::rimi_resolve::use_skill_kani(me));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.fire[me as usize] == spec::rimi_02_fire_after(pre_fire),
         "C-PPP-rimi-skill-02: must spend exactly 3 fire"
     );
@@ -689,15 +765,15 @@ pub fn rimi_skill_02_wrong_class_is_reachable() {
     kani::cover!(best_agent == 29, "farthest agent abs-dist 29");
     // The finding: a non-agent tile also sits at a large distance and the
     // body's pick set is properties, not agents.
-    assert!(
+    crate::kassert!(
         best_property >= 29,
         "WRONG finding: property set reaches the same ring radius"
     );
-    assert!(
+    crate::kassert!(
         !spec::rimi_02_dest_ok(at, 6, is_agent(6), best_agent),
         "星空齿科 is a property, not a 地产商 — must not be a legal dest"
     );
-    assert!(
+    crate::kassert!(
         spec::rimi_02_dest_ok(at, 59, is_agent(59), best_agent),
         "高级住宅区 (59) is a legal farthest-agent dest"
     );
@@ -707,7 +783,7 @@ pub fn rimi_skill_02_wrong_class_is_reachable() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn rimi_skill_02_mutant_any_tile_reachable() {
-    assert!(
+    crate::kassert!(
         !spec::rimi_02_dest_ok(30, 0, false, 30),
         "mutant companion: non-agent dest is illegal"
     );
@@ -721,6 +797,7 @@ pub fn rimi_skill_02_mutant_any_tile_reachable() {
 
 fn saaya_01a_world(accept: bool) -> (World, i32, i32) {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let payer: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
@@ -754,7 +831,7 @@ pub fn saaya_skill_01a_accept_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(SAAYA, SAAYA_PAY_AFTER, me));
+    invoke::unwrap_done(skill_characters::saaya_sky::on_pay_after_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let mark_key = tok_key(spec::TOK_SAAYA);
@@ -764,24 +841,24 @@ pub fn saaya_skill_01a_accept_iff() {
     kani::cover!(took, "optional taken");
     kani::cover!(!took, "optional declined");
     if took {
-        assert!(
+        crate::kassert!(
             spec::saaya_01a_log_ok(effects_of(&logbuf, log_n), me, payer, mark_key),
             "C-PPP-saaya-skill-01a: +mark +fire +200"
         );
     } else {
-        assert!(
+        crate::kassert!(
             spec::saaya_01a_empty_ok(effects_of(&logbuf, log_n)),
             "C-PPP-saaya-skill-01a: declined ⇒ empty log"
         );
     }
-    assert!(spec::frame_others_money(&pre, &post, me) || took, "frame");
+    crate::kassert!(spec::frame_others_money(&pre, &post, me) || took, "frame");
 }
 
 /// NO-OP: payer is self ⇒ residual rejects (host would not call).
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn saaya_skill_01a_noop_self_pay() {
-    assert!(
+    crate::kassert!(
         !spec::saaya_01a_applies(0, 0, 1000, false),
         "self pay must not admit"
     );
@@ -794,9 +871,9 @@ pub fn saaya_skill_01a_noop_self_pay() {
 pub fn saaya_skill_01a_mutant_payee_swap() {
     let (w, me, payer) = saaya_01a_world(true);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(SAAYA, SAAYA_PAY_AFTER, me));
+    invoke::unwrap_done(skill_characters::saaya_sky::on_pay_after_kani(me));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.money[me as usize] == post.money[payer as usize] + 200,
         "mutant: payee must not be swapped onto self"
     );
@@ -815,10 +892,10 @@ pub fn saaya_skill_01b_cut_spec() {
     let d10: i32 = kani::any();
     kani::assume((1..=10).contains(&d10));
     let after = spec::saaya_01b_cut(before, d10);
-    assert!(after == before - d10);
+    crate::kassert!(after == before - d10);
     kani::cover!(after <= 0, "floor: next buyable tile");
     kani::cover!(after > 0, "reduced walk");
-    assert!(spec::saaya_01b_floored(before, d10) == (after <= 0));
+    crate::kassert!(spec::saaya_01b_floored(before, d10) == (after <= 0));
 }
 
 // ===========================================================================
@@ -831,6 +908,7 @@ pub fn saaya_skill_01b_cut_spec() {
 #[kani::unwind(24)]
 pub fn saaya_skill_02_shave_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = kani::any();
@@ -848,7 +926,7 @@ pub fn saaya_skill_02_shave_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(SAAYA, SAAYA_PAY_CHOOSE, me));
+    invoke::unwrap_done(skill_characters::saaya_sky::on_pay_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
 
@@ -857,25 +935,25 @@ pub fn saaya_skill_02_shave_iff() {
     kani::cover!(took, "optional taken");
     kani::cover!(!took, "optional declined");
     if took {
-        assert!(
+        crate::kassert!(
             spec::saaya_02_log_ok(effects_of(&logbuf, log_n), expected),
             "C-PPP-saaya-skill-02: log exactly SetPayAmount(max(pre-5000,0))"
         );
-        assert!(
+        crate::kassert!(
             post.fire[me as usize] == spec::saaya_02_fire_after(pre_fire),
             "C-PPP-saaya-skill-02: spend 5 fire"
         );
     } else {
-        assert!(
+        crate::kassert!(
             log_n == 0,
             "C-PPP-saaya-skill-02: declined ⇒ empty log"
         );
-        assert!(
+        crate::kassert!(
             post.pay_amount == pre_amount && post.fire[me as usize] == pre_fire,
             "C-PPP-saaya-skill-02: declined ⇒ untouched"
         );
     }
-    assert!(spec::frame_others_fire(&pre, &post, me), "frame others' fire");
+    crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame others' fire");
 }
 
 /// MUTANT: shave one extra. Companion.
@@ -883,11 +961,11 @@ pub fn saaya_skill_02_shave_iff() {
 #[kani::unwind(16)]
 pub fn saaya_skill_02_mutant_off_by_one_reachable() {
     let pre = 6000;
-    assert!(
+    crate::kassert!(
         spec::saaya_02_amount(pre) == 1000,
         "mutant companion: max(pre-5000,0) = 1000"
     );
-    assert!(
+    crate::kassert!(
         spec::saaya_02_amount_mutant(pre) != spec::saaya_02_amount(pre),
         "mutant amount disagrees with the book"
     );
@@ -903,6 +981,7 @@ pub fn saaya_skill_02_mutant_off_by_one_reachable() {
 #[kani::unwind(24)]
 pub fn aoki_skill_01_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let other: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
@@ -915,32 +994,32 @@ pub fn aoki_skill_01_iff() {
     let pre_fire = w.fire[me as usize];
     let applies = spec::aoki_01_applies(other, me, spec::TILE_RYUSEIDO);
     kani::cover!(applies, "other draws at 流星堂");
-    assert!(applies);
+    crate::kassert!(applies);
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
     // residual is the CEL guard `actor != owner && tile.id == tile_named('流星堂')`
-    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_EVENT, me));
+    invoke::unwrap_done(skill_characters::arisa_bonsai::on_event_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
-    assert!(
+    crate::kassert!(
         spec::aoki_01_log_ok(effects_of(&logbuf, log_n), me, pre_fire),
         "C-PPP-aoki-skill-01: +1 fire (cap 2)"
     );
-    assert!(
+    crate::kassert!(
         post.fire[me as usize] == spec::aoki_01_fire_after(pre_fire),
         "C-PPP-aoki-skill-01: fire after"
     );
-    assert!(spec::frame_others_fire(&pre, &post, me), "frame");
+    crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame");
 }
 
 /// NO-OP: self draw, or not at 流星堂.
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn aoki_skill_01_noop() {
-    assert!(!spec::aoki_01_applies(0, 0, spec::TILE_RYUSEIDO), "self");
-    assert!(
+    crate::kassert!(!spec::aoki_01_applies(0, 0, spec::TILE_RYUSEIDO), "self");
+    crate::kassert!(
         !spec::aoki_01_applies(1, 0, 10),
         "not at 流星堂"
     );
@@ -952,6 +1031,7 @@ pub fn aoki_skill_01_noop() {
 #[kani::should_panic]
 pub fn aoki_skill_01_mutant_plus_two() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = 0;
@@ -960,9 +1040,9 @@ pub fn aoki_skill_01_mutant_plus_two() {
         w.trig_tile = spec::TILE_RYUSEIDO;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_EVENT, me));
+    invoke::unwrap_done(skill_characters::arisa_bonsai::on_event_kani(me));
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.fire[me as usize] == 2,
         "mutant: card must not match +2 fire"
     );
@@ -980,6 +1060,7 @@ pub fn aoki_skill_01_mutant_plus_two() {
 #[kani::unwind(24)]
 pub fn aoki_skill_02_turn_end_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = 0;
@@ -995,19 +1076,19 @@ pub fn aoki_skill_02_turn_end_iff() {
     });
     let admits = spec::aoki_02_end_admits(w.pos[0], 1);
     kani::cover!(admits, "turn-end admits");
-    assert!(admits);
+    crate::kassert!(admits);
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_TURN_END, me));
+    invoke::unwrap_done(skill_characters::arisa_bonsai::at_turn_end_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
-    assert!(
+    crate::kassert!(
         spec::aoki_02_log_ok(effects_of(&logbuf, log_n), me),
         "C-PPP-aoki-skill-02: draw 1 + fire +1"
     );
-    assert!(post.fire[me as usize] == 1, "fire +1");
+    crate::kassert!(post.fire[me as usize] == 1, "fire +1");
 }
 
 /// NO-OP: standing on 流星堂 at turn end.
@@ -1015,20 +1096,21 @@ pub fn aoki_skill_02_turn_end_iff() {
 #[kani::unwind(16)]
 pub fn aoki_skill_02_noop_end_on_station() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.pos[me as usize] = spec::TILE_RYUSEIDO;
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_ARISA_PASSED), 1);
     });
-    assert!(
+    crate::kassert!(
         !spec::aoki_02_end_admits(spec::TILE_RYUSEIDO, 1),
         "end at 流星堂 must not fire"
     );
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_TURN_END, me));
+    invoke::unwrap_done(skill_characters::arisa_bonsai::at_turn_end_kani(me));
     let (logbuf, log_n) = take_log();
-    assert!(log_n == 0, "C-PPP-aoki-skill-02: no-op ⇒ empty log");
+    crate::kassert!(log_n == 0, "C-PPP-aoki-skill-02: no-op ⇒ empty log");
 }
 
 /// MUTANT: fire without the draw. Companion.
@@ -1037,6 +1119,7 @@ pub fn aoki_skill_02_noop_end_on_station() {
 #[kani::should_panic]
 pub fn aoki_skill_02_mutant_no_draw() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.fire[me as usize] = 0;
@@ -1048,9 +1131,9 @@ pub fn aoki_skill_02_mutant_no_draw() {
         w.deck_pile[0] = 7;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_TURN_END, me));
+    invoke::unwrap_done(skill_characters::arisa_bonsai::at_turn_end_kani(me));
     let (logbuf, log_n) = take_log();
-    assert!(
+    crate::kassert!(
         log_n == 1,
         "mutant: card must not match a fire-only spec"
     );
@@ -1067,7 +1150,7 @@ pub fn aoki_skill_02_mutant_no_draw() {
 pub fn aoki_skill_03_spend_spec() {
     let pre: i32 = kani::any();
     kani::assume((0..=6).contains(&pre));
-    assert!(spec::aoki_03_fire_after(pre) == (pre - 2).max(0));
+    crate::kassert!(spec::aoki_03_fire_after(pre) == (pre - 2).max(0));
     kani::cover!(pre >= 2, "can spend");
     kani::cover!(pre < 2, "cannot spend");
 }
@@ -1103,11 +1186,12 @@ fn band_pass_guard(tile: i32, actor: i32, owner: i32) -> bool {
 #[kani::unwind(12)]
 pub fn band_skill_01a_corner_set() {
     let owner: i32 = 0;
+    skills_ppp_world(owner);
     // Book-correct corners must be the ones the clause names.
     let mut i = 0;
     while i < 4 {
         let t = spec::BAND_CORNERS[i];
-        assert!(spec::is_band_corner(t));
+        crate::kassert!(spec::is_band_corner(t));
         i += 1;
     }
     // Guard admits tile 0 (book #1)? and tile 1 (CEL literal 1)?
@@ -1120,7 +1204,7 @@ pub fn band_skill_01a_corner_set() {
     // Document the actual single-source verdict: the CEL literals select
     // 1/16/31/46 as 0-based `tile.id` values. The book's 「#N格」 is N-1.
     // If they disagree this is a WRONG finding (off-by-one).
-    assert!(
+    crate::kassert!(
         g1 && !g0,
         "expected CEL literals 1/16/31/46 as 0-based tile.id (off-by-one vs book #N=N-1)"
     );
@@ -1131,6 +1215,7 @@ pub fn band_skill_01a_corner_set() {
 #[kani::unwind(24)]
 pub fn band_skill_01a_sticker_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     // Drive the body at a tile the single-source guard admits (1 / 16 / 31 / 46).
     let tile: i32 = kani::any();
     kani::assume(tile == 1 || tile == 16 || tile == 31 || tile == 46);
@@ -1141,27 +1226,27 @@ pub fn band_skill_01a_sticker_iff() {
     });
     let admitted = band_pass_guard(tile, me, me);
     kani::cover!(admitted, "guard admits");
-    assert!(admitted, "forced tile must admit the single-source guard");
+    crate::kassert!(admitted, "forced tile must admit the single-source guard");
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PASS, me));
+    invoke::unwrap_done(skill_bands::poppin::on_pass_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let key = tok_key(spec::TOK_STICKER);
-    assert!(
+    crate::kassert!(
         spec::band_01a_log_ok(effects_of(&logbuf, log_n), me, key),
         "C-PPP-band-01a: sticker +1"
     );
-    assert!(post.money == pre.money, "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 /// NO-OP: actor ≠ owner ⇒ guard rejects.
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn band_skill_01a_noop_other() {
-    assert!(
+    crate::kassert!(
         !band_pass_guard(1, 1, 0),
         "other actor must not admit"
     );
@@ -1173,16 +1258,17 @@ pub fn band_skill_01a_noop_other() {
 #[kani::should_panic]
 pub fn band_skill_01a_mutant_two_stickers() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
         w.trig_tile = 1;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PASS, me));
+    invoke::unwrap_done(skill_bands::poppin::on_pass_kani(me));
     let (logbuf, log_n) = take_log();
     let key = tok_key(spec::TOK_STICKER);
-    assert!(
+    crate::kassert!(
         spec::band_01a_log_ok_mutant(effects_of(&logbuf, log_n), me, key),
         "mutant: card must not match a two-sticker spec"
     );
@@ -1198,6 +1284,7 @@ pub fn band_skill_01a_mutant_two_stickers() {
 #[kani::unwind(24)]
 pub fn band_skill_01b_crystal_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
@@ -1212,11 +1299,11 @@ pub fn band_skill_01b_crystal_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(skill_bands::poppin::press_kani(me));
     let (logbuf, log_n) = take_log();
     let tok = tok_key(spec::TOK_STICKER);
     let crystal_key = tok_key("crystals");
-    assert!(
+    crate::kassert!(
         spec::band_01b_log_ok(effects_of(&logbuf, log_n), me, tok, crystal_key),
         "C-PPP-band-01b: −2 stickers, +1 crystal"
     );
@@ -1227,6 +1314,7 @@ pub fn band_skill_01b_crystal_iff() {
 #[kani::unwind(16)]
 pub fn band_skill_01b_noop_no_stickers() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
@@ -1234,9 +1322,9 @@ pub fn band_skill_01b_noop_no_stickers() {
         w.player_keys[me as usize].set(crate::intern::intern("crystals"), 0);
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(skill_bands::poppin::press_kani(me));
     let (logbuf, log_n) = take_log();
-    assert!(log_n == 0, "C-PPP-band-01b: nothing available ⇒ empty log");
+    crate::kassert!(log_n == 0, "C-PPP-band-01b: nothing available ⇒ empty log");
 }
 
 /// MUTANT: +1 sticker instead of −2. Companion.
@@ -1245,6 +1333,7 @@ pub fn band_skill_01b_noop_no_stickers() {
 #[kani::should_panic]
 pub fn band_skill_01b_mutant_gains_sticker() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
@@ -1252,7 +1341,7 @@ pub fn band_skill_01b_mutant_gains_sticker() {
         w.player_keys[me as usize].set(crate::intern::intern("crystals"), 0);
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(skill_bands::poppin::press_kani(me));
     let (logbuf, log_n) = take_log();
     let mut gained = false;
     let mut i = 0;
@@ -1264,7 +1353,7 @@ pub fn band_skill_01b_mutant_gains_sticker() {
         }
         i += 1;
     }
-    assert!(gained, "mutant: card must not gain stickers");
+    crate::kassert!(gained, "mutant: card must not gain stickers");
 }
 
 // ===========================================================================
@@ -1278,6 +1367,7 @@ pub fn band_skill_01b_mutant_gains_sticker() {
 #[kani::unwind(32)]
 pub fn band_skill_01c_crystal_spend_iff() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
@@ -1296,7 +1386,7 @@ pub fn band_skill_01c_crystal_spend_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(skill_bands::poppin::press_kani(me));
     let (logbuf, log_n) = take_log();
     let crystal_key = tok_key("crystals");
     let used_key = tok_key(spec::STATE_POPPIN_USED);
@@ -1304,7 +1394,7 @@ pub fn band_skill_01c_crystal_spend_iff() {
     let cash_ok = spec::band_01c_cash_ok(effects_of(&logbuf, log_n), me, crystal_key, used_key);
     kani::cover!(draw_ok, "draw branch");
     kani::cover!(cash_ok, "cash branch");
-    assert!(
+    crate::kassert!(
         draw_ok || cash_ok,
         "C-PPP-band-01c: −2 crystals + USED=1 + (draw 1 | +2000)"
     );
@@ -1315,6 +1405,7 @@ pub fn band_skill_01c_crystal_spend_iff() {
 #[kani::unwind(16)]
 pub fn band_skill_01c_noop_already_used() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
@@ -1323,9 +1414,9 @@ pub fn band_skill_01c_noop_already_used() {
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_POPPIN_USED), 1);
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(skill_bands::poppin::press_kani(me));
     let (logbuf, log_n) = take_log();
-    assert!(
+    crate::kassert!(
         log_n == 0,
         "C-PPP-band-01c: once-per-turn gate must block the second use"
     );
@@ -1337,6 +1428,7 @@ pub fn band_skill_01c_noop_already_used() {
 #[kani::unwind(32)]
 pub fn band_skill_01c_mutant_cash_branch_reachable() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
@@ -1351,17 +1443,17 @@ pub fn band_skill_01c_mutant_cash_branch_reachable() {
         w.opt_n = 2;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(skill_bands::poppin::press_kani(me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let crystal_key = tok_key("crystals");
     let used_key = tok_key(spec::STATE_POPPIN_USED);
     // Companion: the cash branch is reachable and matches the book.
-    assert!(
+    crate::kassert!(
         spec::band_01c_cash_ok(effects_of(&logbuf, log_n), me, crystal_key, used_key),
         "mutant companion: cash branch must match the book"
     );
-    assert!(post.money[me as usize] == 2000);
+    crate::kassert!(post.money[me as usize] == 2000);
 }
 
 // ===========================================================================
@@ -1373,12 +1465,13 @@ pub fn band_skill_01c_mutant_cash_branch_reachable() {
 #[kani::unwind(16)]
 pub fn band_skill_02_no_reward_prop() {
     let me: i32 = 0;
+    skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
         w.trig_player = me;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(BAND, 0, me)); // at_turn_start
+    invoke::unwrap_done(skill_bands::poppin::at_turn_start_kani(me));
     // prop::NO_REWARD = "noReward" — see card_sdk::abi::prop.
     let armed = world::with_world(|ww| {
         // set_prop writes the running instance's props via key_set on trig_player
@@ -1387,7 +1480,7 @@ pub fn band_skill_02_no_reward_prop() {
         let _ = ww;
         spec::band_02_reward_forbidden()
     });
-    assert!(armed, "C-PPP-band-02: reward is forbidden by the clause");
+    crate::kassert!(armed, "C-PPP-band-02: reward is forbidden by the clause");
 }
 
 // ===========================================================================
@@ -1398,8 +1491,8 @@ pub fn band_skill_02_no_reward_prop() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn band_skill_03a_co_own_spec() {
-    assert!(spec::band_03a_co_owns("Poppin' Party", spec::TILE_HILL));
-    assert!(!spec::band_03a_co_owns("Afterglow", spec::TILE_HILL));
+    crate::kassert!(spec::band_03a_co_owns("Poppin' Party", spec::TILE_HILL));
+    crate::kassert!(!spec::band_03a_co_owns("Afterglow", spec::TILE_HILL));
 }
 
 /// 03b OPEN-分摊: payee *set* is exactly the unmortgaged PPP seats.
@@ -1410,16 +1503,17 @@ pub fn band_skill_03b_payee_set_spec() {
     let is_ppp = [true, true, false, false];
     let out = [false, false, false, false];
     let payees = spec::band_03b_payee_set(n, &is_ppp, false, &out);
-    assert!(payees[0] && payees[1] && !payees[2] && !payees[3]);
+    crate::kassert!(payees[0] && payees[1] && !payees[2] && !payees[3]);
     let mortgaged = spec::band_03b_payee_set(n, &is_ppp, true, &out);
-    assert!(!mortgaged[0] && !mortgaged[1], "mortgaged ⇒ no payees");
+    crate::kassert!(!mortgaged[0] && !mortgaged[1], "mortgaged ⇒ no payees");
 }
 
 /// 03c: BuyGate lock while any PPP character is alive.
 #[kani::proof]
 #[kani::unwind(16)]
 pub fn band_skill_03c_buy_gate_iff() {
-    let me: i32 = 0; // the band-skill owner (a PPP seat)
+    let me: i32 = 0;
+    skills_ppp_world(me); // the band-skill owner (a PPP seat)
     let w = install_world(|w| {
         w.n_players = 2;
         w.out = [false, false, true, true];
@@ -1432,10 +1526,10 @@ pub fn band_skill_03c_buy_gate_iff() {
     });
     let any_ppp_alive = !w.out[0];
     kani::cover!(any_ppp_alive, "PPP alive ⇒ lock");
-    assert!(spec::band_03c_buy_refused(any_ppp_alive));
+    crate::kassert!(spec::band_03c_buy_refused(any_ppp_alive));
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_GATE, me));
-    assert!(
+    invoke::unwrap_done(skill_bands::poppin::lock_hill_kani(me));
+    crate::kassert!(
         world::with_world(|ww| ww.trig_cancelled),
         "C-PPP-band-03c: hill buy must be cancelled while PPP lives"
     );
@@ -1449,8 +1543,8 @@ pub fn band_skill_03c_mutant_unlock_reachable() {
     let any_ppp_alive = true;
     let book = spec::band_03c_buy_refused(any_ppp_alive);
     let mutant_unlock = !book;
-    assert!(book, "book: lock holds while PPP lives");
-    assert!(
+    crate::kassert!(book, "book: lock holds while PPP lives");
+    crate::kassert!(
         book != mutant_unlock,
         "mutant companion: unlock spec must disagree with the book"
     );
@@ -1463,8 +1557,8 @@ pub fn band_skill_03c_mutant_unlock_reachable() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn band_skill_04_no_build_spec() {
-    assert!(spec::band_04_build_forbidden(true));
-    assert!(!spec::band_04_build_forbidden(false));
+    crate::kassert!(spec::band_04_build_forbidden(true));
+    crate::kassert!(!spec::band_04_build_forbidden(false));
 }
 
 // ===========================================================================
@@ -1476,6 +1570,6 @@ pub fn band_skill_04_no_build_spec() {
 pub fn skills_ppp_frame_helpers() {
     let pre = world::snapshot();
     let post = world::snapshot();
-    assert!(spec::frame_others_money(&pre, &post, 0));
-    assert!(spec::frame_others_fire(&pre, &post, 0));
+    crate::kassert!(spec::frame_others_money(&pre, &post, 0));
+    crate::kassert!(spec::frame_others_fire(&pre, &post, 0));
 }

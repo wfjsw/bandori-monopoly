@@ -28,7 +28,13 @@ pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"是我自己的问题"#)
+        .raw_name(r#"是我自己的问题"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击]（1）主要移动结束时，[触发结算]前打出此卡，使自己额外远离绝对距离最近的玩家一格（若距离最近的玩家在身前则向后移动，若与其他玩家重合则可选择任意方向）。（2）若受到[异常移动效果]影响，此卡不生效"#)
+        .cell(r#"M7"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.
 fn nearest(player_id: i32) -> Vec<i32> {
@@ -127,4 +133,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .tile("tile", to),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

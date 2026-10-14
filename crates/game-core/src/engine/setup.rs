@@ -1,12 +1,17 @@
 //! Pre-game phases: turn order, ban (Ranked only), pick, deck.
 //!
 //! These never prompt, so they run directly on the world without replay.
+//! Their decision windows come from [`crate::clock::ClockSettings`]
+//! (`ban_seconds` / `pick_seconds` / `deck_seconds`) and are **dedicated**
+//! timers -- they never draw on a seat's time pool.
 
 use super::cx::Cx;
 use crate::deck;
 use crate::msg::{Arg, Msg};
 
-/// Seconds per ban / pick / deck decision (`StartChoice`).
+/// Defaults for the three setup windows, kept here as documentation and as
+/// the values a pre-settings (`legacy_clock`) match uses. The live values are
+/// `ClockSettings::ban_seconds` / `pick_seconds` / `deck_seconds`.
 pub const BAN_SECONDS: f32 = 20.0;
 pub const PICK_SECONDS: f32 = 25.0;
 pub const DECK_SECONDS: f32 = 45.0;
@@ -96,7 +101,7 @@ impl Cx<'_> {
     pub(crate) fn begin_ban(&mut self) {
         self.w.st.phase = "ban".into();
         self.w.st.turn = self.w.player_count() as i32 - 1;
-        self.w.st.time_left = BAN_SECONDS;
+        self.w.st.time_left = self.w.clock.ban_seconds;
         self.w.log("text", -1, Msg::new("log.ban_phase"));
     }
 
@@ -104,7 +109,7 @@ impl Cx<'_> {
     pub(crate) fn begin_pick(&mut self) {
         self.w.st.phase = "pick".into();
         self.w.st.turn = 0;
-        self.w.st.time_left = PICK_SECONDS;
+        self.w.st.time_left = self.w.clock.pick_seconds;
         self.w.log("text", -1, Msg::new("log.pick_phase"));
     }
 
@@ -128,7 +133,7 @@ impl Cx<'_> {
         if self.w.st.turn < 0 {
             self.begin_pick();
         } else {
-            self.w.st.time_left = BAN_SECONDS;
+            self.w.st.time_left = self.w.clock.ban_seconds;
         }
     }
 
@@ -161,9 +166,9 @@ impl Cx<'_> {
                     self.submit_deck(p, None);
                 }
             }
-            self.w.st.time_left = DECK_SECONDS;
+            self.w.st.time_left = self.w.clock.deck_seconds;
         } else {
-            self.w.st.time_left = PICK_SECONDS;
+            self.w.st.time_left = self.w.clock.pick_seconds;
         }
     }
 

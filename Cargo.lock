@@ -1770,6 +1770,7 @@ dependencies = [
  "rules-status",
  "rules-tile-marks",
  "rules-tiles",
+ "ruleset-core",
  "serde_json",
  "sha2",
  "skill-bands",

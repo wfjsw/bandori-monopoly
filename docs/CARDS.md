@@ -50,7 +50,7 @@ guard + the effect, `On::Hook` the field-hook kinds (`passTile`, `payAdd`,
 `drawn`, `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) in the same
 shape. An empty kind list is never dispatched.
 
-* `id` is the **data** card id from `data/cards.json` (Chinese; an identifier,
+* `id` is the **data** card id from the roster (Chinese; an identifier,
   not display text).
 * every string a card produces is a message key: `key!("...")` namespaces it as
   `cards:<crate>.<key>`, and the translation lives in the crate's
@@ -240,6 +240,7 @@ cannot share a definition, so they are mirrored -- keep them in step):
 |---|---|---|---|---|
 | `handLimitDelta` | `prop::HAND_LIMIT_DELTA` | 「手卡上限数量减1」 (`-1`) | `Card.HandLimitDelta` | stamped onto the field instance at placement (`FieldCard::props`) and summed into the owner's hand limit while it sits there; gone with the card. A `place_raw` test arrangement sees it too. |
 | `playableStunned` | `prop::PLAYABLE_STUNNED` | 「（此卡可在眩晕时打出）」 (`1`) | `Card.PlayableStunned` | the card skips the stun gate in `cannot_play`. The exile and no-hand gates have no such exception in the pool. |
+| `song` | `prop::SONG` | 「卡名为歌名的卡」 (`1`) | -- | a song-title card (Kizuna Music's X). A ruleset-level marker other rules read via `ctx::card_prop`; the engine itself never reads it. Declared on exactly the twenty song cards. |
 
 **Tile-rule properties** (the same map, on a *board-owned* tile rule instance --
 [TILES.md](TILES.md)): `price` / `house` / `group` / `buildMax` / `rentLen` /
@@ -275,7 +276,98 @@ and serialization stay deterministic) → `CardRules::card_props(card)` /
 Each declaration cites its clause like any other line (see below). The current
 holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习生解密指南` and
 `Sumimi:#L12` declare `(prop::HAND_LIMIT_DELTA, -1)`; `MyGO:壱雫空` declares
-`(prop::PLAYABLE_STUNNED, 1)`.
+`(prop::PLAYABLE_STUNNED, 1)`; the twenty song-title cards declare
+`(prop::SONG, 1)`.
+
+## Card metadata (ABI v63) -- data lives with the rule
+
+The deck-builder / gallery / home-screen rows (cards / characters / bands) are
+**authored beside the rule code** and exported from the ruleset. There is no
+flat `data/{cards,characters,bands}.json` any more: the Rust metadata is the
+single source (cutover complete; equivalence to the old JSON was verified at
+commit `7c3d115`).
+
+* **Cards** -- `CardDef::meta(&CardMeta::new()...)` on the card's `CardDef`
+  (`rules/cards/card-*/src/*.rs`). Carries `name` / `rawName` / `text` /
+  `tags` / `derived` / `cell`, plus a generic `fields` map for the game slots
+  `band` and `owner` (`ruleset_core::roster::meta_key`). Multi-line CJK text is
+  a raw string literal -- byte-exact newlines, full-width punctuation and
+  trailing spaces round-trip untouched.
+* **Characters** -- `ruleset_core::roster::CharacterDef` beside each character
+  skill (`rules/skills/skill-characters/src/*.rs`), collected in that crate's
+  `roster_table::CHARACTERS`.
+* **Bands** -- `ruleset_core::roster::BandDef` beside each band skill
+  (`rules/skills/skill-bands/src/*.rs`), collected in `roster_table::BANDS`.
+
+`card-sdk` stays vocabulary-free: `CardMeta` is the generic card-row shape and
+`MetaRow` / `MetaDoc` the wire form. `CharacterDef` / `BandDef` name this
+game's concepts and live in `ruleset-core` / the skill crates.
+
+### Transport
+
+`bandori_metadata` (`export::METADATA`) returns a packed postcard
+`meta::MetaDoc` -- **not** through `ManifestEntry`, so the match path and the
+per-card manifest stay lean. The blob is built only when the host asks (load
+time, never per run). Host: `Ruleset::metadata()` / `::roster()`, then
+`game_core::data::GameData::load(get_file, roster)`. Native
+(`rules-native`): `rules_native::roster_metadata()` / `::roster()`.
+
+### Canonical order
+
+The Rust crates register cards alphabetically inside each band, while
+`GameData` iterates the roster in its own order (deck pools, presets).
+A shared generated table (`rules/ruleset-core/src/roster_order.rs`) maps
+id → ordinal; the export sorts by `(kind, ordinal)` so the rebuilt vectors
+equal the roster order exactly.
+
+### Fixture gate
+
+The lift is **complete** (184 cards / 54 characters / 12 bands) and the
+`tools/lift-roster.mjs` lifter is retired (deleted; see `docs/ROSTER-TOOLS.md`
+for the dump tooling). The test fixture `crates/game-core/tests/fixtures/
+roster.json` is a generated dump of the Rust roster (one
+`{cards, characters, bands}` document), used by
+crates that have no ruleset (game-core / game-rules / bot-core / server) and by
+`webui/src/core/cards.test.ts`. Regenerate it with:
+
+```sh
+cargo run -p rules-native --example dump_roster -- --fixture crates/game-core/tests/fixtures/roster.json
+```
+
+`cargo test -p rules-native --test roster_equiv` is the gate: the fixture must
+be byte-equal to a fresh dump (ordering / field fidelity included). Equivalence
+to the retired `data/{cards,characters,bands}.json` baseline was verified at
+the cutover (commit `7c3d115`, the last tree with those files as the baseline).
+
+### Cutover complete: consumers take the roster from the ruleset
+
+Runtime hosts no longer read `data/{cards,characters,bands}.json` (those files
+are deleted). The roster is ruleset metadata end to end:
+
+| Host | Roster source |
+| --- | --- |
+| `crates/server`, `crates/rules-worker` | `Ruleset::roster()` after loading `dist/cards` (load the ruleset first -- it does not need `GameData`) |
+| `crates/web-glue` | `Ruleset::roster()` / `roster_json()`; `load_data` pairs it with the remaining `DATA_FILES` |
+| `webui` (`core/data.ts`, workers) | `glue.roster_json()` after `ruleset_build`, before `load_data` |
+| `crates/bot-glue`, `crates/bot-service` | ruleset / `rules_native::roster()` |
+| tests / examples (game-core, game-rules, bot-core, server, rules-worker) | `Roster::from_fixture` over `crates/game-core/tests/fixtures/roster.json` |
+| `webui/src/core/cards.test.ts` | the same fixture for `text` / `tags` |
+
+`GameData::load(read, roster)` is the one constructor. `DATA_FILES` is the
+remaining eight tables (board / events / schools / home_lines / voice_lines /
+match_rules / rules.txt / skill_simple.json). The data hash
+(`EngineStamp::data_sha256`) covers exactly those; the roster is covered by
+`ruleset_sha256` (the metadata lives in the modules that hash names).
+
+Display-only overlays stay JSON and are merged by the client:
+`skill_simple.json` (simplified skill bodies + the card `counterReason` list).
+The engine still does not read it; it is hashed via `DATA_FILES` so a record
+names the display tables it was sealed against.
+
+Tools that need JSON rows use `tools/roster.py` against a dump written by
+`tools/roster-dump.mjs` (see `docs/ROSTER-TOOLS.md`); they do not read
+`data/{cards,characters,bands}.json` either. The other `data/*.json` files
+(tiles / events / schools / voice / home / board / match_rules) stay JSON.
 
 ## The vocabulary (`card_sdk::ctx` vs `ruleset_core::ctx`)
 

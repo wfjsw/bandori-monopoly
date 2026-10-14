@@ -10,9 +10,10 @@
 //   in  ({id, op, ...}):  init | open | verify | call | close
 //   out ({id, ok, value} | {id, ok:false, error})
 //
-// Boot is the page's `loadGameData` + `loadRuleset` minus the display data --
-// the same tables, bot books and ruleset (`soloWorker.ts` does likewise), so
-// the stamp is the one the page's instance would report.
+// Boot is the page's `loadGameData` minus the display data -- ruleset first
+// (so the roster is non-empty), then the same tables and bot books
+// (`soloWorker.ts` does likewise), so the stamp is the one the page's
+// instance would report.
 
 import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
@@ -51,6 +52,14 @@ async function boot(): Promise<{ api: number; stamp: unknown; id: string }> {
   if (typeof glue.set_glue_sha === "function" && engineId?.glueSha256) {
     glue.set_glue_sha(engineId.glueSha256);
   }
+  // Ruleset before `load_data`: the roster rides on the built set. Unlike the
+  // page this is fatal -- a replay without the rules (or roster) the record
+  // was played under only diverges.
+  await loadRulesetInto(glue, async (rel) => {
+    const r = await fetch("/assets/rules/" + rel);
+    if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+    return new Uint8Array(await r.arrayBuffer());
+  });
   const names: string[] = JSON.parse(glue.data_files());
   const files: Record<string, string> = {};
   await Promise.all(
@@ -71,13 +80,6 @@ async function boot(): Promise<{ api: number; stamp: unknown; id: string }> {
     }
   }
   glue.load_data(JSON.stringify(files));
-  // Unlike the page this is fatal: a replay without the rules the record was
-  // played under only diverges.
-  await loadRulesetInto(glue, async (rel) => {
-    const r = await fetch("/assets/rules/" + rel);
-    if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
-    return new Uint8Array(await r.arrayBuffer());
-  });
   const stamp = JSON.parse(glue.engine_stamp()) as { bundle?: string };
   return {
     api: typeof glue.replay_api_version === "function" ? glue.replay_api_version() : 1,

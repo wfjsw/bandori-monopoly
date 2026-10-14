@@ -20,7 +20,16 @@ const STAR: &str = "PPP:仓库里的Random Star";
 pub const AUCTION_PULLED: CardDef = CardDef::new(
     ID,
     &[On::Hook(&[HookKind::Drawn, HookKind::TurnStart], "", None, hook)],
-).props(&[(card_sdk::abi::prop::EST_COST, 540)]);
+).props(&[(card_sdk::abi::prop::EST_COST, 540)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"拍卖撤下来了"#)
+        .raw_name(r#"[衍生]拍卖撤下来了"#)
+        .derived(true)
+        .tags(&[r#"持续"#, r#"特"#, r#"衍生"#])
+        .text(r#"[特]：
+此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）
+[持续]：此卡拥有者火罐上限加1且不受任何其他效果影响。"#)
+        .cell(r#"B13"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 /// `Fx.Drawn` (C# `CardAuctionPulled.Drawn`) -- pull the card out of the hand
 /// and place it on the owner's field the moment it arrives.
@@ -72,4 +81,11 @@ fn hook(player_id: i32) -> card_sdk::Asked {
         _ => {}
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
+    hook(player_id)
 }

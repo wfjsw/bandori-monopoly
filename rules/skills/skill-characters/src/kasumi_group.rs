@@ -43,3 +43,32 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1500, &Msg::new(key!("kasumi_group_pass")))?;
     Ok(())
 }
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"弦卷心"#)
+    .display(r#"弦卷心"#)
+    .band(r#"Hello, Happy World!"#)
+    .color(r#"#FFEE22"#)
+    .skill(r#"弦卷集团"#)
+    .text(r#"（1）开局时获得1000资金（2）[经过]CiRCLE时额外获得1500资金"#)
+    .cn_id(r#"011"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"前往笑容集结的地方！"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}

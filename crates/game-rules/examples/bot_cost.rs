@@ -17,13 +17,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::{CardRules, Cx, Dest, Flow, Match, StubRules, Trigger, World};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
 use game_core::MatchMode;
-use game_rules::WasmRules;
+use game_rules::{Ruleset, WasmRules};
 
 // --------------------------------------------------------------- counting
 
@@ -56,6 +56,9 @@ impl CardRules for CountingRules {
     }
     fn card_props(&self, card: &str) -> BTreeMap<String, i32> {
         self.inner.card_props(card)
+    }
+    fn card_texts(&self, card: &str) -> std::sync::Arc<[game_core::engine::TileTextDecl]> {
+        self.inner.card_texts(card)
     }
     fn has_rule(&self, id: &str) -> bool {
         self.inner.has_rule(id)
@@ -96,21 +99,23 @@ impl CardRules for CountingRules {
     }
 }
 
-fn load_data() -> Arc<GameData> {
+fn load_data(roster: Roster) -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .expect("game data"),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .expect("game data"),
     )
 }
 
 /// The shipped ruleset, the same one the server loads (`dist/cards`).
-fn load_rules(data: &Arc<GameData>) -> Arc<WasmRules> {
+fn load_ruleset() -> Ruleset {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/cards");
-    WasmRules::load_dir(data.clone(), &dir)
+    Ruleset::load_dir(&dir)
         .expect("read dist/cards")
         .expect("run `node tools/build-ruleset.mjs` first")
-        .into()
 }
 
 fn members(n: i32, mentality: BotMentality) -> Vec<RoomMember> {
@@ -345,8 +350,9 @@ fn main() {
         "wasmtime"
     };
 
-    let data = load_data();
-    let wasm: Arc<WasmRules> = load_rules(&data);
+    let ruleset = load_ruleset();
+    let data = load_data(ruleset.roster());
+    let wasm: Arc<WasmRules> = Arc::new(WasmRules::new(ruleset, data.clone()));
     let counts = Arc::new(EntryCounts::default());
     let counting: Arc<dyn CardRules> = Arc::new(CountingRules {
         inner: WasmRules::new(wasm.ruleset().clone(), data.clone()),

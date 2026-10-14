@@ -18,7 +18,13 @@ pub const YOUR_LIGHT: CardDef = CardDef::new(
         Some(cant_play),
         your_light,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"你的光芒将照亮前路"#)
+        .raw_name(r#"你的光芒将照亮前路"#)
+        .tags(&[])
+        .text(r#"当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡，此次移动以“月之森女子学院”为起点（不触发起点地块效果）。"#)
+        .cell(r#"G4"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡」
@@ -56,4 +62,11 @@ fn your_light(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("your_light_start")).player_id("who", player_id),
     ); // 规则书: 「此次移动以…为起点」
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn your_light_kani(player_id: i32) -> card_sdk::Asked {
+    your_light(player_id)
 }

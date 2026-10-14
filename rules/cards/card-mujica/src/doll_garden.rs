@@ -12,7 +12,14 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const DOLL_GARDEN: CardDef = CardDef::new(
     "Mujica:人偶的箱庭",
     &[On::Play("", Some(cant_play), doll_garden)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"人偶的箱庭"#)
+        .raw_name(r#"人偶的箱庭"#)
+        .tags(&[])
+        .text(r#"使场上所有其他玩家选择其一执行：“进行一次移动掷骰并移动对应步数（不[触发结算]）”或“向你支付X*20资金，X为该玩家正常移动到你所在格子所需的移动数。” 无法移动的玩家只能选择向你支付。
+然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。"#)
+        .cell(r#"J12"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 /// C# `CardDollGarden.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -105,4 +112,11 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
     // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
     // player; that is exactly `card_move`'s bookkeeping.
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn doll_garden_kani(player_id: i32) -> card_sdk::Asked {
+    doll_garden(player_id)
 }

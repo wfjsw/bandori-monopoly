@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
-use card_sdk::abi::{export, ManifestOn, OnKind, ABI_VERSION};
+use card_sdk::abi::{export, ManifestOn, ManifestTileText, OnKind, ABI_VERSION};
 use card_sdk::On;
 use game_rules::{
     Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome,
@@ -107,7 +107,6 @@ impl NativeRulesHandle {
                             }
                         },
                         has_guard: o.has_guard(),
-                        has_legacy: card.legacy.iter().any(|(e, _)| *e == ei as i32),
                         messages: match o {
                             On::Message(names, ..) => {
                                 names.iter().map(|s| String::from(*s)).collect()
@@ -161,6 +160,16 @@ impl NativeRulesHandle {
                     id: card.id.to_string(),
                     on,
                     props,
+                    texts: card
+                        .texts
+                        .iter()
+                        .map(|(e, slot, tile, key)| ManifestTileText {
+                            entry: *e,
+                            slot: (*slot).to_string(),
+                            tile: (*tile).to_string(),
+                            key: (*key).to_string(),
+                        })
+                        .collect(),
                 });
             }
         }
@@ -218,6 +227,39 @@ impl Default for NativeRulesHandle {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Roster metadata (ABI v63) from the linked rule tables -- the native
+/// counterpart of the sandbox's `bandori_metadata` export. Same sources the
+/// wasm module's `card-all` passes to `bandori_ruleset!(; roster:)`.
+pub fn roster_metadata() -> card_sdk::meta::MetaDoc {
+    static SOURCES: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
+        card_ordinals: ruleset_core::roster_order::CARDS,
+        lists: &[
+            card_sdk::meta::RosterList {
+                kind: "character",
+                ordinals: ruleset_core::roster_order::CHARACTERS,
+                rows: skill_characters::roster_table::meta_rows,
+            },
+            card_sdk::meta::RosterList {
+                kind: "band",
+                ordinals: ruleset_core::roster_order::BANDS,
+                rows: skill_bands::roster_table::meta_rows,
+            },
+        ],
+    };
+    let _frame = card_sdk::native::enter();
+    let packed = card_sdk::rt::metadata(RULESET, &SOURCES);
+    let (handle, len) = card_sdk::abi::unpack(packed);
+    // Native `leak` interned the bytes in the card-sdk arena; `native::read`
+    // turns the handle back into a slice (see `card_sdk::native`).
+    let bytes = card_sdk::native::read(handle as i32, len as usize);
+    game_rules::roster::decode_metadata(&bytes).expect("native metadata is valid postcard")
+}
+
+/// The same rows as [`roster_metadata`], as the game's `Roster`.
+pub fn roster() -> game_core::data::Roster {
+    game_rules::roster::roster_from_meta(&roster_metadata())
 }
 
 impl RulesHandle for NativeRulesHandle {
@@ -614,6 +656,14 @@ impl CardModules for NativeModules {
     }
     fn card_prop(&self, id: &str, key: &str) -> i32 {
         self.card_props(id).get(key).copied().unwrap_or(0)
+    }
+    fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
+        let mut texts = self
+            .card(id)
+            .and_then(|i| self.index.card(i))
+            .map_or_else(Default::default, |c| c.texts.clone());
+        texts.sort_by_key(|t| t.entry);
+        texts
     }
     fn declares(&self, kind: TriggerKind) -> bool {
         self.index.declares(kind)

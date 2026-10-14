@@ -42,12 +42,7 @@ pub const HINA_LOTTERY: CardDef = CardDef::new(
         ),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, roll),
     ],
-)
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得冰川日菜
 /// 的（2）技能」.
@@ -99,4 +94,28 @@ fn expire(player_id: i32) -> card_sdk::Asked {
     }
     state::set(player_id, BORROWED, -1);
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"冰川日菜"#)
+    .display(r#"冰川日菜"#)
+    .band(r#"Pastel✽Palettes"#)
+    .color(r#"#55DDEE"#)
+    .skill(r#"日菜抽中的大奖"#)
+    .text(r#"（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得冰川日菜的（2）技能
+（2）每回合开始时必须进行1次投掷1d4，根据最后投掷的结果在下回合开始前获得以下角色的（2）技能：结果为1是丸山彩；结果为2是白鹭千圣；结果为3是若宫伊芙；结果为4是大和麻弥。"#)
+    .cn_id(r#"017"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"会发出怎样的声音呢？"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_kani(player_id: i32) -> card_sdk::Asked {
+    roll(player_id)
 }

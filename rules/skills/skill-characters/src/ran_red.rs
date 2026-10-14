@@ -80,3 +80,38 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("ran_red_reverse")));
     Ok(())
 }
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"美竹兰"#)
+    .display(r#"美竹兰"#)
+    .band(r#"Afterglow"#)
+    .color(r#"#EE0022"#)
+    .skill(r#"叛逆的红挑染"#)
+    .text(r#"（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）（2）投掷移动步数前可使用一个[火罐]选择本次移动向后，并且向后移动[经过]CiRCLE时不获得CiRCLE奖励。"#)
+    .cn_id(r#"006"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"像往常一样"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
+    tick(player_id)
+}

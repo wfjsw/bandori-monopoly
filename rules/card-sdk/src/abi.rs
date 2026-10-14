@@ -379,6 +379,69 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v64: **turn-clock props** -- `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET`
+///      on a board-owned instance override the host turn clock (`base_time`
+///      = 恢复时间, `bonus_time` = 免费时间) as each turn starts (元祖！邦多利酱).
+///      Also the turn-clock **modifier hooks** `TriggerKind` / `HookKind`
+///      `{TurnBonusTime = 99, TurnBaseTime = 100}`: raised as each turn starts
+///      with `value` = the seconds the host would use (免费时间 refill / 恢复时间);
+///      a hook rewrites it with `trigger::set_pay_amount`. The props then
+///      override the hooked result. No new import, no SAVE_VERSION change.
+/// v63: **roster metadata export** (`docs/CARDS.md` 「Card metadata」).
+///      `CardDef::meta` carries the card's data-set row (name / rawName /
+///      text / tags / derived / cell + a generic `fields` map for game slots
+///      `band` / `owner`); the skill crates' `CharacterDef` / `BandDef`
+///      tables carry the character / band rows. A new guest export
+///      `bandori_metadata` (`export::METADATA`, `() -> i64` packed
+///      postcard `meta::MetaDoc`) hands the whole roster to the host on
+///      request -- **not** through `ManifestEntry` (the match path is
+///      unchanged and unbloomed). Rows sort by `(kind, ordinal)` where the
+///      ordinal comes from a shared generated table
+///      (`ruleset_core::roster_order`) so the rebuilt vectors equal the JSON
+///      file order exactly even though the Rust crates register alphabetically.
+///      Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load`
+///      consumes the converted `Roster`. No host-function change; SAVE_VERSION
+///      unchanged (no save field).
+/// v62: **static card property + guest query** -- `prop::SONG` (`"song"`,
+///      default 0): a song-title card marker (「卡名为歌名的卡」, Kizuna
+///      Music's X). Declared with `.props(&[(prop::SONG, 1)])` on exactly the
+///      twenty song cards; rules read it back through the new host import
+///      `card_prop(id, key) -> i32` (`ctx::card_prop`), which is the generic
+///      guest face of `CardRules::card_prop` (default 0). No game vocabulary
+///      in the import. SAVE_VERSION unchanged.
+/// v61: **legacy guard-audit scaffolding removed** (docs/GUARDS.md §5.1/§10
+///      finished 2026-10-14). `CardDef::legacy` / `.legacy(...)`,
+///      `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`, the `guard-audit`
+///      host feature, `cond_pre::legacy_audit` and `legacy_probe` are gone --
+///      the G3 equivalence check ran once at removal time and the pre-migration
+///      copies were deleted. `ManifestOn` loses `has_legacy` (postcard is not
+///      self-describing, so this is the bump); guest wasm must be rebuilt with
+///      the host. SAVE_VERSION / RECORD_VERSION unchanged (no save field).
+/// v60: **exclusive-use gate** -- `TriggerKind::ExclusiveUse = 98` (also
+///      `GateKind`): a CEL-only `On::Gate` question the band-skill cards answer
+///      (CRYCHIC's 「variants may not use the base character's exclusives」).
+///      The engine's default verdict is the generic exclusive rule (playable
+///      iff `card.owner` is the actor's character or its base `variant_of`);
+///      a closing gate entry denies the base case. Window: `actor`,
+///      `trigger_card` (the exclusive's id hash), `name` (the card's `owner`
+///      character name; `counter_is`), `value` (1 = owner is the actor's base
+///      character), `step` (1 = owner is the actor's own character). No new
+///      host import, no SAVE_VERSION change.
+/// v59: `ManifestEntry::texts` -- per-entry **tile text** declarations
+///      (`CardDef::texts`): the deed-popup description an entry speaks for,
+///      as `(entry, slot, tile, key)`. `slot` is [`text_slot`] (settle /
+///      pass); `tile` is `""` = the instance's own tile or a board tile name
+///      for a tile-bound text on a tile-less instance; `key` is a `ui`
+///      namespace i18n key (`deed.note.*`), `""` = suppress the slot. The
+///      view composes per-tile speakers in body-precedence order (docs/TILES.md
+///      「Tile text」). Trailing field on `ManifestEntry` (postcard is not
+///      self-describing, so this is the bump); `MatchState::tile_texts` is a
+///      view-only field and needs no SAVE_VERSION change.
+/// v58: **status gates** -- `TriggerKind::{ActGate = 95, PayGate = 96,
+///      MoveGate = 97}` (also `GateKind`): CEL-only `On::Gate` questions the
+///      `status:*` pseudo cards answer; the host evaluates the condition
+///      natively (`ctx::can_pay`'s host body asks `PayGate`). No new host
+///      import, no SAVE_VERSION change.
 /// v57: **closeout integration** -- one monotonic bump covering every addition
 ///      the five closeout batches made on top of v56:
 ///      `TriggerKind::FirePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
@@ -394,7 +457,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 57;
+pub const ABI_VERSION: i32 = 64;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -471,6 +534,19 @@ pub struct EntryPresentation {
 /// The host scopes it to one counteraction body, never the resulting walk.
 pub const COUNTERACT_MOVE_EXTENSION: &str = "counteract.moveExtension";
 
+/// Tile-text slots (`CardDef::texts`, [`ManifestTileText::slot`], v59): which
+/// half of a deed popup an entry speaks for. The settle slot is the [结算]
+/// description; the pass slot is the [经过] one. Mirrors the body's
+/// `On::Settle` / `HookKind::PassTile` split -- the text an entry declares is
+/// the description that entry speaks for, so a rule that replaces one half
+/// only replaces that half's text.
+pub mod text_slot {
+    /// The [结算] / landing description (`On::Settle`).
+    pub const SETTLE: &str = "settle";
+    /// The [经过] / pass description (`HookKind::PassTile`).
+    pub const PASS: &str = "pass";
+}
+
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
 
@@ -481,18 +557,17 @@ pub mod export {
     pub const MANIFEST: &str = "bandori_manifest";
     /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
     /// `entry` (an index into the card's manifest `on` list). `op` is
-    /// [`OP_RUN`], [`OP_GUARD`] or [`OP_LEGACY_GUARD`]. Returns 0, the guard's
+    /// [`OP_RUN`] or [`OP_GUARD`]. Returns 0, the guard's
     /// 0/1, or (for a `Play` gate) a packed `(ptr << 32) | len` postcard `Msg`
     /// reason with 0 meaning "playable".
     pub const ON: &str = "bandori_on";
     pub const OP_RUN: i32 = 0;
     pub const OP_GUARD: i32 = 1;
-    /// G3 migration audit (GUARDS.md §5.1): the card's pre-migration
-    /// `legacy_*` guard. Only present while `ManifestOn::has_legacy`; the
-    /// `guard-audit` host compares it against `pre ∧ guard` and panics on any
-    /// mismatch. Traps / a missing entry mean "no legacy" and skip the check.
-    pub const OP_LEGACY_GUARD: i32 = 2;
     pub const MEMORY: &str = "memory";
+    /// `() -> i64` packed `(ptr << 32) | len` pointing at a postcard
+    /// [`crate::meta::MetaDoc`] (ABI v63). Built only when called; absent on
+    /// pre-v63 modules (the host then reports empty roster metadata).
+    pub const METADATA: &str = "bandori_metadata";
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the
@@ -725,6 +800,11 @@ pub mod prop {
     /// so a `place_raw` / engine placement sees it without running the play
     /// body. Mirrors `game_core::state::prop::IMMUNE`.
     pub const IMMUNE: &str = "immune";
+    /// Song-title card marker (「卡名为歌名的卡」, Kizuna Music's X): `1` =
+    /// this card's printed name is a song title. A ruleset-level fact other
+    /// rules read back via `ctx::card_prop` (`card_prop` host import); the
+    /// engine itself never reads it. Default `0` (not a song).
+    pub const SONG: &str = "song";
     /// Virtual **rent** house count (「房屋数视为…」).
     /// Presence is the override -- a house count of `0` is a legitimate value,
     /// so the read is `props.get`, not `unwrap_or(0)`. Real `st.houses` is
@@ -776,6 +856,21 @@ pub mod prop {
     /// refuses a build whose house cost is `>=` this, while the instance is in
     /// play. On a board-owned instance (`ctx::set_prop`); `0` disables.
     pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
+    /// Turn-clock override (v61): every turn start **sets** the host
+    /// `base_time` (恢复时间) to this many seconds **plus one**; `0` = no
+    /// override (the +1 is what lets "0 seconds" be expressed). On a
+    /// board-owned instance (`tile < 0`); with several, the smallest wins.
+    /// Use [`clock_secs`] to encode. SET, not refill -- it replaces the
+    /// `turnBaseTime` refill/cap calculation for that turn start (元祖！邦多利酱).
+    pub const BASE_TIME_SET: &str = "baseTimeSet";
+    /// Turn-clock override (v61): as [`BASE_TIME_SET`], for the acting seat's
+    /// `bonus_time` (免费时间): it is **set** to this value at turn start
+    /// instead of refilled.
+    pub const BONUS_TIME_SET: &str = "bonusTimeSet";
+    /// Encode `secs` for [`BASE_TIME_SET`] / [`BONUS_TIME_SET`].
+    pub const fn clock_secs(secs: i32) -> i32 {
+        secs + 1
+    }
 
     // ------------------------------------------------------ purchase surface
     // v40 (`docs/PURCHASE.md`). Tile props that decide eligibility, price and
@@ -1429,6 +1524,38 @@ pub enum TriggerKind {
     MarkerSpend = 92,
     /// **Before a marker gain** moves. Same window shape as [`Self::MarkerSpend`].
     MarkerGain = 93,
+    /// v58: **status gate** (`rules/status`). May `t.player_id` use [主动]
+    /// skills / 手卡的[手]效果? Answered by `On::Gate` entries that are
+    /// **CEL-only** (no residual guard): the host evaluates the condition
+    /// natively wherever the question is asked, including pure reads.
+    ActGate = 95,
+    /// v58: may `t.player_id` pay or receive payment (「无法收付款」)?
+    /// CEL-only, like [`Self::ActGate`].
+    PayGate = 96,
+    /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
+    MoveGate = 97,
+    /// v59: **exclusive-use gate**. May `t.player_id` play this exclusive card
+    /// (`card.owner` / base-`variant_of` / band-skill denial)? CEL-only, like
+    /// [`Self::ActGate`]. Window carries the card in `trigger_card` / `name`.
+    ExclusiveUse = 98,
+    /// v61: turn-clock modifier -- the 免费时间 (`bonus_time`) **refill** in
+    /// seconds the acting seat gets as its turn starts (`t.value`; the host
+    /// then caps the total). Rewrite with `trigger::set_pay_amount`.
+    TurnBonusTime = 99,
+    /// v61: turn-clock modifier -- the 恢复时间 (`base_time`) **refill** in
+    /// seconds the acting seat's turn adds at turn start (`t.value`; the
+    /// default is the match's `turnBaseTime` budget). Rewrite with
+    /// `trigger::set_pay_amount`.
+    ///
+    /// Host application (`engine` `StartTimer`, post-settings clock):
+    /// `base = (base + value).min(max(settings.base_time, value))` -- a refill
+    /// capped at the larger of the configured initial pool and the hook's own
+    /// value, so a hook that grants a bigger refill (e.g. doubling 15 → 30)
+    /// still shows up as base 30 rather than being clipped back. A
+    /// `baseTimeSet` board prop replaces the whole calculation (SET at turn
+    /// start, 元祖！邦多利酱). Pre-settings (`legacy_clock`) matches instead
+    /// *set* `base = value` each turn.
+    TurnBaseTime = 100,
 }
 
 impl TriggerKind {
@@ -1529,6 +1656,12 @@ impl TriggerKind {
             91 => Self::MoveAfter,
             92 => Self::MarkerSpend,
             93 => Self::MarkerGain,
+            95 => Self::ActGate,
+            96 => Self::PayGate,
+            97 => Self::MoveGate,
+            98 => Self::ExclusiveUse,
+            99 => Self::TurnBonusTime,
+            100 => Self::TurnBaseTime,
             _ => Self::None,
         }
     }
@@ -1632,6 +1765,12 @@ impl TriggerKind {
             Self::MoveAfter => "moveAfter",
             Self::MarkerSpend => "markerSpend",
             Self::MarkerGain => "markerGain",
+            Self::ActGate => "actGate",
+            Self::PayGate => "payGate",
+            Self::MoveGate => "moveGate",
+            Self::ExclusiveUse => "exclusiveUse",
+            Self::TurnBonusTime => "turnBonusTime",
+            Self::TurnBaseTime => "turnBaseTime",
         }
     }
 
@@ -1733,6 +1872,12 @@ impl TriggerKind {
             "moveAfter" => Self::MoveAfter,
             "markerSpend" => Self::MarkerSpend,
             "markerGain" => Self::MarkerGain,
+            "actGate" => Self::ActGate,
+            "payGate" => Self::PayGate,
+            "moveGate" => Self::MoveGate,
+            "exclusiveUse" => Self::ExclusiveUse,
+            "turnBonusTime" => Self::TurnBonusTime,
+            "turnBaseTime" => Self::TurnBaseTime,
             _ => Self::None,
         }
     }
@@ -2179,6 +2324,10 @@ declare_kinds! {
         /// See [`TriggerKind::FlipEffect`] -- a face-down counter is being
         /// flipped face-up. Hook-only.
         FlipEffect = 94,
+        /// v61: see [`TriggerKind::TurnBonusTime`].
+        TurnBonusTime = 99,
+        /// v61: see [`TriggerKind::TurnBaseTime`].
+        TurnBaseTime = 100,
         /// v40: the buy price's first modifier stage (`docs/PURCHASE.md`) --
         /// fixed ±, before [`Self::BuyMul`] / [`Self::BuySet`]. `t.value` /
         /// `set_price` on the run; each stage floors the price at 0.
@@ -2257,6 +2406,19 @@ declare_kinds! {
         /// A placed card refuses with `trigger::set_cancelled()` plus a
         /// reason. Runs for every [`BuyKind`], Force included.
         BuyGate = 79,
+        /// v58: **status gate** (`rules/status`). May `t.player_id` use [主动]
+        /// skills / 手卡的[手]效果? Answered by `On::Gate` entries that are
+        /// **CEL-only** (no residual guard): the host evaluates the condition
+        /// natively wherever the question is asked, including pure reads.
+        ActGate = 95,
+        /// v58: may `t.player_id` pay or receive payment (「无法收付款」)?
+        /// CEL-only, like [`Self::ActGate`].
+        PayGate = 96,
+        /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
+        MoveGate = 97,
+        /// v59: **exclusive-use gate**. May `t.player_id` play this exclusive
+        /// card? CEL-only. See [`TriggerKind::ExclusiveUse`].
+        ExclusiveUse = 98,
     }
 }
 
@@ -2284,6 +2446,29 @@ pub struct ManifestEntry {
     /// declare reads as its default (`0`). Host side becomes a `BTreeMap`.
     #[serde(default)]
     pub props: Vec<(String, i32)>,
+    /// Tile texts this card's entries speak (`CardDef::texts`). v59.
+    /// Trailing field -- postcard is not self-describing, so adding it is an
+    /// ABI bump.
+    #[serde(default)]
+    pub texts: Vec<ManifestTileText>,
+}
+
+/// One per-entry **tile text** declaration (`CardDef::texts`, v59): the
+/// deed-popup description an entry speaks for.
+///
+/// * `entry` -- the manifest `on` index the text hangs off.
+/// * `slot` -- [`text_slot`] (`"settle"` / `"pass"`).
+/// * `tile` -- `""` = the instance's own tile (a `tile:*` rule bound to one
+///   tile); otherwise a board tile *name* (`"CiRCLE"`, `"CiRCLE 咖啡厅"`) for a
+///   tile-bound text on a tile-less instance (`event:*`).
+/// * `key` -- i18n key in the `ui` namespace (`deed.note.*`); `""` suppresses
+///   the slot (the effective text is nothing).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ManifestTileText {
+    pub entry: i32,
+    pub slot: String,
+    pub tile: String,
+    pub key: String,
 }
 
 /// One entry point in the manifest: what it is and which trigger kinds it
@@ -2306,11 +2491,6 @@ pub struct ManifestOn {
     /// moved into `pre`; the host then skips the `OP_GUARD` instantiation
     /// (`admits_pre`). `true` for every pre-G4 entry.
     pub has_guard: bool,
-    /// Does this entry keep a `legacy_*` audit guard (G3, docs/GUARDS.md §5.1)?
-    /// The `guard-audit` host feature calls [`export::OP_LEGACY_GUARD`] and
-    /// panics on any mismatch with `pre ∧ guard`. Deleted once the card's audit
-    /// is clean.
-    pub has_legacy: bool,
     /// Message names this [`OnKind::Message`] entry answers (empty otherwise).
     #[serde(default)]
     pub messages: Vec<String>,

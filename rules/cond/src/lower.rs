@@ -238,6 +238,7 @@ fn fn_id_of(name: &str) -> Option<FnId> {
         "owned_within" => FnId::OwnedWithin,
         "on_path" => FnId::OnPath,
         "between" => FnId::Between,
+        "state" => FnId::State,
         _ => return None,
     })
 }
@@ -250,7 +251,7 @@ fn fn_arity(fid: FnId) -> usize {
         | Tiles | Blocked | ChainHas | ChainHits | GainsThisTurn | TargetedCount
         | RepeatedDigits | Between => 1,
         CharacterIs | BandIs | Neighbor | Dist | PlayersOn | NextDist | OthersWithin
-        | OwnedWithin | OnPath | TileIs | TileAttr => 2,
+        | OwnedWithin | OnPath | TileIs | TileAttr | State => 2,
         TileIn => 3,
     }
 }
@@ -417,6 +418,7 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("owned_within", OwnedWithin),
         ("on_path", OnPath),
         ("between", Between),
+        ("state", State),
     ]
 }
 

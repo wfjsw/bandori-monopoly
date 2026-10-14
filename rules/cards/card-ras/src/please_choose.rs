@@ -15,7 +15,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
     &[On::Counteract(&[ChainKind::Settle], "", Some(can_counteract), counteract)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"PLEASE CHOOSE"#)
+        .raw_name(r#"PLEASE CHOOSE"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 当有玩家在livehouse格子上结算时，使对方选择以下效果之一执行：（1）立即打出一张可将你指定为目标的牌并将你指定为目标（之一），（2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）"#)
+        .cell(r#"H7"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
 /// buyable Live House (color group 6, `kind` property/ring). `Live House` the
@@ -98,4 +104,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // no-settle half is `ctx::teleport_to`; the band-skill half needs the
     // `BandBase.PassTile` fan-out (C# `H.EachOf(i, f => f.PassTile(m, to))`).
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

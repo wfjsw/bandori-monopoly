@@ -18,7 +18,7 @@ use crate::data::{GameData, TileData};
 use crate::msg::Msg;
 use crate::state::MatchPrompt;
 
-use super::rules::CardRules;
+use super::rules::{CardRules, ExclusiveAsk};
 use super::world::World;
 
 /// Why a routine stopped before finishing. Opaque to card rules: they only pass it
@@ -74,6 +74,17 @@ pub struct Ask {
     pub ai_picked: Vec<Vec<String>>,
     /// Auction: most each player's AI is willing to bid.
     pub worth: Vec<i32>,
+    /// Whether answering this prompt draws on the answering seats' time pools
+    /// (ordinary prompts under the post-settings clock) or runs on its own
+    /// fixed window (`view.time_left`, e.g. the bankruptcy leftover auction --
+    /// see [`crate::clock::ClockSettings::bankrupt_auction_time`]). Serde
+    /// default `true` so an `Ask` written before this field stays ordinary.
+    #[serde(default = "default_use_pool")]
+    pub use_pool: bool,
+}
+
+fn default_use_pool() -> bool {
+    true
 }
 
 impl Ask {
@@ -92,6 +103,7 @@ impl Ask {
             ai: vec![AI_UNSET; n],
             ai_picked: vec![vec![]; n],
             worth: vec![0; n],
+            use_pool: true,
         }
     }
 
@@ -153,22 +165,29 @@ impl Ask {
         a
     }
 
-    /// `Auction`: open bidding on a tile.
+    /// `Auction`: open bidding on a tile. `time` is the prompt's own window
+    /// (the AI-schedule / all-bot fallback deadline); `use_pool` selects
+    /// whether the answering seats also spend their time pools (ordinary
+    /// auctions) or not (the bankruptcy leftover auction's dedicated timer --
+    /// [`crate::clock::ClockSettings::bankrupt_auction_time`]).
     pub fn auction(
         tile: usize,
         players: Vec<usize>,
         title: Msg,
         text: Msg,
         worth: Vec<i32>,
+        time: f32,
+        use_pool: bool,
     ) -> Self {
         let n = players.len();
-        let mut a = Self::new("auction", players, title, text, 10.0);
+        let mut a = Self::new("auction", players, title, text, time);
         a.view.tile = tile as i32;
         a.view.bid = 0;
         a.view.bidder = -1;
         // Bidding reads `worth` (already mentality-aware); `ai` is unused.
         a.ai = vec![0; n];
         a.worth = worth;
+        a.use_pool = use_pool;
         a
     }
 
@@ -449,11 +468,14 @@ pub struct Cx<'a> {
 /// The play-gate memo: verdicts keyed by `(player, card id)`, valid only for
 /// the [`crate::engine::world::SharedWorld`] stamp they were computed under.
 /// A small linear map (a hand scan has few unique ids) -- no hashing on the
-/// hot path.
+/// hot path. Two verdicts ride along: the ruleset's `cant_play` and the
+/// `ExclusiveUse` gate denial (both pure within one stamp).
 #[derive(Default)]
 struct PlayMemo {
     stamp: u64,
     entries: Vec<((usize, String), Option<Msg>)>,
+    exclusive_stamp: u64,
+    exclusive: Vec<((usize, String), bool)>,
 }
 
 impl PlayMemo {
@@ -481,6 +503,29 @@ impl PlayMemo {
             self.entries.clear();
         }
         self.entries.push(((player, card.to_string()), why));
+    }
+    fn clear_exclusive(&mut self) {
+        self.exclusive.clear();
+    }
+    fn get_exclusive(&self, player: usize, card: &str) -> Option<bool> {
+        self.exclusive
+            .iter()
+            .find(|((p, c), _)| *p == player && c == card)
+            .map(|(_, v)| *v)
+    }
+    fn insert_exclusive(&mut self, player: usize, card: &str, denied: bool) {
+        if let Some(slot) = self
+            .exclusive
+            .iter_mut()
+            .find(|((p, c), _)| *p == player && c == card)
+        {
+            slot.1 = denied;
+            return;
+        }
+        if self.exclusive.len() >= 64 {
+            self.exclusive.clear();
+        }
+        self.exclusive.push(((player, card.to_string()), denied));
     }
 }
 
@@ -889,8 +934,10 @@ impl<'a> Cx<'a> {
     /// verdict instead of re-running the gate body.
     ///
     /// This is the **rules** gate only -- the engine's own cheap gates (hand
-    /// membership, phase, `CannotPlay`, exclusivity, `normal`) run every time
-    /// in [`Self::cant_play`] and are pure field reads.
+    /// membership, phase, `CannotPlay`, `normal`) run every time in
+    /// [`Self::cant_play`] and are pure field reads. The exclusive-use check
+    /// (`ExclusiveUse` gate) has its own half of this memo
+    /// ([`Self::exclusive_play`]).
     pub fn rules_cant_play(&self, player: usize, card: &str) -> Option<Msg> {
         #[cfg(feature = "bot-cost")]
         use std::sync::atomic::Ordering::Relaxed;
@@ -912,6 +959,31 @@ impl<'a> Cx<'a> {
         let why = self.rules.cant_play(self, player, card);
         self.play_memo.borrow_mut().insert(player, card, why.clone());
         why
+    }
+
+    /// The `ExclusiveUse` gate with the per-world memo (same stamp rule as
+    /// [`Self::rules_cant_play`]). `true` = a band-skill gate entry closed this
+    /// exclusive play. The engine's generic own/base verdict is the caller's
+    /// cheap pre-check; this only asks the ruleset.
+    pub fn exclusive_gate_denied(&self, player: usize, card: &str, ask: &ExclusiveAsk<'_>) -> bool {
+        let stamp = self.w.stamp();
+        {
+            let mut memo = self.play_memo.borrow_mut();
+            if memo.exclusive_stamp != stamp {
+                memo.clear_exclusive();
+                memo.exclusive_stamp = stamp;
+            }
+            if let Some(denied) = memo.get_exclusive(player, card) {
+                #[cfg(feature = "bot-cost")]
+                crate::engine::bot_cost::CANT_PLAY_MEMO_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return denied;
+            }
+        }
+        let denied = !self.w.exclusive_use(self.rules, player, ask);
+        self.play_memo
+            .borrow_mut()
+            .insert_exclusive(player, card, denied);
+        denied
     }
 
     /// Simulation mode: answer every prompt through `p` instead of halting
@@ -1184,7 +1256,7 @@ impl<'a> Cx<'a> {
     /// `CanPay`: not out, and the status hosts' pay gate is open.
     pub(crate) fn can_pay(&self, i: usize) -> bool {
         let s = &self.w.st.players[i];
-        !s.out() && s.status_gates().pay
+        !s.out() && self.w.gate_open(self.rules, super::Gate::Pay, i)
     }
 
     /// `Blocked(i)` -- why a player can't move money.

@@ -15,7 +15,13 @@ pub const SOYO_COLORS: CardDef = CardDef::new(
         On::Play("", Some(cant_play), soyo_colors),
         On::Hook(&[card_sdk::abi::HookKind::PayMul], "", Some(on_rent), half_again),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"混合的颜色"#)
+        .raw_name(r#"（soyo）混合的颜色"#)
+        .tags(&[])
+        .text(r#"将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半。"#)
+        .cell(r#"I9"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"长崎素世"#)]));
 
 /// 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时」 -- rent charged
 /// on this card's own tile. The card's tile 「获得所有颜色」, so any agent
@@ -101,4 +107,17 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
     // 减半收费基础上额外减半」 -- the agent group is the group of the tile being
     // settled; 「其他颜色」 is that group differing from this tile's.
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn soyo_colors_kani(player_id: i32) -> card_sdk::Asked {
+    soyo_colors(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn half_again_kani(player_id: i32) -> card_sdk::Asked {
+    half_again(player_id)
 }

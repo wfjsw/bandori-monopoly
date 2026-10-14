@@ -7,9 +7,9 @@
 //! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{roll_source, ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind};
 
-use ruleset_core::ctx::{self, trigger};
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LAYER_KEEP: CardDef = CardDef::new(
@@ -31,13 +31,13 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
             counter_fire,
         ),
     ],
-)
-.legacy(&[(2, legacy_can_counter_fire)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counter_fire(player_id: i32) -> bool {
-    trigger::player_id() == player_id && trigger::roll_source() == roll_source::FIRE
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"寄于指尖的执念"#)
+        .raw_name(r#"（和奏瑞依）寄于指尖的执念"#)
+        .tags(&[])
+        .text(r#"当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。"#)
+        .cell(r#"H16"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"和奏瑞依"#)]));
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
@@ -92,8 +92,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// `actor == owner && card.placed` is the pre.
 /// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
 /// source is `roll_source::FIRE` (the fire-pot reroll).
-// (the live guard is the `pre` on the Counteract entry; `legacy_can_counter_fire`
-// above is the G4 audit oracle)
 
 /// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
 /// is played from hand; its `play` body places it on the field. The unchosen
@@ -186,4 +184,17 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("layer_keep_used")).i("n", die as i64),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
+    roll_after(player_id)
 }

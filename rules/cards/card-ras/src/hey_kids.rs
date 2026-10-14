@@ -29,7 +29,14 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"狂乱Hey Kids!!"#)
+        .raw_name(r#"狂乱Hey Kids!!"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 在属于你的格子上结算时，打出此卡，将本次结算改为：将本格上的房屋转移到属于你的可建造格子上。转移的房屋与目标格子中，至少一方数量为1，且每个目标格子至多获得1层房屋。转移时，消耗的房屋造价等于获得的房屋总造价，超出的部分作为现金获得；随后，你失去“转移后各格房屋造价总和－获得房屋数量×500”的资金。"#)
+        .cell(r#"H4"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
 /// would allow. 「属于你的可建造格子」 -- the same gate the build step uses, so a
@@ -147,4 +154,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         ctx::pay(player_id, fee, &Msg::new(key!("hey_kids_lose_fee")))?;
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

@@ -3,35 +3,63 @@
 //! Band skill `skill:MyGO!!!!!:迷途之星` and the five MyGO!!!!! character
 //! skills. Per clause: iff + no-op + covers + mutant (see KANI-FOUNDATION.md).
 //! Specs live in `crate::spec::skills_mygo`.
+//!
+//! **ppcost pattern.** Concrete user seats (n_players=2). Direct body call
+//! via the cfg(kani) `NAME_kani` wrapper. Per-harness host-op subset.
 
 use crate::host;
 use crate::invoke;
 use crate::spec;
-use crate::world::{self, Effect, World, MAX_PLAYERS};
+use crate::world::{self, Effect, MAX_PLAYERS};
 
-const BAND_ID: usize = crate::card_id!("skill:MyGO!!!!!:迷途之星");
+// ---------------------------------------------------------------------------
+// Host-op subsets (body-reachable ops).
+// ---------------------------------------------------------------------------
 
-fn skills_symbolic_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
-        w.pos[p] = kani::any();
-        kani::assume(w.pos[p] >= 0 && w.pos[p] < world::TILE_COUNT);
-        w.stay[p] = 0;
-        w.fire[p] = 0;
-        w.out[p] = kani::any();
-    }
-    w
+/// `after_roll` (RollAfter) — add_crystals(1,1) + log.
+crate::host_subset!(mygo_after_roll_dispatch {
+    add_counter_self => arm_add_counter_self,
+    add_card_counter => arm_add_card_counter,
+    log | effect => arm_log,
+});
+
+/// `on_discarded` (Discarded) — crystals read + state + add_crystals.
+crate::host_subset!(mygo_on_discarded_dispatch {
+    counter_self => arm_counter_self,
+    card_counter => arm_card_counter,
+    add_counter_self => arm_add_counter_self,
+    add_card_counter => arm_add_card_counter,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    log | effect => arm_log,
+});
+
+fn after_roll_world(user: i32) {
+    host::install_backend(mygo_after_roll_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        for p in 0..MAX_PLAYERS {
+            w.out[p] = p >= 2;
+            w.stay[p] = 0;
+            w.fire[p] = 0;
+        }
+        w.trig_player = user;
+    });
 }
 
-fn living_player(w: &World) -> i32 {
-    let p = crate::harness::any_player(w.n_players);
-    kani::assume(!w.out[p as usize]);
-    p
+fn on_discarded_world(user: i32, pre_c: i32) {
+    host::install_backend(mygo_on_discarded_dispatch);
+    let key = crate::intern::intern("crystals");
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        for p in 0..MAX_PLAYERS {
+            w.out[p] = p >= 2;
+            w.stay[p] = 0;
+            w.fire[p] = 0;
+        }
+        w.trig_player = user;
+        w.key_set(user, key, pre_c);
+    });
 }
 
 fn crystals_key() -> crate::intern::NameId {
@@ -41,67 +69,69 @@ fn crystals_key() -> crate::intern::NameId {
 // ===========================================================================
 // C-MYGO-band-02
 // 「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。」
-// Hook entry index 1 (`On::Hook(RollAfter)`). The guard
-// `"actor == owner && move.roll >= 16"` is the host pre; under Kani we invoke
-// the body only when the guard admits.
+// Hook entry index 1 (`On::Hook(RollAfter)`). Seat-symmetric (「为此卡」).
 // ===========================================================================
 
-/// Iff: one AddCounter(+1); crystals rise to min(pre+1, 1).
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn band_02_crystal_on_16_iff() {
-    let w = skills_symbolic_world();
-    let player = living_player(&w);
-
-    // Host pre: `actor == owner && move.roll >= 16`. We pin the admitted region
-    // and invoke the unmodified body. The guard IR for this string is exercised
-    // by `cond_ops`; here the body is the obligation.
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+/// Shared iff at a **concrete** user seat.
+fn band_02_crystal_on_16_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    after_roll_world(user);
+    let pre = world::snapshot();
+    let pre_c = world::with_world(|ww| ww.key_get(user, crystals_key()));
     kani::assume(pre_c >= 0 && pre_c <= 3);
 
-    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "RollAfter", player));
+    invoke::unwrap_done(skill_bands::mygo::after_roll_kani(user));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+    let post_c = world::with_world(|ww| ww.key_get(user, crystals_key()));
 
     // `add_crystals(1, 1)` clamps at max=1. Host `add_counter_self` logs the
     // raw `n` (not the clamped delta) and clamps the stored value.
-    assert!(
-        spec::skills_mygo::band_02_log_ok(effects, player),
+    crate::kassert!(
+        spec::skills_mygo::band_02_log_ok(effects, user),
         "C-MYGO-band-02: effect log must be exactly one AddCounter(+1)"
     );
-    assert!(
+    crate::kassert!(
         post_c == spec::skills_mygo::band_02_crystals_after(pre_c),
         "C-MYGO-band-02: crystals must be min(pre+1, 1) under the roll cap"
     );
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
-    assert!(post.stay == pre.stay, "frame: stay unchanged");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
 
     kani::cover!(pre_c == 0, "pre crystals 0 (gain lands)");
     kani::cover!(pre_c >= 1, "pre crystals at cap (gain refused by max)");
+}
+
+/// Band-02 iff at seat 0.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_02_crystal_on_16_iff() {
+    band_02_crystal_on_16_iff_at(0);
+}
+
+/// Band-02 iff at seat 1.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_02_user1_crystal_on_16_iff() {
+    band_02_crystal_on_16_iff_at(1);
 }
 
 /// Mutant companion: a +2 spec must not match.
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn band_02_mutant_is_detected() {
-    let w = skills_symbolic_world();
-    let player = living_player(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "RollAfter", player));
+    after_roll_world(0);
+    let user = 0i32;
+    invoke::unwrap_done(skill_bands::mygo::after_roll_kani(user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
-        !spec::skills_mygo::band_02_log_ok_mutant(effects, player),
+    crate::kassert!(
+        !spec::skills_mygo::band_02_log_ok_mutant(effects, user),
         "mutant: +2 spec must not match the +1 card"
     );
 }
@@ -115,71 +145,73 @@ pub fn band_02_mutant_is_detected() {
 // is already at the roll cap of 1. Spec from the book.
 // ===========================================================================
 
-/// Iff against the book (gain whenever `pre < 1+over`, over ∈ 0..=2).
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn band_04_ineffective_overcap_iff() {
-    let w = skills_symbolic_world();
-    let player = living_player(&w);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+/// Shared iff at a **concrete** user seat.
+fn band_04_ineffective_overcap_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    let pre_c: i32 = kani::any();
     kani::assume(pre_c >= 0 && pre_c <= 3);
-
-    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "Discarded", player));
+    on_discarded_world(user, pre_c);
+    let pre = world::snapshot();
+    invoke::unwrap_done(skill_bands::mygo::on_discarded_kani(user));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
-    let over = world::with_world(|ww| ww.key_get(player, crate::intern::intern("skill.mygo.over")));
+    let post_c = world::with_world(|ww| ww.key_get(user, crystals_key()));
+    let over = world::with_world(|ww| ww.key_get(user, crate::intern::intern("skill.mygo.over")));
     kani::assume(over >= 0 && over <= 2);
 
     let expected = spec::skills_mygo::band_04_crystals_after(pre_c, over);
     kani::cover!(pre_c == 1 && over == 0, "at roll cap, over=0 (book: must still grow)");
     kani::cover!(pre_c < expected, "gain fires");
 
-    assert!(
+    crate::kassert!(
         post_c == expected,
         "C-MYGO-band-04: ineffective discard must add one over-cap crystal (max 2 over)"
     );
     if post_c > pre_c {
-        assert!(
-            spec::skills_mygo::band_04_log_ok(effects, player),
+        crate::kassert!(
+            spec::skills_mygo::band_04_log_ok(effects, user),
             "C-MYGO-band-04: gain logs exactly one AddCounter(+1)"
         );
     }
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+}
+
+/// Band-04 iff at seat 0.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_04_ineffective_overcap_iff() {
+    band_04_ineffective_overcap_iff_at(0);
+}
+
+/// Band-04 iff at seat 1.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn band_04_user1_ineffective_overcap_iff() {
+    band_04_ineffective_overcap_iff_at(1);
 }
 
 /// Mutant: empty log when the gain should fire.
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn band_04_mutant_is_detected() {
-    let w = skills_symbolic_world();
-    let player = living_player(&w);
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
-    let _ = pre;
-    kani::assume(pre_c == 0); // gain must fire
-    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "Discarded", player));
+    on_discarded_world(0, 0);
+    let user = 0i32;
+    let pre_c = 0; // gain must fire
+    invoke::unwrap_done(skill_bands::mygo::on_discarded_kani(user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     if log_n > 0 {
-        assert!(
-            !spec::skills_mygo::band_04_log_ok_mutant(effects, player),
+        crate::kassert!(
+            !spec::skills_mygo::band_04_log_ok_mutant(effects, user),
             "mutant: empty-log spec must not match a gaining card"
         );
     }
+    let _ = pre_c;
 }
 
 // ===========================================================================

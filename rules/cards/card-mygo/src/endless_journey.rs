@@ -23,7 +23,13 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
         On::Hook(&[HookKind::SettleBody], "actor == owner && move.main && card.placed", None, settle_body),
         On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"哪怕这旅程没有终点"#)
+        .raw_name(r#"哪怕这旅程没有终点"#)
+        .tags(&[r#"手"#, r#"持续"#])
+        .text(r#"[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶，每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹水晶数量为0时，将此卡置入弃牌堆。（2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数"#)
+        .cell(r#"I14"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 const ID: &str = "MyGO:哪怕这旅程没有终点";
 
@@ -105,4 +111,29 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
             .i("n", x as i64),
     )?;
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn endless_journey_kani(player_id: i32) -> card_sdk::Asked {
+    endless_journey(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
+    settle_body(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
 }

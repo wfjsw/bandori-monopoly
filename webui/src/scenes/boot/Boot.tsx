@@ -15,12 +15,6 @@ import { toast } from "../../ui/Toast";
 import s from "./Boot.module.css";
 import { t as tr } from "../../i18n/t";
 
-/** BootController.BandKeys -- boot art per home character's band. */
-const BAND_KEYS: Record<string, string> = {
-  "Poppin' Party": "001", Afterglow: "002", "Hello, Happy World!": "003", "Pastel✽Palettes": "004",
-  Roselia: "005", "RAISE A SUILEN": "018", Morfonica: "021", "MyGO!!!!!": "045", CRYCHIC: "045",
-};
-
 const TIPS = [
   tr("boot.tip.circle"),
   tr("boot.tip.dealer"),
@@ -33,6 +27,9 @@ const TIPS = [
 
 let loading: Promise<void> | null = null;
 function loadAll(progress: (p: number) => void): Promise<void> {
+  // `loadGameData` is the single gate: it loads the ruleset first (the roster
+  // source), then the tables, and assigns `D` only at the end. Deck builder /
+  // gallery / home may read `D` as soon as this resolves -- never before.
   loading ??= (async () => {
     await loadManifest();
     installFonts();
@@ -48,9 +45,11 @@ function loadAll(progress: (p: number) => void): Promise<void> {
 type Stage = "loading" | "tap" | "create" | "error";
 
 /**
- * One-shot boot: manifest, fonts, game data and the wasm rules, with a
- * progress meter. On success it plays the boot BGM and either hands back to
- * the shell (`resume`) or offers the tap / create screens.
+ * One-shot boot: manifest, fonts, then `loadGameData` (ruleset + tables + the
+ * typed `D`), with a progress meter. On success it plays the boot BGM and
+ * either hands back to the shell (`resume`) or offers the tap / create screens.
+ * A throw leaves `D` unset and lands on the error stage -- `loadGameData`
+ * assigns `D` only after every piece is in.
  */
 function useBootAssets(opts: {
   resume: boolean;
@@ -68,7 +67,7 @@ function useBootAssets(opts: {
         if (!alive) return;
         playSceneBgm("boot");
         const home = hasProfile() ? D.character(getProfile().homeCharacter) : undefined;
-        setArt(res(`BandoriBoot/${BAND_KEYS[home?.band ?? ""] ?? "045"}`));
+        setArt(res(`BandoriBoot/${(home && D.band(home.band)?.bootArt) || "045"}`));
         if (!hasProfile()) setStage("create");
         else if (resume) onReady();
         else setStage("tap");

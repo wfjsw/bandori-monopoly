@@ -43,6 +43,10 @@ def main() -> int:
     bad = 0
     game_all = set(load(LANGS[0], "game")) | set(load(LANGS[1], "game"))
     ui_all = set(load(LANGS[0], "ui")) | set(load(LANGS[1], "ui"))
+    # Roots that live only in `ui.json` are client copy even when a `.rs` string
+    # names them (`CardDef::texts` / `deed.note.*` ride the manifest as i18n
+    # keys). Everything else a `.rs` file emits is a protocol / engine key.
+    ui_only_roots = {k.split(".")[0] for k in ui_all} - {k.split(".")[0] for k in game_all}
     # The key shape is taken from the locales themselves, so a new namespace in a
     # locale file is scanned automatically.
     roots = {k.split(".")[0] for k in game_all | ui_all} | set(SPECIAL) | {"err", "log", "ask", "src", "vote", "end", "status", "room"}
@@ -65,7 +69,13 @@ def main() -> int:
             engine_roots = {"err", "log", "ask", "src", "vote", "end", "status", "blank", "list"}
             from_protocol = rel.removeprefix("webui/src/") in PROTOCOL
             for k in keys:
-                to_engine = p.suffix == ".rs" or from_protocol or k.split(".")[0] in engine_roots
+                root = k.split(".")[0]
+                # A key whose root exists only in ui.json is client copy even
+                # when a .rs text declaration names it (tile deed texts).
+                if root in ui_only_roots:
+                    ui_used.add(k)
+                    continue
+                to_engine = p.suffix == ".rs" or from_protocol or root in engine_roots
                 (engine_used if to_engine else ui_used).add(k)
 
     def report(lang: str, title: str, keys) -> None:

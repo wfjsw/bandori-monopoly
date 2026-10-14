@@ -42,12 +42,7 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
             on_draw,
         ),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得大和麻弥的
 /// （2）技能」.
@@ -148,4 +143,34 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("maya_dawn_done")).i("n", y as i64),
     );
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"大和麻弥"#)
+    .display(r#"大和麻弥"#)
+    .band(r#"Pastel✽Palettes"#)
+    .color(r#"#99DD88"#)
+    .skill(r#"朝阳照耀的片刻"#)
+    .text(r#"（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得大和麻弥的（2）技能
+（2）自己抽卡时时可选择将自己Y个正面[P✽P粉丝]变反，此次抽卡改为观看卡组顶端Y+1张卡（卡组数量不足Y+1则观看全部卡组），然后选择一张牌（不公开）加入手牌（此次加手视为抽卡动作），剩余观看的牌洗回卡组；如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正，否则将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正"#)
+    .cn_id(r#"019"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"可能性为∞"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_draw_kani(player_id: i32) -> card_sdk::Asked {
+    on_draw(player_id)
 }

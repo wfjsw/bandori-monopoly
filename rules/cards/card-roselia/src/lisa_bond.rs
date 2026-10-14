@@ -8,8 +8,8 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
@@ -20,20 +20,13 @@ pub const LISA_BOND: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」
-    // 规则书[反击]: 「当你使用技能进行传送后」 -- C# `t.Kind == "skillTeleport" && t.Seat == seat`.
-    if trigger::kind() != TriggerKind::SkillTeleport || trigger::player_id() != player_id {
-        return false;
-    }
-    // 规则书[反击]: 「指定一个和你在同一地块的角色」 -- only worth counteracting with someone
-    // else on your tile (C# `H.SeatsOn(pos, seat).Count > 0`).
-    !ctx::players_on(ctx::player_pos(player_id), player_id).is_empty()
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"必然的联系"#)
+        .raw_name(r#"必然的联系（莉莎）"#)
+        .tags(&[r#"反击"#])
+        .text(r#"【反击】当你使用技能进行传送后，你可以打出此卡并指定一个和你在同一地块的角色，将此卡放在对方的游戏区，你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆。"#)
+        .cell(r#"E16"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", r#"今井莉莎"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && players_on(owner.pos, owner) > 0` is the pre.

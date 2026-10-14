@@ -11,7 +11,13 @@ use alloc::vec::Vec;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", Some(cant_play), play)]);
+pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"向着顶点"#)
+        .raw_name(r#"向着顶点"#)
+        .tags(&[])
+        .text(r#"移动到下一个可被购买的livehouse格子。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋，视为你的主要移动。"#)
+        .cell(r#"E4"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
 
 /// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`),
 /// where `IsColor` sees both the `anyColor` tile prop and this player's
@@ -175,4 +181,11 @@ fn ceil_to(x: i64, unit: i64) -> i32 {
         return x as i32;
     }
     (((x + unit - 1) / unit) * unit) as i32
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
 }

@@ -1,7 +1,7 @@
 //! Unit `skills_sumimi`: reference specs FROM the clause docs only.
 //!
-//! Sources: `data/characters.json` `text` (纯田真奈 / 三角初华（Sumimi）) and
-//! `data/bands.json` `text` (Sumimi / 人气偶像组合), via
+//! Sources: the roster character row `text` (纯田真奈 / 三角初华（Sumimi）) and
+//! the roster band row `text` (Sumimi / 人气偶像组合), via
 //! `docs/rulebook/spec/cards/sumimi.md`. Never derive a spec from engine
 //! behaviour. OPEN terms stay OPEN.
 

@@ -42,8 +42,13 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // condition vocabulary).
         On::Hook(&[HookKind::CounterChanged], card_sdk::pre::MINE, Some(refill_guard), refill),
     ],
-)
-    .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine)]);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"不再迷茫"#)
+        .raw_name(r#"（灯）不再迷茫"#)
+        .tags(&[])
+        .text(r#"（1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数 （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶] （3）此卡上的奇迹水晶耗尽后，[移除]此卡"#)
+        .cell(r#"I3"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"高松灯"#)]));
 
 /// Set while (2)'s substitution is running, so [`refill`] knows the decrease
 /// is the skill-cost swap and must not be refunded.
@@ -142,10 +147,6 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
-
 /// Guard for [`sweep`] -- the count emptied (the write was a decrease and the
 /// card now holds 0). Name-filtered to `counter::CRYSTALS`.
 fn sweep_guard(player_id: i32) -> bool {
@@ -162,4 +163,23 @@ fn sweep_guard(player_id: i32) -> bool {
 fn sweep(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn tomori_no_longer_kani(player_id: i32) -> card_sdk::Asked {
+    tomori_no_longer(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn sweep_kani(player_id: i32) -> card_sdk::Asked {
+    sweep(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn refill_kani(player_id: i32) -> card_sdk::Asked {
+    refill(player_id)
 }

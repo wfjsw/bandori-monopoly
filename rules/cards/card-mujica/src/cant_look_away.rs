@@ -6,7 +6,7 @@
 //!
 //! force-move the player who [反击]'d you this turn 1-4 tiles with settle.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -29,18 +29,13 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
             counteract,
         ),
     ],
-)
-    .legacy(&[(1, legacy_can_counteract)]);
-
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- C#
-    // `t.Kind == "counteracted" && t.Target == seat && t.Seat != seat`.
-    (trigger::kind() == TriggerKind::Counteracted
-        || trigger::kind() == TriggerKind::Card
-        || trigger::kind() == TriggerKind::SkillUsed)
-        && trigger::target() == player_id
-        && trigger::player_id() != player_id
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"无法将视线移开"#)
+        .raw_name(r#"无法将视线移开"#)
+        .tags(&[r#"反击"#])
+        .text(r#"使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动"#)
+        .cell(r#"J7"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     run(player_id)?;
@@ -110,4 +105,11 @@ fn run(player_id: i32) -> card_sdk::Asked {
     // `_turnCtx.MainMoved` when the walked player is the turn player, so a
     // self walk on one's own turn consumes the main move.
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
 }

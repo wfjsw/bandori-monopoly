@@ -29,7 +29,7 @@
 //! * **`exileMain`** -- the return teleport is consumed as the turn's
 //!   [主要移动] (`main_moved = true`), so the player cannot also roll.
 
-use card_sdk::abi::{AbKind, HookKind};
+use card_sdk::abi::{AbKind, GateKind, HookKind};
 use card_sdk::ctx::trigger;
 use card_sdk::{CardDef, On};
 
@@ -42,8 +42,27 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // hook is the same moment from the abnormal path).
         On::Hook(&[HookKind::Abnormal], "", Some(exile_landed), on_exile_landed),
         On::Hook(&[HookKind::Exile], "", None, on_exile_granted),
+        // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
+        // [手]效果，无法收付款」 -- three gates, **CEL-only**.
+        // TODO(规则书): 「不能被[指定]」 and the on-board clause are still
+        // engine-side (`MatchPlayer::status_gates`), pending Untargetable /
+        // on-board gate kinds.
+        On::Gate(
+            &[GateKind::ActGate, GateKind::PayGate, GateKind::MoveGate],
+            EXILED,
+            None,
+            refuse,
+        ),
     ],
 );
+
+/// The condition under which [除外] closes the act, pay and move gates.
+pub const EXILED: &str = "state(actor,'exile') > 0";
+
+fn refuse(_owner: i32) -> card_sdk::Asked {
+    trigger::set_cancelled();
+    Ok(())
+}
 
 fn exile_landed(_owner: i32) -> bool {
     trigger::abnormal_kind() == Some(AbKind::Exile)

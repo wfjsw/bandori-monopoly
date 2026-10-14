@@ -13,12 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const AFTERGLOW: CardDef = CardDef::new(
     "skill:Afterglow:商店街的宠儿",
     &[On::Hook(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought)],
-)
-    .legacy(&[(0, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.
 fn on_bought(player_id: i32) -> card_sdk::Asked {
@@ -38,4 +33,21 @@ fn on_bought(player_id: i32) -> card_sdk::Asked {
         );
     }
     Ok(())
+}
+
+/// Roster band row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Afterglow"#)
+    .short_name(r#"AG"#)
+    .boot_art(r#"002"#)
+    .color(r#"#EE3344"#)
+    .skill(r#"商店街的宠儿"#)
+    .text(r#"你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子"#)
+    .logo(r#"002"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_bought_kani(player_id: i32) -> card_sdk::Asked {
+    on_bought(player_id)
 }

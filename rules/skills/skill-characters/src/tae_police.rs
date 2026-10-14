@@ -44,12 +44,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         // (the seat keeps the floor until it passes).
         (prop::COUNTERACT_GROUP, 1),
     ])
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)])
     .silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
 
 /// 「初始2，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -130,4 +125,46 @@ fn negate(player_id: i32) -> card_sdk::Asked {
         ctx::gain(src, 2000, &Msg::new(key!("tae_police_gain_other")))?;
     }
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"花园多惠"#)
+    .display(r#"花园多惠"#)
+    .band(r#"Poppin' Party"#)
+    .color(r#"#0077DD"#)
+    .skill(r#"花园警察，出警！"#)
+    .text(r#"（1）每次你领取[CiRCLE奖励]时投掷3d20，如果结果对应的格子不是“星空齿科”则在结果对应的格子放置一个[多惠兔子]；当你经过有[多惠兔子]的格子时[移除]该格子上的所有[多惠兔子]并获得等量的[火罐]（初始2，上限4）
+（2）在其他玩家使用角色/团技能的[主]效果或使用手牌的[手]效果时你可以使用4个[火罐]将其抵消，然后你获得500资金且被抵消的玩家获得2000资金"#)
+    .cn_id(r#"002"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"寻找更好的声音"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_circle_kani(player_id: i32) -> card_sdk::Asked {
+    on_circle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn negate_kani(player_id: i32) -> card_sdk::Asked {
+    negate(player_id)
 }

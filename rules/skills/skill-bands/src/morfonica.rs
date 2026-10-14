@@ -35,12 +35,7 @@ pub const MORFONICA: CardDef = CardDef::new(
             on_circle,
         ),
     ],
-)
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「当你一次性失去2000以上资金时，抽一张卡」. Applicability is the `pre`;
 /// this side only draws.
@@ -76,3 +71,26 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
 // （2）「[CiRCLE奖励]选择[获得]资金时」 -- `circleAffected` now fires between the
 // pick and the payout, with `t.value` = 0 (money) / 1 (card). The guard keys on
 // the money half only, so the draw option is left alone.
+
+/// Roster band row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Morfonica"#)
+    .short_name(r#"Mor"#)
+    .boot_art(r#"021"#)
+    .color(r#"#33AAFF"#)
+    .skill(r#"振翅高飞的练习曲"#)
+    .text(r#"（1）当你一次性失去2000以上资金时，抽一张卡。（2）[CiRCLE奖励]选择[获得]资金时根据选择[获得]资金次数设资金量为1000，1500，2000的循环"#)
+    .logo(r#"021"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
+    after_pay(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_circle_kani(player_id: i32) -> card_sdk::Asked {
+    on_circle(player_id)
+}

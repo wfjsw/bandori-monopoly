@@ -21,7 +21,13 @@ pub const THAT_DAY_RAIN: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], "", Some(hook_guard), hook),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"那天的雨"#)
+        .raw_name(r#"那天的雨"#)
+        .tags(&[])
+        .text(r#"将此卡放置于自己场上并为其放置5个奇迹水晶，打出此卡时及你的每回合开始时投掷1d10并按地产商格子顺序使（除“东京外”的）第n个地产商对应的颜色格子及这些格子相邻格子上的所有玩家获得一层[停留]，每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆（骰点大于10则固定为高级住宅区对应颜色的格子）"#)
+        .cell(r#"I12"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 const ID: &str = "MyGO:那天的雨";
 
@@ -219,4 +225,23 @@ fn rain(player_id: i32) {
             ctx::log(p, &Msg::new(key!("that_day_rain_stay")).player_id("who", p));
         }
     }
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn that_day_rain_kani(player_id: i32) -> card_sdk::Asked {
+    that_day_rain(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
+    hook(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
 }

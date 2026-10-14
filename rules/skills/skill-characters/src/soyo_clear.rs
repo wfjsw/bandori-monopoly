@@ -42,11 +42,7 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
         On::Hook(&[HookKind::Settle], "actor == owner && slot('skill.soyoClear.armed') != 0", None, on_settle),
     ],
 )
-    .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -116,4 +112,39 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
     //   a payment's reduction to one skill, so 「以此法免除」 has no reading that
     //   is both faithful and checkable. The penalty latch is wired in `on_pass`.
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"长崎素世"#)
+    .display(r#"长崎素世"#)
+    .band(r#"MyGO!!!!!"#)
+    .color(r#"#FFDD88"#)
+    .skill(r#"通透的颜色"#)
+    .text(r#"（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）（2）移动掷骰后可消耗一个火罐，使自己本回合的[移动终点]对你视为对应颜色的地产商格子，持续至你的下回合开始；若以此法单次免除了至少1500资金的[支付]，则你下次经过CiRCLE时不获得火罐。"#)
+    .cn_id(r#"039"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"混合的颜色"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
+    on_settle(player_id)
 }

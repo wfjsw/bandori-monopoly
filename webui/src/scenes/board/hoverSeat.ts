@@ -29,3 +29,18 @@ export function useHoverSeat(): number {
 export function useSeatFocus(i: number): "" | "hot" | "dim" {
   return useSyncExternalStore(subscribe, () => (seat < 0 ? "" : i === seat ? "hot" : "dim"));
 }
+
+// The tiles a hovered on-field card designates. While set, those tiles light up
+// and the rest of the board fades, like a hovered Players panel.
+let cardTiles: ReadonlySet<number> | null = null;
+
+export function setHoverCardTiles(t: ReadonlySet<number> | null): void {
+  if (cardTiles === t) return;
+  cardTiles = t;
+  subs.forEach((f) => f());
+}
+
+/** How tile `i` reads while a field card with designated tiles is hovered. */
+export function useCardTileFocus(i: number): "" | "hot" | "dim" {
+  return useSyncExternalStore(subscribe, () => (!cardTiles ? "" : cardTiles.has(i) ? "hot" : "dim"));
+}

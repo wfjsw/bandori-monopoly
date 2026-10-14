@@ -8,7 +8,7 @@
 //!
 //! Counteraction-only (`Normal => false`).
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,27 +20,13 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「当你将要向其他玩家支付时打出此卡」
-    // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.PayToOther && !t.Pay.cancel
-    //   && t.Pay.amount > 0` (`t.Pay.to` on pay triggers is `trigger::target`).
-    if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
-        return false;
-    }
-    // 规则书[反击]: 「支付」 -- the `pay` effect entry. The causer's own `abnormal`
-    // also rides an `effect` link with `player_id` = the causer and `value` = its
-    // `AbKind` (> 0); that is not a payment and must not open this window.
-    if !ctx::effect::has(TriggerKind::Pay) {
-        return false;
-    }
-    let to = trigger::target();
-    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
-    // reads as `value() == 0`, so the >0 guard covers it.
-    to >= 0 && to != player_id && trigger::value() > 0
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name(r#"（小白）"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击]当你将要向其他玩家支付时打出此卡，此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金"#)
+        .cell(r#"G9"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", r#"仓田真白"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
@@ -69,4 +55,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         )?;
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

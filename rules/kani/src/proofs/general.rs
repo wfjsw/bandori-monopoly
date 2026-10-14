@@ -74,22 +74,22 @@ pub fn recruit_01_iff() {
     kani::cover!(pre.money[player as usize] == 1500, "exactly 1500");
     kani::cover!(pre.money[player as usize] > 1500, "more than 1500");
 
-    assert!(
+    crate::kassert!(
         spec::recruit_01_log_ok(effects, player),
         "C-GEN-recruit-01: log must be exactly PayMoney(1500) then Draw(1)"
     );
-    assert!(
+    crate::kassert!(
         spec::recruit_01_post_ok(&post, player, pre.money[player as usize]),
         "C-GEN-recruit-01: user's money falls by exactly 1500"
     );
     // Frame: everyone else's money untouched; stay/fire/pos untouched.
-    assert!(
+    crate::kassert!(
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-recruit-01: frame other money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-recruit-01: frame pos");
-    assert!(post.fire == pre.fire, "C-GEN-recruit-01: frame fire");
-    assert!(post.stay == pre.stay, "C-GEN-recruit-01: frame stay");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-recruit-01: frame pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "C-GEN-recruit-01: frame fire");
+    crate::kassert!(post.stay == pre.stay, "C-GEN-recruit-01: frame stay");
 }
 
 /// MUTANT companion: the off-by-one spend does NOT match the card.
@@ -103,7 +103,7 @@ pub fn recruit_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:10次招募（1回限定）"), player));
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         !spec::recruit_01_log_ok_mutant(effects, player),
         "mutant 1400-spend must not match the card"
     );
@@ -140,11 +140,11 @@ pub fn great_01_02_03_iff() {
     kani::cover!(pre_deck_perfect == 0, "no pre-existing PERFECT");
     kani::cover!(pre_deck_perfect > 0, "one pre-existing PERFECT");
 
-    assert!(
+    crate::kassert!(
         spec::great_01_log_ok(effects, player),
         "C-GEN-great-03: log must be exactly GainMoney(2000)"
     );
-    assert!(
+    crate::kassert!(
         spec::great_post_ok(
             post_dest,
             pre_deck_perfect,
@@ -154,12 +154,12 @@ pub fn great_01_02_03_iff() {
         ),
         "C-GEN-great-01/02/03: Banished + one more PERFECT in deck + money+2000"
     );
-    assert!(
+    crate::kassert!(
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-great: frame other money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-great: frame pos");
-    assert!(post.stay == pre.stay, "C-GEN-great: frame stay");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-great: frame pos");
+    crate::kassert!(post.stay == pre.stay, "C-GEN-great: frame stay");
 }
 
 /// MUTANT companion: the +2500 reference does not match the card.
@@ -171,7 +171,7 @@ pub fn great_01_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:GREAT"), player));
     let (log_n, logbuf) = take_log();
-    assert!(
+    crate::kassert!(
         !spec::great_01_log_ok_mutant(&logbuf[..log_n], player),
         "mutant +2500 must not match the card"
     );
@@ -208,11 +208,11 @@ pub fn perfect_01_02_03_iff() {
     kani::cover!(pre_discard_fever == 0, "no pre-existing FEVER!");
     kani::cover!(pre_discard_fever > 0, "one pre-existing FEVER!");
 
-    assert!(
+    crate::kassert!(
         spec::perfect_01_log_ok(effects, player),
         "C-GEN-perfect-03: log must be exactly GainMoney(3000)"
     );
-    assert!(
+    crate::kassert!(
         spec::perfect_post_ok(
             post_dest,
             pre_discard_fever,
@@ -222,12 +222,12 @@ pub fn perfect_01_02_03_iff() {
         ),
         "C-GEN-perfect-01/02/03: Banished + one more FEVER! in discard + money+3000"
     );
-    assert!(
+    crate::kassert!(
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-perfect: frame other money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-perfect: frame pos");
-    assert!(post.stay == pre.stay, "C-GEN-perfect: frame stay");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-perfect: frame pos");
+    crate::kassert!(post.stay == pre.stay, "C-GEN-perfect: frame stay");
 }
 
 /// MUTANT companion: the +2500 reference does not match the card.
@@ -239,7 +239,7 @@ pub fn perfect_01_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]PERFECT"), player));
     let (log_n, logbuf) = take_log();
-    assert!(
+    crate::kassert!(
         !spec::perfect_01_log_ok_mutant(&logbuf[..log_n], player),
         "mutant +2500 must not match the card"
     );
@@ -267,24 +267,24 @@ pub fn fever_01_iff() {
     let effects = &logbuf[..log_n];
     let this_card = world::card_slot_of("通用:[衍生]FEVER!");
 
-    assert!(
+    crate::kassert!(
         spec::fever_01_log_ok(effects, player, this_card),
         "C-GEN-fever-01: log must be exactly PlaceCard(Field)"
     );
-    assert!(
+    crate::kassert!(
         spec::others_money_unchanged(&pre, &post, pre.n_players, player),
         "C-GEN-fever-01: frame money"
     );
-    assert!(post.pos == pre.pos, "C-GEN-fever-01: frame pos");
-    assert!(post.stay == pre.stay, "C-GEN-fever-01: frame stay");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-fever-01: frame pos");
+    crate::kassert!(post.stay == pre.stay, "C-GEN-fever-01: frame stay");
     // Post: one field instance owned by the player.
     let (field_n, owner0) = world::with_world(|ww| {
         let n = ww.field_n;
         let o = if n > 0 { ww.field[0].player } else { -99 };
         (n, o)
     });
-    assert!(field_n == 1, "C-GEN-fever-01: exactly one field instance");
-    assert!(owner0 == player, "C-GEN-fever-01: instance owned by the user");
+    crate::kassert!(field_n == 1, "C-GEN-fever-01: exactly one field instance");
+    crate::kassert!(owner0 == player, "C-GEN-fever-01: instance owned by the user");
 }
 
 /// MUTANT companion: dest Graveyard must not match.
@@ -298,7 +298,7 @@ pub fn fever_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]FEVER!"), player));
     let (log_n, logbuf) = take_log();
     let this_card = world::card_slot_of("通用:[衍生]FEVER!");
-    assert!(
+    crate::kassert!(
         !spec::fever_01_log_ok_mutant(&logbuf[..log_n], player, this_card),
         "mutant dest=Graveyard must not match the card"
     );
@@ -351,7 +351,7 @@ pub fn fever_04_turn_start_iff() {
     let player = w.trig_player;
     let admitted = fever_guard_admits(&w, player, true);
     kani::cover!(admitted, "card.placed admits");
-    assert!(admitted, "C-GEN-fever-04: placed card must pass card.placed");
+    crate::kassert!(admitted, "C-GEN-fever-04: placed card must pass card.placed");
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -364,17 +364,17 @@ pub fn fever_04_turn_start_iff() {
 
     kani::cover!(log_n == 0, "no effects (set_dest is unlogged)");
 
-    assert!(
+    crate::kassert!(
         spec::fever_04_log_ok(effects),
         "C-GEN-fever-04: no Effect log entries"
     );
-    assert!(
+    crate::kassert!(
         post_dest == spec::DEST_GRAVEYARD,
         "C-GEN-fever-04: dest must be Graveyard (弃卡区)"
     );
-    assert!(post.money == pre.money, "C-GEN-fever-04: frame money");
-    assert!(post.pos == pre.pos, "C-GEN-fever-04: frame pos");
-    assert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "C-GEN-fever-04: frame money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-fever-04: frame pos");
+    crate::kassert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
 }
 
 /// NO-OP: (a) the guard rejects when the card is not placed (host would not
@@ -392,15 +392,15 @@ pub fn fever_04_wrong_turn_noop() {
     };
     // The host admits (`card.placed`); the body itself must no-op because
     // `trigger::player_id() != player_id`.
-    assert!(admitted, "C-GEN-fever-04: placed card passes the guard");
+    crate::kassert!(admitted, "C-GEN-fever-04: placed card passes the guard");
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
     let post = world::snapshot();
     let (log_n, _) = take_log();
     let post_dest = world::with_world(|ww| ww.dest);
-    assert!(log_n == 0, "C-GEN-fever-04: wrong turn start is a no-op");
-    assert!(post_dest == pre_dest, "C-GEN-fever-04: dest untouched");
-    assert!(post.money == pre.money, "C-GEN-fever-04: frame money");
-    assert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
+    crate::kassert!(log_n == 0, "C-GEN-fever-04: wrong turn start is a no-op");
+    crate::kassert!(post_dest == pre_dest, "C-GEN-fever-04: dest untouched");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "C-GEN-fever-04: frame money");
+    crate::kassert!(post.stay == pre.stay, "C-GEN-fever-04: frame stay");
 }
 
 /// Guard-reject path: not placed ⇒ host does not call the body.
@@ -410,7 +410,7 @@ pub fn fever_04_not_placed_guard_rejects() {
     let w = fever_turn_start_world(false, true);
     let player = w.trig_player;
     let admitted = fever_guard_admits(&w, player, false);
-    assert!(!admitted, "C-GEN-fever-04: unplaced card must fail card.placed");
+    crate::kassert!(!admitted, "C-GEN-fever-04: unplaced card must fail card.placed");
 }
 
 /// MUTANT companion: dest Banished must not match.
@@ -422,7 +422,7 @@ pub fn fever_04_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
     let post_dest = world::with_world(|ww| ww.dest);
-    assert!(
+    crate::kassert!(
         !spec::fever_04_dest_ok_mutant(post_dest),
         "mutant dest=Banished must not match the card"
     );
@@ -446,17 +446,17 @@ pub fn budokan_x_formula() {
     kani::cover!(n == 2, "2 others");
     kani::cover!(n == 3, "3 others (2000/3 -> 670)");
     // Ceil-to-10: x is a multiple of 10, 2000/n <= x < 2000/n + 10.
-    assert!(x % 10 == 0, "X is a multiple of 10");
-    assert!(x >= (2000 + n - 1) / n, "X is at least ceil(2000/n)");
-    assert!(x < (2000 + n - 1) / n + 10, "X is below ceil(2000/n)+10");
+    crate::kassert!(x % 10 == 0, "X is a multiple of 10");
+    crate::kassert!(x >= (2000 + n - 1) / n, "X is at least ceil(2000/n)");
+    crate::kassert!(x < (2000 + n - 1) / n + 10, "X is below ceil(2000/n)+10");
     if n == 3 {
-        assert!(x == 670, "2000/3 ceil-10 is 670");
+        crate::kassert!(x == 670, "2000/3 ceil-10 is 670");
     }
     if n == 1 {
-        assert!(x == 2000, "2000/1 is 2000");
+        crate::kassert!(x == 2000, "2000/1 is 2000");
     }
     if n == 2 {
-        assert!(x == 1000, "2000/2 is 1000");
+        crate::kassert!(x == 1000, "2000/2 is 1000");
     }
 }
 
@@ -465,7 +465,7 @@ pub fn budokan_x_formula() {
 #[kani::unwind(8)]
 pub fn budokan_x_mutant_is_detected() {
     let n: i32 = 3;
-    assert!(
+    crate::kassert!(
         spec::budokan_x(n) != spec::budokan_x_mutant(n),
         "ceil-10 vs floor-10 must disagree on 2000/3"
     );
@@ -494,7 +494,7 @@ pub fn harvest_steps_bound() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn harvest_steps_mutant_is_detected() {
-    assert!(
+    crate::kassert!(
         spec::harvest_steps_ok(7) != spec::harvest_steps_ok_mutant(7),
         "1..=7 mutant must disagree at 7"
     );
@@ -522,11 +522,11 @@ pub fn tsugu_thresholds() {
     assert_eq!(spec::tsugu_lt26(s), s < 26);
     // Stacking: ≥28 implies ≥26 and ≥22.
     if s >= 28 {
-        assert!(spec::tsugu_ge26(s) && spec::tsugu_ge22(s), "stacking");
+        crate::kassert!(spec::tsugu_ge26(s) && spec::tsugu_ge22(s), "stacking");
     }
     // Branch 4 does not stack with branch 2.
     if s >= 26 {
-        assert!(!spec::tsugu_lt26(s), "04 excludes 02");
+        crate::kassert!(!spec::tsugu_lt26(s), "04 excludes 02");
     }
 }
 
@@ -534,7 +534,7 @@ pub fn tsugu_thresholds() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn tsugu_ge22_mutant_is_detected() {
-    assert!(
+    crate::kassert!(
         spec::tsugu_ge22(22) != spec::tsugu_ge22_mutant(22),
         "exclusive-22 mutant must disagree at 22"
     );
@@ -551,7 +551,7 @@ pub fn party_x_and_payout() {
     let others: i32 = kani::any();
     kani::assume((0..=3).contains(&others));
     let x = spec::party_x(others);
-    assert!(x == others + 1, "X = other spenders + 1");
+    crate::kassert!(x == others + 1, "X = other spenders + 1");
     kani::cover!(x == 1, "X=1 extra-turn branch");
     kani::cover!(x == 2, "X=2 roll branch");
 
@@ -567,7 +567,7 @@ pub fn party_x_and_payout() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn party_payout_mutant_is_detected() {
-    assert!(
+    crate::kassert!(
         spec::party_pays_out(35) != spec::party_pays_out_mutant(35),
         "exclusive-35 mutant must disagree at 35"
     );
@@ -622,13 +622,13 @@ pub fn encore_01_leaf_quiet_frame() {
     invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("通用:安可"), player));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
-    assert!(
+    crate::kassert!(
         spec::encore_01_log_ok(&logbuf[..log_n]),
         "C-GEN-encore-01: no Effect entries (negation is trig_negate)"
     );
-    assert!(post.money == pre.money, "C-GEN-encore-01: frame money");
-    assert!(post.pos == pre.pos, "C-GEN-encore-01: frame pos");
-    assert!(post.stay == pre.stay, "C-GEN-encore-01: frame stay");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "C-GEN-encore-01: frame money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-encore-01: frame pos");
+    crate::kassert!(post.stay == pre.stay, "C-GEN-encore-01: frame stay");
     // Documented host gap (not a body finding):
     let negate = world::with_world(|ww| ww.trig_negate);
     let _ = negate; // BLOCKED-HOST: unit-call models as a0 != 0 with a0 = 0
@@ -650,23 +650,23 @@ pub fn clearcp_settle_amount() {
     let n: i32 = kani::any();
     kani::assume((0..=8).contains(&n));
     if n == spec::CLEARCP_START {
-        assert!(!spec::clearcp_after_settle(n), "6 is pre-settle");
+        crate::kassert!(!spec::clearcp_after_settle(n), "6 is pre-settle");
     }
     if n == spec::CLEARCP_START - 1 {
-        assert!(spec::clearcp_after_settle(n), "5 is post one settle");
+        crate::kassert!(spec::clearcp_after_settle(n), "5 is post one settle");
     }
     if n == 0 {
-        assert!(spec::clearcp_graveyards_at_zero(n), "0 triggers the graveyard");
+        crate::kassert!(spec::clearcp_graveyards_at_zero(n), "0 triggers the graveyard");
     }
     // Pinned amount.
-    assert!(spec::clearcp_02_effects_ok(
+    crate::kassert!(spec::clearcp_02_effects_ok(
         &[Effect::GainMoney {
             player: settler,
             n: 800
         }],
         settler
     ), "settle pays the settler 800");
-    assert!(
+    crate::kassert!(
         !spec::clearcp_02_effects_ok_mutant(
             &[Effect::GainMoney {
                 player: settler,
@@ -697,7 +697,7 @@ pub fn parking_house_delta_bound() {
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn parking_house_delta_mutant_is_detected() {
-    assert!(
+    crate::kassert!(
         spec::parking_house_delta_ok(2) != spec::parking_house_delta_ok_mutant(2),
         "+2 mutant must disagree"
     );

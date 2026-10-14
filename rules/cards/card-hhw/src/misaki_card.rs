@@ -22,8 +22,13 @@ pub const MISAKI_CARD: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-.legacy(&[(0, legacy_can_counteract)]);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name(r#"（美咲）"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。"#)
+        .cell(r#"F15"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", r#"奥泽美咲"#)]));
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
 /// in the direction the move actually travels (`t.Move.Dir`).
@@ -44,22 +49,6 @@ fn between(player_id: i32) -> Vec<i32> {
             (1..=roll).contains(&d)
         })
         .collect()
-}
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「使用火罐进行移动掷骰后，触发结算前可打出此卡」 -- C#
-    // `CanCounteract`: `t.Kind == "moveRoll" && t.Seat == seat && t.Move != null &&
-    // t.Move.FireRoll && Between(t.Move).Count > 0`.
-    if trigger::player_id() != player_id {
-        return false;
-    }
-    // The [火罐] roll is card-owned state: the card that armed one tagged the
-    // move (see `ctx::plan::set_tag`).
-    if trigger::move_tag("fireRoll") == 0 {
-        return false;
-    }
-    !between(player_id).is_empty()
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

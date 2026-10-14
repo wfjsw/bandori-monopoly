@@ -114,6 +114,12 @@ pub struct RoomInfo {
     pub playing: bool,
     pub theme: String,
     pub weights: ScoreWeights,
+    /// Match clock / timer settings (`game_core::clock::ClockSettings`), the
+    /// host-editable twin of `weights`. Defaults reproduce the pre-settings
+    /// constants. Nested object on the wire: `{ baseTime, bonusTime, baseRefill,
+    /// banSeconds, pickSeconds, deckSeconds, bankruptAuctionTime }`.
+    #[serde(default)]
+    pub clock: crate::clock::ClockSettings,
     pub members: Vec<RoomMember>,
     /// Commit-reveal fairness (`docs/FAIRNESS.md`). `commit` is published the
     /// moment the room is **created** -- before any entropy can be collected

@@ -13,7 +13,13 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const KARAOKE: CardDef = CardDef::new(
     "CRYCHIC:去唱卡拉ok吧",
     &[On::Play("", Some(cant_play), karaoke)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"去唱卡拉ok吧"#)
+        .raw_name(r#"去唱卡拉ok吧"#)
+        .tags(&[])
+        .text(r#"进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。"#)
+        .cell(r#"M4"#)
+        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
 
 /// C# `CardKaraoke.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -89,4 +95,11 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
             .i("n", chosen as i64),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn karaoke_kani(player_id: i32) -> card_sdk::Asked {
+    karaoke(player_id)
 }

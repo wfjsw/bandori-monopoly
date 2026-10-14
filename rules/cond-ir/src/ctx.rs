@@ -50,6 +50,10 @@ pub enum FnId {
     TileIs,
     TileAttr,
     TileIn,
+    /// `state(p, 'key')` -- the seat's player-state value for an arbitrary
+    /// string key (`MatchPlayer.state` / `state_get`). Missing = 0. The key
+    /// argument is an `id_of` hash baked at lower time.
+    State,
 }
 
 /// Per-seat scalar fields (index into `IrCtx::seat`).
@@ -108,6 +112,11 @@ pub const NAMED_CAP: usize = 80;
 /// `(a * 1024 + b) -> v`, same packing as `rules-cond`'s eager fill.
 pub const BIN_CAP: usize = 64;
 
+/// Player-state rows for `state(p, 'key')`: `(seat, key_id, value)`. `key_id`
+/// is `id_of(key)`, the same hash the lowerer bakes for the string argument.
+/// Sized for 4 seats x 16 keys. Missing `(seat, key)` answers 0.
+pub const STATE_CAP: usize = 64;
+
 #[derive(Copy, Clone, Debug)]
 pub struct IrCtx {
     /// Flat scalars ([`VarId`] as index), raw i64. `OptInt` uses `-1` = null;
@@ -119,6 +128,9 @@ pub struct IrCtx {
     /// `(name_id, value)` pairs; `named_n` live entries.
     pub named: [(i64, i64); NAMED_CAP],
     pub named_n: u8,
+    /// `(seat, key_id, value)` rows for `state(p, 'key')`; `state_n` live.
+    pub state: [(i64, i64, i64); STATE_CAP],
+    pub state_n: u8,
     /// Bitsets ([`SetId`] as index).
     pub sets: [[u64; SET_BITS / 64]; SET_COUNT],
     /// Board tile count — backs `dist` / ring wraps.
@@ -136,6 +148,8 @@ impl Default for IrCtx {
             n_players: 0,
             named: [(0, 0); NAMED_CAP],
             named_n: 0,
+            state: [(0, 0, 0); STATE_CAP],
+            state_n: 0,
             sets: [[0; SET_BITS / 64]; SET_COUNT],
             tile_count: 0,
             bin: [(0, 0); BIN_CAP],
@@ -201,71 +215,181 @@ impl IrCtx {
 
     pub fn named_get(&self, name_id: i64) -> Option<i64> {
         let n = self.named_n as usize;
-        // Small-table path (light fills). Fixed 4-iteration walk.
-        if n <= 4 {
-            let mut i = 0usize;
-            while i < 4 {
-                if i < n && self.named[i].0 == name_id {
-                    return Some(self.named[i].1);
-                }
-                i += 1;
+        // Kani: zero-loop scan. A `while i < n` / 10×8 chunk walk unwinds to
+        // the global bound whenever `named_n` is not folded (the money_shave
+        // profile's `named_set` 8). Same result: first live `(name_id, _)`.
+        #[cfg(kani)]
+        {
+            macro_rules! step {
+                ($i:expr) => {
+                    // `.get`, not `[i]`: no slice_index_fail panic path.
+                    if $i < n {
+                        if let Some(e) = self.named.get($i) {
+                            if e.0 == name_id {
+                                return Some(e.1);
+                            }
+                        }
+                    }
+                };
             }
+            step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+            step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+            step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+            step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
+            step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
+            step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
+            step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
+            step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+            step!(64); step!(65); step!(66); step!(67); step!(68); step!(69); step!(70); step!(71);
+            step!(72); step!(73); step!(74); step!(75); step!(76); step!(77); step!(78); step!(79);
             return None;
         }
-        // 10×8 = 80 = NAMED_CAP chunk walk (unwind bound 10). Must cover the
-        // whole table: `fill_from_world` inserts 60 tile names before the
-        // card counters, so a 64-slot walk would miss them.
-        let mut outer = 0usize;
-        while outer < 10 {
-            let mut k = 0usize;
-            while k < 8 {
-                let i = outer * 8 + k;
-                if i < n && i < NAMED_CAP && self.named[i].0 == name_id {
-                    return Some(self.named[i].1);
+        #[cfg(not(kani))]
+        {
+            // Small-table path (light fills). Fixed 4-iteration walk.
+            if n <= 4 {
+                let mut i = 0usize;
+                while i < 4 {
+                    if i < n && self.named[i].0 == name_id {
+                        return Some(self.named[i].1);
+                    }
+                    i += 1;
                 }
-                k += 1;
+                return None;
             }
-            outer += 1;
+            // 10×8 = 80 = NAMED_CAP chunk walk (unwind bound 10). Must cover the
+            // whole table: `fill_from_world` inserts 60 tile names before the
+            // card counters, so a 64-slot walk would miss them.
+            let mut outer = 0usize;
+            while outer < 10 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let i = outer * 8 + k;
+                    if i < n && i < NAMED_CAP && self.named[i].0 == name_id {
+                        return Some(self.named[i].1);
+                    }
+                    k += 1;
+                }
+                outer += 1;
+            }
+            None
         }
-        None
     }
 
     pub fn named_set(&mut self, name_id: i64, v: i64) {
         let n = self.named_n as usize;
-        // Small-table path (light fills insert ≤ 4 pairs): a fixed 4-iteration
-        // walk, so `#[kani::unwind(4)]` covers it. The 10×8 walk below is only
-        // for the full `fill_from_world` 60-name table.
-        if n <= 4 {
-            let mut i = 0usize;
-            while i < 4 {
-                if i < n && self.named[i].0 == name_id {
-                    self.named[i].1 = v;
-                    return;
+        // Kani: zero-loop scan + append (same bits as the walks below).
+        #[cfg(kani)]
+        {
+            macro_rules! step {
+                ($i:expr) => {
+                    if $i < n {
+                        if let Some(e) = self.named.get_mut($i) {
+                            if e.0 == name_id {
+                                e.1 = v;
+                                return;
+                            }
+                        }
+                    }
+                };
+            }
+            step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+            step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+            step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+            step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
+            step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
+            step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
+            step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
+            step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+            step!(64); step!(65); step!(66); step!(67); step!(68); step!(69); step!(70); step!(71);
+            step!(72); step!(73); step!(74); step!(75); step!(76); step!(77); step!(78); step!(79);
+            if n < NAMED_CAP {
+                if let Some(e) = self.named.get_mut(n) {
+                    *e = (name_id, v);
                 }
-                i += 1;
+                self.named_n = (n + 1) as u8;
+            }
+            return;
+        }
+        #[cfg(not(kani))]
+        {
+            // Small-table path (light fills insert ≤ 4 pairs): a fixed 4-iteration
+            // walk, so `#[kani::unwind(4)]` covers it. The 10×8 walk below is only
+            // for the full `fill_from_world` 60-name table.
+            if n <= 4 {
+                let mut i = 0usize;
+                while i < 4 {
+                    if i < n && self.named[i].0 == name_id {
+                        self.named[i].1 = v;
+                        return;
+                    }
+                    i += 1;
+                }
+                if n < NAMED_CAP {
+                    self.named[n] = (name_id, v);
+                    self.named_n = (n + 1) as u8;
+                }
+                return;
+            }
+            let mut outer = 0usize;
+            while outer < 10 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let i = outer * 8 + k;
+                    if i < n && i < NAMED_CAP && self.named[i].0 == name_id {
+                        self.named[i].1 = v;
+                        return;
+                    }
+                    k += 1;
+                }
+                outer += 1;
             }
             if n < NAMED_CAP {
                 self.named[n] = (name_id, v);
                 self.named_n = (n + 1) as u8;
             }
-            return;
         }
+    }
+
+    /// `state(p, 'key')` lookup. 8×8 chunk walk over `STATE_CAP = 64`
+    /// (unwind bound 8). Missing `(seat, key)` answers 0.
+    pub fn state_get(&self, seat: i64, key_id: i64) -> i64 {
+        let n = self.state_n as usize;
         let mut outer = 0usize;
-        while outer < 10 {
+        while outer < 8 {
             let mut k = 0usize;
             while k < 8 {
                 let i = outer * 8 + k;
-                if i < n && i < NAMED_CAP && self.named[i].0 == name_id {
-                    self.named[i].1 = v;
+                if i < n && i < STATE_CAP && self.state[i].0 == seat && self.state[i].1 == key_id {
+                    return self.state[i].2;
+                }
+                k += 1;
+            }
+            outer += 1;
+        }
+        0
+    }
+
+    /// Insert or overwrite a `state(p, 'key')` row. 8×8 chunk walk (unwind
+    /// bound 8).
+    pub fn state_set(&mut self, seat: i64, key_id: i64, v: i64) {
+        let n = self.state_n as usize;
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < n && i < STATE_CAP && self.state[i].0 == seat && self.state[i].1 == key_id {
+                    self.state[i].2 = v;
                     return;
                 }
                 k += 1;
             }
             outer += 1;
         }
-        if n < NAMED_CAP {
-            self.named[n] = (name_id, v);
-            self.named_n = (n + 1) as u8;
+        if n < STATE_CAP {
+            self.state[n] = (seat, key_id, v);
+            self.state_n = (n + 1) as u8;
         }
     }
 

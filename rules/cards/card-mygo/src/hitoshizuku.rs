@@ -16,7 +16,13 @@ pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play("", N
     // 规则书: 「（此卡可在眩晕时打出）」 -- the `playableStunned` property
     // (C# `Card.PlayableStunned`), skips the stun gate. The exile and no-hand
     // gates have no such exception.
-    .props(&[(prop::PLAYABLE_STUNNED, 1)]);
+    .props(&[(prop::PLAYABLE_STUNNED, 1), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"壱雫空"#)
+        .raw_name(r#"壱雫空"#)
+        .tags(&[])
+        .text(r#"清除场上所有[停留]与[眩晕]效果，所有玩家因本效果每清除一种效果则支付此卡使用者1000资金，若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金。（此卡可在眩晕时打出）"#)
+        .cell(r#"I5"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
@@ -106,4 +112,11 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
         }
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn hitoshizuku_kani(player_id: i32) -> card_sdk::Asked {
+    hitoshizuku(player_id)
 }

@@ -30,7 +30,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bot_core::{next_decision, Ismcts, MatchSim, SearchConfig, SearchOutcome, SeatView};
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::{CardRules, Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -38,9 +38,20 @@ use game_core::state::BotMentality;
 use game_core::MatchMode;
 
 fn data() -> Arc<GameData> {
+    // bot-core must not grow a hard dep on the card crates, so the roster
+    // comes from the generated roster fixture (see `Roster::from_fixture`).
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let roster = Roster::from_fixture(&std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    )
+    .expect("roster fixture"))
+    .expect("roster fixture parses");
     Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())).unwrap(),
+        GameData::load(
+            |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+            roster,
+        )
+        .unwrap(),
     )
 }
 

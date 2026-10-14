@@ -34,11 +34,7 @@ pub const TAKI_CRYCHIC: CardDef = CardDef::new(
         On::Hook(&[HookKind::SkillUsed], card_sdk::pre::MINE, None, on_skill_used),
     ],
 )
-    .legacy(&[(0, legacy_mine), (2, legacy_mine)]).silent(&[0, 2]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0, 2]);
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, USED, 0);
@@ -115,4 +111,39 @@ fn offer_reroll(player_id: i32, first: i32) -> card_sdk::Asked {
         &Msg::new(key!("taki_crychic_kept")).i("n", chosen as i64),
     );
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"椎名立希（CRYCHIC）"#)
+    .display(r#"椎名立希（CRYCHIC）"#)
+    .band(r#"CRYCHIC"#)
+    .color(r#"#7777AA"#)
+    .skill(r#"克服劣等感"#)
+    .text(r#"每当你的移动掷骰结果严格小于你以外玩家中上一次进行的移动掷骰结果且那次移动掷骰结果不大于20，若你本回合未使用技能，你下回合可在移动前重骰一次并选择第二次的结果使用。"#)
+    .cn_id(r#"040"#)
+    .art(r#"040c"#)
+    .costume(r#"040_live_event_235_sr"#)
+    .exclusive_cards(&[r#"即便比不上..."#])
+    .preset(&[])
+    .variant_of(r#"椎名立希"#)
+    .variant_tag(r#"c"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_skill_used_kani(player_id: i32) -> card_sdk::Asked {
+    on_skill_used(player_id)
 }

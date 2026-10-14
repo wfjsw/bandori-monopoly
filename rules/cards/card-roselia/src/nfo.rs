@@ -22,7 +22,13 @@ pub const NFO: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, counteract),
         On::AtEnd("", None, at_end),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"NFO"#)
+        .raw_name(r#"NFO"#)
+        .tags(&[])
+        .text(r#"投掷1d6mod6并在回合结束后获得一层[停留]。若投掷结果为1，获得1500资金；若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]；若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆；若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出；若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300；若结果为6，依次获得结果1-5的全部效果。（若结果严格大于6，则从1开始重新计数）"#)
+        .cell(r#"E7"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
 
 const ID: &str = "R:NFO";
 
@@ -265,4 +271,29 @@ fn gain_bump(player_id: i32) -> card_sdk::Asked {
     ctx::trigger::set_pay_amount(ctx::trigger::value() + 300);
     ctx::log(player_id, &Msg::new(key!("nfo_bumped")));
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn gain_bump_kani(player_id: i32) -> card_sdk::Asked {
+    gain_bump(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
 }

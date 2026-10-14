@@ -109,7 +109,7 @@
 }
 
 /* Live markers in the face's bottom zone -- the part that must read while the
-   row is retracted: crystals, on-card CP, the note dot. */
+   row is retracted: crystals and on-card CP. */
 .crystal,
 .cp,
 .count {
@@ -127,14 +127,6 @@
 }
 .cp {
   background: var(--teal);
-}
-.noteDot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--pink);
-  box-shadow: 0 0 0 1.5px #fff;
 }
 
 /* Face-down: a card back in the owner's frame (no name or markers leak). */
@@ -211,3 +203,14 @@
 /* Players-panel hover: the hovered seat's field cards light up; the rest fade. */
 .slot.hot { filter: drop-shadow(0 0 6px var(--own)) drop-shadow(0 0 2px var(--own)); transform: translateY(6px); }
 .slot.dim { opacity: 0.35; filter: grayscale(0.7); }
+
+/* The field's owner, ringed in their character colour, on the card's bottom
+   right corner. Clicks fall through to the card. */
+.holder {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  z-index: 1;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}

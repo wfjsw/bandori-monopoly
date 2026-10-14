@@ -493,6 +493,24 @@ macro_rules! raise {
 }
 pub(crate) use raise;
 
+/// One declared **tile text** (`CardRules::card_texts`): the deed-popup
+/// description an entry speaks for. `game-core`'s own shape -- this crate does
+/// not depend on `card-sdk` types (same pattern as [`crate::state::prop`] vs
+/// `card_sdk::abi::prop`); the host's `ManifestTileText` carries the same
+/// `slot` / `tile` / `key` plus the entry index, which the loader folds into
+/// the Vec's order.
+///
+/// * `slot` -- `"settle"` or `"pass"` (the [结算] / [经过] half).
+/// * `tile` -- `""` = the instance's own tile; otherwise a board tile *name*
+///   (`"CiRCLE"`) for a tile-bound text on a tile-less instance.
+/// * `key` -- `ui` namespace i18n key (`deed.note.*`); `""` suppresses the slot.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TileTextDecl {
+    pub slot: String,
+    pub tile: String,
+    pub key: String,
+}
+
 pub trait CardRules: Send + Sync {
     /// Hex SHA-256 of the built ruleset, when the implementation has one.
     /// `None` (the default) means "unknown" and is skipped by
@@ -505,6 +523,30 @@ pub trait CardRules: Send + Sync {
     /// May be played from hand in the operation phase.
     fn normal(&self, _card: &str) -> bool {
         true
+    }
+
+    /// A status gate (`docs/STATUS-HOSTS.md`): `Some(true)` = open. The
+    /// ruleset answers from the standing `status:*` rules' CEL-only
+    /// `On::Gate` conditions, natively and purely. `None` (the default) means
+    /// "no ruleset opinion": the engine falls back to
+    /// [`crate::state::MatchPlayer::status_gates`], the same clauses in Rust
+    /// (what `StubRules` runs; pinned equal by `tests/status_gate_drift.rs`).
+    fn gate_open(&self, _w: &super::World, _gate: Gate, _player: usize) -> Option<bool> {
+        None
+    }
+
+    /// An [`Gate::Exclusive`] question (`docs/GUARDS.md`): `Some(true)` = the
+    /// ruleset's CEL-only `ExclusiveUse` `On::Gate` entries all allow this
+    /// exclusive play. `None` (the default) means "no ruleset opinion": the
+    /// engine's generic own/base verdict stands. A band-skill card (CRYCHIC)
+    /// closes the gate to deny a variant its base character's exclusives.
+    fn exclusive_use(
+        &self,
+        _w: &super::World,
+        _player: usize,
+        _ask: &ExclusiveAsk<'_>,
+    ) -> Option<bool> {
+        None
     }
 
     /// Extra card-specific reason it can't be played right now.
@@ -532,6 +574,20 @@ pub trait CardRules: Send + Sync {
     /// is `0` for every key the engine reads.
     fn card_prop(&self, card: &str, key: &str) -> i32 {
         self.card_props(card).get(key).copied().unwrap_or(0)
+    }
+
+    /// The card rule's declared **tile texts** (`CardDef::texts`): the
+    /// deed-popup description each entry speaks for, **in declaration order**
+    /// (sorted by entry index, then declaration position -- that order is the
+    /// third component of the view's text precedence key, `docs/ENGINE.md`
+    /// 「Effect ordering」). Empty when the card declares none.
+    ///
+    /// [`TileTextDecl`] is `game-core`'s own shape (this crate does not depend
+    /// on `card-sdk` types); the host's `ManifestTileText` carries the same
+    /// `slot` / `tile` / `key` plus the entry index the loader folds into this
+    /// Vec's order. See `docs/TILES.md` 「Tile text」.
+    fn card_texts(&self, _card: &str) -> std::sync::Arc<[TileTextDecl]> {
+        std::sync::Arc::from(Vec::new())
     }
 
     /// Does this ruleset declare a rule with this id (a card id or a
@@ -611,6 +667,33 @@ pub trait CardRules: Send + Sync {
             })
             .collect()
     }
+}
+
+/// Which status gate a [`CardRules::gate_open`] question is about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Gate {
+    /// [主动] skills and 手卡的[手]效果.
+    Act,
+    /// Paying / receiving payment.
+    Pay,
+    /// This turn's [主要移动].
+    Move,
+    /// May this exclusive card be played? Context rides along as an
+    /// [`ExclusiveAsk`] on [`CardRules::exclusive_use`].
+    Exclusive,
+}
+
+/// The card-side context of a [`Gate::Exclusive`] question.
+#[derive(Debug, Clone, Copy)]
+pub struct ExclusiveAsk<'a> {
+    /// The exclusive card's id.
+    pub card: &'a str,
+    /// The card's `owner` character name.
+    pub owner: &'a str,
+    /// `owner == actor.character`.
+    pub owner_is_self: bool,
+    /// `owner == base_character(actor.character)`.
+    pub owner_is_base: bool,
 }
 
 /// Every card and event has no effect yet.

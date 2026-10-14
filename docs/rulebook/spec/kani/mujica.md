@@ -233,3 +233,11 @@ place / stay / stun bodies → hooks).
 * Prompt-heavy bodies (doll_garden move branch, crystal_swap picks,
   welcome designate) are PROTOCOL-LEVEL / BLOCKED-HOST rather than run,
   so this unit has no 15–40 min prompt cliff in the current harness set.
+
+## bands-b concrete-user rollout (branch `kani-bands-b`)
+
+Verdicts below marked **bands-b** use the ppcost pattern: `n_players=2`,
+concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
+body calls, per-harness `host_subset!`, sparse in-place world. See
+TRIAGE-LOG.md `bands-b`. Results accumulate in
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.

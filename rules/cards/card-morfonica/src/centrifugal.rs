@@ -33,7 +33,13 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         On::Gate(&[GateKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"离心力，不为所动"#)
+        .raw_name(r#"离心力，不为所动"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击]当你在两个你的回合之间（回合1结束，回合2开始）第二次成为其他角色技能或卡牌的目标时，你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果"#)
+        .cell(r#"G10"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果」
@@ -77,4 +83,17 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("centrifugal_end")).player_id("who", player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn immune_all_kani(player_id: i32) -> card_sdk::Asked {
+    immune_all(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    turn_start(player_id)
 }

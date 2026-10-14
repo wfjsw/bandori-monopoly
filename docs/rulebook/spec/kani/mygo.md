@@ -182,3 +182,11 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
   (missing field) rather than faking an independent stun.
 * [反击] / multi-turn / settle pipelines: KANI.md §6 — PROTOCOL-LEVEL, not
   deleted or weakened.
+
+## bands-b concrete-user rollout (branch `kani-bands-b`)
+
+Verdicts below marked **bands-b** use the ppcost pattern: `n_players=2`,
+concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
+body calls, per-harness `host_subset!`, sparse in-place world. See
+TRIAGE-LOG.md `bands-b`. Results accumulate in
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.

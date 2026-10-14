@@ -53,15 +53,46 @@ impl Ctx {
     /// Load the game tables and card modules once. Read-only from here on.
     /// The tables' sha256 (in [`DATA_FILES`] order) is captured here too, so a
     /// record written by this worker says which board / card data it saw.
+    ///
+    /// Order matters: the ruleset loads first (it does not need the tables) and
+    /// its [`game_rules::Ruleset::roster`] supplies the tables' roster (ABI v63).
     pub fn load(data_dir: &std::path::Path, rules_dir: &std::path::Path) -> Self {
+        let ruleset = match game_rules::Ruleset::load_dir(rules_dir) {
+            Ok(Some(set)) => {
+                eprintln!(
+                    "card modules: {} loaded from {}",
+                    set.module_count(),
+                    rules_dir.display()
+                );
+                Some(set)
+            }
+            Ok(None) => {
+                eprintln!(
+                    "no card modules in {} -- cards have no effect",
+                    rules_dir.display()
+                );
+                None
+            }
+            Err(e) => {
+                eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
+                None
+            }
+        };
+        let roster = ruleset
+            .as_ref()
+            .map(|s| s.roster())
+            .unwrap_or_default();
         let mut contents: Vec<(String, String)> = Vec::new();
         let data = Arc::new(
-            GameData::load(|f| {
-                let text =
-                    std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string())?;
-                contents.push((f.to_string(), text.clone()));
-                Ok(text)
-            })
+            GameData::load(
+                |f| {
+                    let text =
+                        std::fs::read_to_string(data_dir.join(f)).map_err(|e| e.to_string())?;
+                    contents.push((f.to_string(), text.clone()));
+                    Ok(text)
+                },
+                roster,
+            )
             .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
         );
         let mut hasher = Sha256::new();
@@ -72,7 +103,9 @@ impl Ctx {
             // (`skill_simple.json` is display-only and the engine never reads
             // it), so read the ones it skipped -- otherwise this hash disagrees
             // with the browser's and the record names an engine bundle the
-            // replay loader has never seen.
+            // replay loader has never seen. The roster (`cards.json` /
+            // `characters.json` / `bands.json`) is no longer in `DATA_FILES`:
+            // it comes from the ruleset and is covered by the ruleset hash.
             let owned;
             let text: Option<&str> = match contents.iter().find(|(f, _)| f == name) {
                 Some((_, text)) => Some(text),
@@ -89,26 +122,9 @@ impl Ctx {
             }
         }
         let data_sha256 = hex(&hasher.finalize());
-        let rules: Arc<dyn CardRules> = match WasmRules::load_dir(data.clone(), rules_dir) {
-            Ok(Some(r)) => {
-                eprintln!(
-                    "card modules: {} loaded from {}",
-                    r.ruleset().module_count(),
-                    rules_dir.display()
-                );
-                Arc::new(r)
-            }
-            Ok(None) => {
-                eprintln!(
-                    "no card modules in {} -- cards have no effect",
-                    rules_dir.display()
-                );
-                Arc::new(StubRules)
-            }
-            Err(e) => {
-                eprintln!("card modules failed to load: {e:?} -- falling back to no effects");
-                Arc::new(StubRules)
-            }
+        let rules: Arc<dyn CardRules> = match ruleset {
+            Some(set) => Arc::new(WasmRules::new(set, data.clone())),
+            None => Arc::new(StubRules),
         };
         Self {
             data,
@@ -232,6 +248,17 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     serde_json::from_value(w.clone()).map_err(|e| format!("weights: {e}"))?
                 }
             };
+            // Optional match clock / timer settings (camelCase `ClockSettings`).
+            // Absent = defaults with the new semantics (the pre-settings
+            // legacy path is record restore only -- `MatchSetup::clock: None`).
+            let clock: game_core::clock::ClockSettings = match req.get("clock") {
+                None | Some(Value::Null) => Default::default(),
+                Some(c) => {
+                    serde_json::from_value::<game_core::clock::ClockSettings>(c.clone())
+                        .map_err(|e| format!("clock: {e}"))?
+                        .sanitized()
+                }
+            };
             // Prefer the derived 256-bit seed (every new match,
             // `docs/FAIRNESS.md`); a bare u64 `seed` is the legacy path, kept
             // for pre-fairness callers and tests only.
@@ -239,24 +266,28 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 Some(hex) => {
                     let key = game_core::fair::unhex32(hex)
                         .map_err(|e| format!("seed256: {e}"))?;
-                    Match::new_seeded(
+                    Match::new_seeded_with_clock(
                         ctx.data.clone(),
                         ctx.rules.clone(),
                         &members,
                         game_core::rng::Seed256(key),
                         MatchMode::from_i32(mode).unwrap_or_default(),
                         weights,
+                        clock,
+                        false,
                     )
                 }
                 None => {
                     let seed = req.get("seed").and_then(Value::as_u64).unwrap_or(1);
-                    Match::new(
+                    Match::new_with_clock(
                         ctx.data.clone(),
                         ctx.rules.clone(),
                         &members,
                         seed,
                         MatchMode::from_i32(mode).unwrap_or_default(),
                         weights,
+                        clock,
+                        false,
                     )
                 }
             };
@@ -351,7 +382,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 .get("needExtras")
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
-            let state = m.state();
+            let mut state = m.state();
+            // Per-member prompt countdown: the table-wide `state()` reports the
+            // tightest pending human pool; each client sees its own.
+            m.personalize_prompt_time(&mut state, member);
             let player_id = state.player_of(member);
             let extra = if need_extras {
                 m.view_extra(member)

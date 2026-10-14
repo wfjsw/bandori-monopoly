@@ -36,11 +36,11 @@ pub fn rinpuu_01_log_ok(effects: &[Effect], player: i32) -> bool {
 pub fn rinpuu_01_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let p = player as usize;
     post.stay[p] == pre.stay[p].saturating_add(1)
-        && post.money == pre.money
-        && post.pos == pre.pos
-        && post.fire == pre.fire
-        && post.hand == pre.hand
-        && post.discard == pre.discard
+        && crate::world::arr4_eq(post.money, pre.money)
+        && crate::world::arr4_eq(post.pos, pre.pos)
+        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr8b_eq(post.hand, pre.hand)
+        && crate::world::arr8b_eq(post.discard, pre.discard)
         && post.pay_amount == pre.pay_amount
         && (0..MAX_PLAYERS).all(|i| i == p || post.stay[i] == pre.stay[i])
 }
@@ -64,30 +64,22 @@ pub fn rinpuu_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 // Card: `MyGO:哪怕这旅程没有终点` On::Play.
 // Trigger: the [手] play. Condition: none beyond a legal play from hand.
 // Effect: the card is placed on the current tile with exactly 4 [奇迹水晶].
-// Frame: only the user's hand/field zones move (PlaceCard); the crystal write
-// is a counter on the instance (host stores it as the player's `crystals` key;
-// `set_crystals` logs no Effect).
+// Frame: only the user's hand/field zones move (PlaceCard + AddCounter). Host
+// note: crystals live on the instance (`field[last_uid]` / `self_crystals`),
+// and `set_crystals` logs one `AddCounter`.
 // ===========================================================================
 
-/// Dest::Field discriminant (`card_sdk::ctx::Dest::Field`).
+/// Dest::Field discriminant (`card_sdk::ctx::Dest::Field`). `place_card_at`
+/// logs this as `PlaceCard { dest }`; `place_card_on` instead logs the landing
+/// **tile index** (see `journey_01_log_ok`).
 pub const DEST_FIELD: i32 = 2;
 
-/// Exact effect log: one `PlaceCard` to Field at the user's position.
-/// `set_crystals(4)` is a counter write (no Effect); narration is not the frame.
-pub fn journey_01_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
-    effects.len() == 1
-        && matches!(
-            effects[0],
-            Effect::PlaceCard {
-                player: p,
-                dest,
-                card: c
-            } if p == player && dest == DEST_FIELD && c == card
-        )
-}
-
-/// MUTANT: demands two PlaceCard effects.
-pub fn journey_01_log_ok_mutant(effects: &[Effect], player: i32, card: u8) -> bool {
+/// Exact effect log of the play body: `PlaceCard` on the current tile then
+/// `AddCounter(4)`. Host note: `place_card_on` logs `PlaceCard { dest }` with
+/// `dest` = the landing tile index (not `Dest::Field`); `set_crystals(4)` is
+/// `set_counter_self`, which logs one `AddCounter { n: 4 }` on the instance.
+/// Narration is not the frame.
+pub fn journey_01_log_ok(effects: &[Effect], player: i32, card: u8, tile: i32) -> bool {
     effects.len() == 2
         && matches!(
             effects[0],
@@ -95,7 +87,28 @@ pub fn journey_01_log_ok_mutant(effects: &[Effect], player: i32, card: u8) -> bo
                 player: p,
                 dest,
                 card: c
-            } if p == player && dest == DEST_FIELD && c == card
+            } if p == player && dest == tile && c == card
+        )
+        && matches!(
+            effects[1],
+            Effect::AddCounter {
+                owner: p,
+                n,
+                ..
+            } if p == player && n == 4
+        )
+}
+
+/// MUTANT: demands two PlaceCard effects.
+pub fn journey_01_log_ok_mutant(effects: &[Effect], player: i32, card: u8, tile: i32) -> bool {
+    let _ = tile;
+    effects.len() == 2
+        && matches!(
+            effects[0],
+            Effect::PlaceCard {
+                player: p,
+                ..
+            } if p == player
         )
         && matches!(
             effects[1],
@@ -338,11 +351,11 @@ pub fn hitoshizuku_body_global_pay_ok(
 // The general X>0 case is the same shape plus X DiscardFromHand effects.
 // ===========================================================================
 
-/// Exact effect log when the hand is empty: GiveStay(user, 2) then PlaceCard.
-/// `inc_slot("lockedStay", 2)` and `set_crystals(1)` are counter/slot writes
-/// with no Effect.
+/// Exact effect log when the hand is empty: GiveStay(user, 2), PlaceCard(Field),
+/// then AddCounter(1). `inc_slot("lockedStay", 2)` is a slot write (no Effect);
+/// `set_crystals(1)` is `set_counter_self` and logs the AddCounter.
 pub fn tomori_card_02_empty_hand_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
-    effects.len() == 2
+    effects.len() == 3
         && matches!(effects[0], Effect::GiveStay { player: p, n } if p == player && n == 2)
         && matches!(
             effects[1],
@@ -352,11 +365,19 @@ pub fn tomori_card_02_empty_hand_log_ok(effects: &[Effect], player: i32, card: u
                 card: c
             } if p == player && dest == DEST_FIELD && c == card
         )
+        && matches!(
+            effects[2],
+            Effect::AddCounter {
+                owner: p,
+                n,
+                ..
+            } if p == player && n == 1
+        )
 }
 
 /// MUTANT: demands 1 stay layer instead of 2.
 pub fn tomori_card_02_empty_hand_log_ok_mutant(effects: &[Effect], player: i32, card: u8) -> bool {
-    effects.len() == 2
+    effects.len() == 3
         && matches!(effects[0], Effect::GiveStay { player: p, n } if p == player && n == 1)
         && matches!(
             effects[1],
@@ -365,6 +386,13 @@ pub fn tomori_card_02_empty_hand_log_ok_mutant(effects: &[Effect], player: i32, 
                 dest,
                 card: c
             } if p == player && dest == DEST_FIELD && c == card
+        )
+        && matches!(
+            effects[2],
+            Effect::AddCounter {
+                owner: p,
+                ..
+            } if p == player
         )
 }
 

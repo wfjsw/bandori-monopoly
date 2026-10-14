@@ -17,7 +17,13 @@ pub const SIGNPOST: CardDef = CardDef::new(
         On::AtEnd("owner.out == 0", None, at_end),
     ],
 )
-.props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
+.props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"向着未来的路标"#)
+        .raw_name(r#"向着未来的路标"#)
+        .tags(&[])
+        .text(r#"本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金"#)
+        .cell(r#"B14"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -56,4 +62,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
 fn at_end(player_id: i32) -> card_sdk::Asked {
     ctx::pay(player_id, 1000, &Msg::new(key!("signpost_lose")))?;
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
 }

@@ -1010,7 +1010,9 @@ impl World {
         if self.st.houses.get(tile as usize).copied().unwrap_or(0) as usize >= t.rent.len() - 1 {
             return Some(Msg::new("err.build_full"));
         }
-        if s.out() || !s.status_gates().pay {
+        // The payer's own gate ([晕眩]/[除外] 「无法收付款」) is the caller's
+        // `Gate::Pay` question: a World has no ruleset to ask.
+        if s.out() {
             return Some(Msg::new("err.cannot_spend"));
         }
         None
@@ -1123,6 +1125,31 @@ impl World {
             .find(|f| f.uid == uid)
     }
 
+    /// The seat whose field the instance at `uid` sits on (`BOARD_OWNER` for
+    /// the board field), or -1 when it is not in play. Distinct from
+    /// [`FieldCard::owner`], which names who the card *belongs* to.
+    pub fn holder_of(&self, uid: i32) -> i32 {
+        if self.st.board_field.iter().any(|f| f.uid == uid) {
+            return crate::state::BOARD_OWNER;
+        }
+        self.st
+            .players
+            .iter()
+            .position(|s| s.field.iter().any(|f| f.uid == uid))
+            .map_or(-1, |i| i as i32)
+    }
+
+    /// Re-attribute the instance at `uid` to the player who owns the card.
+    /// Placement stamps `owner` / `user` with the field holder; a card parked
+    /// on *another* player's field (「放置于你以外的一名玩家场上」) belongs to the
+    /// player who played it, which the placement run records here.
+    pub fn set_field_owner(&mut self, uid: i32, owner: i32) {
+        if let Some(f) = self.field_by_uid_mut(uid) {
+            f.owner = owner;
+            f.user = owner;
+        }
+    }
+
     fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
         if let Some(f) = self.st.board_field.iter_mut().find(|f| f.uid == uid) {
             return Some(f);
@@ -1227,6 +1254,16 @@ impl World {
             .find(|f| f.tile == tile)
             .and_then(|f| f.props.get(key).copied())
             .unwrap_or(0)
+    }
+
+    /// Every prop key set on a board-owned rule instance governing `tile`
+    /// (the keys [`Self::tile_prop`] can answer non-zero for).
+    pub fn tile_prop_keys(&self, tile: i32) -> impl Iterator<Item = &str> {
+        self.st
+            .board_field
+            .iter()
+            .filter(move |f| f.tile == tile)
+            .flat_map(|f| f.props.keys().map(String::as_str))
     }
 
     /// Write [`Self::tile_prop`] on every board-owned rule instance governing
@@ -2078,6 +2115,40 @@ impl World {
                 self.st.skip_move = skip;
             }
         }
+    }
+
+    /// Is the status gate open for this player? Asks the ruleset (the
+    /// `status:*` pseudo cards' CEL conditions); a ruleset with no opinion
+    /// falls back to the engine-side mirror [`crate::state::MatchPlayer::status_gates`].
+    pub fn gate_open(&self, rules: &dyn super::CardRules, gate: super::Gate, player: usize) -> bool {
+        if let Some(open) = rules.gate_open(self, gate, player) {
+            return open;
+        }
+        let Some(p) = self.st.players.get(player) else {
+            return true;
+        };
+        let g = p.status_gates();
+        match gate {
+            super::Gate::Act => g.act,
+            super::Gate::Pay => g.pay,
+            super::Gate::Move => g.r#move,
+            // [`Self::exclusive_use`] owns this question (it needs the card).
+            super::Gate::Exclusive => true,
+        }
+    }
+
+    /// Is the exclusive-use gate open for this player and card? The engine's
+    /// generic own/base verdict is the caller's business (it is the default);
+    /// this asks the ruleset's CEL-only `ExclusiveUse` entries (a band-skill
+    /// card denying a variant its base character's exclusives). `true` = no
+    /// entry closed it.
+    pub fn exclusive_use(
+        &self,
+        rules: &dyn super::CardRules,
+        player: usize,
+        ask: &super::ExclusiveAsk<'_>,
+    ) -> bool {
+        rules.exclusive_use(self, player, ask).unwrap_or(true)
     }
 
     /// `status:stay` count-changed clause (rules.txt 48): when the last [停留]

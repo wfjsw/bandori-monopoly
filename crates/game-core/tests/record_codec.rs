@@ -8,9 +8,10 @@
 
 use std::sync::Arc;
 
-use game_core::data::GameData;
 use game_core::engine::{CardRules, StubRules, SAVE_VERSION};
 use game_core::net::RoomMember;
+mod common;
+use common::data_arc as data;
 use game_core::record::{
     decode_record, encode_record_gz, encode_record_json, encode_record_zst, expand_record,
     is_gzip, is_zstd, parse_header_bytes, parse_record, sniff_record, EngineStamp, MatchSetup,
@@ -19,14 +20,6 @@ use game_core::record::{
 use game_core::scoring::ScoreWeights;
 use game_core::state::BotMentality;
 use game_core::MatchMode;
-
-fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
-    )
-}
 
 fn rules() -> Arc<dyn CardRules> {
     Arc::new(StubRules)
@@ -61,6 +54,7 @@ fn run_bot_game(seed: u64, n: i32, max_rounds: i32) -> game_core::record::Record
         seed,
         seed256: None,
         weights: ScoreWeights::default(),
+            clock: None,
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
     rm.quick_start();
@@ -262,6 +256,7 @@ fn size_comparison_on_a_real_200_round_bot_game() {
             seed: 0xB07,
             seed256: None,
             weights: ScoreWeights::default(),
+            clock: None,
         },
         MatchMode::Casual,
     );

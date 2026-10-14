@@ -21,20 +21,33 @@ pub fn log_is_paytos(effects: &[Effect], expected: &[(i32, i32, i32)]) -> bool {
     if effects.len() != expected.len() {
         return false;
     }
-    for (e, &(from, to, n)) in effects.iter().zip(expected.iter()) {
-        match e {
-            Effect::PayTo {
-                from: f,
-                to: t,
-                n: m,
-            } => {
-                if *f != from || *t != to || *m != n {
-                    return false;
+    // Zero-loop zip (see `log_is_gains`).
+    let n = effects.len().min(expected.len()).min(24);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < n {
+                let (e, &(from, to, amt)) = match (effects.get($i), expected.get($i)) {
+                    (Some(e), Some(x)) => (e, x),
+                    _ => return false,
+                };
+                match e {
+                    Effect::PayTo {
+                        from: f,
+                        to: t,
+                        n: m,
+                    } => {
+                        if *f != from || *t != to || *m != amt {
+                            return false;
+                        }
+                    }
+                    _ => return false,
                 }
             }
-            _ => return false,
-        }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
     true
 }
 
@@ -43,19 +56,33 @@ pub fn log_is_gains(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
     if effects.len() != expected.len() {
         return false;
     }
-    for (e, &(p, n)) in effects.iter().zip(expected.iter()) {
-        match e {
-            Effect::GainMoney {
-                player: q,
-                n: m,
-            } => {
-                if *q != p || *m != n {
-                    return false;
+    // Zero-loop zip: a `for (e, &x) in a.iter().zip(b)` unrolls to the global
+    // bound when the lengths are not folded (front_or_back profile: `log_is_gains` 31).
+    let n = effects.len().min(expected.len()).min(24);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < n {
+                let (e, &(p, amt)) = match (effects.get($i), expected.get($i)) {
+                    (Some(e), Some(x)) => (e, x),
+                    _ => return false,
+                };
+                match e {
+                    Effect::GainMoney {
+                        player: q,
+                        n: m,
+                    } => {
+                        if *q != p || *m != amt {
+                            return false;
+                        }
+                    }
+                    _ => return false,
                 }
             }
-            _ => return false,
-        }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
     true
 }
 
@@ -328,15 +355,23 @@ pub fn front_or_back_share_total_ok(gains: &[(i32, i32)], winners: &[i32]) -> bo
         return gains.is_empty();
     }
     let mut total = 0;
-    for &(p, n) in gains {
-        if !winners.contains(&p) {
-            return false;
-        }
-        if n < 0 {
-            return false;
-        }
-        total += n;
+    let ng = gains.len().min(8);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < ng {
+                if let Some(&(p, n)) = gains.get($i) {
+                    if !winners.contains(&p) {
+                        return false;
+                    }
+                    if n < 0 {
+                        return false;
+                    }
+                    total += n;
+                }
+            }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
     let n = winners.len() as i32;
     let expected_total = 1000 - (1000 % n);
     total == expected_total && gains.len() == winners.len()
@@ -364,18 +399,26 @@ pub fn front_or_back_share_legs(effects: &[Effect], winners: &[i32]) -> Vec<(i32
     }
     let each = 1000 / winners.len() as i32;
     let mut skipped = false;
-    for e in effects {
-        if let Effect::PayTo { from, to, n } = e {
-            // Drop the first full-total shaping record from the bank.
-            if !skipped && *from < 0 && *n == 1000 {
-                skipped = true;
-                continue;
+    let ne = effects.len().min(24);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < ne {
+                if let Some(e) = effects.get($i) {
+                    if let Effect::PayTo { from, to, n } = e {
+                        // Drop the first full-total shaping record from the bank.
+                        if !skipped && *from < 0 && *n == 1000 {
+                            skipped = true;
+                        } else if *from < 0 && winners.contains(to) && *n == each {
+                            out.push((*to, *n));
+                        }
+                    }
+                }
             }
-            if *from < 0 && winners.contains(to) && *n == each {
-                out.push((*to, *n));
-            }
-        }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
     out
 }
 
@@ -401,7 +444,7 @@ pub fn ex_quest_01_no_state_effects(effects: &[Effect]) -> bool {
 // ===========================================================================
 
 /// One `GiveExile` per living player with `n ∈ 1..=2`, destination `to`
-/// (the book's 微笑号; -1 under the Kani tile_named stub).
+/// (the book's 微笑号; board index 26).
 pub fn habinel_01_exiles_ok(effects: &[Effect], players: &[i32], to: i32) -> bool {
     if effects.len() != players.len() {
         return false;
@@ -426,13 +469,27 @@ pub fn habinel_01_exiles_ok(effects: &[Effect], players: &[i32], to: i32) -> boo
 // ===========================================================================
 // E-never-ends-01 — 一切不会结束
 // 「抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG且获得1层…[除外]。」
-// BLOCKED-HOST(tile_named:RiNG N) — the body early-returns; under Kani this
-// is always a no-op. The book effect is NOT proven.
+// tile_named("RiNG {n}") resolves to board 8 / 16 / 36 / 53.
 // ===========================================================================
 
-/// Under the tile_named stub the body is a no-op: empty effect log.
-pub fn never_ends_01_noop(effects: &[Effect]) -> bool {
-    effects.is_empty()
+/// One `Teleport` to `dest` + one `GiveExile` of 1 (`to` = -1, turn-start tick)
+/// per living player, in seat order.
+pub fn never_ends_01_ok(effects: &[Effect], players: &[i32], dest: i32) -> bool {
+    if effects.len() != players.len() * 2 {
+        return false;
+    }
+    for (i, &p) in players.iter().enumerate() {
+        let a = &effects[i * 2];
+        let b = &effects[i * 2 + 1];
+        if !matches!(a, Effect::Teleport { player, tile } if *player == p && *tile == dest) {
+            return false;
+        }
+        if !matches!(b, Effect::GiveExile { player, n, to } if *player == p && *n == 1 && *to == -1)
+        {
+            return false;
+        }
+    }
+    true
 }
 
 // ===========================================================================
@@ -585,11 +642,11 @@ pub fn end_it_all_01_picked_three(picks: usize) -> bool {
 // ===========================================================================
 // E-lulu / E-school-time / E-kizuna — pay / exile legs
 // 「如果选择[传送]需支付500资金」 / 「获得1层[除外]」
-// Destinations 快餐店 / 周边学区 are BLOCKED-HOST(tile_named); Kizuna's dest
-// is `roll mod 60` and is modeled.
+// Destinations 快餐店 (33) / 周边学区 (17) resolve via `tile_named`;
+// Kizuna's dest is `roll mod 60` and is modeled.
 // ===========================================================================
 
-/// Lulu accept: the chooser pays exactly 500 (Teleport dest is BLOCKED-HOST).
+/// Lulu accept: the chooser pays exactly 500 and teleports to `dest` (快餐店).
 pub fn lulu_01_pay_ok(effects: &[Effect], who: i32, dest: i32) -> bool {
     effects.len() == 2
         && matches!(

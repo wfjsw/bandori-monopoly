@@ -1,6 +1,6 @@
 //! `Sumimi:#L12` -- C# `CardL12` (MatchHost.cs:11621-11682): pull a Sumimi card
 //!
-//! 规则书（data/cards.json, id `Sumimi:#L12`）:
+//! 规则书（the roster, id `Sumimi:#L12`）:
 //! > [手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。
 //!
 //! from discard/draw, place this card, hand limit -1, crystals on fire spent.
@@ -20,7 +20,13 @@ pub const L12: CardDef = CardDef::new(
         On::Hook(&[card_sdk::abi::HookKind::FireSpent], "", Some(fire_spent_guard), fire_spent),
     ],
 )
-// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
+.meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name("")
+        .tags(&[r#"手"#, r#"持续"#])
+        .text(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#)
+        .cell(r#"L12"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", "")]))// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
 // property (C# `Card.HandLimitDelta`), continuous while this instance sits on
 // the field.
 .props(&[(prop::HAND_LIMIT_DELTA, -1)]);
@@ -117,4 +123,17 @@ fn fire_spent(player_id: i32) -> card_sdk::Asked {
         );
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn l12_kani(player_id: i32) -> card_sdk::Asked {
+    l12(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn fire_spent_kani(player_id: i32) -> card_sdk::Asked {
+    fire_spent(player_id)
 }

@@ -30,7 +30,7 @@
 //! text (`回合階段&註釋` `C44` blocks the money half; `团技能` `D13` forces the
 //! card half).
 
-use card_sdk::abi::{prop, HookKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
+use card_sdk::abi::{prop, text_slot, HookKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -43,7 +43,14 @@ pub const CIRCLE: CardDef = CardDef::new(
         On::Settle("", None, settle),
         On::Hook(&[HookKind::PassTile], "", Some(pass_pays), on_pass),
     ],
-);
+)
+// Deed-popup text (`docs/TILES.md` 「Tile text」): the two halves the book
+// splits (line 95 settle draw, line 96 [经过] reward) speak for one slot each.
+// `event:协助CiRCLE重建` replaces both while it is up.
+.texts(&[
+    (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
+    (1, text_slot::PASS, "", "deed.note.circlePass"),
+]);
 
 /// The [经过] arm's applicability. Only the tile this instance governs (the
 /// dispatch already filters board instances by tile; this is the belt to that
@@ -200,4 +207,17 @@ pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
         }
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_kani(player_id: i32) -> card_sdk::Asked {
+    settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }

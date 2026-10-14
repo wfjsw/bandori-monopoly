@@ -33,12 +33,7 @@ pub const PASTEL: CardDef = CardDef::new(
         // (there is no cost or downside), so the overflow is applied here.
         On::Hook(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
     ],
-)
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张
 /// Pastel✽Palettes乐队卡时此效果不重复发动）」 -- the band card's own game-start
@@ -99,4 +94,35 @@ fn on_flip(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("pastel_over")).i("n", over as i64),
     );
     Ok(())
+}
+
+/// Roster band row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Pastel✽Palettes"#)
+    .short_name(r#"PP"#)
+    .boot_art(r#"004"#)
+    .color(r#"#33DDAA"#)
+    .skill(r#"与偶像一起"#)
+    .text(r#"（1）游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张Pastel✽Palettes乐队卡时此效果不重复发动）。（2）你因任意原因受到“将X个反面[P✽P粉丝]变正”的效果且X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。
+（3）[经过]CiRCLE时不获得[CiRCLE奖励]。
+（4）回合开始时此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡。"#)
+    .logo(r#"004"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_flip_kani(player_id: i32) -> card_sdk::Asked {
+    on_flip(player_id)
 }

@@ -36,11 +36,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         On::Hook(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
     ],
 )
-    .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine), (4, legacy_mine)]).silent(&[2, 3]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[2, 3]);
 
 /// (1) 「游戏开始起点为#30弦卷豪宅」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
@@ -92,4 +88,51 @@ fn on_plan(player_id: i32) -> card_sdk::Asked {
     plan::add_base_dice(1, 4, "真正的迷子");
     ctx::log(player_id, &Msg::new(key!("kanon_lost_dice")));
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"松原花音"#)
+    .display(r#"松原花音"#)
+    .band(r#"Hello, Happy World!"#)
+    .color(r#"#44DDFF"#)
+    .skill(r#"真正的迷子"#)
+    .text(r#"(1) 游戏开始起点为#30弦卷豪宅 (2) 移动阶段进行两次移动掷骰并将它们的结果相减作为你的移动格数 (3) 如果三个回合内没有拿过Circle奖励，则下回合移动投掷改为1d20+1d4"#)
+    .cn_id(r#"014"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"Wacha Mocha 啪嗒进行曲"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_circle_kani(player_id: i32) -> card_sdk::Asked {
+    on_circle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan(player_id)
 }

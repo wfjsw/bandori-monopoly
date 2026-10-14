@@ -3,138 +3,108 @@
 //! Character skills (RAISE A SUILEN) + band skill UNSTOPPABLE.
 //! Classification lives in `docs/rulebook/spec/kani/ras.md`.
 //!
+//! **ppcost pattern.** Concrete user seats. Direct body call via the
+//! cfg(kani) `NAME_kani` wrapper. Per-harness host-op subset.
+//!
 //! Isolation: fire-pot pass gains assume `fire + 1 <= fire_max` so the
 //! (unmodeled) cap does not bind. The printed cap itself is BLOCKED-HOST.
 
 use crate::host;
+use crate::invoke;
 use crate::spec::skills_ras as spec;
-use crate::world::{self, Effect, World, MAX_PLAYERS};
+use crate::world::{self, Effect, MAX_PLAYERS};
 
-/// Call an `On` body without the registry string scan (memcmp cliff).
-fn body_of(on: &card_sdk::On) -> fn(i32) -> card_sdk::Asked {
-    match on {
-        card_sdk::On::Play(_, _, f)
-        | card_sdk::On::Counteract(_, _, _, f)
-        | card_sdk::On::Hook(_, _, _, f)
-        | card_sdk::On::Gate(_, _, _, f)
-        | card_sdk::On::RollPlan(_, _, f)
-        | card_sdk::On::AtEnd(_, _, f)
-        | card_sdk::On::Settle(_, _, f)
-        | card_sdk::On::Message(_, _, _, f) => *f,
-    }
+// ---------------------------------------------------------------------------
+// Host-op subset: both `on_pass` bodies are one-liners into
+// `rules_status::fire::gain` → `gain_fire`.
+// ---------------------------------------------------------------------------
+crate::host_subset!(fire_pass_dispatch {
+    gain_fire => arm_gain_fire,
+    log | effect => arm_log,
+});
+
+/// In-place 2-seat world: fire pots symbolic, default cap 3, sub-cap so the
+/// unmodeled cap does not bind.
+fn fire_world(user: i32) {
+    host::install_backend(fire_pass_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        for p in 0..MAX_PLAYERS {
+            w.out[p] = false;
+            w.fire[p] = kani::any();
+            kani::assume(w.fire[p] >= 0 && w.fire[p] <= 2);
+            // default model cap; skill declare_cap is BLOCKED-HOST
+            w.fire_max[p] = 3;
+            kani::assume(w.fire[p] + 1 <= w.fire_max[p]);
+        }
+        w.trig_player = user;
+    });
 }
 
-fn unwrap_done(r: card_sdk::Asked) {
-    match r {
-        Ok(()) => {}
-        Err(_) => panic!("unexpected EXIT_NEED_INPUT"),
-    }
-}
+/// Shared leaf iff at a **concrete** user seat (seat-symmetric 「自己的」).
+/// `call` is a *direct* body invocation already expanded at the call site
+/// (do not pass `fn` pointers — that reintroduces the code* IF-chain).
+macro_rules! fire_pass_leaf_iff_at {
+    ($user:expr, $call:expr) => {{
+        let user: i32 = $user;
+        debug_assert!(user == 0 || user == 1);
+        fire_world(user);
+        let pre = world::snapshot();
+        invoke::unwrap_done($call);
+        kani::cover!(true, "body returned");
+        let post = world::snapshot();
+        let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+        let log_n = world::with_world(|ww| ww.log_n);
+        let effects = &logbuf[..log_n];
 
-fn symbolic_fire_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.out[p] = false;
-        w.fire[p] = kani::any();
-        kani::assume(w.fire[p] >= 0 && w.fire[p] <= 2);
-        // default model cap; skill declare_cap is BLOCKED-HOST
-        w.fire_max[p] = 3;
-        kani::assume(w.fire[p] + 1 <= w.fire_max[p]);
-    }
-    w
+        crate::kassert!(
+            spec::fire_pass_log_ok(effects, user),
+            "leaf is exactly one +1 GainFire"
+        );
+        crate::kassert!(
+            post.fire[user as usize] == pre.fire[user as usize] + spec::fire_pass_gain(),
+            "fire is pre+1"
+        );
+        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+        crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
+    }};
 }
 
 /// C-RAS-masking-01 leaf: `skill:佐藤益木` `on_pass` requests +1 [火罐].
 /// The tile gate (`白雪学园` / `银河拉面馆`) is the hook's CEL pre and is not
 /// re-checked here — this harness proves the leaf the body runs once admitted.
 #[kani::proof]
-#[kani::unwind(16)]
+#[kani::unwind(24)]
 pub fn masking_01_fire_gain_leaf() {
-    let w = symbolic_fire_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
+    fire_pass_leaf_iff_at!(0, skill_characters::sato_red::on_pass_kani(0));
+}
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    // Hook entry 2 is `on_pass` (see `skill:佐藤益木` registration order).
-    unwrap_done(body_of(
-        &skill_characters::sato_red::SATO_RED.on[2],
-    )(player));
-
-    let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
-    let effects = &logbuf[..log_n];
-
-    assert!(
-        spec::fire_pass_log_ok(effects, player),
-        "C-RAS-masking-01: leaf is exactly one +1 GainFire"
-    );
-    assert!(
-        post.fire[player as usize] == pre.fire[player as usize] + spec::fire_pass_gain(),
-        "C-RAS-masking-01: fire is pre+1"
-    );
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: positions unchanged");
+/// Same leaf at seat 1.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn masking_01_user1_fire_gain_leaf() {
+    fire_pass_leaf_iff_at!(1, skill_characters::sato_red::on_pass_kani(1));
 }
 
 /// C-RAS-rio-01 leaf: `skill:和奏瑞依` `on_pass` requests +1 [火罐].
 #[kani::proof]
-#[kani::unwind(16)]
+#[kani::unwind(24)]
 pub fn rio_01_fire_gain_leaf() {
-    let w = symbolic_fire_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    // Hook entry 1 is `on_pass` (see `skill:和奏瑞依` registration order).
-    unwrap_done(body_of(
-        &skill_characters::raise_effort::RAISE_EFFORT.on[1],
-    )(player));
-
-    let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
-    let effects = &logbuf[..log_n];
-
-    assert!(
-        spec::fire_pass_log_ok(effects, player),
-        "C-RAS-rio-01: leaf is exactly one +1 GainFire"
-    );
-    assert!(
-        post.fire[player as usize] == pre.fire[player as usize] + spec::fire_pass_gain(),
-        "C-RAS-rio-01: fire is pre+1"
-    );
-    assert!(post.money == pre.money, "frame: money unchanged");
+    fire_pass_leaf_iff_at!(0, skill_characters::raise_effort::on_pass_kani(0));
 }
 
 /// Mutant companion for the fire-pass leaf (+2 ≠ +1).
 #[kani::proof]
-#[kani::unwind(16)]
+#[kani::unwind(24)]
 pub fn fire_pass_gain_mutant_is_detected() {
-    let w = symbolic_fire_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-
-    world::reset_world(w);
-    unwrap_done(body_of(
-        &skill_characters::sato_red::SATO_RED.on[2],
-    )(player));
+    fire_world(0);
+    let user = 0i32;
+    invoke::unwrap_done(skill_characters::sato_red::on_pass_kani(user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
-        !spec::fire_pass_log_ok_mutant(effects, player),
+    crate::kassert!(
+        !spec::fire_pass_log_ok_mutant(effects, user),
         "mutant: card must not match the +2 GainFire spec"
     );
 }

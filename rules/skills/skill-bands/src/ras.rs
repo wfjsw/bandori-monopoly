@@ -47,11 +47,7 @@ pub const RAS: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0, 2]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0, 2]);
 
 /// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
 /// landing memory when the player has moved off it.
@@ -139,4 +135,27 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
     }
     state::set(player_id, ON_HOUSE, t);
     Ok(())
+}
+
+/// Roster band row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"RAISE A SUILEN"#)
+    .short_name(r#"RAS"#)
+    .boot_art(r#"018"#)
+    .color(r#"#22CCCC"#)
+    .skill(r#"UNSTOPPABLE"#)
+    .text(r#"（1）每回合可选择只获得第一次受到的[异常移动效果]。（2）因该技能以外的效果在livehouse格子[触发结算]时，若你的下回合开始时仍在那个格子上，你的下一次主要移动可变为传送至你拥有的一个livehouse格子。"#)
+    .logo(r#"018"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_reset_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start_reset(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
+    on_settle(player_id)
 }

@@ -46,7 +46,14 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
             counteract2,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name(r#"（育美）"#)
+        .tags(&[])
+        .text(r#"（1）[手] 投掷2次4d20并将一个育美标记放置到投掷结果之一的格子上，你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记；若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记。
+（2）[反击] 此卡可在你回合外收到资金的回合结束时打出，当前回合内你每获得过一次资金，此卡的投掷次数+1"#)
+        .cell(r#"F14"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", r#"北泽育美"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「投掷2次4d20」
@@ -182,4 +189,11 @@ fn counteract2(player_id: i32) -> card_sdk::Asked {
     let gains = ctx::gains_this_turn(player_id);
     // 规则书（2）: 「此卡的投掷次数+1」 per gain, on top of (1)'s 「投掷2次」.
     rolls(player_id, 2 + gains)
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
 }

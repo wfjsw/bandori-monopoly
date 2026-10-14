@@ -62,11 +62,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
     ],
 )
-    .legacy(&[(2, legacy_mine), (4, legacy_mine)]).silent(&[1, 4]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1, 4]);
 
 /// Residual guard for [`on_skill`]: the CD and the 「每种角色标记上限1」 cap.
 /// Pure reads -- the same instant as the body (`run_hook` runs both on one
@@ -185,4 +181,45 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("nanami_ordinary_used")).card("card", id),
     );
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"广町七深"#)
+    .display(r#"广町七深"#)
+    .band(r#"Morfonica"#)
+    .color(r#"#EE7744"#)
+    .skill(r#"这是很普通的事吧？"#)
+    .text(r#"（1）每次[经过]CiRCLE时获得一个[火罐]（初始2，上限2）（2）当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记（当场上存活玩家数量大于等于3时：每种角色标记上限1，该技能对被动技能存在3回合CD）（3）在时机合适时候，你可以使用手中的角色标记，视为使用该角色的技能（尽力补齐资源消耗，比如双[火罐]消耗技能和翻转[P✽P粉丝]）。"#)
+    .cn_id(r#"028"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"稍微努力了一下"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
+    tick(player_id)
 }

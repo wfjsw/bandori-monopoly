@@ -1041,14 +1041,20 @@ fn bangdream_chan_stays_until_the_drawer_third_turn_start() {
     );
 }
 
-// The clocks (免费时间 / 恢复时间) are host-side; there is no match state for
-// them. Only the expiry is assertable black-box.
+// 免费时间 = `bonus_time`, 恢复时间 = `base_time`: while the event is up each
+// turn starts with 5 s / 0 s; once it is filed away the defaults come back.
 #[test]
-#[ignore = "RULING: 元祖！邦多利酱's 免费时间/恢复时间 are host clocks -- no match-state seam"]
 fn bangdream_chan_shortens_the_clocks() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "元祖！邦多利酱", &[]);
-    panic!("no clock surface to assert");
+    pass(&mut t, 0);
+    until_turn(&mut t, 1);
+    assert_eq!((t.st().base_time, t.st().bonus_time), (0.0, 5.0), "{:?}", t.st().event_active);
+    until_turn(&mut t, 0);
+    pass(&mut t, 0);
+    until_turn(&mut t, 0);
+    assert!(!t.event_in_play("元祖！邦多利酱"));
+    assert_eq!(t.st().base_time, 15.0, "defaults return");
 }
 
 // =====================================================================
@@ -1207,7 +1213,7 @@ fn forbidden_moca_halves_move_dice_then_is_permanently_removed() {
 
 #[test]
 fn school_time_moves_to_the_school_and_grants_exile() {
-    // There is no school field in `data/characters.json`; the body maps each
+    // There is no school field in the roster; the body maps each
     // character to a school tile (or 周边学区). Assert the text's shape: every
     // player lands on a school tile or 周边学区, and each gains 1[除外].
     let mut t = Table::vanilla(3);
@@ -1283,7 +1289,7 @@ fn tears_all_different_pays_300_around_the_table() {
 #[test]
 fn kizuna_music_counts_song_cards_and_teleports() {
     let mut t = Table::vanilla(2);
-    // Song-card names (data/song_cards.json): Returns / STAR BEAT! / 宣战布告.
+    // Song-card names (prop::SONG): Returns / STAR BEAT! / 宣战布告.
     // The cafe draws a non-song card first, leaving 2 in P0's draw pile and
     // 1 in P1's → X = 3. Plus 1d20 = 7 → tile 10.
     t.set_draw(0, &["通用:GREAT", "PPP:Returns", "PPP:STAR BEAT!"]);
@@ -1621,4 +1627,15 @@ fn embers_copies_are_removed_on_exile() {
         "copies go when someone gains [除外]: {:?}",
         t.marks()
     );
+}
+
+// The turn clock is a modifier point (`TurnBonusTime` / `TurnBaseTime`): a
+// placed card's hooks rewrite the refill / base before the host applies them.
+#[test]
+fn turn_clock_hooks_rewrite_the_refill_and_base() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "TEST:clockHook").unwrap();
+    pass(&mut t, 0);
+    until_turn(&mut t, 1);
+    assert_eq!((t.st().base_time, t.st().bonus_time), (30.0, 17.0));
 }

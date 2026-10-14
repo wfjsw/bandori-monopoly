@@ -41,12 +41,7 @@ pub const ASAHI_AIM: CardDef = CardDef::new(
         ),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, Some(owns_bath_with_lh), at_turn_start),
     ],
-)
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// Residual guard for [`on_bought`]: the tile is not already a Live House for
 /// this player (`ctx::is_live_house_for` -- per-player colour, not CEL's
@@ -94,4 +89,27 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// because this skill recoloured it.
 fn is_initial_livehouse(t: i32) -> bool {
     ctx::is_buyable(t) && ctx::tile_group(t) == 6
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"朝日六花"#)
+    .display(r#"朝日六花"#)
+    .band(r#"RAISE A SUILEN"#)
+    .color(r#"#AAEE22"#)
+    .skill(r#"瞄准目标"#)
+    .text(r#"（1）你购买的第一个非“旭汤澡堂”或任意“Live House”格子获得“Live House”的颜色（2）在你有初始“Live House”格子时你拥有的“旭汤澡堂”格子获得“Live House”的颜色"#)
+    .cn_id(r#"032"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"追逐梦想的步伐"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
 }

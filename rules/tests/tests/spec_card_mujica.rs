@@ -3,12 +3,12 @@
 //! Spec doc: `docs/rulebook/spec/cards/mujica.md`. Clause IDs `C-MUJICA-<slug>-<n>`.
 //!
 //! Source precedence: live sheet (`docs/rulebook/cards.json`,
-//! `data/characters.json` `text`, `data/bands.json` `text`) >
+//! the roster character row `text`, the roster band row `text`) >
 //! `docs/rulebook/rulebook-doc.md`. Never engine behaviour.
 //!
-//! Scope: the 14 `Mujica:` cards in `cards.json`, the five Ave Mujica
-//! character skills (`data/characters.json` `band == "Ave Mujica"`), and the
-//! band skill `假面之下的真实` (`data/bands.json`).
+//! Scope: the 14 `Mujica:` cards in the roster, the five Ave Mujica
+//! character skills (`the roster` `band == "Ave Mujica"`), and the
+//! band skill `假面之下的真实` (`the roster`).
 
 use rules_spec::{forall, frame, Clause, Step, Table};
 
@@ -83,7 +83,7 @@ fn finish_turn(t: &mut Table, who: usize) {
 /// C-MUJICA-黑色生日-01 -- 「资金不多于1000」 pays 800 (inclusive; TEST-FINDINGS §6).
 ///
 /// * **ID:** `C-MUJICA-黑色生日-01`
-/// * **Source:** `cards.json#Mujica:黑色生日`
+/// * **Source:** `roster#Mujica:黑色生日`
 /// * **Quote:** 「每名你以外的资金不多于1000的玩家支付你800资金」
 /// * **Trigger:** play of `Mujica:黑色生日` from hand.
 /// * **Condition:** another player's money is `<= 1000` (inclusive) and they
@@ -127,7 +127,7 @@ fn black_bday_low_pays_800(step: &Step<'_>) -> Result<(), String> {
 /// C-MUJICA-黑色生日-02 -- 「资金严格在1000以上」 pays 200 twice.
 ///
 /// * **ID:** `C-MUJICA-黑色生日-02`
-/// * **Source:** `cards.json#Mujica:黑色生日`
+/// * **Source:** `roster#Mujica:黑色生日`
 /// * **Quote:** 「每名你以外的资金严格在1000以上的玩家支付你两次200资金。」
 /// * **Condition:** another player's money is `> 1000`.
 /// * **Effect:** that player pays the user 200 twice (total 400).
@@ -286,7 +286,7 @@ fn black_birthday_contract() {
 /// C-MUJICA-心の雨-01 -- 「你前方20格内的所有玩家各自骰1d20」.
 ///
 /// * **ID:** `C-MUJICA-心の雨-01`
-/// * **Source:** `cards.json#Mujica:心の雨`
+/// * **Source:** `roster#Mujica:心の雨`
 /// * **Quote:** 「使你前方20格内的所有玩家各自骰1d20，骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。」
 /// * **Trigger:** play of `Mujica:心の雨`.
 /// * **Condition:** other players sitting on the 20 tiles clockwise ahead of
@@ -498,37 +498,37 @@ fn rain_contract() {
 pub const CLAUSES: &[Clause] = &[
     Clause::new(
         "C-MUJICA-黑色生日-01",
-        "cards.json#Mujica:黑色生日",
+        "roster#Mujica:黑色生日",
         "每名你以外的资金不多于1000的玩家支付你800资金",
         black_bday_low_pays_800,
     ),
     Clause::new(
         "C-MUJICA-黑色生日-02",
-        "cards.json#Mujica:黑色生日",
+        "roster#Mujica:黑色生日",
         "每名你以外的资金严格在1000以上的玩家支付你两次200资金。",
         black_bday_high_pays_400,
     ),
     Clause::new(
         "C-MUJICA-黑色生日-frame",
-        "cards.json#Mujica:黑色生日",
+        "roster#Mujica:黑色生日",
         "每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。",
         black_bday_frame,
     ),
     Clause::new(
         "C-MUJICA-心の雨-01",
-        "cards.json#Mujica:心の雨",
+        "roster#Mujica:心の雨",
         "使你前方20格内的所有玩家各自骰1d20",
         rain_stay_layers,
     ),
     Clause::new(
         "C-MUJICA-心の雨-02",
-        "cards.json#Mujica:心の雨",
+        "roster#Mujica:心の雨",
         "骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。",
         rain_stay_amount,
     ),
     Clause::new(
         "C-MUJICA-心の雨-03",
-        "cards.json#Mujica:心の雨",
+        "roster#Mujica:心の雨",
         "若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金",
         rain_miss_self_stun,
     ),

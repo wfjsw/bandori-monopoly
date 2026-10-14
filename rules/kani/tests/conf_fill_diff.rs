@@ -58,8 +58,12 @@ struct Seat {
     out: bool,
     stay: i32,
     stun: i32,
+    /// Pending `stunStart` layer (starts counting next turn).
+    stun_start: i32,
     exile: i32,
     no_hand: i32,
+    /// `[不可阻挡]` layers.
+    unstoppable: i32,
     character: &'static str,
     band: &'static str,
     /// Non-zero named tokens (`tok('…')`).
@@ -84,8 +88,10 @@ impl Default for Seat {
             out: false,
             stay: 0,
             stun: 0,
+            stun_start: 0,
             exile: 0,
             no_hand: 0,
+            unstoppable: 0,
             character: "",
             band: "",
             tokens: Vec::new(),
@@ -389,11 +395,31 @@ impl SnapSrc for Fixture {
             return 0;
         };
         match key {
+            "stay" => s.stay,
             "stun" => s.stun,
+            "stunStart" => s.stun_start,
             "exile" => s.exile,
             "noHand" => s.no_hand,
+            "unstoppable" => s.unstoppable,
             other => s.slots.iter().find(|(n, _)| *n == other).map(|(_, v)| *v).unwrap_or(0),
         }
+    }
+    fn state_entries(&self, p: i32) -> Vec<(String, i32)> {
+        let Some(s) = self.seats.get(p as usize) else {
+            return Vec::new();
+        };
+        let mut rows = vec![
+            ("stay".to_string(), s.stay),
+            ("stun".to_string(), s.stun),
+            ("stunStart".to_string(), s.stun_start),
+            ("exile".to_string(), s.exile),
+            ("noHand".to_string(), s.no_hand),
+            ("unstoppable".to_string(), s.unstoppable),
+        ];
+        for (n, v) in &s.slots {
+            rows.push((n.to_string(), *v));
+        }
+        rows.into_iter().filter(|(_, v)| *v != 0).collect()
     }
     fn character_skill_id(&self, _p: i32) -> Option<String> {
         None
@@ -511,8 +537,10 @@ fn to_world(fx: &Fixture) -> KWorld {
             w.band_id[p] = intern::intern(s.band).0;
         }
         w.player_keys[p].set(intern::intern(ir_fill::KEY_STUN), s.stun);
+        w.player_keys[p].set(intern::intern(ir_fill::KEY_STUN_START), s.stun_start);
         w.player_keys[p].set(intern::intern(ir_fill::KEY_EXILE), s.exile);
         w.player_keys[p].set(intern::intern(ir_fill::KEY_NO_HAND), s.no_hand);
+        w.player_keys[p].set(intern::intern(ir_fill::KEY_UNSTOPPABLE), s.unstoppable);
         for &(n, v) in &s.tokens {
             let id = intern::intern(n);
             w.player_keys[p].set(id, v);
@@ -1020,6 +1048,35 @@ fn fx_four_players_teleport() -> Fixture {
     fx
 }
 
+/// Status-gate layer counts on one seat: stay / stun / stunStart / exile /
+/// unstoppable all non-zero so a `stay(p)`-shaped guard cannot pass by
+/// reading unfilled zeros.
+fn fx_status_layers() -> Fixture {
+    let mut fx = Fixture::new("status_layers", 2);
+    fx.seats[0].stay = 2;
+    fx.seats[0].stun = 1;
+    fx.seats[0].stun_start = 3;
+    fx.seats[0].exile = 0;
+    fx.seats[0].unstoppable = 0;
+    fx.seats[1].stay = 0;
+    fx.seats[1].stun = 0;
+    fx.seats[1].stun_start = 1;
+    fx.seats[1].exile = 4;
+    fx.seats[1].unstoppable = 2;
+    fx.trig = Trig {
+        kind: TriggerKind::Pay,
+        actor: 1,
+        target: 1,
+        tile: 0,
+        value: 100,
+        turn_player: 0,
+        ..Trig::default()
+    };
+    fx.card_placed = true;
+    fx.card_tile = -1;
+    fx
+}
+
 fn all_fixtures() -> Vec<Fixture> {
     vec![
         fx_aya_poorest_value(),
@@ -1030,6 +1087,7 @@ fn all_fixtures() -> Vec<Fixture> {
         fx_no_chain_abnormal(),
         fx_rent_property(),
         fx_four_players_teleport(),
+        fx_status_layers(),
     ]
 }
 
@@ -1185,4 +1243,63 @@ fn fill_diff_rent_property() {
 #[test]
 fn fill_diff_four_players_teleport() {
     check_all(&fx_four_players_teleport());
+}
+#[test]
+fn fill_diff_status_layers() {
+    check_all(&fx_status_layers());
+}
+
+/// `state(p, 'key')` through both fillers, on a fixture whose seat carries
+/// stay / stun / stunStart / exile / unstoppable. The inventory has no
+/// `state(p,'key')` guard yet, so this lowers the sources directly (same
+/// `fill_window` / `fill_from_world` seam `check_guard` uses).
+#[test]
+fn fill_diff_state_fns() {
+    let fx = fx_status_layers();
+    // (src, owner, expected) — agreement first, then a truth value so a
+    // double-zero pass cannot hide a fill gap.
+    let cases: &[(&str, i32, bool)] = &[
+        (
+            "state(owner,'stay') > 0 && state(owner,'unstoppable') == 0",
+            0,
+            true,
+        ),
+        (
+            "state(owner,'stay') > 0 && state(owner,'unstoppable') == 0",
+            1,
+            false,
+        ),
+        ("state(owner,'stun') + state(owner,'stunStart') == 4", 0, true),
+        ("state(owner,'stun') + state(owner,'stunStart') == 1", 1, true),
+        (
+            "state(owner,'exile') == 0 && state(owner,'unstoppable') == 0",
+            0,
+            true,
+        ),
+        (
+            "state(actor,'exile') == 4 && state(actor,'unstoppable') == 2",
+            0,
+            true,
+        ),
+        (
+            "state(owner,'stay') + state(owner,'stun') + state(owner,'stunStart') == 6",
+            0,
+            true,
+        ),
+    ];
+    for &(src, owner, want) in cases {
+        let a = prod_eval(src, &fx, owner);
+        let prog = rules_cond::lower::lower_src(src).expect("lower state fn src");
+        let w = to_world(&fx);
+        let ov = to_overlay(&fx);
+        let card_id = rules_cond_ir::ctx::id_of(fx.card);
+        let c = ir_fill::fill_from_world(&w, owner, card_id, fx.card_placed, fx.card_tile, &ov);
+        let b = prog.eval_bool(&c);
+        assert_eq!(
+            a, b,
+            "state-fn fill differential: fixture={} owner={owner} src={src:?}\n  prod={a} ir={b}",
+            fx.name
+        );
+        assert_eq!(a, want, "state-fn truth: owner={owner} src={src:?} got={a}");
+    }
 }

@@ -841,8 +841,8 @@ or the bundle is not deployed at all, the embedded engine runs -- that is the
 whole point of carrying it. The user is told: 「正在使用回放文件内嵌的引擎」 /
 "Playing on the engine embedded in this record (bundle …)".
 
-**BOM note (`data_sha256`).** Three of the game tables (`cards.json`,
-`characters.json`, `skill_simple.json`) begin with a UTF-8 BOM, and a
+**BOM note (`data_sha256`).** Some of the game tables (`skill_simple.json` and
+historically the retired roster files) begin with a UTF-8 BOM, and a
 byte-preserving decode keeps it (`as_bytes()` puts `EF BB BF` back) while
 `TextDecoder`'s default and `Response.text()` strip it. The stamp recipe is
 unified on **hash without the BOM**: `load_data`, `Ctx::load` and

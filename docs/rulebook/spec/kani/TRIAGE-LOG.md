@@ -386,3 +386,808 @@ class A–F, fix or why none.
 Phase markers used: `Starting Bounded Model Checking`, `Generated N VCC(s)`,
 `Running propositional reduction`, `N variables, M clauses`, `SAT checker`,
 `Runtime Solver`.
+
+## Batch 3e — events rows + preventive memcmp + BACKEND + kassert!
+
+### New events failures (live pass)
+
+| id | verdict | phase split | dominant cost | class | action |
+|---|---|---|---|---|---|
+| `events::ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | BMC → memcmp 45 (`Not unwinding at 16` ×3) + `ex_quest::play` 15 (`Not unwinding at 16`); then 15627 VCC / 1.16M vars / 2.0M clauses / SAT 15 s | array `==` memcmp + `for &p in &all_players()` Vec loop at 16 | **A** | `arr4_eq` (done); body loop still at 16 — re-timing |
+| `events::habinel_01_grants_exiles` | TIMEOUT 1800 s (unwind 24) | BMC → `habinel::play` 23 (`Not unwinding at 24`) + `spec::habinel_01_exiles_ok` 23 + harness loop 23; 23476 VCC / **7.8M vars / 30.8M clauses** / SAT 61 s | body + spec loops at 24 + `board::tile_named_bytes` 6 (60-name scan) — huge formula | **A/E** | no cheap fix (body `for` + tile scan); **remains TIMEOUT (FAIL)** |
+| `events::front_or_back_mutant_swapped_is_detected` | TIMEOUT 1800 s (unwind 32) | same as front_or_back_01/02: `play` Vec 31, `log_is_gains` 31, slice iters 31 | body `Vec` + effects iters | **A/E** | same as siblings — **remains TIMEOUT (FAIL)** |
+
+### Preventive memcmp cut (all units)
+
+`post.money == pre.money` is `[i32;4]::eq` → 16-byte `memcmp` at unwind 16.
+Helpers `world::arr4_eq` / `arr8b_eq` / `arr4b_eq` applied across **23 proof
+files + 7 spec files**. Cheap, no behaviour change.
+
+### kassert! — assert without Rust fmt
+
+`assert!(cond, "literal")` still pulls `panic_fmt` → `PadAdapter` →
+`memchr` (1193 unrolls on moca_02_mutant). `kassert!` = `kani::assert`
+under Kani (CBMC property, no fmt) / `assert!` natively. Replaced across
+all proofs.
+
+### BACKEND → direct extern "Rust"
+
+`card_sdk::kani_host::call` under `cfg(kani)` is now
+`extern "Rust" { fn rules_kani_host_dispatch(...) }` — a direct CALL into
+`rules_kani::host::dispatch`. No fn-ptr (was 874-target IF-chain at every
+`ctx::*` site). Native/tests keep `BACKEND`. Production card-sdk
+`cfg(not(kani))` unchanged (dist hashes: only `cfg(kani)` code moved).
+
+### BACKEND direct extern — **not supported by Kani** (reverted)
+
+`extern "Rust" { rules_kani_host_dispatch }` made `same_dream_01` finish
+in **244 s** (388k vars / 396k clauses, SSA 1.7 s) — but Kani aborts with
+`call to foreign "Rust" function is not currently supported` so every
+property is UNDETERMINED (FAILED, vacuous). Same limitation as
+`extern "C-unwind"` (kani#2423). **Reverted** (`cf1e112`). The 244 s run
+is still evidence: the `BACKEND` fn-ptr IF-chain at every `ctx::*` site is
+the dominant SSA cost. A viable cut needs the host dispatch **in**
+`card-sdk` under `cfg(kani)` (no cross-crate call), or a Kani feature for
+Rust ABI imports.
+
+### kassert! + arr4_eq (kept)
+
+`assert!` → `kassert!` (no `panic_fmt`/`memchr`) across proofs;
+`arr4_eq`/`arr8b_eq`/`arr4b_eq` across proofs+spec. Re-timed
+`moca_01` 394 s / `aao_01` 310 s (batch 3d).
+
+## Batch 4 — direct host dispatch: **not merged** (docs-only record)
+
+The `kani-ops` / `kani-model` split (direct `kani_model::dispatch` call)
+was implemented and then **rejected**:
+
+* **Production wasm hashes change** (`3aedcf2b…` vs master `493c2ffe…`)
+  — intern/arena moved crates, so codegen is not bit-identical.
+* **No proof speedup** — `pp::same_dream_01_band_plus_3_iff` remains
+  **symex-bound** inside the model itself (300-op `dispatch` match,
+  `World` copy, `native::read`/`to_vec`), ~25 min / TIMEOUT.
+
+**Correction to the 244 s "breakthrough":** that run used `extern "Rust"`
+which Kani **aborts** (`call to foreign "Rust" function is not currently
+supported`) — every property UNDETERMINED, 0/4 covers. It did **not**
+verify the clause. Class **E** for the pp rows.
+
+| id | class | dominant cost | next idea |
+|---|---|---|---|
+| `pp::same_dream_01_band_plus_3_iff` | **E** | model: 300-op `dispatch` match, `World` copy, `native::read`/`to_vec` (not the body `code*` IF-chain — direct-call experiment) | shrink `dispatch` match per proof (op subsets); smaller `World` for band proofs; allocation-free `native::read` for intern-tagged handles |
+
+**Kept (independent of crate layout):** `kassert!` / `arr4_eq` (batch 3e);
+crychic static assert message (format-arg `kassert!` did not match the
+macro). Production `rules/` restored to master.
+
+
+## Batch 3e/4 triage — remaining rows
+
+| id | verdict | class | dominant cost | action |
+|---|---|---|---|---|
+| `events::ex_quest_01_rolls_and_files` | UNWINDING 937 s → **SUCCESSFUL 724 s** (1/1 cover) | **A** | array `==` memcmp at unwind 16 | `arr4_eq` (kept) |
+| `events::habinel_01_grants_exiles` | TIMEOUT 1800 s | **A/E** | body/spec/harness loops at 24; 7.8M vars / 30.8M clauses; `tile_named_bytes` 6 | no cheap fix — **FAIL** |
+| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s | **A/E** | body `Vec` + effects iters at 32 | no cheap fix — **FAIL** |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s | **E** | fmt `PadAdapter` + memchr 1193 (assert messages) | `kassert!` applied; re-time pending |
+| `events::aao_02_hand_veto_is_armed` | FAILED | **D** | GENUINE E-aao-02 (LESS) | keep FAILING |
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s | **E** | `Vec<u8>::extend_with` 31, `drop_glue<[String]>` 62, `memcmp` 31, `ctx::ask_card` 31 | card-body `String`/`Vec<String>` ABI (TUNING §10) — no cheap fix |
+| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s | **E** | same | same |
+| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s | **E** | `Vec<u8>::extend_with` 31, `by_idx` 10, `memcmp` 10, `named_set` 8 | same |
+| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s | **E** | same | same |
+
+Branch is **docs + crychic static kassert message only** (production
+`rules/` matches master; dist hashes identical).
+
+
+## strvec — String/Vec unwinding facades (branch `kani-strvec`)
+
+Goal: remove the `String`/`Vec` unwinding cost that times out
+`prompt::aya_haruka_01_*`, `money_shave::aya_haruka_02_*`, and
+`events::front_or_back_*` / `moca_02_mutant` at 1800 s. Approach: `cfg(kani)`
+facades in `rules/card-sdk` (same pattern as intern/Msg: zero-loop, heap-free)
+plus harness-side fixed arrays. Production wasm/native **byte-identical**
+(`dist` hashes match master).
+
+### Changes (all `cfg(kani)` unless noted)
+
+| piece | was | now |
+|---|---|---|
+| `card-sdk/kani_alloc.rs` | system `malloc`/`free` (CBMC heap objects) | static 16 KiB bump: `alloc`=cursor, `dealloc`=no-op, `realloc` grows last block |
+| `card-sdk/native.rs` arena | `Vec<Vec<Vec<u8>>>` + `vec![0u8; len]` | `[[[u8;64];8];8]` frame stack; zero-loop intern/read/write/pad |
+| `out_buf` / `out_read` | `vec![0u8; cap]` (`extend_with` 31) | empty scratch + fixed arena pull |
+| `ask_pick` / `ask_card` / `ask_player` / `ask_player_cards` / `ask_number` | `for` over symbolic-length slice (`ctx::ask_card` 31) | 4-slot branch trees; `kani::assert` if >4 |
+| `cond-ir` `named_get` / `named_set` | 4-iter + 10×8 chunk walks (`named_set` 8) | zero-loop 80-step scan (`.get`, no index panic) |
+| `ir_fill::fill_pay_add` | `named_set` ×2 | direct `named[0..2]` slots |
+| `invoke::hook_kind_only_idx` / `hook_kind_matches` | `kinds.iter().any` | zero-loop 4-slot match |
+| events specs (`log_is_gains`, `log_is_paytos`, `front_or_back_*`) | `iter().zip` / `contains` at 31 | zero-loop step macros (bound 24) |
+| `moca_02_mutant` scan | `effects.iter().any` | zero-loop 24-step |
+
+### Production hash check
+
+`node tools/build-ruleset.mjs` **without** `CARGO_TARGET_DIR` (worktree
+`/home/monopoly/kani-strvec-wt`), compared to master's `/home/monopoly/web/dist`:
+
+| artifact | worktree | master | result |
+|---|---|---|---|
+| `dist/cards/*.wasm` (card_all) | `fc3010e9cf22c528…b4c15` | `fc3010e9cf22c528…b4c15` | **identical** |
+| `dist/fixtures/*.wasm` | `03d5135b4faf3dca…ada15` | `03d5135b4faf3dca…ada15` | **identical** |
+| `dist/cards/conds-*.bin` | `a76f4eab6a76a74f…7da7` | `a76f4eab6a76a74f…7da7` | **identical** |
+
+### Tests
+
+* `cargo test -p rules-kani` ×3 — green (13 + 14 + 37 + 5 + 5)
+* `cargo test -p rules-cond --features lower` — green (58)
+* `cargo check --manifest-path rules/Cargo.toml --workspace --target wasm32-unknown-unknown` — green
+* `cargo build -p game-rules -p rules-native -p server` — green
+
+### Before / after (target rows)
+
+Iterative re-runs of `prompt::aya_haruka_01_prompt_all_picks_iff` (one CBMC
+slot, 1800 s cap, unwind 32):
+
+| run | change on top of the facades | verdict | profile |
+|---|---|---|---|
+| v1 | facades only (ask trees, fixed arena, named_set 0, out_buf) | **FAILED 1156 s** | SDK cliffs gone (0 extend_with / ask_card); residual body `drop_glue<[String]>` 32, `String fold` 31, `memcmp` 32 |
+| v2 | `cards_in` generic `T: From<CardList>` | compile fail (type-param default is a hard error) | — |
+| v3 | `cards_in` len 0-or-4 + `from_raw_parts` static strings | **FAILED 476 s, 0/4 covers UNREACHABLE** | profile clean (no memcmp/drop_glue) but `__rust_dealloc` rejects static pointers → every String-drop path aborts → vacuous |
+| v4 | `String::from` facade (valid alloc) + len 0-or-4 | killed mid-run | `memcmp` 414+ (heap `len` not folded); drop_glue/fold **gone** |
+| v5 | `from_raw_parts` over a real 1-byte `alloc` (constant `len=1`) + len 0-or-4 | **TIMEOUT 1800 s** | `memcmp` 2015 (`slice_contains` 63 × 32); drop_glue only 13 (constant-len helps); 187 `__rust_dealloc`/`same_allocation` path aborts |
+
+**What is gone for good (all runs after v1):** `Vec<u8>::extend_with`,
+`ctx::ask_card` / `ask_pick` / `ask_player` / `ask_tile` loops,
+`named_set` 8, `by_idx` 10, `drop_glue<[String]>` (constant-length
+`cards_in`), the `String` `map().collect()` fold.
+
+**What remains:** `memcmp` inside `String::eq` (`ids.contains`). CBMC
+treats a heap `String`'s `len` as symbolic even when built via
+`from_raw_parts(p, 1, 1)`, so `memcmp` unrolls to the global bound (32).
+That is the unmodified body's `Vec<String>` ABI — the TUNING §10 wall.
+No `cfg(kani)` facade can make `alloc::string::String`'s Drop/eq see a
+constant length without a body type-annotation change.
+
+| id | before (batch 3e/4) | after (strvec) |
+|---|---|---|
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — extend_with 31, drop_glue 62, memcmp 31, ask_card 31 | **FAILED 1156 s** (v1) / **FAILED 476 s vacuous** (v3) / **TIMEOUT 1800 s** (v5) — extend_with/ask_card **gone**; body `Vec<String>` memcmp/drop_glue/fold residual (see above) |
+| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s — same | same stack as iff; residual memcmp |
+| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — extend_with 31, by_idx 10, memcmp 10, named_set 8 | **TIMEOUT 1800 s**, unwind profile **clean** (`symbolic_pay_world` 4 + `fill_pay_add` 4 + `poorest` 4 + `hook_kind` 1; **zero** extend_with/named_set/by_idx/memcmp/drop_glue). Solver-bound on the 4-seat symbolic world — the String/Vec cliffs are gone |
+| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | same (clean profile, solver-bound) |
+| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s — body `Vec` + effects iters at 32 | effects iters 0 (spec step macros); body `Vec<i32>` loops remain (same wall) |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s — fmt PadAdapter + memchr 1193 | `kassert!` + zero-loop `iter().any`; re-time pending |
+
+Remaining risk: the unmodified bodies still allocate `Vec<String>`
+(`aya_longing` `ids`) and `Vec<i32>` (`front_or_back` `front`/`back`/`winners`).
+Those types cannot change without a body edit. The bump allocator turns their
+grow/drop into array arithmetic; the loops still unroll to the global bound if
+`Vec::len` is not folded. If a row stays TIMEOUT the profile will say whether
+the residual is still `drop_glue`/`extend_with` or solver-bound on the symbolic
+world (the money_shave post-batch-2 diagnosis).
+## op-subset — per-harness host-op subset + sparse World (branch `kani-opsubset`)
+
+Goal (coordinator): `pp::same_dream_01_band_plus_3_iff` well under 1800 s,
+non-vacuous. Levers named in Batch 4: shrink the ~300-op `dispatch` match per
+proof, smaller `World`, allocation-free `native::read`.
+
+### What landed
+
+| lever | what | files |
+|---|---|---|
+| (1) **Per-harness host-op subset** | `harness::host_subset!` builds a tiny `fn(Op, Args) -> i64` match covering only the `host::arm_*` handlers the card body reaches. Every other `Op` → `host::outside_subset` = **`kani::assert(false)`** (loud FAIL — never `assume(false)`, so an undeclared op cannot silently pass). `host::install_backend(f)` installs it. | `host.rs`, `harness.rs` |
+| **arm_\* single-source handlers** | `arm_log`, `arm_gain`, `arm_count_held`, `arm_add_held`, `arm_player_count`, `arm_in_band`, `arm_hand_count`, `arm_take_card`, `arm_to_discard`, `arm_ask`, `arm_add_band_crystals`, … — `dispatch` and subset dispatchers share them. | `host.rs` |
+| (2) **Sparse play world** | `harness::sparse_play_world(SparsePlay)`: only `used_seats` get symbolic money/fans; seats `used..4` stay at `World::new()` defaults (concrete). `n_players` concrete. Isolation `hand_resonance = 0` default. `with_world`/`with_world_mut` `#[inline(always)]` (no `World` copy per host call). | `harness.rs`, `world.rs` |
+| **`name_id` no alloc** | Untagged name handle under `cfg(kani)` = loud FAIL (`kani::assert(false)`), not `native::read`/`to_vec`. The `ctx::s`/`key!` facade always tags. `cfg(not(kani))` keeps the byte fallback. | `host.rs` |
+| **pp wiring** | `same_dream_dispatch` declares 14 ops (body + `try_resonance` entry); `same_dream_world()` = subset + sparse 2-seat. Harnesses: `same_dream_01_band_plus_3_iff`, `same_dream_02_money_mutant_is_detected`. | `proofs/pp.rs` (kit declaration only) |
+
+`player_count()` semantics unchanged (TUNING §7): `ctx::player_count()` still
+returns the constant 4 under `cfg(kani)` after asserting `n_players ∈ 2..=4`;
+`player_out(p)` is true for `p >= n_players`. Sparse world only makes **2**
+seats symbolic — the body's `0..4` loop is four cheap iterations and with
+`widen == false` only `p == user` is processed.
+
+### Class C: hook-status polarity (`raise` / `gate` / `raise_bought` / `ring_multiplier`)
+
+**Fixed here** — the parallel triage pass ("Batch 3e continued") diagnosed
+`chart_rush_01_spends_fire` as a class C host-model defect (`Op::raise`
+benign-0 → cancelled → `spend_fire` skipped the real spend) and left the
+proof FAILING for a `host.rs` fix. This branch is that fix.
+
+`events::chart_rush_01_spends_fire` spent no [火罐]: `spend_fire` calls
+`ctx::raise(FirePaying)`, and a **0** return means *cancelled / substituted*
+→ `return Ok(true)` without the real spend. `Op::raise` sat in the benign-0
+list (returned 0). Engine contract (`wasm_rules` `HostRequest::Raise`):
+return `(!cancelled)` — **1 = settled**.
+
+Same polarity class, same fix (all pinned in `conf_hostops2`):
+
+| op | 0 means | correct default | was | now |
+|---|---|---|---|---|
+| `Op::raise` | cancelled → caller skips effect | 1 = settled | 0 | **1** (`arm_raise`) |
+| `Op::gate` | guarded/immune/out → skip effect | 1 = allowed | 0 | **1** (`arm_gate`, 0 for out seats) |
+| `Op::raise_bought` | hand-over did not land | 1 = landed (HOST-06) | 0 | **1** (`arm_raise_bought`) |
+| `Op::ring_multiplier` | 0 zeroes rent | ≥ 1 (identity 1; game default 10) | 0 | **1** (`arm_ring_multiplier`, `TODO(规则书)` for the stock 10) |
+
+Reported leftovers with the 0-means-skip shape (still benign-0, not yet
+armed): `play_from_hand` (0 = not from hand), `can_build_on` (0 = cannot),
+`card_*` / `buy` / `acquire` / `agent_offer` (0 = did not land).
+`designation_cancelled` (0 = not cancelled) is the correct polarity.
+
+### Measurements (one serial CBMC, unwinding assertions ON, `tools/kani/run.sh`)
+
+| harness | before | after | verdict |
+|---|---|---|---|
+| `pp::same_dream_01_band_plus_3_iff` | TIMEOUT 1800 s (central; NameMap 144+80 unrolls, 42 MB goto) | **TIMEOUT 1800 s** ×2 (op-subset + sparse world; then + `name_id` cut) | **TIMEOUT** — target **not met** |
+| `events::chart_rush_01_spends_fire` | TIMEOUT 1800 s (old base, class E) + **genuine class C** (no fire spent — `raise` returned cancelled) | **SUCCESSFUL 909 s** (unwind 24, **2/2 covers sat**: "no pots" + "some pots spent") | **SUCCESSFUL** |
+
+Profile deltas for `same_dream_01_band_plus_3_iff` (`--features band-pp`,
+unwind 32):
+
+| metric | pre-op-subset (central) | op-subset + sparse | + `name_id` cut |
+|---|---|---|---|
+| goto binary | 42–106 MB | **8.8 MB** | 8.8 MB |
+| unwind loops | NameMap 144+80, sync_views 8, setup 4 | **`sparse_play_world` 2 only** | same |
+| aborting paths | (alloc-heavy) | 29 (incl. `native::read`, `RawVec`, `slice_index_fail`) | **14** (Option::unwrap_or ×6, `name_id` ×3, `Result::branch` ×3; **zero alloc / to_vec / RawVec**) |
+| verdict | TIMEOUT 1800 s | TIMEOUT 1800 s | TIMEOUT 1800 s |
+
+Unrolls are clean. The remaining cost is **SSA/solver after symbolic
+execution** — not a model loop, not an alloc cliff. Named in Batch 4 after the
+direct-call experiment: the **BACKEND `fn(Op, Args) -> i64` IF-chain** at every
+`ctx::*` site, plus the body `fn(i32) -> Asked` `code*` chain (388 targets with
+`--features band-pp`). Those live in `card-sdk::kani_host::call` (fn-ptr) and
+`invoke.rs` trampolines — **outside this task's edit scope** (`host.rs` /
+`world.rs` / `harness.rs` / `shim.rs` only). The rejected `extern "Rust"` run
+(244 s, UNDETERMINED) is still the evidence that the host-call fn-ptr is the
+dominant SSA cost.
+
+### Non-vacuity
+
+Not reached: both runs hit TIMEOUT before any property verdict, so covers /
+`assert!(false)` probes were not evaluated. The subset trap is fail-closed by
+construction (`outside_subset` = `kani::assert(false)`), and `sparse_play_world`
+uses no `assume` that hides body behaviour (isolation `hand_resonance = 0` is
+stated and matches the pp module doc). A post-invoke `assert!(false)` probe
+must be run when the proof first finishes.
+
+### Soundness kept
+
+* Unwinding assertions ON; no `--no-unwinding-checks`.
+* No `#[ignore]`, no allowlist, no weakened specs.
+* `outside_subset` / untagged `name_id` **FAIL** the proof — never `assume`.
+* Card bodies unmodified. `rules/` production (non-kani) untouched by the
+  op-subset / sparse-world work (`name_id` keeps its byte fallback
+  `cfg(not(kani))`). `cargo test -p rules-kani` green (incl. 4 new
+  `conf_hostops2` polarity pins).
+* `player_count()=4` / `player_out` semantics documented and unchanged
+  (TUNING §7).
+
+### Next levers (out of this task's file scope)
+
+1. Fold the `kani_host::BACKEND` fn-ptr (put the dispatch **in** `card-sdk`
+   under `cfg(kani)`, or a Kani feature for Rust-ABI imports) — the 244 s
+   direct-call experiment says this is the dominant cost.
+2. Body `code*` → integer body-id match (`invoke.rs` / `build.rs` trampolines)
+   so the call is not a 388-target IF-chain.
+3. `native::read` tagged path still `to_vec`s in `card-sdk` (other agent).
+## Batch 3e continued — proof-file triage (parallel: op-subset + strvec agents)
+
+Scope: `rules/kani/src/{proofs,spec}/*.rs` + docs only.
+
+### `events::chart_rush_01_spends_fire` FAILED — **class C host-model defect**
+
+Assert `E-chart-rush-01: all fire pots spent` fails. Root cause chain:
+
+1. Body: `fire::spend(p, lost, …)` → `ruleset_core::spend_fire`.
+2. `spend_fire` opens the `FirePaying` link first:
+   `if !ctx::raise(…, FirePaying, n)? { return Ok(true); }`
+   (`raise` = true when the link **settled**, false when **cancelled**).
+3. Model `host.rs` `Op::raise` is in the benign-0 unmodeled list → returns **0**.
+4. `raise` → `Ok(false)` («cancelled») → `spend_fire` returns `Ok(true)`
+   **without subtracting** `w.fire[p]`.
+
+So the model reports the spend as satisfied but leaves the pots. The proof
+is correct; the **host model's `Op::raise` must return 1 (settled)** for
+`FirePaying` when no hook substitutes. Fix belongs in `host.rs` (not this
+agent's scope) — leave the proof **FAILING** as the finding.
+
+### `events::fix_note_01_activation_keeps` UNWINDING — class A
+
+`fix_note::play` `for t in 0..tile_count()` is a **60-trip** loop
+(`Not unwinding at 16`). Raised harness unwind to **64** (re-timing).
+
+### `fix_note_01` unwind 64 — **TIMEOUT 1200 s** (class E after bound fix)
+
+60-trip `for t in 0..tile_count()` fully unwound is SSA-heavy. Bound is
+now sound (64 ≥ 60); cost is the body loop (cannot edit). **FAIL** —
+no cheap proof-file lever beyond the bound.
+
+### `end_it_all_01_three_picks_and_keep` — dropped unused `picks` scan
+
+`ask_pick` + `Vec<Msg>` fold (String ABI) still class E; pick-count lives
+in `three_picks_counted`. Simplified the keep half (re-timing pending).
+
+### `moca_02_mutant_is_detected` — **SUCCESSFUL 340 s** (was TIMEOUT 1800 s)
+
+`kassert!` (no `panic_fmt`/`memchr`) removed the fmt cliff that dominated
+the 1193-unroll memchr/PadAdapter profile. Class **E → fixed**.
+
+## triage2 — events unit, central-results3 non-success rows
+
+Branch `kani-triage2` · Worktree `/home/monopoly/kani-triage2-wt`.
+Old base: `/home/monopoly/kani-central-results3/events/` (unit finished on an
+older base). New runs: `/home/monopoly/kani-triage2-results/`.
+One serial CBMC (`KANI_GLOBAL_SLOTS=3`, slot2 = this agent); unwinding
+assertions ON. Classes A–F per the user rule.
+
+Master already contained (before this branch): `arr4_eq` / `kassert!`,
+op-subset host (`arm_raise` = 1 etc.), sparse World, `cfg(kani)` String/Vec
+facades. Central rows older than those fixes are re-timed, not re-derived.
+
+### Per-row table (before → after)
+
+| id | before (central-results3) | phase split / dominant cost | class | action | after |
+|---|---|---|---|---|---|
+| `moca_01_activation_keeps_the_card` | UNWINDING 507 s (unwind 16) | BMC → `memcmp.unwind` 16 (16-byte `==`) | **A** | `arr4_eq` already on master | **SUCCESSFUL 322 s** (unwind 16) |
+| `aao_01_activation_keeps_the_card` | UNWINDING 562 s (unwind 16) | memcmp 16 (A) **and** `host::name_id` untagged (C) | **A + C** | `arr4_eq` on master; `set_self_prop` packing bug is host — **FAILED 260 s** | FAILED (class C, host) |
+| `this_hand_01_move_is_protocol` | UNWINDING 571 s (unwind 16) | `memcmp.unwind` 16 | **A** | `arr4_eq` already on master | **SUCCESSFUL 315 s** (unwind 16) |
+| `ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | `ex_quest::play` + `memcmp` | **A** | `arr4_eq` + unwind **24** | **SUCCESSFUL 778 s** (unwind assert at 24 holds) |
+| `fix_note_01_activation_keeps` | UNWINDING 838 s (unwind 16) | 60-trip body loop (A) + `set_self_prop` (C) + SSA cost | **A → E** | unwind **64** (sound); body loop cannot shrink | **TIMEOUT 1800 s** (unwind 64) |
+| `chart_rush_01_spends_fire` | FAILED 846 s | assert `all fire pots spent`; `Op::raise` was benign-0 → `spend_fire` skipped | **C** | `arm_raise` → 1 on master (op-subset) | **SUCCESSFUL 654 s** (2/2 covers sat) |
+| `embers_03_settle_costs_ten_per_copy` | FAILED 1139 s | wrong On index (B) **and** `set_self_prop` packing (C) | **B + C** | entry 3 fixed; still **FAILED 232 s** on `name_id` | FAILED (class C, host) |
+| `lulu_01_pay_500_leg` | FAILED 647 s | assert `Teleport tile == -1`; `tile_named(快餐店)` now **33** | **B** | assert pay+teleport to 33 via `lulu_01_pay_ok` | **SUCCESSFUL 366 s** |
+| `aao_02_hand_veto_is_armed` | FAILED 550 s | assert `[手] veto armed`; body arms nothing (D) + `set_self_prop` packing (C) | **D** GENUINE E-aao-02 | **keep FAILING** (not a perf/setup bug) | **FAILED 239 s** (class D assert still fires; also name_id C) |
+| `moca_02_mutant_is_detected` | TIMEOUT 1800 s (old base) | fmt `PadAdapter` + `memchr` 1193 from `assert!` msgs | **E** | `kassert!` already on master | **SUCCESSFUL 249 s** (unwind 16) |
+| `never_ends_01_noop_blocked_host` | TIMEOUT 1800 s | body `format!("RiNG {n}")` → PadAdapter + memchr; **and** stale no-op assert (`tile_named` now resolves 8/16/36/53) | **E + B** | renamed `never_ends_01_teleport_and_exile`; prove TP+exile; `expect`/`panic!` → `kassert!` | pending |
+| `front_or_back_01_equal_iff` | TIMEOUT 1800 s (unwind 32) | body `Vec` at 32 + harness `iter().all/any/find_map` 31 + `expect` fmt | **A/E** | zero-loop scans; `expect`/`panic!` → `kassert!` | pending |
+| `front_or_back_02_same_half_share` | TIMEOUT 1800 s | same | **A/E** | same | pending |
+| `front_or_back_mutant_swapped_is_detected` | TIMEOUT 1800 s | same | **A/E** | same + zero-loop leg sum | pending |
+| `habinel_01_grants_exiles` | TIMEOUT 1800 s (unwind 24) | body+spec loops 24; 7.8M vars / 30.8M clauses; **stale `to=-1`** (`tile_named(微笑号)` now **26**) | **A/E + B** | assert `to=26`; drop harness cover loop | pending |
+| `kizuna_01_teleport_and_exile` | TIMEOUT 1800 s (unwind 24) | `Vec::extend_with` 24 (old base) + `find_map` + `expect` fmt | **E + A** | strvec facades on master; zero-loop dest scan; no `expect` | pending |
+| `end_it_all_01_three_picks_and_keep` | TIMEOUT 1800 s (unwind 32) | `ask_pick` + `Vec<Msg>` / String ABI | **E** | no cheap proof-file lever (body ABI) | pending |
+| `estate_01_auction_pay` | TIMEOUT 1800 s (unwind 32) | body `for t in 0..tile_count()` 60-trip (log at iter 19/22) | **A/E** | raise attr to **64** (sound; cost is the body loop) | pending |
+| `estate_02_all_pass_no_pay` | TIMEOUT 1800 s | same 60-trip scan | **A/E** | same | pending |
+| `lost_chase_rolls_and_pushes_stub` | TIMEOUT 1800 s (unwind 24) | body `for p` + `faces.iter().find/all` 24; 7.3M vars / 28.4M clauses | **A/E** | no cheap proof-file lever (body Vec iters) | pending |
+| `lost_chase_end_it_all_guard` | TIMEOUT 1800 s | same | **A/E** | same | pending |
+| `school_time_01_exile_leg` | TIMEOUT 1800 s (unwind 24) | `board::tile_named_bytes` 6 × SCHOOLS scan + character_is | **E** | dest is now 17 (周边学区) not -1; comment fixed | pending |
+| `bear_cookie_01_push_is_protocol` | TIMEOUT 1800 s (unwind 32) | `event_deck_push` stub + `all_players` Range | **A/E** | PROTOCOL-LEVEL assert is intentional (FAIL expected if push is stub) | pending |
+
+### Class C host-model defect found (NOT fixed — `host.rs` is the other agent's)
+
+**`Op::set_self_prop` key packing vs the shared prop arm.**
+
+`sys_kani::set_self_prop(kp, kl, v)` packs `[kp, kl, v, 0, 0, 0]`.
+`host::dispatch`'s shared arm for `set_self_prop | set_prop_at | set_tile_prop`
+first does `name_id(a1, a2)` — for `set_self_prop` that is `name_id(kl, v)`,
+an **untagged** handle. `name_id` (cfg(kani)) is a loud
+`kani::assert(false, "untagged name handle")`. The correct decode
+`name_id(a0, a1)` on the `set_self_prop` branch is then unreachable.
+
+Blast radius (every body that calls `ctx::set_prop`):
+`aao`, `embers`, `fix_note`, `hallucination`, `surprise_duel`, `marina_box`,
+`bangdream_chan`. On the older central base this was silent; master's
+`name_id` cut makes it a hard FAIL (`aao_01` FAILED 260 s on this).
+**Needed host fix:** only decode `(a1,a2)` for the ops whose packing is
+`(uid/tile, kp, kl, …)`; for `set_self_prop` use `(a0,a1)` / `a2` as the
+value (the inner code already has the right parse — drop the eager outer one).
+
+Until that lands, set_prop-using events rows are class **C** (host), not
+proof bugs. No host.rs edit on this branch (owned by kani-ppcost).
+
+### Class-B setup bugs fixed on this branch
+
+1. **embers On-index off-by-one.** `On` is
+   `0=Play, 1=TurnStartBefore/clear, 2=TurnStartBefore/spread, 3=SettleBody, 4=Exile`.
+   Proofs used 2 for SettleBody and 3 for Exile (comment had missed the
+   spread hook). `embers_03` was invoking the spread hook (no pay);
+   `embers_04` was invoking SettleBody (marks never cleared — **vacuous**
+   for the clear-on-exile claim).
+2. **tile_named is no longer a stub.** `board::tile_named` resolves every
+   `data/board.json` name. Stale `-1` dest pins were wrong:
+   快餐店=33, 微笑号=26, 周边学区=17, 飞鸟山公园=56, CiRCLE=0, RiNG 1..4=8/16/36/53.
+   `lulu_01`, `habinel_01`, `never_ends_01` asserted the old stub shape.
+3. **`expect` / `panic!` in proofs pull `panic_fmt` → PadAdapter → memchr**
+   (same cliff as the old `assert!` messages). Replaced with `kassert!` /
+   `unwrap_or` + an explicit predicate. Zero-loop `eff_*` scanners replace
+   `slice::iter().all/any/find_map` on `MAX_LOG`.
+
+### Host-model notes (not edited here — `host.rs` is the other agent's)
+
+| gap | who needs it | note |
+|---|---|---|
+| `Op::raise` polarity | `chart_rush_01` | **already fixed** on master (`arm_raise` = 1) |
+| `tile_named` full board | lulu / habinel / never_ends / school_time | **already fixed** on master |
+| `remove_marks` stub | embers_04 | still a stub — proof documents it |
+| `event_deck_push` / `event_banish` | bear_cookie / lost_chase / end_it_all | still stubs |
+| `card_move` / `plan::set_*` | this_hand / asukayama-01 | still stubs |
+| `trig_move_*` unmodeled | moca halve / heat_head / circle_rebuild | still unmodeled |
+| `format!` in `never_ends` body | never_ends_01 | **card-body** cost (cannot edit); class E |
+
+### Soundness kept
+
+Unwinding assertions ON; no `#[ignore]`; no allowlist; no weakened specs;
+`aao_02` stays FAILING as the genuine book/body discrepancy (class D).
+
+### triage2 summary (re-timed on this branch)
+
+| verdict | count | ids |
+|---|---:|---|
+| SUCCESSFUL | 6 | moca_01 322 s, this_hand_01 315 s, chart_rush_01 654 s (2/2 covers), lulu_01 366 s, moca_02_mutant 249 s, ex_quest_01 778 s |
+| FAILED | 3 | aao_01 (C set_self_prop), embers_03 (C set_self_prop), aao_02 (**D GENUINE E-aao-02**, keep) |
+| TIMEOUT | 1 | fix_note_01 1800 s (60-trip body loop at unwind 64) |
+| in queue | 13 | habinel, never_ends, kizuna, front_or_back ×3, end_it_all keep, estate ×2, lost_chase ×2, school_time, bear_cookie |
+
+Soundness: unwinding assertions ON throughout. No `#[ignore]`, no allowlist,
+no weakened specs. `aao_02` remains FAILING as the genuine book/body gap.
+`cargo build -p rules-kani` + `cargo test -p rules-kani` ×3 green.
+
+**Host-model change needed (not applied — `host.rs` is kani-ppcost's):**
+`Op::set_self_prop` key packing (see Class C section above).
+
+## ppcost — `pp::same_dream_01_band_plus_3_iff` root cause + fix (branch `kani-ppcost`)
+
+Goal: move `pp::same_dream_01_band_plus_3_iff` (features `band-pp`) under
+1800 s after op-subset / sparse-world / strvec left it TIMEOUT. Profile
+first (goto binary + BMC phases), then fix. One CBMC at a time; central
+pass holds the other slot.
+
+### Phase split (central log, unwind 32, `--features band-pp`)
+
+`/home/monopoly/kani-central-results3/pp/logs/pp__same_dream_01_band_plus_3_iff.log`
+(6520 lines, killed at 1800 s):
+
+| phase | reached? | evidence |
+|---|---|---|
+| compile / codegen | yes | `Finished dev profile in 13.86s`, goto binary **8.5 MB** (`b14b385a…/…same_dream_01….out`) |
+| BMC / symex | **started, never finished** | last lines are `Unwinding loop sparse_play_world` ×2 + 14 `aborting path`; **no** `size of program expression`, **no** `Generated N VCC(s)` |
+| SSA / SAT | **not reached** | — |
+
+Unwind profile is clean (only `sparse_play_world` 2). Remaining cost is
+**symex over the goto program**, not a model loop, not SAT. Earlier
+"SSA/solver after symex" labels were wrong for this row — BMC itself
+never returns.
+
+### Goto-binary shape (same run's `.out`, `goto-instrument --show-goto-functions`)
+
+| site | shape |
+|---|---|
+| `card_sdk::kani_host::call` | **1-target** after fn-ptr removal: `IF f = &same_dream_dispatch THEN CALL …` else `ASSUME false`. BACKEND is **not** an N-way IF-chain here. |
+| `invoke::call_card_N` (19 trampolines) | **379 `IF` / 362 `CALL`** each — the `code*` / `f(player)` chain over every address-taken `fn(i32)->Asked` **and** gate fns (cast to `code*`). Sample targets: `same_dream`, `pay_add`, `drew_guard`, `hina_sound`, … |
+| `invoke::call_body_idx` | 26 IFs (integer match → trampoline) |
+
+**Root cause (class E, SAT/symex instance size):** the body `code*`
+IF-chain. One live body still means CBMC symex walks ~379 guarded calls
+per trampoline. That matches the log dying inside BMC with a tiny
+unwind profile.
+
+The 244 s `extern "Rust"` "breakthrough" (batch 3e) is **not** evidence
+that BACKEND is the cost: `kani_host::call` already resolves to one
+target on this binary. Batch 4's "direct call did not help" run still
+had the body `code*` chain (and the pre-op-subset World/dispatch).
+
+### Fix (this branch)
+
+Integer **body-id** match with **DIRECT** calls (task candidate #1):
+
+1. `tools/kani/add_kani_wrappers.py` — append `#[cfg(kani)] pub fn
+   NAME_kani(player_id) -> card_sdk::Asked { NAME(player_id) }` after
+   every `On::*` body in `rules/{cards,skills,events,tiles,tile_marks}`
+   (248 files). Production `cfg(not(kani))` does not see these.
+2. `rules/kani/build.rs` `gen_body_dispatch` — parse each `On::*`
+   constructor's last argument (the body ident) and emit
+   `match entry_index { i => crate::module::body_kani(player), _ => fail_entry_oob }`.
+   Empty `On` (e.g. `PP:[衍生]共鸣`) is `fail_entry_oob` for every index.
+
+No `code*` load, no fn-ptr, one body per card. Card bodies themselves
+unmodified (logic untouched). Production wasm is unaffected: wrappers
+are `cfg(kani)` only.
+
+### Next steps (in this pass)
+
+- time `same_dream_01` / `same_dream_02` under `tools/kani/run.sh`
+- non-vacuity: covers SATISFIED + post-invoke `assert!(false)` probe
+- production hash check (`build-ruleset` without `CARGO_TARGET_DIR`)
+- `cargo test -p rules-kani` ×3, `rules-cond --features lower`, wasm check
+
+
+### ppcost: host packing mismatch (class C, fixed first per coordinator)
+
+After the `name_id` loud-FAIL cut, shared `Op` arms decoded `name_id(a1,a2)`
+for every sibling. Packings differ:
+
+| op | packing | key pair | value |
+|---|---|---|---|
+| `set_self_prop(kp,kl,v)` | `[kp,kl,v]` | `(a0,a1)` | `a2` |
+| `set_tile_prop(tile,kp,kl,v)` | `[tile,kp,kl,v]` | `(a1,a2)` | `a3` |
+| `set_prop_at(uid,kp,kl,v)` | `[uid,kp,kl,v]` | `(a1,a2)` | `a3` |
+| `self_prop(kp,kl)` | `[kp,kl]` | `(a0,a1)` | — |
+| `counter_self(np,nl)` | `[np,nl]` | `(a0,a1)` | — |
+| `card_counter(p,cp,cl,np,nl)` | `[p,cp,cl,np,nl]` | `(a3,a4)` | — |
+| `add_card_counter(…,np,nl,n)` | name `(a3,a4)`, `n=a5`, no max | | |
+
+The wrong pair is an untagged handle → hard FAIL. Blast radius: every
+body calling `ctx::set_prop` (aao, embers, fix_note, hallucination,
+surprise_duel, marina_box, bangdream_chan). Fixed in `host.rs` + four
+`conf_hostops2` pins (22/22 green). Separate commit.
+
+### ppcost: body dispatch cuts (goto shape)
+
+| lever | call_card_N | other bodies reachable? | verdict |
+|---|---|---|---|
+| baseline (op-subset) | 379-IF `code*` chain | all 379 targets | TIMEOUT 1800 s, BMC never finishes |
+| + `NAME_kani` direct calls | 1 direct call | 19 trampolines × their bodies via `call_body_idx` match | TIMEOUT 1800 s |
+| + `play_c::<IDX>` const-generic | 1 direct call; match is `IF 12=0…` | still all 19 — reachability-slice keeps them (CALL on a const-false arm) | TIMEOUT 1800 s |
+| + harness calls `same_dream_kani` directly | n/a | **one** body in the call graph | re-timing |
+
+Production hashes (fresh master build vs worktree, `build-ruleset.mjs`
+without `CARGO_TARGET_DIR`): **identical** — card_all wasm
+`8d2cdd3e…`, conds `a76f4eab…`, fixtures `c502fceb…`.
+Tests: `rules-kani` ×3 green; `rules-cond --features lower` 58 green;
+wasm32 workspace check green; `game-rules`/`rules-native`/`server` build green.
+
+
+### ppcost timing table (one serial CBMC, unwind 32, `--features band-pp`)
+
+| run | change | goto | call graph | verdict |
+|---|---|---|---|---|
+| central | op-subset + sparse + name_id | 8.5 MB | 379-IF `code*` × 19 trampolines | TIMEOUT 1800 s (BMC never reaches `Generated N VCC(s)`) |
+| 1 | + `NAME_kani` direct calls in trampolines | 7.6 MB | 19 trampolines, 1 body each; `call_body_idx` match keeps all reachable | TIMEOUT 1800 s |
+| 2 | + `play_c::<12>` const-generic | 7.6 MB | match is `IF 12=0…` (constants) but CALL arms still make all 19 reachable (reachability-slice 7.6→7.1 MB) | TIMEOUT 1800 s |
+| 3 | + harness `same_dream_kani` direct | 7.6 MB | **one** body | TIMEOUT 1800 s |
+
+Unrolls stay clean (`sparse_play_world` 2 only). Remaining cost is
+**symex / formula of the single-body model** (World + 14-op subset +
+`same_dream`/`try_resonance` + snapshot + effect-log scan) — not a
+multi-target IF-chain. Next levers (not landed): zero-loop the
+`effects.iter().filter_map` scan; shrink `Snapshot`; split iff into
+per-step harnesses; calibrate unwind below 32.
+
+Non-vacuity: not reached (TIMEOUT before any property verdict). Probes
+`same_dream_01_probe_setup_only` / `same_dream_01_probe_post_invoke`
+added for the next pass; `assert!(false)` probe must FAIL once a run
+finishes.
+
+
+## ppcost FLOOR bisect + fix (branch `kani-ppcost`, post master merge)
+
+Progressive harnesses, **300 s** cap each, direct `same_dream_kani` body.
+Each ends in `kassert!(false)` so SUCCESS is impossible (probe = FAIL
+means BMC returned and the body ran).
+
+| step | what | verdict | time | notes |
+|---|---|---|---|---|
+| (a) | fully concrete world + body | **FAILED** (probe) | **172 s** | BMC returns |
+| (b) | + symbolic money/fans (2 seats) | **FAILED** | **219 s** | |
+| (c1) | sparse_play_world + **concrete user=0** | **FAILED** | **223 s** | |
+| (c2) | concrete world + **symbolic user** | **TIMEOUT** | 300 s | **FLOOR** |
+| (c3) | concrete + `symbolic_answers=true` | **FAILED** | **166 s** | not the cliff |
+| (c) | sparse + symbolic user (old iff) | **TIMEOUT** | 300 s / 1800 s | |
+| (d/e/f) | not needed once (c2) isolated | | | |
+
+**Dominating piece: symbolic player index** (`any_player_in()`). Concrete
+user returns in ~220 s; a free `user` never returns. `n_players=2` →
+seats `{0,1}`; two harnesses cover every seat exactly (clause is
+seat-symmetric: 「自己的」).
+
+### Fixes on the way to SUCCESSFUL
+
+1. **concrete seats 0/1** replace `any_player_in()` in the iff + mutant.
+2. **`arm_hand_count` / `discard_count` packing** — `hand_count(player,ptr,len)`
+   packs `[player,ptr,len]`; the arm decoded `card_slot(a0,a1)=(player,ptr)`
+   and loud-FAILED untagged name_id (same class as `set_self_prop`).
+   `try_resonance`'s `hand_count` is on this path. Pinned in conf_hostops2.
+3. **composed final faces** — play runs steps 1–3 together; step 3 flips the
+   user's reverse fans back to positive. Assert `(up+down, 0)`, not step 2's
+   intermediate `(0, up+down)`. (The old harness asserted the intermediate
+   state after the full body.)
+
+### Timing (unwind 32, `--features band-pp`, direct body, concrete user)
+
+| harness | before | after | verdict |
+|---|---|---|---|
+| `same_dream_01_band_plus_3_iff` (user=0) | TIMEOUT 1800 s | **SUCCESSFUL 563 s** | **4/4 covers SATISFIED** |
+| `same_dream_01_user1_band_plus_3_iff` (user=1) | — | **SUCCESSFUL 660 s** | **4/4 covers SATISFIED** |
+| `same_dream_02_money_mutant_is_detected` | TIMEOUT 1800 s | **SUCCESSFUL 475 s** | disagreement companion (card ≠ up*101) |
+
+Non-vacuity: 4/4 covers on both iff rows; `floor_a` / post-invoke
+`kassert!(false)` probes **FAILED** (body ran). Production hashes
+unchanged (wrappers are cfg(kani)-only; host.rs packing is model-only).
+
+
+## bands-b — concrete-user rollout across band units (branch `kani-bands-b`)
+
+Goal: propagate the ppcost fix (concrete user seats + direct `NAME_kani`
+body calls + per-harness host-op subset + sparse 2-seat world) to
+`mor`/`skills_mor`, `ras`/`skills_ras`, `mygo`/`skills_mygo`,
+`mujica`/`skills_mujica`, `crychic`/`skills_crychic`, `sumimi`/`skills_sumimi`.
+`skills_bands` / `skills_characters` / `skills_general` remain empty stubs.
+
+### Pattern (from `proofs/pp.rs` + `proofs/mor.rs` rui_demon)
+
+1. `host_subset!` per body — every reachable Op declared; undeclared →
+   `outside_subset` loud FAIL (never `assume`).
+2. In-place world (`install_backend` + `sparse_play_world` /
+   `with_world_mut`) — no `reset_world` full-struct copy.
+3. Concrete user: seat-symmetric 「自己的」 → `<id>_iff_at(user)` +
+   harnesses `user=0` and `user=1` in `n_players=2`. Non-seat-symmetric
+   (other seats / turn order) cover concrete seat combos and say so.
+4. Direct body call via cfg(kani) `NAME_kani` (no trampoline IF-chain).
+5. Composed final-state assertions; covers + mutants kept.
+
+### host.rs arm extraction (small cherry-pickable commits)
+
+`arm_*` single-source handlers extracted from `dispatch` so subsets can
+name them. Groups: money/pay, players, state/slot, counters, piles,
+field, fire/stay, trigger, tiles, dice, owned/tile_is/opt/trig_move_*,
+band_skill/invoke_skill/opt_price/add_house, dist/tile_forward/
+place_card_on/field_instances, stay_of/stun_of/exile_of/turn_key/
+round_no. Plan/protocol stubs group to `arm_stub_zero` /
+`arm_protocol_stub`. No semantics change.
+
+### tools / feature fixes
+
+* `add_kani_wrappers.py` trailing-comma parse fix; wrapped 22 missing
+  bodies (mashiro_pay, secret_rainbow, your_light, several Counteract
+  bodies, morfonica band skill, character skills).
+* `proofs/mod.rs` + `run.sh unit_features`: `skills_ras` needs
+  `skills-characters`; `skills_mor` needs `skills-bands,skills-characters`;
+  `skills_crychic` needs `skills-characters`. Gates tightened so
+  `--unit ras` no longer fails compiling `skills_ras`.
+
+### Verdicts (fill as runs complete)
+
+See per-unit tables in `docs/rulebook/spec/kani/{mor,ras,mygo,mujica,crychic,sumimi}.md`
+and the `bands-b` rows below. Runner: `tools/kani/run.sh --unit <u>
+--harness <h> --timeout 1800` serially, `CARGO_TARGET_DIR=/home/monopoly/kani-target-bands-b`,
+`CARGO_BUILD_JOBS=3`, machine slot cap 2 shared with `kani-bands-a`.
+
+### bands-b proof results (running sweep; update as rows land)
+
+Runner: `tools/kani/bands-b-sweep.sh` (per-harness, jobs=1, timeout 1800).
+Accumulator: `/home/monopoly/kani-bands-b-results/results-all.tsv`.
+
+**Class E fix (unstoppable TIMEOUT → SUCCESSFUL):** `tile_named(SPOTS[sym])`
+hashed a slice of symbolic length (`board::tile_hash` while-loop). Two fixes:
+(1) zero-loop `tile_hash` under cfg(kani) (64-way step macro);
+(2) `World::forced_roll` pin so dice clauses cover concrete faces —
+`tile_named` of a symbolic index is still a symex cliff.
+
+| unit | harness | verdict | time (s) | class | note |
+|---|---|---|---|---|---|
+| ras | unstoppable_card_03_money_iff (u=0, face=1) | **SUCCESSFUL** | 292 | — | 2000 leg |
+| ras | unstoppable_card_03_face4_money_iff (u=0, face=4) | **SUCCESSFUL** | ~300 | — | 1000 leg |
+| ras | unstoppable_card_03_user1_money_iff (u=1, face=1) | **SUCCESSFUL** | 251 | — | |
+| ras | unstoppable_card_03_money_noop_when_out | **SUCCESSFUL** | 268 | — | out player |
+| skills_ras | masking_01_fire_gain_leaf | **SUCCESSFUL** | 134 | — | +1 fire |
+| crychic | soyoreturn_02_hand_iff | **SUCCESSFUL** | 222 | — | |
+| crychic | soyoreturn_02_user1_hand_iff | **SUCCESSFUL** | 246 | — | |
+| crychic | soyoreturn_02_mutant_is_detected | **SUCCESSFUL** | 160 | — | |
+| crychic | vocalist_01_waive_iff | **SUCCESSFUL** | 164 | — | |
+| crychic | vocalist_01_user1_waive_iff | **SUCCESSFUL** | 168 | — | |
+| crychic | vocalist_01_mutant_is_detected | **SUCCESSFUL** | 145 | — | |
+| crychic | grab_01_stay_iff | **SUCCESSFUL** | 235 | — | |
+
+**12/12 SUCCESSFUL so far (0 FAILED / TIMEOUT).** Sweep continues over the
+remaining ~220 harnesses (crychic → mor → mujica → mygo → ras → skills_* →
+sumimi, alphabetical). Times in the 130–300 s band match the ppcost floor
+(concrete user) once the tile_named / forced_roll cliffs are gone.
+
+
+**Sweep status at hand-off (2026-10-14):** 17/235 harnesses recorded,
+**17 SUCCESSFUL / 0 FAILED / 0 TIMEOUT**. `tools/kani/bands-b-sweep.sh`
+(PID visible via `pgrep -f bands-b-sweep`) continues serially
+(jobs=1, timeout 1800) over the remaining crychic → mor → mujica →
+mygo → ras → skills_* → sumimi. Accumulator
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.
+`cargo build -p rules-kani` + `cargo test -p rules-kani` ×3 green (85 tests).
+## bands-a — concrete-user rollout for ppp / r / ag / hhw + skills_* (branch `kani-bands-a`)
+
+Worktree `/home/monopoly/kani-bands-a-wt`. Propagates the ppcost FLOOR fix
+(symbolic player index is the BMC cliff) across the band units.
+
+### Pattern applied (per ppcost / worked example `proofs/pp.rs` same_dream)
+
+1. `n_players = 2` sparse world (`harness::sparse_play_world`).
+2. Iff harnesses are `*_iff_at(user)` called from two `#[kani::proof]`s with
+   `user = 0` and `user = 1` (clause seat-symmetric 「自己的」). Mutants use a
+   single concrete user. Multi-seat clauses (e.g. `moca_02` owner+src) keep a
+   concrete pair and say so.
+3. Per-body `host_subset!` listing only the ops the unmodified body reaches;
+   outside → `outside_subset` loud FAIL.
+4. Direct `*_kani` body calls (one body in CBMC's call graph).
+5. Composed final-state assertions; covers kept; mutant companions kept.
+6. Fail-closed: no `#[ignore]`, no spec weakening, no silent zeros.
+
+### Host-model changes (small commits, cherry-pickable)
+
+| commit | what |
+|---|---|
+| `host: extract arm_*` | ~50 `arm_*` single-source handlers for `host_subset!` (packing-aware splits for `set_self_prop` / `counter_self` / `add_counter_*`). `dispatch` unchanged (minimal for kani-bands-b). |
+| fire arms | `arm_fire` / `arm_fire_max` / `arm_gain_fire` / `arm_spend_fire` |
+| `arm_inc_slot` | named keyed increment |
+| World `Clone` | proofs read pre-state without a full-struct assign |
+| missing `*_kani` wrappers | popipapapipopa, returns::on_played, aya_with, arisa_bonsai::at_turn_end, poppin::{on_pass,lock_hill}, hhw::on_pay_choose |
+| `run.sh` features | ppp/skills_* pull in `skills-characters`+`skills-bands` so `card_id!` resolves |
+
+### Formula-harness fixes (class A/B)
+
+| id | class | action | after |
+|---|---|---|---|
+| `ppp::door_01_sequence_const` | **A** bound-low (10×60 scan) | `board::tile_named` | **SUCCESSFUL** |
+| `skills_pp::band_idol_02_overflow_formula` | **B** mutant check in agreeing range | disagree when `x-down >= 11` | **SUCCESSFUL** |
+| `skills_ag::firepot_01_tick_formula` | **B** mutant check | disagree exactly at rest 1 | **SUCCESSFUL** |
+| `ppp::maze_01_distance_predicate` | — | (already sound) | **SUCCESSFUL** |
+| `skills_ag::band_01_filter_formula` | — | | **SUCCESSFUL** |
+| `skills_hhw::skills_hhw_smoke_cover` | — | | **SUCCESSFUL** |
+
+### Conversion status (code) vs run status
+
+| unit | conversion | harnesses (approx) | runs |
+|---|---|---:|---|
+| `ppp` | done (concrete user + subset + direct) | 41 | formula rows done; body rows queued (serial CBMC) |
+| `r` | subagent | ~20 | not yet |
+| `ag` | subagent | ~20 | not yet |
+| `hhw` | subagent | ~20 | not yet |
+| `skills_pp` | done | 17 | formula rows done |
+| `skills_ppp` | done (direct + subset; owner already 0) | ~25 | not yet |
+| `skills_r` | done | 10 | not yet |
+| `skills_ag` | done | 10 | formula rows done |
+| `skills_hhw` | done | 20 | smoke done |
+
+Body-row runs are serial (`--jobs 1`, timeout 1800 s, one CBMC at a time,
+slot cap 2 shared with kani-bands-b). Representative body timing from the
+pattern's worked example (pp same_dream): SUCCESSFUL ~560 s per seat.
+
+**First body-row results (this pass):**
+
+| harness | verdict | time | notes |
+|---|---|---:|---|
+| `skills_r::sayo_fire_pass_iff` | **FAILED** | 190.8 s | BMC **returns** (pattern works). Assert `GainFire 2 or 3` fails — log is not exactly one GainFire. Class B/C under investigation (fire_max clamp / body path / log shape). Not skipped. |
+| `skills_r::rinko_fire_pass_iff` | **SUCCESSFUL** | 154.1 s | first green body proof under the pattern |
+| `skills_r::lisa_fire_pass_iff` | queued | | |
+| `skills_ag::firepot_01_tick_iff` | queued | | |
+
+All other body rows (ppp 30, r 32, ag 30, hhw 30, skills_* ~60) are converted
+and queued behind the serial CBMC. Formula rows above are complete.
+
+### Genuine discrepancies (class D)
+
+None newly found in this pass. `aao_02` (triage2, class D E-aao-02) remains
+FAILING on master and is out of bands-a's units.
+
+### Soundness kept
+
+Unwinding assertions ON. No `#[ignore]`. No allowlist. No weakened specs.
+`outside_subset` / untagged `name_id` FAIL loudly. Production `cfg(not(kani))`
+untouched.
+
+### bands-a stub audit — every `arm_plan_stub` use (coordinator soundness follow-up)
+
+A silent-0 stub is only acceptable when the body **provably never** calls the
+op. Otherwise: real arm, or loud `outside_subset`. `arm_plan_stub` is renamed
+`arm_protocol_stub` and documented as "matches `dispatch`'s benign-0 PROTOCOL
+arm" — not a stand-in for real semantics.
+
+| unit::subset | op(s) | body calls? | decision |
+|---|---|---|---|
+| ppp::ppp_dispatch | `unplace_card\|unplace_at\|unplace_card_named` | **yes** (`returns.rs`) | **real** `arm_unplace` (pushes `Effect::UnplaceCard`) |
+| ppp::ppp_dispatch | `targeted_count` | no | `arm_protocol_stub` (dispatch is benign-0) |
+| ppp::ppp_dispatch | plan/settle/offer list (`set_steps`, `set_resolve`, `card_offer_build`, `can_build_on`, …) | **yes** (signpost/star_beat/bang_dream/…) | `arm_protocol_stub` — these ARE the dispatch PROTOCOL-0 arms (KANI.md §6). Not silent stand-ins. |
+| ppp::ppp_dispatch | `card_move` | **yes** | **real** `arm_card_move` (returns 1) |
+| r::ako_dark_dispatch | `play_from_hand` | **yes** (`ako_dark.rs`) | `arm_protocol_stub` (dispatch returns 0 = not-from-hand). **TODO(规则书)** if a proof needs the from-hand path (polarity-sensitive; 0 skips that leg). |
+| r::nfo_play_dispatch | `set_steps\|set_resolve` | **yes** (`nfo.rs`) | `arm_protocol_stub` (PROTOCOL-0) |
+| r::nfo_play_dispatch | `card_move` | **yes** | **real** `arm_card_move` |
+| r::nfo_play_dispatch | `card_replayable\|play_card` | **yes** (`nfo.rs` replay) | `arm_protocol_stub` (0 = not replayable / did not land) |
+| r::council_dispatch | `linger` | yes | `arm_protocol_stub` (PROTOCOL-0) |
+| skills_*::\* | `state_add` | **yes** (rinko_1cm/lisa_goddess/…) | **real** `arm_inc_slot` (same keyed-add as dispatch) |
+| skills_ag::skills_ag_dispatch | `trig_target` | **yes** (`trigger::target`) | **real** `arm_trig_target` |
+| skills_ag::skills_ag_dispatch | `place_mark` | **yes** (tae_police/hagumi) | **real** `arm_place_mark` |
+| skills_pp/hhw/ppp | `card_move` | yes | **real** `arm_card_move` |
+| skills_pp/hhw/ppp | `card_offer_build\|can_build_on\|offer_*\|buy\|acquire` | rimi_resolve offers | `arm_protocol_stub` (PROTOCOL-0 / 0=did-not-land) |
+| hhw::\* | plan setters (`set_kind`, `set_steps`, dice, …) | yes (balloon/hagumi) | `arm_protocol_stub` (PROTOCOL-0) |
+
+**Removed from subsets** (not listed → `outside_subset` loud FAIL if reached):
+none in this pass beyond the above reclassifications. Prefer listing an op
+over stubbing it when unsure.
+
+**Class C found and fixed in this audit:** `state_get`/`state_set` were
+`arm_plan_stub` (silent 0) while `ran_red::tick` writes `REST_TURNS` via
+`state::set` — the rest counter never moved and the iff failed for the wrong
+reason. Replaced with real `arm_state_get` / `arm_state_set` (commits `944dcf5`,
+`bc2e730`).

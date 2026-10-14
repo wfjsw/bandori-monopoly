@@ -13,7 +13,15 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const THANKS_PARTY: CardDef =
     CardDef::new("通用:CiRCLE THANKS PARTY!", &[On::Play("", None, thanks_party)])
-        .props(&[(card_sdk::abi::prop::EST_COST, 500)]);
+        .props(&[(card_sdk::abi::prop::EST_COST, 500)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"CiRCLE THANKS PARTY!"#)
+        .raw_name(r#"CiRCLE THANKS PARTY!"#)
+        .tags(&[r#"手"#])
+        .text(r#"[手]：所有其他玩家可选择[消耗]500资金，你消耗500资金，将X设为因此卡[消耗]资金的玩家数量加1。根据X进行以下操作之一：
+1. X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；
+2. X等于1则[使用者]的本回合结束后获得一个额外回合。"#)
+        .cell(r#"A12"#)
+        .fields(&[("band", r#"通用"#), ("owner", "")]));
 
 fn thanks_party(player_id: i32) -> card_sdk::Asked {
     let why = Msg::new(key!("thanks_party_why"));
@@ -69,4 +77,11 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
         }
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn thanks_party_kani(player_id: i32) -> card_sdk::Asked {
+    thanks_party(player_id)
 }

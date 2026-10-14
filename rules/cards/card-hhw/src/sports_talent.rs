@@ -32,7 +32,13 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         On::RollPlan("card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"运动的天赋"#)
+        .raw_name(r#"运动的天赋"#)
+        .tags(&[])
+        .text(r#"将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。"#)
+        .cell(r#"F9"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardSportsTalent.Next` / `Mem["next"]` -- the next dice-roll reward
 /// (starts at 700, drops by 100, floors at 100). The player slot stands in for
@@ -151,4 +157,29 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("sports_talent_decayed")).player_id("who", player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_plan_kani(player_id: i32) -> card_sdk::Asked {
+    roll_plan(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
 }

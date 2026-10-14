@@ -1,256 +1,344 @@
 //! Unit `mygo`: clause proofs.
 //!
-//! Per clause emit (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
-//! 2. no-op proof when the trigger/condition is false;
-//! 3. kani::cover! each branch;
-//! 4. `*_mutant_is_detected` reachable-disagreement companion (and
-//!    `#[kani::should_panic]` only when it really reports panic-as-expected).
+//! Per clause (KANI-FOUNDATION.md §3): iff + no-op + covers + mutant.
+//! Specs live in `crate::spec::mygo` and come from the clause docs only.
 //!
-//! Specs come from `crate::spec::mygo` — written from the clause docs only.
+//! **ppcost pattern.** Concrete user seats (`n_players = 2`, user=0/1 for
+//! seat-symmetric clauses). Direct body call via the cfg(kani) `NAME_kani`
+//! wrapper. Per-harness host-op subset (`host_subset!`) — undeclared op
+//! FAILS loudly. Isolation assumes are named here and `kani::assume`d.
+//! Narration (`ctx::log`) is not part of the frame.
+//!
+//! Crystals of the just-placed instance live on `field[last_uid]` /
+//! `self_crystals` (`arm_set_counter_self` routes the `crystals` key there),
+//! **not** on the per-player key map.
 
 use crate::host;
 use crate::invoke;
-use crate::spec;
-use crate::world::{self, Effect, World, MAX_PLAYERS};
+use crate::spec::mygo as spec;
+use crate::world::{self, Effect, MAX_PLAYERS};
 
 // ---------------------------------------------------------------------------
-// Shared symbolic pre-world (status / play bodies: no trigger overlay).
-// Isolation: empty hand / discard / field so stacked hooks cannot fire.
+// Per-card host-op subsets (ops the unmodified body reaches, including
+// isolated paths — if isolation breaks the proof FAILS loudly).
 // ---------------------------------------------------------------------------
 
-fn symbolic_play_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
-        w.pos[p] = kani::any();
-        kani::assume(w.pos[p] >= 0 && w.pos[p] < world::TILE_COUNT);
-        w.fire[p] = kani::any();
-        kani::assume(w.fire[p] >= 0 && w.fire[p] <= 8);
-        w.stay[p] = kani::any();
-        kani::assume(w.stay[p] >= 0 && w.stay[p] <= 4);
-        w.out[p] = kani::any();
+/// `MyGO:轮符雨` play — +1 [停留] + schedule turn-end settle + narration.
+/// `before_turn_end` is `Op::schedule_turn_end` (a plan stub).
+crate::host_subset!(rinne_rain_dispatch {
+    give_stay => arm_give_stay,
+    schedule_turn_end => arm_stub_zero,
+    log | effect => arm_log,
+});
+
+/// `MyGO:哪怕这旅程没有终点` play — place on current tile + 4 crystals.
+/// `place_card_on` (NOT `place_card_at`: name at `(a2,a3)`, tile at `a1`).
+crate::host_subset!(endless_journey_dispatch {
+    set_dest => arm_set_dest,
+    place_card_on => arm_place_card_on,
+    player_pos => arm_player_pos,
+    set_counter_self => arm_set_counter_self,
+    log | effect => arm_log,
+});
+
+/// `MyGO:羽丘的不可思议女孩` play — own-tile gate, 1d20, house / draw / place.
+crate::host_subset!(haneoka_dispatch {
+    player_pos => arm_player_pos,
+    tile_owner => arm_tile_owner,
+    roll_ask => arm_roll_ask,
+    mortgaged_of => arm_mortgaged_of,
+    add_house => arm_add_house,
+    draw => arm_draw,
+    set_dest => arm_set_dest,
+    place_card_at => arm_place_card_at,
+    log | effect => arm_log,
+});
+
+/// `MyGO:那天的雨` play — place + 5 crystals + the inlined `rain` leg
+/// (1d10 → agent tiles → +1 [停留] to everyone standing in the zone).
+crate::host_subset!(that_day_rain_dispatch {
+    set_dest => arm_set_dest,
+    place_card_at => arm_place_card_at,
+    set_counter_self => arm_set_counter_self,
+    roll => arm_roll,
+    tile_count => arm_tile_count,
+    tile_named => arm_tile_named,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    player_pos => arm_player_pos,
+    give_stay => arm_give_stay,
+    log | effect => arm_log,
+});
+
+/// `MyGO:壱雫空` play — clear [停留]/[眩晕] then the money legs.
+///
+/// GAP: `stay_of` / `stun_of` have **no** `arm_*` yet (still inline in
+/// `host::dispatch`). Handled locally below so the subset still covers every
+/// op the body reaches; the main agent should extract `arm_stay_of` /
+/// `arm_stun_of` into `host.rs` and swap this to `host_subset!`.
+fn hitoshizuku_dispatch(
+    op: card_sdk::kani_host::Op,
+    a: card_sdk::kani_host::Args,
+) -> i64 {
+    use card_sdk::kani_host::Op;
+    match op {
+        Op::player_count => host::arm_player_count(a),
+        Op::player_out => host::arm_player_out(a),
+        // Local — see GAP above.
+        Op::stay_of => {
+            let [a0, ..] = a;
+            world::with_world(|w| w.stay[a0 as usize]) as i64
+        }
+        Op::stun_of => {
+            let [a0, ..] = a;
+            world::with_world(|w| w.stun[a0 as usize]) as i64
+        }
+        Op::slot => host::arm_slot(a),
+        Op::give_stay => host::arm_give_stay(a),
+        Op::give_stun => host::arm_give_stun(a),
+        Op::state_get => host::arm_state_get(a),
+        Op::state_set => host::arm_state_set(a),
+        Op::pay_to => host::arm_pay_to(a),
+        Op::gain | Op::gain_typed | Op::gain_fixed => host::arm_gain(a),
+        Op::log | Op::effect => host::arm_log(a),
+        other => host::outside_subset(other),
     }
-    w
 }
 
-fn living_player(w: &World) -> i32 {
-    let p = crate::harness::any_player(w.n_players);
-    kani::assume(!w.out[p as usize]);
-    p
+/// `MyGO:（灯）不再迷茫` play — 2 locked [停留] + place + discard hand + X+1
+/// crystals. Isolation: empty hand (the `cards_in` String loop is a no-op).
+crate::host_subset!(tomori_no_longer_dispatch {
+    give_stay => arm_give_stay,
+    state_add | inc_slot => arm_state_add,
+    set_dest => arm_set_dest,
+    place_card_at => arm_place_card_at,
+    cards_in => arm_cards_in,
+    discard_from_hand => arm_discard_from_hand,
+    set_counter_self => arm_set_counter_self,
+    log | effect => arm_log,
+});
+
+// ---------------------------------------------------------------------------
+// In-place 2-seat worlds. No `base_world`, no `reset_world` full copy.
+// ---------------------------------------------------------------------------
+
+/// Sparse 2-seat play world + concrete `trig_player = user`.
+fn sparse2_user(dispatch: card_sdk::kani_host::Backend, user: i32) {
+    host::install_backend(dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+    });
+}
+
+/// Miracle crystals of the just-placed instance (`set_counter_self` routes the
+/// `crystals` key to `field[last_uid]`, falling back to `self_crystals`).
+fn self_crystals() -> i32 {
+    world::with_world(|w| w.field_crystals(w.last_uid))
+}
+
+fn effects_of() -> ([Effect; world::MAX_LOG], usize) {
+    let logbuf: [Effect; world::MAX_LOG] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    (logbuf, log_n)
 }
 
 // ===========================================================================
 // C-MYGO-rinpuu-01
 // 「使自己获得一层[停留]」 — `MyGO:轮符雨` On::Play.
+// Seat-symmetric. Isolation: `before_turn_end` is a scheduling stub.
 // ===========================================================================
 
-/// Iff: the unmodified play body grants exactly one [停留] layer to the user
-/// and nothing else (narration is not the frame; `before_turn_end` is a
-/// scheduling stub that logs no effect).
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn rinpuu_01_give_stay_iff() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:轮符雨"), player));
-
+/// Shared iff at a **concrete** user seat.
+fn rinpuu_01_give_stay_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    sparse2_user(rinne_rain_dispatch, user);
+    let pre = world::snapshot();
+    // DIRECT body call (ppcost): one body in CBMC's call graph.
+    invoke::unwrap_done(card_mygo::rinne_rain::rinne_rain_kani(user));
+    kani::cover!(true, "body returned");
     let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
-    assert!(
-        spec::mygo::rinpuu_01_log_ok(effects, player),
-        "C-MYGO-rinpuu-01: effect log must be exactly one GiveStay(player, 1)"
+    crate::kassert!(
+        spec::rinpuu_01_log_ok(effects, user),
+        "C-MYGO-rinpuu-01: effect log must be exactly one GiveStay(user, 1)"
     );
-    assert!(
-        spec::mygo::rinpuu_01_post_ok(&pre, &post, player),
+    crate::kassert!(
+        spec::rinpuu_01_post_ok(&pre, &post, user),
         "C-MYGO-rinpuu-01: post must be pre + 1 stay on the user, frame unchanged"
     );
 
-    kani::cover!(pre.stay[player as usize] == 0, "pre stay was 0");
-    kani::cover!(pre.stay[player as usize] > 0, "pre stay was nonzero");
+    kani::cover!(pre.stay[user as usize] == 0, "pre stay was 0");
+    kani::cover!(pre.stay[user as usize] > 0, "pre stay was nonzero");
+}
+
+/// Iff at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn rinpuu_01_give_stay_iff() {
+    rinpuu_01_give_stay_iff_at(0);
+}
+
+/// Iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn rinpuu_01_user1_give_stay_iff() {
+    rinpuu_01_give_stay_iff_at(1);
 }
 
 /// Mutant companion: a two-layer spec must be distinguishable from the card.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn rinpuu_01_mutant_is_detected() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:轮符雨"), player));
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let user = 0i32;
+    sparse2_user(rinne_rain_dispatch, user);
+    invoke::unwrap_done(card_mygo::rinne_rain::rinne_rain_kani(user));
+    kani::cover!(true, "body returned");
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // The card does n=1; the mutant wants n=2. They must disagree.
-    assert!(
-        !spec::mygo::rinpuu_01_log_ok_mutant(effects, player),
+    crate::kassert!(
+        !spec::rinpuu_01_log_ok_mutant(effects, user),
         "mutant: two-layer spec must not match the one-layer card"
     );
-    let _ = pre;
 }
 
 /// `#[kani::should_panic]` twin of the mutant companion.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 #[kani::should_panic]
 pub fn rinpuu_01_mutant_two_layers() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:轮符雨"), player));
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let user = 0i32;
+    sparse2_user(rinne_rain_dispatch, user);
+    invoke::unwrap_done(card_mygo::rinne_rain::rinne_rain_kani(user));
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    assert!(
-        spec::mygo::rinpuu_01_log_ok_mutant(effects, player),
+    crate::kassert!(
+        spec::rinpuu_01_log_ok_mutant(effects, user),
         "mutant: card must not match the two-layer spec"
     );
-    let _ = pre;
 }
+
+// ===========================================================================
+// C-MYGO-rinpuu-02 is PROTOCOL-LEVEL: 「并在回合结束时额外进行一次[触发结算]」
+// is engine scheduling (`On::AtEnd` + `card_settle_at`, a protocol stub).
+// Documented here so the unit table can cite a harness name.
+// ===========================================================================
 
 // ===========================================================================
 // C-MYGO-journey-01
 // 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」
 // `MyGO:哪怕这旅程没有终点` On::Play.
-// Isolation: empty field / hand so stacked hooks cannot fire. `set_crystals(4)`
-// is a counter write (host `set_counter_self`) that logs no Effect; we check
-// it via the world's key map (`"crystals"` on the trig player).
+// Seat-symmetric. Host note: `place_card_on` logs `PlaceCard { dest }` with
+// `dest` = the landing **tile index** (not `Dest::Field`); `set_crystals(4)`
+// is `set_counter_self` and logs one `AddCounter { n: 4 }` on the instance.
 // ===========================================================================
 
-const JOURNEY_ID: usize = crate::card_id!("MyGO:哪怕这旅程没有终点");
-
-fn crystals_key() -> crate::intern::NameId {
-    crate::intern::intern("crystals")
-}
-
-/// Iff: place on Field + the instance holds exactly 4 [奇迹水晶].
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn journey_01_place_four_crystals_iff() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
-
-    invoke::unwrap_done(invoke::play_idx(JOURNEY_ID, player));
-
+/// Shared iff at a **concrete** user seat.
+fn journey_01_place_four_crystals_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    sparse2_user(endless_journey_dispatch, user);
+    let pre = world::snapshot();
+    let tile = pre.pos[user as usize];
+    invoke::unwrap_done(card_mygo::endless_journey::endless_journey_kani(user));
+    kani::cover!(true, "body returned");
     let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+    let post_c = self_crystals();
     let field_n = world::with_world(|ww| ww.field_n);
 
     // Host `card_slot` maps unknown card names to slot 2 (pilot CARD_OTHER).
-    assert!(
-        spec::mygo::journey_01_log_ok(effects, player, 2),
-        "C-MYGO-journey-01: effect log must be exactly one PlaceCard(Field)"
+    crate::kassert!(
+        spec::journey_01_log_ok(effects, user, 2, tile),
+        "C-MYGO-journey-01: PlaceCard on the current tile + AddCounter(4)"
     );
-    assert!(post_c == 4, "C-MYGO-journey-01: card must hold exactly 4 crystals");
-    assert!(field_n == 1, "C-MYGO-journey-01: exactly one field instance");
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
-    assert!(post.stay == pre.stay, "frame: stay unchanged");
-    assert!(post.hand == pre.hand, "frame: hand unchanged (play body does not draw)");
-    let _ = pre_c;
+    crate::kassert!(
+        post_c == 4,
+        "C-MYGO-journey-01: card must hold exactly 4 crystals"
+    );
+    crate::kassert!(field_n == 1, "C-MYGO-journey-01: exactly one field instance");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
+    crate::kassert!(
+        world::arr8b_eq(post.hand, pre.hand),
+        "frame: hand unchanged (play body does not draw)"
+    );
 
-    kani::cover!(pre.stay[player as usize] == 0, "clean pre");
+    kani::cover!(pre.stay[user as usize] == 0, "clean pre");
+}
+
+/// Iff at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn journey_01_place_four_crystals_iff() {
+    journey_01_place_four_crystals_iff_at(0);
+}
+
+/// Iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn journey_01_user1_place_four_crystals_iff() {
+    journey_01_place_four_crystals_iff_at(1);
 }
 
 /// Mutant companion: a two-PlaceCard spec must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn journey_01_mutant_is_detected() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(JOURNEY_ID, player));
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let user = 0i32;
+    sparse2_user(endless_journey_dispatch, user);
+    let tile = world::with_world(|w| w.pos[user as usize]);
+    invoke::unwrap_done(card_mygo::endless_journey::endless_journey_kani(user));
+    kani::cover!(true, "body returned");
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    assert!(
-        !spec::mygo::journey_01_log_ok_mutant(effects, player, 2),
+    crate::kassert!(
+        !spec::journey_01_log_ok_mutant(effects, user, 2, tile),
         "mutant: two-PlaceCard spec must not match the one-place card"
     );
 }
-
-/// C-MYGO-rinpuu-02 is PROTOCOL-LEVEL: 「并在回合结束时额外进行一次[触发结算]」
-/// is engine scheduling (`On::AtEnd` + `card_settle_at`, a protocol stub).
-/// Documented here so the unit table can cite a harness name.
 
 // ===========================================================================
 // C-MYGO-haneoka-02/03/04/05
 // `MyGO:羽丘的不可思议女孩` On::Play. Gated on owning the current tile
 // (`cant_play` / body early-out). Roll 1d20 is fully symbolic under Kani.
-// Isolation: the tile is owned by the user and unmortgaged so `add_house`
-// fires on the >=10 band.
+// Seat-symmetric (「属于自己的格子」). Isolation: the tile is owned by the
+// user and unmortgaged so `add_house` fires on the >=10 band. `pos` stays at
+// the sparse default 0 — the user owns tile 0.
 // ===========================================================================
 
-fn haneoka_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
-        w.pos[p] = kani::any();
-        kani::assume(w.pos[p] >= 0 && w.pos[p] < world::TILE_COUNT);
-        w.stay[p] = 0;
-        w.fire[p] = 0;
-        w.out[p] = kani::any();
-    }
-    w
+/// Own-tile + unmortgaged world for the haneoka thresholds.
+fn haneoka_world(user: i32) {
+    sparse2_user(haneoka_dispatch, user);
+    world::with_world_mut(|w| {
+        let pos = w.pos[user as usize] as usize;
+        w.tiles[pos].owner = user;
+        w.tiles[pos].mortgaged = false;
+        w.tiles[pos].houses = kani::any();
+        kani::assume(w.tiles[pos].houses >= 0 && w.tiles[pos].houses <= 4);
+    });
 }
 
-/// Iff over every 1d20 face: r<10 empty log; r>=10 SetHouses; r>=15 +Draw;
-/// r>=20 +PlaceCard. Covers each band.
-#[kani::proof]
-#[kani::unwind(32)]
-pub fn haneoka_thresholds_iff() {
-    let mut w = haneoka_world();
-    let player = living_player(&w);
-    let pos = w.pos[player as usize];
-    // own tile, unmortgaged — the book's 「位于属于自己的格子上时」
-    w.tiles[pos as usize].owner = player;
-    w.tiles[pos as usize].mortgaged = false;
-    w.tiles[pos as usize].houses = kani::any();
-    kani::assume(w.tiles[pos as usize].houses >= 0 && w.tiles[pos as usize].houses <= 4);
-
-    let pre_houses = w.tiles[pos as usize].houses;
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:羽丘的不可思议女孩"), player));
-
+/// Shared iff at a **concrete** user seat, over every 1d20 face:
+/// r<10 empty log; r>=10 SetHouses; r>=15 +Draw; r>=20 +PlaceCard.
+fn haneoka_thresholds_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    haneoka_world(user);
+    let pre = world::snapshot();
+    let pos = pre.pos[user as usize];
+    let pre_houses = world::with_world(|w| w.tiles[pos as usize].houses);
+    invoke::unwrap_done(card_mygo::haneoka::haneoka_kani(user));
+    kani::cover!(true, "body returned");
     let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let post_houses = world::with_world(|ww| ww.tiles[pos as usize].houses);
 
@@ -268,46 +356,60 @@ pub fn haneoka_thresholds_iff() {
 
     // Shape consistency: draw only with house; place only with draw.
     if has_draw {
-        assert!(has_house, "C-MYGO-haneoka: draw implies house (r>=15 ⊇ r>=10)");
+        crate::kassert!(has_house, "C-MYGO-haneoka: draw implies house (r>=15 ⊇ r>=10)");
     }
     if has_place {
-        assert!(has_draw, "C-MYGO-haneoka: place implies draw (r>=20 ⊇ r>=15)");
-        assert!(has_house, "C-MYGO-haneoka: place implies house");
+        crate::kassert!(has_draw, "C-MYGO-haneoka: place implies draw (r>=20 ⊇ r>=15)");
+        crate::kassert!(has_house, "C-MYGO-haneoka: place implies house");
     }
     if has_house {
-        assert!(
+        crate::kassert!(
             post_houses == pre_houses.saturating_add(1),
             "C-MYGO-haneoka-02: exactly one free house"
         );
-        assert!(post.money == pre.money, "C-MYGO-haneoka-02: 免费 — money unchanged");
+        crate::kassert!(
+            world::arr4_eq(post.money, pre.money),
+            "C-MYGO-haneoka-02: 免费 — money unchanged"
+        );
     } else {
-        assert!(post_houses == pre_houses, "C-MYGO-haneoka-05: no house on r<10");
-        assert!(post.money == pre.money, "frame: money unchanged");
+        crate::kassert!(post_houses == pre_houses, "C-MYGO-haneoka-05: no house on r<10");
+        crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
     }
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
-    assert!(post.stay == pre.stay, "frame: stay unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
+}
+
+/// Thresholds iff at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn haneoka_thresholds_iff() {
+    haneoka_thresholds_iff_at(0);
+}
+
+/// Thresholds iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn haneoka_user1_thresholds_iff() {
+    haneoka_thresholds_iff_at(1);
 }
 
 /// Mutant: the ineffective band must not match a one-effect spec.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn haneoka_05_mutant_is_detected() {
-    let mut w = haneoka_world();
-    let player = living_player(&w);
-    let pos = w.pos[player as usize];
-    w.tiles[pos as usize].owner = player;
-    w.tiles[pos as usize].mortgaged = false;
-    world::reset_world(w);
+    let user = 0i32;
+    haneoka_world(user);
+    let pos = world::with_world(|w| w.pos[user as usize]);
     // Force the ineffective band by assuming the symbolic die is < 10 is NOT
     // possible to force post-hoc; instead just run and check: if the log is
     // empty the mutant (wants 1 effect) must disagree.
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:羽丘的不可思议女孩"), player));
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    invoke::unwrap_done(card_mygo::haneoka::haneoka_kani(user));
+    kani::cover!(true, "body returned");
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     if effects.is_empty() {
-        assert!(
-            !spec::mygo::haneoka_effects_ok_mutant(effects, player, pos, 5, 2),
+        crate::kassert!(
+            !spec::haneoka_effects_ok_mutant(effects, user, pos, 5, 2),
             "mutant: empty-log ineffective band must not match a 1-effect spec"
         );
     }
@@ -318,38 +420,34 @@ pub fn haneoka_05_mutant_is_detected() {
 // 「将此卡放置于自己场上并为其放置5个奇迹水晶」
 // `MyGO:那天的雨` On::Play. The play body also runs the -02 rain; that leg's
 // GiveStay effects follow the PlaceCard. This harness checks the placement +
-// crystal count; `rainday_02` covers the stay leg.
+// crystal count; `rainday_02` covers the stay leg (PROTOCOL-adjacent — the
+// rolled zone is board-wide).
+// Seat-symmetric.
 // ===========================================================================
 
-const RAINDAY_ID: usize = crate::card_id!("MyGO:那天的雨");
-
-/// Iff: PlaceCard(Field) first; crystals key == 5; rain may add GiveStays.
-#[kani::proof]
-#[kani::unwind(32)]
-pub fn rainday_01_place_five_crystals_iff() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    invoke::unwrap_done(invoke::play_idx(RAINDAY_ID, player));
-
+/// Shared iff at a **concrete** user seat: PlaceCard(Field) first; crystals
+/// key == 5; rain may add GiveStays.
+fn rainday_01_place_five_crystals_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    sparse2_user(that_day_rain_dispatch, user);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_mygo::that_day_rain::that_day_rain_kani(user));
+    kani::cover!(true, "body returned");
     let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+    let post_c = self_crystals();
 
-    assert!(
-        spec::mygo::rainday_01_place_ok(effects, player, 2),
+    crate::kassert!(
+        spec::rainday_01_place_ok(effects, user, 2),
         "C-MYGO-rainday-01: first effect must be PlaceCard(Field)"
     );
-    assert!(post_c == 5, "C-MYGO-rainday-01: card must hold exactly 5 crystals");
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    crate::kassert!(
+        post_c == 5,
+        "C-MYGO-rainday-01: card must hold exactly 5 crystals"
+    );
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 
     kani::cover!(
         effects.iter().any(|e| matches!(e, Effect::GiveStay { .. })),
@@ -361,17 +459,31 @@ pub fn rainday_01_place_five_crystals_iff() {
     );
 }
 
+/// Placement iff at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn rainday_01_place_five_crystals_iff() {
+    rainday_01_place_five_crystals_iff_at(0);
+}
+
+/// Placement iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn rainday_01_user1_place_five_crystals_iff() {
+    rainday_01_place_five_crystals_iff_at(1);
+}
+
 /// Mutant: 4 crystals must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn rainday_01_mutant_is_detected() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(RAINDAY_ID, player));
-    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
-    assert!(
-        post_c != spec::mygo::rainday_01_crystals_mutant(),
+    let user = 0i32;
+    sparse2_user(that_day_rain_dispatch, user);
+    invoke::unwrap_done(card_mygo::that_day_rain::that_day_rain_kani(user));
+    kani::cover!(true, "body returned");
+    let post_c = self_crystals();
+    crate::kassert!(
+        post_c != spec::rainday_01_crystals_mutant(),
         "mutant: 4-crystal spec must not match the 5-crystal card"
     );
 }
@@ -379,37 +491,31 @@ pub fn rainday_01_mutant_is_detected() {
 // ===========================================================================
 // C-MYGO-hitoshizuku-01/02/03
 // `MyGO:壱雫空` On::Play.
-// Isolation: no `lockedStay` (locked layers survive the clear). The host
-// conflates stay and stun on one `w.stay` array, so a pre-world cannot set
-// them independently; this harness covers the stay-clear + money path with
-// `kinds` recovered from the body's clear prefix.
+// Seat-symmetric on the user (the payee / extra-gainer).
+// Isolation: `lockedStay` = 0 (locked layers survive the clear). Stay / stun
+// start symbolic per seat so the clear prefix is reachable.
 // KNOWN: the body's money leg charges `1000 * global kinds` from every living
 // player (black-box MORE). The book spec is per-player kinds. We assert the
 // BOOK spec; a FAILS here is the finding.
 // ===========================================================================
 
-/// Iff against the book money rule. Expected to FAILS on the money leg.
-#[kani::proof]
-#[kani::unwind(32)]
-pub fn hitoshizuku_money_iff() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
+/// Symbolic stay / stun on the two live seats (lockedStay stays 0).
+fn hitoshizuku_world(user: i32) {
+    sparse2_user(hitoshizuku_dispatch, user);
+    world::with_world_mut(|w| {
+        for p in 0..2 {
+            w.stay[p] = kani::any();
+            kani::assume(w.stay[p] >= 0 && w.stay[p] <= 4);
+            w.stun[p] = kani::any();
+            kani::assume(w.stun[p] >= 0 && w.stun[p] <= 4);
+        }
+    });
+}
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:壱雫空"), player));
-
-    let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
-    let effects = &logbuf[..log_n];
-
-    // Recover per-player kinds from the clear prefix: GiveStay with negative n
-    // is the stay clear (1 kind); GiveStun with negative n (or n!=0) plus
-    // SetState stunStart=0 is the stun clear.
+/// Recover per-player kinds from the clear prefix: GiveStay with negative n
+/// is the stay clear (1 kind); GiveStun with negative n (or n!=0) plus
+/// SetState stunStart=0 is the stun clear.
+fn hitoshizuku_kinds(effects: &[Effect]) -> [i32; MAX_PLAYERS] {
     let mut kinds = [0i32; MAX_PLAYERS];
     for e in effects {
         match e {
@@ -422,136 +528,180 @@ pub fn hitoshizuku_money_iff() {
             _ => {}
         }
     }
+    kinds
+}
 
+/// Shared iff against the **book** money rule at a concrete user seat.
+/// Expected to FAILS on the money leg (body charges global kinds).
+fn hitoshizuku_money_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    hitoshizuku_world(user);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
+    kani::cover!(true, "body returned");
+    let post = world::snapshot();
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+
+    let kinds = hitoshizuku_kinds(effects);
     let global_kinds: i32 = kinds.iter().sum();
     kani::cover!(global_kinds == 0, "nothing cleared");
     kani::cover!(global_kinds > 0, "something cleared");
 
     if global_kinds == 0 {
         // no money leg
-        assert!(
+        crate::kassert!(
             !effects.iter().any(|e| matches!(e, Effect::PayTo { .. } | Effect::GainMoney { .. })),
             "C-MYGO-hitoshizuku: no clear ⇒ no money"
         );
     } else {
         // BOOK spec (per-player kinds).
-        let book_ok = spec::mygo::hitoshizuku_money_ok(effects, player, &kinds, pre.n_players);
+        let book_ok = spec::hitoshizuku_money_ok(effects, user, &kinds, pre.n_players);
         // BODY behaviour (global kinds) — kept as a diagnostic.
         let body_ok =
-            spec::mygo::hitoshizuku_body_global_pay_ok(effects, player, global_kinds, pre.n_players);
+            spec::hitoshizuku_body_global_pay_ok(effects, user, global_kinds, pre.n_players);
         kani::cover!(body_ok, "body matches global-kinds reading");
-        assert!(
+        crate::kassert!(
             book_ok,
             "C-MYGO-hitoshizuku-02: book wants 1000 per type per affected player"
         );
         let _ = body_ok;
     }
 
-    assert!(post.stay.iter().zip(pre.stay.iter()).all(|(a, b)| a <= b),
-        "C-MYGO-hitoshizuku-01: stay never rises");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    crate::kassert!(
+        post.stay.iter().zip(pre.stay.iter()).all(|(a, b)| a <= b),
+        "C-MYGO-hitoshizuku-01: stay never rises"
+    );
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
 }
 
-/// Diagnostic companion: the body's global-kinds reading is what it does.
-/// If this is SUCCESSFUL while `hitoshizuku_money_iff` FAILED, the finding is
-/// MORE/WRONG on the money amount.
+/// Book-spec iff at seat 0.
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn hitoshizuku_body_global_pay_observed() {
-    let w = symbolic_play_world();
-    let player = living_player(&w);
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:壱雫空"), player));
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+pub fn hitoshizuku_money_iff() {
+    hitoshizuku_money_iff_at(0);
+}
+
+/// Book-spec iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn hitoshizuku_user1_money_iff() {
+    hitoshizuku_money_iff_at(1);
+}
+
+/// Diagnostic companion at a concrete user seat: the body's global-kinds
+/// reading is what it does. If this is SUCCESSFUL while `hitoshizuku_money_iff`
+/// FAILED, the finding is MORE/WRONG on the money amount.
+fn hitoshizuku_body_global_pay_observed_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    hitoshizuku_world(user);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_mygo::hitoshizuku::hitoshizuku_kani(user));
+    kani::cover!(true, "body returned");
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    let mut kinds = [0i32; MAX_PLAYERS];
-    for e in effects {
-        match e {
-            Effect::GiveStay { player: p, n } if *n < 0 => kinds[*p as usize] += 1,
-            Effect::GiveStun { player: p, n } if *n != 0 => kinds[*p as usize] += 1,
-            _ => {}
-        }
-    }
+    let kinds = hitoshizuku_kinds(effects);
     let global_kinds: i32 = kinds.iter().sum();
     if global_kinds > 0 {
-        assert!(
-            spec::mygo::hitoshizuku_body_global_pay_ok(effects, player, global_kinds, pre.n_players),
+        crate::kassert!(
+            spec::hitoshizuku_body_global_pay_ok(effects, user, global_kinds, pre.n_players),
             "diagnostic: body charges 1000 * global kinds from every living player"
         );
     }
 }
 
+/// Body-global diagnostic at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn hitoshizuku_body_global_pay_observed() {
+    hitoshizuku_body_global_pay_observed_at(0);
+}
+
+/// Body-global diagnostic at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn hitoshizuku_user1_body_global_pay_observed() {
+    hitoshizuku_body_global_pay_observed_at(1);
+}
+
 // ===========================================================================
 // C-MYGO-tomori-card-01/02
 // `MyGO:（灯）不再迷茫` On::Play.
-// Isolation: empty hand at pre (X=0 ⇒ crystals=1) so the `cards_in` String
-// loop is a no-op. lockedStay is a slot write (no Effect); set_crystals(1) is
-// a counter write (no Effect).
+// Seat-symmetric. Isolation: empty hand at pre (X=0 ⇒ crystals=1) so the
+// `cards_in` String loop is a no-op. lockedStay is a slot write (no Effect);
+// set_crystals(1) is `set_counter_self` and logs one AddCounter.
 // ===========================================================================
 
-/// Iff: GiveStay(user, 2) + PlaceCard(Field); crystals == 1 (X=0).
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn tomori_card_02_empty_hand_iff() {
-    let mut w = symbolic_play_world();
-    // Isolation: empty hand for every player (stated in the module docs).
-    for p in 0..MAX_PLAYERS {
-        w.hand_n = 0;
-        w.hand = [false; 8];
-    }
-    let player = living_player(&w);
+/// Empty-hand world (sparse default already has `hand_resonance = 0` and an
+/// empty `hand` bitset — the `cards_in(Hand)` view is empty).
+fn tomori_world(user: i32) {
+    sparse2_user(tomori_no_longer_dispatch, user);
+}
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:（灯）不再迷茫"), player));
-
+/// Shared iff at a **concrete** user seat: GiveStay(user, 2) + PlaceCard(Field)
+/// + AddCounter(1); crystals == 1 (X=0).
+fn tomori_card_02_empty_hand_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    tomori_world(user);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_mygo::tomori_no_longer::tomori_no_longer_kani(user));
+    kani::cover!(true, "body returned");
     let post = world::snapshot();
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
-    let locked = world::with_world(|ww| ww.key_get(player, crate::intern::intern("lockedStay")));
+    let post_c = self_crystals();
+    let locked = world::with_world(|ww| ww.key_get(user, crate::intern::intern("lockedStay")));
 
-    assert!(
-        spec::mygo::tomori_card_02_empty_hand_log_ok(effects, player, 2),
-        "C-MYGO-tomori-card-02: empty-hand log must be GiveStay(2) + PlaceCard"
+    crate::kassert!(
+        spec::tomori_card_02_empty_hand_log_ok(effects, user, 2),
+        "C-MYGO-tomori-card-02: empty-hand log must be GiveStay(2) + PlaceCard + AddCounter(1)"
     );
-    assert!(
-        post_c == spec::mygo::tomori_card_02_crystals(0),
+    crate::kassert!(
+        post_c == spec::tomori_card_02_crystals(0),
         "C-MYGO-tomori-card-02: X=0 ⇒ exactly 1 crystal"
     );
-    assert!(locked >= 2, "C-MYGO-tomori-card-01: lockedStay marks the 2 layers");
-    assert!(
-        post.stay[player as usize] == pre.stay[player as usize].saturating_add(2),
+    crate::kassert!(
+        locked >= 2,
+        "C-MYGO-tomori-card-01: lockedStay marks the 2 layers"
+    );
+    crate::kassert!(
+        post.stay[user as usize] == pre.stay[user as usize].saturating_add(2),
         "C-MYGO-tomori-card-01: exactly 2 stay layers"
     );
-    assert!(post.money == pre.money, "frame: money unchanged");
-    assert!(post.pos == pre.pos, "frame: pos unchanged");
-    assert!(post.hand == pre.hand, "frame: hand unchanged (empty)");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos unchanged");
+    crate::kassert!(
+        world::arr8b_eq(post.hand, pre.hand),
+        "frame: hand unchanged (empty)"
+    );
+}
+
+/// Empty-hand iff at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn tomori_card_02_empty_hand_iff() {
+    tomori_card_02_empty_hand_iff_at(0);
+}
+
+/// Empty-hand iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn tomori_card_02_user1_empty_hand_iff() {
+    tomori_card_02_empty_hand_iff_at(1);
 }
 
 /// Mutant: 1 stay layer must not match.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn tomori_card_02_mutant_is_detected() {
-    let mut w = symbolic_play_world();
-    w.hand_n = 0;
-    w.hand = [false; 8];
-    let player = living_player(&w);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:（灯）不再迷茫"), player));
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
-    let log_n = world::with_world(|ww| ww.log_n);
+    let user = 0i32;
+    tomori_world(user);
+    invoke::unwrap_done(card_mygo::tomori_no_longer::tomori_no_longer_kani(user));
+    kani::cover!(true, "body returned");
+    let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    assert!(
-        !spec::mygo::tomori_card_02_empty_hand_log_ok_mutant(effects, player, 2),
+    crate::kassert!(
+        !spec::tomori_card_02_empty_hand_log_ok_mutant(effects, user, 2),
         "mutant: 1-stay spec must not match the 2-stay card"
     );
 }

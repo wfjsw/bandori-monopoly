@@ -9,12 +9,8 @@ use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
-
-fn data() -> GameData {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-        .expect("web/data should load -- run tools/asset-pipe/extract.py")
-}
+mod common;
+use common::data;
 
 /// A distinct complete deck for `c`: `SIZE` pool cards starting at `skip`.
 /// `skip = 0` is what `deck::preset` lands on (the pool is filled front to back).

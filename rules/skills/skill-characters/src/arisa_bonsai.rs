@@ -34,11 +34,7 @@ pub const ARISA_BONSAI: CardDef = CardDef::new(
         On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('流星堂')", None, on_pass),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -92,4 +88,45 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("arisa_bonsai_crystal")));
     }
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"市谷有咲"#)
+    .display(r#"市谷有咲"#)
+    .band(r#"Poppin' Party"#)
+    .color(r#"#AA66DD"#)
+    .skill(r#"盆栽爱好者"#)
+    .text(r#"（1）每次有其他玩家在“流星堂”抽取事件时获得一个[火罐]（初始0，上限2）（2）回合结束时如果本回合的[主要移动][经过]“流星堂”且[移动终点]不为“流星堂”时抽取一个视为在“流星堂”抽取的事件并获得一个[火罐]。（3）[经过]“流星堂”时可使用2个[火罐]为自己的团卡添加1个[奇迹水晶]。"#)
+    .cn_id(r#"005"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"等等等一下"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_event_kani(player_id: i32) -> card_sdk::Asked {
+    on_event(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
 }

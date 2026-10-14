@@ -25,7 +25,13 @@ pub const RANA_FUNNY: CardDef = CardDef::new(
             pass_tile,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"有趣的女人"#)
+        .raw_name(r#"（乐奈）有趣的女人"#)
+        .tags(&[])
+        .text(r#"将此卡置于当前格子上，每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶，当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个“抹茶芭菲”或强制停下并[触发结算]，如果强制停下则此卡洗入弃牌堆。 由此卡效果导致[触发结算]时需支付资金减半"#)
+        .cell(r#"I11"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"要乐奈"#)]));
 
 const ID: &str = "MyGO:（乐奈）有趣的女人";
 
@@ -120,4 +126,11 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     );
     ctx::set_transfer_to_dest(owner, ctx::Dest::Graveyard);
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn rana_funny_kani(player_id: i32) -> card_sdk::Asked {
+    rana_funny(player_id)
 }

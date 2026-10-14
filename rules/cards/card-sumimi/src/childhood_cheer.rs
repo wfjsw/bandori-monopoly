@@ -32,7 +32,13 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         // left to discard, so the callback must not run (or flash) for it.
         On::AtEnd("card.placed", None, at_end),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"儿时玩伴的鼓励"#)
+        .raw_name(r#"(初华（Sumimi）)儿时玩伴的鼓励"#)
+        .tags(&[])
+        .text(r#"可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。"#)
+        .cell(r#"L9"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]));
 
 const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 
@@ -86,4 +92,23 @@ fn after_move(player_id: i32) -> card_sdk::Asked {
 fn at_end(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn childhood_cheer_kani(player_id: i32) -> card_sdk::Asked {
+    childhood_cheer(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_move_kani(player_id: i32) -> card_sdk::Asked {
+    after_move(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
 }

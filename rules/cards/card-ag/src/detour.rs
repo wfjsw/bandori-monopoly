@@ -8,7 +8,7 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{prop, ChainKind, MoveKind, TriggerKind};
+use card_sdk::abi::{prop, ChainKind};
 use card_sdk::ctx::plan;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -27,15 +27,14 @@ pub const DETOUR: CardDef = CardDef::new(
         On::AtEnd("", None, clear_no_reward),
     ],
 )
-    .legacy(&[(1, legacy_can_counteract)]).silent(&[3]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    trigger::kind() == TriggerKind::MoveRoll
-        && trigger::player_id() == player_id
-        && trigger::move_roll().is_some()
-        && trigger::move_kind() != Some(MoveKind::Teleport)
-}
+    .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"回家的路上绕个道"#)
+        .raw_name(r#"回家的路上绕个道"#)
+        .tags(&[])
+        .text(r#"(1)此卡可作为反击使用
+(2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的（2）效果），并将下一次的移动掷骰变更为1d6"#)
+        .cell(r#"C9"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
 
 /// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -167,4 +166,29 @@ fn clear_no_reward(player_id: i32) -> card_sdk::Asked {
         ctx::set_tile_prop(circle, prop::NO_REWARD, 0);
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn next_roll_kani(player_id: i32) -> card_sdk::Asked {
+    next_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_no_reward_kani(player_id: i32) -> card_sdk::Asked {
+    clear_no_reward(player_id)
 }

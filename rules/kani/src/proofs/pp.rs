@@ -28,6 +28,35 @@ fn tok_neg() -> u16 {
     crate::intern::intern(FANS_DOWN).0
 }
 
+// ---------------------------------------------------------------------------
+// Per-harness host-op subset for `PP:同一个梦想` (TRIAGE-LOG `op-subset`).
+//
+// Unmodified body (`same_dream.rs` + `resonance::try_resonance`) reaches:
+//   add_band_crystals, tok→count_held_name, add_tok→add_held, log, gain,
+//   player_count, hand_count (try_resonance entry).
+// Isolation (no [共鸣] in hand) keeps try_resonance at `hand_count <= 0`, so
+// ask / take_card / to_discard / in_band are on a dead path — still declared
+// so that if isolation breaks the proof FAILS loudly (outside_subset) rather
+// than silently passing. `effect` / `gain_typed` / `count_held` ride the same
+// handlers as their siblings.
+// ---------------------------------------------------------------------------
+crate::host_subset!(same_dream_dispatch {
+    add_band_crystals => arm_add_band_crystals,
+    count_held | count_held_name => arm_count_held,
+    add_held => arm_add_held,
+    set_held_name => arm_set_held_name,
+    log | effect => arm_log,
+    gain | gain_typed | gain_fixed => arm_gain,
+    player_count => arm_player_count,
+    hand_count => arm_hand_count,
+    take_card => arm_take_card,
+    to_discard => arm_to_discard,
+    ask => arm_ask,
+    in_band => arm_in_band,
+    band_crystals => arm_band_crystals,
+    money => arm_money,
+});
+
 /// Install the symbolic play world **in place** (2..=4 players, bounded
 /// money/fans, no [共鸣] in hand).
 ///
@@ -65,6 +94,22 @@ fn symbolic_play_world() {
 fn pin_two_seats() {
     world::with_world_mut(|w| {
         w.n_players = 2;
+    });
+}
+
+/// `PP:同一个梦想` world: narrow host dispatch + sparse seats.
+///
+/// Steps 1–2 are seat-count independent (step 3 isolated, no 共鸣). Only the
+/// two used seats carry symbolic money/fans; seats 2..4 stay concrete.
+/// `ctx::player_count()` is still the constant 4 (TUNING §7) — the body's
+/// `0..4` loop is four cheap iterations, and with `widen == false` only
+/// `p == user` is processed.
+fn same_dream_world() {
+    host::install_backend(same_dream_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
     });
 }
 
@@ -108,14 +153,219 @@ fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
 // user-only half; this harness pins step 1's band delta.)
 // ===========================================================================
 
-#[kani::proof]
-#[kani::unwind(32)]
-pub fn same_dream_01_band_plus_3_iff() {
-    // Steps 1–2 read only the user's band/fans (step 3 isolated, no 共鸣).
-    // Seat-count independent → pin 2 seats.
-    symbolic_play_world();
-    pin_two_seats();
+/// PROBE (ppcost bisect): world setup only — no body. Must finish quickly
+/// if setup is not the BMC cliff. `assert!(false)` after setup so a SUCCESS
+/// is impossible (fail-closed reachability marker).
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(8))]
+pub fn same_dream_01_probe_setup_only() {
+    same_dream_world();
     let user = any_player_in();
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    crate::kassert!(false, "probe: setup reached");
+}
+
+/// PROBE (ppcost bisect): setup + invoke + `assert!(false)`. FAIL means the
+/// body ran (non-vacuity). TIMEOUT vs setup-only locates the cost.
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn same_dream_01_probe_post_invoke() {
+    same_dream_world();
+    // Concrete user — symbolic user is a BMC cliff (see floor bisect).
+    let user = 0i32;
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "probe: post-invoke reached");
+}
+
+// ===========================================================================
+// FLOOR bisect (ppcost): progressive harnesses, 300 s each, find where BMC
+// stops returning. Each ends in `kassert!(false)` so SUCCESS is impossible.
+// ===========================================================================
+
+/// (a) fully concrete world + direct body. No symbolic money/fans, no spec.
+fn floor_concrete_world() {
+    host::install_backend(same_dream_dispatch);
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        w.out = [false; MAX_PLAYERS];
+        w.money = [100, 100, 0, 0];
+        w.fans_pos = [3, 1, 0, 0];
+        w.fans_neg = [0, 2, 0, 0];
+        w.hand_resonance = [0; MAX_PLAYERS];
+        w.symbolic_answers = false;
+    });
+}
+
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_a_concrete_body_only() {
+    floor_concrete_world();
+    let user = 0i32;
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-a: body ran on concrete world");
+}
+
+/// (b) + symbolic money/fans (2 seats), concrete n/user.
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_b_sym_fans_money() {
+    floor_concrete_world();
+    world::with_world_mut(|w| {
+        for p in 0..2 {
+            w.money[p] = kani::any();
+            kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
+            w.fans_pos[p] = kani::any();
+            kani::assume(w.fans_pos[p] >= 0 && w.fans_pos[p] <= 20);
+            w.fans_neg[p] = kani::any();
+            kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
+            let up = crate::intern::intern(FANS_UP);
+            let down = crate::intern::intern(FANS_DOWN);
+            w.key_set(p as i32, up, w.fans_pos[p]);
+            w.key_set(p as i32, down, w.fans_neg[p]);
+        }
+    });
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(0));
+    crate::kassert!(false, "floor-b: body + sym fans/money");
+}
+
+/// (c) full sparse_play_world (n_players any in 2..=4, used_seats=2).
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_c_sparse_world() {
+    same_dream_world();
+    let user = any_player_in();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-c: sparse world + body");
+}
+
+/// (d) + snapshot pre/post + effect-log scan.
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_d_snapshot_and_log() {
+    same_dream_world();
+    let user = any_player_in();
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    let gained: i32 = effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::GainMoney { player: p, n } if *p == user => Some(*n),
+            _ => None,
+        })
+        .sum();
+    let _ = (pre, post, gained);
+    crate::kassert!(false, "floor-d: snapshot + log scan");
+}
+
+/// (e) + guard_id! / guard! on a real single-source guard (pay-add).
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_e_guard() {
+    same_dream_world();
+    let user = any_player_in();
+    let gid = crate::guard_id!("actor == owner && value > 0");
+    let ctx = world::with_world(|w| crate::ir_fill::fill_pay_add(w, user));
+    let admitted = crate::guard!(gid, &ctx);
+    let _ = admitted;
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-e: guard + body");
+}
+
+/// (c1) sparse_play_world but **concrete** user=0.
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_c1_sparse_concrete_user() {
+    same_dream_world();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(0));
+    crate::kassert!(false, "floor-c1: sparse + concrete user");
+}
+
+/// (c2) concrete world + **symbolic** user in 0..2.
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_c2_concrete_sym_user() {
+    floor_concrete_world();
+    let user = any_player_in();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    crate::kassert!(false, "floor-c2: concrete world + sym user");
+}
+
+/// (c3) concrete world + `symbolic_answers = true` (try_resonance ask).
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_c3_sym_answers() {
+    floor_concrete_world();
+    world::with_world_mut(|w| w.symbolic_answers = true);
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(0));
+    crate::kassert!(false, "floor-c3: symbolic_answers");
+}
+
+/// (f) + full spec compare (the iff asserts, minus covers).
+#[cfg_attr(feature = "diag-probes", kani::proof)] // diagnostic: fails by design
+#[cfg_attr(feature = "diag-probes", kani::unwind(32))]
+pub fn floor_f_spec_compare() {
+    same_dream_world();
+    let user = any_player_in();
+    let pre_band = kani::any();
+    kani::assume(pre_band >= 0 && pre_band <= 50);
+    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    let pre_up = fans_pos_of(user as usize);
+    let pre_down = fans_neg_of(user as usize);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
+    let post = world::snapshot();
+    let (logbuf, log_n) = effects_of();
+    let effects = &logbuf[..log_n];
+    let band = band_crystals_of(user);
+    crate::kassert!(
+        band == spec::pp::same_dream_01_band_after(pre_band),
+        "floor-f step1"
+    );
+    crate::kassert!(post.fans_pos[user as usize] == 0, "floor-f step2");
+    crate::kassert!(
+        post.fans_neg[user as usize] == pre_down + pre_up,
+        "floor-f step2b"
+    );
+    let gained: i32 = effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::GainMoney { player: p, n } if *p == user => Some(*n),
+            _ => None,
+        })
+        .sum();
+    crate::kassert!(
+        gained == spec::pp::same_dream_02_money(pre_up),
+        "floor-f money"
+    );
+    crate::kassert!(post.fans_neg[user as usize] == 0, "floor-f step3");
+    crate::kassert!(
+        post.fans_pos[user as usize] == pre_up + pre_down,
+        "floor-f step3b"
+    );
+    let _ = pre;
+    crate::kassert!(false, "floor-f: spec compare reached");
+}
+
+/// Shared iff body for `PP:同一个梦想` steps 1–3 (isolation: no [共鸣]).
+///
+/// **`user` is a concrete seat.** The floor bisect (TRIAGE-LOG `ppcost`)
+/// showed a symbolic player index is the BMC cliff: concrete user returns
+/// in ~220 s, `any_player_in()` never returns (300 s / 1800 s). With
+/// `n_players = 2` the seats are `{0, 1}` — two harnesses cover every
+/// seat exactly (the clause is seat-symmetric: 「自己的」).
+fn same_dream_01_iff_at(user: i32) {
+    // Steps 1–2 read only the user's band/fans (step 3 isolated, no 共鸣).
+    // Seat-count independent → sparse 2-seat world + narrow host subset.
+    same_dream_world();
+    debug_assert!(user == 0 || user == 1);
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
@@ -123,14 +373,18 @@ pub fn same_dream_01_band_plus_3_iff() {
     let pre_down = fans_neg_of(user as usize);
 
     let pre = world::snapshot();
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
+    // DIRECT body call (ppcost): `call_body_idx_c` still lists every
+    // `call_card_N` in its match arms, so reachability-slice keeps all 19
+    // trampolines (and their bodies) alive. The cfg(kani) `*_kani` wrapper
+    // is a real function — call it so CBMC's call graph has ONE body.
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
     // step 1
     let band = band_crystals_of(user);
-    assert!(
+    crate::kassert!(
         band == spec::pp::same_dream_01_band_after(pre_band),
         "C-PP-same-dream-01: band pool must rise by exactly 3"
     );
@@ -139,14 +393,17 @@ pub fn same_dream_01_band_plus_3_iff() {
     kani::cover!(pre_down > 0, "step 3 has reverses to flip");
     kani::cover!(pre_down == 0, "step 3 no reverses");
 
-    // step 2 (isolation: no [共鸣])
-    assert!(
-        post.fans_pos[user as usize] == 0,
-        "C-PP-same-dream-02: all positive fans flip reverse"
+    // Play runs steps 1–3 together. Step 2 flips up→down and pays `up*100`;
+    // step 3 then flips the user's down→up (no [共鸣] widen). **Final** faces
+    // are step 3's post: `(up+down, 0)`. Asserting step 2's intermediate
+    // faces after the full body would be wrong (the old harness did that).
+    crate::kassert!(
+        post.fans_pos[user as usize] == pre_up + pre_down,
+        "C-PP-same-dream-02+03: faces end all-positive (up+down)"
     );
-    assert!(
-        post.fans_neg[user as usize] == pre_down + pre_up,
-        "C-PP-same-dream-02: reverse count absorbs every flipped fan"
+    crate::kassert!(
+        post.fans_neg[user as usize] == 0,
+        "C-PP-same-dream-02+03: no reverse fans remain on the user"
     );
     let gained: i32 = effects
         .iter()
@@ -155,46 +412,51 @@ pub fn same_dream_01_band_plus_3_iff() {
             _ => None,
         })
         .sum();
-    assert!(
+    crate::kassert!(
         gained == spec::pp::same_dream_02_money(pre_up),
         "C-PP-same-dream-02: gain = flipped * 100"
-    );
-
-    // step 3 user-only (no [共鸣])
-    assert!(
-        post.fans_neg[user as usize] == 0,
-        "C-PP-same-dream-03: user's reverse fans all flip positive"
-    );
-    assert!(
-        post.fans_pos[user as usize] == pre_up + pre_down,
-        "C-PP-same-dream-03: user's positives absorb every reverse"
     );
 
     // frame: other players' fans untouched (no [共鸣] widen)
     for q in 0..MAX_PLAYERS {
         if q != user as usize {
-            assert!(
+            crate::kassert!(
                 post.fans_pos[q] == pre.fans_pos[q] && post.fans_neg[q] == pre.fans_neg[q],
                 "C-PP-same-dream-03: without [共鸣] other players are untouched"
             );
         }
     }
-    assert!(post.money != pre.money || pre_up == 0, "money moves iff step 2 fired");
+    crate::kassert!(!world::arr4_eq(post.money, pre.money) || pre_up == 0, "money moves iff step 2 fired");
+}
+
+/// C-PP-same-dream-01/02/03 iff at seat 0 (`n_players = 2`).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn same_dream_01_band_plus_3_iff() {
+    same_dream_01_iff_at(0);
+}
+
+/// Same iff at seat 1 — with `n_players = 2` the two harnesses cover every
+/// seat. Seat-symmetric clause (「自己的」); a symbolic `user` is a BMC cliff.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn same_dream_01_user1_band_plus_3_iff() {
+    same_dream_01_iff_at(1);
 }
 
 /// MUTANT companion: money formula `up * 101` disagrees with the card.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn same_dream_02_money_mutant_is_detected() {
-    // Money leg is per-user; seat-count independent → pin 2 seats.
-    symbolic_play_world();
-    pin_two_seats();
-    let user = any_player_in();
+    // Money leg is per-user; seat-count independent → sparse 2-seat world.
+    // Concrete user (symbolic user is a BMC cliff — see `same_dream_01_iff_at`).
+    same_dream_world();
+    let user = 0i32;
     kani::assume(fans_pos_of(user as usize) >= 1);
     let pre_up = fans_pos_of(user as usize);
     let pre_band = 0;
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
+    invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects
@@ -204,7 +466,7 @@ pub fn same_dream_02_money_mutant_is_detected() {
             _ => None,
         })
         .sum();
-    assert!(
+    crate::kassert!(
         gained != spec::pp::same_dream_02_money_mutant(pre_up),
         "mutant: card must not match up*101"
     );
@@ -232,7 +494,7 @@ pub fn title_idol_01_band_plus_2_iff() {
     // Step 1 is unconditional +2. Step 2 may add more to the band card via
     // `add_counter_at` (a different store) and is not part of this assertion.
     // `add_band_crystals` is the pool the quote names for step 1.
-    assert!(
+    crate::kassert!(
         band == pre_band + 2,
         "C-PP-title-idol-01: band pool rises by exactly 2 from step 1"
     );
@@ -249,7 +511,7 @@ pub fn title_idol_01_mutant_is_detected() {
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
-    assert!(
+    crate::kassert!(
         band != spec::pp::title_idol_01_band_after_mutant(pre_band),
         "mutant: card must not match +3"
     );
@@ -283,7 +545,7 @@ pub fn seeyou_01_gate_iff() {
     if !allowed {
         // Engine would refuse the play: no body, no effects.
         let (logbuf, log_n) = effects_of();
-        assert!(log_n == 0, "C-PP-seeyou-01: rejected play must not run");
+        crate::kassert!(log_n == 0, "C-PP-seeyou-01: rejected play must not run");
         let _ = logbuf;
         return;
     }
@@ -292,7 +554,7 @@ pub fn seeyou_01_gate_iff() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let (ex, nx) = spec::pp::seeyou_03_post(up, down);
-    assert!(
+    crate::kassert!(
         post.fans_pos[user as usize] == ex && post.fans_neg[user as usize] == nx,
         "C-PP-seeyou-03: flip min(owned, down) reverse positive"
     );
@@ -320,13 +582,13 @@ pub fn seeyou_03_flip_iff() {
     kani::cover!(flip == 0, "nothing to flip");
     kani::cover!(down > up + down, "impossible");
     kani::cover!(up + down < down, "owned < down (flip limited by owned)");
-    assert!(
+    crate::kassert!(
         post.fans_pos[user as usize] == ex_up && post.fans_neg[user as usize] == ex_down,
         "C-PP-seeyou-03: flip exactly min(owned, down)"
     );
     // frame: money untouched
     for q in 0..MAX_PLAYERS {
-        assert!(post.money[q] == 0 || true, "money frame checked below");
+        crate::kassert!(post.money[q] == 0 || true, "money frame checked below");
     }
     let pre = world::snapshot();
     let _ = pre;
@@ -355,7 +617,7 @@ pub fn seeyou_03_mutant_is_detected() {
     let post = world::snapshot();
     let flip = spec::pp::seeyou_03_flip(up, down);
     // Detect an off-by-one high: card flips `flip`, mutant wants `flip + 1`.
-    assert!(
+    crate::kassert!(
         post.fans_pos[user as usize] != up + flip + 1,
         "mutant: card must not flip one extra fan"
     );
@@ -383,7 +645,7 @@ pub fn together_01_x_formula_iff() {
     kani::cover!(up >= down, "base X = 5");
     kani::cover!(flip == 0, "nothing to flip");
     kani::cover!(flip > 0, "flips some");
-    assert!(
+    crate::kassert!(
         post.fans_pos[user as usize] == up + flip && post.fans_neg[user as usize] == down - flip,
         "C-PP-together-01: flip min(X, down) reverse positive"
     );
@@ -393,7 +655,7 @@ pub fn together_01_x_formula_iff() {
     } else {
         5
     };
-    assert!(x == expect_x, "C-PP-together-01: X formula");
+    crate::kassert!(x == expect_x, "C-PP-together-01: X formula");
 }
 
 /// MUTANT: wrong bonus `+1` instead of ceil-half the gap.
@@ -411,7 +673,7 @@ pub fn together_01_mutant_is_detected() {
     let post = world::snapshot();
     let real = post.fans_pos[user as usize] - up;
     let mutant_flip = spec::pp::together_01_x_mutant(up, down).min(down).max(0);
-    assert!(
+    crate::kassert!(
         real != mutant_flip,
         "mutant: card must not match the +1 bonus"
     );
@@ -439,7 +701,7 @@ pub fn guide_01_band_and_crystals_iff() {
     let down = fans_neg_of(user as usize);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let band = band_crystals_of(user);
-    assert!(
+    crate::kassert!(
         band == spec::pp::guide_01_band_after(pre_band),
         "C-PP-guide-01: band pool +3"
     );
@@ -448,7 +710,7 @@ pub fn guide_01_band_and_crystals_iff() {
     let expect = spec::pp::guide_01_crystals(up, down);
     kani::cover!(expect > 0, "places some crystals");
     kani::cover!(expect == 0, "owned < 3 places none");
-    assert!(
+    crate::kassert!(
         cry == expect,
         "C-PP-guide-01: card carries owned/3 crystals"
     );
@@ -456,7 +718,7 @@ pub fn guide_01_band_and_crystals_iff() {
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
-    assert!(placed, "C-PP-guide-01: card sits on the user's field");
+    crate::kassert!(placed, "C-PP-guide-01: card sits on the user's field");
 }
 
 /// MUTANT: round-up division.
@@ -472,7 +734,7 @@ pub fn guide_01_mutant_is_detected() {
     world::with_world_mut(|w| w.band_crystals[user as usize] = 0);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let cry = card_crystals_of_player(user, crate::intern::intern(CRYSTALS));
-    assert!(
+    crate::kassert!(
         cry != spec::pp::guide_01_crystals_mutant(up, down),
         "mutant: card must not round up"
     );
@@ -504,20 +766,20 @@ pub fn eve_bushido_01_gain_iff() {
     // The body does `gain(sum * 60)` where `sum` is the host's 12d4 total.
     // Under Kani `roll` is symbolic within die bounds; the host's 12d4
     // returns a value in 12..=48. Pin: gained is a multiple of 60 in range.
-    assert!(
+    crate::kassert!(
         gained % 60 == 0,
         "C-PP-eve-bushido-01: gain is (sum)*60"
     );
     let sum = gained / 60;
-    assert!(
+    crate::kassert!(
         spec::pp::eve_bushido_01_sum_ok(sum) || gained == 0,
         "C-PP-eve-bushido-01: 12d4 sum in 12..=48 (or host returned 0)"
     );
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
-    assert!(placed, "C-PP-eve-bushido-01: card placed on the user's field");
-    assert!(post.money[user as usize] >= 0, "money frame sanity");
+    crate::kassert!(placed, "C-PP-eve-bushido-01: card placed on the user's field");
+    crate::kassert!(post.money[user as usize] >= 0, "money frame sanity");
 }
 
 // ===========================================================================
@@ -536,16 +798,16 @@ pub fn no_expect_02_place_deck_draw_iff() {
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::pp::no_expect_02_effects_ok(effects, user),
         "C-PP-no-expect-02: place on field + draw 1"
     );
     let deck_n = world::with_world(|ww| ww.deck_n);
-    assert!(deck_n >= 1, "C-PP-no-expect-02: 共鸣 joined the draw pile");
+    crate::kassert!(deck_n >= 1, "C-PP-no-expect-02: 共鸣 joined the draw pile");
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
-    assert!(placed, "C-PP-no-expect-02: card on the user's field");
+    crate::kassert!(placed, "C-PP-no-expect-02: card on the user's field");
     let _ = post;
 }
 
@@ -562,16 +824,16 @@ pub fn first_accident_01_place_deck_draw_iff() {
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::pp::first_accident_01_effects_ok(effects, user),
         "C-PP-first-accident-01: place on field + draw 1"
     );
     let deck_n = world::with_world(|ww| ww.deck_n);
-    assert!(deck_n >= 1, "C-PP-first-accident-01: 重叠的声音 joined the deck");
+    crate::kassert!(deck_n >= 1, "C-PP-first-accident-01: 重叠的声音 joined the deck");
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
-    assert!(placed, "C-PP-first-accident-01: card on the user's field");
+    crate::kassert!(placed, "C-PP-first-accident-01: card on the user's field");
 }
 
 // ===========================================================================
@@ -592,14 +854,14 @@ pub fn maya_inf_02_crystal_formula() {
     kani::cover!(pre < 4, "under the cap: +1 crystal");
     kani::cover!(pre >= 4, "at the cap: clear and bump band");
     if pre < 4 {
-        assert!(post == pre + 1 && band == 0, "under-cap leg");
+        crate::kassert!(post == pre + 1 && band == 0, "under-cap leg");
     } else {
-        assert!(post == 0 && band == 1, "at-cap leg");
+        crate::kassert!(post == 0 && band == 1, "at-cap leg");
     }
     // MUTANT distinguishability (pure)
     let m = spec::pp::maya_inf_02_card_crystals_mutant(pre);
     if pre >= 4 {
-        assert!(m != post, "mutant leaves one crystal behind");
+        crate::kassert!(m != post, "mutant leaves one crystal behind");
     }
 }
 
@@ -616,7 +878,7 @@ pub fn dream_ahead_03_formula() {
     let x: i32 = kani::any();
     kani::assume(x >= 0 && x <= 8);
     let extra = spec::pp::dream_ahead_03_extra(fans, x);
-    assert!(
+    crate::kassert!(
         extra == fans * x + (x * 30).min(300),
         "C-PP-dream-ahead-03: owned*X + MIN(X*30, 300)"
     );
@@ -625,7 +887,7 @@ pub fn dream_ahead_03_formula() {
     kani::cover!(x * 30 > 300, "MIN is 300");
     // Mutant is off-by-one high on the whole extra; it always disagrees.
     if x >= 1 || fans >= 1 {
-        assert!(m != extra, "mutant: extra+1 must disagree");
+        crate::kassert!(m != extra, "mutant: extra+1 must disagree");
     }
 }
 
@@ -647,11 +909,11 @@ pub fn eve_bushido_05_payment_formula() {
     kani::cover!(a != b && !echo, "no echo: (houses+1)*100");
     kani::cover!(a != b && echo, "echo: |diff|*50");
     if a == b {
-        assert!(pay == 0, "tie pays nothing");
+        crate::kassert!(pay == 0, "tie pays nothing");
     } else if echo {
-        assert!(pay == (a - b).abs() * 50, "echo formula");
+        crate::kassert!(pay == (a - b).abs() * 50, "echo formula");
     } else {
-        assert!(pay == (houses + 1) * 100, "base formula");
+        crate::kassert!(pay == (houses + 1) * 100, "base formula");
     }
 }
 
@@ -665,8 +927,8 @@ pub fn shine_again_01_formula() {
     let price: i32 = kani::any();
     kani::assume(price >= 0 && price <= 10_000);
     let money = spec::pp::shine_again_01_money(price);
-    assert!(money == price / 5, "price/5");
-    assert!(spec::pp::shine_again_01_fan() == 1, "exactly 1 positive fan");
+    crate::kassert!(money == price / 5, "price/5");
+    crate::kassert!(spec::pp::shine_again_01_fan() == 1, "exactly 1 positive fan");
 }
 // ===========================================================================
 // C-PP-eve-bushido-04
@@ -705,7 +967,7 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
     });
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
-    assert!(
+    crate::kassert!(
         cry == spec::pp::eve_bushido_04_crystals(pre),
         "C-PP-eve-bushido-04: +1 crystal (pre < 3 region)"
     );
@@ -737,7 +999,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
     });
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
-    assert!(cry == pre, "C-PP-eve-bushido-04: zero-value draw is a no-op");
+    crate::kassert!(cry == pre, "C-PP-eve-bushido-04: zero-value draw is a no-op");
 }
 
 // ===========================================================================
@@ -770,7 +1032,7 @@ pub fn guide_04_turn_end_crystal_iff() {
     });
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:练习生解密指南"), "TurnEnd", me));
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
-    assert!(
+    crate::kassert!(
         cry == spec::pp::guide_04_crystals(pre),
         "C-PP-guide-04: +1 crystal at turn end (pre < 5 region)"
     );
@@ -810,12 +1072,12 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
     });
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:梦在前方，结彩当下"), 2, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
-    assert!(
+    crate::kassert!(
         cry == spec::pp::dream_ahead_01_crystals(pre),
         "C-PP-dream-ahead-01: +1 crystal (pre < 5 region)"
     );
     let x = world::with_world(|ww| ww.key_get(me, crate::intern::intern("dreamAhead.X")));
-    assert!(
+    crate::kassert!(
         x == 0 || x == spec::pp::dream_ahead_01_overflow(pre),
         "C-PP-dream-ahead-01: overflow only when pre >= 5"
     );
@@ -841,7 +1103,7 @@ pub fn shine_again_00_immune_iff() {
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
-    assert!(placed, "C-PP-shine-again-00: card is on the field");
+    crate::kassert!(placed, "C-PP-shine-again-00: card is on the field");
     let _ = immune;
 }
 
@@ -854,7 +1116,7 @@ pub fn no_expect_01_immune_iff() {
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
-    assert!(placed, "C-PP-no-expect-01: card is on the field");
+    crate::kassert!(placed, "C-PP-no-expect-01: card is on the field");
 }
 
 // ===========================================================================
@@ -881,7 +1143,7 @@ pub fn jennifer_01_place_other_iff() {
         }
         o
     });
-    assert!(
+    crate::kassert!(
         spec::pp::jennifer_01_place_ok(owner, user),
         "C-PP-jennifer-01: card sits on another player's field"
     );
@@ -931,11 +1193,11 @@ pub fn ranger_01_02_steps_by_count_iff() {
     let count = others + 1; // the Ranger itself
     kani::cover!(count >= 3, "count >= 3: band +3");
     kani::cover!(count < 3, "count < 3: no band bump");
-    assert!(
+    crate::kassert!(
         post_money == pre_money + spec::pp::ranger_01_money(count),
         "C-PP-ranger-01: +500 iff count >= 1"
     );
-    assert!(
+    crate::kassert!(
         band == pre_band + spec::pp::ranger_02_band(count),
         "C-PP-ranger-02: band +3 iff count >= 3"
     );
@@ -961,7 +1223,7 @@ pub fn flower_01_place_on_tile_iff() {
     world::with_world_mut(|w| w.tiles[2].owner = user);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:可爱又强壮的花朵"), user));
     let band = band_crystals_of(user);
-    assert!(
+    crate::kassert!(
         band == spec::pp::flower_01_band_after(pre_band),
         "C-PP-flower-01: band pool +2"
     );
@@ -978,7 +1240,7 @@ pub fn flower_01_place_on_tile_iff() {
         }
         (t, o)
     });
-    assert!(
+    crate::kassert!(
         spec::pp::flower_01_tile_ok(tile, owner, user),
         "C-PP-flower-01: card sits on a user-owned tile"
     );
@@ -1011,14 +1273,14 @@ pub fn chisato_mask_01_total_iff() {
     kani::cover!(sum > 0, "money moved toward the user");
     // The quote pins 2000; if the body uses a different split or total this
     // fails. Split among payers is OPEN — we only check the total.
-    assert!(
+    crate::kassert!(
         sum == spec::pp::chisato_mask_01_total() || sum == 0,
         "C-PP-chisato-mask-01: others collectively pay the user exactly 2000 (or host model did not settle)"
     );
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
-    assert!(placed, "C-PP-chisato-mask-01: card on the user's field");
+    crate::kassert!(placed, "C-PP-chisato-mask-01: card on the user's field");
 }
 
 // ===========================================================================
@@ -1047,17 +1309,17 @@ pub fn first_accident_02_blocks_pp_skill_2_iff() {
             || ww.key_get(me, crate::intern::intern("skillBlock")) > 0
     });
     kani::cover!(blocked, "skillBlock token written");
-    assert!(blocked, "C-PP-first-accident-02: skillBlock token must be set");
+    crate::kassert!(blocked, "C-PP-first-accident-02: skillBlock token must be set");
 
     // 2) 丸山彩 (2) must refuse
     let pre_amount2 = world::with_world(|ww| ww.pay_amount);
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
     let post = world::snapshot();
-    assert!(
+    crate::kassert!(
         post.pay_amount == pre_amount2,
         "C-PP-first-accident-02: PP (2) must not rewrite the pay amount"
     );
-    assert!(
+    crate::kassert!(
         post.fans_pos[me as usize] == pre_up,
         "C-PP-first-accident-02: PP (2) must not flip fans"
     );
@@ -1118,7 +1380,7 @@ pub fn shine_again_01_rescue_iff() {
     // a host gap, not a body gap. Accept either, but if the fan moved the
     // money leg must match.
     if post_fans == pre_fans + 1 {
-        assert!(
+        crate::kassert!(
             gained == spec::pp::shine_again_01_money(price) || gained == 0,
             "C-PP-shine-again-01: money leg is price/5 when the rescue runs"
         );

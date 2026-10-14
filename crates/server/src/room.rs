@@ -564,6 +564,7 @@ impl Room {
         max_players: i32,
         password: &str,
         weights: ScoreWeights,
+        clock: game_core::clock::ClockSettings,
         engine: Arc<Pool>,
         store: Arc<dyn CrossState>,
     ) -> Self {
@@ -583,6 +584,7 @@ impl Room {
                 playing: false,
                 theme: String::new(),
                 weights,
+                clock: clock.sanitized(),
                 members: vec![],
                 fair: None,
             },
@@ -884,6 +886,23 @@ impl Room {
         Ok(())
     }
 
+    /// Host-only edit of the match clock / timer settings (the `weights`
+    /// sibling). Sanitized server-side to `ClockSettings::MIN..=MAX`.
+    pub fn set_clock(
+        &mut self,
+        member: i32,
+        c: game_core::clock::ClockSettings,
+    ) -> ApiResult<()> {
+        self.host_only(member)?;
+        if self.info.playing {
+            return Err(ApiError::bad("err.room.playing"));
+        }
+        self.info.clock = c.sanitized();
+        self.persist();
+        self.notify();
+        Ok(())
+    }
+
     fn host_only(&self, member: i32) -> ApiResult<()> {
         if self.is_host(member) {
             Ok(())
@@ -971,10 +990,15 @@ impl Room {
             .map(|(&m, &n)| (m, n))
             .collect();
         let derived = fair::derive_match_seed(&seed, &nonces);
-        let settings = CanonSettings::new(mode, step, &self.info.weights, &members).canon();
+        // Clock settings are part of the canonical room settings the record
+        // header binds (`docs/FAIRNESS.md` §1.3). When they are default the
+        // canon string stays byte-identical to pre-settings records.
+        let mut canon = CanonSettings::new(mode, step, &self.info.weights, &members);
+        canon.clock = self.info.clock;
+        let settings = canon.canon();
         let blob = self
             .engine
-            .new_match(&members, derived, mode as i32, &self.info.weights)
+            .new_match(&members, derived, mode as i32, &self.info.weights, self.info.clock)
             .map_err(|e| ApiError::bad(e.as_str()))?;
         // The record starts from the same inputs `new_match` got, plus the
         // engine's own identity (`docs/REPLAY.md` §4) and the full
@@ -995,6 +1019,7 @@ impl Room {
                 seed: 0,
                 seed256: Some(Seed256(derived)),
                 weights: self.info.weights.clone(),
+                clock: Some(self.info.clock),
             }),
             stamp,
             step,

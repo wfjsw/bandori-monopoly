@@ -55,6 +55,10 @@ export interface LogLine {
   /** The line split around its card references, so the log can render them
    *  hoverable. Absent on plain lines. */
   parts?: LogPart[];
+  /** A collapsed run of identical 「继续前进」 lines: how many it stands for. */
+  repeat?: number;
+  /** The line before the ` ×n` suffix (set only on collapsible rows). */
+  base?: string;
 }
 
 /** A turn-stage change, queued behind the events that led to it. `step` is the
@@ -199,11 +203,20 @@ export class Animator {
     if (e.type === "card") this.actDepth.set(e.id, depth);
     const indent = "  ".repeat(depth);
     const rows: LogLine[] = [];
+    // A walk interrupted at every step republishes 「X 继续前进」 each time;
+    // fold a run of them into one row with a count.
+    const last = this.log[this.log.length - 1];
+    if (e.msg?.k === "log.move_on" && !e.results?.length && last?.base === indent + line) {
+      const n = (last.repeat ?? 1) + 1;
+      this.log = [...this.log.slice(0, -1), { ...last, repeat: n, text: `${last.base} ×${n}` }];
+      return;
+    }
     if (line) {
       rows.push({
         id: e.id, text: indent + line, turn: e.type === "turn",
         who: e.type === "turn" ? e.playerId : undefined,
         parts: parts.length ? parts : undefined,
+        base: e.msg?.k === "log.move_on" ? indent + line : undefined,
       });
     }
     for (const r of e.results ?? []) {
@@ -449,6 +462,7 @@ export class Animator {
     if (this.disposed) return;
     this.animating = false;
     this.pos = null;
+    this.route = null;
     // Caught up: the last stage played is the state's own.
     this.stage = null;
     this.turn = null;
@@ -478,25 +492,63 @@ export class Animator {
     sfx("dice_result");
   }
 
-  private async walk(playerId: number, from: number, steps: number, hop: number, more = 0): Promise<void> {
+  /**
+   * The tiles the same walk goes on to cover in the segments queued behind
+   * the one ending at `end`. The engine publishes a new `move` each time a
+   * per-step hook logs (薰's 火罐 every step), so one walk arrives in many
+   * pieces with card / fire events between; reading ahead lets the route stay
+   * lit for the whole walk, as it does for a walk published in one piece.
+   */
+  private routeAhead(playerId: number, end: number): number[] {
+    const n = D.tiles.length;
+    const out: number[] = [];
+    let at = end;
+    for (const it of this.queue) {
+      if ("mark" in it) break;
+      const q = it.ev;
+      if (q.type === "move" && q.playerId === playerId && q.from === at && q.value) {
+        const dir = q.value > 0 ? 1 : -1;
+        for (let k = 0; k < Math.abs(q.value); k++) {
+          at = (((at + dir) % n) + n) % n;
+          out.push(at);
+        }
+      } else if (["move", "roll", "teleport", "turn"].includes(q.type) && (q.playerId === playerId || q.type === "turn")) {
+        break;
+      }
+    }
+    return out;
+  }
+
+  private async walk(playerId: number, from: number, steps: number, hop: number, stepsLeft = 0): Promise<void> {
     if (!this.pos) return;
     const n = D.tiles.length;
     const dir = steps >= 0 ? 1 : -1;
     let p = from;
     this.pos[playerId] = from;
-    // The whole walk is lit at once: this segment plus the `more` steps the
-    // engine will publish after it (a walk is cut into one event per CiRCLE).
     const ahead: number[] = [];
-    for (let k = 1, q = from; k <= Math.abs(steps) + more; k++) {
+    for (let k = 1, q = from; k <= Math.abs(steps); k++) {
       q = (((q + dir) % n) + n) % n;
       ahead.push(q);
     }
-    const continued = this.route !== null;
-    if (hop > 0) this.route = ahead.slice();
+    // The engine says how many steps follow this segment (a walk is cut at every
+    // CiRCLE, and the next segment only exists after the reward settles); the
+    // queue read-ahead covers cuts by per-step hooks.
+    const end = ahead.length ? ahead[ahead.length - 1] : from;
+    let more = hop > 0 ? this.routeAhead(playerId, end) : [];
+    if (hop > 0 && stepsLeft > more.length) {
+      more = [];
+      for (let k = 1, q = end; k <= stepsLeft; k++) {
+        q = (((q + dir) % n) + n) % n;
+        more.push(q);
+      }
+    }
+    // A continuation of a walk whose route is already lit: keep it as is.
+    const carried = hop > 0 && !!this.route && this.route.length > 0 && this.route[0] === ahead[0];
+    if (hop > 0 && !carried) this.route = ahead.concat(more);
     this.bump();
     try {
       // A beat to read the lit route before the token sets off.
-      if (hop > 0 && !continued && ahead.length > 0) await this.nap(300);
+      if (hop > 0 && !carried && ahead.length > 0) await this.nap(300);
       for (let k = 0; k < Math.abs(steps); k++) {
         p = (((p + dir) % n) + n) % n;
         this.pos[playerId] = p;
@@ -511,7 +563,7 @@ export class Animator {
     } finally {
       this.hop = null;
       // Between segments (CiRCLE settles here) the rest of the route stays lit.
-      this.route = more > 0 && this.route && this.route.length > 0 ? this.route : null;
+      if (!more.length) this.route = null;
       this.bump();
     }
   }

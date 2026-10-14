@@ -10,7 +10,13 @@ use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SMILE_PATROL: CardDef =
-    CardDef::new("HHW:微笑巡逻队", &[On::Play("", Some(cant_play), play)]);
+    CardDef::new("HHW:微笑巡逻队", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"微笑巡逻队"#)
+        .raw_name(r#"微笑巡逻队"#)
+        .tags(&[])
+        .text(r#"付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）"#)
+        .cell(r#"F6"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSmilePatrol.WhyNot`: refuses without a tile you can afford to
@@ -70,4 +76,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         );
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
 }

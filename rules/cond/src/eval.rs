@@ -26,6 +26,12 @@ use crate::vocab::{self, Fx, Name, Scope, Table, VOCAB};
 /// each candidate.
 pub struct WindowScope {
     root: Context<'static, 'static>,
+    /// The window snapshot, kept so the function tables can be baked on
+    /// demand (see [`Self::bind_window_tables`]).
+    win: WindowCtx,
+    /// Window-side function tables already baked for this window, by the
+    /// function's flat name: `(hidden variable, table)`.
+    tables: std::sync::Mutex<HashMap<String, Option<(&'static str, Value)>>>,
 }
 
 impl WindowScope {
@@ -33,17 +39,60 @@ impl WindowScope {
     /// constants, the effect-chain lookup tables, and the shared lookup
     /// functions. `O(schema)` once per window.
     pub fn new(win: &WindowCtx) -> Self {
+        Self::from_owned(win.clone())
+    }
+
+    /// [`Self::new`] taking the snapshot by value (no copy).
+    pub fn from_owned(win: WindowCtx) -> Self {
+        let win_ref = &win;
         let mut root = Context::with_env(shared_env());
         // The eager snapshot is the reference `CondView`; the host's live
         // view (`game-rules`'s `LiveSnap`) can fill the same tables directly.
         let empty_cand = CandidateCtx::default();
         let view = crate::SnapshotView {
-            win,
+            win: win_ref,
             cand: &empty_cand,
         };
         bind_window(&mut root, &view);
         install_functions(&mut root);
-        WindowScope { root }
+        WindowScope {
+            root,
+            win,
+            tables: Default::default(),
+        }
+    }
+
+    /// Bind the window-side function tables `cond` actually calls into the
+    /// candidate scope. They used to be baked eagerly for every function on
+    /// every window; most windows serve a handful of probes (or none) that read
+    /// one or two of them, and baking the tile tables dominated a match. Each
+    /// table is built once per window on first use.
+    fn bind_window_tables(&self, scope: &mut Context<'_, '_>, cond: &Cond) {
+        for flat in cond.used_fns() {
+            let hit = {
+                let mut cache = self.tables.lock().unwrap_or_else(|e| e.into_inner());
+                cache
+                    .entry(flat.clone())
+                    .or_insert_with(|| {
+                        let n = vocab::by_flat(flat)?;
+                        if !matches!(n.scope, Scope::Func { cand: false, .. }) {
+                            return None;
+                        }
+                        let empty_cand = CandidateCtx::default();
+                        let view = crate::SnapshotView {
+                            win: &self.win,
+                            cand: &empty_cand,
+                        };
+                        vocab::fn_table(n, &view).map(|(var, t)| (var, table_value(&t)))
+                    })
+                    .clone()
+            };
+            if let Some((var, v)) = hit {
+                // Several functions share a table (`money` bakes `_money`
+                // once); re-binding the same var is idempotent.
+                scope.add_variable_from_value(var, v);
+            }
+        }
     }
 
     /// Evaluate `cond` against a candidate. The child scope borrows the window
@@ -66,6 +115,7 @@ impl WindowScope {
             cand,
         };
         bind_candidate(&mut child, cond, &view);
+        self.bind_window_tables(&mut child, cond);
         let val = child
             .resolve(cond.expr())
             .map_err(EvalError::Exec)?;
@@ -110,7 +160,51 @@ fn cel_value(v: &vocab::Val) -> Value {
     }
 }
 
+/// [`build_table_value`] through a per-thread memo. The big tables (tile
+/// attrs / classes / kinds, pairwise distances) are a function of the board,
+/// which is the same from one window to the next, yet rebuilding their CEL
+/// maps dominated every window. A hit returns the shared (`Arc`) value; the
+/// stored table is compared in full, so a hash collision cannot alias.
 fn table_value(t: &Table) -> Value {
+    use std::hash::{Hash, Hasher};
+    // Small tables cost less to build than to hash.
+    let size = match t {
+        Table::IntMap(r) => r.len(),
+        Table::StrMap(r) => r.len(),
+        Table::IntList(r) => r.len(),
+        Table::Seats(_) => 0,
+        Table::BinMap(r) => r.len(),
+        Table::StrIntList(r) => r.len() * 8,
+        Table::IntStrMap(r) => r.len(),
+        Table::TripleSet(r) => r.len(),
+    };
+    if size < 16 {
+        return build_table_value(t);
+    }
+    thread_local! {
+        static MEMO: std::cell::RefCell<HashMap<u64, Vec<(Table, Value)>>> =
+            std::cell::RefCell::new(HashMap::new());
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    t.hash(&mut h);
+    let key = h.finish();
+    MEMO.with(|m| {
+        let mut m = m.borrow_mut();
+        if let Some(v) = m.get(&key).and_then(|b| b.iter().find(|(c, _)| c == t)) {
+            return v.1.clone();
+        }
+        // Bounded: a match touches a handful of distinct boards; a runaway
+        // stream of different tables just starts over.
+        if m.len() >= 256 {
+            m.clear();
+        }
+        let v = build_table_value(t);
+        m.entry(key).or_default().push((t.clone(), v.clone()));
+        v
+    })
+}
+
+fn build_table_value(t: &Table) -> Value {
     match t {
         Table::IntMap(rows) => {
             let mut m = HashMap::new();
@@ -195,17 +289,8 @@ fn bind_window(ctx: &mut Context<'static, 'static>, view: &dyn CondView) {
         emit_var(ctx, n.flat, v);
     }
 
-    // Window-side function tables (money(p), tile_named, is_*, chain_*, …).
-    for n in VOCAB {
-        if !matches!(n.scope, Scope::Func { cand: false, .. }) {
-            continue;
-        }
-        if let Some((var, t)) = vocab::fn_table(n, view) {
-            // Several functions share a table (`money` bakes `_money` once);
-            // re-baking the same var is idempotent, so just write it.
-            ctx.add_variable_from_value(var, table_value(&t));
-        }
-    }
+    // The window-side function tables (money(p), tile_named, is_*, chain_*, …)
+    // are baked on demand per evaluation -- see `WindowScope::bind_window_tables`.
 }
 
 /// Candidate-side bindings, restricted to what `cond` actually reads. This is
@@ -437,6 +522,18 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
                         class.as_str()
                     ))))
                     .is_some())
+                },
+            )
+            .expect(fname);
+        }
+        Fx::SeatStrInt { var, .. } => {
+            let var = var.to_string();
+            // `state(p, 'key')` -- the key is a string; missing = 0.
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, seat: i64, key: Arc<String>| -> Result<i64, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    Ok(int_at_str(&m, &format!("{seat}:{}", key.as_str()), 0))
                 },
             )
             .expect(fname);

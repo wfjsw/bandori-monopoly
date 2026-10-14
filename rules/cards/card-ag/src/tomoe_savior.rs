@@ -21,21 +21,13 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    let t = trigger::tile();
-    if !is_shop(t) {
-        return false;
-    }
-    if trigger::player_id() != player_id {
-        ctx::money_of(player_id) >= ctx::tile_price(t) / 2
-    } else {
-        true
-    }
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"商店街的救世主"#)
+        .raw_name(r#"（巴）商店街的救世主"#)
+        .tags(&[r#"反击"#])
+        .text(r#"【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回"#)
+        .cell(r#"C14"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", r#"宇田川巴"#)]));
 
 /// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
 fn is_shop(t: i32) -> bool {

@@ -23,7 +23,20 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
         On::Play("", Some(cant_play), overlapping_voices),
         On::AtEnd("", None, at_end),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"重叠的声音"#)
+        .raw_name(r#"[衍生]重叠的声音"#)
+        .derived(true)
+        .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
+        .text(r#"[特]：
+此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上的“初次演出事故”（如果有）。
+[手]：
+依次进行以下操作：
+1. [移除]此卡和[使用者][场地]上的“初次演出事故”（如果有）；
+2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
+3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。"#)
+        .cell(r#"D5"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// C# `CardOverlappingVoices.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -73,3 +86,16 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
 }
 // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
 // 的“初次演出事故”（如果有）」 -- a named unplace on the discard.
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn overlapping_voices_kani(player_id: i32) -> card_sdk::Asked {
+    overlapping_voices(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
+}

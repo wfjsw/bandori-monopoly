@@ -4,11 +4,63 @@
 //! ran (2)'s fire spend. OPEN / PROTOCOL halves are listed in
 //! `docs/rulebook/spec/kani/ag.md` and not faked here.
 
+use crate::harness::{self, SparsePlay};
 use crate::host;
 use crate::intern;
 use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
+
+// Ops the ran_red / moca_self skill bodies reach.
+crate::host_subset!(skills_ag_dispatch {
+    log | effect => arm_log,
+    gain | gain_typed | gain_fixed => arm_gain,
+    money => arm_money,
+    pay => arm_pay,
+    gain_fire => arm_gain_fire,
+    fire => arm_fire,
+    fire_max => arm_fire_max,
+    spend_fire => arm_spend_fire,
+    teleport_to => arm_teleport_to,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    player_pos => arm_player_pos,
+    in_band => arm_in_band,
+    character_is => arm_character_is,
+    add_held => arm_add_held,
+    count_held | count_held_name => arm_count_held,
+    set_held_name => arm_set_held_name,
+    ask => arm_ask,
+    raise => arm_raise,
+    gate => arm_gate,
+    slot => arm_slot,
+    set_slot => arm_set_slot,
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add => arm_inc_slot,
+    set_self_prop => arm_set_self_prop,
+    set_prop_at => arm_set_prop_at,
+    set_tile_prop => arm_set_tile_prop,
+    self_prop | prop_at | tile_prop => arm_counter_self,
+    trig_player => arm_trig_player,
+    trig_target => arm_trig_target,
+    count_marks_f => arm_count_marks_f,
+    place_mark => arm_place_mark,
+});
+
+/// Install sparse 2-seat world + subset. Callers keep concrete seats.
+fn skills_ag_world() {
+    host::install_backend(skills_ag_dispatch);
+    harness::sparse_play_world(SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        money_lo: 0,
+        money_hi: 10_000,
+        fans_lo: 0,
+        fans_hi: 0,
+        resonance_in_hand: false,
+    });
+}
 
 const SKILL_RAN: usize = crate::card_id!("skill:美竹兰:叛逆的红挑染");
 const SKILL_MOCA: usize = crate::card_id!("skill:青叶摩卡:我行我素");
@@ -39,11 +91,11 @@ fn rest_of(w: &World, player: i32) -> i32 {
 // C-AG-firepot-01 — shared (1) rest tick
 // ===========================================================================
 
-fn firepot_tick_world(pre_rest: i32, pre_fire: i32) -> World {
-    host::install();
+fn firepot_tick_world(user: i32, pre_rest: i32, pre_fire: i32) -> World {
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
-    let player = 0i32;
+    let player = user;
     w.trig_player = player;
     w.turn_player = player;
     w.band_id[player as usize] = band_key();
@@ -53,21 +105,20 @@ fn firepot_tick_world(pre_rest: i32, pre_fire: i32) -> World {
     w
 }
 
-/// C-AG-firepot-01 iff on the TurnEnd tick (ran_red entry 2).
-#[kani::proof]
-#[kani::unwind(80)]
-pub fn firepot_01_tick_iff() {
+/// Shared iff body at a concrete seat (ppcost). Seat-symmetric (owner tick).
+fn firepot_01_tick_iff_at(user: i32) {
+    let player = user;
     let pre_rest: i32 = kani::any();
     kani::assume(pre_rest >= 0 && pre_rest <= 2);
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 0 && pre_fire <= 1);
-    let w = firepot_tick_world(pre_rest, pre_fire);
+    let w = firepot_tick_world(user, pre_rest, pre_fire);
     let player = w.trig_player;
     world::reset_world(w);
     // Entry 2 is the TurnEnd hook with residual `afterglow`
     // (`trigger::player_id() == player_id && in_band(player_id, "Afterglow")`).
     // Both hold by construction.
-    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 2, player));
+    invoke::unwrap_done(skill_characters::ran_red::tick_kani(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -78,28 +129,40 @@ pub fn firepot_01_tick_iff() {
     kani::cover!(grants, "third idle turn grants a pot");
     kani::cover!(!grants, "first/second idle turn grants nothing");
     if grants {
-        assert!(
+        crate::kassert!(
             spec::skills_ag::firepot_01_grant_log_ok(effects, player),
             "C-AG-firepot-01: granting tick is exactly GainFire(1)"
         );
         // Host `gain_fire` is saturating_add with no fire_max clamp (the cap
         // is declared by `fire_pot` but not enforced under Kani). Pin the
         // body's +1; the cap is recorded as a host gap in the unit table.
-        assert!(
+        crate::kassert!(
             post_fire == pre_fire + 1,
             "C-AG-firepot-01: fire rises by 1"
         );
     } else {
-        assert!(
+        crate::kassert!(
             spec::skills_ag::firepot_01_idle_log_ok(effects),
             "C-AG-firepot-01: idle tick is a no-op in the log"
         );
-        assert!(post_fire == pre_fire, "C-AG-firepot-01: fire unchanged");
+        crate::kassert!(post_fire == pre_fire, "C-AG-firepot-01: fire unchanged");
     }
-    assert!(
+    crate::kassert!(
         post_rest == spec::skills_ag::firepot_01_next_rest(pre_rest),
         "C-AG-firepot-01: rest counter is next_rest(pre)"
     );
+}
+
+#[kani::proof]
+#[kani::unwind(80)]
+pub fn firepot_01_tick_iff() {
+    firepot_01_tick_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::unwind(80)]
+pub fn firepot_01_user1_tick_iff() {
+    firepot_01_tick_iff_at(1);
 }
 
 /// Companion: the every-other-turn mutant must not match.
@@ -107,8 +170,8 @@ pub fn firepot_01_tick_iff() {
 #[kani::unwind(80)]
 pub fn firepot_01_mutant_is_detected() {
     // pre_rest = 0: the card does not grant; the mutant (grant at +1>=2) does.
-    assert!(spec::skills_ag::firepot_01_grants(0) == false, "card: no grant at rest 0");
-    assert!(
+    crate::kassert!(spec::skills_ag::firepot_01_grants(0) == false, "card: no grant at rest 0");
+    crate::kassert!(
         spec::skills_ag::firepot_01_grants_mutant(0),
         "mutant: claims a grant at rest 0"
     );
@@ -119,7 +182,9 @@ pub fn firepot_01_mutant_is_detected() {
 // ===========================================================================
 
 fn moca_offer_world(pre_fire: i32, src_pos: i32, used: i32) -> World {
-    host::install();
+    // NOT seat-symmetric: involves owner and another seat `src`. Covered
+    // concretely at (owner=0, src=1); a second pair is the seat-swap below.
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
     let owner = 0i32;
@@ -164,7 +229,7 @@ pub fn moca_02_teleport_iff() {
     let src = 1i32;
     world::reset_world(w);
     // Entry 2 is CardPlayed (residual `other`: actor != owner). Held by setup.
-    invoke::unwrap_done(invoke::entry_idx(SKILL_MOCA, 2, owner));
+    invoke::unwrap_done(skill_characters::moca_self::on_card_kani(owner));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -178,29 +243,29 @@ pub fn moca_02_teleport_iff() {
     kani::cover!(pre_fire == 0, "no fire pot");
 
     if gated {
-        assert!(
+        crate::kassert!(
             spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: CD / no-fire gate is a no-op"
         );
-        assert!(post.pos[owner as usize] != src_pos || pre_fire == 0, "no teleport when gated");
+        crate::kassert!(post.pos[owner as usize] != src_pos || pre_fire == 0, "no teleport when gated");
         return;
     }
     // Not gated: the body asks yes/no (symbolic). Both answers are legal.
     if accepted {
-        assert!(
+        crate::kassert!(
             spec::skills_ag::moca_02_log_ok(effects, owner, src_pos),
             "C-AG-moca-02: exactly Teleport(owner → src tile)"
         );
-        assert!(
+        crate::kassert!(
             spec::skills_ag::moca_02_post_ok(post.pos[owner as usize], post.fire[owner as usize], src_pos, pre_fire),
             "C-AG-moca-02: on the actor's tile with fire −1"
         );
     } else {
-        assert!(
+        crate::kassert!(
             spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: declined offer is a no-op"
         );
-        assert!(post.fire[owner as usize] == pre_fire, "decline leaves fire");
+        crate::kassert!(post.fire[owner as usize] == pre_fire, "decline leaves fire");
         let _ = src;
     }
 }
@@ -215,15 +280,15 @@ pub fn moca_02_mutant_is_detected() {
     w.symbolic_answers = false;
     w.answers[0] = 0; // yes
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(SKILL_MOCA, 2, owner));
+    invoke::unwrap_done(skill_characters::moca_self::on_card_kani(owner));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         !spec::skills_ag::moca_02_log_ok_mutant(effects, owner, 10),
         "mutant (tile+1) must not match"
     );
-    assert!(
+    crate::kassert!(
         spec::skills_ag::moca_02_log_ok(effects, owner, 10),
         "card teleports to the actor's tile"
     );
@@ -239,7 +304,7 @@ pub fn moca_02_mutant_is_detected() {
 pub fn ran_02_spend_fire_iff() {
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 1 && pre_fire <= 1);
-    host::install();
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
     let player = 0i32;
@@ -249,16 +314,16 @@ pub fn ran_02_spend_fire_iff() {
     w.band_id[player as usize] = band_key();
     world::reset_world(w);
     // Entry 0 is the (2) Play (`can_use` residual: not skill_blocked, fire ≥ 1).
-    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 0, player));
+    invoke::unwrap_done(skill_characters::ran_red::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::skills_ag::ran_02_spend_log_empty(effects),
         "C-AG-ran-02: fire spend is not an Effect (spend_fire mutates fire only)"
     );
-    assert!(
+    crate::kassert!(
         spec::skills_ag::ran_02_fire_ok(post_fire, pre_fire),
         "C-AG-ran-02: exactly one [火罐] spent"
     );
@@ -268,7 +333,7 @@ pub fn ran_02_spend_fire_iff() {
 #[kani::proof]
 #[kani::unwind(80)]
 pub fn ran_02_mutant_is_detected() {
-    host::install();
+    skills_ag_world();
     let mut w = World::new();
     w.n_players = 2;
     let player = 0i32;
@@ -277,10 +342,10 @@ pub fn ran_02_mutant_is_detected() {
     w.fire_max = [1, 1, 1, 1];
     w.band_id[player as usize] = band_key();
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 0, player));
+    invoke::unwrap_done(skill_characters::ran_red::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
-    assert!(post_fire == 0, "card spends exactly 1");
-    assert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
+    crate::kassert!(post_fire == 0, "card spends exactly 1");
+    crate::kassert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
 }
 // ===========================================================================
 // Pure formula harnesses (no invoke) — cheap, run first under the slot cap.
@@ -295,15 +360,18 @@ pub fn firepot_01_tick_formula() {
     let grants = spec::skills_ag::firepot_01_grants(pre_rest);
     let next = spec::skills_ag::firepot_01_next_rest(pre_rest);
     if pre_rest == 2 {
-        assert!(grants, "third idle turn grants");
-        assert!(next == 0, "counter resets");
+        crate::kassert!(grants, "third idle turn grants");
+        crate::kassert!(next == 0, "counter resets");
     } else {
-        assert!(!grants, "first/second idle turn grants nothing");
-        assert!(next == pre_rest + 1, "counter advances");
+        crate::kassert!(!grants, "first/second idle turn grants nothing");
+        crate::kassert!(next == pre_rest + 1, "counter advances");
     }
-    assert!(
-        grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest == 2,
-        "mutant disagrees on rest 0/1"
+    // Mutant is `pre+1 >= 2` (grants at rest 1 and 2); card is `pre+1 >= 3`
+    // (grants only at rest 2). They disagree exactly at rest 1.
+    kani::cover!(pre_rest == 1, "reachable disagreement (rest 1)");
+    crate::kassert!(
+        grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest != 1,
+        "mutant disagrees at rest 1"
     );
 }
 
@@ -315,12 +383,12 @@ pub fn band_01_filter_formula() {
     let price: i32 = kani::any();
     kani::assume(price >= 0 && price <= 5000);
     let applies = spec::skills_ag::band_01_applies(is_shop, price);
-    assert!(
+    crate::kassert!(
         applies == (is_shop || price <= 1200),
         "shop-street OR price <= 1200"
     );
     if !is_shop && price > 1200 && price <= 5000 {
-        assert!(
+        crate::kassert!(
             !spec::skills_ag::band_01_applies_mutant(is_shop, price) || price <= 1000,
             "mutant (<=1000) is strictly tighter"
         );

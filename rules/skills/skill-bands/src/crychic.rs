@@ -13,7 +13,7 @@
 //! can be played from hand. （2） is the hand-emptying reshuffle that turns the
 //! player into a MyGO or Ave Mujica player. （3） is a crystal on a 4→5 crossing.
 
-use card_sdk::abi::{state_key, CardPile, HookKind};
+use card_sdk::abi::{state_key, CardPile, GateKind, HookKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -32,13 +32,28 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
         On::Hook(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
         On::Hook(&[HookKind::CircleAffected], "", Some(in_lock), force_card),
+        // 「CRYCHIC variants may not use base character's exclusives」 -- a
+        // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
+        // is the generic own/base rule; this entry closes the base case for
+        // CRYCHIC variants. `value` = the card's owner is the actor's base
+        // character; `step` = the owner is the actor's own character.
+        On::Gate(&[GateKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
         On::Play("", Some(can_transform), transform_now),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
+    .silent(&[0]);
 
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
+/// The condition under which this band skill closes the exclusive-use gate.
+/// CRYCHIC variants may play their own exclusives (`step == 1`) but not the
+/// base character's (`value == 1 && step == 0`).
+pub const EXCLUSIVE_USE_DENIED: &str =
+    "band_is(actor, 'CRYCHIC') && value == 1 && step == 0";
+
+/// The answer of a closed exclusive-use gate (only run if a gate is ever
+/// raised; pure reads use the condition alone).
+fn refuse(_owner: i32) -> card_sdk::Asked {
+    ctx::trigger::set_cancelled();
+    Ok(())
 }
 
 /// （1）「任何时刻拥有手牌数大于等于6时」.
@@ -212,4 +227,57 @@ fn transform_now(player_id: i32) -> card_sdk::Asked {
     }
     at_turn_end(player_id)?;
     Ok(())
+}
+
+/// Roster band row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"CRYCHIC"#)
+    .short_name(r#"CRYCHIC"#)
+    .boot_art(r#"045"#)
+    .color(r#"#5AC7BE"#)
+    .skill(r#"美好的往日幻影"#)
+    .text(r#"CRYCHIC团技能：（1）你的手牌数没有上限，任何时刻拥有手牌数大于等于6时，你无法获得或失去资金，无法从手中打出任何牌且领取CiRCLE奖励时必须选择抽一张卡。（2）你的回合结束时，若你的抽牌堆与弃牌堆中都没有卡，移除此卡与你所有区域的所有“CRYCHIC”卡，将你剩余的所有手牌放入抽牌堆，并向抽牌堆中加入角色对应的自选“MyGO”或“Ave Mujica”卡至抽牌堆中总共有10张卡并洗切；获得角色对应的“MyGO”或“Ave Mujica”乐队技能卡，然后抽2张卡。（3）每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶 （上限10）；当此卡移除时，你获得X*500资金，X为此卡上的奇迹水晶数。"#)
+    .logo("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_drawn_kani(player_id: i32) -> card_sdk::Asked {
+    on_drawn(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn lock_pay_kani(player_id: i32) -> card_sdk::Asked {
+    lock_pay(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn force_card_kani(player_id: i32) -> card_sdk::Asked {
+    force_card(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn refuse_kani(player_id: i32) -> card_sdk::Asked {
+    refuse(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn transform_now_kani(player_id: i32) -> card_sdk::Asked {
+    transform_now(player_id)
 }

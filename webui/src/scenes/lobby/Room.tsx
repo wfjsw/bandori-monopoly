@@ -16,9 +16,9 @@ import { endSession, matchScene, OnlineSession, resumeOnline } from "../../game/
 import { api } from "../../net/api";
 import { fmtMsg, type Msg } from "../../i18n/msg";
 import { Btn } from "../../ui/Button";
-import { CommitChip } from "../../ui/CommitChip";
 import { Icon } from "../../ui/Icon";
 import { formula, showScoreWeights } from "../../ui/ScoreWeights";
+import { DEFAULT_CLOCK, showClockSettings } from "../../ui/ClockSettings";
 import { toast } from "../../ui/Toast";
 import { TopBar } from "../../ui/TopBar";
 import s from "./Room.module.css";
@@ -113,9 +113,9 @@ export function Room({ id }: { id: string }) {
         <b>{tr("room.idLabel", { id: r.id })}</b>
         <span>{tr("room.players", { n: r.members.length, max: r.maxPlayers, hint: r.ranked ? tr("lobby.playersHintRanked") : tr("solo.playersHint"), locked: r.locked ? tr("room.locked") : "" })}</span>
         {!sess.connected && <span className={s.warn}>{tr("room.reconnecting")}</span>}
-        {r.fair && <CommitChip commit={r.fair.commit} />}
         <span className={s.spacer} />
         <Btn size="small" icon="leaderboard" onClick={() => showScoreWeights(r.weights, isHost && !r.playing, async (w) => report(await api.weights(r.id, w)))}>{tr("solo.scoreRules")}</Btn>
+        <Btn size="small" icon="schedule" onClick={() => showClockSettings(r.clock ?? DEFAULT_CLOCK, isHost && !r.playing, async (c) => report(await api.setClock(r.id, c)))}>{tr("clock.title")}</Btn>
         <Btn size="small" icon="person_add" onClick={() => { void navigator.clipboard?.writeText(r.id); toast(tr("room.copied", { id: r.id })); }}>{tr("room.invite")}</Btn>
       </div>
       <div className={cx(s.grid, r.maxPlayers > 6 && s.dense)}>

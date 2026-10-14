@@ -11,7 +11,13 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const IDOL_AND_BAND: CardDef = CardDef::new(
     "Sumimi:兼顾偶像与乐队",
     &[On::Play("", Some(cant_play), idol_and_band)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"兼顾偶像与乐队"#)
+        .raw_name(r#"兼顾偶像与乐队"#)
+        .tags(&[])
+        .text(r#"当你本回合未进行过赎回操作时可打出，将你的资金重设为3000。（若你的资金为3000以上则无效果）"#)
+        .cell(r#"L2"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
 
 /// 规则书: 「当你本回合未进行过赎回操作时可打出」 -- the redeem step records
 /// itself and clears at the turn end, so this is just asking that record.
@@ -33,4 +39,11 @@ fn idol_and_band(player_id: i32) -> card_sdk::Asked {
     // C# H.Money(..., fixedAmount: true) -- the host's gain carries no such flag yet.
     ctx::gain(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")))?;
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn idol_and_band_kani(player_id: i32) -> card_sdk::Asked {
+    idol_and_band(player_id)
 }

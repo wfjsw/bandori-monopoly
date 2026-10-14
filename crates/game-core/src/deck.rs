@@ -37,17 +37,16 @@ pub fn can_use(data: &GameData, c: &CharacterData, card: &CardData) -> bool {
     cant_play(data, c, card).is_none()
 }
 
-/// Sumimi members may use each other's exclusive cards.
+/// Members of a band with the `shares_exclusives` trait (Sumimi) may use each
+/// other's exclusive cards.
 pub fn shares_exclusives(data: &GameData, c: &CharacterData, card: &CardData) -> bool {
-    c.band == "Sumimi"
+    data.band_shares_exclusives(c)
         && card.exclusive()
-        && data
-            .character(&card.owner)
-            .is_some_and(|o| o.band == "Sumimi")
+        && data.character(&card.owner).is_some_and(|o| o.band == c.band)
 }
 
 /// Cards `c` may use: exclusives first, then band cards, then general cards
-/// (each group in `cards.json` order).
+/// (each group in the roster's canonical deck-pool order).
 pub fn pool<'a>(data: &'a GameData, c: &CharacterData) -> Vec<&'a CardData> {
     let usable: Vec<&CardData> = data.cards.iter().filter(|k| can_use(data, c, k)).collect();
     let excl = usable.iter().copied().filter(|k| k.exclusive());

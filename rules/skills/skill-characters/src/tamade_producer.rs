@@ -28,12 +28,7 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[1, 2]);
-
-/// Only this player's own business -- the skill is theirs, not the table's.
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1, 2]);
 
 /// 「加盖房屋时半价」, or 「本回合加盖房屋变为免费」 when last turn built.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
@@ -59,4 +54,39 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, BUILT_LAST, state::get(player_id, BUILT_THIS));
     state::set(player_id, BUILT_THIS, 0);
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"珠手知由"#)
+    .display(r#"珠手知由"#)
+    .band(r#"RAISE A SUILEN"#)
+    .color(r#"#00BBFF"#)
+    .skill(r#"天才制作人"#)
+    .text(r#"加盖房屋时半价，如果你上回合进行过房屋加盖，本回合加盖房屋变为免费"#)
+    .cn_id(r#"035"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"演奏我的音乐吧"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_built_kani(player_id: i32) -> card_sdk::Asked {
+    on_built(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
 }

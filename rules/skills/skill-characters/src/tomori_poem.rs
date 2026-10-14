@@ -42,11 +42,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
 )
-    .legacy(&[(1, legacy_mine), (4, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// 「在此技能影响下的支付价格变为原本的一半」 -- only the payments of the
 /// player this skill moved.
@@ -168,4 +164,45 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     }
     ctx::card_settle_at(player_id, at, true);
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"高松灯"#)
+    .display(r#"高松灯"#)
+    .band(r#"MyGO!!!!!"#)
+    .color(r#"#77BBDD"#)
+    .skill(r#"诗超绊"#)
+    .text(r#"（1）每次[经过]任意RiNG时获得一个[火罐]（初始4，上限4）（2）当其他玩家的[移动终点]位于您前后5格内时可以选择使用4个火罐，在该玩家[触发结算]前强制将该玩家[传送]至自己所在的格子，然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的下回合结束时[触发结算]；在此技能影响下的支付价格变为原本的一半。（3）当你的[移动终点]位于其他玩家的前后五格内时可以选择使用1个火罐，在[触发结算]前将自己[传送]至那名玩家所在的格子。"#)
+    .cn_id(r#"036"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"不再迷茫"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
 }

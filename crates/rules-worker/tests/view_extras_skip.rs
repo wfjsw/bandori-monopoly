@@ -3,15 +3,24 @@
 
 use std::sync::Arc;
 
-use game_core::data::GameData;
+use game_core::data::{GameData, Roster};
 use game_core::engine::StubRules;
 use rules_worker::{handle, Ctx};
 use serde_json::{json, Value};
 
 fn ctx() -> Ctx {
+    // No ruleset in this harness: the three legacy JSON files are the bridge.
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    let data = GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-        .expect("game data");
+    let roster = Roster::from_fixture(&std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+    )
+    .expect("roster fixture"))
+    .expect("roster fixture parses");
+    let data = GameData::load(
+        |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
+        roster,
+    )
+    .expect("game data");
     Ctx::new(Arc::new(data), Arc::new(StubRules))
 }
 

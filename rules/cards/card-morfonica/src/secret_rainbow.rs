@@ -28,7 +28,13 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"秘密与青春的虹彩"#)
+        .raw_name(r#"秘密与青春的虹彩"#)
+        .tags(&[r#"反击"#])
+        .text(r#"[反击] （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。（2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#)
+        .cell(r#"G14"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
 
 // ============ NORMALIZED GRADE ORDINALS ================================
 // Ruling 2026-10-06: grades come from BanG Dream character facts, shipped as
@@ -56,7 +62,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
 // high school = 12; 长崎素世 is Tsukinomori 1st yr = 10.
 //
 // Keyed by the character's Chinese name (`ctx::character_is`); `cnId` is the
-// id from `data/characters.json`, the wiki page is the cited source.
+// id from the roster, the wiki page is the cited source.
 const GRADES: &[(&str, &str, i32)] = &[
     // (name, cnId, ordinal)
     ("户山香澄", "001", 12),   // Toyama_Kasumi, Hanasakigawa Hi 3rd
@@ -171,4 +177,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         );
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

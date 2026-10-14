@@ -34,7 +34,7 @@ Flags: `--only img,audio,fonts,text,live2d,data`, `--force`, `--jobs N`, `--prob
   "characters": { "001": { "stand": "...", "kv": "...", "sd": "...", "sdHappy": "...", "namePlate": "..." } },
   "bands":      { "Poppin' Party": "img/band/band_001.webp" },
   "rooms":      { "<band>": "img/room/..." },
-  "cards":      { "AG:Y.O.L.O": "img/card/....webp" },          // card id from cards.json
+  "cards":      { "AG:Y.O.L.O": "img/card/....webp" },          // card id from the roster (docs/ROSTER-TOOLS.md)
   "fx":         { "tapRing": "...", "tapLight": "...", "tapStar": "...", "tapSparkle": "..." },
   "scene":      { "img": { "<name>": "..." }, "audio": {} },
   "fonts":      { "<font name>": "fonts/....ttf" },

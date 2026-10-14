@@ -17,7 +17,13 @@ use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CRYSTAL_SWAP: CardDef =
-    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play("", None, crystal_swap)]);
+    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play("", None, crystal_swap)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"会被骗着买水晶的人"#)
+        .raw_name(r#"会被骗着买水晶的人"#)
+        .tags(&[])
+        .text(r#"将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上。"#)
+        .cell(r#"J13"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 /// One pool entry: a card instance on some player's field.
 ///
@@ -150,4 +156,11 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
             .player_id("dst", all[dst].player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn crystal_swap_kani(player_id: i32) -> card_sdk::Asked {
+    crystal_swap(player_id)
 }

@@ -54,7 +54,13 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
         On::Hook(&[HookKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"爱心义演"#)
+        .raw_name(r#"爱心义演"#)
+        .tags(&[])
+        .text(r#"打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）"#)
+        .cell(r#"F12"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // C# `CardCharityShow.Play` arms the two turn-long effects and logs.
@@ -182,4 +188,17 @@ fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PROP_TURN, 0);
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_after_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end_after(player_id)
 }

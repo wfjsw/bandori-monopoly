@@ -11,7 +11,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
+use card_sdk::abi::{ChainKind, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,7 +25,7 @@ const SLOT_USER: &str = "here_user";
 /// little-endian) because `set_slot` is i32-only. C# stores a card-database
 /// index; the bytes reconstruct the same id.
 const SLOT_HELD_LEN: &str = "here_held_len";
-/// Up to 64 bytes -- every `data/cards.json` id fits (max 52 bytes today).
+/// Up to 64 bytes -- every `the roster` id fits (max 52 bytes today).
 const HELD_SLOTS: usize = 16;
 
 /// Slot key for packed byte-chunk `i` (0..HELD_SLOTS).
@@ -94,18 +94,13 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed && slot('here_held_len') > 0", None, turn_start),
     ],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书（1）[反击]: 「当有人同一回合内打出两张卡时」 -- C# `t.Kind == "twoCards" && t.Seat != seat`.
-    if trigger::kind() != TriggerKind::TwoCards {
-        return false;
-    }
-    let them = trigger::player_id();
-    them != player_id && !ctx::player_out(them)
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Here the world"#)
+        .raw_name(r#"Here the world"#)
+        .tags(&[r#"反击"#])
+        .text(r#"（1）[反击] 当有人同一回合内打出两张卡时，将此卡放置于对方场上。（2）场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。"#)
+        .cell(r#"L7"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
 
 /// Residual the condition cannot express: the actor is still in the game
 /// (`actor != owner` is the `pre`).
@@ -188,4 +183,17 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
         ctx::draw(user, 1)?;
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
+    drew(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    turn_start(player_id)
 }

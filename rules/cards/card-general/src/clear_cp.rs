@@ -43,7 +43,16 @@ pub const CLEAR_CP: CardDef = CardDef::new(
         // the name check in the residual guard speaks for `counter::CP` only.
         On::Hook(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"该清CP了"#)
+        .raw_name(r#"该清CP了"#)
+        .tags(&[r#"手"#, r#"特"#])
+        .text(r#"[特]：
+（2）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
+[手]：
+在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。"#)
+        .cell(r#"A8"#)
+        .fields(&[("band", r#"通用"#), ("owner", "")]));
 
 const ID: &str = "通用:该清CP了";
 
@@ -249,4 +258,23 @@ fn on_cp_empty(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("clear_cp_empty")).player_id("who", player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_cp_kani(player_id: i32) -> card_sdk::Asked {
+    clear_cp(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn spread_kani(player_id: i32) -> card_sdk::Asked {
+    spread(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_cp_empty_kani(player_id: i32) -> card_sdk::Asked {
+    on_cp_empty(player_id)
 }

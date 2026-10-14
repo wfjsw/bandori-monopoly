@@ -9,8 +9,8 @@
 //!
 //! arm a turn-end undo of abnormal movement (counteraction or hand play).
 
-use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RAN_AS_USUAL: CardDef = CardDef::new(
@@ -39,22 +39,14 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         // an abnormal effect this turn (`at_end_something_to_undo`).
         On::AtEnd("owner.out == 0", Some(at_end_something_to_undo), at_end),
     ],
-)
-    .legacy(&[(1, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    if trigger::kind() != ChainKind::Effect {
-        return false;
-    }
-    if trigger::target() != player_id {
-        return false;
-    }
-    if !ctx::effect::has(TriggerKind::Abnormal) {
-        return false;
-    }
-    ctx::slot(player_id, "asUsualTurn") != ctx::turn_key()
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"像往常一样"#)
+        .raw_name(r#"(兰) 像往常一样"#)
+        .tags(&[])
+        .text(r#"（1）此卡可以当反击使用
+（2）受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。"#)
+        .cell(r#"C6"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", r#"美竹兰"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「此卡可以当反击使用」 -- the C# also plays it from hand (`Play`).
@@ -114,4 +106,17 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
 /// [`at_end`].
 fn at_end_something_to_undo(player_id: i32) -> bool {
     ctx::abnormal_count(player_id) > 0
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
 }

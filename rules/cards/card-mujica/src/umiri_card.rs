@@ -42,7 +42,15 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
             turn_end,
         ),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name(r#"（海铃）"#)
+        .tags(&[])
+        .text(r#"（1）将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。
+（2）使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。
+（3）当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。"#)
+        .cell(r#"J16"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", r#"八幡海铃"#)]));
 
 /// C# `CardUmiriCard.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -193,4 +201,11 @@ fn next_of(holder: i32) -> i32 {
         }
     }
     holder
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn umiri_card_kani(player_id: i32) -> card_sdk::Asked {
+    umiri_card(player_id)
 }

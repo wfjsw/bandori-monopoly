@@ -31,11 +31,7 @@ pub const SATO_RED: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(2, legacy_mine)]).silent(&[1]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1]);
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -80,4 +76,39 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     plan::add_extra_dice(x, 10, "与燃烧的红色一起驰骋");
     ctx::log(player_id, &Msg::new(key!("sato_red_dice")).i("n", x as i64));
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"佐藤益木"#)
+    .display(r#"佐藤益木"#)
+    .band(r#"RAISE A SUILEN"#)
+    .color(r#"#EEBB44"#)
+    .skill(r#"与燃烧的红色一起驰骋"#)
+    .text(r#"（1）每次[经过]“白雪学园”或“银河拉面馆”时获得1个[火罐]（初始0，上限2）（2）移动阶段前可使用X个[火罐]，本回合主要移动掷骰额外添加Xd10"#)
+    .cn_id(r#"033"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"CRUSH ON THE DRUM!!!"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }

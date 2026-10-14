@@ -8,7 +8,14 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const UNSTOPPABLE: CardDef =
-    CardDef::new("RAS:UNSTOPPABLE", &[On::Play("", Some(cant_play), unstoppable)]);
+    CardDef::new("RAS:UNSTOPPABLE", &[On::Play("", Some(cant_play), unstoppable)])
+        .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"UNSTOPPABLE"#)
+        .raw_name(r#"UNSTOPPABLE"#)
+        .tags(&[])
+        .text(r#"投掷1d6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。本次传送不触发结算，视为你的主要移动。且若骰点为1-3获得2000资金，若为4-6则获得1000资金。"#)
+        .cell(r#"H10"#)
+        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 /// C# `CardUnstoppable.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.
@@ -50,4 +57,11 @@ fn unstoppable(player_id: i32) -> card_sdk::Asked {
         )?;
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn unstoppable_kani(player_id: i32) -> card_sdk::Asked {
+    unstoppable(player_id)
 }

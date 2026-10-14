@@ -7,7 +7,7 @@
 //!
 //! just before you pay another player: take a [眩晕] layer instead of paying.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,32 +19,13 @@ pub const AKO_DARK: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// 规则书（1）[反击]: 「[反击] 当你即将向其他玩家支付资金时可打出此卡」
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书（1）[反击]: 「当你即将向其他玩家支付资金时」 -- C# `t.Kind == "pay" &&
-    // t.Pay.from == player && t.Pay.PayToOther`.
-    if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
-        return false;
-    }
-    // 规则书（1）[反击]: 「支付资金」 -- the `pay` effect entry. The causer's own
-    // `abnormal` also rides an `effect` link with `player_id` = the causer and
-    // `value` = its `AbKind` (> 0); that is not a payment and must not open this
-    // window.
-    if !ctx::effect::has(TriggerKind::Pay) {
-        return false;
-    }
-    // `t.Pay.PayToOther` -- the payee is another player (`t.Pay.to` = `trigger::target()`).
-    let to = trigger::target();
-    if to < 0 || to == player_id {
-        return false;
-    }
-    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already zeroed reads as
-    // `value() == 0`, so the >0 guard covers it (cf. `set_pay_amount(0)` = cancel).
-    trigger::value() > 0
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"黑暗大魔姬亚子"#)
+        .raw_name(r#"（亚子）黑暗大魔姬亚子"#)
+        .tags(&[r#"反击"#])
+        .text(r#"（1）[反击] 当你即将向其他玩家支付资金时可打出此卡，使自己获得一层[眩晕]。若此卡从手牌以外的地方打出，你抽一张卡。"#)
+        .cell(r#"E11"#)
+        .fields(&[("band", r#"Roselia"#), ("owner", r#"宇田川亚子"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[反击]: 「使自己获得一层[眩晕]」 -- C# `H.GiveStun(i, 1, i, "黑暗大魔姬亚子")`.
@@ -68,4 +49,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         );
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

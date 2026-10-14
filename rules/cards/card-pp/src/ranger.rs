@@ -21,7 +21,22 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RANGER: CardDef = CardDef::new(
     "PP:[衍生]魔法战队Pastel✽Ranger",
     &[On::Play("", Some(cant_play), ranger)],
-).props(&[(card_sdk::abi::prop::EST_COST, 2000)]);
+).props(&[(card_sdk::abi::prop::EST_COST, 2000)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"魔法战队Pastel✽Ranger"#)
+        .raw_name(r#"[衍生]魔法战队Pastel✽Ranger"#)
+        .derived(true)
+        .tags(&[r#"手"#, r#"特"#, r#"衍生"#])
+        .text(r#"[特]：
+仅在你的绝对距离30-“粉丝数量”格内有你拥有房的格子时可使用。
+[手]：
+根据场上你拥有的卡数量并依次进行以下操作，如果[共鸣]则视为数量加1：
+1. 数量至少为1则[获得]500资金；
+2. 数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]；
+3. 数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡；
+4. 数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；
+5.数量至少为6则抽1张卡。"#)
+        .cell(r#"D14"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -91,4 +106,11 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
         ctx::draw(player_id, 1)?;
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn ranger_kani(player_id: i32) -> card_sdk::Asked {
+    ranger(player_id)
 }

@@ -22,7 +22,7 @@ export const CardStand = memo(function CardStand({ flash }: { flash?: string }) 
   return (
     <div className={s.stand} aria-live="polite">
       {card ? (
-        <CardPreview id={card.id} note={card.note} className={cardStandClass} scrollable />
+        <CardPreview id={card.id} note={card.note} pills={card.pills} className={cardStandClass} scrollable />
       ) : (
         <div className={s.empty}>{tr("prompt.cardHover")}</div>
       )}

@@ -113,6 +113,12 @@ pub enum Fx {
         var: &'static str,
         fill: fn(&dyn CondView) -> Vec<(i64, i64, String)>,
     },
+    /// `f(seat: int, key: string) -> int` over a baked `(seat, key) -> v` map
+    /// (`state` is the only user). Missing = 0. Mirrors [`Fx::TileAttr`].
+    SeatStrInt {
+        var: &'static str,
+        fill: fn(&dyn CondView) -> Vec<(i64, String, i64)>,
+    },
 }
 
 /// One vocabulary name.
@@ -780,28 +786,7 @@ pub const VOCAB: &[Name] = &[
         get: NO_GET,
         fx: Fx::TileIn {
             var: "_tile_in",
-            fill: |v| {
-                let n = v.tile_count();
-                let seats = v.seat_count();
-                let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect();
-                for g in -2..=32 {
-                    classes.push(format!("color:{}", g));
-                }
-                let mut rows = Vec::new();
-                for t in 0..n {
-                    for p in std::iter::once(-1).chain(0..seats) {
-                        for c in &classes {
-                            if v.tile_in(p, t, c) {
-                                rows.push((p, t, c.clone()));
-                            }
-                        }
-                    }
-                }
-                rows
-            },
+            fill: |v| v.tile_in_rows(),
         },
         doc: "tile_in(p, t, class) -> ruleset class membership (buyable/shop/livehouse/color:<g>)",
     },
@@ -1010,6 +995,20 @@ pub const VOCAB: &[Name] = &[
             field: |v, s| v.targeted_count(s),
         },
         doc: "targeted_count(p) -> hostile targetings of p this turn",
+    },
+    // -- player-state lookup -------------------------------------------------
+    Name {
+        cel: "state",
+        aliases: &[],
+        flat: "state",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatStrInt {
+            var: "_state",
+            fill: |v| v.state_table(),
+        },
+        doc: "state(p, 'key') -> the seat's player-state value for that key ('stay' / 'stun' / 'stunStart' / 'exile' / 'unstoppable' / …); missing = 0",
     },
     // -- pure int predicate -------------------------------------------------
     Name {
@@ -1255,6 +1254,7 @@ pub enum Val {
 
 /// The eager function-table shape a [`Fx`] bakes from the view. The evaluator
 /// turns this into the hidden CEL variable (`_<var>`) the closure reads.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Table {
     /// seat -> int (also the `int -> int` case, keyed by the fill list).
     IntMap(Vec<(i64, i64)>),
@@ -1340,5 +1340,6 @@ pub fn fn_table(n: &Name, view: &dyn CondView) -> Option<(&'static str, Table)> 
         Fx::TileIs { var, fill } => Some((var, Table::StrIntList(fill(view)))),
         Fx::TileAttr { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
         Fx::TileIn { var, fill } => Some((var, Table::TripleSet(fill(view)))),
+        Fx::SeatStrInt { var, fill } => Some((var, Table::IntStrMap(fill(view)))),
     }
 }

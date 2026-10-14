@@ -9,6 +9,8 @@ use std::sync::Arc;
 use game_core::data::GameData;
 use game_core::engine::{Match, StubRules, SAVE_VERSION};
 use game_core::net::{NetMessage, RoomMember};
+mod common;
+use common::data_arc as data;
 use game_core::record::{
     body_check, compat, hash_save, parse_header, parse_record, seal, EngineStamp, Init, Input,
     MatchSetup, Origin, RecordedMatch, ReplayError, Replayer, RECORD_VERSION, STEP,
@@ -17,14 +19,6 @@ use game_core::rng::Rng;
 use game_core::scoring::ScoreWeights;
 use game_core::state::{BotMentality, MatchEvent};
 use game_core::MatchMode;
-
-fn data() -> Arc<GameData> {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(
-        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-            .unwrap(),
-    )
-}
 
 fn rules() -> Arc<dyn game_core::engine::CardRules> {
     Arc::new(StubRules)
@@ -60,6 +54,7 @@ fn setup(members: Vec<RoomMember>, seed: u64) -> MatchSetup {
         seed256: None,
         seed,
         weights: ScoreWeights::default(),
+            clock: None,
     }
 }
 
@@ -687,6 +682,7 @@ fn u64_and_f32_values_are_bit_exact() {
         seed: 1,
         seed256: None,
         weights: w,
+            clock: None,
     };
     let body = game_core::record::RecordBody {
         init: Init::Seed(setup.clone()),

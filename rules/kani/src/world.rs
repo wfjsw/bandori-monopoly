@@ -606,6 +606,7 @@ impl Mark {
 // World
 // ---------------------------------------------------------------------------
 
+#[derive(Clone)]
 pub struct World {
     // ---- players ----
     pub n_players: i32,
@@ -691,6 +692,9 @@ pub struct World {
     /// 真奈 join (CH-05): the seat a joiner's self-targeted effects are
     /// redirected to; `-1` outside a join (hostfns `join_redirect_target`).
     pub trig_join_redirect: i32,
+    /// When non-zero, `roll_dice` returns this value instead of a symbolic
+    /// face (harness control for dice-clause proofs; 0 = symbolic).
+    pub forced_roll: i32,
     /// A joiner used the redirect (hostfns `set_join_used`).
     pub trig_join_used: bool,
     /// `Trigger::main` — fired as part of the turn's [主要移动]?
@@ -806,6 +810,7 @@ impl World {
             trig_cancelled: false,
             trig_negate: false,
             trig_join_redirect: -1,
+            forced_roll: 0,
             trig_join_used: false,
             trig_main: false,
             trig_roll_source: ROLL_UNATTRIBUTED,
@@ -1151,10 +1156,15 @@ fn world_mut() -> &'static mut World {
     }
 }
 
+/// Read the global world. `inline(always)` so a host arm's closure is a
+/// direct field access — no `World` copy per host call (op-subset batch).
+#[inline(always)]
 pub fn with_world<R>(f: impl FnOnce(&World) -> R) -> R {
     f(world_mut())
 }
 
+/// Mutate the global world. See [`with_world`].
+#[inline(always)]
 pub fn with_world_mut<R>(f: impl FnOnce(&mut World) -> R) -> R {
     f(world_mut())
 }
@@ -1209,6 +1219,22 @@ pub fn snapshot() -> Snapshot {
         }
     })
 }
+
+/// Element-wise array equality — avoids `memcmp` (a 16-byte `[i32;4]::eq`
+/// unrolls past unwind 16). Class A on moca_01 / aao_01 / ex_quest_01.
+pub fn arr4_eq(a: [i32; 4], b: [i32; 4]) -> bool {
+    a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
+}
+/// Element-wise `[bool; 4]` equality (`Snapshot::out`).
+pub fn arr4b_eq(a: [bool; 4], b: [bool; 4]) -> bool {
+    a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
+}
+/// Element-wise `[bool; 8]` equality (`Snapshot::hand`).
+pub fn arr8b_eq(a: [bool; 8], b: [bool; 8]) -> bool {
+    a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
+        && a[4] == b[4] && a[5] == b[5] && a[6] == b[6] && a[7] == b[7]
+}
+
 #[cfg(test)]
 mod namemap_tests {
     use super::*;

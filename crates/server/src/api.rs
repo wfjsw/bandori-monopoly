@@ -104,6 +104,9 @@ pub struct CreateRoom {
     pub max_players: i32,
     pub password: String,
     pub weights: Option<ScoreWeights>,
+    /// Match clock / timer settings. Absent = defaults (the pre-settings
+    /// constants). Sanitized on the way in (`ClockSettings::sanitized`).
+    pub clock: Option<game_core::clock::ClockSettings>,
 }
 
 impl Default for CreateRoom {
@@ -114,6 +117,7 @@ impl Default for CreateRoom {
             max_players: 6,
             password: String::new(),
             weights: None,
+            clock: None,
         }
     }
 }
@@ -173,6 +177,7 @@ pub async fn create_room(
     let name = req.name.trim().to_string();
     let defaults = rules_weights(&s);
     let weights = req.weights.unwrap_or(defaults).sanitized(defaults);
+    let clock = req.clock.unwrap_or_default().sanitized();
     let engine = s.engine.clone();
     let store = s.store.clone();
     let bot_search = s.bots.is_some();
@@ -186,7 +191,7 @@ pub async fn create_room(
     // runtime like every other engine touch.
     let rid = id.clone();
     let (room, you) = tokio::task::spawn_blocking(move || {
-        let mut room = Room::new(rid, &name, req.ranked, req.max_players, &req.password, weights, engine, store);
+        let mut room = Room::new(rid, &name, req.ranked, req.max_players, &req.password, weights, clock, engine, store);
         // Advanced bots need the bot-service; without one they play as standard
         // (`docs/BOT.md` B5, `Room::start`).
         room.bot_search = bot_search;
@@ -325,6 +330,20 @@ pub async fn weights(
     let defaults = rules_weights(&s);
     let mut r = room.lock().unwrap();
     r.set_weights(me, w, defaults)?;
+    Ok(Json(r.info.clone()))
+}
+
+/// `POST /api/rooms/{id}/clock` -- host-only edit of the match clock / timer
+/// settings (the `weights` sibling). Body is `ClockSettings` (camelCase).
+pub async fn clock(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(c): Json<game_core::clock::ClockSettings>,
+) -> ApiResult<Json<RoomInfo>> {
+    let (room, me) = member_room(&s, &sess, &id)?;
+    let mut r = room.lock().unwrap();
+    r.set_clock(me, c)?;
     Ok(Json(r.info.clone()))
 }
 

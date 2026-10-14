@@ -419,7 +419,7 @@ pub fn noble_02_mark_ok(effects: &[Effect], tile: i32) -> bool {
 
 /// Unowned / self-owned / owner-out: no money moves; effect log empty.
 pub fn courage_03_post_ok(post: &Snapshot, pre: &Snapshot) -> bool {
-    post.money == pre.money
+    crate::world::arr4_eq(post.money, pre.money)
 }
 
 // ===========================================================================

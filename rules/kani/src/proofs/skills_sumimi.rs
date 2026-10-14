@@ -2,41 +2,72 @@
 //!
 //! Character skills (纯田真奈 / 三角初华（Sumimi）) and the band skill
 //! 人气偶像组合. Specs live in `crate::spec::skills_sumimi`.
+//!
+//! **ppcost pattern.** Concrete user seats (`n_players = 2`, user=0/1 for
+//! seat-symmetric clauses). Direct body call via the cfg(kani) `NAME_kani`
+//! wrapper. Per-harness host-op subset (`host_subset!`) — undeclared op
+//! FAILS loudly. Isolation assumes are named here and `kani::assume`d.
+//! Narration (`ctx::log`) is not part of the frame.
 
 use crate::host;
 use crate::intern;
 use crate::invoke;
 use crate::ir_fill;
 use crate::spec;
-use crate::world::{self, Effect, World, MAX_PLAYERS};
+use crate::world::{self, Effect, MAX_PLAYERS};
 
-const BAND: usize = crate::card_id!("skill:Sumimi:人气偶像组合");
-const MANA: &str = "skill:纯田真奈:甜甜圈爱好者";
+// ---------------------------------------------------------------------------
+// Per-body host-op subsets (ops the unmodified body reaches, including
+// isolated paths — if isolation breaks the proof FAILS loudly).
+// ---------------------------------------------------------------------------
 
-fn base_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
-        w.fire[p] = kani::any();
-        kani::assume(w.fire[p] >= 0 && w.fire[p] <= 8);
-        w.fire_max[p] = 2;
-        w.out[p] = false;
-    }
-    w
-}
+/// `skill:Sumimi:人气偶像组合` `bend` (PayMul) — crystal read + pay rewrite.
+crate::host_subset!(sumimi_bend_dispatch {
+    counter_self => arm_counter_self,
+    trig_target => arm_trig_target,
+    trig_value => arm_trig_value,
+    trig_set_pay_amount => arm_trig_set_pay_amount,
+});
 
-fn log_slice() -> ([Effect; 24], usize) {
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+/// `skill:Sumimi:人气偶像组合` `at_turn_end` (TurnEndBefore) — latch + crystal
+/// add/clear. Isolation: the entry guard (`slot('skill.sumimi.got') == 0`)
+/// never admits the add half — that LESS is pinned below; the body still
+/// declares every op the unmodified `at_turn_end` reaches on either half.
+crate::host_subset!(sumimi_turn_end_dispatch {
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    add_counter_self => arm_add_counter_self,
+    counter_self => arm_counter_self,
+    log | effect => arm_log,
+});
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+fn log_slice() -> ([Effect; world::MAX_LOG], usize) {
+    let logbuf: [Effect; world::MAX_LOG] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     (logbuf, log_n)
 }
 
-fn effects_of(logbuf: &[Effect; 24], log_n: usize) -> &[Effect] {
+fn effects_of(logbuf: &[Effect; world::MAX_LOG], log_n: usize) -> &[Effect] {
     &logbuf[..log_n]
+}
+
+/// Miracle crystals of the running instance (`counter_self` / `add_counter_self`
+/// path — `field_crystals(last_uid)`, which falls back to `self_crystals` when
+/// no `field[]` slot matches). The player-key map is a different store.
+fn self_crystals() -> i32 {
+    world::with_world(|w| w.field_crystals(w.last_uid))
+}
+
+fn set_self_crystals(v: i32) {
+    world::with_world_mut(|w| w.self_crystals = v);
+}
+
+fn crystals_key() -> intern::NameId {
+    intern::intern("crystals")
 }
 
 // ===========================================================================
@@ -46,80 +77,95 @@ fn effects_of(logbuf: &[Effect; 24], log_n: usize) -> &[Effect] {
 // Convention: `crystals()` is the running instance's counter (host: keyed on
 // `trig_player`); the body admits when `trigger.target == owner` (money
 // flowing to this player — 「向其他人收费」).
+// Seat-symmetric (the owner is the collector).
 // ===========================================================================
 
-/// C-SUMIMI-band-02 iff: rent amount += crystals * 100.
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn band_02_rent_bonus_iff() {
-    let mut w = base_world();
-    let owner: i32 = kani::any();
-    kani::assume(owner >= 0 && owner < w.n_players);
-    // The skill owner is the collector; crystals live on that instance.
-    w.trig_player = owner;
-    w.trig_target = owner;
+/// In-place 2-seat world for the PayMul rewrite. Crystals live on the
+/// running instance (`self_crystals`).
+fn band_02_world(owner: i32, crystals: i32, pre_amount: i32) {
+    debug_assert!(owner == 0 || owner == 1);
+    host::install_backend(sumimi_bend_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| {
+        w.trig_player = owner;
+        w.trig_target = owner;
+        w.trig_value = pre_amount;
+        w.pay_amount = pre_amount;
+        w.out[owner as usize] = false;
+    });
+    set_self_crystals(crystals);
+}
+
+/// Shared iff at a **concrete** owner seat.
+fn band_02_rent_bonus_iff_at(owner: i32) {
+    debug_assert!(owner == 0 || owner == 1);
     let pre_amount: i32 = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 10_000);
-    w.pay_amount = pre_amount;
-    w.trig_value = pre_amount;
-
     let crystals: i32 = kani::any();
     kani::assume(crystals >= 0 && crystals <= 8);
-    let ckey = intern::intern("crystals");
-    w.key_set(owner, ckey, crystals);
+    band_02_world(owner, crystals, pre_amount);
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let crystals = world::with_world(|ww| ww.key_get(owner, ckey));
+    let pre = world::snapshot();
+    let crystals = self_crystals();
 
     kani::cover!(crystals > 0, "crystals > 0 (bonus applies)");
     kani::cover!(crystals == 0, "crystals == 0 (no-op)");
 
-    invoke::unwrap_done(invoke::hook_only_idx(BAND, "PayMul", owner));
+    // DIRECT body call (ppcost).
+    invoke::unwrap_done(skill_bands::sumimi::bend_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
     let expected = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
-    assert!(
+    crate::kassert!(
         spec::sumimi::band_rent_bonus_log_ok(effects, crystals, expected),
         "C-SUMIMI-band-02: exactly one SetPayAmount to pre + crystals*100 (or empty at 0)"
     );
-    assert!(
+    crate::kassert!(
         post.pay_amount == expected || crystals <= 0,
         "C-SUMIMI-band-02: post pay_amount must be pre + crystals*100"
     );
     if crystals <= 0 {
-        assert!(post.pay_amount == pre_amount, "no crystals: amount untouched");
+        crate::kassert!(post.pay_amount == pre_amount, "no crystals: amount untouched");
     }
     // Frame: money of every seat untouched at rewrite time.
     for p in 0..MAX_PLAYERS {
-        assert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
     }
 }
 
+/// Iff at owner seat 0.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
+pub fn band_02_rent_bonus_iff() {
+    band_02_rent_bonus_iff_at(0);
+}
+
+/// Same iff at owner seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn band_02_user1_rent_bonus_iff() {
+    band_02_rent_bonus_iff_at(1);
+}
+
+/// Mutant companion: +100 total is not what the card does.
+#[kani::proof]
+#[kani::unwind(32)]
 pub fn band_02_rent_bonus_mutant_is_detected() {
-    let mut w = base_world();
-    let owner: i32 = kani::any();
-    kani::assume(owner >= 0 && owner < w.n_players);
-    w.trig_player = owner;
-    w.trig_target = owner;
+    let owner = 0i32;
     let pre_amount: i32 = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 10_000);
-    w.pay_amount = pre_amount;
-    w.trig_value = pre_amount;
-    let ckey = intern::intern("crystals");
-    w.key_set(owner, ckey, 3);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only_idx(BAND, "PayMul", owner));
+    band_02_world(owner, 3, pre_amount);
+    invoke::unwrap_done(skill_bands::sumimi::bend_kani(owner));
     let post = world::snapshot();
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
     kani::cover!(post.pay_amount != wrong, "disagreement live");
-    assert!(
+    crate::kassert!(
         post.pay_amount != wrong,
         "mutant: bonus is +100 per crystal, not +100 total"
     );
@@ -130,37 +176,46 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
 // Entry guard: `"actor == owner && slot('skill.sumimi.got') == 0"` — the
 // clear half. The add half (「添加1个奇迹水晶」) is gated OUT by that same
 // string (it only admits GOT == 0); see the unit table for the FAILS row.
+// Seat-symmetric (the owner's turn-end).
 // ===========================================================================
 
-/// C-SUMIMI-band-01 clear half + add-half guard finding.
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn band_01_clear_iff() {
-    let mut w = base_world();
-    let owner: i32 = kani::any();
-    kani::assume(owner >= 0 && owner < w.n_players);
-    w.trig_player = owner;
-    w.turn_player = owner;
+/// In-place 2-seat world for the TurnEnd body. Latch `got` + crystals on the
+/// running instance.
+fn band_01_world(owner: i32, got: i32, crystals: i32) {
+    debug_assert!(owner == 0 || owner == 1);
+    host::install_backend(sumimi_turn_end_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    let got_key = intern::intern("skill.sumimi.got");
+    world::with_world_mut(|w| {
+        w.trig_player = owner;
+        w.turn_player = owner;
+        w.out[owner as usize] = false;
+        w.key_set(owner, got_key, got);
+    });
+    set_self_crystals(crystals);
+}
+
+/// Shared iff body at a **concrete** owner seat (clear half).
+fn band_01_clear_iff_at(owner: i32) {
+    debug_assert!(owner == 0 || owner == 1);
     let got: i32 = kani::any();
     kani::assume(got == 0 || got == 1);
-    let got_key = intern::intern("skill.sumimi.got");
-    w.key_set(owner, got_key, got);
     let crystals: i32 = kani::any();
     kani::assume(crystals >= 0 && crystals <= 8);
-    let ckey = intern::intern("crystals");
-    w.key_set(owner, ckey, crystals);
+    band_01_world(owner, got, crystals);
 
     let gid = crate::guard_id!("actor == owner && slot('skill.sumimi.got') == 0");
     let ov = ir_fill::TriggerOverlay::default();
-    let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, -1, &ov);
-    let admitted = crate::guard!(gid, &ctx);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let crystals = world::with_world(|ww| ww.key_get(owner, ckey));
-    let got = world::with_world(|ww| ww.key_get(owner, got_key));
+    let admitted = world::with_world(|w| {
+        let ctx = ir_fill::fill_for_guard(w, gid, owner, 0, true, -1, &ov);
+        crate::guard!(gid, &ctx)
+    });
+    let crystals = self_crystals();
+    let got = world::with_world(|ww| ww.key_get(owner, intern::intern("skill.sumimi.got")));
 
     kani::cover!(admitted && crystals > 0, "clear half with crystals");
     kani::cover!(admitted && crystals == 0, "clear half with no crystals");
@@ -170,45 +225,58 @@ pub fn band_01_clear_iff() {
     // only GOT == 0, so the add half can never run. This assert is the
     // plain FAILING proof of that LESS.
     if got != 0 {
-        assert!(
+        crate::kassert!(
             admitted,
             "C-SUMIMI-band-01 add half: book demands a turn-end add when money was gained; the entry guard never admits"
         );
         return;
     }
 
-    assert!(admitted, "clear half must be admitted when GOT == 0");
-    invoke::unwrap_done(invoke::hook_only_idx(BAND, "TurnEndBefore", owner));
+    crate::kassert!(admitted, "clear half must be admitted when GOT == 0");
+    let pre = world::snapshot();
+    // DIRECT body call (ppcost).
+    invoke::unwrap_done(skill_bands::sumimi::at_turn_end_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    assert!(
-        spec::sumimi::band_crystal_clear_ok(effects, owner, ckey.0, crystals),
+    crate::kassert!(
+        spec::sumimi::band_crystal_clear_ok(effects, owner, crystals_key().0, crystals),
         "C-SUMIMI-band-01 clear: remove every crystal when the latch is clear"
     );
-    let _ = pre;
-    let _ = post;
+    // Frame: money / pos / fire untouched by the crystal clear.
+    for p in 0..MAX_PLAYERS {
+        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.fire[p] == pre.fire[p], "frame: fire");
+    }
 }
 
+/// Clear-half iff at owner seat 0.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
+pub fn band_01_clear_iff() {
+    band_01_clear_iff_at(0);
+}
+
+/// Same iff at owner seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn band_01_user1_clear_iff() {
+    band_01_clear_iff_at(1);
+}
+
+/// Mutant companion: clear removes one crystal, not all.
+#[kani::proof]
+#[kani::unwind(32)]
 pub fn band_01_clear_mutant_is_detected() {
-    let mut w = base_world();
-    let owner: i32 = kani::any();
-    kani::assume(owner >= 0 && owner < w.n_players);
-    w.trig_player = owner;
-    w.turn_player = owner;
-    let got_key = intern::intern("skill.sumimi.got");
-    w.key_set(owner, got_key, 0);
-    let ckey = intern::intern("crystals");
-    w.key_set(owner, ckey, 3);
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only_idx(BAND, "TurnEndBefore", owner));
+    let owner = 0i32;
+    band_01_world(owner, 0, 3);
+    invoke::unwrap_done(skill_bands::sumimi::at_turn_end_kani(owner));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
-    let wrong = spec::sumimi::band_crystal_clear_ok_mutant(effects, owner, ckey.0, 3);
-    assert!(!wrong, "mutant: clear removes all crystals, not one");
+    let wrong = spec::sumimi::band_crystal_clear_ok_mutant(effects, owner, crystals_key().0, 3);
+    crate::kassert!(!wrong, "mutant: clear removes all crystals, not one");
 }
 
 // ===========================================================================
@@ -227,8 +295,9 @@ pub fn band_01_clear_mutant_is_detected() {
 
 /// C-SUMIMI-mana-02 structure (declined offer): no effects.
 /// The accept path is BLOCKED-HOST (`rent_of` for the open 「原本收费」).
+/// Pure-formula (no body call).
 #[kani::proof]
-#[kani::unwind(16)]
+#[kani::unwind(8)]
 pub fn mana_02_decline_is_empty() {
     // Determined part of the offer: a refusal leaves the world untouched.
     // The body's `ask_yes` false path is `return Ok(())` with no effects.
@@ -236,7 +305,7 @@ pub fn mana_02_decline_is_empty() {
     // accept amount); this harness documents the declined-side contract and
     // is a pure-spec cover of `mana_shop_pay_declined`.
     let empty: [Effect; 0] = [];
-    assert!(
+    crate::kassert!(
         spec::skills_sumimi::mana_shop_pay_declined(&empty),
         "declined offer must be a no-op"
     );
@@ -247,6 +316,7 @@ pub fn mana_02_decline_is_empty() {
 // 「你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出。」
 // The gate is the playability query on a character exclusive card (not a
 // body effect). Covered here as a pure predicate on the character match.
+// Pure-formula (no body).
 // ===========================================================================
 
 #[kani::proof]
@@ -255,19 +325,19 @@ pub fn band_03_exclusive_gate_predicate() {
     let user_is_owner: bool = kani::any();
     kani::cover!(user_is_owner, "matching character — play allowed");
     kani::cover!(!user_is_owner, "mismatch — play denied");
-    assert!(
+    crate::kassert!(
         spec::skills_sumimi::band_exclusive_play_allowed(user_is_owner) == user_is_owner,
         "C-SUMIMI-band-03: play iff the character matches the exclusive's owner"
     );
     // Mutant: the dual must be distinguishable.
-    assert!(
+    crate::kassert!(
         spec::skills_sumimi::band_exclusive_play_allowed(user_is_owner) != !user_is_owner,
         "mutant: gate is identity, not negation"
     );
 }
 
-/// Keep `MANA` referenced so the id is greppable next to the BLOCKED-HOST row.
+/// Keep the mana skill id greppable next to the BLOCKED-HOST row.
 #[allow(dead_code)]
 fn mana_id() -> &'static str {
-    MANA
+    "skill:纯田真奈:甜甜圈爱好者"
 }

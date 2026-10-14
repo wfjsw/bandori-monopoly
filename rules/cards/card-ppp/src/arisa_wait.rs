@@ -23,7 +23,17 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
         On::Play("", None, arisa_wait),
         On::Hook(&[HookKind::EventAfter], "", Some(event_after_guard), event_after),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"等等等一下"#)
+        .raw_name(r#"（有咲）等等等一下"#)
+        .tags(&[r#"手"#, r#"持续"#])
+        .text(r#"[手]：
+将此卡放置在[使用者]的[场地]。
+[持续]：
+（1）任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。
+（2）事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。"#)
+        .cell(r#"B16"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", r#"市谷有咲"#)]));
 
 fn arisa_wait(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]。」
@@ -63,4 +73,17 @@ fn event_after(player_id: i32) -> card_sdk::Asked {
             .i("n", ctx::crystals() as i64),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn arisa_wait_kani(player_id: i32) -> card_sdk::Asked {
+    arisa_wait(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn event_after_kani(player_id: i32) -> card_sdk::Asked {
+    event_after(player_id)
 }

@@ -130,6 +130,7 @@ pub fn eval_node(nodes: &[Node], root: u16, ctx: &IrCtx) -> Val {
                 34 => FnId::TileIs,
                 35 => FnId::TileAttr,
                 36 => FnId::TileIn,
+                37 => FnId::State,
                 _ => return Val::Err,
             };
             let nargs = n.b as usize;

@@ -2,7 +2,7 @@
 //!
 //! Owned by unit 1. Append to [`CLAUSES`]; do not edit other areas.
 //!
-//! Sources: live sheet (`docs/rulebook/cards.json`, `data/characters.json` /
+//! Sources: live sheet (`docs/rulebook/cards.json`, `the roster` /
 //! `bands.json`) > `docs/rulebook/rulebook-doc.md`. `rulebook.txt` is not
 //! authoritative. TEST-FINDINGS §6 rulings unless superseded by newer sheet
 //! text.

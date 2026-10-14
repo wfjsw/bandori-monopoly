@@ -1,4 +1,5 @@
-//! Static game data (`data/*.json`) and the lookups [`GameData`] provides.
+//! Static game data (`data/*.json`, minus the roster) and the lookups
+//! [`GameData`] provides.
 //!
 //! Field names and defaults mirror the JSON the data files already carry:
 //! missing fields take `#[serde(default)]`, and unknown keys (e.g. the
@@ -8,6 +9,14 @@
 //!
 //! `game-core` never touches the filesystem: [`GameData::load`] takes a reader so the
 //! server (fs) and the browser (fetch) can both supply the files.
+//!
+//! **Roster (ABI v63).** `cards` / `characters` / `bands` no longer come from
+//! `data/{cards,characters,bands}.json`. They are authored beside the rule code
+//! and handed over as [`Roster`] (ruleset `bandori_metadata` ->
+//! [`crate::data::Roster`]). [`DATA_FILES`] covers only the remaining tables
+//! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
+//! roster is covered by the ruleset hash (`EngineStamp::ruleset_sha256`),
+//! which already names the modules the metadata lives in.
 
 use std::collections::HashMap;
 
@@ -176,7 +185,7 @@ pub fn status_rule_ids() -> &'static [&'static str] {
     ]
 }
 
-/// One card row from `cards.json`.
+/// One card row of the roster (was `cards.json`; now ruleset metadata).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CardData {
@@ -213,7 +222,7 @@ impl CardData {
     }
 }
 
-/// One playable character from `characters.json`.
+/// One playable character of the roster (was `characters.json`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CharacterData {
@@ -228,6 +237,11 @@ pub struct CharacterData {
     pub costume: String,
     pub exclusive_cards: Vec<String>,
     pub preset: Vec<String>,
+    /// The character this one is an alternate form of (`高松灯（CRYCHIC）` ->
+    /// `高松灯`); empty when it is a base character.
+    pub variant_of: String,
+    /// Short label for compact displays of a variant (`c`).
+    pub variant_tag: String,
 }
 
 impl CharacterData {
@@ -241,7 +255,7 @@ impl CharacterData {
     }
 }
 
-/// One band from `bands.json` (skill text + branding).
+/// One band of the roster (was `bands.json`; skill text + branding).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct BandData {
@@ -251,6 +265,71 @@ pub struct BandData {
     pub skill: String,
     pub text: String,
     pub logo: String,
+    /// Band-skill trait: members may carry each other's exclusive cards in a
+    /// starting deck. Deck-legal only -- the in-match play gate is the
+    /// band-skill card's `ExclusiveUse` entry (or the generic own/base rule).
+    pub shares_exclusives: bool,
+    /// Boot-screen art id for a home character of this band; empty = default.
+    pub boot_art: String,
+}
+
+/// The roster half of [`GameData`] -- cards / characters / bands -- handed over
+/// by the ruleset host (ABI v63 `bandori_metadata`, converted in `game-rules`).
+/// `game-core` stays free of the card crates; this is the plain struct of
+/// vectors it already iterates in roster order (the Rust ordinal table).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Roster {
+    pub cards: Vec<CardData>,
+    pub characters: Vec<CharacterData>,
+    pub bands: Vec<BandData>,
+}
+
+impl Roster {
+    /// Parse the generated test fixture (`crates/game-core/tests/fixtures/
+    /// roster.json`, written by `cargo run -p rules-native --example
+    /// dump_roster -- --fixture`). One JSON object `{cards, characters, bands}`
+    /// in the same camelCase row shapes the roster metadata carries. Tests of
+    /// crates that have no ruleset (game-core / game-rules / bot-core / server)
+    /// load this instead of depending on the card crates.
+    pub fn from_fixture(text: &str) -> Result<Self, String> {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            #[serde(default)]
+            cards: Vec<CardData>,
+            #[serde(default)]
+            characters: Vec<CharacterData>,
+            #[serde(default)]
+            bands: Vec<BandData>,
+        }
+        let f: Fixture = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+            .map_err(|e| format!("roster fixture: {e}"))?;
+        Ok(Roster {
+            cards: f.cards,
+            characters: f.characters,
+            bands: f.bands,
+        })
+    }
+
+    /// Serialize back to the fixture document (`{cards, characters, bands}`),
+    /// the byte-stable form `cargo run -p rules-native --example dump_roster --
+    /// --fixture` writes. The rules-native gate compares this against the
+    /// checked-in fixture so the two can never drift.
+    pub fn to_fixture_json(&self) -> String {
+        #[derive(serde::Serialize)]
+        struct Fixture<'a> {
+            cards: &'a [CardData],
+            characters: &'a [CharacterData],
+            bands: &'a [BandData],
+        }
+        let mut s = serde_json::to_string_pretty(&Fixture {
+            cards: &self.cards,
+            characters: &self.characters,
+            bands: &self.bands,
+        })
+        .expect("roster fixture serializes");
+        s.push('\n');
+        s
+    }
 }
 
 /// One event card from `events.json`.
@@ -264,8 +343,8 @@ pub struct EventData {
     pub cell: String,
 }
 
-/// `band` value of the cards every character may take. A data key from
-/// `cards.json` (the data set is Chinese), not display text.
+/// `band` value of the cards every character may take. A roster band key (the
+/// data set is Chinese), not display text.
 pub const GENERAL_BAND: &str = "通用";
 
 /// Character → school tile-name map.
@@ -282,13 +361,6 @@ pub struct SchoolsData {
 pub struct SchoolEntry {
     pub character: String,
     pub school: String,
-}
-
-/// The song-card id list (the data file's `cards` array).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SongCardsData {
-    pub cards: Vec<String>,
 }
 
 /// Home-screen line tags per character.
@@ -365,24 +437,6 @@ struct BoardFile {
 }
 
 #[derive(Deserialize)]
-struct CardFile {
-    #[serde(default)]
-    cards: Vec<CardData>,
-}
-
-#[derive(Deserialize)]
-struct CharacterFile {
-    #[serde(default)]
-    characters: Vec<CharacterData>,
-}
-
-#[derive(Deserialize)]
-struct BandFile {
-    #[serde(default)]
-    bands: Vec<BandData>,
-}
-
-#[derive(Deserialize)]
 struct EventFile {
     #[serde(default)]
     events: Vec<EventData>,
@@ -422,7 +476,6 @@ pub struct GameData {
     pub bands: Vec<BandData>,
     pub events: Vec<EventData>,
     pub schools: SchoolsData,
-    pub song_cards: SongCardsData,
     pub home_lines: HomeLinesData,
     pub voice_lines: VoiceLinesData,
     pub match_rules: MatchRulesData,
@@ -442,22 +495,24 @@ pub struct GameData {
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`.
-pub const DATA_FILES: [&str; 12] = [
+/// Data files, as named in `web/data/`. The roster (`cards` / `characters` /
+/// `bands`) is **not** here: it comes from the ruleset (ABI v63
+/// `bandori_metadata`) or, in tests, from the generated fixture
+/// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
+/// `skill_simple.json` and the card display overlay stay because they are
+/// display-only and the client merges them.
+pub const DATA_FILES: [&str; 8] = [
     "board.json",
-    "cards.json",
-    "characters.json",
-    "bands.json",
     "events.json",
     "schools.json",
-    "song_cards.json",
     "home_lines.json",
     "voice_lines.json",
     "match_rules.json",
     "rules.txt",
-    // Hand-written simplified skill bodies, for the client's skill-text
-    // setting. Display-only: the engine reads the originals in `characters.json`
-    // / `bands.json`.
+    // Hand-written simplified skill bodies (and the card `counterReason`
+    // overlay), for the client's skill-text setting and the [反击] prompt
+    // reason. Display-only: the engine reads the full skill text from the
+    // roster.
     "skill_simple.json",
 ];
 
@@ -486,7 +541,7 @@ impl GameData {
     }
 
     /// Is `id` a **band** skill rule (`skill:<band>:<skill>` for some band in
-    /// `bands.json`), as against a character skill (`skill:<character>:<skill>`)?
+    /// roster bands), as against a character skill (`skill:<character>:<skill>`)?
     /// This is what stamps `FieldCard::band_skill` at placement, and through it
     /// what 「乐队卡 / 团卡」 crystal reads and writes land on.
     pub fn is_band_skill(&self, id: &str) -> bool {
@@ -495,18 +550,26 @@ impl GameData {
             .any(|b| !b.skill.is_empty() && skill_id(&b.name, &b.skill) == id)
     }
 
-    /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`.
-    pub fn load(mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Self, String> {
+    /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`,
+    /// plus the [`Roster`] the ruleset host supplies (ABI v63 `bandori_metadata`
+    /// -> `game_rules::roster::roster_from_meta`, or `rules_native::roster()`),
+    /// or, in tests, [`Roster::from_fixture`]. There is no JSON-roster path
+    /// left in the runtime.
+    ///
+    /// The deck book / strategy book are loaded here so every entry point
+    /// shares that path.
+    pub fn load(
+        mut read: impl FnMut(&str) -> Result<String, String>,
+        roster: Roster,
+    ) -> Result<Self, String> {
         let mut get = |f: &str| read(f).map_err(|e| format!("{f}: {e}"));
         let mut d = GameData {
             tiles: parse::<BoardFile>("board.json", &get("board.json")?)?.tiles,
-            cards: parse::<CardFile>("cards.json", &get("cards.json")?)?.cards,
-            characters: parse::<CharacterFile>("characters.json", &get("characters.json")?)?
-                .characters,
-            bands: parse::<BandFile>("bands.json", &get("bands.json")?)?.bands,
+            cards: roster.cards,
+            characters: roster.characters,
+            bands: roster.bands,
             events: parse::<EventFile>("events.json", &get("events.json")?)?.events,
             schools: parse("schools.json", &get("schools.json")?)?,
-            song_cards: parse("song_cards.json", &get("song_cards.json")?)?,
             home_lines: parse("home_lines.json", &get("home_lines.json")?)?,
             voice_lines: parse("voice_lines.json", &get("voice_lines.json")?)?,
             match_rules: parse("match_rules.json", &get("match_rules.json")?)?,
@@ -546,14 +609,19 @@ impl GameData {
         self.characters.iter().find(|c| c.name == name)
     }
 
-    /// The base character of a variant (`X（CRYCHIC）` -> `X`): the longest other
-    /// character name this one starts with. Itself when it is not a variant.
+    /// The base character of a variant (`variant_of`). Itself when it is not
+    /// a variant.
     pub fn base_character<'a>(&'a self, name: &'a str) -> &'a str {
-        self.characters
-            .iter()
-            .filter(|c| c.name != name && name.starts_with(c.name.as_str()))
-            .max_by_key(|c| c.name.len())
-            .map_or(name, |c| c.name.as_str())
+        self.character(name)
+            .map(|c| c.variant_of.as_str())
+            .filter(|b| !b.is_empty())
+            .unwrap_or(name)
+    }
+
+    /// Whether `c`'s band lets its members carry each other's exclusive cards
+    /// in a starting deck (deck-building only; see [`crate::deck`]).
+    pub fn band_shares_exclusives(&self, c: &CharacterData) -> bool {
+        self.band(&c.band).is_some_and(|b| b.shares_exclusives)
     }
 
     /// Band by `name`, first match.
@@ -574,11 +642,6 @@ impl GameData {
             .find(|s| s.character == character)
             .map(|s| s.school.as_str())
             .unwrap_or(&self.schools.fallback)
-    }
-
-    /// Whether `card` is a song card, matched by title.
-    pub fn is_song_card(&self, card: &CardData) -> bool {
-        self.song_cards.cards.iter().any(|t| t == card.title())
     }
 
     /// Short name on the home screen.

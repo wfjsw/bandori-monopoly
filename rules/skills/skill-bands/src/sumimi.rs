@@ -26,11 +26,7 @@ pub const SUMIMI: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEndBefore], "actor == owner && slot('skill.sumimi.got') == 0", None, at_turn_end),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 /// （1）'s latch.
 fn after_pay(player_id: i32) -> card_sdk::Asked {
@@ -76,10 +72,44 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 // （3）「你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出」 --
-// a hand-composition rule (two characters' exclusive cards may be held) plus a
-// play gate that reads the *character* the card belongs to.
+// a deck-composition rule (two characters' exclusive cards may be carried) plus
+// the generic in-match play gate. The carry half is **data** (the roster band row
+// `sharesExclusives`, `deck::shares_exclusives`) -- deck building has no rules
+// handle (docs/GUARDS.md §ExclusiveUse). The play half is the engine's generic
+// own/base exclusive rule (「角色卡为对应角色」, with a variant counted as its
+// base); this card needs no `ExclusiveUse` entry of its own.
 // TODO(规则书)（3）: 「你可携带两个角色的专属卡牌」 -- carrying two characters'
-//   exclusive cards is a deck/hand building rule the engine has no form for
-//   (there is no per-card 「this belongs to character X」 field to filter the hand
-//   on, and no hand-slot rule). The play half -- 「仅有在你的角色卡为对应角色时
-//   才可打出」 -- would be `ctx::character_is` in each exclusive card's own gate.
+//   exclusive cards is a deck/hand building rule. The deck half is data
+//   (`sharesExclusives`); a hand-composition filter (holding a second
+//   character's exclusive without it being in the starting deck) still has no
+//   form.
+
+/// Roster band row for this band skill (ABI v63).
+pub const BAND: ruleset_core::roster::BandDef =
+ruleset_core::roster::BandDef::new(r#"Sumimi"#)
+    .short_name(r#"Sumimi"#)
+    .boot_art("")
+    .color(r#"#FFFF66"#)
+    .skill(r#"人气偶像组合"#)
+    .text(r#"（1）若你在一回合内从其他玩家处获得过资金，你的回合结束时为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶。（2）此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。（3）你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出。"#)
+    .logo("")
+    .shares_exclusives(true);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
+    after_pay(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn bend_kani(player_id: i32) -> card_sdk::Asked {
+    bend(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}

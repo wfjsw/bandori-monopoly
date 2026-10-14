@@ -64,16 +64,12 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(1, legacy_mine), (3, legacy_mine)]).silent(&[4]);
+    .silent(&[4]);
 
 /// （3）「获得一个火罐（上限1）」 -- no 「初始N」, so initial is 0 and the cap is 1.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id, 0, 1);
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// 「当其他玩家移动[经过]您时」 -- another player's step onto **my** tile.
@@ -173,4 +169,33 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 fn on_move_end(player_id: i32) -> card_sdk::Asked {
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"凑友希那"#)
+    .display(r#"凑友希那"#)
+    .band(r#"Roselia"#)
+    .color(r#"#881188"#)
+    .skill(r#"来练习吧"#)
+    .text(r#"（1）初始获得“RiNG 4”格子，从“RiNG 4”格子开始游戏，首次经过CiRCLE不获得经过奖励（2）如果移动时[经过]了RiNG，可以在[经过]的第一个RiNG停止移动（3）移动终点为任意“RiNG”时，获得一个火罐（上限1）。任何时刻当你不位于RiNG时，失去所有的火罐。当其他玩家移动[经过]您时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算。"#)
+    .cn_id(r#"021"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"louder"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }

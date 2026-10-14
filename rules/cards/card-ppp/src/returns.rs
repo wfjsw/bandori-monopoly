@@ -35,6 +35,9 @@ const ID: &str = "PPP:Returns";
 /// Index into `SKILLS` of the currently borrowed band, on the Returns instance
 /// (`FieldCard::props`) -- scoped to this card, not the player's state map.
 const PROP_BAND: &str = "returns.band";
+/// Seat the borrowed band card was copied from, on the Returns instance -- the
+/// board reads it to say whose card the owner holds. -1 = nothing borrowed.
+const PROP_FROM: &str = "returns.from";
 
 pub const RETURNS: CardDef = CardDef::new(
     "PPP:Returns",
@@ -70,10 +73,23 @@ pub const RETURNS: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
+    .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Returns"#)
+        .raw_name(r#"Returns"#)
+        .tags(&[r#"手"#, r#"持续"#, r#"特"#])
+        .text(r#"[特]：
+（1）如果此卡被加入初始卡组则卡组卡数添加8。
+（2）游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个其他存活玩家的团卡。
+[持续]：
+（1）无效[拥有者]Poppin' Party团卡的（4）效果。
+（2）[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]。
+（3）使用因此卡获得的团卡的主动效果时需要支付1星星贴纸。
+（4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。"#)
+        .cell(r#"B5"#)
+        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
-/// first, then band, then general) -- a snapshot of `data/cards.json`; Returns is
+/// first, then band, then general) -- a snapshot of the roster; Returns is
 /// a Poppin' Party band card so only that band's pool can hold it. The exclusive
 /// entry is the player's own character card (`exclusive_of`).
 const BAND_POOL: [&str; 10] = [
@@ -202,6 +218,7 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     // -1 = no borrow yet (the prop's defined default is 0, which is a valid
     // `SKILLS` index -- Poppin' Party -- so it cannot serve as the sentinel).
     ctx::set_prop(PROP_BAND, -1);
+    ctx::set_prop(PROP_FROM, -1);
     // [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果」 -- arm the token
     // `skill-bands::poppin` reads to skip its no-build-on-main-settle rule.
     ctx::set_tok(player_id, "returns.noBuild4", 1);
@@ -245,10 +262,6 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("returns_sticker")));
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 const BANDS: [&str; 12] = [
@@ -409,10 +422,24 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     }
     ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
     ctx::set_prop(PROP_BAND, idx);
+    ctx::set_prop(PROP_FROM, who);
     ctx::set_tok(player_id, "returns.copied", 1);
     ctx::log(
         player_id,
         &Msg::new(key!("returns_got_band")).card("card", want),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn deck_before_game_kani(player_id: i32) -> card_sdk::Asked {
+    deck_before_game(player_id)
+}
+
+/// cfg(kani) direct-call wrapper (ppcost body-id pattern).
+#[cfg(kani)]
+pub fn on_played_kani(player_id: i32) -> card_sdk::Asked {
+    on_played(player_id)
 }

@@ -83,16 +83,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (2, legacy_mine)]).silent(&[2, 3]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
-
-/// G4: kept as a callable alias for in-body uses of the old guard.
-fn mine(player_id: i32) -> bool {
-    legacy_mine(player_id)
-}
+    .silent(&[2, 3]);
 
 /// Residual guard for [`at_turn_start`]: 状态2 (the cap write must run) or
 /// the memory latch is clear (the 状态2 offer). Dynamic key.
@@ -143,7 +134,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- settling on one
 /// sets the latch. `actor == owner` and the three named tiles are the condition.
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    debug_assert!(mine(player_id));
+    debug_assert!(ctx::trigger::player_id() == player_id);
     debug_assert!(MEMORY.iter().any(|&n| ctx::trigger::tile() == ctx::tile_named(n)));
     state::set(player_id, DIRTY, 1);
     state::set(player_id, MEMO_DIRTY, 1);
@@ -194,4 +185,28 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("uika_imprisoned_moved")).i("n", d as i64),
     );
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"三角初华"#)
+    .display(r#"三角初华"#)
+    .band(r#"Ave Mujica"#)
+    .color(r#"#BB9955"#)
+    .skill(r#"Imprisoned XII"#)
+    .text(r#"状态1：移动改为10+1d10，每当你经过CiRCLE的回合结束后，若你自从上一次经过CiRCLE后未在任何[回忆地块]（小豆岛，武道馆，旧古河庭园）触发结算则可在你的下回合开始时进入状态2。若满足前述条件，你可在你经过CiRCLE的回合结束后立刻获得一个新的回合。
+状态2：（火罐上限3）获得[不可阻挡]，并且在此状态下主动移动经过任何玩家都将向其收取200资金，每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）"#)
+    .cn_id("")
+    .art(r#"337"#)
+    .costume(r#"337_event_297_story_01"#)
+    .exclusive_cards(&[r#"我，无畏悲伤"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
 }

@@ -1,6 +1,6 @@
 //! `Sumimi:#L11` -- C# `CardL11` (MatchHost.cs:11592-11620): place with 2 miracle
 //!
-//! 规则书（data/cards.json, id `Sumimi:#L11`）:
+//! 规则书（the roster, id `Sumimi:#L11`）:
 //! > 将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。
 //!
 //! crystals that stand in for band-skill crystal removal. Not in
@@ -15,8 +15,13 @@ pub const L11: CardDef = CardDef::new(
         On::Play("", None, l11),
         On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') <= 0", None, sweep),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name("")
+        .tags(&[])
+        .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每当乐队技能需要移除[奇迹水晶]时，可移除此卡上的一个[奇迹水晶]代替，此卡[奇迹水晶]数为0时放入弃牌堆。"#)
+        .cell(r#"L11"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
 
 fn l11(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡置于自身场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 2)`.
@@ -38,12 +43,21 @@ fn l11(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
-
 /// 「此卡[奇迹水晶]数为0时放入弃牌堆」.
 fn sweep(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn l11_kani(player_id: i32) -> card_sdk::Asked {
+    l11(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn sweep_kani(player_id: i32) -> card_sdk::Asked {
+    sweep(player_id)
 }

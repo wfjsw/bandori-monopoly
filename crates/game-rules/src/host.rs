@@ -6,7 +6,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use card_sdk::abi::{
-    self, export, AbKind, ManifestOn, OnKind, PromptKind, ABI_VERSION, IMPORT_MODULE,
+    self, export, AbKind, ManifestOn, ManifestTileText, OnKind, PromptKind, ABI_VERSION,
+    IMPORT_MODULE,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -63,6 +64,10 @@ pub mod bot_cost {
 /// every machine.
 pub const DEFAULT_FUEL: u64 = 5_000_000;
 
+/// Fuel for the one-off `bandori_metadata` export, which builds the whole
+/// roster (every card, character and band) and so dwarfs a single effect run.
+const METADATA_FUEL: u64 = 500_000_000;
+
 /// Maximum `play_card` nesting (card A plays B plays C ...).
 pub const MAX_NESTING: u32 = 8;
 
@@ -80,6 +85,10 @@ pub struct CardInfo {
     /// serialization stay deterministic.
     #[serde(default)]
     pub props: std::collections::BTreeMap<String, i32>,
+    /// Tile texts this card's entries speak (`CardDef::texts`, ABI v59), in
+    /// declaration order. See [`ManifestTileText`].
+    #[serde(default)]
+    pub texts: Vec<ManifestTileText>,
 }
 
 impl CardInfo {
@@ -540,6 +549,85 @@ pub(crate) struct Inner {
     /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
     /// can never fire at a kind.
     hook_mask: Vec<u128>,
+    /// Roster metadata (ABI v63) gathered from every module's
+    /// `bandori_metadata`. Empty on pre-v63 / meta-less sets.
+    metadata: card_sdk::meta::MetaDoc,
+    /// The CEL-only gates (`TriggerKind::{ActGate, PayGate, MoveGate,
+    /// ExclusiveUse}`): per gate kind, the `(card, entry)` pairs whose
+    /// condition closes it. Built once at load so a gate read walks only these.
+    gates: [Vec<(i32, i32)>; GATE_KINDS.len()],
+}
+
+/// The gate kinds answered natively from conditions alone (see
+/// [`gate_open_over`]). Index = position in this array.
+pub const GATE_KINDS: [crate::TriggerKind; 4] = [
+    crate::TriggerKind::ActGate,
+    crate::TriggerKind::PayGate,
+    crate::TriggerKind::MoveGate,
+    crate::TriggerKind::ExclusiveUse,
+];
+
+fn gate_index(kind: crate::TriggerKind) -> Option<usize> {
+    GATE_KINDS.iter().position(|&k| k == kind)
+}
+
+/// `(card, entry)` of every gate entry answering `kind`, found by scanning the
+/// manifest. The uncached form of [`Inner::gates`].
+pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i32, i32)> {
+    let mut out = Vec::new();
+    for (ci, c) in cards.iter().enumerate() {
+        for (ei, o) in c.on.iter().enumerate() {
+            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+                out.push((ci as i32, ei as i32));
+            }
+        }
+    }
+    out
+}
+
+/// A status gate entry is **CEL-only**: its condition is the whole answer, so
+/// the host can evaluate it natively in a pure read. A residual wasm guard (or
+/// a missing condition) would be invisible to that read -- refuse at load.
+pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
+    for c in cards {
+        for (ei, o) in c.on.iter().enumerate() {
+            if o.kind != OnKind::Gate as i32 {
+                continue;
+            }
+            if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k as i32 == t)) {
+                continue;
+            }
+            if o.has_guard || o.pre.is_none() {
+                return Err(RuleError::Load(format!(
+                    "{}/{ei}: an ActGate/PayGate/MoveGate/ExclusiveUse entry must be CEL-only (a condition, no residual guard)",
+                    c.id
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Is the gate open? Closed when any entry's condition holds against `win`
+/// (`actor` = the asked player). Pure and native: no wasm, no mutation.
+pub fn gate_open_over<'a>(
+    entries: impl IntoIterator<Item = (i32, i32)>,
+    pre: impl Fn(i32, i32) -> Option<&'a crate::cond_pre::CompiledPre>,
+    win: &rules_cond::WindowCtx,
+) -> bool {
+    let mut scope = None;
+    for (c, e) in entries {
+        let Some(p) = pre(c, e) else { continue };
+        let sc = scope.get_or_insert_with(|| crate::cond_pre::window_scope(win));
+        let cand = rules_cond::CandidateCtx {
+            owner: win.actor,
+            ..Default::default()
+        };
+        if crate::cond_pre::condition_allows(Some(p), Some(sc), &cand) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Builds a [`Ruleset`] from any number of card modules (normally one per card).
@@ -548,6 +636,9 @@ pub struct RulesetBuilder {
     modules: Vec<LoadedModule>,
     cards: Vec<CardInfo>,
     slots: Vec<Slot>,
+    /// Roster metadata rows gathered from every module's `bandori_metadata`
+    /// (ABI v63). Merged in [`RulesetBuilder::build`].
+    metadata: Vec<card_sdk::meta::MetaRow>,
     /// Lean compiled condition blobs (`Cond::to_bytes(false)`), keyed by
     /// `(card id, entry index)`. The runtime-only (browser) path fills these
     /// from the ruleset index instead of compiling -- see
@@ -559,8 +650,21 @@ impl RulesetBuilder {
     /// Compile and validate one card module (ABI version, exports, manifest) and add
     /// its cards. Returns the module's SHA-256.
     pub fn add(&mut self, wasm: &[u8]) -> Result<String, RuleError> {
-        let (module, cards) = inspect(&self.engine, wasm)?;
-        let sha256 = hex_sha256(wasm);
+        self.add_inner(wasm, None)
+    }
+
+    /// [`Self::add`] with the module's lowercase-hex SHA-256 supplied by the
+    /// caller, who computed it over exactly `wasm` (the browser has a native
+    /// `crypto.subtle.digest`; hashing 0.5 MB in wasm cost ~30 ms of main
+    /// thread). The hash names the module in the ruleset identity, so a wrong
+    /// one would mislabel the set -- only pass a digest you just computed.
+    pub fn add_hashed(&mut self, wasm: &[u8], sha256: String) -> Result<String, RuleError> {
+        self.add_inner(wasm, Some(sha256))
+    }
+
+    fn add_inner(&mut self, wasm: &[u8], sha256: Option<String>) -> Result<String, RuleError> {
+        let (module, cards, meta) = inspect(&self.engine, wasm)?;
+        let sha256 = sha256.unwrap_or_else(|| hex_sha256(wasm));
         let m = self.modules.len();
         for (local, c) in cards.into_iter().enumerate() {
             self.slots.push(Slot {
@@ -569,6 +673,7 @@ impl RulesetBuilder {
             });
             self.cards.push(c);
         }
+        self.metadata.extend(meta.rows);
         self.modules.push(LoadedModule {
             module,
             sha256: sha256.clone(),
@@ -613,6 +718,8 @@ impl RulesetBuilder {
             counteract_mask.push(cm);
             hook_mask.push(hm);
         }
+        validate_cel_only_gates(&self.cards)?;
+        let gates = GATE_KINDS.map(|k| gate_entries_scan(&self.cards, k));
         // Compile every condition once (docs/GUARDS.md §4.3). Fail-closed: a
         // parse / unknown-var / float error is a build error, never "treat as
         // true". On the runtime-only (browser) path a source `pre` without a
@@ -676,6 +783,15 @@ impl RulesetBuilder {
             parts.extend(cond_lines);
         }
         let sha256 = hex_sha256(parts.join("\n").as_bytes());
+        // Keep the metadata rows sorted the way the export produced them
+        // (`kind`, `ordinal`) so a multi-module merge stays deterministic.
+        let mut metadata = self.metadata;
+        metadata.sort_by(|a, b| {
+            a.kind
+                .cmp(&b.kind)
+                .then(a.ordinal.cmp(&b.ordinal))
+                .then(a.id.cmp(&b.id))
+        });
         Ok(Ruleset {
             inner: Arc::new(Inner {
                 id: next_inner_id(),
@@ -689,6 +805,8 @@ impl RulesetBuilder {
                 declared,
                 counteract_mask,
                 hook_mask,
+                gates,
+                metadata: card_sdk::meta::MetaDoc { rows: metadata },
             }),
             fuel: DEFAULT_FUEL,
         })
@@ -770,6 +888,7 @@ impl Ruleset {
             modules: vec![],
             cards: vec![],
             slots: vec![],
+            metadata: vec![],
             precompiled: HashMap::new(),
         }
     }
@@ -779,6 +898,40 @@ impl Ruleset {
         let mut b = Self::builder();
         b.add(wasm)?;
         b.build()
+    }
+
+    /// Load every module listed in `<dir>/index.json` (tools/build-ruleset.sh)
+    /// without binding to a [`game_core::data::GameData`]. `Ok(None)` when the
+    /// directory or index is missing -- the caller falls back to no card
+    /// effects. Hosts use this to take [`Self::roster`] *before* loading the
+    /// game tables (the tables' roster comes from the ruleset).
+    pub fn load_dir(dir: &std::path::Path) -> Result<Option<Self>, RuleError> {
+        let index = dir.join("index.json");
+        let Ok(text) = std::fs::read_to_string(&index) else {
+            return Ok(None);
+        };
+        let v: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| RuleError::Load(format!("bad index: {e}")))?;
+        let mut builder = Self::builder();
+        let mut any = false;
+        for m in v["modules"]
+            .as_array()
+            .map(|a| a.iter())
+            .into_iter()
+            .flatten()
+        {
+            let file = m["file"]
+                .as_str()
+                .ok_or_else(|| RuleError::Load("module entry has no file".into()))?;
+            let bytes = std::fs::read(dir.join(file))
+                .map_err(|e| RuleError::Load(format!("{file}: {e}")))?;
+            builder.add(&bytes)?;
+            any = true;
+        }
+        if !any {
+            return Ok(None);
+        }
+        Ok(Some(builder.build()?))
     }
 
     /// Override the per-run fuel limit.
@@ -805,6 +958,20 @@ impl Ruleset {
 
     pub fn cards(&self) -> &[CardInfo] {
         &self.inner.cards
+    }
+
+    /// Roster metadata (ABI v63): every card / character / band row the
+    /// modules declared via `CardDef::meta` / the skill crates' tables.
+    /// Sorted by `(kind, ordinal)` -- the data-file order. Convert with
+    /// [`crate::roster::roster_from_meta`] to build a `GameData`.
+    pub fn metadata(&self) -> &card_sdk::meta::MetaDoc {
+        &self.inner.metadata
+    }
+
+    /// The same rows as [`Self::metadata`], as the game's `Roster` (ready for
+    /// [`game_core::data::GameData::load`]).
+    pub fn roster(&self) -> game_core::data::Roster {
+        crate::roster::roster_from_meta(self.metadata())
     }
 
     /// Does any card in the set declare an entry at this kind? The cheap
@@ -883,7 +1050,7 @@ impl Ruleset {
                 .is_some_and(|m| (m >> v) & 1 != 0)
     }
 
-    /// Handle for a card id from `cards.json`, e.g. `"AG:Y.O.L.O"`.
+    /// Handle for a card id from the roster, e.g. `"AG:Y.O.L.O"`.
     pub fn card(&self, id: &str) -> Option<i32> {
         self.inner.by_id.get(id).copied()
     }
@@ -895,6 +1062,14 @@ impl Ruleset {
         self.card(id)
             .and_then(|i| self.inner.cards.get(i as usize))
             .map_or_else(Default::default, |c| c.props.clone())
+    }
+
+    /// The card rule's declared **tile texts** (`CardDef::texts`), see
+    /// [`CardInfo::texts`]. Empty when the card declares none.
+    pub fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
+        self.card(id)
+            .and_then(|i| self.inner.cards.get(i as usize))
+            .map_or_else(Default::default, |c| c.texts.clone())
     }
 
     /// One declared property; `0` when the card does not declare it (the
@@ -951,7 +1126,7 @@ impl Ruleset {
             call,
             Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
         ) {
-            let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+            let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
             let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
             if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {
                 return Ok(Outcome::Done(world.clone()));
@@ -987,15 +1162,12 @@ impl Ruleset {
         cand: &crate::cond_pre::CandidateCtx,
         answers: &[i32],
     ) -> Result<bool, RuleError> {
-        let info = &self.inner.cards[card as usize];
         let pre = self
             .inner
             .pre
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        #[cfg(feature = "guard-audit")]
-        let audit = self.legacy_probe(world, card, entry, player_id);
         let admitted = if self.guard_is_none(card, entry) {
             crate::cond_pre::admits_pre(pre, Some(scope), cand)
         } else {
@@ -1018,16 +1190,6 @@ impl Ruleset {
             });
             matches!(asked, Ok(true))
         };
-        #[cfg(feature = "guard-audit")]
-        if let Some(legacy) = audit {
-            crate::cond_pre::legacy_audit(
-                &info.id,
-                entry,
-                Some(legacy),
-                admitted,
-                &trigger_dump(&world.trigger()),
-            );
-        }
         Ok(admitted)
     }
 
@@ -1062,7 +1224,7 @@ impl Ruleset {
         if entries.is_empty() {
             return Ok(None);
         }
-        let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+        let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
         // `card.placed` must answer for the **running instance** (the guest's
         // `ctx::is_placed()`): a game-start hook also fires for the same id
         // while it sits in a pile / hand (`uid = -1`).
@@ -1150,7 +1312,7 @@ impl Ruleset {
         card: i32,
         player_id: i32,
     ) -> Result<bool, RuleError> {
-        let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+        let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
         self.can_counteract_scoped(world, card, player_id, &scope)
     }
 
@@ -1181,8 +1343,6 @@ impl Ruleset {
             &self.inner.cards[card as usize].id,
             false,
         );
-        #[cfg(feature = "guard-audit")]
-        let audit = self.legacy_probe(world, card, entry, player_id);
         let ok = if self.guard_is_none(card, entry) {
             // G4 deleted the residual: the condition alone decides.
             crate::cond_pre::admits_pre(pre, Some(scope), &cand)
@@ -1198,16 +1358,6 @@ impl Ruleset {
                 }
             })?
         };
-        #[cfg(feature = "guard-audit")]
-        if let Some(legacy) = audit {
-            crate::cond_pre::legacy_audit(
-                &self.inner.cards[card as usize].id,
-                entry,
-                Some(legacy),
-                ok,
-                &trigger_dump(&world.trigger()),
-            );
-        }
         Ok(ok)
     }
 
@@ -1259,37 +1409,6 @@ impl Ruleset {
             .is_some_and(|o| !o.has_guard)
     }
 
-    /// G3 migration audit: ask the guest for the entry's `legacy_*` guard
-    /// (`export::OP_LEGACY_GUARD`). `None` when the entry has no legacy copy.
-    #[cfg(feature = "guard-audit")]
-    fn legacy_probe<W: CardWorld>(
-        &self,
-        world: &W,
-        card: i32,
-        entry: i32,
-        player_id: i32,
-    ) -> Option<bool> {
-        let info = self.inner.cards.get(card as usize)?;
-        if !info.on.get(entry as usize)?.has_legacy {
-            return None;
-        }
-        let mut store = self.store(world.clone(), &[]).ok()?;
-        match crate::inline::with_no_inline(|| {
-            call_card(
-                &self.inner,
-                &mut store,
-                card,
-                entry,
-                export::OP_LEGACY_GUARD,
-                player_id,
-            )
-        }) {
-            // rt.rs returns -1 for "no legacy copy".
-            Ok(v) if v >= 0 => Some(v != 0),
-            _ => None,
-        }
-    }
-
     /// `Card.WhyNot` -- the reason the card cannot be played now, or `None` when
     /// it can. Also a pure query on a throwaway copy (a prompting guard reports
     /// [`RuleError::GuardPrompted`]). This is the `Play` **gate**
@@ -1325,7 +1444,7 @@ impl Ruleset {
             let pre = self.pre_at(card, entry);
             let scope;
             let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
-                scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(
+                scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
                     world, player_id,
                 ));
                 Some(&scope)
@@ -1382,7 +1501,7 @@ impl Ruleset {
         // `cant_play` hot path (ai_step / view extras ask it per hand card).
         let scope;
         let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
-            scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(
+            scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window_ambient(
                 world, player_id,
             ));
             Some(&scope)
@@ -1395,8 +1514,6 @@ impl Ruleset {
             &self.inner.cards[card as usize].id,
             false,
         );
-        #[cfg(feature = "guard-audit")]
-        let audit = self.legacy_probe(world, card, entry, player_id);
         let why = if self.guard_is_none(card, entry) {
             // G4 deleted the gate: the condition alone decides. A rejecting
             // condition is still a block; an admitting one is playable.
@@ -1430,16 +1547,6 @@ impl Ruleset {
                 },
             )?
         };
-        #[cfg(feature = "guard-audit")]
-        if let Some(legacy) = audit {
-            crate::cond_pre::legacy_audit(
-                &self.inner.cards[card as usize].id,
-                entry,
-                Some(legacy),
-                why.is_none(),
-                &format!("cant_play player={player_id}"),
-            );
-        }
         Ok(why)
     }
 
@@ -1469,25 +1576,6 @@ impl Ruleset {
         );
         Ok(store)
     }
-}
-
-/// One-line dump of a trigger for the G3 audit panic message.
-fn trigger_dump(t: &crate::Trigger) -> String {
-    format!(
-        "kind={:?} actor={} target={} tile={} value={} step={} by={} pay_is_rent={} move_roll={:?} move_kind={:?} main={} abnormal={}",
-        t.kind,
-        t.player_id,
-        t.target,
-        t.tile,
-        t.value,
-        t.step,
-        t.by_card.unwrap_or(-1),
-        t.pay.map(|p| p.is_rent).unwrap_or(false),
-        t.mv.as_ref().and_then(|m| m.roll),
-        t.mv.as_ref().map(|m| m.kind),
-        t.main,
-        matches!(t.kind, crate::TriggerKind::Abnormal),
-    )
 }
 
 fn trap(e: Error) -> RuleError {
@@ -1551,6 +1639,9 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     fn card(&self, id: &str) -> Option<i32>;
     fn card_props(&self, id: &str) -> std::collections::BTreeMap<String, i32>;
     fn card_prop(&self, id: &str, key: &str) -> i32;
+    /// Tile texts this card's entries speak (`CardDef::texts`), in declaration
+    /// order. Empty when the card declares none.
+    fn card_texts(&self, id: &str) -> Vec<ManifestTileText>;
     fn declares(&self, kind: crate::TriggerKind) -> bool;
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
     /// a [反击] at `kind`? Default scans the entry table; [`Ruleset`] uses the
@@ -1610,6 +1701,19 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// the whole-set declared bitmask.
     fn declares_buy(&self) -> bool {
         BUY_HOOK_KINDS.iter().any(|&k| self.declares(k))
+    }
+    /// A CEL-only status gate (`ActGate` / `PayGate` / `MoveGate`): `true` =
+    /// open. Default scans the manifest; [`Ruleset`] overrides with its
+    /// load-time list.
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        if !self.declares(kind) {
+            return true;
+        }
+        gate_open_over(
+            gate_entries_scan(self.cards(), kind),
+            |c, e| self.pre(c, e),
+            win,
+        )
     }
     /// Condition pre-filter (BOT-RESEARCH.md #1): `Some(entry)` when the
     /// card's [反击] at this window's kind exists and its condition admits.
@@ -1722,6 +1826,9 @@ impl CardModules for Ruleset {
     fn card_prop(&self, id: &str, key: &str) -> i32 {
         Ruleset::card_prop(self, id, key)
     }
+    fn card_texts(&self, id: &str) -> Vec<ManifestTileText> {
+        Ruleset::card_texts(self, id)
+    }
     fn declares(&self, kind: crate::TriggerKind) -> bool {
         Ruleset::declares(self, kind)
     }
@@ -1755,6 +1862,14 @@ impl CardModules for Ruleset {
     }
     fn play_gate_vanishes(&self, card: i32) -> bool {
         Ruleset::play_gate_vanishes(self, card)
+    }
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        let Some(i) = gate_index(kind) else { return true };
+        gate_open_over(
+            self.inner.gates[i].iter().copied(),
+            |c, e| CardModules::pre(self, c, e),
+            win,
+        )
     }
     fn sha256(&self) -> Option<&str> {
         Some(Ruleset::sha256(self))
@@ -1854,11 +1969,36 @@ pub enum CallOut {
 pub trait RulesHandle: Clone + Send + Sync + 'static {
     fn by_id(&self, id: &str) -> Option<i32>;
     fn card(&self, i: i32) -> Option<&CardInfo>;
+    /// One declared static property of the card rule `id`
+    /// (`CardInfo::props`); `0` when the card does not declare it (the
+    /// defined default). Mirrors [`crate::Ruleset::card_prop`] /
+    /// `game_core::engine::CardRules::card_prop`.
+    fn card_prop(&self, id: &str, key: &str) -> i32 {
+        self.by_id(id)
+            .and_then(|i| self.card(i))
+            .and_then(|c| c.props.get(key).copied())
+            .unwrap_or(0)
+    }
     /// The compiled condition of card `i`'s `entry` (docs/GUARDS.md G0), if
     /// any. Default `None` (no condition) so a stub handle need not care.
     fn pre(&self, i: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
         let _ = (i, entry);
         None
+    }
+    /// A CEL-only status gate, `true` = open (see [`CardModules::gate_open`]).
+    /// Default scans the card table through [`Self::card`].
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        let mut entries = Vec::new();
+        let mut i = 0;
+        while let Some(c) = self.card(i) {
+            for (ei, o) in c.on.iter().enumerate() {
+                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+                    entries.push((i, ei as i32));
+                }
+            }
+            i += 1;
+        }
+        gate_open_over(entries, |c, e| self.pre(c, e), win)
     }
 }
 
@@ -1871,6 +2011,14 @@ impl RulesHandle for Arc<Inner> {
     }
     fn pre(&self, i: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
         self.pre.get(i as usize)?.get(entry as usize)?.as_ref()
+    }
+    fn gate_open(&self, kind: crate::TriggerKind, win: &rules_cond::WindowCtx) -> bool {
+        let Some(i) = gate_index(kind) else { return true };
+        gate_open_over(
+            self.gates[i].iter().copied(),
+            |c, e| RulesHandle::pre(self, c, e),
+            win,
+        )
     }
 }
 
@@ -2160,8 +2308,12 @@ fn call_card_msg<W: CardWorld>(
     Ok(Some(engine_msg(m)))
 }
 
-/// Validate one module and read its manifest.
-fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), RuleError> {
+/// Validate one module and read its manifest. Also reads the optional
+/// `bandori_metadata` roster blob (ABI v63) when the module exports it.
+fn inspect(
+    engine: &Engine,
+    wasm: &[u8],
+) -> Result<(Module, Vec<CardInfo>, card_sdk::meta::MetaDoc), RuleError> {
     let load = |m: String| RuleError::Load(m);
     let module = be::compile(engine, wasm).map_err(load)?;
 
@@ -2197,6 +2349,7 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
             id: e.id,
             on: e.on,
             props: e.props.into_iter().collect(),
+            texts: e.texts,
         })
         .collect();
     if cards.is_empty() {
@@ -2210,7 +2363,21 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
     if !has_func(&inst, &mut store, export::ON) {
         return Err(load(format!("missing export {}", export::ON)));
     }
-    Ok((module, cards))
+    // Roster metadata (ABI v63) is optional -- absent on pre-v63 modules and
+    // on fixtures that declare no `.meta()`. Built only when this is called.
+    let mut meta = card_sdk::meta::MetaDoc::default();
+    if has_func(&inst, &mut store, export::METADATA) {
+        set_fuel(&mut store, METADATA_FUEL).map_err(load)?;
+        let packed = inst
+            .get_typed_func::<(), i64>(&mut store, export::METADATA)
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(|e| load(format!("{}: {e}", export::METADATA)))?;
+        let (ptr, len) = abi::unpack(packed);
+        let bytes =
+            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        meta = crate::roster::decode_metadata(&bytes).map_err(load)?;
+    }
+    Ok((module, cards, meta))
 }
 
 /// The abnormal [反击] gate, from inside a card run: on replay the logged
@@ -3185,6 +3352,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "card_text_mentions",
         |mut c: C<W>, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
             hostfns::card_text_mentions(&mut c, cp, cl, np, nl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_prop",
+        |mut c: C<W>, ip: i32, il: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            hostfns::card_prop(&mut c, ip, il, kp, kl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4876,5 +5050,41 @@ impl CardWorld for NullWorld {
     }
     fn in_band(&self, _: i32, _: &str) -> i32 {
         0
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    fn card(on: Vec<ManifestOn>) -> CardInfo {
+        CardInfo {
+            id: "t:gate".into(),
+            on,
+            props: Default::default(),
+            texts: Default::default(),
+        }
+    }
+
+    fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
+        ManifestOn {
+            kind: OnKind::Gate as i32,
+            triggers: vec![crate::TriggerKind::PayGate as i32],
+            pre: pre.map(str::to_string),
+            has_guard,
+            messages: vec![],
+            label: None,
+            presentation: Default::default(),
+            flash: Default::default(),
+        }
+    }
+
+    /// A status gate must be CEL-only: a residual guard or a missing
+    /// condition is invisible to a pure read, so the load refuses it.
+    #[test]
+    fn status_gates_must_be_cel_only() {
+        assert!(validate_cel_only_gates(&[card(vec![gate(false, Some("true"))])]).is_ok());
+        assert!(validate_cel_only_gates(&[card(vec![gate(true, Some("true"))])]).is_err());
+        assert!(validate_cel_only_gates(&[card(vec![gate(false, None)])]).is_err());
     }
 }

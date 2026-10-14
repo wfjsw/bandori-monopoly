@@ -1,47 +1,83 @@
 //! Unit `sumimi`: clause proofs.
 //!
-//! Per clause (see crate::harness and KANI-FOUNDATION.md):
-//! 1. iff proof (post == spec(pre) and effect log exactly and frame);
-//! 2. no-op proof when the trigger/condition is false;
-//! 3. kani::cover! each branch;
-//! 4. mutant (reachable-disagreement companion preferred).
+//! Per clause (KANI-FOUNDATION.md §3): iff + no-op + covers + mutant.
+//! Specs live in `crate::spec::sumimi` and come from the clause docs only.
 //!
-//! Isolation assumes are listed per harness.
+//! **ppcost pattern.** Concrete user seats (`n_players = 2`, user=0/1 for
+//! seat-symmetric clauses). Direct body call via the cfg(kani) `NAME_kani`
+//! wrapper. Per-harness host-op subset (`host_subset!`) — undeclared op
+//! FAILS loudly. Isolation assumes are named here and `kani::assume`d.
+//! Narration (`ctx::log`) is not part of the frame.
 
 use crate::host;
 use crate::intern;
 use crate::invoke;
 use crate::ir_fill;
 use crate::spec;
-use crate::world::{self, Effect, World, MAX_PLAYERS};
+use crate::world::{self, Effect, MAX_PLAYERS};
 
 // ---------------------------------------------------------------------------
-// shared helpers
+// Per-body host-op subsets (ops the unmodified body reaches, including
+// isolated paths — if isolation breaks the proof FAILS loudly).
 // ---------------------------------------------------------------------------
 
-fn base_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
-        w.fire[p] = kani::any();
-        kani::assume(w.fire[p] >= 0 && w.fire[p] <= 8);
-        w.fire_max[p] = 2;
-        w.out[p] = false;
-    }
-    w
-}
+/// `Sumimi:兼顾偶像与乐队` play body — money + log + gain.
+/// `state_get` is the play-gate residual (`cant_play` reads `redeemed`); the
+/// body itself is money / log / gain only.
+crate::host_subset!(idolband_dispatch {
+    money => arm_money,
+    gain | gain_typed | gain_fixed => arm_gain,
+    log | effect => arm_log,
+    state_get => arm_state_get,
+});
 
-fn log_slice() -> ([Effect; 24], usize) {
-    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+/// `skill:三角初华（Sumimi）:成为偶像` `on_pass` — one `gain_fire`.
+crate::host_subset!(hina_pass_dispatch {
+    gain_fire => arm_gain_fire,
+});
+
+/// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `after_move` — `gain_fire` + `set_dest`.
+crate::host_subset!(childhood_after_move_dispatch {
+    gain_fire => arm_gain_fire,
+    set_dest => arm_set_dest,
+});
+
+/// `Sumimi:一人两个甜甜圈` play body — pos / exile / slots / dest / place / log.
+/// Isolation: the multi-act `PassTile` / `SettleAfter` half (clause (2)) is
+/// PROTOCOL-LEVEL and not entered here.
+crate::host_subset!(two_donuts_dispatch {
+    player_pos => arm_player_pos,
+    give_exile => arm_give_exile,
+    set_slot => arm_set_slot,
+    set_dest => arm_set_dest,
+    place_card_at => arm_place_card_at,
+    log | effect => arm_log,
+});
+
+/// `Sumimi:Sumimi是二人一体的` play body — character flip + fire reset.
+/// `find_card` walks `field_instances`; under Kani that arm is a count-only
+/// stub (no uid/name buffer), so the `unplace_at` half of the swap is
+/// isolated (never entered) — still declared so isolation cannot drift.
+crate::host_subset!(two_in_one_dispatch {
+    character_is => arm_character_is,
+    field_instances => arm_field_instances,
+    unplace_at | unplace_card | unplace_card_named => arm_unplace_card,
+    place_card_at => arm_place_card_at,
+    state_set => arm_state_set,
+    log | effect => arm_log,
+});
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+fn log_slice() -> ([Effect; world::MAX_LOG], usize) {
+    let logbuf: [Effect; world::MAX_LOG] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     (logbuf, log_n)
 }
 
-fn effects_of(logbuf: &[Effect; 24], log_n: usize) -> &[Effect] {
+fn effects_of(logbuf: &[Effect; world::MAX_LOG], log_n: usize) -> &[Effect] {
     &logbuf[..log_n]
 }
 
@@ -64,97 +100,118 @@ fn play_gate_allows(idx: usize, player: i32) -> bool {
 // C-SUMIMI-idolband -- Sumimi:兼顾偶像与乐队
 // 「当你本回合未进行过赎回操作时可打出，将你的资金重设为3000。
 //  （若你的资金为3000以上则无效果）」
+// Seat-symmetric (the user's own money).
 // ===========================================================================
 
 const IDOLBAND: usize = crate::card_id!("Sumimi:兼顾偶像与乐队");
 
-fn idolband_world(redeemed: i32) -> World {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
+/// In-place 2-seat world for the play body + its `redeemed` play gate.
+fn idolband_world(user: i32, redeemed: i32) {
+    debug_assert!(user == 0 || user == 1);
+    host::install_backend(idolband_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
     let key = intern::intern("redeemed");
-    w.key_set(player, key, redeemed);
-    w
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.out[user as usize] = false;
+        w.key_set(user, key, redeemed);
+    });
 }
 
-/// C-SUMIMI-idolband-01 + -02 + -03 + -frame.
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn idolband_reset_iff() {
-    let w = idolband_world(kani::any());
-    let player = w.trig_player;
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let redeemed = world::with_world(|ww| ww.key_get(player, intern::intern("redeemed")));
-    let playable = play_gate_allows(IDOLBAND, player);
+/// Shared iff at a **concrete** user seat.
+fn idolband_reset_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    let redeemed: i32 = kani::any();
+    kani::assume(redeemed == 0 || redeemed == 1);
+    idolband_world(user, redeemed);
+    let playable = play_gate_allows(IDOLBAND, user);
 
     kani::cover!(playable, "gate admits (not redeemed)");
     kani::cover!(!playable, "gate rejects (redeemed)");
-    kani::cover!(pre.money[player as usize] < 3000, "pre money < 3000");
-    kani::cover!(pre.money[player as usize] >= 3000, "pre money >= 3000");
 
-    assert!(
+    crate::kassert!(
         playable == (redeemed == 0),
         "C-SUMIMI-idolband-01: gate must allow exactly the not-redeemed case"
     );
 
+    let pre = world::snapshot();
     if !playable {
+        // Host would not call the body. Untouched.
         let post = world::snapshot();
-        assert!(post.money == pre.money, "rejected play must not touch money");
+        crate::kassert!(world::arr4_eq(post.money, pre.money), "rejected play must not touch money");
         let (logbuf, log_n) = log_slice();
-        assert!(log_n == 0, "rejected play must not log");
+        crate::kassert!(log_n == 0, "rejected play must not log");
         let _ = effects_of(&logbuf, log_n);
         return;
     }
 
-    invoke::unwrap_done(invoke::play_idx(IDOLBAND, player));
+    let pre_money = pre.money[user as usize];
+    kani::cover!(pre_money < 3000, "pre money < 3000");
+    kani::cover!(pre_money >= 3000, "pre money >= 3000");
+
+    // DIRECT body call (ppcost).
+    invoke::unwrap_done(card_sumimi::idol_and_band::idol_and_band_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    let pre_money = pre.money[player as usize];
-    assert!(
-        spec::sumimi::idolband_money_ok(effects, player, pre_money),
+    crate::kassert!(
+        spec::sumimi::idolband_money_ok(effects, user, pre_money),
         "C-SUMIMI-idolband-02/03: money path must be a set-to-3000 or a no-op"
     );
-    assert!(
-        post.money[player as usize] == spec::sumimi::idolband_post_money(pre_money),
+    crate::kassert!(
+        post.money[user as usize] == spec::sumimi::idolband_post_money(pre_money),
         "C-SUMIMI-idolband-02: post money must be exactly 3000 when pre < 3000"
     );
     for p in 0..MAX_PLAYERS {
-        if p != player as usize {
-            assert!(post.money[p] == pre.money[p], "frame: other players' money");
+        if p != user as usize {
+            crate::kassert!(post.money[p] == pre.money[p], "frame: other players' money");
         }
-        assert!(post.fire[p] == pre.fire[p], "frame: fire");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
-        assert!(post.stay[p] == pre.stay[p], "frame: stay");
+        crate::kassert!(post.fire[p] == pre.fire[p], "frame: fire");
+        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.stay[p] == pre.stay[p], "frame: stay");
     }
-    assert!(post.hand == pre.hand, "frame: hand bitset");
-    assert!(post.discard == pre.discard, "frame: discard bitset");
+    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
+    crate::kassert!(post.discard == pre.discard, "frame: discard bitset");
+}
+
+/// Iff at seat 0 (`n_players = 2`).
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn idolband_reset_iff() {
+    idolband_reset_iff_at(0);
+}
+
+/// Same iff at seat 1 — the two harnesses cover every seat of the 2-seat world.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn idolband_reset_user1_iff() {
+    idolband_reset_iff_at(1);
 }
 
 /// Mutant companion: the off-by-one target (2999) must NOT match the card.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn idolband_mutant_is_detected() {
-    let mut w = idolband_world(0);
-    let player = w.trig_player;
-    w.money[player as usize] = kani::any();
-    kani::assume(w.money[player as usize] >= 0 && w.money[player as usize] < 3000);
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    invoke::unwrap_done(invoke::play_idx(IDOLBAND, player));
+    idolband_world(0, 0);
+    let user = 0i32;
+    world::with_world_mut(|w| {
+        // Pin money in the live region so the mutant is reachable.
+        w.money[0] = kani::any();
+        kani::assume(w.money[0] >= 0 && w.money[0] < 3000);
+    });
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_sumimi::idol_and_band::idol_and_band_kani(user));
     let post = world::snapshot();
-    let pre_money = pre.money[player as usize];
+    let pre_money = pre.money[user as usize];
     let wrong = spec::sumimi::idolband_post_money_mutant(pre_money);
     kani::cover!(pre_money < 3000, "mutant region live");
-    assert!(
-        post.money[player as usize] != wrong,
+    crate::kassert!(
+        post.money[user as usize] != wrong,
         "mutant: card must not match the 2999 target"
     );
 }
@@ -164,93 +221,119 @@ pub fn idolband_mutant_is_detected() {
 // `skill:三角初华（Sumimi）:成为偶像` `On::Hook(Pass)` with the single-source
 // guard `"actor == owner && is_circle(tile.id)"`.
 // Isolation: the turn-start pot placement (clause (2)) is a different entry.
+// Seat-symmetric (the user's own fire).
 // ===========================================================================
 
-const HINA: usize = crate::card_id!("skill:三角初华（Sumimi）:成为偶像");
+/// In-place 2-seat world for the Pass leaf: fire pots symbolic under the
+/// hold-cap model (`fire_max = 2` = `FIRE_CAP_SUMIMI`).
+fn hina_pass_world(user: i32, tile: i32) {
+    debug_assert!(user == 0 || user == 1);
+    host::install_backend(hina_pass_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.trig_tile = tile;
+        w.out[user as usize] = false;
+        for p in 0..MAX_PLAYERS {
+            w.fire[p] = kani::any();
+            kani::assume(w.fire[p] >= 0 && w.fire[p] <= 8);
+            w.fire_max[p] = spec::sumimi::FIRE_CAP_SUMIMI;
+        }
+    });
+}
 
-/// C-SUMIMI-hina-01 iff: pass CiRCLE → +1 [火罐] under the hold cap.
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn hina_01_pass_circle_iff() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
+/// Shared iff at a **concrete** user seat.
+fn hina_01_pass_circle_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
     // Board slot 0 is 「CiRCLE」 (board.json index 1). Symbolic over the
     // 60-tile board so both the circle and non-circle covers are live.
     let tile: i32 = kani::any();
     kani::assume(tile >= 0 && tile < 60);
-    w.trig_tile = tile;
+    hina_pass_world(user, tile);
 
     // single-source guard: the real CEL string, lowered once
     let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
     let ov = ir_fill::TriggerOverlay::default();
-    let ctx = ir_fill::fill_for_guard(&w, gid, player, 0, true, -1, &ov);
-    let admitted = crate::guard!(gid, &ctx);
+    let admitted = world::with_world(|w| {
+        let ctx = ir_fill::fill_for_guard(w, gid, user, 0, true, -1, &ov);
+        crate::guard!(gid, &ctx)
+    });
     kani::cover!(admitted, "guard admits (on a CiRCLE tile)");
     kani::cover!(!admitted, "guard rejects (not CiRCLE / not owner)");
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
+    let pre = world::snapshot();
     if !admitted {
         // Host would not call the body. Untouched.
         let post = world::snapshot();
-        assert!(post.fire == pre.fire, "rejected hook must not touch fire");
+        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
         let (logbuf, log_n) = log_slice();
-        assert!(log_n == 0, "rejected hook must not log");
+        crate::kassert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);
         return;
     }
 
-    let pre_fire = pre.fire[player as usize];
+    let pre_fire = pre.fire[user as usize];
     let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     kani::cover!(pre_fire < cap, "under cap (gain applies)");
     kani::cover!(pre_fire >= cap, "at/over cap (global hold-cap forbids)");
 
-    invoke::unwrap_done(invoke::hook_only_idx(HINA, "Pass", player));
+    // DIRECT body call (ppcost).
+    invoke::unwrap_done(skill_characters::uika_idol::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    assert!(
-        spec::sumimi::pass_circle_fire_ok(effects, player, pre_fire, cap),
+    crate::kassert!(
+        spec::sumimi::pass_circle_fire_ok(effects, user, pre_fire, cap),
         "C-SUMIMI-hina-01: effect log must be exactly +1 fire under the cap"
     );
-    assert!(
-        post.fire[player as usize] == spec::sumimi::pass_circle_fire_post(pre_fire, cap),
+    crate::kassert!(
+        post.fire[user as usize] == spec::sumimi::pass_circle_fire_post(pre_fire, cap),
         "C-SUMIMI-hina-01: post fire must be pre+1 under the cap and unchanged at the cap"
     );
     for p in 0..MAX_PLAYERS {
-        if p != player as usize {
-            assert!(post.fire[p] == pre.fire[p], "frame: other players' fire");
+        if p != user as usize {
+            crate::kassert!(post.fire[p] == pre.fire[p], "frame: other players' fire");
         }
-        assert!(post.money[p] == pre.money[p], "frame: money");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
     }
+}
+
+/// Iff at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn hina_01_pass_circle_iff() {
+    hina_01_pass_circle_iff_at(0);
+}
+
+/// Same iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn hina_01_user1_pass_circle_iff() {
+    hina_01_pass_circle_iff_at(1);
 }
 
 /// Mutant: +2 instead of +1 (under the cap).
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn hina_01_mutant_is_detected() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
-    w.trig_tile = 0; // CiRCLE
-    w.fire[player as usize] = 0;
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    invoke::unwrap_done(invoke::hook_only_idx(HINA, "Pass", player));
+    hina_pass_world(0, 0); // CiRCLE
+    let user = 0i32;
+    world::with_world_mut(|w| w.fire[0] = 0);
+    let pre = world::snapshot();
+    invoke::unwrap_done(skill_characters::uika_idol::on_pass_kani(user));
     let post = world::snapshot();
-    let wrong = spec::sumimi::pass_circle_fire_post_mutant(pre.fire[player as usize], spec::sumimi::FIRE_CAP_SUMIMI);
-    assert!(
-        post.fire[player as usize] != wrong,
+    let wrong = spec::sumimi::pass_circle_fire_post_mutant(
+        pre.fire[user as usize],
+        spec::sumimi::FIRE_CAP_SUMIMI,
+    );
+    crate::kassert!(
+        post.fire[user as usize] != wrong,
         "mutant: card must not match the +2 spec"
     );
 }
@@ -260,82 +343,108 @@ pub fn hina_01_mutant_is_detected() {
 // `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `On::Hook(MoveAfter)`.
 // Guard: `"actor == owner && move.main && card.placed"`.
 // C-SUMIMI-childhood-01 (move start = 小豆岛) is PROTOCOL-LEVEL (plan stub).
+// Seat-symmetric (the user's own fire).
 // ===========================================================================
 
-const CHILDHOOD: usize = crate::card_id!("Sumimi:(初华（Sumimi）)儿时玩伴的鼓励");
+/// In-place 2-seat world for the after-move leaf.
+fn childhood_after_move_world(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    host::install_backend(childhood_after_move_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.out[user as usize] = false;
+        for p in 0..MAX_PLAYERS {
+            w.fire[p] = kani::any();
+            kani::assume(w.fire[p] >= 0 && w.fire[p] <= 8);
+            w.fire_max[p] = spec::sumimi::FIRE_CAP_SUMIMI;
+        }
+    });
+}
 
-/// C-SUMIMI-childhood-02 iff: after the re-based move, +1 [火罐].
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn childhood_02_fire_iff() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
+/// Shared iff at a **concrete** user seat.
+fn childhood_02_fire_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    childhood_after_move_world(user);
 
     let gid = crate::guard_id!("actor == owner && move.main && card.placed");
     let mut ov = ir_fill::TriggerOverlay::default();
     ov.move_main = true;
-    let ctx = ir_fill::fill_for_guard(&w, gid, player, 0, true, -1, &ov);
-    let admitted = crate::guard!(gid, &ctx);
+    let admitted = world::with_world(|w| {
+        let ctx = ir_fill::fill_for_guard(w, gid, user, 0, true, -1, &ov);
+        crate::guard!(gid, &ctx)
+    });
     kani::cover!(admitted, "guard admits");
     kani::cover!(!admitted, "guard rejects");
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
+    let pre = world::snapshot();
     if !admitted {
         let post = world::snapshot();
-        assert!(post.fire == pre.fire, "rejected hook must not touch fire");
+        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "rejected hook must not touch fire");
         let (logbuf, log_n) = log_slice();
-        assert!(log_n == 0, "rejected hook must not log");
+        crate::kassert!(log_n == 0, "rejected hook must not log");
         let _ = effects_of(&logbuf, log_n);
         return;
     }
 
-    let pre_fire = pre.fire[player as usize];
+    let pre_fire = pre.fire[user as usize];
     let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     kani::cover!(pre_fire < cap, "under cap");
     kani::cover!(pre_fire >= cap, "at cap");
 
-    invoke::unwrap_done(invoke::hook_only_idx(CHILDHOOD, "MoveAfter", player));
+    // DIRECT body call (ppcost).
+    invoke::unwrap_done(card_sumimi::childhood_cheer::after_move_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    assert!(
-        spec::sumimi::childhood_fire_ok(effects, player, pre_fire, cap),
+    crate::kassert!(
+        spec::sumimi::childhood_fire_ok(effects, user, pre_fire, cap),
         "C-SUMIMI-childhood-02: after-move must be exactly +1 fire under the cap"
     );
-    assert!(
-        post.fire[player as usize] == spec::sumimi::childhood_fire_post(pre_fire, cap),
+    crate::kassert!(
+        post.fire[user as usize] == spec::sumimi::childhood_fire_post(pre_fire, cap),
         "C-SUMIMI-childhood-02: post fire"
     );
     for p in 0..MAX_PLAYERS {
-        if p != player as usize {
-            assert!(post.fire[p] == pre.fire[p], "frame: other fire");
+        if p != user as usize {
+            crate::kassert!(post.fire[p] == pre.fire[p], "frame: other fire");
         }
-        assert!(post.money[p] == pre.money[p], "frame: money");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
     }
 }
 
+/// Iff at seat 0.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
+pub fn childhood_02_fire_iff() {
+    childhood_02_fire_iff_at(0);
+}
+
+/// Same iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn childhood_02_user1_fire_iff() {
+    childhood_02_fire_iff_at(1);
+}
+
+/// Mutant: after-move is +1, not +2.
+#[kani::proof]
+#[kani::unwind(32)]
 pub fn childhood_02_mutant_is_detected() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
-    w.fire[player as usize] = 0;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only_idx(CHILDHOOD, "MoveAfter", player));
+    childhood_after_move_world(0);
+    let user = 0i32;
+    world::with_world_mut(|w| w.fire[0] = 0);
+    invoke::unwrap_done(card_sumimi::childhood_cheer::after_move_kani(user));
     let post = world::snapshot();
     let wrong = spec::sumimi::childhood_fire_post(0, spec::sumimi::FIRE_CAP_SUMIMI) + 1;
-    assert!(
-        post.fire[player as usize] != wrong,
+    crate::kassert!(
+        post.fire[user as usize] != wrong,
         "mutant: after-move is +1, not +2"
     );
 }
@@ -344,51 +453,75 @@ pub fn childhood_02_mutant_is_detected() {
 // C-SUMIMI-twodonuts-01 -- 「（1）获得[除外]…」
 // `Sumimi:一人两个甜甜圈` play body.
 // (2)/(3) are PROTOCOL-LEVEL (multi-act pass window).
+// Seat-symmetric (the user's own exile grant).
 // ===========================================================================
 
-const TWODONUTS: usize = crate::card_id!("Sumimi:一人两个甜甜圈");
+/// In-place 2-seat world for the play body. Position symbolic so the exile
+/// target tile is live.
+fn two_donuts_world(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    host::install_backend(two_donuts_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.out[user as usize] = false;
+        let pos: i32 = kani::any();
+        kani::assume(pos >= 0 && pos < 60);
+        w.pos[user as usize] = pos;
+    });
+}
 
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn twodonuts_01_exile_iff() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    invoke::unwrap_done(invoke::play_idx(TWODONUTS, player));
+/// Shared iff at a **concrete** user seat.
+fn twodonuts_01_exile_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    two_donuts_world(user);
+    let pre = world::snapshot();
+    // DIRECT body call (ppcost).
+    invoke::unwrap_done(card_sumimi::two_donuts::two_donuts_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    assert!(
-        spec::sumimi::twodonuts_exile_ok(effects, player),
+    crate::kassert!(
+        spec::sumimi::twodonuts_exile_ok(effects, user),
         "C-SUMIMI-twodonuts-01: exactly one [除外] grant and no money/pos/fire side effects"
     );
     for p in 0..MAX_PLAYERS {
-        assert!(post.money[p] == pre.money[p], "frame: money");
-        assert!(post.pos[p] == pre.pos[p], "frame: pos");
-        assert!(post.fire[p] == pre.fire[p], "frame: fire");
+        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+        crate::kassert!(post.fire[p] == pre.fire[p], "frame: fire");
     }
 }
 
+/// Iff at seat 0.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
+pub fn twodonuts_01_exile_iff() {
+    twodonuts_01_exile_iff_at(0);
+}
+
+/// Same iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn twodonuts_01_user1_exile_iff() {
+    twodonuts_01_exile_iff_at(1);
+}
+
+/// Mutant: no exile grant at all. The card does grant — disagreement is live.
+#[kani::proof]
+#[kani::unwind(32)]
 pub fn twodonuts_01_mutant_is_detected() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(TWODONUTS, player));
+    two_donuts_world(0);
+    let user = 0i32;
+    invoke::unwrap_done(card_sumimi::two_donuts::two_donuts_kani(user));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
-    // Mutant: no exile grant at all. The card does grant — disagreement is live.
-    let wrong = !spec::sumimi::twodonuts_exile_grant_in(effects, player);
-    assert!(!wrong, "mutant: card does grant [除外]");
+    let wrong = !spec::sumimi::twodonuts_exile_grant_in(effects, user);
+    crate::kassert!(!wrong, "mutant: card does grant [除外]");
 }
 
 // ===========================================================================
@@ -397,33 +530,44 @@ pub fn twodonuts_01_mutant_is_detected() {
 // C-SUMIMI-twoinone-01 (character identity) is a known engine gap (the
 // bound skill is swapped but `player.character` stays) — the fire half is
 // what this harness pins. C-SUMIMI-twoinone-02 is PROTOCOL-LEVEL.
+// Seat-symmetric (the user's own character / fire).
 // ===========================================================================
 
-const TWOINONE: usize = crate::card_id!("Sumimi:Sumimi是二人一体的");
-
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn twoinone_01b_fire_iff() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
-    let is_hina: bool = kani::any();
+/// In-place 2-seat world for the play body. Character identity is the
+/// residual the swap reads (`character_is`).
+fn two_in_one_world(user: i32, is_hina: bool) {
+    debug_assert!(user == 0 || user == 1);
+    host::install_backend(two_in_one_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
     let name = if is_hina {
         "三角初华（Sumimi）"
     } else {
         "纯田真奈"
     };
-    w.character_id[player as usize] = intern::intern(name).0;
+    let cid = intern::intern(name).0;
+    world::with_world_mut(|w| {
+        w.trig_player = user;
+        w.out[user as usize] = false;
+        w.character_id[user as usize] = cid;
+    });
+}
+
+/// Shared iff at a **concrete** user seat.
+fn twoinone_01b_fire_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
+    let is_hina: bool = kani::any();
+    two_in_one_world(user, is_hina);
 
     let to = spec::sumimi::twoinone_fire_target(is_hina);
     let fire_key = intern::intern(card_sdk::abi::state_key::FIRE).0;
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
+    let pre = world::snapshot();
 
-    invoke::unwrap_done(invoke::play_idx(TWOINONE, player));
+    // DIRECT body call (ppcost).
+    invoke::unwrap_done(card_sumimi::two_in_one::play_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -431,45 +575,55 @@ pub fn twoinone_01b_fire_iff() {
     kani::cover!(is_hina, "from 三角初华（Sumimi） → 纯田真奈 fire 1");
     kani::cover!(!is_hina, "from 纯田真奈 → 三角初华（Sumimi） fire 2");
 
-    assert!(
-        spec::sumimi::twoinone_fire_effects_ok(effects, player, fire_key, to),
+    crate::kassert!(
+        spec::sumimi::twoinone_fire_effects_ok(effects, user, fire_key, to),
         "C-SUMIMI-twoinone-01b: fire must be set to the other character's 初始火罐数"
     );
-    let _ = pre;
-    let _ = post;
+    // Money / positions are outside the swap's frame.
+    for p in 0..MAX_PLAYERS {
+        crate::kassert!(post.money[p] == pre.money[p], "frame: money");
+        crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
+    }
 }
 
+/// Iff at seat 0.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
+pub fn twoinone_01b_fire_iff() {
+    twoinone_01b_fire_iff_at(0);
+}
+
+/// Same iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn twoinone_01b_user1_fire_iff() {
+    twoinone_01b_fire_iff_at(1);
+}
+
+/// Mutant: fire is not set to 初始+1.
+#[kani::proof]
+#[kani::unwind(32)]
 pub fn twoinone_01b_mutant_is_detected() {
-    let mut w = base_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    w.trig_player = player;
     let is_hina: bool = kani::any();
-    let name = if is_hina {
-        "三角初华（Sumimi）"
-    } else {
-        "纯田真奈"
-    };
-    w.character_id[player as usize] = intern::intern(name).0;
+    two_in_one_world(0, is_hina);
+    let user = 0i32;
     let to = spec::sumimi::twoinone_fire_target(is_hina);
     let wrong = to + 1;
     let fire_key = intern::intern(card_sdk::abi::state_key::FIRE).0;
-    world::reset_world(w);
-    invoke::unwrap_done(invoke::play_idx(TWOINONE, player));
+    invoke::unwrap_done(card_sumimi::two_in_one::play_kani(user));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     let mut saw_wrong = false;
     for e in effects {
         if let Effect::SetState { player: p, key, n } = e {
-            if *p == player && *key == fire_key && *n == wrong {
+            if *p == user && *key == fire_key && *n == wrong {
                 saw_wrong = true;
             }
         }
     }
-    assert!(!saw_wrong, "mutant: fire is not set to 初始+1");
+    crate::kassert!(!saw_wrong, "mutant: fire is not set to 初始+1");
 }
+
 // ===========================================================================
 // Cheap pure-formula harnesses (spec math, no host invoke) — run these first.
 // ===========================================================================
@@ -482,13 +636,13 @@ pub fn idolband_money_formula() {
     kani::assume(pre >= 0 && pre <= 10_000);
     let post = spec::sumimi::idolband_post_money(pre);
     if pre >= 3000 {
-        assert!(post == pre, "no-effect region keeps money");
+        crate::kassert!(post == pre, "no-effect region keeps money");
     } else {
-        assert!(post == 3000, "under-3000 region sets exactly 3000");
+        crate::kassert!(post == 3000, "under-3000 region sets exactly 3000");
     }
     let wrong = spec::sumimi::idolband_post_money_mutant(pre);
     if pre < 3000 {
-        assert!(wrong == 2999 && post != wrong, "mutant 2999 is distinguishable");
+        crate::kassert!(wrong == 2999 && post != wrong, "mutant 2999 is distinguishable");
     }
     kani::cover!(pre < 3000, "under 3000");
     kani::cover!(pre >= 3000, "at/over 3000");
@@ -503,12 +657,12 @@ pub fn pass_circle_fire_formula() {
     let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     let post = spec::sumimi::pass_circle_fire_post(pre_fire, cap);
     if pre_fire < cap {
-        assert!(post == pre_fire + 1, "under cap: +1");
+        crate::kassert!(post == pre_fire + 1, "under cap: +1");
     } else {
-        assert!(post == pre_fire, "at cap: no-op (global hold-cap)");
+        crate::kassert!(post == pre_fire, "at cap: no-op (global hold-cap)");
     }
     let wrong = spec::sumimi::pass_circle_fire_post_mutant(pre_fire, cap);
-    assert!(post != wrong, "mutant +2 / past-cap is distinguishable");
+    crate::kassert!(post != wrong, "mutant +2 / past-cap is distinguishable");
     kani::cover!(pre_fire < cap, "under cap");
     kani::cover!(pre_fire >= cap, "at cap");
 }
@@ -522,10 +676,10 @@ pub fn band_02_rent_bonus_formula() {
     let crystals: i32 = kani::any();
     kani::assume(crystals >= 0 && crystals <= 8);
     let post = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
-    assert!(post == pre_amount + crystals * 100, "bonus is +100 per crystal");
+    crate::kassert!(post == pre_amount + crystals * 100, "bonus is +100 per crystal");
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, crystals);
     if crystals != 1 {
-        assert!(post != wrong, "mutant +100-total distinguishable when c != 1");
+        crate::kassert!(post != wrong, "mutant +100-total distinguishable when c != 1");
     }
     kani::cover!(crystals == 0, "c=0");
     kani::cover!(crystals >= 2, "c>=2");

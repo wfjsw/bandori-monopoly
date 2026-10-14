@@ -7,7 +7,7 @@
 //! Sheet 2026-10-06 新卡组卡 C3: 「你的**任意**掷骰结算前」 (was 「你的掷骰
 //! 结算前」) -- any of the user's rolls, not only the main move roll.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -22,14 +22,13 @@ pub const YOLO: CardDef = CardDef::new(
         counteract,
     )],
 )
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll)
-        && trigger::player_id() == player_id
-        && (trigger::move_roll().is_some() || trigger::value() >= 0)
-}
+    .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Y.O.L.O"#)
+        .raw_name(r#"Y.O.L.O"#)
+        .tags(&[])
+        .text(r#"你的任意掷骰结算前打出此卡，使结果增加1d4结果的数字"#)
+        .cell(r#"C3"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).

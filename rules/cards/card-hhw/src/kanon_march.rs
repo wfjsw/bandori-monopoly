@@ -30,8 +30,13 @@ pub const KANON_MARCH: CardDef = CardDef::new(
             on_pass,
         ),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Wacha Mocha 啪嗒进行曲"#)
+        .raw_name(r#"（花音）Wacha Mocha 啪嗒进行曲"#)
+        .tags(&[])
+        .text(r#"[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后置入弃牌堆。"#)
+        .cell(r#"F13"#)
+        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", r#"松原花音"#)]));
 
 /// Combined gate: not yet placed (the placement branch), or placed with the
 /// 「至少9个水母标记」 the jump needs. A placement is always available from
@@ -63,10 +68,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     jump(player_id)
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// 「花音每次倒走获得一个水母标记」 -- C# `CardKanonMarch.Arrive`
@@ -115,4 +116,11 @@ fn jump(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("kanon_march_jump")).tile("tile", pick),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
 }

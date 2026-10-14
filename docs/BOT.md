@@ -1180,7 +1180,7 @@ counts identical.
 | residual guard kept | 258 | 250 |
 | guard deleted (`None`) | 342 | **350** |
 | kind re-checks (precheck) | 34 | **0** |
-| `legacy_*` audit copies | 128 | 137 |
+| `legacy_*` audit copies | 128 | 137 (all deleted 2026-10-14) |
 | module instantiations/game | 47 836 | 47 836 (2-game sample) |
 | inline rollout N=2 (wasmtime) | 125 304 µs | 133 595 µs (loaded machine) |
 | StubRules inline N=2 | 511 µs | 490 µs |
@@ -1190,7 +1190,7 @@ What moved (batch 2): 8 counteract entries (`elegant_shout`, `taki_even_if`,
 `mana_champion` — plus `here_the_world`'s prefix) got their expressible clauses
 into `pre` (`actor`/`by`/`target` relations, `move.roll`, `roll_source`,
 `effect.hits`, `character_is`, `neighbor`, `value`) with `legacy_*` copies for
-the audit. **All 34 kind re-checks the precheck flagged are stripped** (the
+the audit (since removed). **All 34 kind re-checks the precheck flagged are stripped** (the
 category list owns the kind; compound forms kept their residual clauses).
 Play-gate `cant_play` money/fire thresholds are still in the gate bodies —
 next batch.

@@ -14,17 +14,13 @@ use game_core::data::{CharacterData, GameData};
 use game_core::engine::{Match, StubRules, BUY_RESERVE};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
+mod common;
+use common::data;
 use game_core::strategy::{
     self, CardPlayParams, CounterParams, SkillParams, StrategyBook, StrategyEntry, StrategyParams,
     DEFAULT_COUNTERACT_PROPENSITY_MILLI, PARAMS_VERSION, POLICY_STANDARD, STRATEGY_BOOK_VERSION,
 };
 use game_core::MatchMode;
-
-fn data() -> GameData {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
-        .expect("web/data should load -- run tools/asset-pipe/extract.py")
-}
 
 fn me<'a>(d: &'a GameData) -> &'a CharacterData {
     d.character("户山香澄").unwrap()

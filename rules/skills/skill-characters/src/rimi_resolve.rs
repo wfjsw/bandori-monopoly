@@ -33,11 +33,7 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.rimiResolve.passed') != 0", None, at_turn_end),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[1, 2]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1, 2]);
 
 /// 「初始1，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -123,4 +119,45 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「且可选择盖房」.
     ctx::card_offer_build(player_id, &[to]);
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"牛込里美"#)
+    .display(r#"牛込里美"#)
+    .band(r#"Poppin' Party"#)
+    .color(r#"#FF55BB"#)
+    .skill(r#"里美的决心"#)
+    .text(r#"（1）你的回合中[经过]任意Live House颜色格子后在回合结束时获得1个[火罐]（初始1，上限3）（2）运营阶段可选择使用3个[火罐]立刻进入移动阶段，[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房"#)
+    .cn_id(r#"003"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"我的心就像巧克力螺"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
 }

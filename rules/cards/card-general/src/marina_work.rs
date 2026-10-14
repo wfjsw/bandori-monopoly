@@ -7,8 +7,8 @@
 //!
 //! (MatchHost.cs:2409-2429): [反击] let a CiRCLE [经过]/[结算] proceed normally.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MARINA_WORK: CardDef = CardDef::new(
@@ -19,15 +19,14 @@ pub const MARINA_WORK: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「[使用者][经过]#1格子且#1格子受到其他效果影响时」
-    // C# `CardMarinaWork.CanCounteract`: `t.Kind == "circleAffected" && t.Seat == seat`.
-    trigger::kind() == TriggerKind::CircleAffected && trigger::player_id() == player_id
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"今天也要加油工作喔"#)
+        .raw_name(r#"[月岛麻里奈]今天也要加油工作喔"#)
+        .tags(&[r#"手"#, r#"反击"#])
+        .text(r#"[手]：
+[反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。"#)
+        .cell(r#"A14"#)
+        .fields(&[("band", r#"通用"#), ("owner", r#"月岛麻里奈"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果」

@@ -398,7 +398,7 @@
   "log.part.paid_to": " 付给 {{who}}",
   "log.part.player_roll": "{{who}} {{n}}",
   "log.part.rent_half": "，地产商半价：{{full}} → {{cut}}",
-  "log.part.rent_half_only": "（{{half}}）",
+  "log.part.rent_half_only": "（地产商半价：{{full}} → {{cut}}）",
   "log.part.rent_houses": "（{{h}} 栋房屋{{half}}）",
   "log.part.rent_ring": "（拥有 {{rings}} 个 RiNG × {{mult}} × 1d20({{d}}){{half}}）",
   "log.part.rolled_by": "，由 {{who}} 代掷",

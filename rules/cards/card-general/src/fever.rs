@@ -24,7 +24,18 @@ pub const FEVER: CardDef = CardDef::new(
         // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
         On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], "card.placed", None, counteract),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"FEVER!"#)
+        .raw_name(r#"[衍生]FEVER!"#)
+        .derived(true)
+        .tags(&[r#"手"#, r#"持续"#, r#"衍生"#])
+        .text(r#"[手]：
+将此卡放置在[使用者]的[场地]。
+[持续]：
+（1）[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）。
+（2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。"#)
+        .cell(r#"A6"#)
+        .fields(&[("band", r#"通用"#), ("owner", "")]));
 
 fn fever(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
@@ -81,4 +92,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         _ => {}
     }
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn fever_kani(player_id: i32) -> card_sdk::Asked {
+    fever(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
 }

@@ -10,7 +10,7 @@
 //! discards it to move as many tiles as your hand size.
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx::{self, trigger};
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(
@@ -24,24 +24,13 @@ pub const EVEN_LOST: CardDef = CardDef::new(
             counteract,
         ),
     ],
-)
-.legacy(&[(1, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
-    // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
-    if !trigger::by_card().is_some_and(|by| by != player_id) {
-        return false;
-    }
-    // 规则书[反击]: 「被其他人的卡的效果影响」 is one condition on the *effect*,
-    // and now reads as one: any effect another player's card declared at me. It
-    // used to be reconstructed by unioning `Target`/`Abnormal` (via `t.Target`)
-    // with `Pay` (via `t.Pay.from`) and matching on two different fields.
-    // `effect::hits` covers both because a payment touches its payer *and* its
-    // payee.
-    ctx::effect::hits(player_id)
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"即使迷茫着"#)
+        .raw_name(r#"即使迷茫着"#)
+        .tags(&[r#"反击"#, r#"持续"#])
+        .text(r#"（1）[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。（2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。"#)
+        .cell(r#"I2"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（1）: 「你将此卡放置在自己场上」 -- C# `H.PlaceFromPlay(c)`.
@@ -79,4 +68,11 @@ fn go(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("even_lost_go")).i("n", ctx::hand_size(player_id) as i64),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn go_kani(player_id: i32) -> card_sdk::Asked {
+    go(player_id)
 }

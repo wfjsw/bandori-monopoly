@@ -17,7 +17,15 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const HINA_SOUND: CardDef = CardDef::new(
     "PP:[冰川日菜]会发出怎样的声音呢？",
     &[On::Play("", None, hina_sound)],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"会发出怎样的声音呢？"#)
+        .raw_name(r#"[冰川日菜]会发出怎样的声音呢？"#)
+        .tags(&[r#"特"#])
+        .text(r#"[特]：
+（1）此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡。
+（2）[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。"#)
+        .cell(r#"D19"#)
+        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", r#"冰川日菜"#)]));
 
 /// C# `CardHinaSound.Subs` -- the exclusive cards this can stand in for when
 /// played from hand (each has a hand-play [手] and places itself).
@@ -68,4 +76,11 @@ fn hina_sound(player_id: i32) -> card_sdk::Asked {
     // 「[丸山彩]憧憬的前方」/「[大和麻弥]可能性为∞」/「[白鹭千圣]微笑的铁假面」/「[若宫伊芙]属于我的武士道！」
     // while keeping its crystals (`H.Unplace` + `H.PlaceCard(..., crystals, ...)`).
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn hina_sound_kani(player_id: i32) -> card_sdk::Asked {
+    hina_sound(player_id)
 }

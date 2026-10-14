@@ -5,7 +5,7 @@
 //!
 //! Counteraction: when one of your own rolls is under 6, it goes up by 1.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,19 +19,13 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    if !matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll) {
-        return false;
-    }
-    if trigger::player_id() != player_id {
-        return false;
-    }
-    matches!(trigger::move_roll(), Some(r) if r < 6)
-}
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"如果并非没问题"#)
+        .raw_name(r#"（绯玛丽）如果并非没问题"#)
+        .tags(&[r#"反击"#])
+        .text(r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#)
+        .cell(r#"C15"#)
+        .fields(&[("band", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使结果+1」

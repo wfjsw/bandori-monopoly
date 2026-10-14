@@ -34,6 +34,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 pub mod abi;
+pub mod meta;
 pub mod msg;
 
 /// Generic interned-name table (`u16` ids). Under `cfg(kani)` the ctx boundary
@@ -108,7 +109,7 @@ pub mod rt;
 /// ```
 #[derive(Clone, Copy)]
 pub struct CardDef {
-    /// Exact id from `game-data/cards.json`, e.g. `"AG:Y.O.L.O"`.
+    /// Exact id from `game-the roster`, e.g. `"AG:Y.O.L.O"`.
     pub id: &'static str,
     pub on: &'static [On],
     /// The card's declared static properties, `(key, value)` in declaration
@@ -116,11 +117,6 @@ pub struct CardDef {
     /// Keys are [`abi::prop`] constants; a key not declared reads as its
     /// default (`0`).
     pub props: &'static [(&'static str, i32)],
-    /// G3 migration audit (docs/GUARDS.md §5.1): the card's pre-migration
-    /// guard(s), as `(entry index, legacy fn)`. Kept beside the migrated entry
-    /// while the `guard-audit` host feature is in play; deleted once the card
-    /// is clean. Empty for a card that is not under audit.
-    pub legacy: &'static [(i32, fn(i32) -> bool)],
     /// Per-entry labels -- the rulebook's numbered clauses, 「（1）」 / 「（2）」
     /// and kin -- as `(entry index, label)`. Rides the manifest so the
     /// 「效果适用」 line can name which clause of a multi-entry card ran.
@@ -141,6 +137,23 @@ pub struct CardDef {
     /// [`abi::Flash::Always`] / [`abi::Flash::Never`] are the rule's own
     /// opinion and win over the Auto classification. `CardDef::flash`.
     pub flash: &'static [(i32, crate::abi::Flash)],
+    /// Per-entry **tile text** -- the deed-popup description this entry speaks
+    /// for, as `(entry index, slot, tile, key)`.
+    /// - `slot`: [`abi::text_slot::SETTLE`] or [`abi::text_slot::PASS`].
+    /// - `tile`: `""` = the instance's own tile (a `tile:*` rule bound to one
+    ///   tile); otherwise a board tile *name* (`"CiRCLE"`, `"CiRCLE 咖啡厅"`) for
+    ///   a tile-bound text on a tile-less instance (`event:*`).
+    /// - `key`: i18n key in the `ui` namespace (`deed.note.*`); `""` means this
+    ///   entry **suppresses** the slot (the effective text is nothing).
+    ///
+    /// `CardDef::texts`. The view composes per-tile speakers in
+    /// body-precedence order (docs/TILES.md 「Tile text」).
+    pub texts: &'static [(i32, &'static str, &'static str, &'static str)],
+    /// Deck/gallery metadata for this card (`CardDef::meta`, ABI v63). Lives
+    /// beside the rule so the roster is authored with the rule; rides the
+    /// separate `bandori_metadata` export, **not** [`abi::ManifestEntry`].
+    /// `None` = the card has no Rust metadata yet (partial lift).
+    pub meta: Option<&'static crate::meta::CardMeta>,
 }
 
 impl CardDef {
@@ -149,11 +162,12 @@ impl CardDef {
             id,
             on,
             props: &[],
-            legacy: &[],
             labels: &[],
             silent: &[],
             quiet_when_empty: &[],
             flash: &[],
+            texts: &[],
+            meta: None,
         }
     }
 
@@ -164,11 +178,12 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -180,11 +195,12 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -208,11 +224,12 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: entries,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -227,11 +244,12 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: entries,
             flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -253,11 +271,12 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy: self.legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: entries,
+            texts: self.texts,
+            meta: self.meta,
         }
     }
 
@@ -291,20 +310,63 @@ impl CardDef {
         crate::abi::EntryPresentation { header, flash }
     }
 
-    /// Keep the pre-migration guard of entry `entry` as `legacy` for the G3
-    /// equivalence audit (docs/GUARDS.md §5.1). The `guard-audit` host calls it
-    /// through `export::OP_LEGACY_GUARD` and panics on any mismatch with
-    /// `pre ∧ guard`. Delete the copy once the card's audit is clean.
-    pub const fn legacy(self, legacy: &'static [(i32, fn(i32) -> bool)]) -> Self {
+    /// Declare the deed-popup **tile text** these entries speak for --
+    /// `(entry index, slot, tile, key)`. See [`Self::texts`] for the shape.
+    /// Replaces any earlier `texts` call.
+    ///
+    /// ```ignore
+    /// use card_sdk::abi::text_slot;
+    /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
+    ///     On::Settle("", None, settle),                                       // 0
+    ///     On::Hook(&[HookKind::PassTile], "", Some(pass_pays), on_pass),      // 1
+    /// ]).texts(&[
+    ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
+    ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
+    /// ]);
+    /// ```
+    pub const fn texts(
+        self,
+        texts: &'static [(i32, &'static str, &'static str, &'static str)],
+    ) -> Self {
         Self {
             id: self.id,
             on: self.on,
             props: self.props,
-            legacy,
             labels: self.labels,
             silent: self.silent,
             quiet_when_empty: self.quiet_when_empty,
             flash: self.flash,
+            texts,
+            meta: self.meta,
+        }
+    }
+
+    /// Deck/gallery metadata for this card (`docs/CARDS.md` 「Card metadata」).
+    /// Lives beside the rule; exported through `bandori_metadata`, never
+    /// through [`abi::ManifestEntry`]. Replaces any earlier `meta` call.
+    ///
+    /// ```ignore
+    /// use card_sdk::meta::CardMeta;
+    /// pub const CARD: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[...])
+    ///     .meta(&CardMeta::new()
+    ///         .name("Sumimi不会解散哦")
+    ///         .raw_name("Sumimi不会解散哦")
+    ///         .text("...")
+    ///         .tags(&["手"])
+    ///         .cell("B2")
+    ///         .fields(&[("band", "Sumimi"), ("owner", "")]));
+    /// ```
+    pub const fn meta(self, meta: &'static crate::meta::CardMeta) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: Some(meta),
         }
     }
 

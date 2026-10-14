@@ -28,11 +28,7 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
     ],
 )
-    .legacy(&[(3, legacy_mine)]).silent(&[1, 3]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1, 3]);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -102,4 +98,45 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("taki_meeting_added")).card("card", card),
     );
     Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::CharacterDef =
+ruleset_core::roster::CharacterDef::new(r#"椎名立希"#)
+    .display(r#"椎名立希"#)
+    .band(r#"MyGO!!!!!"#)
+    .color(r#"#7777AA"#)
+    .skill(r#"决定练习日的会议"#)
+    .text(r#"（1）场上每有玩家获得一层[停留]时，你获得一个[火罐]（初始0，上限5）（2）运营阶段可消耗1个[火罐]为你场上的任何一张卡添加一个[奇迹水晶]，每回合限一次。"#)
+    .cn_id(r#"040"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"想认真去做"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_abnormal_kani(player_id: i32) -> card_sdk::Asked {
+    on_abnormal(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn reset_kani(player_id: i32) -> card_sdk::Asked {
+    reset(player_id)
 }

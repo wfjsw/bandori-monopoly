@@ -37,7 +37,17 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
         On::AtEnd("", None, discard_down_to_five),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"稍微努力了一下"#)
+        .raw_name(r#"（NNM）稍微努力了一下"#)
+        .tags(&[])
+        .text(r#"弃置手中x枚角色标记，发动以下效果中的一个：
+（1）抽x张卡（可超过上限），回合结束后将手牌弃置到五张
+（2）获得x次经过CiRCLE时的资金奖励
+（3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或轮数限制
+（4）当奇迹水晶耗尽时，将此卡置入弃牌堆"#)
+        .cell(r#"G7"#)
+        .fields(&[("band", r#"Morfonica"#), ("owner", r#"广町七深"#)]));
 
 /// Combined gate: from hand the x-标记 body needs at least one 「角色标记:*」;
 /// once placed the (3) press needs a crystal and a bound owner skill.
@@ -237,4 +247,17 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     );
     ctx::play_card(&id, player_id)?;
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn discard_down_to_five_kani(player_id: i32) -> card_sdk::Asked {
+    discard_down_to_five(player_id)
 }

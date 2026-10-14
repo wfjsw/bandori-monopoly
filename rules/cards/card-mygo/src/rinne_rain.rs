@@ -19,7 +19,14 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         // player not standing on a square has nothing to settle.
         On::AtEnd("owner.pos >= 0", None, settle_now),
     ],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"轮符雨"#)
+        .raw_name(r#"轮符雨"#)
+        .tags(&[])
+        .text(r#"使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]"#)
+        .cell(r#"I4"#)
+        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn rinne_rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使自己获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, CardName)`.
@@ -40,4 +47,17 @@ fn settle_now(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
     ctx::card_settle_at(player_id, at, false);
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn rinne_rain_kani(player_id: i32) -> card_sdk::Asked {
+    rinne_rain(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_now_kani(player_id: i32) -> card_sdk::Asked {
+    settle_now(player_id)
 }

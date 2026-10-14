@@ -5,8 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
+import { namesOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
-import { CommitChip } from "../../ui/CommitChip";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
@@ -111,7 +111,10 @@ export function Board({ sess }: { sess: GameSession }) {
   // Turn timer: online frames carry absolute deadlines, so repaint exactly
   // when the displayed second flips (not on a 500ms grid). Fallback tick for
   // paths with no deadline (replay / older server / local countdowns).
-  const clockDeadline = view?.clock ? view.clock.bonusDeadlineMs : null;
+  // Bonus drains first; `baseDeadlineMs` is the end of the whole clock, so it
+  // is the one that keeps the second-boundary ticker running through both
+  // phases (bonus then base).
+  const clockDeadline = view?.clock ? view.clock.baseDeadlineMs : null;
   useSecondBoundary(clockDeadline);
   useTick(500);
   const auto = useAutoplay(sess); // 托管 -- one shared input-lock
@@ -157,12 +160,28 @@ export function Board({ sess }: { sess: GameSession }) {
   const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
   // The die lives in the board's roll zone (Ring); replays hide it entirely.
   const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
+  const advance = control === "end";
+  const names = namesOf(S);
+  const cur = S.players[S.turn];
+  // Why the button is (or is not) live, shown under it.
+  let hint: string;
+  if (S.phase !== "play") hint = "";
+  else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
+  else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
+  else if (S.busy || anim.animating) hint = tr("board.settling");
+  else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: names.playerId(S.turn) });
+  else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
+  else if (advance) hint = tr("board.moved");
+  else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: names.playerId(S.roller) });
+  else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
+  else hint = tr("board.waiting", { who: names.playerId(S.turn), bot: cur?.bot ? tr("board.botSuffix") : "" });
   const roll: RollControl | null = sess.readOnly ? null : {
-    enabled: control === "roll",
+    enabled: control !== null,
     rolling: anim.rolling,
     dice: anim.dice,
-    hint: control === "roll" ? tr("board.clickRoll") : "",
-    onClick: () => control === "roll" && void act(sess, { act: "roll" }),
+    caption: advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice"),
+    hint,
+    onClick: () => control && void act(sess, { act: control }),
   };
 
   return (
@@ -173,13 +192,13 @@ export function Board({ sess }: { sess: GameSession }) {
         section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
         title={tr("board.round", { n: Math.max(1, S.round) })}
         onBack={leave}
-        right={sess.kind === "online" && sess.room?.fair ? <CommitChip commit={sess.room.fair.commit} /> : <></>}
+        right={<></>}
       />
       <AutoBanner sess={sess} />
       <div className={s.body}>
         <div className={s.left}>
           <Players m={shown ?? m} solo={sess.kind !== "online"} elapsed={(performance.now() - at) / 1000} />
-          <Side m={m} sess={sess} anim={anim} />
+          <Side sess={sess} />
         </div>
         <div className={s.middle}>
           {/* The cards in play, as a top-docked card row over this column's

@@ -45,7 +45,6 @@ fn main() {
     let mut with_pre = 0usize;
     let mut with_guard = 0usize;
     let mut deleted_guard = 0usize;
-    let mut with_legacy = 0usize;
     let mut entries = 0usize;
     let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
     for c in cards {
@@ -71,13 +70,10 @@ fn main() {
             } else {
                 deleted_guard += 1;
             }
-            if o.has_legacy {
-                with_legacy += 1;
-            }
             if std::env::var("PRECHECK_VERBOSE").is_ok() {
                 println!(
-                    "{:40} {name:10} triggers={:?} pre={:?} guard={} legacy={}",
-                    c.id, o.triggers, pre, o.has_guard, o.has_legacy
+                    "{:40} {name:10} triggers={:?} pre={:?} guard={}",
+                    c.id, o.triggers, pre, o.has_guard
                 );
             }
         }
@@ -87,7 +83,6 @@ fn main() {
     println!("  with condition:     {with_pre}");
     println!("  with residual guard:{with_guard}");
     println!("  guard deleted:      {deleted_guard}");
-    println!("  legacy audit copy:  {with_legacy}");
     for (k, n) in &kinds {
         println!("  {k:12} {n}");
     }
@@ -102,9 +97,6 @@ fn main() {
         let Ok(text) = std::fs::read_to_string(&p) else {
             continue;
         };
-        // `legacy_*` copies keep the pre-migration kind checks on purpose
-        // (GUARDS.md §5.1) -- they are the audit oracle, not live guards.
-        let text = filter_legacy(&text);
         for (line, msg) in kind_rejects(&text) {
             println!("  {}:{line}: {msg}", p.display());
             flagged += 1;
@@ -121,32 +113,6 @@ fn main() {
     if flagged > 0 {
         std::process::exit(1);
     }
-}
-
-/// Blank out `fn legacy_*` bodies so the kind-recheck scan skips the G3 audit
-/// copies (they intentionally keep the pre-migration checks).
-fn filter_legacy(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut in_legacy = false;
-    let mut depth = 0i32;
-    for line in text.lines() {
-        let t = line.trim_start();
-        if !in_legacy && (t.starts_with("fn legacy_") || t.starts_with("pub fn legacy_")) {
-            in_legacy = true;
-            depth = 0;
-        }
-        if in_legacy {
-            depth += line.matches('{').count() as i32 - line.matches('}').count() as i32;
-            out.push('\n');
-            if depth <= 0 && line.contains('}') {
-                in_legacy = false;
-            }
-            continue;
-        }
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
 }
 
 fn walk(dir: &Path) -> Vec<PathBuf> {

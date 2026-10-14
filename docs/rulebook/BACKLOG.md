@@ -41,8 +41,8 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **CD-02 `crystals_changed_guard` residuals.** `ruleset_core::crystals_changed_of`
   is the shared base; the x11 per-card copies still carry local residuals
   (value vs 0, `is_placed`, …). Fold the identical prefix onto the helper.
-- **CD-03 `legacy_*` audit copies.** Delete only after NEGATION-AUDIT is clean
-  (GUARDS.md G3). Not part of the split.
+- **CD-03 `legacy_*` audit copies.** Done 2026-10-14: the G3 audit scaffolding
+  and every `legacy_*` copy were deleted (GUARDS.md §5.1/§10; ABI 61).
 - **CD-04 HookKind game-named wire variants** (`CircleAffected`, `CpChanged`,
   `CrystalsChanged`, …) stay in `card-sdk` as wire codes; ownership is
   documented. A rename would be an ABI break for no gain.

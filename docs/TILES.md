@@ -101,7 +101,7 @@ shape as `rules/cards/card-*` and `rules/skills/*`:
 | `tile:event` | `event.rs` | `cafe`, `ryuseido` | lines 97–99 |
 
 The crate is a **rule crate**, not a card crate: its ids are `tile:*`, not
-`data/cards.json` ids. `tools/rules-aggregate.mjs` gains `rules/tiles` as a
+roster card ids. `tools/rules-aggregate.mjs` gains `rules/tiles` as a
 scan root (alongside `rules/cards`, `rules/skills`, `rules/tile_marks` and
 `rules/events`) so `card-all` links it; `tools/build-ruleset.mjs` needs no
 change.
@@ -315,6 +315,99 @@ unless a rule says otherwise (rulebook: 「抵押，赎回，和强制购买的�
 受任何效果影响」), which is why `offer_force_buy` remains a primitive that
 moves money directly.
 
+## Tile text
+
+Deed-popup text is owned by the rule instances, the same way settle bodies
+are. A tile rule -- and any other instance that speaks for a board tile --
+declares the description its entries speak for; the view composes one winner
+per slot.
+
+### Declaration
+
+`CardDef::texts` is a per-entry side table `(entry index, slot, tile, key)`
+(`rules/card-sdk`, ABI v59):
+
+| field | values | |
+|---|---|---|
+| `slot` | `text_slot::SETTLE` (`"settle"`) | the [结算] half |
+| | `text_slot::PASS` (`"pass"`) | the [经过] half |
+| `tile` | `""` | the instance's own tile (`tile:*`) |
+| | a board tile *name* | a tile-less instance speaking for that square (`event:*`) |
+| `key` | a `ui`-namespace i18n key | `deed.note.*` in `webui/src/i18n/locales/*/ui.json` |
+| | `""` | suppresses the slot |
+
+The `slot` mirrors the body's own split (`On::Settle` / `HookKind::PassTile`),
+so a rule that replaces one half only replaces that half's text.
+
+### Manifest
+
+`ManifestEntry::texts: Vec<ManifestTileText>` (v59) carries the side table
+through the wire. The host caches it on `CardInfo`; `CardRules::card_texts`
+exposes it to `game-core` as `TileTextDecl`s.
+
+### View
+
+`MatchState.tile_texts: Vec<Vec<TileTextEntry>>` -- one speaker list per board
+tile, in **body-precedence order**. Composed by
+`crates/game-core/src/engine/tile_text.rs` (`compose_tile_texts`) on every
+public state. View-only (not in `Match::save`) and serde-defaulted, so older
+clients and older saves ignore it.
+
+### Precedence (generic override)
+
+The one that wins the settle body also wins the text:
+
+1. **Replacements first** -- any speaking instance other than the tile's own
+   `tile:*` base (a player-field instance on that tile, an `event:*` naming
+   the tile, an extra attached `tile:*`). Ordered by `effect_order_key`
+   (lookup group → source order → declaration order; [ENGINE.md](ENGINE.md)
+   「Effect ordering」). Among replacements **first claim wins** -- the settle
+   body's `cancelled` bail.
+2. **Base last** -- the `tile:*` bound to that tile (`tile: ""` texts). Wins
+   only unclaimed slots.
+
+An empty `key` suppresses the slot. A replacement silent on a slot has no
+opinion -- the base can still win it. `TODO(规则书)`: the book's 「该改变[触发
+结算]的效果优先于其他任何改变[触发结算]的效果」 is **not** a priority rule
+here -- the engine is placement order / first claim (`event:协助CiRCLE重建`
+carries the same TODO on its settle body). Text precedence uses that same
+ordering.
+
+### Worked example: `event:协助CiRCLE重建`
+
+While the event is live its instance speaks for both re-homed tiles
+(`rules/events/src/circle_rebuild.rs`):
+
+| tile | settle | pass |
+|---|---|---|
+| CiRCLE | `deed.note.rebuildSettle` | `""` (suppressed -- the reward is re-homed) |
+| CiRCLE 咖啡厅 | `deed.note.draw` | `deed.note.circlePass` |
+
+CiRCLE's settle becomes the rebuild choice and its [经过] reward text
+disappears, while the cafe shows CiRCLE's original notes
+(「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」). Expire drops
+the instance and the base `tile:*` texts return automatically -- no restore
+step.
+
+### Webui
+
+`webui/src/scenes/board/Popups.tsx`'s `Deed` renders the per-slot winning keys
+(`winningTileText` in `webui/src/scenes/board/tileText.ts`) and
+falls back to the old `switch (t.kind)` notes when `tileTexts` is absent, so
+the popup never goes blank.
+
+### Keys the tile rules declare
+
+| rule | settle | pass |
+|---|---|---|
+| `tile:circle` | `deed.note.circleSettle` | `deed.note.circlePass` |
+| `tile:edogawa` | `deed.note.draw` | -- |
+| `tile:event` | `deed.note.drawEvent` | -- |
+| `tile:agent` | `deed.note.dealer` | -- |
+| `tile:property` / `tile:ring` | none | none |
+
+(The RiNG dice-rent grid is webui-owned, not a tile rule text.)
+
 ## Cards become rule operations
 
 A card that bends a tile now **attaches, swaps or retunes rule instances**
@@ -509,7 +602,7 @@ than the only path. Phase 3 landed the following (2026-10-06):
   card effects shape it (a rent-region expansion, a forced stop-and-pay).
 * **`tools/rulebook/check.py`** now checks `rules/tiles/*` and
   `rules/tile_marks/*` against
-  `data/rules.txt` the way it checks `rules/cards/*` against `cards.json`.
+  `data/rules.txt` the way it checks `rules/cards/*` against the roster fixture.
 
 Concretely still short:
 

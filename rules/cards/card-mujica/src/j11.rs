@@ -22,7 +22,13 @@ pub const J11: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted], "card.placed", None, counteract),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name("")
+        .raw_name("")
+        .tags(&[])
+        .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#)
+        .cell(r#"J11"#)
+        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // C# `H.PlaceFromPlay(c, -1, -1, 2)` -- place with 2 miracle crystals.
@@ -135,4 +141,23 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("j11_decayed")).player_id("who", player_id),
     );
     Ok(())
+}
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
 }

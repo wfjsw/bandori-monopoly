@@ -329,6 +329,18 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn no_hand(&self, seat: i64) -> i64 {
         self.src.state_get(seat as i32, game_core::state::key::NO_HAND) as i64
     }
+    fn state(&self, seat: i64, key: &str) -> i64 {
+        self.src.state_get(seat as i32, key) as i64
+    }
+    fn state_table(&self) -> Vec<(i64, String, i64)> {
+        let mut rows = Vec::new();
+        for s in 0..self.src.player_count() {
+            for (k, v) in self.src.state_entries(s) {
+                rows.push((s as i64, k, v as i64));
+            }
+        }
+        rows
+    }
     fn character(&self, seat: i64) -> i64 {
         id_of(&self.src.character_name(seat as i32).unwrap_or_default())
     }
@@ -635,6 +647,19 @@ pub trait SnapSrc {
         let _ = (player_id, tile, class);
         false
     }
+    /// Fast path for `fill_tile_generic`: push every true `(player, tile,
+    /// class)` triple for `tile` in one pass and return `true`, or return
+    /// `false` to fall back to per-probe [`Self::tile_in`] (the default; a
+    /// world says `true` only when it can answer exactly).
+    fn tile_class_rows(
+        &self,
+        tile: i32,
+        classes: &[String],
+        out: &mut Vec<(i64, i64, String)>,
+    ) -> bool {
+        let _ = (tile, classes, out);
+        false
+    }
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
     fn fire(&self, player_id: i32) -> i32;
@@ -645,6 +670,13 @@ pub trait SnapSrc {
     fn stay_of(&self, player_id: i32) -> i32;
     fn stun_of(&self, player_id: i32) -> i32;
     fn state_get(&self, player_id: i32, key: &str) -> i32;
+    /// The seat's player-state `(key, value)` pairs (`MatchPlayer.state`),
+    /// for the baked `state(p, 'key')` table. Live worlds walk the real map;
+    /// the `CardWorld` blanket probes the well-known status keys via
+    /// [`Self::state_get`] and omits zeros (so a test world that never sets
+    /// state answers empty). Missing keys are simply absent -- `state(p, k)`
+    /// answers 0 for them.
+    fn state_entries(&self, player_id: i32) -> Vec<(String, i32)>;
     fn character_skill_id(&self, player_id: i32) -> Option<String>;
     fn band_skill_id(&self, player_id: i32) -> Option<String>;
     /// The player's character **name** -- the spelling `ctx::character_is`
@@ -742,6 +774,10 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::tile_in(self, player_id, tile, class)
     }
     #[inline]
+    fn tile_class_rows(&self, tile: i32, classes: &[String], out: &mut Vec<(i64, i64, String)>) -> bool {
+        CardWorld::tile_class_rows(self, tile, classes, out)
+    }
+    #[inline]
     fn player_count(&self) -> i32 {
         CardWorld::player_count(self)
     }
@@ -780,6 +816,35 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn state_get(&self, player_id: i32, key: &str) -> i32 {
         CardWorld::state_get(self, player_id, key)
+    }
+    fn state_entries(&self, player_id: i32) -> Vec<(String, i32)> {
+        // No map to walk on a bare `CardWorld` -- probe the well-known status
+        // keys via `state_get` and omit zeros. A test world that never sets
+        // state answers empty; `state(p, k)` still answers 0 for anything
+        // missing. Live worlds override this with the real `MatchPlayer.state`.
+        const KNOWN: &[&str] = &[
+            game_core::state::key::STAY,
+            game_core::state::key::STUN,
+            game_core::state::key::STUN_START,
+            game_core::state::key::EXILE,
+            game_core::state::key::EXILE_TO,
+            game_core::state::key::EXILE_MAIN,
+            game_core::state::key::FIRE,
+            game_core::state::key::NO_HAND,
+            game_core::state::key::UNSTOPPABLE,
+            game_core::state::key::HAND_LIMIT,
+        ];
+        KNOWN
+            .iter()
+            .filter_map(|k| {
+                let v = CardWorld::state_get(self, player_id, k);
+                if v != 0 {
+                    Some((k.to_string(), v))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
     #[inline]
     fn character_skill_id(&self, player_id: i32) -> Option<String> {
@@ -1054,50 +1119,6 @@ pub mod guard_cost {
     }
 }
 
-/// G3 (docs/GUARDS.md §5.1): the migration audit. On every probe the host
-/// evaluates the card's pre-migration `legacy_*` guard and
-/// `kind ∧ pre(ctx) ∧ guard(ctx)` and **panics** with card id + trigger dump on
-/// any mismatch (equivalence, both directions). Compiled out unless the
-/// `guard-audit` feature is on; once a card is clean its `legacy_*` copy is
-/// deleted and the check is a no-op for it.
-///
-/// `legacy == None` means the entry has no legacy copy (`has_legacy == false`)
-/// and the check is skipped. `trigger` is a one-line dump of the window.
-#[cfg(feature = "guard-audit")]
-pub fn legacy_audit(
-    card: &str,
-    entry: i32,
-    legacy: Option<bool>,
-    migrated: bool,
-    trigger: &str,
-) {
-    let Some(legacy) = legacy else {
-        return;
-    };
-    if legacy != migrated {
-        panic!(
-            "GUARDS G3 audit mismatch: card {card:?} entry {entry}\n\
-             trigger: {trigger}\n\
-             legacy(ctx) = {legacy}, category ∧ pre(ctx) ∧ guard(ctx) = {migrated}\n\
-             The two must be equivalent (docs/GUARDS.md §5.1). Either the \
-             condition drops a clause the legacy guard kept, or the residual \
-             guard / condition rejects what the legacy guard admitted."
-        );
-    }
-}
-
-/// No-op when the `guard-audit` feature is off (the production shape).
-#[cfg(not(feature = "guard-audit"))]
-#[inline]
-pub fn legacy_audit(
-    _card: &str,
-    _entry: i32,
-    _legacy: Option<bool>,
-    _migrated: bool,
-    _trigger: &str,
-) {
-}
-
 #[inline]
 fn bump(stat: &std::sync::atomic::AtomicU64) {
     stat.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1239,6 +1260,11 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             stun: world.stun_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
+            state: world
+                .state_entries(p)
+                .into_iter()
+                .map(|(k, v)| (k, v as i64))
+                .collect(),
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
@@ -1371,6 +1397,11 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             stun: world.stun_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
+            state: world
+                .state_entries(p)
+                .into_iter()
+                .map(|(k, v)| (k, v as i64))
+                .collect(),
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
@@ -1452,23 +1483,35 @@ fn fill_tile_generic<S: SnapSrc>(
 
     // Classes: the ruleset vocabulary plus `color:<g>` for groups present on
     // the board. `player = -1` plus each live seat.
-    let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    for g in -2..=32 {
-        classes.push(format!("color:{g}"));
+    let classes = class_names();
+    if world.tile_class_rows(tile, classes, tile_classes) {
+        return;
     }
     let players: Vec<i32> = std::iter::once(-1)
         .chain(0..world.player_count())
         .collect();
     for &p in &players {
-        for c in &classes {
+        for c in classes {
             if world.tile_in(p, tile, c) {
                 tile_classes.push((p as i64, tile as i64, c.clone()));
             }
         }
     }
+}
+
+/// The class vocabulary `tile_in` is probed over (built once).
+fn class_names() -> &'static [String] {
+    static NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        for g in -2..=32 {
+            classes.push(format!("color:{g}"));
+        }
+        classes
+    })
 }
 
 /// Every board name -> id, so `tile_named('Bandori车站')` / `tile_named('CiRCLE')`
@@ -1654,4 +1697,9 @@ pub fn fill_candidate_extras<S: SnapSrc>(
 /// A window scope helper: build once, evaluate every candidate against it.
 pub fn window_scope(win: &WindowCtx) -> WindowScope {
     WindowScope::new(win)
+}
+
+/// [`window_scope`] for a snapshot built just for it (no copy of the tables).
+pub fn window_scope_owned(win: WindowCtx) -> WindowScope {
+    WindowScope::from_owned(win)
 }
