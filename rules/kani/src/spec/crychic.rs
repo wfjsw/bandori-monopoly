@@ -142,8 +142,8 @@ pub fn ifonly_01_log_ok_mutant(effects: &[Effect], player: i32, x: i32) -> bool 
 // ---------------------------------------------------------------------------
 
 /// The card must leave the field into the discard. Observed as an
-/// `UnplaceCard` effect (or a field-count drop). `set_dest` alone is not a
-/// move.
+/// `UnplaceCard` effect (explicit `unplace`) or a field-count drop (the
+/// `set_dest(Graveyard)` commit — world state only, not an in-run effect).
 pub fn ifonly_02_log_ok(effects: &[Effect], uid: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::UnplaceCard { uid: u } if u == uid)
 }

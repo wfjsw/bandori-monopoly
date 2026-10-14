@@ -142,8 +142,15 @@ fn band_crystals_of(p: i32) -> i32 {
     world::with_world(|w| w.band_crystals[p as usize])
 }
 
-fn card_crystals_of_player(p: i32, key: crate::intern::NameId) -> i32 {
-    world::with_world(|w| w.key_get(p, key))
+/// Crystals on the card instance the body just wrote (`set_crystals` /
+/// `add_crystals` land on `field_crystals(last_uid)`, the counter name is
+/// `"crystals"` — NOT the player-level key `"奇迹水晶"`).
+fn self_crystals() -> i32 {
+    world::with_world(|w| w.field_crystals(w.last_uid))
+}
+
+fn set_self_crystals(v: i32) {
+    world::with_world_mut(|w| w.set_field_crystals(w.last_uid, v))
 }
 
 // ===========================================================================
@@ -666,9 +673,12 @@ pub fn together_01_mutant_is_detected() {
     let user = any_player_in();
     let up = fans_pos_of(user as usize);
     let down = fans_neg_of(user as usize);
-    // Need up < down and ceil_half(down-up) != 1
+    // Need up < down and ceil_half(down-up) != 1, and `down` large enough that
+    // the `min(X, down)` flip clamp does not collapse body and mutant to `down`
+    // (both `min(5+bonus, down)` and `min(6, down)` equal `down` when `down<=6`).
     kani::assume(up < down);
     kani::assume(spec::pp::ceil_half(down - up) != 1);
+    kani::assume(down >= 7);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
     let post = world::snapshot();
     let real = post.fans_pos[user as usize] - up;
@@ -687,8 +697,6 @@ pub fn together_01_mutant_is_detected() {
 // OPEN-div: integer division.
 // ===========================================================================
 
-const CRYSTALS: &str = "奇迹水晶";
-
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn guide_01_band_and_crystals_iff() {
@@ -705,8 +713,8 @@ pub fn guide_01_band_and_crystals_iff() {
         band == spec::pp::guide_01_band_after(pre_band),
         "C-PP-guide-01: band pool +3"
     );
-    // Card crystals = owned / 3 via `set_crystals` (counter on trig_player).
-    let cry = card_crystals_of_player(user, crate::intern::intern(CRYSTALS));
+    // Card crystals = owned / 3 via `set_crystals` (on-card `crystals` counter).
+    let cry = self_crystals();
     let expect = spec::pp::guide_01_crystals(up, down);
     kani::cover!(expect > 0, "places some crystals");
     kani::cover!(expect == 0, "owned < 3 places none");
@@ -733,7 +741,7 @@ pub fn guide_01_mutant_is_detected() {
     kani::assume(owned % 3 != 0 && owned >= 1);
     world::with_world_mut(|w| w.band_crystals[user as usize] = 0);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
-    let cry = card_crystals_of_player(user, crate::intern::intern(CRYSTALS));
+    let cry = self_crystals();
     crate::kassert!(
         cry != spec::pp::guide_01_crystals_mutant(up, down),
         "mutant: card must not round up"
@@ -947,12 +955,11 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
     let me = any_player_in();
     let pre = kani::any();
     kani::assume(pre >= 0 && pre < 3); // cap region is BLOCKED-HOST (max ignored)
-    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|w| w.trig_value = 1);
     world::with_world_mut(|w| w.pay_amount = 1);
-    // place the card so `is_placed` holds
-        world::with_world_mut(|ww| {
+    // place the card so `is_placed` holds; crystals live on the instance
+    world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
             card: crate::intern::intern("PP:[若宫伊芙]属于我的武士道！").0,
@@ -960,13 +967,14 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: 0,
+            crystals: pre,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
+        ww.last_uid = 1;
     });
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
-    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    let cry = self_crystals();
     crate::kassert!(
         cry == spec::pp::eve_bushido_04_crystals(pre),
         "C-PP-eve-bushido-04: +1 crystal (pre < 3 region)"
@@ -983,7 +991,6 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
     world::with_world_mut(|w| w.trig_value = 0);
     world::with_world_mut(|w| w.pay_amount = 0);
     let pre = 1;
-    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
         world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
             uid: 1,
@@ -992,13 +999,14 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: 0,
+            crystals: pre,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
+        ww.last_uid = 1;
     });
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
-    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    let cry = self_crystals();
     crate::kassert!(cry == pre, "C-PP-eve-bushido-04: zero-value draw is a no-op");
 }
 
@@ -1015,7 +1023,6 @@ pub fn guide_04_turn_end_crystal_iff() {
     let me = any_player_in();
     let pre = kani::any();
     kani::assume(pre >= 0 && pre <= 4); // stay under the 5-crystal cash-in
-    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
     world::with_world_mut(|w| w.trig_player = me);
         world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
@@ -1025,13 +1032,14 @@ pub fn guide_04_turn_end_crystal_iff() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: 0,
+            crystals: pre,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
+        ww.last_uid = 1;
     });
     invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:练习生解密指南"), "TurnEnd", me));
-    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    let cry = self_crystals();
     crate::kassert!(
         cry == spec::pp::guide_04_crystals(pre),
         "C-PP-guide-04: +1 crystal at turn end (pre < 5 region)"
@@ -1054,7 +1062,6 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
     let me = any_player_in();
     let pre = kani::any();
     kani::assume(pre >= 0 && pre < 5);
-    world::with_world_mut(|w| w.key_set(me, crate::intern::intern("奇迹水晶"), pre));
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|w| w.trig_value = 1);
         world::with_world_mut(|ww| {
@@ -1065,18 +1072,20 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
             tile: 0,
             face_down: false,
             immune: false,
-            crystals: 0,
+            crystals: pre,
             props: world::NameMap::new(),
         };
         ww.field_n = 1;
+        ww.last_uid = 1;
     });
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:梦在前方，结彩当下"), 2, me)  /* Hook Drew */);
-    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    let cry = self_crystals();
     crate::kassert!(
         cry == spec::pp::dream_ahead_01_crystals(pre),
         "C-PP-dream-ahead-01: +1 crystal (pre < 5 region)"
     );
-    let x = world::with_world(|ww| ww.key_get(me, crate::intern::intern("dreamAhead.X")));
+    // Overflow counter is the body's `SLOT_X` slot (`dream_ahead_x`).
+    let x = world::with_world(|ww| ww.key_get(me, crate::intern::intern("dream_ahead_x")));
     crate::kassert!(
         x == 0 || x == spec::pp::dream_ahead_01_overflow(pre),
         "C-PP-dream-ahead-01: overflow only when pre >= 5"
@@ -1159,10 +1168,11 @@ pub fn jennifer_01_place_other_iff() {
 pub fn ranger_01_02_steps_by_count_iff() {
     symbolic_play_world();
     let user = any_player_in();
-    // Isolation: no [共鸣]; pre-place 0..=2 other owned field cards so the
-    // Ranger itself (placed by the play) makes count ∈ 1..=3.
+    // Isolation: no [共鸣]; pre-place 0..=3 other owned field cards. The
+    // Ranger is a [手] play (default dest = discard) and is NOT on the field
+    // during its own body — 「场上你拥有的卡数量」 counts the others only.
     let others: i32 = kani::any();
-    kani::assume(others >= 0 && others <= 2);
+    kani::assume(others >= 0 && others <= 3);
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
@@ -1190,7 +1200,7 @@ pub fn ranger_01_02_steps_by_count_iff() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]魔法战队Pastel✽Ranger"), user));
     let post_money = world::with_world(|ww| ww.money[user as usize]);
     let band = band_crystals_of(user);
-    let count = others + 1; // the Ranger itself
+    let count = others; // the Ranger itself is not on the field during Play
     kani::cover!(count >= 3, "count >= 3: band +3");
     kani::cover!(count < 3, "count < 3: no band bump");
     crate::kassert!(

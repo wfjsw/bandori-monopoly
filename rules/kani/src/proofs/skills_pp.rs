@@ -326,7 +326,9 @@ pub fn band_idol_02_body_never_overflows() {
     kani::cover!(down >= 1, "player has reverse fans");
     // Detect: if the body ever produced overflow crystals, the book formula
     // for some X > down would match. Under this host/body it never does.
-    let cry = world::with_world(|w| w.key_get(me, crate::intern::intern("奇迹水晶")));
+    // Crystals live on the on-card `crystals` counter (`field_crystals`),
+    // not the player key `"奇迹水晶"`.
+    let cry = world::with_world(|w| w.field_crystals(w.last_uid));
     crate::kassert!(
         cry == 0 || cry < 11,
         "C-PP-band-idol-02: overflow crystals capped at 10 if any"
@@ -347,15 +349,15 @@ fn band_idol_04_tick_iff_at(user: i32) {
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre = kani::any();
     kani::assume(pre >= 0 && pre <= 10);
-    // crystals of the running instance live on the named CRYSTALS key of
-    // trig_player under the Kani host.
-    w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
+    // Crystals live on the on-card `crystals` counter (`field_crystals`),
+    // not the player key `"奇迹水晶"` (class B triage3).
+    w.self_crystals = pre;
     w.trig_player = me;
     world::reset_world(w);
     invoke::unwrap_done(skill_bands::pastel::at_turn_start_kani(me));
     let post = world::snapshot();
     let _ = post;
-    let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
+    let cry = world::with_world(|ww| ww.field_crystals(ww.last_uid));
     // Automatic +1. The optional -5 / draw is a prompt; with symbolic answers
     // both branches run in this harness.
     kani::cover!(cry == pre + 1, "option declined (just +1)");
