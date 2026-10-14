@@ -21,6 +21,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from roster import load_bands, load_cards, load_characters  # noqa: E402
+
 WEB = Path(__file__).resolve().parents[2]
 ASSETS = WEB / "webui" / "public" / "assets"
 DATA = WEB / "data"
@@ -62,12 +65,12 @@ def main() -> int:
     missing = [f for f in files if not (ASSETS / f).exists()]
     errors += [f"manifest points to missing file {f}" for f in missing]
 
-    # 2. game data coverage
-    cards = load(DATA / "cards.json")["cards"]
+    # 2. game data coverage (roster from the ruleset dump, not data/*.json)
+    cards = load_cards()
     no_art = [c["id"] for c in cards if c["id"] not in m["cards"]]
     errors += [f"card without art: {i}" for i in no_art]
 
-    chars = load(DATA / "characters.json")["characters"]
+    chars = load_characters()
     for c in chars:
         art_id = c.get("art") or c["cnId"]  # CharacterData.cs:34-38 (art ?? cnId)
         art = m["characters"].get(art_id)
@@ -81,7 +84,7 @@ def main() -> int:
             if kind not in art:
                 warnings.append(f"character {c['name']} ({art_id}) has no {kind}")
 
-    band_names = {b["name"] for b in load(DATA / "bands.json")["bands"]}
+    band_names = {b["name"] for b in load_bands()}
     no_logo = sorted(band_names - set(m["bands"]))
     warnings += [f"band without logo in BandoriDatabase: {b}" for b in no_logo]
 

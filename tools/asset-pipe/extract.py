@@ -370,8 +370,14 @@ def run(args) -> int:
         # The source export is the base; web/data is extended by hand (bot
         # names, presets, ...). Copy only files we do not have -- overwriting
         # would silently drop those extensions.
+        # `cards.json` / `characters.json` / `bands.json` are NOT generated
+        # here any more: the roster lives in the Rust rule code (ABI v63) and
+        # tools read it via tools/roster-dump.mjs (docs/ROSTER-TOOLS.md).
+        skip = {"cards.json", "characters.json", "bands.json"}
         for f in GAME_DATA.iterdir():
             if f.suffix not in (".json", ".txt") or f.name.startswith("LineBreaking"):
+                continue
+            if f.name in skip:
                 continue
             dst = DATA_OUT / f.name
             if dst.exists():
@@ -379,26 +385,10 @@ def run(args) -> int:
                 continue
             shutil.copy2(f, dst)
             p.stats.add("data", dst)
-        # 6b) the build's `skill_simple` TextAsset (C# GameDataLoader.WithSimple):
-        # a simplified skill text per character / band, merged into the data JSONs
-        # as `simple` (the full `text` stays as-is).
-        simple = read_text_asset("skill_simple")
-        if simple:
-            for fname, key in (("characters.json", "characters"), ("bands.json", "bands")):
-                dst = DATA_OUT / fname
-                if not dst.exists():
-                    continue
-                doc = json.loads(dst.read_text(encoding="utf-8-sig"))
-                rows = doc.get(key) if isinstance(doc, dict) else doc
-                by_name = {e.get("name"): e.get("text") for e in simple.get(key, [])}
-                n = 0
-                for row in rows:
-                    text = by_name.get(row.get("name"))
-                    if text and row.get("simple") != text:
-                        row["simple"] = text
-                        n += 1
-                dst.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-                print(f"   data: {fname} += simple skill text on {n} {key}")
+        # skill_simple.json (display-only `simple` skill text, C#
+        # GameDataLoader.WithSimple) is a normal game-data file -- copied above.
+        # It used to be merged into characters.json / bands.json as `simple`;
+        # those files are gone, so no merge.
 
     p.drain()
     p.pool.shutdown()
