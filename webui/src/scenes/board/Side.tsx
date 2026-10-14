@@ -18,7 +18,6 @@ import { PanelTab } from "../../ui/Chips";
 import { usePromptSheet } from "../../ui/Modal";
 import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
-import type { Animator } from "./anim";
 import { act, type Model } from "./model";
 import { byTitle, showDeck, showDeedList } from "./Popups";
 import { BOARD_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
