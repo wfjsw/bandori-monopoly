@@ -1252,7 +1252,7 @@ specs. Production `cfg(not(kani))` untouched.
 
 ### Proof/spec fixes (commit `0b25d27d`)
 
-3. **Crystal storage (class B, 4 rows + 1 vacuous mutant).** Bodies call
+3. **Crystal storage (class B, 4 rows + 1 vacuous mutant; also 2 skills_pp rows pre-empted).** Bodies call
    `ctx::add_crystals` / `ctx::set_crystals` → `add_counter("crystals")` /
    `set_counter("crystals")`, which the host lands on
    `field_crystals(last_uid)`. Proofs set/read the player-level key
