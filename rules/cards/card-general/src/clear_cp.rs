@@ -259,3 +259,22 @@ fn on_cp_empty(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_cp_kani(player_id: i32) -> card_sdk::Asked {
+    clear_cp(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn spread_kani(player_id: i32) -> card_sdk::Asked {
+    spread(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_cp_empty_kani(player_id: i32) -> card_sdk::Asked {
+    on_cp_empty(player_id)
+}

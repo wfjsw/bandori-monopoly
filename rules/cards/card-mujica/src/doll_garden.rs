@@ -113,3 +113,10 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
     // player; that is exactly `card_move`'s bookkeeping.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn doll_garden_kani(player_id: i32) -> card_sdk::Asked {
+    doll_garden(player_id)
+}

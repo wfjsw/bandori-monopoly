@@ -107,3 +107,10 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
     }
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn ranger_kani(player_id: i32) -> card_sdk::Asked {
+    ranger(player_id)
+}

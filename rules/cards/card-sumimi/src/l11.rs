@@ -48,3 +48,16 @@ fn sweep(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn l11_kani(player_id: i32) -> card_sdk::Asked {
+    l11(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn sweep_kani(player_id: i32) -> card_sdk::Asked {
+    sweep(player_id)
+}

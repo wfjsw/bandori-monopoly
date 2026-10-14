@@ -14,3 +14,10 @@ fn press(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1000, &Msg::new(key!("press_why")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn press_kani(player_id: i32) -> card_sdk::Asked {
+    press(player_id)
+}

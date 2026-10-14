@@ -24,3 +24,10 @@ fn resolve(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1000, &Msg::new(key!("resolve_why")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn resolve_kani(player_id: i32) -> card_sdk::Asked {
+    resolve(player_id)
+}

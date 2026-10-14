@@ -178,3 +178,28 @@ ruleset_core::roster::BandDef::new(r#"Ave Mujica"#)
     .skill(r#"假面之下的真实"#)
     .text(r#"你拥有“状态1”和“状态2”两种状态，初始处于状态1。处于状态2的第三回合开始时为此卡添加一个奇迹水晶。你在状态2时从[收取]与[支付]的资金改为1.5倍（只对自己结算，对应的其他玩家收支不变），处于状态2时可消耗一个奇迹水晶使你的一次[支付]金额减半。若你的技能拥有火罐，进入状态2时将火罐补充至上限且每回合结束时失去1火罐，回合结束后若火罐为0则退出状态2；退出状态2时，失去所有剩余火罐。"#)
     .logo("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn halve_kani(player_id: i32) -> card_sdk::Asked {
+    halve(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn bend_kani(player_id: i32) -> card_sdk::Asked {
+    bend(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}

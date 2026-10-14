@@ -154,3 +154,16 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
     ctx::inc_slot(player_id, SLOT_STACKS, 2);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn no_expectation_kani(player_id: i32) -> card_sdk::Asked {
+    no_expectation(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
+    hook(player_id)
+}

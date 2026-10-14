@@ -26,3 +26,10 @@ fn tae_sound(player_id: i32) -> card_sdk::Asked {
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("tae_sound_why")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn tae_sound_kani(player_id: i32) -> card_sdk::Asked {
+    tae_sound(player_id)
+}

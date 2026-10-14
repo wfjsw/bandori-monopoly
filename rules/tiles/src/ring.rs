@@ -28,3 +28,10 @@ pub const RING: CardDef = CardDef::new("tile:ring", &[On::Settle("", None, settl
 fn settle(player_id: i32) -> card_sdk::Asked {
     super::property::settle(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_kani(player_id: i32) -> card_sdk::Asked {
+    settle(player_id)
+}

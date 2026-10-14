@@ -146,3 +146,16 @@ ruleset_core::roster::BandDef::new(r#"RAISE A SUILEN"#)
     .skill(r#"UNSTOPPABLE"#)
     .text(r#"（1）每回合可选择只获得第一次受到的[异常移动效果]。（2）因该技能以外的效果在livehouse格子[触发结算]时，若你的下回合开始时仍在那个格子上，你的下一次主要移动可变为传送至你拥有的一个livehouse格子。"#)
     .logo(r#"018"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_reset_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start_reset(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
+    on_settle(player_id)
+}

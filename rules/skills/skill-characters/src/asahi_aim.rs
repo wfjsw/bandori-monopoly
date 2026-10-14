@@ -106,3 +106,10 @@ ruleset_core::roster::CharacterDef::new(r#"朝日六花"#)
     .preset(&[])
     .variant_of("")
     .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}

@@ -48,3 +48,16 @@ fn settle_now(player_id: i32) -> card_sdk::Asked {
     ctx::card_settle_at(player_id, at, false);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn rinne_rain_kani(player_id: i32) -> card_sdk::Asked {
+    rinne_rain(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_now_kani(player_id: i32) -> card_sdk::Asked {
+    settle_now(player_id)
+}

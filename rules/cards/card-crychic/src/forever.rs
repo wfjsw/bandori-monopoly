@@ -80,3 +80,16 @@ fn on_drew(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn forever_kani(player_id: i32) -> card_sdk::Asked {
+    forever(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_drew_kani(player_id: i32) -> card_sdk::Asked {
+    on_drew(player_id)
+}

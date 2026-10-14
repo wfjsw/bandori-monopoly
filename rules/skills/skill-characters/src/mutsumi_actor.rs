@@ -101,3 +101,16 @@ ruleset_core::roster::CharacterDef::new(r#"若叶睦"#)
     .preset(&[])
     .variant_of("")
     .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_play_kani(player_id: i32) -> card_sdk::Asked {
+    on_play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}

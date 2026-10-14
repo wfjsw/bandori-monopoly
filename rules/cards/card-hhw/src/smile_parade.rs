@@ -314,3 +314,22 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
 // move, and `place_card_on` is what put it on 弦卷集团 in the first place.
 // （3） is `swap_body` / `discard_after_settle` above: a board position
 // exchange for the settle body/ownership/rent reads, then the discard.
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_resolved_kani(player_id: i32) -> card_sdk::Asked {
+    on_resolved(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
+}

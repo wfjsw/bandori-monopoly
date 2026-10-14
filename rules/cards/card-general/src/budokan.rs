@@ -43,3 +43,10 @@ fn budokan(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「Y设为[存活]玩家数量减1」 -- Y is defined but unused in the passage.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn budokan_kani(player_id: i32) -> card_sdk::Asked {
+    budokan(player_id)
+}

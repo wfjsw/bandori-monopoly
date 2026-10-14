@@ -53,3 +53,22 @@ fn expire(_player_id: i32) -> card_sdk::Asked {
     expire_removed(ID);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn halve_kani(player_id: i32) -> card_sdk::Asked {
+    halve(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn expire_kani(player_id: i32) -> card_sdk::Asked {
+    expire(player_id)
+}

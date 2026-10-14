@@ -170,3 +170,10 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
     // player; that is exactly `card_move`'s bookkeeping.
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn sakiko_cut_kani(player_id: i32) -> card_sdk::Asked {
+    sakiko_cut(player_id)
+}

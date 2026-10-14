@@ -110,3 +110,16 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn strong_flower_kani(player_id: i32) -> card_sdk::Asked {
+    strong_flower(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
+    pass_tile(player_id)
+}

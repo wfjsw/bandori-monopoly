@@ -166,3 +166,34 @@ fn on_out(_owner: i32) -> card_sdk::Asked {
     clear_copies(trigger::player_id());
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_turn_start_clear_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_start_clear(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    on_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
+    on_settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_out_kani(player_id: i32) -> card_sdk::Asked {
+    on_out(player_id)
+}

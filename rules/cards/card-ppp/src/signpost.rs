@@ -63,3 +63,16 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     ctx::pay(player_id, 1000, &Msg::new(key!("signpost_lose")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
+}

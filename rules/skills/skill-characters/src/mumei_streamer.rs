@@ -154,3 +154,10 @@ ruleset_core::roster::CharacterDef::new(r#"祐天寺若麦"#)
     .preset(&[])
     .variant_of("")
     .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}

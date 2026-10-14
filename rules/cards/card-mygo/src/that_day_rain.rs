@@ -226,3 +226,22 @@ fn rain(player_id: i32) {
         }
     }
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn that_day_rain_kani(player_id: i32) -> card_sdk::Asked {
+    that_day_rain(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
+    hook(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
+}

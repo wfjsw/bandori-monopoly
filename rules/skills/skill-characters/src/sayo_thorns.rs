@@ -150,3 +150,16 @@ ruleset_core::roster::CharacterDef::new(r#"冰川纱夜"#)
     .preset(&[r#"R:（纱夜）弹奏弹奏弹奏，继续弹奏"#, r#"R:学生会的检查"#, r#"R:曲奇时间"#, r#"R:NFO"#, r#"R:live前的准备"#, r#"R:蓝玫瑰的骄傲"#, r#"R:Sprechchor"#, r#"通用:登上武道馆"#, r#"通用:网络链接异常"#, r#"通用:尽力后的收获"#])
     .variant_of("")
     .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_kani(player_id: i32) -> card_sdk::Asked {
+    offer(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}

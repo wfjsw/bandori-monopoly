@@ -185,3 +185,16 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
+    roll_after(player_id)
+}

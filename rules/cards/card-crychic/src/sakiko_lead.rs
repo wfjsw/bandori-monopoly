@@ -67,3 +67,10 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_pay_factor(500);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn sakiko_lead_kani(player_id: i32) -> card_sdk::Asked {
+    sakiko_lead(player_id)
+}

@@ -107,3 +107,34 @@ ruleset_core::roster::CharacterDef::new(r#"高松灯（CRYCHIC）"#)
     .preset(&[])
     .variant_of(r#"高松灯"#)
     .variant_tag(r#"c"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn use_skill_kani(player_id: i32) -> card_sdk::Asked {
+    use_skill(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
+    on_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_now_kani(player_id: i32) -> card_sdk::Asked {
+    settle_now(player_id)
+}

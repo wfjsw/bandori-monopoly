@@ -107,3 +107,22 @@ ruleset_core::roster::BandDef::new(r#"Pastel✽Palettes"#)
 （3）[经过]CiRCLE时不获得[CiRCLE奖励]。
 （4）回合开始时此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡。"#)
     .logo(r#"004"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_flip_kani(player_id: i32) -> card_sdk::Asked {
+    on_flip(player_id)
+}

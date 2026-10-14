@@ -190,3 +190,22 @@ fn field_crystals(p: i32) -> i32 {
         .map(|(uid, _)| ctx::counter_at(uid, counter::CRYSTALS))
         .sum()
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn miracle_kani(player_id: i32) -> card_sdk::Asked {
+    miracle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
+    before_build(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_build_kani(player_id: i32) -> card_sdk::Asked {
+    after_build(player_id)
+}

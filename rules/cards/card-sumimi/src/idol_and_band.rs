@@ -40,3 +40,10 @@ fn idol_and_band(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")))?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn idol_and_band_kani(player_id: i32) -> card_sdk::Asked {
+    idol_and_band(player_id)
+}

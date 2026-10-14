@@ -64,3 +64,16 @@ fn nyamu_card(player_id: i32) -> card_sdk::Asked {
     // the face-down flag at the turn end (`Fx.Flipped` does not exist).
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn nyamu_card_kani(player_id: i32) -> card_sdk::Asked {
+    nyamu_card(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn watch_flips_kani(player_id: i32) -> card_sdk::Asked {
+    watch_flips(player_id)
+}

@@ -114,3 +114,34 @@ fn pay_mul(player_id: i32) -> card_sdk::Asked {
     );
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
+    roll_after(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_mul_kani(player_id: i32) -> card_sdk::Asked {
+    pay_mul(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
+}

@@ -142,3 +142,22 @@ fn settle_body(player_id: i32) -> card_sdk::Asked {
     ctx::card_settle_at(trigger::player_id(), tile, true);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
+    pass_tile(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
+    settle_body(player_id)
+}

@@ -86,3 +86,16 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
 }
 // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
 // 的“初次演出事故”（如果有）」 -- a named unplace on the discard.
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn overlapping_voices_kani(player_id: i32) -> card_sdk::Asked {
+    overlapping_voices(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_end(player_id)
+}

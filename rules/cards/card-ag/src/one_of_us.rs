@@ -300,3 +300,22 @@ fn before_out(owner: i32) -> card_sdk::Asked {
     ctx::set_slot(owner, "one_of_us_partner", 0);
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn play_kani(player_id: i32) -> card_sdk::Asked {
+    play(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn measure_rent_kani(player_id: i32) -> card_sdk::Asked {
+    measure_rent(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_measured_rent_kani(player_id: i32) -> card_sdk::Asked {
+    clear_measured_rent(player_id)
+}

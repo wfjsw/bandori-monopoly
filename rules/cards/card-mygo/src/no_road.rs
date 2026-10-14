@@ -154,3 +154,10 @@ fn redirect(player_id: i32) -> card_sdk::Asked {
 // that turn's main move -- `TurnCtx::main_moved` is set, so 「一回合只能触发
 // 一次［主要移动］」 keeps the player from rolling as well (C#
 // `H.MoveWhyNot` / `_turnCtx.MainMoved`).
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
+    no_road(player_id)
+}
