@@ -35,12 +35,7 @@ pub const MYGO: CardDef = CardDef::new(
         // and skips the prompt when only one is.
         On::Play("", Some(cant_play), press),
     ],
-)
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」.
 fn at_start(player_id: i32) -> card_sdk::Asked {

@@ -28,11 +28,7 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
     ],
 )
-    .legacy(&[(3, legacy_mine)]).silent(&[1, 3]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1, 3]);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

@@ -28,11 +28,7 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::AtEnd("owner.pos >= 0", None, settle_now),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[1]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1]);
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {

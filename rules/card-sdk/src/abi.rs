@@ -379,6 +379,14 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v61: **legacy guard-audit scaffolding removed** (docs/GUARDS.md §5.1/§10
+///      finished 2026-10-14). `CardDef::legacy` / `.legacy(...)`,
+///      `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`, the `guard-audit`
+///      host feature, `cond_pre::legacy_audit` and `legacy_probe` are gone --
+///      the G3 equivalence check ran once at removal time and the pre-migration
+///      copies were deleted. `ManifestOn` loses `has_legacy` (postcard is not
+///      self-describing, so this is the bump); guest wasm must be rebuilt with
+///      the host. SAVE_VERSION / RECORD_VERSION unchanged (no save field).
 /// v60: **exclusive-use gate** -- `TriggerKind::ExclusiveUse = 98` (also
 ///      `GateKind`): a CEL-only `On::Gate` question the band-skill cards answer
 ///      (CRYCHIC's 「variants may not use the base character's exclusives」).
@@ -419,7 +427,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 60;
+pub const ABI_VERSION: i32 = 61;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -519,17 +527,12 @@ pub mod export {
     pub const MANIFEST: &str = "bandori_manifest";
     /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
     /// `entry` (an index into the card's manifest `on` list). `op` is
-    /// [`OP_RUN`], [`OP_GUARD`] or [`OP_LEGACY_GUARD`]. Returns 0, the guard's
+    /// [`OP_RUN`] or [`OP_GUARD`]. Returns 0, the guard's
     /// 0/1, or (for a `Play` gate) a packed `(ptr << 32) | len` postcard `Msg`
     /// reason with 0 meaning "playable".
     pub const ON: &str = "bandori_on";
     pub const OP_RUN: i32 = 0;
     pub const OP_GUARD: i32 = 1;
-    /// G3 migration audit (GUARDS.md §5.1): the card's pre-migration
-    /// `legacy_*` guard. Only present while `ManifestOn::has_legacy`; the
-    /// `guard-audit` host compares it against `pre ∧ guard` and panics on any
-    /// mismatch. Traps / a missing entry mean "no legacy" and skip the check.
-    pub const OP_LEGACY_GUARD: i32 = 2;
     pub const MEMORY: &str = "memory";
 }
 
@@ -2406,11 +2409,6 @@ pub struct ManifestOn {
     /// moved into `pre`; the host then skips the `OP_GUARD` instantiation
     /// (`admits_pre`). `true` for every pre-G4 entry.
     pub has_guard: bool,
-    /// Does this entry keep a `legacy_*` audit guard (G3, docs/GUARDS.md §5.1)?
-    /// The `guard-audit` host feature calls [`export::OP_LEGACY_GUARD`] and
-    /// panics on any mismatch with `pre ∧ guard`. Deleted once the card's audit
-    /// is clean.
-    pub has_legacy: bool,
     /// Message names this [`OnKind::Message`] entry answers (empty otherwise).
     #[serde(default)]
     pub messages: Vec<String>,

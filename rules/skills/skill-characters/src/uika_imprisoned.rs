@@ -83,16 +83,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (2, legacy_mine)]).silent(&[2, 3]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
-
-/// G4: kept as a callable alias for in-body uses of the old guard.
-fn mine(player_id: i32) -> bool {
-    legacy_mine(player_id)
-}
+    .silent(&[2, 3]);
 
 /// Residual guard for [`at_turn_start`]: 状态2 (the cap write must run) or
 /// the memory latch is clear (the 状态2 offer). Dynamic key.
@@ -143,7 +134,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- settling on one
 /// sets the latch. `actor == owner` and the three named tiles are the condition.
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    debug_assert!(mine(player_id));
+    debug_assert!(ctx::trigger::player_id() == player_id);
     debug_assert!(MEMORY.iter().any(|&n| ctx::trigger::tile() == ctx::tile_named(n)));
     state::set(player_id, DIRTY, 1);
     state::set(player_id, MEMO_DIRTY, 1);

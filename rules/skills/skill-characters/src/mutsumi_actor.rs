@@ -34,11 +34,7 @@ pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[1]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1]);
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // `slot('skillState') != 2` is the pre.

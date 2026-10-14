@@ -20,14 +20,7 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         On::Hook(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
         On::Hook(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
     ],
-).props(&[(card_sdk::abi::prop::EST_COST, 6000)])
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
-
-/// The lingering instance only answers for its own player's buys
-/// (「本回合购买格子」 is the turn player's purchase).
-fn legacy_mine(player_id: i32) -> bool {
-    trigger::player_id() == player_id
-}
+).props(&[(card_sdk::abi::prop::EST_COST, 6000)]);
 
 /// 「本回合购买格子不[消耗]资金」 -- `BuySet` is the free / fixed stage
 /// (`docs/PURCHASE.md`), so the hook sets the running price to 0.

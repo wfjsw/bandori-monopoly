@@ -6,7 +6,7 @@
 //!
 //! until the face is new this turn.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,16 +18,7 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「进入移动阶段后，触发结算前可打出」
-    trigger::kind() == TriggerKind::MoveRoll
-        && trigger::player_id() == player_id
-        && trigger::move_roll().is_some()
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(before) = trigger::move_roll() else {

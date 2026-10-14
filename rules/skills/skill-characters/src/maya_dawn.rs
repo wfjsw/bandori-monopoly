@@ -42,12 +42,7 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
             on_draw,
         ),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得大和麻弥的
 /// （2）技能」.

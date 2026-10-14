@@ -37,8 +37,7 @@ pub const HHW: CardDef = CardDef::new(
         // （3） a recorded amount to spend down.
         On::Hook(&[HookKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
     ],
-)
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
+);
 
 /// Residual guard for [`after_pay`]: a recorded player collected a rent and
 /// this card has a crystal to spend. Dynamic keys (`skill.hhw.*`), not CEL.
@@ -58,10 +57,6 @@ fn after_pay_applies(player_id: i32) -> bool {
 /// Residual guard for [`before_build`]: something recorded to spend.
 fn has_saved(player_id: i32) -> bool {
     state::get(player_id, SAVED) > 0
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }
 
 /// （1）「向他人的格子付款时可选择支付双倍价格」.

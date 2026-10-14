@@ -34,12 +34,7 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayChoose], "", Some(paired), on_pay),
         On::Hook(&[HookKind::HouseAdded], "", Some(partner), on_built),
     ],
-)
-    .legacy(&[(2, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// Either half of the pair is under the spell.
 fn paired(player_id: i32) -> bool {

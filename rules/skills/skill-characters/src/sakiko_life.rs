@@ -53,16 +53,7 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         On::Hook(&[HookKind::Abnormal], "target == owner", Some(im_hit), on_abnormal),
     ],
 )
-    .legacy(&[(1, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
-
-/// G4: kept as a callable alias for in-body uses of the old guard.
-fn mine(player_id: i32) -> bool {
-    legacy_mine(player_id)
-}
+    .silent(&[0]);
 
 /// The `Abnormal` hook's guard: this player is the *recipient* of the effect
 /// (`trigger::target()`), still in 状态1.

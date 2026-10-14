@@ -34,12 +34,7 @@ pub const NUMAZU_MAID: CardDef = CardDef::new(
         // On::Play's gate is `Option<Msg>` (WhyNot), not a bool residual.
         On::Play("tok('PAREO标记') >= 1", Some(offer_gate), offer),
     ],
-)
-    .legacy(&[(1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「游戏开始时如果场上有"Pastel✽Palettes"角色则额外获得1个正面[P✽P粉丝]」,
 /// and （2）'s 「初始1」 -- the PAREO mark starts at 1 (cap 3).

@@ -35,12 +35,7 @@ pub const MORFONICA: CardDef = CardDef::new(
             on_circle,
         ),
     ],
-)
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「当你一次性失去2000以上资金时，抽一张卡」. Applicability is the `pre`;
 /// this side only draws.

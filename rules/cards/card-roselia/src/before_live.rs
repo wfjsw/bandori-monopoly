@@ -6,7 +6,7 @@
 //!
 //! on passing 江户川乐器店: force yourself to stop there and settle.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,25 +18,7 @@ pub const BEFORE_LIVE: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-.legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「[反击] 经过江户川乐器店时可打出此卡」
-    // 规则书[反击]: 「经过江户川乐器店时」 -- C# `t.Kind == "pass" && t.Seat == seat &&
-    // H.Name(t.Tile) == "江户川乐器店"`.
-    if trigger::kind() != TriggerKind::Pass || trigger::player_id() != player_id {
-        return false;
-    }
-    let tile = trigger::tile();
-    let shop = ctx::tile_named("江户川乐器店");
-    // 规则书[反击]: the C# also requires `t.Move.Remaining > 0` (still mid-move).
-    if trigger::move_remaining() <= 0 {
-        return false;
-    }
-    tile >= 0 && tile == shop
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && move.remaining > 0 && tile.id ==

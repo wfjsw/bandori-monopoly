@@ -33,12 +33,7 @@ pub const PASTEL: CardDef = CardDef::new(
         // (there is no cost or downside), so the overflow is applied here.
         On::Hook(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
     ],
-)
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// （1）「游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张
 /// Pastel✽Palettes乐队卡时此效果不重复发动）」 -- the band card's own game-start

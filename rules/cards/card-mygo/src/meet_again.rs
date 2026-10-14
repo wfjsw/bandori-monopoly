@@ -7,7 +7,7 @@
 //! move roll, keep re-rolling movement dice until the total passes the next
 //! player in the direction of travel.
 
-use card_sdk::abi::{ChainKind, MoveKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,8 +19,7 @@ pub const MEET_AGAIN: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-.legacy(&[(0, legacy_can_counteract)]);
+);
 
 /// Distance in the direction of travel to the nearest other player who can be
 /// passed (C# `CardMeetAgain.Next` over `H.Forward`, picked by `MoveCtx.Dir`).
@@ -52,20 +51,6 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
     } else {
         best
     }
-}
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书: 「[反击]移动掷骰后」 -- C# `t.Kind == "moveRoll" && t.Seat == seat`.
-    if trigger::player_id() != player_id {
-        return false;
-    }
-    // 规则书: 「且场上有可被经过的玩家时可打出」 -- C# `!t.Move.Teleport && Next(t.Move) > 0`
-    // (`t.Move.Teleport` is `trigger::move_kind() == Some(MoveKind::Teleport)`).
-    if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return false;
-    }
-    trigger::move_roll().is_some() && next_dist(player_id, trigger::move_dir()) > 0
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

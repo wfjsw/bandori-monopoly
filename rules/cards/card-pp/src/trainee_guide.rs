@@ -34,7 +34,7 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
 // (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
 .props(&[(prop::HAND_LIMIT_DELTA, -1)])
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]).silent(&[1]);
+    .silent(&[1]);
 
 fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
@@ -146,8 +146,4 @@ fn after_build(player_id: i32) -> card_sdk::Asked {
         ctx::state::add(player_id, "trainee_guide.buildOff", -1);
     }
     Ok(())
-}
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
 }

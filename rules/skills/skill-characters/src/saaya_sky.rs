@@ -33,11 +33,7 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0]);
 
 fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() != player_id

@@ -5,7 +5,7 @@
 //!
 //! Counteraction: when one of your own rolls is under 6, it goes up by 1.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,19 +19,7 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    if !matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll) {
-        return false;
-    }
-    if trigger::player_id() != player_id {
-        return false;
-    }
-    matches!(trigger::move_roll(), Some(r) if r < 6)
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使结果+1」

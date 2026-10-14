@@ -33,11 +33,7 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
         On::Hook(&[HookKind::RollAfter], "", Some(other), latch),
     ],
 )
-    .legacy(&[(2, legacy_mine)]).silent(&[3]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[3]);
 
 fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() == state::get(player_id, OTHER)

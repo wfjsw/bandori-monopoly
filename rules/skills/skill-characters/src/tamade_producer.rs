@@ -28,12 +28,7 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[1, 2]);
-
-/// Only this player's own business -- the skill is theirs, not the table's.
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[1, 2]);
 
 /// 「加盖房屋时半价」, or 「本回合加盖房屋变为免费」 when last turn built.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {

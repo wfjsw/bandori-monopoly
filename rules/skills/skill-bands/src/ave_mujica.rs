@@ -34,12 +34,7 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayMul], "slot('skillState') == 2 && card.placed", None, bend),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
     ],
-)
-    .legacy(&[(3, legacy_mine)]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+);
 
 /// 「你在状态2时…」 -- the bends only apply in 状态2.
 fn in_two(player_id: i32) -> bool {

@@ -34,11 +34,7 @@ pub const TAKI_CRYCHIC: CardDef = CardDef::new(
         On::Hook(&[HookKind::SkillUsed], card_sdk::pre::MINE, None, on_skill_used),
     ],
 )
-    .legacy(&[(0, legacy_mine), (2, legacy_mine)]).silent(&[0, 2]);
-
-fn legacy_mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-}
+    .silent(&[0, 2]);
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, USED, 0);

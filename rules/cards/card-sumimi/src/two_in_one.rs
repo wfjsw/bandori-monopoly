@@ -7,8 +7,8 @@
 //!
 //! swap to the other Sumimi character (play or [反击] after own move roll).
 
-use card_sdk::abi::{ChainKind, TriggerKind};
-use ruleset_core::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TWO_IN_ONE: CardDef = CardDef::new(
@@ -22,24 +22,12 @@ pub const TWO_IN_ONE: CardDef = CardDef::new(
             counteract,
         ),
     ],
-)
-.legacy(&[(1, legacy_can_counteract)]);
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
     swap(player_id);
     Ok(())
-}
-
-/// G4 audit oracle (docs/GUARDS.md §5.1).
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // 规则书（2）: 「此卡可在你的移动掷骰后作为[反击]使用」 -- C#
-    // `t.Kind == "moveRoll" && t.Seat == seat` (and the player's character is a
-    // Sumimi one).
-    trigger::kind() == TriggerKind::MoveRoll
-        && trigger::player_id() == player_id
-        // 规则书（1）: the player's character is one of the two Sumimi ones.
-        && (ctx::character_is(player_id, "三角初华（Sumimi）") || ctx::character_is(player_id, "纯田真奈"))
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

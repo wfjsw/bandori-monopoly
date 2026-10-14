@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::ChainKind;
-use ruleset_core::ctx::{self, trigger, CardPile};
+use ruleset_core::ctx::{self, CardPile};
 use card_sdk::{CardDef, On};
 
 pub const RIOT: CardDef = CardDef::new(
@@ -20,24 +20,7 @@ pub const RIOT: CardDef = CardDef::new(
         None,
         counteract,
     )],
-)
-    .legacy(&[(0, legacy_can_counteract)]);
-
-/// 规则书[反击]: 「当你被其他人的卡效果影响时打出此卡」 -- C# `H.HitByOtherCard`.
-fn legacy_can_counteract(player_id: i32) -> bool {
-    // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
-    // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
-    if !trigger::by_card().is_some_and(|by| by != player_id) {
-        return false;
-    }
-    // 规则书[反击]: 「被其他人的卡的效果影响」 is one condition on the *effect*,
-    // and now reads as one: any effect another player's card declared at me. It
-    // used to be reconstructed by unioning `Target`/`Abnormal` (via `t.Target`)
-    // with `Pay` (via `t.Pay.from`) and matching on two different fields.
-    // `effect::hits` covers both because a payment touches its payer *and* its
-    // payee.
-    ctx::effect::hits(player_id)
-}
+);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡」
