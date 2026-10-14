@@ -989,3 +989,51 @@ Non-vacuity: 4/4 covers on both iff rows; `floor_a` / post-invoke
 `kassert!(false)` probes **FAILED** (body ran). Production hashes
 unchanged (wrappers are cfg(kani)-only; host.rs packing is model-only).
 
+
+## bands-b — concrete-user rollout across band units (branch `kani-bands-b`)
+
+Goal: propagate the ppcost fix (concrete user seats + direct `NAME_kani`
+body calls + per-harness host-op subset + sparse 2-seat world) to
+`mor`/`skills_mor`, `ras`/`skills_ras`, `mygo`/`skills_mygo`,
+`mujica`/`skills_mujica`, `crychic`/`skills_crychic`, `sumimi`/`skills_sumimi`.
+`skills_bands` / `skills_characters` / `skills_general` remain empty stubs.
+
+### Pattern (from `proofs/pp.rs` + `proofs/mor.rs` rui_demon)
+
+1. `host_subset!` per body — every reachable Op declared; undeclared →
+   `outside_subset` loud FAIL (never `assume`).
+2. In-place world (`install_backend` + `sparse_play_world` /
+   `with_world_mut`) — no `reset_world` full-struct copy.
+3. Concrete user: seat-symmetric 「自己的」 → `<id>_iff_at(user)` +
+   harnesses `user=0` and `user=1` in `n_players=2`. Non-seat-symmetric
+   (other seats / turn order) cover concrete seat combos and say so.
+4. Direct body call via cfg(kani) `NAME_kani` (no trampoline IF-chain).
+5. Composed final-state assertions; covers + mutants kept.
+
+### host.rs arm extraction (small cherry-pickable commits)
+
+`arm_*` single-source handlers extracted from `dispatch` so subsets can
+name them. Groups: money/pay, players, state/slot, counters, piles,
+field, fire/stay, trigger, tiles, dice, owned/tile_is/opt/trig_move_*,
+band_skill/invoke_skill/opt_price/add_house, dist/tile_forward/
+place_card_on/field_instances, stay_of/stun_of/exile_of/turn_key/
+round_no. Plan/protocol stubs group to `arm_stub_zero` /
+`arm_protocol_stub`. No semantics change.
+
+### tools / feature fixes
+
+* `add_kani_wrappers.py` trailing-comma parse fix; wrapped 22 missing
+  bodies (mashiro_pay, secret_rainbow, your_light, several Counteract
+  bodies, morfonica band skill, character skills).
+* `proofs/mod.rs` + `run.sh unit_features`: `skills_ras` needs
+  `skills-characters`; `skills_mor` needs `skills-bands,skills-characters`;
+  `skills_crychic` needs `skills-characters`. Gates tightened so
+  `--unit ras` no longer fails compiling `skills_ras`.
+
+### Verdicts (fill as runs complete)
+
+See per-unit tables in `docs/rulebook/spec/kani/{mor,ras,mygo,mujica,crychic,sumimi}.md`
+and the `bands-b` rows below. Runner: `tools/kani/run.sh --unit <u>
+--harness <h> --timeout 1800` serially, `CARGO_TARGET_DIR=/home/monopoly/kani-target-bands-b`,
+`CARGO_BUILD_JOBS=3`, machine slot cap 2 shared with `kani-bands-a`.
+
