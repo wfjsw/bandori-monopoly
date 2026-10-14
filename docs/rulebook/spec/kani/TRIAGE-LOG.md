@@ -1068,3 +1068,11 @@ remaining ~220 harnesses (crychic → mor → mujica → mygo → ras → skills
 sumimi, alphabetical). Times in the 130–300 s band match the ppcost floor
 (concrete user) once the tile_named / forced_roll cliffs are gone.
 
+
+**Sweep status at hand-off (2026-10-14):** 17/235 harnesses recorded,
+**17 SUCCESSFUL / 0 FAILED / 0 TIMEOUT**. `tools/kani/bands-b-sweep.sh`
+(PID visible via `pgrep -f bands-b-sweep`) continues serially
+(jobs=1, timeout 1800) over the remaining crychic → mor → mujica →
+mygo → ras → skills_* → sumimi. Accumulator
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.
+`cargo build -p rules-kani` + `cargo test -p rules-kani` ×3 green (85 tests).
