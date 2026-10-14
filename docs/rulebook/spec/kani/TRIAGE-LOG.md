@@ -514,3 +514,8 @@ no cheap proof-file lever beyond the bound.
 
 `ask_pick` + `Vec<Msg>` fold (String ABI) still class E; pick-count lives
 in `three_picks_counted`. Simplified the keep half (re-timing pending).
+
+### `moca_02_mutant_is_detected` — **SUCCESSFUL 340 s** (was TIMEOUT 1800 s)
+
+`kassert!` (no `panic_fmt`/`memchr`) removed the fmt cliff that dominated
+the 1193-unroll memchr/PadAdapter profile. Class **E → fixed**.
