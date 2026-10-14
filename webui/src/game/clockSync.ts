@@ -40,6 +40,7 @@ export class ClockOffset {
   private shown = 0;
   private bestRtt = Infinity;
   private sampled = false;
+  private pending: { offset: number; rtt: number } | null = null;
 
   /** Feed one ping. Returns true when this sample became the estimate. */
   push(s: ClockSample): boolean {
@@ -47,6 +48,7 @@ export class ClockOffset {
     // A sane sample: finite, non-negative delay, and the server cannot send
     // before it received (T3 >= T2).
     if (rtt < 0 || !Number.isFinite(rtt) || !Number.isFinite(offset) || s.t3 < s.t2) return false;
+    if (this.divergedUnconfirmed(offset, rtt)) return false;
     // Keep the lowest-RTT sample. A later sample only wins when its RTT is
     // better, or when we have no estimate yet.
     if (!this.sampled || rtt < this.bestRtt) {
@@ -72,12 +74,34 @@ export class ClockOffset {
   refresh(s: ClockSample): void {
     const { offset, rtt } = estimateOffset(s);
     if (rtt < 0 || !Number.isFinite(rtt) || !Number.isFinite(offset) || s.t3 < s.t2) return;
+    if (this.divergedUnconfirmed(offset, rtt)) return;
     if (!this.sampled || rtt <= this.bestRtt * 1.25) {
       if (!this.sampled) this.shown = offset;
       this.target = offset;
       this.bestRtt = Math.min(this.bestRtt, rtt);
       this.sampled = true;
     }
+  }
+
+  /** A sample that disagrees with the estimate by more than both samples'
+   *  own uncertainty and [`SNAP_MS`] is either one wild outlier or a different
+   *  clock (the server restarted: its monotonic epoch is its own start). One
+   *  such sample is held back; a second that agrees with it confirms the new
+   *  clock, and the stale best-RTT estimate is forgotten so it wins. Returns
+   *  true while the sample must be ignored. */
+  private divergedUnconfirmed(offset: number, rtt: number): boolean {
+    if (!this.sampled || Math.abs(offset - this.target) <= SNAP_MS + rtt / 2 + this.bestRtt / 2) {
+      this.pending = null;
+      return false;
+    }
+    const p = this.pending;
+    if (p && Math.abs(offset - p.offset) <= SNAP_MS + rtt / 2 + p.rtt / 2) {
+      this.pending = null;
+      this.bestRtt = Infinity;
+      return false;
+    }
+    this.pending = { offset, rtt };
+    return true;
   }
 
   /** Slew `shown` toward `target` (call once per frame / tick). A gap over

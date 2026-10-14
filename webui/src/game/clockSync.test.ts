@@ -39,9 +39,9 @@ test("lowest-RTT sample wins; a noisier one is ignored", () => {
   assert.ok(!o.push({ t1: 10, t2: 50_000, t3: 50_100, t4: 120 })); // rtt 110
   assert.equal(o.targetOffset, 1000.5);
   // Better RTT replaces it.
-  // t1=0, t4=0, t2=2000, t3=2000 -> rtt 0, offset 2000
-  assert.ok(o.push({ t1: 0, t2: 2000, t3: 2000, t4: 0 }));
-  assert.equal(o.targetOffset, 2000);
+  // t1=0, t4=0, t2=1200, t3=1200 -> rtt 0, offset 1200
+  assert.ok(o.push({ t1: 0, t2: 1200, t3: 1200, t4: 0 }));
+  assert.equal(o.targetOffset, 1200);
   assert.equal(o.bestRoundTrip, 0);
 });
 
@@ -55,9 +55,35 @@ test("the first sample is taken whole, however far off", () => {
 test("a change over SNAP_MS snaps on the next step", () => {
   const o = new ClockOffset();
   o.push({ t1: 0, t2: 0, t3: 0, t4: 10 }); // rtt 10, offset -5
-  o.push({ t1: 0, t2: 100_000, t3: 100_000, t4: 0 }); // rtt 0, offset 100000
+  o.push({ t1: 0, t2: 100_000, t3: 100_000, t4: 0 }); // held back: unconfirmed
+  o.push({ t1: 0, t2: 100_000, t3: 100_000, t4: 0 }); // confirmed, rtt 0, offset 100000
   assert.equal(o.offset, -5);
   assert.equal(o.step(2), 100_000);
+});
+
+test("a server restart replaces the estimate even at a worse RTT", () => {
+  const o = new ClockOffset();
+  o.push({ t1: 0, t2: 600_000, t3: 600_000, t4: 0 }); // rtt 0, offset +600000
+  // Server restarted: its clock now reads far behind. rtt 40, offset -300000.
+  // The first such sample could be an outlier; it is held back...
+  assert.ok(!o.push({ t1: 1_000_000, t2: 700_020, t3: 700_020, t4: 1_000_040 }));
+  assert.equal(o.targetOffset, 600_000);
+  // ...and a second one agreeing with it confirms the new clock.
+  assert.ok(o.push({ t1: 1_001_000, t2: 701_020, t3: 701_020, t4: 1_001_040 }));
+  assert.equal(o.step(2), -300_000);
+  // refresh() path too.
+  const r = new ClockOffset();
+  r.push({ t1: 0, t2: 600_000, t3: 600_000, t4: 0 });
+  r.refresh({ t1: 1_000_000, t2: 700_020, t3: 700_020, t4: 1_000_040 });
+  r.refresh({ t1: 1_001_000, t2: 701_020, t3: 701_020, t4: 1_001_040 });
+  assert.equal(r.step(2), -300_000);
+});
+
+test("a noisy high-RTT sample does not displace a good estimate", () => {
+  const o = new ClockOffset();
+  o.push({ t1: 0, t2: 100, t3: 100, t4: 0 }); // offset 100, rtt 0
+  assert.ok(!o.push({ t1: 0, t2: 1100, t3: 1100, t4: 2000 })); // rtt 2000, offset 100
+  assert.equal(o.targetOffset, 100);
 });
 
 test("slew approaches the target without jumping", () => {
