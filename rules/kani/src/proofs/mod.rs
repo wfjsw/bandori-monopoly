@@ -31,7 +31,7 @@ pub mod mygo;
 pub mod mujica;
 #[cfg(feature = "band-crychic")]
 pub mod crychic;
-#[cfg(feature = "band-sumimi")]
+#[cfg(all(feature = "band-sumimi", feature = "skills-characters"))]
 pub mod sumimi;
 #[cfg(feature = "band-general")]
 pub mod general;
@@ -47,17 +47,17 @@ pub mod skills_r;
 pub mod skills_ag;
 #[cfg(feature = "band-hhw")]
 pub mod skills_hhw;
-#[cfg(feature = "band-morfonica")]
+#[cfg(all(feature = "band-morfonica", feature = "skills-bands"))]
 pub mod skills_mor;
-#[cfg(feature = "band-ras")]
+#[cfg(all(feature = "band-ras", feature = "skills-characters"))]
 pub mod skills_ras;
-#[cfg(feature = "band-mygo")]
+#[cfg(all(feature = "band-mygo", feature = "skills-bands"))]
 pub mod skills_mygo;
-#[cfg(feature = "band-mujica")]
+#[cfg(all(feature = "band-mujica", feature = "skills-bands"))]
 pub mod skills_mujica;
-#[cfg(feature = "band-crychic")]
+#[cfg(all(feature = "band-crychic", feature = "skills-bands"))]
 pub mod skills_crychic;
-#[cfg(feature = "band-sumimi")]
+#[cfg(all(feature = "band-sumimi", feature = "skills-bands"))]
 pub mod skills_sumimi;
 #[cfg(feature = "band-general")]
 pub mod skills_general;

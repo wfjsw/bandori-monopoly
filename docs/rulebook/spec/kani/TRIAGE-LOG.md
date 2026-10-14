@@ -989,6 +989,93 @@ Non-vacuity: 4/4 covers on both iff rows; `floor_a` / post-invoke
 `kassert!(false)` probes **FAILED** (body ran). Production hashes
 unchanged (wrappers are cfg(kani)-only; host.rs packing is model-only).
 
+
+## bands-b — concrete-user rollout across band units (branch `kani-bands-b`)
+
+Goal: propagate the ppcost fix (concrete user seats + direct `NAME_kani`
+body calls + per-harness host-op subset + sparse 2-seat world) to
+`mor`/`skills_mor`, `ras`/`skills_ras`, `mygo`/`skills_mygo`,
+`mujica`/`skills_mujica`, `crychic`/`skills_crychic`, `sumimi`/`skills_sumimi`.
+`skills_bands` / `skills_characters` / `skills_general` remain empty stubs.
+
+### Pattern (from `proofs/pp.rs` + `proofs/mor.rs` rui_demon)
+
+1. `host_subset!` per body — every reachable Op declared; undeclared →
+   `outside_subset` loud FAIL (never `assume`).
+2. In-place world (`install_backend` + `sparse_play_world` /
+   `with_world_mut`) — no `reset_world` full-struct copy.
+3. Concrete user: seat-symmetric 「自己的」 → `<id>_iff_at(user)` +
+   harnesses `user=0` and `user=1` in `n_players=2`. Non-seat-symmetric
+   (other seats / turn order) cover concrete seat combos and say so.
+4. Direct body call via cfg(kani) `NAME_kani` (no trampoline IF-chain).
+5. Composed final-state assertions; covers + mutants kept.
+
+### host.rs arm extraction (small cherry-pickable commits)
+
+`arm_*` single-source handlers extracted from `dispatch` so subsets can
+name them. Groups: money/pay, players, state/slot, counters, piles,
+field, fire/stay, trigger, tiles, dice, owned/tile_is/opt/trig_move_*,
+band_skill/invoke_skill/opt_price/add_house, dist/tile_forward/
+place_card_on/field_instances, stay_of/stun_of/exile_of/turn_key/
+round_no. Plan/protocol stubs group to `arm_stub_zero` /
+`arm_protocol_stub`. No semantics change.
+
+### tools / feature fixes
+
+* `add_kani_wrappers.py` trailing-comma parse fix; wrapped 22 missing
+  bodies (mashiro_pay, secret_rainbow, your_light, several Counteract
+  bodies, morfonica band skill, character skills).
+* `proofs/mod.rs` + `run.sh unit_features`: `skills_ras` needs
+  `skills-characters`; `skills_mor` needs `skills-bands,skills-characters`;
+  `skills_crychic` needs `skills-characters`. Gates tightened so
+  `--unit ras` no longer fails compiling `skills_ras`.
+
+### Verdicts (fill as runs complete)
+
+See per-unit tables in `docs/rulebook/spec/kani/{mor,ras,mygo,mujica,crychic,sumimi}.md`
+and the `bands-b` rows below. Runner: `tools/kani/run.sh --unit <u>
+--harness <h> --timeout 1800` serially, `CARGO_TARGET_DIR=/home/monopoly/kani-target-bands-b`,
+`CARGO_BUILD_JOBS=3`, machine slot cap 2 shared with `kani-bands-a`.
+
+### bands-b proof results (running sweep; update as rows land)
+
+Runner: `tools/kani/bands-b-sweep.sh` (per-harness, jobs=1, timeout 1800).
+Accumulator: `/home/monopoly/kani-bands-b-results/results-all.tsv`.
+
+**Class E fix (unstoppable TIMEOUT → SUCCESSFUL):** `tile_named(SPOTS[sym])`
+hashed a slice of symbolic length (`board::tile_hash` while-loop). Two fixes:
+(1) zero-loop `tile_hash` under cfg(kani) (64-way step macro);
+(2) `World::forced_roll` pin so dice clauses cover concrete faces —
+`tile_named` of a symbolic index is still a symex cliff.
+
+| unit | harness | verdict | time (s) | class | note |
+|---|---|---|---|---|---|
+| ras | unstoppable_card_03_money_iff (u=0, face=1) | **SUCCESSFUL** | 292 | — | 2000 leg |
+| ras | unstoppable_card_03_face4_money_iff (u=0, face=4) | **SUCCESSFUL** | ~300 | — | 1000 leg |
+| ras | unstoppable_card_03_user1_money_iff (u=1, face=1) | **SUCCESSFUL** | 251 | — | |
+| ras | unstoppable_card_03_money_noop_when_out | **SUCCESSFUL** | 268 | — | out player |
+| skills_ras | masking_01_fire_gain_leaf | **SUCCESSFUL** | 134 | — | +1 fire |
+| crychic | soyoreturn_02_hand_iff | **SUCCESSFUL** | 222 | — | |
+| crychic | soyoreturn_02_user1_hand_iff | **SUCCESSFUL** | 246 | — | |
+| crychic | soyoreturn_02_mutant_is_detected | **SUCCESSFUL** | 160 | — | |
+| crychic | vocalist_01_waive_iff | **SUCCESSFUL** | 164 | — | |
+| crychic | vocalist_01_user1_waive_iff | **SUCCESSFUL** | 168 | — | |
+| crychic | vocalist_01_mutant_is_detected | **SUCCESSFUL** | 145 | — | |
+| crychic | grab_01_stay_iff | **SUCCESSFUL** | 235 | — | |
+
+**12/12 SUCCESSFUL so far (0 FAILED / TIMEOUT).** Sweep continues over the
+remaining ~220 harnesses (crychic → mor → mujica → mygo → ras → skills_* →
+sumimi, alphabetical). Times in the 130–300 s band match the ppcost floor
+(concrete user) once the tile_named / forced_roll cliffs are gone.
+
+
+**Sweep status at hand-off (2026-10-14):** 17/235 harnesses recorded,
+**17 SUCCESSFUL / 0 FAILED / 0 TIMEOUT**. `tools/kani/bands-b-sweep.sh`
+(PID visible via `pgrep -f bands-b-sweep`) continues serially
+(jobs=1, timeout 1800) over the remaining crychic → mor → mujica →
+mygo → ras → skills_* → sumimi. Accumulator
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.
+`cargo build -p rules-kani` + `cargo test -p rules-kani` ×3 green (85 tests).
 ## bands-a — concrete-user rollout for ppp / r / ag / hhw + skills_* (branch `kani-bands-a`)
 
 Worktree `/home/monopoly/kani-bands-a-wt`. Propagates the ppcost FLOOR fix

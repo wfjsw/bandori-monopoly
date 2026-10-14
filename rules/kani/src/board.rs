@@ -278,6 +278,35 @@ pub fn tile_named(name: &str) -> i32 {
 }
 
 /// FNV-1a 64, same as `rules_cond_ir::ctx::id_of`.
+///
+/// Under `cfg(kani)` this is a **zero-loop** 64-way step (same reason as
+/// `card_sdk::intern::fnv1a`: a `while i < len` with a symbolic slice length
+/// is an unwinding cliff — `tile_named(SPOTS[sym])` in `RAS:UNSTOPPABLE`
+/// never returned). Production keeps the loop.
+#[cfg(kani)]
+pub fn tile_hash(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < bytes.len() {
+                h ^= bytes[$i] as u64;
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        };
+    }
+    // 64 straight-line steps; board names are ≤ 32 UTF-8 bytes.
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    step!(24); step!(25); step!(26); step!(27); step!(28); step!(29); step!(30); step!(31);
+    step!(32); step!(33); step!(34); step!(35); step!(36); step!(37); step!(38); step!(39);
+    step!(40); step!(41); step!(42); step!(43); step!(44); step!(45); step!(46); step!(47);
+    step!(48); step!(49); step!(50); step!(51); step!(52); step!(53); step!(54); step!(55);
+    step!(56); step!(57); step!(58); step!(59); step!(60); step!(61); step!(62); step!(63);
+    h
+}
+
+#[cfg(not(kani))]
 const fn tile_hash(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     let mut i = 0usize;

@@ -264,11 +264,16 @@ fn tile_idx(t: i32) -> usize {
 }
 
 /// Die roll within `count` d `sides` — symbolic under Kani, mid-value native.
+/// `World::forced_roll != 0` pins the face (harness control for dice clauses).
 fn roll_dice(count: i32, sides: i32) -> i32 {
     let c = count.max(0).min(8);
     let s = sides.max(1).min(1000);
     #[cfg(kani)]
     {
+        let forced = world::with_world(|w| w.forced_roll);
+        if forced != 0 {
+            return forced;
+        }
         // Explore every face of a single die; for multi-dice take a symbolic
         // sum bounded by the true range (CBMC stays small).
         if c == 1 {
@@ -323,61 +328,18 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
     match op {
         // ---- dice / log ----
-        Op::roll => roll_dice(a1, a2) as i64,
-        Op::roll_ask => roll_dice(a1, a2) as i64,
-        Op::do_move_roll => roll_dice(2, 6) as i64,
+                Op::roll => arm_roll(a),
+                Op::roll_ask => arm_roll_ask(a),
+                Op::do_move_roll => arm_do_move_roll(a),
         Op::log | Op::effect => arm_log(a),
 
         // ---- tiles (static data from board.json + runtime state) ----
-        Op::tile_count => world::TILE_COUNT as i64,
-        Op::tile_named => {
-            // Real board: `data.tiles.iter().position(|t| t.name == name)`
-            // (hostfns `tile_named`). Every `board.json` name resolves; unknown
-            // names are -1.
-            let id = name_id(a0, a1);
-            let mut found = board::tile_named_bytes(intern::resolve(id));
-            // Pilot boards (all `pos < 8`) keep the stub-shop index so the
-            // money/teleport pilots against the 8-tile fixture still work.
-            if id == known().tile_shop {
-                let pilot = world::with_world(|w| w.pos.iter().all(|&p| p < 8));
-                if pilot {
-                    found = TILE_SHOP;
-                }
-            }
-            found as i64
-        }
-        Op::tile_owner => world::with_world(|w| w.tiles[tile_idx(a0)].owner) as i64,
-        Op::tile_group => {
-            let s = board::tile_slot(a0);
-            if s < 0 {
-                0
-            } else {
-                board::TILES[s as usize].group as i64
-            }
-        }
-        Op::tile_price => {
-            let s = board::tile_slot(a0);
-            if s < 0 {
-                0
-            } else {
-                board::TILES[s as usize].price as i64
-            }
-        }
-        Op::buy_price => {
-            let s = board::tile_slot(a0);
-            if s < 0 {
-                0
-            } else {
-                // `purchase::quote_native` = land + standing houses × house_cost.
-                // The model's `buy_price` arm historically returned land only;
-                // keep land-only here and note the gap — `quote_native` also
-                // folds house cost, which `houses_of` × `build_cost` exposes.
-                // Faithful quote: land + houses * house_cost (see purchase.rs).
-                let h = world::with_world(|w| w.tiles[tile_idx(a0)].houses).max(0);
-                (board::TILES[s as usize].price
-                    + h * board::TILES[s as usize].house_cost) as i64
-            }
-        }
+                Op::tile_count => arm_tile_count(a),
+                Op::tile_named => arm_tile_named(a),
+                Op::tile_owner => arm_tile_owner(a),
+                Op::tile_group => arm_tile_group(a),
+                Op::tile_price => arm_tile_price(a),
+                Op::buy_price => arm_buy_price(a),
         Op::build_cost => {
             let s = board::tile_slot(a0);
             if s < 0 {
@@ -397,7 +359,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // `WorldOps::rent_of` — RiNG quotes `price`; otherwise `table_rent`
         // at `rent_houses` (RENT_HOUSES override → standing houses).
         Op::rent_of => world::with_world(|w| w.rent_of(a0)) as i64,
-        Op::houses_of => world::with_world(|w| w.tiles[tile_idx(a0)].houses) as i64,
+                Op::houses_of => arm_houses_of(a),
         Op::rent_houses_of => world::with_world(|w| w.tiles[tile_idx(a0)].houses) as i64,
         Op::set_houses => {
             world::with_world_mut(|w| {
@@ -406,104 +368,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             0
         }
-        Op::add_house => {
-            world::with_world_mut(|w| {
-                let t = tile_idx(a0);
-                w.tiles[t].houses = w.tiles[t].houses.saturating_add(a1);
-                w.push(Effect::SetHouses {
-                    tile: a0,
-                    n: w.tiles[t].houses,
-                });
-                w.tiles[t].houses as i64
-            })
-        }
-        Op::mortgaged_of => {
-            world::with_world(|w| w.tiles[tile_idx(a0)].mortgaged) as i64
-        }
-        Op::set_mortgaged => {
-            world::with_world_mut(|w| {
-                w.tiles[tile_idx(a0)].mortgaged = a1 != 0;
-                w.push(Effect::SetMortgaged {
-                    tile: a0,
-                    on: a1 != 0,
-                });
-            });
-            0
-        }
-        Op::set_owner => {
-            world::with_world_mut(|w| {
-                w.tiles[tile_idx(a0)].owner = a1;
-                w.push(Effect::SetOwner {
-                    tile: a0,
-                    player: a1,
-                });
-            });
-            0
-        }
-        Op::owned_count => world::with_world(|w| {
-            let p = a0;
-            // 8×8 chunk walk over the 60-tile board (unwind bound 8, not 60).
-            let mut n = 0;
-            let mut outer = 0usize;
-            while outer < 8 {
-                let mut k = 0usize;
-                while k < 8 {
-                    let i = outer * 8 + k;
-                    if i < 60 && w.tiles[i].owner == p {
-                        n += 1;
-                    }
-                    k += 1;
-                }
-                outer += 1;
-            }
-            n
-        }) as i64,
-        Op::owned_at => world::with_world(|w| {
-            let p = a0;
-            let idx = a1;
-            let mut n = 0;
-            let mut found = -1;
-            let mut outer = 0usize;
-            while outer < 8 {
-                let mut k = 0usize;
-                while k < 8 {
-                    let i = outer * 8 + k;
-                    if i < 60 && w.tiles[i].owner == p {
-                        if n == idx {
-                            // 0-based engine index (was wrongly `i + 1`).
-                            found = i as i32;
-                        }
-                        n += 1;
-                    }
-                    k += 1;
-                }
-                outer += 1;
-            }
-            found
-        }) as i64,
-        Op::tile_is => {
-            // ABI: tile_is(tile, kind_ptr, kind_len)
-            let s = board::tile_slot(a0);
-            if s < 0 {
-                0
-            } else {
-                let kind = name_id(a1, a2);
-                let t = &board::TILES[s as usize];
-                // Compare via interned wire spellings.
-                let hit = [
-                    ("circle", board::is_circle(t)),
-                    ("ring", board::is_ring(t)),
-                    ("agent", board::is_agent(t)),
-                    ("property", board::is_property(t)),
-                    ("cafe", t.kind == 4),
-                    ("edogawa", t.kind == 5),
-                    ("ryuseido", t.kind == 6),
-                ]
-                .iter()
-                .any(|(k, hit)| *hit && intern::id_eq_str(kind, k));
-                hit as i64
-            }
-        }
+                Op::add_house => arm_add_house(a),
+                Op::mortgaged_of => arm_mortgaged_of(a),
+                Op::set_mortgaged => arm_set_mortgaged(a),
+                Op::set_owner => arm_set_owner(a),
+                Op::owned_count => arm_owned_count(a),
+                Op::owned_at => arm_owned_at(a),
+                Op::tile_is => arm_tile_is(a),
         Op::tile_attr => {
             // ABI: tile_attr(tile, attr_ptr, attr_len)
             let s = board::tile_slot(a0);
@@ -574,12 +445,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 0
             }
         }
-        Op::dist | Op::tile_forward => {
-            // Forward distance on a 60-tile ring (hostfns `dist`).
-            let n = world::TILE_COUNT;
-            let d = (a1 - a0).rem_euclid(n);
-            d as i64
-        }
+                Op::dist | Op::tile_forward => arm_dist(a),
         Op::neighbor => {
             // hostfns `neighbor`: the **next** present player in turn order,
             // wrapping. `dir < 0` walks backwards. Not a board tile.
@@ -606,10 +472,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
             found as i64
         }
-        Op::tile_steps_ahead => {
-            let pos = world::with_world(|w| w.pos[player_idx(a0)]);
-            ((pos + a1).rem_euclid(60)) as i64
-        }
+                Op::tile_steps_ahead => arm_tile_steps_ahead(a),
         Op::players_on_count => world::with_world(|w| {
             let tile = a0;
             let except = a1;
@@ -643,307 +506,51 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }) as i64,
 
         // ---- players ----
-        Op::player_pos => world::with_world(|w| w.pos[player_idx(a0)]) as i64,
+                Op::player_pos => arm_player_pos(a),
         Op::player_count => arm_player_count(a),
         Op::player_out => arm_player_out(a),
-        Op::others_count => world::with_world(|w| {
-            let me = a0;
-            let mut n = 0;
-            let mut p = 0;
-            while p < MAX_PLAYERS {
-                if (p as i32) != me && !w.out[p] && p < w.n_players as usize {
-                    n += 1;
-                }
-                p += 1;
-            }
-            n
-        }) as i64,
-        Op::others_at => world::with_world(|w| {
-            let me = a0;
-            let idx = a1;
-            let mut n = 0;
-            let mut p = 0;
-            let mut found = -1;
-            while p < MAX_PLAYERS {
-                if (p as i32) != me && !w.out[p] && p < w.n_players as usize {
-                    if n == idx {
-                        found = p as i32;
-                    }
-                    n += 1;
-                }
-                p += 1;
-            }
-            found
-        }) as i64,
-        Op::turn_player => world::with_world(|w| w.turn_player) as i64,
-        Op::round_no => world::with_world(|w| w.round_no) as i64,
-        Op::turn_key => world::with_world(|w| w.turn_key) as i64,
+                Op::others_count => arm_others_count(a),
+                Op::others_at => arm_others_at(a),
+                Op::turn_player => arm_turn_player(a),
+                Op::round_no => arm_round_no(a),
+                Op::turn_key => arm_turn_key(a),
         // `target(player, tile, single)` is engine scheduling (hooks + the
         // `target` [反击] window). Model the **admission** half only: a living
         // seat in range is targeted and returned; out / OOB answers -1.
         // The counteract window is PROTOCOL-LEVEL (KANI.md §6) — no cancel
         // path is explored. `targeted_count` is bumped on success.
-        Op::target => {
-            let p = a0;
-            world::with_world_mut(|w| {
-                if p >= 0 && (p as usize) < MAX_PLAYERS && (p as usize) < w.n_players as usize && !w.out[p as usize] {
-                    w.targeted_count[p as usize] = w.targeted_count[p as usize].saturating_add(1);
-                    p as i64
-                } else {
-                    -1
-                }
-            })
-        }
+                Op::target => arm_target(a),
         Op::character_is => arm_character_is(a),
         Op::in_band => arm_in_band(a),
-        Op::self_uid => world::with_world(|w| w.last_uid) as i64,
+                Op::self_uid => arm_self_uid(a),
 
         // ---- money ----
         Op::money => arm_money(a),
         Op::gain | Op::gain_typed | Op::gain_fixed => arm_gain(a),
-        Op::adjust_money => {
-            // Raw money adjustment: `money += delta` with **no** payment
-            // pipeline (no payAdd/payMul, no effect window). Mirrors
-            // `hostfns::adjust_money` / `World::adjust_money_raw`.
-            let delta = a1;
-            if delta != 0 {
-                world::with_world_mut(|w| {
-                    let p = player_idx(a0);
-                    if delta > 0 {
-                        w.money[p] = w.money[p].saturating_add(delta);
-                        w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(delta);
-                        w.push(Effect::GainMoney {
-                            player: a0,
-                            n: delta,
-                        });
-                    } else {
-                        let n = (-delta).min(w.money[p].max(0));
-                        w.money[p] -= n;
-                    }
-                });
-            }
-            world::with_world(|w| w.money[player_idx(a0)]) as i64
-        }
-        Op::pay => {
-            if a1 > 0 {
-                world::with_world_mut(|w| {
-                    let p = player_idx(a0);
-                    w.money[p] = (w.money[p] - a1).max(0);
-                    w.push(Effect::PayMoney {
-                        player: a0,
-                        n: a1,
-                    });
-                });
-            }
-            a1 as i64
-        }
-        Op::pay_to => {
-            if a1 > 0 {
-                world::with_world_mut(|w| {
-                    let from = player_idx(a0);
-                    let to = player_idx(a1); // wrong slot — see note below
-                    let _ = to;
-                    let _ = from;
-                });
-            }
-            // ABI: pay_to(from, to, amount, …). Re-dispatch with packed args.
-            // In the wire form a0=from, a1=to, a2=amount.
-            let from = a0;
-            let to = a1;
-            let amount = a2;
-            if amount > 0 {
-                world::with_world_mut(|w| {
-                    let f = player_idx(from);
-                    let t = player_idx(to);
-                    w.money[f] = (w.money[f] - amount).max(0);
-                    w.money[t] = w.money[t].saturating_add(amount);
-                    w.push(Effect::PayTo {
-                        from,
-                        to,
-                        n: amount,
-                    });
-                });
-            }
-            amount as i64
-        }
-        Op::pay_total => {
-            // (from, to, total) — same as pay_to for the model.
-            let from = a0;
-            let to = a1;
-            let amount = a2;
-            if amount > 0 {
-                world::with_world_mut(|w| {
-                    let f = player_idx(from);
-                    let t = player_idx(to);
-                    w.money[f] = (w.money[f] - amount).max(0);
-                    w.money[t] = w.money[t].saturating_add(amount);
-                    w.push(Effect::PayTo {
-                        from,
-                        to,
-                        n: amount,
-                    });
-                });
-            }
-            amount as i64
-        }
-        Op::pay_leg => {
-            if a2 > 0 {
-                world::with_world_mut(|w| {
-                    let f = player_idx(a0);
-                    let t = player_idx(a1);
-                    w.money[f] = (w.money[f] - a2).max(0);
-                    w.money[t] = w.money[t].saturating_add(a2);
-                    w.push(Effect::PayTo {
-                        from: a0,
-                        to: a1,
-                        n: a2,
-                    });
-                });
-            }
-            a2 as i64
-        }
-        Op::can_pay => world::with_world(|w| (w.money[player_idx(a0)] > 0) as i64),
-        Op::gains_this_turn => {
-            world::with_world(|w| w.gains_this_turn[player_idx(a0)]) as i64
-        }
+                Op::adjust_money => arm_adjust_money(a),
+                Op::pay => arm_pay(a),
+                Op::pay_to => arm_pay_to(a),
+                Op::pay_total => arm_pay_total(a),
+                Op::pay_leg => arm_pay_leg(a),
+                Op::can_pay => arm_can_pay(a),
+                Op::gains_this_turn => arm_gains_this_turn(a),
         Op::paid_in_settle => 0,
 
         // ---- cards / piles ----
-        Op::draw => {
-            // hostfns::draw: reply is the count drawn. Model: push `n` generic
-            // cards into hand (bounded) and record the effect.
-            let n = a1.max(0).min(8);
-            world::with_world_mut(|w| {
-                let mut i = 0;
-                while i < n {
-                    world::pile_push(&mut w.hand_pile, &mut w.hand_n, u16::MAX);
-                    i += 1;
-                }
-                w.push(Effect::Draw {
-                    player: a0,
-                    n,
-                });
-            });
-            n as i64
-        }
+                Op::draw => arm_draw(a),
         Op::draw_event => 0,
-        Op::add_to_hand => {
-            let id = card_u16(a1, a2);
-            let slot = card_slot(a1, a2);
-            world::with_world_mut(|w| {
-                world::pile_push(&mut w.hand_pile, &mut w.hand_n, id);
-                if (slot as usize) < 4 {
-                    w.hand[slot as usize] = true;
-                    if slot == 1 {
-                        w.hand_resonance[player_idx(a0)] += 1;
-                    }
-                }
-                w.push(Effect::AddToHand {
-                    player: a0,
-                    card: slot,
-                });
-            });
-            0
-        }
-        Op::add_to_deck => {
-            let id = card_u16(a1, a2);
-            world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
-            0
-        }
+                Op::add_to_hand => arm_add_to_hand(a),
+                Op::add_to_deck => arm_add_to_deck(a),
         Op::add_to_deck_at => {
             let id = card_u16(a1, a2);
             world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
             0
         }
         Op::take_card => arm_take_card(a),
-        Op::cards_in => {
-            // Bounded layout `[n, id…]` under Kani (see ctx::cards_in). The
-            // guest rebuilds names from interned ids via the same table.
-            let mut ids: [u8; world::MAX_CARDS] = [0; world::MAX_CARDS];
-            let mut n = 0usize;
-            world::with_world(|w| {
-                if a1 == 1 {
-                    // Discard: pilot bitset first, then pile.
-                    let mut s = 0u8;
-                    while s < 4 {
-                        if w.discard[s as usize] && n < world::MAX_CARDS {
-                            ids[n] = s;
-                            n += 1;
-                        }
-                        s += 1;
-                    }
-                    let mut i = 0usize;
-                    while i < w.discard_n as usize && n < world::MAX_CARDS {
-                        let id = intern::NameId(w.discard_pile[i]);
-                        // NameId compare against the pre-interned pilot ids —
-                        // no byte walk. Unknown ids fall back to the zero-loop
-                        // byte heuristic.
-                        let slot = card_slot_of_id(id);
-                        // de-dup against bitset slots already emitted
-                        let mut seen = false;
-                        let mut j = 0usize;
-                        while j < n {
-                            if ids[j] == slot {
-                                seen = true;
-                            }
-                            j += 1;
-                        }
-                        if !seen {
-                            ids[n] = slot;
-                            n += 1;
-                        }
-                        i += 1;
-                    }
-                } else if a1 == 0 {
-                    let p = player_idx(a0);
-                    let res = w.hand_resonance[p].min(2);
-                    let mut k = 0;
-                    while k < res && n < world::MAX_CARDS {
-                        ids[n] = 1;
-                        n += 1;
-                        k += 1;
-                    }
-                    let mut s = 0u8;
-                    while s < 4 {
-                        if s != 1 && w.hand[s as usize] && n < world::MAX_CARDS {
-                            ids[n] = s;
-                            n += 1;
-                        }
-                        s += 1;
-                    }
-                }
-            });
-            let mut encoded = [0u8; 16];
-            encoded[0] = n as u8;
-            let mut i = 0usize;
-            while i < n {
-                encoded[1 + i] = ids[i];
-                i += 1;
-            }
-            let need = (1 + n) as i32;
-            if a2 == 0 {
-                return need as i64;
-            }
-            if a3 < need {
-                return -1;
-            }
-            card_sdk::native::write(a2, &encoded[..need as usize]);
-            need as i64
-        }
+                Op::cards_in => arm_cards_in(a),
         Op::to_discard => arm_to_discard(a),
         Op::hand_count => arm_hand_count(a),
-        Op::hand_size => world::with_world(|w| {
-            let p = player_idx(a0);
-            let mut n = w.hand_resonance[p];
-            let mut s = 0usize;
-            while s < 4 {
-                if s != 1 && w.hand[s] {
-                    n += 1;
-                }
-                s += 1;
-            }
-            n + w.hand_n as i32
-        }) as i64,
+                Op::hand_size => arm_hand_size(a),
         Op::discard_count => {
             // `discard_count(player, ptr, len)` → [player, ptr, len]: name (a1,a2).
             let slot = card_slot(a1, a2);
@@ -958,148 +565,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 in_pile.max(in_bits)
             }) as i64
         }
-        Op::discard_size => world::with_world(|w| w.discard_n as i32) as i64,
-        Op::deck_count => world::with_world(|w| w.deck_n as i32) as i64,
-        Op::discard_from_hand => {
-            let slot = card_slot(a1, a2);
-            let id = card_u16(a1, a2);
-            world::with_world_mut(|w| {
-                let ok = world::pile_take(&mut w.hand_pile, &mut w.hand_n, id)
-                    || ((slot as usize) < 4 && {
-                        let b = w.hand[slot as usize];
-                        w.hand[slot as usize] = false;
-                        if slot == 1 && w.hand_resonance[player_idx(a0)] > 0 {
-                            w.hand_resonance[player_idx(a0)] -= 1;
-                            true
-                        } else {
-                            b
-                        }
-                    });
-                if ok {
-                    world::pile_push(&mut w.discard_pile, &mut w.discard_n, id);
-                    if (slot as usize) < 4 {
-                        w.discard[slot as usize] = true;
-                    }
-                    w.push(Effect::DiscardFromHand {
-                        player: a0,
-                        card: slot,
-                    });
-                }
-                ok as i64
-            })
-        }
-        Op::shuffle_into_deck => {
-            // Engine: move `hand` / `discard` into `draw` and shuffle. Order is
-            // symbolic/irrelevant — model as a multiset move (task B8).
-            let do_hand = a1 != 0;
-            let do_discard = a2 != 0;
-            world::with_world_mut(|w| {
-                let mut moved = 0i32;
-                if do_hand {
-                    let mut i = 0usize;
-                    while i < w.hand_n as usize {
-                        let id = w.hand_pile[i];
-                        if id != u16::MAX {
-                            let di = w.deck_n as usize;
-                            if di < world::MAX_CARDS {
-                                w.deck_pile[di] = id;
-                                w.deck_n += 1;
-                                moved += 1;
-                            }
-                            w.hand_pile[i] = u16::MAX;
-                        }
-                        i += 1;
-                    }
-                    w.hand_n = 0;
-                }
-                if do_discard {
-                    let mut i = 0usize;
-                    while i < w.discard_n as usize {
-                        let id = w.discard_pile[i];
-                        if id != u16::MAX {
-                            let di = w.deck_n as usize;
-                            if di < world::MAX_CARDS {
-                                w.deck_pile[di] = id;
-                                w.deck_n += 1;
-                                moved += 1;
-                            }
-                            w.discard_pile[i] = u16::MAX;
-                        }
-                        i += 1;
-                    }
-                    w.discard_n = 0;
-                }
-                moved as i64
-            })
-        }
-        Op::place_card_at => {
-            // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
-            let id = card_u16(a1, a2);
-            let slot = card_slot(a1, a2);
-            world::with_world_mut(|w| {
-                let dest = w.dest;
-                let uid = w.next_uid;
-                w.next_uid += 1;
-                w.last_uid = uid;
-                let fi = w.field_n as usize;
-                if fi < world::MAX_FIELD {
-                    w.field[fi] = world::FieldCard {
-                        uid,
-                        card: id,
-                        player: a0,
-                        tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
-                        face_down: false,
-                        immune: false,
-                        crystals: 0,
-                        props: world::NameMap::new(),
-                    };
-                    w.field_n += 1;
-                }
-                w.push(Effect::PlaceCard {
-                    player: a0,
-                    dest,
-                    card: slot,
-                });
-                uid as i64
-            })
-        }
-        Op::place_card_on => {
-            // ABI `[player, tile, cp, cl, ptr, len]` — card name at (a2, a3),
-            // landing tile at a1 (HHW kkr-02 「放置在CiRCLE」). The old arm
-            // read the name from (a1, a2) = (tile, cp) and used `dest`.
-            let tile = a1;
-            let id = card_u16(a2, a3);
-            let slot = card_slot(a2, a3);
-            world::with_world_mut(|w| {
-                let uid = w.next_uid;
-                w.next_uid += 1;
-                w.last_uid = uid;
-                let fi = w.field_n as usize;
-                if fi < world::MAX_FIELD {
-                    w.field[fi] = world::FieldCard {
-                        uid,
-                        card: id,
-                        player: a0,
-                        tile,
-                        face_down: false,
-                        immune: false,
-                        crystals: 0,
-                        props: world::NameMap::new(),
-                    };
-                    w.field_n += 1;
-                }
-                w.push(Effect::PlaceCard {
-                    player: a0,
-                    dest: tile,
-                    card: slot,
-                });
-                uid as i64
-            })
-        }
-        Op::set_dest => {
-            world::with_world_mut(|w| w.dest = a0);
-            0
-        }
+                Op::discard_size => arm_discard_size(a),
+                Op::deck_count => arm_deck_count(a),
+                Op::discard_from_hand => arm_discard_from_hand(a),
+                Op::shuffle_into_deck => arm_shuffle_into_deck(a),
+                Op::place_card_at => arm_place_card_at(a),
+                Op::place_card_on => arm_place_card_on(a),
+                Op::set_dest => arm_set_dest(a),
         Op::set_transfer_to_dest => 0,
         Op::send_to_dest => {
             world::with_world_mut(|w| {
@@ -1113,31 +585,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::transfer_to_dest => 0,
-        Op::teleport_to => {
-            world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.pos[a0 as usize] = a1;
-                }
-                w.push(Effect::Teleport {
-                    player: a0,
-                    tile: a1,
-                });
-            });
-            0
-        }
-        Op::unplace_card | Op::unplace_at | Op::unplace_card_named => {
-            world::with_world_mut(|w| {
-                w.push(Effect::UnplaceCard { uid: a0 });
-            });
-            0
-        }
-        Op::is_placed => world::with_world(|w| (w.field_n > 0) as i64),
-        Op::field_instances => {
-            // Write uid list into out-buffer: [n, uid…] as i32s is overkill;
-            // return count.
-            world::with_world(|w| w.field_n as i32) as i64
-        }
-        Op::placed_cards => world::with_world(|w| w.field_n as i32) as i64,
+                Op::teleport_to => arm_teleport_to(a),
+                Op::unplace_card | Op::unplace_at | Op::unplace_card_named => arm_unplace_card(a),
+                Op::is_placed => arm_is_placed(a),
+                Op::field_instances => arm_field_instances(a),
+                Op::placed_cards => arm_placed_cards(a),
         Op::placed_tile => world::with_world(|w| {
             if w.field_n == 0 {
                 -1
@@ -1308,72 +760,301 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
             0
         }
-        Op::counter_self | Op::card_counter => {
-            //   counter_self(np, nl)                  -> [np, nl, 0, …]           name (a0,a1)
-            //   card_counter(player, cp, cl, np, nl)  -> [player, cp, cl, np, nl] name (a3,a4)
-            let key = if op == Op::counter_self {
-                name_id(a0, a1)
-            } else {
-                name_id(a3, a4)
-            };
+                Op::counter_self => arm_counter_self(a),
+        Op::card_counter => arm_card_counter(a),
+                Op::counter_at => arm_counter_at(a),
+                Op::add_counter_self => arm_add_counter_self(a),
+        Op::add_card_counter => arm_add_card_counter(a),
+                Op::add_counter_at => arm_add_counter_at(a),
+                Op::set_counter_self => arm_set_counter_self(a),
+        Op::count_held | Op::count_held_name => arm_count_held(a),
+        Op::add_held => arm_add_held(a),
+        Op::set_held_name => arm_set_held_name(a),
+                Op::state_get => arm_state_get(a),
+                Op::slot => arm_slot(a),
+                Op::state_set => arm_state_set(a),
+                Op::set_slot => arm_set_slot(a),
+                Op::state_add | Op::inc_slot => arm_state_add(a),
+                Op::tok_names => arm_tok_names(a),
+
+        // ---- marks ----
+                Op::place_mark => arm_place_mark(a),
+        Op::count_marks_f => {
             world::with_world(|w| {
-                if key == known().crystals {
-                    w.field_crystals(w.last_uid)
-                } else {
-                    w.key_get(w.trig_player, key)
+                let mut n = 0;
+                let mut i = 0;
+                while i < w.marks_n as usize {
+                    if w.marks[i].tile == a0 {
+                        n += w.marks[i].n;
+                    }
+                    i += 1;
                 }
+                n
             }) as i64
         }
-        Op::counter_at => {
-            // `counter_at(uid, np, nl)` — the **uid** instance's counter.
-            let uid = a0;
-            let key = name_id(a1, a2);
-            world::with_world(|w| {
-                if key == known().crystals {
-                    w.field_crystals(uid)
-                } else {
-                    w.field_counter(uid, key)
-                }
-            }) as i64
-        }
-        Op::add_counter_self | Op::add_card_counter => {
-            // `(was+n).clamp(0,max)` when `max > 0`, else floor at 0.
-            //   add_counter_self(np, nl, n, max)              -> [np, nl, n, max]         name (a0,a1) n=a2 max=a3
-            //   add_card_counter(player, cp, cl, np, nl, n)   -> [player, cp, cl, np, nl, n] name (a3,a4) n=a5 max=0
-            // (add_card_counter has no max slot in the 6-word ABI.)
-            let (key, n, max) = if op == Op::add_counter_self {
-                (name_id(a0, a1), a2, a3)
-            } else {
-                (name_id(a3, a4), a5, 0)
-            };
+        Op::bump_mark_f => 0,
+        Op::remove_marks_f => 0,
+        Op::mark_src_at | Op::mark_instance_at => -1,
+
+        // ---- status ----
+                Op::fire => arm_fire(a),
+                Op::fire_max => arm_fire_max(a),
+                Op::gain_fire => arm_gain_fire(a),
+        Op::add_fire_max => {
             world::with_world_mut(|w| {
-                let p = w.trig_player;
-                let was = if key == known().crystals {
-                    w.field_crystals(w.last_uid)
-                } else {
-                    w.key_get(p, key)
-                };
-                let mut now = was + n;
-                if now < 0 {
-                    now = 0;
-                }
-                if max > 0 && now > max {
-                    now = max;
-                }
-                if key == known().crystals {
-                    w.set_field_crystals(w.last_uid, now);
-                } else {
-                    w.key_set(p, key, now);
-                }
-                w.push(Effect::AddCounter {
-                    owner: p,
-                    key: key.0,
-                    n: now - was,
-                });
-                now as i64
-            })
+                w.fire_max[player_idx(a0)] = w.fire_max[player_idx(a0)].saturating_add(a1);
+            });
+            0
         }
-        Op::add_counter_at => {
+                Op::spend_fire => arm_spend_fire(a),
+        // `ctx::n(k, v)` doubles when `play_doubled() == k`. Default is
+        // **no doubling** (`-1` / `None` in the engine) — the old stub returned
+        // 0, so `n(0, 600)` wrongly yielded 1200.
+        Op::play_doubled => world::with_world(|w| w.play_doubled) as i64,
+        Op::set_play_doubled => {
+            world::with_world_mut(|w| w.play_doubled = a0);
+            0
+        }
+                Op::give_stay => arm_give_stay(a),
+                Op::give_stun => arm_give_stun(a),
+                Op::give_exile => arm_give_exile(a),
+        Op::give_extra_turn => {
+            // Recorded so the protocol can schedule it. Scheduling is
+            // PROTOCOL-LEVEL (the turn engine owns the extra-turn queue).
+            world::with_world_mut(|w| {
+                if a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
+                    w.extra_turns[a0 as usize] = true;
+                }
+                w.push(Effect::GiveExtraTurn { player: a0 });
+            });
+            0
+        }
+                Op::stay_of => arm_stay_of(a),
+                Op::stun_of => arm_stun_of(a),
+                Op::exile_of => arm_exile_of(a),
+        Op::cant_move => world::with_world(|w| {
+            (w.stay[player_idx(a0)] > 0
+                || w.stun[player_idx(a0)] > 0
+                || w.exile[player_idx(a0)] > 0) as i64
+        }),
+        Op::abnormal_count => world::with_world(|w| {
+            let mut n = 0;
+            let mut p = 0;
+            while p < MAX_PLAYERS {
+                if w.stay[p] > 0 {
+                    n += 1;
+                }
+                p += 1;
+            }
+            n
+        }) as i64,
+                Op::card_move => arm_card_move(a),
+
+        // ---- band / skills ----
+        Op::band_crystals => arm_band_crystals(a),
+        Op::add_band_crystals => arm_add_band_crystals(a),
+                Op::band_skill | Op::character_skill => arm_band_skill(a),
+                Op::band_skills => arm_band_skills(a),
+                Op::add_band_skill => arm_add_band_skill(a),
+                Op::invoke_skill => arm_invoke_skill(a),
+
+        // ---- events ----
+        Op::event_is_active => {
+            let id = name_id(a0, a1);
+            world::with_world(|w| {
+                let mut i = 0;
+                let mut on = 0;
+                while i < w.events_n as usize {
+                    if w.events[i] == id.0 {
+                        on = 1;
+                    }
+                    i += 1;
+                }
+                on
+            }) as i64
+        }
+        Op::event_expire => {
+            let id = name_id(a0, a1);
+            world::with_world_mut(|w| {
+                w.push(Effect::EventExpire { key: id });
+            });
+            0
+        }
+        Op::event_deck_push | Op::event_banish => 0,
+
+        // ---- prompts ----
+                Op::opt_int | Op::opt_str | Op::opt_tile => arm_opt(a),
+                Op::opt_price | Op::opt_ai => arm_opt_price(a),
+        Op::ask => arm_ask(a),
+
+        // ---- trigger context ----
+                Op::trig_kind => arm_trig_kind(a),
+                Op::trig_player => arm_trig_player(a),
+                Op::trig_value => arm_trig_value(a),
+                Op::trig_target => arm_trig_target(a),
+                Op::trig_tile => arm_trig_tile(a),
+                Op::trig_name => arm_trig_name(a),
+        Op::trig_step => 0,
+        Op::trig_by_card => 0,
+        Op::trig_pay_is_rent => world::with_world(|w| w.trig_pay_is_rent as i64),
+        Op::trig_cancelled => world::with_world(|w| w.trig_cancelled as i64),
+        // ---- move payload (hostfns 1830–1880; sentinels when no move) ----
+        Op::trig_move_kind => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.kind as i64 } else { -1 })
+        }
+        Op::trig_move_resolve => world::with_world(|w| w.move_snap.resolve as i64),
+        Op::trig_move_tag => {
+            let key = name_id(a0, a1);
+            world::with_world(|w| w.move_snap.tags.get(key)) as i64
+        }
+        // `trig_move_main` is `Trigger::main`, not `mv.main` (hostfns 1848).
+                Op::trig_move_main => arm_trig_move_main(a),
+        Op::trig_move_dir => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.dir as i64 } else { 1 })
+        }
+        Op::trig_move_remaining => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.remaining as i64 } else { 0 })
+        }
+        Op::trig_move_from => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.from as i64 } else { -1 })
+        }
+        Op::trig_move_total => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.total as i64 } else { 0 })
+        }
+        // `mv.and_then(|m| m.roll).unwrap_or(-1)` — no-move and no-face are -1.
+                Op::trig_move_roll => arm_trig_move_roll(a),
+        Op::trig_roll_source => world::with_world(|w| w.trig_roll_source) as i64,
+        // ---- buy payload (hostfns 1886–1936) ----
+        Op::trig_buy_kind => world::with_world(|w| w.buy_snap.kind) as i64,
+        Op::trig_seller => world::with_world(|w| w.buy_snap.seller) as i64,
+        Op::trig_price => world::with_world(|w| w.buy_snap.price) as i64,
+        Op::trig_deal_owner => world::with_world(|w| w.buy_snap.deal_owner) as i64,
+        Op::trig_deal_houses => world::with_world(|w| w.buy_snap.deal_houses) as i64,
+        Op::trig_deal_mortgaged => world::with_world(|w| w.buy_snap.deal_mortgaged as i64),
+                Op::trig_set_pay_amount => arm_trig_set_pay_amount(a),
+                Op::trig_set_pay_target => arm_trig_set_pay_target(a),
+        Op::trig_set_price => {
+            world::with_world_mut(|w| w.buy_snap.price = a0);
+            0
+        }
+                Op::trig_set_move_roll => arm_trig_set_move_roll(a),
+        Op::trig_set_deal_owner => {
+            world::with_world_mut(|w| w.buy_snap.deal_owner = a0);
+            0
+        }
+        Op::trig_set_deal_houses => {
+            world::with_world_mut(|w| w.buy_snap.deal_houses = a0);
+            0
+        }
+        Op::trig_set_deal_mortgaged => {
+            world::with_world_mut(|w| w.buy_snap.deal_mortgaged = a0 != 0);
+            0
+        }
+        // 真奈 join (CH-05), faithful to hostfns: the redirect seat is `-1`
+        // outside a join; `set_join_used` only records the flag. Who sets the
+        // redirect (the join opener's counter window) is PROTOCOL-LEVEL, so a
+        // harness that needs a join arranges `w.trig_join_redirect` itself.
+        Op::join_redirect_target => world::with_world(|w| w.trig_join_redirect) as i64,
+        Op::set_join_used => {
+            world::with_world_mut(|w| w.trig_join_used = true);
+            0
+        }
+        Op::trig_set_cancelled => arm_trig_set_cancelled(a),
+        Op::trig_set_negate_effect => arm_trig_set_negate_effect(a),
+        Op::trig_set_reason | Op::trig_set_spare => arm_stub_zero(a),
+        Op::trig_seq => 0,
+        Op::trig_answers => 0,
+        Op::trig_effect_count => 0,
+        Op::trig_effect_kind | Op::trig_effect_target | Op::trig_effect_from
+        | Op::trig_effect_tile | Op::trig_effect_value => 0,
+        Op::declare_effect => 0,
+        Op::trig_card_is => 0,
+        Op::trig_cards => 0,
+
+        // ---- move plan / settle (structure only; engine scheduling is
+        //      PROTOCOL-LEVEL and out of Kani scope) ----
+                Op::set_steps | Op::set_roller | Op::set_reverse | Op::set_signed | Op::set_stop_at | Op::set_parity | Op::set_resolve | Op::set_settle_tile | Op::set_pay_factor | Op::set_rent_factor | Op::set_no_buy | Op::set_no_build | Op::set_build_anywhere | Op::set_kind | Op::set_teleport_to | Op::set_start | Op::set_base_dice | Op::add_base_dice | Op::add_extra_dice | Op::set_min_roll | Op::set_extra_steps | Op::set_more_steps | Op::set_tag | Op::set_settle_as_agent | Op::plan_add_follower | Op::set_play_doubled | Op::set_no_money_loss | Op::set_fixed_roll | Op::set_next_steps | Op::set_build_discount | Op::set_build_cost_pct | Op::set_extreme | Op::clear_dice | Op::set_can_build | Op::move_stopped | Op::move_stop_at | Op::move_parity | Op::move_resolve | Op::move_steps | Op::move_remaining | Op::move_total | Op::move_dir | Op::fixed_roll | Op::turn_main_steps | Op::turn_rolls | Op::turn_snap | Op::turn_start_pos | Op::schedule_turn_end | Op::linger | Op::targeted_count => arm_stub_zero(a),
+
+        // ---- hook-status flags (polarity-sensitive; see arm_*) ----
+        // 0 on these means "cancelled / blocked / substituted", which makes
+        // callers skip the real effect (class C — chart_rush spent no fire).
+        Op::raise => arm_raise(a),
+        Op::raise_bought => arm_raise_bought(a),
+        Op::gate => arm_gate(a),
+        Op::ring_multiplier => arm_ring_multiplier(a),
+
+        // ---- offers / buy / build (PROTOCOL-LEVEL) ----
+                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_ring_bonus | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+
+        other => unmodeled(other),
+    }
+}
+
+#[allow(dead_code)]
+fn _w(_w: World) {}
+
+// ===========================================================================
+// Per-harness op-subset handlers
+// ===========================================================================
+//
+// Each `arm_*` is the single implementation of one (group of) host op(s).
+// `dispatch` calls them; a **narrow** per-harness dispatcher built by
+// [`crate::harness::host_subset!`] calls only the ones the card body can
+// reach and sends everything else to [`outside_subset`] (loud FAIL — never
+// `assume(false)`). That keeps the CBMC match at a handful of arms instead of
+// the full ~300-op `dispatch` (TRIAGE-LOG `op-subset`).
+
+/// `Op::log` / `Op::effect` — narration counter only (not the effect frame).
+
+// ---- merged bands-a + bands-b subset arms (deduped) ----
+
+pub fn arm_add_band_crystals(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        let p = player_idx(a0);
+        w.band_crystals[p] = (w.band_crystals[p] + a1).clamp(0, 99);
+        w.band_crystals[p] as i64
+    })
+}
+
+pub fn arm_add_band_skill(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
+pub fn arm_add_card_counter(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let key = name_id(a3, a4);
+    let n = a5;
+    let max = 0;
+
+    world::with_world_mut(|w| {
+        let p = w.trig_player;
+        let was = if key == known().crystals {
+            w.field_crystals(w.last_uid)
+        } else {
+            w.key_get(p, key)
+        };
+        let mut now = was + n;
+        if now < 0 { now = 0; }
+        if max > 0 && now > max { now = max; }
+        if key == known().crystals {
+            w.set_field_crystals(w.last_uid, now);
+        } else {
+            w.key_set(p, key, now);
+        }
+        w.push(Effect::AddCounter {
+            owner: p,
+            key: key.0,
+            n: now - was,
+        });
+        now as i64
+    })
+}
+
+pub fn arm_add_counter_at(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
             // `add_counter_at(uid, np, nl, n, max)` — same clamp on `uid`.
             let uid = a0;
             let key = name_id(a1, a2);
@@ -1405,7 +1086,1131 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 now as i64
             })
         }
-        Op::set_counter_self => {
+}
+
+pub fn arm_add_counter_self(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let key = name_id(a0, a1);
+    let n = a2;
+    let max = a3;
+
+    world::with_world_mut(|w| {
+        let p = w.trig_player;
+        let was = if key == known().crystals {
+            w.field_crystals(w.last_uid)
+        } else {
+            w.key_get(p, key)
+        };
+        let mut now = was + n;
+        if now < 0 { now = 0; }
+        if max > 0 && now > max { now = max; }
+        if key == known().crystals {
+            w.set_field_crystals(w.last_uid, now);
+        } else {
+            w.key_set(p, key, now);
+        }
+        w.push(Effect::AddCounter {
+            owner: p,
+            key: key.0,
+            n: now - was,
+        });
+        now as i64
+    })
+}
+
+pub fn arm_add_held(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let key = name_id(a0, a1);
+    world::with_world_mut(|w| {
+        let v = w.key_add(a2, key, a3);
+        w.sync_views_player(a2);
+        w.push(Effect::AddToken {
+            player: a2,
+            key: key.0,
+            n: a3,
+        });
+        v as i64
+    })
+}
+
+pub fn arm_add_house(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                let t = tile_idx(a0);
+                w.tiles[t].houses = w.tiles[t].houses.saturating_add(a1);
+                w.push(Effect::SetHouses {
+                    tile: a0,
+                    n: w.tiles[t].houses,
+                });
+                w.tiles[t].houses as i64
+            })
+        }
+}
+
+pub fn arm_add_to_deck(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let id = card_u16(a1, a2);
+            world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
+            0
+        }
+}
+
+pub fn arm_add_to_deck_at(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a0, a1, a2, a3, a4, a5);
+
+    let id = card_u16(a1, a2);
+    world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
+    0
+}
+
+pub fn arm_add_to_hand(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let id = card_u16(a1, a2);
+            let slot = card_slot(a1, a2);
+            world::with_world_mut(|w| {
+                world::pile_push(&mut w.hand_pile, &mut w.hand_n, id);
+                if (slot as usize) < 4 {
+                    w.hand[slot as usize] = true;
+                    if slot == 1 {
+                        w.hand_resonance[player_idx(a0)] += 1;
+                    }
+                }
+                w.push(Effect::AddToHand {
+                    player: a0,
+                    card: slot,
+                });
+            });
+            0
+        }
+}
+
+pub fn arm_adjust_money(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // Raw money adjustment: `money += delta` with **no** payment
+            // pipeline (no payAdd/payMul, no effect window). Mirrors
+            // `hostfns::adjust_money` / `World::adjust_money_raw`.
+            let delta = a1;
+            if delta != 0 {
+                world::with_world_mut(|w| {
+                    let p = player_idx(a0);
+                    if delta > 0 {
+                        w.money[p] = w.money[p].saturating_add(delta);
+                        w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(delta);
+                        w.push(Effect::GainMoney {
+                            player: a0,
+                            n: delta,
+                        });
+                    } else {
+                        let n = (-delta).min(w.money[p].max(0));
+                        w.money[p] -= n;
+                    }
+                });
+            }
+            world::with_world(|w| w.money[player_idx(a0)]) as i64
+        }
+}
+
+pub fn arm_ask(a: Args) -> i64 {
+    let _ = a;
+    let n = world::with_world(|w| w.opt_n.max(1));
+    world::with_world_mut(|w| w.opt_n = 0);
+    #[cfg(kani)]
+    {
+        if world::with_world(|w| w.symbolic_answers) {
+            let x: i32 = kani::any();
+            kani::assume(x >= 0 && x < n);
+            return x as i64;
+        }
+    }
+    world::with_world_mut(|w| {
+        let i = w.next_answer;
+        if i < world::MAX_ANSWERS {
+            let v = w.answers[i];
+            w.next_answer = i + 1;
+            v as i64
+        } else {
+            0
+        }
+    })
+}
+
+pub fn arm_band_crystals(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.band_crystals[player_idx(a0)]) as i64
+}
+
+pub fn arm_band_skill(a: Args) -> i64 {
+    let _ = a;
+{
+            // Return 0 = no skill id (string returns go through out-buffers in
+            // the real ABI; the model answers "none").
+            0
+        }
+}
+
+pub fn arm_band_skills(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
+pub fn arm_build_cost(a: Args) -> i64 {
+    let [a0, ..] = a;
+    let s = board::tile_slot(a0);
+    if s < 0 {
+        0
+    } else {
+        board::TILES[s as usize].house_cost as i64
+    }
+}
+
+pub fn arm_buy_price(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let s = board::tile_slot(a0);
+            if s < 0 {
+                0
+            } else {
+                // `purchase::quote_native` = land + standing houses × house_cost.
+                // The model's `buy_price` arm historically returned land only;
+                // keep land-only here and note the gap — `quote_native` also
+                // folds house cost, which `houses_of` × `build_cost` exposes.
+                // Faithful quote: land + houses * house_cost (see purchase.rs).
+                let h = world::with_world(|w| w.tiles[tile_idx(a0)].houses).max(0);
+                (board::TILES[s as usize].price
+                    + h * board::TILES[s as usize].house_cost) as i64
+            }
+        }
+}
+
+pub fn arm_can_build_on(_a: Args) -> i64 {
+    0
+}
+
+pub fn arm_can_pay(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| (w.money[player_idx(a0)] > 0) as i64)
+}
+
+pub fn arm_card_counter(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let key = name_id(a3, a4);
+    world::with_world(|w| {
+        if key == known().crystals {
+            w.field_crystals(w.last_uid)
+        } else {
+            w.key_get(w.trig_player, key)
+        }
+    }) as i64
+}
+
+pub fn arm_card_move(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a0, a1, a2, a3, a4, a5);
+    1
+}
+
+pub fn arm_card_offer_build(_a: Args) -> i64 {
+    0
+}
+
+pub fn arm_cards_in(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // Bounded layout `[n, id…]` under Kani (see ctx::cards_in). The
+            // guest rebuilds names from interned ids via the same table.
+            let mut ids: [u8; world::MAX_CARDS] = [0; world::MAX_CARDS];
+            let mut n = 0usize;
+            world::with_world(|w| {
+                if a1 == 1 {
+                    // Discard: pilot bitset first, then pile.
+                    let mut s = 0u8;
+                    while s < 4 {
+                        if w.discard[s as usize] && n < world::MAX_CARDS {
+                            ids[n] = s;
+                            n += 1;
+                        }
+                        s += 1;
+                    }
+                    let mut i = 0usize;
+                    while i < w.discard_n as usize && n < world::MAX_CARDS {
+                        let id = intern::NameId(w.discard_pile[i]);
+                        // NameId compare against the pre-interned pilot ids —
+                        // no byte walk. Unknown ids fall back to the zero-loop
+                        // byte heuristic.
+                        let slot = card_slot_of_id(id);
+                        // de-dup against bitset slots already emitted
+                        let mut seen = false;
+                        let mut j = 0usize;
+                        while j < n {
+                            if ids[j] == slot {
+                                seen = true;
+                            }
+                            j += 1;
+                        }
+                        if !seen {
+                            ids[n] = slot;
+                            n += 1;
+                        }
+                        i += 1;
+                    }
+                } else if a1 == 0 {
+                    let p = player_idx(a0);
+                    let res = w.hand_resonance[p].min(2);
+                    let mut k = 0;
+                    while k < res && n < world::MAX_CARDS {
+                        ids[n] = 1;
+                        n += 1;
+                        k += 1;
+                    }
+                    let mut s = 0u8;
+                    while s < 4 {
+                        if s != 1 && w.hand[s as usize] && n < world::MAX_CARDS {
+                            ids[n] = s;
+                            n += 1;
+                        }
+                        s += 1;
+                    }
+                }
+            });
+            let mut encoded = [0u8; 16];
+            encoded[0] = n as u8;
+            let mut i = 0usize;
+            while i < n {
+                encoded[1 + i] = ids[i];
+                i += 1;
+            }
+            let need = (1 + n) as i32;
+            if a2 == 0 {
+                return need as i64;
+            }
+            if a3 < need {
+                return -1;
+            }
+            card_sdk::native::write(a2, &encoded[..need as usize]);
+            need as i64
+        }
+}
+
+pub fn arm_character_is(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let want = name_id(a1, a2);
+    world::with_world(|w| (w.character_id[player_idx(a0)] == want.0) as i64)
+}
+
+pub fn arm_count_held(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let key = name_id(a0, a1);
+    let p = a2;
+    world::with_world(|w| {
+        let pp = player_idx(p);
+        if key == known().tok_pp_pos {
+            w.fans_pos[pp]
+        } else if key == known().tok_pp_neg {
+            w.fans_neg[pp]
+        } else {
+            w.key_get(p, key)
+        }
+    }) as i64
+}
+
+pub fn arm_count_marks_f(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        let mut n = 0;
+        let mut i = 0;
+        while i < w.marks_n as usize {
+            if w.marks[i].tile == a0 {
+                n += w.marks[i].n;
+            }
+            i += 1;
+        }
+        n
+    }) as i64
+}
+
+pub fn arm_counter_at(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // `counter_at(uid, np, nl)` — the **uid** instance's counter.
+            let uid = a0;
+            let key = name_id(a1, a2);
+            world::with_world(|w| {
+                if key == known().crystals {
+                    w.field_crystals(uid)
+                } else {
+                    w.field_counter(uid, key)
+                }
+            }) as i64
+        }
+}
+
+pub fn arm_counter_self(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let key = name_id(a0, a1);
+    world::with_world(|w| {
+        if key == known().crystals {
+            w.field_crystals(w.last_uid)
+        } else {
+            w.key_get(w.trig_player, key)
+        }
+    }) as i64
+}
+
+pub fn arm_deck_count(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.deck_n as i32) as i64
+}
+
+pub fn arm_discard_from_hand(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let slot = card_slot(a1, a2);
+            let id = card_u16(a1, a2);
+            world::with_world_mut(|w| {
+                let ok = world::pile_take(&mut w.hand_pile, &mut w.hand_n, id)
+                    || ((slot as usize) < 4 && {
+                        let b = w.hand[slot as usize];
+                        w.hand[slot as usize] = false;
+                        if slot == 1 && w.hand_resonance[player_idx(a0)] > 0 {
+                            w.hand_resonance[player_idx(a0)] -= 1;
+                            true
+                        } else {
+                            b
+                        }
+                    });
+                if ok {
+                    world::pile_push(&mut w.discard_pile, &mut w.discard_n, id);
+                    if (slot as usize) < 4 {
+                        w.discard[slot as usize] = true;
+                    }
+                    w.push(Effect::DiscardFromHand {
+                        player: a0,
+                        card: slot,
+                    });
+                }
+                ok as i64
+            })
+        }
+}
+
+pub fn arm_discard_size(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.discard_n as i32) as i64
+}
+
+pub fn arm_dist(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // Forward distance on a 60-tile ring (hostfns `dist`).
+            let n = world::TILE_COUNT;
+            let d = (a1 - a0).rem_euclid(n);
+            d as i64
+        }
+}
+
+pub fn arm_do_move_roll(a: Args) -> i64 {
+    let _ = a;
+    roll_dice(2, 6) as i64
+}
+
+pub fn arm_draw(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // hostfns::draw: reply is the count drawn. Model: push `n` generic
+            // cards into hand (bounded) and record the effect.
+            let n = a1.max(0).min(8);
+            world::with_world_mut(|w| {
+                let mut i = 0;
+                while i < n {
+                    world::pile_push(&mut w.hand_pile, &mut w.hand_n, u16::MAX);
+                    i += 1;
+                }
+                w.push(Effect::Draw {
+                    player: a0,
+                    n,
+                });
+            });
+            n as i64
+        }
+}
+
+pub fn arm_exile_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.exile[player_idx(a0)]) as i64
+}
+
+pub fn arm_field_instances(a: Args) -> i64 {
+    let _ = a;
+{
+            // Write uid list into out-buffer: [n, uid…] as i32s is overkill;
+            // return count.
+            world::with_world(|w| w.field_n as i32) as i64
+        }
+}
+
+pub fn arm_fire(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.fire[player_idx(a0)]) as i64
+}
+
+pub fn arm_fire_max(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.fire_max[player_idx(a0)]) as i64
+}
+
+pub fn arm_gain(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    if a1 > 0 {
+        world::with_world_mut(|w| {
+            let p = player_idx(a0);
+            w.money[p] = w.money[p].saturating_add(a1);
+            w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(a1);
+            w.push(Effect::GainMoney {
+                player: a0,
+                n: a1,
+            });
+        });
+    }
+    a1 as i64
+}
+
+pub fn arm_gain_fire(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // engine `gain_fire`: `got = n.clamp(0, (fire_max - fire).max(0))`;
+            // 0 when out / n<=0 / cap<=0. Returns the amount gained.
+            world::with_world_mut(|w| {
+                let p = player_idx(a0);
+                let n = a1;
+                if n <= 0 || w.out[p] {
+                    return 0;
+                }
+                let cap = w.fire_max[p];
+                if cap <= 0 {
+                    return 0;
+                }
+                let got = n.clamp(0, (cap - w.fire[p]).max(0));
+                if got <= 0 {
+                    return 0;
+                }
+                w.fire[p] += got;
+                w.push(Effect::GainFire {
+                    player: a0,
+                    n: got,
+                });
+                got as i64
+            })
+        }
+}
+
+pub fn arm_gains_this_turn(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world(|w| w.gains_this_turn[player_idx(a0)]) as i64
+        }
+}
+
+pub fn arm_gate(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        let out_of_range = a0 < 0 || a0 as usize >= MAX_PLAYERS || a0 >= w.n_players;
+        let dead = !out_of_range && w.out[player_idx(a0)];
+        if out_of_range || dead {
+            0
+        } else {
+            1
+        }
+    })
+}
+
+pub fn arm_give_exile(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // `key::EXILE` layers + `key::EXILE_TO` target (decay is protocol).
+            world::with_world_mut(|w| {
+                if (a0 as usize) < MAX_PLAYERS {
+                    w.exile[a0 as usize] = (w.exile[a0 as usize] + a1).max(0);
+                    w.exile_to[a0 as usize] = a2;
+                }
+                w.push(Effect::GiveExile {
+                    player: a0,
+                    n: a1,
+                    to: a2,
+                });
+            });
+            0
+        }
+}
+
+pub fn arm_give_stay(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                if (a0 as usize) < MAX_PLAYERS {
+                    w.stay[a0 as usize] = w.stay[a0 as usize].saturating_add(a1);
+                }
+                w.push(Effect::GiveStay {
+                    player: a0,
+                    n: a1,
+                });
+            });
+            0
+        }
+}
+
+pub fn arm_give_stun(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // Separate from [停留] (`key::STUN` vs `key::STAY` in the engine).
+            world::with_world_mut(|w| {
+                if (a0 as usize) < MAX_PLAYERS {
+                    w.stun[a0 as usize] = (w.stun[a0 as usize] + a1).max(0);
+                }
+                w.push(Effect::GiveStun {
+                    player: a0,
+                    n: a1,
+                });
+            });
+            0
+        }
+}
+
+pub fn arm_hand_count(a: Args) -> i64 {
+    // `hand_count(player, ptr, len)` → [player, ptr, len]: name is (a1,a2),
+    // seat is a0. (Was (a0,a1) = (player, ptr) — untagged name_id loud-FAIL.)
+    let [a0, a1, a2, ..] = a;
+    let slot = card_slot(a1, a2);
+    world::with_world(|w| {
+        if slot == 1 {
+            w.hand_resonance[player_idx(a0)]
+        } else {
+            let id = card_u16(a1, a2);
+            let in_pile = world::pile_count(&w.hand_pile, w.hand_n, id);
+            let in_bits = if (slot as usize) < 4 {
+                w.hand[slot as usize] as i32
+            } else {
+                0
+            };
+            in_pile.max(in_bits)
+        }
+    }) as i64
+}
+
+pub fn arm_hand_size(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| {
+            let p = player_idx(a0);
+            let mut n = w.hand_resonance[p];
+            let mut s = 0usize;
+            while s < 4 {
+                if s != 1 && w.hand[s] {
+                    n += 1;
+                }
+                s += 1;
+            }
+            n + w.hand_n as i32
+        }) as i64
+}
+
+pub fn arm_houses_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.tiles[tile_idx(a0)].houses) as i64
+}
+
+pub fn arm_in_band(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let want = name_id(a1, a2);
+    world::with_world(|w| (w.band_id[player_idx(a0)] == want.0) as i64)
+}
+
+pub fn arm_inc_slot(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a3, a4, a5);
+    let key = name_id(a1, a2);
+    let by = a3;
+    world::with_world_mut(|w| {
+        let v = w.key_add(a0, key, by);
+        w.sync_views_player(a0);
+        v as i64
+    })
+}
+
+pub fn arm_invoke_skill(a: Args) -> i64 {
+    let _ = a;
+    0
+}
+
+pub fn arm_is_placed(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| (w.field_n > 0) as i64)
+}
+
+pub fn arm_linger(_a: Args) -> i64 {
+    0
+}
+
+pub fn arm_log(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| w.push_narration(a0, 0));
+    0
+}
+
+pub fn arm_money(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.money[player_idx(a0)]) as i64
+}
+
+pub fn arm_mortgaged_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world(|w| w.tiles[tile_idx(a0)].mortgaged) as i64
+        }
+}
+
+pub fn arm_opt(a: Args) -> i64 {
+    let _ = a;
+    world::with_world_mut(|w| w.opt_n += 1);
+    0
+}
+
+pub fn arm_opt_price(a: Args) -> i64 {
+    let _ = a;
+{
+            world::with_world_mut(|w| w.opt_n += 1);
+            0
+        }
+}
+
+pub fn arm_others_at(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| {
+            let me = a0;
+            let idx = a1;
+            let mut n = 0;
+            let mut p = 0;
+            let mut found = -1;
+            while p < MAX_PLAYERS {
+                if (p as i32) != me && !w.out[p] && p < w.n_players as usize {
+                    if n == idx {
+                        found = p as i32;
+                    }
+                    n += 1;
+                }
+                p += 1;
+            }
+            found
+        }) as i64
+}
+
+pub fn arm_others_count(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| {
+            let me = a0;
+            let mut n = 0;
+            let mut p = 0;
+            while p < MAX_PLAYERS {
+                if (p as i32) != me && !w.out[p] && p < w.n_players as usize {
+                    n += 1;
+                }
+                p += 1;
+            }
+            n
+        }) as i64
+}
+
+pub fn arm_owned_at(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| {
+            let p = a0;
+            let idx = a1;
+            let mut n = 0;
+            let mut found = -1;
+            let mut outer = 0usize;
+            while outer < 8 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let i = outer * 8 + k;
+                    if i < 60 && w.tiles[i].owner == p {
+                        if n == idx {
+                            // 0-based engine index (was wrongly `i + 1`).
+                            found = i as i32;
+                        }
+                        n += 1;
+                    }
+                    k += 1;
+                }
+                outer += 1;
+            }
+            found
+        }) as i64
+}
+
+pub fn arm_owned_count(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| {
+            let p = a0;
+            // 8×8 chunk walk over the 60-tile board (unwind bound 8, not 60).
+            let mut n = 0;
+            let mut outer = 0usize;
+            while outer < 8 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let i = outer * 8 + k;
+                    if i < 60 && w.tiles[i].owner == p {
+                        n += 1;
+                    }
+                    k += 1;
+                }
+                outer += 1;
+            }
+            n
+        }) as i64
+}
+
+pub fn arm_pay(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            if a1 > 0 {
+                world::with_world_mut(|w| {
+                    let p = player_idx(a0);
+                    w.money[p] = (w.money[p] - a1).max(0);
+                    w.push(Effect::PayMoney {
+                        player: a0,
+                        n: a1,
+                    });
+                });
+            }
+            a1 as i64
+        }
+}
+
+pub fn arm_pay_leg(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            if a2 > 0 {
+                world::with_world_mut(|w| {
+                    let f = player_idx(a0);
+                    let t = player_idx(a1);
+                    w.money[f] = (w.money[f] - a2).max(0);
+                    w.money[t] = w.money[t].saturating_add(a2);
+                    w.push(Effect::PayTo {
+                        from: a0,
+                        to: a1,
+                        n: a2,
+                    });
+                });
+            }
+            a2 as i64
+        }
+}
+
+pub fn arm_pay_to(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            if a1 > 0 {
+                world::with_world_mut(|w| {
+                    let from = player_idx(a0);
+                    let to = player_idx(a1); // wrong slot — see note below
+                    let _ = to;
+                    let _ = from;
+                });
+            }
+            // ABI: pay_to(from, to, amount, …). Re-dispatch with packed args.
+            // In the wire form a0=from, a1=to, a2=amount.
+            let from = a0;
+            let to = a1;
+            let amount = a2;
+            if amount > 0 {
+                world::with_world_mut(|w| {
+                    let f = player_idx(from);
+                    let t = player_idx(to);
+                    w.money[f] = (w.money[f] - amount).max(0);
+                    w.money[t] = w.money[t].saturating_add(amount);
+                    w.push(Effect::PayTo {
+                        from,
+                        to,
+                        n: amount,
+                    });
+                });
+            }
+            amount as i64
+        }
+}
+
+pub fn arm_pay_total(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // (from, to, total) — same as pay_to for the model.
+            let from = a0;
+            let to = a1;
+            let amount = a2;
+            if amount > 0 {
+                world::with_world_mut(|w| {
+                    let f = player_idx(from);
+                    let t = player_idx(to);
+                    w.money[f] = (w.money[f] - amount).max(0);
+                    w.money[t] = w.money[t].saturating_add(amount);
+                    w.push(Effect::PayTo {
+                        from,
+                        to,
+                        n: amount,
+                    });
+                });
+            }
+            amount as i64
+        }
+}
+
+pub fn arm_place_card(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a0, a1, a2, a3, a4, a5);
+
+    // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
+    let id = card_u16(a1, a2);
+    let slot = card_slot(a1, a2);
+    world::with_world_mut(|w| {
+        let dest = w.dest;
+        let uid = w.next_uid;
+        w.next_uid += 1;
+        w.last_uid = uid;
+        let fi = w.field_n as usize;
+        if fi < world::MAX_FIELD {
+            w.field[fi] = world::FieldCard {
+                uid,
+                card: id,
+                player: a0,
+                tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
+                face_down: false,
+                immune: false,
+                crystals: 0,
+                props: world::NameMap::new(),
+            };
+            w.field_n += 1;
+        }
+        w.push(Effect::PlaceCard {
+            player: a0,
+            dest,
+            card: slot,
+        });
+        uid as i64
+    })
+}
+
+pub fn arm_place_card_at(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
+            let id = card_u16(a1, a2);
+            let slot = card_slot(a1, a2);
+            world::with_world_mut(|w| {
+                let dest = w.dest;
+                let uid = w.next_uid;
+                w.next_uid += 1;
+                w.last_uid = uid;
+                let fi = w.field_n as usize;
+                if fi < world::MAX_FIELD {
+                    w.field[fi] = world::FieldCard {
+                        uid,
+                        card: id,
+                        player: a0,
+                        tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
+                        face_down: false,
+                        immune: false,
+                        crystals: 0,
+                        props: world::NameMap::new(),
+                    };
+                    w.field_n += 1;
+                }
+                w.push(Effect::PlaceCard {
+                    player: a0,
+                    dest,
+                    card: slot,
+                });
+                uid as i64
+            })
+        }
+}
+
+pub fn arm_place_card_on(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // ABI `[player, tile, cp, cl, ptr, len]` — card name at (a2, a3),
+            // landing tile at a1 (HHW kkr-02 「放置在CiRCLE」). The old arm
+            // read the name from (a1, a2) = (tile, cp) and used `dest`.
+            let tile = a1;
+            let id = card_u16(a2, a3);
+            let slot = card_slot(a2, a3);
+            world::with_world_mut(|w| {
+                let uid = w.next_uid;
+                w.next_uid += 1;
+                w.last_uid = uid;
+                let fi = w.field_n as usize;
+                if fi < world::MAX_FIELD {
+                    w.field[fi] = world::FieldCard {
+                        uid,
+                        card: id,
+                        player: a0,
+                        tile,
+                        face_down: false,
+                        immune: false,
+                        crystals: 0,
+                        props: world::NameMap::new(),
+                    };
+                    w.field_n += 1;
+                }
+                w.push(Effect::PlaceCard {
+                    player: a0,
+                    dest: tile,
+                    card: slot,
+                });
+                uid as i64
+            })
+        }
+}
+
+pub fn arm_place_mark(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // ABI is filter-based; record a mark on tile a0.
+            world::with_world_mut(|w| {
+                let i = w.marks_n as usize;
+                if i < world::MAX_MARKS {
+                    w.marks[i] = world::Mark {
+                        tile: a0,
+                        key: NameId::INVALID,
+                        src_card: u16::MAX,
+                        instance: 0,
+                        n: 1,
+                    };
+                    w.marks_n += 1;
+                }
+                w.push(Effect::PlaceMark {
+                    tile: a0,
+                    key: NameId::INVALID,
+                });
+            });
+            0
+        }
+}
+
+pub fn arm_placed_cards(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.field_n as i32) as i64
+}
+
+pub fn arm_player_count(a: Args) -> i64 {
+    let _ = a;
+    let n = world::with_world(|w| w.n_players) as i64;
+    #[cfg(kani)]
+    kani::assume(n >= 2 && n <= 4);
+    n
+}
+
+pub fn arm_player_out(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.out[player_idx(a0)]) as i64
+}
+
+pub fn arm_player_pos(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.pos[player_idx(a0)]) as i64
+}
+
+pub fn arm_players_on_at(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    world::with_world(|w| {
+        let tile = a0;
+        let except = a1;
+        let idx = a2;
+        let mut n = 0;
+        let mut p = 0;
+        let mut found = -1;
+        while p < MAX_PLAYERS {
+            if (p as i32) != except && !w.out[p] && w.pos[p] == tile {
+                if n == idx {
+                    found = p as i32;
+                }
+                n += 1;
+            }
+            p += 1;
+        }
+        found
+    }) as i64
+}
+
+pub fn arm_players_on_count(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world(|w| {
+        let tile = a0;
+        let except = a1;
+        let mut n = 0;
+        let mut p = 0;
+        while p < MAX_PLAYERS {
+            if (p as i32) != except && !w.out[p] && w.pos[p] == tile {
+                n += 1;
+            }
+            p += 1;
+        }
+        n
+    }) as i64
+}
+
+pub fn arm_raise(_a: Args) -> i64 {
+    1
+}
+
+pub fn arm_raise_bought(_a: Args) -> i64 {
+    1
+}
+
+pub fn arm_ring_multiplier(_a: Args) -> i64 {
+    1
+}
+
+pub fn arm_roll(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    roll_dice(a1, a2) as i64
+}
+
+pub fn arm_roll_ask(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    roll_dice(a1, a2) as i64
+}
+
+pub fn arm_round_no(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.round_no) as i64
+}
+
+pub fn arm_schedule_turn_end(_a: Args) -> i64 {
+    0
+}
+
+pub fn arm_self_tile(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a0, a1, a2, a3, a4, a5);
+    world::with_world(|w| {
+                if w.field_n == 0 {
+                    w.pos[player_idx(w.trig_player)]
+                } else {
+                    w.field[0].tile
+                }
+            }) as i64
+}
+
+pub fn arm_self_uid(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.last_uid) as i64
+}
+
+pub fn arm_set_counter_self(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
             let key = name_id(a0, a1);
             let v = a2;
             world::with_world_mut(|w| {
@@ -1422,10 +2227,242 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             v as i64
         }
-        Op::count_held | Op::count_held_name => arm_count_held(a),
-        Op::add_held => arm_add_held(a),
-        Op::set_held_name => arm_set_held_name(a),
-        Op::state_get => {
+}
+
+pub fn arm_set_dest(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| w.dest = a0);
+            0
+        }
+}
+
+pub fn arm_set_held_name(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let key = name_id(a0, a1);
+    let p = a2;
+    let v = a3;
+    world::with_world_mut(|w| {
+        w.key_set(p, key, v);
+        if key == known().tok_pp_pos {
+            w.fans_pos[player_idx(p)] = v;
+        } else if key == known().tok_pp_neg {
+            w.fans_neg[player_idx(p)] = v;
+        } else {
+            w.sync_views_player(p);
+        }
+        w.push(Effect::SetToken {
+            player: p,
+            key: key.0,
+            n: v,
+        });
+    });
+    0
+}
+
+pub fn arm_set_mortgaged(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                w.tiles[tile_idx(a0)].mortgaged = a1 != 0;
+                w.push(Effect::SetMortgaged {
+                    tile: a0,
+                    on: a1 != 0,
+                });
+            });
+            0
+        }
+}
+
+pub fn arm_set_owner(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                w.tiles[tile_idx(a0)].owner = a1;
+                w.push(Effect::SetOwner {
+                    tile: a0,
+                    player: a1,
+                });
+            });
+            0
+        }
+}
+
+pub fn arm_set_prop_at(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a4, a5);
+    let key = name_id(a1, a2);
+    let val = a3;
+    let uid = a0;
+    world::with_world_mut(|w| {
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].uid == uid {
+                w.field[i].props.set(key, val);
+            }
+            i += 1;
+        }
+    });
+    0
+}
+
+pub fn arm_set_self_immune(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a0, a1, a2, a3, a4, a5);
+    world::with_world_mut(|w| {
+                if w.field_n == 0 {
+                    0
+                } else {
+                    w.field[0].immune = a0 != 0;
+                    1
+                }
+            })
+}
+
+pub fn arm_set_self_prop(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a3, a4, a5);
+    let key = name_id(a0, a1);
+    let val = a2;
+    world::with_world_mut(|w| {
+        if w.field_n > 0 {
+            let i = (w.field_n as usize) - 1;
+            w.field[i].props.set(key, val);
+        }
+    });
+    0
+}
+
+pub fn arm_set_self_tile(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a0, a1, a2, a3, a4, a5);
+    world::with_world_mut(|w| {
+                if w.field_n == 0 {
+                    0
+                } else {
+                    let uid = w.field[0].uid;
+                    let ok = w.set_tile_at(uid, a0);
+                    if ok {
+                        w.push(Effect::SetCardTile { uid, tile: a0 });
+                    }
+                    ok as i64
+                }
+            })
+}
+
+pub fn arm_set_slot(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // `set_slot(player, ptr, len, v)` — a3 is the value (sugar for
+            // `state_set` field 0).
+            let key = name_id(a1, a2);
+            world::with_world_mut(|w| {
+                w.key_set(a0, key, a3);
+                w.push(Effect::SetState {
+                    player: a0,
+                    key: key.0,
+                    n: a3,
+                });
+            });
+            a3 as i64
+        }
+}
+
+pub fn arm_set_tile_prop(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let _ = (a4, a5);
+    let key = name_id(a1, a2);
+    let val = a3;
+    world::with_world_mut(|w| {
+        w.tiles[tile_idx(a0)].props.set(key, val);
+    });
+    0
+}
+
+pub fn arm_shuffle_into_deck(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // Engine: move `hand` / `discard` into `draw` and shuffle. Order is
+            // symbolic/irrelevant — model as a multiset move (task B8).
+            let do_hand = a1 != 0;
+            let do_discard = a2 != 0;
+            world::with_world_mut(|w| {
+                let mut moved = 0i32;
+                if do_hand {
+                    let mut i = 0usize;
+                    while i < w.hand_n as usize {
+                        let id = w.hand_pile[i];
+                        if id != u16::MAX {
+                            let di = w.deck_n as usize;
+                            if di < world::MAX_CARDS {
+                                w.deck_pile[di] = id;
+                                w.deck_n += 1;
+                                moved += 1;
+                            }
+                            w.hand_pile[i] = u16::MAX;
+                        }
+                        i += 1;
+                    }
+                    w.hand_n = 0;
+                }
+                if do_discard {
+                    let mut i = 0usize;
+                    while i < w.discard_n as usize {
+                        let id = w.discard_pile[i];
+                        if id != u16::MAX {
+                            let di = w.deck_n as usize;
+                            if di < world::MAX_CARDS {
+                                w.deck_pile[di] = id;
+                                w.deck_n += 1;
+                                moved += 1;
+                            }
+                            w.discard_pile[i] = u16::MAX;
+                        }
+                        i += 1;
+                    }
+                    w.discard_n = 0;
+                }
+                moved as i64
+            })
+        }
+}
+
+pub fn arm_slot(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let key = name_id(a1, a2);
+            world::with_world(|w| w.key_get(a0, key)) as i64
+        }
+}
+
+pub fn arm_spend_fire(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let p = player_idx(a0);
+            world::with_world_mut(|w| {
+                if w.fire[p] >= a1 && a1 > 0 {
+                    w.fire[p] -= a1;
+                    1
+                } else if a1 == 0 {
+                    1
+                } else {
+                    0
+                }
+            })
+        }
+}
+
+pub fn arm_state_add(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let key = name_id(a1, a2);
+            world::with_world_mut(|w| w.key_add(a0, key, a3)) as i64
+        }
+}
+
+pub fn arm_state_get(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
             // hostfns `state_get(player, ptr, len, field)`: field 1/2/3 read
             // the declared MAX / MIN / EXPIRES column; anything else is VALUE.
             let key = name_id(a1, a2);
@@ -1437,11 +2474,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 _ => w.key_get(a0, key),
             }) as i64
         }
-        Op::slot => {
-            let key = name_id(a1, a2);
-            world::with_world(|w| w.key_get(a0, key)) as i64
-        }
-        Op::state_set => {
+}
+
+pub fn arm_state_set(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
             // hostfns `state_set(player, ptr, len, field, v)`:
             //   a3 = field (0 value / 1 max / 2 min / 3 expires), a4 = v.
             // The old model wrote a3 as the value and dropped a4.
@@ -1477,569 +2514,18 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 out
             }) as i64
         }
-        Op::set_slot => {
-            // `set_slot(player, ptr, len, v)` — a3 is the value (sugar for
-            // `state_set` field 0).
-            let key = name_id(a1, a2);
-            world::with_world_mut(|w| {
-                w.key_set(a0, key, a3);
-                w.push(Effect::SetState {
-                    player: a0,
-                    key: key.0,
-                    n: a3,
-                });
-            });
-            a3 as i64
-        }
-        Op::state_add | Op::inc_slot => {
-            let key = name_id(a1, a2);
-            world::with_world_mut(|w| w.key_add(a0, key, a3)) as i64
-        }
-        Op::tok_names => 0,
-
-        // ---- marks ----
-        Op::place_mark => {
-            // ABI is filter-based; record a mark on tile a0.
-            world::with_world_mut(|w| {
-                let i = w.marks_n as usize;
-                if i < world::MAX_MARKS {
-                    w.marks[i] = world::Mark {
-                        tile: a0,
-                        key: NameId::INVALID,
-                        src_card: u16::MAX,
-                        instance: 0,
-                        n: 1,
-                    };
-                    w.marks_n += 1;
-                }
-                w.push(Effect::PlaceMark {
-                    tile: a0,
-                    key: NameId::INVALID,
-                });
-            });
-            0
-        }
-        Op::count_marks_f => {
-            world::with_world(|w| {
-                let mut n = 0;
-                let mut i = 0;
-                while i < w.marks_n as usize {
-                    if w.marks[i].tile == a0 {
-                        n += w.marks[i].n;
-                    }
-                    i += 1;
-                }
-                n
-            }) as i64
-        }
-        Op::bump_mark_f => 0,
-        Op::remove_marks_f => 0,
-        Op::mark_src_at | Op::mark_instance_at => -1,
-
-        // ---- status ----
-        Op::fire => world::with_world(|w| w.fire[player_idx(a0)]) as i64,
-        Op::fire_max => world::with_world(|w| w.fire_max[player_idx(a0)]) as i64,
-        Op::gain_fire => {
-            // engine `gain_fire`: `got = n.clamp(0, (fire_max - fire).max(0))`;
-            // 0 when out / n<=0 / cap<=0. Returns the amount gained.
-            world::with_world_mut(|w| {
-                let p = player_idx(a0);
-                let n = a1;
-                if n <= 0 || w.out[p] {
-                    return 0;
-                }
-                let cap = w.fire_max[p];
-                if cap <= 0 {
-                    return 0;
-                }
-                let got = n.clamp(0, (cap - w.fire[p]).max(0));
-                if got <= 0 {
-                    return 0;
-                }
-                w.fire[p] += got;
-                w.push(Effect::GainFire {
-                    player: a0,
-                    n: got,
-                });
-                got as i64
-            })
-        }
-        Op::add_fire_max => {
-            world::with_world_mut(|w| {
-                w.fire_max[player_idx(a0)] = w.fire_max[player_idx(a0)].saturating_add(a1);
-            });
-            0
-        }
-        Op::spend_fire => {
-            let p = player_idx(a0);
-            world::with_world_mut(|w| {
-                if w.fire[p] >= a1 && a1 > 0 {
-                    w.fire[p] -= a1;
-                    1
-                } else if a1 == 0 {
-                    1
-                } else {
-                    0
-                }
-            })
-        }
-        // `ctx::n(k, v)` doubles when `play_doubled() == k`. Default is
-        // **no doubling** (`-1` / `None` in the engine) — the old stub returned
-        // 0, so `n(0, 600)` wrongly yielded 1200.
-        Op::play_doubled => world::with_world(|w| w.play_doubled) as i64,
-        Op::set_play_doubled => {
-            world::with_world_mut(|w| w.play_doubled = a0);
-            0
-        }
-        Op::give_stay => {
-            world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.stay[a0 as usize] = w.stay[a0 as usize].saturating_add(a1);
-                }
-                w.push(Effect::GiveStay {
-                    player: a0,
-                    n: a1,
-                });
-            });
-            0
-        }
-        Op::give_stun => {
-            // Separate from [停留] (`key::STUN` vs `key::STAY` in the engine).
-            world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.stun[a0 as usize] = (w.stun[a0 as usize] + a1).max(0);
-                }
-                w.push(Effect::GiveStun {
-                    player: a0,
-                    n: a1,
-                });
-            });
-            0
-        }
-        Op::give_exile => {
-            // `key::EXILE` layers + `key::EXILE_TO` target (decay is protocol).
-            world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.exile[a0 as usize] = (w.exile[a0 as usize] + a1).max(0);
-                    w.exile_to[a0 as usize] = a2;
-                }
-                w.push(Effect::GiveExile {
-                    player: a0,
-                    n: a1,
-                    to: a2,
-                });
-            });
-            0
-        }
-        Op::give_extra_turn => {
-            // Recorded so the protocol can schedule it. Scheduling is
-            // PROTOCOL-LEVEL (the turn engine owns the extra-turn queue).
-            world::with_world_mut(|w| {
-                if a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
-                    w.extra_turns[a0 as usize] = true;
-                }
-                w.push(Effect::GiveExtraTurn { player: a0 });
-            });
-            0
-        }
-        Op::stay_of => world::with_world(|w| w.stay[player_idx(a0)]) as i64,
-        Op::stun_of => world::with_world(|w| w.stun[player_idx(a0)]) as i64,
-        Op::exile_of => world::with_world(|w| w.exile[player_idx(a0)]) as i64,
-        Op::cant_move => world::with_world(|w| {
-            (w.stay[player_idx(a0)] > 0
-                || w.stun[player_idx(a0)] > 0
-                || w.exile[player_idx(a0)] > 0) as i64
-        }),
-        Op::abnormal_count => world::with_world(|w| {
-            let mut n = 0;
-            let mut p = 0;
-            while p < MAX_PLAYERS {
-                if w.stay[p] > 0 {
-                    n += 1;
-                }
-                p += 1;
-            }
-            n
-        }) as i64,
-        Op::card_move => 1,
-
-        // ---- band / skills ----
-        Op::band_crystals => arm_band_crystals(a),
-        Op::add_band_crystals => arm_add_band_crystals(a),
-        Op::band_skill | Op::character_skill => {
-            // Return 0 = no skill id (string returns go through out-buffers in
-            // the real ABI; the model answers "none").
-            0
-        }
-        Op::band_skills => 0,
-        Op::add_band_skill => 0,
-        Op::invoke_skill => 0,
-
-        // ---- events ----
-        Op::event_is_active => {
-            let id = name_id(a0, a1);
-            world::with_world(|w| {
-                let mut i = 0;
-                let mut on = 0;
-                while i < w.events_n as usize {
-                    if w.events[i] == id.0 {
-                        on = 1;
-                    }
-                    i += 1;
-                }
-                on
-            }) as i64
-        }
-        Op::event_expire => {
-            let id = name_id(a0, a1);
-            world::with_world_mut(|w| {
-                w.push(Effect::EventExpire { key: id });
-            });
-            0
-        }
-        Op::event_deck_push | Op::event_banish => 0,
-
-        // ---- prompts ----
-        Op::opt_int | Op::opt_str | Op::opt_tile => {
-            world::with_world_mut(|w| w.opt_n += 1);
-            0
-        }
-        Op::opt_price | Op::opt_ai => {
-            world::with_world_mut(|w| w.opt_n += 1);
-            0
-        }
-        Op::ask => arm_ask(a),
-
-        // ---- trigger context ----
-        Op::trig_kind => world::with_world(|w| w.trig_kind) as i64,
-        Op::trig_player => world::with_world(|w| w.trig_player) as i64,
-        Op::trig_value => world::with_world(|w| w.pay_amount) as i64,
-        Op::trig_target => world::with_world(|w| w.trig_target) as i64,
-        Op::trig_tile => world::with_world(|w| w.trig_tile) as i64,
-        Op::trig_name => world::with_world(|w| w.counter_name) as i64,
-        Op::trig_step => 0,
-        Op::trig_by_card => 0,
-        Op::trig_pay_is_rent => world::with_world(|w| w.trig_pay_is_rent as i64),
-        Op::trig_cancelled => world::with_world(|w| w.trig_cancelled as i64),
-        // ---- move payload (hostfns 1830–1880; sentinels when no move) ----
-        Op::trig_move_kind => {
-            world::with_world(|w| if w.move_snap.present() { w.move_snap.kind as i64 } else { -1 })
-        }
-        Op::trig_move_resolve => world::with_world(|w| w.move_snap.resolve as i64),
-        Op::trig_move_tag => {
-            let key = name_id(a0, a1);
-            world::with_world(|w| w.move_snap.tags.get(key)) as i64
-        }
-        // `trig_move_main` is `Trigger::main`, not `mv.main` (hostfns 1848).
-        Op::trig_move_main => world::with_world(|w| w.trig_main as i64),
-        Op::trig_move_dir => {
-            world::with_world(|w| if w.move_snap.present() { w.move_snap.dir as i64 } else { 1 })
-        }
-        Op::trig_move_remaining => {
-            world::with_world(|w| if w.move_snap.present() { w.move_snap.remaining as i64 } else { 0 })
-        }
-        Op::trig_move_from => {
-            world::with_world(|w| if w.move_snap.present() { w.move_snap.from as i64 } else { -1 })
-        }
-        Op::trig_move_total => {
-            world::with_world(|w| if w.move_snap.present() { w.move_snap.total as i64 } else { 0 })
-        }
-        // `mv.and_then(|m| m.roll).unwrap_or(-1)` — no-move and no-face are -1.
-        Op::trig_move_roll => world::with_world(|w| w.move_snap.roll) as i64,
-        Op::trig_roll_source => world::with_world(|w| w.trig_roll_source) as i64,
-        // ---- buy payload (hostfns 1886–1936) ----
-        Op::trig_buy_kind => world::with_world(|w| w.buy_snap.kind) as i64,
-        Op::trig_seller => world::with_world(|w| w.buy_snap.seller) as i64,
-        Op::trig_price => world::with_world(|w| w.buy_snap.price) as i64,
-        Op::trig_deal_owner => world::with_world(|w| w.buy_snap.deal_owner) as i64,
-        Op::trig_deal_houses => world::with_world(|w| w.buy_snap.deal_houses) as i64,
-        Op::trig_deal_mortgaged => world::with_world(|w| w.buy_snap.deal_mortgaged as i64),
-        Op::trig_set_pay_amount => {
-            world::with_world_mut(|w| {
-                w.pay_amount = a0;
-                w.push(Effect::SetPayAmount { to: a0 });
-            });
-            0
-        }
-        Op::trig_set_pay_target => {
-            world::with_world_mut(|w| w.trig_target = a0);
-            0
-        }
-        Op::trig_set_price => {
-            world::with_world_mut(|w| w.buy_snap.price = a0);
-            0
-        }
-        Op::trig_set_move_roll => {
-            world::with_world_mut(|w| w.move_snap.roll = a0);
-            0
-        }
-        Op::trig_set_deal_owner => {
-            world::with_world_mut(|w| w.buy_snap.deal_owner = a0);
-            0
-        }
-        Op::trig_set_deal_houses => {
-            world::with_world_mut(|w| w.buy_snap.deal_houses = a0);
-            0
-        }
-        Op::trig_set_deal_mortgaged => {
-            world::with_world_mut(|w| w.buy_snap.deal_mortgaged = a0 != 0);
-            0
-        }
-        // 真奈 join (CH-05), faithful to hostfns: the redirect seat is `-1`
-        // outside a join; `set_join_used` only records the flag. Who sets the
-        // redirect (the join opener's counter window) is PROTOCOL-LEVEL, so a
-        // harness that needs a join arranges `w.trig_join_redirect` itself.
-        Op::join_redirect_target => world::with_world(|w| w.trig_join_redirect) as i64,
-        Op::set_join_used => {
-            world::with_world_mut(|w| w.trig_join_used = true);
-            0
-        }
-        Op::trig_set_reason | Op::trig_set_cancelled | Op::trig_set_negate_effect
-        | Op::trig_set_spare => {
-            // No-arg setters: `sys_kani` packs `[0;6]`. The call **is** the
-            // effect (hostfns `trig_set_cancelled` / `trig_set_negate_effect`
-            // take no value). Do not read a0.
-            world::with_world_mut(|w| {
-                if op == Op::trig_set_cancelled {
-                    w.trig_cancelled = true;
-                }
-                if op == Op::trig_set_negate_effect {
-                    w.trig_negate = true;
-                }
-            });
-            0
-        }
-        Op::trig_seq => 0,
-        Op::trig_answers => 0,
-        Op::trig_effect_count => 0,
-        Op::trig_effect_kind | Op::trig_effect_target | Op::trig_effect_from
-        | Op::trig_effect_tile | Op::trig_effect_value => 0,
-        Op::declare_effect => 0,
-        Op::trig_card_is => 0,
-        Op::trig_cards => 0,
-
-        // ---- move plan / settle (structure only; engine scheduling is
-        //      PROTOCOL-LEVEL and out of Kani scope) ----
-        Op::set_steps | Op::set_roller | Op::set_reverse | Op::set_signed | Op::set_stop_at
-        | Op::set_parity | Op::set_resolve | Op::set_settle_tile | Op::set_pay_factor
-        | Op::set_rent_factor | Op::set_no_buy | Op::set_no_build | Op::set_build_anywhere
-        | Op::set_kind | Op::set_teleport_to | Op::set_start | Op::set_base_dice
-        | Op::add_base_dice | Op::add_extra_dice | Op::set_min_roll | Op::set_extra_steps
-        | Op::set_more_steps | Op::set_tag | Op::set_settle_as_agent | Op::plan_add_follower
-        | Op::set_play_doubled | Op::set_no_money_loss | Op::set_fixed_roll | Op::set_next_steps
-        | Op::set_build_discount | Op::set_build_cost_pct | Op::set_extreme
-        | Op::clear_dice | Op::set_can_build | Op::move_stopped | Op::move_stop_at
-        | Op::move_parity | Op::move_resolve | Op::move_steps | Op::move_remaining
-        | Op::move_total | Op::move_dir | Op::fixed_roll | Op::do_move_roll
-        | Op::turn_main_steps | Op::turn_rolls | Op::turn_snap | Op::turn_start_pos
-        | Op::schedule_turn_end | Op::linger
-        | Op::targeted_count => 0,
-
-        // ---- hook-status flags (polarity-sensitive; see arm_*) ----
-        // 0 on these means "cancelled / blocked / substituted", which makes
-        // callers skip the real effect (class C — chart_rush spent no fire).
-        Op::raise => arm_raise(a),
-        Op::raise_bought => arm_raise_bought(a),
-        Op::gate => arm_gate(a),
-        Op::ring_multiplier => arm_ring_multiplier(a),
-
-        // ---- offers / buy / build (PROTOCOL-LEVEL) ----
-        Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build
-        | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at
-        | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy
-        | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice
-        | Op::play_card | Op::play_from_hand
-        | Op::can_build_on | Op::add_ring_bonus
-        | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat
-        | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile
-        | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations
-        | Op::cancel_designation | Op::designation_cancelled
-        | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => {
-            // Several of these are read-only queries we did model above; the
-            // remaining ones are engine-protocol and return a benign 0. Any
-            // op that must fail loudly is handled by the catch-all below if
-            // it is missing from this arm — keep this list honest.
-            //
-            // Polarity note (TRIAGE-LOG `op-subset` / class C): 0 here is
-            // only safe when the caller treats 0 as "no data" / "did not
-            // happen". Ops whose 0 means "cancelled — skip the real effect"
-            // live in the arm_* block above. Reported leftovers with that
-            // shape: `play_from_hand` (0 = not from hand), `can_build_on`
-            // (0 = cannot), `card_*` / `buy` / `acquire` (0 = did not land).
-            0
-        }
-
-        other => unmodeled(other),
-    }
 }
 
-#[allow(dead_code)]
-fn _w(_w: World) {}
-
-// ===========================================================================
-// Per-harness op-subset handlers
-// ===========================================================================
-//
-// Each `arm_*` is the single implementation of one (group of) host op(s).
-// `dispatch` calls them; a **narrow** per-harness dispatcher built by
-// [`crate::harness::host_subset!`] calls only the ones the card body can
-// reach and sends everything else to [`outside_subset`] (loud FAIL — never
-// `assume(false)`). That keeps the CBMC match at a handful of arms instead of
-// the full ~300-op `dispatch` (TRIAGE-LOG `op-subset`).
-
-/// `Op::log` / `Op::effect` — narration counter only (not the effect frame).
-pub fn arm_log(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world_mut(|w| w.push_narration(a0, 0));
-    0
+pub fn arm_stay_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.stay[player_idx(a0)]) as i64
 }
 
-/// `Op::player_count` — the host's real `n_players` (2..=4). Note
-/// `ctx::player_count()` under `cfg(kani)` **returns the constant 4** after
-/// asserting this value is in range (TUNING §7): bodies loop `0..4` and
-/// `player_out(p)` is true for `p >= n_players`.
-pub fn arm_player_count(a: Args) -> i64 {
-    let _ = a;
-    let n = world::with_world(|w| w.n_players) as i64;
-    #[cfg(kani)]
-    kani::assume(n >= 2 && n <= 4);
-    n
+pub fn arm_stun_of(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.stun[player_idx(a0)]) as i64
 }
 
-/// `Op::player_out` — out of the game, or not a live seat (`p >= n_players`).
-pub fn arm_player_out(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| w.out[player_idx(a0)]) as i64
-}
-
-/// `Op::in_band` — seat's band name id equals `want`.
-pub fn arm_in_band(a: Args) -> i64 {
-    let [a0, a1, a2, ..] = a;
-    let want = name_id(a1, a2);
-    world::with_world(|w| (w.band_id[player_idx(a0)] == want.0) as i64)
-}
-
-/// `Op::character_is` — seat's character name id equals `want`.
-pub fn arm_character_is(a: Args) -> i64 {
-    let [a0, a1, a2, ..] = a;
-    let want = name_id(a1, a2);
-    world::with_world(|w| (w.character_id[player_idx(a0)] == want.0) as i64)
-}
-
-/// `Op::band_crystals` / `Op::add_band_crystals` — band miracle-crystal pool.
-pub fn arm_band_crystals(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| w.band_crystals[player_idx(a0)]) as i64
-}
-
-pub fn arm_add_band_crystals(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    world::with_world_mut(|w| {
-        let p = player_idx(a0);
-        w.band_crystals[p] = (w.band_crystals[p] + a1).clamp(0, 99);
-        w.band_crystals[p] as i64
-    })
-}
-
-/// `Op::gain` / `Op::gain_typed` / `Op::gain_fixed` — immediate credit + effect
-/// record (no chain window under Kani).
-pub fn arm_gain(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    if a1 > 0 {
-        world::with_world_mut(|w| {
-            let p = player_idx(a0);
-            w.money[p] = w.money[p].saturating_add(a1);
-            w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(a1);
-            w.push(Effect::GainMoney {
-                player: a0,
-                n: a1,
-            });
-        });
-    }
-    a1 as i64
-}
-
-/// `Op::count_held` / `Op::count_held_name` — named counter (fan tokens live
-/// in the `fans_*` views; everything else in `player_keys`).
-pub fn arm_count_held(a: Args) -> i64 {
-    let [a0, a1, a2, ..] = a;
-    let key = name_id(a0, a1);
-    let p = a2;
-    world::with_world(|w| {
-        let pp = player_idx(p);
-        if key == known().tok_pp_pos {
-            w.fans_pos[pp]
-        } else if key == known().tok_pp_neg {
-            w.fans_neg[pp]
-        } else {
-            w.key_get(p, key)
-        }
-    }) as i64
-}
-
-/// `Op::add_held` — add `n` units of a named counter (clamped by the map).
-pub fn arm_add_held(a: Args) -> i64 {
-    let [a0, a1, a2, a3, ..] = a;
-    let key = name_id(a0, a1);
-    world::with_world_mut(|w| {
-        let v = w.key_add(a2, key, a3);
-        w.sync_views_player(a2);
-        w.push(Effect::AddToken {
-            player: a2,
-            key: key.0,
-            n: a3,
-        });
-        v as i64
-    })
-}
-
-/// `Op::set_held_name` — set a named counter outright.
-pub fn arm_set_held_name(a: Args) -> i64 {
-    let [a0, a1, a2, a3, ..] = a;
-    let key = name_id(a0, a1);
-    let p = a2;
-    let v = a3;
-    world::with_world_mut(|w| {
-        w.key_set(p, key, v);
-        if key == known().tok_pp_pos {
-            w.fans_pos[player_idx(p)] = v;
-        } else if key == known().tok_pp_neg {
-            w.fans_neg[player_idx(p)] = v;
-        } else {
-            w.sync_views_player(p);
-        }
-        w.push(Effect::SetToken {
-            player: p,
-            key: key.0,
-            n: v,
-        });
-    });
-    0
-}
-
-/// `Op::hand_count` — copies of a card in hand (resonance uses the view).
-pub fn arm_hand_count(a: Args) -> i64 {
-    // `hand_count(player, ptr, len)` → [player, ptr, len]: name is (a1,a2),
-    // seat is a0. (Was (a0,a1) = (player, ptr) — untagged name_id loud-FAIL.)
-    let [a0, a1, a2, ..] = a;
-    let slot = card_slot(a1, a2);
-    world::with_world(|w| {
-        if slot == 1 {
-            w.hand_resonance[player_idx(a0)]
-        } else {
-            let id = card_u16(a1, a2);
-            let in_pile = world::pile_count(&w.hand_pile, w.hand_n, id);
-            let in_bits = if (slot as usize) < 4 {
-                w.hand[slot as usize] as i32
-            } else {
-                0
-            };
-            in_pile.max(in_bits)
-        }
-    }) as i64
-}
-
-/// `Op::take_card` — move one copy out of a pile (hand / discard).
 pub fn arm_take_card(a: Args) -> i64 {
     let [a0, a1, a2, a3, ..] = a;
     let id = card_u16(a2, a3);
@@ -2088,1060 +2574,54 @@ pub fn arm_take_card(a: Args) -> i64 {
     })
 }
 
-/// `Op::to_discard` — put a card into the discard pile.
-pub fn arm_to_discard(a: Args) -> i64 {
-    let [a0, a1, a2, ..] = a;
-    let _ = a0;
-    let slot = card_slot(a1, a2);
-    let id = card_u16(a1, a2);
-    world::with_world_mut(|w| {
-        world::pile_push(&mut w.discard_pile, &mut w.discard_n, id);
-        if (slot as usize) < 4 {
-            w.discard[slot as usize] = true;
-        }
-    });
-    0
-}
-
-/// `Op::ask` — symbolic (or scripted) prompt answer.
-pub fn arm_ask(a: Args) -> i64 {
-    let _ = a;
-    let n = world::with_world(|w| w.opt_n.max(1));
-    world::with_world_mut(|w| w.opt_n = 0);
-    #[cfg(kani)]
-    {
-        if world::with_world(|w| w.symbolic_answers) {
-            let x: i32 = kani::any();
-            kani::assume(x >= 0 && x < n);
-            return x as i64;
-        }
-    }
-    world::with_world_mut(|w| {
-        let i = w.next_answer;
-        if i < world::MAX_ANSWERS {
-            let v = w.answers[i];
-            w.next_answer = i + 1;
-            v as i64
-        } else {
-            0
-        }
-    })
-}
-
-/// `Op::money` — seat's cash.
-pub fn arm_money(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| w.money[player_idx(a0)]) as i64
-}
-
-/// `Op::raise` — guest-raised trigger point (`ctx::raise`).
-///
-/// Returns `(!cancelled)` per `wasm_rules` `HostRequest::Raise`: **1 = the
-/// link settled** (nobody cancelled it), 0 = a counteraction cancelled it.
-/// A 0 here makes callers like `spend_fire` treat the cost as substituted
-/// and **skip the real effect** (class C — `chart_rush` spent no [火罐]).
-/// No [反击] substitute model under Kani (the window is PROTOCOL-LEVEL):
-/// with no hook substituting, the link settles.
-pub fn arm_raise(_a: Args) -> i64 {
-    1
-}
-
-/// `Op::raise_bought` — announce a hand-over outside the buy routine.
-/// HOST-06: **1 = the hand-over landed**. No hook denies under Kani.
-pub fn arm_raise_bought(_a: Args) -> i64 {
-    1
-}
-
-/// `Op::gate` — abnormal-effect [反击] gate (`ctx::gate`).
-///
-/// Returns `allowed` per `HostRequest::Gate`: **1 = may land**, 0 = a field
-/// card guarded it / immune / unstoppable / out. Callers skip the effect on
-/// 0 — the same polarity class as [`arm_raise`]. With no standing guard and
-/// a living seat the effect is allowed.
-pub fn arm_gate(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| {
-        let out_of_range = a0 < 0 || a0 as usize >= MAX_PLAYERS || a0 >= w.n_players;
-        let dead = !out_of_range && w.out[player_idx(a0)];
-        if out_of_range || dead {
-            0
-        } else {
-            1
-        }
-    })
-}
-
-/// `Op::ring_multiplier` — RiNG rent multiplier (`match_rules.ring_multiplier
-/// + bonus`, floored at 1). **0 is not a legal value** (it zeroes rent); the
-/// multiplicative identity is 1. The Kani `World` has no RiNG-rule field, so
-/// this is the neutral floor. `TODO(规则书)` if a proof needs the stock 10.
-pub fn arm_ring_multiplier(_a: Args) -> i64 {
-    1
-}
-
-// ===========================================================================
-// Extracted single-source arms (bands-a host_subset kit).
-// Same logic as the `dispatch` match arms — `dispatch` and `host_subset!`
-// dispatchers both call these. Keep in sync when changing `dispatch`.
-// ===========================================================================
-
-/// `Op::roll` / `roll_ask` — symbolic dice.
-pub fn arm_roll(a: Args) -> i64 {
+pub fn arm_target(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    roll_dice(a1, a2) as i64
+{
+            let p = a0;
+            world::with_world_mut(|w| {
+                if p >= 0 && (p as usize) < MAX_PLAYERS && (p as usize) < w.n_players as usize && !w.out[p as usize] {
+                    w.targeted_count[p as usize] = w.targeted_count[p as usize].saturating_add(1);
+                    p as i64
+                } else {
+                    -1
+                }
+            })
+        }
 }
 
-/// `Op::tile_count`.
+pub fn arm_teleport_to(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                if (a0 as usize) < MAX_PLAYERS {
+                    w.pos[a0 as usize] = a1;
+                }
+                w.push(Effect::Teleport {
+                    player: a0,
+                    tile: a1,
+                });
+            });
+            0
+        }
+}
+
 pub fn arm_tile_count(a: Args) -> i64 {
+    let _ = a;
     world::TILE_COUNT as i64
 }
 
-/// `Op::tile_named` — board.json name → tile index.
-pub fn arm_tile_named(a: Args) -> i64 {
+pub fn arm_tile_group(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // Real board: `data.tiles.iter().position(|t| t.name == name)`
-    // (hostfns `tile_named`). Every `board.json` name resolves; unknown
-    // names are -1.
-    let id = name_id(a0, a1);
-    let mut found = board::tile_named_bytes(intern::resolve(id));
-    // Pilot boards (all `pos < 8`) keep the stub-shop index so the
-    // money/teleport pilots against the 8-tile fixture still work.
-    if id == known().tile_shop {
-        let pilot = world::with_world(|w| w.pos.iter().all(|&p| p < 8));
-        if pilot {
-            found = TILE_SHOP;
-        }
-    }
-    found as i64
-}
-
-/// `Op::tile_owner`.
-pub fn arm_tile_owner(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| w.tiles[tile_idx(a0)].owner) as i64
-}
-
-/// `Op::tile_price`.
-pub fn arm_tile_price(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    let s = board::tile_slot(a0);
-    if s < 0 {
-        0
-    } else {
-        board::TILES[s as usize].price as i64
-    }
-}
-
-/// `Op::houses_of`.
-pub fn arm_houses_of(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| w.tiles[tile_idx(a0)].houses) as i64
-}
-
-/// `Op::mortgaged_of`.
-pub fn arm_mortgaged_of(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    world::with_world(|w| w.tiles[tile_idx(a0)].mortgaged) as i64
-}
-
-/// `Op::set_mortgaged`.
-pub fn arm_set_mortgaged(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    world::with_world_mut(|w| {
-        w.tiles[tile_idx(a0)].mortgaged = a1 != 0;
-        w.push(Effect::SetMortgaged {
-            tile: a0,
-            on: a1 != 0,
-        });
-    });
-    0
-}
-
-/// `Op::set_owner`.
-pub fn arm_set_owner(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    world::with_world_mut(|w| {
-        w.tiles[tile_idx(a0)].owner = a1;
-        w.push(Effect::SetOwner {
-            tile: a0,
-            player: a1,
-        });
-    });
-    0
-}
-
-/// `Op::owned_count`.
-pub fn arm_owned_count(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| {
-                let p = a0;
-                // 8×8 chunk walk over the 60-tile board (unwind bound 8, not 60).
-                let mut n = 0;
-                let mut outer = 0usize;
-                while outer < 8 {
-                    let mut k = 0usize;
-                    while k < 8 {
-                        let i = outer * 8 + k;
-                        if i < 60 && w.tiles[i].owner == p {
-                            n += 1;
-                        }
-                        k += 1;
-                    }
-                    outer += 1;
-                }
-                n
-            }) as i64
-}
-
-/// `Op::owned_at`.
-pub fn arm_owned_at(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| {
-                let p = a0;
-                let idx = a1;
-                let mut n = 0;
-                let mut found = -1;
-                let mut outer = 0usize;
-                while outer < 8 {
-                    let mut k = 0usize;
-                    while k < 8 {
-                        let i = outer * 8 + k;
-                        if i < 60 && w.tiles[i].owner == p {
-                            if n == idx {
-                                // 0-based engine index (was wrongly `i + 1`).
-                                found = i as i32;
-                            }
-                            n += 1;
-                        }
-                        k += 1;
-                    }
-                    outer += 1;
-                }
-                found
-            }) as i64
-}
-
-/// `Op::dist` / `Op::tile_forward` — ring distance.
-pub fn arm_dist(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // Forward distance on a 60-tile ring (hostfns `dist`).
-    let n = world::TILE_COUNT;
-    let d = (a1 - a0).rem_euclid(n);
-    d as i64
-}
-
-/// `Op::player_pos`.
-pub fn arm_player_pos(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| w.pos[player_idx(a0)]) as i64
-}
-
-/// `Op::others_count`.
-pub fn arm_others_count(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| {
-                let me = a0;
-                let mut n = 0;
-                let mut p = 0;
-                while p < MAX_PLAYERS {
-                    if (p as i32) != me && !w.out[p] && p < w.n_players as usize {
-                        n += 1;
-                    }
-                    p += 1;
-                }
-                n
-            }) as i64
-}
-
-/// `Op::others_at`.
-pub fn arm_others_at(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| {
-                let me = a0;
-                let idx = a1;
-                let mut n = 0;
-                let mut p = 0;
-                let mut found = -1;
-                while p < MAX_PLAYERS {
-                    if (p as i32) != me && !w.out[p] && p < w.n_players as usize {
-                        if n == idx {
-                            found = p as i32;
-                        }
-                        n += 1;
-                    }
-                    p += 1;
-                }
-                found
-            }) as i64
-}
-
-/// `Op::target` — player targeting (`target(player, -1, …)`) or tile
-/// targeting (`target(-1, tile, …)` used by `ctx::target_tile`).
-pub fn arm_target(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a2, a3, a4, a5);
-
-    // Tile targeting: `target(-1, tile, 0)` succeeds when the tile is on-board.
-    if a0 < 0 {
-        let t = a1;
-        return if t >= 0 && t < 60 { 0 } else { -1 };
-    }
-    let p = a0;
-    world::with_world_mut(|w| {
-        if p >= 0 && (p as usize) < MAX_PLAYERS && (p as usize) < w.n_players as usize && !w.out[p as usize] {
-            w.targeted_count[p as usize] = w.targeted_count[p as usize].saturating_add(1);
-            p as i64
-        } else {
-            -1
-        }
-    })
-}
-
-/// `Op::pay`.
-pub fn arm_pay(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    if a1 > 0 {
-        world::with_world_mut(|w| {
-            let p = player_idx(a0);
-            w.money[p] = (w.money[p] - a1).max(0);
-            w.push(Effect::PayMoney {
-                player: a0,
-                n: a1,
-            });
-        });
-    }
-    a1 as i64
-}
-
-/// `Op::pay_to`.
-pub fn arm_pay_to(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    if a1 > 0 {
-        world::with_world_mut(|w| {
-            let from = player_idx(a0);
-            let to = player_idx(a1); // wrong slot — see note below
-            let _ = to;
-            let _ = from;
-        });
-    }
-    // ABI: pay_to(from, to, amount, …). Re-dispatch with packed args.
-    // In the wire form a0=from, a1=to, a2=amount.
-    let from = a0;
-    let to = a1;
-    let amount = a2;
-    if amount > 0 {
-        world::with_world_mut(|w| {
-            let f = player_idx(from);
-            let t = player_idx(to);
-            w.money[f] = (w.money[f] - amount).max(0);
-            w.money[t] = w.money[t].saturating_add(amount);
-            w.push(Effect::PayTo {
-                from,
-                to,
-                n: amount,
-            });
-        });
-    }
-    amount as i64
-}
-
-/// `Op::draw`.
-pub fn arm_draw(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // hostfns::draw: reply is the count drawn. Model: push `n` generic
-    // cards into hand (bounded) and record the effect.
-    let n = a1.max(0).min(8);
-    world::with_world_mut(|w| {
-        let mut i = 0;
-        while i < n {
-            world::pile_push(&mut w.hand_pile, &mut w.hand_n, u16::MAX);
-            i += 1;
-        }
-        w.push(Effect::Draw {
-            player: a0,
-            n,
-        });
-    });
-    n as i64
-}
-
-/// `Op::add_to_hand`.
-pub fn arm_add_to_hand(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    let id = card_u16(a1, a2);
-    let slot = card_slot(a1, a2);
-    world::with_world_mut(|w| {
-        world::pile_push(&mut w.hand_pile, &mut w.hand_n, id);
-        if (slot as usize) < 4 {
-            w.hand[slot as usize] = true;
-            if slot == 1 {
-                w.hand_resonance[player_idx(a0)] += 1;
+{
+            let s = board::tile_slot(a0);
+            if s < 0 {
+                0
+            } else {
+                board::TILES[s as usize].group as i64
             }
         }
-        w.push(Effect::AddToHand {
-            player: a0,
-            card: slot,
-        });
-    });
-    0
 }
 
-/// `Op::add_to_deck`.
-pub fn arm_add_to_deck(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    let id = card_u16(a1, a2);
-    world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
-    0
-}
-
-/// `Op::add_to_deck_at`.
-pub fn arm_add_to_deck_at(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    let id = card_u16(a1, a2);
-    world::with_world_mut(|w| world::pile_push(&mut w.deck_pile, &mut w.deck_n, id));
-    0
-}
-
-/// `Op::cards_in` — bounded `[n, id…]` layout.
-pub fn arm_cards_in(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // Bounded layout `[n, id…]` under Kani (see ctx::cards_in). The
-    // guest rebuilds names from interned ids via the same table.
-    let mut ids: [u8; world::MAX_CARDS] = [0; world::MAX_CARDS];
-    let mut n = 0usize;
-    world::with_world(|w| {
-        if a1 == 1 {
-            // Discard: pilot bitset first, then pile.
-            let mut s = 0u8;
-            while s < 4 {
-                if w.discard[s as usize] && n < world::MAX_CARDS {
-                    ids[n] = s;
-                    n += 1;
-                }
-                s += 1;
-            }
-            let mut i = 0usize;
-            while i < w.discard_n as usize && n < world::MAX_CARDS {
-                let id = intern::NameId(w.discard_pile[i]);
-                // NameId compare against the pre-interned pilot ids —
-                // no byte walk. Unknown ids fall back to the zero-loop
-                // byte heuristic.
-                let slot = card_slot_of_id(id);
-                // de-dup against bitset slots already emitted
-                let mut seen = false;
-                let mut j = 0usize;
-                while j < n {
-                    if ids[j] == slot {
-                        seen = true;
-                    }
-                    j += 1;
-                }
-                if !seen {
-                    ids[n] = slot;
-                    n += 1;
-                }
-                i += 1;
-            }
-        } else if a1 == 0 {
-            let p = player_idx(a0);
-            let res = w.hand_resonance[p].min(2);
-            let mut k = 0;
-            while k < res && n < world::MAX_CARDS {
-                ids[n] = 1;
-                n += 1;
-                k += 1;
-            }
-            let mut s = 0u8;
-            while s < 4 {
-                if s != 1 && w.hand[s as usize] && n < world::MAX_CARDS {
-                    ids[n] = s;
-                    n += 1;
-                }
-                s += 1;
-            }
-        }
-    });
-    let mut encoded = [0u8; 16];
-    encoded[0] = n as u8;
-    let mut i = 0usize;
-    while i < n {
-        encoded[1 + i] = ids[i];
-        i += 1;
-    }
-    let need = (1 + n) as i32;
-    if a2 == 0 {
-        return need as i64;
-    }
-    if a3 < need {
-        return -1;
-    }
-    card_sdk::native::write(a2, &encoded[..need as usize]);
-    need as i64
-}
-
-/// `Op::discard_size`.
-pub fn arm_discard_size(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| w.discard_n as i32) as i64
-}
-
-/// `Op::deck_count`.
-pub fn arm_deck_count(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| w.deck_n as i32) as i64
-}
-
-/// `Op::discard_from_hand`.
-pub fn arm_discard_from_hand(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    let slot = card_slot(a1, a2);
-    let id = card_u16(a1, a2);
-    world::with_world_mut(|w| {
-        let ok = world::pile_take(&mut w.hand_pile, &mut w.hand_n, id)
-            || ((slot as usize) < 4 && {
-                let b = w.hand[slot as usize];
-                w.hand[slot as usize] = false;
-                if slot == 1 && w.hand_resonance[player_idx(a0)] > 0 {
-                    w.hand_resonance[player_idx(a0)] -= 1;
-                    true
-                } else {
-                    b
-                }
-            });
-        if ok {
-            world::pile_push(&mut w.discard_pile, &mut w.discard_n, id);
-            if (slot as usize) < 4 {
-                w.discard[slot as usize] = true;
-            }
-            w.push(Effect::DiscardFromHand {
-                player: a0,
-                card: slot,
-            });
-        }
-        ok as i64
-    })
-}
-
-/// `Op::shuffle_into_deck`.
-pub fn arm_shuffle_into_deck(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // Engine: move `hand` / `discard` into `draw` and shuffle. Order is
-    // symbolic/irrelevant — model as a multiset move (task B8).
-    let do_hand = a1 != 0;
-    let do_discard = a2 != 0;
-    world::with_world_mut(|w| {
-        let mut moved = 0i32;
-        if do_hand {
-            let mut i = 0usize;
-            while i < w.hand_n as usize {
-                let id = w.hand_pile[i];
-                if id != u16::MAX {
-                    let di = w.deck_n as usize;
-                    if di < world::MAX_CARDS {
-                        w.deck_pile[di] = id;
-                        w.deck_n += 1;
-                        moved += 1;
-                    }
-                    w.hand_pile[i] = u16::MAX;
-                }
-                i += 1;
-            }
-            w.hand_n = 0;
-        }
-        if do_discard {
-            let mut i = 0usize;
-            while i < w.discard_n as usize {
-                let id = w.discard_pile[i];
-                if id != u16::MAX {
-                    let di = w.deck_n as usize;
-                    if di < world::MAX_CARDS {
-                        w.deck_pile[di] = id;
-                        w.deck_n += 1;
-                        moved += 1;
-                    }
-                    w.discard_pile[i] = u16::MAX;
-                }
-                i += 1;
-            }
-            w.discard_n = 0;
-        }
-        moved as i64
-    })
-}
-
-/// `Op::place_card_at` (ctx::place_card).
-pub fn arm_place_card(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
-    let id = card_u16(a1, a2);
-    let slot = card_slot(a1, a2);
-    world::with_world_mut(|w| {
-        let dest = w.dest;
-        let uid = w.next_uid;
-        w.next_uid += 1;
-        w.last_uid = uid;
-        let fi = w.field_n as usize;
-        if fi < world::MAX_FIELD {
-            w.field[fi] = world::FieldCard {
-                uid,
-                card: id,
-                player: a0,
-                tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
-                face_down: false,
-                immune: false,
-                crystals: 0,
-                props: world::NameMap::new(),
-            };
-            w.field_n += 1;
-        }
-        w.push(Effect::PlaceCard {
-            player: a0,
-            dest,
-            card: slot,
-        });
-        uid as i64
-    })
-}
-
-/// `Op::place_card_on`.
-pub fn arm_place_card_on(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // ABI `[player, tile, cp, cl, ptr, len]` — card name at (a2, a3),
-    // landing tile at a1 (HHW kkr-02 「放置在CiRCLE」). The old arm
-    // read the name from (a1, a2) = (tile, cp) and used `dest`.
-    let tile = a1;
-    let id = card_u16(a2, a3);
-    let slot = card_slot(a2, a3);
-    world::with_world_mut(|w| {
-        let uid = w.next_uid;
-        w.next_uid += 1;
-        w.last_uid = uid;
-        let fi = w.field_n as usize;
-        if fi < world::MAX_FIELD {
-            w.field[fi] = world::FieldCard {
-                uid,
-                card: id,
-                player: a0,
-                tile,
-                face_down: false,
-                immune: false,
-                crystals: 0,
-                props: world::NameMap::new(),
-            };
-            w.field_n += 1;
-        }
-        w.push(Effect::PlaceCard {
-            player: a0,
-            dest: tile,
-            card: slot,
-        });
-        uid as i64
-    })
-}
-
-/// `Op::set_dest`.
-pub fn arm_set_dest(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    world::with_world_mut(|w| w.dest = a0);
-    0
-}
-
-/// `Op::teleport_to`.
-pub fn arm_teleport_to(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    world::with_world_mut(|w| {
-        if (a0 as usize) < MAX_PLAYERS {
-            w.pos[a0 as usize] = a1;
-        }
-        w.push(Effect::Teleport {
-            player: a0,
-            tile: a1,
-        });
-    });
-    0
-}
-
-/// `Op::self_tile`.
-pub fn arm_self_tile(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| {
-                if w.field_n == 0 {
-                    w.pos[player_idx(w.trig_player)]
-                } else {
-                    w.field[0].tile
-                }
-            }) as i64
-}
-
-/// `Op::set_self_tile`.
-pub fn arm_set_self_tile(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world_mut(|w| {
-                if w.field_n == 0 {
-                    0
-                } else {
-                    let uid = w.field[0].uid;
-                    let ok = w.set_tile_at(uid, a0);
-                    if ok {
-                        w.push(Effect::SetCardTile { uid, tile: a0 });
-                    }
-                    ok as i64
-                }
-            })
-}
-
-/// `Op::set_self_immune`.
-pub fn arm_set_self_immune(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world_mut(|w| {
-                if w.field_n == 0 {
-                    0
-                } else {
-                    w.field[0].immune = a0 != 0;
-                    1
-                }
-            })
-}
-
-/// `Op::is_placed`.
-pub fn arm_is_placed(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    world::with_world(|w| (w.field_n > 0) as i64)
-}
-
-/// `Op::slot` — named keyed slot.
-pub fn arm_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    let key = name_id(a1, a2);
-    world::with_world(|w| w.key_get(a0, key)) as i64
-}
-
-/// `Op::set_slot`.
-pub fn arm_set_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-
-    // `set_slot(player, ptr, len, v)` — a3 is the value (sugar for
-    // `state_set` field 0).
-    let key = name_id(a1, a2);
-    world::with_world_mut(|w| {
-        w.key_set(a0, key, a3);
-        w.push(Effect::SetState {
-            player: a0,
-            key: key.0,
-            n: a3,
-        });
-    });
-    a3 as i64
-}
-
-/// `Op::card_move` — protocol stub (returns 1).
-pub fn arm_card_move(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
-    1
-}
-
-/// `Op::set_self_prop` — packing `[kp, kl, v]`, name (a0,a1), value a2.
-pub fn arm_set_self_prop(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a3, a4, a5);
-    let key = name_id(a0, a1);
-    let val = a2;
-    world::with_world_mut(|w| {
-        if w.field_n > 0 {
-            let i = (w.field_n as usize) - 1;
-            w.field[i].props.set(key, val);
-        }
-    });
-    0
-}
-
-/// `Op::set_tile_prop` — packing `[tile, kp, kl, v]`, name (a1,a2), value a3.
-pub fn arm_set_tile_prop(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a4, a5);
-    let key = name_id(a1, a2);
-    let val = a3;
-    world::with_world_mut(|w| {
-        w.tiles[tile_idx(a0)].props.set(key, val);
-    });
-    0
-}
-
-/// `Op::set_prop_at` — packing `[uid, kp, kl, v]`, name (a1,a2), value a3.
-pub fn arm_set_prop_at(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a4, a5);
-    let key = name_id(a1, a2);
-    let val = a3;
-    let uid = a0;
-    world::with_world_mut(|w| {
-        let mut i = 0usize;
-        while i < w.field_n as usize {
-            if w.field[i].uid == uid {
-                w.field[i].props.set(key, val);
-            }
-            i += 1;
-        }
-    });
-    0
-}
-
-/// `Op::counter_self` — packing `[np, nl]`, name (a0,a1).
-pub fn arm_counter_self(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a2, a3, a4, a5);
-    let key = name_id(a0, a1);
-    world::with_world(|w| {
-        if key == known().crystals {
-            w.field_crystals(w.last_uid)
-        } else {
-            w.key_get(w.trig_player, key)
-        }
-    }) as i64
-}
-
-/// `Op::card_counter` — packing `[player, cp, cl, np, nl]`, name (a3,a4).
-pub fn arm_card_counter(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a5);
-    let key = name_id(a3, a4);
-    world::with_world(|w| {
-        if key == known().crystals {
-            w.field_crystals(w.last_uid)
-        } else {
-            w.key_get(w.trig_player, key)
-        }
-    }) as i64
-}
-
-/// `Op::add_counter_self` — packing `[np, nl, n, max]`.
-pub fn arm_add_counter_self(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a4, a5);
-    let key = name_id(a0, a1);
-    let n = a2;
-    let max = a3;
-    world::with_world_mut(|w| {
-        let p = w.trig_player;
-        let was = if key == known().crystals {
-            w.field_crystals(w.last_uid)
-        } else {
-            w.key_get(p, key)
-        };
-        let mut now = was + n;
-        if now < 0 {
-            now = 0;
-        }
-        if max > 0 && now > max {
-            now = max;
-        }
-        if key == known().crystals {
-            w.set_field_crystals(w.last_uid, now);
-        } else {
-            w.key_set(p, key, now);
-        }
-        w.push(Effect::AddCounter {
-            owner: p,
-            key: key.0,
-            n: now - was,
-        });
-        now as i64
-    })
-}
-
-/// `Op::add_card_counter` — packing `[player, cp, cl, np, nl, n]`, no max.
-pub fn arm_add_card_counter(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = a0;
-    let key = name_id(a3, a4);
-    let n = a5;
-    let max = 0;
-    world::with_world_mut(|w| {
-        let p = w.trig_player;
-        let was = if key == known().crystals {
-            w.field_crystals(w.last_uid)
-        } else {
-            w.key_get(p, key)
-        };
-        let mut now = was + n;
-        if now < 0 {
-            now = 0;
-        }
-        if max > 0 && now > max {
-            now = max;
-        }
-        if key == known().crystals {
-            w.set_field_crystals(w.last_uid, now);
-        } else {
-            w.key_set(p, key, now);
-        }
-        w.push(Effect::AddCounter {
-            owner: p,
-            key: key.0,
-            n: now - was,
-        });
-        now as i64
-    })
-}
-
-/// `Op::set_counter_self` — packing `[np, nl, v]`.
-pub fn arm_set_counter_self(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a3, a4, a5);
-    let key = name_id(a0, a1);
-    let v = a2;
-    world::with_world_mut(|w| {
-        if key == known().crystals {
-            w.set_field_crystals(w.last_uid, v);
-        } else {
-            w.key_set(w.trig_player, key, v);
-        }
-        w.push(Effect::AddCounter {
-            owner: w.trig_player,
-            key: key.0,
-            n: v,
-        });
-    });
-    v as i64
-}
-
-/// `Op::inc_slot` — named keyed increment (packing name at a1,a2).
-pub fn arm_inc_slot(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a3, a4, a5);
-    let key = name_id(a1, a2);
-    let by = a3;
-    world::with_world_mut(|w| {
-        let v = w.key_add(a0, key, by);
-        w.sync_views_player(a0);
-        v as i64
-    })
-}
-
-/// `Op::opt_*` — register one prompt option (count only; the pick is
-/// [`arm_ask`]). Same as `dispatch`'s opt arms.
-pub fn arm_opt(a: Args) -> i64 {
-    let _ = a;
-    world::with_world_mut(|w| w.opt_n += 1);
-    0
-}
-
-/// `Op::hand_size` — hand bits + resonance + pile count.
-pub fn arm_hand_size(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| {
-        let p = player_idx(a0);
-        let mut n = w.hand_resonance[p];
-        let mut s = 0usize;
-        while s < 4 {
-            if s != 1 && w.hand[s] {
-                n += 1;
-            }
-            s += 1;
-        }
-        n + w.hand_n as i32
-    }) as i64
-}
-
-/// `Op::players_on_count` — living seats (other than `except`) standing on `tile`.
-pub fn arm_players_on_count(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    world::with_world(|w| {
-        let tile = a0;
-        let except = a1;
-        let mut n = 0;
-        let mut p = 0;
-        while p < MAX_PLAYERS {
-            if (p as i32) != except && !w.out[p] && w.pos[p] == tile {
-                n += 1;
-            }
-            p += 1;
-        }
-        n
-    }) as i64
-}
-
-/// `Op::players_on_at` — the `idx`-th such seat (or -1).
-pub fn arm_players_on_at(a: Args) -> i64 {
-    let [a0, a1, a2, ..] = a;
-    world::with_world(|w| {
-        let tile = a0;
-        let except = a1;
-        let idx = a2;
-        let mut n = 0;
-        let mut p = 0;
-        let mut found = -1;
-        while p < MAX_PLAYERS {
-            if (p as i32) != except && !w.out[p] && w.pos[p] == tile {
-                if n == idx {
-                    found = p as i32;
-                }
-                n += 1;
-            }
-            p += 1;
-        }
-        found
-    }) as i64
-}
-
-/// `Op::tile_in` — class membership (`buyable` / `shop` / `livehouse` / `color:*`).
-/// Same quirks as `dispatch` so proofs stay put.
 pub fn arm_tile_in(a: Args) -> i64 {
     let [a0, a1, a2, a3, ..] = a;
     let _ = a0;
@@ -3171,265 +2651,190 @@ pub fn arm_tile_in(a: Args) -> i64 {
     }
 }
 
-/// `Op::self_uid` — the running instance's uid.
-pub fn arm_self_uid(a: Args) -> i64 {
-    let _ = a;
-    world::with_world(|w| w.last_uid) as i64
+pub fn arm_tile_is(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // ABI: tile_is(tile, kind_ptr, kind_len)
+            let s = board::tile_slot(a0);
+            if s < 0 {
+                0
+            } else {
+                let kind = name_id(a1, a2);
+                let t = &board::TILES[s as usize];
+                // Compare via interned wire spellings.
+                let hit = [
+                    ("circle", board::is_circle(t)),
+                    ("ring", board::is_ring(t)),
+                    ("agent", board::is_agent(t)),
+                    ("property", board::is_property(t)),
+                    ("cafe", t.kind == 4),
+                    ("edogawa", t.kind == 5),
+                    ("ryuseido", t.kind == 6),
+                ]
+                .iter()
+                .any(|(k, hit)| *hit && intern::id_eq_str(kind, k));
+                hit as i64
+            }
+        }
 }
 
-/// `Op::place_mark` — record one mark on tile `a0` (designation etc.).
-pub fn arm_place_mark(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world_mut(|w| {
-        let i = w.marks_n as usize;
-        if i < world::MAX_MARKS {
-            w.marks[i] = world::Mark {
-                tile: a0,
-                key: NameId::INVALID,
-                src_card: u16::MAX,
-                instance: 0,
-                n: 1,
-            };
-            w.marks_n += 1;
+pub fn arm_tile_named(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            // Real board: `data.tiles.iter().position(|t| t.name == name)`
+            // (hostfns `tile_named`). Every `board.json` name resolves; unknown
+            // names are -1.
+            let id = name_id(a0, a1);
+            let mut found = board::tile_named_bytes(intern::resolve(id));
+            // Pilot boards (all `pos < 8`) keep the stub-shop index so the
+            // money/teleport pilots against the 8-tile fixture still work.
+            if id == known().tile_shop {
+                let pilot = world::with_world(|w| w.pos.iter().all(|&p| p < 8));
+                if pilot {
+                    found = TILE_SHOP;
+                }
+            }
+            found as i64
         }
-        w.push(Effect::PlaceMark {
-            tile: a0,
-            key: NameId::INVALID,
-        });
+}
+
+pub fn arm_tile_owner(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    world::with_world(|w| w.tiles[tile_idx(a0)].owner) as i64
+}
+
+pub fn arm_tile_price(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let s = board::tile_slot(a0);
+            if s < 0 {
+                0
+            } else {
+                board::TILES[s as usize].price as i64
+            }
+        }
+}
+
+pub fn arm_tile_steps_ahead(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            let pos = world::with_world(|w| w.pos[player_idx(a0)]);
+            ((pos + a1).rem_euclid(60)) as i64
+        }
+}
+
+pub fn arm_to_discard(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let _ = a0;
+    let slot = card_slot(a1, a2);
+    let id = card_u16(a1, a2);
+    world::with_world_mut(|w| {
+        world::pile_push(&mut w.discard_pile, &mut w.discard_n, id);
+        if (slot as usize) < 4 {
+            w.discard[slot as usize] = true;
+        }
     });
     0
 }
 
-/// `Op::count_marks_f` — total mark units on tile `a0`.
-pub fn arm_count_marks_f(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| {
-        let mut n = 0;
-        let mut i = 0;
-        while i < w.marks_n as usize {
-            if w.marks[i].tile == a0 {
-                n += w.marks[i].n;
-            }
-            i += 1;
-        }
-        n
-    }) as i64
-}
-
-/// `Op::trig_value` — the trigger amount (`pay_amount` under Kani).
-pub fn arm_trig_value(a: Args) -> i64 {
+pub fn arm_tok_names(a: Args) -> i64 {
     let _ = a;
-    world::with_world(|w| w.pay_amount) as i64
+    0
 }
 
-/// `Op::trig_target` — the trigger's target seat.
+pub fn arm_trig_kind(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.trig_kind) as i64
+}
+
+pub fn arm_trig_move_main(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.trig_main as i64)
+}
+
+pub fn arm_trig_move_roll(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.move_snap.roll) as i64
+}
+
+pub fn arm_trig_name(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.counter_name) as i64
+}
+
+pub fn arm_trig_player(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.trig_player) as i64
+}
+
+pub fn arm_trig_set_cancelled(a: Args) -> i64 {
+    let _ = a;
+    world::with_world_mut(|w| {
+        w.trig_cancelled = true;
+    });
+    0
+}
+
+pub fn arm_trig_set_move_roll(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| w.move_snap.roll = a0);
+            0
+        }
+}
+
+pub fn arm_trig_set_negate_effect(a: Args) -> i64 {
+    let _ = a;
+    world::with_world_mut(|w| {
+        w.trig_negate = true;
+    });
+    0
+}
+
+pub fn arm_trig_set_pay_amount(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                w.pay_amount = a0;
+                w.push(Effect::SetPayAmount { to: a0 });
+            });
+            0
+        }
+}
+
+pub fn arm_trig_set_pay_target(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| w.trig_target = a0);
+            0
+        }
+}
+
 pub fn arm_trig_target(a: Args) -> i64 {
     let _ = a;
     world::with_world(|w| w.trig_target) as i64
 }
 
-/// `Op::trig_set_pay_amount` — rewrite the pay amount (counteraction).
-pub fn arm_trig_set_pay_amount(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world_mut(|w| {
-        w.pay_amount = a0;
-        w.push(Effect::SetPayAmount { to: a0 });
-    });
-    0
+pub fn arm_trig_tile(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.trig_tile) as i64
 }
 
-/// `Op::give_stun` — [眩晕] layers (distinct from [停留]).
-pub fn arm_give_stun(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    world::with_world_mut(|w| {
-        if (a0 as usize) < MAX_PLAYERS {
-            w.stun[a0 as usize] = (w.stun[a0 as usize] + a1).max(0);
-        }
-        w.push(Effect::GiveStun {
-            player: a0,
-            n: a1,
-        });
-    });
-    0
+pub fn arm_trig_value(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.pay_amount) as i64
 }
 
-/// `Op::give_stay` — [停留] layers.
-pub fn arm_give_stay(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    world::with_world_mut(|w| {
-        if (a0 as usize) < MAX_PLAYERS {
-            w.stay[a0 as usize] = w.stay[a0 as usize].saturating_add(a1);
-        }
-        w.push(Effect::GiveStay {
-            player: a0,
-            n: a1,
-        });
-    });
-    0
+pub fn arm_turn_key(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.turn_key) as i64
 }
 
-/// `Op::stun_of` — [眩晕] layers on the seat.
-pub fn arm_stun_of(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| w.stun[player_idx(a0)]) as i64
+pub fn arm_turn_player(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.turn_player) as i64
 }
 
-/// `Op::stay_of` — [停留] layers on the seat.
-pub fn arm_stay_of(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| w.stay[player_idx(a0)]) as i64
-}
-
-/// `Op::tile_is` — kind predicate (`ring` / `circle` / `agent` / …).
-pub fn arm_tile_is(a: Args) -> i64 {
-    let [a0, a1, a2, ..] = a;
-    let s = board::tile_slot(a0);
-    if s < 0 {
-        0
-    } else {
-        let kind = name_id(a1, a2);
-        let t = &board::TILES[s as usize];
-        let hit = [
-            ("circle", board::is_circle(t)),
-            ("ring", board::is_ring(t)),
-            ("agent", board::is_agent(t)),
-            ("property", board::is_property(t)),
-            ("cafe", t.kind == 4),
-            ("edogawa", t.kind == 5),
-            ("ryuseido", t.kind == 6),
-        ]
-        .iter()
-        .any(|(k, hit)| *hit && intern::id_eq_str(kind, k));
-        hit as i64
-    }
-}
-
-/// `Op::build_cost` — house build price on the tile.
-pub fn arm_build_cost(a: Args) -> i64 {
-    let [a0, ..] = a;
-    let s = board::tile_slot(a0);
-    if s < 0 {
-        0
-    } else {
-        board::TILES[s as usize].house_cost as i64
-    }
-}
-
-/// `Op::tile_steps_ahead` — the tile `steps` forward of the seat's pos.
-pub fn arm_tile_steps_ahead(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    let pos = world::with_world(|w| w.pos[player_idx(a0)]);
-    ((pos + a1).rem_euclid(60)) as i64
-}
-
-/// `Op::fire` — seat's fire pots.
-pub fn arm_fire(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| w.fire[player_idx(a0)]) as i64
-}
-
-/// `Op::fire_max` — seat's fire cap.
-pub fn arm_fire_max(a: Args) -> i64 {
-    let [a0, ..] = a;
-    world::with_world(|w| w.fire_max[player_idx(a0)]) as i64
-}
-
-/// `Op::gain_fire` — clamped fire gain (same as dispatch).
-pub fn arm_gain_fire(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    world::with_world_mut(|w| {
-        let p = player_idx(a0);
-        let n = a1;
-        if n <= 0 || w.out[p] {
-            return 0;
-        }
-        let cap = w.fire_max[p];
-        if cap <= 0 {
-            return 0;
-        }
-        let got = n.clamp(0, (cap - w.fire[p]).max(0));
-        if got <= 0 {
-            return 0;
-        }
-        w.fire[p] += got;
-        w.push(Effect::GainFire {
-            player: a0,
-            n: got,
-        });
-        got as i64
-    })
-}
-
-/// `Op::spend_fire` — 1 = spent, 0 = not enough.
-pub fn arm_spend_fire(a: Args) -> i64 {
-    let [a0, a1, ..] = a;
-    let p = player_idx(a0);
-    world::with_world_mut(|w| {
-        if w.fire[p] >= a1 && a1 > 0 {
-            w.fire[p] -= a1;
-            1
-        } else if a1 == 0 {
-            1
-        } else {
-            0
-        }
-    })
-}
-
-/// `Op::trig_player` — the trigger's acting seat.
-pub fn arm_trig_player(_a: Args) -> i64 {
-    world::with_world(|w| w.trig_player) as i64
-}
-
-
-
-/// `Op::state_get` — keyed state column (VALUE / MAX / MIN / EXPIRES).
-pub fn arm_state_get(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a4, a5);
-    let key = name_id(a1, a2);
-    let field = a3;
-    world::with_world(|w| match field {
-        1 => w.key_max(a0, key),
-        2 => w.key_min(a0, key),
-        3 => w.key_expires(a0, key),
-        _ => w.key_get(a0, key),
-    }) as i64
-}
-
-/// `Op::state_set` — write a keyed state column. Packing: name (a1,a2),
-/// field a3 (0 VALUE / 1 MAX / 2 MIN / 3 EXPIRES), value a4.
-pub fn arm_state_set(a: Args) -> i64 {
-    let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = a5;
-    let key = name_id(a1, a2);
-    let field = a3;
-    let v = a4;
-    world::with_world_mut(|w| {
-        let out = match field {
-            1 => {
-                w.key_set_max(a0, key, v);
-                v
-            }
-            2 => {
-                w.key_set_min(a0, key, v);
-                v
-            }
-            3 => {
-                w.key_set_expires(a0, key, v);
-                v
-            }
-            _ => {
-                w.key_set(a0, key, v);
-                v
-            }
-        };
-        out as i64
-    })
-}
-
-/// `Op::unplace_card` / `unplace_at` / `unplace_card_named` — real:
-/// pushes `Effect::UnplaceCard` (not a silent 0).
 pub fn arm_unplace(a: Args) -> i64 {
     let [a0, ..] = a;
     world::with_world_mut(|w| {
@@ -3438,36 +2843,26 @@ pub fn arm_unplace(a: Args) -> i64 {
     0
 }
 
-/// Protocol-stub arm: the op's `dispatch` arm is a documented benign-0
-/// (move-plan / settle / offer — KANI.md §6 PROTOCOL-LEVEL). **Not** a
-/// silent stand-in for real semantics: if a proof needs the real behaviour
-/// this arm must be replaced (TRIAGE-LOG `bands-a` stub audit).
-pub fn arm_protocol_stub(_a: Args) -> i64 {
-    0
+pub fn arm_unplace_card(a: Args) -> i64 {
+    let [a0, a1, a2, a3, a4, a5] = a;
+{
+            world::with_world_mut(|w| {
+                w.push(Effect::UnplaceCard { uid: a0 });
+            });
+            0
+        }
 }
 
-/// Move-plan / settle / offer protocol stubs (PROTOCOL-LEVEL; return 0).
-/// Same benign-0 list as `dispatch`'s plan/settle and offers arms.
 pub fn arm_plan_stub(_a: Args) -> i64 {
     0
 }
 
-/// `Op::schedule_turn_end` / `before_turn_end` — PROTOCOL stub (0).
-pub fn arm_schedule_turn_end(_a: Args) -> i64 {
+pub fn arm_protocol_stub(_a: Args) -> i64 {
     0
 }
 
-/// `Op::linger` — PROTOCOL stub (0).
-pub fn arm_linger(_a: Args) -> i64 {
+pub fn arm_stub_zero(a: Args) -> i64 {
+    let _ = a;
     0
 }
 
-/// `Op::card_offer_build` — PROTOCOL stub (0 = did not land).
-pub fn arm_card_offer_build(_a: Args) -> i64 {
-    0
-}
-
-/// `Op::can_build_on` — PROTOCOL stub (0 = cannot).
-pub fn arm_can_build_on(_a: Args) -> i64 {
-    0
-}

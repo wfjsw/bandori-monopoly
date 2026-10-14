@@ -81,3 +81,16 @@ ruleset_core::roster::BandDef::new(r#"Morfonica"#)
     .skill(r#"振翅高飞的练习曲"#)
     .text(r#"（1）当你一次性失去2000以上资金时，抽一张卡。（2）[CiRCLE奖励]选择[获得]资金时根据选择[获得]资金次数设资金量为1000，1500，2000的循环"#)
     .logo(r#"021"#);
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
+    after_pay(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_circle_kani(player_id: i32) -> card_sdk::Asked {
+    on_circle(player_id)
+}

@@ -271,3 +271,11 @@ OPEN-change-world-equal, OPEN-hey-kids-sum.
   **not** assume the cap away for the full clause — proved the sub-cap leaf.
 * move-plan / buy / build: left as PROTOCOL-LEVEL per KANI.md §6; the arms
   return 0 on purpose.
+
+## bands-b concrete-user rollout (branch `kani-bands-b`)
+
+Verdicts below marked **bands-b** use the ppcost pattern: `n_players=2`,
+concrete user seats (user=0/1 for seat-symmetric clauses), direct `NAME_kani`
+body calls, per-harness `host_subset!`, sparse in-place world. See
+TRIAGE-LOG.md `bands-b`. Results accumulate in
+`/home/monopoly/kani-bands-b-results/results-all.tsv`.

@@ -26,15 +26,42 @@ pub fn black_bday_is_low_bracket(money: i32) -> bool {
 }
 
 /// Exact transfers for one solvent other-player in the low bracket.
+/// The body also latches the bracket into a slot (`SetState` ×2: set then
+/// clear) — those writes sit alongside the single PayTo.
 pub fn black_bday_low_effects(effects: &[Effect], from: i32, to: i32) -> bool {
-    effects.len() == 1 && matches!(effects[0], Effect::PayTo { from: f, to: t, n } if f == from && t == to && n == 800)
+    let mut pays = 0;
+    for e in effects {
+        match e {
+            Effect::PayTo { from: f, to: t, n } => {
+                if *f != from || *t != to || *n != 800 {
+                    return false;
+                }
+                pays += 1;
+            }
+            Effect::SetState { .. } => {}
+            _ => return false,
+        }
+    }
+    pays == 1
 }
 
 /// Exact transfers for one solvent other-player in the high bracket.
+/// Same latch `SetState` writes as the low bracket.
 pub fn black_bday_high_effects(effects: &[Effect], from: i32, to: i32) -> bool {
-    effects.len() == 2
-        && matches!(effects[0], Effect::PayTo { from: f, to: t, n } if f == from && t == to && n == 200)
-        && matches!(effects[1], Effect::PayTo { from: f, to: t, n } if f == from && t == to && n == 200)
+    let mut pays = 0;
+    for e in effects {
+        match e {
+            Effect::PayTo { from: f, to: t, n } => {
+                if *f != from || *t != to || *n != 200 {
+                    return false;
+                }
+                pays += 1;
+            }
+            Effect::SetState { .. } => {}
+            _ => return false,
+        }
+    }
+    pays == 2
 }
 
 /// Full-play log over the ordered `others` list (solvent payers only).
@@ -75,9 +102,22 @@ pub fn black_bday_high_post_ok(post: &Snapshot, from: i32, to: i32, pre_from: i3
     post.money[from as usize] == pre_from - 400 && post.money[to as usize] == pre_to + 400
 }
 
-/// MUTANT: low bracket pays 801.
+/// MUTANT: low bracket pays 801 (latch `SetState` writes ignored).
 pub fn black_bday_low_effects_mutant(effects: &[Effect], from: i32, to: i32) -> bool {
-    effects.len() == 1 && matches!(effects[0], Effect::PayTo { from: f, to: t, n } if f == from && t == to && n == 801)
+    let mut pays = 0;
+    for e in effects {
+        match e {
+            Effect::PayTo { from: f, to: t, n } => {
+                if *f != from || *t != to || *n != 801 {
+                    return false;
+                }
+                pays += 1;
+            }
+            Effect::SetState { .. } => {}
+            _ => return false,
+        }
+    }
+    pays == 1
 }
 
 // ===========================================================================
@@ -399,9 +439,22 @@ pub fn umiri_next_actor(user: i32, n_players: i32) -> i32 {
     (user + 1) % n_players.max(1)
 }
 
+/// Place on the next actor's field. The body also writes the `umiri_user`
+/// latch (`SetState`).
 pub fn umiri_place_effects(effects: &[Effect], holder: i32, card: u8) -> bool {
-    effects.len() == 1
-        && matches!(effects[0], Effect::PlaceCard { player: p, dest: 2, card: c } if p == holder && c == card)
+    let mut placed = false;
+    for e in effects {
+        match e {
+            Effect::PlaceCard {
+                player: p,
+                dest: 2,
+                card: c,
+            } if *p == holder && *c == card => placed = true,
+            Effect::SetState { .. } => {}
+            _ => return false,
+        }
+    }
+    placed
 }
 
 // ===========================================================================

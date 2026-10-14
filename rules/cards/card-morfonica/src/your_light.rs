@@ -63,3 +63,10 @@ fn your_light(player_id: i32) -> card_sdk::Asked {
     ); // 规则书: 「此次移动以…为起点」
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn your_light_kani(player_id: i32) -> card_sdk::Asked {
+    your_light(player_id)
+}

@@ -3,104 +3,153 @@
 //! Per clause (KANI-FOUNDATION.md §3): iff + no-op + covers + mutant.
 //! Specs live in `crate::spec::ras` and come from the clause docs only.
 //!
-//! Isolation assumes are named here and `kani::assume`d. Narration (`ctx::log`)
-//! is not part of the frame.
+//! **ppcost pattern.** Concrete user seats (`n_players = 2`, user=0/1 for
+//! seat-symmetric clauses). Direct body call via the cfg(kani) `NAME_kani`
+//! wrapper. Per-harness host-op subset (`host_subset!`) — undeclared op
+//! FAILS loudly. Isolation assumes are named here and `kani::assume`d.
+//! Narration (`ctx::log`) is not part of the frame.
 
 use crate::host;
+use crate::invoke;
 use crate::spec::ras as spec;
-use crate::world::{self, Effect, World, MAX_CARDS, MAX_PLAYERS};
+use crate::world::{self, Effect, MAX_CARDS, MAX_PLAYERS};
 
-/// Call an `On` body without the registry string scan (`invoke::find` is a
-/// memcmp cliff under CBMC). The unmodified `fn(i32) -> Asked` is taken from
-/// the exported `CardDef`.
-fn body_of(on: &card_sdk::On) -> fn(i32) -> card_sdk::Asked {
-    match on {
-        card_sdk::On::Play(_, _, f)
-        | card_sdk::On::Counteract(_, _, _, f)
-        | card_sdk::On::Hook(_, _, _, f)
-        | card_sdk::On::Gate(_, _, _, f)
-        | card_sdk::On::RollPlan(_, _, f)
-        | card_sdk::On::AtEnd(_, _, f)
-        | card_sdk::On::Settle(_, _, f)
-        | card_sdk::On::Message(_, _, _, f) => *f,
-    }
+// ---------------------------------------------------------------------------
+// Per-card host-op subsets (ops the unmodified body reaches, including
+// isolated paths — if isolation breaks the proof FAILS loudly).
+// ---------------------------------------------------------------------------
+
+/// `RAS:UNSTOPPABLE` play — money + (BLOCKED-HOST) teleport half.
+/// Isolation: `tile_named` cannot resolve the campus names and `card_move` is
+/// a plan stub, so the teleport branch is never entered — still declared.
+crate::host_subset!(unstoppable_dispatch {
+    roll => arm_roll,
+    tile_named => arm_tile_named,
+    set_teleport_to | set_resolve | set_kind | set_steps | move_dir | fixed_roll
+        | schedule_turn_end => arm_stub_zero,
+    card_move => arm_card_move,
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    gain | gain_typed | gain_fixed => arm_gain,
+    log | effect => arm_log,
+});
+
+/// `RAS:暴动` counteract — discard-all + redraw + holder extra.
+crate::host_subset!(riot_dispatch {
+    player_count => arm_player_count,
+    player_out => arm_player_out,
+    cards_in => arm_cards_in,
+    discard_from_hand => arm_discard_from_hand,
+    draw => arm_draw,
+    log | effect => arm_log,
+});
+
+/// `RAS:（pareo）` play — +2 PAREO marks (optional house-removal isolated).
+crate::host_subset!(pareo_dispatch {
+    add_held => arm_add_held,
+    count_held | count_held_name => arm_count_held,
+    log | effect => arm_log,
+    band_skill | character_skill => arm_band_skill,
+    invoke_skill => arm_invoke_skill,
+    owned_count => arm_owned_count,
+    owned_at => arm_owned_at,
+    houses_of => arm_houses_of,
+    add_house => arm_add_house,
+    opt_tile | opt_int | opt_str => arm_opt,
+    opt_price | opt_ai => arm_opt_price,
+    ask => arm_ask,
+});
+
+/// In-place 2-seat world for UNSTOPPABLE (stay=0 so cant_move admits).
+/// `face` pins the die via `forced_roll` (0 = symbolic) — `tile_named(SPOTS[sym])`
+/// is a symex cliff (see board `tile_hash` zero-loop + TRIAGE-LOG `bands-b`).
+fn unstoppable_world(user: i32, face: i32) {
+    host::install_backend(unstoppable_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        money_hi: 8_000,
+        ..Default::default()
+    });
+    world::with_world_mut(|w| {
+        w.stay = [0; MAX_PLAYERS];
+        w.out[user as usize] = false;
+        w.forced_roll = face;
+    });
 }
 
-fn unwrap_done(r: card_sdk::Asked) {
-    match r {
-        Ok(()) => {}
-        Err(_) => panic!("unexpected EXIT_NEED_INPUT"),
-    }
+/// In-place 2-seat world for riot: hands are the `hand_resonance` view
+/// (the only per-player hand `cards_in(Hand)` reads under Kani), at most 2
+/// cards per player so the 24-slot effect log cannot overflow.
+fn riot_world() -> ([usize; MAX_PLAYERS], [[u8; 4]; MAX_PLAYERS]) {
+    host::install_backend(riot_dispatch);
+    let mut hand_ns = [0usize; MAX_PLAYERS];
+    let mut hands = [[0u8; 4]; MAX_PLAYERS];
+    world::with_world_mut(|w| {
+        w.n_players = 2;
+        for p in 0..MAX_PLAYERS {
+            w.out[p] = p >= 2;
+            let h: i32 = if p < 2 { kani::any() } else { 0 };
+            if p < 2 {
+                kani::assume(h >= 0 && h <= 2);
+            }
+            w.hand_resonance[p] = h;
+            w.hand[p] = false;
+            hand_ns[p] = h as usize;
+            for k in 0..h as usize {
+                hands[p][k] = 1;
+            }
+        }
+        w.symbolic_answers = true;
+    });
+    (hand_ns, hands)
+}
+
+/// In-place 2-seat world for pareo: no houses (no optional-removal prompt);
+/// PAREO marks start sub-cap.
+fn pareo_world(user: i32, pre_marks: i32) {
+    host::install_backend(pareo_dispatch);
+    crate::harness::sparse_play_world(crate::harness::SparsePlay {
+        used_seats: 2,
+        n_players: 2,
+        ..Default::default()
+    });
+    let key = crate::intern::intern("PAREO标记");
+    world::with_world_mut(|w| {
+        w.out[user as usize] = false;
+        w.key_set(user, key, pre_marks);
+    });
 }
 
 // ===========================================================================
 // C-RAS-unstoppable-card-03
 // 「若骰点为1-3获得2000资金，若为4-6则获得1000资金」
-//
 // Isolation: the teleport half is BLOCKED-HOST (`tile_named` cannot resolve
-// 「白雪学园」…`CHUCHU的公寓` and `card_move` is a plan stub), so the body's
-// teleport branch is never entered and the effect log is the money half only.
-// The money clause itself does not depend on that branch.
+// 「白雪学园」…`CHUCHU的公寓` and `card_move` is a plan stub).
+// Seat-symmetric (the user gains the rolled face money).
 // ===========================================================================
 
-fn symbolic_unstoppable_world() -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.money[p] = kani::any();
-        kani::assume(w.money[p] >= 0 && w.money[p] <= 8_000);
-        w.out[p] = kani::any();
-        // stay == 0 ⇒ cant_move is false (the play gate admits)
-        w.stay[p] = 0;
-    }
-    w
-}
-
-/// Iff: living player gains exactly the printed money for the rolled face.
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn unstoppable_card_03_money_iff() {
-    let w = symbolic_unstoppable_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    kani::assume(!w.out[player as usize]);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    unwrap_done(body_of(&card_ras::unstoppable::UNSTOPPABLE.on[0])(player));
-
+/// Shared iff at a **concrete** user seat and a **concrete** die face.
+fn unstoppable_card_03_money_iff_at(user: i32, face: i32) {
+    debug_assert!(user == 0 || user == 1);
+    debug_assert!(face >= 1 && face <= 6);
+    unstoppable_world(user, face);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));
+    kani::cover!(true, "body returned");
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    // The roll is symbolic 1..=6 inside `ctx::roll(1, 6)`. Recover the face
-    // from the money amount the body granted (the only observable).
-    let gained = post.money[player as usize] - pre.money[player as usize];
-    kani::cover!(gained == 2000, "face 1-3 grants 2000");
-    kani::cover!(gained == 1000, "face 4-6 grants 1000");
-
-    let r = if gained == 2000 {
-        1
-    } else if gained == 1000 {
-        4
-    } else {
-        // Must not happen: the body only grants those two figures.
-        crate::kassert!(false, "C-RAS-unstoppable-card-03: unexpected money delta");
-        0
-    };
-    let expected = spec::unstoppable_card_03_money(r);
+    let gained = post.money[user as usize] - pre.money[user as usize];
+    let expected = spec::unstoppable_card_03_money(face);
     crate::kassert!(
         gained == expected,
         "C-RAS-unstoppable-card-03: money must be 2000 / 1000 by face"
     );
     crate::kassert!(
-        spec::unstoppable_card_03_log_ok(effects, player, expected),
+        spec::unstoppable_card_03_log_ok(effects, user, expected),
         "C-RAS-unstoppable-card-03: effect log is exactly one GainMoney"
     );
     // Frame: nothing but the money moved.
@@ -109,7 +158,7 @@ pub fn unstoppable_card_03_money_iff() {
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
     crate::kassert!(post.discard == pre.discard, "frame: discard unchanged");
     for q in 0..MAX_PLAYERS {
-        if q != player as usize {
+        if q != user as usize {
             crate::kassert!(
                 post.money[q] == pre.money[q],
                 "frame: other players' money unchanged"
@@ -118,22 +167,36 @@ pub fn unstoppable_card_03_money_iff() {
     }
 }
 
-/// No-op: an out player gains nothing.
+/// Iff at seat 0, face 1 (low band → 2000).
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
+pub fn unstoppable_card_03_money_iff() {
+    unstoppable_card_03_money_iff_at(0, 1);
+}
+
+/// Iff at seat 0, face 4 (high band → 1000) — the two faces cover both legs.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn unstoppable_card_03_face4_money_iff() {
+    unstoppable_card_03_money_iff_at(0, 4);
+}
+
+/// Iff at seat 1, face 1 — the two user seats of the 2-seat world.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn unstoppable_card_03_user1_money_iff() {
+    unstoppable_card_03_money_iff_at(1, 1);
+}
+
+/// No-op: an out player gains nothing. (Concrete user, forced `out`.)
+#[kani::proof]
+#[kani::unwind(32)]
 pub fn unstoppable_card_03_money_noop_when_out() {
-    let w = symbolic_unstoppable_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    kani::assume(w.out[player as usize]);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    unwrap_done(body_of(&card_ras::unstoppable::UNSTOPPABLE.on[0])(player));
-
+    unstoppable_world(0, 1);
+    let user = 0i32;
+    world::with_world_mut(|w| w.out[0] = true);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -148,20 +211,14 @@ pub fn unstoppable_card_03_money_noop_when_out() {
 
 /// Mutant companion: the off-by-one money spec does NOT match the card.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn unstoppable_card_03_money_mutant_is_detected() {
-    let w = symbolic_unstoppable_world();
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    kani::assume(!w.out[player as usize]);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    unwrap_done(body_of(&card_ras::unstoppable::UNSTOPPABLE.on[0])(player));
+    unstoppable_world(0, 4);
+    let user = 0i32;
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_ras::unstoppable::unstoppable_kani(user));
     let post = world::snapshot();
-    let gained = post.money[player as usize] - pre.money[player as usize];
+    let gained = post.money[user as usize] - pre.money[user as usize];
 
     // Pin a face in the high band (the mutant only differs there).
     kani::assume(gained == 1000);
@@ -176,57 +233,20 @@ pub fn unstoppable_card_03_money_mutant_is_detected() {
 // ===========================================================================
 // C-RAS-riot-02 / C-RAS-riot-03
 // 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。」
-//
-// The [反击] *window* (when the body runs) is PROTOCOL-LEVEL. This harness
-// invokes `On::Counteract`'s unmodified body directly — the leaf effect.
-//
-// Isolation: hands are the per-player `hand_resonance` view (the only
-// per-player hand `cards_in(Hand)` reads under Kani), at most 2 cards per
-// player so the 24-slot effect log cannot overflow. The global pilot bitset
-// is left empty.
+// The [反击] *window* is PROTOCOL-LEVEL. Leaf effect driven directly.
+// Isolation: hands are the `hand_resonance` view, ≤2 cards/player.
+// Seat-symmetric (the holder is the extra-draw seat).
 // ===========================================================================
 
-fn symbolic_riot_world() -> (World, [usize; MAX_PLAYERS], [[u8; 4]; MAX_PLAYERS]) {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    let mut hand_ns = [0usize; MAX_PLAYERS];
-    let mut hands = [[0u8; 4]; MAX_PLAYERS];
-    for p in 0..MAX_PLAYERS {
-        w.out[p] = kani::any();
-        let h: i32 = kani::any();
-        kani::assume(h >= 0 && h <= 2);
-        w.hand_resonance[p] = h;
-        w.hand[p] = false;
-        hand_ns[p] = h as usize;
-        for k in 0..h as usize {
-            hands[p][k] = 1;
-        }
-    }
-    // bitset empty (isolation)
-    for s in 0..MAX_CARDS {
-        w.hand[s] = false;
-    }
-    (w, hand_ns, hands)
-}
-
-/// Iff: every living player's hand is discarded then redrawn; the holder +1.
-#[kani::proof]
-#[kani::unwind(32)]
-pub fn riot_02_03_cycle_iff() {
-    let (w, hand_ns, hands) = symbolic_riot_world();
-    let holder: i32 = kani::any();
-    kani::assume(holder >= 0 && holder < w.n_players);
-    kani::assume(!w.out[holder as usize]);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    unwrap_done(body_of(&card_ras::riot::RIOT.on[0])(holder));
-
+/// Shared iff at a **concrete** holder seat.
+fn riot_02_03_cycle_iff_at(holder: i32) {
+    debug_assert!(holder == 0 || holder == 1);
+    let (hand_ns, hands) = riot_world();
+    world::with_world_mut(|w| {
+        w.out[holder as usize] = false;
+    });
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_ras::riot::counteract_kani(holder));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -252,22 +272,32 @@ pub fn riot_02_03_cycle_iff() {
     );
 }
 
+/// Riot cycle iff at holder seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn riot_02_03_cycle_iff() {
+    riot_02_03_cycle_iff_at(0);
+}
+
+/// Riot cycle iff at holder seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn riot_02_03_user1_cycle_iff() {
+    riot_02_03_cycle_iff_at(1);
+}
+
 /// Mutant companion: dropping the holder's extra draw disagrees with the card.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn riot_03_extra_draw_mutant_is_detected() {
-    let (w, hand_ns, hands) = symbolic_riot_world();
-    let holder: i32 = kani::any();
-    kani::assume(holder >= 0 && holder < w.n_players);
-    kani::assume(!w.out[holder as usize]);
+    let (hand_ns, hands) = riot_world();
+    let holder = 0i32;
+    world::with_world_mut(|w| w.out[0] = false);
     // Need the holder to actually hold a card so h vs h+1 differ in the log.
-    kani::assume(hand_ns[holder as usize] >= 1);
+    kani::assume(hand_ns[0] >= 1);
 
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    unwrap_done(body_of(&card_ras::riot::RIOT.on[0])(holder));
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_ras::riot::counteract_kani(holder));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -321,64 +351,31 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
 // ===========================================================================
 // C-RAS-pareo-01
 // 「获得2个PAREO标记，…」
-//
 // Isolation: no owned tile with houses (the optional 「移除…一层房屋」 offer
-// is not opened), and the holder is not 鳰原令王那 (`character_skill` models
-// "none" under Kani, so 「视为你的房屋总数增加」 has no listener).
-// Sub-cap: `PAREO标记` starts at 0 or 1 so the requested +2 stays ≤ 3.
-// Full-cap (start ≥ 2) is BLOCKED-HOST: `Op::add_held` ignores the `max`
-// the body names (3) and always logs +2.
+// is not opened). Sub-cap: `PAREO标记` starts at 0 or 1 so +2 stays ≤ 3.
+// Seat-symmetric.
 // ===========================================================================
 
-fn symbolic_pareo_world(pareo_key: u16) -> World {
-    host::install();
-    let mut w = World::new();
-    w.n_players = kani::any();
-    kani::assume(w.n_players >= 2 && w.n_players <= 4);
-    for p in 0..MAX_PLAYERS {
-        w.out[p] = kani::any();
-        // isolation: no houses anywhere ⇒ no optional removal prompt
-        w.tiles[p].houses = 0;
-    }
-    // `World::new` already has `houses = 0` on every tile — the old 60-trip
-    // walk tripped the unwinding assertion at unwind 32 (class A).
-    w
-}
-
-/// Iff (sub-cap): exactly +2 PAREO marks and nothing else.
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn pareo_01_marks_iff() {
-    let pareo_key = crate::intern::intern("PAREO标记").0;
-    let mut w = symbolic_pareo_world(pareo_key);
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    kani::assume(!w.out[player as usize]);
-    // sub-cap isolation (see module docs)
+/// Shared iff at a **concrete** user seat.
+fn pareo_01_marks_iff_at(user: i32) {
+    debug_assert!(user == 0 || user == 1);
     let pre_marks: i32 = kani::any();
     kani::assume(pre_marks >= 0 && pre_marks <= 1);
-    w.key_set(player, crate::intern::intern("PAREO标记"), pre_marks);
-
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-
-    unwrap_done(body_of(&card_ras::pareo_far::PAREO_FAR.on[0])(player));
-
+    pareo_world(user, pre_marks);
+    let pre = world::snapshot();
+    invoke::unwrap_done(card_ras::pareo_far::pareo_far_kani(user));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    let marks_after = world::with_world(|ww| {
-        ww.key_get(player, crate::intern::intern("PAREO标记"))
-    });
+    let pareo_key = crate::intern::intern("PAREO标记").0;
+    let marks_after = world::with_world(|ww| ww.key_get(user, crate::intern::intern("PAREO标记")));
 
     kani::cover!(pre_marks == 0, "start at 0 marks");
     kani::cover!(pre_marks == 1, "start at 1 mark");
 
     crate::kassert!(
-        spec::pareo_01_log_ok(effects, player, pareo_key),
+        spec::pareo_01_log_ok(effects, user, pareo_key),
         "C-RAS-pareo-01: effect log is exactly one +2 PAREO AddToken"
     );
     crate::kassert!(
@@ -391,24 +388,33 @@ pub fn pareo_01_marks_iff() {
     );
 }
 
+/// Pareo marks iff at seat 0.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn pareo_01_marks_iff() {
+    pareo_01_marks_iff_at(0);
+}
+
+/// Pareo marks iff at seat 1.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn pareo_01_user1_marks_iff() {
+    pareo_01_marks_iff_at(1);
+}
+
 /// Mutant companion: +3 marks is not what the card does.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(32)]
 pub fn pareo_01_marks_mutant_is_detected() {
+    pareo_world(0, 0);
+    let user = 0i32;
     let pareo_key = crate::intern::intern("PAREO标记").0;
-    let mut w = symbolic_pareo_world(pareo_key);
-    let player: i32 = kani::any();
-    kani::assume(player >= 0 && player < w.n_players);
-    kani::assume(!w.out[player as usize]);
-    w.key_set(player, crate::intern::intern("PAREO标记"), 0);
-
-    world::reset_world(w);
-    unwrap_done(body_of(&card_ras::pareo_far::PAREO_FAR.on[0])(player));
+    invoke::unwrap_done(card_ras::pareo_far::pareo_far_kani(user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     crate::kassert!(
-        !spec::pareo_01_log_ok_mutant(effects, player, pareo_key),
+        !spec::pareo_01_log_ok_mutant(effects, user, pareo_key),
         "mutant: card must not match the +3 marks spec"
     );
 }

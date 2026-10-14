@@ -66,3 +66,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     ctx::draw(player_id, 1)?;
     Ok(())
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}
