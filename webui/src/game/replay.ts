@@ -26,8 +26,8 @@ import type {
   TurnMark,
 } from "./record";
 
-/** Target main-thread time of one keyframe-index chunk (ms). */
-const INDEX_CHUNK_MS = 12;
+/** Tick quanta per keyframe-index call (see `Replayer::index`). */
+const INDEX_CHUNK = 40;
 
 /** `TurnMark` with the u64 tick already converted to a number. */
 export interface Turn {
@@ -251,26 +251,20 @@ export class ReplaySession extends GameSession {
     }
   }
 
-  /** Keyframes for `seek`, built in small `setTimeout` chunks so the UI stays
-   *  up. The page engine runs on the main thread, and one tick quantum of a
-   *  long game costs milliseconds, so the chunk size adapts to take about
-   *  {@link INDEX_CHUNK_MS} each rather than assuming a fixed amount of work,
-   *  and while playing it idles four times as long as it worked so playback
-   *  keeps most of the thread. */
+  /** Keyframes for `seek`, built in the background. The engine runs in a
+   *  worker, so this never blocks the UI; it is chunked (by tick quanta) only
+   *  so a step or a seek queued behind it waits for one short chunk, not the
+   *  whole pass. */
   private runIndex(): void {
     if (this.indexing) return;
     this.indexing = true;
-    let budget = 4;
     const step = () => {
       if (this.closed) return;
-      const t0 = performance.now();
-      void this.run((h) => h.index(budget))
+      void this.run((h) => h.index(INDEX_CHUNK))
         .then((st) => {
-          const ms = Math.max(1, performance.now() - t0);
-          budget = Math.max(1, Math.min(2000, Math.round((budget * INDEX_CHUNK_MS) / ms)));
           this.indexStatus = st;
           this.emitOther();
-          if (!st.done && !this.closed) window.setTimeout(step, this.playing ? Math.max(16, ms * 4) : 16);
+          if (!st.done && !this.closed) window.setTimeout(step, 0);
           else this.indexing = false;
         })
         .catch((e) => {
@@ -278,8 +272,7 @@ export class ReplaySession extends GameSession {
           this.indexing = false;
         });
     };
-    // After the first frame, so the Board paints before any indexing starts.
-    window.setTimeout(step, 250);
+    window.setTimeout(step, 0);
   }
 
   setPlaying(on: boolean): void {
