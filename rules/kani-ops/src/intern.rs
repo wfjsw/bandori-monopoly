@@ -498,3 +498,14 @@ mod tests {
         }
     }
 }
+
+/// Intern `name`, panicking under Kani when the table is exhausted (a loud
+/// cut, never a silent INVALID).
+pub fn intern_or_fail(name: &str) -> NameId {
+    let id = intern(name);
+    #[cfg(kani)]
+    kani::assert(id.is_valid(), "intern table exhausted or name too long");
+    #[cfg(not(kani))]
+    assert!(id.is_valid(), "intern table exhausted or name too long");
+    id
+}
