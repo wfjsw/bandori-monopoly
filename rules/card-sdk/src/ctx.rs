@@ -852,29 +852,27 @@ impl Iterator for CardIter {
 /// Every card id in a player's `pile`, in pile order (the deck's top card
 /// first). Duplicates are listed once per copy.
 ///
-/// Under `cfg(kani)` this builds a [`CardList`] (fixed 4-slot, zero-loop
-/// iterator) and converts to `T` (`CardList` by default, or `Vec<String>`
-/// where a body annotates that type). The unmodified body's
-/// `for c in cards_in(..)` then has a **hard 4-iteration bound**, so its
-/// subsequent `ids: Vec<String>` push/contains/fold/drop unrolls to 5 —
-/// not 32 (the prompt profile's `drop_glue<[String]>` 62 / `String fold` 31).
+/// Under `cfg(kani)` the result is a `Vec<String>` of **length 0 or 4**
+/// (never 1..=3): empty pile → empty vec; otherwise 4 slots where unused
+/// slots repeat earlier facade ids. The unmodified body's
+/// `ids.contains` dedups the repeats, so `ids` still holds exactly the
+/// distinct cards — and every `Vec<String>` walk in the body (`contains` /
+/// `map().collect()` / `drop_glue`) sees a **constant** length 0 or 4, so
+/// it unwinds to 4 instead of the global bound (prompt profile: fold 31,
+/// `drop_glue<[String]>` 62).
 #[cfg(kani)]
-pub fn cards_in<T = CardList>(player_id: i32, pile: CardPile) -> T
-where
-    T: From<CardList>,
-{
-    let mut out = CardList::empty();
+pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     if need <= 0 {
-        return T::from(out);
+        return Vec::new();
     }
     let (p, scratch) = out_buf(need as usize);
     let got = unsafe { sys::cards_in(player_id, pile as i32, p, need) };
     if got != need {
-        return T::from(out);
+        return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // Static 1-byte facade strings (see `slot_str`).
+    // Static 1-byte facade strings (no heap).
     fn slot_str(buf: &[u8], i: usize) -> String {
         static B: [[u8; 1]; 4] = [[0], [1], [2], [3]];
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
@@ -882,16 +880,21 @@ where
         // SAFETY: `'static` 1-byte buffer; kani bump `dealloc` is a no-op.
         unsafe { String::from_raw_parts(b.as_ptr() as *mut u8, 1, 1) }
     }
-    if need >= 2 {
-        out.push(slot_str(&buf, 0));
-        if need >= 3 {
-            out.push(slot_str(&buf, 1));
-            if need >= 4 {
-                out.push(slot_str(&buf, 2));
-            }
-        }
-    }
-    T::from(out)
+    // Real slots (branch tree, 0..=3 of them).
+    let s0 = slot_str(&buf, 0);
+    let s1 = slot_str(&buf, 1);
+    let s2 = slot_str(&buf, 2);
+    // Always 4 elements; pad with repeats so `len` is the constant 4.
+    // `ids.contains` in the body dedups.
+    let a = if need >= 2 { s0.clone() } else { s1.clone() };
+    let b = if need >= 3 { s1.clone() } else { a.clone() };
+    let c = if need >= 4 { s2.clone() } else { b.clone() };
+    let mut out = Vec::new();
+    out.push(a);
+    out.push(b);
+    out.push(c);
+    out.push(if need >= 2 { s0 } else { s1 });
+    out
 }
 
 #[cfg(not(kani))]
