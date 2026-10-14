@@ -15,7 +15,6 @@ import { Btn } from "../../ui/Button";
 import { CardFace, type CardAction, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
-import { Icon } from "../../ui/Icon";
 import { usePromptSheet } from "../../ui/Modal";
 import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
@@ -23,50 +22,19 @@ import type { Animator } from "./anim";
 import { act, type Model } from "./model";
 import { byTitle, showDeck, showDeedList } from "./Popups";
 import { BOARD_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
-import { movementControl } from "./turnFlow";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 
-export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Animator }) {
+export function Side({ sess }: { sess: GameSession }) {
   const auto = useAutoplay(sess);
   // A replay is read-only: every action control (skill, roll / continue,
   // mortgage, redeem) is hidden, not disabled, and the grid collapses away --
   // the left column is just the players. Inspection (tiles, cards, log) stays.
   if (sess.readOnly) return null;
-  const S = m.S;
-  const cur = S.players[S.turn];
-  const names = namesOf(S);
-  const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
-  const can = control !== null;
-  const advance = control === "end";
-
-  let hint: string;
-  if (S.phase !== "play") hint = "";
-  else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
-  else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
-  else if (S.busy || anim.animating) hint = tr("board.settling");
-  else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: names.playerId(S.turn) });
-  else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
-  else if (advance) hint = tr("board.moved");
-  else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: names.playerId(S.roller) });
-  else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
-  else hint = tr("board.waiting", { who: names.playerId(S.turn), bot: cur?.bot ? tr("board.botSuffix") : "" });
-
-  const caption = advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice");
   return (
     <div className={s.actions}>
-      {/* The die itself lives in the board's roll zone (Ring). This slot keeps
-          only the "skip movement / continue" step, and collapses away when
-          there is nothing to advance. */}
-      {advance && (
-        <button type="button" className={cx(s.dice, can && s.can)} title={hint} disabled={!can} onClick={() => control && void act(sess, { act: control })}>
-          <Icon name="arrow_forward" className={s.advanceIcon} />
-          <div className={s.diceCap}>{caption}</div>
-          <div className={s.diceHint}>{hint}</div>
-        </button>
-      )}
       <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess)}>{tr("board.deeds")}</Btn>
     </div>
   );

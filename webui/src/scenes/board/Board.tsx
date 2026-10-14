@@ -157,12 +157,14 @@ export function Board({ sess }: { sess: GameSession }) {
   const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
   // The die lives in the board's roll zone (Ring); replays hide it entirely.
   const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
+  const advance = control === "end";
   const roll: RollControl | null = sess.readOnly ? null : {
-    enabled: control === "roll",
+    enabled: control !== null,
     rolling: anim.rolling,
     dice: anim.dice,
-    hint: control === "roll" ? tr("board.clickRoll") : "",
-    onClick: () => control === "roll" && void act(sess, { act: "roll" }),
+    caption: advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice"),
+    hint: control === "roll" ? tr("board.clickRoll") : advance ? tr(S.skipMove ? "board.stayHint" : "board.moved") : "",
+    onClick: () => control && void act(sess, { act: control }),
   };
 
   return (
@@ -179,7 +181,7 @@ export function Board({ sess }: { sess: GameSession }) {
       <div className={s.body}>
         <div className={s.left}>
           <Players m={shown ?? m} solo={sess.kind !== "online"} elapsed={(performance.now() - at) / 1000} />
-          <Side m={m} sess={sess} anim={anim} />
+          <Side sess={sess} />
         </div>
         <div className={s.middle}>
           {/* The cards in play, as a top-docked card row over this column's
