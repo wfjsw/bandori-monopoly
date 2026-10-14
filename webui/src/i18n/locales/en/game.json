@@ -398,7 +398,7 @@
   "log.part.paid_to": " paid to {{who}}",
   "log.part.player_roll": "{{who}} {{n}}",
   "log.part.rent_half": ", dealer half price: {{full}} → {{cut}}",
-  "log.part.rent_half_only": " ({{half}})",
+  "log.part.rent_half_only": " (dealer half price: {{full}} → {{cut}})",
   "log.part.rent_houses": " ({{h}} houses{{half}})",
   "log.part.rent_ring": " (owns {{rings}} RiNG × {{mult}} × 1d20({{d}}){{half}})",
   "log.part.rolled_by": ", rolled by {{who}}",

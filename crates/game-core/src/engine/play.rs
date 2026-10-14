@@ -2426,11 +2426,19 @@ impl Cx<'_> {
             )
         };
         let mut half_part = None;
+        let mut half_only = None;
         if half {
             let full = amount;
             amount = ((full as f64 / 2.0 / 10.0).ceil() as i32) * 10;
             half_part = Some(
                 Msg::new("log.part.rent_half")
+                    .n("full", full)
+                    .n("cut", amount),
+            );
+            // Bare in its own parens: no leading comma (`rent_half` is the
+            // tail of a house / ring note).
+            half_only = Some(
+                Msg::new("log.part.rent_half_only")
                     .n("full", full)
                     .n("cut", amount),
             );
@@ -2443,8 +2451,7 @@ impl Cx<'_> {
         // (`docs/TILES.md`, 「支付减半」 ruling 2026-10-06).
         let note = match (detail, half_part) {
             (Some(d), h) => Some(d.opt("half", h)),
-            (None, Some(h)) => Some(Msg::new("log.part.rent_half_only").msg("half", h)),
-            (None, None) => None,
+            (None, _) => half_only,
         };
         let mut p = Pay::new(amount, PayKind::Rent);
         p.from = Some(i);
