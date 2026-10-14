@@ -502,6 +502,11 @@ seats symbolic — the body's `0..4` loop is four cheap iterations and with
 
 ### Class C: hook-status polarity (`raise` / `gate` / `raise_bought` / `ring_multiplier`)
 
+**Fixed here** — the parallel triage pass ("Batch 3e continued") diagnosed
+`chart_rush_01_spends_fire` as a class C host-model defect (`Op::raise`
+benign-0 → cancelled → `spend_fire` skipped the real spend) and left the
+proof FAILING for a `host.rs` fix. This branch is that fix.
+
 `events::chart_rush_01_spends_fire` spent no [火罐]: `spend_fire` calls
 `ctx::raise(FirePaying)`, and a **0** return means *cancelled / substituted*
 → `return Ok(true)` without the real spend. `Op::raise` sat in the benign-0
