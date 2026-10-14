@@ -46,6 +46,7 @@ pub mod poppin;
 use poppin::POPPIN;
 pub mod crychic;
 use crychic::CRYCHIC;
+pub mod roster_table;
 
 // The 规则书 text for these is a Google Sheet (see `skill-rulebook-sheets` in
 // the project memory, or fetch `export?format=csv&gid=1398197110` on the

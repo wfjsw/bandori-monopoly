@@ -38,6 +38,7 @@ dependencies = [
  "rules-status",
  "rules-tile-marks",
  "rules-tiles",
+ "ruleset-core",
  "skill-bands",
  "skill-characters",
 ]

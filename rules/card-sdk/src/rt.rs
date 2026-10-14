@@ -4,6 +4,7 @@ use crate::abi::{export, pack, ManifestEntry, ManifestOn, ManifestTileText};
 #[cfg(target_arch = "wasm32")]
 use alloc::{boxed::Box, string::String, vec::Vec};
 
+use crate::meta::{ordinal_of, MetaDoc, MetaRow, RosterSources};
 use crate::{CardDef, On};
 
 /// The card manifest, `postcard`-encoded (ABI v5 -- the guest hand-writes no
@@ -71,6 +72,40 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
         })
         .collect();
     leak(postcard::to_allocvec(&entries).unwrap_or_default())
+}
+
+/// `bandori_metadata` -- the roster metadata blob (ABI v63), built only when
+/// the host asks. Card rows come from every `CardDef` that declares
+/// [`crate::meta::CardMeta`]; non-card rows ride `sources.lists`. Sorted by
+/// `(kind, ordinal)` so the bytes are deterministic regardless of registration
+/// order.
+pub fn metadata(bands: &'static [&'static [CardDef]], sources: &RosterSources) -> i64 {
+    let mut rows: Vec<MetaRow> = Vec::new();
+    for band in bands {
+        for c in band.iter() {
+            if let Some(m) = c.meta {
+                rows.push(m.to_row(c.id, ordinal_of(sources.card_ordinals, c.id)));
+            }
+        }
+    }
+    for list in sources.lists {
+        for r in (list.rows)() {
+            let mut row = r;
+            row.kind = String::from(list.kind);
+            // Canonical data-file order wins over whatever the def left in
+            // `ordinal` (the shared table is the one source of truth).
+            row.ordinal = ordinal_of(list.ordinals, &row.id);
+            rows.push(row);
+        }
+    }
+    rows.sort_by(|a, b| {
+        a.kind
+            .cmp(&b.kind)
+            .then(a.ordinal.cmp(&b.ordinal))
+            .then(a.id.cmp(&b.id))
+    });
+    let doc = MetaDoc { rows };
+    leak(postcard::to_allocvec(&doc).unwrap_or_default())
 }
 
 /// Hand a buffer to the host as packed `(ptr << 32) | len`. The bytes live as
@@ -196,9 +231,27 @@ pub fn on(
 /// `RULESET` table so every rule crate can link into one binary without
 /// `#[no_mangle]` clashes; `rules-native` calls [`crate::rt::on`] over the
 /// concatenated tables.
+///
+/// A trailing `; roster $sources` clause (ABI v63) points `bandori_metadata`
+/// at this game's [`crate::meta::RosterSources`] (card ordinals + the skill
+/// crates' character / band tables). Without the clause the export still
+/// exists but carries only cards that declare [`crate::meta::CardMeta`].
+///
+/// ```ignore
+/// card_sdk::bandori_ruleset!(CARDS; roster: &RosterSources {
+///     card_ordinals: ruleset_core::roster_order::CARDS,
+///     lists: &[...],
+/// });
+/// ```
 #[macro_export]
 macro_rules! bandori_ruleset {
     ($($cards:expr),+ $(,)?) => {
+        $crate::bandori_ruleset!(@body [$($cards),+] ; &$crate::meta::EMPTY_ROSTER);
+    };
+    ($($cards:expr),+ ; roster: $sources:expr $(,)?) => {
+        $crate::bandori_ruleset!(@body [$($cards),+] ; $sources);
+    };
+    (@body [$($cards:expr),+] ; $sources:expr) => {
         /// Every band's table, in the order given. `static` so the export
         /// functions can hand out `'static` references into it.
         #[allow(dead_code)]
@@ -221,6 +274,12 @@ macro_rules! bandori_ruleset {
             $crate::rt::manifest(BAND_TABLE)
         }
 
+        /// Native roster metadata (ABI v63) -- same body as the wasm export.
+        #[cfg(not(target_arch = "wasm32"))]
+        pub fn bandori_metadata() -> i64 {
+            $crate::rt::metadata(BAND_TABLE, $sources)
+        }
+
         #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn bandori_abi_version() -> i32 {
@@ -235,6 +294,11 @@ macro_rules! bandori_ruleset {
         #[no_mangle]
         pub extern "C" fn bandori_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
             $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
+        }
+        #[cfg(target_arch = "wasm32")]
+        #[no_mangle]
+        pub extern "C" fn bandori_metadata() -> i64 {
+            $crate::rt::metadata(BAND_TABLE, $sources)
         }
     };
 }

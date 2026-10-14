@@ -23,7 +23,13 @@ pub const TWO_IN_ONE: CardDef = CardDef::new(
         ),
     ],
 )
-.legacy(&[(1, legacy_can_counteract)]);
+.legacy(&[(1, legacy_can_counteract)]).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"Sumimi是二人一体的"#)
+        .raw_name(r#"Sumimi是二人一体的"#)
+        .tags(&[r#"反击"#])
+        .text(r#"（1）打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数（2）此卡可在你的移动掷骰后作为[反击]使用。"#)
+        .cell(r#"L6"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」

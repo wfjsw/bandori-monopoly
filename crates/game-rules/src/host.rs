@@ -545,6 +545,9 @@ pub(crate) struct Inner {
     /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
     /// can never fire at a kind.
     hook_mask: Vec<u128>,
+    /// Roster metadata (ABI v63) gathered from every module's
+    /// `bandori_metadata`. Empty on pre-v63 / meta-less sets.
+    metadata: card_sdk::meta::MetaDoc,
     /// The CEL-only gates (`TriggerKind::{ActGate, PayGate, MoveGate,
     /// ExclusiveUse}`): per gate kind, the `(card, entry)` pairs whose
     /// condition closes it. Built once at load so a gate read walks only these.
@@ -629,6 +632,9 @@ pub struct RulesetBuilder {
     modules: Vec<LoadedModule>,
     cards: Vec<CardInfo>,
     slots: Vec<Slot>,
+    /// Roster metadata rows gathered from every module's `bandori_metadata`
+    /// (ABI v63). Merged in [`RulesetBuilder::build`].
+    metadata: Vec<card_sdk::meta::MetaRow>,
     /// Lean compiled condition blobs (`Cond::to_bytes(false)`), keyed by
     /// `(card id, entry index)`. The runtime-only (browser) path fills these
     /// from the ruleset index instead of compiling -- see
@@ -640,7 +646,7 @@ impl RulesetBuilder {
     /// Compile and validate one card module (ABI version, exports, manifest) and add
     /// its cards. Returns the module's SHA-256.
     pub fn add(&mut self, wasm: &[u8]) -> Result<String, RuleError> {
-        let (module, cards) = inspect(&self.engine, wasm)?;
+        let (module, cards, meta) = inspect(&self.engine, wasm)?;
         let sha256 = hex_sha256(wasm);
         let m = self.modules.len();
         for (local, c) in cards.into_iter().enumerate() {
@@ -650,6 +656,7 @@ impl RulesetBuilder {
             });
             self.cards.push(c);
         }
+        self.metadata.extend(meta.rows);
         self.modules.push(LoadedModule {
             module,
             sha256: sha256.clone(),
@@ -759,6 +766,15 @@ impl RulesetBuilder {
             parts.extend(cond_lines);
         }
         let sha256 = hex_sha256(parts.join("\n").as_bytes());
+        // Keep the metadata rows sorted the way the export produced them
+        // (`kind`, `ordinal`) so a multi-module merge stays deterministic.
+        let mut metadata = self.metadata;
+        metadata.sort_by(|a, b| {
+            a.kind
+                .cmp(&b.kind)
+                .then(a.ordinal.cmp(&b.ordinal))
+                .then(a.id.cmp(&b.id))
+        });
         Ok(Ruleset {
             inner: Arc::new(Inner {
                 id: next_inner_id(),
@@ -773,6 +789,7 @@ impl RulesetBuilder {
                 counteract_mask,
                 hook_mask,
                 gates,
+                metadata: card_sdk::meta::MetaDoc { rows: metadata },
             }),
             fuel: DEFAULT_FUEL,
         })
@@ -854,6 +871,7 @@ impl Ruleset {
             modules: vec![],
             cards: vec![],
             slots: vec![],
+            metadata: vec![],
             precompiled: HashMap::new(),
         }
     }
@@ -889,6 +907,20 @@ impl Ruleset {
 
     pub fn cards(&self) -> &[CardInfo] {
         &self.inner.cards
+    }
+
+    /// Roster metadata (ABI v63): every card / character / band row the
+    /// modules declared via `CardDef::meta` / the skill crates' tables.
+    /// Sorted by `(kind, ordinal)` -- the data-file order. Convert with
+    /// [`crate::roster::roster_from_meta`] to build a `GameData`.
+    pub fn metadata(&self) -> &card_sdk::meta::MetaDoc {
+        &self.inner.metadata
+    }
+
+    /// The same rows as [`Self::metadata`], as the game's `Roster` (ready for
+    /// [`game_core::data::GameData::load_with_roster`]).
+    pub fn roster(&self) -> game_core::data::Roster {
+        crate::roster::roster_from_meta(self.metadata())
     }
 
     /// Does any card in the set declare an entry at this kind? The cheap
@@ -2302,8 +2334,12 @@ fn call_card_msg<W: CardWorld>(
     Ok(Some(engine_msg(m)))
 }
 
-/// Validate one module and read its manifest.
-fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), RuleError> {
+/// Validate one module and read its manifest. Also reads the optional
+/// `bandori_metadata` roster blob (ABI v63) when the module exports it.
+fn inspect(
+    engine: &Engine,
+    wasm: &[u8],
+) -> Result<(Module, Vec<CardInfo>, card_sdk::meta::MetaDoc), RuleError> {
     let load = |m: String| RuleError::Load(m);
     let module = be::compile(engine, wasm).map_err(load)?;
 
@@ -2353,7 +2389,20 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
     if !has_func(&inst, &mut store, export::ON) {
         return Err(load(format!("missing export {}", export::ON)));
     }
-    Ok((module, cards))
+    // Roster metadata (ABI v63) is optional -- absent on pre-v63 modules and
+    // on fixtures that declare no `.meta()`. Built only when this is called.
+    let mut meta = card_sdk::meta::MetaDoc::default();
+    if has_func(&inst, &mut store, export::METADATA) {
+        let packed = inst
+            .get_typed_func::<(), i64>(&mut store, export::METADATA)
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(|e| load(format!("{}: {e}", export::METADATA)))?;
+        let (ptr, len) = abi::unpack(packed);
+        let bytes =
+            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        meta = crate::roster::decode_metadata(&bytes).map_err(load)?;
+    }
+    Ok((module, cards, meta))
 }
 
 /// The abnormal [反击] gate, from inside a card run: on replay the logged

@@ -32,7 +32,13 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         // left to discard, so the callback must not run (or flash) for it.
         On::AtEnd("card.placed", None, at_end),
     ],
-);
+).meta(&card_sdk::meta::CardMeta::new()
+        .name(r#"儿时玩伴的鼓励"#)
+        .raw_name(r#"(初华（Sumimi）)儿时玩伴的鼓励"#)
+        .tags(&[])
+        .text(r#"可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。"#)
+        .cell(r#"L9"#)
+        .fields(&[("band", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]));
 
 const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 

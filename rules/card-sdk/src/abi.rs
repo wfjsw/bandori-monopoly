@@ -419,7 +419,22 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 60;
+/// v63: **roster metadata export** (`docs/CARDS.md` 「Card metadata」).
+///      `CardDef::meta` carries the card's data-set row (name / rawName /
+///      text / tags / derived / cell + a generic `fields` map for game slots
+///      `band` / `owner`); the skill crates' `CharacterDef` / `BandDef`
+///      tables carry `characters.json` / `bands.json`. A new guest export
+///      `bandori_metadata` (`export::METADATA`, `() -> i64` packed
+///      postcard `meta::MetaDoc`) hands the whole roster to the host on
+///      request -- **not** through `ManifestEntry` (the match path is
+///      unchanged and unbloomed). Rows sort by `(kind, ordinal)` where the
+///      ordinal comes from a shared generated table
+///      (`ruleset_core::roster_order`) so the rebuilt vectors equal the JSON
+///      file order exactly even though the Rust crates register alphabetically.
+///      Host: `Ruleset::metadata()` -> `meta::MetaDoc`; `GameData::load_with_roster`
+///      consumes the converted `Roster`. No host-function change; SAVE_VERSION
+///      unchanged (no save field).
+pub const ABI_VERSION: i32 = 63;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -531,6 +546,10 @@ pub mod export {
     /// mismatch. Traps / a missing entry mean "no legacy" and skip the check.
     pub const OP_LEGACY_GUARD: i32 = 2;
     pub const MEMORY: &str = "memory";
+    /// `() -> i64` packed `(ptr << 32) | len` pointing at a postcard
+    /// [`crate::meta::MetaDoc`] (ABI v63). Built only when called; absent on
+    /// pre-v63 modules (the host then reports empty roster metadata).
+    pub const METADATA: &str = "bandori_metadata";
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the

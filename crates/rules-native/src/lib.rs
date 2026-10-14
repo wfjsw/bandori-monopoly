@@ -230,6 +230,39 @@ impl Default for NativeRulesHandle {
     }
 }
 
+/// Roster metadata (ABI v63) from the linked rule tables -- the native
+/// counterpart of the sandbox's `bandori_metadata` export. Same sources the
+/// wasm module's `card-all` passes to `bandori_ruleset!(; roster:)`.
+pub fn roster_metadata() -> card_sdk::meta::MetaDoc {
+    static SOURCES: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
+        card_ordinals: ruleset_core::roster_order::CARDS,
+        lists: &[
+            card_sdk::meta::RosterList {
+                kind: "character",
+                ordinals: ruleset_core::roster_order::CHARACTERS,
+                rows: skill_characters::roster_table::meta_rows,
+            },
+            card_sdk::meta::RosterList {
+                kind: "band",
+                ordinals: ruleset_core::roster_order::BANDS,
+                rows: skill_bands::roster_table::meta_rows,
+            },
+        ],
+    };
+    let _frame = card_sdk::native::enter();
+    let packed = card_sdk::rt::metadata(RULESET, &SOURCES);
+    let (handle, len) = card_sdk::abi::unpack(packed);
+    // Native `leak` interned the bytes in the card-sdk arena; `native::read`
+    // turns the handle back into a slice (see `card_sdk::native`).
+    let bytes = card_sdk::native::read(handle as i32, len as usize);
+    game_rules::roster::decode_metadata(&bytes).expect("native metadata is valid postcard")
+}
+
+/// The same rows as [`roster_metadata`], as the game's `Roster`.
+pub fn roster() -> game_core::data::Roster {
+    game_rules::roster::roster_from_meta(&roster_metadata())
+}
+
 impl RulesHandle for NativeRulesHandle {
     fn by_id(&self, id: &str) -> Option<i32> {
         self.inner.by_id.get(id).copied()

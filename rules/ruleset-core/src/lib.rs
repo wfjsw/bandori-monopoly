@@ -34,6 +34,12 @@ pub mod counter {
     pub const CRYSTALS: &str = "crystals";
 }
 
+/// Roster metadata types (`CharacterDef` / `BandDef`, `meta_key`) and the
+/// canonical data-file order tables (ABI v63, `docs/CARDS.md`).
+pub mod roster;
+/// Generated `(key -> ordinal)` tables restoring `data/*.json` order.
+pub mod roster_order;
+
 /// State-map keys that name this ruleset's pots / statuses.
 pub mod state_key {
     /// Fire pots held.

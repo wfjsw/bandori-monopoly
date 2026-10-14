@@ -264,6 +264,17 @@ pub struct BandData {
     pub boot_art: String,
 }
 
+/// The roster half of [`GameData`] -- `cards.json` / `characters.json` /
+/// `bands.json` -- handed over by the ruleset host (ABI v63 `bandori_metadata`,
+/// converted in `game-rules`). `game-core` stays free of the card crates; this
+/// is the plain struct of vectors it already iterates in file order.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Roster {
+    pub cards: Vec<CardData>,
+    pub characters: Vec<CharacterData>,
+    pub bands: Vec<BandData>,
+}
+
 /// One event card from `events.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -509,12 +520,30 @@ impl GameData {
     /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`.
     pub fn load(mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Self, String> {
         let mut get = |f: &str| read(f).map_err(|e| format!("{f}: {e}"));
-        let mut d = GameData {
-            tiles: parse::<BoardFile>("board.json", &get("board.json")?)?.tiles,
+        let roster = Roster {
             cards: parse::<CardFile>("cards.json", &get("cards.json")?)?.cards,
             characters: parse::<CharacterFile>("characters.json", &get("characters.json")?)?
                 .characters,
             bands: parse::<BandFile>("bands.json", &get("bands.json")?)?.bands,
+        };
+        Self::load_with_roster(&mut read, roster)
+    }
+
+    /// Like [`Self::load`], but the roster (`cards` / `characters` / `bands`)
+    /// is handed over by the ruleset host (ABI v63 `bandori_metadata` ->
+    /// `Roster`) instead of read from JSON. Every other file still comes
+    /// through `read`. The deck book / strategy book are loaded here so both
+    /// entry points share that path.
+    pub fn load_with_roster(
+        mut read: impl FnMut(&str) -> Result<String, String>,
+        roster: Roster,
+    ) -> Result<Self, String> {
+        let mut get = |f: &str| read(f).map_err(|e| format!("{f}: {e}"));
+        let mut d = GameData {
+            tiles: parse::<BoardFile>("board.json", &get("board.json")?)?.tiles,
+            cards: roster.cards,
+            characters: roster.characters,
+            bands: roster.bands,
             events: parse::<EventFile>("events.json", &get("events.json")?)?.events,
             schools: parse("schools.json", &get("schools.json")?)?,
             song_cards: parse("song_cards.json", &get("song_cards.json")?)?,
