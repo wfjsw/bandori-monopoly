@@ -1,8 +1,8 @@
 //! CRYCHIC unit contracts: 15 cards + 5 character skills + the band skill.
 //!
 //! Spec: `docs/rulebook/spec/cards/crychic.md`. Every clause is derived from
-//! the live sheet (`docs/rulebook/cards.json`, `data/characters.json`,
-//! `data/bands.json`) and the rulebook body, never from implementation
+//! the live sheet (`docs/rulebook/cards.json`, `the roster`,
+//! `the roster`) and the rulebook body, never from implementation
 //! behaviour. A discrepancy is a plain failing test.
 //!
 //! Clause IDs are `C-CRYCHIC-<slug>-<n>`. Frame conditions travel with the
@@ -44,7 +44,7 @@ const DEBUT: &str = "CRYCHIC:初演大成功";
 
 /// C-CRYCHIC-debut-01 -- 「本回合内你的资金不会下降」.
 ///
-/// * **Source:** `cards.json#CRYCHIC:初演大成功`
+/// * **Source:** `roster#CRYCHIC:初演大成功`
 /// * **Quote:** 「打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外）」
 /// * **Trigger:** a rent [支付] the same turn the card was played.
 /// * **Condition:** the user played this card this turn and lands on an
@@ -71,7 +71,7 @@ pub fn c_crychic_debut_no_drop(step: &Step<'_>) -> Result<(), String> {
 
 /// C-CRYCHIC-debut-02 -- turn end: 1 [晕眩] + 1 crystal on the band skill card.
 ///
-/// * **Source:** `cards.json#CRYCHIC:初演大成功`
+/// * **Source:** `roster#CRYCHIC:初演大成功`
 /// * **Quote:** 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。」
 /// * **Trigger:** the turn end of the player who played the card this turn.
 /// * **Condition:** the card was played this turn.
@@ -148,7 +148,7 @@ fn crychic_debut_blocks_rent_decrease() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-CRYCHIC-debut-01",
-            "cards.json#CRYCHIC:初演大成功",
+            "roster#CRYCHIC:初演大成功",
             "本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外）",
             c_crychic_debut_no_drop,
         )]);
@@ -204,7 +204,7 @@ fn crychic_debut_turn_end_stun_and_crystal() {
         t.give(0, &[DEBUT]);
         t.observe(&[Clause::new(
             "C-CRYCHIC-debut-02",
-            "cards.json#CRYCHIC:初演大成功",
+            "roster#CRYCHIC:初演大成功",
             "回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。",
             c_crychic_debut_turn_end,
         )]);
@@ -274,7 +274,7 @@ fn crychic_ifonly_cashs_out_band_crystals() {
 
         t.observe(&[Clause::new(
             "C-CRYCHIC-ifonly-01",
-            "cards.json#CRYCHIC:如果能一直持续下去...",
+            "roster#CRYCHIC:如果能一直持续下去...",
             "[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。",
             c_crychic_ifonly_cashout,
         )]);
@@ -523,7 +523,7 @@ fn crychic_grab_grants_stay() {
         t.give(0, &[GRAB]);
         t.observe(&[Clause::new(
             "C-CRYCHIC-grab-01",
-            "cards.json#CRYCHIC:想要抓住...",
+            "roster#CRYCHIC:想要抓住...",
             "（1）获得一层[停留]。",
             c_crychic_grab_stay,
         )]);
@@ -616,7 +616,7 @@ pub fn c_crychic_soyoreturn_hand(step: &Step<'_>) -> Result<(), String> {
 fn crychic_soyoreturn_hand_gains_500() {
     forall(6, 0xC1C0_0009, |rng, _i| {
         let mut t = Table::vanilla(2);
-        // Exclusive to 长崎素世（CRYCHIC） (`characters.json` exclusiveCards).
+        // Exclusive to 长崎素世（CRYCHIC） (`the roster` exclusiveCards).
         t.set_character_raw(0, "长崎素世（CRYCHIC）");
         let money0 = 8_000 + rng.range(0, 40) * 100;
         t.set_money(0, money0);
@@ -624,7 +624,7 @@ fn crychic_soyoreturn_hand_gains_500() {
         let pre = t.snapshot_world();
         t.observe(&[Clause::new(
             "C-CRYCHIC-soyoreturn-02",
-            "cards.json#CRYCHIC:（soyo）回到曾经",
+            "roster#CRYCHIC:（soyo）回到曾经",
             "（2）[手] 获得500资金",
             c_crychic_soyoreturn_hand,
         )]);
@@ -1001,31 +1001,31 @@ fn crychic_band_crystal_on_four_to_five() {
 pub const CLAUSES: &[Clause] = &[
     Clause::new(
         "C-CRYCHIC-debut-01",
-        "cards.json#CRYCHIC:初演大成功",
+        "roster#CRYCHIC:初演大成功",
         "本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外）",
         c_crychic_debut_no_drop,
     ),
     Clause::new(
         "C-CRYCHIC-debut-02",
-        "cards.json#CRYCHIC:初演大成功",
+        "roster#CRYCHIC:初演大成功",
         "回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。",
         c_crychic_debut_turn_end,
     ),
     Clause::new(
         "C-CRYCHIC-ifonly-01",
-        "cards.json#CRYCHIC:如果能一直持续下去...",
+        "roster#CRYCHIC:如果能一直持续下去...",
         "[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。",
         c_crychic_ifonly_cashout,
     ),
     Clause::new(
         "C-CRYCHIC-grab-01",
-        "cards.json#CRYCHIC:想要抓住...",
+        "roster#CRYCHIC:想要抓住...",
         "（1）获得一层[停留]。",
         c_crychic_grab_stay,
     ),
     Clause::new(
         "C-CRYCHIC-soyoreturn-02",
-        "cards.json#CRYCHIC:（soyo）回到曾经",
+        "roster#CRYCHIC:（soyo）回到曾经",
         "（2）[手] 获得500资金",
         c_crychic_soyoreturn_hand,
     ),

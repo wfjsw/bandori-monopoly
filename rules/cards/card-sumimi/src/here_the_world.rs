@@ -25,7 +25,7 @@ const SLOT_USER: &str = "here_user";
 /// little-endian) because `set_slot` is i32-only. C# stores a card-database
 /// index; the bytes reconstruct the same id.
 const SLOT_HELD_LEN: &str = "here_held_len";
-/// Up to 64 bytes -- every `data/cards.json` id fits (max 52 bytes today).
+/// Up to 64 bytes -- every `the roster` id fits (max 52 bytes today).
 const HELD_SLOTS: usize = 16;
 
 /// Slot key for packed byte-chunk `i` (0..HELD_SLOTS).

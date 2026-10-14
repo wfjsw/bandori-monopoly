@@ -1,6 +1,6 @@
 //! Harness (b): status/teleport-style card body.
 //!
-//! `PPP:（多惠）寻找更好的声音` (cards.json):
+//! `PPP:（多惠）寻找更好的声音` (roster):
 //! > 「传送到"江户川乐器店"并获得一个[火罐]」
 //!
 //! Effect: teleport to the named tile, +1 [火罐]. Frame: exactly those two.

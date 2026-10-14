@@ -100,7 +100,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"椎名立希"#)
     .display(r#"椎名立希"#)

@@ -1,7 +1,7 @@
 //! Unit `skills_hhw`: reference specs FROM the clause docs only.
 //!
-//! Sources: `data/characters.json` `text` (band = Hello, Happy World!) and
-//! `data/bands.json` `text` (传播笑容). Never derived from engine behaviour.
+//! Sources: the roster character row `text` (band = Hello, Happy World!) and
+//! the roster band row `text` (传播笑容). Never derived from engine behaviour.
 //! Clause IDs are `C-HHW-*` (see `docs/rulebook/spec/cards/hhw.md`).
 
 use crate::world::Effect;

@@ -7,7 +7,7 @@
 //! listeners. Never "reaction".
 //!
 //! Source precedence: live sheet (`docs/rulebook/cards.json`,
-//! `data/characters.json` / `bands.json`) > `docs/rulebook/rulebook-doc.md`.
+//! `the roster` / `bands.json`) > `docs/rulebook/rulebook-doc.md`.
 //! `rulebook.txt` is not authoritative.
 
 use spec_kit::{Clause, Step};

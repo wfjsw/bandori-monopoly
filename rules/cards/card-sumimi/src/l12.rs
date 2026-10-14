@@ -1,6 +1,6 @@
 //! `Sumimi:#L12` -- C# `CardL12` (MatchHost.cs:11621-11682): pull a Sumimi card
 //!
-//! 规则书（data/cards.json, id `Sumimi:#L12`）:
+//! 规则书（the roster, id `Sumimi:#L12`）:
 //! > [手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。
 //!
 //! from discard/draw, place this card, hand limit -1, crystals on fire spent.

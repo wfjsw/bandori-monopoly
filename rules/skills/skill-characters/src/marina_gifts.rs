@@ -73,7 +73,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `characters.json` row for this skill's owner (ABI v63).
+/// Roster character row for this skill's owner (ABI v63).
 pub const CHARACTER: ruleset_core::roster::CharacterDef =
 ruleset_core::roster::CharacterDef::new(r#"月岛麻里奈"#)
     .display(r#"月岛麻里奈"#)

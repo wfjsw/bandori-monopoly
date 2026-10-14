@@ -233,7 +233,7 @@ fn returns_borrow_options_carry_band_cards() {
 }
 
 // Returns sheet [持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果」.
-// PPP band (4) (data/bands.json): 「不能通过[主要移动]的[结算]盖房」.
+// PPP band (4) (the roster): 「不能通过[主要移动]的[结算]盖房」.
 // 规则书 基础[结算] 5.1 (bold): 「玩家拥有的[可购买格子]的[结算]是：如果格子
 // 地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 — the
 // upgrade IS the settle's 「可选择」, so (4) vetoes that choice and Returns

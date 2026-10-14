@@ -1207,7 +1207,7 @@ fn forbidden_moca_halves_move_dice_then_is_permanently_removed() {
 
 #[test]
 fn school_time_moves_to_the_school_and_grants_exile() {
-    // There is no school field in `data/characters.json`; the body maps each
+    // There is no school field in the roster; the body maps each
     // character to a school tile (or 周边学区). Assert the text's shape: every
     // player lands on a school tile or 周边学区, and each gains 1[除外].
     let mut t = Table::vanilla(3);

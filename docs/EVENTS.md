@@ -64,7 +64,7 @@ as `rules/cards/card-*`, `rules/skills/*`, `rules/tiles` and `rules/tile_marks`:
 | `event:火种燃尽之后会怎么样呢？` | `embers.rs` | active | A29 |
 
 The crate is a **rule crate**, not a card crate: its ids are `event:*`, not
-`data/cards.json` ids. `tools/rules-aggregate.mjs` scans `rules/events` as one
+roster card ids. `tools/rules-aggregate.mjs` scans `rules/events` as one
 of its roots (alongside `rules/cards`, `rules/skills`, `rules/tiles` and
 `rules/tile_marks`) so `card-all` links it; `tools/build-ruleset.mjs` runs that
 aggregate first.

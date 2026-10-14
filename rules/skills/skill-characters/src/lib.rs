@@ -5,7 +5,7 @@
 //! ([`CardDef`]), same guest runtime, separate crate -- so a card author never
 //! has to scroll past them and a skill author never edits a card.
 //!
-//! The rule text lives in `data/characters.json` (`skill` is the name, `text` /
+//! The rule text lives in the roster character row (`skill` is the name, `text` /
 //! `simple` the wording); what is here is the behavior. A skill that mandates a
 //! fire-pot cap is the whole reason the keyed state carries bounds -- it writes
 //! `state::set_bounds(player_id, state_key::FIRE, 0, 1)` and every card reads it
@@ -185,7 +185,7 @@ pub mod roster_table;
 // The 规则书 text for these is a Google Sheet (see `skill-rulebook-sheets` in
 // the project memory, or fetch `export?format=csv&gid=951422372` on the
 // `1xZ3avBsNBXbl3bQ74lmPs0YQFgZkPD0Sdzmx7ZGGEDY` document), column `技能`.
-// `data/characters.json` (`text`) is a faithful copy of it -- 54/54 rows match
+// the roster character row (`text`) is a faithful copy of it -- 54/54 rows match
 // modulo the sheet's literal backslash-n escapes -- so the JSON is safe to
 // code against, and the sheet is where to check a body against.
 //

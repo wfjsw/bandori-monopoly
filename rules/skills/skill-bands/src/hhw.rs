@@ -108,7 +108,7 @@ fn before_build(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `bands.json` row for this band skill (ABI v63).
+/// Roster band row for this band skill (ABI v63).
 pub const BAND: ruleset_core::roster::BandDef =
 ruleset_core::roster::BandDef::new(r#"Hello, Happy World!"#)
     .short_name(r#"HHW"#)

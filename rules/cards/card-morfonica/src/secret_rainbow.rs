@@ -62,7 +62,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
 // high school = 12; 长崎素世 is Tsukinomori 1st yr = 10.
 //
 // Keyed by the character's Chinese name (`ctx::character_is`); `cnId` is the
-// id from `data/characters.json`, the wiki page is the cited source.
+// id from the roster, the wiki page is the cited source.
 const GRADES: &[(&str, &str, i32)] = &[
     // (name, cnId, ordinal)
     ("户山香澄", "001", 12),   // Toyama_Kasumi, Hanasakigawa Hi 3rd

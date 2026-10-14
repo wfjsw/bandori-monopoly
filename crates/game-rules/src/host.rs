@@ -1033,7 +1033,7 @@ impl Ruleset {
                 .is_some_and(|m| (m >> v) & 1 != 0)
     }
 
-    /// Handle for a card id from `cards.json`, e.g. `"AG:Y.O.L.O"`.
+    /// Handle for a card id from the roster, e.g. `"AG:Y.O.L.O"`.
     pub fn card(&self, id: &str) -> Option<i32> {
         self.inner.by_id.get(id).copied()
     }
