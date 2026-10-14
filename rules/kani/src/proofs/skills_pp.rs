@@ -46,11 +46,12 @@ crate::host_subset!(skills_pp_dispatch {
     inc_slot => arm_inc_slot,
     state_get => arm_state_get,
     state_set => arm_state_set,
-    state_add => arm_plan_stub,
+    state_add => arm_inc_slot,  // same keyed-add as inc_slot (real)
     raise => arm_raise,
     gate => arm_gate,
     set_steps | set_resolve | set_stop_at | schedule_turn_end | linger
-    | card_move | card_offer_build | can_build_on => arm_plan_stub,
+    | card_offer_build | can_build_on => arm_protocol_stub,
+    card_move => arm_card_move,
 });
 
 /// Sparse 2-seat world + skills_pp subset. `user` ∈ {0, 1} concrete.

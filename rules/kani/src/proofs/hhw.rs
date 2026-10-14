@@ -120,7 +120,7 @@ crate::host_subset!(balloon_dispatch {
     | plan_add_follower | set_play_doubled | set_no_money_loss | set_fixed_roll
     | set_next_steps | set_build_discount | set_build_cost_pct | set_extreme
     | clear_dice | set_can_build | set_min_roll | set_extra_steps
-    | set_more_steps | add_base_dice | add_extra_dice => arm_plan_stub,
+    | set_more_steps | add_base_dice | add_extra_dice => arm_protocol_stub,
     card_move => arm_card_move,
     log | effect => arm_log,
 });

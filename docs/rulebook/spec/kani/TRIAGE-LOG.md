@@ -1069,3 +1069,38 @@ FAILING on master and is out of bands-a's units.
 Unwinding assertions ON. No `#[ignore]`. No allowlist. No weakened specs.
 `outside_subset` / untagged `name_id` FAIL loudly. Production `cfg(not(kani))`
 untouched.
+
+### bands-a stub audit — every `arm_plan_stub` use (coordinator soundness follow-up)
+
+A silent-0 stub is only acceptable when the body **provably never** calls the
+op. Otherwise: real arm, or loud `outside_subset`. `arm_plan_stub` is renamed
+`arm_protocol_stub` and documented as "matches `dispatch`'s benign-0 PROTOCOL
+arm" — not a stand-in for real semantics.
+
+| unit::subset | op(s) | body calls? | decision |
+|---|---|---|---|
+| ppp::ppp_dispatch | `unplace_card\|unplace_at\|unplace_card_named` | **yes** (`returns.rs`) | **real** `arm_unplace` (pushes `Effect::UnplaceCard`) |
+| ppp::ppp_dispatch | `targeted_count` | no | `arm_protocol_stub` (dispatch is benign-0) |
+| ppp::ppp_dispatch | plan/settle/offer list (`set_steps`, `set_resolve`, `card_offer_build`, `can_build_on`, …) | **yes** (signpost/star_beat/bang_dream/…) | `arm_protocol_stub` — these ARE the dispatch PROTOCOL-0 arms (KANI.md §6). Not silent stand-ins. |
+| ppp::ppp_dispatch | `card_move` | **yes** | **real** `arm_card_move` (returns 1) |
+| r::ako_dark_dispatch | `play_from_hand` | **yes** (`ako_dark.rs`) | `arm_protocol_stub` (dispatch returns 0 = not-from-hand). **TODO(规则书)** if a proof needs the from-hand path (polarity-sensitive; 0 skips that leg). |
+| r::nfo_play_dispatch | `set_steps\|set_resolve` | **yes** (`nfo.rs`) | `arm_protocol_stub` (PROTOCOL-0) |
+| r::nfo_play_dispatch | `card_move` | **yes** | **real** `arm_card_move` |
+| r::nfo_play_dispatch | `card_replayable\|play_card` | **yes** (`nfo.rs` replay) | `arm_protocol_stub` (0 = not replayable / did not land) |
+| r::council_dispatch | `linger` | yes | `arm_protocol_stub` (PROTOCOL-0) |
+| skills_*::\* | `state_add` | **yes** (rinko_1cm/lisa_goddess/…) | **real** `arm_inc_slot` (same keyed-add as dispatch) |
+| skills_ag::skills_ag_dispatch | `trig_target` | **yes** (`trigger::target`) | **real** `arm_trig_target` |
+| skills_ag::skills_ag_dispatch | `place_mark` | **yes** (tae_police/hagumi) | **real** `arm_place_mark` |
+| skills_pp/hhw/ppp | `card_move` | yes | **real** `arm_card_move` |
+| skills_pp/hhw/ppp | `card_offer_build\|can_build_on\|offer_*\|buy\|acquire` | rimi_resolve offers | `arm_protocol_stub` (PROTOCOL-0 / 0=did-not-land) |
+| hhw::\* | plan setters (`set_kind`, `set_steps`, dice, …) | yes (balloon/hagumi) | `arm_protocol_stub` (PROTOCOL-0) |
+
+**Removed from subsets** (not listed → `outside_subset` loud FAIL if reached):
+none in this pass beyond the above reclassifications. Prefer listing an op
+over stubbing it when unsure.
+
+**Class C found and fixed in this audit:** `state_get`/`state_set` were
+`arm_plan_stub` (silent 0) while `ran_red::tick` writes `REST_TURNS` via
+`state::set` — the rest counter never moved and the iff failed for the wrong
+reason. Replaced with real `arm_state_get` / `arm_state_set` (commits `944dcf5`,
+`bc2e730`).

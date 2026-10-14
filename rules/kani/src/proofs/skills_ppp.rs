@@ -67,10 +67,11 @@ crate::host_subset!(skills_ppp_dispatch {
     inc_slot => arm_inc_slot,
     state_get => arm_state_get,
     state_set => arm_state_set,
-    state_add => arm_plan_stub,
-    set_steps | set_resolve | schedule_turn_end | linger | card_move
+    state_add => arm_inc_slot,
+    set_steps | set_resolve | schedule_turn_end | linger
     | card_offer_build | can_build_on | card_build | card_buy | acquire
-    | offer_buy | offer_build | buy => arm_plan_stub,
+    | offer_buy | offer_build | buy | acquire => arm_protocol_stub,
+    card_move => arm_card_move,
 });
 
 /// Install sparse 2-seat world + subset (concrete owner seat).

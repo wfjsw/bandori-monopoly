@@ -57,7 +57,7 @@ crate::host_subset!(ppp_dispatch {
     self_tile => arm_self_tile,
     set_self_tile => arm_set_self_tile,
     set_self_immune => arm_set_self_immune,
-    unplace_card | unplace_at | unplace_card_named => arm_plan_stub,
+    unplace_card | unplace_at | unplace_card_named => arm_unplace,
     add_band_crystals => arm_add_band_crystals,
     band_crystals => arm_band_crystals,
     counter_self => arm_counter_self,
@@ -100,7 +100,7 @@ crate::host_subset!(ppp_dispatch {
     set_steps | set_reverse | set_stop_at | set_parity | set_resolve
     | set_kind | set_teleport_to | set_start | set_base_dice | set_rent_factor
     | schedule_turn_end | linger | card_offer_build | can_build_on
-    | card_move | set_roller | set_signed | set_settle_tile | set_pay_factor
+    | set_roller | set_signed | set_settle_tile | set_pay_factor
     | set_no_buy | set_no_build | set_build_anywhere | add_base_dice
     | add_extra_dice | set_min_roll | set_extra_steps | set_more_steps
     | set_tag | set_settle_as_agent | plan_add_follower | set_play_doubled
@@ -109,7 +109,8 @@ crate::host_subset!(ppp_dispatch {
     | move_stopped | move_stop_at | move_parity | move_resolve | move_steps
     | move_remaining | move_total | move_dir | fixed_roll | do_move_roll
     | turn_main_steps | turn_rolls | turn_snap | turn_start_pos
-    | targeted_count => arm_plan_stub,
+    | targeted_count => arm_protocol_stub,
+    card_move => arm_card_move,
 });
 
 /// Install the sparse 2-seat world + the ppp host subset **in place**.

@@ -3428,6 +3428,24 @@ pub fn arm_state_set(a: Args) -> i64 {
     })
 }
 
+/// `Op::unplace_card` / `unplace_at` / `unplace_card_named` — real:
+/// pushes `Effect::UnplaceCard` (not a silent 0).
+pub fn arm_unplace(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| {
+        w.push(Effect::UnplaceCard { uid: a0 });
+    });
+    0
+}
+
+/// Protocol-stub arm: the op's `dispatch` arm is a documented benign-0
+/// (move-plan / settle / offer — KANI.md §6 PROTOCOL-LEVEL). **Not** a
+/// silent stand-in for real semantics: if a proof needs the real behaviour
+/// this arm must be replaced (TRIAGE-LOG `bands-a` stub audit).
+pub fn arm_protocol_stub(_a: Args) -> i64 {
+    0
+}
+
 /// Move-plan / settle / offer protocol stubs (PROTOCOL-LEVEL; return 0).
 /// Same benign-0 list as `dispatch`'s plan/settle and offers arms.
 pub fn arm_plan_stub(_a: Args) -> i64 {
