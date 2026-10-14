@@ -221,7 +221,7 @@ enum Routine {
 /// [`crate::record::Input::AnimDone`] so replays reproduce the same pauses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ClockHold {
-    /// Seat that must ack (the acting human).
+    /// Room member id of the seat that must ack (the acting human).
     member: i32,
     /// State version the ack must name. A lower `seq` is stale and ignored.
     seq: i32,
@@ -1468,7 +1468,8 @@ impl Match {
             return;
         }
         self.clock_hold = Some(ClockHold {
-            member: actor as i32,
+            // The room member id (what the ack route sends), not the seat index.
+            member: p.member,
             seq: self.seq,
             elapsed: 0.0,
         });
