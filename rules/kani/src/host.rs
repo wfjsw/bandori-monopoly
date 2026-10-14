@@ -2395,11 +2395,17 @@ pub fn arm_others_at(a: Args) -> i64 {
             }) as i64
 }
 
-/// `Op::target`.
+/// `Op::target` — player targeting (`target(player, -1, …)`) or tile
+/// targeting (`target(-1, tile, …)` used by `ctx::target_tile`).
 pub fn arm_target(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
-    let _ = (a0, a1, a2, a3, a4, a5);
+    let _ = (a2, a3, a4, a5);
 
+    // Tile targeting: `target(-1, tile, 0)` succeeds when the tile is on-board.
+    if a0 < 0 {
+        let t = a1;
+        return if t >= 0 && t < 60 { 0 } else { -1 };
+    }
     let p = a0;
     world::with_world_mut(|w| {
         if p >= 0 && (p as usize) < MAX_PLAYERS && (p as usize) < w.n_players as usize && !w.out[p as usize] {
@@ -3066,6 +3072,254 @@ pub fn arm_inc_slot(a: Args) -> i64 {
         w.sync_views_player(a0);
         v as i64
     })
+}
+
+/// `Op::opt_*` — register one prompt option (count only; the pick is
+/// [`arm_ask`]). Same as `dispatch`'s opt arms.
+pub fn arm_opt(a: Args) -> i64 {
+    let _ = a;
+    world::with_world_mut(|w| w.opt_n += 1);
+    0
+}
+
+/// `Op::hand_size` — hand bits + resonance + pile count.
+pub fn arm_hand_size(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        let p = player_idx(a0);
+        let mut n = w.hand_resonance[p];
+        let mut s = 0usize;
+        while s < 4 {
+            if s != 1 && w.hand[s] {
+                n += 1;
+            }
+            s += 1;
+        }
+        n + w.hand_n as i32
+    }) as i64
+}
+
+/// `Op::players_on_count` — living seats (other than `except`) standing on `tile`.
+pub fn arm_players_on_count(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world(|w| {
+        let tile = a0;
+        let except = a1;
+        let mut n = 0;
+        let mut p = 0;
+        while p < MAX_PLAYERS {
+            if (p as i32) != except && !w.out[p] && w.pos[p] == tile {
+                n += 1;
+            }
+            p += 1;
+        }
+        n
+    }) as i64
+}
+
+/// `Op::players_on_at` — the `idx`-th such seat (or -1).
+pub fn arm_players_on_at(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    world::with_world(|w| {
+        let tile = a0;
+        let except = a1;
+        let idx = a2;
+        let mut n = 0;
+        let mut p = 0;
+        let mut found = -1;
+        while p < MAX_PLAYERS {
+            if (p as i32) != except && !w.out[p] && w.pos[p] == tile {
+                if n == idx {
+                    found = p as i32;
+                }
+                n += 1;
+            }
+            p += 1;
+        }
+        found
+    }) as i64
+}
+
+/// `Op::tile_in` — class membership (`buyable` / `shop` / `livehouse` / `color:*`).
+/// Same quirks as `dispatch` so proofs stay put.
+pub fn arm_tile_in(a: Args) -> i64 {
+    let [a0, a1, a2, a3, ..] = a;
+    let _ = a0;
+    let class = name_id(a2, a3);
+    if intern::id_eq_str(class, "buyable") {
+        let s = board::tile_slot(a1);
+        if s < 0 {
+            0
+        } else {
+            let t = &board::TILES[s as usize];
+            let owned = world::with_world(|w| w.tiles[tile_idx(a1)].owner);
+            (board::is_property(t) && owned < 0) as i64
+        }
+    } else if intern::id_eq_str(class, "shop") {
+        let s = board::tile_slot(a1);
+        if s < 0 {
+            0
+        } else {
+            board::is_shop(&board::TILES[s as usize]) as i64
+        }
+    } else if intern::id_eq_str(class, "livehouse") {
+        (a1 == 31 || a1 == 50) as i64
+    } else if intern::id_eq_str(class, "color:6") {
+        (a1 == 31 || a1 == 50) as i64
+    } else {
+        0
+    }
+}
+
+/// `Op::self_uid` — the running instance's uid.
+pub fn arm_self_uid(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.last_uid) as i64
+}
+
+/// `Op::place_mark` — record one mark on tile `a0` (designation etc.).
+pub fn arm_place_mark(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| {
+        let i = w.marks_n as usize;
+        if i < world::MAX_MARKS {
+            w.marks[i] = world::Mark {
+                tile: a0,
+                key: NameId::INVALID,
+                src_card: u16::MAX,
+                instance: 0,
+                n: 1,
+            };
+            w.marks_n += 1;
+        }
+        w.push(Effect::PlaceMark {
+            tile: a0,
+            key: NameId::INVALID,
+        });
+    });
+    0
+}
+
+/// `Op::count_marks_f` — total mark units on tile `a0`.
+pub fn arm_count_marks_f(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| {
+        let mut n = 0;
+        let mut i = 0;
+        while i < w.marks_n as usize {
+            if w.marks[i].tile == a0 {
+                n += w.marks[i].n;
+            }
+            i += 1;
+        }
+        n
+    }) as i64
+}
+
+/// `Op::trig_value` — the trigger amount (`pay_amount` under Kani).
+pub fn arm_trig_value(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.pay_amount) as i64
+}
+
+/// `Op::trig_target` — the trigger's target seat.
+pub fn arm_trig_target(a: Args) -> i64 {
+    let _ = a;
+    world::with_world(|w| w.trig_target) as i64
+}
+
+/// `Op::trig_set_pay_amount` — rewrite the pay amount (counteraction).
+pub fn arm_trig_set_pay_amount(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world_mut(|w| {
+        w.pay_amount = a0;
+        w.push(Effect::SetPayAmount { to: a0 });
+    });
+    0
+}
+
+/// `Op::give_stun` — [眩晕] layers (distinct from [停留]).
+pub fn arm_give_stun(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        if (a0 as usize) < MAX_PLAYERS {
+            w.stun[a0 as usize] = (w.stun[a0 as usize] + a1).max(0);
+        }
+        w.push(Effect::GiveStun {
+            player: a0,
+            n: a1,
+        });
+    });
+    0
+}
+
+/// `Op::give_stay` — [停留] layers.
+pub fn arm_give_stay(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    world::with_world_mut(|w| {
+        if (a0 as usize) < MAX_PLAYERS {
+            w.stay[a0 as usize] = w.stay[a0 as usize].saturating_add(a1);
+        }
+        w.push(Effect::GiveStay {
+            player: a0,
+            n: a1,
+        });
+    });
+    0
+}
+
+/// `Op::stun_of` — [眩晕] layers on the seat.
+pub fn arm_stun_of(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.stun[player_idx(a0)]) as i64
+}
+
+/// `Op::stay_of` — [停留] layers on the seat.
+pub fn arm_stay_of(a: Args) -> i64 {
+    let [a0, ..] = a;
+    world::with_world(|w| w.stay[player_idx(a0)]) as i64
+}
+
+/// `Op::tile_is` — kind predicate (`ring` / `circle` / `agent` / …).
+pub fn arm_tile_is(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let s = board::tile_slot(a0);
+    if s < 0 {
+        0
+    } else {
+        let kind = name_id(a1, a2);
+        let t = &board::TILES[s as usize];
+        let hit = [
+            ("circle", board::is_circle(t)),
+            ("ring", board::is_ring(t)),
+            ("agent", board::is_agent(t)),
+            ("property", board::is_property(t)),
+            ("cafe", t.kind == 4),
+            ("edogawa", t.kind == 5),
+            ("ryuseido", t.kind == 6),
+        ]
+        .iter()
+        .any(|(k, hit)| *hit && intern::id_eq_str(kind, k));
+        hit as i64
+    }
+}
+
+/// `Op::build_cost` — house build price on the tile.
+pub fn arm_build_cost(a: Args) -> i64 {
+    let [a0, ..] = a;
+    let s = board::tile_slot(a0);
+    if s < 0 {
+        0
+    } else {
+        board::TILES[s as usize].house_cost as i64
+    }
+}
+
+/// `Op::tile_steps_ahead` — the tile `steps` forward of the seat's pos.
+pub fn arm_tile_steps_ahead(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    let pos = world::with_world(|w| w.pos[player_idx(a0)]);
+    ((pos + a1).rem_euclid(60)) as i64
 }
 
 /// `Op::fire` — seat's fire pots.
