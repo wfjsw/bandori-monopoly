@@ -8,6 +8,7 @@
 //! same field names, and `#[serde(default)]` so missing fields take the typed
 //! default.
 
+pub mod clock;
 pub mod data;
 pub mod deck;
 pub mod deck_book;

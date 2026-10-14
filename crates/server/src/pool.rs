@@ -300,9 +300,10 @@ impl Pool {
         seed256: [u8; 32],
         mode: i32,
         weights: &ScoreWeights,
+        clock: game_core::clock::ClockSettings,
     ) -> Result<String, String> {
         let hex: String = seed256.iter().map(|b| format!("{b:02x}")).collect();
-        let v = self.call(json!({"op": "new", "members": members, "seed256": hex, "mode": mode, "weights": weights}))?;
+        let v = self.call(json!({"op": "new", "members": members, "seed256": hex, "mode": mode, "weights": weights, "clock": clock}))?;
         v.get("state")
             .and_then(Value::as_str)
             .map(str::to_string)

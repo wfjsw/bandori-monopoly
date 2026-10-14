@@ -166,7 +166,7 @@ Checked: `card_sdk::abi::ABI_VERSION = 39`,
 |---|---|---|
 | **ABI → 37** | the migration | `ctx::event_expire` / `event_is_active` / `event_deck_push` / `event_banish`, and the `event:*` rule-id convention |
 | **ABI → 39** | the discrepancy pass | `plan::set_roller` (幻觉来了's roll substitution) and `prop::NO_BUILD_ABOVE` (卡池BUG's build gate) |
-| **ABI → 64** | turn clock | modifier hooks `TurnBonusTime` / `TurnBaseTime` (value = seconds, rewritten with `trigger::set_pay_amount`), then `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET` override (元祖！邦多利酱: 免费时间 5 s, 恢复时间 0 s uses the props) |
+| **ABI → 64** | turn clock | modifier hooks `TurnBonusTime` / `TurnBaseTime` (value = seconds, rewritten with `trigger::set_pay_amount`). `TurnBonusTime` is the 免费时间 **refill** (default 10); `TurnBaseTime` is the 恢复时间 **refill** (default = the match setting `baseRefill`). Then `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET` override with a hard **set** at turn start (元祖！邦多利酱: 免费时间 5 s, 恢复时间 0 s uses the props). |
 | **SAVE_VERSION** | unchanged | `MatchState::event_active` and `World::board_field` were already in the v3 save. A v2 save is still rejected; a v3 save with an empty active list still loads (it simply has no event in play). |
 
 ## Conventions

@@ -251,6 +251,12 @@ fn bankrupt_land_is_freed_and_auctioned() {
     let p = p.expect("auction prompt");
     assert_eq!((p.kind.as_str(), p.tile), ("auction", mine as i32));
     assert_eq!(p.players, vec![1, 2], "remaining players bid");
+    // Bankruptcy leftover auction runs on its own dedicated timer and never
+    // draws on a seat pool (`Ask::use_pool` -- see `auction_tile`).
+    assert_eq!(
+        p.time_left, w.clock.bankrupt_auction_time,
+        "its window is ClockSettings::bankrupt_auction_time"
+    );
 
     let won = Answered {
         answers: vec![1, -1],

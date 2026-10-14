@@ -40,15 +40,19 @@ pub fn server_time_ms() -> f64 {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClockWire {
-    /// When the acting seat's base time runs out.
+    /// When the acting seat's **base** pool runs out (the end of the whole
+    /// clock). Bonus drains first, so this is the later of the two.
     pub base_deadline_ms: f64,
-    /// When base + bonus runs out. Equal to `base_deadline_ms` when the bonus
-    /// pool is empty.
+    /// When the acting seat's **bonus** pool runs out. Equal to
+    /// `base_deadline_ms` when the bonus pool is empty.
     pub bonus_deadline_ms: f64,
 }
 
 /// Build the clock payload for one published view, from the engine's remaining
 /// base/bonus seconds. Pure so the deadline math is unit-testable.
+///
+/// Drain order is **bonus first, then base** (`docs/SERVER.md` §Turn clock):
+/// `bonus_deadline_ms = now + bonus`, `base_deadline_ms = now + bonus + base`.
 pub fn clock_for_state(st: &MatchState, now_ms: f64) -> Option<ClockWire> {
     // Solo never expires a clock; machine seats are driven by the host.
     if st.mode == game_core::MatchMode::Solo as i32 {
@@ -71,8 +75,8 @@ pub fn clock_for_state(st: &MatchState, now_ms: f64) -> Option<ClockWire> {
     let base = st.base_time.max(0.0) as f64 * 1000.0;
     let bonus = st.bonus_time.max(0.0) as f64 * 1000.0;
     Some(ClockWire {
-        base_deadline_ms: now_ms + base,
-        bonus_deadline_ms: now_ms + base + bonus,
+        base_deadline_ms: now_ms + bonus + base,
+        bonus_deadline_ms: now_ms + bonus,
     })
 }
 
@@ -114,18 +118,23 @@ mod tests {
 
     #[test]
     fn deadlines_are_absolute_on_the_server_clock() {
+        // Bonus drains first: bonus expires at now+bonus, base (total) at
+        // now+bonus+base.
         let st = play_state();
         let c = clock_for_state(&st, 1_000.0).expect("clock");
-        assert_eq!(c.base_deadline_ms, 1_000.0 + 15_000.0);
-        assert_eq!(c.bonus_deadline_ms, 1_000.0 + 25_000.0);
+        assert_eq!(c.bonus_deadline_ms, 1_000.0 + 10_000.0);
+        assert_eq!(c.base_deadline_ms, 1_000.0 + 25_000.0);
     }
 
     #[test]
-    fn zero_bonus_collapses_onto_the_base_deadline() {
+    fn zero_bonus_leaves_only_the_base_phase() {
+        // Bonus drains first: an empty bonus pool puts `bonus_deadline_ms` at
+        // "now" (already spent), and the base deadline is the end of the clock.
         let mut st = play_state();
         st.bonus_time = 0.0;
         let c = clock_for_state(&st, 500.0).expect("clock");
-        assert_eq!(c.base_deadline_ms, c.bonus_deadline_ms);
+        assert_eq!(c.bonus_deadline_ms, 500.0);
+        assert_eq!(c.base_deadline_ms, 500.0 + 15_000.0);
     }
 
     #[test]

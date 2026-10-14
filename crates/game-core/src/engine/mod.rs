@@ -194,10 +194,12 @@ const MAX_WAIT: f32 = 6.0;
 const CHOICE_WAIT: f32 = 1.2;
 /// Seconds before the first phase starts (`_wait` in the constructor).
 const ORDER_WAIT: f32 = 4.0;
-/// Turn clock: base time per turn, bonus-time refill per turn, bonus cap (`StartTimer`).
-const BASE_TIME: f32 = 15.0;
+/// Turn-clock defaults. `BASE_TIME` is gone as a reset-to value: the per-turn
+/// base refill is [`crate::clock::ClockSettings::base_refill`] (the
+/// `turnBaseTime` hook's default), and the bonus cap is
+/// [`crate::clock::ClockSettings::bonus_max`]. [`BONUS_REFILL`] stays the
+/// `turnBonusTime` hook default -- it is a hook seed, not a pool knob.
 const BONUS_REFILL: f32 = 10.0;
-const BONUS_MAX: f32 = 30.0;
 /// Hard cap on how long the acting seat's clock may stay held waiting for
 /// that seat's `anim_done` ack, in seconds. Fed by ticks (never wall time).
 const ANIM_HOLD_CAP: f32 = 10.0;
@@ -242,11 +244,22 @@ struct Live {
     time_left: f32,
     bid: i32,
     bidder: i32,
+    /// Whether this prompt draws on the answering seats' time pools (ordinary
+    /// prompts) or runs on its own fixed window (bankruptcy leftover auction).
+    /// Mirrors [`Ask::use_pool`]; the copy is what `tick_live` reads so a
+    /// future `Ask` mutation cannot silently change an in-flight prompt.
+    #[serde(default = "default_use_pool")]
+    use_pool: bool,
+}
+
+fn default_use_pool() -> bool {
+    true
 }
 
 impl Live {
     fn new(ask: Ask) -> Self {
         let n = ask.view.players.len();
+        let use_pool = ask.use_pool;
         Self {
             answers: vec![-1; n],
             picked: vec![],
@@ -255,6 +268,7 @@ impl Live {
             bid: 0,
             bidder: -1,
             ask,
+            use_pool,
         }
     }
 
@@ -298,7 +312,18 @@ struct Saved {
     live_rng: Rng,
     wait: f32,
     bonus_time: Vec<f32>,
-    base_time: f32,
+    base_time: Vec<f32>,
+    /// Match clock / timer settings (see [`crate::clock`]). Constant for the
+    /// life of the match; restored alongside the pools so a refresh keeps the
+    /// same refill caps and setup windows.
+    #[serde(default)]
+    clock: crate::clock::ClockSettings,
+    /// `true` when this match was built from a `MatchSetup` with `clock: None`
+    /// (a pre-settings record). Legacy clock semantics: base-first drain,
+    /// base reset-to-hook-value at turn start, prompts never touch a pool.
+    /// New matches always write `false`.
+    #[serde(default)]
+    legacy_clock: bool,
     timed_out: bool,
     vote: MatchVote,
     vote_seq: i32,
@@ -324,7 +349,11 @@ struct Saved {
 /// lose those tables and the next roll diverged.
 /// v8: turn clock renamed (`base_time` / `bonus_time`) and `clock_hold`
 /// (anim-ack pause) is part of the saved shape. Older saves are refused.
-pub const SAVE_VERSION: u32 = 8;
+/// v9: `base_time` is **per seat** (`Vec<f32>`), and the match carries its
+/// [`crate::clock::ClockSettings`] plus a `legacy_clock` flag (see
+/// [`crate::record::MatchSetup::clock`]). Older saves are refused -- the
+/// archived engine bundle is what replays them (`docs/REPLAY.md`).
+pub const SAVE_VERSION: u32 = 9;
 
 /// A running match.
 pub struct Match {
@@ -335,8 +364,10 @@ pub struct Match {
     pending: Option<Pending>,
     live_rng: Rng,
     wait: f32,
+    /// Per-seat 免费时间 pool (drains first).
     bonus_time: Vec<f32>,
-    base_time: f32,
+    /// Per-seat 恢复时间 pool (drains second).
+    base_time: Vec<f32>,
     timed_out: bool,
     vote: MatchVote,
     vote_seq: i32,
@@ -372,7 +403,9 @@ impl Match {
             live_rng: self.live_rng.clone(),
             wait: self.wait,
             bonus_time: self.bonus_time.clone(),
-            base_time: self.base_time,
+            base_time: self.base_time.clone(),
+            clock: self.world.clock,
+            legacy_clock: self.world.legacy_clock,
             timed_out: self.timed_out,
             vote: self.vote.clone(),
             vote_seq: self.vote_seq,
@@ -416,7 +449,11 @@ impl Match {
         // mark / token row is already stamped with its owning `instance` at
         // creation time. No re-attach runs here: rewriting live v6 state
         // would break save → restore identity (fuzz_save_restore).
-        let world = s.world;
+        let mut world = s.world;
+        // v9: clock settings live on the World (so `Cx` sees them mid-routine)
+        // and are mirrored at the Saved top level for the bot mirror / docs.
+        world.clock = s.clock;
+        world.legacy_clock = s.legacy_clock;
         Ok(Self {
             data,
             rules,
@@ -446,7 +483,9 @@ impl Match {
     /// **Legacy** seeding: xoshiro256\*\* keyed by a `u64`. This is the stream
     /// every record written before the commit-reveal switch runs on, and the
     /// only way to rebuild one byte-identically. New matches go through
-    /// [`Match::new_seeded`] (`docs/FAIRNESS.md`).
+    /// [`Match::new_seeded`] (`docs/FAIRNESS.md`). Runs on
+    /// [`ClockSettings::default`] with **new** clock semantics; a pre-settings
+    /// record rebuilds through [`Match::new_with_clock`] with `legacy = true`.
     pub fn new(
         data: Arc<GameData>,
         rules: Arc<dyn CardRules>,
@@ -454,6 +493,32 @@ impl Match {
         seed: u64,
         mode: MatchMode,
         weights: ScoreWeights,
+    ) -> Self {
+        Self::new_with_clock(
+            data,
+            rules,
+            members,
+            seed,
+            mode,
+            weights,
+            crate::clock::ClockSettings::default(),
+            false,
+        )
+    }
+
+    /// [`Match::new`] with explicit clock settings and the legacy-semantics
+    /// flag. `legacy = true` is only for restoring a pre-settings record
+    /// (`MatchSetup { clock: None }`): base-first drain, base reset-to-hook
+    /// value at turn start, prompts never draw on a pool.
+    pub fn new_with_clock(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        members: &[RoomMember],
+        seed: u64,
+        mode: MatchMode,
+        weights: ScoreWeights,
+        clock: crate::clock::ClockSettings,
+        legacy: bool,
     ) -> Self {
         Self::build(
             data,
@@ -464,12 +529,15 @@ impl Match {
             weights,
             Rng::new(seed),
             Rng::new(seed ^ 0x5EED_1A7E),
+            clock,
+            legacy,
         )
     }
 
     /// The constructor every **new** match uses: ChaCha12 keyed by the
     /// 256-bit derived seed of the commit-reveal scheme (`docs/FAIRNESS.md`),
     /// with the live-cosmetics stream keyed by [`crate::fair::live_seed`].
+    /// Runs on [`ClockSettings::default`] with **new** clock semantics.
     pub fn new_seeded(
         data: Arc<GameData>,
         rules: Arc<dyn CardRules>,
@@ -477,6 +545,30 @@ impl Match {
         seed: crate::rng::Seed256,
         mode: MatchMode,
         weights: ScoreWeights,
+    ) -> Self {
+        Self::new_seeded_with_clock(
+            data,
+            rules,
+            members,
+            seed,
+            mode,
+            weights,
+            crate::clock::ClockSettings::default(),
+            false,
+        )
+    }
+
+    /// [`Match::new_seeded`] with explicit clock settings and the
+    /// legacy-semantics flag. See [`Match::new_with_clock`].
+    pub fn new_seeded_with_clock(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        members: &[RoomMember],
+        seed: crate::rng::Seed256,
+        mode: MatchMode,
+        weights: ScoreWeights,
+        clock: crate::clock::ClockSettings,
+        legacy: bool,
     ) -> Self {
         let key = seed.0;
         // Not seed bits: a match id travels in every public view, so it is
@@ -492,6 +584,8 @@ impl Match {
             weights,
             Rng::from_seed256(key),
             Rng::from_seed256(live),
+            clock,
+            legacy,
         )
     }
 
@@ -508,6 +602,8 @@ impl Match {
         weights: ScoreWeights,
         world_rng: Rng,
         live_rng: Rng,
+        clock: crate::clock::ClockSettings,
+        legacy_clock: bool,
     ) -> Self {
         let members = &members[..members.len().min(10)];
         let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
@@ -565,16 +661,30 @@ impl Match {
             ..MatchState::default()
         };
         let n = st.players.len();
+        let mut world = World::new(st, n, world_rng);
+        world.clock = clock;
+        world.legacy_clock = legacy_clock;
         let mut m = Self {
-            world: World::new(st, n, world_rng),
+            world,
             live_rng,
             data,
             rules,
             mode,
             pending: None,
             wait: ORDER_WAIT,
-            bonus_time: vec![0.0; n],
-            base_time: 0.0,
+            // Pools start at the match settings, not at zero waiting for the
+            // first `StartTimer` to fill them (v9). Legacy matches keep the
+            // old empty-start: their first turn *sets* base to the hook value.
+            bonus_time: if legacy_clock {
+                vec![0.0; n]
+            } else {
+                vec![clock.bonus_time; n]
+            },
+            base_time: if legacy_clock {
+                vec![0.0; n]
+            } else {
+                vec![clock.base_time; n]
+            },
             timed_out: false,
             vote: MatchVote::default(),
             vote_seq: 0,
@@ -632,11 +742,12 @@ impl Match {
             // Solo has no answer deadline (see `tick_live`), so don't show a
             // spent bar: report the ask's own allotment instead of the ticking
             // bot-schedule counter underneath it.
-            st.prompt.time_left = if self.mode == MatchMode::Solo {
-                l.ask.view.time_left.max(l.time_left).max(0.0)
-            } else {
-                l.time_left.max(0.0)
-            };
+            //
+            // Table-wide: the tightest pending **human** pool when the prompt
+            // draws on pools (each client re-personalises via
+            // [`Match::personalize_prompt_time`]); otherwise the soft window
+            // `l.time_left` (bots-only, dedicated timers, Solo).
+            st.prompt.time_left = self.prompt_time_left(l);
             if l.kind() == "auction" {
                 st.prompt.bid = l.bid;
                 st.prompt.bidder = l.bidder;
@@ -725,10 +836,11 @@ impl Match {
                         .is_none()
                     && self.world.purchase_funds(&self.data, ti, Some(t)) >= st.build_cost.max(0);
             }
-            let bonus = self.bonus_time.get(st.turn as usize).copied().unwrap_or(0.0);
-            st.base_time = self.base_time;
+            let bonus = self.bonus_time.get(ti).copied().unwrap_or(0.0);
+            let base = self.base_time.get(ti).copied().unwrap_or(0.0);
+            st.base_time = base;
             st.bonus_time = bonus;
-            st.time_left = self.base_time + bonus;
+            st.time_left = base + bonus;
             st.clock_paused = self.clock_hold.is_some();
             // `why_not_act`'s roll / end branches, from the **live** fields the
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
@@ -762,6 +874,149 @@ impl Match {
         // only -- never part of `Match::save`.
         st.tile_texts = tile_text::compose(&self.world, &self.data, self.rules.as_ref());
         st
+    }
+
+    /// Seat `i`'s pool remaining (bonus + base), clamped at 0 for display.
+    fn pool_left(&self, i: usize) -> f32 {
+        self.pool_total(i).max(0.0)
+    }
+
+    /// Seat `i`'s raw pool total, which may be slightly negative during the
+    /// prompt grace window (see [`REMOTE_GRACE`]).
+    fn pool_total(&self, i: usize) -> f32 {
+        let b = self.bonus_time.get(i).copied().unwrap_or(0.0);
+        let base = self.base_time.get(i).copied().unwrap_or(0.0);
+        b + base
+    }
+
+    /// Drain seat `i`'s pool by `dt`: **bonus first, then base**. Does not
+    /// clamp at zero -- the prompt path relies on a small negative total as
+    /// the [`REMOTE_GRACE`] window before forcing a default answer.
+    fn drain_pool(&mut self, i: usize, dt: f32) {
+        if i >= self.bonus_time.len() || i >= self.base_time.len() {
+            return;
+        }
+        if self.bonus_time[i] > 0.0 {
+            self.bonus_time[i] -= dt;
+            if self.bonus_time[i] < 0.0 {
+                // Spill the overshoot into base so the total moves by exactly dt.
+                self.base_time[i] += self.bonus_time[i];
+                self.bonus_time[i] = 0.0;
+            }
+        } else {
+            self.base_time[i] -= dt;
+        }
+    }
+
+    /// True while the anim-ack hold is waiting on this seat's client -- their
+    /// clock (and prompt pool) must not consume presentation time.
+    fn clock_hold_covers(&self, seat: usize) -> bool {
+        let Some(hold) = &self.clock_hold else {
+            return false;
+        };
+        self.world
+            .st
+            .players
+            .get(seat)
+            .is_some_and(|p| p.member == hold.member)
+    }
+
+    /// AUCTION_EXTEND is a **grant**, not a borrow: a bid tops every
+    /// still-pending human seat's total remaining up to at least
+    /// [`AUCTION_EXTEND`] by adding the shortfall to that seat's `base_time`
+    /// (may exceed the refill cap -- the point is to keep the table moving,
+    /// not to respect a per-turn budget). `Live::place_bid` separately raises
+    /// the soft window `l.time_left` so bots reschedule.
+    fn grant_auction_extend(&mut self) {
+        if !self
+            .pending
+            .as_ref()
+            .is_some_and(|p| self.prompt_uses_pool(&p.live))
+        {
+            return;
+        }
+        let mut grants: Vec<(usize, f32)> = Vec::new();
+        if let Some(p) = &self.pending {
+            for (k, &s) in p.live.ask.view.players.iter().enumerate() {
+                if p.live.answers[k] >= 0 {
+                    continue;
+                }
+                let seat = s as usize;
+                if self.auto_player(seat) {
+                    continue;
+                }
+                let total = self.pool_total(seat);
+                if total < AUCTION_EXTEND {
+                    grants.push((seat, AUCTION_EXTEND - total));
+                }
+            }
+        }
+        for (seat, add) in grants {
+            if seat < self.base_time.len() {
+                self.base_time[seat] += add;
+            }
+        }
+    }
+
+    /// True when this prompt draws on the answering seats' pools (new clock
+    /// semantics, ordinary prompts). Bankruptcy leftover auctions and every
+    /// pre-settings (`legacy_clock`) prompt run on a fixed window instead.
+    fn prompt_uses_pool(&self, l: &Live) -> bool {
+        !self.world.legacy_clock && l.use_pool
+    }
+
+    /// The table-wide prompt countdown published on [`MatchState::prompt`]:
+    /// the **tightest** pending human pool when the prompt draws on pools,
+    /// otherwise the soft window `l.time_left` (bots-only prompts, dedicated
+    /// timers, Solo). Each client re-personalises via
+    /// [`Match::personalize_prompt_time`].
+    fn prompt_time_left(&self, l: &Live) -> f32 {
+        if self.mode == MatchMode::Solo {
+            // Solo has no answer deadline (see `tick_live`), so don't show a
+            // spent bar: report the ask's own allotment instead of the ticking
+            // bot-schedule counter underneath it.
+            return l.ask.view.time_left.max(l.time_left).max(0.0);
+        }
+        if self.prompt_uses_pool(l) {
+            let mut tightest: Option<f32> = None;
+            for (k, &s) in l.ask.view.players.iter().enumerate() {
+                if l.answers[k] >= 0 {
+                    continue;
+                }
+                let seat = s as usize;
+                if self.auto_player(seat) {
+                    continue;
+                }
+                let left = self.pool_left(seat);
+                tightest = Some(match tightest {
+                    None => left,
+                    Some(t) => t.min(left),
+                });
+            }
+            if let Some(t) = tightest {
+                return t;
+            }
+        }
+        l.time_left.max(0.0)
+    }
+
+    /// Personalise a [`MatchState`] built by [`Match::state`] for one viewer:
+    /// when that member is a pending human on a pool-consuming prompt, their
+    /// own pool remaining replaces the table-wide tightest. Rules-worker's
+    /// `view` op calls this so each client sees its own countdown. No-op on
+    /// dedicated timers / legacy prompts / non-pending seats.
+    pub fn personalize_prompt_time(&self, st: &mut MatchState, member: i32) {
+        let Some(p) = &self.pending else { return };
+        let l = &p.live;
+        if !self.prompt_uses_pool(l) {
+            return;
+        }
+        let Some(seat) = self.player_index(member) else { return };
+        let Some(k) = l.ask.view.player_index(seat as i32) else { return };
+        if l.answers[k] >= 0 || self.auto_player(seat) {
+            return;
+        }
+        st.prompt.time_left = self.pool_left(seat);
     }
 
     /// True once after every change; the server broadcasts on it.
@@ -1127,6 +1382,7 @@ impl Match {
                     ai: vec![cx::AI_UNSET],
                     ai_picked: vec![Vec::new()],
                     worth: vec![0],
+                    use_pool: true,
                 };
                 let answer = cx.ai_answer_for_entry(&ask, i);
                 Some(RawAiAnswer {
@@ -1159,7 +1415,7 @@ impl Match {
             live_rng: self.live_rng.clone(),
             wait: self.wait,
             bonus_time: self.bonus_time.clone(),
-            base_time: self.base_time,
+            base_time: self.base_time.clone(),
             timed_out: self.timed_out,
             vote: self.vote.clone(),
             vote_seq: self.vote_seq,
@@ -1273,7 +1529,7 @@ impl Match {
                 self.wait = delay.min(MAX_WAIT);
                 for s in signals {
                     match s {
-                        Signal::StartTimer(i, refill, base) => {
+                        Signal::StartTimer(i, refill, base_refill) => {
                             // `prop::{BASE,BONUS}_TIME_SET` on a board-owned
                             // instance (元祖！邦多利酱) replace the hooked defaults.
                             let set = |key: &str| {
@@ -1288,8 +1544,27 @@ impl Match {
                                     .reduce(f32::min)
                             };
                             self.bonus_time[i] = set(crate::state::prop::BONUS_TIME_SET)
-                                .unwrap_or_else(|| (self.bonus_time[i] + refill).min(BONUS_MAX));
-                            self.base_time = set(crate::state::prop::BASE_TIME_SET).unwrap_or(base);
+                                .unwrap_or_else(|| {
+                                    (self.bonus_time[i] + refill).min(self.world.clock.bonus_max())
+                                });
+                            if self.world.legacy_clock {
+                                // Pre-settings: 恢复时间 is *set* to the hooked
+                                // value, not refilled into. Matches every
+                                // recording written before `MatchSetup::clock`.
+                                self.base_time[i] =
+                                    set(crate::state::prop::BASE_TIME_SET).unwrap_or(base_refill);
+                            } else {
+                                // Refill + cap-lift: `settings.base_time.max(base_refill)`
+                                // lets a hook that grants a larger refill (e.g.
+                                // TEST:clockHook doubles 15 → 30) still show up as
+                                // base 30, while the default path caps back at the
+                                // configured initial pool.
+                                self.base_time[i] = set(crate::state::prop::BASE_TIME_SET)
+                                    .unwrap_or_else(|| {
+                                        (self.base_time[i] + base_refill)
+                                            .min(self.world.clock.base_time.max(base_refill))
+                                    });
+                            }
                         }
                         Signal::TurnBegan => self.timed_out = false,
                     }
@@ -1692,12 +1967,21 @@ impl Match {
                 if self.clock_hold.is_some() {
                     return;
                 }
-                if self.base_time > 0.0 {
-                    self.base_time = (self.base_time - dt).max(0.0);
-                } else {
+                // Drain order is **bonus first, then base** (`docs/SERVER.md`
+                // §Turn clock). Legacy matches keep the old base-first order so
+                // a pre-settings recording's countdowns stay identical.
+                if self.world.legacy_clock {
+                    if self.base_time[turn] > 0.0 {
+                        self.base_time[turn] = (self.base_time[turn] - dt).max(0.0);
+                    } else {
+                        self.bonus_time[turn] = (self.bonus_time[turn] - dt).max(0.0);
+                    }
+                } else if self.bonus_time[turn] > 0.0 {
                     self.bonus_time[turn] = (self.bonus_time[turn] - dt).max(0.0);
+                } else {
+                    self.base_time[turn] = (self.base_time[turn] - dt).max(0.0);
                 }
-                if self.base_time + self.bonus_time[turn] > 0.0 {
+                if self.base_time[turn] + self.bonus_time[turn] > 0.0 {
                     return;
                 }
                 self.timed_out = true;
@@ -1713,6 +1997,14 @@ impl Match {
 
     /// `TickAsk` / `TickAuction` -- bots answer after a short delay; time-outs
     /// fall back to the default answer.
+    ///
+    /// Under the post-settings clock an ordinary prompt (`use_pool`) draws on
+    /// each pending **human** seat's own pool (bonus then base). `Live::time_left`
+    /// stays the soft window bots schedule against and the all-bot fallback
+    /// deadline; a human is no longer force-completed just because that window
+    /// closed if their pool still has time. Bankruptcy leftover auctions
+    /// (`use_pool = false`) and every pre-settings (`legacy_clock`) prompt keep
+    /// the old fixed-window behaviour.
     // Indexing by prompt player walks several parallel vectors at once.
     #[allow(clippy::needless_range_loop)]
     fn tick_live(&mut self, dt: f32) {
@@ -1754,6 +2046,31 @@ impl Match {
             })
             .collect();
         let solo = self.mode == MatchMode::Solo;
+        let uses_pool = self
+            .pending
+            .as_ref()
+            .is_some_and(|p| self.prompt_uses_pool(&p.live));
+        // Prompt pool drain (post-settings ordinary prompts only). Each
+        // pending human seat spends its own pool; the anim-ack hold pauses
+        // consumption for the held seat so presentation never costs clock.
+        // Solo never forces *or drains* a local player's prompt -- nobody is
+        // waiting on them.
+        if uses_pool && !solo {
+            let pending: Vec<bool> = self
+                .pending
+                .as_ref()
+                .map(|p| (0..players.len()).map(|k| p.live.answers[k] < 0).collect())
+                .unwrap_or_default();
+            let held: Vec<bool> = players.iter().map(|&s| self.clock_hold_covers(s)).collect();
+            for k in 0..players.len() {
+                if pending[k] && !auto[k] && !held[k] {
+                    self.drain_pool(players[k], dt);
+                }
+            }
+        }
+        // Snapshot every prompted seat's pool total *before* the `live` borrow
+        // so the force-default pass below can read them without fighting it.
+        let pool: Vec<f32> = players.iter().map(|&s| self.pool_total(s)).collect();
         let rng = &mut self.live_rng;
         let p = self.pending.as_mut().expect("checked above");
         let l = &mut p.live;
@@ -1765,6 +2082,29 @@ impl Match {
         // not the human count: an online room with one human still owes its
         // table an answer.
         let hold = solo && (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
+        let mut bid_grant = false;
+        // Force-default a pending human seat whose pool is exhausted past the
+        // grace window. Shared by the auction and ordinary-prompt branches.
+        let force_exhausted = |l: &mut Live| {
+            if !uses_pool || hold {
+                return;
+            }
+            for k in 0..players.len() {
+                if l.answers[k] >= 0 || auto[k] {
+                    continue;
+                }
+                if pool[k] <= -REMOTE_GRACE {
+                    if matches!(l.kind(), "pick" | "mortgage") {
+                        l.picked = l.ask.ai_picked[k].clone();
+                        l.answers[k] = 0;
+                    } else if l.kind() == "auction" {
+                        l.answers[k] = 1; // pass
+                    } else {
+                        l.answers[k] = l.ask.view.fallback;
+                    }
+                }
+            }
+        };
         let done = if l.kind() == "auction" {
             for k in 0..players.len() {
                 if l.answers[k] >= 0 || l.bidder == players[k] as i32 || !auto[k] {
@@ -1812,15 +2152,24 @@ impl Match {
                                 cap.min(min + step * rng.below(nudge) as i32)
                             };
                             l.place_bid(seat, bid);
+                            bid_grant = true;
                         }
                     }
                     _ => {}
                 }
             }
+            force_exhausted(l);
             let open = (0..players.len())
                 .filter(|&k| l.answers[k] < 0 && l.bidder != players[k] as i32)
                 .count();
-            open == 0 || (l.time_left <= 0.0 && !hold)
+            if uses_pool {
+                // Per-seat pool deadline (with grace); the soft window alone
+                // must not force a human who still has pool left.
+                let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
+                open == 0 || (!humans_pending && l.time_left <= 0.0 && !hold)
+            } else {
+                open == 0 || (l.time_left <= 0.0 && !hold)
+            }
         } else {
             let picks = matches!(l.kind(), "pick" | "mortgage");
             let fallback = l.ask.view.fallback;
@@ -1846,32 +2195,61 @@ impl Match {
                     _ => {}
                 }
             }
-            // Keep waiting while time is left, plus a short grace for remote humans.
-            let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
-            if l.answers.iter().all(|&a| a >= 0) {
-                true
-            } else if hold
-                || l.time_left > 0.0
-                || (l.time_left > -REMOTE_GRACE && !solo && humans_pending)
-            {
-                false
-            } else {
-                for k in 0..players.len() {
-                    if l.answers[k] < 0 {
-                        if picks {
-                            l.picked = l.ask.ai_picked[k].clone();
-                            l.answers[k] = 0;
-                        } else {
-                            l.answers[k] = fallback;
+            if uses_pool {
+                force_exhausted(l);
+                let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
+                if l.answers.iter().all(|&a| a >= 0) {
+                    true
+                } else if hold || humans_pending {
+                    // A human still has pool (or Solo is holding for them).
+                    false
+                } else if l.time_left > 0.0 {
+                    // Only bots left on the soft window's schedule.
+                    false
+                } else {
+                    for k in 0..players.len() {
+                        if l.answers[k] < 0 {
+                            if picks {
+                                l.picked = l.ask.ai_picked[k].clone();
+                                l.answers[k] = 0;
+                            } else {
+                                l.answers[k] = fallback;
+                            }
                         }
                     }
+                    true
                 }
-                true
+            } else {
+                // Keep waiting while time is left, plus a short grace for remote humans.
+                let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
+                if l.answers.iter().all(|&a| a >= 0) {
+                    true
+                } else if hold
+                    || l.time_left > 0.0
+                    || (l.time_left > -REMOTE_GRACE && !solo && humans_pending)
+                {
+                    false
+                } else {
+                    for k in 0..players.len() {
+                        if l.answers[k] < 0 {
+                            if picks {
+                                l.picked = l.ask.ai_picked[k].clone();
+                                l.answers[k] = 0;
+                            } else {
+                                l.answers[k] = fallback;
+                            }
+                        }
+                    }
+                    true
+                }
             }
         };
         if (l.answers.clone(), l.bid) != before {
             self.changed = true;
             self.seq += 1;
+        }
+        if bid_grant {
+            self.grant_auction_extend();
         }
         if done {
             self.complete_prompt();
@@ -2009,6 +2387,7 @@ impl Match {
             }
             out
         };
+        let mut bid_grant = false;
         match l.kind() {
             "auction" => {
                 if m.value < 0 {
@@ -2041,6 +2420,7 @@ impl Match {
                         return Err(Msg::new("err.poor"));
                     }
                     l.place_bid(i, m.value / 100 * 100);
+                    bid_grant = true;
                 }
             }
             "pick" => {
@@ -2087,15 +2467,17 @@ impl Match {
             }
         }
         let complete = l.kind() != "auction" && l.answers.iter().all(|&a| a >= 0);
+        let is_auction = l.kind() == "auction";
         self.changed = true;
         self.seq += 1;
+        if bid_grant {
+            // AUCTION_EXTEND is a grant to every still-pending human pool (see
+            // `grant_auction_extend`); `place_bid` already raised the soft window.
+            self.grant_auction_extend();
+        }
         if complete {
             self.complete_prompt();
-        } else if self
-            .pending
-            .as_ref()
-            .is_some_and(|p| p.live.kind() == "auction")
-        {
+        } else if is_auction {
             self.tick_live(0.0);
         }
         Ok(())

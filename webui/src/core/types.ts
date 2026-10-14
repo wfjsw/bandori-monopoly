@@ -271,6 +271,27 @@ export interface MatchView {
 
 export interface ScoreWeights { money: number; property: number; houses: number }
 /**
+ * Match clock / timer settings, host-editable before start (the ScoreWeights
+ * sibling). Defaults reproduce the pre-settings constants. Wire shape is
+ * camelCase nested under `RoomInfo.clock` / `CreateRoom.clock`.
+ */
+export interface ClockSettings {
+  /** Initial per-seat 恢复时间 pool, seconds (default 15). */
+  baseTime: number;
+  /** Initial per-seat 免费时间 pool, seconds (default 0). */
+  bonusTime: number;
+  /** Per-turn base refill, seconds (default 15). */
+  baseRefill: number;
+  /** Ranked ban decision window, seconds (default 20). */
+  banSeconds: number;
+  /** Pick decision window, seconds (default 25). */
+  pickSeconds: number;
+  /** Deck-build window, seconds (default 45). */
+  deckSeconds: number;
+  /** Bankruptcy leftover-auction window, seconds (default 10). */
+  bankruptAuctionTime: number;
+}
+/**
  * Bot decision policy: `standard` is the ported C# bot, `chaos` is legal but
  * maximally disruptive, `advanced` is the server-side search bot
  * (`docs/BOT.md` B5 -- online rooms only; solo stays standard / chaos until
@@ -288,6 +309,8 @@ export interface RoomMember {
 export interface RoomInfo {
   id: string; name: string; ranked: boolean; maxPlayers: number; locked: boolean;
   playing: boolean; theme: string; weights: ScoreWeights; members: RoomMember[];
+  /** Match clock / timer settings (host-editable before start). */
+  clock?: ClockSettings;
   /** Commit-reveal fairness (`docs/FAIRNESS.md`): the commitment is public
    *  from the moment the room is created (and a fresh one after every match);
    *  the openings never travel here. */

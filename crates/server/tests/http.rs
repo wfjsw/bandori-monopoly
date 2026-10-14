@@ -746,6 +746,7 @@ async fn a_restart_restores_the_room_and_its_match() {
             playing: true,
             theme: String::new(),
             weights: Default::default(),
+            clock: Default::default(),
             members: vec![member],
             fair: None,
         },

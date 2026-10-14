@@ -111,7 +111,10 @@ export function Board({ sess }: { sess: GameSession }) {
   // Turn timer: online frames carry absolute deadlines, so repaint exactly
   // when the displayed second flips (not on a 500ms grid). Fallback tick for
   // paths with no deadline (replay / older server / local countdowns).
-  const clockDeadline = view?.clock ? view.clock.bonusDeadlineMs : null;
+  // Bonus drains first; `baseDeadlineMs` is the end of the whole clock, so it
+  // is the one that keeps the second-boundary ticker running through both
+  // phases (bonus then base).
+  const clockDeadline = view?.clock ? view.clock.baseDeadlineMs : null;
   useSecondBoundary(clockDeadline);
   useTick(500);
   const auto = useAutoplay(sess); // 托管 -- one shared input-lock
