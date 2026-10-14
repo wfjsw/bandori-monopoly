@@ -386,3 +386,52 @@ class A–F, fix or why none.
 Phase markers used: `Starting Bounded Model Checking`, `Generated N VCC(s)`,
 `Running propositional reduction`, `N variables, M clauses`, `SAT checker`,
 `Runtime Solver`.
+
+## Batch 3e — events rows + preventive memcmp + BACKEND + kassert!
+
+### New events failures (live pass)
+
+| id | verdict | phase split | dominant cost | class | action |
+|---|---|---|---|---|---|
+| `events::ex_quest_01_rolls_and_files` | UNWINDING 937 s (unwind 16) | BMC → memcmp 45 (`Not unwinding at 16` ×3) + `ex_quest::play` 15 (`Not unwinding at 16`); then 15627 VCC / 1.16M vars / 2.0M clauses / SAT 15 s | array `==` memcmp + `for &p in &all_players()` Vec loop at 16 | **A** | `arr4_eq` (done); body loop still at 16 — re-timing |
+| `events::habinel_01_grants_exiles` | TIMEOUT 1800 s (unwind 24) | BMC → `habinel::play` 23 (`Not unwinding at 24`) + `spec::habinel_01_exiles_ok` 23 + harness loop 23; 23476 VCC / **7.8M vars / 30.8M clauses** / SAT 61 s | body + spec loops at 24 + `board::tile_named_bytes` 6 (60-name scan) — huge formula | **A/E** | no cheap fix (body `for` + tile scan); **remains TIMEOUT (FAIL)** |
+| `events::front_or_back_mutant_swapped_is_detected` | TIMEOUT 1800 s (unwind 32) | same as front_or_back_01/02: `play` Vec 31, `log_is_gains` 31, slice iters 31 | body `Vec` + effects iters | **A/E** | same as siblings — **remains TIMEOUT (FAIL)** |
+
+### Preventive memcmp cut (all units)
+
+`post.money == pre.money` is `[i32;4]::eq` → 16-byte `memcmp` at unwind 16.
+Helpers `world::arr4_eq` / `arr8b_eq` / `arr4b_eq` applied across **23 proof
+files + 7 spec files**. Cheap, no behaviour change.
+
+### kassert! — assert without Rust fmt
+
+`assert!(cond, "literal")` still pulls `panic_fmt` → `PadAdapter` →
+`memchr` (1193 unrolls on moca_02_mutant). `kassert!` = `kani::assert`
+under Kani (CBMC property, no fmt) / `assert!` natively. Replaced across
+all proofs.
+
+### BACKEND → direct extern "Rust"
+
+`card_sdk::kani_host::call` under `cfg(kani)` is now
+`extern "Rust" { fn rules_kani_host_dispatch(...) }` — a direct CALL into
+`rules_kani::host::dispatch`. No fn-ptr (was 874-target IF-chain at every
+`ctx::*` site). Native/tests keep `BACKEND`. Production card-sdk
+`cfg(not(kani))` unchanged (dist hashes: only `cfg(kani)` code moved).
+
+### BACKEND direct extern — **not supported by Kani** (reverted)
+
+`extern "Rust" { rules_kani_host_dispatch }` made `same_dream_01` finish
+in **244 s** (388k vars / 396k clauses, SSA 1.7 s) — but Kani aborts with
+`call to foreign "Rust" function is not currently supported` so every
+property is UNDETERMINED (FAILED, vacuous). Same limitation as
+`extern "C-unwind"` (kani#2423). **Reverted** (`cf1e112`). The 244 s run
+is still evidence: the `BACKEND` fn-ptr IF-chain at every `ctx::*` site is
+the dominant SSA cost. A viable cut needs the host dispatch **in**
+`card-sdk` under `cfg(kani)` (no cross-crate call), or a Kani feature for
+Rust ABI imports.
+
+### kassert! + arr4_eq (kept)
+
+`assert!` → `kassert!` (no `panic_fmt`/`memchr`) across proofs;
+`arr4_eq`/`arr8b_eq`/`arr4b_eq` across proofs+spec. Re-timed
+`moca_01` 394 s / `aao_01` 310 s (batch 3d).

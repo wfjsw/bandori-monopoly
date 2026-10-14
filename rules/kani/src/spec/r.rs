@@ -74,11 +74,11 @@ pub fn resolve_play_log_ok(effects: &[Effect], player: i32) -> bool {
 /// Post: the user's money rose by exactly 1000; nobody else moved.
 pub fn resolve_play_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     only_player_money_delta(pre, post, player, resolve_gain_amount(), 1)
-        && post.pos == pre.pos
-        && post.fire == pre.fire
-        && post.stay == pre.stay
-        && post.hand == pre.hand
-        && post.discard == pre.discard
+        && crate::world::arr4_eq(post.pos, pre.pos)
+        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.stay, pre.stay)
+        && crate::world::arr8b_eq(post.hand, pre.hand)
+        && crate::world::arr8b_eq(post.discard, pre.discard)
 }
 
 /// MUTANT: wants 2000.
@@ -139,9 +139,9 @@ pub fn sprechchor_log_ok(effects: &[Effect], player: i32, x: i32) -> bool {
 /// Post: only the user's money moved, by `1000 + X*120`.
 pub fn sprechchor_post_ok(pre: &Snapshot, post: &Snapshot, player: i32, x: i32) -> bool {
     only_player_money_delta(pre, post, player, sprechchor_gain(x), 1)
-        && post.pos == pre.pos
-        && post.fire == pre.fire
-        && post.stay == pre.stay
+        && crate::world::arr4_eq(post.pos, pre.pos)
+        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.stay, pre.stay)
 }
 
 /// MUTANT: off-by-one on the X term (1000 + (X+1)*120).
@@ -194,7 +194,7 @@ pub fn ako_dark_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let me = player as usize;
     me < MAX_PLAYERS
         && post.stay[me] == pre.stay[me].saturating_add(1)
-        && post.money == pre.money
+        && crate::world::arr4_eq(post.money, pre.money)
         && post.pay_amount == 0
 }
 

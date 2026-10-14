@@ -117,13 +117,13 @@ fn assert_trunc_divrem(x: i64, y: i64, q: i64, r: i64) {
         "truncating divmod: q*y + r == x"
     );
     // |r| < |y|, via unsigned abs so `y == i64::MIN` is well-defined.
-    assert!(
+    crate::kassert!(
         (r.unsigned_abs() as u128) < (y.unsigned_abs() as u128),
         "truncating divmod: |r| < |y|"
     );
     // sign(r) ∈ {0, sign(x)} — rejects Python/floor rounding (rem takes the
     // sign of the divisor).
-    assert!(
+    crate::kassert!(
         r == 0 || r.signum() == x.signum(),
         "truncating divmod: sign(r) == sign(x)"
     );
@@ -137,11 +137,11 @@ fn reject_floor_mutant(x: i64, y: i64, q: i64, r: i64) {
         let q_m = q.wrapping_sub(1);
         let r_m = r.wrapping_add(y);
         // Floor rem takes the sign of y, opposite to x ⇒ fails sign(r)==sign(x).
-        assert!(
+        crate::kassert!(
             r_m != 0 && r_m.signum() != x.signum(),
             "mutant floor rem must fail sign(r)==sign(x)"
         );
-        assert!(
+        crate::kassert!(
             q_m != q || r_m != r,
             "mutant floor pair must differ from the evaluator"
         );
@@ -176,8 +176,8 @@ pub fn ir_div_rem_error_class_matches_spec() {
             assert_eq!(de.is_err(), err, "div Err exactly on y==0 or MIN/-1");
             assert_eq!(re.is_err(), err, "rem Err exactly on y==0 or MIN/-1");
             if !err {
-                assert!(matches!(de, Val::Int(_)), "non-error div is Ok(Int)");
-                assert!(matches!(re, Val::Int(_)), "non-error rem is Ok(Int)");
+                crate::kassert!(matches!(de, Val::Int(_)), "non-error div is Ok(Int)");
+                crate::kassert!(matches!(re, Val::Int(_)), "non-error rem is Ok(Int)");
             }
         }
         _ => {
@@ -325,11 +325,11 @@ pub fn error_root_is_false() {
     let v = eval_binop(Kind::Div, Val::Int(1), Val::Int(x));
     if x == 0 {
         assert_eq!(v, Val::Err);
-        assert!(!v.as_cond_bool());
+        crate::kassert!(!v.as_cond_bool());
     } else {
         assert_eq!(v, Val::Int(1 / x));
         // A bool root that is an error is also false.
-        assert!(!Val::Err.as_cond_bool());
+        crate::kassert!(!Val::Err.as_cond_bool());
     }
 }
 

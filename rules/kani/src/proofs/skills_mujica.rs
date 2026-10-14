@@ -39,7 +39,7 @@ pub fn uika_state1_roll_is_10_plus_d10() {
     let (lo, hi) = spec::skills_mujica::uika_state1_move_range();
     kani::cover!(d10 == 1, "d10 = 1 → move 11");
     kani::cover!(d10 == 10, "d10 = 10 → move 20");
-    assert!(
+    crate::kassert!(
         mv == 10 + d10 && mv >= lo && mv <= hi,
         "C-MUJICA-初华技能-01: move is 10+1d10 in 11..=20"
     );
@@ -51,7 +51,7 @@ pub fn uika_state1_roll_is_10_plus_d10() {
 pub fn uika_state1_move_mutant_is_detected() {
     let d10: i32 = kani::any();
     kani::assume((1..=10).contains(&d10));
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::uika_state1_move(d10) != spec::skills_mujica::uika_state1_move_mutant(d10),
         "mutant: 10+d10 ≠ 9+d10"
     );
@@ -87,16 +87,16 @@ pub fn band_starts_in_state1() {
     let now = world::with_world(|ww| ww.key_get(user, skill_state));
 
     kani::cover!(true, "fresh init");
-    assert!(pre_state == 0, "precondition: skillState unset");
-    assert!(
+    crate::kassert!(pre_state == 0, "precondition: skillState unset");
+    crate::kassert!(
         now == spec::skills_mujica::band_initial_state(),
         "C-MUJICA-团技能-00: initial 状态1"
     );
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::band_init_effects(effects, user, skill_state.0),
         "C-MUJICA-团技能-00: SetState(skillState, 1)"
     );
-    assert!(post.money == pre.money, "frame: money");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 // ===========================================================================
@@ -151,12 +151,12 @@ pub fn band_state2_pay_is_150_only_on_self() {
     } else {
         (bent, -printed)
     };
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::band_state2_one_sided_ok(user_delta, other_delta, printed, user_is_payer),
         "C-MUJICA-团技能-01: 1.5x on the user's side only"
     );
     // A symmetric 1.5x is NOT the book (the known engine finding).
-    assert!(
+    crate::kassert!(
         !spec::skills_mujica::band_state2_one_sided_ok_mutant(user_delta, other_delta, printed, user_is_payer)
             || bent == printed,
         "mutant: symmetric 1.5x must not satisfy the one-sided spec when bent ≠ printed"
@@ -186,13 +186,13 @@ pub fn band_state2_bend_hook_rewrites_amount() {
     // and accept the body's formula on odds as the executable reading.
     if pre_amount > 0 {
         let expected = (pre_amount * 3 + 1) / 2;
-        assert!(
+        crate::kassert!(
             post.pay_amount == expected,
             "C-MUJICA-团技能-01: PayMul rewrites the amount to 1.5x"
         );
     }
-    assert!(post.money == pre.money, "frame: money (hook only rewrites the amount)");
-    assert!(post.pos == pre.pos, "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (hook only rewrites the amount)");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT: the hook must not leave the amount unchanged when the user is a side.
@@ -206,7 +206,7 @@ pub fn band_state2_bend_mutant_is_detected() {
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Ave Mujica:假面之下的真实"), 2, user));
     let post = world::snapshot();
     if pre_amount > 0 && pre_amount != (pre_amount * 3 + 1) / 2 {
-        assert!(
+        crate::kassert!(
             post.pay_amount != pre_amount,
             "mutant: amount must change"
         );
@@ -230,11 +230,11 @@ pub fn nyamu_pay_raise_uses_new_pot_count() {
     kani::cover!(pots_before == 0, "0 → 1 pot, raise 100");
     kani::cover!(pots_before == 4, "4 → 5 pots, raise 500");
     kani::cover!(pots_before == 5, "already at cap");
-    assert!(
+    crate::kassert!(
         after == (pots_before + 1).min(5),
         "C-MUJICA-若麦技能-01: pots +1, cap 5"
     );
-    assert!(
+    crate::kassert!(
         raise == after * 100,
         "C-MUJICA-若麦技能-01: raise is X*100 with X the NEW pot count"
     );
@@ -246,7 +246,7 @@ pub fn nyamu_pay_raise_uses_new_pot_count() {
 pub fn nyamu_pay_raise_mutant_is_detected() {
     let pots_before: i32 = kani::any();
     kani::assume(pots_before == 0);
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::nyamu_pay_raise(pots_before) != spec::skills_mujica::nyamu_pay_raise_mutant(pots_before),
         "mutant: new-count raise (100) ≠ old-count raise (0)"
     );
@@ -263,11 +263,11 @@ pub fn sakiko_fire_cap_is_three() {
     kani::assume((0..=3).contains(&pots_before));
     let after = spec::skills_mujica::sakiko_pots_after(pots_before);
     kani::cover!(pots_before == 2, "2 → 3 (at cap)");
-    assert!(
+    crate::kassert!(
         after == (pots_before + 1).min(3),
         "C-MUJICA-祥子技能-02: pots +1, cap 3"
     );
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::sakiko_state2_offered(after) == (after >= 3),
         "C-MUJICA-祥子技能-02: 状态2 offered at cap"
     );
@@ -280,11 +280,11 @@ pub fn umiri_fire_cap_is_four() {
     kani::assume((0..=4).contains(&pots_before));
     let after = spec::skills_mujica::umiri_pots_after(pots_before);
     kani::cover!(pots_before == 3, "3 → 4 (at cap)");
-    assert!(
+    crate::kassert!(
         after == (pots_before + 1).min(4),
         "C-MUJICA-海铃技能-02: pots +1, cap 4"
     );
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::umiri_state2_offered(after) == (after >= 4),
         "C-MUJICA-海铃技能-02: 状态2 offered at cap"
     );
@@ -309,11 +309,11 @@ pub fn umiri_deed_pay_and_draw_arithmetic() {
     kani::cover!(houses == 3, "3 houses → 400");
     kani::cover!(pots == 4, "4 pots → 1 draw");
     kani::cover!(pots == 7, "7 pots → 1 draw");
-    assert!(
+    crate::kassert!(
         pay == 100 + houses * 100,
         "C-MUJICA-海铃技能-03: pay is 100+n*100"
     );
-    assert!(
+    crate::kassert!(
         draws == pots / 4,
         "C-MUJICA-海铃技能-03: 1 draw per 4 pots spent"
     );
@@ -332,7 +332,7 @@ pub fn mutsumi_state2_gate_is_hand_exactly_5() {
     kani::assume((0..=8).contains(&hand));
     kani::cover!(hand == 5, "hand 5 → gate open");
     kani::cover!(hand == 4, "hand 4 → gate closed (sheet supersedes)");
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::mutsumi_state2_gate(hand) == (hand == 5),
         "C-MUJICA-睦技能-01: gate is hand size exactly 5"
     );
@@ -350,11 +350,11 @@ pub fn band_halve_pay_amount() {
     kani::assume((0..=2_000).contains(&amount));
     kani::cover!(amount == 320, "even 320 → 160");
     kani::cover!(amount == 321, "odd 321 → 160 (OPEN-取整, floor)");
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::band_halve_pay(amount) == amount / 2,
         "C-MUJICA-团技能-03: halve the payment"
     );
-    assert!(
+    crate::kassert!(
         spec::skills_mujica::band_halve_crystal_spend(-1),
         "C-MUJICA-团技能-03: spend exactly 1 crystal"
     );

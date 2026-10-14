@@ -36,11 +36,11 @@ pub fn rinpuu_01_log_ok(effects: &[Effect], player: i32) -> bool {
 pub fn rinpuu_01_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let p = player as usize;
     post.stay[p] == pre.stay[p].saturating_add(1)
-        && post.money == pre.money
-        && post.pos == pre.pos
-        && post.fire == pre.fire
-        && post.hand == pre.hand
-        && post.discard == pre.discard
+        && crate::world::arr4_eq(post.money, pre.money)
+        && crate::world::arr4_eq(post.pos, pre.pos)
+        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr8b_eq(post.hand, pre.hand)
+        && crate::world::arr8b_eq(post.discard, pre.discard)
         && post.pay_amount == pre.pay_amount
         && (0..MAX_PLAYERS).all(|i| i == p || post.stay[i] == pre.stay[i])
 }

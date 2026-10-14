@@ -129,7 +129,7 @@ pub fn riot_cycle_log_ok(
 
 /// Frame: money / positions / fire untouched by the cycle itself.
 pub fn riot_cycle_frame_ok(pre: &Snapshot, post: &Snapshot) -> bool {
-    pre.money == post.money && pre.pos == post.pos && pre.fire == post.fire
+    crate::world::arr4_eq(pre.money, post.money) && pre.pos == post.pos && pre.fire == post.fire
 }
 
 /// Mutant: the holder draws one *fewer* (no 「你额外抽1张卡」).
@@ -168,11 +168,11 @@ pub fn pareo_01_log_ok(effects: &[Effect], player: i32, pareo_key: u16) -> bool 
 
 /// Frame for the mark half: nothing but the mark moved.
 pub fn pareo_01_frame_ok(pre: &Snapshot, post: &Snapshot) -> bool {
-    pre.money == post.money
+    crate::world::arr4_eq(pre.money, post.money)
         && pre.pos == post.pos
         && pre.fire == post.fire
-        && pre.hand == post.hand
-        && pre.discard == post.discard
+        && crate::world::arr8b_eq(pre.hand, post.hand)
+        && crate::world::arr8b_eq(pre.discard, post.discard)
 }
 
 /// Mutant: +3 marks instead of +2.

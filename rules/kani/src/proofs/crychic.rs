@@ -82,20 +82,20 @@ pub fn soyoreturn_02_hand_iff() {
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
 
-    assert!(
+    crate::kassert!(
         spec::crychic::soyoreturn_02_log_ok(effects, player),
         "C-CRYCHIC-soyoreturn-02: exactly GainMoney{player, 500}"
     );
-    assert!(
+    crate::kassert!(
         post.money[player as usize] == pre.money[player as usize] + 500,
         "C-CRYCHIC-soyoreturn-02: money +500"
     );
     // frame
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.stay == pre.stay, "frame: stay");
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.hand == pre.hand, "frame: hand bitset");
-    assert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
+    crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
 }
 
 /// MUTANT companion: the 501-spec is distinguishable from the body.
@@ -110,13 +110,13 @@ pub fn soyoreturn_02_mutant_is_detected() {
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
 
-    assert!(
+    crate::kassert!(
         spec::crychic::soyoreturn_02_log_ok(effects, player),
         "card matches the book"
     );
     let wrong = spec::crychic::soyoreturn_02_log_ok_mutant(effects, player);
     kani::cover!(!wrong, "off-by-one mutant disagrees");
-    assert!(!wrong, "mutant 501 must NOT match the body");
+    crate::kassert!(!wrong, "mutant 501 must NOT match the body");
 }
 
 // ===========================================================================
@@ -166,16 +166,16 @@ pub fn vocalist_01_waive_iff() {
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
 
-    assert!(
+    crate::kassert!(
         spec::crychic::vocalist_01_log_ok(effects),
         "C-CRYCHIC-vocalist-01: exactly SetPayAmount{to: 0}"
     );
-    assert!(
+    crate::kassert!(
         post.pay_amount == 0,
         "C-CRYCHIC-vocalist-01: payment waived"
     );
-    assert!(post.money == pre.money, "frame: money (waive is at rewrite time)");
-    assert!(post.pos == pre.pos, "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (waive is at rewrite time)");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 /// MUTANT companion: SetPayAmount{1} is not what the body does.
@@ -192,10 +192,10 @@ pub fn vocalist_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("CRYCHIC:主唱太拼命了"), owner));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(spec::crychic::vocalist_01_log_ok(effects), "card matches book");
+    crate::kassert!(spec::crychic::vocalist_01_log_ok(effects), "card matches book");
     let wrong = spec::crychic::vocalist_01_log_ok_mutant(effects);
     kani::cover!(!wrong, "mutant SetPayAmount{1} disagrees");
-    assert!(!wrong, "mutant must NOT match");
+    crate::kassert!(!wrong, "mutant must NOT match");
 }
 
 // ===========================================================================
@@ -224,13 +224,13 @@ pub fn grab_01_stay_iff() {
     // stores the field id and drops the value, so the log carries
     // `SetState{n: 0}` rather than `n: -1`. Assert the stay (PROVEN) and the
     // presence of the latch write; the value is BLOCKED-HOST.
-    assert!(
+    crate::kassert!(
         effects.len() == 2
             && matches!(effects[0], Effect::GiveStay { player: p, n: 1 } if p == player)
             && matches!(effects[1], Effect::SetState { player: p, key, .. } if p == player && key == passer_key),
         "C-CRYCHIC-grab-01: GiveStay{{1}} + SetState(PASSER) present"
     );
-    assert!(
+    crate::kassert!(
         post.stay[player as usize] == pre.stay[player as usize] + 1,
         "C-CRYCHIC-grab-01: stay +1"
     );
@@ -238,8 +238,8 @@ pub fn grab_01_stay_iff() {
     let passer_val = key_get(player, intern::NameId(passer_key));
     kani::cover!(passer_val == -1, "book value -1 visible (fixed host)");
     kani::cover!(passer_val == 0, "host stores field id 0");
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -253,13 +253,13 @@ pub fn grab_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:想要抓住..."), player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         matches!(effects[0], Effect::GiveStay { player: p, n: 1 } if p == player),
         "card gives exactly one stay"
     );
     let wrong = matches!(effects[0], Effect::GiveStay { player: p, n: 2 } if p == player);
     kani::cover!(!wrong, "two-stay mutant disagrees");
-    assert!(!wrong, "mutant GiveStay{2} must NOT match");
+    crate::kassert!(!wrong, "mutant GiveStay{2} must NOT match");
 }
 
 // ===========================================================================
@@ -286,21 +286,21 @@ pub fn debut_02_turn_end_iff() {
     let effects = &logbuf[..log_n];
     let post_crystals = band_crystals_of(player);
 
-    assert!(
+    crate::kassert!(
         spec::crychic::debut_02_log_ok(effects, player),
         "C-CRYCHIC-debut-02: exactly GiveStun{player, 1}"
     );
-    assert!(
+    crate::kassert!(
         post_crystals == pre_crystals + spec::crychic::debut_02_crystal_delta(),
         "C-CRYCHIC-debut-02: band crystal +1"
     );
     // give_stun is modeled as stay+1 in the Kani host (stun_of reads stay).
-    assert!(
+    crate::kassert!(
         post.stay[player as usize] == pre.stay[player as usize] + 1,
         "C-CRYCHIC-debut-02: stun layer +1 (host models stun on stay)"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -314,10 +314,10 @@ pub fn debut_02_mutant_is_detected() {
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("CRYCHIC:初演大成功"), 1, player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(spec::crychic::debut_02_log_ok(effects, player), "card matches book");
+    crate::kassert!(spec::crychic::debut_02_log_ok(effects, player), "card matches book");
     let wrong = spec::crychic::debut_02_log_ok_mutant(effects, player);
     kani::cover!(!wrong, "GiveStay-mutant disagrees");
-    assert!(!wrong, "mutant GiveStay must NOT match GiveStun");
+    crate::kassert!(!wrong, "mutant GiveStay must NOT match GiveStun");
 }
 
 /// C-CRYCHIC-debut-01 leaf: the play body itself logs nothing (scheduling ops
@@ -331,7 +331,7 @@ pub fn debut_01_play_logs_nothing() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:初演大成功"), player));
     let (logbuf, log_n) = effects();
-    assert!(
+    crate::kassert!(
         spec::crychic::debut_01_log_ok(&logbuf[..log_n]),
         "C-CRYCHIC-debut-01 leaf: play body produces no effects (arms stubs only)"
     );
@@ -362,25 +362,25 @@ pub fn ifonly_01_cashout_iff() {
     let effects = &logbuf[..log_n];
     let post_crystals = band_crystals_of(player);
 
-    assert!(
+    crate::kassert!(
         spec::crychic::ifonly_01_log_ok(effects, player, x),
         "C-CRYCHIC-ifonly-01: GainMoney{2000+500X} + PlaceCard on field"
     );
-    assert!(
+    crate::kassert!(
         post.money[player as usize] == pre.money[player as usize] + spec::crychic::ifonly_01_amount(x),
         "C-CRYCHIC-ifonly-01: money +2000+500X"
     );
-    assert!(
+    crate::kassert!(
         post_crystals == 0,
         "C-CRYCHIC-ifonly-01: all band crystals removed"
     );
-    assert!(
+    crate::kassert!(
         field_n() == field0 + 1,
         "C-CRYCHIC-ifonly-01: card placed as [持续]"
     );
     kani::cover!(x == 0, "X = 0");
     kani::cover!(x >= 1, "X >= 1");
-    assert!(post.pos == pre.pos, "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 #[kani::proof]
@@ -394,13 +394,13 @@ pub fn ifonly_01_mutant_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:如果能一直持续下去..."), player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::crychic::ifonly_01_log_ok(effects, player, 2),
         "card matches book at X=2"
     );
     let wrong = spec::crychic::ifonly_01_log_ok_mutant(effects, player, 2);
     kani::cover!(!wrong, "X+1 mutant disagrees");
-    assert!(!wrong, "mutant 2000+500*(X+1) must NOT match");
+    crate::kassert!(!wrong, "mutant 2000+500*(X+1) must NOT match");
 }
 
 // ===========================================================================
@@ -475,7 +475,7 @@ pub fn ifonly_02_discard_at_seven_iff() {
         || effects
             .iter()
             .any(|e| matches!(e, Effect::UnplaceCard { .. }));
-    assert!(
+    crate::kassert!(
         unplaced,
         "C-CRYCHIC-ifonly-02: card must go to discard (UnplaceCard / field drop); \
          log={:?} field {} -> {}",
@@ -483,8 +483,8 @@ pub fn ifonly_02_discard_at_seven_iff() {
         field0,
         field_n()
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }
 
 // ===========================================================================
@@ -523,10 +523,10 @@ pub fn soyoreturn_01_branch2_iff() {
     kani::cover!(effects.is_empty(), "no money branch visible");
 
     if picked_keep {
-        assert!(
+        crate::kassert!(
             spec::crychic::soyoreturn_01_branch2_log_ok(effects, player),
             "C-CRYCHIC-soyoreturn-01 branch 2: exactly GainMoney{1000}"
         );
     }
-    assert!(post.pos == pre.pos, "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
 }

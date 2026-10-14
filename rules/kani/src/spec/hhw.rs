@@ -46,9 +46,9 @@ pub fn backstage_02_log_ok(effects: &[Effect], player: i32, flipped: i32) -> boo
 pub fn backstage_02_post_ok(pre: &Snapshot, post: &Snapshot, player: i32, flipped: i32) -> bool {
     let p = player as usize;
     post.money[p] == pre.money[p] + backstage_02_gain(flipped)
-        && post.pos == pre.pos
-        && post.fire == pre.fire
-        && post.stay == pre.stay
+        && crate::world::arr4_eq(post.pos, pre.pos)
+        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.stay, pre.stay)
 }
 
 /// MUTANT: pay 500 per flip (off-by-amount).
@@ -606,12 +606,12 @@ pub fn log_empty(effects: &[Effect]) -> bool {
 /// Frame: the fields a money clause must not touch.
 pub fn money_frame_unchanged(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let p = player as usize;
-    post.pos == pre.pos
-        && post.fire == pre.fire
-        && post.stay == pre.stay
-        && post.hand == pre.hand
-        && post.discard == pre.discard
-        && post.out == pre.out
+    crate::world::arr4_eq(post.pos, pre.pos)
+        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.stay, pre.stay)
+        && crate::world::arr8b_eq(post.hand, pre.hand)
+        && crate::world::arr8b_eq(post.discard, pre.discard)
+        && crate::world::arr4b_eq(post.out, pre.out)
         && (p >= 4 || {
             // only the acting player's money may move; callers check the delta
             true
@@ -620,7 +620,7 @@ pub fn money_frame_unchanged(pre: &Snapshot, post: &Snapshot, player: i32) -> bo
 
 /// Hand/discard bitsets unchanged.
 pub fn piles_unchanged(pre: &Snapshot, post: &Snapshot) -> bool {
-    pre.hand == post.hand && pre.discard == post.discard
+    crate::world::arr8b_eq(pre.hand, post.hand) && crate::world::arr8b_eq(pre.discard, post.discard)
 }
 
 /// Count of `MAX_CARDS`-sized bitset true bits.

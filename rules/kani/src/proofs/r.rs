@@ -68,11 +68,11 @@ pub fn resolve_play_iff() {
     let effects = &slice_of(logbuf, log_n)[..log_n];
 
     kani::cover!(log_n == 1, "one effect");
-    assert!(
+    crate::kassert!(
         spec::resolve_play_log_ok(effects, player),
         "C-R-觉悟-01: exactly GainMoney 1000"
     );
-    assert!(
+    crate::kassert!(
         spec::resolve_play_post_ok(&pre, &post, player),
         "C-R-觉悟-01: only the user's money moves, +1000"
     );
@@ -92,11 +92,11 @@ pub fn resolve_play_mutant_is_detected() {
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
-    assert!(
+    crate::kassert!(
         !spec::resolve_play_log_ok_mutant(effects, player),
         "mutant: card does not pay 2000"
     );
-    assert!(
+    crate::kassert!(
         post.money[player as usize] != pre.money[player as usize] + 2000,
         "mutant: money is not +2000"
     );
@@ -116,7 +116,7 @@ pub fn resolve_play_mutant_2000() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:[衍生] 觉悟"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
-    assert!(
+    crate::kassert!(
         spec::resolve_play_log_ok_mutant(effects, player),
         "mutant: not a 2000 spec"
     );
@@ -154,11 +154,11 @@ pub fn cookie_pay_iff() {
     kani::cover!(x == 1, "X=1");
     kani::cover!(x == 3, "X=3");
     kani::cover!(x == 8, "X=8");
-    assert!(
+    crate::kassert!(
         spec::cookie_pay_log_ok(effects, player, x),
         "C-R-曲奇时间-02: exactly GainMoney 500*X"
     );
-    assert!(
+    crate::kassert!(
         spec::cookie_pay_post_ok(&pre, &post, player, x),
         "C-R-曲奇时间-02: money +500*X only"
     );
@@ -182,7 +182,7 @@ pub fn cookie_pay_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let wrong = spec::cookie_pay_amount_mutant(x);
-    assert!(
+    crate::kassert!(
         !matches!(effects.first(), Some(Effect::GainMoney { n, .. }) if *n == wrong),
         "mutant: gain is not 500*(X+1)"
     );
@@ -208,26 +208,26 @@ pub fn sprechchor_pay_iff() {
     let effects = &slice_of(logbuf, log_n)[..log_n];
 
     // Recover the rolled face from the gain amount: n = 1000 + X*120.
-    assert!(log_n == 1, "C-R-Sprechchor-02: exactly one effect");
+    crate::kassert!(log_n == 1, "C-R-Sprechchor-02: exactly one effect");
     let n = match effects[0] {
         Effect::GainMoney { n, .. } => n,
         _ => {
-            assert!(false, "C-R-Sprechchor-02: effect must be GainMoney");
+            crate::kassert!(false, "C-R-Sprechchor-02: effect must be GainMoney");
             0
         }
     };
     let x = (n - 1000) / 120;
     kani::cover!(x == 1, "face 1");
     kani::cover!(x == 20, "face 20");
-    assert!(
+    crate::kassert!(
         spec::sprechchor_face_ok(x),
         "C-R-Sprechchor-02: face in 1..=20"
     );
-    assert!(
+    crate::kassert!(
         spec::sprechchor_log_ok(effects, player, x),
         "C-R-Sprechchor-02: gain is exactly 1000+X*120"
     );
-    assert!(
+    crate::kassert!(
         spec::sprechchor_post_ok(&pre, &post, player, x),
         "C-R-Sprechchor-02: only the user's money moves"
     );
@@ -251,7 +251,7 @@ pub fn sprechchor_pay_mutant_is_detected() {
         _ => -1,
     };
     let x = (n - 1000) / 120;
-    assert!(
+    crate::kassert!(
         n != spec::sprechchor_gain_mutant(x),
         "mutant: gain is not 1000+(X+1)*120"
     );
@@ -286,11 +286,11 @@ pub fn ako_dark_offhand_iff() {
     let effects = &slice_of(logbuf, log_n)[..log_n];
 
     kani::cover!(log_n == 3, "stun + cancel + draw");
-    assert!(
+    crate::kassert!(
         spec::ako_dark_offhand_log_ok(effects, player),
         "C-R-黑暗大魔姬亚子-02/03: GiveStun{1} + SetPayAmount{0} + Draw{1}"
     );
-    assert!(
+    crate::kassert!(
         spec::ako_dark_post_ok(&pre, &post, player),
         "C-R-黑暗大魔姬亚子-02: +1 stun, pay zeroed, money unchanged"
     );
@@ -315,7 +315,7 @@ pub fn ako_dark_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let two = spec::ako_dark_stun_n_mutant();
-    assert!(
+    crate::kassert!(
         !matches!(effects.first(), Some(Effect::GiveStun { n, .. }) if *n == two),
         "mutant: first effect is not 2 stun layers"
     );
@@ -347,11 +347,11 @@ pub fn fire_bird_place_iff() {
     let card = crate::world::card_slot_of("R:Fire bird");
 
     kani::cover!(log_n == 2, "pay + place");
-    assert!(
+    crate::kassert!(
         spec::fire_bird_place_log_ok(effects, player, card),
         "C-R-Fire bird-01: PayMoney 1600 + PlaceCard"
     );
-    assert!(
+    crate::kassert!(
         spec::fire_bird_place_post_ok(&pre, &post, player),
         "C-R-Fire bird-01: money -1600"
     );
@@ -373,7 +373,7 @@ pub fn fire_bird_place_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let card = crate::world::card_slot_of("R:Fire bird");
-    assert!(
+    crate::kassert!(
         !spec::fire_bird_place_log_ok_mutant(effects, player, card),
         "mutant: first effect is not a 1600 gain"
     );
@@ -405,11 +405,11 @@ pub fn fire_bird_burn_iff() {
     let effects = &slice_of(logbuf, log_n)[..log_n];
 
     kani::cover!(log_n == 1, "pay 400");
-    assert!(
+    crate::kassert!(
         spec::fire_bird_burn_log_ok(effects, player),
         "C-R-Fire bird-02: exactly PayMoney 400"
     );
-    assert!(
+    crate::kassert!(
         spec::only_player_money_delta(&pre, &post, player, -spec::fire_bird_burn_pay(), 1),
         "C-R-Fire bird-02: money -400"
     );
@@ -428,7 +428,7 @@ pub fn fire_bird_burn_mutant_is_detected() {
     invoke::unwrap_done(invoke::entry_idx(crate::card_id!("R:Fire bird"), 1, player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
-    assert!(
+    crate::kassert!(
         !spec::fire_bird_burn_log_ok_mutant(effects, player),
         "mutant: not a 400 gain"
     );
@@ -463,11 +463,11 @@ pub fn nfo_face1_iff() {
     kani::cover!(face1, "face 1 fires");
     kani::cover!(!face1, "other face");
     if face1 {
-        assert!(
+        crate::kassert!(
             spec::nfo_face1_log_ok(effects, player),
             "C-R-NFO-03: exactly GainMoney 1500"
         );
-        assert!(
+        crate::kassert!(
             spec::only_player_money_delta(&pre, &post, player, spec::nfo_face1_gain(), 1),
             "C-R-NFO-03: money +1500 only"
         );
@@ -495,7 +495,7 @@ pub fn nfo_face1_mutant_is_detected() {
         && matches!(effects[0], Effect::GainMoney { player: p, n } if p == player && n == spec::nfo_face1_gain());
     if face1 {
         let wrong = spec::nfo_face1_gain_mutant();
-        assert!(
+        crate::kassert!(
             !matches!(effects[0], Effect::GainMoney { n, .. } if n == wrong),
             "mutant: face-1 gain is not 1400"
         );
@@ -517,11 +517,11 @@ pub fn nfo_stay_iff() {
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
 
-    assert!(
+    crate::kassert!(
         spec::nfo_stay_log_ok(effects, player),
         "C-R-NFO-02: exactly GiveStay{1}"
     );
-    assert!(
+    crate::kassert!(
         post.stay[player as usize] == pre.stay[player as usize] + 1,
         "C-R-NFO-02: +1 [停留]"
     );
@@ -541,7 +541,7 @@ pub fn nfo_stay_mutant_is_detected() {
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let two = spec::nfo_stay_n_mutant();
-    assert!(
+    crate::kassert!(
         !matches!(effects.first(), Some(Effect::GiveStay { n, .. }) if *n == two),
         "mutant: stay is not 2 layers"
     );
@@ -574,7 +574,7 @@ pub fn student_council_add_resolve_iff() {
     let post_deck_n = world::with_world(|ww| ww.deck_n as i32);
 
     kani::cover!(post_deck_n == 1, "one card in deck");
-    assert!(
+    crate::kassert!(
         spec::student_council_add_resolve_delta(pre_deck_n, post_deck_n),
         "C-R-学生会的检查-02: deck gains exactly one 觉悟"
     );
@@ -583,7 +583,7 @@ pub fn student_council_add_resolve_iff() {
     // No effect-log entry: `add_to_deck` is a silent pile write.
     let (logbuf, log_n) = effects_of();
     let _ = slice_of(logbuf, log_n);
-    assert!(log_n == 0, "C-R-学生会的检查-02: insert is not an effect-log row");
+    crate::kassert!(log_n == 0, "C-R-学生会的检查-02: insert is not an effect-log row");
 }
 
 /// MUTANT companion: the deck must not grow by 2.
@@ -600,7 +600,7 @@ pub fn student_council_add_resolve_mutant_is_detected() {
     };
     invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("R:学生会的检查"), player));
     let post_deck_n = world::with_world(|ww| ww.deck_n as i32);
-    assert!(
+    crate::kassert!(
         post_deck_n != 2,
         "mutant: deck did not grow by 2"
     );
@@ -628,7 +628,7 @@ pub fn ringing_bloom_place_iff() {
     let card = crate::world::card_slot_of("R:（燐子）Ringing Bloom");
 
     kani::cover!(log_n == 1, "place");
-    assert!(
+    crate::kassert!(
         spec::ringing_bloom_place_log_ok(effects, player, card),
         "C-R-Ringing Bloom-01: exactly PlaceCard on the user's field"
     );
@@ -647,7 +647,7 @@ pub fn ringing_bloom_place_mutant_is_detected() {
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:（燐子）Ringing Bloom"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
-    assert!(
+    crate::kassert!(
         !spec::ringing_bloom_place_log_ok_mutant(effects, player),
         "mutant: not a two-PlaceCard body"
     );

@@ -77,17 +77,17 @@ pub fn half_speed_01_place_iff() {
     let post_crystals = world::with_world(|ww| crystals_of(ww, player));
 
     kani::cover!(true, "half-speed play runs");
-    assert!(
+    crate::kassert!(
         spec::ag::half_speed_01_log_ok(effects, player, card),
         "C-AG-half-speed-01: log must be exactly PlaceCard(field)"
     );
-    assert!(
+    crate::kassert!(
         spec::ag::half_speed_01_post_ok(post_crystals),
         "C-AG-half-speed-01: exactly 3 crystals on the card"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
 }
 
 /// MUTANT companion: the 4-crystal spec must disagree with the card.
@@ -99,11 +99,11 @@ pub fn half_speed_01_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::play_idx(CARD_MOCA_HALF, player));
     let post_crystals = world::with_world(|ww| crystals_of(ww, player));
-    assert!(
+    crate::kassert!(
         !spec::ag::half_speed_01_post_ok_mutant(post_crystals),
         "mutant (4 crystals) must not match the card's 3"
     );
-    assert!(
+    crate::kassert!(
         spec::ag::half_speed_01_post_ok(post_crystals),
         "card does 3 crystals"
     );
@@ -144,11 +144,11 @@ pub fn half_speed_02_decay_iff() {
 
     kani::cover!(pre_crystals == 1, "decay from 1 (emptying)");
     kani::cover!(pre_crystals > 1, "decay from >1");
-    assert!(
+    crate::kassert!(
         spec::ag::half_speed_02_decay_log_ok(effects, player, key),
         "C-AG-half-speed-02: tick is exactly AddCounter(crystals, -1)"
     );
-    assert!(
+    crate::kassert!(
         spec::ag::half_speed_02_decay_post_ok(pre_crystals, post_crystals),
         "C-AG-half-speed-02: crystals fall by 1"
     );
@@ -175,7 +175,7 @@ pub fn half_speed_02_mutant_is_detected() {
                 n: -2
             } if o == player && k == key
         );
-    assert!(!mutant_ok, "mutant (−2) must not match the card's −1");
+    crate::kassert!(!mutant_ok, "mutant (−2) must not match the card's −1");
 }
 
 // ===========================================================================
@@ -220,17 +220,17 @@ pub fn half_speed_04_pay_mul_iff() {
     kani::cover!(pre_amount % 2 == 0, "even amount");
     kani::cover!(pre_amount % 2 == 1, "odd amount (OPEN-减半取整)");
     kani::cover!(pre_amount < 20, "small amount (half < 10)");
-    assert!(
+    crate::kassert!(
         post_amount == expected,
         "C-AG-half-speed-04: pay amount must be ceil10(amount/2)"
     );
-    assert!(
+    crate::kassert!(
         spec::ag::half_speed_04_log_ok(effects, expected),
         "C-AG-half-speed-04: log exactly the rewrite"
     );
     // Determined half for even multiples of 10: plain /2.
     if pre_amount % 20 == 0 {
-        assert!(
+        crate::kassert!(
             post_amount == spec::ag::half_speed_04_amount_even(pre_amount),
             "C-AG-half-speed-04: even 10-multiple halves exactly"
         );
@@ -248,7 +248,7 @@ pub fn half_speed_04_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::entry_idx(CARD_MOCA_HALF, 3, player));
     let post_amount = world::with_world(|ww| ww.pay_amount);
-    assert!(
+    crate::kassert!(
         post_amount != spec::ag::half_speed_04_amount_mutant(amount),
         "mutant (+1) must not match the card"
     );
@@ -312,22 +312,22 @@ pub fn sky_02_03_play_iff() {
 
     kani::cover!(hand_after_take >= 3, "hand >= 3 (gain)");
     kani::cover!(hand_after_take < 3, "hand < 3 (draw)");
-    assert!(
+    crate::kassert!(
         spec::ag::sky_play_log_ok(effects, player, card, hand_after_take),
         "C-AG-sky-02/03: take + (gain n*600 | draw 1)"
     );
     if hand_after_take >= 3 {
-        assert!(
+        crate::kassert!(
             post.money[player as usize] == hand_after_take * 600,
             "C-AG-sky-02: money = hand*600"
         );
     } else {
-        assert!(
+        crate::kassert!(
             post.money[player as usize] == 0,
             "C-AG-sky-03: no money on the draw branch"
         );
     }
-    assert!(post.pos == [0, 0, 0, 0], "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, [0, 0, 0, 0]), "frame: pos");
 }
 
 /// MUTANT companion: n*601 must not match.
@@ -347,11 +347,11 @@ pub fn sky_02_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         !spec::ag::sky_02_log_ok_mutant(effects, player, n),
         "mutant (n*601) must not match"
     );
-    assert!(
+    crate::kassert!(
         spec::ag::sky_02_log_ok(effects, player, n),
         "card pays n*600"
     );
@@ -370,7 +370,7 @@ pub fn sky_03_draws_one() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::ag::sky_03_log_ok(&effects[1..], player),
         "C-AG-sky-03: draw exactly 1 after the take"
     );
@@ -436,7 +436,7 @@ pub fn colors_01_02_03_04_play_iff() {
     let _ = is_multi;
 
     // IFF: the body produces exactly one of the determined shapes.
-    assert!(
+    crate::kassert!(
         is_gain_1500
             || is_draw_1
             || is_gain_2000
@@ -447,15 +447,15 @@ pub fn colors_01_02_03_04_play_iff() {
     );
 
     if is_gain_1500 {
-        assert!(post.money[player as usize] == 1500, "C-AG-colors-02 money");
+        crate::kassert!(post.money[player as usize] == 1500, "C-AG-colors-02 money");
     }
     if is_gain_2000 {
-        assert!(post.money[player as usize] == 2000, "C-AG-colors-05 money");
+        crate::kassert!(post.money[player as usize] == 2000, "C-AG-colors-05 money");
     }
     if is_draw_1 {
-        assert!(post.money[player as usize] == 0, "C-AG-colors-04 no money");
+        crate::kassert!(post.money[player as usize] == 0, "C-AG-colors-04 no money");
     }
-    assert!(post.pos == [0, 0, 0, 0], "frame: pos");
+    crate::kassert!(world::arr4_eq(post.pos, [0, 0, 0, 0]), "frame: pos");
 }
 
 /// C-AG-colors-02 dedicated mutant (off-by-one).
@@ -468,8 +468,8 @@ pub fn colors_02_mutant_is_detected() {
         player: 0,
         n: 1500,
     }];
-    assert!(spec::ag::colors_02_log_ok(&effects, 0), "true spec matches 1500");
-    assert!(
+    crate::kassert!(spec::ag::colors_02_log_ok(&effects, 0), "true spec matches 1500");
+    crate::kassert!(
         !spec::ag::colors_02_log_ok_mutant(&effects, 0),
         "mutant (1501) must not match a 1500 gain"
     );
@@ -515,25 +515,25 @@ pub fn colors_06_pick_to_hand() {
                     pile: 1,
                     card,
                 } => {
-                    assert!(*p == player, "take from the user's discard");
-                    assert!(*card == 2 || *card == 3, "pick is one of the offered");
+                    crate::kassert!(*p == player, "take from the user's discard");
+                    crate::kassert!(*card == 2 || *card == 3, "pick is one of the offered");
                     if effects.len() == 2 {
-                        assert!(
+                        crate::kassert!(
                             spec::ag::colors_06_log_ok(effects, player, *card),
                             "C-AG-colors-06: take + add_to_hand"
                         );
                     } else {
-                        assert!(
+                        crate::kassert!(
                             spec::ag::colors_03_log_ok(effects, player, *card),
                             "C-AG-colors-03: take + deck-top (no log on the insert)"
                         );
                     }
                 }
                 Effect::GainMoney { n, .. } => {
-                    assert!(*n == 1500 || *n == 2000, "money branches 1/4");
+                    crate::kassert!(*n == 1500 || *n == 2000, "money branches 1/4");
                 }
                 Effect::Draw { n, .. } => {
-                    assert!(*n == 1, "branch 3 draws 1");
+                    crate::kassert!(*n == 1, "branch 3 draws 1");
                 }
                 Effect::GainFire { .. } => {}
                 _ => {}
@@ -584,16 +584,16 @@ pub fn soul_01_place_and_load_iff() {
     kani::cover!(k == 1, "k = 1");
     kani::cover!(k >= 2, "k >= 2");
 
-    assert!(k >= 1 && k <= 5, "C-AG-soul-01: k in 1..=5");
-    assert!(
+    crate::kassert!(k >= 1 && k <= 5, "C-AG-soul-01: k in 1..=5");
+    crate::kassert!(
         spec::ag::soul_01_log_ok(effects, player, card, k),
         "C-AG-soul-01: pay k*500 then PlaceCard"
     );
-    assert!(
+    crate::kassert!(
         spec::ag::soul_01_post_ok(post_crystals, k),
         "C-AG-soul-01: k crystals on the card"
     );
-    assert!(
+    crate::kassert!(
         post.money[player as usize] == pre_money - k * 500,
         "C-AG-soul-01: money falls by k*500"
     );
@@ -614,7 +614,7 @@ pub fn soul_01_mutant_is_detected() {
     if let Some(Effect::PayMoney { n, .. }) = (&logbuf[..log_n]).first() {
         k = *n / 500;
     }
-    assert!(
+    crate::kassert!(
         !spec::ag::soul_01_post_ok_mutant(post_crystals, k),
         "mutant (k+1 crystals) must not match"
     );
@@ -673,16 +673,16 @@ pub fn soul_02_pay_choose_yes_iff() {
     kani::cover!(!accepted, "owner declines (no-op)");
     if accepted {
         let expected = spec::ag::soul_02_amount(pre_amount);
-        assert!(
+        crate::kassert!(
             spec::ag::soul_02_pay_log_ok(effects, owner, payee, key, expected),
             "C-AG-soul-02: +500 payee, −1 crystal, amount = max(pre-1000, 0)"
         );
-        assert!(post_amount == expected, "C-AG-soul-02 amount");
-        assert!(post_crystals == crystals - 1, "C-AG-soul-02 crystal");
+        crate::kassert!(post_amount == expected, "C-AG-soul-02 amount");
+        crate::kassert!(post_crystals == crystals - 1, "C-AG-soul-02 crystal");
     } else {
-        assert!(spec::ag::soul_02_noop_log_ok(effects), "decline is a no-op");
-        assert!(post_amount == pre_amount, "decline leaves the amount");
-        assert!(post_crystals == crystals, "decline leaves the crystal");
+        crate::kassert!(spec::ag::soul_02_noop_log_ok(effects), "decline is a no-op");
+        crate::kassert!(post_amount == pre_amount, "decline leaves the amount");
+        crate::kassert!(post_crystals == crystals, "decline leaves the crystal");
     }
 }
 
@@ -700,11 +700,11 @@ pub fn soul_02_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::entry_idx(CARD_SOUL, 1, owner));
     let post_amount = world::with_world(|ww| ww.pay_amount);
-    assert!(
+    crate::kassert!(
         post_amount != spec::ag::soul_02_amount_mutant(amount),
         "mutant (+1) must not match"
     );
-    assert!(post_amount == spec::ag::soul_02_amount(amount), "card does max(pre-1000,0)");
+    crate::kassert!(post_amount == spec::ag::soul_02_amount(amount), "card does max(pre-1000,0)");
 }
 
 // ===========================================================================
@@ -737,11 +737,11 @@ pub fn soul_03_skill_used_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     let post_crystals = world::with_world(|ww| crystals_of(ww, owner));
-    assert!(
+    crate::kassert!(
         spec::ag::soul_03_log_ok(effects, owner, key),
         "C-AG-soul-03: exactly one crystal leaves"
     );
-    assert!(post_crystals == crystals - 1, "crystals fall by 1");
+    crate::kassert!(post_crystals == crystals - 1, "crystals fall by 1");
 }
 
 // ===========================================================================
@@ -799,15 +799,15 @@ pub fn glory_02_03_swap_iff() {
     let from_us = spec::ag::glory_half(2600);
     kani::cover!(from_them > 0, "other has a dearest deed");
     kani::cover!(from_us > 0, "user has a dearest deed");
-    assert!(
+    crate::kassert!(
         spec::ag::glory_log_ok(effects, user, other, from_them, from_us),
         "C-AG-glory-02/03: PayTo legs are the two halves, in order"
     );
-    assert!(
+    crate::kassert!(
         post.money[user as usize] == 10_000 + from_them - from_us,
         "C-AG-glory: user money = +their half − our half"
     );
-    assert!(
+    crate::kassert!(
         post.money[other as usize] == 10_000 - from_them + from_us,
         "C-AG-glory: other money mirrors"
     );
@@ -825,7 +825,7 @@ pub fn glory_mutant_is_detected() {
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         !spec::ag::glory_log_ok_mutant(effects, user, other, 1600, 1300),
         "mutant (+1) must not match"
     );
@@ -880,7 +880,7 @@ pub fn one_of_us_01_place_iff() {
         )
     });
     kani::cover!(placed, "card lands on the field");
-    assert!(
+    crate::kassert!(
         placed,
         "C-AG-one-of-us-01: the card must be placed on the user's field"
     );
@@ -895,7 +895,7 @@ pub fn one_of_us_01_place_iff() {
 pub fn colors_01_wrap_formula() {
     let raw: i32 = kani::any();
     kani::assume(raw >= 1 && raw <= 6);
-    assert!(
+    crate::kassert!(
         spec::ag::colors_01_wrap(raw) == raw,
         "C-AG-colors-01: wrap is identity on 1d6"
     );
@@ -908,16 +908,16 @@ pub fn half_speed_04_amount_formula() {
     let amount: i32 = kani::any();
     kani::assume(amount >= 1 && amount <= 10_000);
     let half = spec::ag::half_speed_04_amount_ceil10(amount);
-    assert!(half >= (amount + 1) / 2, "ceil10(half) >= true half");
-    assert!(half % 10 == 0, "ceil10 lands on a multiple of 10");
-    assert!(half <= (amount + 1) / 2 + 9, "ceil10 overshoots by < 10");
+    crate::kassert!(half >= (amount + 1) / 2, "ceil10(half) >= true half");
+    crate::kassert!(half % 10 == 0, "ceil10 lands on a multiple of 10");
+    crate::kassert!(half <= (amount + 1) / 2 + 9, "ceil10 overshoots by < 10");
     if amount % 20 == 0 {
-        assert!(
+        crate::kassert!(
             half == spec::ag::half_speed_04_amount_even(amount),
             "even 10-multiples halve exactly"
         );
     }
-    assert!(
+    crate::kassert!(
         half != spec::ag::half_speed_04_amount_mutant(amount),
         "mutant +1 disagrees"
     );
@@ -930,10 +930,10 @@ pub fn glory_half_formula() {
     let base: i32 = kani::any();
     kani::assume(base >= 0 && base <= 10_000);
     let h = spec::ag::glory_half(base);
-    assert!(h == base / 2, "floor half");
-    assert!(h * 2 <= base && h * 2 + 2 > base, "floor-half bounds");
+    crate::kassert!(h == base / 2, "floor half");
+    crate::kassert!(h * 2 <= base && h * 2 + 2 > base, "floor-half bounds");
     if base % 2 == 0 {
-        assert!(h * 2 == base, "even bases split exactly");
+        crate::kassert!(h * 2 == base, "even bases split exactly");
     }
 }
 
@@ -944,8 +944,8 @@ pub fn soul_02_amount_formula() {
     let amount: i32 = kani::any();
     kani::assume(amount >= 0 && amount <= 10_000);
     let to = spec::ag::soul_02_amount(amount);
-    assert!(to == (amount - 1000).max(0), "max(pre-1000, 0)");
-    assert!(to != spec::ag::soul_02_amount_mutant(amount), "mutant disagrees");
+    crate::kassert!(to == (amount - 1000).max(0), "max(pre-1000, 0)");
+    crate::kassert!(to != spec::ag::soul_02_amount_mutant(amount), "mutant disagrees");
 }
 
 /// C-AG-sky-02 formula: n*600 for n >= 3.
@@ -958,11 +958,11 @@ pub fn sky_02_amount_formula() {
         player: 0,
         n: n * 600,
     }];
-    assert!(
+    crate::kassert!(
         spec::ag::sky_02_log_ok(&effects, 0, n),
         "n*600 matches the gain leg"
     );
-    assert!(
+    crate::kassert!(
         !spec::ag::sky_02_log_ok_mutant(&effects, 0, n),
         "n*601 does not"
     );

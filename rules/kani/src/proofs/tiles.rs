@@ -95,21 +95,21 @@ pub fn edogawa_settle_draw_one_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(log_n == 1, "exactly one effect");
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok(&effects, player),
         "G-SETTLE-02 edogawa: effect log must be exactly one Draw{player,1}"
     );
     // Post: one more card in the hand pile.
     let post_hand_n = world::with_world(|w| w.hand_n);
-    assert!(
+    crate::kassert!(
         post_hand_n as i32 == pre_hand_n as i32 + 1,
         "G-SETTLE-02 edogawa: hand count must rise by 1"
     );
     // Frame: money / pos / fire / stay untouched (draw is the only write).
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(post.stay == pre.stay, "frame: stay");
 }
 
 /// MUTANT: a wrong spec that wants two cards. Must be distinguishable.
@@ -123,7 +123,7 @@ pub fn edogawa_settle_mutant_two_cards() {
     call_settle(&rules_tiles::edogawa::EDOGAWA, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok_mutant_two(&effects, player),
         "mutant: body draws one card, not two"
     );
@@ -140,7 +140,7 @@ pub fn edogawa_settle_mutant_wrong_player() {
     call_settle(&rules_tiles::edogawa::EDOGAWA, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok_mutant_wrong_player(&effects, player),
         "mutant: the draw goes to the settler"
     );
@@ -170,19 +170,19 @@ pub fn circle_settle_draw_one_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(log_n == 1, "exactly one effect");
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok(&effects, player),
         "G-SETTLE-02 circle: effect log must be exactly one Draw{player,1}"
     );
     let post_hand_n = world::with_world(|w| w.hand_n);
-    assert!(
+    crate::kassert!(
         post_hand_n as i32 == pre_hand_n as i32 + 1,
         "G-SETTLE-02 circle: hand count must rise by 1"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(post.stay == pre.stay, "frame: stay");
 }
 
 /// MUTANT: two cards.
@@ -196,7 +196,7 @@ pub fn circle_settle_mutant_two_cards() {
     call_settle(&rules_tiles::circle::CIRCLE, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok_mutant_two(&effects, player),
         "mutant: body draws one card, not two"
     );
@@ -213,7 +213,7 @@ pub fn circle_settle_mutant_wrong_player() {
     call_settle(&rules_tiles::circle::CIRCLE, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok_mutant_wrong_player(&effects, player),
         "mutant: the draw goes to the settler"
     );
@@ -247,19 +247,19 @@ pub fn event_settle_draw_one_iff() {
     let effects = &logbuf[..log_n];
 
     kani::cover!(log_n == 1, "exactly one observable effect (hand draw)");
-    assert!(
+    crate::kassert!(
         spec::g_settle_03_hand_draw_ok(&effects, player),
         "G-SETTLE-03: observable effect log must be exactly one Draw{player,1}"
     );
     let post_hand_n = world::with_world(|w| w.hand_n);
-    assert!(
+    crate::kassert!(
         post_hand_n as i32 == pre_hand_n as i32 + 1,
         "G-SETTLE-03: hand count must rise by 1"
     );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
-    assert!(post.fire == pre.fire, "frame: fire");
-    assert!(post.stay == pre.stay, "frame: stay");
+    crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
+    crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
+    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(post.stay == pre.stay, "frame: stay");
 }
 
 /// MUTANT: two cards.
@@ -273,7 +273,7 @@ pub fn event_settle_mutant_two_cards() {
     call_settle(&rules_tiles::event::EVENT, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok_mutant_two(&effects, player),
         "mutant: body draws one card, not two"
     );
@@ -290,7 +290,7 @@ pub fn event_settle_mutant_wrong_player() {
     call_settle(&rules_tiles::event::EVENT, player);
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
-    assert!(
+    crate::kassert!(
         spec::g_settle_02_draw_one_ok_mutant_wrong_player(&effects, player),
         "mutant: the draw goes to the settler"
     );
@@ -309,18 +309,18 @@ pub fn agent_half_charge_rounds_up_to_ten() {
     kani::assume(full >= 0 && full <= 10_000);
     let cut = spec::agent_half_charge(full);
     if full <= 0 {
-        assert!(cut == 0);
+        crate::kassert!(cut == 0);
         return;
     }
     // cut == ceil(full/20)*10, so cut >= full/2 and cut % 10 == 0 and
     // cut - 10 < ceil(full/2).
-    assert!(cut % 10 == 0, "G-MONEY-10: cut is a multiple of 10");
+    crate::kassert!(cut % 10 == 0, "G-MONEY-10: cut is a multiple of 10");
     let half = (full + 1) / 2;
-    assert!(cut >= half, "G-MONEY-10: cut >= ceil(full/2)");
-    assert!(cut < half + 10, "G-MONEY-10: cut is the *smallest* such multiple of 10");
+    crate::kassert!(cut >= half, "G-MONEY-10: cut >= ceil(full/2)");
+    crate::kassert!(cut < half + 10, "G-MONEY-10: cut is the *smallest* such multiple of 10");
     kani::cover!(full == 301, "301 → 160 (the clause-doc example)");
     if full == 301 {
-        assert!(cut == 160, "G-MONEY-10: 301 → 160");
+        crate::kassert!(cut == 160, "G-MONEY-10: 301 → 160");
     }
 }
 
@@ -336,7 +336,7 @@ pub fn force_buy_is_double_buy_total() {
     kani::assume(house_cost >= 0 && house_cost <= 5_000);
     let buy = spec::buy_total(price, houses, house_cost);
     let force = spec::force_buy_total(price, houses, house_cost);
-    assert!(force == 2 * buy, "G-MONEY-07: force-buy is 2 × (price + houses·house)");
+    crate::kassert!(force == 2 * buy, "G-MONEY-07: force-buy is 2 × (price + houses·house)");
 }
 
 /// G-SETTLE-08: level cap is `rent.len() - 1`; empty table ⇒ 0 (RiNG).
@@ -352,7 +352,7 @@ pub fn level_cap_is_rent_len_minus_one() {
         i += 1;
     }
     let cap = spec::level_cap(&table[..n]);
-    assert!(
+    crate::kassert!(
         cap == (n as i32) - 1,
         "G-SETTLE-08: cap is the last marked level"
     );
@@ -371,7 +371,7 @@ pub fn property_leg_unowned_is_buy() {
     let mortgaged: bool = kani::any();
     let leg = spec::g_settle_property_leg(owner, player, mortgaged);
     if owner < 0 {
-        assert!(leg == spec::PropertyLeg::UnownedBuy);
+        crate::kassert!(leg == spec::PropertyLeg::UnownedBuy);
     }
     kani::cover!(owner < 0, "unowned → buy");
     kani::cover!(owner == player && !mortgaged, "own + free → build");
@@ -401,7 +401,7 @@ pub fn agent_all_owned_gate() {
     if all {
         let mut j = 0;
         while j < n {
-            assert!(owners[j] >= 0 && owners[j] != player, "gate: every member is other-owned");
+            crate::kassert!(owners[j] >= 0 && owners[j] != player, "gate: every member is other-owned");
             j += 1;
         }
     }

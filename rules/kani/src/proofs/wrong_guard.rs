@@ -89,8 +89,8 @@ pub fn wrong_guard_too_loose_is_caught() {
 
     // The same proof obligation the real harness uses:
     // guard ⇔ clause condition. The wrong guard fails it at `value == 0`.
-    assert!(wrong == book);
-    assert!(real == book);
+    crate::kassert!(wrong == book);
+    crate::kassert!(real == book);
 }
 
 /// The real guard satisfies the iff — non-vacuous companion.
@@ -108,7 +108,7 @@ pub fn real_guard_matches_clause_iff() {
     let rn = real_guard_nodes7();
     let real = rules_cond_ir::eval_node(&rn, 6, &ctx).as_cond_bool();
     let book = clause_condition(actor, owner, value);
-    assert!(real == book);
+    crate::kassert!(real == book);
     kani::cover!(real);
     kani::cover!(!real);
 }
@@ -134,7 +134,7 @@ pub fn wrong_guard_disagreement_is_reachable() {
     kani::cover!(wrong && !book, "value == 0: wrong admits, clause rejects");
     kani::cover!(!wrong && book, "value > 0 && actor==owner: wrong rejects? no — cover other side");
     kani::cover!(wrong == book, "they agree");
-    assert!(
+    crate::kassert!(
         !(wrong == book && value == 0 && actor == owner),
         "at value==0 the wrong guard must disagree with the clause"
     );
@@ -143,7 +143,7 @@ pub fn wrong_guard_disagreement_is_reachable() {
     let witness_ctx = fill(1, 1, 0);
     let w_witness = rules_cond_ir::eval_node(&wn, 2, &witness_ctx).as_cond_bool();
     let book_witness = clause_condition(1, 1, 0);
-    assert!(w_witness != book_witness, "witness value==0 must disagree");
+    crate::kassert!(w_witness != book_witness, "witness value==0 must disagree");
     kani::cover!(w_witness != book_witness, "reachable disagreement");
 }
 
@@ -153,7 +153,7 @@ pub fn wrong_guard_disagreement_is_reachable() {
 #[kani::should_panic]
 pub fn sanity_should_panic() {
     let x: i64 = kani::any();
-    assert!(x != x);
+    crate::kassert!(x != x);
 }
 
 /// Sanity 2: the range assume actually keeps `value == 0`.
@@ -163,5 +163,5 @@ pub fn sanity_should_panic() {
 pub fn sanity_value_zero_reachable() {
     let value: i64 = kani::any();
     kani::assume(value >= -2 && value <= 2);
-    assert!(value != 0);
+    crate::kassert!(value != 0);
 }

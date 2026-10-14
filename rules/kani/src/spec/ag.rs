@@ -492,6 +492,6 @@ pub fn frame_money_only(pre: &Snapshot, post: &Snapshot, touched: &[usize]) -> b
     pre.pos == post.pos
         && pre.fire == post.fire
         && pre.stay == post.stay
-        && pre.out == post.out
+        && crate::world::arr4b_eq(pre.out, post.out)
         && pre.pay_amount == post.pay_amount
 }

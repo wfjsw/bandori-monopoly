@@ -624,17 +624,17 @@ pub fn maya_inf_02_card_crystals_mutant(pre: i32) -> i32 {
 
 /// Money of every player unchanged.
 pub fn frame_money(pre: &Snapshot, post: &Snapshot) -> bool {
-    pre.money == post.money
+    crate::world::arr4_eq(pre.money, post.money)
 }
 
 /// Fan views unchanged.
 pub fn frame_fans(pre: &Snapshot, post: &Snapshot) -> bool {
-    pre.fans_pos == post.fans_pos && pre.fans_neg == post.fans_neg
+    crate::world::arr4_eq(pre.fans_pos, post.fans_pos) && crate::world::arr4_eq(pre.fans_neg, post.fans_neg)
 }
 
 /// Hand / discard bitsets unchanged.
 pub fn frame_piles(pre: &Snapshot, post: &Snapshot) -> bool {
-    pre.hand == post.hand && pre.discard == post.discard
+    crate::world::arr8b_eq(pre.hand, post.hand) && crate::world::arr8b_eq(pre.discard, post.discard)
 }
 
 /// Quiet: no effects at all.
