@@ -3376,6 +3376,13 @@ pub fn arm_spend_fire(a: Args) -> i64 {
     })
 }
 
+/// `Op::trig_player` — the trigger's acting seat.
+pub fn arm_trig_player(_a: Args) -> i64 {
+    world::with_world(|w| w.trig_player) as i64
+}
+
+
+
 /// Move-plan / settle / offer protocol stubs (PROTOCOL-LEVEL; return 0).
 /// Same benign-0 list as `dispatch`'s plan/settle and offers arms.
 pub fn arm_plan_stub(_a: Args) -> i64 {
