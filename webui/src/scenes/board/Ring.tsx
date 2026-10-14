@@ -313,7 +313,7 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   const [col, row] = cell(i);
   const owner = S.owners[i] ?? -1;
   const focus = useSeatFocus(owner);
-  const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail, dest && s.pickable);
+  const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail, dest && s.dest);
   const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
   const tileMarks = S.marks ?? [];
   const designations = tileMarks.filter((x) => x.tile === i && x.category === "designate");
