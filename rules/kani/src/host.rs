@@ -118,6 +118,12 @@ pub fn install_backend(f: kani_host::Backend) {
 /// Decode a guest name handle. Under the string facade the handle *is* the
 /// `NameId` (`intern::INTERN_TAG | id`); otherwise fall back to reading the
 /// arena bytes and interning (legacy / non-`s()` producers).
+///
+/// Under `cfg(kani)` an **untagged** name handle is a loud FAIL (same rule as
+/// [`outside_subset`]): the facade (`ctx::s` / `key!`) always tags, so an
+/// untagged handle means the body bypassed it. We do **not** `assume` the
+/// path away, and we do **not** `native::read`/`to_vec` (the alloc is an SSA
+/// cliff — TRIAGE-LOG `op-subset`).
 #[inline(always)]
 fn name_id(handle: i32, len: i32) -> NameId {
     if let Some(id) = intern::decode_handle(handle) {
@@ -125,8 +131,17 @@ fn name_id(handle: i32, len: i32) -> NameId {
         kani::assert(id.is_valid(), "name handle carries INVALID NameId");
         return id;
     }
-    let b = card_sdk::native::read(handle, len.max(0) as usize);
-    intern::intern_bytes(&b)
+    #[cfg(kani)]
+    {
+        let _ = len;
+        kani::assert(false, "untagged name handle (expected ctx::s facade)");
+        return intern::NameId::INVALID;
+    }
+    #[cfg(not(kani))]
+    {
+        let b = card_sdk::native::read(handle, len.max(0) as usize);
+        intern::intern_bytes(&b)
+    }
 }
 
 /// Bytes of a guest name, from the intern table (static, no heap).
