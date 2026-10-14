@@ -1234,6 +1234,8 @@ specs. Production `cfg(not(kani))` untouched.
 | `pp::ranger_01_02_steps_by_count_iff` | FAILED 453 s | `C-PP-ranger-01: +500 iff count >= 1` | **B+C** | host `arm_cards_in` had no Field/Deck case (class C); proof counted the Ranger itself (class B, [手] play is not on the field during its body) | pending |
 | `skills_pp::band_idol_02/04` (pre-empted) | (not yet run) | same crystal-storage shape as pp | **B** | `field_crystals` not player key `"奇迹水晶"` | pending |
 | `mor::courage_01_mutant_is_detected` | UNWINDING 121 s | same `courage_world_owned` loop | **A** | same 8×8 chunk walk | pending |
+| `mor::toko_swap_iff_blocked_host` | UNWINDING 273 s | `unwinding assertion loop 0` at `toko_swap::pairs` | **A** | body `for theirs in 0..60` at unwind 32; raise to 64 (card body untouchable) | pending |
+| `mor::toko_swap_user1_iff_blocked_host` | UNWINDING 419 s | same | **A** | same | pending |
 
 ### Host-model fixes (commit `2548b2b4`)
 
