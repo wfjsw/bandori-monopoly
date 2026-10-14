@@ -478,6 +478,89 @@ macro). Production `rules/` restored to master.
 Branch is **docs + crychic static kassert message only** (production
 `rules/` matches master; dist hashes identical).
 
+
+## strvec — String/Vec unwinding facades (branch `kani-strvec`)
+
+Goal: remove the `String`/`Vec` unwinding cost that times out
+`prompt::aya_haruka_01_*`, `money_shave::aya_haruka_02_*`, and
+`events::front_or_back_*` / `moca_02_mutant` at 1800 s. Approach: `cfg(kani)`
+facades in `rules/card-sdk` (same pattern as intern/Msg: zero-loop, heap-free)
+plus harness-side fixed arrays. Production wasm/native **byte-identical**
+(`dist` hashes match master).
+
+### Changes (all `cfg(kani)` unless noted)
+
+| piece | was | now |
+|---|---|---|
+| `card-sdk/kani_alloc.rs` | system `malloc`/`free` (CBMC heap objects) | static 16 KiB bump: `alloc`=cursor, `dealloc`=no-op, `realloc` grows last block |
+| `card-sdk/native.rs` arena | `Vec<Vec<Vec<u8>>>` + `vec![0u8; len]` | `[[[u8;64];8];8]` frame stack; zero-loop intern/read/write/pad |
+| `out_buf` / `out_read` | `vec![0u8; cap]` (`extend_with` 31) | empty scratch + fixed arena pull |
+| `ask_pick` / `ask_card` / `ask_player` / `ask_player_cards` / `ask_number` | `for` over symbolic-length slice (`ctx::ask_card` 31) | 4-slot branch trees; `kani::assert` if >4 |
+| `cond-ir` `named_get` / `named_set` | 4-iter + 10×8 chunk walks (`named_set` 8) | zero-loop 80-step scan (`.get`, no index panic) |
+| `ir_fill::fill_pay_add` | `named_set` ×2 | direct `named[0..2]` slots |
+| `invoke::hook_kind_only_idx` / `hook_kind_matches` | `kinds.iter().any` | zero-loop 4-slot match |
+| events specs (`log_is_gains`, `log_is_paytos`, `front_or_back_*`) | `iter().zip` / `contains` at 31 | zero-loop step macros (bound 24) |
+| `moca_02_mutant` scan | `effects.iter().any` | zero-loop 24-step |
+
+### Production hash check
+
+`node tools/build-ruleset.mjs` **without** `CARGO_TARGET_DIR` (worktree
+`/home/monopoly/kani-strvec-wt`), compared to master's `/home/monopoly/web/dist`:
+
+| artifact | worktree | master | result |
+|---|---|---|---|
+| `dist/cards/*.wasm` (card_all) | `fc3010e9cf22c528…b4c15` | `fc3010e9cf22c528…b4c15` | **identical** |
+| `dist/fixtures/*.wasm` | `03d5135b4faf3dca…ada15` | `03d5135b4faf3dca…ada15` | **identical** |
+| `dist/cards/conds-*.bin` | `a76f4eab6a76a74f…7da7` | `a76f4eab6a76a74f…7da7` | **identical** |
+
+### Tests
+
+* `cargo test -p rules-kani` ×3 — green (13 + 14 + 37 + 5 + 5)
+* `cargo test -p rules-cond --features lower` — green (58)
+* `cargo check --manifest-path rules/Cargo.toml --workspace --target wasm32-unknown-unknown` — green
+* `cargo build -p game-rules -p rules-native -p server` — green
+
+### Before / after (target rows)
+
+Iterative re-runs of `prompt::aya_haruka_01_prompt_all_picks_iff` (one CBMC
+slot, 1800 s cap, unwind 32):
+
+| run | change on top of the facades | verdict | profile |
+|---|---|---|---|
+| v1 | facades only (ask trees, fixed arena, named_set 0, out_buf) | **FAILED 1156 s** | SDK cliffs gone (0 extend_with / ask_card); residual body `drop_glue<[String]>` 32, `String fold` 31, `memcmp` 32 |
+| v2 | `cards_in` generic `T: From<CardList>` | compile fail (type-param default is a hard error) | — |
+| v3 | `cards_in` len 0-or-4 + `from_raw_parts` static strings | **FAILED 476 s, 0/4 covers UNREACHABLE** | profile clean (no memcmp/drop_glue) but `__rust_dealloc` rejects static pointers → every String-drop path aborts → vacuous |
+| v4 | `String::from` facade (valid alloc) + len 0-or-4 | killed mid-run | `memcmp` 414+ (heap `len` not folded); drop_glue/fold **gone** |
+| v5 | `from_raw_parts` over a real 1-byte `alloc` (constant `len=1`) + len 0-or-4 | **TIMEOUT 1800 s** | `memcmp` 2015 (`slice_contains` 63 × 32); drop_glue only 13 (constant-len helps); 187 `__rust_dealloc`/`same_allocation` path aborts |
+
+**What is gone for good (all runs after v1):** `Vec<u8>::extend_with`,
+`ctx::ask_card` / `ask_pick` / `ask_player` / `ask_tile` loops,
+`named_set` 8, `by_idx` 10, `drop_glue<[String]>` (constant-length
+`cards_in`), the `String` `map().collect()` fold.
+
+**What remains:** `memcmp` inside `String::eq` (`ids.contains`). CBMC
+treats a heap `String`'s `len` as symbolic even when built via
+`from_raw_parts(p, 1, 1)`, so `memcmp` unrolls to the global bound (32).
+That is the unmodified body's `Vec<String>` ABI — the TUNING §10 wall.
+No `cfg(kani)` facade can make `alloc::string::String`'s Drop/eq see a
+constant length without a body type-annotation change.
+
+| id | before (batch 3e/4) | after (strvec) |
+|---|---|---|
+| `prompt::aya_haruka_01_prompt_all_picks_iff` | TIMEOUT 1800 s — extend_with 31, drop_glue 62, memcmp 31, ask_card 31 | **FAILED 1156 s** (v1) / **FAILED 476 s vacuous** (v3) / **TIMEOUT 1800 s** (v5) — extend_with/ask_card **gone**; body `Vec<String>` memcmp/drop_glue/fold residual (see above) |
+| `prompt::aya_haruka_01_mutant_two_cards` | TIMEOUT 1800 s — same | same stack as iff; residual memcmp |
+| `money_shave::aya_haruka_02_shave_iff` | TIMEOUT 1800 s — extend_with 31, by_idx 10, memcmp 10, named_set 8 | **TIMEOUT 1800 s**, unwind profile **clean** (`symbolic_pay_world` 4 + `fill_pay_add` 4 + `poorest` 4 + `hook_kind` 1; **zero** extend_with/named_set/by_idx/memcmp/drop_glue). Solver-bound on the 4-seat symbolic world — the String/Vec cliffs are gone |
+| `money_shave::aya_haruka_02_mutant_*` | TIMEOUT 1800 s — same | same (clean profile, solver-bound) |
+| `events::front_or_back_*` (01/02/mutant) | TIMEOUT 1800 s — body `Vec` + effects iters at 32 | effects iters 0 (spec step macros); body `Vec<i32>` loops remain (same wall) |
+| `events::moca_02_mutant_is_detected` | TIMEOUT 1800 s — fmt PadAdapter + memchr 1193 | `kassert!` + zero-loop `iter().any`; re-time pending |
+
+Remaining risk: the unmodified bodies still allocate `Vec<String>`
+(`aya_longing` `ids`) and `Vec<i32>` (`front_or_back` `front`/`back`/`winners`).
+Those types cannot change without a body edit. The bump allocator turns their
+grow/drop into array arithmetic; the loops still unroll to the global bound if
+`Vec::len` is not folded. If a row stays TIMEOUT the profile will say whether
+the residual is still `drop_glue`/`extend_with` or solver-bound on the symbolic
+world (the money_shave post-batch-2 diagnosis).
 ## op-subset — per-harness host-op subset + sparse World (branch `kani-opsubset`)
 
 Goal (coordinator): `pp::same_dream_01_band_plus_3_iff` well under 1800 s,

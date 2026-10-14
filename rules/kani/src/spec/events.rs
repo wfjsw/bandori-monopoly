@@ -21,20 +21,33 @@ pub fn log_is_paytos(effects: &[Effect], expected: &[(i32, i32, i32)]) -> bool {
     if effects.len() != expected.len() {
         return false;
     }
-    for (e, &(from, to, n)) in effects.iter().zip(expected.iter()) {
-        match e {
-            Effect::PayTo {
-                from: f,
-                to: t,
-                n: m,
-            } => {
-                if *f != from || *t != to || *m != n {
-                    return false;
+    // Zero-loop zip (see `log_is_gains`).
+    let n = effects.len().min(expected.len()).min(24);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < n {
+                let (e, &(from, to, amt)) = match (effects.get($i), expected.get($i)) {
+                    (Some(e), Some(x)) => (e, x),
+                    _ => return false,
+                };
+                match e {
+                    Effect::PayTo {
+                        from: f,
+                        to: t,
+                        n: m,
+                    } => {
+                        if *f != from || *t != to || *m != amt {
+                            return false;
+                        }
+                    }
+                    _ => return false,
                 }
             }
-            _ => return false,
-        }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
     true
 }
 
@@ -43,19 +56,33 @@ pub fn log_is_gains(effects: &[Effect], expected: &[(i32, i32)]) -> bool {
     if effects.len() != expected.len() {
         return false;
     }
-    for (e, &(p, n)) in effects.iter().zip(expected.iter()) {
-        match e {
-            Effect::GainMoney {
-                player: q,
-                n: m,
-            } => {
-                if *q != p || *m != n {
-                    return false;
+    // Zero-loop zip: a `for (e, &x) in a.iter().zip(b)` unrolls to the global
+    // bound when the lengths are not folded (front_or_back profile: `log_is_gains` 31).
+    let n = effects.len().min(expected.len()).min(24);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < n {
+                let (e, &(p, amt)) = match (effects.get($i), expected.get($i)) {
+                    (Some(e), Some(x)) => (e, x),
+                    _ => return false,
+                };
+                match e {
+                    Effect::GainMoney {
+                        player: q,
+                        n: m,
+                    } => {
+                        if *q != p || *m != amt {
+                            return false;
+                        }
+                    }
+                    _ => return false,
                 }
             }
-            _ => return false,
-        }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
     true
 }
 
@@ -328,15 +355,23 @@ pub fn front_or_back_share_total_ok(gains: &[(i32, i32)], winners: &[i32]) -> bo
         return gains.is_empty();
     }
     let mut total = 0;
-    for &(p, n) in gains {
-        if !winners.contains(&p) {
-            return false;
-        }
-        if n < 0 {
-            return false;
-        }
-        total += n;
+    let ng = gains.len().min(8);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < ng {
+                if let Some(&(p, n)) = gains.get($i) {
+                    if !winners.contains(&p) {
+                        return false;
+                    }
+                    if n < 0 {
+                        return false;
+                    }
+                    total += n;
+                }
+            }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
     let n = winners.len() as i32;
     let expected_total = 1000 - (1000 % n);
     total == expected_total && gains.len() == winners.len()
@@ -364,18 +399,26 @@ pub fn front_or_back_share_legs(effects: &[Effect], winners: &[i32]) -> Vec<(i32
     }
     let each = 1000 / winners.len() as i32;
     let mut skipped = false;
-    for e in effects {
-        if let Effect::PayTo { from, to, n } = e {
-            // Drop the first full-total shaping record from the bank.
-            if !skipped && *from < 0 && *n == 1000 {
-                skipped = true;
-                continue;
+    let ne = effects.len().min(24);
+    macro_rules! step {
+        ($i:expr) => {
+            if $i < ne {
+                if let Some(e) = effects.get($i) {
+                    if let Effect::PayTo { from, to, n } = e {
+                        // Drop the first full-total shaping record from the bank.
+                        if !skipped && *from < 0 && *n == 1000 {
+                            skipped = true;
+                        } else if *from < 0 && winners.contains(to) && *n == each {
+                            out.push((*to, *n));
+                        }
+                    }
+                }
             }
-            if *from < 0 && winners.contains(to) && *n == each {
-                out.push((*to, *n));
-            }
-        }
+        };
     }
+    step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+    step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+    step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
     out
 }
 

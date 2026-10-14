@@ -96,11 +96,20 @@ fn mj(m: &Msg) -> (i32, i32) {
 /// an arena slot and `scratch` is a dummy of the same length (the real bytes
 /// come back through [`out_read`]).
 fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
+    #[cfg(kani)]
+    {
+        // Fixed arena slot — never `vec![0u8; cap]` (`extend_with` cliff when
+        // `cap` is a host return). Scratch is empty: `out_read` pulls the bytes.
+        let (h, _l) = crate::native::reserve(cap);
+        (h, alloc::vec::Vec::new())
+    }
+    #[cfg(not(kani))]
     #[cfg(target_arch = "wasm32")]
     {
         let mut buf = alloc::vec![0u8; cap];
         (buf.as_mut_ptr() as i32, buf)
     }
+    #[cfg(not(kani))]
     #[cfg(not(target_arch = "wasm32"))]
     {
         let (h, l) = crate::native::reserve(cap);
@@ -112,11 +121,18 @@ fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
 /// On wasm the scratch already holds the bytes; on native they live in the
 /// arena and `scratch` is discarded.
 fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
+    #[cfg(kani)]
+    {
+        let _ = scratch;
+        crate::native::read(p, n.max(0) as usize)
+    }
+    #[cfg(not(kani))]
     #[cfg(target_arch = "wasm32")]
     {
         let _ = p;
         scratch
     }
+    #[cfg(not(kani))]
     #[cfg(not(target_arch = "wasm32"))]
     {
         let _ = scratch;
@@ -563,25 +579,70 @@ pub fn pay_leg(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt
 /// rather than each share (`PIPELINE-AUDIT` Q2 / `rb_money::
 /// pre_split_modifier_shapes_the_total_not_each_leg`).
 pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i32>, Prompt> {
-    let list: Vec<i32> = payers
-        .iter()
-        .copied()
-        .filter(|&p| p != to && !player_out(p))
-        .collect();
-    if list.is_empty() || total <= 0 {
-        return Ok(Vec::new());
+    #[cfg(kani)]
+    {
+        // Zero-loop filter + leg walk (a `filter().collect()` + `for p in list`
+        // over a symbolic-length slice is the extend_with / drop_glue cliff).
+        let mut list: [i32; 4] = [0; 4];
+        let mut n = 0usize;
+        macro_rules! push {
+            ($i:expr) => {
+                if n < 4 {
+                    if let Some(&p) = payers.get($i) {
+                        if p != to && !player_out(p) {
+                            list[n] = p;
+                            n += 1;
+                        }
+                    }
+                }
+            };
+        }
+        push!(0); push!(1); push!(2); push!(3);
+        if payers.len() > 4 {
+            kani::assert(false, "split_pay: more than 4 payers under Kani");
+        }
+        if n == 0 || total <= 0 {
+            return Ok(Vec::new());
+        }
+        let Some(shaped) = pay_total(list[0], to, total, src)? else {
+            return Ok(Vec::new());
+        };
+        let ln = n as i32;
+        let per = (shaped + ln - 1) / ln;
+        let share = (per + 9) / 10 * 10;
+        let mut moved = Vec::new();
+        macro_rules! leg {
+            ($i:expr) => {
+                if $i < n {
+                    moved.push(pay_leg(list[$i], to, share, src)?);
+                }
+            };
+        }
+        leg!(0); leg!(1); leg!(2); leg!(3);
+        return Ok(moved);
     }
-    let Some(shaped) = pay_total(list[0], to, total, src)? else {
-        return Ok(Vec::new());
-    };
-    let n = list.len() as i32;
-    let per = (shaped + n - 1) / n;
-    let share = (per + 9) / 10 * 10;
-    let mut moved = Vec::with_capacity(list.len());
-    for p in list {
-        moved.push(pay_leg(p, to, share, src)?);
+    #[cfg(not(kani))]
+    {
+        let list: Vec<i32> = payers
+            .iter()
+            .copied()
+            .filter(|&p| p != to && !player_out(p))
+            .collect();
+        if list.is_empty() || total <= 0 {
+            return Ok(Vec::new());
+        }
+        let Some(shaped) = pay_total(list[0], to, total, src)? else {
+            return Ok(Vec::new());
+        };
+        let n = list.len() as i32;
+        let per = (shaped + n - 1) / n;
+        let share = (per + 9) / 10 * 10;
+        let mut moved = Vec::with_capacity(list.len());
+        for p in list {
+            moved.push(pay_leg(p, to, share, src)?);
+        }
+        Ok(moved)
     }
-    Ok(moved)
 }
 
 // ------------------------------------------------------------- hand / deck
@@ -594,11 +655,34 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 /// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
 /// does; the body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
-    let mut got = 0;
-    for _ in 0..n.max(0) {
-        got += asked(unsafe { sys::draw(player_id, 1) })?;
+    #[cfg(kani)]
+    {
+        // Zero-loop (card-pool draws are 1..=3; a `for _ in 0..n` unrolls to
+        // the global bound when `n` is a register value).
+        let mut got = 0;
+        let mut taken = 0i32;
+        macro_rules! draw1 {
+            () => {
+                if taken < n.max(0) {
+                    got += asked(unsafe { sys::draw(player_id, 1) })?;
+                    taken += 1;
+                }
+            };
+        }
+        draw1!(); draw1!(); draw1!(); draw1!();
+        if n.max(0) > 4 {
+            kani::assert(false, "draw: more than 4 cards under Kani");
+        }
+        return Ok(got);
     }
-    Ok(got)
+    #[cfg(not(kani))]
+    {
+        let mut got = 0;
+        for _ in 0..n.max(0) {
+            got += asked(unsafe { sys::draw(player_id, 1) })?;
+        }
+        Ok(got)
+    }
 }
 
 /// Draw the top event and resolve it (「抽取一个事件卡」).
@@ -660,6 +744,63 @@ pub fn take_from_hand(player_id: i32, card: &str) -> bool {
 
 /// Every card id in a player's `pile`, in pile order (the deck's top card
 /// first). Duplicates are listed once per copy.
+///
+/// Under `cfg(kani)` the result is a `Vec<String>` of **length 0 or 4**
+/// (never 1..=3): empty pile → empty vec; otherwise 4 slots where unused
+/// slots repeat earlier facade ids. The unmodified body's
+/// `ids.contains` dedups the repeats, so `ids` still holds exactly the
+/// distinct cards — and every `Vec<String>` walk in the body (`contains` /
+/// `map().collect()` / `drop_glue`) sees a **constant** length 0 or 4, so
+/// it unwinds to 4 instead of the global bound (prompt profile: fold 31,
+/// `drop_glue<[String]>` 62).
+#[cfg(kani)]
+pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
+    let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
+    if need < 2 {
+        // 0 cards (`need = 1 + n`, n=0) or a host error — empty (constant len 0).
+        return Vec::new();
+    }
+    let (p, scratch) = out_buf(need as usize);
+    let got = unsafe { sys::cards_in(player_id, pile as i32, p, need) };
+    if got != need {
+        return Vec::new();
+    }
+    let buf = out_read(p, got, scratch);
+    // 1-byte facade strings. `from_raw_parts` over a **real 1-byte
+    // allocation** (not a static — kani's `__rust_dealloc` rejects non-malloc
+    // pointers and that vacuities the covers) keeps `len` the constant 1 so
+    // `String::eq` is a 1-byte `memcmp` (v3 profile: memcmp 0). The
+    // allocation is the system allocator kani tracks.
+    fn slot_str(buf: &[u8], i: usize) -> String {
+        let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
+        let layout = core::alloc::Layout::from_size_align(1, 1).unwrap();
+        let p = unsafe { std::alloc::alloc(layout) };
+        if p.is_null() {
+            return String::new();
+        }
+        unsafe {
+            *p = slot;
+            String::from_raw_parts(p, 1, 1)
+        }
+    }
+    // Real slots (branch tree, 0..=3 of them).
+    let s0 = slot_str(&buf, 0);
+    let s1 = slot_str(&buf, 1);
+    let s2 = slot_str(&buf, 2);
+    // Always 4 elements; pad with repeats so `len` is the constant 4.
+    // `ids.contains` in the body dedups.
+    let a = if need >= 2 { s0.clone() } else { s1.clone() };
+    let b = if need >= 3 { s1.clone() } else { a.clone() };
+    let c = if need >= 4 { s2.clone() } else { b.clone() };
+    let mut out = Vec::new();
+    out.push(a);
+    out.push(b);
+    out.push(c);
+    out.push(if need >= 2 { s0 } else { s1 });
+    out
+}
+
+#[cfg(not(kani))]
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     if need <= 0 {
@@ -671,54 +812,7 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // Under Kani the host writes `[n, slot…]` where slot is a small card
-    // slot (see rules-kani). postcard + String does not unwind under CBMC.
-    //
-    // Interned-str facade: each returned `String` is a **single byte** whose
-    // value is the slot id (0..3). Card bodies still see `Vec<String>`
-    // (unmodified), but `String::eq` / `Vec::contains` degrade to a 1-byte
-    // compare. The previous full-name encoding made `ids.contains(&c)` in
-    // play bodies blow CBMC's `memcmp` unwind (the prompt OOM cliff — see
-    // `KANI.md` §5). The host's `card_slot` / `card_u16` recognise this
-    // 1-byte form and map it back to the well-known name id.
-    //
-    // Length comes from the host's **integer return** (`need = 1 + n`), not
-    // from `buf[0]`: the heap buffer's metadata is symbolic to CBMC and a
-    // symbolic `n` unwinds `Vec::contains` to the full bound. `need` is an
-    // i64 in a register, concrete whenever the pile contents are.
-    #[cfg(kani)]
-    {
-        // Branch tree, not a loop: CBMC unwinds `while i < n` to the global
-        // bound when `need` (fn-ptr return) is not folded, and a 32-iteration
-        // Vec-grow × String path is the time cliff. The host only ever emits
-        // `need = 1 + n` for `n = 0..=4` pilot slots.
-        fn slot_str(buf: &[u8], i: usize) -> String {
-            let slot = if 1 + i < buf.len() { buf[1 + i] & 3 } else { 2 };
-            // Fixed 1-char literals: `len` is a compile-time constant so
-            // `String::eq` / `memcmp` is one byte.
-            match slot {
-                0 => String::from("\x00"),
-                1 => String::from("\x01"),
-                2 => String::from("\x02"),
-                _ => String::from("\x03"),
-            }
-        }
-        let mut out = Vec::new();
-        if need >= 2 {
-            out.push(slot_str(&buf, 0));
-            if need >= 3 {
-                out.push(slot_str(&buf, 1));
-                if need >= 4 {
-                    out.push(slot_str(&buf, 2));
-                }
-            }
-        }
-        return out;
-    }
-    #[cfg(not(kani))]
-    {
-        postcard::from_bytes(&buf).unwrap_or_default()
-    }
+    postcard::from_bytes(&buf).unwrap_or_default()
 }
 
 #[cfg_attr(kani, inline(always))]
@@ -1607,21 +1701,68 @@ fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<
 /// Returns the chosen **tile**, not the index.
 /// Falls back to the first option if the answer is out of range.
 pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
-    for &t in tiles {
-        unsafe { sys::opt_int(t) }
+    #[cfg(kani)]
+    {
+        // Zero-loop option list (see `ask_pick`).
+        if let Some(&t) = tiles.get(0) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(1) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(2) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(3) {
+            unsafe { sys::opt_int(t) }
+        }
+        if tiles.len() > 4 {
+            kani::assert(false, "ask_tile: more than 4 tiles under Kani");
+        }
+        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
+        return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
     }
-    let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
-    Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    #[cfg(not(kani))]
+    {
+        for &t in tiles {
+            unsafe { sys::opt_int(t) }
+        }
+        let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
+        Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    }
 }
 
 /// [`ask_tile`] for a pick the player then walks to: the board lights the
 /// path to the hovered tile as well as the tile itself.
 pub fn ask_tile_walk(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
-    for &t in tiles {
-        unsafe { sys::opt_int(t) }
+    #[cfg(kani)]
+    {
+        if let Some(&t) = tiles.get(0) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(1) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(2) {
+            unsafe { sys::opt_int(t) }
+        }
+        if let Some(&t) = tiles.get(3) {
+            unsafe { sys::opt_int(t) }
+        }
+        if tiles.len() > 4 {
+            kani::assert(false, "ask_tile_walk: more than 4 tiles under Kani");
+        }
+        let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
+        return Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]);
     }
-    let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
-    Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    #[cfg(not(kani))]
+    {
+        for &t in tiles {
+            unsafe { sys::opt_int(t) }
+        }
+        let i = ask_raw(PromptKind::TileWalk, player_id, title, text)?;
+        Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+    }
 }
 
 /// Tile ask with per-option labels, prices, and an AI choice hint
@@ -1654,12 +1795,42 @@ pub fn ask_tiles(
 
 /// Returns the chosen option index.
 pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Result<usize, Prompt> {
-    for o in options {
-        let (p, l) = mj(o);
-        unsafe { sys::opt_str(p, l) }
+    #[cfg(kani)]
+    {
+        // Zero-loop option list: fixed 4-slot branch tree. A `for o in options`
+        // unrolls to the global bound when `options.len()` is not folded (the
+        // prompt profile's `ctx::ask_card` 31).
+        if let Some(o) = options.get(0) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if let Some(o) = options.get(1) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if let Some(o) = options.get(2) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if let Some(o) = options.get(3) {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        if options.len() > 4 {
+            kani::assert(false, "ask_pick: more than 4 options under Kani");
+        }
+        let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
+        return Ok((i.max(0) as usize).min(options.len().saturating_sub(1)));
     }
-    let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
-    Ok((i.max(0) as usize).min(options.len().saturating_sub(1)))
+    #[cfg(not(kani))]
+    {
+        for o in options {
+            let (p, l) = mj(o);
+            unsafe { sys::opt_str(p, l) }
+        }
+        let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
+        Ok((i.max(0) as usize).min(options.len().saturating_sub(1)))
+    }
 }
 
 /// A yes/no ask.
@@ -1669,11 +1840,34 @@ pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> Result<bool, Prompt> 
 
 /// Returns the chosen player.
 pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> Result<i32, Prompt> {
-    for &x in players {
-        unsafe { sys::opt_int(x) }
+    #[cfg(kani)]
+    {
+        if let Some(&x) = players.get(0) {
+            unsafe { sys::opt_int(x) }
+        }
+        if let Some(&x) = players.get(1) {
+            unsafe { sys::opt_int(x) }
+        }
+        if let Some(&x) = players.get(2) {
+            unsafe { sys::opt_int(x) }
+        }
+        if let Some(&x) = players.get(3) {
+            unsafe { sys::opt_int(x) }
+        }
+        if players.len() > 4 {
+            kani::assert(false, "ask_player: more than 4 players under Kani");
+        }
+        let i = ask_raw(PromptKind::Player, player_id, title, text)?;
+        return Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))]);
     }
-    let i = ask_raw(PromptKind::Player, player_id, title, text)?;
-    Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
+    #[cfg(not(kani))]
+    {
+        for &x in players {
+            unsafe { sys::opt_int(x) }
+        }
+        let i = ask_raw(PromptKind::Player, player_id, title, text)?;
+        Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
+    }
 }
 
 /// A player ask where each option also names a **card** to show with it (returns
@@ -1691,28 +1885,79 @@ pub fn ask_player_cards(
     players: &[i32],
     cards: &[&str],
 ) -> Result<i32, Prompt> {
-    let n = players.len().min(cards.len());
-    let mut options: Vec<Msg> = Vec::with_capacity(n);
-    for (p, c) in players.iter().zip(cards.iter()).take(n) {
-        options.push(Msg::new("ask.player").player_id("who", *p).card("card", c));
+    #[cfg(kani)]
+    {
+        // Fixed 4-slot option array — no `Vec<Msg>` grow/drop.
+        let mut options: [Msg; 4] = [Msg::new("ask.player"); 4];
+        let mut n = 0usize;
+        macro_rules! push {
+            ($i:expr) => {
+                if n < 4 {
+                    if let (Some(&p), Some(&c)) = (players.get($i), cards.get($i)) {
+                        options[n] = Msg::new("ask.player").player_id("who", p).card("card", c);
+                        n += 1;
+                    }
+                }
+            };
+        }
+        push!(0); push!(1); push!(2); push!(3);
+        if n == 0 {
+            return Ok(-1);
+        }
+        let i = ask_pick(player_id, title, text, &options[..n])?;
+        return Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))]);
     }
-    if options.is_empty() {
-        return Ok(-1);
+    #[cfg(not(kani))]
+    {
+        let n = players.len().min(cards.len());
+        let mut options: Vec<Msg> = Vec::with_capacity(n);
+        for (p, c) in players.iter().zip(cards.iter()).take(n) {
+            options.push(Msg::new("ask.player").player_id("who", *p).card("card", c));
+        }
+        if options.is_empty() {
+            return Ok(-1);
+        }
+        let i = ask_pick(player_id, title, text, &options)?;
+        Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
     }
-    let i = ask_pick(player_id, title, text, &options)?;
-    Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
 }
 
 /// Pick one of `cards` (ids); returns the index.
 pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Result<usize, Prompt> {
-    for c in cards {
-        // `opt_str` takes a serialized `Msg`, not a raw string -- a card id
-        // wrapped as `{{card}}` is the label.
-        let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
-        unsafe { sys::opt_str(p, l) }
+    #[cfg(kani)]
+    {
+        // Zero-loop option list (same 4-slot tree as `ask_pick`). The prompt
+        // profile showed `ctx::ask_card` 31 — the `for c in cards` over a
+        // symbolic-length slice.
+        macro_rules! opt {
+            ($i:expr) => {
+                if let Some(c) = cards.get($i) {
+                    // `opt_str` takes a serialized `Msg`, not a raw string -- a
+                    // card id wrapped as `{{card}}` is the label. Under kani
+                    // `Msg` is Copy and `mj` is two ints (no postcard Vec).
+                    let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
+                    unsafe { sys::opt_str(p, l) }
+                }
+            };
+        }
+        opt!(0); opt!(1); opt!(2); opt!(3);
+        if cards.len() > 4 {
+            kani::assert(false, "ask_card: more than 4 cards under Kani");
+        }
+        let i = ask_raw(PromptKind::Card, player_id, title, text)?;
+        return Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)));
     }
-    let i = ask_raw(PromptKind::Card, player_id, title, text)?;
-    Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)))
+    #[cfg(not(kani))]
+    {
+        for c in cards {
+            // `opt_str` takes a serialized `Msg`, not a raw string -- a card id
+            // wrapped as `{{card}}` is the label.
+            let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
+            unsafe { sys::opt_str(p, l) }
+        }
+        let i = ask_raw(PromptKind::Card, player_id, title, text)?;
+        Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)))
+    }
 }
 
 /// A number in `min..=max`, built as an [`ask_pick`] over the range (ranges in
@@ -1727,15 +1972,52 @@ pub fn ask_number(
 ) -> Result<i32, Prompt> {
     let min = min.min(max);
     let max = max.max(min);
-    let mut options: Vec<Msg> = Vec::new();
-    for n in min..=max {
-        options.push(Msg::new("ask.intOption").i("n", n as i64));
+    #[cfg(kani)]
+    {
+        // Fixed 4-slot options (card-pool ranges are small).
+        let mut options: [Msg; 4] = [Msg::new("ask.intOption"); 4];
+        let mut n = 0usize;
+        macro_rules! push {
+            ($v:expr) => {
+                if n < 4 {
+                    options[n] = Msg::new("ask.intOption").i("n", ($v) as i64);
+                    n += 1;
+                }
+            };
+        }
+        if min <= max {
+            push!(min);
+            if min + 1 <= max {
+                push!(min + 1);
+                if min + 2 <= max {
+                    push!(min + 2);
+                    if min + 3 <= max {
+                        push!(min + 3);
+                        if min + 4 <= max {
+                            kani::assert(false, "ask_number: range wider than 4 under Kani");
+                        }
+                    }
+                }
+            }
+        }
+        if n == 0 {
+            return Ok(min);
+        }
+        let i = ask_pick(player_id, title, text, &options[..n])?;
+        return Ok(min + i as i32);
     }
-    if options.is_empty() {
-        return Ok(min);
+    #[cfg(not(kani))]
+    {
+        let mut options: Vec<Msg> = Vec::new();
+        for n in min..=max {
+            options.push(Msg::new("ask.intOption").i("n", n as i64));
+        }
+        if options.is_empty() {
+            return Ok(min);
+        }
+        let i = ask_pick(player_id, title, text, &options)?;
+        Ok(min + i as i32)
     }
-    let i = ask_pick(player_id, title, text, &options)?;
-    Ok(min + i as i32)
 }
 
 /// Run another card's `play` inside this run, as that card.

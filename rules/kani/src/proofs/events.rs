@@ -448,9 +448,26 @@ pub fn moca_02_mutant_is_detected() {
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
     // Mutant wants an extra GainMoney. Card has only EventExpire.
-    let mutant_has_gain = effects
-        .iter()
-        .any(|e| matches!(e, Effect::GainMoney { .. }));
+    // Zero-loop scan (a `iter().any` over a symbolic-length slice unrolls to
+    // the global bound and was part of the moca_02 SAT cliff).
+    let mut mutant_has_gain = false;
+    {
+        let n = effects.len().min(24);
+        macro_rules! step {
+            ($i:expr) => {
+                if $i < n {
+                    if let Some(e) = effects.get($i) {
+                        if matches!(e, Effect::GainMoney { .. }) {
+                            mutant_has_gain = true;
+                        }
+                    }
+                }
+            };
+        }
+        step!(0); step!(1); step!(2); step!(3); step!(4); step!(5); step!(6); step!(7);
+        step!(8); step!(9); step!(10); step!(11); step!(12); step!(13); step!(14); step!(15);
+        step!(16); step!(17); step!(18); step!(19); step!(20); step!(21); step!(22); step!(23);
+    }
     crate::kassert!(!mutant_has_gain, "mutant extra gain must not match the card");
 }
 

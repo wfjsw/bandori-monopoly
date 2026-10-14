@@ -309,7 +309,7 @@ every address-taken `fn(i32) -> Asked` (874–4313 targets) — the
 
 | pattern | why | affected clauses |
 |---|---|---|
-| `Vec<String>` / `String` drop glue in card bodies (`ids: Vec<String>`, `push`, `swap_remove`) | heap metadata stays symbolic to CBMC; cannot replace `String` without editing the body's type annotation (`Vec<alloc::string::String>` is named) | `aya_longing` Play (prompt class), any `cards_in` consumer |
+| `Vec<String>` / `String` drop glue in card bodies (`ids: Vec<String>`, `push`, `swap_remove`) | heap metadata stays symbolic to CBMC; cannot replace `String` without editing the body's type annotation (`Vec<alloc::string::String>` is named). **Mitigated** by `kani_alloc` bump (see §11) + static 1-byte facade strings | `aya_longing` Play (prompt class), any `cards_in` consumer |
 | `ids.contains(&c)` over a growable `Vec` | `Vec::contains` unrolls the grow path; 1-byte facade makes each `eq` cheap but the iteration bound is still `ids.len()` | prompt / all-picks / riot cycle |
 | `ctx::player_count()` **value** (not the loop) | documented §7 caveat — unchanged | `chuchu_music`, `sakiko_lead`, `kokoro_circle`, `clear_cp`, `umiri_card`, `tsukushi_garden`, `hallucination` |
 | multi-turn / chain / settle | PROTOCOL (`KANI.md` §6) | all chain windows |
@@ -352,6 +352,33 @@ attribute patch):
 |---:|---|
 | 12 (sound) | SUCCESSFUL 59 s |
 | **2 (deliberate)** | **UNWINDING** (unwinding assertion) — pipeline cannot silently regress |
+
+
+---
+
+## 11. String/Vec facades (branch `kani-strvec`)
+
+Goal: kill the remaining `extend_with` / `drop_glue` / `memcmp` / `ask_card`
+unwinds that time out the prompt / money_shave / front_or_back rows. All
+`cfg(kani)` (production dist hashes **byte-identical** to master). See
+TRIAGE-LOG `strvec` for the before/after table.
+
+| piece | what |
+|---|---|
+| `card-sdk/kani_alloc.rs` | static 16 KiB bump `#[global_allocator]`: `alloc`=cursor, `dealloc`=no-op. Unmodified bodies' `String`/`Vec` grow/drop is array arithmetic, not CBMC heap objects |
+| `card-sdk/native.rs` arena | fixed `[[[u8;64];8];8]` frames (was `Vec<Vec<Vec<u8>>>`); zero-loop intern/read/write/pad |
+| `out_buf`/`out_read` | no `vec![0u8; cap]` (`extend_with` 31); empty scratch + fixed arena pull |
+| `ask_*` (pick/card/player/tile/number) | 4-slot branch trees instead of `for` over symbolic-length slices (`ctx::ask_card` 31) |
+| `split_pay` / `draw` | zero-loop filter/leg/draw walks |
+| `cards_in` facade strings | static 1-byte buffers (`String::from_raw_parts`), no heap; `eq` is one byte |
+| `cond-ir` `named_get`/`named_set` | zero-loop 80-step scan (`.get`, no index panic) |
+| `invoke` hook-kind match | zero-loop 4-slot (`kinds.iter().any` gone) |
+| events specs / `moca_02` scan | zero-loop step macros over the effect log |
+
+Residual (cannot fix without a body edit): the bodies' own `Vec<String>`
+(`aya_longing` `ids`) and `Vec<i32>` (`front_or_back` `front`/`back`/`winners`)
+still have `Vec::len`-bounded loops. The bump allocator makes each iteration
+cheap; the loop bound is the global unwind if `len` is not folded.
 
 
 ---
