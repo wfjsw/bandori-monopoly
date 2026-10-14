@@ -1125,6 +1125,20 @@ impl World {
             .find(|f| f.uid == uid)
     }
 
+    /// The seat whose field the instance at `uid` sits on (`BOARD_OWNER` for
+    /// the board field), or -1 when it is not in play. Distinct from
+    /// [`FieldCard::owner`], which names who the card *belongs* to.
+    pub fn holder_of(&self, uid: i32) -> i32 {
+        if self.st.board_field.iter().any(|f| f.uid == uid) {
+            return crate::state::BOARD_OWNER;
+        }
+        self.st
+            .players
+            .iter()
+            .position(|s| s.field.iter().any(|f| f.uid == uid))
+            .map_or(-1, |i| i as i32)
+    }
+
     /// Re-attribute the instance at `uid` to the player who owns the card.
     /// Placement stamps `owner` / `user` with the field holder; a card parked
     /// on *another* player's field (「放置于你以外的一名玩家场上」) belongs to the
