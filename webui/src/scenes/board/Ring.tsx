@@ -1,13 +1,13 @@
 // The 60-tile ring, tokens, and the center: cards in play, the event deck, banner.
 
-import { useHoverSeat, useSeatFocus } from "./hoverSeat";
+import { useCardTileFocus, useHoverSeat, useSeatFocus } from "./hoverSeat";
 import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { memo, useCallback, useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
-import { isLight, plain } from "../../core/format";
+import { isLight, plain, prefersDarkInk } from "../../core/format";
 import type { TileData, TileQuote } from "../../core/types";
 import type { Animator } from "./anim";
 import type { Model } from "./model";
@@ -314,7 +314,8 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
   const t = D.tiles[i];
   const [col, row] = cell(i);
   const owner = S.owners[i] ?? -1;
-  const focus = useSeatFocus(owner);
+  const cardFocus = useCardTileFocus(i);
+  const focus = cardFocus || useSeatFocus(owner);
   const cls = cx(s.tile, owner >= 0 && s.owned, focus && s[focus], S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, picked && s.pickable, trail && s.trail, dest && s.dest);
   const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
   const tileMarks = S.marks ?? [];
@@ -346,9 +347,9 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
       <div className={s.houses}>{Array.from({ length: Math.min(S.houses[i] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
       {designations.length > 0 && (
         <div className={s.desig}>
-          {designations.slice(0, 2).map((x) => {
+          {designations.slice(0, 1).map((x) => {
             const { title, lines } = markTip(x);
-            const ink = x.owner >= 0 && isLight(m.colorOf(x.owner)) ? s.lightInk : undefined;
+            const ink = x.owner >= 0 && prefersDarkInk(m.colorOf(x.owner)) ? s.lightInk : undefined;
             return (
               <span
                 key={x.uid}
@@ -359,8 +360,8 @@ const Tile = memo(function Tile({ i, m, cellW, cellH, picked, trail, dest, onHov
               >{shortMarkName(cardTitle(x.card))}</span>
             );
           })}
-          {designations.length > 2 && (
-            <span className={s.desigMore}>+{designations.length - 2}</span>
+          {designations.length > 1 && (
+            <span className={s.desigMore}>+{designations.length - 1}</span>
           )}
         </div>
       )}

@@ -228,42 +228,44 @@
   font-weight: 700;
   letter-spacing: -0.2px;
 }
-/* [指定] designation: a full-width ribbon in the tile's bottom gutter, the
-   designating card's short name in the designating seat's colour. Type matches
-   the price caption (`--u * 0.78`) so it stays readable at the 1366 cell.
-   Stacks upward; a third-and-beyond is a +N chip on the last ribbon. */
+/* [指定] designation: a tab on the right end of the tile's colour band (the
+   `#index` chip leaves that half empty), so the tile name is never covered.
+   The designating card's short name in the designating seat's colour; further
+   designations collapse into a +N chip. */
 .desig {
   position: absolute;
-  left: 0;
   right: 0;
-  top: calc(var(--u, 12px) * 1.5);
+  top: 0;
+  height: calc(var(--u, 12px) * 1.45);
+  max-width: 72%;
   z-index: 6;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-end;
   gap: 1px;
   min-width: 0;
   pointer-events: none;
 }
 .markDesignate {
   display: block;
-  width: 100%;
+  min-width: 0;
   box-sizing: border-box;
-  /* Floor at ~13px so the card name stays readable at the 1366 cell even
-     when --u scales down; still grows with the wide board. */
-  height: max(16px, calc(var(--u, 12px) * 1.65));
-  padding: 0 max(4px, calc(var(--u, 12px) * 0.28));
-  border-radius: 0 0 max(3px, calc(var(--u, 12px) * 0.2)) max(3px, calc(var(--u, 12px) * 0.2));
-  font-size: max(12px, calc(var(--u, 12px) * 1.1));
+  padding: 0 max(3px, calc(var(--u, 12px) * 0.24));
+  border-radius: 0 0 0 max(3px, calc(var(--u, 12px) * 0.2));
+  font-size: max(10px, calc(var(--u, 12px) * 0.95));
   font-weight: 800;
-  line-height: max(16px, calc(var(--u, 12px) * 1.65));
-  letter-spacing: 0.01em;
+  line-height: calc(var(--u, 12px) * 1.45);
   color: #fff;
-  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.92), 0 2px 4px rgba(0, 0, 0, 0.35);
+  /* White hairline + drop shadow lift the tab off a same-coloured band. */
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-top: 0;
+  border-right: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
   cursor: help;
 }
@@ -271,12 +273,11 @@
    legible on a busy face. */
 .markDesignate.lightInk {
   color: #17221e;
-  text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 .desigMore {
   flex: 0 0 auto;
-  align-self: flex-end;
-  margin-left: auto;
+  align-self: center;
   padding: 0 calc(var(--u, 12px) * 0.22);
   border-radius: var(--r-pill);
   background: rgba(30, 22, 28, 0.72);
