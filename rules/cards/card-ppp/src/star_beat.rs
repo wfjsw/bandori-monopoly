@@ -26,7 +26,8 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         ),
         On::Play("", Some(cant_play), play),
     ],
-);
+)
+    .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

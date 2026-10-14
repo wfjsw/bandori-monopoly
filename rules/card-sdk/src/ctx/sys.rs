@@ -619,6 +619,8 @@ extern "C-unwind" {
     pub fn card_mortgage(player_id: i32, tile: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_text_mentions")]
     pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_prop")]
+    pub fn card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_gain_fixed")]
     pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_paid_in_settle")]

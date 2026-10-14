@@ -14,7 +14,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
     &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你拥有的格子被其他玩家的卡效果影响时」

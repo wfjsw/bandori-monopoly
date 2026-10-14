@@ -9,7 +9,8 @@ use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SPRECHCHOR: CardDef =
-    CardDef::new("R:Sprechchor", &[On::Play("", Some(cant_play), sprechchor)]);
+    CardDef::new("R:Sprechchor", &[On::Play("", Some(cant_play), sprechchor)])
+        .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// 规则书: 「在Livehouse地块开始回合时」 -- the **turn-start** square, not the
 /// one a mid-turn walk has since reached (C# `H._turnSnap[i].pos`).

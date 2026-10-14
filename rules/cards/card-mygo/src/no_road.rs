@@ -23,7 +23,8 @@ pub const NO_ROAD: CardDef = CardDef::new(
         ),
         On::Play("", Some(cant_play), no_road),
     ],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `CardNoRoad.WhyNot`
 /// refuses the card with no other player alive ("没有别的玩家").

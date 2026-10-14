@@ -21,7 +21,8 @@ pub const YOLO: CardDef = CardDef::new(
         None,
         counteract,
     )],
-);
+)
+    .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).

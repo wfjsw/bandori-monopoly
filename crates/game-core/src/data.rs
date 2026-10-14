@@ -295,13 +295,6 @@ pub struct SchoolEntry {
     pub school: String,
 }
 
-/// The song-card id list (the data file's `cards` array).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SongCardsData {
-    pub cards: Vec<String>,
-}
-
 /// Home-screen line tags per character.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -433,7 +426,6 @@ pub struct GameData {
     pub bands: Vec<BandData>,
     pub events: Vec<EventData>,
     pub schools: SchoolsData,
-    pub song_cards: SongCardsData,
     pub home_lines: HomeLinesData,
     pub voice_lines: VoiceLinesData,
     pub match_rules: MatchRulesData,
@@ -454,14 +446,13 @@ pub struct GameData {
 }
 
 /// Data files, as named in `web/data/`.
-pub const DATA_FILES: [&str; 12] = [
+pub const DATA_FILES: [&str; 11] = [
     "board.json",
     "cards.json",
     "characters.json",
     "bands.json",
     "events.json",
     "schools.json",
-    "song_cards.json",
     "home_lines.json",
     "voice_lines.json",
     "match_rules.json",
@@ -517,7 +508,6 @@ impl GameData {
             bands: parse::<BandFile>("bands.json", &get("bands.json")?)?.bands,
             events: parse::<EventFile>("events.json", &get("events.json")?)?.events,
             schools: parse("schools.json", &get("schools.json")?)?,
-            song_cards: parse("song_cards.json", &get("song_cards.json")?)?,
             home_lines: parse("home_lines.json", &get("home_lines.json")?)?,
             voice_lines: parse("voice_lines.json", &get("voice_lines.json")?)?,
             match_rules: parse("match_rules.json", &get("match_rules.json")?)?,
@@ -590,11 +580,6 @@ impl GameData {
             .find(|s| s.character == character)
             .map(|s| s.school.as_str())
             .unwrap_or(&self.schools.fallback)
-    }
-
-    /// Whether `card` is a song card, matched by title.
-    pub fn is_song_card(&self, card: &CardData) -> bool {
-        self.song_cards.cards.iter().any(|t| t == card.title())
     }
 
     /// Short name on the home screen.

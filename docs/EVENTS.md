@@ -200,9 +200,8 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
   ([TILES.md](TILES.md) 「Tile text」).
 * **「减少1d6」 as a subtraction** (超燃甩头 phase 2) rather than a negative die
   in the pool -- the dice plan has no negative-die op.
-* **Song-card count** (Kizuna Music's X) is a duplicated id table (from
-  `data/song_cards.json` + `data/cards.json`) counted from each player's draw
-  pile; `GameData.song_cards` is not reachable from `ctx`.
+* **Song-card count** (Kizuna Music's X) reads the static card property
+  `prop::SONG` via `ctx::card_prop` on each card in every player's draw pile.
 * **Non-derived event id table** (让我来结束一切's 3 picks) is duplicated from
   `data/events.json` (`derived` is not reachable from `ctx`).
 * **「累计在上述格子上加盖后」** (修复公告) read as one build per designated tile

@@ -43,7 +43,8 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             on_drawn,
         ),
     ],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 const ID: &str = "CRYCHIC:春日影";
 

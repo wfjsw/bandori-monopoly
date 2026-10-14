@@ -29,7 +29,8 @@ pub const HEY_KIDS: CardDef = CardDef::new(
         Some(can_counteract),
         counteract,
     )],
-);
+)
+.props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
 /// would allow. 「属于你的可建造格子」 -- the same gate the build step uses, so a

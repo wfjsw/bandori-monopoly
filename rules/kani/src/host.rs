@@ -1823,7 +1823,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
         Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build
         | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at
-        | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::buy
+        | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy
         | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice
         | Op::play_card | Op::play_from_hand
         | Op::can_build_on | Op::add_ring_bonus

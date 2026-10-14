@@ -72,7 +72,8 @@ pub const RETURNS: CardDef = CardDef::new(
             deck_at_game_start,
         ),
     ],
-);
+)
+    .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
 /// first, then band, then general) -- a snapshot of `data/cards.json`; Returns is

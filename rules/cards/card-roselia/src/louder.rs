@@ -8,7 +8,8 @@
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, louder)]);
+pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play("", None, louder)])
+    .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 fn louder(player_id: i32) -> card_sdk::Asked {
     let now = ctx::add_ring_bonus(5);

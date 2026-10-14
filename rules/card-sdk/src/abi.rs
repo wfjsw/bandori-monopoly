@@ -379,6 +379,13 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v62: **static card property + guest query** -- `prop::SONG` (`"song"`,
+///      default 0): a song-title card marker (「卡名为歌名的卡」, Kizuna
+///      Music's X). Declared with `.props(&[(prop::SONG, 1)])` on exactly the
+///      twenty song cards; rules read it back through the new host import
+///      `card_prop(id, key) -> i32` (`ctx::card_prop`), which is the generic
+///      guest face of `CardRules::card_prop` (default 0). No game vocabulary
+///      in the import. SAVE_VERSION unchanged.
 /// v61: **legacy guard-audit scaffolding removed** (docs/GUARDS.md §5.1/§10
 ///      finished 2026-10-14). `CardDef::legacy` / `.legacy(...)`,
 ///      `ManifestOn::has_legacy`, `export::OP_LEGACY_GUARD`, the `guard-audit`
@@ -427,7 +434,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 61;
+pub const ABI_VERSION: i32 = 62;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -766,6 +773,11 @@ pub mod prop {
     /// so a `place_raw` / engine placement sees it without running the play
     /// body. Mirrors `game_core::state::prop::IMMUNE`.
     pub const IMMUNE: &str = "immune";
+    /// Song-title card marker (「卡名为歌名的卡」, Kizuna Music's X): `1` =
+    /// this card's printed name is a song title. A ruleset-level fact other
+    /// rules read back via `ctx::card_prop` (`card_prop` host import); the
+    /// engine itself never reads it. Default `0` (not a song).
+    pub const SONG: &str = "song";
     /// Virtual **rent** house count (「房屋数视为…」).
     /// Presence is the override -- a house count of `0` is a legitimate value,
     /// so the read is `props.get`, not `unwrap_or(0)`. Real `st.houses` is

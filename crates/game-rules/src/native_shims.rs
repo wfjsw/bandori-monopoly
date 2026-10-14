@@ -510,6 +510,8 @@ pub trait HostOps {
     fn op_card_mortgage(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_card_text_mentions`
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `bandori_card_prop`
+    fn op_card_prop(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_gain_fixed`
     fn op_gain_fixed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_paid_in_settle`
@@ -1449,6 +1451,9 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_text_mentions(self, a[0], a[1], a[2], a[3])? as i64)
+    }
+    fn op_card_prop(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::card_prop(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_gain_fixed(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::gain_fixed(self, a[0], a[1], a[2], a[3])? as i64)
@@ -3629,6 +3634,14 @@ pub unsafe extern "C-unwind" fn bandori_card_mortgage(player_id: i32, tile: i32)
 #[no_mangle]
 pub unsafe extern "C-unwind" fn bandori_card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
     with_host(|h| match h.op_card_text_mentions([cp, cl, np, nl, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn bandori_card_prop(ip: i32, il: i32, kp: i32, kl: i32) -> i32 {
+    with_host(|h| match h.op_card_prop([ip, il, kp, kl, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

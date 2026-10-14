@@ -20,7 +20,8 @@ pub const RIOT: CardDef = CardDef::new(
         None,
         counteract,
     )],
-);
+)
+    .props(&[(card_sdk::abi::prop::SONG, 1)]);
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡」

@@ -32,6 +32,45 @@ fn loads_and_validates() {
     assert!(r.card("nope").is_none());
 }
 
+/// Exactly the twenty song-title cards declare `prop::SONG` (Kizuna Music's
+/// 「卡名为歌名的卡」). The count is the X the event rolls; a drift here is a
+/// rulebook disagreement.
+#[test]
+fn exactly_twenty_song_cards_declare_song() {
+    let r = ruleset();
+    let songs: Vec<&str> = r
+        .cards()
+        .iter()
+        .filter(|c| r.card_prop(&c.id, "song") != 0)
+        .map(|c| c.id.as_str())
+        .collect();
+    assert_eq!(songs.len(), 20, "SONG cards: {songs:?}");
+    for id in [
+        "PPP:Returns",
+        "PPP:STAR BEAT!",
+        "AG:宣战布告",
+        "AG:Y.O.L.O",
+        "AG:ONE OF US",
+        "PP:TITLE IDOL",
+        "R:（ykn）louder",
+        "R:Fire bird",
+        "R:（燐子）Ringing Bloom",
+        "R:Sprechchor",
+        "R:轨迹",
+        "RAS:R. I. O. T.",
+        "RAS:狂乱Hey Kids!!",
+        "RAS:UNSTOPPABLE",
+        "MyGO:壱雫空",
+        "MyGO:无路矢",
+        "MyGO:轮符雨",
+        "Mujica:黑色生日",
+        "Mujica:骰子已经掷下",
+        "CRYCHIC:春日影",
+    ] {
+        assert!(songs.contains(&id), "missing SONG on {id}");
+    }
+}
+
 #[test]
 fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let r = ruleset();
