@@ -51,6 +51,7 @@ macro_rules! fire_pass_leaf_iff_at {
         fire_world(user);
         let pre = world::snapshot();
         invoke::unwrap_done($call);
+        kani::cover!(true, "body returned");
         let post = world::snapshot();
         let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
         let log_n = world::with_world(|ww| ww.log_n);
