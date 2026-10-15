@@ -1366,7 +1366,7 @@ impl CardWorld for Run {
                 who,
                 Msg::new("log.outcome.mark_remove")
                     .tile("tile", tile)
-                    .msg("kind", crate::trigger_why::mark_kind_name(""))
+                    .msg("kind", crate::trigger_why::mark_kind_name(filter.kind))
                     .i("n", got.abs() as i64),
             );
         }
@@ -1517,6 +1517,19 @@ impl CardWorld for Run {
                 .i("fire", fire as i64)
                 .i("max", cap as i64);
             self.post_log_value("fire", player_id, msg, "", got);
+        } else if n > 0 {
+            // 「不能超过持有上限」: the effect applied and the cap refused it.
+            if let Some(p) = self.world.st.players.get(player_id.max(0) as usize) {
+                let (cap, fire) = (p.fire_max(), p.fire());
+                if cap > 0 && fire >= cap && !p.out() {
+                    let msg = Msg::new("log.gain_fire_capped")
+                        .player_id("who", player_id)
+                        .msg("why", why)
+                        .i("fire", fire as i64)
+                        .i("max", cap as i64);
+                    self.post_log_value("fire", player_id, msg, "", 0);
+                }
+            }
         }
         got
     }
@@ -2379,6 +2392,15 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
                 return None;
             }
         }
+        // Ruling 2a: a host effect is a visible outcome -- post the lazy
+        // 「效果适用」 header first, so the engine's own lines (the loss, the
+        // gain) group under it instead of leaving it 「（无事发生）」.
+        // Ruling 2a: a host effect is a visible outcome -- post the lazy
+        // 「效果适用」 header first, so the engine's own lines (the loss, the
+        // gain) group under it instead of leaving it 「（无事发生）」.
+        if visible_host_request(&req).is_some() {
+            run.flush_header();
+        }
         let cx = unsafe { &mut *self.cx };
         let bridge = unsafe { &*self.bridge };
         let card_id: &str = unsafe { &*self.card_id };
@@ -3194,7 +3216,12 @@ impl<M: CardModules> RulesBridge<M> {
                     if run.own_activation >= 0 {
                         flushed_header = run.own_activation;
                     }
+                    let live_before = cx.live_event_count();
+                    let live_before = cx.live_event_count();
                     let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
+                    if run.own_activation >= 0 {
+                        cx.stamp_parent_since(live_before, run.parent);
+                    }
                     // Debug guard: a silent entry must not produce a visible
                     // effect through the host either (`ctx::gain` and kin are
                     // host requests, not Run-local logs).

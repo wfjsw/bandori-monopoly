@@ -1613,6 +1613,30 @@ fn embers_copy_costs_10_on_settle() {
 }
 
 #[test]
+fn embers_settle_header_owns_its_loss_line() {
+    let mut t = Table::vanilla(2);
+    t.set_pos(1, 20);
+    draw_event_quiet(&mut t, 0, "火种燃尽之后会怎么样呢？", &[]);
+    let site = t.pos(1);
+    until_turn(&mut t, 0);
+    t.set_pos(0, (site + 59) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let recent = &t.m.world().recent;
+    for (i, e) in recent.iter().enumerate() {
+        if log_key(e) == "log.effect_applied" {
+            let kids = recent.iter().filter(|c| c.parent == e.id && c.id != e.id).count();
+            let nothing = e.results.iter().any(|r| r.key() == "log.effect_nothing");
+            assert!(!(nothing && kids > 0) && !(kids == 0 && !nothing), "header {i}: kids={kids}");
+        }
+    }
+    let lose = recent.iter().find(|e| log_key(e) == "log.lose").expect("lose line");
+    let hdr = recent.iter().find(|e| e.id == lose.parent);
+    assert!(hdr.is_some(), "loss line must hang under a header: {:?}", t.recent_keys(20));
+}
+
+#[test]
 fn embers_copies_are_removed_on_exile() {
     let mut t = Table::vanilla(2);
     t.set_pos(1, 20);
@@ -1628,6 +1652,19 @@ fn embers_copies_are_removed_on_exile() {
         "copies go when someone gains [除外]: {:?}",
         t.marks()
     );
+    // The removal lines name the mark ("余烬") and the clear line names the event.
+    for e in t.m.world().recent.iter() {
+        match e.msg.key() {
+            "log.outcome.mark_remove" => {
+                let kind = format!("{:?}", e.msg.a.get("kind"));
+                assert!(!kind.contains("log.mark.none"), "unnamed mark removed: {kind}");
+            }
+            "log.event.embers_clear" => {
+                assert!(e.msg.a.contains_key("event"), "clear line names no event");
+            }
+            _ => {}
+        }
+    }
 }
 
 // The turn clock is a modifier point (`TurnBonusTime` / `TurnBaseTime`): a

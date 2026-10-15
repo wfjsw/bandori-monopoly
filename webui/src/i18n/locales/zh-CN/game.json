@@ -318,6 +318,7 @@
   "log.forfeit": "{{who}} 离开了对局（弃权），和破产一样出局",
   "log.gain": "{{who}} 获得 {{amount}}{{src}}",
   "log.gain_fire": "{{who}} 获得 {{n}} 个 [火罐]（{{why}}，现在 {{fire}}/{{max}}）",
+  "log.gain_fire_capped": "{{who}} 的 [火罐] 已达上限（{{fire}}/{{max}}），没有获得（{{why}}）",
   "log.immune_all": "{{who}} 现在不受别人的效果影响",
   "log.kind.wire": "{{name}}",
   "log.land": "{{who}} 停在 {{tile}}",
