@@ -304,7 +304,8 @@
   border-radius: var(--r-lg);
   border: 3px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 0 22px rgba(120, 220, 255, 0.75), 0 12px 30px rgba(0, 0, 0, 0.45);
-  transition: transform 0.4s, opacity 0.5s, filter 0.4s;
+  transition: transform 0.3s, opacity 0.3s;
+  will-change: transform, opacity;
 }
 .chainLink:first-child { margin-left: 0; }
 .chainEven { transform: rotate(-7deg) translateY(10px); }
@@ -335,18 +336,21 @@
   animation: chainBar 0.45s ease-out 0.3s backwards;
 }
 .chainIn { animation: chainIn 0.55s cubic-bezier(0.2, 1.2, 0.4, 1); }
-.chainResolving .chainLink { filter: brightness(0.6); transform: scale(0.85); }
+.chainResolving .chainLink { opacity: 0.55; transform: scale(0.85); }
 .chainResolving .chainLink.chainActive {
-  filter: none;
+  opacity: 1;
   z-index: 3;
   transform: scale(1.35) rotate(0deg);
   box-shadow: 0 0 36px 10px rgba(255, 255, 255, 0.9), 0 12px 30px rgba(0, 0, 0, 0.45);
 }
-.chainResolving .chainLink.chainDone { opacity: 0; transform: scale(1.7); filter: brightness(2); }
+.chainResolving .chainLink.chainDone { opacity: 0; transform: scale(1.5); }
 .chainTitle {
   position: absolute;
-  left: 8%;
-  top: 44%;
+  left: 50%;
+  top: 22%;
+  translate: -50% 0;
+  justify-content: center;
+  white-space: nowrap;
   z-index: calc(var(--z-fx-banner) + 1);
   display: flex;
   font-size: 110px;
@@ -364,4 +368,4 @@
 }
 @keyframes chainBar { from { transform: scaleX(0); } }
 @keyframes chainLetter { from { transform: translate(-90px, -50px) rotate(-25deg) scale(0.3); opacity: 0; } }
-@keyframes chainTitleOut { to { opacity: 0; transform: translateX(60px); } }
+@keyframes chainTitleOut { to { opacity: 0; } }

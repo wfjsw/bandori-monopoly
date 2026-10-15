@@ -72,6 +72,8 @@ const TURN_MS = 1500;
 /** Chain overlay pacing: a link joining, a link settling. */
 const CHAIN_LINK_MS = 900;
 const CHAIN_RESOLVE_MS = 1100;
+/** A long chain plays each link faster so the whole of it stays watchable. */
+const chainStep = (ms: number, links: number) => Math.max(400, Math.min(ms, 7000 / Math.max(1, links)));
 
 /** The log label key of an engine stage number. */
 function stageKey(step: number): string {
@@ -612,7 +614,7 @@ export class Animator {
    *  chain stack with the link animation. */
   private async chainLink(e: MatchEvent, fast: boolean): Promise<void> {
     const seq = e.value;
-    const quiet = this.noFlash() || fast;
+    const quiet = this.noFlash();
     if (seq <= 1 || !this.chain) this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
     const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq };
     if (!quiet) {
@@ -630,14 +632,14 @@ export class Animator {
       this.chain.shown = true;
       if (!quiet) sfx("place");
       this.bump();
-      await (quiet ? Promise.resolve() : this.nap(CHAIN_LINK_MS));
+      await (quiet ? Promise.resolve() : this.nap(chainStep(CHAIN_LINK_MS, this.chain.links.length)));
     }
   }
 
   /** The closed chain settles newest-first: a Resolve banner, then each link
    *  lifts out of the stack in turn, down to link 1. */
   private async chainResolve(e: MatchEvent, fast: boolean): Promise<void> {
-    const quiet = this.noFlash() || fast;
+    const quiet = this.noFlash();
     const ch = this.chain;
     if (e.value === 0) {
       if (!ch) return;
@@ -655,7 +657,7 @@ export class Animator {
     this.bump();
     if (!quiet) {
       sfx("card_play");
-      await this.nap(CHAIN_RESOLVE_MS);
+      await this.nap(chainStep(CHAIN_RESOLVE_MS, ch.links.length));
     }
     ch.done = [...ch.done, e.value];
     // Link 1 settles last: the chain is over.

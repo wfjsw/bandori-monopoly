@@ -184,6 +184,8 @@ export function Board({ sess }: { sess: GameSession }) {
     onClick: () => control && void act(sess, { act: control }),
   };
 
+  const nLinks = anim.chain?.links.length ?? 0;
+  const cardW = nLinks <= 3 ? 170 : nLinks <= 5 ? 140 : nLinks <= 7 ? 110 : 90;
   return (
     <>
       <TopBar
@@ -250,7 +252,7 @@ export function Board({ sess }: { sess: GameSession }) {
                       )}
                       style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)" }}
                     >
-                      <CardFace id={l.card} size="big" width={170} />
+                      <CardFace id={l.card} size="big" width={cardW} />
                       <span className={s.chainNo}>{l.seq}</span>
                       {k > 0 && <i className={s.chainBar} />}
                     </div>
