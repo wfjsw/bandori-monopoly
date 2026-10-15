@@ -70,8 +70,8 @@ type Item = { ev: MatchEvent } | { mark: StageMark };
 /** How long the new-turn announcement stays on screen. */
 const TURN_MS = 1500;
 /** Chain overlay pacing: a link joining, a link settling. */
-const CHAIN_LINK_MS = 900;
-const CHAIN_RESOLVE_MS = 1100;
+const CHAIN_LINK_MS = 800;
+const CHAIN_RESOLVE_MS = 850;
 /** A long chain plays each link faster so the whole of it stays watchable. */
 const chainStep = (ms: number, links: number) => Math.max(400, Math.min(ms, 7000 / Math.max(1, links)));
 
@@ -628,48 +628,54 @@ export class Animator {
       if (this.disposed) return;
     }
     this.chain.links = [...this.chain.links, link];
-    if (seq >= 2) {
-      if (!this.chain.shown && !quiet) {
+    if (seq >= 2 && !quiet) {
+      // The chain appears only while a card attaches, then goes.
+      const ch = this.chain;
+      ch.shown = true;
+      sfx("place");
+      if (seq === 2) {
         if (!fast) sfx("prompt");
         this.showChainTitle(tr("anim.chain"));
-        await this.nap(1100);
       }
-      this.chain.shown = true;
-      if (!quiet) sfx("place");
       this.bump();
-      await (quiet ? Promise.resolve() : this.nap(chainStep(CHAIN_LINK_MS, this.chain.links.length)));
+      await this.nap(seq === 2 ? 1100 : chainStep(CHAIN_LINK_MS, ch.links.length));
+      ch.shown = false;
+      this.bump();
     }
   }
 
-  /** The closed chain settles newest-first: a Resolve banner, then each link
-   *  lifts out of the stack in turn, down to link 1. */
+  /** The closed chain settles newest-first: a Resolve title, then each link
+   *  is shown for a beat as it comes off the chain. The chain is gone before
+   *  the link's effect events play, so each effect lands right after its card. */
   private async chainResolve(e: MatchEvent): Promise<void> {
     const quiet = this.noFlash();
     const ch = this.chain;
+    if (!ch) return;
     if (e.value === 0) {
-      if (!ch) return;
       ch.resolving = true;
       if (!quiet) {
         sfx("prompt");
         this.showChainTitle(tr("anim.resolve"));
-        await this.nap(1100);
+        await this.nap(900);
       }
-      this.bump();
       return;
     }
-    if (!ch) return;
     ch.active = e.value;
-    this.bump();
     if (!quiet) {
+      ch.shown = true;
       sfx("card_play");
+      this.bump();
       await this.nap(chainStep(CHAIN_RESOLVE_MS, ch.links.length));
     }
+    // The card fades off the chain, then the board is clear for its effect.
     ch.done = [...ch.done, e.value];
-    // Link 1 settles last: the chain is over.
-    if (e.value === 1) {
-      if (!quiet) await this.nap(300);
-      if (this.chain === ch) this.chain = null;
+    if (!quiet) {
+      this.bump();
+      await this.nap(250);
     }
+    ch.shown = false;
+    // Link 1 settles last: the chain is over.
+    if (e.value === 1 && this.chain === ch) this.chain = null;
     this.bump();
   }
 

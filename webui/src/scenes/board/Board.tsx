@@ -185,7 +185,7 @@ export function Board({ sess }: { sess: GameSession }) {
   };
 
   const nLinks = anim.chain?.links.length ?? 0;
-  const cardW = nLinks <= 3 ? 170 : nLinks <= 5 ? 140 : nLinks <= 7 ? 110 : 90;
+  const cardW = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
   return (
     <>
       <TopBar
@@ -236,8 +236,8 @@ export function Board({ sess }: { sess: GameSession }) {
               </div>
             )}
             {anim.chain?.shown && (
-              <div className={cx(s.chain, anim.chain.resolving && s.chainResolving)}>
-                {anim.chain.links.map((l, k) => {
+              <div className={cx(s.chain, anim.chain.resolving && s.chainResolving)} style={{ width: cardW * 2.3 }}>
+                {anim.chain.links.filter((l) => !anim.chain!.done.includes(l.seq) || l.seq === anim.chain!.active).map((l) => {
                   const ch = anim.chain!;
                   const done = ch.done.includes(l.seq);
                   return (
@@ -245,18 +245,17 @@ export function Board({ sess }: { sess: GameSession }) {
                       key={l.seq}
                       className={cx(
                         s.chainLink,
-                        k % 2 ? s.chainOdd : s.chainEven,
-                        !ch.resolving && k === ch.links.length - 1 && s.chainIn,
+                        l.owner >= 0 && l.owner === m.playerId ? s.chainMine : s.chainTheirs,
+                        !ch.resolving && l.seq === ch.links.length && s.chainIn,
                         ch.active === l.seq && !done && s.chainActive,
                         done && s.chainDone,
                       )}
-                      style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)" }}
+                      style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)", marginTop: l.seq > 1 ? -cardW * 0.55 : 0 }}
                     >
                       {l.card
                         ? <CardFace id={l.card} size="big" width={cardW} />
                         : <div className={s.chainOrigin} style={{ width: cardW, height: cardW * 1.5 }}>{tr("anim.chainOrigin")}</div>}
                       <span className={s.chainNo}>{l.seq}</span>
-                      {k > 0 && <i className={s.chainBar} />}
                     </div>
                   );
                 })}

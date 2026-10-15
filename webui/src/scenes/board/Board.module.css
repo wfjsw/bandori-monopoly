@@ -296,20 +296,20 @@
   transform: translate(-50%, -50%);
   z-index: var(--z-fx-banner);
   display: flex;
-  align-items: center;
+  flex-direction: column;
 }
 .chainLink {
   position: relative;
-  margin-left: -26px;
   border-radius: var(--r-lg);
   border: 3px solid rgba(255, 255, 255, 0.85);
   box-shadow: 0 0 22px rgba(120, 220, 255, 0.75), 0 12px 30px rgba(0, 0, 0, 0.45);
   transition: transform 0.3s, opacity 0.3s;
   will-change: transform, opacity;
 }
-.chainLink:first-child { margin-left: 0; }
-.chainEven { transform: rotate(-7deg) translateY(10px); }
-.chainOdd { transform: rotate(6deg) translateY(-14px); }
+/* Zig-zag down the chain: my cards left, everyone else's right. */
+.chainMine { align-self: flex-start; transform: rotate(-5deg); }
+.chainTheirs { align-self: flex-end; transform: rotate(5deg); }
+.chainTheirs .chainNo { left: auto; right: -18px; }
 .chainOrigin {
   display: flex;
   align-items: center;
@@ -331,19 +331,6 @@
   color: #b8fbff;
   -webkit-text-stroke: 2px #17a5c8;
   text-shadow: 0 0 18px rgba(80, 230, 255, 0.95), 0 4px 10px rgba(0, 0, 0, 0.5);
-}
-/* The chain tying a link to the one before it. */
-.chainBar {
-  position: absolute;
-  left: -52px;
-  top: 46%;
-  width: 78px;
-  height: 14px;
-  border-radius: 7px;
-  background: repeating-linear-gradient(90deg, #e8eef2 0 9px, #7f8c96 9px 15px);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
-  transform-origin: right;
-  animation: chainBar 0.45s ease-out 0.3s backwards;
 }
 .chainIn { animation: chainIn 0.55s cubic-bezier(0.2, 1.2, 0.4, 1); }
 .chainResolving .chainLink { opacity: 0.55; transform: scale(0.85); }
@@ -376,6 +363,5 @@
   from { translate: 0 -160px; scale: 1.8; opacity: 0; }
   60% { opacity: 1; }
 }
-@keyframes chainBar { from { transform: scaleX(0); } }
 @keyframes chainLetter { from { transform: translate(-90px, -50px) rotate(-25deg) scale(0.3); opacity: 0; } }
 @keyframes chainTitleOut { to { opacity: 0; } }
