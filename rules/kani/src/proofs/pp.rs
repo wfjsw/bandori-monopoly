@@ -1022,7 +1022,9 @@ pub fn guide_04_turn_end_crystal_iff() {
     symbolic_play_world();
     let me = any_player_in();
     let pre = kani::any();
-    kani::assume(pre >= 0 && pre <= 4); // stay under the 5-crystal cash-in
+    // `pre <= 3` so `pre+1 < 5` — the ≥5 cash-in (clause 3) stays off-path.
+    // (`pre == 4` → 5 crystals enters the cash-in, which may unplace the card.)
+    kani::assume(pre >= 0 && pre <= 3);
     world::with_world_mut(|w| w.trig_player = me);
         world::with_world_mut(|ww| {
         ww.field[0] = world::FieldCard {
