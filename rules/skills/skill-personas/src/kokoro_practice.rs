@@ -213,3 +213,9 @@ pub fn on_passed_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_move_end_kani(player_id: i32) -> card_sdk::Asked {
     on_move_end(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
+    declare_cap(player_id)
+}

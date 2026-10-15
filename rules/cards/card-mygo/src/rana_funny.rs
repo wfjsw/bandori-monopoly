@@ -134,3 +134,9 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
 pub fn rana_funny_kani(player_id: i32) -> card_sdk::Asked {
     rana_funny(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
+    pass_tile(player_id)
+}

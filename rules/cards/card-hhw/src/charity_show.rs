@@ -202,3 +202,15 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn turn_end_after_kani(player_id: i32) -> card_sdk::Asked {
     turn_end_after(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_mul_kani(player_id: i32) -> card_sdk::Asked {
+    pay_mul(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
+    pass_tile(player_id)
+}

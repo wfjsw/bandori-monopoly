@@ -160,3 +160,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 pub fn want_human_kani(player_id: i32) -> card_sdk::Asked {
     want_human(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}

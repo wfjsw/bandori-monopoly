@@ -123,3 +123,9 @@ pub fn half_price_kani(player_id: i32) -> card_sdk::Asked {
 pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_start(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_bought_kani(player_id: i32) -> card_sdk::Asked {
+    on_bought(player_id)
+}

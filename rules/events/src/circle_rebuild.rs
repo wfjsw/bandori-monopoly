@@ -177,3 +177,9 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_settle_body_kani(player_id: i32) -> card_sdk::Asked {
     on_settle_body(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pass_kani(owner: i32) -> card_sdk::Asked {
+    on_pass(owner)
+}

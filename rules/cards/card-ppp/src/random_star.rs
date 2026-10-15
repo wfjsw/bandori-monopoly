@@ -99,3 +99,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 pub fn random_star_kani(player_id: i32) -> card_sdk::Asked {
     random_star(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
+    pass_tile(player_id)
+}

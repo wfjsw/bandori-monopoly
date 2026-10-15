@@ -59,6 +59,12 @@ for u in "${UNITS[@]}"; do
   fi
   if build_break "$u"; then
     echo "BUILD BREAK: every harness of unit $u failed to compile (see $OUT/$u/logs). Aborting the pass; fix the source, delete $OUT/$u and re-run." >&2
+    # Print the first compile error from the first log to speed up diagnosis.
+    first_log=$(ls "$OUT/$u/logs"/*.log 2>/dev/null | head -1)
+    if [[ -n "$first_log" ]]; then
+      echo "First compile error ($first_log):" >&2
+      grep -E 'error\[E[0-9]+\]|could not compile' "$first_log" | head -5 >&2
+    fi
     exit 2
   fi
   mapfile -t uwf < <(python3 "$H/central_summary.py" --out "$OUT" --unit "$u" --list-unwind-only)

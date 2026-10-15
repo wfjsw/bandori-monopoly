@@ -146,3 +146,21 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
 pub fn deck_at_game_start_kani(player_id: i32) -> card_sdk::Asked {
     deck_at_game_start(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn deck_before_game_kani(player_id: i32) -> card_sdk::Asked {
+    deck_before_game(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
+    pass_tile(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_before_kani(player_id: i32) -> card_sdk::Asked {
+    settle_before(player_id)
+}

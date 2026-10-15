@@ -369,3 +369,9 @@ pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
 pub fn split_rent_kani(player_id: i32) -> card_sdk::Asked {
     split_rent(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}

@@ -167,3 +167,9 @@ pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
 pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_start_offer(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_abnormal_kani(player_id: i32) -> card_sdk::Asked {
+    on_abnormal(player_id)
+}

@@ -184,3 +184,9 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_pass_tile_kani(player_id: i32) -> card_sdk::Asked {
     on_pass_tile(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}

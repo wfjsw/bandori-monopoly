@@ -161,3 +161,9 @@ pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
 pub fn offer_kani(player_id: i32) -> card_sdk::Asked {
     offer(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_built_kani(player_id: i32) -> card_sdk::Asked {
+    on_built(player_id)
+}
