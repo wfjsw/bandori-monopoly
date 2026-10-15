@@ -310,6 +310,16 @@
 .chainLink:first-child { margin-left: 0; }
 .chainEven { transform: rotate(-7deg) translateY(10px); }
 .chainOdd { transform: rotate(6deg) translateY(-14px); }
+.chainOrigin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-lg);
+  background: rgba(246, 242, 243, 0.92);
+  color: var(--ink);
+  font-weight: 800;
+  text-align: center;
+}
 .chainNo {
   position: absolute;
   left: -18px;

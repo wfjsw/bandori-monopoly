@@ -11,6 +11,7 @@
   "anim.forceBuy": "强制购买",
   "anim.leftOf": "{{who}} 离开了对局",
   "anim.chain": "连锁",
+  "anim.chainOrigin": "触发",
   "anim.resolve": "连锁结算",
   "anim.pay": "支付",
   "anim.payRent": "付地租",

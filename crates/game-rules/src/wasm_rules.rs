@@ -5299,7 +5299,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // then each declaration is a `"chain"` event whose `value`
                     // is its link number. The client flashes the card and
                     // appends it to the chain overlay.
-                    if chain.len() == 1 && !chain[0].id.is_empty() {
+                    if chain.len() == 1 {
                         let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
                         cx.log_event(
                             "chain",

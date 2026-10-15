@@ -615,9 +615,14 @@ export class Animator {
   private async chainLink(e: MatchEvent, fast: boolean): Promise<void> {
     const seq = e.value;
     const quiet = this.noFlash();
-    if (seq <= 1 || !this.chain) this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
+    if (seq <= 1 || !this.chain) {
+      this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
+      // A chain on a timing with no card of its own (a board event) opens
+      // without a link 1 event on old records: stand one in.
+      if (seq > 1) this.chain.links.push({ seq: 1, card: "", owner: -1, fresh: 0 });
+    }
     const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq };
-    if (!quiet) {
+    if (!quiet && e.card) {
       await this.cardFlash({ ...e, kind: "counter", msg: e.msg, results: [], negated: false }, false);
       await this.flashGone();
       if (this.disposed) return;

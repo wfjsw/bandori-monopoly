@@ -252,7 +252,9 @@ export function Board({ sess }: { sess: GameSession }) {
                       )}
                       style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)" }}
                     >
-                      <CardFace id={l.card} size="big" width={cardW} />
+                      {l.card
+                        ? <CardFace id={l.card} size="big" width={cardW} />
+                        : <div className={s.chainOrigin} style={{ width: cardW, height: cardW * 1.5 }}>{tr("anim.chainOrigin")}</div>}
                       <span className={s.chainNo}>{l.seq}</span>
                       {k > 0 && <i className={s.chainBar} />}
                     </div>
