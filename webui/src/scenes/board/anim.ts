@@ -65,7 +65,7 @@ export interface LogLine {
  *  engine's stage number (1..4 = 开始 / 运营 / 移动 / 结束). */
 interface StageMark { step: number; newTurn: boolean; label?: string; turn?: number }
 
-type Item = { ev: MatchEvent } | { mark: StageMark };
+type Item = { ev: MatchEvent } | { mark: StageMark } | { view: MatchView };
 
 /** How long the new-turn announcement stays on screen. */
 const TURN_MS = 1500;
@@ -138,6 +138,13 @@ export class Animator {
   private disposed = false;
   private bump: () => void;
   private view: () => MatchView | null;
+  /** The view the board is drawing: the state as of before the events being
+   *  played. Walks start from its positions. */
+  shownView: () => MatchView | null = () => this.view();
+  /** Adopt a view as the one the board draws (a `view` queue item reached). */
+  onView: (v: MatchView) => void = () => undefined;
+  /** Called when the queue has drained: the board catches up with the state. */
+  onDrain: () => void = () => undefined;
   private readonly replay: boolean;
 
   constructor(bump: () => void, view: () => MatchView | null, replay = false) {
@@ -242,6 +249,15 @@ export class Animator {
   /** Names for message arguments (players/tiles/cards of the running match). */
   private names(): Names {
     return namesOf(this.view()?.state);
+  }
+
+  /** A new view arrived. Queued behind the events that led to it, the board
+   *  adopts it the moment those have played -- not before (state running
+   *  ahead of the animation) and not after later turns' events. */
+  pushView(v: MatchView): void {
+    if (!this.animating && !this.queue.length) return this.onView(v);
+    this.queue.push({ view: v });
+    void this.run();
   }
 
   push(e: MatchEvent): void {
@@ -448,11 +464,12 @@ export class Animator {
   private async run(): Promise<void> {
     if (this.animating) return;
     this.animating = true;
-    this.pos = this.view()?.state.players.map((x) => x.pos) ?? null;
+    this.pos = this.shownView()?.state.players.map((x) => x.pos) ?? null;
     this.bump();
     while (this.queue.length && !this.disposed) {
       const it = this.queue.shift()!;
       try {
+        if ("view" in it) { this.onView(it.view); this.bump(); continue; }
         if ("mark" in it) await this.enterStage(it.mark, this.fast());
         else await this.play(it.ev, this.fast());
       } catch (err) {
@@ -462,10 +479,16 @@ export class Animator {
     if (this.disposed) return;
     this.animating = false;
     this.pos = null;
-    this.route = null;
+    // A walk halted mid-route (CiRCLE's reward prompt, or any hook still
+    // settling in the move stage) keeps its remaining route lit: the queue is
+    // empty only until the engine publishes the next segment.
+    const st = this.shownView()?.state;
+    const midWalk = !!st && (st.prompt.id > 0 || st.step === 3);
+    if (!(midWalk && this.route && this.route.length > 0)) this.route = null;
     // Caught up: the last stage played is the state's own.
     this.stage = null;
     this.turn = null;
+    this.onDrain();
     this.bump();
   }
 
@@ -505,6 +528,7 @@ export class Animator {
     let at = end;
     for (const it of this.queue) {
       if ("mark" in it) break;
+      if ("view" in it) continue;
       const q = it.ev;
       if (q.type === "move" && q.playerId === playerId && q.from === at && q.value) {
         const dir = q.value > 0 ? 1 : -1;
@@ -519,7 +543,7 @@ export class Animator {
     return out;
   }
 
-  private async walk(playerId: number, from: number, steps: number, hop: number): Promise<void> {
+  private async walk(playerId: number, from: number, steps: number, hop: number, stepsLeft = 0): Promise<void> {
     if (!this.pos) return;
     const n = D.tiles.length;
     const dir = steps >= 0 ? 1 : -1;
@@ -530,7 +554,18 @@ export class Animator {
       q = (((q + dir) % n) + n) % n;
       ahead.push(q);
     }
-    const more = hop > 0 ? this.routeAhead(playerId, ahead.length ? ahead[ahead.length - 1] : from) : [];
+    // The engine says how many steps follow this segment (a walk is cut at every
+    // CiRCLE, and the next segment only exists after the reward settles); the
+    // queue read-ahead covers cuts by per-step hooks.
+    const end = ahead.length ? ahead[ahead.length - 1] : from;
+    let more = hop > 0 ? this.routeAhead(playerId, end) : [];
+    if (hop > 0 && stepsLeft > more.length) {
+      more = [];
+      for (let k = 1, q = end; k <= stepsLeft; k++) {
+        q = (((q + dir) % n) + n) % n;
+        more.push(q);
+      }
+    }
     // A continuation of a walk whose route is already lit: keep it as is.
     const carried = hop > 0 && !!this.route && this.route.length > 0 && this.route[0] === ahead[0];
     if (hop > 0 && !carried) this.route = ahead.concat(more);
@@ -551,6 +586,7 @@ export class Animator {
       }
     } finally {
       this.hop = null;
+      // Between segments (CiRCLE settles here) the rest of the route stays lit.
       if (!more.length) this.route = null;
       this.bump();
     }
@@ -564,6 +600,8 @@ export class Animator {
     const playerId = e.playerId;
     const ok = playerId >= 0 && !!v && playerId < v.state.players.length;
     const wait = (ms: number) => (fast ? Promise.resolve() : this.nap(ms));
+    // A route left lit between walk segments is dropped by a turn change or a teleport.
+    if (e.type === "turn" || e.type === "teleport") this.route = null;
     switch (e.type) {
       case "turn":
         // The queued new-turn marker announces whose turn it is once.
@@ -583,7 +621,7 @@ export class Animator {
         await wait(450);
         // A burst of reward/card events may fast-forward the log, but must
         // still show the path. Only explicit 4x replay skips movement frames.
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130, e.ahead ?? 0);
         break;
       }
       case "dice": {
@@ -617,7 +655,7 @@ export class Animator {
       case "move":
         if (!ok) break;
         this.showBanner(this.player(playerId), body);
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90, e.ahead ?? 0);
         break;
       case "teleport":
         if (!ok || !this.pos) break;
@@ -701,11 +739,25 @@ export class Animator {
 export function useBoardSession(sess: GameSession): { view: MatchView | null; at: number; anim: Animator } {
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const [state, set] = useState<{ view: MatchView | null; at: number }>(() => ({ view: sess.view, at: performance.now() }));
+  // `viewRef` is the newest view from the session; `state.view` is what the
+  // board draws. A view that arrives while events are still playing is held
+  // (the events precede their view), so every panel -- player bars, tile
+  // owners, field cards, money -- changes only once the animation has caught
+  // up, instead of running ahead of it. The drain below releases it.
   const viewRef = useRef(state.view);
-  viewRef.current = state.view;
+  const shownRef = useRef(state.view);
+  shownRef.current = state.view;
   const animRef = useRef<Animator | null>(null);
   if (!animRef.current) {
     const a = new Animator(bump, () => viewRef.current, sess.kind === "replay");
+    a.shownView = () => shownRef.current;
+    a.onView = (v) => {
+      shownRef.current = v;
+      set({ view: v, at: performance.now() });
+    };
+    a.onDrain = () => {
+      if (viewRef.current !== shownRef.current) set({ view: viewRef.current, at: performance.now() });
+    };
     for (const e of sess.view?.state.events ?? []) a.addLog(e, { history: true });
     animRef.current = a;
   }
@@ -720,7 +772,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
       (v) => {
         const prev = viewRef.current?.state;
         viewRef.current = v;
-        set({ view: v, at: performance.now() });
+        a.pushView(v);
         // Queue stage changes for the match log after their events. Only a
         // new turn gets an announcement over the board.
         const now = v.state;

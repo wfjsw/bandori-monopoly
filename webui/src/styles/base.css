@@ -140,6 +140,31 @@
   color: var(--text);
 }
 
+/* Phone landscape (Stage sets data-compact; styles/layout.ts mirrors these). */
+:root[data-compact] {
+  --board-inset-x: 10px;
+  --board-gap: 6px;
+  --board-col-left: 240px;
+  --topbar-h: 58px;
+  --players-top: 58px;
+  --hand-peek: 42px; /* the hand's tap strip (and the bar's controls) */
+  --players-bottom: 80px;
+  --actions-bottom: 8px;
+  --board-col-right: 216px;
+  --map-margin-top: 6px;
+  /* Tighter chrome: the same shapes with less air (radius, spacing). */
+  --r-sm: 4px;
+  --r-md: 7px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+  --r-2xl: 14px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 12px;
+  --sp-5: 14px;
+  --sp-6: 16px;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; overflow: hidden; background: var(--backdrop); }
 /* Pin the document. Mobile browsers still scroll an `overflow: hidden` body
