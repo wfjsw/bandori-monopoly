@@ -50,7 +50,8 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // per-seat status functions.
         On::Gate(&[GateKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
     ],
-);
+)
+    .board_role("status");
 
 /// The condition under which [停留] closes the move gate. [停留] closes
 /// neither the act nor the pay gate.

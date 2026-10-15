@@ -49,7 +49,7 @@ pub fn half_ceil10(full: i32) -> i32 {
 /// RiNG has no table entry (OPEN-RING-RENT); returns `None`.
 pub fn table_rent_at(step: &Step<'_>, tile: usize) -> Option<i32> {
     let t = step.data.tiles.get(tile)?;
-    if t.kind == TileKind::Ring || t.rent.is_empty() {
+    if t.kind.as_str() == "ring" || t.rent.is_empty() {
         return None;
     }
     let h = step
@@ -78,7 +78,7 @@ pub fn level_cap(step: &Step<'_>, tile: usize) -> i32 {
     let Some(t) = step.data.tiles.get(tile) else {
         return 0;
     };
-    if t.kind == TileKind::Ring {
+    if t.kind.as_str() == "ring" {
         return 0;
     }
     t.rent.len().saturating_sub(1) as i32
@@ -136,7 +136,7 @@ pub fn agent_colour_set(step: &Step<'_>, agent: usize) -> Vec<usize> {
     let Some(a) = step.data.tiles.get(agent) else {
         return Vec::new();
     };
-    if a.kind != TileKind::Agent {
+    if a.kind.as_str() != "agent" {
         return Vec::new();
     }
     let g = a.group;
@@ -616,7 +616,7 @@ pub fn g_settle_08(step: &Step<'_>) -> Result<(), String> {
         let Some(tile) = step.data.tiles.get(t) else {
             continue;
         };
-        if tile.kind == TileKind::Ring {
+        if tile.kind.as_str() == "ring" {
             return Err(format!("build on RiNG tile {t} (「所有RiNG不可升级」)"));
         }
         let cap = level_cap(step, t);
@@ -1347,7 +1347,7 @@ pub fn verify_level_cap(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        if tile.kind == TileKind::Ring {
+        if tile.kind.as_str() == "ring" {
             return Err(format!("MORE: build on RiNG tile {t}"));
         }
         let cap = tile.rent.len().saturating_sub(1) as i32;
@@ -1362,7 +1362,7 @@ pub fn verify_level_cap(
         let pre_h = pre.st.houses.get(t).copied().unwrap_or(0);
         let post_h = post.st.houses.get(t).copied().unwrap_or(0);
         let cap = data.tiles[t].rent.len().saturating_sub(1) as i32;
-        if data.tiles[t].kind == TileKind::Ring {
+        if data.tiles[t].kind.as_str() == "ring" {
             continue;
         }
         if pre_h <= cap && post_h > cap {
@@ -1409,7 +1409,7 @@ pub fn verify_rent_amount(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        if tile.kind == TileKind::Ring || tile.rent.is_empty() {
+        if tile.kind.as_str() == "ring" || tile.rent.is_empty() {
             continue;
         }
         let h = pre.st.houses.get(t).copied().unwrap_or(0).max(0) as usize;

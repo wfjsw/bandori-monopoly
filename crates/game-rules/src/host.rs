@@ -89,6 +89,13 @@ pub struct CardInfo {
     /// declaration order. See [`ManifestTileText`].
     #[serde(default)]
     pub texts: Vec<ManifestTileText>,
+    /// Board role (`CardDef::board_role`, ABI v66): `""` / `"tile"` / `"mark"` /
+    /// `"status"`.
+    #[serde(default)]
+    pub board_role: String,
+    /// Tile kinds this rule governs (`CardDef::governs`, ABI v66).
+    #[serde(default)]
+    pub governs: Vec<String>,
 }
 
 impl CardInfo {
@@ -1081,6 +1088,48 @@ impl Ruleset {
             .unwrap_or(0)
     }
 
+    /// The rule id that settles a board tile of this opaque kind (ABI v66).
+    /// From `CardDef::governs` / `board_role == "tile"`; empty when none.
+    pub fn tile_rule_id(&self, kind: &str) -> String {
+        for c in &self.inner.cards {
+            if c.board_role != "tile" {
+                continue;
+            }
+            if c.governs.iter().any(|g| g == kind) {
+                return c.id.clone();
+            }
+            // Default: a single kind derived from the id's `tile:` suffix.
+            if c.governs.is_empty() {
+                if let Some(k) = c.id.strip_prefix("tile:") {
+                    if k == kind {
+                        return c.id.clone();
+                    }
+                }
+            }
+        }
+        String::new()
+    }
+
+    /// Standing **mark-owner** rule ids (`board_role == "mark"`).
+    pub fn mark_rule_ids(&self) -> Vec<String> {
+        self.inner
+            .cards
+            .iter()
+            .filter(|c| c.board_role == "mark")
+            .map(|c| c.id.clone())
+            .collect()
+    }
+
+    /// Standing **status-host** rule ids (`board_role == "status"`).
+    pub fn status_rule_ids(&self) -> Vec<String> {
+        self.inner
+            .cards
+            .iter()
+            .filter(|c| c.board_role == "status")
+            .map(|c| c.id.clone())
+            .collect()
+    }
+
     /// Run an effect from `world` with the answers collected so far.
     ///
     /// `world` is never modified. On [`Outcome::Done`] the caller commits the returned
@@ -1643,6 +1692,42 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// order. Empty when the card declares none.
     fn card_texts(&self, id: &str) -> Vec<ManifestTileText>;
     fn declares(&self, kind: crate::TriggerKind) -> bool;
+    /// Rule id that settles a board tile of this opaque kind (ABI v66).
+    /// Default scans [`Self::cards`] for `board_role == "tile"`.
+    fn tile_rule_id(&self, kind: &str) -> String {
+        for c in self.cards() {
+            if c.board_role != "tile" {
+                continue;
+            }
+            if c.governs.iter().any(|g| g == kind) {
+                return c.id.clone();
+            }
+            if c.governs.is_empty() {
+                if let Some(k) = c.id.strip_prefix("tile:") {
+                    if k == kind {
+                        return c.id.clone();
+                    }
+                }
+            }
+        }
+        String::new()
+    }
+    /// Standing mark-owner rule ids (`board_role == "mark"`).
+    fn mark_rule_ids(&self) -> Vec<String> {
+        self.cards()
+            .iter()
+            .filter(|c| c.board_role == "mark")
+            .map(|c| c.id.clone())
+            .collect()
+    }
+    /// Standing status-host rule ids (`board_role == "status"`).
+    fn status_rule_ids(&self) -> Vec<String> {
+        self.cards()
+            .iter()
+            .filter(|c| c.board_role == "status")
+            .map(|c| c.id.clone())
+            .collect()
+    }
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
     /// a [反击] at `kind`? Default scans the entry table; [`Ruleset`] uses the
     /// per-card kind bitmask.
@@ -1831,6 +1916,15 @@ impl CardModules for Ruleset {
     }
     fn declares(&self, kind: crate::TriggerKind) -> bool {
         Ruleset::declares(self, kind)
+    }
+    fn tile_rule_id(&self, kind: &str) -> String {
+        Ruleset::tile_rule_id(self, kind)
+    }
+    fn mark_rule_ids(&self) -> Vec<String> {
+        Ruleset::mark_rule_ids(self)
+    }
+    fn status_rule_ids(&self) -> Vec<String> {
+        Ruleset::status_rule_ids(self)
     }
     fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
         Ruleset::counteracts_to(self, card, kind)
@@ -2350,6 +2444,8 @@ fn inspect(
             on: e.on,
             props: e.props.into_iter().collect(),
             texts: e.texts,
+            board_role: e.board_role,
+            governs: e.governs,
         })
         .collect();
     if cards.is_empty() {
@@ -5063,6 +5159,8 @@ mod gate_tests {
             on,
             props: Default::default(),
             texts: Default::default(),
+            board_role: Default::default(),
+            governs: Default::default(),
         }
     }
 

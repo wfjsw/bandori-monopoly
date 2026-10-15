@@ -33,7 +33,7 @@
 //! the same TODO on its settle body). Text precedence is built on that same
 //! ordering, so it is placement order / first claim here too.
 
-use crate::data::{tile_rule_id, GameData};
+use crate::data::GameData;
 use crate::engine::rules::{CardRules, TileTextDecl};
 use crate::engine::World;
 use crate::state::{FieldCard, TileTextEntry};
@@ -91,7 +91,7 @@ pub fn compose(world: &World, data: &GameData, rules: &dyn CardRules) -> Vec<Vec
         let Some(td) = data.tiles.get(t) else {
             continue;
         };
-        let want = tile_rule_id(&td.kind);
+        let want = rules.tile_rule_id(td.kind.as_str());
         if want.is_empty() || f.card != want {
             continue;
         }

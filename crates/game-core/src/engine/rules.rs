@@ -598,12 +598,33 @@ pub trait CardRules: Send + Sync {
         false
     }
 
+    /// The rule id that settles a board tile of this **opaque kind**, or `""`
+    /// when the ruleset declares none (the engine's generic deed settlement
+    /// then applies). Supplied by the ruleset (`CardDef::governs` /
+    /// `board_role == "tile"`); the engine keeps no kind→rule table.
+    fn tile_rule_id(&self, _kind: &str) -> String {
+        String::new()
+    }
+
+    /// Board-wide **mark-owner** rule ids (`board_role == "mark"`): one
+    /// standing instance each on the neutral board owner.
+    fn mark_rule_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Board-wide **status-host** rule ids (`board_role == "status"`): one
+    /// standing instance each on the neutral board owner.
+    fn status_rule_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Resolve the tile `player` stopped on -- the **settle body**.
     ///
     /// The default is the built-in plain-Monopoly settlement
-    /// (`land_at`'s body): buyable / circle / edogawa / cafe / ryuseido /
-    /// agent. `WasmRules` overrides this to run the tile's **rule instances**
-    /// (`docs/TILES.md`) and falls back to this default for a tile with none.
+    /// (`land_at`'s body): generic deed buy / pay-rent / build, plus a plain
+    /// log for a non-deed. `WasmRules` overrides this to run the tile's
+    /// **rule instances** (`docs/TILES.md`) and falls back to this default for
+    /// a tile with none.
     fn settle_tile(
         &self,
         cx: &mut Cx,

@@ -16,7 +16,6 @@
 use super::super::world::World;
 use crate::data::GameData;
 use crate::state::MatchState;
-use crate::data::TileKind;
 
 /// Which kind of purchase this is. Mirrors
 /// `card_sdk::abi::BuyKind`.
@@ -149,16 +148,13 @@ pub fn redeem_cost(data: &GameData, t: usize) -> i32 {
 }
 
 /// The property rent-table entry at the **counted** house count
-/// ([`World::rent_houses`]; `pay_rent`'s lookup). RiNG is not on this table -- see
-/// [`ring_rent_unit`]. **Single source** for `pay_rent`, `World::rent_of`'s
-/// property branch and the tile quotes.
+/// ([`World::rent_houses`]; `pay_rent`'s lookup). Dice-rent tiles are not on
+/// this table -- see [`dice_rent_unit`]. **Single source** for `pay_rent`,
+/// `World::rent_of`'s table branch and the tile quotes.
 pub fn table_rent(data: &GameData, w: &World, t: usize) -> i32 {
     let Some(tile) = data.tiles.get(t) else {
         return 0;
     };
-    if tile.kind == TileKind::Ring {
-        return 0;
-    }
     let h = w.rent_houses(t as i32);
     if tile.rent.is_empty() {
         0
@@ -167,19 +163,21 @@ pub fn table_rent(data: &GameData, w: &World, t: usize) -> i32 {
     }
 }
 
-/// RiNG rent's per-die unit: `rings × ring_multiplier`. The payment is
-/// `unit × 1d20` (`pay_rent`); the tile quotes show `(unit, unit × 20)`.
-/// **Single source** for both.
-pub fn ring_rent_unit(data: &GameData, w: &World, owner: usize) -> i32 {
-    count_rings(data, w, owner).max(1) * data.match_rules.ring_multiplier.max(1)
+/// Generic dice-rent unit: `count_owned_kind(owner, kind) × mult`. The
+/// payment is `unit × 1d20` (`pay_rent`); quotes show `(unit, unit × 20)`.
+/// `mult` is [`crate::state::prop::RENT_DICE_MULT`] on the tile rule
+/// instance. The floor of 1 owned tile matches the standing convention that
+/// a deed with dice rent still charges one unit when the owner holds none of
+/// that kind. `TODO(规则书)`: that floor is not book text for every ruleset.
+pub fn dice_rent_unit(data: &GameData, w: &World, owner: usize, kind: &str, mult: i32) -> i32 {
+    count_owned_kind(data, w, owner, kind).max(1) * mult.max(1)
 }
 
-/// How many RiNG tiles `player` owns. **Single source** for
-/// `Cx::count_rings` and [`ring_rent_unit`].
-pub fn count_rings(data: &GameData, w: &World, player: usize) -> i32 {
+/// How many tiles of opaque `kind` `player` owns.
+pub fn count_owned_kind(data: &GameData, w: &World, player: usize, kind: &str) -> i32 {
     (0..data.tiles.len())
         .filter(|&t| {
-            data.tiles[t].kind == TileKind::Ring
+            data.tiles[t].kind.as_str() == kind
                 && w.st.owners.get(t).copied().unwrap_or(-1) == player as i32
         })
         .count() as i32
@@ -484,11 +482,11 @@ pub fn tile_quotes(
 }
 
 /// The rent a landing on `t` would move, as a `(min, max)` pair. `max` is
-/// `Some` only for RiNG dice (`unit × 1d20`).
+/// `Some` only for dice rent (`unit × 1d20`).
 ///
-/// RiNG rent always counts the **owner's** rings (`pay_rent`), which is
-/// public state -- so Rent, OwnRent and the seat-independent quote share one
-/// figure. `_viewer` is reserved for future payer-scoped scalars.
+/// Dice rent always counts the **owner's** tiles of the same kind (`pay_rent`),
+/// which is public state -- so Rent, OwnRent and the seat-independent quote
+/// share one figure. `_viewer` is reserved for future payer-scoped scalars.
 fn rent_quote(
     data: &crate::data::GameData,
     w: &World,
@@ -498,10 +496,11 @@ fn rent_quote(
     let Some(tile) = data.tiles.get(t) else {
         return (0, None);
     };
-    if tile.kind == TileKind::Ring {
-        // RiNG rent is rolled at payment time; show the honest dice range.
+    let mult = w.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT);
+    if mult > 0 {
+        // Rolled at payment time; show the honest dice range.
         let owner = w.st.owners.get(t).copied().unwrap_or(-1);
-        let unit = ring_rent_unit(data, w, owner.max(0) as usize);
+        let unit = dice_rent_unit(data, w, owner.max(0) as usize, tile.kind.as_str(), mult);
         (unit, Some(unit * 20))
     } else {
         let rent = table_rent(data, w, t);

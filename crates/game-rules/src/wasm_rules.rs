@@ -6507,14 +6507,14 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == game_core::data::TileKind::Circle)
+            .is_some_and(|t| t.kind.as_str() == "circle")
     }
     #[inline]
     fn is_ring(&self, tile: i32) -> bool {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == game_core::data::TileKind::Ring)
+            .is_some_and(|t| t.kind.as_str() == "ring")
     }
     #[inline]
     fn is_live_house(&self, tile: i32) -> bool {
@@ -7093,13 +7093,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == game_core::data::TileKind::Circle)
+            .is_some_and(|t| t.kind.as_str() == "circle")
     }
     fn is_ring(&self, tile: i64) -> bool {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == game_core::data::TileKind::Ring)
+            .is_some_and(|t| t.kind.as_str() == "ring")
     }
     fn is_live_house(&self, tile: i64) -> bool {
         self.data
@@ -7677,6 +7677,20 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
 
     fn has_rule(&self, id: &str) -> bool {
         self.ruleset.card(id).is_some()
+    }
+
+    /// [`game_core::engine::CardRules::tile_rule_id`] -- from the ruleset's
+    /// `CardDef::governs` / `board_role` table (ABI v66).
+    fn tile_rule_id(&self, kind: &str) -> String {
+        self.ruleset.tile_rule_id(kind)
+    }
+
+    fn mark_rule_ids(&self) -> Vec<String> {
+        self.ruleset.mark_rule_ids()
+    }
+
+    fn status_rule_ids(&self) -> Vec<String> {
+        self.ruleset.status_rule_ids()
     }
 
     /// [`game_core::engine::CardRules::normal`] -- a card with a rule but no

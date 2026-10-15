@@ -21,8 +21,6 @@ pub const START_MONEY: i32 = 10_000;
 pub const START_HAND: usize = 2;
 /// Base hand limit.
 pub const HAND_LIMIT: usize = 5;
-/// CiRCLE reward in money.
-pub const CIRCLE_MONEY: i32 = 2000;
 /// Events kept for `events_since`.
 pub const EVENT_KEEP: usize = 400;
 /// Events carried in every `MatchState` snapshot.

@@ -25,7 +25,8 @@ use card_sdk::CardDef;
 /// No hooks of its own yet: the verbs live in [`crate::fire_api`] and the
 /// `markerSpend` / `fireSpent` windows are generic engine points. A future
 /// 「获得[火罐]时」 clause would hang off `markerGain`.
-pub const STATUS_FIRE: CardDef = CardDef::new("status:fire", &[]);
+pub const STATUS_FIRE: CardDef = CardDef::new("status:fire", &[])
+    .board_role("status");
 
 /// Gain `n`, at most up to the cap; returns how many landed. This is the
 /// host's clause (「不能超过持有上限」). The engine verb `gain_fire` is the

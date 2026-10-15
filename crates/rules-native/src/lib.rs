@@ -170,6 +170,8 @@ impl NativeRulesHandle {
                             key: (*key).to_string(),
                         })
                         .collect(),
+                    board_role: card.board_role.to_string(),
+                    governs: card.governs.iter().map(|k| (*k).to_string()).collect(),
                 });
             }
         }

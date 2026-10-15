@@ -465,7 +465,19 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 65;
+/// v66: **generic engine vocabulary** (phase 2, tiles). The engine treats
+///      tile kinds as opaque string ids; rule meaning comes from the ruleset.
+///      `CardDef::board_role` (`""` / `"tile"` / `"mark"` / `"status"`) and
+///      `CardDef::governs` (tile kinds a `tile` rule settles) ride
+///      [`ManifestEntry`] as trailing fields (postcard is not self-describing,
+///      so this is the bump). `game-core` no longer carries a kind→rule table
+///      or named tile-kind enum variants; `CardRules::tile_rule_id` /
+///      `mark_rule_ids` / `status_rule_ids` supply the lists. Generic dice
+///      rent: [`prop::RENT_DICE_MULT`] on a tile rule instance means
+///      `count_owned_kind(owner, kind) × mult × 1d20` instead of the rent
+///      table. No SAVE_VERSION change
+///      (TileKind still serializes as the same raw string).
+pub const ABI_VERSION: i32 = 66;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -845,8 +857,19 @@ pub mod prop {
     pub const RENT_LEN: &str = "rentLen";
     /// Rent at level N: `rent:0` … `rent:rentLen-1`.
     pub const RENT_PREFIX: &str = "rent:";
-    /// RiNG rent multiplier (`match_rules.ring_multiplier`). TODO(规则书).
-    pub const RING_MULT: &str = "ringMult";
+    /// Generic dice-rent multiplier (ABI v66). When set (`> 0`) on a tile rule
+    /// instance, rent is `count_owned_kind(owner, kind) × mult × 1d20` instead
+    /// of the rent table.
+    /// TODO(规则书): the dice-rent table itself is not book text for every
+    /// ruleset.
+    pub const RENT_DICE_MULT: &str = "rentDiceMult";
+    /// This tile's rule is the **start** square (the engine's generic
+    /// "pass the start" / start-tile queries). Stamped from the tile rule's
+    /// static props; the engine never matches a kind string.
+    pub const START: &str = "start";
+    /// `1` = this deed cannot be mortgaged (a tile-rule static prop). The
+    /// engine reads it instead of matching a tile kind.
+    pub const NO_MORTGAGE: &str = "noMortgage";
 
     // ------------------------------------------------- tile rule modifiers
     // What a card that bends a tile writes onto its rule instance, replacing
@@ -2459,6 +2482,15 @@ pub struct ManifestEntry {
     /// ABI bump.
     #[serde(default)]
     pub texts: Vec<ManifestTileText>,
+    /// Board role of a standing rule (`CardDef::board_role`, v66): `""`
+    /// (ordinary card), `"tile"`, `"mark"`, or `"status"`. Trailing field.
+    #[serde(default)]
+    pub board_role: String,
+    /// Tile kinds this rule governs (`CardDef::governs`, v66) when
+    /// [`Self::board_role`] is `"tile"`. Empty derives a single kind from the
+    /// id's `tile:` suffix. Trailing field.
+    #[serde(default)]
+    pub governs: Vec<String>,
 }
 
 /// One per-entry **tile text** declaration (`CardDef::texts`, v59): the

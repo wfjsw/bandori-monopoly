@@ -12,7 +12,6 @@ use crate::msg::Msg;
 use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
 use super::world::World;
-use crate::data::TileKind;
 use crate::engine::world::Extreme;
 
 impl World {
@@ -307,12 +306,13 @@ impl World {
         let Some(t) = data.tiles.get(i) else {
             return 0;
         };
-        if t.kind == TileKind::Ring {
-            // RiNG rent is rolled at payment time; the table value is the base.
-            t.price
-        } else {
-            super::play::purchase::table_rent(data, self, i)
+        // Dice rent (`prop::RENT_DICE_MULT`) is rolled at payment time; the
+        // unit (`count_owned_kind × mult`) is the quoted base.
+        let mult = self.tile_prop(tile, crate::state::prop::RENT_DICE_MULT);
+        if mult > 0 {
+            return super::play::purchase::dice_rent_unit(data, self, i, t.kind.as_str(), mult);
         }
+        super::play::purchase::table_rent(data, self, i)
     }
 
     /// Price to buy a tile now (land + houses standing on it).
@@ -352,7 +352,7 @@ impl World {
                 .filter(|&(t, tile)| {
                     Some(t) != exclude
                         && tile.is_buyable()
-                        && tile.kind != TileKind::Ring
+                        && self.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) == 0
                         && self.st.owners[t] == player as i32
                         && !self.st.mortgaged[t]
                 })
@@ -995,8 +995,10 @@ impl World {
         {
             return Some(Msg::new("err.build_denied"));
         }
-        if t.kind == TileKind::Ring || t.rent.len() < 2 {
-            return Some(Msg::new("err.build_ring"));
+        // No upgrade past the declared table (a rule may also stamp
+        // `prop::BUILD_MAX = 0`).
+        if t.rent.len() < 2 {
+            return Some(Msg::new("err.build_no_upgrade"));
         }
         if self
             .st
@@ -1400,9 +1402,8 @@ impl World {
     /// ([`crate::state::BOARD_OWNER`]) -- one per board tile, the way
     /// [`Self::bind_skills`] places a player's skills. Idempotent.
     ///
-    /// The rule id comes from the tile's `kind` (`docs/TILES.md`):
-    /// `tile:property` / `tile:ring` / `tile:agent` / `tile:circle` /
-    /// `tile:edogawa` / `tile:event` (`cafe` and `ryuseido` share one).
+    /// The rule id comes from the ruleset (`CardRules::tile_rule_id`, the
+    /// tile-kind table declared by `CardDef::governs` / `board_role`).
     /// Tile data (price, rent table, group, level cap) is stamped into the
     /// instance's `props`; a key the kind does not use is still stamped, so a
     /// card that retunes one reads and writes the same map the bodies do.
@@ -1416,19 +1417,19 @@ impl World {
     ) {
         use crate::state::prop;
         for (t, tile) in data.tiles.iter().enumerate() {
-            let id = crate::data::tile_rule_id(&tile.kind);
+            let id = rules.tile_rule_id(tile.kind.as_str());
             if id.is_empty() {
                 continue;
             }
-            if self.tile_rule_instances(t as i32).iter().any(|(_, c)| c == id) {
+            if self.tile_rule_instances(t as i32).iter().any(|(_, c)| c == &id) {
                 continue;
             }
-            if !rules.has_rule(id) {
+            if !rules.has_rule(&id) {
                 // No such rule in this ruleset (StubRules). The engine's
                 // built-in settlement covers it; nothing to bind.
                 continue;
             }
-            let mut props = rules.card_props(id);
+            let mut props = rules.card_props(&id);
             props.insert(prop::PRICE.to_string(), tile.price);
             props.insert(prop::HOUSE.to_string(), tile.house);
             props.insert(prop::GROUP.to_string(), tile.group);
@@ -1441,67 +1442,61 @@ impl World {
             for (n, r) in tile.rent.iter().enumerate() {
                 props.insert(format!("{}{}", prop::RENT_PREFIX, n), *r);
             }
-            if tile.kind == TileKind::Ring {
-                props.insert(prop::RING_MULT.to_string(), data.match_rules.ring_multiplier);
-            }
             self.place_card_on(
                 data,
                 crate::state::BOARD_OWNER,
                 t as i32,
-                id,
+                &id,
                 Msg::default(),
                 props,
             );
         }
-        // Board-wide **mark owners** (`mark:*`, `crate::data::mark_rule_ids`) --
-        // one instance each on the neutral board owner, governing no single
-        // tile (`tile = -1`). `mark:cp` is the [CP点] tile-mark owner
-        // (`rules/tile_marks/src/cp.rs`): a board-wide category, so it is not bound
-        // per board tile the way `tile:*` is. Idempotent.
-        for id in crate::data::mark_rule_ids() {
-            if !rules.has_rule(id) {
+        // Board-wide **mark owners** (`CardRules::mark_rule_ids`) -- one
+        // instance each on the neutral board owner, governing no single
+        // tile (`tile = -1`). Idempotent.
+        for id in rules.mark_rule_ids() {
+            if !rules.has_rule(&id) {
                 continue;
             }
             if self
                 .st
                 .board_field
                 .iter()
-                .any(|f| f.card == *id && f.tile < 0)
+                .any(|f| f.card == id && f.tile < 0)
             {
                 continue;
             }
-            let props = rules.card_props(id);
+            let props = rules.card_props(&id);
             self.place_card_on(
                 data,
                 crate::state::BOARD_OWNER,
                 -1,
-                id,
+                &id,
                 Msg::default(),
                 props,
             );
         }
-        // Board-wide **status hosts** (`status:*`,
-        // `crate::data::status_rule_ids`) -- one instance each on the neutral
-        // board owner (`docs/STATUS-HOSTS.md`). Each owns its status counter's
-        // semantics. Idempotent, same path as `mark:*`.
-        for id in crate::data::status_rule_ids() {
-            if !rules.has_rule(id) {
+        // Board-wide **status hosts** (`CardRules::status_rule_ids`) -- one
+        // instance each on the neutral board owner. Idempotent, same path as
+        // mark owners.
+        for id in rules.status_rule_ids() {
+            if !rules.has_rule(&id) {
                 continue;
             }
             if self
                 .st
                 .board_field
                 .iter()
-                .any(|f| f.card == *id && f.tile < 0)
+                .any(|f| f.card == id && f.tile < 0)
             {
                 continue;
             }
-            let props = rules.card_props(id);
+            let props = rules.card_props(&id);
             self.place_card_on(
                 data,
                 crate::state::BOARD_OWNER,
                 -1,
-                id,
+                &id,
                 Msg::default(),
                 props,
             );

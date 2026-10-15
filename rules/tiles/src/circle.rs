@@ -44,6 +44,7 @@ pub const CIRCLE: CardDef = CardDef::new(
         On::Hook(&[HookKind::PassTile], "", Some(pass_pays), on_pass),
     ],
 )
+.board_role("tile")
 // Deed-popup text (`docs/TILES.md` 「Tile text」): the two halves the book
 // splits (line 95 settle draw, line 96 [经过] reward) speak for one slot each.
 // `event:协助CiRCLE重建` replaces both while it is up.

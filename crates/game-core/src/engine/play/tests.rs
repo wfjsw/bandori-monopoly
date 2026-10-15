@@ -11,7 +11,6 @@ use crate::net::RoomMember;
 use crate::scoring::ScoreWeights;
 use crate::state::MatchPrompt;
 use crate::MatchMode;
-use crate::data::TileKind;
 
 fn data() -> Arc<GameData> {
     // Unit tests live inside the crate, so they cannot use the integration-test
@@ -88,7 +87,7 @@ fn first(d: &GameData, f: impl Fn(&crate::data::TileData) -> bool) -> usize {
 #[test]
 fn rent_follows_the_rent_table() {
     let (d, mut w) = setup(2);
-    let t = first(&d, |x| x.kind == TileKind::Property && x.rent.len() >= 3);
+    let t = first(&d, |x| x.is_buyable() && x.rent.len() >= 3);
     w.st.owners[t] = 1;
     w.st.houses[t] = 2;
     w.st.players[0].pos = t as i32;
@@ -105,80 +104,39 @@ fn rent_follows_the_rent_table() {
 }
 
 #[test]
-fn ring_rent_is_rings_times_multiplier_times_d20() {
+fn dice_rent_unit_is_count_owned_kind_times_mult() {
     let (d, mut w) = setup(2);
-    let rings: Vec<usize> = (0..d.tiles.len())
-        .filter(|&t| d.tiles[t].kind == TileKind::Ring)
+    let deeds: Vec<usize> = (0..d.tiles.len())
+        .filter(|&t| d.tiles[t].is_buyable() && d.tiles[t].rent.len() >= 2)
+        .take(3)
         .collect();
-    assert_eq!(rings.len(), 4);
-    w.st.owners[rings[0]] = 1;
-    w.st.owners[rings[1]] = 1;
-    w.st.players[0].pos = rings[0] as i32;
-    for seed in 0..20 {
-        w.rng = crate::rng::Rng::new(seed);
-        let (w2, _) = run(&d, &w, &[], |cx| cx.land(0, true));
-        let paid = 10_000 - w2.st.players[0].money;
-        assert!(
-            paid % 20 == 0 && (20..=400).contains(&paid),
-            "2 rings x 10 x 1d20, got {paid}"
-        );
-    }
+    assert!(deeds.len() >= 2);
+    w.st.owners[deeds[0]] = 1;
+    w.st.owners[deeds[1]] = 1;
+    let kind = d.tiles[deeds[0]].kind.as_str().to_string();
+    let unit = crate::engine::play::purchase::dice_rent_unit(&d, &w, 1, &kind, 10);
+    assert_eq!(
+        unit,
+        crate::engine::play::purchase::count_owned_kind(&d, &w, 1, &kind).max(1) * 10
+    );
+    assert_eq!(unit, 20, "two owned deeds x mult 10");
 }
 
 #[test]
-fn agent_charges_half_rent_when_the_whole_group_belongs_to_others() {
+fn non_deed_land_is_a_plain_log() {
     let (d, mut w) = setup(2);
-    let agent = first(&d, |x| x.kind == TileKind::Agent);
-    let g = d.tiles[agent].group;
-    let group: Vec<usize> = (0..d.tiles.len())
-        .filter(|&t| d.tiles[t].is_buyable() && d.tiles[t].group == g)
-        .collect();
-    assert!(!group.is_empty());
-    for &t in &group {
-        w.st.owners[t] = 1;
-    }
-    w.st.players[0].pos = agent as i32;
-    let expected: i32 = group
-        .iter()
-        .map(|&t| ((d.tiles[t].rent[0] as f64 / 2.0 / 10.0).ceil() as i32) * 10)
-        .sum();
+    let t = first(&d, |x| !x.is_buyable());
+    w.st.players[0].pos = t as i32;
     let (w2, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert!(p.is_none());
-    assert_eq!(10_000 - w2.st.players[0].money, expected);
-}
-
-#[test]
-fn agent_offers_purchases_in_its_group() {
-    let (d, mut w) = setup(2);
-    let agent = first(&d, |x| x.kind == TileKind::Agent);
-    let g = d.tiles[agent].group;
-    w.st.players[0].pos = agent as i32;
-    let (_, p) = run(&d, &w, &[], |cx| cx.land(0, true));
-    let p = p.expect("tile prompt");
-    assert_eq!(p.kind, "tile");
-    assert_eq!(
-        p.fallback,
-        p.items.len() as i32,
-        "fallback = choose nothing"
-    );
-    let t: usize = p.items[0].parse().unwrap();
-    assert_eq!(d.tiles[t].group, g);
-
-    let (w2, p) = run(&d, &w, &[pick(0)], |cx| cx.land(0, true));
-    assert!(p.is_none());
-    assert_eq!(w2.st.owners[t], 0);
-    assert_eq!(w2.st.players[0].money, 10_000 - d.tiles[t].price);
-
-    // Any answer outside the option list means "choose nothing".
-    let (w3, _) = run(&d, &w, &[pick(99)], |cx| cx.land(0, true));
-    assert_eq!(w3.st.owners[t], -1, "choosing nothing buys nothing");
+    assert_eq!(w2.st.players[0].money, 10_000, "no charge on a non-deed");
 }
 
 #[test]
 fn short_of_cash_mortgages_then_pays() {
     let (d, mut w) = setup(2);
     let t = first(&d, |x| {
-        x.kind == TileKind::Property && x.rent.len() >= 3 && x.rent[2] >= 1000
+        x.is_buyable() && x.rent.len() >= 3 && x.rent[2] >= 1000
     });
     let rent = d.tiles[t].rent[2];
     w.st.owners[t] = 1;
@@ -186,7 +144,7 @@ fn short_of_cash_mortgages_then_pays() {
     w.st.players[0].pos = t as i32;
     w.st.players[0].money = 100;
     let deeds: Vec<usize> = (0..d.tiles.len())
-        .filter(|&x| d.tiles[x].kind == TileKind::Property && x != t)
+        .filter(|&x| d.tiles[x].is_buyable() && d.tiles[x].rent.len() >= 2 && x != t)
         .take(4)
         .collect();
     for &x in &deeds {
@@ -216,7 +174,7 @@ fn short_of_cash_mortgages_then_pays() {
 #[test]
 fn bankruptcy_pays_the_creditor_and_can_end_the_game() {
     let (d, mut w) = setup(2);
-    let t = first(&d, |x| x.kind == TileKind::Property && x.rent.len() >= 3);
+    let t = first(&d, |x| x.is_buyable() && x.rent.len() >= 3);
     w.st.owners[t] = 1;
     w.st.houses[t] = 3;
     w.st.players[0].pos = t as i32;
@@ -236,8 +194,8 @@ fn bankruptcy_pays_the_creditor_and_can_end_the_game() {
 #[test]
 fn bankrupt_land_is_freed_and_auctioned() {
     let (d, mut w) = setup(3);
-    let t = first(&d, |x| x.kind == TileKind::Property && x.rent.len() >= 3);
-    let mine = first(&d, |x| x.kind == TileKind::Property && x.name != d.tiles[t].name);
+    let t = first(&d, |x| x.is_buyable() && x.rent.len() >= 3);
+    let mine = first(&d, |x| x.is_buyable() && x.rent.len() >= 2 && x.name != d.tiles[t].name);
     w.st.owners[t] = 1;
     w.st.houses[t] = 3;
     w.st.owners[mine] = 0;
@@ -272,7 +230,7 @@ fn bankrupt_land_is_freed_and_auctioned() {
 #[test]
 fn mortgaged_land_can_be_force_bought_at_double() {
     let (d, mut w) = setup(2);
-    let t = first(&d, |x| x.kind == TileKind::Property && x.rent.len() >= 3);
+    let t = first(&d, |x| x.is_buyable() && x.rent.len() >= 3);
     w.st.owners[t] = 1;
     w.st.houses[t] = 1;
     w.st.mortgaged[t] = true;
@@ -297,35 +255,28 @@ fn mortgaged_land_can_be_force_bought_at_double() {
 }
 
 #[test]
-fn passing_circle_offers_money_or_a_card() {
+fn walk_lands_without_a_builtin_pass_reward() {
     let (d, mut w) = setup(2);
     let n = d.tiles.len() as i32;
-    assert_eq!(d.tiles[0].kind, TileKind::Circle);
     w.st.players[0].pos = n - 2;
+    w.turn.plan.resolve = false;
     let walk = |cx: &mut Cx| {
         let mut m = Move::new(0);
         m.roll = 5;
         m.resolve = false;
         cx.walk(&mut m)
     };
-    let (_, p) = run(&d, &w, &[], walk);
-    let p = p.expect("reward prompt");
-    assert_eq!((p.title.key(), p.options.len()), ("ask.circle.title", 2));
-
-    let (money, _) = run(&d, &w, &[pick(0)], walk);
-    assert_eq!(money.st.players[0].money, 10_000 + CIRCLE_MONEY);
-    assert_eq!(money.st.players[0].pos, 3);
-
-    let hand = w.hidden[0].hand.len();
-    let (card, _) = run(&d, &w, &[pick(1)], walk);
-    assert_eq!(card.st.players[0].money, 10_000);
-    assert_eq!(card.hidden[0].hand.len(), hand + 1);
+    let (w2, p) = run(&d, &w, &[], walk);
+    // StubRules pays no pass reward; `resolve = false` skips the settle.
+    assert!(p.is_none(), "no built-in pass-reward prompt");
+    assert_eq!(w2.st.players[0].pos, 3);
+    assert_eq!(w2.st.players[0].money, 10_000);
 }
 
 #[test]
 fn replays_are_exact() {
     let (d, w) = setup(3);
-    // A real main move: random roll, possibly a CiRCLE prompt, landing, rent...
+    // A real main move: random roll, landing, rent...
     for seed in 0..30 {
         let mut w = w.clone();
         w.rng = crate::rng::Rng::new(seed);
@@ -350,7 +301,7 @@ fn replays_are_exact() {
 fn final_score_and_ranking() {
     let (d, mut w) = setup(4);
     let props: Vec<usize> = (0..d.tiles.len())
-        .filter(|&t| d.tiles[t].kind == TileKind::Property)
+        .filter(|&t| d.tiles[t].is_buyable() && d.tiles[t].rent.len() >= 2)
         .collect();
     w.st.players[0].money = 5_000;
     w.st.owners[props[0]] = 0;

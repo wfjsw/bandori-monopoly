@@ -19,12 +19,22 @@
 //! rule. `ctx::pay_rent` picks the dice formula because the tile's `kind` is
 //! `ring`.
 
+use card_sdk::abi::prop;
 use card_sdk::{CardDef, On};
 
-pub const RING: CardDef = CardDef::new("tile:ring", &[On::Settle("", None, settle)]);
+/// Default dice-rent multiplier (match_rules note 「× ringMultiplier」).
+/// The engine charges `count_owned_kind(owner, kind) × rentDiceMult × 1d20`.
+pub const RENT_DICE_MULT: i32 = 10;
+
+pub const RING: CardDef = CardDef::new("tile:ring", &[On::Settle("", None, settle)])
+    .board_role("tile")
+    .props(&[
+        (prop::NO_MORTGAGE, 1),
+        (prop::RENT_DICE_MULT, RENT_DICE_MULT),
+    ]);
 
 /// 规则书: the [可购买格子] branch (lines 100–106) with 「所有RiNG不可升级」
-/// folded in as `buildMax = 0`.
+/// folded in as `buildMax = 0`. Dice rent is `prop::RENT_DICE_MULT` (see above).
 fn settle(player_id: i32) -> card_sdk::Asked {
     super::property::settle(player_id)
 }

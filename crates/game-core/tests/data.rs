@@ -30,10 +30,15 @@ fn game_data_counts_match_the_original() {
     assert_eq!(d.match_rules.ring_multiplier, 10);
     assert!(!d.rules_text.is_empty());
 
-    let kind = |k: &str| d.tiles.iter().filter(|t| t.kind.as_str() == k).count();
-    assert_eq!((kind("property"), kind("agent"), kind("ring")), (41, 11, 4));
-    assert_eq!(d.tiles.iter().filter(|t| t.is_corner()).count(), 4);
     assert_eq!(d.tiles.iter().filter(|t| t.is_buyable()).count(), 45);
+    assert_eq!(
+        d.tiles
+            .iter()
+            .filter(|t| t.is_buyable() && t.rent.len() < 2)
+            .count(),
+        4,
+        "four non-upgradable deeds"
+    );
     assert!(
         d.tiles
             .iter()

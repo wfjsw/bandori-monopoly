@@ -10,8 +10,7 @@ use super::cx::{Ask, Cx, Flow, Halt};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
 use super::rules::{raise, Dest, Trigger, TriggerBuy, TriggerPay};
-use crate::data::TileKind;
-use super::world::{Extreme, Signal, WalkSeg, CIRCLE_MONEY, START_HAND, START_MONEY};
+use super::world::{Extreme, Signal, WalkSeg, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
 
@@ -1487,10 +1486,9 @@ impl Cx<'_> {
             m.total = planned as i32;
             m.remaining = remaining as i32;
             let at = next as usize;
-            let passes_circle = self.tile(at).kind == TileKind::Circle;
             let last = remaining == 0;
             // `passBefore` -- the glossary's 「[经过]X」 is any tile on the move
-            // path, so this fires for every step (not just CiRCLE / the end).
+            // path, so this fires for every step (not just the end).
             // A hook that logs here flushes the segment covering steps up to
             // `cur` (the step onto `next` has not happened yet).
             raise!(self, "passBefore", i, @m m, tile = next)?;
@@ -1507,9 +1505,10 @@ impl Cx<'_> {
                 seg.to = next;
                 seg.value += m.dir();
             }
-            if passes_circle || last {
-                // Publish the approach before `passTile`: CiRCLE's rule can
-                // halt there for its reward choice. The client must walk to
+            if last || !self.w.tile_rule_instances(at as i32).is_empty() {
+                // Publish the approach before `passTile` when a tile rule
+                // (or the walk's last step) can halt there for a prompt. The
+                // client must walk to
                 // the tile before showing that choice, then continue from it
                 // after the reward resolves, without snapping back to `from`.
                 self.w.flush_walk();
@@ -1520,15 +1519,8 @@ impl Cx<'_> {
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
-            if passes_circle {
-                // The [经过] CiRCLE reward is `tile:circle`'s **Pass entry**
-                // (`docs/TILES.md`), dispatched through the `passTile` hook
-                // above. With no rule instance bound on this tile (`StubRules`,
-                // or a kind not migrated) the built-in reward runs here instead.
-                if self.w.tile_rule_instances(at as i32).is_empty() {
-                    self.circle_reward(i, m.resolve && last, m.from)?;
-                }
-            }
+            // A pass-reward (if any) is the tile rule's Pass entry on the
+            // `passTile` hook above. The engine keeps no built-in fallback.
             // `pass` -- every traversed tile, like `passBefore` / `passTile`
             // (glossary 「[经过]」). `passTile` is the Fx hook kind for the same
             // walk; a card uses one or the other, never both.
@@ -1656,16 +1648,8 @@ impl Cx<'_> {
         if self.out(i) || !self.playing() {
             return Ok(());
         }
-        if self.tile(to).kind == TileKind::Circle {
-            // Same fallback shape as the walk's: `tile:circle`'s Pass entry
-            // rode the `passTile` raise above. With no instance bound the
-            // built-in reward runs here instead. `landing` mirrors `resolve`:
-            // a settling teleport arrives (the landed wording), a no-settle one
-            // is a pure [经过] of the endpoint.
-            if self.w.tile_rule_instances(to as i32).is_empty() {
-                self.circle_reward(i, resolve, from)?;
-            }
-        }
+        // A pass-reward (if any) is the tile rule's Pass entry on the
+        // `passTile` raise above. The engine keeps no built-in fallback.
         m.to = self.w.st.players[i].pos as i32;
         // `moveAfter` (行动阶段 13 「移动后」/「主要移动结束时」) -- after
         // [重叠], before the settle stages, for every completed move including
@@ -1934,39 +1918,6 @@ impl Cx<'_> {
 
     // =============================================================== tiles
 
-    /// `circleAffected`'s `Trigger::value`: which half of the CiRCLE reward was
-    /// taken. These are the source of truth -- `card-sdk`'s `abi` mirrors them
-    /// (same convention as `Arg` / `TriggerKind`, which `abi` documents as
-    /// "must match the engine"). The stunned path forces [`CIRCLE_REWARD_CARD`],
-    /// so a money-only clause cannot fire there.
-    pub const CIRCLE_REWARD_MONEY: i32 = 0;
-    pub const CIRCLE_REWARD_CARD: i32 = 1;
-
-    /// The CiRCLE reward: 2,000 money or one card.
-    ///
-    /// `docs/TILES.md`: the reward step is `tile:circle`'s **Pass entry**
-    /// (`ctx::settle_circle_reward`), and suppression is `prop::NO_REWARD` on
-    /// the rule instance -- a rule that 「无法获取[CiRCLE奖励]」 / 「[经过]CiRCLE
-    /// 时不获得[CiRCLE奖励]」 / 「首次经过CiRCLE不获得经过奖励」 **sets the prop**
-    /// and clears it when its own clause ends (「…时」 goes in an event handler on
-    /// that state's change). The source owns the arming and the disarming; the
-    /// reader is the rule instance, not a per-player latch and not a walk-plan
-    /// flag.
-    ///
-    /// Two placements are read, both named `prop::NO_REWARD`, because the
-    /// clauses are of two shapes:
-    ///
-    /// * on the **tile's** `tile:circle` instance (`ctx::set_tile_prop`) -- a
-    ///   walk-scoped veto (「…的移动…不获得[CiRCLE奖励]」). Consumed here, so a
-    ///   stale arm cannot veto the next player.
-    /// * on the **passing player's own** field instance (`ctx::set_prop`) -- a
-    ///   per-player veto (「无法获取[CiRCLE奖励]」 while the source is in play).
-    ///   The source arms and disarms it.
-    pub fn card_circle_reward(&mut self, i: usize, landing: bool) -> Flow<()> {
-        let start = self.move_start;
-        self.circle_reward(i, landing, start)
-    }
-
     /// A card- or skill-driven dice roll. Sums `count`d`sides` the
     /// same way `roll_tables` does (a flat `count` when `sides <= 0`); the
     /// caller raises the `Roll` chain link so 「掷骰结算前」 [反击]s see it.
@@ -1985,110 +1936,6 @@ impl Cx<'_> {
     pub fn card_do_move_roll(&mut self, _player_id: usize) -> i32 {
         let plan = self.w.turn.plan.clone();
         self.roll_tables(&plan)
-    }
-
-    /// The CiRCLE reward: 2,000 money or one card. `start` is the move's 移动起点.
-    fn circle_reward(&mut self, i: usize, landing: bool, start: i32) -> Flow<()> {
-        // [除外] 「玩家棋子不失为存在于任何格子上」 -- no CiRCLE reward while
-        // off board (the status hosts' on-board gate).
-        if !self.w.st.players[i].status_gates().on_board {
-            return Ok(());
-        }
-        let at = self.w.st.players[i].pos;
-        // 规则书 基础[结算] 1.1: 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得
-        // [CiRCLE奖励]」. The pass qualifies only when the move did not begin on
-        // CiRCLE -- a same-tile teleport onto CiRCLE or a 0-move that ends there
-        // with 移动起点 == CiRCLE pays nothing. (`start < 0` = no move in flight,
-        // e.g. a card granting the CiRCLE reward outright: no 移动起点 to compare,
-        // so the clause does not bar it.)
-        if start >= 0
-            && self.tile(at as usize).kind == TileKind::Circle
-            && self.tile(start as usize).kind == TileKind::Circle
-        {
-            return Ok(());
-        }
-        for (uid, _) in self.w.tile_rule_instances(at) {
-            if self.w.prop_at(uid, crate::state::prop::NO_REWARD) > 0 {
-                self.w.set_prop_at(uid, crate::state::prop::NO_REWARD, 0);
-                return Ok(());
-            }
-        }
-        if self
-            .w
-            .field_instances(i as i32)
-            .into_iter()
-            .any(|(uid, _)| self.w.prop_at(uid, crate::state::prop::NO_REWARD) > 0)
-        {
-            return Ok(());
-        }
-        let pick = if self.w.st.players[i].stunned() {
-            self.w.log(
-                "text",
-                i as i32,
-                Msg::new("log.circle_card_only").player_id("who", i),
-            );
-            1
-        } else {
-            let ask = if landing {
-                Ask::choice(
-                    vec![i],
-                    Msg::new("ask.circle.title"),
-                    Msg::new("ask.circle.text_landed").player_id("who", i),
-                    vec![
-                        Msg::new("ask.circle.money_landed").n("money", CIRCLE_MONEY),
-                        Msg::new("ask.circle.card_landed"),
-                    ],
-                    0,
-                    10.0,
-                )
-            } else {
-                Ask::choice(
-                    vec![i],
-                    Msg::new("ask.circle.title"),
-                    Msg::new("ask.circle.text").player_id("who", i),
-                    vec![
-                        Msg::new("ask.circle.money").n("money", CIRCLE_MONEY),
-                        Msg::new("ask.circle.card"),
-                    ],
-                    0,
-                    10.0,
-                )
-            };
-            self.ask(ask)?.of(i)
-        };
-        // `circleAffected` -- the reward has been picked but not paid out. A
-        // field card can rewrite it or cancel it outright and pay something
-        // else (Morfonica replaces the money half), so this raises between the
-        // pick and the payout: after the pick, because a hook has to see which
-        // option was taken; before the payout, because it has to be able to
-        // change it.
-        //
-        // `value` is which option the reward resolved to: 0 = money, 1 = card.
-        // The stunned path forces the card, so it raises with `value = 1` --
-        // a money-only clause ("when the money option is chosen") checks
-        // `value == 0` and correctly does not fire there. Raised on both paths
-        // rather than only the choice, so a reward rewrite applies however the
-        // option was arrived at.
-        let ca = raise!(self, "circleAffected", i, value = pick)?;
-        if !ca.is_cancelled() {
-            if pick == Self::CIRCLE_REWARD_CARD {
-                self.w.log(
-                    "text",
-                    i as i32,
-                    Msg::new("log.circle_card").player_id("who", i),
-                );
-                self.draw_r(i, 1, "src.circle")?;
-            } else {
-                let mut p = Pay::new(CIRCLE_MONEY, PayKind::Gain);
-                p.to = Some(i);
-                p.typ = Some(PayEvent::Pass);
-                p.source = "src.circle";
-                p.text = Some(Msg::new("log.circle_money").player_id("who", i));
-                self.money(p)?;
-            }
-        }
-        self.wait(0.4);
-        Ok(())
     }
 
     /// Resolve the tile a player stopped on.
@@ -2166,216 +2013,14 @@ impl Cx<'_> {
             }
             return Ok(());
         }
-        match tile.kind.as_str() {
-            "circle" => {
-                self.w.log(
-                    "text",
-                    i as i32,
-                    Msg::new("log.land_circle").player_id("who", i),
-                );
-                self.draw_r(i, 1, "src.land_circle")?;
-                self.wait(0.4);
-            }
-            "edogawa" => {
-                self.w.log(
-                    "text",
-                    i as i32,
-                    Msg::new("log.land_draw")
-                        .player_id("who", i)
-                        .tile("tile", at),
-                );
-                self.draw_r(i, 1, "src.land_edogawa")?;
-                self.wait(0.4);
-            }
-            "cafe" | "ryuseido" => {
-                self.w.log(
-                    "text",
-                    i as i32,
-                    Msg::new("log.land_event")
-                        .player_id("who", i)
-                        .tile("tile", at),
-                );
-                self.draw_r(i, 1, "src.land_event")?;
-                self.wait(0.6);
-                self.draw_event(i)?;
-            }
-            "agent" => self.agent_landing(i, at)?,
-            _ => {
-                self.w.log(
-                    "text",
-                    i as i32,
-                    Msg::new("log.land").player_id("who", i).tile("tile", at),
-                );
-            }
-        }
-        Ok(())
-    }
-
-    /// The agent's 同色 set (`docs/PURCHASE.md`): own `group` + `ANY_COLOR` +
-    /// per-player `colorFor:<p>`. An `ANY_COLOR`-only member is never buildable
-    /// (soyo 「该格本身不可因自有以外的颜色的地产商盖房」).
-    pub(crate) fn agent_colour_set(&self, i: usize, agent: usize) -> Vec<(usize, bool)> {
-        let g = self.tile(agent).group;
-        let mut out = Vec::new();
-        for t in 0..self.data.tiles.len() {
-            if !self.tile(t).is_buyable() {
-                continue;
-            }
-            let tg = self.tile(t).group;
-            let any = self.w.tile_prop(t as i32, crate::state::prop::ANY_COLOR) != 0;
-            let color_for = self.w.tile_prop(
-                t as i32,
-                &format!("{}{}", crate::state::prop::COLOR_FOR_PREFIX, i),
-            );
-            let in_group = tg == g
-                || any
-                || color_for == g
-                || color_for == crate::state::prop::ALL_COLORS
-                || tg == crate::state::prop::ALL_COLORS;
-            if !in_group {
-                continue;
-            }
-            // An `ANY_COLOR`-only member (not the agent's own group) is offered
-            // for Buy but never for Build (soyo 「该格本身不可因自有以外的颜色的
-            // 地产商盖房」).
-            let buildable = tg == g;
-            out.push((t, buildable));
-        }
-        out
-    }
-
-    /// Buy or build once in the agent's colour group.
-    pub fn agent_landing(&mut self, i: usize, agent: usize) -> Flow<()> {
-        let set = self.agent_colour_set(i, agent);
-        let same: Vec<usize> = set.iter().map(|&(t, _)| t).collect();
-        if same.is_empty() {
-            self.w.log(
-                "text",
-                i as i32,
-                Msg::new("log.agent_none")
-                    .player_id("who", i)
-                    .tile("agent", agent),
-            );
-            return Ok(());
-        }
-        if same
-            .iter()
-            .all(|&t| self.w.st.owners[t] >= 0 && self.w.st.owners[t] as usize != i)
-        {
-            self.w.log(
-                "text",
-                i as i32,
-                Msg::new("log.agent_all_owned")
-                    .player_id("who", i)
-                    .tile("agent", agent)
-                    .i("n", same.len() as i64),
-            );
-            self.wait(0.6);
-            for t in same {
-                if self.out(i) || !self.playing() {
-                    break;
-                }
-                self.pay_rent(i, t, true)?;
-            }
-            return Ok(());
-        }
-        let mut options = vec![];
-        let mut labels = vec![];
-        let mut prices: Vec<i32> = vec![];
-        for &(t, buildable) in &set {
-            if self.w.st.owners[t] < 0 {
-                let quote = self.buy_quote_for(i, t, purchase::BuyKind::Agent);
-                let price = quote.price.max(0);
-                if self.can_pay(i) && quote.eligible {
-                    let houses = self.w.st.houses[t];
-                    options.push(t);
-                    prices.push(price);
-                    labels.push(
-                        Msg::new("ask.agent.buy")
-                            .tile("tile", t)
-                            .n("price", price)
-                            .opt(
-                                "extra",
-                                (houses > 0)
-                                    .then(|| Msg::new("ask.part.incl_houses").i("h", houses)),
-                            ),
-                    );
-                }
-            } else if self.w.st.owners[t] as usize == i
-                && buildable
-                && self.why_not_build_on(i, t).is_none()
-            {
-                options.push(t);
-                prices.push(self.build_cost(t));
-                labels.push(
-                    Msg::new("ask.agent.build")
-                        .tile("tile", t)
-                        .i("nth", self.w.st.houses[t] + 1)
-                        .n("cost", self.build_cost(t)),
-                );
-            } else if self.w.st.owners[t] >= 0
-                && self.w.st.owners[t] as usize != i
-                && !self.w.st.mortgaged[t]
-            {
-                // 「无主或玩家拥有的」 includes other seats; the settle is the
-                // agent's 「半价收费的[结算]（向上取整10）」 -- `ceil(full/2/10)*10`
-                // in integer math (matches `pay_rent` / `agent.rs`).
-                let full = purchase::table_rent(self.data, &self.w, t);
-                let half = (full + 1) / 2;
-                let half = ((half + 9) / 10) * 10;
-                options.push(t);
-                prices.push(half);
-                labels.push(
-                    Msg::new("ask.agent.rent")
-                        .tile("tile", t)
-                        .player_id("who", self.w.st.owners[t])
-                        .n("price", half),
-                );
-            }
-        }
-        if options.is_empty() {
-            self.w.log(
-                "text",
-                i as i32,
-                Msg::new("log.agent_nothing")
-                    .player_id("who", i)
-                    .tile("agent", agent),
-            );
-            return Ok(());
-        }
-        let ai = self.ai_agent_choice(i, &options);
-        let mut ask = Ask::tile(
-            i,
-            Msg::new("ask.agent.title").tile("agent", agent),
-            Msg::new("ask.agent.text").player_id("who", i),
-            &options,
-            labels,
-        )
-        .with_ai(|_| ai);
-        ask.view.prices = prices;
-        let pick = self.ask(ask)?.of(i);
-        let Some(&t) = usize::try_from(pick).ok().and_then(|p| options.get(p)) else {
-            self.w.log(
-                "text",
-                i as i32,
-                Msg::new("log.agent_skip").player_id("who", i),
-            );
-            return Ok(());
-        };
-        if self.w.st.owners[t] < 0 {
-            let quote = self.buy_quote_for(i, t, purchase::BuyKind::Agent);
-            if self.can_pay(i) && quote.eligible {
-                self.buy(i, t, purchase::BuyKind::Agent)?;
-            }
-        } else if self.w.st.owners[t] as usize == i
-            && self.why_not_build_on(i, t).is_none()
-        {
-            self.build(i, t)?;
-        } else if self.w.st.owners[t] as usize != i && !self.w.st.mortgaged[t] {
-            // 「进行一次[结算]」 on another player's deed -- the agent's half charge.
-            self.pay_rent(i, t, true)?;
-        }
-        self.wait(0.6);
+        // Non-deed: the settle body is the ruleset's (`CardRules::settle_tile`
+        // rule instances). With no bound rule (StubRules) there is only the
+        // generic landing log -- no game-named tile branches.
+        self.w.log(
+            "text",
+            i as i32,
+            Msg::new("log.land").player_id("who", i).tile("tile", at),
+        );
         Ok(())
     }
 
@@ -2418,17 +2063,18 @@ impl Cx<'_> {
             return self.offer_force_buy(i, t);
         }
         let tile = self.tile(t);
-        let (mut amount, detail) = if tile.kind == TileKind::Ring {
+        let dice_mult = self.w.tile_prop(t as i32, crate::state::prop::RENT_DICE_MULT);
+        let (mut amount, detail) = if dice_mult > 0 {
             let d = self.w.rng.d(20);
-            let unit = purchase::ring_rent_unit(self.data, &self.w, owner);
-            let rings = self.count_rings(owner).max(1);
-            let mult = self.data.match_rules.ring_multiplier.max(1);
+            let kind = tile.kind.as_str().to_string();
+            let unit = purchase::dice_rent_unit(self.data, &self.w, owner, &kind, dice_mult);
+            let n = purchase::count_owned_kind(self.data, &self.w, owner, &kind).max(1);
             (
                 unit * d,
                 Some(
-                    Msg::new("log.part.rent_ring")
-                        .i("rings", rings)
-                        .i("mult", mult)
+                    Msg::new("log.part.rent_dice")
+                        .i("n", n)
+                        .i("mult", dice_mult)
                         .i("d", d),
                 ),
             )
@@ -2768,17 +2414,13 @@ impl Cx<'_> {
         purchase::redeem_cost(self.data, t)
     }
 
-    fn count_rings(&self, player_id: usize) -> i32 {
-        purchase::count_rings(self.data, &self.w, player_id)
-    }
-
     /// Deeds a player could mortgage (not RiNG, not already mortgaged).
     pub(crate) fn mortgageable(&self, player_id: usize) -> Vec<usize> {
         (0..self.data.tiles.len())
             .filter(|&t| {
                 self.w.st.owners[t] == player_id as i32
                     && self.tile(t).is_buyable()
-                    && self.tile(t).kind != TileKind::Ring
+                    && self.w.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) == 0
                     && !self.w.st.mortgaged[t]
             })
             .collect()
@@ -3162,8 +2804,8 @@ impl Cx<'_> {
         if !tile.is_buyable() || st.owners[t] != i as i32 {
             return Some(Msg::new("err.not_your_deed"));
         }
-        if tile.kind == TileKind::Ring {
-            return Some(Msg::new("err.mortgage_ring"));
+        if self.w.tile_prop(t as i32, crate::state::prop::NO_MORTGAGE) > 0 {
+            return Some(Msg::new("err.no_mortgage"));
         }
         if st.mortgaged[t] {
             return Some(Msg::new("err.already_mortgaged"));

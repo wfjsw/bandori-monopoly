@@ -68,6 +68,8 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     key: String::from(*key),
                 })
                 .collect(),
+            board_role: String::from(c.board_role),
+            governs: c.governs.iter().map(|k| String::from(*k)).collect(),
         })
         .collect();
     leak(postcard::to_allocvec(&entries).unwrap_or_default())

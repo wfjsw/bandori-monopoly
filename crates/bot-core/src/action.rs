@@ -427,7 +427,8 @@ pub fn can_build(data: &GameData, st: &MatchState, seat: usize, i: usize) -> boo
     let Some(t) = data.tiles.get(i) else {
         return false;
     };
-    t.kind == game_core::data::TileKind::Property
+    t.is_buyable()
+        && t.rent.len() >= 2
         && st.phase == "play"
         && st.step == stage::END
         && st.turn == seat as i32

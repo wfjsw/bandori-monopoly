@@ -25,68 +25,25 @@ use serde::{Deserialize, Serialize};
 use crate::deck_book::{DeckBook, DECK_BOOK_FILE};
 use crate::strategy::{StrategyBook, STRATEGY_BOOK_FILE};
 
-/// What sort of tile this is. The JSON data files carry these as short
-/// strings (`"circle"`, `"property"`, ...); the Rust side is typed and serde
-/// round-trips the wire spelling, so the data format is unchanged. A kind
-/// this build does not model keeps its raw string rather than being flattened
-/// to a generic "unknown" (which would rewrite the JSON).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TileKind {
-    /// CiRCLE (the start square).
-    Circle,
-    /// 「CiRCLE咖啡厅」.
-    Cafe,
-    /// 「江户川乐器店」.
-    Edogawa,
-    /// 「流星堂」.
-    Ryuseido,
-    /// A [可购买格子] in a colour group.
-    Property,
-    /// A RiNG deed.
-    Ring,
-    /// 「[地产商]」.
-    Agent,
-    /// An event square (`tile:event`'s other home).
-    Event,
-    /// A kind the data file names that this build does not model.
-    Other(String),
-}
+/// What sort of tile this is: an **opaque string id** from the board data.
+///
+/// The JSON data files carry short strings (`"circle"`, `"property"`, ...);
+/// the engine never interprets them. Meaning (start square, deed, which rule
+/// settles it) comes from the ruleset via [`crate::engine::rules::CardRules`]
+/// and from tile props stamped at bind time. Serde round-trips the raw
+/// spelling so the data format is unchanged.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TileKind(pub String);
 
 impl TileKind {
     /// The data-file / wire spelling.
     pub fn as_str(&self) -> &str {
-        match self {
-            TileKind::Circle => "circle",
-            TileKind::Cafe => "cafe",
-            TileKind::Edogawa => "edogawa",
-            TileKind::Ryuseido => "ryuseido",
-            TileKind::Property => "property",
-            TileKind::Ring => "ring",
-            TileKind::Agent => "agent",
-            TileKind::Event => "event",
-            TileKind::Other(s) => s,
-        }
+        &self.0
     }
 
     /// Decode the data-file spelling.
     pub fn parse(s: &str) -> Self {
-        match s {
-            "circle" => TileKind::Circle,
-            "cafe" => TileKind::Cafe,
-            "edogawa" => TileKind::Edogawa,
-            "ryuseido" => TileKind::Ryuseido,
-            "property" => TileKind::Property,
-            "ring" => TileKind::Ring,
-            "agent" => TileKind::Agent,
-            "event" => TileKind::Event,
-            other => TileKind::Other(other.to_string()),
-        }
-    }
-}
-
-impl Default for TileKind {
-    fn default() -> Self {
-        TileKind::Other(String::new())
+        TileKind(s.to_string())
     }
 }
 
@@ -105,7 +62,7 @@ impl Serialize for TileKind {
 impl<'de> Deserialize<'de> for TileKind {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(d)?;
-        Ok(TileKind::parse(&raw))
+        Ok(TileKind(raw))
     }
 }
 
@@ -128,62 +85,19 @@ pub struct TileData {
 }
 
 impl TileData {
-    /// The four corner tiles (start, café, music store, Ryuseido).
-    pub fn is_corner(&self) -> bool {
-        matches!(
-            self.kind,
-            TileKind::Circle | TileKind::Cafe | TileKind::Edogawa | TileKind::Ryuseido
-        )
-    }
-
+    /// Generic deed shape: a priced tile (the land price). A deed may have an
+    /// empty rent table (no upgrade ladder). The ruleset may override via
+    /// [`crate::state::prop::BUYABLE`] on the tile's rule instance; this is
+    /// the data-only heuristic for paths with no ruleset.
     pub fn is_buyable(&self) -> bool {
-        matches!(self.kind, TileKind::Property | TileKind::Ring)
-    }
-
-    pub fn is_agent(&self) -> bool {
-        self.kind == TileKind::Agent
+        self.price > 0
     }
 }
 
-/// The rule id that settles a tile of this `kind` (`docs/TILES.md`). Empty when
-/// the kind has no rule (unknown kinds fall through to the engine's built-in
-/// settlement). `cafe` and `ryuseido` share `tile:event` -- the rulebook gives
-/// them one passage (「CiRCLE咖啡厅和流星堂的的[结算]是…」).
-pub fn tile_rule_id(kind: &TileKind) -> &'static str {
-    match kind {
-        TileKind::Property => "tile:property",
-        TileKind::Ring => "tile:ring",
-        TileKind::Agent => "tile:agent",
-        TileKind::Circle => "tile:circle",
-        TileKind::Edogawa => "tile:edogawa",
-        TileKind::Cafe | TileKind::Ryuseido => "tile:event",
-        _ => "",
-    }
-}
-
-/// Board-wide **mark-owner** rules (`mark:*`) -- one instance each on the
-/// neutral board owner, governing no single tile (unlike [`tile_rule_id`]'s
-/// `tile:*`, which binds one per board tile of the kind). `mark:cp` is the
-/// [CP点] tile-mark owner (`rules/tile_marks/src/cp.rs`, `docs/TILES.md`).
-pub fn mark_rule_ids() -> &'static [&'static str] {
-    &["mark:cp"]
-}
-
-/// Board-wide **status-host** rules (`status:*`) -- one instance each on the
-/// neutral board owner, governing no single tile. Each is the creating rule
-/// of its status counter (`rules/status`, `docs/STATUS-HOSTS.md`): wear-off,
-/// clamping, gates and clauses. Sibling of [`mark_rule_ids`]; `bind_tiles`
-/// places them on the same path.
-pub fn status_rule_ids() -> &'static [&'static str] {
-    &[
-        "status:stay",
-        "status:stun",
-        "status:exile",
-        "status:fire",
-        "status:unstoppable",
-        "status:no_hand",
-    ]
-}
+/// Rule-id supply moved to [`crate::engine::rules::CardRules`]: the ruleset
+/// declares which rule settles each opaque tile kind (`tile_rule_id`) and
+/// which standing board rules exist (`mark_rule_ids` / `status_rule_ids`).
+/// The engine keeps no kind→rule table.
 
 /// One card row of the roster (was `cards.json`; now ruleset metadata).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

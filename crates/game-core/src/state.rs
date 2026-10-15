@@ -510,8 +510,15 @@ pub mod prop {
     pub const RENT_LEN: &str = "rentLen";
     /// Rent at level N: `rent[0]` … `rent[len - 1]`.
     pub const RENT_PREFIX: &str = "rent:";
-    /// RiNG rent multiplier (`match_rules.ring_multiplier`). TODO(规则书).
-    pub const RING_MULT: &str = "ringMult";
+    /// Generic dice-rent multiplier (ABI v66). When set (`> 0`) on a tile rule
+    /// instance, rent is `count_owned_kind(owner, kind) × mult × 1d20` instead
+    /// of the rent table. Stamped by the tile rule's static props (or at bind
+    /// from the match-rules parameter the rule declares).
+    pub const RENT_DICE_MULT: &str = "rentDiceMult";
+    /// This tile is the start square (from the tile rule's static props).
+    pub const START: &str = "start";
+    /// `1` = this deed cannot be mortgaged (tile-rule static prop).
+    pub const NO_MORTGAGE: &str = "noMortgage";
 
     // ------------------------------------------------- tile rule modifiers
     // What a card that bends a tile writes onto its rule instance, replacing
