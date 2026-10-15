@@ -817,8 +817,15 @@ impl Room {
         }
     }
 
+    /// Tell every local SSE pump, and every *other* process's, that this room
+    /// changed. The store publish is best-effort and lossy by design: pumps
+    /// also re-poll the store, so a dropped note is latency, never correctness.
     pub fn notify(&self) {
         let _ = self.tx.send(Note::Changed);
+        let _ = self.store.publish(
+            crate::store::NOTE_CHANNEL,
+            &serde_json::json!({ "room": self.info.id, "kind": "changed" }).to_string(),
+        );
     }
 
     pub fn member_of(&self, token: &str) -> Option<i32> {
@@ -916,7 +923,13 @@ impl Room {
             let _ = self.store.room_del(&self.info.id);
             let _ = self.store.match_del(&self.info.id);
             let _ = self.store.record_log_del(&self.info.id);
-            let _ = self.tx.send(Note::Dissolved(reason));
+            let _ = self.store.rec_meta_del(&self.info.id);
+            let _ = self.tx.send(Note::Dissolved(reason.clone()));
+            let _ = self.store.publish(
+                crate::store::NOTE_CHANNEL,
+                &serde_json::json!({ "room": self.info.id, "kind": "dissolved", "reason": reason })
+                    .to_string(),
+            );
         }
     }
 

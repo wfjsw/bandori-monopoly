@@ -305,6 +305,10 @@ pub const LOCK_TTL_MS: u64 = 10_000;
 /// a waiter cannot out-wait the lock's own expiry and stampede.
 pub const LOCK_DEADLINE: Duration = Duration::from_secs(8);
 
+/// The pub/sub channel for room change notes and dissolves. Payload is a small
+/// JSON object (`{room, kind, reason?}`); delivery is best-effort.
+pub const NOTE_CHANNEL: &str = "bm:note";
+
 /// A held cross-process lock. Releases (compare-and-delete) on drop, so a
 /// panic inside the critical section cannot leak the lock past its owner.
 pub struct LockGuard<'a> {
