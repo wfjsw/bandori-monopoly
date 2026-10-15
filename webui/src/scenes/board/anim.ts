@@ -69,6 +69,11 @@ type Item = { ev: MatchEvent } | { mark: StageMark } | { view: MatchView };
 
 /** How long the new-turn announcement stays on screen. */
 const TURN_MS = 1500;
+/** Chain overlay pacing: a link joining, a link settling. */
+const CHAIN_LINK_MS = 800;
+const CHAIN_RESOLVE_MS = 850;
+/** A long chain plays each link faster so the whole of it stays watchable. */
+const chainStep = (ms: number, links: number) => Math.max(400, Math.min(ms, 7000 / Math.max(1, links)));
 
 /** The log label key of an engine stage number. */
 function stageKey(step: number): string {
@@ -112,6 +117,20 @@ export class Animator {
    *  cards-in-play row slides out and lights up (Master Duel's activated-card
    *  cue). `uid` is the field instance. */
   pulse: { uid: number; id: number; ms: number } | null = null;
+  /** The [反击] chain under construction / resolving (Master Duel style): the
+   *  links so far (1 = the initiating card), the link settling now, and the
+   *  links already settled. `shown` turns on with the second link -- a lone
+   *  initiating card is not a chain. */
+  chain: {
+    links: { seq: number; card: string; owner: number; fresh: number; origin?: Msg }[];
+    shown: boolean;
+    resolving: boolean;
+    active: number;
+    done: number[];
+  } | null = null;
+  /** The big "CHAIN" / "RESOLVE" title (letters stagger in, Master Duel style). */
+  chainTitle: { text: string; id: number } | null = null;
+  private chainTitleTimer = 0;
   hop: { playerId: number; id: number } | null = null;
   /** The walk under way: the tiles still ahead (the last is the landing).
    *  The board lights them so the destination and path read before and
@@ -182,6 +201,7 @@ export class Animator {
   dispose(): void {
     this.disposed = true;
     clearTimeout(this.bannerTimer);
+    clearTimeout(this.chainTitleTimer);
     clearTimeout(this.turnTimer);
     clearTimeout(this.flashTimer);
     clearTimeout(this.pulseTimer);
@@ -303,6 +323,16 @@ export class Animator {
       }];
       this.bump();
     }
+  }
+
+  private showChainTitle(text: string): void {
+    this.chainTitle = { text, id: ++this.seq };
+    clearTimeout(this.chainTitleTimer);
+    this.chainTitleTimer = setTimeout(() => {
+      this.chainTitle = null;
+      this.bump();
+    }, 1100 / Math.max(1, this.speed));
+    this.bump();
   }
 
   private showBanner(title: string, body = ""): void {
@@ -592,6 +622,81 @@ export class Animator {
     }
   }
 
+  /** Wait for the card face on the flash to leave (its hold is a timer). */
+  private async flashGone(): Promise<void> {
+    while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
+  }
+
+  /** A link joins the chain: the card flashes (the initiating card first),
+   *  the second link raises the Chain banner, then the card is appended to the
+   *  chain stack with the link animation. */
+  private async chainLink(e: MatchEvent, fast: boolean): Promise<void> {
+    const seq = e.value;
+    const quiet = this.noFlash();
+    if (seq <= 1 || !this.chain) {
+      this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
+      // A chain on a timing with no card of its own (a board event) opens
+      // without a link 1 event on old records: stand one in.
+      if (seq > 1) this.chain.links.push({ seq: 1, card: "", owner: -1, fresh: 0 });
+    }
+    const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq, origin: seq === 1 && !e.card ? e.msg : undefined };
+    if (!quiet && e.card) {
+      await this.cardFlash({ ...e, kind: "counter", msg: e.msg, results: [], negated: false }, false);
+      await this.flashGone();
+      if (this.disposed) return;
+    }
+    this.chain.links = [...this.chain.links, link];
+    if (seq >= 2 && !quiet) {
+      // The chain appears only while a card attaches, then goes.
+      const ch = this.chain;
+      ch.shown = true;
+      sfx("place");
+      if (seq === 2) {
+        if (!fast) sfx("prompt");
+        this.showChainTitle(tr("anim.chain"));
+      }
+      this.bump();
+      await this.nap(seq === 2 ? 1100 : chainStep(CHAIN_LINK_MS, ch.links.length));
+      ch.shown = false;
+      this.bump();
+    }
+  }
+
+  /** The closed chain settles newest-first: a Resolve title, then each link
+   *  is shown for a beat as it comes off the chain. The chain is gone before
+   *  the link's effect events play, so each effect lands right after its card. */
+  private async chainResolve(e: MatchEvent): Promise<void> {
+    const quiet = this.noFlash();
+    const ch = this.chain;
+    if (!ch) return;
+    if (e.value === 0) {
+      ch.resolving = true;
+      if (!quiet) {
+        sfx("prompt");
+        this.showChainTitle(tr("anim.resolve"));
+        await this.nap(900);
+      }
+      return;
+    }
+    ch.active = e.value;
+    if (!quiet) {
+      ch.shown = true;
+      sfx("card_play");
+      this.bump();
+      await this.nap(chainStep(CHAIN_RESOLVE_MS, ch.links.length));
+    }
+    // The card fades off the chain, then the board is clear for its effect.
+    ch.done = [...ch.done, e.value];
+    if (!quiet) {
+      this.bump();
+      await this.nap(250);
+    }
+    ch.shown = false;
+    // Link 1 settles last: the chain is over.
+    if (e.value === 1 && this.chain === ch) this.chain = null;
+    this.bump();
+  }
+
   private async play(e: MatchEvent, fast: boolean): Promise<void> {
     const body = fmtMsg(e.msg, this.names());
     this.addLog(e);
@@ -710,6 +815,8 @@ export class Animator {
         if (this.noFlash()) break;
         await this.cardFlash(e, fast);
         break;
+      case "chain": await this.chainLink(e, fast); break;
+      case "resolve": await this.chainResolve(e); break;
       case "flash":
         // Proactive "look here" cue (`ctx::flash_card` / `flash_tile`): the
         // named card's face, or a tile banner when there is no card. Parent-

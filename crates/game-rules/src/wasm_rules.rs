@@ -5338,6 +5338,92 @@ impl<M: CardModules> RulesBridge<M> {
                     {
                         chain[timing].link.join_redirect = Some(cursor as i32);
                     }
+                    // Master Duel's chain build-up: the first counter opens the
+                    // chain, so L1 (the initiating card) is announced first,
+                    // then each declaration is a `"chain"` event whose `value`
+                    // is its link number. The client flashes the card and
+                    // appends it to the chain overlay.
+                    if chain.len() == 1 {
+                        let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
+                        // A timing with no card of its own (a roll, a payment,
+                        // a landing ...) says what it is: the trigger kind and
+                        // its particulars, for the client's origin tile.
+                        let l = &chain[0].link;
+                        let src = match l.roll_source {
+                            game_core::engine::rules::RollSource::Fire => "fire",
+                            game_core::engine::rules::RollSource::Card => "card",
+                            game_core::engine::rules::RollSource::Skill => "skill",
+                            _ => "",
+                        };
+                        let mut origin = Msg::new("log.chain_link")
+                            .n("n", 1)
+                            .card("card", l1_id.clone())
+                            .text("kind", l.kind.as_str())
+                            .player_id("who", l.player_id)
+                            .i("value", l.value as i64)
+                            .text("src", src)
+                            .text("rent", if l.pay.as_ref().is_some_and(|p| p.is_rent) { "1" } else { "" });
+                        if l.tile >= 0 {
+                            origin = origin.tile("tile", l.tile);
+                        }
+                        // Particulars for the origin tile: who it is aimed at,
+                        // whose card caused it, the move / purchase behind it
+                        // and the effects it declares.
+                        if l.target != l.player_id && l.target >= 0 {
+                            origin = origin.player_id("target", l.target);
+                        }
+                        if let Some(by) = l.by_card.filter(|b| *b >= 0 && *b != l.player_id) {
+                            origin = origin.player_id("by", by);
+                        }
+                        if l.main {
+                            origin = origin.text("main", "1");
+                        }
+                        if let Some(mv) = &l.mv {
+                            origin = origin
+                                .tile("mv_from", mv.from)
+                                .i("mv_total", mv.total as i64)
+                                .i("mv_left", mv.remaining as i64);
+                            if let Some(r) = mv.roll {
+                                origin = origin.i("mv_roll", r as i64);
+                            }
+                        }
+                        if let Some(b) = &l.buy {
+                            origin = origin.i("price", b.price as i64);
+                        }
+                        let fx: Vec<game_core::msg::Arg> = l
+                            .effects
+                            .iter()
+                            .map(|e| {
+                                let mut m = Msg::new("fx").text("kind", e.kind).i("value", e.value as i64);
+                                if e.target >= 0 {
+                                    m = m.player_id("target", e.target);
+                                }
+                                if e.tile >= 0 {
+                                    m = m.tile("tile", e.tile);
+                                }
+                                game_core::msg::Arg::Msg(Box::new(m))
+                            })
+                            .collect();
+                        if !fx.is_empty() {
+                            origin = origin.list("effects", fx);
+                        }
+                        cx.log_event(
+                            "chain",
+                            l1_seat,
+                            origin,
+                            -1,
+                            &l1_id,
+                            1,
+                        );
+                    }
+                    cx.log_event(
+                        "chain",
+                        cursor as i32,
+                        Msg::new("log.chain_link").n("n", at as i64 + 1).card("card", id.clone()),
+                        -1,
+                        &id,
+                        at as i32 + 1,
+                    );
                     chain.push(ChainLink {
                         seat: cursor,
                         idx,
@@ -5499,11 +5585,25 @@ impl<M: CardModules> RulesBridge<M> {
         order: &[usize],
         mut next: usize,
     ) -> Flow<()> {
+        // The closed chain starts resolving: one `"resolve"` banner cue
+        // (`value` 0), then one per link as it settles, newest first
+        // (`value` = link number), and finally L1 itself (`value` 1).
+        if next == 0 && !order.is_empty() {
+            cx.log_event("resolve", -1, Msg::new("log.chain_resolve"), -1, "", 0);
+        }
         while next < order.len() {
             let idx = order[next];
             let seat = chain[idx].seat;
             let card = chain[idx].idx;
             let id = chain[idx].id.clone();
+            cx.log_event(
+                "resolve",
+                seat as i32,
+                Msg::new("log.chain_resolve_link").n("n", idx as i64 + 1).card("card", id.clone()),
+                -1,
+                &id,
+                idx as i32 + 1,
+            );
             let answered = chain[idx].answered;
             let negated = chain[idx].link.is_cancelled();
             let uid = chain[idx].uid;
@@ -5626,6 +5726,17 @@ impl<M: CardModules> RulesBridge<M> {
                 }
             }
             next += 1;
+        }
+        if !order.is_empty() {
+            let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
+            cx.log_event(
+                "resolve",
+                l1_seat,
+                Msg::new("log.chain_resolve_link").n("n", 1).card("card", l1_id.clone()),
+                -1,
+                &l1_id,
+                1,
+            );
         }
         Ok(())
     }
