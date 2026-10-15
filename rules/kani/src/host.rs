@@ -1994,17 +1994,24 @@ pub fn arm_place_card(a: Args) -> i64 {
     let id = card_u16(a1, a2);
     let slot = card_slot(a1, a2);
     world::with_world_mut(|w| {
-        let dest = w.dest;
+        // `place_card` puts the **new** instance on the owner's field. The
+        // running card's fate (`w.dest`, set by `set_dest`) is a different
+        // thing — it is where the *running* instance goes when the effect
+        // finishes. The PlaceCard effect's `dest` is the Dest code of the
+        // **placed** card = Field (2). (pipopa: `set_dest(Banished)` for
+        // 「此卡[移除]」 then `place_card` a Popipapapipopa — the old arm
+        // leaked `w.dest=3` into PlaceCard.dest.)
         let uid = w.next_uid;
         w.next_uid += 1;
         w.last_uid = uid;
+        let tile = w.pos[player_idx(a0)];
         let fi = w.field_n as usize;
         if fi < world::MAX_FIELD {
             w.field[fi] = world::FieldCard {
                 uid,
                 card: id,
                 player: a0,
-                tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
+                tile,
                 face_down: false,
                 immune: false,
                 crystals: 0,
@@ -2014,7 +2021,7 @@ pub fn arm_place_card(a: Args) -> i64 {
         }
         w.push(Effect::PlaceCard {
             player: a0,
-            dest,
+            dest: 2,
             card: slot,
         });
         uid as i64
@@ -2025,20 +2032,22 @@ pub fn arm_place_card_at(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
             // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
+            // Same fate/dest split as `arm_place_card`: PlaceCard.dest is
+            // Field (2) for the placed instance, not `w.dest`.
             let id = card_u16(a1, a2);
             let slot = card_slot(a1, a2);
             world::with_world_mut(|w| {
-                let dest = w.dest;
                 let uid = w.next_uid;
                 w.next_uid += 1;
                 w.last_uid = uid;
+                let tile = w.pos[player_idx(a0)];
                 let fi = w.field_n as usize;
                 if fi < world::MAX_FIELD {
                     w.field[fi] = world::FieldCard {
                         uid,
                         card: id,
                         player: a0,
-                        tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
+                        tile,
                         face_down: false,
                         immune: false,
                         crystals: 0,
@@ -2048,7 +2057,7 @@ pub fn arm_place_card_at(a: Args) -> i64 {
                 }
                 w.push(Effect::PlaceCard {
                     player: a0,
-                    dest,
+                    dest: 2,
                     card: slot,
                 });
                 uid as i64
