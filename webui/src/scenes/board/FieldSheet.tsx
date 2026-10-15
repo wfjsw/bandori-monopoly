@@ -61,7 +61,7 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   }, [any]);
   // Touch screens: the first tap only highlights a card (like the hand); a
   // second tap on the same card opens its detail popup.
-  const [picked, setPicked] = useState<number | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   // Skill rules (`skill:`) are engine plumbing on the field, not cards in play.
   const rows = S.players
     .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
@@ -108,9 +108,9 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   note={live}
                   pills={pills}
                   actions={[]}
-                  on={picked === fc.uid}
+                  on={picked === `c${fc.uid}`}
                   onClick={() => {
-                    if (window.matchMedia("(pointer: coarse)").matches && picked !== fc.uid) return void setPicked(fc.uid);
+                    if (window.matchMedia("(pointer: coarse)").matches && picked !== `c${fc.uid}`) return void setPicked(`c${fc.uid}`);
                     setPicked(null);
                     void showCard(fc.card, [], live, pills);
                   }}
@@ -137,7 +137,11 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
               {e.faceDown ? (
                 <div className={s.back} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
               ) : (
-                <button type="button" className={s.event} title={tr("board.activeEvents")} onClick={() => showEvent(e.id, note)}
+                <button type="button" className={cx(s.event, picked === `e${e.id}` && s.picked)} title={tr("board.activeEvents")} onClick={() => {
+                    if (window.matchMedia("(pointer: coarse)").matches && picked !== `e${e.id}`) return void setPicked(`e${e.id}`);
+                    setPicked(null);
+                    showEvent(e.id, note);
+                  }}
                   onMouseEnter={(x) => previewFrom(x.currentTarget, e.id, note)} onFocus={(x) => previewFrom(x.currentTarget, e.id, note)}
                   onMouseLeave={previewHide} onBlur={previewHide}>
                   <div className={s.eventArt}><img src={sceneImg("card_back")} alt="" /></div>
