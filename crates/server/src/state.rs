@@ -20,7 +20,7 @@ use crate::store::CrossState;
 
 /// Seconds a seated player may be without an open stream before the AI takes over
 /// (`NetProtocol.Timeout`).
-pub const PRESENCE_TIMEOUT: Duration = Duration::from_secs(20);
+pub const PRESENCE_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone)]
 pub struct Session {
