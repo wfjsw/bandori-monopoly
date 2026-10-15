@@ -32,6 +32,8 @@
 .who { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
 /* The character name stays on one line and truncates when space is tight. */
 .who b { flex: 0 1 auto; min-width: 0; font-size: 16px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nick { flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compact .nick { font-size: 12px; }
 .money { display: flex; align-items: center; gap: 5px; justify-content: flex-end; }
 .money img { width: 22px; }
 .money b { font-size: 19px; line-height: 1.2; }

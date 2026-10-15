@@ -171,6 +171,7 @@ export function makeReferenceRecord(g, seed = 7) {
   const members = [
     { id: 1, player: "P1", bot: true },
     { id: 2, player: "P2", bot: true },
+    { id: 3, player: "P3", bot: true }, // 娱乐 mode seats 3 to 10 (G-FLOW-12)
   ];
   const m = new g.SoloMatch(JSON.stringify(members), seedHex(seed), 1, "");
   try {
