@@ -360,14 +360,14 @@ impl MatchHandle {
                 rec.inputs += 1;
             }
         }
-        if let Some(cp) = &out.cp {
+        if let Some(ckpt) = &out.cp {
             Self::flush_buf(&self.store, &self.id, &mut rec);
             let entry = crate::store::Checkpoint {
                 at: rec.inputs,
                 tick: rec.ticks,
-                round: cp.round,
-                turn: cp.turn,
-                hash: cp.hash.clone(),
+                round: ckpt.round,
+                turn: ckpt.turn,
+                hash: ckpt.hash.clone(),
             };
             let line = LogEntry::Checkpoint(entry).to_line();
             if self.store.record_log_append(&self.id, &line).is_err() {

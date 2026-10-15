@@ -45,12 +45,12 @@ fn main() {
         Some(dir) => {
             let dir = PathBuf::from(dir);
             let cards = cards_json(&roster.cards);
-            let characters = personas_json(&roster.personas);
-            let bands = groups_json(&roster.groups);
+            let personas = personas_json(&roster.personas);
+            let groups = groups_json(&roster.groups);
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(dir.join("cards.json"), &cards).unwrap();
-            std::fs::write(dir.join("personas.json"), &characters).unwrap();
-            std::fs::write(dir.join("groups.json"), &bands).unwrap();
+            std::fs::write(dir.join("personas.json"), &personas).unwrap();
+            std::fs::write(dir.join("groups.json"), &groups).unwrap();
             eprintln!(
                 "wrote {}/{{cards,personas,groups}}.json ({} cards, {} personas, {} groups)",
                 dir.display(),
@@ -61,8 +61,8 @@ fn main() {
         }
         None => {
             print!("// ===== cards.json =====\n{}", cards_json(&roster.cards));
-            print!("// ===== characters.json =====\n{}", personas_json(&roster.personas));
-            print!("// ===== bands.json =====\n{}", groups_json(&roster.groups));
+            print!("// ===== personas.json =====\n{}", personas_json(&roster.personas));
+            print!("// ===== groups.json =====\n{}", groups_json(&roster.groups));
         }
     }
 }
