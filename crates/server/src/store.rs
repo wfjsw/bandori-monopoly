@@ -4,10 +4,12 @@
 //! (see [`crate::pool`]); this trait is the boundary that state crosses. Two
 //! stores implement it:
 //!
-//! * [`dummy`] -- in-process maps. One server, no durability: a restart loses
-//!   every session, room and match. **This is the development default, and that
-//!   is a deliberate choice, not a gap** -- during development we are not
-//!   running a database, and the in-memory store is the honest version of that.
+//! * [`dummy`] -- in-process maps. One **shared** store object (it is
+//!   `Clone` over an `Arc`, and two [`crate::Server`]s can hold the same one),
+//!   no durability across processes: a restart loses every session, room and
+//!   match. **This is the development default, and that is a deliberate choice,
+//!   not a gap** -- during development we are not running a database, and the
+//!   in-memory store is the honest version of that.
 //! * [`redis`] -- shared and durable. Several server processes can serve the
 //!   same clients, and a restart keeps them. This is the "no state in this
 //!   process" option.
@@ -19,10 +21,16 @@
 //! here, so that is additive: the trait, the `SessionRecord`/`RoomInfo`
 //! shapes, and the call sites do not change.
 //!
-//! Deliberately **not** here: per-connection bookkeeping (SSE stream counts,
-//! the room's broadcast channel) and the ordering gate on a match. Those are
-//! properties of a live process, not of the state it is holding -- moving them
-//! behind this trait would buy nothing and cost a network hop per frame.
+//! Everything a server process needs between two requests lives here, so two
+//! processes sharing one store can serve the same match and either can restart
+//! mid-game. That includes the primitives that *coordinate* processes rather
+//! than describe the game: the short-lived locks ([`CrossState::lock_acquire`]
+//! and friends, used through [`with_lock`]), the change notes
+//! ([`CrossState::publish`] / [`CrossState::subscribe`]), the per-stream
+//! presence keys, and the record-log bookkeeping ([`RecMeta`]). Per-connection
+//! caches (the SSE cursor, the local broadcast fan-out, bot ponder trees) stay
+//! in the process -- they are performance only, and a missed note is recovered
+//! by re-polling the store.
 //!
 //! The trait is **sync**. Both stores are used from blocking closures
 //! (`spawn_blocking`) as well as from async handlers, so a sync surface serves
@@ -30,6 +38,7 @@
 //! runtime thread (the same rule as the worker pool).
 
 use std::fmt;
+use std::time::Duration;
 
 use game_core::net::RoomInfo;
 use game_core::record::{EngineStamp, Init, Input};
@@ -102,6 +111,66 @@ pub trait CrossState: Send + Sync {
     /// [`RECORD_TTL_SECS`] (a store with native expiry may drop it sooner).
     fn record_put(&self, room: &str, rec: &StoredRecord) -> Result<(), StoreError>;
     fn record_get(&self, room: &str) -> Result<Option<StoredRecord>, StoreError>;
+
+    // ------------------------------------------------------------- locks
+    //
+    // Short-lived exclusive claims across processes: the per-room mutation
+    // lock, the per-match operation lock, the per-room tick lease, the bot
+    // probe claims. `owner` is a per-process token so a holder only renews or
+    // releases its own lock. Semantics: `SET key owner NX PX ttl` -- acquire
+    // fails while someone else holds it; a TTL'd lock a dead process left
+    // behind frees itself.
+
+    /// Take `key` for `owner` for `ttl_ms`. `false` when someone else holds it.
+    fn lock_acquire(&self, key: &str, owner: &str, ttl_ms: u64) -> Result<bool, StoreError>;
+    /// Extend a lock this `owner` still holds. `false` when it does not (it
+    /// expired and may now belong to somebody else).
+    fn lock_renew(&self, key: &str, owner: &str, ttl_ms: u64) -> Result<bool, StoreError>;
+    /// Drop a lock this `owner` holds. A lock held by anybody else is left
+    /// alone (compare-and-delete) -- a stale release must not free it.
+    fn lock_release(&self, key: &str, owner: &str) -> Result<(), StoreError>;
+
+    // ------------------------------------------------------------ pub/sub
+    //
+    // Room change notes and dissolves. Delivery is best-effort: every consumer
+    // also re-polls the store, so a dropped message is latency, never
+    // correctness.
+
+    /// Send `msg` to everything subscribed to `channel`.
+    fn publish(&self, channel: &str, msg: &str) -> Result<(), StoreError>;
+    /// Subscribe to `channel`. The receiver gets every message published from
+    /// now on; a backend that reconnects may drop messages in between (the
+    /// consumers re-poll).
+    fn subscribe(&self, channel: &str) -> Result<std::sync::mpsc::Receiver<PubMsg>, StoreError>;
+
+    // ----------------------------------------------------------- presence
+    //
+    // One TTL key per live SSE stream (`presence:{room}:{member}:{stream}`),
+    // plus an `idle` key that covers "joined but no stream yet" and the grace
+    // after the last stream closed. A member is present while
+    // [`Self::presence_count`] is non-zero; the keys' TTLs are what make a
+    // dead process's streams vanish on their own.
+
+    /// Note (or refresh) one live stream of `member` in `room`.
+    fn presence_set(&self, room: &str, member: i32, stream: &str, ttl_ms: u64)
+        -> Result<(), StoreError>;
+    /// That one stream closed.
+    fn presence_del(&self, room: &str, member: i32, stream: &str) -> Result<(), StoreError>;
+    /// Every stream of `member` is gone (the member left the room).
+    fn presence_clear(&self, room: &str, member: i32) -> Result<(), StoreError>;
+    /// How many of `member`'s keys are still alive. `0` = gone for at least
+    /// one full TTL.
+    fn presence_count(&self, room: &str, member: i32) -> Result<u32, StoreError>;
+
+    // ------------------------------------------------ record-log bookkeeping
+    //
+    // [`RecMeta`], the driver's counters beside the record log. Always read
+    // and written under the match lock (see [`with_lock`]), so one JSON blob
+    // is enough -- no CAS.
+
+    fn rec_meta_get(&self, room: &str) -> Result<Option<RecMeta>, StoreError>;
+    fn rec_meta_put(&self, room: &str, meta: &RecMeta) -> Result<(), StoreError>;
+    fn rec_meta_del(&self, room: &str) -> Result<(), StoreError>;
 }
 
 /// Everything needed to rebuild a [`crate::room::Room`] after a restart.
@@ -182,6 +251,120 @@ impl From<SessionRecord> for Session {
             persona: r.persona,
             cn_id: r.cn_id,
             room: r.room,
+        }
+    }
+}
+
+/// One published note: the channel it came in on and its payload.
+#[derive(Debug, Clone)]
+pub struct PubMsg {
+    pub channel: String,
+    pub payload: String,
+}
+
+/// Bookkeeping for one match's record log -- the counters [`crate::room`] used
+/// to keep in memory. Persisted beside the log so another process (or a
+/// restarted one) picks up exactly where the last writer left off: the open
+/// tick run included, so a change of hands loses nothing.
+///
+/// Read and written only under the match lock.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RecMeta {
+    /// The open tick run (`Input::Ticks`), not yet flushed to the log. Run-
+    /// length merging of consecutive ticks is what keeps a long match's log
+    /// small; the run lives here (not in a process) until it closes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buf: Option<(u8, u32)>,
+    /// Inputs the log holds, counting the buffered run as one.
+    pub inputs: u32,
+    /// Tick calls recorded -- the sum of every `Ticks.n`.
+    pub ticks: u64,
+    /// `at` of the last checkpoint, so a run closes at a turn boundary.
+    pub last_ckpt_at: u32,
+    /// Something was lost: a store write failed, or a previous holder died
+    /// mid-operation (see [`RecMeta::dirty`]). The sealed record is then
+    /// unverifiable (`RecordHeader::gaps`).
+    pub gaps: bool,
+    /// Members seated when the match started -- the record's participants.
+    #[serde(default)]
+    pub members: Vec<i32>,
+    /// Sealed; stop appending.
+    pub done: bool,
+    /// A recorded operation was in flight. Set under the match lock *before*
+    /// the worker call and cleared after its log lines are written; a leftover
+    /// on load means that operation's input may be missing from the log and
+    /// [`RecMeta::gaps`] must be raised. Never set outside the lock.
+    pub dirty: bool,
+}
+
+/// Default TTL for a cross-process lock: long enough for one match / room
+/// operation (a worker round-trip plus a store write), short enough that a
+/// dead holder's lock frees itself quickly. Single operations do not renew.
+pub const LOCK_TTL_MS: u64 = 10_000;
+/// How long [`with_lock`] retries before giving up. Below [`LOCK_TTL_MS`] so
+/// a waiter cannot out-wait the lock's own expiry and stampede.
+pub const LOCK_DEADLINE: Duration = Duration::from_secs(8);
+
+/// A held cross-process lock. Releases (compare-and-delete) on drop, so a
+/// panic inside the critical section cannot leak the lock past its owner.
+pub struct LockGuard<'a> {
+    store: &'a dyn CrossState,
+    key: String,
+    owner: String,
+}
+
+impl Drop for LockGuard<'_> {
+    fn drop(&mut self) {
+        let _ = self.store.lock_release(&self.key, &self.owner);
+    }
+}
+
+/// One attempt at a cross-process lock. `None` = somebody else has it.
+pub fn try_lock<'a>(
+    store: &'a dyn CrossState,
+    key: &str,
+    owner: &str,
+    ttl_ms: u64,
+) -> Result<Option<LockGuard<'a>>, StoreError> {
+    if store.lock_acquire(key, owner, ttl_ms)? {
+        Ok(Some(LockGuard {
+            store,
+            key: key.to_string(),
+            owner: owner.to_string(),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Run `f` while holding the cross-process lock `key`.
+///
+/// Retries with short sleeps up to `deadline`; a lock failure is an error and
+/// **never** falls through to unlocked execution. Match / room operations are
+/// short, so the [`LOCK_TTL_MS`] default needs no renewal.
+pub fn with_lock<T>(
+    store: &dyn CrossState,
+    key: &str,
+    owner: &str,
+    ttl_ms: u64,
+    deadline: Duration,
+    f: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    let start = std::time::Instant::now();
+    loop {
+        match try_lock(store, key, owner, ttl_ms) {
+            Ok(Some(_guard)) => {
+                let out = f();
+                // `_guard` drops (and releases) after `f` returns or panics.
+                return out;
+            }
+            Ok(None) => {
+                if start.elapsed() >= deadline {
+                    return Err(format!("lock {key} not acquired within {deadline:?}"));
+                }
+                std::thread::sleep(Duration::from_millis(15));
+            }
+            Err(e) => return Err(format!("lock {key}: {e}")),
         }
     }
 }
