@@ -123,25 +123,55 @@ export interface StreamHandlers {
   status(connected: boolean): void;
 }
 
-/** The room's SSE stream. The browser reconnects by itself and resends `Last-Event-ID`. */
+/**
+ * The room's SSE stream. The browser reconnects by itself after a dropped
+ * connection, but gives up for good when the reconnect gets an HTTP error --
+ * which is exactly what a server restart looks like behind a proxy (502 while
+ * it boots). So once the source is `CLOSED` we reopen it ourselves, with
+ * backoff, resuming from the last event id seen.
+ */
 export function openStream(roomId: string, h: StreamHandlers): () => void {
-  const es = new EventSource(`/api/rooms/${roomId}/stream?token=${encodeURIComponent(token)}`);
-  const on = <T>(name: string, f: (v: T) => void) =>
-    es.addEventListener(name, (e) => {
-      try {
-        f(JSON.parse((e as MessageEvent).data));
-      } catch (err) {
-        console.error(name, err);
-      }
+  let es: EventSource | null = null;
+  let stopped = false;
+  let lastId = "";
+  let retry = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const connect = () => {
+    const q = `token=${encodeURIComponent(token)}` + (lastId ? `&lastEventId=${encodeURIComponent(lastId)}` : "");
+    const src = new EventSource(`/api/rooms/${roomId}/stream?${q}`);
+    es = src;
+    const on = <T>(name: string, f: (v: T) => void) =>
+      src.addEventListener(name, (e) => {
+        const m = e as MessageEvent;
+        if (m.lastEventId) lastId = m.lastEventId;
+        try {
+          f(JSON.parse(m.data));
+        } catch (err) {
+          console.error(name, err);
+        }
+      });
+    on<RoomInfo>("room", h.room);
+    on<MatchView>("match", h.match);
+    on<MatchEvent>("event", h.event);
+    on<{ reason: Msg }>("dissolve", (d) => {
+      stopped = true;
+      h.dissolve(d.reason);
+      src.close();
     });
-  on<RoomInfo>("room", h.room);
-  on<MatchView>("match", h.match);
-  on<MatchEvent>("event", h.event);
-  on<{ reason: Msg }>("dissolve", (d) => {
-    h.dissolve(d.reason);
-    es.close();
-  });
-  es.onopen = () => h.status(true);
-  es.onerror = () => h.status(false);
-  return () => es.close();
+    src.onopen = () => {
+      retry = 0;
+      h.status(true);
+    };
+    src.onerror = () => {
+      h.status(false);
+      if (stopped || src.readyState !== EventSource.CLOSED) return;
+      timer = setTimeout(connect, Math.min(5000, 500 * 2 ** retry++));
+    };
+  };
+  connect();
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    es?.close();
+  };
 }
