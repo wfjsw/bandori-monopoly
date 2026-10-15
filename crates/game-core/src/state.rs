@@ -186,6 +186,9 @@ pub struct MatchState {
     /// machine seats never hold.
     #[serde(default)]
     pub clock_paused: bool,
+    /// 规则书 基础[结算]: one turn performs only one normal action (buy or
+    /// build) on a land and its buildings. Set by any acquisition of the
+    /// landed tile; `built` is its build twin. Either one closes both.
     pub bought: bool,
     pub built: bool,
     /// Next uid to hand out for a card instance. **Global** across the match, not
