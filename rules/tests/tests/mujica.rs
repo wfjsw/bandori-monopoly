@@ -946,23 +946,33 @@ fn mortis_instinct_plays_without_error() {
 fn welcome_to_ave_mujica_switches_state() {
     let mut t = Table::new(&["三角初华", "丰川祥子"]);
     t.clean();
+    // 规则书: 「转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）」
+    // 「任意一名玩家」 includes the user; a seat without the 状态1/状态2 axis
+    // is a no-op. Give P1 the axis (状态1) so the toggle has somewhere to go.
+    // Arrange before begin_turn: turn-start hooks leave a routine pending and
+    // world_mut may not be used while one is.
+    t.set_state(1, "skillState", 1);
     t.begin_turn(0);
     while t.prompt().is_some() {
         decline_q(&mut t);
     }
-    // 规则书: 「转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）」
-    // 三角初华 has 状態2. Play the card and switch her state.
     let r = t.give_play(0, "Mujica:欢迎来到ave mujica的世界");
-    // The card's (1) designates a player; the prompt offers the players with a
-    // state 2 (here P1 丰川祥子).
+    // The card's (1) designates a player; the prompt offers every seat (self
+    // included). Pick P1 by player id, not by option index.
     let mut designated = None;
     loop {
         let Some(p) = t.prompt() else { break };
         eprintln!("welcome prompt: {}", t.dump_prompt());
         if p.kind == "choice" || p.kind == "player" {
-            // take the offered player
+            // `ask.player` options carry the seat in their args.
+            let k = t
+                .option("PlayerId(1)")
+                .or_else(|| t.option("P1"))
+                .unwrap_or_else(|| {
+                    panic!("no option for player 1 among {:?}", p.options)
+                });
             designated = Some(1usize);
-            answer_q(&mut t, 0, 0).unwrap();
+            answer_q(&mut t, 0, k).unwrap();
         } else {
             decline_q(&mut t);
         }

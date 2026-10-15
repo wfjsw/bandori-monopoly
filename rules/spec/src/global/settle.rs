@@ -648,10 +648,11 @@ pub fn g_settle_08(step: &Step<'_>) -> Result<(), String> {
 /// * **Quote:** 「如果格子地契未抵押则**[支付]拥有格子的玩家格子地契所标记的现等级地租。**」
 /// * **Trigger:** a `rent` event on a buyable tile owned by someone else.
 /// * **Condition:** the tile was not mortgaged in `pre`; the window has no
-///   card activation (「支付减半」 etc. are L6); the tile is not a RiNG
-///   (OPEN-RING-RENT: no marked table); not an agent half-charge window --
-///   neither the all-owned sweep (`log.agent_all_owned`) nor the choose-one
-///   else-branch kind=2 commit (`log.agent_offer_commit`).
+///   card activation and no lingering field-card modifier (「支付减半」 etc.
+///   are L6); the tile is not a RiNG (OPEN-RING-RENT: no marked table); not an
+///   agent half-charge window -- neither the all-owned sweep
+///   (`log.agent_all_owned`) nor the choose-one else-branch kind=2 commit
+///   (`log.agent_offer_commit`).
 /// * **Effect:** the payer pays the owner exactly `rent[h]` where `h` is the
 ///   standing house count (「现等级」).
 /// * **Frame:** only the two money balances move (the ledger -- G-MONEY-01).
@@ -668,7 +669,11 @@ const G_SETTLE_10: Clause = Clause::new(
 
 /// Executable form of [`G_SETTLE_10`].
 pub fn g_settle_10(step: &Step<'_>) -> Result<(), String> {
-    if has_card_activation(step) {
+    // L6 「技能和卡的效果优先」: a card activation or a lingering field-card
+    // modifier (BuyAdd / BuyMul / pay-halving, …) may reshape the charge. The
+    // clean figure is covered by the scenario tests; this clause only owns the
+    // unmodified 现等级 rent. Same skip as G-SETTLE-06/07.
+    if has_card_activation(step) || has_lingering_modifiers(step) {
         return Ok(());
     }
     for e in step.events {
@@ -984,12 +989,17 @@ fn g_settle_13_half_note_only(step: &Step<'_>) -> Result<(), String> {
     // The choose-one else-branch (`log.agent_offer_commit`, kind=2) is also a
     // half-charge, but it is **not** the all-owned sweep this clause names.
     // Its amount may additionally carry an L6 「支付减半」 scale on top of the
-    // agent half -- leave it to the money / agent clauses.
+    // agent half -- leave it to the money / agent clauses. The commit line can
+    // also land in an earlier observation window than the rent (a [反击]
+    // prompt splits the money pipeline), so key on the half note itself.
     if step
         .events
         .iter()
         .any(|x| key_of(x) == "log.agent_offer_commit")
     {
+        return Ok(());
+    }
+    if has_lingering_modifiers(step) {
         return Ok(());
     }
     for e in step.events {
@@ -1004,18 +1014,54 @@ fn g_settle_13_half_note_only(step: &Step<'_>) -> Result<(), String> {
         if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
             continue;
         }
-        if let Some(full) = table_rent_at(step, t) {
-            let half = half_ceil10(full);
-            let noted_half = format!("{:?}", e.msg).contains("half");
-            if noted_half && e.value != half && e.value != full {
-                return Err(format!(
-                    "half-noted rent on {t} = {}, expected {half} or full {full}",
-                    e.value
-                ));
-            }
+        let Some(full) = table_rent_at(step, t) else {
+            continue;
+        };
+        let half = half_ceil10(full);
+        // The half note carries the **agent** cut (`log.part.rent_half` /
+        // `rent_half_only`, args `full` / `cut`). Verify that cut against the
+        // ceil-10 formula. The settled `e.value` may sit further below `cut`
+        // when an L6 「支付减半」 scaled the payment on top -- that reshape is
+        // not this clause's figure.
+        let Some((note_full, note_cut)) = half_note_of(&e.msg) else {
+            continue;
+        };
+        if note_cut != half || note_full != full {
+            return Err(format!(
+                "half-noted rent on {t}: note cut {note_cut} (full {note_full}), \
+                 expected half_ceil10 {half} of marked rent {full}"
+            ));
         }
     }
     Ok(())
+}
+
+/// Pull `(full, cut)` out of a rent message's half note, if it has one.
+fn half_note_of(msg: &game_core::msg::Msg) -> Option<(i32, i32)> {
+    half_note_walk(msg)
+}
+
+fn half_note_walk(m: &game_core::msg::Msg) -> Option<(i32, i32)> {
+    use game_core::msg::Arg;
+    if m.key() == "log.part.rent_half" || m.key() == "log.part.rent_half_only" {
+        let full = match m.a.get("full") {
+            Some(Arg::N(v)) | Some(Arg::I(v)) => *v as i32,
+            _ => return None,
+        };
+        let cut = match m.a.get("cut") {
+            Some(Arg::N(v)) | Some(Arg::I(v)) => *v as i32,
+            _ => return None,
+        };
+        return Some((full, cut));
+    }
+    for v in m.a.values() {
+        if let Arg::Msg(inner) = v {
+            if let Some(found) = half_note_walk(inner) {
+                return Some(found);
+            }
+        }
+    }
+    None
 }
 
 /// [地产商], otherwise: choose **one** same-colour unowned-or-own buyable and
@@ -1400,6 +1446,21 @@ pub fn verify_rent_amount(
     data: &GameData,
 ) -> Result<(), String> {
     if events.iter().any(|e| e.r#type == "card") {
+        return Ok(());
+    }
+    // L6 linger: a non-skill field card / non-tile board card can reshape the
+    // charge outside this window (same skip as [`has_lingering_modifiers`]).
+    let lingering = pre
+        .st
+        .players
+        .iter()
+        .any(|p| p.field.iter().any(|f| !f.card.starts_with("skill:")))
+        || pre
+            .st
+            .board_field
+            .iter()
+            .any(|f| !f.card.starts_with("tile:") && !f.card.starts_with("mark:"));
+    if lingering {
         return Ok(());
     }
     for e in events {

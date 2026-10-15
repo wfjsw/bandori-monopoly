@@ -439,6 +439,9 @@ fn nnm_discard_marks_draw_x() {
 fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     // 规则书 (3): 「你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或
     // 轮数限制」 -- the placed-press branch of the merged Play entry.
+    // 规则书 (4): 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the last crystal
+    // also discards the card, so the field lookup is gone afterwards. Assert
+    // the discard (the spent-crystal consequence) rather than a residual 0.
     let mut t = Table::new(&["广町七深", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
@@ -446,10 +449,17 @@ fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
     t.set_crystals(0, "Mor:（NNM）稍微努力了一下", 1);
     t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
     decline_all(&mut t);
-    assert_eq!(
-        t.crystals(0, "Mor:（NNM）稍微努力了一下"),
-        Some(0),
-        "one crystal removed for the owner's (2) skill"
+    assert!(
+        !t.on_field(0, "Mor:（NNM）稍微努力了一下"),
+        "last crystal spent → (4) discards the card; field={:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.discard(0).contains(&"Mor:（NNM）稍微努力了一下".to_string())
+            || t.draw_pile(0).contains(&"Mor:（NNM）稍微努力了一下".to_string()),
+        "card left the field for the discard; discard={:?} draw={:?}",
+        t.discard(0),
+        t.draw_pile(0)
     );
 }
 

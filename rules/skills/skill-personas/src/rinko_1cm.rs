@@ -13,11 +13,11 @@
 //! which the abnormal gate already reads.
 //!
 //! 「此技能可以正常使用或在[晕眩]状态下使用」 is a *play waiver*: a stunned
-//! player may press this. The engine's generic `cannot_play` refuses every
-//! action while stunned, and there is no per-card way to say otherwise yet --
-//! see the TODO below.
+//! player may press this. The engine's generic stun gate (`Gate::Act` /
+//! `cannot_play`) refuses every action while stunned; `prop::PLAYABLE_STUNNED`
+//! is the documented exception (the same waiver 壱雫空 carries).
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{prop, state_key, HookKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -29,6 +29,8 @@ pub const RINKO_1CM: CardDef = CardDef::new(
         On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
     ],
 )
+    // 规则书: 「此技能可以正常使用或在[晕眩]状态下使用」 -- skip the stun gate.
+    .props(&[(prop::PLAYABLE_STUNNED, 1)])
     .silent(&[1]);
 
 /// 「初始3，上限3」.
@@ -51,10 +53,8 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if state::get(player_id, state_key::CHARGE) < 1 {
         return Some(Msg::new(key!("rinko_1cm_no_fire")));
     }
-    // TODO(规则书)[judgement]: 「此技能可以正常使用或在[晕眩]状态下使用」 --
-    //   the clause under-specifies -- a per-card waiver of the engine's generic
-    //   stun gate needs a shape (a `CardDef` flag, or the play guard running
-    //   first) and neither exists yet.
+    // 「可在[晕眩]状态下使用」 is `prop::PLAYABLE_STUNNED` on this CardDef;
+    // the engine's stun gate reads it before this body runs.
     None
 }
 

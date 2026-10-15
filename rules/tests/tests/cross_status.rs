@@ -194,9 +194,10 @@ fn s05_crychic_band_six_cards() {
 
 // 规则书: 壱雫空: 「清除场上所有[停留]与[眩晕]效果，所有玩家因本效果每清除一种效果则支付
 // 此卡使用者1000资金，若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」.
-// Ruling 2026-10-06: 「每清除一种效果」 is per effect type, counted separately
-// for each affected player. Here P1 停留 (1) + P2 眩晕 (1) + P0 眩晕 (1) = 3.
-// Every player pays 3000; the user gains 1000 extra per own type (1).
+// Ruling 2026-10-06 (spec/cards/mygo.md C-MYGO-hitoshizuku-02): 「每清除一种
+// 效果」 is per effect type **on that player**. Each affected player pays 1000
+// per own cleared type; unaffected pay nothing. Here P1 停留 (1) + P2 眩晕 (1)
+// + P0 眩晕 (1) = three (player, type) pairs, charged on their own seats.
 #[test]
 fn s06_izana_clears_statuses() {
     let mut t = Table::vanilla(3);
@@ -208,10 +209,11 @@ fn s06_izana_clears_statuses() {
     assert_eq!(t.state(1, "stay"), 0, "P1's stay cleared");
     assert_eq!(t.state(2, "stun"), 0, "P2's stun cleared");
     assert_eq!(t.state(0, "stun"), 0, "P0's own stun cleared");
-    // count = 3 → every player pays 3000; user also +1000 extra.
-    assert_eq!(t.money(1), 7_000, "P1 pays 3000 (count 3)");
-    assert_eq!(t.money(2), 7_000, "P2 pays 3000 (count 3)");
-    assert_eq!(t.money(0), 10_000 + 3_000 + 3_000 + 1_000, "3000 x 2 + 1000 extra");
+    // Each affected seat pays 1000 for its own type; the user self-pay nets 0
+    // and gains 1000 extra for the own stun.
+    assert_eq!(t.money(1), 9_000, "P1 pays 1000 (1 own type)");
+    assert_eq!(t.money(2), 9_000, "P2 pays 1000 (1 own type)");
+    assert_eq!(t.money(0), 10_000 + 1_000 + 1_000 + 1_000, "1000 x 2 + 1000 extra");
 }
 
 // =====================================================================

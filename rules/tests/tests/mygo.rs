@@ -331,24 +331,26 @@ fn clear_removes_all_stay_and_stun() {
 #[test]
 fn clear_charges_every_player_per_type() {
     // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」
-    // Ruling 2026-10-06: 「每清除一种效果」 is per effect type, counted
-    // separately for each affected player. P1 has 停留 (1 type), P2 has 眩晕
-    // (1 type) → count = 1 + 1 = 2. Every player pays 2000. The user has none.
+    // Ruling 2026-10-06 (spec/cards/mygo.md C-MYGO-hitoshizuku-02): 「每清除
+    // 一种效果」 is per effect type **on that player**. Each affected player
+    // pays 1000 per own cleared type; unaffected players pay nothing. P1 has
+    // 停留 (1 type) and P2 has 眩晕 (1 type) → each pays 1000. The user has
+    // none, so no extra.
     let mut t = Table::vanilla(3);
     t.set_state(1, "stay", 1);
     t.set_state(2, "stun", 1);
     t.give_play(0, "MyGO:壱雫空").unwrap();
-    assert_eq!(t.money(1), 8_000, "P1 pays 2000 (count 2)");
-    assert_eq!(t.money(2), 8_000, "P2 pays 2000 (count 2)");
-    assert_eq!(t.money(0), 14_000, "user collects 2000 x 2");
+    assert_eq!(t.money(1), 9_000, "P1 pays 1000 (1 own type)");
+    assert_eq!(t.money(2), 9_000, "P2 pays 1000 (1 own type)");
+    assert_eq!(t.money(0), 12_000, "user collects 1000 x 2");
 }
 
-// Ruling 2026-10-06: the count is per effect type *per affected player*.
-// Clearing 2 types from A and 1 type from B counts 3.
+// Ruling 2026-10-06: the count is per effect type **on that player**.
+// Clearing 2 types from A and 1 type from B: A pays 2000, B pays 1000.
 #[test]
 fn clear_two_types_and_one_type_counts_three() {
-    // P1 has 停留+眩晕 (2 types), P2 has 停留 (1 type) → count = 3.
-    // Every player pays 3000; the user has none so no extra.
+    // P1 has 停留+眩晕 (2 types on P1 → 2000), P2 has 停留 (1 type → 1000).
+    // The user has none so no extra.
     let mut t = Table::vanilla(3);
     t.set_state(1, "stay", 1);
     t.set_state(1, "stun", 1);
@@ -357,26 +359,27 @@ fn clear_two_types_and_one_type_counts_three() {
     assert_eq!(t.state(1, "stay"), 0);
     assert_eq!(t.state(1, "stun"), 0);
     assert_eq!(t.state(2, "stay"), 0);
-    assert_eq!(t.money(1), 7_000, "P1 pays 3000 (count 3)");
-    assert_eq!(t.money(2), 7_000, "P2 pays 3000 (count 3)");
-    assert_eq!(t.money(0), 16_000, "user collects 3000 x 2");
+    assert_eq!(t.money(1), 8_000, "P1 pays 2000 (2 own types)");
+    assert_eq!(t.money(2), 9_000, "P2 pays 1000 (1 own type)");
+    assert_eq!(t.money(0), 13_000, "user collects 2000 + 1000");
 }
 
 #[test]
 fn clear_user_effect_gives_extra() {
     // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
-    // Ruling: stay on P0 and stay on P1 count separately → count = 2.
-    // Every player pays 2000; the user gains 1000 extra per own type (1).
+    // Ruling (C-MYGO-hitoshizuku-02/-03): P1 pays 1000 for its own stay; the
+    // user's self-pay nets 0, and the user gains 1000 extra per own type (1).
+    // Unaffected P2 pays nothing.
     let mut t = Table::vanilla(3);
     t.set_state(0, "stay", 1);
     t.set_state(1, "stay", 1);
     t.give_play(0, "MyGO:壱雫空").unwrap();
-    assert_eq!(t.money(2), 8_000, "unaffected P2 still pays the count-2 2000");
-    assert_eq!(t.money(1), 8_000);
+    assert_eq!(t.money(2), 10_000, "unaffected P2 pays nothing");
+    assert_eq!(t.money(1), 9_000, "P1 pays 1000 for its own stay");
     assert_eq!(
         t.money(0),
-        15_000,
-        "self-pay nets 0 + 2000 from P1 + 2000 from P2 + 1000 extra"
+        12_000,
+        "self-pay nets 0 + 1000 from P1 + 1000 extra for the own stay"
     );
 }
 
