@@ -328,7 +328,11 @@ export function useBoardViewport(): ViewportApi {
       const [a, c] = [...g.pointers.values()];
       const mid = { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 };
       const d = Math.hypot(a.x - c.x, a.y - c.y) || 1;
-      setV(() => pinchAround(g.pinch!.v0, g.pinch!.mid0, toLocal(el, mid.x, mid.y), d / g.pinch!.d0, b));
+      // Read everything now: the updater runs later, during render, by which
+      // time a finger-up may have cleared `g.pinch` (a throw there blanks the page).
+      const { v0, mid0, d0 } = g.pinch;
+      const next = pinchAround(v0, mid0, toLocal(el, mid.x, mid.y), d / d0, b);
+      setV(next);
       g.dragging = true;
       g.dragged = true;
       return;
