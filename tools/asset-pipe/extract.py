@@ -120,7 +120,7 @@ class Pipeline:
         self.manifest: dict = {
             "version": 1,
             "resources": {},  # lower-case Resources path -> asset file
-            "characters": {}, "bands": {}, "rooms": {}, "cards": {}, "fx": {},
+            "personas": {}, "groups": {}, "rooms": {}, "cards": {}, "fx": {},
             "scene": {"img": {}, "audio": {}},
             "fonts": {},
             "live2d": None,
@@ -277,10 +277,10 @@ def run(args) -> int:
 
         for c in db.character_art:
             entry = {k: art(c[k], "img/char") for k in CHAR_SPRITES}
-            p.manifest["characters"][c["id"]] = {k: v for k, v in entry.items() if v}
+            p.manifest["personas"][c["id"]] = {k: v for k, v in entry.items() if v}
         for b in db.band_art:
             if (rel := art(b["logo"], "img/band")):
-                p.manifest["bands"][b["band"]] = rel
+                p.manifest["groups"][b["band"]] = rel
         for i, r in enumerate(db.room_art):
             if (rel := art(r["card"], "img/room")):
                 p.manifest["rooms"][r["band"] or f"default{i}"] = rel
@@ -395,10 +395,10 @@ def run(args) -> int:
 
     # 7) display-size stand/sd thumbs for the gallery grid and board tokens. The
     #    generated paths go into the manifest (single source of paths) as
-    #    characters.<id>.thumb|sdThumb|sdHappyThumb -- see tools/asset-pipe/thumbs.py.
+    #    personas.<id>.thumb|sdThumb|sdHappyThumb -- see tools/asset-pipe/thumbs.py.
     from thumbs import build as build_thumbs  # noqa: E402
-    for cid, extra in build_thumbs(out, p.manifest["characters"]).items():
-        p.manifest["characters"].setdefault(cid, {}).update(extra)
+    for cid, extra in build_thumbs(out, p.manifest["personas"]).items():
+        p.manifest["personas"].setdefault(cid, {}).update(extra)
 
     # A partial run (--only img,audio,...) never touches the fonts / live2d
     # sections; carry them over from the previous manifest instead of clobbering.

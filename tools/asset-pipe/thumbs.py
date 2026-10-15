@@ -10,7 +10,7 @@ resizes those sources once into small alpha WebPs:
   img/char/sd_<id>.webp         -> img/char/thumb_sd_<id>.webp         (220 px tall)
   img/char/sd_<id>_happy.webp   -> img/char/thumb_sd_<id>_happy.webp   (220 px tall)
 
-and records the new paths under `characters.<id>.thumb|sdThumb|sdHappyThumb` in
+and records the new paths under `personas.<id>.thumb|sdThumb|sdHappyThumb` in
 manifest.json, so the manifest stays the single source of paths. extract.py's
 manifest writer calls build() after the img export, so a full re-extract keeps
 the keys; this script is the fast standalone path (also patches the manifest).
@@ -72,7 +72,7 @@ def make_thumb(src: Path, dest: Path, height: int) -> int:
 def build(out: Path, characters: dict, force: bool = False, quiet: bool = False) -> dict[str, dict[str, str]]:
     """Generate thumbs for every character entry; return {id: {manifest key: rel}}.
 
-    `characters` is manifest["characters"] (id -> kind -> rel path). Only reads it.
+    `characters` is manifest["personas"] (id -> kind -> rel path). Only reads it.
     """
     extra: dict[str, dict[str, str]] = {}
     made = skipped = stale = 0
@@ -121,12 +121,12 @@ def main() -> int:
     if not mf.exists():
         sys.exit(f"no manifest at {mf} -- run extract.py first")
     manifest = json.loads(mf.read_text(encoding="utf-8"))
-    chars = manifest.get("characters") or {}
+    chars = manifest.get("personas") or {}
     extra = build(out, chars, force=args.force)
     if not args.no_manifest:
         for cid, e in extra.items():
             chars.setdefault(cid, {}).update(e)
-        manifest["characters"] = chars
+        manifest["personas"] = chars
         mf.write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"   manifest patched: {sum(len(e) for e in extra.values())} thumb paths")
     return 0

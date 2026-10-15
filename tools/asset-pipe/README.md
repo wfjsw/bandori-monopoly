@@ -31,8 +31,8 @@ Flags: `--only img,audio,fonts,text,live2d,data`, `--force`, `--jobs N`, `--prob
 ```jsonc
 {
   "resources":  { "bandoribgm/21_enjoy": "audio/bandoribgm/21_enjoy.ogg", ... }, // lower-case keys
-  "characters": { "001": { "stand": "...", "kv": "...", "sd": "...", "sdHappy": "...", "namePlate": "..." } },
-  "bands":      { "Poppin' Party": "img/band/band_001.webp" },
+  "personas":   { "001": { "stand": "...", "kv": "...", "sd": "...", "sdHappy": "...", "namePlate": "..." } },
+  "groups":     { "Poppin' Party": "img/band/band_001.webp" },
   "rooms":      { "<band>": "img/room/..." },
   "cards":      { "AG:Y.O.L.O": "img/card/....webp" },          // card id from the roster (docs/ROSTER-TOOLS.md)
   "fx":         { "tapRing": "...", "tapLight": "...", "tapStar": "...", "tapSparkle": "..." },

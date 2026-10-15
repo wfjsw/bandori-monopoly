@@ -73,7 +73,7 @@ def main() -> int:
     chars = load_characters()
     for c in chars:
         art_id = c.get("art") or c["cnId"]  # CharacterData.cs:34-38 (art ?? cnId)
-        art = m["characters"].get(art_id)
+        art = m["personas"].get(art_id)
         if not art:
             errors.append(f"character without any art: {c['name']} ({art_id})")
             continue
@@ -85,7 +85,7 @@ def main() -> int:
                 warnings.append(f"character {c['name']} ({art_id}) has no {kind}")
 
     band_names = {b["name"] for b in load_bands()}
-    no_logo = sorted(band_names - set(m["bands"]))
+    no_logo = sorted(band_names - set(m["groups"]))
     warnings += [f"band without logo in BandoriDatabase: {b}" for b in no_logo]
 
     # 3. what the code loads

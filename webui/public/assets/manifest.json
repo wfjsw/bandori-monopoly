@@ -593,7 +593,7 @@
   "bandorivoice/040/afterlive-ta-tg-6-001": "audio/bandorivoice/040/afterlive-ta-tg-6-001.ogg",
   "bandorivoice/040/area5521-001": "audio/bandorivoice/040/area5521-001.ogg"
  },
- "characters": {
+ "personas": {
   "001": {
    "stand": "img/char/stand_001.webp",
    "kv": "img/char/kv_001.webp",
@@ -1102,7 +1102,7 @@
    "sdThumb": "img/char/thumb_sd_341c.webp"
   }
  },
- "bands": {
+ "groups": {
   "Poppin' Party": "img/band/band_001.webp",
   "Afterglow": "img/band/band_002.webp",
   "Pastel✽Palettes": "img/band/band_004.webp",
