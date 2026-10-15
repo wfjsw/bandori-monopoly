@@ -294,3 +294,7 @@
 :global(:root[data-compact]) .flashNegated span { font-size: 26px; border-width: 4px; padding: 2px 10px; }
 :global(:root[data-compact]) .banner { min-width: 0; max-width: 90%; padding: var(--sp-2) 18px; }
 :global(:root[data-compact]) .banner b { font-size: var(--fs-2xl); }
+/* ... and its art cropped to 16:9 around the centre, like the preview panel (the face
+   would otherwise reserve a 2:3 box around a 4:3 picture). */
+:global(:root[data-compact]) .flashFace > :first-child { min-height: 0; }
+:global(:root[data-compact]) .flashFace > :first-child > :first-child { aspect-ratio: 16 / 9; }
