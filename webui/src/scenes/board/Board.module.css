@@ -324,8 +324,8 @@
   background: color-mix(in srgb, var(--owner, var(--white)) 14%, var(--white));
 }
 /* Zig-zag down the chain: my cards left, everyone else's right. */
-.chainMine { align-self: flex-start; transform: rotate(-5deg); }
-.chainTheirs { align-self: flex-end; transform: rotate(5deg); }
+.chainMine { align-self: flex-start; rotate: -5deg; }
+.chainTheirs { align-self: flex-end; rotate: 5deg; }
 .chainTheirs .chainNo { left: auto; right: -18px; }
 .chainOrigin {
   display: flex;
@@ -361,7 +361,7 @@
 .chainResolving .chainLink.chainActive {
   opacity: 1;
   z-index: 3;
-  transform: scale(1.35) rotate(0deg);
+  transform: scale(1.35);
   box-shadow: 0 0 36px 10px rgba(255, 255, 255, 0.9), 0 12px 30px rgba(0, 0, 0, 0.45);
 }
 .chainResolving .chainLink.chainDone { opacity: 0; transform: scale(1.5); }
