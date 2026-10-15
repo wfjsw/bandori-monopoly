@@ -36,7 +36,7 @@ pub const MAX_PLAYS_PER_TURN: usize = 2;
 /// The one knob the chaos policy spends to -- without it a chaos bot burns out
 /// in a few turns and stops being disruptive.
 pub const CHAOS_RESERVE: i32 = 1_000;
-/// Chaos declares a [反击] on this share of the counteract offers it gets
+/// Chaos declares a counteraction on this share of the counteract offers it gets
 /// (a random offered card); the rest of the offers it passes. Rolled per offer
 /// from the match RNG, so a repeated offer ring naturally stops after a skip.
 pub const CHAOS_COUNTER_CHANCE: f64 = 0.3;
@@ -99,7 +99,7 @@ pub fn bot_wants_redeem(m: BotMentality, money: i32, cost: i32) -> bool {
     }
 }
 
-/// Mentality-aware 「可选择[支付]…两倍…强行购买」 test.
+/// Mentality-aware 「可选择pay…两倍…强行购买」 test.
 pub fn bot_wants_force_buy(m: BotMentality, money: i32, price: i32) -> bool {
     match m {
         BotMentality::Standard | BotMentality::Advanced => money - price >= FORCE_BUY_RESERVE,
@@ -131,8 +131,8 @@ impl Cx<'_> {
     }
 
     /// The standard policy's parameters for seat `i` (`docs/BOT.md` §3.8).
-    /// Resolved from public state only (own character + the other seats'
-    /// characters); chaos never reads them.
+    /// Resolved from public state only (own persona + the other seats'
+    /// personas); chaos never reads them.
     #[inline]
     pub(crate) fn strategy_of(&self, i: usize) -> StrategyParams {
         crate::strategy::for_seat_sha(
@@ -276,7 +276,7 @@ impl Cx<'_> {
     }
 
     /// A random playable card the rules say a bot would play.
-    /// Chaos ignores the rule's `ai_play` heuristic (it will even fire [反击]
+    /// Chaos ignores the rule's `ai_play` heuristic (it will even fire counteraction
     /// cards from hand) and only asks `cant_play`.
     ///
     /// Standard additionally gates on the card's [`crate::strategy::CardPlayParams`]
@@ -360,8 +360,8 @@ impl Cx<'_> {
         Some(ok[k].clone())
     }
 
-    /// A skill button the seat would press right now: a placed character /
-    /// band skill rule the player may activate.
+    /// A skill button the seat would press right now: a placed persona /
+    /// group skill rule the player may activate.
     ///
     /// Chaos presses every usable one (at most one press per skill per turn --
     /// a skill whose body is a no-op must not park the bot in a press loop).
@@ -399,7 +399,7 @@ impl Cx<'_> {
                 if sk.play_weight_milli <= 0 || round < sk.min_round || round > sk.max_round {
                     continue;
                 }
-                // Odds per offer; the "always" band draws nothing extra, and a
+                // Odds per offer; the "always" group draws nothing extra, and a
                 // zero weight (the default) short-circuits above so the RNG
                 // stream of the old policy is untouched.
                 if sk.play_weight_milli < crate::strategy::NEUTRAL_WEIGHT {

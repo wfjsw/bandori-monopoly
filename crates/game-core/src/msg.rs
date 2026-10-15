@@ -3,7 +3,7 @@
 //! The engine and the server never produce display text. Every log line, prompt
 //! and error is a [`Msg`]: an i18next key plus typed arguments. Each client renders
 //! it in its own player's language (`webui/src/locales/*`), resolving players to
-//! player names, tiles / cards / characters to their (localized) data names.
+//! player names, tiles / cards / personas to their (localized) data names.
 //!
 //! Keys without a namespace live in the client's `game` namespace; card modules use
 //! `cards:<crate>.<key>`.

@@ -29,7 +29,7 @@
 //!
 //! TODO(规则书): the book's 「该改变[触发结算]的效果优先于其他任何改变[触发结算]
 //! 的效果」 is **not** implemented as a priority rule -- the engine runs hook
-//! instances in placement order / first claim (`event:协助CiRCLE重建` carries
+//! instances in placement order / first claim (`event:the start-square rebuild event` carries
 //! the same TODO on its settle body). Text precedence is built on that same
 //! ordering, so it is placement order / first claim here too.
 
@@ -40,7 +40,7 @@ use crate::state::{FieldCard, TileTextEntry};
 
 /// The lookup-group half of `game_rules`'s `effect_order_key`
 /// (`docs/ENGINE.md` 「Effect ordering」), kept in step by hand -- `game-core`
-/// does not depend on `game-rules`. Status → band → character → field →
+/// does not depend on `game-rules`. Status → group → persona → field →
 /// hand → discard → deck → removed → Board (board-owned `tile:*` / `event:*` /
 /// `mark:*` sort after the player groups).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

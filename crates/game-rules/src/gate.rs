@@ -10,10 +10,10 @@
 //! rollout's `can_pay`), so it must stay O(players).
 //!
 //! [`ExclusiveUse`] additionally carries the questioned exclusive: the card id
-//! hash in `trigger_card`, the card's `owner` character name in `name`
+//! hash in `trigger_card`, the card's `owner` persona name in `name`
 //! (`counter_is('名')`), `value = 1` when that owner is the actor's base
-//! character, and `step = 1` when it is the actor's own character. Player
-//! snaps also carry `character` / `band` hashes so `group_is` / `persona_is`
+//! persona, and `step = 1` when it is the actor's own persona. Player
+//! snaps also carry `persona` / `group` hashes so `group_is` / `persona_is`
 //! can name the asked seat's identity (CRYCHIC's denial).
 
 use rules_cond::{id_of, PlayerSnap, WindowCtx};
@@ -115,9 +115,9 @@ pub fn window_of_card_world<W: CardWorld>(w: &W, actor: i32) -> WindowCtx {
 }
 
 /// The [`Gate::Exclusive`] window: status layers **plus** the questioned
-/// exclusive and each seat's `character` / `band` identity hashes (so
-/// `group_is(actor, 'CRYCHIC')` reads the character row's band -- the stable
-/// spelling, not the currently attached band-skill id).
+/// exclusive and each seat's `persona` / `group` identity hashes (so
+/// `group_is(actor, 'CRYCHIC')` reads the persona row's group -- the stable
+/// spelling, not the currently attached group-skill id).
 pub fn window_of_exclusive(
     w: &World,
     data: &GameData,

@@ -45,7 +45,7 @@ pub struct SettleFrame {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettleStage {
-    /// Raise `settle` (declaration + [反击] window).
+    /// Raise `settle` (declaration + counteraction window).
     RaiseSettle,
     /// After `settle` returned: cancel check, then body or terminal.
     AfterSettle,

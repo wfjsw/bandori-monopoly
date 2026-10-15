@@ -1,13 +1,13 @@
 //! Roster fixture gate (ABI v63, `docs/CARDS.md` 「Card metadata」).
 //!
-//! The Rust rule code is the single source of card / character / band metadata.
+//! The Rust rule code is the single source of card / persona / group metadata.
 //! The checked-in test fixture
 //! (`crates/game-core/tests/fixtures/roster.json`) is a **generated dump** of
 //! that roster for crates that have no ruleset (game-core / game-rules /
 //! bot-core / server). This test keeps the two byte-identical: if the fixture
 //! drifts from a fresh dump, the test fails and names the regenerate command.
 //!
-//! Equivalence to the retired `data/{cards,characters,bands}.json` baseline was
+//! Equivalence to the retired `data/{cards,personas,groups}.json` baseline was
 //! verified at the cutover (commit `7c3d115`, the last tree with those files as
 //! the baseline). The old JSON-vs-Rust comparison is gone; what remains here is
 //! ordering / field fidelity of the fixture against the live ruleset roster.
@@ -66,13 +66,13 @@ fn load_sees_fixture_rows() {
     let mut read = |f: &str| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string());
     let roster = Roster::from_fixture(&checked_in_fixture()).unwrap();
     let d = GameData::load(&mut read, roster).unwrap();
-    // A lifted Sumimi card is visible by id and carries its band.
+    // A lifted Sumimi card is visible by id and carries its group.
     let card = d.card("Sumimi:Sumimi不会解散哦").expect("fixture card");
     assert_eq!(card.group, "Sumimi");
-    // The lifted character is visible by name.
+    // The lifted persona is visible by name.
     let c = d.persona("纯田真奈").expect("fixture character");
     assert_eq!(c.group, "Sumimi");
-    // The lifted band is visible by name.
+    // The lifted group is visible by name.
     let b = d.group("Sumimi").expect("fixture band");
     assert!(b.shares_exclusives);
     // Non-roster files still come from the data dir (tiles exist either way).

@@ -6,10 +6,10 @@
 //!   and stays completely silent when the guard rejects;
 //! * a counteraction whose own link an answer negated still shows the card,
 //!   marked `negated` (its body does not run), logging 「<卡名> 的效果被无效」;
-//! * a play a [反击] negated likewise shows, marked negated.
+//! * a play a counteraction negated likewise shows, marked negated.
 //!
 //! Guard rejects and pre-scan skips run no body and so emit nothing. A fresh
-//! activation (hand play, [反击], skill press) keeps its own 「打出」 / 「发动」
+//! activation (hand play, counteraction, skill press) keeps its own 「打出」 / 「发动」
 //! line; an already-in-play card's effect says 「效果适用」 + why, with the
 //! body's own lines and the host effects it caused grouped under that header.
 
@@ -178,7 +178,7 @@ fn negated_counteraction_shows_negated() {
     assert_eq!(aimer[0].kind, "play");
 }
 
-/// A [反击] that negates a play (`TEST:denyPlay` answers the root `card` link):
+/// A counteraction that negates a play (`TEST:denyPlay` answers the root `card` link):
 /// the played card still flashes, marked negated, while its body does not run.
 #[test]
 fn negated_play_shows_negated() {
@@ -250,7 +250,7 @@ fn hook_whose_cel_pre_rejects_stays_silent() {
     );
 }
 
-/// A [反击] that is **offered and declined** is not an activation: the hand
+/// A counteraction that is **offered and declined** is not an activation: the hand
 /// window listing the card is not a declaration, and nothing about the card
 /// reaches the UI until its body runs (or a negation marks it).
 #[test]

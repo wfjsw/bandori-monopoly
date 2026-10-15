@@ -1,5 +1,5 @@
 //! 10-card decks: who may use which card, and the named saved decks per
-//! character (id 0 = the read-only preset).
+//! persona (id 0 = the read-only preset).
 //!
 //! Note `clean` returns cards in **pool order**, not input order, and `fill`
 //! cleans again after padding -- so a filled deck's order is always the
@@ -13,7 +13,7 @@ use crate::profile::{sanitize_deck_name, DeckChoice, PlayerProfile, SavedDeck};
 
 /// Cards per deck.
 pub const SIZE: usize = 10;
-/// Saved custom decks per character -- an arbitrary number, bounded so one
+/// Saved custom decks per persona -- an arbitrary number, bounded so one
 /// profile cannot grow without limit.
 pub const DECKS_MAX: usize = 100;
 
@@ -37,7 +37,7 @@ pub fn can_use(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
     cant_play(data, c, card).is_none()
 }
 
-/// Members of a band with the `shares_exclusives` trait (Sumimi) may use each
+/// Members of a group with the `shares_exclusives` trait (Sumimi) may use each
 /// other's exclusive cards.
 pub fn shares_exclusives(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
     data.group_shares_exclusives(c)
@@ -45,7 +45,7 @@ pub fn shares_exclusives(data: &GameData, c: &PersonaData, card: &CardData) -> b
         && data.persona(&card.owner).is_some_and(|o| o.group == c.group)
 }
 
-/// Cards `c` may use: exclusives first, then band cards, then general cards
+/// Cards `c` may use: exclusives first, then group cards, then general cards
 /// (each group in the roster's canonical deck-pool order).
 pub fn pool<'a>(data: &'a GameData, c: &PersonaData) -> Vec<&'a CardData> {
     let usable: Vec<&CardData> = data.cards.iter().filter(|k| can_use(data, c, k)).collect();

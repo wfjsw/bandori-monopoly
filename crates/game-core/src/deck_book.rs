@@ -8,7 +8,7 @@
 //!
 //! * **Key = public information only.** At the deck phase every pick and the
 //!   seat order are public; opponents' decks are not. The key is
-//!   `(my persona, my seat, opponents' characters in seat order)`.
+//!   `(my persona, my seat, opponents' personas in seat order)`.
 //! * **Back-off**, first hit wins ([`DeckBook::lookup`]): exact
 //!   `(me, seat, opponents in order)` → `(me, seat, multiset of opponents'
 //!   groups)` → `(me, multiset of opponents' groups)` → `(me)` → `deck::preset`.
@@ -57,7 +57,7 @@ pub const DECK_BOOK_FILE: &str = "deck_book.json";
 ///
 /// | level | key fields |
 /// |---|---|
-/// | `exact` | `me`, `seat`, `opponents` (characters in seat order) |
+/// | `exact` | `me`, `seat`, `opponents` (personas in seat order) |
 /// | `seat_groups` | `me`, `seat`, `opponent_groups` (sorted multiset) |
 /// | `groups` | `me`, `opponent_groups` (sorted multiset) |
 /// | `me` | `me` |
@@ -68,9 +68,9 @@ pub struct DeckBookEntry {
     pub me: String,
     /// Own seat (turn order index). Used by the two seat levels only.
     pub seat: Option<u32>,
-    /// Opponents' characters in seat order (exact level).
+    /// Opponents' personas in seat order (exact level).
     pub opponents: Vec<String>,
-    /// Sorted multiset of the opponents' band names (band levels).
+    /// Sorted multiset of the opponents' group names (group levels).
     pub opponent_groups: Vec<String>,
     /// Card ids; validated with `deck::clean` / `deck::is_complete` at lookup.
     pub cards: Vec<String>,
@@ -88,7 +88,7 @@ pub struct DeckBook {
     pub policy: String,
     /// Free-form generation stamp (date, tool version); display only.
     pub generated_at: String,
-    /// 1. `(me, seat, opponents' characters in seat order)`.
+    /// 1. `(me, seat, opponents' personas in seat order)`.
     pub exact: Vec<DeckBookEntry>,
     /// 2. `(me, seat, sorted multiset of opponents' groups)`.
     pub seat_groups: Vec<DeckBookEntry>,
@@ -173,7 +173,7 @@ impl DeckBook {
     ///
     /// * `me` -- own persona.
     /// * `seat` -- own seat (turn order index).
-    /// * `opponents` -- the other seats' characters in seat order (ascending
+    /// * `opponents` -- the other seats' personas in seat order (ascending
     ///   seat index, excluding `me`).
     /// * `ruleset_sha256` -- the running ruleset's hash
     ///   ([`crate::engine::CardRules::ruleset_sha256`], `"stub"` when unknown).
@@ -189,7 +189,7 @@ impl DeckBook {
             return None;
         }
         let groups = opponent_groups(data, opponents);
-        // 1. exact: (me, seat, opponents' characters in seat order)
+        // 1. exact: (me, seat, opponents' personas in seat order)
         if let Some(d) = first_valid(
             data,
             me,
@@ -228,9 +228,9 @@ impl DeckBook {
     }
 }
 
-/// Sorted multiset of the opponents' band names (`PersonaData::band`). An
+/// Sorted multiset of the opponents' group names (`PersonaData::group`). An
 /// unknown persona contributes `""` -- deterministic, and it only ever makes
-/// a band-level key miss.
+/// a group-level key miss.
 fn opponent_groups(data: &GameData, opponents: &[String]) -> Vec<String> {
     let mut groups: Vec<String> = opponents
         .iter()

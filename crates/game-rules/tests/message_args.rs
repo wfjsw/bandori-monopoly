@@ -24,7 +24,7 @@ fn is_internal_key(s: &str) -> bool {
     }
     // Lower-camel engine state / prop keys (handLimit, startHand, skillState,
     // unstoppable, noHand, stunStart, exileTo, ...). Rulebook terms are
-    // Chinese or bracketed ([停留]); card-declared counters are display names.
+    // Chinese or bracketed (stay); card-declared counters are display names.
     if s.chars().next().is_some_and(|c| c.is_ascii_lowercase())
         && s.chars().any(|c| c.is_ascii_uppercase())
         && s.chars().all(|c| c.is_ascii_alphanumeric())

@@ -471,7 +471,7 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
     if st.step == stage::OPS {
         // `end` only where the engine accepts it (`why_not_act`'s end branch).
         // The public `skip_move` re-derives from stay / exile and can disagree
-        // with the gate (unstoppable / mid-turn [停留] / [除外]) -- trusting it
+        // with the gate (unstoppable / mid-turn stay / exile) -- trusting it
         // sent `end` into `err.roll_first` and stalled the seat (bot_cpu §6).
         // A/B: `BOT_STRENGTH_AB_NO_GATES` restores the old skip_move test.
         if action::ab_on("BOT_STRENGTH_AB_NO_GATES") {

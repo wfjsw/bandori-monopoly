@@ -3,7 +3,7 @@
 //! One checkable **clause** per rulebook sentence, evaluated over one observed
 //! engine transition. The kit is **generic**: it names only engine types
 //! ([`World`], [`MatchEvent`], [`StepAct`], [`GameData`]) and never speaks a
-//! game's vocabulary (no band / character / tile / token / card names). The
+//! game's vocabulary (no group / persona / tile / token / card names). The
 //! game-specific harness and clause tables live in `rules/spec`.
 //!
 //! ## The unit of observation
@@ -108,7 +108,7 @@ pub struct Step<'a> {
     pub events: &'a [MatchEvent],
     /// The player input that produced this step.
     pub act: &'a StepAct,
-    /// Static data (tiles, cards, characters, events, match rules).
+    /// Static data (tiles, cards, personas, events, match rules).
     pub data: &'a GameData,
     /// A prompt was waiting **before** the input. The live prompt lives on the
     /// host (`Match`), not in [`World`], so it is captured alongside the step.

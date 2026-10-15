@@ -800,7 +800,7 @@ fn origin_and_header_fields_survive() {
 
 // ---------------------------------------------------------------- solo preset
 
-/// `Match::new`'s solo preset path (a character already on every seat, so the
+/// `Match::new`'s solo preset path (a persona already on every seat, so the
 /// timed ban / pick is skipped and the match opens in the deck phase) is the
 /// path the solo session start takes. It runs inside `Match::new`, so it is part
 /// of `Init::Seed` and must reproduce identically on the replayer -- including

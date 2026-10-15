@@ -4,7 +4,7 @@
 //! uses, so the web client has one set of types for online and solo play.
 //!
 //! * `load_data` -- the contents of `/data/*` (`DATA_FILES`, no roster)
-//! * `roster_json` -- cards / characters / bands from the built ruleset
+//! * `roster_json` -- cards / personas / groups from the built ruleset
 //! * deck rules and saved deck slots (`deck_*`)
 //! * profile and progression (`profile_*`), persisted by the client
 //! * [`SoloMatch`] -- the full match engine running locally
@@ -181,8 +181,8 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
 }
 
 /// The ruleset roster in the three legacy data-file shapes, one object:
-/// `{"cards":[...],"characters":[...],"bands":[...]}` with camelCase rows
-/// (the old `cards.json` / `characters.json` / `bands.json` shapes minus the
+/// `{"cards":[...],"personas":[...],"groups":[...]}` with camelCase rows
+/// (the old `cards.json` / `personas.json` / `groups.json` shapes minus the
 /// display-only overlay fields, which live in `skill_simple.json`).
 ///
 /// Empty arrays when no ruleset is built -- does not throw. Call
@@ -261,7 +261,7 @@ pub fn data_files() -> String {
 
 // ------------------------------------------------------------------ decks
 
-/// Card ids `character` may put in a deck, in display order.
+/// Card ids `persona` may put in a deck, in display order.
 #[wasm_bindgen]
 pub fn deck_pool(character_name: &str) -> Result<String, JsError> {
     let d = data()?;
@@ -278,11 +278,11 @@ pub fn deck_preset(character_name: &str) -> Result<String, JsError> {
 }
 
 /// The deck 托管 / a standard bot should submit at this table: the deck book's
-/// entry for the public key when it has one, else the character's preset
+/// entry for the public key when it has one, else the persona's preset
 /// (`docs/BOT.md` §3.7). Pure -- no RNG.
 ///
 /// * `seat` -- own seat (turn order index).
-/// * `opponents_json` -- the other seats' characters in seat order
+/// * `opponents_json` -- the other seats' personas in seat order
 ///   (`["...", ...]`). Never an opponent's deck.
 ///
 /// The book must match the running ruleset's hash (the one `ruleset_build`
@@ -321,10 +321,10 @@ pub fn deck_clean(character_name: &str, ids_json: &str) -> Result<String, JsErro
 /// [`deck_suggest`]. Pure -- no RNG.
 ///
 /// * `seat` -- own seat (turn order index). The strategy key is public and
-///   seat-less (`(character, opponents' bands)` → `(character)` → `(band)`);
+///   seat-less (`(persona, opponents' groups)` → `(persona)` → `(group)`);
 ///   the argument mirrors [`deck_suggest`]'s shape.
-/// * `opponents_json` -- the other seats' characters in seat order. Only
-///   their bands enter the key.
+/// * `opponents_json` -- the other seats' personas in seat order. Only
+///   their groups enter the key.
 ///
 /// The book must match the running ruleset's hash, the `standard` policy and
 /// this build's `params_version`; otherwise the whole book is ignored and
@@ -348,7 +348,7 @@ pub fn strategy_for(
     )))
 }
 
-/// Why `character` may not use `card` (a `Msg` as JSON), or `undefined`.
+/// Why `persona` may not use `card` (a `Msg` as JSON), or `undefined`.
 #[wasm_bindgen]
 pub fn deck_why_not(character_name: &str, card: &str) -> Result<Option<String>, JsError> {
     let d = data()?;
@@ -389,7 +389,7 @@ pub fn deck_save(
     Ok(json(&p))
 }
 
-/// Saved custom decks of `character`, in display order:
+/// Saved custom decks of `persona`, in display order:
 /// `[{"id": <int>, "name": <str>, "cards": [id, ...]}, ...]`. `name` is the
 /// user-editable label ("" = auto, shown as 「卡组 n」/"Deck n"); `cards` are
 /// cleaned to what is usable today. Id 0 (the preset) is not included.
@@ -842,7 +842,7 @@ impl SoloMatch {
         self.m.inner_mut().tick(dt);
     }
 
-    /// Skip ban/pick/deck with random characters and preset decks.
+    /// Skip ban/pick/deck with random personas and preset decks.
     pub fn quick_start(&mut self) {
         self.m.quick_start();
     }

@@ -142,7 +142,7 @@ fn cards_json(cards: &[CardData]) -> String {
     out
 }
 
-/// `characters.json` row order: name, display, [variantOf], [variantTag], group,
+/// `personas.json` row order: name, display, [variantOf], [variantTag], group,
 /// color, skill, text, cnId, [art], [costume], exclusiveCards, [preset].
 fn characters_json(chars: &[PersonaData]) -> String {
     let mut out = String::from("{\n    \"personas\": [\n");
@@ -184,7 +184,7 @@ fn characters_json(chars: &[PersonaData]) -> String {
     out
 }
 
-/// `bands.json` row order: name, shortName, [sharesExclusives], [bootArt],
+/// `groups.json` row order: name, shortName, [sharesExclusives], [bootArt],
 /// color, skill, text, logo.
 fn bands_json(groups: &[GroupData]) -> String {
     let mut out = String::from("{\n    \"groups\": [\n");

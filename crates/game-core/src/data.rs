@@ -10,8 +10,8 @@
 //! `game-core` never touches the filesystem: [`GameData::load`] takes a reader so the
 //! server (fs) and the browser (fetch) can both supply the files.
 //!
-//! **Roster (ABI v63).** `cards` / `characters` / `groups` no longer come from
-//! `data/{cards,characters,groups}.json`. They are authored beside the rule code
+//! **Roster (ABI v63).** `cards` / `personas` / `groups` no longer come from
+//! `data/{cards,personas,groups}.json`. They are authored beside the rule code
 //! and handed over as [`Roster`] (ruleset `ruleset_metadata` ->
 //! [`crate::data::Roster`]). [`DATA_FILES`] covers only the remaining tables
 //! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
@@ -125,7 +125,7 @@ impl CardData {
         }
     }
 
-    /// Usable by every band (the data's general band, [`GENERAL_GROUP`]).
+    /// Usable by every group (the data's general group, [`GENERAL_GROUP`]).
     pub fn is_universal(&self) -> bool {
         self.group == GENERAL_GROUP
     }
@@ -136,7 +136,7 @@ impl CardData {
     }
 }
 
-/// One playable persona of the roster (was `characters.json`).
+/// One playable persona of the roster (was `personas.json`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PersonaData {
@@ -169,7 +169,7 @@ impl PersonaData {
     }
 }
 
-/// One band of the roster (was `groups.json`; skill text + branding).
+/// One group of the roster (was `groups.json`; skill text + branding).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GroupData {
@@ -179,15 +179,15 @@ pub struct GroupData {
     pub skill: String,
     pub text: String,
     pub logo: String,
-    /// Band-skill trait: members may carry each other's exclusive cards in a
+    /// Group-skill trait: members may carry each other's exclusive cards in a
     /// starting deck. Deck-legal only -- the in-match play gate is the
-    /// band-skill card's `ExclusiveUse` entry (or the generic own/base rule).
+    /// group-skill card's `ExclusiveUse` entry (or the generic own/base rule).
     pub shares_exclusives: bool,
-    /// Boot-screen art id for a home persona of this band; empty = default.
+    /// Boot-screen art id for a home persona of this group; empty = default.
     pub boot_art: String,
 }
 
-/// The roster half of [`GameData`] -- cards / characters / groups -- handed over
+/// The roster half of [`GameData`] -- cards / personas / groups -- handed over
 /// by the ruleset host (ABI v63 `ruleset_metadata`, converted in `game-rules`).
 /// `game-core` stays free of the card crates; this is the plain struct of
 /// vectors it already iterates in roster order (the Rust ordinal table).
@@ -201,7 +201,7 @@ pub struct Roster {
 impl Roster {
     /// Parse the generated test fixture (`crates/game-core/tests/fixtures/
     /// roster.json`, written by `cargo run -p rules-native --example
-    /// dump_roster -- --fixture`). One JSON object `{cards, characters, groups}`
+    /// dump_roster -- --fixture`). One JSON object `{cards, personas, groups}`
     /// in the same camelCase row shapes the roster metadata carries. Tests of
     /// crates that have no ruleset (game-core / game-rules / bot-core / server)
     /// load this instead of depending on the card crates.
@@ -257,11 +257,11 @@ pub struct EventData {
     pub cell: String,
 }
 
-/// `band` value of the cards every persona may take. A roster band key (the
+/// `group` value of the cards every persona may take. A roster group key (the
 /// data set is Chinese), not display text.
 pub const GENERAL_GROUP: &str = "通用";
 
-/// Character → school tile-name map.
+/// Persona → school tile-name map.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SchoolsData {
@@ -363,7 +363,7 @@ struct EventFile {
 /// Bump when the rules book changes; drives the "NEW" badge (`rules_version`).
 pub const RULES_VERSION: i32 = 1;
 
-/// The rule id of a persona or band skill (the crates under `rules/skills`).
+/// The rule id of a persona or group skill (the crates under `rules/skills`).
 ///
 /// The id **names its owner**, which is the binding: a player's two skills
 /// follow mechanically from the persona they picked, and a skill can be
@@ -413,7 +413,7 @@ pub struct GameData {
     card_by_id: HashMap<String, usize>,
 }
 
-/// Data files, as named in `web/data/`. The roster (`cards` / `characters` /
+/// Data files, as named in `web/data/`. The roster (`cards` / `personas` /
 /// `groups`) is **not** here: it comes from the ruleset (ABI v63
 /// `ruleset_metadata`) or, in tests, from the generated fixture
 /// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
@@ -428,7 +428,7 @@ pub const DATA_FILES: [&str; 8] = [
     "match_rules.json",
     "rules.txt",
     // Hand-written simplified skill bodies (and the card `counterReason`
-    // overlay), for the client's skill-text setting and the [反击] prompt
+    // overlay), for the client's skill-text setting and the counteraction prompt
     // reason. Display-only: the engine reads the full skill text from the
     // roster.
     "skill_simple.json",
@@ -439,9 +439,9 @@ fn parse<T: serde::de::DeserializeOwned>(file: &str, text: &str) -> Result<T, St
 }
 
 impl GameData {
-    /// The rule ids of `persona`'s own skill and of its band's skill, in that
+    /// The rule ids of `persona`'s own skill and of its group's skill, in that
     /// order. This is the binding: see [`skill_id`]. Empty entries (a persona
-    /// or band with no skill) are skipped, so the result is 0..=2 ids.
+    /// or group with no skill) are skipped, so the result is 0..=2 ids.
     pub fn skill_rules_of(&self, persona: &str) -> Vec<String> {
         let Some(c) = self.personas.iter().find(|c| c.name == persona) else {
             return Vec::new();
@@ -458,10 +458,10 @@ impl GameData {
         out
     }
 
-    /// Is `id` a **band** skill rule (`skill:<band>:<skill>` for some band in
+    /// Is `id` a **group** skill rule (`skill:<group>:<skill>` for some group in
     /// roster groups), as against a persona skill (`skill:<persona>:<skill>`)?
     /// This is what stamps `FieldCard::group_skill` at placement, and through it
-    /// what 「乐队卡 / 团卡」 crystal reads and writes land on.
+    /// what the group-skill named counter reads and writes land on.
     pub fn is_group_skill(&self, id: &str) -> bool {
         self.groups
             .iter()
@@ -522,7 +522,7 @@ impl GameData {
         self.card_by_id.get(id).map(|&i| &self.cards[i])
     }
 
-    /// Character by `name`, first match.
+    /// Persona by `name`, first match.
     pub fn persona(&self, name: &str) -> Option<&PersonaData> {
         self.personas.iter().find(|c| c.name == name)
     }
@@ -536,13 +536,13 @@ impl GameData {
             .unwrap_or(name)
     }
 
-    /// Whether `c`'s band lets its members carry each other's exclusive cards
+    /// Whether `c`'s group lets its members carry each other's exclusive cards
     /// in a starting deck (deck-building only; see [`crate::deck`]).
     pub fn group_shares_exclusives(&self, c: &PersonaData) -> bool {
         self.group(&c.group).is_some_and(|b| b.shares_exclusives)
     }
 
-    /// Band by `name`, first match.
+    /// Group by `name`, first match.
     pub fn group(&self, name: &str) -> Option<&GroupData> {
         self.groups.iter().find(|b| b.name == name)
     }

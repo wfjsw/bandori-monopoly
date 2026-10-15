@@ -81,11 +81,11 @@ fn lookup_falls_back_in_order() {
 
     // 1. exact: (me, seat, opponents in seat order)
     assert_eq!(lookup(1, &["花园多惠", "牛込里美"]), Some(exact));
-    // 2. same seat and band multiset, opponents swapped out of seat order.
+    // 2. same seat and group multiset, opponents swapped out of seat order.
     assert_eq!(lookup(1, &["牛込里美", "花园多惠"]), Some(seat_groups));
-    // 3. same band multiset, other seat.
+    // 3. same group multiset, other seat.
     assert_eq!(lookup(0, &["牛込里美", "花园多惠"]), Some(bands));
-    // 4. other bands entirely.
+    // 4. other groups entirely.
     assert_eq!(lookup(1, &["美竹兰", "青叶摩卡"]), Some(me_only.clone()));
     // Unknown table shape still stops at level 4 before the preset.
     assert_eq!(lookup(3, &["美竹兰", "青叶摩卡"]), Some(me_only));
@@ -242,7 +242,7 @@ fn the_shipped_book_is_empty_and_inert() {
 
 // ---------------------------------------------------------------- engine
 
-/// Solo with preset characters: skips ban / pick and opens the deck phase.
+/// Solo with preset personas: skips ban / pick and opens the deck phase.
 /// Seat 1 is human (so the deck phase holds); the rest are standard bots.
 fn solo_bots(d: Arc<GameData>, seed: u64) -> Match {
     let names = ["户山香澄", "花园多惠", "美竹兰"];
@@ -260,7 +260,7 @@ fn solo_bots(d: Arc<GameData>, seed: u64) -> Match {
     Match::new(d, Arc::new(StubRules), &members, seed, MatchMode::Solo, ScoreWeights::default())
 }
 
-/// The bot seats of `solo_bots`, `(member, character)`.
+/// The bot seats of `solo_bots`, `(member, persona)`.
 fn bot_seats(m: &Match) -> Vec<(i32, String)> {
     m.state()
         .players

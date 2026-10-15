@@ -17,7 +17,7 @@ use crate::MatchMode;
 pub const SAVE_VERSION: i32 = 4;
 /// Match history entries kept on the profile.
 pub const HISTORY_CAP: usize = 30;
-/// Deck name cap in **characters** (not bytes), so CJK names count as one each.
+/// Deck name cap in **personas** (not bytes), so CJK names count as one each.
 pub const DECK_NAME_MAX: usize = 24;
 
 /// Trim and cap a user-entered deck name. Empty means "auto" -- the UI shows
@@ -254,7 +254,7 @@ impl PlayerProfile {
         true
     }
 
-    /// Refill fire once per day. Returns whether it refilled.
+    /// Refill charge once per day. Returns whether it refilled.
     pub fn refresh_daily(&mut self, today: &str) -> bool {
         if self.charge_date == today {
             return false;
@@ -298,7 +298,7 @@ impl PlayerProfile {
         }
     }
 
-    /// Spend fire, grant EXP/stars/coins, update
+    /// Spend charge, grant EXP/stars/coins, update
     /// counters and stats, and prepend to history (capped at 30). `replay_id`
     /// is the local replay-store id of this match's record, if the client kept
     /// one (empty otherwise).

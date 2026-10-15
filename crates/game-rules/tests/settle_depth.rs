@@ -1,6 +1,6 @@
 //! STACK-01: nested `card_settle_at` must not recurse the Rust stack.
 //!
-//! A placed `TEST:settleNest` re-settles its tile while its crystal counter
+//! A placed `TEST:settleNest` re-settles its tile while its named counter counter
 //! lasts -- a deep settle chain of depth N. The engine's work stack has to
 //! run that chain on a **small** thread (512 KiB): at a depth that overflows
 //! master's synchronous nest, this test must still complete.

@@ -3,7 +3,7 @@
 //! | Method | Path | Body | Response |
 //! |---|---|---|---|
 //! | GET  | `/api/health` | | `{game, version, rooms}` |
-//! | POST | `/api/session` | `{player, character?, cnId?}` | `{token, player}` + cookie |
+//! | POST | `/api/session` | `{player, persona?, cnId?}` | `{token, player}` + cookie |
 //! | GET  | `/api/session` | | `{token, player, room, member}` |
 //! | GET  | `/api/rooms` | | `RoomInfo[]` |
 //! | POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?, clock?}` | `{room, you}` |

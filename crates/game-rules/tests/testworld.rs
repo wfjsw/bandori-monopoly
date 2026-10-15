@@ -290,10 +290,10 @@ impl CardWorld for TestWorld {
     fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
-    fn group_pool(&self, _: i32) -> i32 {
+    fn group_pool(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn add_group_pool(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_group_pool(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
     fn charge(&self, _: i32) -> i32 {
@@ -322,13 +322,13 @@ impl CardWorld for TestWorld {
     fn set_trigger_value(&mut self, value: i32) {
         self.trigger.value = value;
     }
-    fn group_pool(&self) -> i32 {
+    fn self_pool(&self, _: &str) -> i32 {
         0
     }
-    fn set_crystals(&mut self, _: i32) -> i32 {
+    fn set_self_pool(&mut self, _: &str, _: i32) -> i32 {
         0
     }
-    fn add_crystals(&mut self, _: i32, _: i32) -> i32 {
+    fn add_self_pool(&mut self, _: &str, _: i32, _: i32) -> i32 {
         0
     }
     fn take_card(&mut self, _: i32, _: game_rules::CardPile, _: &str) -> bool {

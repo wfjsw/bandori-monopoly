@@ -17,7 +17,7 @@ pub use rules_cond::{
 };
 use rules_cond::view::{CondView, TileKind};
 
-/// Name-stable hash for string identities (character / band / card id).
+/// Name-stable hash for string identities (persona / group / card id).
 /// Re-exported from [`rules_cond::id_of`] -- one hash, one spelling.
 pub use rules_cond::id_of;
 
@@ -686,11 +686,11 @@ pub trait SnapSrc {
     fn state_entries(&self, player_id: i32) -> Vec<(String, i32)>;
     fn persona_skill_id(&self, player_id: i32) -> Option<String>;
     fn group_skill_id(&self, player_id: i32) -> Option<String>;
-    /// The player's character **name** -- the spelling `ctx::persona_is`
+    /// The player's persona **name** -- the spelling `ctx::persona_is`
     /// matches. `persona_is(p, "名")` compares `id_of(name)` to this.
     fn character_name(&self, player_id: i32) -> Option<String>;
-    /// The player's band **name** -- the spelling `ctx::in_group` matches.
-    /// `group_is(p, "Band")` compares `id_of(name)` to this.
+    /// The player's group **name** -- the spelling `ctx::in_group` matches.
+    /// `group_is(p, "Group")` compares `id_of(name)` to this.
     fn band_name(&self, player_id: i32) -> Option<String>;
     /// Named token counter (`ctx::tok`); 0 when absent.
     fn tok(&self, player_id: i32, name: &str) -> i32;
@@ -1521,7 +1521,7 @@ fn class_names() -> &'static [String] {
     })
 }
 
-/// Every board name -> id, so `tile_named('Bandori车站')` / `tile_named('CiRCLE')`
+/// Every board name -> id, so `tile_named('the game车站')` / `tile_named('the start square')`
 /// resolve to the same id the guest's `ctx::tile_named` returns. Unknown names
 /// stay out of the map; the CEL `tile_named` answers `-1` for those (matching
 /// the guest), never tile 0.

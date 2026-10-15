@@ -173,7 +173,7 @@ fn wait_ops(m: &mut Match, me: i32) {
     panic!("never reached OPS for member {me}");
 }
 
-/// The `skill:*` rules `bind_skills` places for the seat's character.
+/// The `skill:*` rules `bind_skills` places for the seat's persona.
 fn skill_ids(m: &Match, me: i32) -> Vec<String> {
     let st = m.state();
     let seat = st.player_of(me) as usize;
@@ -192,7 +192,7 @@ fn skills_are_empty_before_the_play_phase() {
 
 #[test]
 fn skills_list_only_activatable_rules_during_ops() {
-    // Place the character + band skills, mark only the first as `On::Play`.
+    // Place the persona + group skills, mark only the first as `On::Play`.
     let m = solo_with(Arc::new(TestRules {
         play: vec![],
         refuse: None,

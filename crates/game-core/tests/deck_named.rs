@@ -1,4 +1,4 @@
-//! Named decks: arbitrary count per character, rename / duplicate / delete /
+//! Named decks: arbitrary count per persona, rename / duplicate / delete /
 //! reorder, and lossless migration of the old fixed-slot profile JSON.
 
 use game_core::deck;
@@ -59,7 +59,7 @@ fn create_duplicate_rename_delete_and_reorder() {
     let order: Vec<i32> = deck::list(&p, c).iter().map(|x| x.slot).collect();
     assert_eq!(order, vec![1, 2, 3, 4, 5]);
 
-    // Cap at DECKS_MAX per character (other characters unaffected).
+    // Cap at DECKS_MAX per persona (other personas unaffected).
     while deck::list(&p, c).len() < deck::DECKS_MAX {
         assert!(deck::create(&d, &mut p, c, "", &Vec::<String>::new()).is_some());
     }

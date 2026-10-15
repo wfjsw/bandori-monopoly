@@ -1,7 +1,7 @@
 //! Strategy book format, back-off lookup and plumbing (`docs/BOT.md` §3.8 S1).
 //!
 //! The gate for S1 is byte-identical behaviour with the empty book (bar the
-//! [反击] default, which user ruling 2026-10-08 moved from "never declare" to
+//! counteraction default, which user ruling 2026-10-08 moved from "never declare" to
 //! `DEFAULT_COUNTERACT_PROPENSITY_MILLI` -- "bots must be able to counteract");
 //! the tests below pin the lookup contract, the stale-book fallback, the
 //! partial-params merge, and that a live parameter change is actually read by
@@ -86,13 +86,13 @@ fn defaults_equal_todays_constants() {
     assert_eq!(p.bid_frac_milli, 750);
     assert_eq!(p.mortgage_house_key_milli, 1_000);
     assert_eq!(p.mortgage_price_key_milli, 1_000);
-    // Sparse maps are empty = neutral / the [反击] base rate (see below).
+    // Sparse maps are empty = neutral / the counteraction base rate (see below).
     assert!(p.cards.is_empty());
     assert!(p.skills.is_empty());
     assert!(p.counteract.is_empty());
     assert_eq!(p.card("anything"), CardPlayParams::default());
     assert_eq!(p.skill("anything"), SkillParams::default());
-    // Ruling 2026-10-08 ("bots must be able to counteract"): the [反击] default
+    // Ruling 2026-10-08 ("bots must be able to counteract"): the counteraction default
     // is the one default that is NOT one of the old constants -- it moved from
     // "never declare" to `DEFAULT_COUNTERACT_PROPENSITY_MILLI`.
     assert_eq!(
@@ -163,13 +163,13 @@ fn lookup_backs_off_in_order() {
         b.lookup(&d, c, &opp, None, Some("stub"))
     };
 
-    // 1. (me, opponents' bands multiset)
+    // 1. (me, opponents' groups multiset)
     assert_eq!(lookup("户山香澄", &["美竹兰"]), Some(persona_groups));
-    // 2. same character, other bands.
+    // 2. same persona, other groups.
     assert_eq!(lookup("户山香澄", &["花园多惠"]), Some(me_only));
-    // 3. band level: another Poppin' Party character the `me` levels do not name.
+    // 3. group level: another Poppin' Party persona the `me` levels do not name.
     assert_eq!(lookup("花园多惠", &["美竹兰"]), Some(band));
-    // 4. defaults: an Afterglow character the `me` levels do not name.
+    // 4. defaults: an Afterglow persona the `me` levels do not name.
     assert_eq!(lookup("美竹兰", &["花园多惠"]), None);
     // Resolve with nothing matching at all falls to the defaults.
     let empty = StrategyBook::default();
@@ -292,8 +292,8 @@ fn parses_the_documented_shape_and_merges_partial_params() {
     assert_eq!(p.play_card_chance_milli, 250);
     assert_eq!(p.buy_reserve, BUY_RESERVE);
 
-    // A deck-tagged entry only applies to that deck. The band level names
-    // Poppin' Party -- use a character the `me` levels do not.
+    // A deck-tagged entry only applies to that deck. The group level names
+    // Poppin' Party -- use a persona the `me` levels do not.
     let band_c = d.persona("花园多惠").unwrap();
     let any: Vec<String> = vec![];
     assert!(b
@@ -387,7 +387,7 @@ fn a_live_parameter_change_moves_the_standard_bot() {
     assert!(baseline > 0, "the default policy must buy something");
 
     // Same seeds, buy reserve (all three phases) so high no purchase can
-    // leave it. Cover every character `quick_start` might deal out.
+    // leave it. Cover every persona `quick_start` might deal out.
     let mut book = StrategyBook::default();
     book.version = STRATEGY_BOOK_VERSION;
     book.ruleset_sha256 = "stub".into();
@@ -413,12 +413,12 @@ fn a_live_parameter_change_moves_the_standard_bot() {
     assert_eq!(blocked, 0, "a 1 000 000 buy reserve must stop every purchase");
 }
 
-/// `strategy::for_seat` resolves from public state alone (own character + the
-/// other seats' characters) -- the key the book is allowed to see.
+/// `strategy::for_seat` resolves from public state alone (own persona + the
+/// other seats' personas) -- the key the book is allowed to see.
 #[test]
 fn for_seat_reads_the_book_from_public_state() {
     let mut d = data();
-    // One `me` entry per character, so whatever `quick_start` deals out hits.
+    // One `me` entry per persona, so whatever `quick_start` deals out hits.
     let mut b = StrategyBook::default();
     b.version = STRATEGY_BOOK_VERSION;
     b.ruleset_sha256 = "stub".into();

@@ -1,5 +1,5 @@
 //! The bot **strategy book** (`docs/BOT.md` §3.8): a flat, versioned parameter
-//! set per persona / band, derived offline and looked up here.
+//! set per persona / group, derived offline and looked up here.
 //!
 //! Every tunable constant the standard heuristic uses lives in
 //! [`StrategyParams`], with a default equal to today's constant in
@@ -10,7 +10,7 @@
 //!
 //! * **Key = public information only**, with back-off, first hit wins
 //!   ([`StrategyBook::lookup`]): `(persona, opponents' groups multiset)` →
-//!   `(persona)` → `(band)` → [`StrategyParams::default`].
+//!   `(persona)` → `(group)` → [`StrategyParams::default`].
 //! * **Validity.** The book records the ruleset hash (the same string
 //!   [`crate::record::EngineStamp::ruleset_sha256`] carries), the policy and
 //!   [`PARAMS_VERSION`]. A mismatch at lookup ignores the whole book (once, on
@@ -56,12 +56,12 @@ pub const STRATEGY_BOOK_FILE: &str = "strategy_book.json";
 /// behaviour.
 pub const NEUTRAL_WEIGHT: i32 = 1_000;
 
-/// Default [反击] declare propensity, in milli (`600` = 60 % per offered card
+/// Default counteraction declare propensity, in milli (`600` = 60 % per offered card
 /// per offer; see [`StrategyParams::counteract_propensity`]).
 ///
 /// User ruling 2026-10-08: *"bots must be able to counteract"* -- the old
 /// default was `0` (never declare), which meant a standard bot held every
-/// [反击] card forever. The rules expose no per-card counteract usefulness
+/// counteraction card forever. The rules expose no per-card counteract usefulness
 /// value (a card's play-window gate is not a usefulness score, and `CardDef`
 /// has no host-side usefulness hook yet), so the policy is this propensity, drawn from the
 /// match RNG exactly like chaos's `CHAOS_COUNTER_CHANCE`. A card the book
@@ -80,7 +80,7 @@ pub struct CardPlayParams {
     /// equal, exactly today's uniform pick); `0` = never play this card from
     /// the heuristic.
     pub play_weight_milli: i32,
-    /// Hold this card back from the 运营 play window (keep it for a [反击]
+    /// Hold this card back from the 运营 play window (keep it for a counteraction
     /// window). Default false -- today's policy holds nothing back.
     pub hold_for_counteract: bool,
     /// Earliest round the heuristic will play it (`0` = any).
@@ -118,7 +118,7 @@ pub struct SkillParams {
     /// (`0` = no threshold). Meaning is the tuner's; the heuristic only
     /// enforces the numeric floor.
     pub min_charge: i32,
-    /// Press only with at least this many crystals (`0` = none).
+    /// Press only with at least this many named counters (`0` = none).
     pub min_crystals: i32,
     /// Markers to keep unspent (`0` = none).
     pub keep_markers: i32,
@@ -139,7 +139,7 @@ impl Default for SkillParams {
     }
 }
 
-/// Per-card [反击] response knobs (sparse map; absent = the seat's
+/// Per-card counteraction response knobs (sparse map; absent = the seat's
 /// [`StrategyParams::counteract_propensity_milli`]). An entry is the card's
 /// own spec -- it does **not** inherit the base rate, so a card the book lists
 /// and wants held back writes `propensity_milli: 0` explicitly.
@@ -174,7 +174,7 @@ impl Default for CounterParams {
 /// Flat and versioned; integers / milli-fractions only (no floats in the
 /// file). **Every default equals today's constant** in `engine/ai.rs` /
 /// `bot-core` / `autopilot.ts`, so an empty book is byte-identical to the
-/// pre-book behaviour -- with one ruling exception: the [反击] default moved
+/// pre-book behaviour -- with one ruling exception: the counteraction default moved
 /// from "never declare" to [`DEFAULT_COUNTERACT_PROPENSITY_MILLI`] (user
 /// 2026-10-08, "bots must be able to counteract"; `defaults_equal_todays_constants`
 /// pins the rest). Sparse maps (`cards`, `skills`, `counteract`) are
@@ -216,7 +216,7 @@ pub struct StrategyParams {
     pub target_houses: Vec<i32>,
 
     // -- auctions / force-buy ------------------------------------------------
-    /// Cash left after 「可选择[支付]…两倍…强行购买」 (`FORCE_BUY_RESERVE`).
+    /// Cash left after 「可选择pay…两倍…强行购买」 (`FORCE_BUY_RESERVE`).
     pub force_buy_reserve: i32,
     /// Auction ceiling's low end as a fraction of the quoted worth, milli
     /// (`0.6` today).
@@ -253,11 +253,11 @@ pub struct StrategyParams {
     pub skills: BTreeMap<String, SkillParams>,
 
     // -- counteraction -------------------------------------------------------
-    /// Base [反击] declare propensity for a card with **no** `counteract[id]`
+    /// Base counteraction declare propensity for a card with **no** `counteract[id]`
     /// entry, 0..=1000 ([`DEFAULT_COUNTERACT_PROPENSITY_MILLI`] = 600). Drawn
     /// per offer from the match RNG, like chaos's `CHAOS_COUNTER_CHANCE`.
     pub counteract_propensity_milli: i32,
-    /// Per-card [反击] response propensity, sparse. A listed card is its own
+    /// Per-card counteraction response propensity, sparse. A listed card is its own
     /// spec (0 = hold back); an unlisted card takes
     /// [`Self::counteract_propensity_milli`].
     pub counteract: BTreeMap<String, CounterParams>,
@@ -296,9 +296,9 @@ pub struct StrategyParams {
     pub prior_bid_floor_milli: i32,
     /// Ceiling of the distance-shaped bid prior (`0.9`).
     pub prior_bid_ceil_milli: i32,
-    /// Prior of a [反击] skip when it is the heuristic default (`0.7`).
+    /// Prior of a counteraction skip when it is the heuristic default (`0.7`).
     pub prior_counter_skip_milli: i32,
-    /// Prior of a [反击] declaration the heuristic did not pick (`0.5`).
+    /// Prior of a counteraction declaration the heuristic did not pick (`0.5`).
     pub prior_counter_declare_milli: i32,
 }
 
@@ -459,7 +459,7 @@ impl StrategyParams {
         money - cost >= self.redeem_reserve
     }
 
-    /// 「可选择[支付]…两倍…强行购买」 under these params.
+    /// 「可选择pay…两倍…强行购买」 under these params.
     pub fn wants_force_buy(&self, money: i32, price: i32) -> bool {
         money - price >= self.force_buy_reserve
     }
@@ -499,7 +499,7 @@ impl StrategyParams {
         self.skills.get(id).cloned().unwrap_or_default()
     }
 
-    /// The [反击] propensity for declaring `card`, 0..=1000. `window_kind` is
+    /// The counteraction propensity for declaring `card`, 0..=1000. `window_kind` is
     /// the trigger kind when the caller knows it (the engine's prompt does not
     /// carry it yet, so `None` is the common case and only the base
     /// propensity applies).
@@ -608,18 +608,18 @@ impl StrategyParams {
     pub fn prior_bid_ceil(&self) -> f64 {
         self.prior_bid_ceil_milli as f64 / 1000.0
     }
-    /// Prior of a [反击] skip that is the heuristic default.
+    /// Prior of a counteraction skip that is the heuristic default.
     pub fn prior_counter_skip(&self) -> f64 {
         self.prior_counter_skip_milli as f64 / 1000.0
     }
-    /// Prior of a [反击] declaration the heuristic did not pick.
+    /// Prior of a counteraction declaration the heuristic did not pick.
     pub fn prior_counter_declare(&self) -> f64 {
         self.prior_counter_declare_milli as f64 / 1000.0
     }
 }
 
 /// The parameters a standard seat at `seat` plays under, from public state
-/// only (own persona + the other seats' characters). The running ruleset's
+/// only (own persona + the other seats' personas). The running ruleset's
 /// hash is not in hand here, so only version / policy / `params_version` gate
 /// the book -- see [`for_seat_sha`] for the hash-checked lookup.
 pub fn for_seat(data: &GameData, st: &MatchState, seat: usize) -> StrategyParams {
@@ -664,15 +664,15 @@ pub fn for_seat_sha(
 /// |---|---|
 /// | `persona_groups` | `me`, `opponent_groups` (sorted multiset) |
 /// | `me` | `me` |
-/// | `band` | `band` (the persona's band) |
+/// | `group` | `group` (the persona's group) |
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StrategyEntry {
     /// Own persona (`PersonaData::name`). Used by the two persona levels.
     pub me: String,
-    /// Own band (`PersonaData::band`). Used by the band level.
+    /// Own group (`PersonaData::group`). Used by the group level.
     pub group: String,
-    /// Sorted multiset of the opponents' band names (persona_groups level).
+    /// Sorted multiset of the opponents' group names (persona_groups level).
     pub opponent_groups: Vec<String>,
     /// The deck-book entry the parameters were tuned with (card ids). Empty =
     /// any deck. A non-empty entry whose deck differs from the seat's actual
@@ -700,7 +700,7 @@ pub struct StrategyBook {
     pub persona_groups: Vec<StrategyEntry>,
     /// 2. `(me)`.
     pub me: Vec<StrategyEntry>,
-    /// 3. `(band)`.
+    /// 3. `(group)`.
     pub groups: Vec<StrategyEntry>,
     /// Warned once about being stale / mismatched (never serialized).
     #[serde(skip)]
@@ -789,7 +789,7 @@ impl StrategyBook {
     /// actual deck matches (or is unknown).
     ///
     /// * `me` -- own persona.
-    /// * `opponents` -- the other seats' characters in seat order (only their
+    /// * `opponents` -- the other seats' personas in seat order (only their
     ///   groups are used).
     /// * `deck` -- the seat's deck card ids, when the caller knows them.
     /// * `ruleset_sha256` -- the running ruleset's hash; `None` skips the hash
@@ -819,7 +819,7 @@ impl StrategyBook {
         if let Some(e) = self.me.iter().find(|e| e.me == me.name && hits(e)) {
             return Some(e.params.clone());
         }
-        // 3. (band)
+        // 3. (group)
         if let Some(e) = self.groups.iter().find(|e| e.group == me.group && hits(e)) {
             return Some(e.params.clone());
         }
@@ -855,9 +855,9 @@ fn deck_matches(e: &StrategyEntry, deck: Option<&[String]>) -> bool {
     }
 }
 
-/// Sorted multiset of the opponents' band names (`PersonaData::band`). An
+/// Sorted multiset of the opponents' group names (`PersonaData::group`). An
 /// unknown persona contributes `""` -- deterministic, and it only ever makes
-/// a band-level key miss.
+/// a group-level key miss.
 fn opponent_groups(data: &GameData, opponents: &[String]) -> Vec<String> {
     let mut groups: Vec<String> = opponents
         .iter()

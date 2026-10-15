@@ -45,17 +45,17 @@ pub mod bot_cost {
     pub static GUEST_NS: AtomicU64 = AtomicU64::new(0);
     /// `World` clones at the card-host boundary (one per store built).
     pub static HOST_WORLD_CLONES: AtomicU64 = AtomicU64::new(0);
-    /// [反击] window opens: `hand_counteractions` rings that passed the
+    /// counteraction window opens: `hand_counteractions` rings that passed the
     /// valid-option-first pre-scan (at least one candidate survived the kind
     /// bitmask + seat eligibility + condition).
     pub static COUNTERACT_WINDOWS: AtomicU64 = AtomicU64::new(0);
-    /// [反击] windows skipped whole because no candidate could respond.
+    /// counteraction windows skipped whole because no candidate could respond.
     pub static COUNTERACT_WINDOWS_SKIPPED: AtomicU64 = AtomicU64::new(0);
     /// Per-candidate counteraction probes (condition / guard evaluations).
     pub static COUNTERACT_PROBES: AtomicU64 = AtomicU64::new(0);
     /// Probes answered from the per-window processed set (no re-evaluation).
     pub static COUNTERACT_PROBE_MEMO_HITS: AtomicU64 = AtomicU64::new(0);
-    /// [反击] cards actually declared (left a hand for a counter link).
+    /// counteraction cards actually declared (left a hand for a counter link).
     pub static COUNTERACT_DECLARED: AtomicU64 = AtomicU64::new(0);
 }
 
@@ -65,7 +65,7 @@ pub mod bot_cost {
 pub const DEFAULT_FUEL: u64 = 5_000_000;
 
 /// Fuel for the one-off `ruleset_metadata` export, which builds the whole
-/// roster (every card, character and band) and so dwarfs a single effect run.
+/// roster (every card, persona and group) and so dwarfs a single effect run.
 const METADATA_FUEL: u64 = 500_000_000;
 
 /// Maximum `play_card` nesting (card A plays B plays C ...).
@@ -135,7 +135,7 @@ impl CardInfo {
         self.entry(OnKind::Play, None).is_some()
     }
 
-    /// Declares a [反击] at this trigger kind.
+    /// Declares a counteraction at this trigger kind.
     pub fn counteracts_to(&self, trigger: crate::TriggerKind) -> bool {
         self.entry(OnKind::Counteract, Some(trigger)).is_some()
     }
@@ -147,7 +147,7 @@ impl CardInfo {
 
     /// The field-card entries that answer `trigger`, whether declared as a
     /// settlement hook (`On::Hook`) or as a gate (`On::Gate`). Both run
-    /// automatically on a placed card and neither opens a [反击] window; they
+    /// automatically on a placed card and neither opens a counteraction window; they
     /// are separate declarations only so the type can say which is a question.
     /// **All** of them run, in declaration order -- each carries its own
     /// condition / guard and at most one body entry per entry per raise.
@@ -243,9 +243,9 @@ pub struct Prompt {
     pub ai_hint: i32,
 }
 
-/// Engine work a card effect needs mid-run (it may open [反击] windows or
+/// Engine work a card effect needs mid-run (it may open counteraction windows or
 /// prompt), paused so the engine can do it before the effect continues:
-/// trigger (and the [反击] window) before the money moves. The engine answers
+/// trigger (and the counteraction window) before the money moves. The engine answers
 /// with the final amount to move -- `0` means the payment was cancelled.
 // `Move` carries a `MoveCtx`, which has `f64` factors: no `Eq`.
 #[derive(Debug, Clone, PartialEq)]
@@ -279,7 +279,7 @@ pub enum HostRequest {
         src: Option<crate::Msg>,
     },
     /// An abnormal effect about to hit `player_id`: the engine runs the
-    /// abnormal [反击] gate and answers 1 (it goes through) or 0 (blocked).
+    /// abnormal counteraction gate and answers 1 (it goes through) or 0 (blocked).
     Gate { player_id: i32, kind: AbKind },
     /// A card targeting a player (`tile < 0`) or a tile: the engine runs the
     /// targeting pipeline and answers with the player (or tile) actually
@@ -299,7 +299,7 @@ pub enum HostRequest {
         plan: game_core::engine::MoveCtx,
     },
     /// A position write with no settle and no move bookkeeping (a forced
-    /// teleport). The engine runs the abnormal [反击] gate and applies the
+    /// teleport). The engine runs the abnormal counteraction gate and applies the
     /// write to the **live** world, so a move that follows in the same effect
     /// starts at the destination -- and the replay skips the call (an answer
     /// is logged), so it cannot re-teleport over a move that already ran.
@@ -327,7 +327,7 @@ pub enum HostRequest {
     },
     /// v40: the agent offer's chosen branch. `kind` names it:
     /// `0` = buy an unowned tile, `1` = build on an own one, `2` = half-rent
-    /// settle on another player's deed (the agent's 「半价收费的[结算]」).
+    /// settle on another player's deed (the agent's 「half-charge的settle」).
     AgentOffer {
         player_id: i32,
         agent: i32,
@@ -353,30 +353,30 @@ pub enum HostRequest {
     /// effect, filing to the event discard, the reshuffle-when-empty half).
     /// `docs/TILES.md`'s `ctx::draw_event`, what `tile:event`'s body calls.
     DrawEvent { player_id: i32 },
-    /// 「[支付]拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
-    /// pipeline (rent table / RiNG dice / the agent's 「半价收费」 half-flag).
-    /// `docs/TILES.md`'s `ctx::pay_rent`, what `tile:property` / `tile:ring` /
-    /// `tile:agent` bodies call.
+    /// 「pay拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
+    /// pipeline (rent table / the flat deed dice / the agent's 「half-charge」 half-flag).
+    /// `docs/TILES.md`'s `ctx::pay_rent`, what the deed tile rule / the flat-deed tile rule /
+    /// the agent tile rule bodies call.
     PayRent {
         player_id: i32,
         tile: i32,
         half: bool,
     },
-    /// 「可选择[消耗]购买格子地契和建造已有房子的资金总价」 on a
+    /// 「可选择spend购买格子地契和建造已有房子的资金总价」 on a
     /// non-main landing on unowned land. `ctx::offer_buy`.
     OfferBuy { player_id: i32, tile: i32 },
-    /// 「可选择[支付]…资金总价的两倍，从该玩家处强行购买」
+    /// 「可选择pay…资金总价的两倍，从该玩家处强行购买」
     /// on a mortgaged deed. `ctx::offer_force_buy`.
     OfferForceBuy { player_id: i32, tile: i32 },
-    /// 「可选择[消耗]…房屋建筑费进行升级建造」 on a non-main
+    /// 「可选择spend…房屋建筑费进行升级建造」 on a non-main
     /// landing on one's own land. `ctx::offer_build`.
     OfferBuildOne { player_id: i32, tile: i32 },
     /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
-    /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 [反击]
-    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行
+    /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 counteraction
+    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用charge pots进行
     /// 掷骰时」) with the roller, the face and `source`, then answers with the
     /// face any counteraction left on the link. `source` is an
-    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = a fire pot, ...).
+    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = a charge pot, ...).
     Roll {
         player_id: i32,
         count: i32,
@@ -391,7 +391,7 @@ pub enum HostRequest {
     RaiseBought { player_id: i32, tile: i32 },
     /// Raise a trigger point from a guest body (`ctx::raise`). `kind` is a
     /// [`TriggerKind`] as `i32` (mapped through `TriggerKind::as_str` for the
-    /// wire name, e.g. `CircleAffected` → `"circleAffected"`); `value` is the
+    /// wire name, e.g. `PassReward` → `"the pass-reward trigger"`); `value` is the
     /// trigger's `value`. Answers 1 when the link settled, 0 when a
     /// counteraction cancelled it.
     Raise {
@@ -419,8 +419,8 @@ pub enum HostRequest {
     /// balance directly (`World::gain_money` / a raw decrement) with a
     /// `log.gain` / `log.lose` line, **without** the `HostRequest::Pay` money
     /// pipeline: no `payAdd` / `payMul` / `payChoose` / `payAt`, no `effect`
-    /// [反击] window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
-    /// amount a [指定] split moves to land as-is (ONE OF US's 「被分享方资金
+    /// counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
+    /// amount a designate split moves to land as-is (ONE OF US's 「被分享方资金
     /// 直接增加」). Answers the amount actually moved (0 = the seat was out).
     AdjustMoney {
         player_id: i32,
@@ -428,15 +428,15 @@ pub enum HostRequest {
         src: Option<crate::Msg>,
     },
     /// Marker spend / gain (user ruling 2026-10-07): the engine raises
-    /// `markerSpend` / `markerGain` -- the marker's own [反击] window --
+    /// `markerSpend` / `markerGain` -- the marker's own counteraction window --
     /// **before** the markers move. Answers `1` (the move goes through) or `0`
     /// (a counteraction cancelled it, nothing moves). Marker *costs* otherwise
     /// keep today's timing: they are spent as the effect resolves and a
     /// whole-effect negation before the body already prevents them.
     Marker {
         player_id: i32,
-        /// Marker name (「火罐」/「奇迹水晶」/「P✽P粉丝」/…). `fire` is the
-        /// 火罐 pot shorthand (`key::CHARGE`).
+        /// Marker name (charge / named counters/「P✽P粉丝」/…). `charge` is the
+        /// charge shorthand (`key::CHARGE`).
         name: String,
         /// Signed delta. Negative = spend (raises `markerSpend`), positive =
         /// gain (raises `markerGain`).
@@ -967,7 +967,7 @@ impl Ruleset {
         &self.inner.cards
     }
 
-    /// Roster metadata (ABI v63): every card / character / band row the
+    /// Roster metadata (ABI v63): every card / persona / group row the
     /// modules declared via `CardDef::meta` / the skill crates' tables.
     /// Sorted by `(kind, ordinal)` -- the data-file order. Convert with
     /// [`crate::roster::roster_from_meta`] to build a `GameData`.
@@ -1033,7 +1033,7 @@ impl Ruleset {
     }
 
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
-    /// a [反击] at `kind`? One shift of the per-card bitmask -- the offer loop
+    /// a counteraction at `kind`? One shift of the per-card bitmask -- the offer loop
     /// never scans the entry table and never builds a `Run` for a card that
     /// cannot answer.
     pub fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
@@ -1376,7 +1376,7 @@ impl Ruleset {
         scope: &rules_cond::WindowScope,
     ) -> Result<bool, RuleError> {
         self.check(card)?;
-        // Only a card that declared a [反击] at this kind is ever asked.
+        // Only a card that declared a counteraction at this kind is ever asked.
         let Some(entry) = self.counteract_entry(card, &world.trigger()) else {
             return Ok(false);
         };
@@ -1414,7 +1414,7 @@ impl Ruleset {
     /// condition for `(card, seat)` against a shared window scope **without**
     /// building a `Run` or instantiating the guard. `Some(entry)` when the
     /// condition admits (or the entry has none) and the residual guard must be
-    /// asked; `None` when the card has no [反击] at this kind or the condition
+    /// asked; `None` when the card has no counteraction at this kind or the condition
     /// rejects it. The offer loop calls this first and only builds the `Run`
     /// for the survivors.
     pub fn counteract_pre_allows<W: CardWorld>(
@@ -1729,7 +1729,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
             .collect()
     }
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
-    /// a [反击] at `kind`? Default scans the entry table; [`Ruleset`] uses the
+    /// a counteraction at `kind`? Default scans the entry table; [`Ruleset`] uses the
     /// per-card kind bitmask.
     fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
         self.cards()
@@ -1737,7 +1737,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
             .is_some_and(|c| c.counteracts_to(kind))
     }
     /// The trigger's card declares recipients (`DESIGNATES`) -- those plays are
-    /// one [反击] timing (CROSS-TESTS C13): their `Effect` counters also answer
+    /// one counteraction timing (CROSS-TESTS C13): their `Effect` counters also answer
     /// the play's own `card` raise.
     fn trigger_designates(&self, t: &crate::Trigger) -> bool {
         t.kind == crate::TriggerKind::Card
@@ -1801,7 +1801,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         )
     }
     /// Condition pre-filter (BOT-RESEARCH.md #1): `Some(entry)` when the
-    /// card's [反击] at this window's kind exists and its condition admits.
+    /// card's counteraction at this window's kind exists and its condition admits.
     /// `None` skips the `Run` / guard entirely. Default builds the candidate
     /// from the world and evaluates the condition; [`Ruleset`] overrides with
     /// the same shape.
@@ -2476,7 +2476,7 @@ fn inspect(
     Ok((module, cards, meta))
 }
 
-/// The abnormal [反击] gate, from inside a card run: on replay the logged
+/// The abnormal counteraction gate, from inside a card run: on replay the logged
 /// answer says whether the effect went through; otherwise the run is paused
 /// with a `Gate` request and the engine adjudicates it.
 ///
@@ -2547,7 +2547,7 @@ pub fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
 // Linkers, cached per (engine, world type). The linker is a pure function of
 // the world type -- every host function is a fixed registration -- but
 // building it walks ~160 `func_wrap` calls and cost ~1.3ms of every ~2ms
-// fire-up, so it must never be per call. Thread-local because the world type
+// linker init, so it must never be per call. Thread-local because the world type
 // is not `Send`-bounded and the cache is pure memoization.
 thread_local! {
     static LINKERS: std::cell::RefCell<HashMap<(usize, std::any::TypeId), Box<dyn std::any::Any>>> =
@@ -2564,7 +2564,7 @@ fn next_inner_id() -> u64 {
 
 // Instantiation points, cached per (ruleset, world type, module). With the
 // linker cached, resolving a module's imports against it is the rest of a
-// fire-up; `Prepared` does that once and every call instantiates from it.
+// linker init; `Prepared` does that once and every call instantiates from it.
 // Same thread-local reasoning as [`LINKERS`].
 thread_local! {
     static PREPARED: std::cell::RefCell<

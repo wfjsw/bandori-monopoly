@@ -257,12 +257,12 @@ fn standard_takes_the_prompt_fallback() {
     assert_eq!(*rules.play_pick.lock().unwrap(), Some(0), "standard ignored the fallback");
 }
 
-/// A [反击] offer is a real decision for standard too -- user ruling 2026-10-08,
+/// A counteraction offer is a real decision for standard too -- user ruling 2026-10-08,
 /// *"bots must be able to counteract"*. The default propensity
 /// [`game_core::strategy::DEFAULT_COUNTERACT_PROPENSITY_MILLI`] (600‰ per
 /// offered card) declares on some offers and passes the rest; both branches
 /// must actually happen. (The old default was 0 = never, which left every
-/// [反击] card dead in a standard bot's hand.)
+/// counteraction card dead in a standard bot's hand.)
 #[test]
 fn standard_counters_at_the_default_propensity() {
     let mut declared = 0usize;

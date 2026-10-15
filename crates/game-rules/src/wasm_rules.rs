@@ -192,7 +192,7 @@ pub struct Run {
     draw_log: Vec<(i32, String)>,
     /// Players whose deck this run shuffled -- `reshuffled` once it commits.
     reshuffle_log: Vec<i32>,
-    /// Fire spent during the run, raised as `fireSpent` once the run commits
+    /// Fire spent during the run, raised as `chargeSpent` once the run commits
     /// (same shape as `paid_log`).
     charge_spent_log: Vec<(i32, i32)>,
     /// Houses added during the run, raised as `houseAdded` once it commits.
@@ -204,11 +204,11 @@ pub struct Run {
     /// instance's own `counter(name)`. One log for every named counter:
     /// `counter::CRYSTALS`, `counter::CP`, and any card-declared name.
     counter_log: Vec<(i32, String, String, i32)>,
-    /// Players this run granted [除外] layers to -- the engine raises `exile`
-    /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
+    /// Players this run granted exile layers to -- the engine raises `exile`
+    /// for each once the run commits (「任意玩家获得exile…时」 handlers).
     exile_log: Vec<i32>,
     /// Which of the card's numbers this play doubles, or -1. Set by the
-    /// doubling band skill, which is not ported yet.
+    /// doubling group skill, which is not ported yet.
     doubled: i32,
     /// Props the running card wants on the lingering instance `ctx::linger`
     /// binds (`docs/PURCHASE.md` P5). A hand play has no field instance for
@@ -218,7 +218,7 @@ pub struct Run {
     /// This run is an already-in-play card applying its effect (a field /
     /// tile / lingering hook, a settle body, a scheduled callback): its log
     /// lines say 「<卡名> 的效果：<what happened>」 rather than standing alone.
-    /// A fresh activation (a hand play, a [反击] declaration, a skill press,
+    /// A fresh activation (a hand play, a counteraction declaration, a skill press,
     /// a drawn event) logs its own action and leaves its outcome lines bare.
     wrap_effect: bool,
     /// Live-stream sink for write-through logs (`ctx::log`, the activation
@@ -303,7 +303,7 @@ pub struct Run {
 
 impl Run {
     /// An already-in-play card's log lines name their source: 「<卡名> 的效果：
-    /// <what happened>」. A fresh activation (hand play, [反击], skill press,
+    /// <what happened>」. A fresh activation (hand play, counteraction, skill press,
     /// drawn event) leaves its outcome lines bare -- the play already said
     /// which card they belong to.
     fn attribute(&self, msg: Msg) -> Msg {
@@ -500,7 +500,7 @@ impl Run {
         self.post_log("text", who, msg, "");
     }
 
-    /// Outcome line for a rulebook-visible state-key write (hand limit, fire
+    /// Outcome line for a rulebook-visible state-key write (hand limit, charge
     /// pot, stay / stun / exile & friends). Scratch keys (`skill.*` latches,
     /// slots, counters the player never sees as a clause firing) stay silent.
     /// A write that lands on the same value is not an effect and logs nothing.
@@ -556,11 +556,11 @@ impl Run {
         );
     }
 
-    /// Record a crystal write on the instance at `uid` so the commit point can
+    /// Record a named counter write on the instance at `uid` so the commit point can
     /// raise `crystalsChanged` (the same shape as `charge_spent_log` /
     /// `house_log`). `was` and `now` bracket the write; only the delta rides
     /// the trigger, so a write that lands on the same count still raises --
-    /// a card placed with no crystals has to hear about its own count. A write
+    /// a card placed with no named counters has to hear about its own count. A write
     /// to an instance that is not on a field raises nothing.
     fn note_counter_changed(&mut self, uid: i32, was: i32, now: i32, name: &str) {
         let Some(f) = self.world.field_by_uid(uid) else {
@@ -571,7 +571,7 @@ impl Run {
         self.counter_log.push((owner, card, name.to_string(), now - was));
     }
 
-    /// Record an **on-card** [CP点] write against the instance at `uid` so the
+    /// Record an **on-card** [tile marks] write against the instance at `uid` so the
     /// commit point can raise `cpChanged` (the same shape as
     /// [`Self::note_crystals`]). `was` and `now` bracket that instance's
     /// `FieldCard::cp`, so a write that lands on the same count still raises
@@ -598,7 +598,7 @@ impl Run {
         } else if dest == 1 {
             self.add_to_hand(who, &card);
         }
-        // Banished (「[移除]」) is just "gone" -- it left above and goes nowhere.
+        // Banished (「banish」) is just "gone" -- it left above and goes nowhere.
         Some(left)
     }
 }
@@ -658,7 +658,7 @@ impl CardWorld for Run {
         // 资金变动 (rulebook 支付阶段 7): a fixed gain/loss is still a money
         // change. Logged as `(-1, player, n)` for money in and `(player, -1, n)`
         // for money out, so the Done handler can raise `payAfter` for both and
-        // open the `paid` [反击] window only for the loss.
+        // open the `paid` counteraction window only for the loss.
         if got > 0 {
             self.paid_log.push((-1, player_id, got));
         } else if got < 0 {
@@ -1126,8 +1126,8 @@ impl CardWorld for Run {
             return c.text.contains(needle);
         }
         // A `skill:<owner>:<skill>` rule id is not in `cards.json`; the skill's
-        // text is the owner's (character's or band's) `text` field
-        // (发送熊饼表情 「所有技能中含有火罐的玩家」).
+        // text is the owner's (persona's or group's) `text` field
+        // (a bear-cookie emote targeting 「every player whose skills mention charge pots」).
         if let Some(rest) = card.strip_prefix("skill:") {
             if let Some((owner, _)) = rest.split_once(':') {
                 if let Some(c) = self.data.persona(owner) {
@@ -1305,10 +1305,10 @@ impl CardWorld for Run {
             .place_mark(me, kind, category, tile, owner, src, count, note, fresh);
         if uid >= 0 && count > 0 {
             let who = self.trigger.player_id;
-            // A [指定] never prints its wire kind (`mark:designate`) -- the
+            // A designate never prints its wire kind (`mark:designate`) -- the
             // player sees the readable outcome 「指定了 {{tile}}」. Other kinds
             // keep the generic placement line (the view resolves their i18n
-            // key; `mark:cp` is labelled from its category).
+            // key; the tile-mark owner is labelled from its category).
             if category == game_core::state::mark_category::DESIGNATE {
                 self.outcome(
                     who,
@@ -1479,7 +1479,7 @@ impl CardWorld for Run {
         self.world.persona_skill_id(player_id)
     }
     fn character_name(&self, player_id: i32) -> Option<String> {
-        // The `persona_is` spelling: `MatchPlayer::character`.
+        // The `persona_is` spelling: `MatchPlayer::persona`.
         self.world
             .st
             .players
@@ -1488,7 +1488,7 @@ impl CardWorld for Run {
             .filter(|c| !c.is_empty())
     }
     fn band_name(&self, player_id: i32) -> Option<String> {
-        // The `in_group` spelling: the character's band from the data table.
+        // The `in_group` spelling: the persona's group from the data table.
         let s = self.world.st.players.get(player_id.max(0) as usize)?;
         self.data
             .personas
@@ -1546,7 +1546,7 @@ impl CardWorld for Run {
     }
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
         if n > 0 {
-            // 「任意玩家获得[除外]…时」 -- the grant is a raise point (embers).
+            // 「任意玩家获得exile…时」 -- the grant is a raise point (embers).
             self.exile_log.push(player_id);
             self.outcome(
                 player_id,
@@ -1648,7 +1648,7 @@ impl CardWorld for Run {
         }
     }
     fn add_house(&mut self, tile: i32, n: i32) -> i32 {
-        // Cap at `rent.Length - 1` (the board's house max; RiNG deeds have no
+        // Cap at `rent.Length - 1` (the board's house max; the flat deed deeds have no
         // rent table and never hold houses).
         let cap = self
             .data
@@ -1819,7 +1819,7 @@ impl CardWorld for Run {
     }
     fn designations(&self, player_id: i32) -> Vec<i32> {
         // A play whose card declares recipients (`DESIGNATES`) names the other
-        // living players of its user (「[指定][使用者]以外的所有玩家」 /
+        // living players of its user (「designate[使用者]以外的所有玩家」 /
         // 「其他玩家[分摊]」). The play's card is the one the trigger names.
         let card = self.trigger.card.as_deref().unwrap_or("");
         let designates = props_of(&self.props, card)
@@ -1857,14 +1857,14 @@ impl CardWorld for Run {
 
     // status extensions -----------------------------------------------------
     fn can_pay(&self, player_id: i32) -> i32 {
-        // The status hosts' pay gate (not out, not [晕眩], not [除外]).
+        // The status hosts' pay gate (not out, not stun, not exile).
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
             return 0;
         };
         (!s.out() && s.status_gates().pay) as i32
     }
     fn cant_move(&self, player_id: i32) -> i32 {
-        // Why the [主要移动] is still unavailable (0 = free).
+        // Why the main move is still unavailable (0 = free).
         if self.world.st.turn != player_id {
             return 1;
         }
@@ -1916,7 +1916,7 @@ impl CardWorld for Run {
             .is_some_and(|s| s.persona == name) as i32
     }
     fn in_group(&self, player_id: i32, name: &str) -> i32 {
-        // The character's band.
+        // The persona's group.
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
             return 0;
         };
@@ -2016,7 +2016,7 @@ impl CardWorld for Run {
             early,
             // The instance asking for the callback, captured now. The
             // identity belongs to the entry rather than being resolved from the
-            // field at fire time (which copy would it be?). `-1` when the card
+            // field at trigger time (which copy would it be?). `-1` when the card
             // is not in play: `On::AtEnd` may run for a card in a hand or pile.
             uid: self.current_uid,
         });
@@ -2439,7 +2439,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// **No.** The 「效果适用」 header at body entry names the card and the
     /// trigger; the body's own lines sit under that header as its results, so
     /// repeating 「<卡名> 的效果：」 on every line is noise. A fresh activation
-    /// (hand play, [反击], skill press, drawn event) already logged its action
+    /// (hand play, counteraction, skill press, drawn event) already logged its action
     /// and likewise leaves its outcome lines bare.
     fn wraps_effect(_call: Call, _card_id: &str) -> bool {
         false
@@ -2529,7 +2529,7 @@ impl<M: CardModules> RulesBridge<M> {
         let label = self.entry_label(card_id, call, entry);
         // Wording:
         // * a skill press has no declaration line of its own -> 「发动」
-        // * a hand play / a [反击] declaration / a drawn event already logged
+        // * a hand play / a counteraction declaration / a drawn event already logged
         //   their action (打出 / 抽到); their flash keeps no line of its own
         //   (the player's action is the why)
         // * everything else that runs as an already-in-play card or a
@@ -2541,7 +2541,7 @@ impl<M: CardModules> RulesBridge<M> {
             card_trigger::HOOK | card_trigger::COUNTER => {
                 let why = if matches!(call, Call::Counteract { .. }) {
                     // Resolution names the answered link's card and what it
-                    // was doing (the declaration already logged 打出[反击]).
+                    // was doing (the declaration already logged 打出counteraction).
                     crate::counteract_reason(
                         trigger.card.as_deref().unwrap_or(""),
                         trigger,
@@ -2623,7 +2623,7 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// As [`drive`], but ask the hook's guard first and skip the body when it
-    /// refuses -- on the same instantiation, so a fired hook costs one fire-up
+    /// refuses -- on the same instantiation, so a fired hook costs one linker init
     /// and one world copy rather than the two a `hook_guard` + `drive` pair
     /// cost. A body that runs announces itself once, on the first pass (a
     /// prompt re-runs the module) -- see [`Self::announce_drive`].
@@ -3087,7 +3087,7 @@ impl<M: CardModules> RulesBridge<M> {
                     let _ = player_id;
                 }
                 // A card-driven payment: the same money pipeline as `money()`
-                // -- PayAdd -> PayMul -> PayChoose -> PayAt -> the `pay` [反击]
+                // -- PayAdd -> PayMul -> PayChoose -> PayAt -> the `pay` counteraction
                 // window -- then replay the effect with the adjudicated amount
                 // (0 = cancelled, and PayAfter runs with 0).
                 Ok(Outcome::NeedHost(req, mut run)) => {
@@ -3102,7 +3102,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // Progress counters stay on the copy: the replay redoes them.
                     cx.adopt_turn_policy(&run.world);
                     // The guest's pending player state (a status clear, e.g.
-                    // 壱雫空 zeroing [晕眩] and then paying) is overlaid for the
+                    // 壱雫空 zeroing stun and then paying) is overlaid for the
                     // routine's duration -- `can_pay` must see it -- and dropped
                     // at the next iteration's top, so the replay re-applies it
                     // rather than double-counting. See `Cx::overlay_guest_state`.
@@ -3290,7 +3290,7 @@ impl<M: CardModules> RulesBridge<M> {
             if card_id.starts_with("event:") {
                 plan.forced = true;
             }
-            // Forced moves go through the abnormal gate so [反击] cards
+            // Forced moves go through the abnormal gate so counteraction cards
             // (安可, 像往常一样) get their window. `AbKind::Forced`
             // covers both other-player and self-applied forced moves.
             let allowed = self.abnormal_gate(
@@ -3393,7 +3393,7 @@ impl<M: CardModules> RulesBridge<M> {
             let did = match kind {
                 1 => cx.card_build(p, t)?,
                 2 => {
-                    // The agent's 「半价收费的[结算]」 on another player's deed.
+                    // The agent's 「half-charge的settle」 on another player's deed.
                     cx.card_pay_rent(p, t, true)?;
                     true
                 }
@@ -3460,8 +3460,8 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(1);
         }
         // A card- or skill-driven dice roll. The engine rolls and raises
-        // the `Roll` chain link -- the 「掷骰结算前」 [反击] window (Y.O.L.O
-        // 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」)
+        // the `Roll` chain link -- the 「掷骰结算前」 counteraction window (Y.O.L.O
+        // 「你的任意掷骰结算前」, 寄于指尖的执念 「when you roll using charge pots」)
         // -- with the roller, the face and the `roll_source` code, then
         // answers with whatever a counteraction left on `value`.
         HostRequest::Roll {
@@ -3495,8 +3495,8 @@ impl<M: CardModules> RulesBridge<M> {
             )?;
             return Ok(did as i32);
         }
-        // Guest-raised trigger points (`ctx::raise`): `circleAffected` from
-        // `tile:circle` and kin. The kind is the wire name
+        // Guest-raised trigger points (`ctx::raise`): the pass-reward trigger from
+        // the start-square tile rule and kin. The kind is the wire name
         // (`TriggerKind::as_str`); the link settles unless a counteraction
         // cancelled it.
         HostRequest::Raise {
@@ -3583,7 +3583,7 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(moved);
         }
         // Marker spend / gain (user ruling 2026-10-07): the marker's own
-        // [反击] window opens **before** the markers move. A counteraction
+        // counteraction window opens **before** the markers move. A counteraction
         // that cancels the link stops the move outright (answer `0`); nothing
         // is spent then. Marker *costs* otherwise keep today's timing --
         // spent as the effect resolves, and a whole-effect negation before
@@ -3636,12 +3636,12 @@ impl<M: CardModules> RulesBridge<M> {
                 return Ok(0);
             }
             // One pipeline: `Cx::money` runs the staged adjustment
-            // points (pre-split `effect` [反击] window -> payTotalAdd /
+            // points (pre-split `effect` counteraction window -> payTotalAdd /
             // payTotalMul / payTotalCancel -> payAdd / payMul /
             // payChoose / payAt -> split -> post-split `pay` /
             // `payAfter` / `paid`) whatever the cause -- print (game ->
             // player), delete (player -> game) or pay-player. The
-            // [反击] window opens here the same way it does for rent, so
+            // counteraction window opens here the same way it does for rent, so
             // any card-caused payment is answerable. The money move
             // happens inside, so the guest's `pay`/`gain` resume is
             // answered with the amount and does not move it again.
@@ -3655,7 +3655,7 @@ impl<M: CardModules> RulesBridge<M> {
             p.by_card = by;
             p.total_stage = total_stage;
             // Q1 / B1 (`PIPELINE-AUDIT` P11a): a card's forced
-            // 「[支付]/[消耗]」 runs the same raise-funds-then-bankrupt
+            // 「pay/spend」 runs the same raise-funds-then-bankrupt
             // path rent does (规则书 L16 「当玩家无法支付某笔支出时（包括
             // 抵押）」 → 折现 + 破产, L76 the mortgage offer). It used to
             // settle as `must = false`, which silently underpaid and
@@ -3694,7 +3694,7 @@ impl<M: CardModules> RulesBridge<M> {
 
 
     /// Ruling 1: the card **flash** is shown only when the activation left the
-    /// owner. Owner-self-only effects (own fire, counters, latches, hand-limit,
+    /// owner. Owner-self-only effects (own charge, counters, latches, hand-limit,
     /// own bank money, own draw/discard) keep the log entry but no animation.
     ///
     /// Scope classification (see the report table):
@@ -3704,7 +3704,7 @@ impl<M: CardModules> RulesBridge<M> {
     ///   deeds, mortgage, ownership, tile props.
     /// * **Move** -- position change, teleport, stop-at, extra steps, plan
     ///   rewrites of a move.
-    /// * **SelfOnly** -- own fire, own counters / latches / skill state, own
+    /// * **SelfOnly** -- own charge, own counters / latches / skill state, own
     ///   hand-limit / start-hand, own prop / slot writes, own bank money,
     ///   own draw / discard.
     ///
@@ -3821,7 +3821,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// Debug guard: a **silent** entry (`CardDef::silent`) is bookkeeping --
     /// declarations, resets, latch clears the player never sees as a clause
     /// firing. It must not produce a visible effect (money, cards, marks,
-    /// houses, fire spend, narration lines); the flag exists to hide the
+    /// houses, charge spend, narration lines); the flag exists to hide the
     /// flash, not the effect. When one does, the flag is lying: record the
     /// violation (tests read [`take_silent_visible`]) and `debug_assert!` for
     /// shipped card ids so debug CI trips on a mis-marked entry. `TEST:*`
@@ -4013,7 +4013,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // 资金变动 (rulebook 支付阶段 7) fires on **any** money
                 // change, merged into `payAfter` per the doc's
                 // 「合并到[支付后]?」 -- a print (game -> player) included.
-                // The `paid` [反击] window opens only when money left a
+                // The `paid` counteraction window opens only when money left a
                 // player, matching 再次牵起手来 / 游击演出.
                 let side = if from >= 0 { from } else { to };
                 self.raise_core(cx, "payAfter", side, |t| {
@@ -4056,7 +4056,7 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = nth;
                 })?;
             }
-            // `crystalsChanged` -- 「此卡上不再拥有[奇迹水晶]时」 (AG:绯红之魂
+            // `crystalsChanged` -- 「when this card no longer has its named counter」 (AG:绯红之魂
             // (3) and kin) live here rather than at each spend site, so a
             // count emptied by *any* path still leaves the field.
             for (owner, card, name, change) in after.counter_log {
@@ -4067,14 +4067,14 @@ impl<M: CardModules> RulesBridge<M> {
                     t.by_card = by;
                 })?;
             }
-            // `cpChanged` -- the 该清CP了 「its on-card [CP点] is empty →
+            // `cpChanged` -- the the mark-emptying card 「its on-card [tile marks] is empty →
             // graveyard」 rule (user ruling 2026-10-07) lives here, for
             // the same reason: a count emptied by *any* write (this
             // run's `add_cp_at`, another effect's removal) leaves the
             // field. The count watched is `FieldCard::cp`, the CP points
             // attached to the card -- not the tile marks.
 
-            // `exile` -- 「任意玩家获得[除外]…时」 (火种燃尽之后会怎么样呢？
+            // `exile` -- 「任意玩家获得exile…时」 (火种燃尽之后会怎么样呢？
             // 「移除所有此卡的复制品」) listens here rather than at each
             // grant site, so a layer granted by *any* path still fires.
             for player_id in after.exile_log {
@@ -4110,7 +4110,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// `DeckAtGameStart` reaches the draw pile and the hand (after the mulligan).
     fn counteract_orig(&self, cx: &mut Cx, t: &mut CoreTrigger) -> Flow<()> {
         // Nothing in the set declares an entry at this kind, so no hook, no
-        // gate and no [反击] can charge: skip building the bridge trigger at all.
+        // gate and no counteraction can charge: skip building the bridge trigger at all.
         // This is most raises even with cards in play, and every raise for a
         // kind nobody listens to. Nothing could have rewritten `t`, so the
         // write-back below is a no-op and is safe to skip with it.
@@ -4125,14 +4125,14 @@ impl<M: CardModules> RulesBridge<M> {
         // (1) the acting card's own follow-up resolves FIRST, outside the
         //     answer tree -- a card answering its own play is not competing with
         //     the counteractions to it, so it never loses its place to them;
-        // (2) then the hand-counteraction [反击] round on the timing, and
+        // (2) then the hand-counteraction counteraction round on the timing, and
         //     counters to counters, settle LIFO -- newest first -- each before
         //     the link it answers;
         // (3) only then the field/tile/event/lingering hooks, and only when
         //     the trigger was not cancelled by (2).
         //
-        // `NEGATION-AUDIT` V1: the [反击] round runs **before** hook dispatch
-        // (规则书 L32 「[反击]…结算优先于X」 -- the counteraction settles before
+        // `NEGATION-AUDIT` V1: the counteraction round runs **before** hook dispatch
+        // (规则书 L32 「counteraction…结算优先于X」 -- the counteraction settles before
         // X, including X's triggered [持续] settlement). A spend inside a hook
         // body must not settle before any seat can counteract the trigger that
         // carries it, and a cancelled trigger runs no hook body at all.
@@ -4171,11 +4171,11 @@ impl<M: CardModules> RulesBridge<M> {
         // (3) Field-card (`Fx`) hooks: at a hook-point kind, every *placed* card
         // runs its `counteract` automatically, in placement order per player. No player
         // declaration -- this is the persistent-effect path, as against the
-        // [反击] window below.
+        // counteraction window below.
         // Any trigger kind can carry a hook; the manifest says which cards
         // declared one, so nothing else is instantiated.
         //
-        // V1: a trigger the [反击] round already cancelled runs **no** hook
+        // V1: a trigger the counteraction round already cancelled runs **no** hook
         // body -- the spend inside one is effect content of the card that
         // wrote it and must not settle past a negation of the trigger.
         let kind = trigger.kind;
@@ -4193,7 +4193,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // Own-card dispatch for `Drawn` (the card is in a hand / pile)
                 // and `Discarded` (the card that just entered the discard --
                 // RAS:游击演出's [特] 「此卡进入弃卡区的回合结束时」). A placed
-                // field card also hears about discards (MyGO band (3) 「每次你
+                // field card also hears about discards (MyGO group (3) 「每次你
                 // 的卡在未生效的情况下进入弃牌堆时」), so `Discarded` falls
                 // through to the field-card walk as well.
                 if matches!(kind, TriggerKind::Drawn | TriggerKind::Discarded) {
@@ -4277,7 +4277,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // hear the hooks they declare, the same as a player's field
                 // cards do. They run **after** the player fields so a suppressing
                 // card can arm `prop::NO_REWARD` on the tile instance in its own
-                // hook before `tile:circle`'s Pass entry reads it.
+                // hook before the start-square tile rule's Pass entry reads it.
                 //
                 // A tile-carrying trigger (`passTile`, `settle`, a rent `pay`)
                 // reaches only the instances governing *that* tile -- the cheap
@@ -4313,11 +4313,11 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                 }
-                // **Mark** owners (`mark:*`, `mark:cp` = the [CP点] tile-mark
+                // **Mark** owners (`mark:*`, the tile-mark owner = the [tile marks] tile-mark
                 // owner) are board-wide the same way: they govern no single
                 // tile, so they hear every trigger their rule declares
-                // wherever it points -- `mark:cp`'s settle clause is 「在拥有
-                // [CP]点的格子上[结算]时」, any tile.
+                // wherever it points -- the tile-mark owner's settle clause is 「在拥有
+                // [CP]点的格子上settle时」, any tile.
                 if self
                     .ruleset
                     .cards()
@@ -4356,7 +4356,7 @@ impl<M: CardModules> RulesBridge<M> {
                 // **Lingering** instances (`TurnCtx.lingering`, `docs/PURCHASE.md`
                 // P5) run last: the hand-card home for 「本回合」 effects, which
                 // would otherwise have no instance to carry them. A lingering
-                // `BuyAdd` is how @Tsugu ycm's 「本回合购买格子时[消耗]资金降低1500」
+                // `BuyAdd` is how @Tsugu ycm's 「本回合购买格子时spend资金降低1500」
                 // reaches a buy. `uid = -1`: there is no field instance, so
                 // `is_placed` answers false and the money re-entrancy guard does
                 // not apply to it.
@@ -4688,7 +4688,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// The abnormal-move gate, for an effect a card run wants to apply to
     /// `player_id` (`by` = the card's player): an out player is never hit;
     /// field cards guard (`abnormalGuard`, block with `set_cancelled`); then,
-    /// if another player caused it, the `abnormal` [反击] window. What gets
+    /// if another player caused it, the `abnormal` counteraction window. What gets
     /// through bumps `player_id`'s abnormal counter for this turn.
     fn abnormal_gate(
         &self,
@@ -4707,14 +4707,14 @@ impl<M: CardModules> RulesBridge<M> {
         // 1. movement abnormals (teleport / forced / stop / reverse): a blanket
         //    bypass, the ones that put the player somewhere they did not
         //    choose. A self-caused move (`by == player_id`) is *chosen*, not
-        //    「受到的」 (「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」),
+        //    「受到的」 (「可选择受到的teleport，[强制移动]，[强制停下]效果是否生效」),
         //    so [不可阻挡] does not refuse it -- a card's own `card_move`
         //    (里美's 「期间[不可阻挡]」) must still walk.
-        // 2. [晕眩] / [除外]: 「也不会获得新的层数」 / 「无法获得新的[除外]层数」 --
+        // 2. stun / exile: 「也不会获得新的层数」 / 「无法获得新的exile层数」 --
         //    the gain does not land at all (this gate answers `false`, so the
         //    layer is never written). Existing layers still decay (「在适当时机
         //    依旧掉层」).
-        // 3. [停留]: 「无视已存在的[停留]」 is a movement bypass (already in 1's
+        // 3. stay: 「无视已存在的stay」 is a movement bypass (already in 1's
         //    spirit via `stunned`/`stay` checks at move time), not a refusal of
         //    new layers -- but 「也不会获得新的层数」 names only 晕眩 and 除外.
         let movement = matches!(
@@ -4739,7 +4739,7 @@ impl<M: CardModules> RulesBridge<M> {
         // `Untargetable` at declaration, same as `target_player`: 「你只会被
         // 自己发动的效果指定」 (夏日合宿) also covers an area status grant that
         // lands on the player without a `ctx::target` pick (那天的雨's 「所有
-        // 玩家获得一层[停留]」). A self-caused grant (`by == player_id`) is the
+        // 玩家获得一层stay」). A self-caused grant (`by == player_id`) is the
         // owner's own effect and passes the gate's own condition.
         if self
             .raise_core(cx, "untargetable", player_id, |t| t.by_card = Some(by))?
@@ -4777,7 +4777,7 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(false);
         }
         // Settlement: what actually landed. `abnormal` is a hook now -- it is
-        // the outcome, and cannot be [反击]'d. It fires for **every** landing,
+        // the outcome, and cannot be counteraction'd. It fires for **every** landing,
         // self-applied included (「场上每有玩家获得」 counts each layer, and
         // 「每次受到…影响」 counts one's own too).
         self.raise_core(cx, "abnormal", by, on)?;
@@ -4786,9 +4786,9 @@ impl<M: CardModules> RulesBridge<M> {
             w.turn.abnormal.resize(s + 1, 0);
         }
         w.turn.abnormal[s] += 1;
-        // Longer-lived latch for 「若受到[异常移动效果]影响，此卡不生效」
+        // Longer-lived latch for 「若受到abnormal move影响，此卡不生效」
         // (是我自己的问题 (2)): survives across turns until the player's next
-        // [主要移动] completes.
+        // main move completes.
         w.state_set(player_id, game_core::state::key::ABNORMAL_HIT, 1);
         cx.swap_world(w);
         Ok(true)
@@ -4818,7 +4818,7 @@ impl<M: CardModules> RulesBridge<M> {
         if s >= cx.state().players.len() || cx.world().out(s) {
             return Ok(-1);
         }
-        // Per-pair cancel (「取消其对目标之一的[指定]」,
+        // Per-pair cancel (「取消其对目标之一的designate」,
         // `play.Tags["immune"+seat]`): this designation was cancelled; the
         // rest still land.
         if cx.world().turn.cancelled_designations.contains(&p) {
@@ -4928,7 +4928,7 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// The effect declaration for a targeting: `targeted` (a field hook), then
-    /// the `effect` [反击] chain, then `target` as a settlement hook.
+    /// the `effect` counteraction chain, then `target` as a settlement hook.
     ///
     /// The chain is keyed on the **effect**, not on the outcome: 「被其他玩家
     /// 的卡效果影响」 listens to `effect` and reads `ctx::effect` for the list.
@@ -5012,7 +5012,7 @@ impl<M: CardModules> RulesBridge<M> {
             // Back to the hand (手牌).
             w.add_to_hand(who, card);
         }
-        // Banished (「[移除]」) is just "gone" -- it left above and goes nowhere.
+        // Banished (「banish」) is just "gone" -- it left above and goes nowhere.
         cx.swap_world(w);
         if refilled {
             self.raise_core(cx, "reshuffled", who, |_| {})?;
@@ -5028,13 +5028,13 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(())
     }
 
-    /// The [反击] hand window: one **round per timing**, per rulebook clauses
+    /// The counteraction hand window: one **round per timing**, per rulebook clauses
     /// 32 and 89.
     ///
-    /// **32:** 「[反击]：带有"[反击]X：Y"效果在X发生时打出并触发效果Y，且结算优先于X」.
-    /// **89:** 「如果有多名玩家可在同一时间发动[反击]效果则从行动顺序上在触发[反击]时点
-    /// 的玩家的**下一位**玩家开始依次决定是否使用[反击]效果。多个效果可[反击]同一个时点，
-    /// 所有玩家同意所有对一个时点的[反击]已发动后可对新的时点发动[反击]。」
+    /// **32:** 「counteraction：带有"counteractionX：Y"效果在X发生时打出并触发效果Y，且结算优先于X」.
+    /// **89:** 「如果有多名玩家可在同一时间发动counteraction效果则从行动顺序上在触发counteraction时点
+    /// 的玩家的**下一位**玩家开始依次决定是否使用counteraction效果。多个效果可counteraction同一个时点，
+    /// 所有玩家同意所有对一个时点的counteraction已发动后可对新的时点发动counteraction。」
     ///
     /// # Rulings (what the book leaves open)
     ///
@@ -5073,7 +5073,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// effect, each answering X rather than each other -- or passes to end the
     /// visit; only then does priority advance to the next responder.
     ///
-    /// # Counters to counters (「…后可对新的时点发动[反击]」)
+    /// # Counters to counters (「…后可对新的时点发动counteraction」)
     ///
     /// Once the round on X closes, the counters it collected are new timings.
     /// **Design choice (ours):** they are taken **newest first**, each with its
@@ -5119,7 +5119,7 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(());
         }
 
-        // Valid-option-first (docs/GUARDS.md §4.5): open a [反击] window only
+        // Valid-option-first (docs/GUARDS.md §4.5): open a counteraction window only
         // when someone can respond. Cheap static index first (the per-card kind
         // bitmask + seat eligibility), then the compiled conditions against a
         // window context built straight from the live world -- no `Run`, no
@@ -5189,7 +5189,7 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// One round on `chain[timing]`, then -- newest first, the book's 「…后可对
-    /// 新的时点发动[反击]」 -- one round per counter it collected, recursively.
+    /// 新的时点发动counteraction」 -- one round per counter it collected, recursively.
     /// See [`Self::hand_counteractions`].
     fn build_round(
         &self,
@@ -5270,7 +5270,7 @@ impl<M: CardModules> RulesBridge<M> {
                     link.step = cx.state().step;
                     link.by_card = Some(cursor as i32);
                     // A counter used against someone is the `counteracted`
-                    // timing of 「有玩家对你使用[反击]后」 (无法将视线移开): the
+                    // timing of 「有玩家对你使用counteraction后」 (无法将视线移开): the
                     // link's `target` is the seat whose effect is being
                     // answered, `actor`/`player_id` the counter's declarer.
                     // `CoreTrigger::new` defaults `target` to the declarer.
@@ -5727,7 +5727,7 @@ impl<M: CardModules> RulesBridge<M> {
         false
     }
 
-    /// Offer one player a [反击] window answering `top`. Returns the card they
+    /// Offer one player a counteraction window answering `top`. Returns the card they
     /// declared, if any. The prompt describes the **answered** link, so a
     /// player answering a counter is told which counter they are answering.
     fn declare_one(
@@ -5963,7 +5963,7 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// The prompt half of [`Self::declare_one`]: order the offer list by the
-    /// Q5 key, show the [反击] prompt (options + 「不打」), and return the card
+    /// Q5 key, show the counteraction prompt (options + 「不打」), and return the card
     /// the seat declared (if any).
     fn finish_offer(
         &self,
@@ -5992,7 +5992,7 @@ impl<M: CardModules> RulesBridge<M> {
                     > 0
             });
         if shared_move {
-            // Payment order: dedicated card, fire pots, then back.
+            // Payment order: dedicated card, charge pots, then back.
             options.sort_by_key(|(_, _, uid)| *uid >= 0);
         }
         // Labels "打出「...」" + "不打"; the hint is the first CounteractHint or
@@ -6281,7 +6281,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
 
 /// The engine's string trigger kinds -> the module's small enum.
 
-/// The initial user of a [反击] round at the chain root (ruling 2026-10-07):
+/// The initial user of a counteraction round at the chain root (ruling 2026-10-07):
 /// the player whose action or effect raised the link. That is `by_card` when a
 /// card caused the trigger -- **not** the trigger's own player, which for a
 /// payment is the payer: seat 2's card making seat 0 pay starts at seat 2, not
@@ -6297,7 +6297,7 @@ fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
     seat as usize % n
 }
 
-/// One node of the [反击] answer tree (see `hand_counteractions`). Index 0 is
+/// One node of the counteraction answer tree (see `hand_counteractions`). Index 0 is
 /// the timing the chain answers (L1); every other node is one declared counter.
 #[derive(Clone)]
 struct ChainLink {
@@ -6379,7 +6379,7 @@ impl Priority {
     }
 }
 
-/// Test seam for the [反击] window fast path (docs/GUARDS.md §4.5). When the
+/// Test seam for the counteraction window fast path (docs/GUARDS.md §4.5). When the
 /// environment variable `BGD_COUNTERACT_SLOW=1` is set, the valid-option-first
 /// pre-scan never skips a window and the per-window processed set is bypassed,
 /// reproducing the pre-optimisation control flow. The two paths must produce
@@ -6411,7 +6411,7 @@ struct CounteractResume {
     hook_idx: usize,
 }
 
-/// Remaining resolve work of a hand [反击] window (STACK-01).
+/// Remaining resolve work of a hand counteraction window (STACK-01).
 struct HandResume {
     chain: Vec<ChainLink>,
     /// Post-order node indices still to settle.
@@ -6430,7 +6430,7 @@ fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     let Some(player_id) = cx.state().players.get(s) else {
         return false;
     };
-    // Rulebook eligibility only: out / [除外] cannot declare, and `CannotPlay`
+    // Rulebook eligibility only: out / exile cannot declare, and `CannotPlay`
     // (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
     // A bot is still a player, so the window opens for every mentality and
     // the seat answers through `Cx::fill_ai` (standard: `CounterParams`
@@ -6439,7 +6439,7 @@ fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     // `World::out` is `st.players[i].out()`, so the live state answers it --
     // no world copy (this runs on every visit of every ring).
     //
-    // 骰子已经掷下 「本回合内所有其他玩家无法从手牌中使用[反击]」: another
+    // 骰子已经掷下 「本回合内所有其他玩家无法从手牌中使用counteraction」: another
     // seat's `noCounteractTurn` latch for this turn key locks this seat out of
     // *hand* counteractions. Field counteractions (`counteractFromField`) are
     // offered through `has_field_counter` / the field half of `declare_one`
@@ -6634,7 +6634,7 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
     }
     #[inline]
     fn band_name(&self, player_id: i32) -> Option<String> {
-        // Same lookup `CardWorld::in_group` does: the character's band.
+        // Same lookup `CardWorld::in_group` does: the persona's group.
         let s = self.world.st.players.get(player_id.max(0) as usize)?;
         self.data
             .personas
@@ -6941,7 +6941,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         if o < 0 {
             return 0;
         }
-        // The character **name** (`ctx::persona_is` spelling), not the
+        // The persona **name** (`ctx::persona_is` spelling), not the
         // skill id -- `persona_is(p, "名")` hashes the name.
         let name = self
             .world
@@ -6957,7 +6957,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         if o < 0 {
             return 0;
         }
-        // The band **name** (`ctx::in_group` spelling).
+        // The group **name** (`ctx::in_group` spelling).
         let band = self
             .world
             .st
@@ -7412,7 +7412,7 @@ impl ProbeMemo {
     }
 }
 
-/// The one-line description of the answered link the [反击] prompt shows.
+/// The one-line description of the answered link the counteraction prompt shows.
 ///
 /// The key is kind-specific so the client can say **what** is being answered
 /// (「{{who}} 打出了「{{card}}」」 / 「{{who}} 将支付 {{n}} 给 {{to}}」 /
@@ -7428,7 +7428,7 @@ fn describe_trigger(t: &Trigger) -> Msg {
         TriggerKind::MoveBefore | TriggerKind::MoveAfter | TriggerKind::Roll | TriggerKind::MoveRoll => {
             Msg::new("ask.counteract.detail.move")
         }
-        // The [反击] key for a payment / a targeted effect is `effect`
+        // The counteraction key for a payment / a targeted effect is `effect`
         // (`docs` on `TriggerKind::Effect`); the declared effect's own kind
         // says which.
         TriggerKind::Effect if effect_kind == "pay" => {
@@ -7703,7 +7703,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     }
 
     /// [`game_core::engine::CardRules::normal`] -- a card with a rule but no
-    /// `On::Play` entry (a pure [反击] / hook card) is not a normal [手] card
+    /// `On::Play` entry (a pure counteraction / hook card) is not a normal hand card
     /// and cannot be played from hand. A card without a rule keeps the default.
     fn normal(&self, card: &str) -> bool {
         self.ruleset
@@ -7876,7 +7876,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             return q.tiles.iter().map(|&t| native(t)).collect();
         }
         // Only the stages somebody actually declares are run -- a `BuySet`
-        // nobody hooks is a no-op that would cost a fire-up per tile. The
+        // nobody hooks is a no-op that would cost a linker init per tile. The
         // per-card `hook_mask` shift (fix C), not an entry-table scan.
         let declares = |kind: TriggerKind| {
             instances
@@ -8115,7 +8115,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             }
         }
 
-        // (2) Hand [反击] window.
+        // (2) Hand counteraction window.
         match hand_resume {
             Some(hr) => {
                 let mut chain = hr.chain.clone();
@@ -8297,7 +8297,7 @@ pub(crate) enum LookupGroup {
 /// **(lookup group, source order, declaration order)**.
 ///
 /// * **lookup group** -- [`LookupGroup`], the spec's scan order
-///   status → band → character → field → hand → discard → deck → removed.
+///   status → group → persona → field → hand → discard → deck → removed.
 /// * **source order** -- the candidate's index in that group's authoritative
 ///   state list: player-major then placement order for the field-ish groups
 ///   (`players[p].field`), the hand `Vec` index for `hand`, `board_field` order
@@ -8307,14 +8307,14 @@ pub(crate) enum LookupGroup {
 ///
 /// Pure: no `HashMap` iteration, no clock. Two runs of the same authoritative
 /// state produce the same order. Field hooks before the hand counteraction
-/// ring is already group `Field`/`Band`/`Character` < `Hand`, so wiring the
+/// ring is already group `Field`/`Group`/`Persona` < `Hand`, so wiring the
 /// key does not move anything today (`docs/ENGINE.md` 「Effect ordering」).
 pub(crate) fn effect_order_key(group: LookupGroup, source: u32, decl: u32) -> (u8, u32, u32) {
     (group as u8, source, decl)
 }
 
-/// The lookup group of one placed source (`LookupGroup::Band` for a band-skill
-/// instance, `Character` for a character skill, `Field` for anything else).
+/// The lookup group of one placed source (`LookupGroup::Group` for a group-skill
+/// instance, `Persona` for a persona skill, `Field` for anything else).
 /// Reads the instance's `group_skill` stamp (`GameData::is_group_skill`), which
 /// is the authoritative classification.
 fn source_group(world: &game_core::engine::World, uid: i32) -> LookupGroup {
@@ -8325,17 +8325,17 @@ fn source_group(world: &game_core::engine::World, uid: i32) -> LookupGroup {
     }
 }
 
-/// Field-card (`Fx`) hook points (ABI v17). These are **not** [反击] points:
+/// Field-card (`Fx`) hook points (ABI v17). These are **not** counteraction points:
 /// the engine runs every *placed* card's `counteract` against them automatically,
 /// with no player declaration. They are distinct `TriggerKind`s from the
 /// counteraction kinds so a card can tell a field effect from a hand counteraction by its
 /// kind alone.
-/// Hook points that are *only* field-card points: no [反击] window opens at
+/// Hook points that are *only* field-card points: no counteraction window opens at
 /// them. (`turnStart` / `settleAfter` are both, so they are not in here.)
 ///
 /// `PassTile` / `PassPlayer` are **not** in here: ABI v43 made them
-/// [`ChainKind`]s too (「当你经过一名角色时」 -- `AG:刻入天穹傲岸的烈光`),
-/// so the hand [反击] window opens at them. The valid-option-first pre-scan
+/// [`ChainKind`]s too (「when you pass a persona」 -- `AG:刻入天穹傲岸的烈光`),
+/// so the hand counteraction window opens at them. The valid-option-first pre-scan
 /// skips the whole ring when no seat holds a card that answers, which is the
 /// common case on a `passTile` (it fires on every tile walked).
 fn is_hook_only(kind: &str) -> bool {
@@ -8564,9 +8564,9 @@ mod tests {
             "fireSpent",
             "skillUsed",
             "houseAdded",
-            // v29: crystal writes
+            // v29: named counter writes
             "crystalsChanged",
-            // v36: [CP点] writes
+            // v36: [tile marks] writes
             "cpChanged",
             // v42: the command-wide pre-split payment stage + terminals
             "payTotalAdd",

@@ -60,7 +60,7 @@ pub struct NetMessage {
     /// the field itself stays on every build so a record's `Input::Act` shape
     /// does not depend on the profile.
     pub debug: String,
-    /// `ban` / `pick`: the character id.
+    /// `ban` / `pick`: the persona id.
     pub persona: String,
     /// `play` / `discard`: the card id.
     pub card: String,
@@ -205,7 +205,7 @@ pub fn bot_name<'a, S: AsRef<str>>(
 
 /// Clean a display name: trim, then cap at 16 **UTF-16 code units**. A surrogate
 /// pair cut in half at the limit is dropped rather than leaving an invalid half
-/// character. May return "" (callers reject empty names).
+/// persona. May return "" (callers reject empty names).
 pub fn clean_name(name: &str) -> String {
     let mut out = String::new();
     let mut units = 0;

@@ -32,7 +32,7 @@ pub fn guest_str<C: HostCtx>(c: &mut C, ptr: i32, len: i32) -> Result<String, Ho
     String::from_utf8(bytes).map_err(|_| HostErr::trap("guest string is not UTF-8"))
 }
 
-/// The abnormal-move [反击] gate, from inside a card run (see `host.rs`).
+/// The abnormal-move counteraction gate, from inside a card run (see `host.rs`).
 pub fn abnormal_gate<C: HostCtx>(c: &mut C, player_id: i32, kind: AbKind) -> Result<bool, HostErr> {
     let v = crate::inline::request_or_pause(
         c,
@@ -333,7 +333,7 @@ pub fn gain<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) 
             let src = guest_msg(c, p, n)?;
                         // A card-driven gain runs the same `Money` pipeline as a payment --
             // print (game -> player) -- so PayAdd / PayChoose / the `effect`
-            // [反击] window all see it. The pause/resume is the same as `pay`:
+            // counteraction window all see it. The pause/resume is the same as `pay`:
             // the engine answers with the amount that actually moved.
             {
                 let req = HostRequest::Pay {
@@ -399,7 +399,7 @@ pub fn adjust_money<C: HostCtx>(
 pub fn pay<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let src = guest_msg(c, p, n)?;
                         // A card-driven payment is paused so the engine can raise a `pay`
-            // trigger (and the [反击] window) before the money moves. The answer is
+            // trigger (and the counteraction window) before the money moves. The answer is
             // the final amount to move -- 0 cancels the payment outright.
             //
             // The pause is the sentinel **as the return value**, not a trap:
@@ -1243,7 +1243,7 @@ pub fn charge_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr>
 
 pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
-            // Marker window: `markerGain` opens before the fire moves.
+            // Marker window: `markerGain` opens before the charge moves.
             //
             // The pause is a **trap**, not the sentinel: `ctx::gain_charge`
             // returns `Result<i32, Prompt>` and a great many bodies discard
@@ -1442,7 +1442,7 @@ pub fn play_from_hand<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 pub fn gain_fixed<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             // V4 (`NEGATION-AUDIT`): Tritone's 「立刻获得此次失去的资金金额」 is
             // money movement and goes through the same `Money` pipeline as any
-            // other gain -- the `effect` [反击] window, the modifier stages and
+            // other gain -- the `effect` counteraction window, the modifier stages and
             // the `pay` settlement all see it. (It used to debit/credit the
             // world copy directly, outside every 支付阶段 window.)
             gain(c, player_id, amount, p, n)
@@ -1620,7 +1620,7 @@ pub fn designation_cancelled<C: HostCtx>(c: &mut C, seat: i32) -> Result<i32, Ho
 
 pub fn target<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, single: i32) -> Result<i32, HostErr> {
             // Paused like `gate`: the engine runs the targeting pipeline (it
-            // raises hooks and opens the `target` [反击] window) and the replay
+            // raises hooks and opens the `target` counteraction window) and the replay
             // reads its answer.
                         {
                 let req = HostRequest::Target {
@@ -2518,7 +2518,7 @@ pub fn move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 /// Resolve `Target` to the receiver instance uids that could answer, in field
 /// order. `Uid` names one; `Card` names the first field copy of that card id on
-/// that seat; `Board` names a standing board pseudo card (`mark:cp` and kin)
+/// that seat; `Board` names a standing board pseudo card (the tile-mark owner and kin)
 /// via [`CardWorld::mark_rule_instances`].
 fn resolve_receivers<C: HostCtx>(
     c: &C,
@@ -2622,10 +2622,10 @@ pub fn send<C: HostCtx>(
         let fuel = c.fuel()?;
         let st = c.st_mut();
         // The handler runs **as the receiver instance** (user ruling
-        // 2026-10-10: `mark:cp` answers `"place"` and binds units to its own
+        // 2026-10-10: the tile-mark owner answers `"place"` and binds units to its own
         // counter). `enter_card` would start a fresh uid like `invoke_skill`;
         // pin `current_uid` to the resolved receiver so `ctx::place_mark`
-        // stamps `instance = mark:cp` and `ctx::self_uid()` is that card.
+        // stamps `instance = the tile-mark owner` and `ctx::self_uid()` is that card.
         let saved = st.w().enter_card(&rule_id);
         st.w().set_self_uid(uid);
         let was_from_hand = st.w().play_from_hand();

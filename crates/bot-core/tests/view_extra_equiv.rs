@@ -11,7 +11,7 @@
 //! * `skills` -- same list, same `enabled` / `reason`.
 //!
 //! `ai_answer` may diverge whenever the live match's precomputed [`Ask`] fill
-//! drew from the match RNG (auction ceilings, [反击] propensity) -- the fork
+//! drew from the match RNG (auction ceilings, counteraction propensity) -- the fork
 //! owns a fresh stream. Those divergences are counted here and listed in the
 //! hidden-state audit. Both sides must still agree on *whether* an answer
 //! exists.

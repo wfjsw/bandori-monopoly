@@ -325,7 +325,7 @@ use crate::state::{MoneyFlow, TileQuote, TileQuoteKind};
 /// Per-seat rules (`webui` tile captions):
 /// * unowned → [`TileQuoteKind::Buy`] (what buying would cost me);
 /// * mine, next building available → [`TileQuoteKind::Build`];
-/// * mine, no next building (build cap, RiNG 「不可升级」, `NO_BUILD`) →
+/// * mine, no next building (build cap, the flat deed 「unupgradeable」, `NO_BUILD`) →
 ///   [`TileQuoteKind::OwnRent`] (rent I would **collect**);
 /// * mine, mortgaged → [`TileQuoteKind::Redeem`] (force-buy does not apply to
 ///   one's own deed; redeeming is the natural cost to clear the mortgage);
@@ -387,7 +387,7 @@ pub fn tile_quotes(
                         max: None,
                     });
                 } else {
-                    // Build cap / RiNG / `NO_BUILD`: the rent I would collect.
+                    // Build cap / the flat deed / `NO_BUILD`: the rent I would collect.
                     let (value, max) = rent_quote(data, w, t, Some(me));
                     out[t] = Some(TileQuote {
                         kind: TileQuoteKind::OwnRent,

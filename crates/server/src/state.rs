@@ -166,7 +166,7 @@ pub fn random_u64() -> u64 {
     u64::from_le_bytes(buf)
 }
 
-/// Short room code, unambiguous characters only.
+/// Short room code, unambiguous personas only.
 pub fn room_code() -> String {
     const ALPHABET: &[u8] = b"23456789ABCDEFGHJKMNPQRSTUVWXYZ";
     let mut buf = [0u8; 6];

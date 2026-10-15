@@ -41,12 +41,12 @@ impl World {
     pub fn set_parity(&mut self, n: i32) {
         self.turn.plan.parity = n;
     }
-    /// Settle at the [移动终点] (「到达终点后是否[结算]」). Clear it to skip
+    /// Settle at the [move end] (「到达终点后是否settle」). Clear it to skip
     /// settle entirely; the player still moves.
     pub fn set_resolve(&mut self, on: bool) {
         self.turn.plan.resolve = on;
     }
-    /// How the move gets there: 0 = walk the path, 1 = [传送].
+    /// How the move gets there: 0 = walk the path, 1 = teleport.
     pub fn set_kind(&mut self, kind: i32) {
         if let Some(k) = super::move_ctx::MoveKind::from_i32(kind) {
             self.turn.plan.kind = k;
@@ -67,7 +67,7 @@ impl World {
         self.turn.plan.extra_steps = n;
     }
 
-    /// Passing CiRCLE pays nothing on this walk.
+    /// Passing the start square pays nothing on this walk.
 
     /// The tile the walk begins on instead of where the player stands
     /// (`-1` = the player's own tile). `why` names the effect on the log line.
@@ -75,11 +75,11 @@ impl World {
         self.turn.plan.start = tile;
         self.turn.plan.start_why = why.to_string();
     }
-    /// The movement is a [传送] to this tile (`-1` = a walk).
+    /// The movement is a teleport to this tile (`-1` = a walk).
     /// `card_move` branches on this.
     pub fn set_teleport_to(&mut self, tile: i32) {
         self.turn.plan.teleport_to = tile;
-        // Naming a destination makes it a [传送].
+        // Naming a destination makes it a teleport.
         self.turn.plan.kind = if tile >= 0 {
             super::move_ctx::MoveKind::Teleport
         } else {
@@ -192,7 +192,7 @@ impl World {
     pub fn move_parity(&self) -> i32 {
         self.turn.plan.parity
     }
-    /// Does the planned move settle at its [移动终点]?
+    /// Does the planned move settle at its [move end]?
     pub fn move_resolve(&self) -> bool {
         self.turn.plan.resolve
     }
@@ -608,23 +608,23 @@ impl World {
         now - was
     }
 
-    // -------------------------------------------------------- band crystals
+    // -------------------------------------------------------- group named counters
 
-    /// The uid of `player_id`'s **band-skill field instance** -- the bound band
-    /// skill's field card (`skill:<band>:<skill>`, [`FieldCard::group_skill`]),
-    /// which is where 「乐队卡 / 团卡」 crystals live. -1 when the player has
-    /// none (no band skill bound, or it has left the field).
+    /// The uid of `player_id`'s **group-skill field instance** -- the bound group
+    /// skill's field card (`skill:<group>:<skill>`, [`FieldCard::group_skill`]),
+    /// which is where the group-skill named counters live. -1 when the player has
+    /// none (no group skill bound, or it has left the field).
     ///
     /// Edge cases (the write target is always this one instance):
-    /// * **no band skill** -- every read is 0 and every write is a no-op;
-    /// * **several band cards** (PPP:Returns borrows another band's card beside
-    ///   its own; the book's 「多张…乐队卡时此效果不重复发动」 is about several
-    ///   *players* holding the same band card) -- the **first in placement
+    /// * **no group skill** -- every read is 0 and every write is a no-op;
+    /// * **several group cards** (PPP:Returns borrows another group's card beside
+    ///   its own; the book's 「this effect does not re-trigger with several group cards」 is about several
+    ///   *players* holding the same group card) -- the **first in placement
     ///   order** is the bound one (`bind_skills` places it first; a later copy
     ///   is a borrow that has not replaced it);
-    /// * **swapped or removed** -- the instance goes with its crystals, so a
+    /// * **swapped or removed** -- the instance goes with its named counters, so a
     ///   swap starts the new card at 0 and the old count is gone with the old
-    ///   card (Returns' 「替换并移除上面的所有[奇迹水晶]」 is exactly that).
+    ///   card (Returns' 「replace and remove all counters on it」 is exactly that).
     pub fn group_skill_uid(&self, player_id: i32) -> i32 {
         self.player_id(player_id)
             .and_then(|s| s.field.iter().find(|f| f.group_skill))
@@ -672,7 +672,7 @@ impl World {
     /// A consumer of the passed cap, not the engine deciding one (`max` > 0
     /// clamps, `max` = 0 is uncapped, exactly as
     /// [`Self::add_pool_at`]). Returns the new count; 0 when the player has
-    /// no band skill (writes are no-ops).
+    /// no group skill (writes are no-ops).
     pub fn add_group_pool(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
         let uid = self.group_skill_uid(player_id);
         if uid < 0 {
@@ -681,10 +681,10 @@ impl World {
         self.add_counter_at(uid, name, n, max)
     }
 
-    // ---------------------------------------------- skill / band attachments
+    // ---------------------------------------------- skill / group attachments
 
-    /// Rule id of the player's bound **band skill** (`skill:<band>:<skill>`),
-    /// the one 「乐队卡 / 团卡」 crystals land on. `None` when there is none.
+    /// Rule id of the player's bound **group skill** (`skill:<group>:<skill>`),
+    /// the one the group-skill named counters land on. `None` when there is none.
     pub fn group_skill_id(&self, player_id: i32) -> Option<String> {
         let uid = self.group_skill_uid(player_id);
         if uid < 0 {
@@ -693,9 +693,9 @@ impl World {
         self.field_by_uid(uid).map(|f| f.card.clone())
     }
 
-    /// Rule id of the player's **character skill** (`skill:<character>:<skill>`).
-    /// A character skill is a `skill:` instance that is
-    /// *not* a band skill; `bind_skills` places it beside the band one.
+    /// Rule id of the player's **persona skill** (`skill:<persona>:<skill>`).
+    /// A persona skill is a `skill:` instance that is
+    /// *not* a group skill; `bind_skills` places it beside the group one.
     pub fn persona_skill_id(&self, player_id: i32) -> Option<String> {
         let s = self.player_id(player_id)?;
         s.field
@@ -704,7 +704,7 @@ impl World {
             .map(|f| f.card.clone())
     }
 
-    /// Every band-skill attachment on the player's field, as
+    /// Every group-skill attachment on the player's field, as
     /// `(uid, rule id, extra)` in placement order.
     pub fn group_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
         let Some(s) = self.player_id(player_id) else {
@@ -717,10 +717,10 @@ impl World {
             .collect()
     }
 
-    /// Attach a band-skill instance.
-    /// `extra` marks a 「拿取」ed copy: 「相同乐队技能卡的效果不可叠加」 (refused
-    /// when an attachment of the same id is already there) and 「不视为那个乐队
-    /// 的角色」 (`in_group` still reads only the character). Returns the new uid,
+    /// Attach a group-skill instance.
+    /// `extra` marks a taken copy: 「group-skill card effects do not stack」 (refused
+    /// when an attachment of the same id is already there) and 「不视为那个group
+    /// 的persona」 (`in_group` still reads only the persona). Returns the new uid,
     /// or -1 when refused.
     pub fn add_group_skill(
         &mut self,
@@ -759,7 +759,7 @@ impl World {
     }
 
     /// The mandated resource cap -- the `max` of the `charge` item,
-    /// which a character skill writes. The engine never imposes it.
+    /// which a persona skill writes. The engine never imposes it.
     pub fn charge_max(&self, player_id: i32) -> i32 {
         self.state_max(player_id, key::CHARGE)
     }
@@ -809,7 +809,7 @@ impl World {
 
     // ---------------------------------------------------------- money moves
 
-    /// Money in (「[获得]」), logged with its reason.
+    /// Money in (「gain」), logged with its reason.
     pub fn gain_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -830,7 +830,7 @@ impl World {
         amount
     }
 
-    /// Money out (「[支付]」), logged. Routines that may need to raise funds are
+    /// Money out (「pay」), logged. Routines that may need to raise funds are
     /// driven through `Cx` instead (they prompt).
     pub fn pay_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
         if amount > 0 && self.money_locked(player_id) {
@@ -970,10 +970,10 @@ impl World {
         {
             return Some(Msg::new("err.build_not_own"));
         }
-        // 「[拥有者]不可盖房」 -- `prop::NO_BUILD` on a rule instance
+        // 「owner不可盖房」 -- `prop::NO_BUILD` on a rule instance
         // (`docs/TILES.md`), not a keyed flag. The **source** owns the arming
         // and the disarming; the reader is the rule instance. Two placements
-        // are read, the same shape as the CiRCLE veto: the player's own field
+        // are read, the same shape as the the start square veto: the player's own field
         // instance (a per-player veto) and the tile's rule instance (a per-tile
         // veto). A hand card's 「本回合无法加盖房屋」 rides a lingering instance
         // instead -- see below.
@@ -1038,7 +1038,7 @@ impl World {
         if self.st.houses.get(tile as usize).copied().unwrap_or(0) as usize >= t.rent.len() - 1 {
             return Some(Msg::new("err.build_full"));
         }
-        // The payer's own gate ([晕眩]/[除外] 「无法收付款」) is the caller's
+        // The payer's own gate (stun/exile 「无法收付款」) is the caller's
         // `Gate::Pay` question: a World has no ruleset to ask.
         if s.out() {
             return Some(Msg::new("err.cannot_spend"));
@@ -1104,7 +1104,7 @@ impl World {
         }
         let uid = self.st.next_card_uid;
         self.st.next_card_uid += 1;
-        // A band skill's instance is the 「乐队卡 / 团卡」 crystal holder; see
+        // A group skill's instance is the the group-skill named counter holder; see
         // [`Self::group_skill_uid`].
         let group_skill = data.is_group_skill(card);
         // 「此卡不受任何其他效果影响」 is a static [特] property, not a play-body
@@ -1233,7 +1233,7 @@ impl World {
 
     /// The board-wide **mark owners** (`mark:*`, [`crate::data::mark_rule_ids`])
     /// -- one instance each on the neutral board owner, governing no single
-    /// tile. `mark:cp` is the [CP点] tile-mark owner. Like
+    /// tile. the tile-mark owner is the [tile marks] tile-mark owner. Like
     /// [`Self::event_rule_instances`], these hear every trigger their rule
     /// declares wherever it points, not just the ones on "their" tile (they
     /// have none).
@@ -1307,17 +1307,17 @@ impl World {
         }
     }
 
-    /// Add miracle crystals on the instance at `uid`; `max` caps (0 = uncapped).
+    /// Add named counters on the instance at `uid`; `max` caps (0 = uncapped).
     ///
     /// Also mirrors the count into [`crate::state::MatchState::event_active`]
     /// when the instance is an event's board-owner rule (`docs/EVENTS.md`):
-    /// `ActiveEvent::counter` is the public view of the instance's crystals,
+    /// `ActiveEvent::counter` is the public view of the instance's named counters,
     /// and the raw row is what clients (and tests) read.
     pub fn add_pool_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
         self.add_counter_at(uid, name, n, max)
     }
 
-    /// Set the instance at `uid`'s crystals; returns the new count.
+    /// Set the instance at `uid`'s named counters; returns the new count.
     pub fn set_pool_at(&mut self, uid: i32, name: &str, n: i32) -> i32 {
         self.set_counter_at(uid, name, n)
     }
@@ -1401,7 +1401,7 @@ impl World {
 
     /// Place the player's skill rules on their field. This is the binding:
     /// see [`crate::data::GameData::skill_rules_of`]. Once placed, `On::Hook`
-    /// reaches them like any other field card and crystal counters work on
+    /// reaches them like any other field card and named counter counters work on
     /// them. Idempotent -- calling it twice does not double-place.
     pub fn bind_skills(
         &mut self,
@@ -1531,7 +1531,7 @@ impl World {
     ///
     /// Called from `draw_event` when the event's rule exists in the ruleset, so
     /// the body's `On::Play` and any `On::Hook` it declares run against a live
-    /// instance (props, crystals, `unplace_self` = expire). Idempotent per
+    /// instance (props, named counters, `unplace_self` = expire). Idempotent per
     /// event id: a second activation of the same event keeps the first
     /// instance. Returns the instance uid, or -1 when there is no rule
     /// (`StubRules`) -- the engine's built-in fallback files the card away and
@@ -1866,7 +1866,7 @@ impl World {
     /// Destroy every counter unit owned by the instance at `uid` -- tile marks
     /// and player-held tokens alike. Called when the instance leaves the field
     /// (discard, unplace, player leave / bankrupt, event expire). The standing
-    /// `mark:cp` pseudo card is never destroyed, so its units stay.
+    /// the tile-mark owner pseudo card is never destroyed, so its units stay.
     pub fn destroy_instance_units(&mut self, uid: i32) {
         if uid < 0 {
             return;
@@ -1903,7 +1903,7 @@ impl World {
             *slot = (*slot).min(max);
         }
         let now = *slot;
-        // Event instances mirror their crystal count into the public
+        // Event instances mirror their named counter count into the public
         // `ActiveEvent::counter` row (`docs/EVENTS.md`).
         {
             let card = f.card.clone();
@@ -2049,15 +2049,15 @@ impl World {
         took
     }
 
-    // ------------------------------------------------------- [CP点] marks
-    // Under the bound-counter model (user ruling 2026-10-10) the tile [CP点]
-    // are units of the **standing `mark:cp` pseudo card**'s counter
+    // ------------------------------------------------------- [tile marks] marks
+    // Under the bound-counter model (user ruling 2026-10-10) the tile [tile marks]
+    // are units of the **standing the tile-mark owner pseudo card**'s counter
     // ([`crate::state::counter::CP`] / [`crate::state::mark_kind::CP`]), bound
-    // to tiles. `mark:cp` lives on the neutral board owner and is never
+    // to tiles. the tile-mark owner lives on the neutral board owner and is never
     // destroyed, so its units outlive any placer. Provenance (`TileMark::src`)
-    // is the placing card instance -- 通用:该清CP了 (1) 「此卡在格子上添加的
-    // [CP点]及其产物」 and the landing hook's 「自己[场上]1个[CP点]」 spend key
-    // on it. The on-card [CP点] of 该清CP了 is that card's own
+    // is the placing card instance -- 通用:the mark-emptying card (1) 「此卡在格子上添加的
+    // [tile marks]及其产物」 and the landing hook's 「自己field1个[tile marks]」 spend key
+    // on it. The on-card [tile marks] of the mark-emptying card is that card's own
     // [`crate::state::counter::CP`] counter and dies with it.
 
     /// The uid of the standing mark-owner rule instance (`rule_id`) on the
@@ -2072,7 +2072,7 @@ impl World {
 
     // ------------------------------------------------------ status effects
 
-    /// Layered status on a player (「[停留]」 / 「[眩晕]」 / 「[除外]」).
+    /// Layered status on a player (「stay」 / 「[眩晕]」 / 「exile」).
     ///
     /// These are *consumers* of the keyed state, and the two that are timed say
     /// so on the item (`expires: TurnEnd`) rather than the engine remembering
@@ -2085,19 +2085,19 @@ impl World {
     /// host's count-changed clause ([`Self::stay_unlatch`]), not a side
     /// effect the grant site invents.
     pub fn give_stay(&mut self, player_id: i32, n: i32) {
-        // 「[停留]：处于该状态时[无法移动]」 and step 7 「停留效果发动：跳过主要
+        // 「stay：处于该状态时[无法移动]」 and step 7 「停留效果发动：跳过主要
         // 移动阶段」 -- the skip is a *consequence* of the state, not a separate
         // latch. A layer gained mid-turn (运营 plays like 轮符雨) locks the
         // turn's main move immediately; dropping the last layer un-skips it,
         // the same as when 壱雫空 clears the last layer.
-        // 「[不可阻挡]」: 「处于该状态时无视已存在的[停留]」 -- an unstoppable
+        // 「[不可阻挡]」: 「处于该状态时无视已存在的stay」 -- an unstoppable
         // holder walks through the stay rather than losing the move.
         //
-        // [除外] is **not** folded into this latch: it grants [无法移动]
-        // (glossary 13) but not 「跳过主要移动阶段」. A mid-turn [除外]
+        // exile is **not** folded into this latch: it grants [无法移动]
+        // (glossary 13) but not 「跳过主要移动阶段」. A mid-turn exile
         // (MyGO:无路矢) still owes the roll -- see
         // `no_road_in_ops_still_owes_the_roll_and_does_not_read_as_skip` and
-        // the live-latch note in `engine/mod.rs`. [除外]'s own turn-start
+        // the live-latch note in `engine/mod.rs`. exile's own turn-start
         // auto-skip is `log.exiled_skip` in `play.rs`.
         let mut skip = None;
         if let Some(s) = self.player_mut(player_id) {
@@ -2136,8 +2136,8 @@ impl World {
 
     /// Is the exclusive-use gate open for this player and card? The engine's
     /// generic own/base verdict is the caller's business (it is the default);
-    /// this asks the ruleset's CEL-only `ExclusiveUse` entries (a band-skill
-    /// card denying a variant its base character's exclusives). `true` = no
+    /// this asks the ruleset's CEL-only `ExclusiveUse` entries (a group-skill
+    /// card denying a variant its base persona's exclusives). `true` = no
     /// entry closed it.
     pub fn exclusive_use(
         &self,
@@ -2148,9 +2148,9 @@ impl World {
         rules.exclusive_use(self, player, ask).unwrap_or(true)
     }
 
-    /// `status:stay` count-changed clause (rules.txt 48): when the last [停留]
+    /// `status:stay` count-changed clause (rules.txt 48): when the last stay
     /// layer (or an [不可阻挡] grant) leaves the player free to walk, the turn's
-    /// main-move latch is released. [除外] is deliberately not part of it (see
+    /// main-move latch is released. exile is deliberately not part of it (see
     /// [`Self::give_stay`]).
     pub fn stay_unlatch(&mut self, player_id: i32) {
         let free = self
@@ -2170,7 +2170,7 @@ impl World {
     }
 
     pub fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
-        // 「[除外]」 grants [无法移动] (glossary 13) but does **not** skip the
+        // 「exile」 grants [无法移动] (glossary 13) but does **not** skip the
         // main-move phase (that is 停留's step-7 clause). Do not touch
         // `skip_move` here: a mid-turn grant (无路矢) still owes the roll, and
         // the turn-start `exiled_skip` auto-skip is what drops a whole later
@@ -2216,7 +2216,7 @@ impl World {
         self.add_rule_param_bonus("rentUnitMult", n)
     }
 
-    /// Move a player to a tile without settling (a bare [传送]).
+    /// Move a player to a tile without settling (a bare teleport).
     pub fn teleport_to(&mut self, player_id: i32, tile: i32) {
         if let Some(s) = self.player_mut(player_id) {
             s.pos = tile;

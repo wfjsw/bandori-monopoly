@@ -2,7 +2,7 @@
 //!
 //! One [`Msg`] per [`Trigger`], derived host-side from the trigger's kind and
 //! payload (who / target / tile / value / the chain link it answers). Bracketed
-//! terms ([经过], [重叠], [结算], [支付]…) match the rulebook's wording, the way
+//! terms ([pass], overlap, settle, pay…) match the rulebook's wording, the way
 //! existing `log.*` keys do. A kind with no dedicated phrase falls back to
 //! `log.why.{{kind}}`, so nothing ever renders blank.
 //!
@@ -226,7 +226,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
     }
 }
 
-/// The `{{why}}` of a [反击] resolution: the answered link's card and what it
+/// The `{{why}}` of a counteraction resolution: the answered link's card and what it
 /// was doing. `answered_card` names the link's card; the link's own [`Trigger`]
 /// supplies the rest.
 pub fn counteract_reason(answered_card: &str, answered: &Trigger) -> Msg {
@@ -277,7 +277,7 @@ pub fn state_key_name(key: &str) -> Msg {
 }
 
 /// A tile-mark kind. The kind string **is** the i18n key (one mechanism,
-/// shared with the designation work): `mark:cp`, `mark:designate`,
+/// shared with the designation work): the tile-mark owner, `mark:designate`,
 /// `skillBlock`, `ember`, or a card's own display name (怪盗标记). The view
 /// resolves known keys and falls back to the literal, so a raw key never
 /// reaches the player as a `Text` arg. Empty kind becomes `log.mark.none`.

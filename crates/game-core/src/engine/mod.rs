@@ -354,8 +354,8 @@ struct Saved {
 /// [`crate::record::MatchSetup::clock`]). Older saves are refused -- the
 /// archived engine bundle is what replays them (`docs/REPLAY.md`).
 /// v10: roster/player wire names are neutral (`persona` / `skillOwner` /
-/// `affiliations` / `groupSkill`, was `character` / `skillCharacter` /
-/// `bands` / `bandSkill`). Older saves are refused; archived engine bundles
+/// `affiliations` / `groupSkill`, was `persona` / `skillCharacter` /
+/// `groups` / `bandSkill`). Older saves are refused; archived engine bundles
 /// replay them (`docs/REPLAY.md`).
 pub const SAVE_VERSION: u32 = 10;
 
@@ -850,7 +850,7 @@ impl Match {
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
             // it used to be re-derived from stay / exile, which disagrees with
-            // the gate (unstoppable, mid-turn [停留], a [除外] granted this
+            // the gate (unstoppable, mid-turn stay, a exile granted this
             // turn by MyGO:无路矢): a policy that trusted it sent `end` into
             // `err.roll_first` forever.
             {
@@ -1292,7 +1292,7 @@ impl Match {
                 ..Default::default()
             };
             let reason = why_not_act(&cx, i, &m, busy);
-            // `skill:<owner>:<name>` -- the owner is the persona or band the
+            // `skill:<owner>:<name>` -- the owner is the persona or group the
             // skill came from (granted copies keep the original owner).
             let source = id
                 .strip_prefix("skill:")
@@ -1327,11 +1327,11 @@ impl Match {
     /// prompt-open fill ran: [`Cx::ai_auction_worth`] for an auction ceiling,
     /// [`Cx::auto_mortgage`] for a mortgage selection, and
     /// [`Cx::ai_answer_for_entry`] for every other prompt (the fallback, or a
-    /// [反击] propensity roll).
+    /// counteraction propensity roll).
     ///
     /// `None` when the seat has no open prompt or has already answered. The
     /// result is **not** bit-identical to the live match's precomputed fill
-    /// whenever that fill drew from the match RNG (auction ceilings, [反击]
+    /// whenever that fill drew from the match RNG (auction ceilings, counteraction
     /// propensity) -- the fork owns a fresh stream. That is expected and
     /// listed in the hidden-state audit (`docs/BOT.md` §1).
     pub fn compute_ai_answer(&mut self, member: i32) -> Option<RawAiAnswer> {
@@ -1377,7 +1377,7 @@ impl Match {
             }
             _ => {
                 // `fill_ai`'s per-seat body, on a throwaway `Ask` view of the
-                // same prompt (the fallback / [反击] propensity path). The
+                // same prompt (the fallback / counteraction propensity path). The
                 // prompt's own `Ask` is already filled on a stubbed fork, so
                 // read the entry through the shared helper rather than
                 // `fill_ai` (which skips non-`AI_UNSET` slots).
@@ -2407,7 +2407,7 @@ impl Match {
                     if !can_pay {
                         return Err(Msg::new("err.cannot_bid"));
                     }
-                    // B4 (`PIPELINE-AUDIT` K10b) -- 规则书 L76 「需[支付]或[消耗]
+                    // B4 (`PIPELINE-AUDIT` K10b) -- 规则书 L76 「需pay或spend
                     // 资金且资金不足时可以选择抵押拥有的地契」: a bid may be funded
                     // by 抵押, so eligibility is cash **plus** what the seat could
                     // raise, not cash alone. The old `m.value > money` gate let a
@@ -2624,7 +2624,7 @@ impl Match {
         }
     }
 
-    /// Skip the remaining pre-game phases with random characters and preset decks.
+    /// Skip the remaining pre-game phases with random personas and preset decks.
     pub fn quick_start(&mut self) {
         if matches!(self.world.st.phase.as_str(), "play" | "ended") {
             return;

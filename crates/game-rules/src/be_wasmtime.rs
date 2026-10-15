@@ -94,7 +94,7 @@ pub fn instantiate<T>(
 
 /// A module whose imports are resolved against a [`Linker`] **once**.
 /// Instantiating from it skips the per-call import walk, which is the bulk of
-/// what is left of a fire-up now that the linker itself is cached. The host
+/// what is left of a linker init now that the linker itself is cached. The host
 /// caches these per (engine, world type, module).
 pub struct Prepared<T>(InstancePre<T>);
 

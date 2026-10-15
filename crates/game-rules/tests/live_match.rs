@@ -115,8 +115,8 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
 
 #[test]
 fn a_card_whose_crystals_run_out_leaves_the_field() {
-    // TEST:crystal places itself with one crystal and spends it in the same
-    // effect. The 「no crystals -> discard」 check is its `crystalsChanged`
+    // TEST:named counter places itself with one named counter and spends it in the same
+    // effect. The the no-named-counter discard check is its `crystalsChanged`
     // handler, not a re-check at the spend site.
     let mut m = match_with_rules("TEST:crystal", rules_with_fixtures());
     m.act(1, &play("TEST:crystal")).expect("play should run");
@@ -375,7 +375,7 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
     // the effect never settles at all -- as against `negate_effect`, which
     // would let a listener see the effect and only void what lands.
     //
-    // Both players are human: a [反击] window is never offered to a bot.
+    // Both players are human: a counteraction window is never offered to a bot.
     let members = vec![member(1, false), member(2, false)];
     let mut m = Match::new(
         data(),

@@ -152,8 +152,8 @@ fn ranked_games_run_the_ban_phase() {
     );
 }
 
-/// Solo with a character on every seat (the solo setup screen's picks) skips
-/// the timed ban / pick entirely and opens the deck phase on those characters.
+/// Solo with a persona on every seat (the solo setup screen's picks) skips
+/// the timed ban / pick entirely and opens the deck phase on those personas.
 #[test]
 fn solo_preset_characters_skip_the_pick_phase() {
     let d = data();

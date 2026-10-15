@@ -38,7 +38,7 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
     );
     let first_id = first.id;
     t.m.tick(0.5);
-    assert_eq!(t.pos(0), 0, "wait at CiRCLE until the reward is chosen");
+    assert_eq!(t.pos(0), 0, "wait at the start square until the reward is chosen");
     assert_eq!(
         t.mark(),
         events.last().unwrap().id,
@@ -53,7 +53,7 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
         .iter()
         .find(|e| e.msg.key() == "log.circle_money")
         .unwrap();
-    assert!(first_id < reward.id, "walk to CiRCLE, then pay the reward");
+    assert!(first_id < reward.id, "walk to the start square, then pay the reward");
     let walks: Vec<_> = events
         .iter()
         .filter(|e| matches!(e.r#type.as_str(), "roll" | "move"))
@@ -63,7 +63,7 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
         "answering must not repeat the approach"
     );
     if landing == 0 {
-        assert_eq!(walks.len(), 1, "landing on CiRCLE needs no continuation");
+        assert_eq!(walks.len(), 1, "landing on the start square needs no continuation");
     } else {
         assert_eq!(walks.len(), 2);
         let rest = walks[1];

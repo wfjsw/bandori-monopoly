@@ -32,7 +32,7 @@ use game_rules::hostfns;
 use game_rules::{CardWorld, Msg, RulesBridge};
 
 /// The linked ruleset table, as `ruleset!` publishes it on a native
-/// build (one band table per rule crate, in `card-all`'s aggregation order).
+/// build (one group table per rule crate, in `card-all`'s aggregation order).
 pub static RULESET: &[&[card_sdk::CardDef]] = &[
     card_ag::CARDS,
     card_crychic::CARDS,
@@ -125,7 +125,7 @@ impl NativeRulesHandle {
                 // Same bitset the sandbox builds (): trigger
                 // kinds only.  values share the 0..128 numbering, so
                 // also setting those bits would make  say yes for
-                // kinds nothing listens to and open [反击] windows the sandbox
+                // kinds nothing listens to and open counteraction windows the sandbox
                 // skips -- a drift the check caught.
                 for o in &on {
                     for t in &o.triggers {

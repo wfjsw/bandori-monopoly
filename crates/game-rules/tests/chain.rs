@@ -1,4 +1,4 @@
-//! Black-box tests for the [反击] chain builder: one round per timing, the
+//! Black-box tests for the counteraction chain builder: one round per timing, the
 //! ring order of rulebook 89 under **ruling 2026-10-07**, counters to counters
 //! (the 「新的时点」), and LIFO resolution.
 //!
@@ -82,7 +82,7 @@ fn who_of(t: &Table, name: &str) -> Vec<i64> {
         .collect()
 }
 
-/// The card the open [反击] window's detail line names -- the timing it answers.
+/// The card the open counteraction window's detail line names -- the timing it answers.
 fn answered_card(t: &Table) -> Option<String> {
     let p = t.prompt()?;
     match p.text.a.get("detail") {
@@ -347,7 +347,7 @@ fn the_round_closes_after_a_quiet_lap() {
 // Clause 89: several counters to one timing
 // =====================================================================
 
-// 规则书（89）: 「多个效果可[反击]同一个时点」 -- two players answer X itself,
+// 规则书（89）: 「多个效果可counteraction同一个时点」 -- two players answer X itself,
 // not each other's counters. ruling 2026-10-07: the ring starts at the initial
 // user (P0); P0 holds no counter so it is skipped and P1 is asked first, and
 // each declaration exhausts its seat before priority advances.
@@ -451,10 +451,10 @@ fn lifo_resolution_with_multiple_links_from_one_seat() {
 }
 
 // =====================================================================
-// Clause 89: 「…后可对新的时点发动[反击]」 -- counters to counters
+// Clause 89: 「…后可对新的时点发动counteraction」 -- counters to counters
 // =====================================================================
 
-// 规则书（89）: 「所有玩家同意所有对一个时点的[反击]已发动后可对新的时点发动[反击]」
+// 规则书（89）: 「所有玩家同意所有对一个时点的counteraction已发动后可对新的时点发动counteraction」
 // -- a counter is a new timing, answered only once the round on X has closed.
 // ruling 2026-10-07: the ring on X starts at the initial user and laps until
 // quiet, so a seat still holding an eligible card is re-offered on the quiet

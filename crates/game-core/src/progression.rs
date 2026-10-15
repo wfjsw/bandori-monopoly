@@ -1,4 +1,4 @@
-//! Levels, EXP, fire (stamina), coins.
+//! Levels, EXP, charge (stamina), coins.
 
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +23,7 @@ pub fn exp_to_next(level: i32) -> i32 {
     }
 }
 
-/// EXP for finishing `rank` (1 = first) of `players`, before the fire multiplier.
+/// EXP for finishing `rank` (1 = first) of `players`, before the charge multiplier.
 pub fn base_exp(ranked: bool, rank: i32, players: i32) -> i32 {
     let beaten = (players - rank).max(0);
     if ranked {
@@ -40,7 +40,7 @@ pub fn exp_multiplier(charge_used: i32) -> i32 {
 /// Ranked coin change. Top three gain 500/300/100; otherwise the last three lose
 /// 500/300/100 counting from the bottom.
 ///
-/// The two bands overlap in small games by design: with 4 players, 4th place is
+/// The two groups overlap in small games by design: with 4 players, 4th place is
 /// "last" and loses 500 even though 3rd gains 100.
 pub fn ranked_coins(rank: i32, players: i32) -> i32 {
     if rank >= 1 && rank as usize <= TOP_COINS.len() && rank <= players {

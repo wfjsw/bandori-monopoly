@@ -69,7 +69,7 @@ impl Cx<'_> {
         self.bannable(persona) && self.w.st.players.iter().all(|s| s.persona != persona)
     }
 
-    /// Prefers characters with their own art set (`cnId`).
+    /// Prefers personas with their own art set (`cnId`).
     pub(crate) fn random_character(&mut self, for_pick: bool) -> String {
         let all: Vec<&str> = self
             .data
@@ -195,7 +195,7 @@ impl Cx<'_> {
                         }
                     } else {
                         // Public key only: own persona, own seat, the other
-                        // seats' characters in seat order. Pure -- no RNG.
+                        // seats' personas in seat order. Pure -- no RNG.
                         let opponents: Vec<String> = self
                             .w
                             .st

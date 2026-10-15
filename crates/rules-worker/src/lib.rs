@@ -104,7 +104,7 @@ impl Ctx {
             // it), so read the ones it skipped -- otherwise this hash disagrees
             // with the browser's and the record names an engine bundle the
             // replay loader has never seen. The roster (`cards.json` /
-            // `characters.json` / `bands.json`) is no longer in `DATA_FILES`:
+            // `personas.json` / `groups.json`) is no longer in `DATA_FILES`:
             // it comes from the ruleset and is covered by the ruleset hash.
             let owned;
             let text: Option<&str> = match contents.iter().find(|(f, _)| f == name) {
