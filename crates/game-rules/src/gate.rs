@@ -32,6 +32,7 @@ pub fn kind_of(gate: Gate) -> TriggerKind {
         Gate::Pay => TriggerKind::PayGate,
         Gate::Move => TriggerKind::MoveGate,
         Gate::Exclusive => TriggerKind::ExclusiveUse,
+        Gate::Play => TriggerKind::PlayGate,
     }
 }
 
@@ -44,6 +45,8 @@ pub struct Layers {
     pub stun_start: i32,
     pub exile: i32,
     pub unstoppable: i32,
+    /// Hand size (for a standing play lock like CRYCHIC's 「大于等于6」).
+    pub hand: i32,
 }
 
 fn window(actor: i32, seats: impl Iterator<Item = Layers>) -> WindowCtx {
@@ -75,6 +78,9 @@ fn window(actor: i32, seats: impl Iterator<Item = Layers>) -> WindowCtx {
                     stay: l.stay as i64,
                     stun: l.stun as i64,
                     exile: l.exile as i64,
+                    // `hand(p)` for a standing hand-size play lock
+                    // (CRYCHIC 「手牌数大于等于6时…无法从手中打出任何牌」).
+                    hand: l.hand as i64,
                     state,
                     ..PlayerSnap::default()
                 }
@@ -88,13 +94,15 @@ fn window(actor: i32, seats: impl Iterator<Item = Layers>) -> WindowCtx {
 pub fn window_of_world(w: &World, actor: usize) -> WindowCtx {
     window(
         actor as i32,
-        w.st.players.iter().map(|p| Layers {
+        w.st.players.iter().enumerate().map(|(i, p)| Layers {
             out: p.out(),
             stay: p.state_get(key::STAY),
             stun: p.state_get(key::STUN),
             stun_start: p.state_get(key::STUN_START),
             exile: p.state_get(key::EXILE),
             unstoppable: p.state_get(key::UNSTOPPABLE),
+            // Real hand pile, not the (often stale) `MatchPlayer::hand` size.
+            hand: w.hidden.get(i).map(|h| h.hand.len() as i32).unwrap_or(0),
         }),
     )
 }
@@ -110,6 +118,7 @@ pub fn window_of_card_world<W: CardWorld>(w: &W, actor: i32) -> WindowCtx {
             stun_start: w.state_get(p, key::STUN_START),
             exile: w.state_get(p, key::EXILE),
             unstoppable: w.state_get(p, key::UNSTOPPABLE),
+            hand: w.hand_size(p),
         }),
     )
 }

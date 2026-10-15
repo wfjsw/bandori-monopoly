@@ -319,15 +319,18 @@ fn s05_no_reward_when_the_move_started_on_circle() {
 // 「拥有眩晕时无法进行支付和收款（仍可被指定），不可打出手牌」: the money half
 // is blocked, so the reward is forced to the card. (`团技能` `D13` is the
 // parallel that decides the card half for a hand-flood.)
+//
+// [晕眩] is also [无法移动] (rules.txt 49 / `t01_stun_skips_operate_and_main_move`),
+// so a stun given *before* the roll zeros the walk and never reaches CiRCLE.
+// C44's force is a *payout-time* read -- the stun has to land mid-walk, after
+// the move is planned. `TEST:stun_self_mover` does that.
 #[test]
 fn s05b_stunned_pass_takes_the_card_half() {
     let mut t = Table::vanilla(2);
     until_turn(&mut t, 0);
     t.set_pos(0, tile("CiRCLE") + 58);
     t.set_pos(1, 20);
-    // A [晕眩] that landed mid-turn (a counter's stun) -- the reward's
-    // 「无法收付款」 check reads the status at payout time.
-    give_stun(&mut t, 0, 1);
+    t.place_raw(0, "TEST:stun_self_mover");
     t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
     let before = t.money(0);
     let hand = t.hand(0).len();

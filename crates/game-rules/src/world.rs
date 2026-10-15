@@ -947,6 +947,10 @@ pub trait CardWorld: Clone + 'static {
     fn turn_key(&self) -> i32;
     /// Is the player's persona exactly `name`?
     fn persona_is(&self, player_id: i32, name: &str) -> i32;
+    /// Replace the player's persona **name** -- the spelling [`Self::persona_is`]
+    /// matches. Does not rebind skills; the caller swaps the persona skill
+    /// separately (Two-in-One 「替换为sumimi的另一名角色」).
+    fn set_persona(&mut self, player_id: i32, name: &str);
     /// Does this player's persona belong to group `name`?
     fn in_group(&self, player_id: i32, name: &str) -> i32;
 

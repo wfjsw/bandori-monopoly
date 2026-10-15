@@ -7,6 +7,7 @@
   "ave_mujica_left": "火罐归零，退出状态2",
   "ave_mujica_no_crystal": "团卡上没有 [奇迹水晶]。",
   "ave_mujica_not_two": "只有状态2可以使用。",
+  "ave_mujica_one_sided": "状态2：只对自己结算1.5倍，对方收支不变",
   "ave_mujica_refill": "假面之下的真实：进入状态2，火罐补充至上限",
   "circle_staff_ask": "额外弃一张牌，将{{card}}的一个数字变为两倍？",
   "circle_staff_doubled": "已加倍{{card}}；弃置了{{dump}}",

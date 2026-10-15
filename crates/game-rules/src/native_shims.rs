@@ -274,6 +274,8 @@ pub trait HostOps {
     fn op_turn_key(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_persona_is`
     fn op_persona_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_set_persona`
+    fn op_set_persona(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_in_group`
     fn op_in_group(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_opt_int`
@@ -1048,6 +1050,10 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_persona_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::persona_is(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_set_persona(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::set_persona(self, a[0], a[1], a[2])?;
+        Ok(0)
     }
     fn op_in_group(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::in_group(self, a[0], a[1], a[2])? as i64)
@@ -2688,6 +2694,14 @@ pub unsafe extern "C-unwind" fn ruleset_turn_key() -> i32 {
 pub unsafe extern "C-unwind" fn ruleset_persona_is(player_id: i32, ptr: i32, len: i32) -> i32 {
     with_host(|h| match h.op_persona_is([player_id, ptr, len, 0, 0, 0]) {
         Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_persona(player_id: i32, ptr: i32, len: i32) {
+    with_host(|h| match h.op_set_persona([player_id, ptr, len, 0, 0, 0]) {
+        Ok(_) => {},
         Err(e) => abort_host(e),
     })
 }

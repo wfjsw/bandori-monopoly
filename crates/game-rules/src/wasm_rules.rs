@@ -1956,6 +1956,12 @@ impl CardWorld for Run {
             .get(player_id.max(0) as usize)
             .is_some_and(|s| s.persona == name) as i32
     }
+    fn set_persona(&mut self, player_id: i32, name: &str) {
+        // The `persona_is` spelling: `MatchPlayer::persona`.
+        if let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) {
+            s.persona = name.into();
+        }
+    }
     fn in_group(&self, player_id: i32, name: &str) -> i32 {
         // The persona's group.
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {

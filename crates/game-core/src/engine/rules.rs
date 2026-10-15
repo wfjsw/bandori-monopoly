@@ -702,6 +702,9 @@ pub enum Gate {
     /// May this exclusive card be played? Context rides along as an
     /// [`ExclusiveAsk`] on [`CardRules::exclusive_use`].
     Exclusive,
+    /// May a hand card be played right now? Play-only (unlike [`Self::Act`],
+    /// which also gates [主动] skills and skips a stunned turn).
+    Play,
 }
 
 /// The card-side context of a [`Gate::Exclusive`] question.

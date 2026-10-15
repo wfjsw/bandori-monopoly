@@ -1514,6 +1514,15 @@ pub fn set_slot(player_id: i32, key: &str, value: i32) {
     unsafe { sys::set_slot(player_id, p, l, value) }
 }
 
+/// Replace the player's persona **name** -- the spelling `persona_is`
+/// matches. Does not rebind skills; the caller swaps the persona skill
+/// separately (Two-in-One 「替换为sumimi的另一名角色」).
+#[cfg_attr(kani, inline(always))]
+pub fn set_persona(player_id: i32, name: &str) {
+    let (p, l) = s(name);
+    unsafe { sys::set_persona(player_id, p, l) }
+}
+
 #[cfg_attr(kani, inline(always))]
 pub fn inc_slot(player_id: i32, key: &str, by: i32) -> i32 {
     let (p, l) = s(key);

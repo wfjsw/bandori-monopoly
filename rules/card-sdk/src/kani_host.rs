@@ -332,6 +332,8 @@ pub enum Op {
     adjust_money = 313,
     // Static card property read (v62) -- `CardRules::card_prop` guest face.
     card_prop = 314,
+    // v72: write the persona **name** `persona_is` matches (character swap).
+    set_persona = 315,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

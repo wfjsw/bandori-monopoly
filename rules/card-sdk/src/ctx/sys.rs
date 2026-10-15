@@ -366,6 +366,9 @@ extern "C-unwind" {
     pub fn turn_key() -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_persona_is")]
     pub fn persona_is(player_id: i32, ptr: i32, len: i32) -> i32;
+    // v72: write the persona **name** `persona_is` matches (character swap).
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_set_persona")]
+    pub fn set_persona(player_id: i32, ptr: i32, len: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_in_group")]
     pub fn in_group(player_id: i32, ptr: i32, len: i32) -> i32;
     // prompts & trigger

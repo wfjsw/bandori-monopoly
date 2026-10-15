@@ -61,6 +61,10 @@ fn swap(player_id: i32) {
     } else {
         (B, A)
     };
+    // 规则书（1）: 「将自己的角色卡替换为sumimi的另一名角色」 -- the identity
+    // itself, not just the bound skill. Exclusive play and `persona_is` read
+    // this name.
+    ctx::set_persona(player_id, to.0);
     if let Some(uid) = ctx::find_card(player_id, from.1) {
         ctx::unplace_at(uid);
     }

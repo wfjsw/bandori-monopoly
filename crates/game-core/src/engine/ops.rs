@@ -2128,6 +2128,9 @@ impl World {
             super::Gate::Move => g.r#move,
             // [`Self::exclusive_use`] owns this question (it needs the card).
             super::Gate::Exclusive => true,
+            // Play-only lock is a ruleset opinion; the engine-side mirror has
+            // no standing play block.
+            super::Gate::Play => true,
         }
     }
 
