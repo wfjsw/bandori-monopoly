@@ -1368,3 +1368,16 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 | id | before | failing assertion | class | action |
 |---|---|---|---|---|
 | `ppp::pipopa_01_iff` + user1 | FAILED 354 s | `log must be exactly GainMoney(1000), PlaceCard(…, Field)` | **C** | `arm_place_card` leaked `w.dest` (the running card's fate) into `PlaceCard.dest`. pipopa does `set_dest(Banished)` for 「此卡[移除]」 then `place_card` a Popipapapipopa — effect recorded dest=3 not 2. Fixed: PlaceCard.dest is always Field (2) |
+
+### batch-2 re-time final
+
+| id | after |
+|---|---|
+| `skills_pp::aya_with_01_five_fans_iff` | **SUCCESSFUL** (1/1 cover; guard_needs fix) |
+| `skills_pp::aya_with_01_five_fans_user1_iff` | **SUCCESSFUL** (1/1 cover) |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | **TIMEOUT 1800 s** (class E — `add_crystals` `?` prompt path + `Msg`/memchr symex; body ABI) |
+| `ppp::pipopa_01_*` | queued (PlaceCard.dest fix) |
+| `ppp::bang_dream_02_teleport_owned_iff` | queued (8×8 walk) |
+| `mor::toko_swap_*` | queued (unwind 64) |
+
+`aya_with_02_*` TIMEOUT remains class E (`ask_number` prompt → Msg → memchr).
