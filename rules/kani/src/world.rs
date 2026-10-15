@@ -977,6 +977,24 @@ impl World {
         None
     }
 
+    /// Swap-remove the field instance `uid`; returns its card id when present.
+    /// Used by the host's unplace / deferred-fate (`set_dest`) commit.
+    pub fn remove_field(&mut self, uid: i32) -> Option<u16> {
+        let mut i = 0usize;
+        while i < self.field_n as usize {
+            if self.field[i].uid == uid {
+                let card = self.field[i].card;
+                let last = (self.field_n as usize) - 1;
+                self.field[i] = self.field[last];
+                self.field[last] = FieldCard::EMPTY;
+                self.field_n -= 1;
+                return Some(card);
+            }
+            i += 1;
+        }
+        None
+    }
+
     /// Refresh `fans_pos` / `fans_neg` for **one** seat from `player_keys`.
     ///
     /// The old `sync_views` walked all 4 seats on every `add_held` /

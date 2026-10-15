@@ -1551,6 +1551,9 @@ impl Match {
                                 .unwrap_or_else(|| {
                                     (self.bonus_time[i] + refill).min(self.world.clock.bonus_max())
                                 });
+                            // `baseTimeRefillSet` swaps the hooked refill only.
+                            let base_refill = set(crate::state::prop::BASE_TIME_REFILL_SET)
+                                .unwrap_or(base_refill);
                             if self.world.legacy_clock {
                                 // Pre-settings: 恢复时间 is *set* to the hooked
                                 // value, not refilled into. Matches every

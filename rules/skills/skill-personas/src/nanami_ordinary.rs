@@ -62,7 +62,8 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
     ],
 )
-    .silent(&[1, 4]);
+    .silent(&[1])
+    .quiet_when_empty(&[4]);
 
 /// Residual guard for [`on_skill`]: the CD and the 「每种角色标记上限1」 cap.
 /// Pure reads -- the same instant as the body (`run_hook` runs both on one
@@ -137,8 +138,13 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
 fn tick(player_id: i32) -> card_sdk::Asked {
     for name in ctx::tok_names(player_id, MARK_PREFIX) {
         let cd = cd_key(mark_skill(&name));
-        if state::get(player_id, &cd) > 0 {
-            state::set(player_id, &cd, state::get(player_id, &cd) - 1);
+        let left = state::get(player_id, &cd);
+        if left > 0 {
+            state::set(player_id, &cd, left - 1);
+            ctx::log(
+                player_id,
+                &Msg::new(key!("nanami_ordinary_cd")).i("n", (left - 1) as i64),
+            );
         }
     }
     Ok(())

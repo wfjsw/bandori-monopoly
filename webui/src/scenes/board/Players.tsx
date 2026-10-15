@@ -1,5 +1,7 @@
 // Player panels on the left; the match log is placed in the right column.
 
+import { useCompactValue } from "../../app/Stage";
+import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
 import { stateOf, stateMax } from "../../core/names";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
@@ -19,6 +21,7 @@ import s from "./Players.module.css";
 import { borrowedBand, byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
 import { setHoverSeat } from "./hoverSeat";
+import { holdPeek } from "../../hooks/hold";
 import { clockSync, displayRemainingMs } from "../../game/clockSync";
 
 /** A player's status chips: [停留] / [眩晕] / [除外] / 托管 (the engine's takeover). */
@@ -111,9 +114,12 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
 
 export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {
   const S = m.S;
+  // The seat list's height: 548 on the 900px stage, what the phone canvas leaves otherwise.
+  const compact = useCompactValue();
+  const avail = compact ? COMPACT_PLAYERS_H : 548;
   const n = S.players.length;
   const gap = n > 6 ? 5 : 8;
-  const height = Math.min(70, Math.floor((548 - gap * (n - 1)) / n));
+  const height = Math.min(compact ? COMPACT_SEAT_H : 70, Math.floor((avail - gap * (n - 1)) / n));
   const t = timerOf(m, solo, elapsed);
   const order = turnOrder(S);
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
@@ -139,7 +145,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
         // seat number keeps its own badge.
         const clock = i === S.turn ? t : null;
         return (
-          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)} onMouseEnter={() => setHoverSeat(i)} onMouseLeave={() => setHoverSeat(-1)}>
+          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)} {...holdPeek(() => setHoverSeat(i), () => setHoverSeat(-1))}>
             <span className={s.n}>{i + 1}</span>
             <div className={s.av}>
               <Avatar c={c} size={height < 58 ? 40 : 54} />
@@ -167,10 +173,10 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
                 return bb && <span className={s.status} title={tr("board.borrowedTip", { skill: cardTitle(bb.skill), who })}>{tr("board.borrowed", { who })}</span>;
               })()}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire} onMouseEnter={() => setFirePeek(i)} onMouseLeave={() => setFirePeek(null)}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "charge")}/{stateMax(x, "charge")}</span>
+              <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "charge")}/{stateMax(x, "charge")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
-              <span className={s.grave} title={tr("board.graveyardPile")} onMouseEnter={() => setPeek(i)} onMouseLeave={() => setPeek(null)} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>
+              <span className={s.grave} title={tr("board.graveyardPile")} {...holdPeek(() => setPeek(i), () => setPeek(null))} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>
                 <img src={sceneImg("card_back")} alt="" /><b>{x.discard.length}</b>
               </span>
             </div>
@@ -236,7 +242,7 @@ function CardRef({ card, text, onHover, onLeave }: { card: string; text: string;
   );
 }
 
-export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode }) {
+export function Log({ lines, colorOf, children, titled = true }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode; titled?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   // The log follows its own tail: re-pin only when new lines arrive, so a
   // reader who scrolled up is not thrown back down by a hover re-render.
@@ -245,7 +251,7 @@ export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: 
   const groups = turnGroups(lines);
   return (
     <div className={s.log}>
-      <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>
+      {titled && <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>}
       {children}
       <div className={s.lines} ref={ref}>
         {groups.map((g) => {

@@ -1,7 +1,7 @@
 //! `server [--port 8080] [--data data] [--static webui/dist] [--workers N] [--redis URL] [--bot-service PATH] [--bot-threads N] [--bot-search-threads N]`
 //!
 //! Environment: `PORT`, `BM_DATA`, `BM_STATIC`, `BM_WORKER`, `BM_WORKERS`, `BM_REDIS`,
-//! `BM_BOT_SERVICE`, `BOT_THREADS`, `BOT_SEARCH_THREADS`.
+//! `BM_BOT_SERVICE`, `BOT_THREADS`, `BOT_SEARCH_THREADS`, `BM_SSE_KEEPALIVE` (seconds, default 30).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,6 +23,10 @@ async fn main() {
     let port: u16 = arg("--port", "PORT", "8080")
         .parse()
         .expect("port must be a number");
+    // Loopback by default: the dev server proxies /api and /data here, so the
+    // backend need not be reachable from outside. `--host ::` / `0.0.0.0` (or
+    // `BM_HOST`) exposes it, e.g. for a deploy that serves `--static` directly.
+    let host = arg("--host", "BM_HOST", "127.0.0.1");
     let data_dir = PathBuf::from(arg("--data", "BM_DATA", "data"));
     let static_dir = PathBuf::from(arg("--static", "BM_STATIC", "webui/dist"));
 
@@ -134,6 +138,10 @@ async fn main() {
     {
         let s = Arc::get_mut(&mut server).expect("fresh server handle");
         s.bots = bots;
+        let secs: u64 = arg("--sse-keepalive", "BM_SSE_KEEPALIVE", "30")
+            .parse()
+            .expect("sse-keepalive must be a number of seconds");
+        s.sse_keepalive = std::time::Duration::from_secs(secs.max(1));
     }
     // Bring back anything the store still knows about, so a restart is silent.
     server.restore_rooms();
@@ -141,10 +149,10 @@ async fn main() {
     let statics = static_dir.is_dir().then_some(static_dir);
     let app = server::router(server, Some(data_dir), statics);
 
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+    let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
         .expect("bind");
-    eprintln!("listening on http://0.0.0.0:{port}");
+    eprintln!("listening on {}", listener.local_addr().expect("local addr"));
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;

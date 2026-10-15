@@ -310,3 +310,8 @@
     opacity: 0;
   }
 }
+/* Phone canvas: the 540px stage is shorter than the sheet's 640px cap, which let the
+   window hang below the screen with its scroll body unreachable. Bound the wrapper to
+   the stage instead; the body scrolls inside what is left. */
+:global(:root[data-compact]) .sheet { top: 6px; align-items: flex-end; }
+:global(:root[data-compact]) .sheetWin { max-height: 100%; }

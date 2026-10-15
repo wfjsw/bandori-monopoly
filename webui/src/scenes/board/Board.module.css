@@ -285,3 +285,107 @@
   transform: translate(-50%, -60%);
 }
 @keyframes flash { from { transform: translate(-50%, -40%) scale(0.6); opacity: 0; } }
+/* Phone canvas: the activation flash is a glance, not a poster -- a smaller face
+   (so it fits the 540px stage) and a caption that wraps instead of clipping. */
+:global(:root[data-compact]) .flash { top: 50%; max-width: 70%; }
+:global(:root[data-compact]) .flashFace { width: 170px; border-width: 2px; }
+:global(:root[data-compact]) .flashCaption { padding: 4px 8px 6px; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+:global(:root[data-compact]) .flashDetail { font-size: var(--fs-xs); line-height: 1.35; }
+:global(:root[data-compact]) .flashNegated span { font-size: 26px; border-width: 4px; padding: 2px 10px; }
+:global(:root[data-compact]) .banner { min-width: 0; max-width: 90%; padding: var(--sp-2) 18px; }
+:global(:root[data-compact]) .banner b { font-size: var(--fs-2xl); }
+/* ... and its art cropped to 16:9 around the centre, like the preview panel (the face
+   would otherwise reserve a 2:3 box around a 4:3 picture). */
+:global(:root[data-compact]) .flashFace > :first-child { min-height: 0; }
+:global(:root[data-compact]) .flashFace > :first-child > :first-child { aspect-ratio: 16 / 9; }
+/* [反击] chain (Master Duel style): the linked cards come to the centre, big
+   and tilted, joined by a chain, each with a large cyan link number. A big
+   italic title ("CHAIN" / "RESOLVE") spells itself in letter by letter. On
+   resolve the newest card is lifted forward first; settled links vanish. */
+.chain {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-fx-banner);
+  display: flex;
+  flex-direction: column;
+}
+.chainLink {
+  position: relative;
+  border-radius: var(--r-lg);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--owner, var(--pink)) 70%, transparent), 0 12px 30px rgba(0, 0, 0, 0.45);
+  transition: transform 0.3s, opacity 0.3s;
+  will-change: transform, opacity;
+}
+/* The face: bordered and tinted with its owner's colour, like a card on the field. */
+.chainLink .chainFace {
+  box-shadow: 0 0 0 3px var(--owner, var(--pink));
+  background: color-mix(in srgb, var(--owner, var(--white)) 14%, var(--white));
+}
+/* Zig-zag down the chain: my cards left, everyone else's right. */
+.chainMine { align-self: flex-start; transform: rotate(-5deg); }
+.chainTheirs { align-self: flex-end; transform: rotate(5deg); }
+.chainTheirs .chainNo { left: auto; right: -18px; }
+.chainOrigin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-lg);
+  box-shadow: 0 0 0 3px var(--owner, var(--pink));
+  background: color-mix(in srgb, var(--owner, var(--white)) 14%, var(--white));
+  color: var(--ink);
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  box-sizing: border-box;
+  text-align: center;
+}
+.chainOrigin b { font-weight: 800; }
+.chainOrigin span { font-weight: 600; opacity: 0.85; line-height: 1.25; }
+.chainDice { display: block; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
+.chainNo {
+  position: absolute;
+  left: -18px;
+  bottom: -30px;
+  font-size: 84px;
+  line-height: 1;
+  font-weight: 900;
+  font-style: italic;
+  color: #b8fbff;
+  -webkit-text-stroke: 2px #17a5c8;
+  text-shadow: 0 0 18px rgba(80, 230, 255, 0.95), 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+.chainIn { animation: chainIn 0.55s cubic-bezier(0.2, 1.2, 0.4, 1); }
+.chainResolving .chainLink { opacity: 0.55; transform: scale(0.85); }
+.chainResolving .chainLink.chainActive {
+  opacity: 1;
+  z-index: 3;
+  transform: scale(1.35) rotate(0deg);
+  box-shadow: 0 0 36px 10px rgba(255, 255, 255, 0.9), 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+.chainResolving .chainLink.chainDone { opacity: 0; transform: scale(1.5); }
+.chainTitle {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  translate: -50% 0;
+  justify-content: center;
+  white-space: nowrap;
+  z-index: calc(var(--z-fx-banner) + 1);
+  display: flex;
+  font-size: 110px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 0 22px rgba(120, 220, 255, 0.95), 0 6px 14px rgba(0, 0, 0, 0.55);
+  animation: chainTitleOut 0.3s ease-in 0.8s forwards;
+}
+.chainTitle span { display: inline-block; animation: chainLetter 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) backwards; }
+@keyframes chainIn {
+  from { translate: 0 -160px; scale: 1.8; opacity: 0; }
+  60% { opacity: 1; }
+}
+@keyframes chainLetter { from { transform: translate(-90px, -50px) rotate(-25deg) scale(0.3); opacity: 0; } }
+@keyframes chainTitleOut { to { opacity: 0; } }

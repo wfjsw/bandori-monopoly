@@ -4,7 +4,10 @@
 
 ```sh
 cargo run -p server --release -- --port 8080 --data data --static webui/dist
-# env: PORT, BM_DATA, BM_STATIC
+# env: PORT, BM_HOST, BM_DATA, BM_STATIC
+# binds 127.0.0.1 by default (the dev server proxies to it); `--host ::` listens
+# on IPv6 + IPv4, `--host 0.0.0.0` on IPv4 only -- needed when this process
+# itself serves `--static` to the network.
 # optional advanced-bot decisions (docs/BOT.md B5) -- see "Enabling it in a deploy":
 #   --bot-service <path> / BM_BOT_SERVICE, --bot-threads N / BOT_THREADS,
 #   --bot-search-threads N / BOT_SEARCH_THREADS
@@ -166,7 +169,7 @@ cargo build -p bot-service --release
 cargo build -p server --release
 
 # run (the server starts the child itself):
-./target/release/server --port 18080 --data data --static webui/dist \
+./target/release/server --host :: --port 18080 --data data --static webui/dist \
   --bot-service ./target/release/bot-service \
   --bot-threads 4 --bot-search-threads 4 \
   --rules dist/cards

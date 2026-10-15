@@ -65,10 +65,15 @@ export interface LogLine {
  *  engine's stage number (1..4 = 开始 / 运营 / 移动 / 结束). */
 interface StageMark { step: number; newTurn: boolean; label?: string; turn?: number }
 
-type Item = { ev: MatchEvent } | { mark: StageMark };
+type Item = { ev: MatchEvent } | { mark: StageMark } | { view: MatchView };
 
 /** How long the new-turn announcement stays on screen. */
 const TURN_MS = 1500;
+/** Chain overlay pacing: a link joining, a link settling. */
+const CHAIN_LINK_MS = 800;
+const CHAIN_RESOLVE_MS = 850;
+/** A long chain plays each link faster so the whole of it stays watchable. */
+const chainStep = (ms: number, links: number) => Math.max(400, Math.min(ms, 7000 / Math.max(1, links)));
 
 /** The log label key of an engine stage number. */
 function stageKey(step: number): string {
@@ -112,6 +117,20 @@ export class Animator {
    *  cards-in-play row slides out and lights up (Master Duel's activated-card
    *  cue). `uid` is the field instance. */
   pulse: { uid: number; id: number; ms: number } | null = null;
+  /** The [反击] chain under construction / resolving (Master Duel style): the
+   *  links so far (1 = the initiating card), the link settling now, and the
+   *  links already settled. `shown` turns on with the second link -- a lone
+   *  initiating card is not a chain. */
+  chain: {
+    links: { seq: number; card: string; owner: number; fresh: number; origin?: Msg }[];
+    shown: boolean;
+    resolving: boolean;
+    active: number;
+    done: number[];
+  } | null = null;
+  /** The big "CHAIN" / "RESOLVE" title (letters stagger in, Master Duel style). */
+  chainTitle: { text: string; id: number } | null = null;
+  private chainTitleTimer = 0;
   hop: { playerId: number; id: number } | null = null;
   /** The walk under way: the tiles still ahead (the last is the landing).
    *  The board lights them so the destination and path read before and
@@ -138,6 +157,13 @@ export class Animator {
   private disposed = false;
   private bump: () => void;
   private view: () => MatchView | null;
+  /** The view the board is drawing: the state as of before the events being
+   *  played. Walks start from its positions. */
+  shownView: () => MatchView | null = () => this.view();
+  /** Adopt a view as the one the board draws (a `view` queue item reached). */
+  onView: (v: MatchView) => void = () => undefined;
+  /** Called when the queue has drained: the board catches up with the state. */
+  onDrain: () => void = () => undefined;
   private readonly replay: boolean;
 
   constructor(bump: () => void, view: () => MatchView | null, replay = false) {
@@ -175,6 +201,7 @@ export class Animator {
   dispose(): void {
     this.disposed = true;
     clearTimeout(this.bannerTimer);
+    clearTimeout(this.chainTitleTimer);
     clearTimeout(this.turnTimer);
     clearTimeout(this.flashTimer);
     clearTimeout(this.pulseTimer);
@@ -244,6 +271,15 @@ export class Animator {
     return namesOf(this.view()?.state);
   }
 
+  /** A new view arrived. Queued behind the events that led to it, the board
+   *  adopts it the moment those have played -- not before (state running
+   *  ahead of the animation) and not after later turns' events. */
+  pushView(v: MatchView): void {
+    if (!this.animating && !this.queue.length) return this.onView(v);
+    this.queue.push({ view: v });
+    void this.run();
+  }
+
   push(e: MatchEvent): void {
     this.queue.push({ ev: e });
     void this.run();
@@ -287,6 +323,16 @@ export class Animator {
       }];
       this.bump();
     }
+  }
+
+  private showChainTitle(text: string): void {
+    this.chainTitle = { text, id: ++this.seq };
+    clearTimeout(this.chainTitleTimer);
+    this.chainTitleTimer = setTimeout(() => {
+      this.chainTitle = null;
+      this.bump();
+    }, 1100 / Math.max(1, this.speed));
+    this.bump();
   }
 
   private showBanner(title: string, body = ""): void {
@@ -448,11 +494,12 @@ export class Animator {
   private async run(): Promise<void> {
     if (this.animating) return;
     this.animating = true;
-    this.pos = this.view()?.state.players.map((x) => x.pos) ?? null;
+    this.pos = this.shownView()?.state.players.map((x) => x.pos) ?? null;
     this.bump();
     while (this.queue.length && !this.disposed) {
       const it = this.queue.shift()!;
       try {
+        if ("view" in it) { this.onView(it.view); this.bump(); continue; }
         if ("mark" in it) await this.enterStage(it.mark, this.fast());
         else await this.play(it.ev, this.fast());
       } catch (err) {
@@ -462,10 +509,16 @@ export class Animator {
     if (this.disposed) return;
     this.animating = false;
     this.pos = null;
-    this.route = null;
+    // A walk halted mid-route (CiRCLE's reward prompt, or any hook still
+    // settling in the move stage) keeps its remaining route lit: the queue is
+    // empty only until the engine publishes the next segment.
+    const st = this.shownView()?.state;
+    const midWalk = !!st && (st.prompt.id > 0 || st.step === 3);
+    if (!(midWalk && this.route && this.route.length > 0)) this.route = null;
     // Caught up: the last stage played is the state's own.
     this.stage = null;
     this.turn = null;
+    this.onDrain();
     this.bump();
   }
 
@@ -505,6 +558,7 @@ export class Animator {
     let at = end;
     for (const it of this.queue) {
       if ("mark" in it) break;
+      if ("view" in it) continue;
       const q = it.ev;
       if (q.type === "move" && q.playerId === playerId && q.from === at && q.value) {
         const dir = q.value > 0 ? 1 : -1;
@@ -519,7 +573,7 @@ export class Animator {
     return out;
   }
 
-  private async walk(playerId: number, from: number, steps: number, hop: number): Promise<void> {
+  private async walk(playerId: number, from: number, steps: number, hop: number, stepsLeft = 0): Promise<void> {
     if (!this.pos) return;
     const n = D.tiles.length;
     const dir = steps >= 0 ? 1 : -1;
@@ -530,7 +584,18 @@ export class Animator {
       q = (((q + dir) % n) + n) % n;
       ahead.push(q);
     }
-    const more = hop > 0 ? this.routeAhead(playerId, ahead.length ? ahead[ahead.length - 1] : from) : [];
+    // The engine says how many steps follow this segment (a walk is cut at every
+    // CiRCLE, and the next segment only exists after the reward settles); the
+    // queue read-ahead covers cuts by per-step hooks.
+    const end = ahead.length ? ahead[ahead.length - 1] : from;
+    let more = hop > 0 ? this.routeAhead(playerId, end) : [];
+    if (hop > 0 && stepsLeft > more.length) {
+      more = [];
+      for (let k = 1, q = end; k <= stepsLeft; k++) {
+        q = (((q + dir) % n) + n) % n;
+        more.push(q);
+      }
+    }
     // A continuation of a walk whose route is already lit: keep it as is.
     const carried = hop > 0 && !!this.route && this.route.length > 0 && this.route[0] === ahead[0];
     if (hop > 0 && !carried) this.route = ahead.concat(more);
@@ -551,9 +616,85 @@ export class Animator {
       }
     } finally {
       this.hop = null;
+      // Between segments (CiRCLE settles here) the rest of the route stays lit.
       if (!more.length) this.route = null;
       this.bump();
     }
+  }
+
+  /** Wait for the card face on the flash to leave (its hold is a timer). */
+  private async flashGone(): Promise<void> {
+    while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
+  }
+
+  /** A link joins the chain: the card flashes (the initiating card first),
+   *  the second link raises the Chain banner, then the card is appended to the
+   *  chain stack with the link animation. */
+  private async chainLink(e: MatchEvent, fast: boolean): Promise<void> {
+    const seq = e.value;
+    const quiet = this.noFlash();
+    if (seq <= 1 || !this.chain) {
+      this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
+      // A chain on a timing with no card of its own (a board event) opens
+      // without a link 1 event on old records: stand one in.
+      if (seq > 1) this.chain.links.push({ seq: 1, card: "", owner: -1, fresh: 0 });
+    }
+    const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq, origin: seq === 1 && !e.card ? e.msg : undefined };
+    if (!quiet && e.card) {
+      await this.cardFlash({ ...e, kind: "counter", msg: e.msg, results: [], negated: false }, false);
+      await this.flashGone();
+      if (this.disposed) return;
+    }
+    this.chain.links = [...this.chain.links, link];
+    if (seq >= 2 && !quiet) {
+      // The chain appears only while a card attaches, then goes.
+      const ch = this.chain;
+      ch.shown = true;
+      sfx("place");
+      if (seq === 2) {
+        if (!fast) sfx("prompt");
+        this.showChainTitle(tr("anim.chain"));
+      }
+      this.bump();
+      await this.nap(seq === 2 ? 1100 : chainStep(CHAIN_LINK_MS, ch.links.length));
+      ch.shown = false;
+      this.bump();
+    }
+  }
+
+  /** The closed chain settles newest-first: a Resolve title, then each link
+   *  is shown for a beat as it comes off the chain. The chain is gone before
+   *  the link's effect events play, so each effect lands right after its card. */
+  private async chainResolve(e: MatchEvent): Promise<void> {
+    const quiet = this.noFlash();
+    const ch = this.chain;
+    if (!ch) return;
+    if (e.value === 0) {
+      ch.resolving = true;
+      if (!quiet) {
+        sfx("prompt");
+        this.showChainTitle(tr("anim.resolve"));
+        await this.nap(900);
+      }
+      return;
+    }
+    ch.active = e.value;
+    if (!quiet) {
+      ch.shown = true;
+      sfx("card_play");
+      this.bump();
+      await this.nap(chainStep(CHAIN_RESOLVE_MS, ch.links.length));
+    }
+    // The card fades off the chain, then the board is clear for its effect.
+    ch.done = [...ch.done, e.value];
+    if (!quiet) {
+      this.bump();
+      await this.nap(250);
+    }
+    ch.shown = false;
+    // Link 1 settles last: the chain is over.
+    if (e.value === 1 && this.chain === ch) this.chain = null;
+    this.bump();
   }
 
   private async play(e: MatchEvent, fast: boolean): Promise<void> {
@@ -564,6 +705,8 @@ export class Animator {
     const playerId = e.playerId;
     const ok = playerId >= 0 && !!v && playerId < v.state.players.length;
     const wait = (ms: number) => (fast ? Promise.resolve() : this.nap(ms));
+    // A route left lit between walk segments is dropped by a turn change or a teleport.
+    if (e.type === "turn" || e.type === "teleport") this.route = null;
     switch (e.type) {
       case "turn":
         // The queued new-turn marker announces whose turn it is once.
@@ -583,7 +726,7 @@ export class Animator {
         await wait(450);
         // A burst of reward/card events may fast-forward the log, but must
         // still show the path. Only explicit 4x replay skips movement frames.
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130, e.ahead ?? 0);
         break;
       }
       case "dice": {
@@ -617,7 +760,7 @@ export class Animator {
       case "move":
         if (!ok) break;
         this.showBanner(this.player(playerId), body);
-        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90, e.ahead ?? 0);
         break;
       case "teleport":
         if (!ok || !this.pos) break;
@@ -672,6 +815,8 @@ export class Animator {
         if (this.noFlash()) break;
         await this.cardFlash(e, fast);
         break;
+      case "chain": await this.chainLink(e, fast); break;
+      case "resolve": await this.chainResolve(e); break;
       case "flash":
         // Proactive "look here" cue (`ctx::flash_card` / `flash_tile`): the
         // named card's face, or a tile banner when there is no card. Parent-
@@ -701,11 +846,25 @@ export class Animator {
 export function useBoardSession(sess: GameSession): { view: MatchView | null; at: number; anim: Animator } {
   const [, bump] = useReducer((x: number) => x + 1, 0);
   const [state, set] = useState<{ view: MatchView | null; at: number }>(() => ({ view: sess.view, at: performance.now() }));
+  // `viewRef` is the newest view from the session; `state.view` is what the
+  // board draws. A view that arrives while events are still playing is held
+  // (the events precede their view), so every panel -- player bars, tile
+  // owners, field cards, money -- changes only once the animation has caught
+  // up, instead of running ahead of it. The drain below releases it.
   const viewRef = useRef(state.view);
-  viewRef.current = state.view;
+  const shownRef = useRef(state.view);
+  shownRef.current = state.view;
   const animRef = useRef<Animator | null>(null);
   if (!animRef.current) {
     const a = new Animator(bump, () => viewRef.current, sess.kind === "replay");
+    a.shownView = () => shownRef.current;
+    a.onView = (v) => {
+      shownRef.current = v;
+      set({ view: v, at: performance.now() });
+    };
+    a.onDrain = () => {
+      if (viewRef.current !== shownRef.current) set({ view: viewRef.current, at: performance.now() });
+    };
     for (const e of sess.view?.state.events ?? []) a.addLog(e, { history: true });
     animRef.current = a;
   }
@@ -720,7 +879,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
       (v) => {
         const prev = viewRef.current?.state;
         viewRef.current = v;
-        set({ view: v, at: performance.now() });
+        a.pushView(v);
         // Queue stage changes for the match log after their events. Only a
         // new turn gets an announcement over the board.
         const now = v.state;

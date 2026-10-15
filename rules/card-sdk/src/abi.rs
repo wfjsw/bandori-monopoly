@@ -935,7 +935,16 @@ pub mod prop {
     /// `bonus_time` (免费时间): it is **set** to this value at turn start
     /// instead of refilled.
     pub const BONUS_TIME_SET: &str = "bonusTimeSet";
-    /// Encode `secs` for [`BASE_TIME_SET`] / [`BONUS_TIME_SET`].
+    /// Turn-clock override: every turn start the 恢复时间 **refill** added to
+    /// `base_time` (the `TurnBaseTime` value) is this many seconds **plus
+    /// one**; `0` = no override. Unlike [`BASE_TIME_SET`] the pool is not
+    /// replaced -- only the per-turn increment, which the usual cap still
+    /// applies to. Replaces any `TurnBaseTime` hook result; ignored when
+    /// [`BASE_TIME_SET`] is armed. On a board-owned instance (`tile < 0`);
+    /// with several, the smallest wins (元祖！邦多利酱).
+    pub const BASE_TIME_REFILL_SET: &str = "baseTimeRefillSet";
+    /// Encode `secs` for [`BASE_TIME_SET`] / [`BASE_TIME_REFILL_SET`] /
+    /// [`BONUS_TIME_SET`].
     pub const fn clock_secs(secs: i32) -> i32 {
         secs + 1
     }
@@ -1699,7 +1708,7 @@ impl TriggerKind {
     /// `trigger::set_pay_amount`.
     ///
     /// Host application (`engine` `StartTimer`, post-settings clock):
-    /// `base = (base + value).min(max(settings.base_time, value))` -- a refill
+    /// (`baseTimeRefillSet` first swaps `value`.) `base = (base + value).min(max(settings.base_time, value))` -- a refill
     /// capped at the larger of the configured initial pool and the hook's own
     /// value, so a hook that grants a bigger refill (e.g. doubling 15 → 30)
     /// still shows up as base 30 rather than being clipped back. A

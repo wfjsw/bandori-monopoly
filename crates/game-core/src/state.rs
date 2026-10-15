@@ -551,6 +551,9 @@ pub mod prop {
     /// Turn-clock override: `base_time` (恢复时间) = value - 1 seconds, `0` =
     /// none. Mirrors `card_sdk::abi::prop::BASE_TIME_SET`.
     pub const BASE_TIME_SET: &str = "baseTimeSet";
+    /// Turn-clock override: the `base_time` refill = value - 1 seconds, `0` =
+    /// none. Mirrors `card_sdk::abi::prop::BASE_TIME_REFILL_SET`.
+    pub const BASE_TIME_REFILL_SET: &str = "baseTimeRefillSet";
     /// As [`BASE_TIME_SET`] for `bonus_time` (免费时间). Mirrors
     /// `card_sdk::abi::prop::BONUS_TIME_SET`.
     pub const BONUS_TIME_SET: &str = "bonusTimeSet";
@@ -1143,6 +1146,12 @@ pub struct MatchEvent {
     /// presentational.
     #[serde(default = "no_parent", skip_serializing_if = "is_no_parent")]
     pub parent: i32,
+    /// On a walk's `roll` / `move` event: how many more steps the same walk
+    /// takes after this segment's `to` (a walk publishes one segment per
+    /// pass-reward tile it passes, so the client cannot see the whole route otherwise).
+    /// `0` = the segment ends the walk.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ahead: i32,
     /// Presentational outcome lines on a `"card"` activation: the explicit
     /// 「无事发生」 / 「被…无效」 notes and the flash's one-line summary. The
     /// body's own `ctx::log` lines and the host effects it caused are **child
@@ -1175,6 +1184,10 @@ fn is_default_flash(f: &bool) -> bool {
 
 fn is_no_parent(p: &i32) -> bool {
     *p < 0
+}
+
+fn is_zero(v: &i32) -> bool {
+    *v == 0
 }
 
 fn no_parent() -> i32 {
@@ -1211,6 +1224,7 @@ impl Default for MatchEvent {
             kind: String::new(),
             negated: false,
             parent: -1,
+            ahead: 0,
             results: Vec::new(),
             uid: -1,
             flash: true,

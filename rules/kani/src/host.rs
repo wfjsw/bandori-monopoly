@@ -265,8 +265,10 @@ fn tile_idx(t: i32) -> usize {
 
 /// Die roll within `count` d `sides` — symbolic under Kani, mid-value native.
 /// `World::forced_roll != 0` pins the face (harness control for dice clauses).
+/// Count range matches the real engine (`hostfns::roll` accepts `1..=100`);
+/// a tighter clamp silently rewrites 12d4 into 8d4 (class C, eve-bushido-01).
 fn roll_dice(count: i32, sides: i32) -> i32 {
-    let c = count.max(0).min(8);
+    let c = count.max(0).min(100);
     let s = sides.max(1).min(1000);
     #[cfg(kani)]
     {
@@ -1375,6 +1377,24 @@ pub fn arm_cards_in(a: Args) -> i64 {
                         }
                         s += 1;
                     }
+                } else if a1 == 3 {
+                    // Field: cards placed by `a0`, in placement order.
+                    let mut i = 0usize;
+                    while i < w.field_n as usize && n < world::MAX_CARDS {
+                        if w.field[i].player == a0 {
+                            ids[n] = card_slot_of_id(intern::NameId(w.field[i].card));
+                            n += 1;
+                        }
+                        i += 1;
+                    }
+                } else if a1 == 2 {
+                    // Deck: draw pile, top card first.
+                    let mut i = 0usize;
+                    while i < w.deck_n as usize && n < world::MAX_CARDS {
+                        ids[n] = card_slot_of_id(intern::NameId(w.deck_pile[i]));
+                        n += 1;
+                        i += 1;
+                    }
                 }
             });
             let mut encoded = [0u8; 16];
@@ -1974,17 +1994,24 @@ pub fn arm_place_card(a: Args) -> i64 {
     let id = card_u16(a1, a2);
     let slot = card_slot(a1, a2);
     world::with_world_mut(|w| {
-        let dest = w.dest;
+        // `place_card` puts the **new** instance on the owner's field. The
+        // running card's fate (`w.dest`, set by `set_dest`) is a different
+        // thing — it is where the *running* instance goes when the effect
+        // finishes. The PlaceCard effect's `dest` is the Dest code of the
+        // **placed** card = Field (2). (pipopa: `set_dest(Banished)` for
+        // 「此卡[移除]」 then `place_card` a Popipapapipopa — the old arm
+        // leaked `w.dest=3` into PlaceCard.dest.)
         let uid = w.next_uid;
         w.next_uid += 1;
         w.last_uid = uid;
+        let tile = w.pos[player_idx(a0)];
         let fi = w.field_n as usize;
         if fi < world::MAX_FIELD {
             w.field[fi] = world::FieldCard {
                 uid,
                 card: id,
                 player: a0,
-                tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
+                tile,
                 face_down: false,
                 immune: false,
                 crystals: 0,
@@ -1994,7 +2021,7 @@ pub fn arm_place_card(a: Args) -> i64 {
         }
         w.push(Effect::PlaceCard {
             player: a0,
-            dest,
+            dest: 2,
             card: slot,
         });
         uid as i64
@@ -2005,20 +2032,22 @@ pub fn arm_place_card_at(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
             // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
+            // Same fate/dest split as `arm_place_card`: PlaceCard.dest is
+            // Field (2) for the placed instance, not `w.dest`.
             let id = card_u16(a1, a2);
             let slot = card_slot(a1, a2);
             world::with_world_mut(|w| {
-                let dest = w.dest;
                 let uid = w.next_uid;
                 w.next_uid += 1;
                 w.last_uid = uid;
+                let tile = w.pos[player_idx(a0)];
                 let fi = w.field_n as usize;
                 if fi < world::MAX_FIELD {
                     w.field[fi] = world::FieldCard {
                         uid,
                         card: id,
                         player: a0,
-                        tile: if dest == 0 { w.pos[player_idx(a0)] } else { dest },
+                        tile,
                         face_down: false,
                         immune: false,
                         crystals: 0,
@@ -2028,7 +2057,7 @@ pub fn arm_place_card_at(a: Args) -> i64 {
                 }
                 w.push(Effect::PlaceCard {
                     player: a0,
-                    dest,
+                    dest: 2,
                     card: slot,
                 });
                 uid as i64
@@ -2232,7 +2261,31 @@ pub fn arm_set_counter_self(a: Args) -> i64 {
 pub fn arm_set_dest(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
-            world::with_world_mut(|w| w.dest = a0);
+            world::with_world_mut(|w| {
+                w.dest = a0;
+                // Field-effect fate: the real engine defers to `apply_dest` at
+                // the run's commit (unplace-and-send the running instance).
+                // A play from hand names the *hand card's* fate instead and is
+                // applied by the play pipeline, so only apply here when the
+                // instance is live on the field. `Dest::Field` (2) = stay.
+                //
+                // The commit is **not** an in-run effect (specs such as
+                // `again_02_effects_ok` / `starry_06_effects_ok` pin "exactly
+                // one effect" and the engine's post-body unplace is outside
+                // the effect log). World state only: field slot drops, pile
+                // gains the card.
+                if a0 != 2 {
+                    let uid = w.last_uid;
+                    if let Some(card) = w.remove_field(uid) {
+                        match a0 {
+                            0 => world::pile_push(&mut w.discard_pile, &mut w.discard_n, card),
+                            1 => world::pile_push(&mut w.hand_pile, &mut w.hand_n, card),
+                            // 3 = Banished 「[移除]」: left the field, goes nowhere.
+                            _ => {}
+                        }
+                    }
+                }
+            });
             0
         }
 }
@@ -2838,6 +2891,9 @@ pub fn arm_turn_player(a: Args) -> i64 {
 pub fn arm_unplace(a: Args) -> i64 {
     let [a0, ..] = a;
     world::with_world_mut(|w| {
+        if let Some(card) = w.remove_field(a0) {
+            world::pile_push(&mut w.discard_pile, &mut w.discard_n, card);
+        }
         w.push(Effect::UnplaceCard { uid: a0 });
     });
     0
@@ -2847,7 +2903,18 @@ pub fn arm_unplace_card(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
             world::with_world_mut(|w| {
-                w.push(Effect::UnplaceCard { uid: a0 });
+                // `unplace_card` = running instance (`last_uid`); `unplace_at`
+                // addresses `a0`; `unplace_card_named` is name-addressed and
+                // still effect-only. All three share this arm.
+                let uid = if (0..w.field_n as usize).any(|i| w.field[i].uid == a0) {
+                    a0
+                } else {
+                    w.last_uid
+                };
+                if let Some(card) = w.remove_field(uid) {
+                    world::pile_push(&mut w.discard_pile, &mut w.discard_n, card);
+                }
+                w.push(Effect::UnplaceCard { uid });
             });
             0
         }

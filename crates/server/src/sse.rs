@@ -16,7 +16,6 @@
 
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
@@ -111,6 +110,7 @@ pub async fn stream(
 ) -> ApiResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
     let (room, member) = member_room(&s, &sess, &id)?;
     let (match_id, last_event) = parse_last_event_id(&headers, uri.query());
+    let keepalive = s.sse_keepalive;
     let (rx, back) = {
         let mut r = room.lock().unwrap();
         let back = r.stream_opened(member);
@@ -139,11 +139,8 @@ pub async fn stream(
         },
         id,
     ));
-    Ok(Sse::new(ReceiverStream::new(out).map(Ok)).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("ping"),
-    ))
+    Ok(Sse::new(ReceiverStream::new(out).map(Ok))
+        .keep_alive(KeepAlive::new().interval(keepalive).text("")))
 }
 
 async fn pump(

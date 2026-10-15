@@ -245,7 +245,17 @@ export function showEventPile(S: MatchState): void {
       {S.eventActive?.length ? (
         <div className={s.rows}>
           <b>{tr("events.active")}</b>
-          {S.eventActive.map((e) => <Btn key={e.id} size="small" onClick={() => showEvent(e.id, fmtMsg(e.note, namesOf(S)))}>{e.id}{e.note?.k ? ` · ${fmtMsg(e.note, namesOf(S))}` : ""}</Btn>)}
+          <div className={s.pileCards}>
+            {S.eventActive.map((e) => {
+              const note = e.note?.k ? fmtMsg(e.note, namesOf(S)) : "";
+              return (
+                <div key={e.id} className={s.fieldSlot}>
+                  <InspectCard id={e.id} note={note} />
+                  {note && <small>{note}</small>}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : <p className={s.muted}>{tr("events.none")}</p>}
       {S.eventDiscard?.length > 0 && <p className={s.muted}>{tr("events.settled", { list: S.eventDiscard.slice(-8).join(tr("common.listSep")) })}</p>}
@@ -310,7 +320,15 @@ export function showField(m: Model): void {
         <div className={s.pileRow}>
           <div className={s.who}><span>{tr("board.activeEvents")}</span></div>
           <div className={s.pileCards}>
-            {events.map((e) => <Btn key={e.id} size="small" onClick={() => showEvent(e.id, fmtMsg(e.note, names))}>{tr("events.label", { id: e.id })}{e.counter ? ` ×${e.counter}` : ""}</Btn>)}
+            {events.map((e) => {
+              const note = e.note?.k ? fmtMsg(e.note, names) : "";
+              return (
+                <div key={e.id} className={s.fieldSlot}>
+                  <InspectCard id={e.id} note={note} />
+                  {(note || e.counter > 0) && <small>{[note, e.counter > 0 ? `×${e.counter}` : ""].filter(Boolean).join(" · ")}</small>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

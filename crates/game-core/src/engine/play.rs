@@ -1464,6 +1464,7 @@ impl Cx<'_> {
             from: pos,
             to: pos,
             value: 0,
+            ahead: steps.max(0) + m.extra_steps.max(0),
             pending_first: true,
             main: m.main,
             roll: m.roll,
@@ -1504,6 +1505,7 @@ impl Cx<'_> {
             if let Some(seg) = self.w.walk_seg_mut() {
                 seg.to = next;
                 seg.value += m.dir();
+                seg.ahead = remaining as i32;
             }
             if last || self.w.tile_prop(at as i32, crate::state::prop::START) != 0 {
                 // Publish the approach before `passTile` on the start square

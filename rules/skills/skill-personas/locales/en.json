@@ -1,4 +1,5 @@
 {
+  "afterglow_rest_count": "Afterglow: turn {{n}}/3 without a (2)",
   "afterglow_rest_gain": "Afterglow: three turns without a (2), +1 fire pot",
   "akao_cool_ask": "Which card goes to hand?",
   "akao_cool_note": "placed face-down",
@@ -180,6 +181,7 @@
   "mutsumi_crychic_spend": "Exquisite Doll",
   "mutsumi_crychic_title": "Exquisite Doll",
   "nanami_ordinary_ask": "Pay 1 fire pot for that character's mark?",
+  "nanami_ordinary_cd": "This Is Quite Ordinary: {{n}} turn(s) of cooldown left",
   "nanami_ordinary_gain": "This Is Quite Ordinary: +1 fire pot",
   "nanami_ordinary_mark": "Gained a 「{{card}}」 mark",
   "nanami_ordinary_no_mark": "You hold no character marks.",

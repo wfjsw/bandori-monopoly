@@ -40,7 +40,7 @@ and `proofs/skills_ppp.rs` (pure formulas, body iff, no-op, mutant).
 | harness | verdict | time | note |
 |---|---|---:|---|
 | `bang_dream_01_crystal_iff` | SUCCESSFUL | 352.7 s CBMC / 508.9 s wall | runner briefly mislabeled UNMODELED (grep of the string); fixed on master |
-| `bang_dream_02_teleport_owned_iff` | SUCCESSFUL | <300 s | teleport to symbolic owned pick |
+| `bang_dream_02_teleport_owned_iff` | triage3: UNWINDING was **A** 60-trip owned-tile scan at u=32; 8×8 chunk walk, re-time pending | <300 s | teleport to symbolic owned pick |
 | `door_01_sequence_const` | SUCCESSFUL | 0.7 s | 10-name sequence ↔ board slots `[45,9,42,50,40,8,16,36,53,24]` |
 | `maze_01_distance_predicate` | SUCCESSFUL | <120 s | circular ≤5 predicate |
 | `megumi_skill_01a_tile_map` | SUCCESSFUL | ~1 s | 3d20 → board slot map |
@@ -90,7 +90,7 @@ Skills agent also confirmed SUCCESSFUL on: `megumi_skill_01a_tile_map`,
 | C-PPP-bang-dream-01 | 为团卡添加一个[奇迹水晶] | **PROVEN** | `bang_dream_01_crystal_iff`, `bang_dream_01_mutant_plus_2` | iff SUCCESSFUL 352.7 s; mutant pending | — | — |
 | C-PPP-bang-dream-02 | [传送]至任意拥有的格子且可选择盖房 | **PROVEN** (teleport leg) / PROTOCOL (optional house) | `bang_dream_02_teleport_owned_iff`, `…_mutant_extra_money` | iff SUCCESSFUL; mutant TIMEOUT | optional house is `card_offer_build` PROTOCOL stub | — |
 | C-PPP-popipa-01 | 获得1000…Pipopa入牌堆…抽一张…[移除] | PROVEN* | `popipa_01_iff`, `popipa_01_mutant_money_off_by_100` | written, verdict pending | deck insert has no typed Effect arm; banish is `w.dest` | — |
-| C-PPP-pipopa-01 | 获得1000…Popipapapipopa放置场上…[移除] | PROVEN* | `pipopa_01_iff`, `pipopa_01_mutant_money_2000` | written, verdict pending | — | — |
+| C-PPP-pipopa-01 | 获得1000…Popipapapipopa放置场上…[移除] | PROVEN* | `pipopa_01_iff`, `pipopa_01_mutant_money_2000` | triage3: FAILED was **C** `PlaceCard.dest` leaked `w.dest` (Banished) instead of Field; fixed, re-time pending | — | — |
 | C-PPP-returns-01 | 加入初始卡组则卡组卡数添加8 | setup-only | — | — | not an observed transition (deck construction) | — |
 | C-PPP-returns-02 | 游戏开始时放置到[场地]并获得团卡 | PROTOCOL-LEVEL | — | — | game-start place + borrow prompt | — |
 | C-PPP-returns-c1 | 无效 Poppin' Party 团卡（4）效果 | PROTOCOL-LEVEL | — | — | continuous negation | — |

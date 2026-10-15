@@ -716,6 +716,56 @@ fn himari_skill_parity_move() {
     eprintln!("pos={} fire={}", t.pos(0), t.charge(0));
 }
 
+// 规则书: 上原绯玛丽「（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」
+// -- the turn-end tick logs its outcome (count / gain / cap) instead of nothing.
+fn himari_end_turn_keys(rest: i32, fire: i32) -> Vec<String> {
+    let mut t = Table::new(&["上原绯玛丽", "美竹兰"]);
+    t.clean();
+    t.set_fire(0, fire, 1);
+    t.m.world_mut().st.players[0].state_set("skill.afterglow.restTurns", rest);
+    t.begin_turn(0);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    t.end(0).unwrap();
+    skip_all(&mut t);
+    t.recent_keys(24)
+}
+
+#[test]
+fn himari_rest_tick_logs_count() {
+    let keys = himari_end_turn_keys(0, 0);
+    assert!(keys.iter().any(|k| k.contains("afterglow_rest_count")), "{keys:?}");
+}
+
+#[test]
+fn himari_rest_tick_logs_gain() {
+    let keys = himari_end_turn_keys(2, 0);
+    assert!(keys.iter().any(|k| k.contains("log.gain_charge")), "{keys:?}");
+}
+
+#[test]
+fn himari_rest_tick_logs_cap() {
+    let keys = himari_end_turn_keys(2, 1);
+    assert!(keys.iter().any(|k| k.contains("log.gain_charge_capped")), "{keys:?}");
+}
+
+// 规则书: 白金燐子「（1）每次[经过]CiRCLE时获得三个[火罐]（上限3）」 -- at the cap the
+// pass still logs that the gain was refused.
+#[test]
+fn rinko_pass_circle_at_cap_logs_refusal() {
+    let mut t = Table::new(&["白金燐子", "美竹兰"]);
+    t.clean();
+    t.set_fire(0, 3, 3);
+    t.begin_turn(0);
+    t.set_pos(0, common::data().tiles.len() - 1);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    let keys = t.recent_keys(24);
+    assert!(keys.iter().any(|k| k.contains("log.gain_charge_capped")), "{keys:?}");
+}
+
 // 规则书: 羽泽鸫「（2）当你进行主要移动时，你可以失去一个[火罐]使本次移动反向」
 #[test]
 fn tsuzushi_skill_reverses_a_move() {

@@ -20,7 +20,8 @@ import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import { act, type Model } from "./model";
 import { byTitle, showDeck, showDeedList } from "./Popups";
-import { BOARD_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
+import { useCompactValue } from "../../app/Stage";
+import { BOARD_MID, COMPACT_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
@@ -267,10 +268,11 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
   // Left skill stack: the fan stays centred on the column regardless; its
   // spread reserves the stack's width on *both* sides, so a wide hand tightens
   // symmetrically and never runs under the stack.
+  const compact = useCompactValue();
   const skillN = skillSlots(m).length;
   const skillStep = skillN > 1 ? Math.min(SKILL_STEP, (240 - SKILL_CARD_W) / (skillN - 1)) : SKILL_STEP;
   const skillW = skillN ? SKILL_CARD_W + (skillN - 1) * skillStep + SKILL_FAN_GAP : 0;
-  const fanSpread = Math.min(660, Math.max(0, BOARD_MID - 2 * skillW - 120));
+  const fanSpread = Math.min(660, Math.max(0, (compact ? COMPACT_MID : BOARD_MID) - 2 * skillW - 120));
   // The preview is `pointer-events: none` (it sits above the hand, not under
   // the cursor), so a long card text is scrolled from the hovered card:
   // the wheel over the dock (fan or skill stack), or PgUp/PgDn/↑/↓ while a

@@ -583,13 +583,23 @@ fn courage_world(user: i32) {
 }
 
 /// Own every tile at the other living seat so the pay branch is taken whenever
-/// the agent bit does not misfire.
+/// the agent bit does not misfire. 8×8 chunk walk (TUNING) keeps the unwind
+/// bound at 8 instead of the 60-trip `0..60` (class A at unwind 32).
 fn courage_world_owned(user: i32) {
     courage_world(user);
     let owner = 1 - user;
     world::with_world_mut(|w| {
-        for t in 0..60 {
-            w.tiles[t].owner = owner;
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < 60 {
+                    w.tiles[i].owner = owner;
+                }
+                k += 1;
+            }
+            outer += 1;
         }
     });
 }
@@ -671,19 +681,29 @@ fn courage_01_pay_iff_at(user: i32) {
     let log_n = effects_of(&mut ebuf);
     let effects = &ebuf[..log_n];
 
-    // We cannot recover the roll from the log; the book pin is "exactly one
-    // PayTo(owner → player, amount)" with amount from the true tile. The
-    // host computes amount from the off-by-one tile — BLOCKED-HOST.
-    kani::cover!(log_n == 1, "one pay leg");
-    kani::cover!(log_n == 0, "agent misfire or empty");
-    if log_n == 1 {
-        // Shape check only (the amount cannot be pinned — see BLOCKED-HOST).
+    // We cannot recover the roll from the log. The book has two arms:
+    // 「所有者向你支付…」 (pay) and 「若为地产商地块，获得1000资金」 (agent).
+    // The 3d20 roll is symbolic, so both arms are live; partition by the
+    // effect shape and pin each arm's leaf.
+    let pay_leg = log_n == 1 && matches!(effects[0], Effect::PayTo { .. });
+    let agent_leg = log_n == 1 && matches!(effects[0], Effect::GainMoney { .. });
+    kani::cover!(pay_leg, "pay arm: one PayTo");
+    kani::cover!(agent_leg, "agent arm: GainMoney 1000");
+    kani::cover!(log_n == 0, "empty (no owner / out)");
+    if pay_leg {
+        // Shape check (the amount cannot be pinned — tile_price/buy_price).
         crate::kassert!(
             matches!(effects[0], Effect::PayTo { from, to, .. } if from == owner && to == user),
             "C-MOR-courage-01: exactly one PayTo(owner → user)"
         );
-        let _ = &pre;
     }
+    if agent_leg {
+        crate::kassert!(
+            matches!(effects[0], Effect::GainMoney { player: p, n } if p == user && n == 1000),
+            "C-MOR-courage-01: agent arm is GainMoney 1000 to the user"
+        );
+    }
+    let _ = &pre;
 }
 
 #[kani::proof]
@@ -876,13 +896,13 @@ fn toko_swap_iff_at(user: i32) {
 }
 
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(64)]
 pub fn toko_swap_iff_blocked_host() {
     toko_swap_iff_at(0);
 }
 
 #[kani::proof]
-#[kani::unwind(32)]
+#[kani::unwind(64)]
 pub fn toko_swap_user1_iff_blocked_host() {
     toko_swap_iff_at(1);
 }

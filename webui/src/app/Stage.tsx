@@ -4,10 +4,10 @@
 // gets a wider stage and the edge-anchored panels (see the scenes' `right:`)
 // slide out to the sides instead of leaving a letterbox.
 
-import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { sceneImg } from "../core/assets";
 import { useEventListener } from "../hooks/dom";
-import { STAGE_H, STAGE_W } from "../styles/layout";
+import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
 import s from "./Stage.module.css";
 
 export { STAGE_H, STAGE_W };
@@ -36,20 +36,61 @@ export function useBackdrop(name: string | null): void {
  * screen opts into `useStageFill` and takes the full height instead, so its
  * columns stretch and the tile board has no bars above or below.
  */
-function useStage(): { scale: number; w: number; h: number } {
+function forcedCompact(): boolean | null {
+  const q = new URLSearchParams(location.search).get("compact");
+  return q === null ? null : q !== "0";
+}
+
+/** The device's left / right safe-area insets (notch side), read off a probe element. */
+function useSafeInsets(): { left: number; right: number } {
+  const read = () => {
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;visibility:hidden;padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left)";
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const r = { left: parseFloat(cs.paddingLeft) || 0, right: parseFloat(cs.paddingRight) || 0 };
+    probe.remove();
+    return r;
+  };
+  const [v, set] = useState(read);
+  useEventListener(window, "resize", () => {
+    const n = read();
+    if (n.left !== v.left || n.right !== v.right) set(n);
+  });
+  return v;
+}
+
+function useStage(tall: boolean): { scale: number; w: number; h: number; compact: boolean; shift: number } {
   // Size against the *visual* viewport where there is one: on a phone the
   // layout viewport (innerWidth / innerHeight) and what is on screen differ
   // while the address bar or keyboard is showing.
-  const calc = () => {
+  // While a text field is focused the on-screen keyboard shrinks the visual
+  // viewport; rescaling the stage to the sliver left would shrink everything,
+  // so hold the height from before the keyboard came up (width unchanged).
+  const open = useRef<{ vw: number; vh: number } | null>(null);
+  const measure = () => {
     const vv = window.visualViewport;
-    const vw = vv?.width ?? window.innerWidth;
-    const vh = vv?.height ?? window.innerHeight;
-    const scale = Math.min(vw / STAGE_W, vh / STAGE_H);
-    return { scale, w: vw / scale, h: vh / scale };
+    const cur = { vw: vv?.width ?? window.innerWidth, vh: vv?.height ?? window.innerHeight };
+    const a = document.activeElement;
+    const editing = a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement;
+    const prev = open.current;
+    if (editing && prev && Math.abs(prev.vw - cur.vw) < 1 && cur.vh < prev.vh) return prev;
+    open.current = cur;
+    return cur;
   };
-  const [box, set] = useState(calc);
-  useEventListener(window, "resize", () => set(calc()));
-  useEventListener(() => window.visualViewport, "resize", () => set(calc()));
+  const [win, set] = useState(measure);
+  useEventListener(window, "resize", () => set(measure()));
+  useEventListener(() => window.visualViewport, "resize", () => set(measure()));
+  useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
+  // Landscape phones: keep the stage out from under the notch / home bar.
+  const inset = useSafeInsets();
+  const vw = win.vw - inset.left - inset.right;
+  const vh = win.vh;
+  // The compact (phone) canvas is the board's alone: the other scenes are
+  // laid out for the 1600 x 900 design and keep scaling it.
+  const compact = tall && isCompactWindow(vw, vh, window.matchMedia("(pointer: coarse)").matches, forcedCompact());
+  const scale = compact ? Math.min(vw / COMPACT_MIN_W, vh / COMPACT_H) : Math.min(vw / STAGE_W, vh / STAGE_H);
+  const box = { scale, w: vw / scale, h: vh / scale, compact, shift: (inset.left - inset.right) / 2 };
   // A scrolled document desyncs touches from the fixed stage (the mobile
   // touch fix); snap back to the origin wherever the scroll came from.
   const unscroll = () => {
@@ -101,10 +142,29 @@ export function useStageFillValue(): boolean {
   );
 }
 
+/** Is the stage on the compact (phone) canvas? Set by `Stage` for the scenes below it. */
+let compactNow = false;
+const compactListeners = new Set<() => void>();
+export function useCompactValue(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      compactListeners.add(cb);
+      return () => compactListeners.delete(cb);
+    },
+    () => compactNow,
+  );
+}
+
 export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
-  const { scale, w, h } = useStage();
-  const bg = useBackdropValue();
   const tall = useStageFillValue();
+  const { scale, w, h, compact, shift } = useStage(tall);
+  useEffect(() => {
+    document.documentElement.toggleAttribute("data-compact", compact);
+    if (compactNow === compact) return;
+    compactNow = compact;
+    compactListeners.forEach((cb) => cb());
+  }, [compact]);
+  const bg = useBackdropValue();
   const src = bg ? sceneImg(bg) : "";
   return (
     <>
@@ -112,7 +172,7 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
       <div
         className={s.stage}
         data-stage
-        style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(-50%, -50%) scale(${scale})` }}
+        style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(calc(-50% + ${shift}px), -50%) scale(${scale})` }}
       >
         {children}
         <div className={fading ? `${s.fader} ${s.on}` : s.fader} />

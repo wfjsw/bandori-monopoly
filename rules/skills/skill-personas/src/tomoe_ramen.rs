@@ -50,13 +50,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
 fn tick(player_id: i32) -> card_sdk::Asked {
-    let n = state::get(player_id, REST_TURNS) + 1;
-    state::set(player_id, REST_TURNS, n);
-    if n >= 3 {
-        state::set(player_id, REST_TURNS, 0);
-        rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
-    }
-    Ok(())
+    super::ran_red::rest_tick(player_id)
 }
 
 /// （2） 「你可以使用一个[火罐]」 + （3） 「若你位于银河拉面馆上，你无法使用（2）效果」.

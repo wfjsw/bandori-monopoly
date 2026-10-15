@@ -358,6 +358,8 @@ pub struct WalkSeg {
     pub from: i32,
     pub to: i32,
     pub value: i32,
+    /// Steps the walk still has after `to` ([`MatchEvent::ahead`]).
+    pub ahead: i32,
     pub pending_first: bool,
     /// The walk is the turn's main move: the first publish is kind `roll`
     /// carrying `dice = roll`, not a bare `move`.
@@ -851,17 +853,18 @@ impl World {
             } else {
                 0
             };
-            pending.push((ek, text, seg.player, seg.from, seg.to, seg.value, dice));
+            pending.push((ek, text, seg.player, seg.from, seg.to, seg.value, dice, seg.ahead));
             seg.from = seg.to;
             seg.value = 0;
             seg.pending_first = false;
         }
-        for (ek, text, player, from, to, value, dice) in pending {
+        for (ek, text, player, from, to, value, dice, ahead) in pending {
             let e = self.log(ek, player, text);
             e.from = from;
             e.to = to;
             e.value = value;
             e.dice = dice;
+            e.ahead = ahead;
             // Same pacing the old per-publish `Cx::wait` applied (1.5s for the
             // head `roll`, 0.3s for a continuation, plus 0.15s/step).
             let pace = if ek == "roll" { 1.5 } else { 0.3 };
