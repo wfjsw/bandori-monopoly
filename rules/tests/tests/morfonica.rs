@@ -619,6 +619,11 @@ fn noble_on_own_tile_places_a_no_target_mark() {
     t.set_pos(0, tsukinomori);
     t.give(0, &["Mor:高贵的微蓝"]);
     t.play(0, "Mor:高贵的微蓝").unwrap();
+    // G-SETTLE-06/07: 「立刻进行一次触发结算」 on your own deed opens the
+    // optional build prompt; answer it so the mark (rule 2) lands.
+    while let Some(_) = t.prompt() {
+        t.decline();
+    }
     let ms = t.marks_on(tsukinomori);
     assert_eq!(ms.len(), 1, "{ms:?}");
     assert_eq!(ms[0].owner, 0);
