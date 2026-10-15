@@ -8,6 +8,7 @@
 import { useEffect, useReducer, useState, useSyncExternalStore } from "react";
 import { langVersion, onLangChange } from "../i18n";
 import { useLatestRef } from "../hooks/latest";
+import { startVideoWake } from "../hooks/videoWake";
 import { getProfile, hasProfile, onProfile, settings } from "./store";
 import type { MatchEvent, MatchView, PlayerProfile } from "./types";
 import type { GameSession } from "../game/session";
@@ -32,7 +33,9 @@ export function useSettings() {
 
 /**
  * Keep the screen on while `active` (a live match, from the ban / pick phase on) and
- * the 「保持屏幕常亮」 setting is on -- the Screen Wake Lock API. The browser
+ * the 「保持屏幕常亮」 setting is on -- the Screen Wake Lock API, or a looping
+ * muted video where that is missing or refused (iOS; started by the first tap
+ * -- see `hooks/videoWake.ts`). The browser
  * drops the lock whenever the page is hidden (another app, another tab, the
  * phone locked), so it is taken again each time the page becomes visible; it
  * never holds the screen on in the background. It needs a secure context
@@ -43,8 +46,11 @@ export function useWakeLock(active: boolean): void {
   const on = active && settings().keepAwake;
   useSettings(); // re-run when the setting flips
   useEffect(() => {
-    if (!on || !("wakeLock" in navigator)) return;
+    if (!on) return;
+    // No Wake Lock API (iOS < 16.4, some home-screen apps): hold the screen with a looping video.
+    if (!("wakeLock" in navigator)) return startVideoWake();
     let lock: WakeLockSentinel | null = null;
+    let video: (() => void) | null = null;
     let disposed = false;
     const take = async () => {
       if (disposed || lock || document.visibilityState !== "visible") return;
@@ -56,7 +62,9 @@ export function useWakeLock(active: boolean): void {
           if (lock === l) lock = null;
         });
       } catch {
-        // Refused (battery saver, policy, insecure context) -- carry on.
+        // Refused (battery saver, Low Power Mode, policy, insecure context):
+        // fall back to the video trick rather than let the screen sleep.
+        if (!disposed) video ??= startVideoWake();
       }
     };
     const onVisible = () => {
@@ -66,6 +74,7 @@ export function useWakeLock(active: boolean): void {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       disposed = true;
+      video?.();
       document.removeEventListener("visibilitychange", onVisible);
       void lock?.release();
       lock = null;

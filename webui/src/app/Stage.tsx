@@ -70,6 +70,10 @@ function useStage(tall: boolean): { scale: number; w: number; h: number; compact
   const open = useRef<{ vw: number; vh: number } | null>(null);
   const measure = () => {
     const vv = window.visualViewport;
+    // A pinch the browser let through zooms the visual viewport: its size is
+    // then the magnified sliver, and sizing the stage to it blanks the page.
+    // Hold the unzoomed size until the zoom is back at 1.
+    if (vv && Math.abs(vv.scale - 1) > 0.01 && open.current) return open.current;
     const cur = { vw: vv?.width ?? window.innerWidth, vh: vv?.height ?? window.innerHeight };
     const a = document.activeElement;
     const editing = a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement;
@@ -81,6 +85,7 @@ function useStage(tall: boolean): { scale: number; w: number; h: number; compact
   const [win, set] = useState(measure);
   useEventListener(window, "resize", () => set(measure()));
   useEventListener(() => window.visualViewport, "resize", () => set(measure()));
+  useEventListener(() => window.visualViewport, "scroll", () => set(measure()));
   useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
   // Landscape phones: keep the stage out from under the notch / home bar.
   const inset = useSafeInsets();
