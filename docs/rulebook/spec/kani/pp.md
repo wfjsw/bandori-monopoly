@@ -90,7 +90,7 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | C-PP-shine-again-01 | [反击] rescue price/5 + 1 fan | PROTOCOL-LEVEL | `shine_again_01_formula` (pure) | pending | [反击] window; regression hint: fan leg missing in engine | — |
 | C-PP-shine-again-02 | [共鸣] record colour + 1 fan | OPEN | — | — | | OPEN-共鸣 |
 | C-PP-first-accident-01 | place + 重叠的声音→deck + draw 1 | PROVEN* | `first_accident_01_place_deck_draw_iff` | triage3: FAILED was **B** spec rejected 持续 `SetToken`; fixed, re-time pending | — | — |
-| C-PP-first-accident-02 | owner cannot use PP (2) skills | FAILS | (regression `first_accident_blocks_pp_skill_2`) | — | book: no PP (2); body writes a skillBlock token but 丸山彩 (2) still opens | — |
+| C-PP-first-accident-02 | owner cannot use PP (2) skills | FAILS | `first_accident_02_blocks_pp_skill_2_iff` (skills_pp) | triage3: FAILED 8.9 s was **B** harness cfg'd on skills-characters (pp unit lacks it) → 'Failed to match'. Moved to skills_pp.rs, re-time pending | book: no PP (2); body writes a skillBlock token but 丸山彩 (2) still opens | — |
 | C-PP-flower-01 | place on owned tile + band +2 | PROVEN* (formula) | `flower_01_band_after` (spec) | — | ask_tile prompt is expensive | — |
 | C-PP-flower-02 | pass → force stop, move becomes settle | OPEN | — | — | definition of [强制停下] truncated | OPEN-强制停下 |
 | C-PP-flower-03 | [共鸣] +1500; card → discard | OPEN | — | — | | OPEN-共鸣 |
@@ -103,7 +103,7 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | C-PP-together-01 | X = 5 (+ ceil half gap) | PROVEN* | `together_01_x_formula_iff`, `together_01_mutant_is_detected` | triage3: mutant FAILED was **B** `min(X,down)` collapsed body+mutant; assume `down>=7`, re-time pending | — | — |
 | C-PP-together-02 | [共鸣] X-=5, draw 1 | OPEN | `together_02_*` (spec) | — | | OPEN-共鸣 |
 | C-PP-dream-ahead-00 | game-start auto place, hand -1 | PROTOCOL-LEVEL | — | — | game-start deal scheduling | — |
-| C-PP-dream-ahead-01 | crystal per draw, cap 5, overflow X | PROVEN* (pre<5) | `dream_ahead_01_crystal_per_draw_iff` | triage3: FAILED was **B** wrong crystal storage + wrong X key; fixed, re-time pending | host `add_counter` ignores `max` (cap-5) | — |
+| C-PP-dream-ahead-01 | crystal per draw, cap 5, overflow X | PROVEN* (pre<5) | `dream_ahead_01_crystal_per_draw_iff` | triage3: TIMEOUT was **E** (overflow-X else branch live); concrete `pre=0`, re-time pending | host `add_counter` ignores `max` (cap-5) | — |
 | C-PP-dream-ahead-02 | no build, hand limit -1 | PROVEN* (continuous prop) | — | prop on CardDef | — | — |
 | C-PP-dream-ahead-03 | extra rent owned×X + MIN(X×30,300) | PROVEN (formula) | `dream_ahead_03_formula` | SUCCESSFUL 3.6s | settle context is PROTOCOL | — |
 | C-PP-dream-ahead-04 | [共鸣][反击] turn-end buy | OPEN | — | — | [可购买格子] set undefined | OPEN-共鸣 |
