@@ -48,6 +48,9 @@ fn land_and_buy(t: &mut Table, who: usize, tile: usize) {
     t.set_pos(who, (tile + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(who).unwrap();
+    // G-SETTLE-06/07: the settle of an unowned buyable is the optional buy
+    // prompt. Decline it so the end-step `buy` button still runs.
+    drain(t);
     t.buy(who).expect("buy the unowned deed");
     drain(t);
 }
@@ -460,7 +463,9 @@ fn yukina_skill_1_first_circle_pass_gives_no_reward() {
     t.set_pos(0, 58);
     t.dice(&[3]);
     t.roll(0).unwrap();
-    assert!(t.prompt().is_none(), "no CiRCLE reward: {}", t.dump_prompt());
+    // G-SETTLE-06/07: landing on the unowned deed past CiRCLE opens a buy
+    // prompt; that is not the CiRCLE reward. Decline it and check no payout.
+    drain(&mut t);
     assert_eq!(t.money(0), 10_000);
 }
 
