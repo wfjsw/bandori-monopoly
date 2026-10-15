@@ -126,7 +126,7 @@ fn tiles_of_group(group: i32) -> Vec<usize> {
         .tiles
         .iter()
         .enumerate()
-        .filter(|(_, t)| t.group == group && t.kind == game_core::data::TileKind::Property)
+        .filter(|(_, t)| t.group == group && t.kind == game_core::data::TileKind("property".into()))
         .map(|(i, _)| i)
         .collect()
 }
@@ -847,7 +847,7 @@ fn pool_bug_still_allows_cheap_builds() {
         .tiles
         .iter()
         .enumerate()
-        .find(|(_, t)| t.kind == game_core::data::TileKind::Property && t.house > 0 && t.house < 1500)
+        .find(|(_, t)| t.kind == game_core::data::TileKind("property".into()) && t.house > 0 && t.house < 1500)
         .map(|(i, _)| i)
         .expect("a cheap property");
     t.own(0, &[cheap]);

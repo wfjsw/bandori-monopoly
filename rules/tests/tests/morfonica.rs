@@ -386,7 +386,7 @@ fn courage_sums_3d20_for_the_tile_number() {
 fn courage_agent_tile_gives_1000() {
     // 规则书: 「若为地产商地块，获得1000资金」
     let mut t = Table::vanilla(2);
-    assert_eq!(data().tiles[tile("主要街道")].kind, game_core::data::TileKind::Agent);
+    assert_eq!(data().tiles[tile("主要街道")].kind, game_core::data::TileKind("agent".into()));
     t.dice(&[2, 2, 1]); // sum 5 -> #5 = 主要街道 (agent)
     t.give_play(0, "Mor:勇气展翅高飞之时").unwrap();
     assert_eq!(t.money(0), 10_000 + 1000);

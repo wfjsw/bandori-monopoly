@@ -61,18 +61,11 @@ fn view_extra_reports_the_viewers_own_hand_playability() {
 
 #[test]
 fn view_extra_carries_the_ai_answer_for_the_asked_player_only() {
-    // A bot-only match runs prompts of its own; drive one until the engine
-    // raises a live prompt, then check the shape of the extra.
-    let members: Vec<RoomMember> = (1..=3).map(|i| member(i, true)).collect();
-    let mut m = Match::new(
-        data(),
-        Arc::new(StubRules),
-        &members,
-        3,
-        MatchMode::Solo,
-        ScoreWeights::default(),
-    );
-    m.quick_start();
+    // Drive a solo match until the engine raises a live prompt (the opening
+    // window or a later ask), then check the shape of the extra. `StubRules`
+    // pays no built-in pass reward, so this no longer depends on a game-named
+    // reward prompt.
+    let mut m = solo(3);
     let mut saw_prompt = false;
     for _ in 0..4000 {
         m.tick(0.25);
@@ -98,12 +91,13 @@ fn view_extra_carries_the_ai_answer_for_the_asked_player_only() {
                     );
                 }
             }
+            break;
         }
         if m.ended() {
             break;
         }
     }
-    assert!(saw_prompt, "the bot game should raise at least one prompt");
+    assert!(saw_prompt, "the match should raise at least one prompt");
 }
 // ---- the viewer's skill list (`ViewExtra::skills`) ---------------------------
 

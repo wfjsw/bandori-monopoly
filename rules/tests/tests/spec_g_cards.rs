@@ -212,7 +212,7 @@ fn not_buyable_tile() -> usize {
     data()
         .tiles
         .iter()
-        .position(|t| t.kind == TileKind::Circle)
+        .position(|t| t.kind == TileKind("circle".into()))
         .expect("CiRCLE")
 }
 
@@ -902,7 +902,7 @@ fn g_cards_13_event_discard_reshuffles_only_when_pile_empty() {
     let cafe = data()
         .tiles
         .iter()
-        .position(|v| v.kind == TileKind::Cafe)
+        .position(|v| v.kind == TileKind("cafe".into()))
         .expect("cafe");
 
     // Pile still holds one after the draw: no reshuffle of the discard.

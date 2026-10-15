@@ -194,7 +194,7 @@ fn g_move_03_end_settles_start_does_not() {
         // `agent_skip` even when they have nothing to do and are not used as
         // the settle marker here -- skip agent/circle ends for this check.
         let end_kind = rules_spec::data().tiles[end].kind.clone();
-        if matches!(end_kind, game_core::data::TileKind::Agent | game_core::data::TileKind::Circle) {
+        if matches!(end_kind.as_str(), "agent" | "circle") {
             return Ok(());
         }
         let settled = keys.iter().any(|k| k.contains("land") || k.contains("rent"));
