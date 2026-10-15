@@ -109,3 +109,11 @@ pub fn clear(player_id: i32) {
         ctx::state::add(player_id, KEY_START, -s);
     }
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_stun_landed_kani(player_id: i32) -> card_sdk::Asked {
+    on_stun_landed(player_id)
+}

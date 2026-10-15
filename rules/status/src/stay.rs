@@ -130,3 +130,11 @@ pub fn clear(player_id: i32) {
         add(player_id, -n);
     }
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_stay_landed_kani(player_id: i32) -> card_sdk::Asked {
+    on_stay_landed(player_id)
+}

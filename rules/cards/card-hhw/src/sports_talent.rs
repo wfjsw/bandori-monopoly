@@ -183,3 +183,11 @@ pub fn roll_plan_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
     on_crystals_changed(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_after_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll_after(player_id)
+}

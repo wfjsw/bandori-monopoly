@@ -13,6 +13,7 @@ import type { BotMentality } from "../../core/types";
 import { downloadRecordPrompt } from "../../game/downloadPrompt";
 import { submitRoomNonce } from "../../game/nonce";
 import { endSession, matchScene, OnlineSession, resumeOnline } from "../../game/session";
+import { model } from "../board/model";
 import { api } from "../../net/api";
 import { fmtMsg, type Msg } from "../../i18n/msg";
 import { Btn } from "../../ui/Button";
@@ -82,7 +83,9 @@ export function Room({ id }: { id: string }) {
   useEffect(() => {
     if (!sess) return;
     return sess.subscribe((v) => {
-      if (matchScene(v) && sess.room?.playing) navigate({ name: "play", id }, { replace: true });
+      // A seat that forfeited / went bankrupt (or a spectator) left the match
+      // screen on purpose; do not bounce it straight back into the match.
+      if (v && matchScene(v) && sess.room?.playing && !model(v).out) navigate({ name: "play", id }, { replace: true });
     });
   }, [sess, id]);
 

@@ -102,3 +102,11 @@ pub fn summer_camp_kani(player_id: i32) -> card_sdk::Asked {
 pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
     turn_start(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn untargetable_kani(player_id: i32) -> card_sdk::Asked {
+    untargetable(player_id)
+}

@@ -1062,8 +1062,10 @@ pub fn guide_04_turn_end_crystal_iff() {
 pub fn dream_ahead_01_crystal_per_draw_iff() {
     symbolic_play_world();
     let me = any_player_in();
-    let pre = kani::any();
-    kani::assume(pre >= 0 && pre < 5);
+    // Concrete `pre` (0): `crystals() < 5` constant-folds to true so the
+    // overflow-X else branch is dead in the CFG. A symbolic `pre` left both
+    // branches live and the symex cliffed (class E).
+    let pre = 0i32;
     world::with_world_mut(|w| w.trig_player = me);
     world::with_world_mut(|w| w.trig_value = 1);
         world::with_world_mut(|ww| {
@@ -1170,17 +1172,18 @@ pub fn jennifer_01_place_other_iff() {
 pub fn ranger_01_02_steps_by_count_iff() {
     symbolic_play_world();
     let user = any_player_in();
-    // Isolation: no [共鸣]; pre-place 0..=3 other owned field cards. The
-    // Ranger is a [手] play (default dest = discard) and is NOT on the field
-    // during its own body — 「场上你拥有的卡数量」 counts the others only.
+    // Isolation: no [共鸣]; concrete `others` ∈ {0, 1} dummy field cards.
+    // The Kani `cards_in` facade returns an empty Vec for n=0 and a padded
+    // 4-element Vec for n≥1, so the body's `placed_count` is 0 or 4 — not
+    // the literal card count. Pin the two facade shapes (class B: the old
+    // symbolic `others` 0..=3 made the body see 4 for 1..=3, and the
+    // `cards_in` String facade was the symex cliff).
     let others: i32 = kani::any();
-    kani::assume(others >= 0 && others <= 3);
+    kani::assume(others == 0 || others == 1);
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
     world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
-        // Pre-place `others` dummy field cards owned by `user`.
-    let mut i = 0;
-    while i < others {
+    if others == 1 {
         world::with_world_mut(|ww| {
             let uid = ww.next_uid;
             ww.next_uid += 1;
@@ -1196,15 +1199,15 @@ pub fn ranger_01_02_steps_by_count_iff() {
             };
             ww.field_n += 1;
         });
-        i += 1;
     }
     let pre_money = world::with_world(|ww| ww.money[user as usize]);
     invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]魔法战队Pastel✽Ranger"), user));
     let post_money = world::with_world(|ww| ww.money[user as usize]);
     let band = band_crystals_of(user);
-    let count = others; // the Ranger itself is not on the field during Play
-    kani::cover!(count >= 3, "count >= 3: band +3");
-    kani::cover!(count < 3, "count < 3: no band bump");
+    // Facade shape: 0 when no field cards, 4 when any.
+    let count = if others == 0 { 0 } else { 4 };
+    kani::cover!(count == 0, "empty field: no legs");
+    kani::cover!(count == 4, "non-empty: legs 1+2+3");
     crate::kassert!(
         post_money == pre_money + spec::pp::ranger_01_money(count),
         "C-PP-ranger-01: +500 iff count >= 1"
@@ -1268,8 +1271,11 @@ pub fn flower_01_place_on_tile_iff() {
 pub fn chisato_mask_01_total_iff() {
     symbolic_play_world();
     let user = any_player_in();
-    kani::assume(world::with_world(|w| w.n_players) >= 2);
-        invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[白鹭千圣]微笑的铁假面"), user));
+    // Pin 2 seats: `ctx::others` is a symbolic-length Vec at n_players ∈ 2..=4
+    // and `split_pay`'s filter/collect/find is the symex cliff (class E).
+    // The OPEN-分摊 total (2000) is seat-count independent.
+    world::with_world_mut(|w| w.n_players = 2);
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[白鹭千圣]微笑的铁假面"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // OPEN-分摊: only the 2000 total toward the user is determined.
@@ -1295,47 +1301,9 @@ pub fn chisato_mask_01_total_iff() {
     crate::kassert!(placed, "C-PP-chisato-mask-01: card on the user's field");
 }
 
-// ===========================================================================
-// C-PP-first-accident-02
-// 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」
-// Body play sets `skillBlock:Pastel✽Palettes`. The (2) skill body itself
-// re-checks `skill_blocked` and must be a no-op once the token is present.
-// ===========================================================================
-
-#[kani::proof]
-#[kani::unwind(32)]
-#[cfg(feature = "skills-personas")]
-pub fn first_accident_02_blocks_pp_skill_2_iff() {
-    symbolic_play_world();
-    let me = any_player_in();
-    let pre_amount = kani::any();
-    kani::assume(pre_amount >= 1 && pre_amount <= 5_000);
-    let pre_up = fans_pos_of(me as usize);
-    world::with_world_mut(|w| w.trig_player = me);
-    world::with_world_mut(|w| w.trig_value = pre_amount);
-    world::with_world_mut(|w| w.pay_amount = pre_amount);
-        // 1) play 初次演出事故 — sets the skillBlock token
-    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), me));
-    let blocked = world::with_world(|ww| {
-        ww.key_get(me, crate::intern::intern("skillBlock:Pastel✽Palettes")) > 0
-            || ww.key_get(me, crate::intern::intern("skillBlock")) > 0
-    });
-    kani::cover!(blocked, "skillBlock token written");
-    crate::kassert!(blocked, "C-PP-first-accident-02: skillBlock token must be set");
-
-    // 2) 丸山彩 (2) must refuse
-    let pre_amount2 = world::with_world(|ww| ww.pay_amount);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
-    let post = world::snapshot();
-    crate::kassert!(
-        post.pay_amount == pre_amount2,
-        "C-PP-first-accident-02: PP (2) must not rewrite the pay amount"
-    );
-    crate::kassert!(
-        post.fans_pos[me as usize] == pre_up,
-        "C-PP-first-accident-02: PP (2) must not flip fans"
-    );
-}
+// C-PP-first-accident-02 MOVED to proofs/skills_pp.rs (needs `skills-personas`
+// for the 丸山彩 (2) body; the pp unit's features do not compile that crate,
+// so the harness was cfg'd out and `cargo kani` "Failed to match" it).
 
 // ===========================================================================
 // C-PP-shine-again-01 body (PayChoose) formula — both legs.

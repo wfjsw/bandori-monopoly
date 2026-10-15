@@ -1381,3 +1381,16 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 | `mor::toko_swap_*` | queued (unwind 64) |
 
 `aya_with_02_*` TIMEOUT remains class E (`ask_number` prompt → Msg → memchr).
+
+## triage3 batch 3 — pp central non-success rows (combined master)
+
+Merged master (batch-2 fixes + rounding `c4d15398`). Central `pp` unit
+finished on the combined master. Non-success rows:
+
+| id | before | failing assertion / phase | class | action |
+|---|---|---|---|---|
+| `pp::first_accident_02_blocks_pp_skill_2_iff` | FAILED 8.9 s | `cargo kani` "Failed to match the harness" | **B** | harness was `#[cfg(feature = "skills-personas")]` which the pp unit's features (`band-pp`) do not compile → symbol missing. Moved to `proofs/skills_pp.rs` (features already right) + user1 companion |
+| `pp::ranger_01_02_steps_by_count_iff` | TIMEOUT 1800 s | BMC/symex on `arm_cards_in` + `card_slot_of_bytes::eq` + the `cards_in` String facade | **B+E** | Kani `cards_in` facade returns 0 or 4 (padded Vec), not the literal count. Concrete `others` ∈ {0,1} + `count = 0\|4`. Old symbolic 0..=3 made the body see 4 for 1..=3 and the String facade was the cliff |
+| `pp::chisato_mask_01_total_iff` | TIMEOUT 1800 s | BMC/symex on `chisato_mask::split_pay` `find`/`try_fold` (slice iters) | **E** | pin `n_players=2`; `ctx::others` is a symbolic-length Vec at 2..=4. The OPEN-分摊 total (2000) is seat-count independent |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | TIMEOUT 1800 s | BMC/symex on `add_crystals` `?` prompt path + overflow-X else branch | **E** | concrete `pre=0` so `crystals()<5` constant-folds and the else branch is dead in the CFG |
+| `pp::shine_again_01_rescue_iff` | TIMEOUT 1800 s | BMC/symex on `SliceContains` fold + `ask_pick` prompt + `owned_tiles` | **E** | `ask_pick` prompt path pulls `Msg` → memchr; body ABI. No cheap lever |

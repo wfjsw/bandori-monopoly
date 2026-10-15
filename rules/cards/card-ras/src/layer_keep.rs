@@ -198,3 +198,11 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
     roll_after(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counter_fire_kani(player_id: i32) -> card_sdk::Asked {
+    counter_fire(player_id)
+}

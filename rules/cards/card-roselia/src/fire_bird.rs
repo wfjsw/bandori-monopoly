@@ -75,20 +75,23 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardFireBird.PayMul`: rent paid to this card's owner is charged at
-/// `CeilTo(amount * 1.5, 10)`. Runs through the Fx hook dispatch at `payMul`
-/// (after `PayAdd`, before `PayChoose`), so this is a field effect, not a [反击].
+/// 规则书: 「自己的所有格子收费变成1.5倍」. Rent paid to this card's owner is
+/// charged at ×1.5. Runs through the Fx hook dispatch at `payMul` (after
+/// `PayAdd`, before `PayChoose`), so this is a field effect, not a [反击].
 /// Pure guard for [`pay_mul`] -- the activation gate. `false`
 /// means the card is not activated at all.
+///
+/// User ruling 2026-10-15 (OPEN-取整 family): a ×1.5 modifier transforms the
+/// running amount exactly and must NOT CeilTo in its own body; the engine
+/// rounds up to a multiple of 10 once after all add/mul modifiers. Integer
+/// fold rounds the .5 up (`(amount * 3 + 1) / 2`) so a sole modifier still
+/// settles at `round10(exact)` (25 → 37.5 → 40).
 fn pay_mul(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     if amount <= 0 {
         return Ok(());
     }
-    // `CeilTo(amount * 1.5, 10)` -- 1.5x, rounded up to a multiple of 10.
-    let boosted = (amount as i64 * 3 + 1) / 2;
-    let boosted = ((boosted + 9) / 10) * 10;
-    let boosted = boosted.clamp(0, i32::MAX as i64) as i32;
+    let boosted = ((amount as i64 * 3 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     trigger::set_pay_amount(boosted);
     ctx::log(
         player_id,

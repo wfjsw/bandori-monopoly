@@ -171,3 +171,11 @@ pub fn shuffle_in_kani(player_id: i32) -> card_sdk::Asked {
 pub fn tomori_inner_shout_kani(player_id: i32) -> card_sdk::Asked {
     tomori_inner_shout(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pull_kani(player_id: i32) -> card_sdk::Asked {
+    pull(player_id)
+}

@@ -98,24 +98,35 @@ that mean the same thing are folded in.
 
 ### OPEN-取整 family — rounding of halves / 1.5× / 60%
 
-Same concept across units; questions are per printed amount.
+**RESOLVED — user ruling 2026-10-15.** Full write-up in
+`docs/rulebook/spec/ROUNDING.md`.
 
-| OPEN id | where | text / gap | suggested question |
-|---|---|---|---|
-| **OPEN-60%舍入** | G-MONEY-06 | redeem rate 60%; no rounding mode (all current prices × 0.6 are integers) | If a deed price × 0.6 is not an integer, is the redeem cost rounded up, down, or to the nearest integer? |
-| **OPEN-半价取整** / **OPEN-减半取整** | ag half-speed / glory / sunset; mujica 祥 移动 支付价格减半 | half of odd amounts | For odd money amounts, is every halve floor, ceil, or "round half up to nearest 10" only where printed? |
-| **OPEN-取整** | mujica 团技能 / 祥 | odd half of 支付价格; 1.5× | Is a 1.5× on an odd amount rounded up, down, or to the nearest 10? |
-| **OPEN-ROUND10** | r louder / fire-bird | rounding of 1.5× and 20% | Same as OPEN-取整 (round to 10 only when printed)? |
-| **OPEN-half-rent** | ppp 香澄 everyone-c2 | odd half-rent | Integer half (floor) or CeilTo-10? |
-| **OPEN-取整顺序** | ag sunset-01/03 | divide then ceil-to-10, or ceil each term first? | Is X = ceil(sum/count / 10)*10 then halved, or ceil each term first? |
-| **OPEN-减半取整** vs **rainbow CeilTo-10** | mor `rainbow_01_half_iff` | spec wants `amount/2`; card is `CeilTo(amount/2, 10)` | Does 「减半」 on money always mean CeilTo-10 of the half, or integer half? |
-| **OPEN-抵押半价取整** | G-MONEY-05 / G-BANKRUPT-04 | 50% mortgage of odd prices (shipped prices all even) | Is a 50% mortgage credit rounded up to the nearest 10 (or to the nearest integer) when the price is odd? |
+**Ruling:** money rounding (up to a multiple of 10) is performed **once**,
+**after** all add/mul modifiers of an amount have been processed. Modifier
+cards transform the running amount exactly and must **not** CeilTo-10 inside
+their own body. Printed 「向上取整10」 on a formula **is** that end-of-calc
+rounding. An amount no modifier touched is left as the base formula produced
+it.
 
-**Rainbow-card specific (CANDIDATE from mor HOSTOPS):** rainbow card printed
-「金额减半」 is implemented `CeilTo(amount/2, 10)` while the unit spec assumed
-integer half. Suggested question: for cards that say only 「减半」, is the
-result CeilTo-10 of the half (301 → 160, matching the 「向上取整10」 style
-used elsewhere), or an integer half (301 → 150)?
+| OPEN id | where | resolution |
+|---|---|---|
+| **OPEN-60%舍入** | G-MONEY-06 | **still OPEN** (valuation, not a running-amount modifier; all shipped prices × 0.6 are integers) |
+| **OPEN-半价取整** / **OPEN-减半取整** | ag half-speed / glory / sunset; mujica 祥 移动 支付价格减半 | **RESOLVED for running modifiers:** fold is exact (integer `.5` up), then one `round10` at settle. Glory / sunset X are base formulas (unchanged; sunset's pre-100 half of X stays OPEN-取整顺序). |
+| **OPEN-取整** | mujica 团技能 / 祥 | **RESOLVED:** 1.5× is an exact fold; one `round10` at settle. 祥's `set_pay_factor(500)` rides `scale_settle_payment` and gets the same end round. |
+| **OPEN-ROUND10** | r louder / fire-bird | **RESOLVED for fire-bird:** ×1.5 fold + one end `round10`. louder is not a pay-amount modifier. blue_rose 20% is a **gain formula** (kept; OPEN as a printed-formula rounding question if ever non-integer). |
+| **OPEN-half-rent** | ppp 香澄 everyone-c2 | **RESOLVED as factor path:** `set_rent_factor(500)` truncates the scale; the engine's one end `round10` applies when the scale rewrote the figure. Sole-modifier result matches `round10(exact half)`. |
+| **OPEN-取整顺序** | ag sunset-01/03 | **still OPEN** (X is a printed base formula, not a running-amount modifier) |
+| **OPEN-减半取整** vs **rainbow CeilTo-10** | mor `rainbow_01_half_iff` | **RESOLVED:** 「减半」 is an exact fold (no CeilTo in the card); `final = round10(fold)` (301 → 150.5 → 160). Kani pins updated. |
+| **OPEN-抵押半价取整** | G-MONEY-05 / G-BANKRUPT-04 | **still OPEN** (mortgage credit is a valuation, not a running-amount modifier) |
+
+**Rainbow-card specific (CANDIDATE from mor HOSTOPS):** **RESOLVED** —
+「金额减半」 is the fold `amount/2` (integer `.5` up); the settled figure is
+`round10(fold)` (301 → 150.5 → 160). See ROUNDING.md.
+
+**Still OPEN in this family:** multi-fractional-stack precision (integer fold
+can diverge from the rational fold when several halves / 1.5× stack);
+OPEN-60%舍入; OPEN-取整顺序; OPEN-抵押半价取整; charity_show's printed
+CeilTo when another modifier stacks after it.
 
 ### OPEN-同色 / OPEN-Agent同色 — colour-group widening
 

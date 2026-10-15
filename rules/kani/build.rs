@@ -417,12 +417,15 @@ fn parse_on_bodies(
             }
         }
         parts.push(inner[cur..].trim());
-        if let Some(last) = parts.last() {
+        // Trailing comma in `On::Hook(…, body,)` leaves an empty last part —
+        // take the last **non-empty** ident instead (class B: aya_with's
+        // `at_start,` / `on_pay,` trailing commas made the dispatch emit
+        // `fail_entry_oob` for every entry).
+        if let Some(last) = parts.iter().rev().find(|p| !p.trim().is_empty()) {
             let last = last.trim();
-            if !last.is_empty()
-                && last
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_')
+            if last
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
                 && last.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
             {
                 bodies.push(last.to_string());

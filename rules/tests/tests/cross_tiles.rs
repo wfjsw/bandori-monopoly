@@ -28,6 +28,17 @@ fn set_draw_n(t: &mut Table, who: usize, n: usize) {
     t.set_draw(who, &cards);
 }
 
+/// User ruling 2026-10-15 (docs/rulebook/spec/ROUNDING.md): money rounds up
+/// to a multiple of 10 **once**, after every add/mul modifier has rewritten
+/// the running figure. Untouched bases stay as-is.
+fn ceil10(x: i32) -> i32 {
+    if x <= 0 {
+        x
+    } else {
+        ((x as i64 + 9) / 10 * 10) as i32
+    }
+}
+
 fn drain(t: &mut Table) {
     while t.prompt().is_some() {
         t.decline();
@@ -194,8 +205,10 @@ fn t03_anon_link_plus_repaint() {
         }
     }
     let full = rent(t1, 0) + rent(t2, 0) / 2;
-    let half = full / 2;
-    assert_eq!(t.money(1), 10_000 - half, "halved: {full} -> {half}");
+    // Repaint's ×0.5 is a modifier: exact half, then the engine's one
+    // end-of-calc `ceil10` (user ruling 2026-10-15).
+    let half = ceil10(full / 2);
+    assert_eq!(t.money(1), 10_000 - half, "halved+round10: {full} -> {half}");
 }
 
 // =====================================================================
@@ -730,13 +743,21 @@ fn t16_soyo_mixed_colors() {
             t.decline();
         }
     }
-    let expected = rent(s, 0) / 2 / 2;
+    // Agent half-rent is the printed base `ceil10(R/2)`; soyo's 「额外减半」 is
+    // a modifier (exact half) and the engine rounds once at settle
+    // (user ruling 2026-10-15). `ceil10(R/2)` then `(x+1)/2` then `ceil10`.
+    let agent_half = ceil10((rent(s, 0) + 1) / 2);
+    let expected = ceil10((agent_half + 1) / 2);
     eprintln!(
-        "t16 record: P1 paid = {} (want R(s)/2/2 = {expected})",
+        "t16 record: P1 paid = {} (want round10(agent_half/2) = {expected}, agent_half = {agent_half})",
         10_000 - t.money(1)
     );
     // 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半」.
-    assert_eq!(10_000 - t.money(1), expected, "R/2/2 on the mixed-colour agent");
+    assert_eq!(
+        10_000 - t.money(1),
+        expected,
+        "R/2/2 on the mixed-colour agent (with the one end-of-calc round10)"
+    );
 }
 
 // =====================================================================
@@ -939,13 +960,19 @@ fn t21_riki_plus_anon_link() {
         }
     }
     let full = rent(t1, 0) + rent(t2, 0) / 2;
-    let quarter = full / 4;
+    // ×0.25 is a modifier: exact quarter, then the engine's one end-of-calc
+    // `ceil10` (user ruling 2026-10-15). 430/4 = 107.5 → 110.
+    let quarter = ceil10((full as f64 * 0.25) as i32);
     eprintln!(
-        "t21 record: P2 paid = {} (want (R1+R2/2)/4 = {quarter}, full = {full})",
+        "t21 record: P2 paid = {} (want round10((R1+R2/2)/4) = {quarter}, full = {full})",
         10_000 - t.money(2)
     );
     // 「本次结算导致的所有[支付]变为原价的四分之一」.
-    assert_eq!(10_000 - t.money(2), quarter, "all payments become a quarter");
+    assert_eq!(
+        10_000 - t.money(2),
+        quarter,
+        "all payments become a quarter (with the one end-of-calc round10)"
+    );
 }
 
 // =====================================================================

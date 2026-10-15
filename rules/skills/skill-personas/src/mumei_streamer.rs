@@ -161,3 +161,17 @@ ruleset_core::roster::PersonaDef::new(r#"祐天寺若麦"#)
 pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
     declare_cap(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_pay_add_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay_add(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_exit_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end_exit(player_id)
+}

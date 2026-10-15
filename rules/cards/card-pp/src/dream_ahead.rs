@@ -231,3 +231,10 @@ pub fn deck_before_game_kani(player_id: i32) -> card_sdk::Asked {
 pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
     drew(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
+    settle_body(player_id)
+}
+

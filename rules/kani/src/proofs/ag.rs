@@ -331,16 +331,22 @@ fn half_speed_04_pay_mul_iff_at(user: i32) {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    let expected = spec::ag::half_speed_04_amount_ceil10(pre_amount);
+    let fold = spec::ag::half_speed_04_fold(pre_amount);
+    let final_amt = spec::ag::half_speed_04_amount_ceil10(pre_amount);
     kani::cover!(pre_amount % 2 == 0, "even amount");
-    kani::cover!(pre_amount % 2 == 1, "odd amount (OPEN-减半取整)");
+    kani::cover!(pre_amount % 2 == 1, "odd amount");
     kani::cover!(pre_amount < 20, "small amount (half < 10)");
+    kani::cover!(pre_amount == 25, "25 → fold 13 → final 20");
     crate::kassert!(
-        post_amount == expected,
-        "C-AG-half-speed-04: pay amount must be ceil10(amount/2)"
+        post_amount == fold,
+        "C-AG-half-speed-04: body writes the exact fold (no CeilTo)"
     );
     crate::kassert!(
-        spec::ag::half_speed_04_log_ok(effects, expected),
+        spec::ag::round10(post_amount) == final_amt,
+        "C-AG-half-speed-04: final = round10(fold of add/mul)"
+    );
+    crate::kassert!(
+        spec::ag::half_speed_04_log_ok(effects, fold),
         "C-AG-half-speed-04: log exactly the rewrite"
     );
     // Determined half for even multiples of 10: plain /2.
@@ -1066,25 +1072,30 @@ pub fn colors_01_wrap_formula() {
     );
 }
 
-/// C-AG-half-speed-04 formula: ceil10(amount/2) on a symbolic positive amount.
+/// C-AG-half-speed-04 formula: `final = round10(fold of add/mul)`.
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn half_speed_04_amount_formula() {
     let amount: i32 = kani::any();
     kani::assume(amount >= 1 && amount <= 10_000);
-    let half = spec::ag::half_speed_04_amount_ceil10(amount);
-    crate::kassert!(half >= (amount + 1) / 2, "ceil10(half) >= true half");
-    crate::kassert!(half % 10 == 0, "ceil10 lands on a multiple of 10");
-    crate::kassert!(half <= (amount + 1) / 2 + 9, "ceil10 overshoots by < 10");
+    let fold = spec::ag::half_speed_04_fold(amount);
+    let final_amt = spec::ag::half_speed_04_amount_ceil10(amount);
+    crate::kassert!(
+        final_amt == spec::ag::round10(fold),
+        "final = round10(fold of add/mul)"
+    );
+    crate::kassert!(final_amt >= fold, "round10 does not decrease");
+    crate::kassert!(final_amt % 10 == 0, "final lands on a multiple of 10");
+    crate::kassert!(final_amt <= fold + 9, "round10 overshoots by < 10");
     if amount % 20 == 0 {
         crate::kassert!(
-            half == spec::ag::half_speed_04_amount_even(amount),
+            final_amt == spec::ag::half_speed_04_amount_even(amount),
             "even 10-multiples halve exactly"
         );
     }
     crate::kassert!(
-        half != spec::ag::half_speed_04_amount_mutant(amount),
-        "mutant +1 disagrees"
+        fold != spec::ag::half_speed_04_amount_mutant(amount),
+        "fold is not the off-by-one mutant"
     );
 }
 

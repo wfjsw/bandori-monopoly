@@ -288,32 +288,32 @@ PY
 unit_features() {
   case "$1" in
     pp|money_shave|prompt) echo "band-pp" ;;
-    ppp|teleport) echo "band-ppp,skills-characters,skills-bands" ;;
-    r) echo "band-roselia,skills-characters,skills-bands" ;;
-    ag) echo "band-ag,skills-characters,skills-bands" ;;
-    hhw) echo "band-hhw,skills-characters,skills-bands" ;;
+    ppp|teleport) echo "band-ppp,skills-personas,skills-groups" ;;
+    r) echo "band-roselia,skills-personas,skills-groups" ;;
+    ag) echo "band-ag,skills-personas,skills-groups" ;;
+    hhw) echo "band-hhw,skills-personas,skills-groups" ;;
     mor) echo "band-morfonica" ;;
     ras) echo "band-ras" ;;
     mygo) echo "band-mygo" ;;
     mujica) echo "band-mujica" ;;
     crychic) echo "band-crychic" ;;
-    sumimi) echo "band-sumimi,skills-characters" ;;
+    sumimi) echo "band-sumimi,skills-personas" ;;
     events) echo "events" ;;
     tiles|tile_marks) echo "tiles" ;;
-    skills_pp) echo "band-pp,skills-characters,skills-bands" ;;
-    skills_ppp) echo "band-ppp,skills-characters,skills-bands" ;;
-    skills_r) echo "band-roselia,skills-characters,skills-bands" ;;
-    skills_ag) echo "band-ag,skills-characters,skills-bands" ;;
-    skills_hhw) echo "band-hhw,skills-characters,skills-bands" ;;
-    skills_mor) echo "band-morfonica,skills-bands,skills-characters" ;;
-    skills_ras) echo "band-ras,skills-characters" ;;
-    skills_mygo) echo "band-mygo,skills-bands" ;;
-    skills_mujica) echo "band-mujica,skills-bands" ;;
-    skills_crychic) echo "band-crychic,skills-bands,skills-characters" ;;
-    skills_sumimi) echo "band-sumimi,skills-bands" ;;
+    skills_pp) echo "band-pp,skills-personas,skills-groups" ;;
+    skills_ppp) echo "band-ppp,skills-personas,skills-groups" ;;
+    skills_r) echo "band-roselia,skills-personas,skills-groups" ;;
+    skills_ag) echo "band-ag,skills-personas,skills-groups" ;;
+    skills_hhw) echo "band-hhw,skills-personas,skills-groups" ;;
+    skills_mor) echo "band-morfonica,skills-groups,skills-personas" ;;
+    skills_ras) echo "band-ras,skills-personas" ;;
+    skills_mygo) echo "band-mygo,skills-groups" ;;
+    skills_mujica) echo "band-mujica,skills-groups" ;;
+    skills_crychic) echo "band-crychic,skills-groups,skills-personas" ;;
+    skills_sumimi) echo "band-sumimi,skills-groups" ;;
     skills_general|general) echo "band-general" ;;
-    skills_characters) echo "skills-characters" ;;
-    skills_bands) echo "skills-bands" ;;
+    skills_characters) echo "skills-personas" ;;
+    skills_bands) echo "skills-groups" ;;
     *) echo "all" ;;
   esac
 }

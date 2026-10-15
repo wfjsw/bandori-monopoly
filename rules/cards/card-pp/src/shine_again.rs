@@ -223,3 +223,10 @@ pub fn shine_again_kani(player_id: i32) -> card_sdk::Asked {
 pub fn offer_resonance_kani(player_id: i32) -> card_sdk::Asked {
     offer_resonance(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_choose_kani(player_id: i32) -> card_sdk::Asked {
+    pay_choose(player_id)
+}
+

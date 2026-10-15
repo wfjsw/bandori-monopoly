@@ -509,7 +509,18 @@ use alloc::{string::String, vec::Vec};
 ///      `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
 ///      `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
 ///      `tile_attr` only. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 70;
+/// v71: **money rounds once after add/mul** (user ruling 2026-10-15,
+///      OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
+///      `payAdd` / `payMul` / `payTotal*` / `set_pay_factor`) transform the
+///      running amount exactly and must not CeilTo-10 inside their own body;
+///      `money_inner` / `pay_total` round a positive figure **up to a multiple
+///      of 10 once** after every add/mul modifier has been processed. An
+///      amount no modifier touched is left as the base formula produced it.
+///      Printed 「向上取整10」 sites (agent half-rent, `[分摊]` share formula,
+///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
+///      No new import; host semantics of `set_pay_amount` composition change.
+///      SAVE_VERSION unchanged (no save field).
+pub const ABI_VERSION: i32 = 71;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

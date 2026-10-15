@@ -90,3 +90,8 @@
 .text { font-size: 17px; line-height: 1.75; white-space: pre-wrap; }
 .note { font-size: 15px; color: var(--note); white-space: pre-wrap; }
 .actions { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+
+/* Phone canvas: a smaller picture beside the text, so the text keeps its room. */
+:global(:root[data-compact]) .detail { gap: 14px; }
+:global(:root[data-compact]) .bigArt { width: 260px; }
+:global(:root[data-compact]) .text { font-size: 15px; line-height: 1.6; }

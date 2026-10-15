@@ -38,6 +38,13 @@ function useRoomList(setStatus: (s: "connecting" | "ok" | "offline") => void, se
       if (!alive) return;
       // Still seated in a room (e.g. came back with the browser's back button): return to it.
       if (session instanceof OnlineSession && !session.dissolved) return navigate({ name: "room", id: session.id }, { replace: true });
+      // Seated server-side but this tab has no live session (browser was closed): rejoin.
+      const me = await api.session();
+      if (me.ok && me.data?.room) {
+        const r = await api.join(me.data.room);
+        if (!alive) return;
+        if (r.ok) return enter(r.data!.room, r.data!.you);
+      }
       setStatus("ok");
       const refresh = async () => {
         const r = await api.rooms();

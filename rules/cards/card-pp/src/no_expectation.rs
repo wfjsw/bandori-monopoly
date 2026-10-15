@@ -167,3 +167,10 @@ pub fn no_expectation_kani(player_id: i32) -> card_sdk::Asked {
 pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
     hook(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn reshuffled_kani(player_id: i32) -> card_sdk::Asked {
+    reshuffled(player_id)
+}
+
