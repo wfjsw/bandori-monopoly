@@ -2672,6 +2672,12 @@ impl Cx<'_> {
         let e = self.w.log("buy", i as i32, text);
         e.value = 0;
         e.to = t as i32;
+        // 规则书: a build is the settle of land already owned. Land acquired
+        // by any route on the tile the turn player stopped on (the settle's own
+        // offer, a card, 收购) uses up that settle, so no build follows it.
+        if self.w.st.turn == i as i32 && self.w.st.landed == t as i32 {
+            self.w.st.bought = true;
+        }
         // `bought` (Fx) -- the owner is set.
         raise!(self, "bought", i, tile = t as i32)?;
         // `buyAfter` -- the deed has changed hands.
