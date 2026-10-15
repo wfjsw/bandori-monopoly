@@ -204,14 +204,14 @@ a list of citations, not a reimplementation:
 | `ctx::ask_tiles` | a tile ask with per-option labels, prices, and an AI choice hint | agent |
 | `ctx::ai_agent_choice` | `ai_agent_choice` (the ask's AI hint) | agent |
 | `ctx::is_color` / `ctx::tile_group` / `ctx::is_buyable` | the 同色 set (colour overrides included) | agent |
-| `ctx::raise` | a guest-raised trigger point (`circleAffected`) | circle |
+| `ctx::raise` | a guest-raised trigger point (kind 26) | circle |
 | `ctx::gain_typed` | a bank print with the Pay's `typ` + log line | circle |
 | `ctx::prop_at` / `ctx::set_prop_at` | instance props by uid (`NO_REWARD` on a field instance) | circle |
 | `ctx::exile_of` / `ctx::stun_of` | the player's `[除外]` / `[晕眩]` layers | circle |
 
 These are **not** new side channels: each is a named verb the engine already
 runs, published so a rule body can call it. They raise the same `buy*` /
-`build*` / `pay` / `circleAffected` triggers they raise today.
+`build*` / `pay` / `passRewardAffected (kind 26)` triggers they raise today.
 
 `tile:property`'s body, in full, is the rulebook's four-way branch (unowned /
 own / other / mortgaged) over those primitives. `tile:ring` is `tile:property`
@@ -531,7 +531,7 @@ Checked: `card_sdk::abi::ABI_VERSION = 40`,
 | **ABI → 31** | Phase 2 first step | `OnKind::Settle` (the settle body), `prop` keys for tile data, `ctx::settle_*` primitives, `place_card` on `BOARD_OWNER` |
 | **SAVE_VERSION → 3** | Phase 2 first step | `World::board_field` (tile rule instances) is part of the world; a v2 save has none and would restore a match with unbound tiles |
 | **ABI → 32** | Phase 3 (engine-fix batch) | `tile_prop` / `set_tile_prop` (write a rule instance's props by tile), `settle_circle_reward`, `ChainKind::SettleBody` (shares `TriggerKind::SettleBody`'s wire value), board-owned instances hearing field hooks. The `MoveCtx` plan is not part of the save, so SAVE_VERSION stays at 3. |
-| **ABI → 50** | agent/circle body migration (2026-10-10) | the tile bodies run the branch themselves. Added: `ask_tiles` (labels + prices + AI hint), `ai_agent_choice`, `raise` (guest-raised `circleAffected`), `gain_typed` (bank print with `typ` + `Pay::text`), `prop_at` / `set_prop_at`, `exile_of`, `trigger::move_from`. **Removed**: `agent_landing` / `settle_circle_reward` and their `HostRequest`s -- the engine keeps `Play::agent_landing` / `Play::circle_reward` as the `StubRules` built-in only. SAVE_VERSION unchanged. |
+| **ABI → 50** | agent/circle body migration (2026-10-10) | the tile bodies run the branch themselves. Added: `ask_tiles` (labels + prices + AI hint), `ai_agent_choice`, `raise` (guest-raised `passRewardAffected (kind 26)`), `gain_typed` (bank print with `typ` + `Pay::text`), `prop_at` / `set_prop_at`, `exile_of`, `trigger::move_from`. **Removed**: `agent_landing` / `settle_circle_reward` and their `HostRequest`s -- the engine keeps `Play::agent_landing` / `Play::circle_reward` as the `StubRules` built-in only. SAVE_VERSION unchanged. |
 
 ## Migration
 
@@ -578,7 +578,7 @@ than the only path. Phase 3 landed the following (2026-10-06):
 
 * **The [经过] CiRCLE reward** is `tile:circle`'s **Pass entry** --
   `On::Hook(&[HookKind::PassTile])` running `circle::settle_reward` (the body
-  itself: suppression, the choice, the `circleAffected` window, the payout).
+  itself: suppression, the choice, the `passRewardAffected (kind 26)` window, the payout).
   `event:协助CiRCLE重建` re-homes the same function onto 「CiRCLE咖啡厅」.
   The hook dispatch visits `board_field` (tile-filtered, and only for kinds a
   `tile:*` rule declares), so board-owned instances hear `passTile` and the
