@@ -45,6 +45,60 @@ build_break() { # unit
   [[ $n -gt 0 && $bad -eq $n ]]
 }
 
+# Pre-flight: compile-check the first harness of each unit before any CBMC
+# time is spent. A rename/regression break stops the pass immediately with
+# the first error instead of burning through every unit's logs.
+preflight() {
+  local u feat h
+  echo "=== preflight compile check $(date +%T)"
+  for u in "${UNITS[@]}"; do
+    # Resolve the unit's features the same way run.sh does.
+    case "$u" in
+      pp|money_shave|prompt) feat="band-pp" ;;
+      ppp|teleport) feat="band-ppp,skills-personas,skills-groups" ;;
+      r) feat="band-roselia,skills-personas,skills-groups" ;;
+      ag) feat="band-ag,skills-personas,skills-groups" ;;
+      hhw) feat="band-hhw,skills-personas,skills-groups" ;;
+      mor) feat="band-morfonica" ;;
+      ras) feat="band-ras" ;;
+      mygo) feat="band-mygo" ;;
+      mujica) feat="band-mujica" ;;
+      crychic) feat="band-crychic" ;;
+      sumimi) feat="band-sumimi,skills-personas" ;;
+      events) feat="events" ;;
+      tiles|tile_marks) feat="tiles" ;;
+      skills_pp) feat="band-pp,skills-personas,skills-groups" ;;
+      skills_ppp) feat="band-ppp,skills-personas,skills-groups" ;;
+      skills_r) feat="band-roselia,skills-personas,skills-groups" ;;
+      skills_ag) feat="band-ag,skills-personas,skills-groups" ;;
+      skills_hhw) feat="band-hhw,skills-personas,skills-groups" ;;
+      skills_mor) feat="band-morfonica,skills-groups,skills-personas" ;;
+      skills_ras) feat="band-ras,skills-personas" ;;
+      skills_mygo) feat="band-mygo,skills-groups" ;;
+      skills_mujica) feat="band-mujica,skills-groups" ;;
+      skills_crychic) feat="band-crychic,skills-groups,skills-personas" ;;
+      skills_sumimi) feat="band-sumimi,skills-groups" ;;
+      skills_general|general) feat="band-general" ;;
+      skills_characters) feat="skills-personas" ;;
+      skills_bands) feat="skills-groups" ;;
+      *) feat="all" ;;
+    esac
+    echo "  $u (features: $feat)"
+    if ! cargo kani --only-codegen -p rules-kani --no-default-features --features "$feat" 2>&1 | tee /tmp/kani-preflight-$u.log | grep -qE 'error\[E[0-9]+\]'; then
+      : # no errors
+    else
+      echo "PREFLIGHT FAIL: unit $u does not compile." >&2
+      echo "First compile errors:" >&2
+      grep -E 'error\[E[0-9]+\]' /tmp/kani-preflight-$u.log | head -5 >&2
+      exit 3
+    fi
+  done
+  echo "=== preflight OK $(date +%T)"
+}
+
+# Compile-check every unit before spending any CBMC time.
+preflight
+
 for u in "${UNITS[@]}"; do
   if [[ ! -f "$OUT/$u/results.json" ]]; then
     echo "=== $u tier1 $(date +%T)"
