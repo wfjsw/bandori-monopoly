@@ -25,6 +25,9 @@ use card_sdk::{key, CardDef, Msg, On};
 const IN_TWO: &str = "skill.aveMujica.inTwo";
 /// `skillState` as of the last check, so 「进入状态2」 can be seen as a transition.
 const WAS: &str = "skill.aveMujica.was";
+/// Printed figure of the payment this bend is inflating, for the PayAfter
+/// one-sided fixup (「对应的其他玩家收支不变」).
+const ORIG: &str = "skill.aveMujica.orig";
 
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
@@ -32,6 +35,9 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Play("", Some(can_halve), halve),
         On::Hook(&[HookKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
         On::Hook(&[HookKind::PayMul], "slot('skillState') == 2 && card.placed", None, bend),
+        // 「只对自己结算，对应的其他玩家收支不变」 -- PayMul rewrites one shared
+        // figure, so the counterpart's side is restored here.
+        On::Hook(&[HookKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
     ],
 );
@@ -101,7 +107,40 @@ fn bend(player_id: i32) -> card_sdk::Asked {
     if !mine {
         return Ok(());
     }
-    ctx::trigger::set_pay_amount((amount * 3 + 1) / 2);
+    // Live sheet 1.5倍 (rulebook-doc 「翻倍」 is superseded). Integer fold
+    // rounds the .5 up, matching OPEN-取整's exact transform.
+    let bent = (amount * 3 + 1) / 2;
+    state::set(player_id, ORIG, amount);
+    ctx::trigger::set_pay_amount(bent);
+    Ok(())
+}
+
+/// The counterpart's figure stays the printed amount (`PayMul` rewrites one
+/// shared transfer). Claw the 0.5× delta back to / from the bank so only this
+/// player's side moved.
+fn after_bend(player_id: i32) -> card_sdk::Asked {
+    let orig = state::get(player_id, ORIG);
+    if orig <= 0 {
+        return Ok(());
+    }
+    state::set(player_id, ORIG, 0);
+    let moved = ctx::trigger::value();
+    if moved == orig {
+        return Ok(());
+    }
+    let from = ctx::trigger::player_id();
+    let to = ctx::trigger::target();
+    let delta = (moved - orig).abs();
+    if delta <= 0 {
+        return Ok(());
+    }
+    if from == player_id && to >= 0 {
+        // I paid `moved`; the counterpart should net `orig`.
+        ctx::pay(to, delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+    } else if to == player_id && from >= 0 {
+        // I received `moved`; the counterpart should have paid `orig`.
+        ctx::gain(from, delta, &Msg::new(key!("ave_mujica_one_sided")))?;
+    }
     Ok(())
 }
 

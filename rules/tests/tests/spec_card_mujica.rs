@@ -1059,7 +1059,17 @@ fn band_state2_pay_is_150_only_on_self() {
         frame(
             &pre,
             t.world(),
-            &["money:P0", "money:P1", "pos:P0", "hand:P0", "draw:P0", "discard:P0"],
+            &[
+                "money:P0",
+                "money:P1",
+                "pos:P0",
+                "hand:P0",
+                "draw:P0",
+                "discard:P0",
+                // One-sided bend bookkeeping (printed figure latched at PayMul).
+                "state:P0:skill.aveMujica.orig",
+                "turn.paid_in_settle",
+            ],
         )
     })
     .expect("C-MUJICA-团技能-01");

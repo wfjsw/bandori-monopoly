@@ -73,7 +73,8 @@ fn forever(player_id: i32) -> card_sdk::Asked {
 fn on_drew(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）[持续]: 「若你的手牌大于等于7」 -- `owner.hand >= 7` in the condition.
     // 规则书（2）[持续]: 「此卡立即置入弃牌堆」 -- C# `H.Unplace(this, "discard", "手牌有 7 张以上")`.
-    ctx::set_dest(ctx::Dest::Graveyard);
+    // `send_to_dest` files it now (a bare `unplace_self` would banish it).
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("forever_discard")).player_id("who", player_id),

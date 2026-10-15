@@ -30,15 +30,11 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new(
         .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」
-    // The C# only offers players with `H.HasStates(p)` (skillState > 0); without a
-    // state query the whole player list is offered and the toggle folds below.
-    let candidates = ctx::others(player_id);
-    // TODO(规则书)（1）[judgement]: 「若指定了不存在状态2的玩家则无效果」 -- read
-    // one way this gates the switch on the target already being in state 2 (so
-    // the only transition is 2 -> 1); read another it rules out targets for whom
-    // state 2 is unreachable. The clause does not say which, so the toggle below
-    // follows 「转换任意一名玩家的状态」 and nothing else.
+    // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」 -- 「任意一名
+    // 玩家」 includes the user. The C# only listed others; the book does not.
+    let mut candidates = alloc::vec::Vec::new();
+    candidates.push(player_id);
+    candidates.extend(ctx::others(player_id));
     if candidates.is_empty() {
         return Ok(());
     }
@@ -56,15 +52,22 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let Some(hit) = ctx::target(who) else {
         return Ok(());
     };
-    // 规则书（1）: 「转换任意一名玩家的状态」 -- C# applies `H.SwitchState` to
-    // `r.index`, the post-redirect target (`res.index = t.index`).
+    switch_state(player_id, hit)
+}
+
+/// 规则书（1）: 「转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）」.
+/// A seat with no 状态1/状态2 axis (`skillState` not in {1,2}) is a no-op.
+fn switch_state(player_id: i32, hit: i32) -> card_sdk::Asked {
+    let cur = ctx::state::get(hit, state_key::SKILL_STATE);
+    if cur != 1 && cur != 2 {
+        // 「若指定了不存在状态2的玩家则无效果」
+        return Ok(());
+    }
     ctx::log(
         player_id,
         &Msg::new(key!("welcome_mujica_switched")).player_id("who", hit),
     );
-    // 规则书（1）: 「转换任意一名玩家的状态」 -- a straight toggle of the keyed
-    // `skillState`, 2 -> 1 and anything else -> 2.
-    let cur = ctx::state::get(hit, state_key::SKILL_STATE);
+    // 「转换任意一名玩家的状态」 -- a straight toggle of the keyed `skillState`.
     let to = if cur == 2 { 1 } else { 2 };
     ctx::state::set(hit, state_key::SKILL_STATE, to);
     ctx::state::set(hit, "switchedRound", ctx::turn_key());
@@ -95,10 +98,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（2）: `H.SwitchState` on each -- the same skill-state toggle the
     // play half runs, plus the `switchedRound` mark the filter above keys on.
+    // Same 「若指定了不存在状态2的玩家则无效果」 no-op on a seat without the axis.
     for &t in &targets {
-        let cur = ctx::state::get(t, state_key::SKILL_STATE);
-        ctx::state::set(t, state_key::SKILL_STATE, if cur == 2 { 1 } else { 2 });
-        ctx::state::set(t, "switchedRound", key);
+        switch_state(player_id, t)?;
     }
     Ok(())
 }

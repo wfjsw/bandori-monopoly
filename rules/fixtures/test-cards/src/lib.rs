@@ -27,6 +27,13 @@ const LISTER: CardDef = CardDef::new("TEST:lister", &[On::Play("", None, lister)
 /// Stuns the first other player through the [abnormal] gate, then logs how many
 /// abnormal effects reached that player this turn.
 const STUNNER: CardDef = CardDef::new("TEST:stunner", &[On::Play("", None, stunner)]);
+/// Standing field hook: stuns the owner at `moveBefore` (after the move is
+/// planned), so the walk continues while [晕眩] is already up at payout.
+/// Models 「a counter's stun landed mid-turn」 without opening a new main move.
+const STUN_SELF_MOVER: CardDef = CardDef::new(
+    "TEST:stun_self_mover",
+    &[On::Hook(&[HookKind::MoveBefore], "actor == owner && card.placed", None, stun_self)],
+);
 /// Placed on the first other player's field; guards that player against every
 /// abnormal effect (C# `IAbnormalGuard`).
 const GUARD: CardDef = CardDef::new(
@@ -254,6 +261,13 @@ fn stunner(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("stunner_done")).i("count", ctx::abnormal_count(target) as i64),
     );
+    Ok(())
+}
+
+/// Stun the owner once the move is already planned (`moveBefore`).
+fn stun_self(player_id: i32) -> card_sdk::Asked {
+    rules_status::stun::add(player_id, 1);
+    ctx::log(player_id, &Msg::new(key!("stunner_done")).i("count", 0));
     Ok(())
 }
 
@@ -1379,7 +1393,7 @@ fn flash_inner(player_id: i32) -> card_sdk::Asked {
 }
 
 card_sdk::ruleset!(&[
-    RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
+    RELAY, RECURSE, ECHO, LISTER, STUNNER, STUN_SELF_MOVER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, CHARGE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,

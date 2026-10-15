@@ -7,6 +7,7 @@
   "ave_mujica_left": "Fire pots hit zero; left state 2",
   "ave_mujica_no_crystal": "No [Miracle Crystal] on the band card.",
   "ave_mujica_not_two": "Only usable in state 2.",
+  "ave_mujica_one_sided": "State 2: 1.5x on your side only; the other seat keeps the printed figure",
   "ave_mujica_refill": "Behind the Mask: entered state 2, fire pots refilled to the cap",
   "circle_staff_ask": "Discard a card to double a number on {{card}}?",
   "circle_staff_doubled": "Doubled {{card}}; discarded {{dump}}",

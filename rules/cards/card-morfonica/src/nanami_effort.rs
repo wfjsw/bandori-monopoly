@@ -15,8 +15,8 @@
 //!
 //! x character tokens for one of three effects.
 
-use card_sdk::abi::{TriggerKind, REWARD_MONEY};
-use ruleset_core::ctx::{self, CardPile};
+use card_sdk::abi::{HookKind, TriggerKind, REWARD_MONEY};
+use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「[获得]2000资金」 (专有名词 11) -- the default CiRCLE money reward. A
@@ -36,6 +36,14 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // skill). The gate admits whenever either branch is available.
         On::Play("", Some(cant_play), play),
         On::AtEnd("", None, discard_down_to_five),
+        // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- same CounterChanged
+        // shape as AG:（摩卡）0.5倍速 / R:Fire bird.
+        On::Hook(
+            &[HookKind::CounterChanged],
+            "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0",
+            Some(crystals_changed_guard),
+            on_crystals_changed,
+        ),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"稍微努力了一下"#)
@@ -168,11 +176,18 @@ fn gain_circle_money(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书（4）: 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the exhaustion half of
-/// effect (3). Nothing drains the crystals yet (that is the skill hook above),
-/// but the branch is what runs when they hit 0.
-#[allow(dead_code)]
-fn exhausted(_player_id: i32) {
+/// effect (3). Residual guard: this card's own crystals counter hit 0.
+fn crystals_changed_guard(_player_id: i32) -> bool {
+    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
+}
+
+fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nanami_effort_note")).player_id("who", player_id),
+    );
+    Ok(())
 }
 
 /// Effect (1) 「抽x张卡（可超过上限），回合结束后将手牌弃置到五张」 -- C# case 0 of

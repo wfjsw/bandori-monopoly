@@ -4142,6 +4142,10 @@ impl Cx<'_> {
             Some("err.play_stunned")
         } else if s.no_hand() > 0 {
             Some("err.play_no_hand")
+        } else if !self.w.gate_open(self.rules, super::Gate::Play, i) {
+            // A standing play lock (CRYCHIC 「手牌数大于等于6时…无法从手中打出
+            // 任何牌」). Play-only: the turn still runs.
+            Some("err.play_pre")
         } else {
             None
         }

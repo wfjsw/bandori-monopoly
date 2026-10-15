@@ -317,8 +317,10 @@ fn crychic_ifonly_cashs_out_band_crystals() {
 fn crychic_ifonly_discards_at_hand_seven() {
     forall(4, 0xC1C0_0004, |_rng, _i| {
         // CRYCHIC band skill removes the hand limit, so a hand of 7 is a
-        // legal standing state (the base limit is 5).
-        let mut t = Table::new(&["高松灯（CRYCHIC）", "长崎素世（CRYCHIC）"]);
+        // legal standing state (the base limit is 5). P0 is Soyo: Tomori
+        // (CRYCHIC)'s 「跌跌撞撞...」 arms a stay that is [无法移动] and would
+        // pin the walk before the shop settle can draw.
+        let mut t = Table::new(&["长崎素世（CRYCHIC）", "高松灯（CRYCHIC）"]);
         t.clean();
         t.begin_turn(0);
         drain(&mut t);
@@ -342,10 +344,25 @@ fn crychic_ifonly_discards_at_hand_seven() {
         t.set_draw(0, &["通用:登上武道馆", "通用:GREAT", "通用:安可"]);
         let shop = rules_spec::tile("江户川乐器店");
         t.set_pos(0, (shop + 59) % 60);
+        // 高松灯（CRYCHIC）:跌跌撞撞... arms a stay on the play above
+        // (`log.outcome.stay`); stay is [无法移动] and would leave the walk at
+        // the start tile. This clause is about the hand-size discard, not the
+        // stay, so clear it before the roll that draws to 7.
+        t.set_state(0, "stay", 0);
+        t.set_state(0, "stayStart", 0);
+        t.m.world_mut().st.skip_move = false;
         t.dice(&[1]);
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         drain(&mut t);
         let hand = t.hand(0).len();
+        if hand < 7 {
+            return Err(format!(
+                "C-CRYCHIC-ifonly-02: draw-to-7 never landed (hand {hand}, pos {}, \
+                 shop {shop}, keys {:?})",
+                t.pos(0),
+                t.recent_keys(16),
+            ));
+        }
         // 「置入弃牌堆」 -- the card must leave the field and land in the
         // discard. A subsequent reshuffle (G-CARDS: empty draw takes the
         // discard) may carry it into the draw pile; that is a different

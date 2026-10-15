@@ -567,11 +567,12 @@ pub(crate) struct Inner {
 
 /// The gate kinds answered natively from conditions alone (see
 /// [`gate_open_over`]). Index = position in this array.
-pub const GATE_KINDS: [crate::TriggerKind; 4] = [
+pub const GATE_KINDS: [crate::TriggerKind; 5] = [
     crate::TriggerKind::ActGate,
     crate::TriggerKind::PayGate,
     crate::TriggerKind::MoveGate,
     crate::TriggerKind::ExclusiveUse,
+    crate::TriggerKind::PlayGate,
 ];
 
 fn gate_index(kind: crate::TriggerKind) -> Option<usize> {

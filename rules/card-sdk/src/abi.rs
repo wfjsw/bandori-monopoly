@@ -1733,6 +1733,13 @@ impl TriggerKind {
     /// *set* `base = value` each turn.
     pub const TurnBaseTime: Self = Self(100);
 
+    /// **Play-only gate** -- may `t.player_id` play a hand card right now?
+    /// Distinct from [`Self::ActGate`]: Act also gates [主动] skills and is
+    /// what skips a stunned/exiled turn at 开始阶段. A standing hand-size lock
+    /// (CRYCHIC 「手牌数大于等于6时…无法从手中打出任何牌」) blocks plays without
+    /// cancelling the rest of the turn. CEL-only, like [`Self::ActGate`].
+    pub const PlayGate: Self = Self(101);
+
     /// The wire value, shared with every kind view.
     pub const fn as_i32(self) -> i32 {
         self.0
@@ -1844,6 +1851,7 @@ impl TriggerKind {
             98 => "exclusiveUse",
             99 => "turnBonusTime",
             100 => "turnBaseTime",
+            101 => "playGate",
             26 => "26",  // ruleset-declared custom id
             73 => "73",  // ruleset-declared custom id
             74 => "74",  // ruleset-declared custom id
@@ -1955,6 +1963,7 @@ impl TriggerKind {
             "exclusiveUse" => Self(98),
             "turnBonusTime" => Self(99),
             "turnBaseTime" => Self(100),
+            "playGate" => Self(101),
             _ => Self::None,
         }
     }

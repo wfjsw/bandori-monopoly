@@ -2577,17 +2577,25 @@ fn nnm_last_crystal_discards_the_card() {
         t.observe(CLAUSES);
         t.skill(0, NNM).unwrap();
         decline_all(&mut t);
-        if t.crystals(0, NNM) != Some(0) {
-            return Err(format!(
-                "C-MOR-nnm-04 setup: crystals {:?}, expected Some(0)",
-                t.crystals(0, NNM)
-            ));
-        }
+        // 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the card leaves the field as
+        // the last crystal goes, so a field lookup is None (not Some(0)).
         if t.on_field(0, NNM) {
             return Err(format!(
                 "C-MOR-nnm-05: 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- \
                  still on the field with 0 crystals: {:?}",
                 t.field_ids(0)
+            ));
+        }
+        let in_discard = t.discard(0).iter().any(|c| c == NNM)
+            || t.discard(1).iter().any(|c| c == NNM)
+            || t.draw_pile(0).iter().any(|c| c == NNM);
+        if !in_discard {
+            return Err(format!(
+                "C-MOR-nnm-05: card left the field but is not in discard/draw: \
+                 d0={:?} d1={:?} draw={:?}",
+                t.discard(0),
+                t.discard(1),
+                t.draw_pile(0),
             ));
         }
         Ok(())

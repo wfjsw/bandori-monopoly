@@ -21,19 +21,31 @@ const GOT: &str = "skill.sumimi.got";
 pub const SUMIMI: CardDef = CardDef::new(
     "skill:Sumimi:人气偶像组合",
     &[
-        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, None, after_pay),
-        On::Hook(&[HookKind::PayMul], card_sdk::pre::MINE, None, bend),
-        On::Hook(&[HookKind::TurnEndBefore], "actor == owner && slot('skill.sumimi.got') == 0", None, at_turn_end),
+        // 「从其他玩家处获得过资金」 -- a PayAfter *landing in this player's
+        // favour* from a real other seat. `MINE` (`actor == owner`) only fires
+        // when this player is the *payer*, which is the opposite of an inbound
+        // charge; the raise's `actor` is `from`. Fire on every placed pay and
+        // let the body keep the from/to filter.
+        On::Hook(&[HookKind::PayAfter], "card.placed", None, after_pay),
+        // 「向其他人收费」 -- this player is the payee of a charge from another
+        // seat. Again `MINE` is the payer side; `target == owner` is the charge.
+        On::Hook(&[HookKind::PayMul], "target == owner && card.placed", None, bend),
+        // Both halves of （1） live in the body: add when GOT, else clear.
+        // The old `slot('skill.sumimi.got') == 0` guard only ever admitted the
+        // clear branch (FINDINGS C-SUMIMI-band-01).
+        On::Hook(&[HookKind::TurnEndBefore], "actor == owner", None, at_turn_end),
     ],
 )
     .silent(&[0]);
 
-/// （1）'s latch.
+/// （1）'s latch -- 「若你在一回合内从其他玩家处获得过资金」.
 fn after_pay(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() != player_id {
         return Ok(());
     }
-    if ctx::trigger::player_id() == player_id {
+    let from = ctx::trigger::player_id();
+    // 「从其他玩家处」 -- not a bank print (`from < 0`) and not a self-pay.
+    if from < 0 || from == player_id {
         return Ok(());
     }
     state::set(player_id, GOT, 1);
@@ -46,8 +58,12 @@ fn bend(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    // 「向其他人收费」 -- this player is the payer's counterpart.
+    // 「向其他人收费」 -- this player is the payee of another seat's payment.
     if ctx::trigger::target() != player_id {
+        return Ok(());
+    }
+    let from = ctx::trigger::player_id();
+    if from < 0 || from == player_id {
         return Ok(());
     }
     let amount = ctx::trigger::value();

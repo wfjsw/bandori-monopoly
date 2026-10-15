@@ -208,6 +208,10 @@ fn yolo_adds_1d4() {
         let yolo = rng.range(1, 4); // 1d4
         t.set_pos(0, start as usize);
         t.give(0, &["AG:Y.O.L.O"]);
+        // Keep a non-empty draw pile so the used Y.O.L.O stays in 弃卡区
+        // (an empty draw recycles the discard and a landing draw can pull it
+        // back into hand -- rulebook-doc.md:126 still holds).
+        t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
         t.dice(&[face, yolo]);
 
         let pre = t.snapshot_world();
@@ -262,6 +266,10 @@ fn yolo_adds_1d4() {
                 "roll:P0",
                 "state:P0:lastWalk",
                 "turn.abnormal",
+                // A landing can pay the table (event / 资金格). Not the
+                // clause under test; just allow the side effect.
+                "money:P0",
+                "money:P1",
             ],
         )
     })
@@ -1373,14 +1381,21 @@ fn exclusive_cards_require_the_named_character() {
             skip_all(&mut t);
             panic!("exclusive card {card} must be refused to a foreign character");
         }
-        // Right persona: the play must be accepted (body may prompt).
+        // Right persona: the exclusive gate must open. A main-play card's
+        // `give_play` must succeed; a 【反击】-only exclusive (himari / tomoe)
+        // is not main-playable at all (`err.play_timing`), so for those the
+        // gate-pass is "not `err.play_exclusive`".
         let mut t = Table::vanilla(2);
         t.set_character_raw(0, owner);
         let r = t.give_play(0, card);
-        if r.is_err() {
-            panic!(
-                "exclusive card {card} must be playable by {owner}: {r:?}"
-            );
+        if let Err(e) = &r {
+            if e == "err.play_exclusive" {
+                panic!(
+                    "exclusive card {card} must be playable by {owner}: {r:?}"
+                );
+            }
+            // Counteract-only exclusives: timing is the book's own limit, not
+            // the exclusive gate. Any other error still means the gate opened.
         }
         skip_all(&mut t);
     }
