@@ -28,7 +28,11 @@
 .viewport { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 /* Fixed overlays on the board window: never zoomed, never in the way. */
 .overlay { position: absolute; inset: 0; pointer-events: none; }
-.ring { position: relative; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); }
+.ring { position: relative; width: 100%; height: 100%;
+  /* Board-wide type/size unit (same as a tile's `--u`), so the centre
+     pockets -- event deck, movement hint -- scale with the board on every
+     screen instead of holding fixed px. ~13.6px on a desktop board. */
+  --u: min(calc(var(--cell-h, 80px) * 0.18), calc(var(--cell-w, 80px) * 0.17)); display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); }
 
 /* tiles: a generated face per cell (TileFace) plus every live overlay.
    Type scale: one unit `--u` off the measured cell (`--cell-w` / `--cell-h`,
@@ -348,15 +352,15 @@
    rows 7-8, the central field cols 4-7 / rows 3-6, and the movement hint
    takes the bottom-right pocket (cols 8-10 / rows 7-8). */
 .piles { position: absolute; left: 8.3333%; top: 70%; width: 25%; height: 20%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.pile { display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: auto; }
-.stack { position: relative; width: 96px; height: 72px; transition: transform 0.12s; }
+.pile { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.3); pointer-events: auto; }
+.stack { position: relative; width: calc(var(--u) * 7); height: calc(var(--u) * 5.3); transition: transform 0.12s; }
 .pile:hover .stack { transform: translateY(-3px); }
-.stack img { position: absolute; left: 50%; top: 50%; width: 72px; height: 96px; transform: translate(-50%, -50%) rotate(270deg); object-fit: cover; border-radius: 8px; box-shadow: 4px 4px 0 #fff, 5px 5px 0 #f0b3c3, 0 6px 14px rgba(0, 0, 0, 0.18); }
-.stack img.face { border: 3px solid #fff; }
-.pileEmpty { position: absolute; inset: 0; border-radius: 8px; border: 3px dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(246, 242, 243, 0.5); }
-.pileLabel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: 26px; padding: 0 12px; border-radius: 13px; background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 13px; font-weight: 700; line-height: 26px; white-space: nowrap; }
-.pileLabel b { color: var(--pink); margin-left: 6px; }
-.hint { position: absolute; left: 66.6667%; top: 70%; width: 25%; height: 20%; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: 15px; line-height: 1.5; pointer-events: none; }
+.stack img { position: absolute; left: 50%; top: 50%; width: calc(var(--u) * 5.3); height: calc(var(--u) * 7); transform: translate(-50%, -50%) rotate(270deg); object-fit: cover; border-radius: calc(var(--u) * 0.6); box-shadow: calc(var(--u) * 0.3) calc(var(--u) * 0.3) 0 #fff, calc(var(--u) * 0.37) calc(var(--u) * 0.37) 0 #f0b3c3, 0 calc(var(--u) * 0.45) calc(var(--u) * 1)  rgba(0, 0, 0, 0.18); }
+.stack img.face { border: max(1.5px, calc(var(--u) * 0.22)) solid #fff; }
+.pileEmpty { position: absolute; inset: 0; border-radius: calc(var(--u) * 0.6); border: max(1.5px, calc(var(--u) * 0.22)) dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(246, 242, 243, 0.5); }
+.pileLabel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); height: calc(var(--u) * 1.9); padding: 0 calc(var(--u) * 0.9); border-radius: calc(var(--u) * 0.95); background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: calc(var(--u) * 0.95); font-weight: 700; line-height: calc(var(--u) * 1.9); white-space: nowrap; }
+.pileLabel b { color: var(--pink); margin-left: calc(var(--u) * 0.45); }
+.hint { position: absolute; left: 66.6667%; top: 70%; width: 25%; height: 20%; box-sizing: border-box; padding: 0 calc(var(--u) * 1.2); display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: calc(var(--u) * 1.1); line-height: 1.5; pointer-events: none; }
 /* The die button, in the roll zone's centre band (cols 6-8 / rows 4-8 of the
    12 x 10 interior grid). Die-styled to sit in the teal pocket: a white disc
    with the d20 face, the running number over it and the caption beneath. */
