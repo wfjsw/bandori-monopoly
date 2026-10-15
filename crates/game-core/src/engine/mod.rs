@@ -353,7 +353,11 @@ struct Saved {
 /// [`crate::clock::ClockSettings`] plus a `legacy_clock` flag (see
 /// [`crate::record::MatchSetup::clock`]). Older saves are refused -- the
 /// archived engine bundle is what replays them (`docs/REPLAY.md`).
-pub const SAVE_VERSION: u32 = 9;
+/// v10: roster/player wire names are neutral (`persona` / `skillOwner` /
+/// `affiliations` / `groupSkill`, was `character` / `skillCharacter` /
+/// `bands` / `bandSkill`). Older saves are refused; archived engine bundles
+/// replay them (`docs/REPLAY.md`).
+pub const SAVE_VERSION: u32 = 10;
 
 /// A running match.
 pub struct Match {

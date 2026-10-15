@@ -477,7 +477,13 @@ use alloc::{string::String, vec::Vec};
 ///      `count_owned_kind(owner, kind) × mult × 1d20` instead of the rent
 ///      table. No SAVE_VERSION change
 ///      (TileKind still serializes as the same raw string).
-pub const ABI_VERSION: i32 = 66;
+/// v67: **roster persona/group names** (phase 2). MetaRow kinds `"persona"` /
+///      `"group"` (was `"character"` / `"band"`); meta key `"group"` (was
+///      `"band"`). Player/field wire names `persona` / `skillOwner` /
+///      `affiliations` / `groupSkill`. Host helpers `group_*` / `persona_*`
+///      (was `band_*` / `character_*`). SAVE_VERSION 9 → 10 (persisted
+///      player/field keys renamed). RECORD_VERSION unchanged.
+pub const ABI_VERSION: i32 = 67;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
