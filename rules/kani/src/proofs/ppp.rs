@@ -513,16 +513,23 @@ fn bang_dream_02_teleport_owned_iff_at(user: i32) {
 
     let pre_pos = w.pos[player as usize];
     // Collect the host's owned-tile indices (what `ask_tile` offers).
+    // 8×8 chunk walk (TUNING) keeps the unwind bound at 8 instead of the
+    // 60-trip `while i < 60` (class A at unwind 32).
     let mut owned: [i32; 8] = [0; 8];
     let mut n_owned = 0usize;
-    let mut i = 0i32;
-    while i < 60 {
-        if w.tiles[i as usize].owner == player && n_owned < 8 {
-            // host `owned_at` returns the 1-based board index
-            owned[n_owned] = i + 1;
-            n_owned += 1;
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let i = outer * 8 + k;
+            if i < 60 && w.tiles[i].owner == player && n_owned < 8 {
+                // host `owned_at` returns the 1-based board index
+                owned[n_owned] = i as i32 + 1;
+                n_owned += 1;
+            }
+            k += 1;
         }
-        i += 1;
+        outer += 1;
     }
     kani::cover!(n_owned == 1, "exactly one owned tile");
     kani::cover!(n_owned >= 2, "several owned tiles (free pick)");
