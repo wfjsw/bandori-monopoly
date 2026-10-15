@@ -5322,6 +5322,47 @@ impl<M: CardModules> RulesBridge<M> {
                         if l.tile >= 0 {
                             origin = origin.tile("tile", l.tile);
                         }
+                        // Particulars for the origin tile: who it is aimed at,
+                        // whose card caused it, the move / purchase behind it
+                        // and the effects it declares.
+                        if l.target != l.player_id && l.target >= 0 {
+                            origin = origin.player_id("target", l.target);
+                        }
+                        if let Some(by) = l.by_card.filter(|b| *b >= 0 && *b != l.player_id) {
+                            origin = origin.player_id("by", by);
+                        }
+                        if l.main {
+                            origin = origin.text("main", "1");
+                        }
+                        if let Some(mv) = &l.mv {
+                            origin = origin
+                                .tile("mv_from", mv.from)
+                                .i("mv_total", mv.total as i64)
+                                .i("mv_left", mv.remaining as i64);
+                            if let Some(r) = mv.roll {
+                                origin = origin.i("mv_roll", r as i64);
+                            }
+                        }
+                        if let Some(b) = &l.buy {
+                            origin = origin.i("price", b.price as i64);
+                        }
+                        let fx: Vec<game_core::msg::Arg> = l
+                            .effects
+                            .iter()
+                            .map(|e| {
+                                let mut m = Msg::new("fx").text("kind", e.kind).i("value", e.value as i64);
+                                if e.target >= 0 {
+                                    m = m.player_id("target", e.target);
+                                }
+                                if e.tile >= 0 {
+                                    m = m.tile("tile", e.tile);
+                                }
+                                game_core::msg::Arg::Msg(Box::new(m))
+                            })
+                            .collect();
+                        if !fx.is_empty() {
+                            origin = origin.list("effects", fx);
+                        }
                         cx.log_event(
                             "chain",
                             l1_seat,

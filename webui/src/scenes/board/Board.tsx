@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
 import { namesOf } from "../../core/names";
-import { sceneImg } from "../../core/assets";
 import type { Msg } from "../../i18n/msg";
 import { t as tr } from "../../i18n/t";
 import { cx } from "../../core/cx";
@@ -252,7 +251,7 @@ export function Board({ sess }: { sess: GameSession }) {
                         ch.active === l.seq && !done && s.chainActive,
                         done && s.chainDone,
                       )}
-                      style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)", marginTop: l.seq > 1 ? -cardW * 0.55 : 0 }}
+                      style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)", marginTop: l.seq > 1 ? -cardW * (l.seq === 2 && anim.chain!.links[0]?.origin ? 0.05 : 0.55) : 0 }}
                     >
                       {l.card
                         ? <CardFace id={l.card} size="big" width={cardW} className={s.chainFace} />
@@ -316,18 +315,56 @@ function ChainOrigin({ msg, names, w }: { msg?: Msg; names: ReturnType<typeof na
   const who = (msg?.a?.who as { playerId?: number } | undefined)?.playerId ?? -1;
   const tile = (msg?.a?.tile as { tile?: number } | undefined)?.tile ?? -1;
   const rent = text("rent") === "1";
-  const label = kind ? tr(`anim.chainKind.${rent && kind === "pay" ? "rent" : kind}`, { defaultValue: kind }) : tr("anim.chainOrigin");
+  // A kind with no label of its own shows its wire name.
+  const kindLabel = (k: string) => {
+    const key = `anim.chainKind.${k}`;
+    const v = tr(key);
+    return v === key ? k : v;
+  };
+  const label = kind ? kindLabel(rent && kind === "pay" ? "rent" : kind) : tr("anim.chainOrigin");
+  const pid = (k: string) => (msg?.a?.[k] as { playerId?: number } | undefined)?.playerId ?? -1;
+  const tid = (k: string) => (msg?.a?.[k] as { tile?: number } | undefined)?.tile ?? -1;
+  const has = (k: string) => msg?.a?.[k] !== undefined;
+  const fx = ((msg?.a?.effects as { list?: { msg?: Msg }[] } | undefined)?.list ?? []).flatMap((x) => (x.msg ? [x.msg] : []));
+  const fxLine = (m: Msg) => {
+    const g = (k: string) => (m.a?.[k] as { text?: string; i?: number; playerId?: number; tile?: number } | undefined);
+    const k = g("kind")?.text ?? "";
+    const bits = [
+      kindLabel(k),
+      g("target")?.playerId !== undefined ? `→ ${names.playerId(g("target")!.playerId!)}` : "",
+      g("tile")?.tile !== undefined ? names.tile(g("tile")!.tile!) : "",
+      g("value")?.i ? String(g("value")!.i) : "",
+    ];
+    return bits.filter(Boolean).join(" ");
+  };
   const lines = [
     who >= 0 ? names.playerId(who) : "",
-    ROLL_KINDS.has(kind) ? tr("anim.chainFace", { n: num("value") }) : num("value") ? String(num("value")) : "",
+    pid("target") >= 0 ? tr("anim.chainTarget", { who: names.playerId(pid("target")) }) : "",
+    pid("by") >= 0 ? tr("anim.chainBy", { who: names.playerId(pid("by")) }) : "",
+    ROLL_KINDS.has(kind) ? tr("anim.chainFace", { n: num("value") }) : num("value") ? tr("anim.chainValue", { n: num("value") }) : "",
+    has("mv_roll") && !(ROLL_KINDS.has(kind) && num("mv_roll") === num("value")) ? tr("anim.chainFace", { n: num("mv_roll") }) : "",
+    has("mv_total") && num("mv_total") > 0 ? tr("anim.chainMove", { from: tid("mv_from") >= 0 ? names.tile(tid("mv_from")) : "?", n: num("mv_total"), left: num("mv_left") }) : "",
+    has("price") ? tr("anim.chainPrice", { n: num("price") }) : "",
     tile >= 0 ? names.tile(tile) : "",
     text("src") ? tr(`anim.chainSrc.${text("src")}`) : "",
+    text("main") === "1" ? tr("anim.chainMain") : "",
+    ...fx.map(fxLine),
   ].filter(Boolean);
   return (
-    <div className={s.chainOrigin} style={{ width: w, height: w * 1.5, fontSize: Math.max(10, w * 0.1) }}>
-      {ROLL_KINDS.has(kind) && <img className={s.chainDice} src={sceneImg("dice_d20")} alt="" style={{ width: w * 0.45 }} />}
+    <div className={s.chainOrigin} style={{ width: Math.max(w, 124), minHeight: w * 1.5, fontSize: Math.max(11, w * 0.1) }}>
+      {ROLL_KINDS.has(kind) && <DiceIcon size={Math.max(34, w * 0.4)} />}
       <b>{label}</b>
       {lines.map((l, k) => <span key={k}>{l}</span>)}
     </div>
+  );
+}
+
+/** A die face (five pips), drawn inline so it never depends on an asset. */
+function DiceIcon({ size }: { size: number }) {
+  return (
+    <svg className={s.chainDice} width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
+      <rect x="3" y="3" width="34" height="34" rx="8" fill="#fff" stroke="#e0527f" strokeWidth="3" />
+      {[[12, 12], [28, 12], [20, 20], [12, 28], [28, 28]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="3.2" fill="#e0527f" />)}
+    </svg>
   );
 }
