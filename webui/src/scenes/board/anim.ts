@@ -467,7 +467,12 @@ export class Animator {
     if (this.disposed) return;
     this.animating = false;
     this.pos = null;
-    this.route = null;
+    // A walk halted mid-route (CiRCLE's reward prompt, or any hook still
+    // settling in the move stage) keeps its remaining route lit: the queue is
+    // empty only until the engine publishes the next segment.
+    const st = this.shownView()?.state;
+    const midWalk = !!st && (st.prompt.id > 0 || st.step === 3);
+    if (!(midWalk && this.route && this.route.length > 0)) this.route = null;
     // Caught up: the last stage played is the state's own.
     this.stage = null;
     this.turn = null;
