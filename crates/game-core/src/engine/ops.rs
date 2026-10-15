@@ -2173,6 +2173,13 @@ impl World {
         // the turn-start `exiled_skip` auto-skip is what drops a whole later
         // turn. See `engine/mod.rs`'s live-latch note.
         if let Some(s) = self.player_mut(player_id) {
+            // 「该效果生效时无法重复获得该效果」 (rulebook 50): while [除外] is
+            // active a new grant gains no layer and writes no return tile. A
+            // multi-layer first grant (MyGO:无路矢 「获得2层[除外]」) is one
+            // acquisition and still lands.
+            if n > 0 && s.exile() > 0 {
+                return;
+            }
             let v = (s.exile() + n).max(0);
             s.state_set(key::EXILE, v);
             s.state_set(key::EXILE_TO, to);

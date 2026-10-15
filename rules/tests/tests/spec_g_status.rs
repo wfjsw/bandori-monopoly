@@ -745,12 +745,9 @@ fn unstoppable_verifier_rejects_mutants() {
 // ---------------------------------------------------------------------------
 
 /// 「[除外]：…无法收付款」 -- rent owed to an exiled owner must not land on
-/// them.
-///
-/// **Genuine discrepancy (stays failing):** the engine pays the exiled owner.
-/// Findings classification: **LESS** is wrong here -- the engine does *more*
-/// (pays a seat the book says cannot receive). Class: **MORE** (money leaks
-/// to a seat that must not receive).
+/// them. A 无路矢-style redirect to another seat is the book's exception
+/// (「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」); with no
+/// redirect the leg is refused entirely.
 #[test]
 fn exile_owner_cannot_receive_rent() {
     let mut t = Table::vanilla(3);
@@ -765,11 +762,15 @@ fn exile_owner_cannot_receive_rent() {
     t.set_pos(0, tile.saturating_sub(1).max(0));
     t.dice(&[1, 1, 1, 1]);
     t.begin_turn(0);
-    finish_turn(&mut t, 0);
+    // The rent lands on the roll's settle -- check while player 1 is still
+    // exiled (before player 0's turn end can roll into player 1's turn start,
+    // which removes one [除外] layer per 「每回合开始前移除一层」).
+    let _ = t.roll(0);
+    drain(&mut t);
     assert_eq!(
         t.state(1, "exile"),
         1,
-        "setup: player 1 should still be exiled after player 0's turn"
+        "setup: player 1 should still be exiled at rent time"
     );
     assert_eq!(
         t.money(1),

@@ -2796,6 +2796,21 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if m.card.is_empty() {
                 return Some(Msg::new("err.skill_unknown"));
             }
+            // stun 「无法使用[主动]技能」 / exile 「玩家技能…停止生效」 close the
+            // status act gate. A card that prints 「可在眩晕时打出」
+            // (`prop::PLAYABLE_STUNNED`) is the one stun exception; exile has
+            // none. Mirrors `cannot_play` for hand plays.
+            let stun_ok = cx
+                .rules
+                .card_prop(&m.card, crate::state::prop::PLAYABLE_STUNNED)
+                != 0;
+            let gates = st.players[i].status_gates();
+            if !gates.on_board {
+                return Some(Msg::new("err.play_exiled"));
+            }
+            if !cx.w.gate_open(cx.rules, Gate::Act, i) && !stun_ok {
+                return Some(Msg::new("err.play_stunned"));
+            }
             // The rule's own gate (`On::Play`'s), so the cost check stays in the
             // rule body where the 规则书 clause lives.
             cx.rules_cant_play(i, &m.card)

@@ -1580,12 +1580,19 @@ impl CardWorld for Run {
     }
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
         if n > 0 {
-            // 「任意玩家获得exile…时」 -- the grant is a raise point (embers).
-            self.exile_log.push(player_id);
-            self.outcome(
-                player_id,
-                Msg::new("log.outcome.exile").player_id("target", player_id),
-            );
+            // 「该效果生效时无法重复获得该效果」 -- a refused re-acquisition is
+            // not a grant: no embers raise and no `outcome.exile` line (the
+            // layer itself is refused in `give_exile` below).
+            let already =
+                self.world.state_get(player_id, game_core::state::key::EXILE) > 0;
+            if !already {
+                // 「任意玩家获得exile…时」 -- the grant is a raise point (embers).
+                self.exile_log.push(player_id);
+                self.outcome(
+                    player_id,
+                    Msg::new("log.outcome.exile").player_id("target", player_id),
+                );
+            }
         }
         self.world.give_exile(player_id, n, to);
     }

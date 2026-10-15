@@ -755,8 +755,10 @@ pub fn verify_stay_turn_end(pre: &World, post: &World, events: &[MatchEvent], wh
     let g = grants(events, who, STAY);
     if !turn_ended(events, who) {
         // Condition false: this rule must be a no-op on the counter. A shrink
-        // here would be a decay firing off its tick (LESS/WRONG).
-        if after < before && g == 0 && !status_cleared(events) {
+        // here would be a decay firing off its tick (LESS/WRONG) -- unless a
+        // card body cleared layers (壱雫空 「清除场上所有[停留]与[眩晕]效果」)
+        // or the window is otherwise busy (same carve-out as the turn-end path).
+        if after < before && g == 0 && !status_cleared(events) && !busy_window(events) {
             return Err(format!(
                 "G-STATUS-03: player {who} [停留] shrank off its tick ({before} -> {after})"
             ));
@@ -869,7 +871,17 @@ pub fn verify_stun_turn_end(
         let skipped = events.iter().any(|e| {
             e.r#type == "status" && e.player_id == who as i32 && msg_key(e) == "stunned_skip"
         });
-        if !skipped && stun_layers(post, who) > 0 {
+        // Row 4's skip is logged at the *end* of 开始阶段, after `turnStartBefore`
+        // / `turnStart` (and the exile return) have run. A counteraction on any
+        // of those hooks opens a prompt mid-`turn_start`, and the observer's
+        // settle stops at prompts -- so a window whose last mark is `log.turn`
+        // may simply be cut before the gate was consulted. `st.step` is still
+        // `START` in that case (the skip path sets `END`; an open gate lets
+        // `tick_play` lift the turn to `OPS`). Only demand the skip once the
+        // turn has left 开始阶段. The book (「跳过经营和主要移动阶段」) forbids
+        // those phases, not an atomic same-window log line.
+        let start_still_open = post.st.step == game_core::state::stage::START;
+        if !skipped && !start_still_open && stun_layers(post, who) > 0 {
             return Err(format!(
                 "G-STATUS-05: stunned player {who} started a turn without the 运营/主要移动 skip (row 4)"
             ));
@@ -895,11 +907,18 @@ pub fn verify_exile_turn_start(
         ));
     }
     if turn_started(events, who) && !status_cleared(events) && !busy_window(events) && g == 0 {
-        let expected = (before - 1).max(0);
-        if after != expected {
-            return Err(format!(
-                "G-STATUS-07: player {who} [除外] {before} -> {after} over their turn start (expected {expected})"
-            ));
+        // Same window-split caveat as G-STATUS-05's skip: `turnStartBefore`
+        // (and the exile return) run before the decay, and a counteraction on
+        // them opens a prompt the observer's settle stops at. `st.step` is
+        // still `START` while 开始阶段 is mid-flight.
+        let start_still_open = post.st.step == game_core::state::stage::START;
+        if !start_still_open {
+            let expected = (before - 1).max(0);
+            if after != expected {
+                return Err(format!(
+                    "G-STATUS-07: player {who} [除外] {before} -> {after} over their turn start (expected {expected})"
+                ));
+            }
         }
     }
     Ok(())
