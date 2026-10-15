@@ -1,24 +1,17 @@
 // The phone canvas' right column: the standing card and the match log share one
-// panel behind a two-tab toggle (the desktop stacks them, half each). A card the
-// user points at, clicks or sees flashed brings the card tab forward -- that is
-// what they are asking to read -- and the toggle flips back to the log.
+// panel behind a two-tab toggle (the desktop stacks them, half each). The tab
+// only changes when the user taps it: a card pointed at or flashed updates the
+// (mounted) stand but never pulls the user away from the log they are reading.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { cx } from "../../core/cx";
 import { t as tr } from "../../i18n/t";
-import { useStickyCard } from "../../ui/CardPreview";
 import { Icon } from "../../ui/Icon";
 import { CardStand } from "./CardStand";
 import s from "./RightTabs.module.css";
 
 export function RightTabs({ flash, log }: { flash?: string; log: ReactNode }) {
   const [tab, setTab] = useState<"card" | "log">("log");
-  const card = useStickyCard();
-  // Follows the sticky card (hover, click or flash) -- including re-picking the
-  // same card after the user flipped to the log, via the object identity.
-  useEffect(() => {
-    if (card) setTab("card");
-  }, [card]);
   return (
     <div className={s.slot}>
       <div className={s.tabs} role="tablist">
