@@ -11,7 +11,7 @@ use alloc::{string::String, vec::Vec};
 /// v7: board/hand/status query + op wave (is_buyable ... in_group, spend_charge,
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
 /// v8: `ruleset_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
-/// v9: `cant_move`, `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
+/// v9: `cant_move`, `hand_size`, `is_deed`/`is_start`/`is_venue`.
 /// v10: `trig_step` (`Trigger.step`) so a counteraction can tell which turn step
 ///      (0/1/2/3) it fired in, for kinds that aren't step-specific (e.g.
 ///      `mortgage` fires during both step 1 and step 3); paired
@@ -286,7 +286,7 @@ use alloc::{string::String, vec::Vec};
 ///      effect reshaped still maps the pick to the same tile. `agent_offer` --
 ///      the chosen branch (buy `0` / build `1` / half-rent `2`) as one host
 ///      routine. `raise` --
-///      guest-raised trigger points (`circleAffected` from `tile:circle`);
+///      guest-raised trigger points (`passRewardAffected` from `tile:circle`);
 ///      returns whether the link settled. `gain_typed` -- a bank print through
 ///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
 ///      `typ` and a replacement log line (`Pay::text`). `prop_at` /
@@ -367,8 +367,8 @@ use alloc::{string::String, vec::Vec};
 ///      the same rule. Client-side, event ids dedupe a re-delivered frame.
 ///      SAVE_VERSION unchanged.
 /// v56: **generic tile queries** replace the eight game-named kind/class host
-///      ops (`is_ring` / `is_circle` / `is_agent` / `is_shop` / `is_live_house`
-///      / `is_buyable` / `is_live_house_for` / `is_color`). New imports:
+///      ops (`is_deed` / `is_start` / `is_agent` / `is_shop` / `is_venue`
+///      / `is_buyable` / `is_venue_for` / `is_color`). New imports:
 ///      `tile_is(tile, kind)` -- data `TileKind` by wire spelling;
 ///      `tile_attr(tile, attr)` -- i32 field read (`group`/`area`/`tier`/
 ///      `price`/`house`/`rent`/`index`);
@@ -376,7 +376,7 @@ use alloc::{string::String, vec::Vec};
 ///      (`buyable`/`shop`/`livehouse`/`color:<g>`), with per-player overrides
 ///      as generic class-membership props (`class:` / `classFor:<p>:`) plus the
 ///      existing `anyColor` / `colorFor:<p>` colour props. Game sugar
-///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
+///      (`is_deed(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
 /// v65: **import-module rename** -- the wasm import module and every guest
@@ -493,7 +493,13 @@ use alloc::{string::String, vec::Vec};
 ///      `StateVar.flags` for never-negative / engine-owned; trigger
 ///      `chargePaying` (was `firePaying`). SAVE_VERSION 10 → 11 (state key,
 ///      FieldCard shape, profile charge fields).
-pub const ABI_VERSION: i32 = 68;
+/// v69: neutral pass-reward / deed wire names. TriggerKind/HookKind/ChainKind
+///      `circleAffected` -> `passRewardAffected` (numeric 26 unchanged; the
+///      old spelling still parses). CEL `is_circle`/`is_ring`/`is_live_house`
+///      -> `is_start`/`is_deed`/`is_venue` (old names remain aliases).
+///      i18n keys `ask.circle.*` / `log.circle_*` -> `ask.pass_reward.*` /
+///      `log.pass_reward_*` / `log.land_start`. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 69;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1185,7 +1191,7 @@ impl CardPile {
     }
 }
 
-/// `circleAffected`'s `Trigger.value` -- which half of the CiRCLE reward was
+/// `passRewardAffected`'s `Trigger.value` -- which half of the CiRCLE reward was
 /// taken. `0` is 「[获得]资金」, `1` is the card. The stunned path forces the
 /// card, so a money-only clause cannot fire there.
 ///
@@ -1316,7 +1322,7 @@ pub enum TriggerKind {
     /// The CiRCLE reward was picked but not paid out (「[获得]资金」 vs the card).
     /// `value` = which half ([`REWARD_MONEY`] / [`REWARD_CARD`]); the stunned
     /// path forces the card. `set_cancelled()` skips the payout.
-    CircleAffected = 26,
+    PassRewardAffected = 26,
     /// Wire name `twoCards`: 「当有人同一回合内打出两张卡时」 (Sumimi:Here the
     /// world). Not raised by the current engine; kept for wire compatibility.
     TwoCards = 27,
@@ -1633,7 +1639,7 @@ impl TriggerKind {
             23 => Self::State,
             24 => Self::Counteracted,
             25 => Self::DrawOut,
-            26 => Self::CircleAffected,
+            26 => Self::PassRewardAffected,
             27 => Self::TwoCards,
             28 => Self::TurnStartBefore,
             29 => Self::PassBefore,
@@ -1742,7 +1748,7 @@ impl TriggerKind {
             Self::State => "state",
             Self::Counteracted => "counteracted",
             Self::DrawOut => "drawOut",
-            Self::CircleAffected => "circleAffected",
+            Self::PassRewardAffected => "passRewardAffected",
             Self::TwoCards => "twoCards",
             Self::TurnStartBefore => "turnStartBefore",
             Self::PassBefore => "passBefore",
@@ -1849,7 +1855,7 @@ impl TriggerKind {
             "state" => Self::State,
             "counteracted" => Self::Counteracted,
             "drawOut" => Self::DrawOut,
-            "circleAffected" => Self::CircleAffected,
+            "passRewardAffected" | "circleAffected" => Self::PassRewardAffected,
             "twoCards" => Self::TwoCards,
             "turnStartBefore" => Self::TurnStartBefore,
             "passBefore" => Self::PassBefore,
@@ -2086,9 +2092,9 @@ declare_kinds! {
         /// See [`TriggerKind::DrawOut`] -- 「回合外受到抽卡效果时」; not raised
         /// by the current engine, kept for wire compatibility.
         DrawOut = 25,
-        /// See [`TriggerKind::CircleAffected`] -- a counter to the CiRCLE reward
+        /// See [`TriggerKind::PassRewardAffected`] -- a counter to the CiRCLE reward
         /// pick, before the payout.
-        CircleAffected = 26,
+        PassRewardAffected = 26,
         /// See [`TriggerKind::TwoCards`] -- 「当有人同一回合内打出两张卡时」; not
         /// raised by the current engine, kept for wire compatibility.
         TwoCards = 27,
@@ -2242,8 +2248,8 @@ declare_kinds! {
         /// See [`TriggerKind::DrawOut`] -- not raised by the current engine;
         /// kept for wire compatibility.
         DrawOut = 25,
-        /// See [`TriggerKind::CircleAffected`].
-        CircleAffected = 26,
+        /// See [`TriggerKind::PassRewardAffected`].
+        PassRewardAffected = 26,
         /// See [`TriggerKind::TwoCards`] -- not raised by the current engine;
         /// kept for wire compatibility.
         TwoCards = 27,

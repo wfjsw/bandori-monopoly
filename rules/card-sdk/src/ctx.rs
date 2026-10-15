@@ -317,7 +317,7 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
 
 /// Does the tile's **data kind** equal `kind` (the `TileKind` wire spelling:
 /// `"ring"`, `"circle"`, `"agent"`, `"property"`, …)? Generic host query —
-/// game sugar (`is_ring` / `is_circle` / …) lives in `ruleset-core`.
+/// game sugar (`is_deed` / `is_start` / …) lives in `ruleset-core`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_is(tile: i32, kind: &str) -> bool {
     let (p, l) = s(kind);
@@ -1532,7 +1532,7 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 }
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
-/// (e.g. [`TriggerKind::CircleAffected`]); `value` is the trigger's `value`.
+/// (e.g. [`TriggerKind::PassRewardAffected`]); `value` is the trigger's `value`.
 /// Returns true when the link settled (nobody cancelled it). A hook that
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prompt> {
