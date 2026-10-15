@@ -5301,10 +5301,31 @@ impl<M: CardModules> RulesBridge<M> {
                     // appends it to the chain overlay.
                     if chain.len() == 1 {
                         let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
+                        // A timing with no card of its own (a roll, a payment,
+                        // a landing ...) says what it is: the trigger kind and
+                        // its particulars, for the client's origin tile.
+                        let l = &chain[0].link;
+                        let src = match l.roll_source {
+                            game_core::engine::rules::RollSource::Fire => "fire",
+                            game_core::engine::rules::RollSource::Card => "card",
+                            game_core::engine::rules::RollSource::Skill => "skill",
+                            _ => "",
+                        };
+                        let mut origin = Msg::new("log.chain_link")
+                            .n("n", 1)
+                            .card("card", l1_id.clone())
+                            .text("kind", l.kind.as_str())
+                            .player_id("who", l.player_id)
+                            .i("value", l.value as i64)
+                            .text("src", src)
+                            .text("rent", if l.pay.as_ref().is_some_and(|p| p.is_rent) { "1" } else { "" });
+                        if l.tile >= 0 {
+                            origin = origin.tile("tile", l.tile);
+                        }
                         cx.log_event(
                             "chain",
                             l1_seat,
-                            Msg::new("log.chain_link").n("n", 1).card("card", l1_id.clone()),
+                            origin,
                             -1,
                             &l1_id,
                             1,

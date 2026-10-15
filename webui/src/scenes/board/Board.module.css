@@ -301,10 +301,14 @@
 .chainLink {
   position: relative;
   border-radius: var(--r-lg);
-  border: 3px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 22px rgba(120, 220, 255, 0.75), 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--owner, var(--pink)) 70%, transparent), 0 12px 30px rgba(0, 0, 0, 0.45);
   transition: transform 0.3s, opacity 0.3s;
   will-change: transform, opacity;
+}
+/* The face: bordered and tinted with its owner's colour, like a card on the field. */
+.chainLink .chainFace {
+  box-shadow: 0 0 0 3px var(--owner, var(--pink));
+  background: color-mix(in srgb, var(--owner, var(--white)) 14%, var(--white));
 }
 /* Zig-zag down the chain: my cards left, everyone else's right. */
 .chainMine { align-self: flex-start; transform: rotate(-5deg); }
@@ -315,11 +319,18 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--r-lg);
-  background: rgba(246, 242, 243, 0.92);
+  box-shadow: 0 0 0 3px var(--owner, var(--pink));
+  background: color-mix(in srgb, var(--owner, var(--white)) 14%, var(--white));
   color: var(--ink);
-  font-weight: 800;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  box-sizing: border-box;
   text-align: center;
 }
+.chainOrigin b { font-weight: 800; }
+.chainOrigin span { font-weight: 600; opacity: 0.85; line-height: 1.25; }
+.chainDice { display: block; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
 .chainNo {
   position: absolute;
   left: -18px;

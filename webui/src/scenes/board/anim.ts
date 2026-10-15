@@ -122,7 +122,7 @@ export class Animator {
    *  links already settled. `shown` turns on with the second link -- a lone
    *  initiating card is not a chain. */
   chain: {
-    links: { seq: number; card: string; owner: number; fresh: number }[];
+    links: { seq: number; card: string; owner: number; fresh: number; origin?: Msg }[];
     shown: boolean;
     resolving: boolean;
     active: number;
@@ -621,7 +621,7 @@ export class Animator {
       // without a link 1 event on old records: stand one in.
       if (seq > 1) this.chain.links.push({ seq: 1, card: "", owner: -1, fresh: 0 });
     }
-    const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq };
+    const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq, origin: seq === 1 && !e.card ? e.msg : undefined };
     if (!quiet && e.card) {
       await this.cardFlash({ ...e, kind: "counter", msg: e.msg, results: [], negated: false }, false);
       await this.flashGone();

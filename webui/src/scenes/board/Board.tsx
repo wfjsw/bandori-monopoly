@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
 import { namesOf } from "../../core/names";
+import { sceneImg } from "../../core/assets";
+import type { Msg } from "../../i18n/msg";
 import { t as tr } from "../../i18n/t";
 import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
@@ -253,8 +255,8 @@ export function Board({ sess }: { sess: GameSession }) {
                       style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)", marginTop: l.seq > 1 ? -cardW * 0.55 : 0 }}
                     >
                       {l.card
-                        ? <CardFace id={l.card} size="big" width={cardW} />
-                        : <div className={s.chainOrigin} style={{ width: cardW, height: cardW * 1.5 }}>{tr("anim.chainOrigin")}</div>}
+                        ? <CardFace id={l.card} size="big" width={cardW} className={s.chainFace} />
+                        : <ChainOrigin msg={l.origin} names={names} w={cardW} />}
                       <span className={s.chainNo}>{l.seq}</span>
                     </div>
                   );
@@ -299,5 +301,33 @@ export function Board({ sess }: { sess: GameSession }) {
         </div>
       </div>
     </>
+  );
+}
+
+const ROLL_KINDS = new Set(["roll", "moveRoll"]);
+
+/** The tile standing in for a chain's link 1 when the timing is no card (a
+ *  roll, a payment, a landing ...): an icon, what happened, and the
+ *  particulars the engine recorded on the trigger. */
+function ChainOrigin({ msg, names, w }: { msg?: Msg; names: ReturnType<typeof namesOf>; w: number }) {
+  const text = (k: string) => (msg?.a?.[k] as { text?: string } | undefined)?.text ?? "";
+  const num = (k: string) => (msg?.a?.[k] as { i?: number } | undefined)?.i ?? 0;
+  const kind = text("kind");
+  const who = (msg?.a?.who as { playerId?: number } | undefined)?.playerId ?? -1;
+  const tile = (msg?.a?.tile as { tile?: number } | undefined)?.tile ?? -1;
+  const rent = text("rent") === "1";
+  const label = kind ? tr(`anim.chainKind.${rent && kind === "pay" ? "rent" : kind}`, { defaultValue: kind }) : tr("anim.chainOrigin");
+  const lines = [
+    who >= 0 ? names.playerId(who) : "",
+    ROLL_KINDS.has(kind) ? tr("anim.chainFace", { n: num("value") }) : num("value") ? String(num("value")) : "",
+    tile >= 0 ? names.tile(tile) : "",
+    text("src") ? tr(`anim.chainSrc.${text("src")}`) : "",
+  ].filter(Boolean);
+  return (
+    <div className={s.chainOrigin} style={{ width: w, height: w * 1.5, fontSize: Math.max(10, w * 0.1) }}>
+      {ROLL_KINDS.has(kind) && <img className={s.chainDice} src={sceneImg("dice_d20")} alt="" style={{ width: w * 0.45 }} />}
+      <b>{label}</b>
+      {lines.map((l, k) => <span key={k}>{l}</span>)}
+    </div>
   );
 }
