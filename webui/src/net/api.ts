@@ -35,6 +35,17 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Pr
 
 /** Make sure this tab has a server session for `player`. */
 export async function ensureSession(player: string, character = "", cnId = ""): Promise<boolean> {
+  if (!token) {
+    // A fresh tab (browser was closed): take the last token over only if it is still seated in a
+    // room, so the player can rejoin their match. Otherwise tabs keep separate sessions.
+    const last = localStorage.getItem(TOKEN_KEY) ?? "";
+    if (last) {
+      token = last;
+      const me = await call<{ player: string; room: string | null }>("GET", "/api/session");
+      if (me.ok && me.data?.player === player && me.data.room) sessionStorage.setItem(TOKEN_KEY, token);
+      else token = "";
+    }
+  }
   if (token) {
     const me = await call<{ player: string }>("GET", "/api/session");
     if (me.ok && me.data?.player === player) return true;
@@ -43,6 +54,7 @@ export async function ensureSession(player: string, character = "", cnId = ""): 
   if (!r.ok || !r.data) return false;
   token = r.data.token;
   sessionStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_KEY, token);
   return true;
 }
 
