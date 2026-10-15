@@ -8,14 +8,14 @@ export interface TileData {
   color: string; tier: number; area: string; price: number; house: number; rent: number[]; note: string;
 }
 export interface CardData {
-  id: string; band: string; name: string; rawName: string; owner: string;
+  id: string; group: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string; cell: string;
   /** The [反击] card's trigger-condition clause (「…时」), extracted once from
    *  `text` and checked for every 反击-tagged card. Why the card is offered. */
   counterReason?: string;
 }
 export interface PersonaData {
-  name: string; display: string; band: string; color: string; skill: string; text: string;
+  name: string; display: string; group: string; color: string; skill: string; text: string;
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
@@ -39,14 +39,14 @@ export interface VoiceLine { text: string; voice: string; motion: string; from: 
 
 export interface MatchPlayer {
   member: number; player: string; bot: boolean; ai: boolean; roll: number; banDone: boolean; ban: string;
-  character: string; deckReady: boolean; money: number; pos: number; hand: number; draw: number;
+  persona: string; deckReady: boolean; money: number; pos: number; hand: number; draw: number;
   discard: string[]; mulligan: boolean; bankrupt: boolean; left: boolean; outOrder: number;
   assets: number; score: number; rank: number;
   /** Bot decision policy (`"standard"` / `"chaos"`). Ignored on a human seat. */
   mentality: BotMentality;
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
   state: Record<string, StateVar>;
-  skillOwner: string; bands: string; tokens: Counter[];
+  skillOwner: string; affiliations: string; tokens: Counter[];
   skillNote: Msg; field: FieldCard[];
 }
 /**
@@ -302,7 +302,7 @@ export interface ClockSettings {
  */
 export type BotMentality = "standard" | "chaos" | "advanced";
 export interface RoomMember {
-  id: number; player: string; character: string; cnId: string;
+  id: number; player: string; persona: string; cnId: string;
   ready: boolean; host: boolean; bot: boolean; away: boolean;
   mentality: BotMentality;
 }
@@ -325,21 +325,21 @@ export interface FairPublic {
 
 /** A match command (NetMessage); only the fields a command uses matter. */
 export interface Command {
-  act: string; character?: string; card?: string; cards?: string[];
+  act: string; persona?: string; card?: string; cards?: string[];
   value?: number; prompt?: number; target?: number;
   /** Replayable solo console operation. Rejected by the engine online. */
   debug?: string;
 }
 
 export interface MatchRecord {
-  time: string; mode: number; ranked: boolean; rank: number; players: number; character: string;
+  time: string; mode: number; ranked: boolean; rank: number; players: number; persona: string;
   exp: number; fireUsed: number; coins: number; stars: number; levelAfter: number;
   /** Local replay-store id of this match's `.bdrec` (`game/record.ts`), "" when none. */
   replayId: string;
 }
 /** `slot` is the stable deck id within the character; `name` is UI-only
  * metadata ("" = auto, displayed as 「卡组 n」/"Deck n"). Never sent in a match. */
-export interface SavedDeck { character: string; slot: number; name: string; cards: string[] }
+export interface SavedDeck { persona: string; slot: number; name: string; cards: string[] }
 export interface PlayerProfile {
   saveVersion: number; playerName: string; playerId: string; createdAt: string;
   level: number; exp: number; totalExp: number; fire: number; fireDate: string; firePerGame: number;

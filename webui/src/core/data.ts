@@ -13,15 +13,15 @@ import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine }
 export interface GameData {
   tiles: TileData[];
   cards: CardData[];
-  characters: PersonaData[];
-  bands: GroupData[];
+  personas: PersonaData[];
+  groups: GroupData[];
   events: EventData[];
   voiceLines: { id: string; name: string; lines: VoiceLine[] }[];
   homeLines: { name: string; tag: string }[];
   rulesText: string;
   card(id: string): CardData | undefined;
-  character(name: string): PersonaData | undefined;
-  band(name: string): GroupData | undefined;
+  persona(name: string): PersonaData | undefined;
+  group(name: string): GroupData | undefined;
   event(id: string): EventData | undefined;
   artId(c: PersonaData): string;
   homeTag(c: PersonaData): string;
@@ -68,8 +68,8 @@ async function loadRuleset(): Promise<void> {
 /** Display-only overlay of `skill_simple.json`: newcomer skill bodies and the
  *  card `counterReason` column (once in `cards.json`, no longer fetched). */
 interface SkillSimple {
-  characters: { name: string; text: string }[];
-  bands: { name: string; text: string }[];
+  personas: { name: string; text: string }[];
+  groups: { name: string; text: string }[];
   cards?: { id: string; counterReason: string }[];
 }
 
@@ -99,8 +99,8 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
 
   const roster = JSON.parse(glue.roster_json()) as {
     cards: CardData[];
-    characters: PersonaData[];
-    bands: GroupData[];
+    personas: PersonaData[];
+    groups: GroupData[];
   };
   const names: string[] = JSON.parse(glue.data_files());
   const files: Record<string, string> = {};
@@ -138,8 +138,8 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // `cards.json` / `characters.json` / `bands.json`; those stay on disk for
   // authoring tools until they retire).
   const cards = roster.cards;
-  const characters = roster.personas;
-  const bands = roster.groups;
+  const personas = roster.personas;
+  const groups = roster.groups;
   const events: EventData[] = j("events.json").events;
   const homeLines = j("home_lines.json").personas ?? [];
   // `skill_simple.json` is the display-only overlay: the hand-written newcomer
@@ -148,8 +148,8 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // roster's `text` is the fallback), and the card `counterReason` column
   // (the [反击] prompt's "why this card may be declared") rides on each card.
   const simple = j("skill_simple.json") as SkillSimple;
-  for (const c of characters) c.simple = simple.personas.find((x) => x.name === c.name)?.text;
-  for (const b of bands) b.simple = simple.groups.find((x) => x.name === b.name)?.text;
+  for (const c of personas) c.simple = simple.personas.find((x) => x.name === c.name)?.text;
+  for (const b of groups) b.simple = simple.groups.find((x) => x.name === b.name)?.text;
   const reasonById = new Map((simple.cards ?? []).map((x) => [x.id, x.counterReason]));
   for (const c of cards) {
     const reason = reasonById.get(c.id);
@@ -159,15 +159,15 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   D = {
     tiles: j("board.json").tiles,
     cards,
-    characters,
-    bands,
+    personas,
+    groups,
     events,
     voiceLines: j("voice_lines.json").personas ?? [],
     homeLines,
     rulesText: files["rules.txt"].replace(/^﻿/, ""),
     card: (id) => byId.get(id),
-    character: (name) => characters.find((c) => c.name === name),
-    band: (name) => bands.find((b) => b.name === name),
+    persona: (name) => personas.find((c) => c.name === name),
+    group: (name) => groups.find((b) => b.name === name),
     event: (id) => events.find((e) => e.id === id),
     artId: (c) => c.art || c.cnId,
     homeTag: (c) => homeLines.find((x: { name: string; tag: string }) => x.name === c.name && x.tag)?.tag ?? c.display,
@@ -205,12 +205,12 @@ export function cardTitle(id: string): string {
  *  e.g. the 团卡 `skill:Poppin' Party:星之鼓动`) resolved for display: title and
  *  body come from the roster's bands / characters, art from the band logo or
  *  the character's art. Undefined for anything that is not a skill id. */
-export function skillCard(id: string): { title: string; text: string; band?: string; color: string; art: string } | undefined {
+export function skillCard(id: string): { title: string; text: string; group?: string; color: string; art: string } | undefined {
   if (!id || !D || !id.startsWith("skill:")) return undefined;
   const band = D.groups.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
-  if (band) return { title: band.skill, text: skillText(band), band: band.name, color: band.color, art: bandLogo(band.name) };
+  if (band) return { title: band.skill, text: skillText(band), group: band.name, color: band.color, art: bandLogo(band.name) };
   const character = D.personas.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
-  if (character) return { title: character.skill, text: skillText(character), band: character.group, color: character.color, art: charArt(character.art, "thumb") };
+  if (character) return { title: character.skill, text: skillText(character), group: character.group, color: character.color, art: charArt(character.art, "thumb") };
   return undefined;
 }
 

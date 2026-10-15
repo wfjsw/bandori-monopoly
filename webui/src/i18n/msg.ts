@@ -9,9 +9,9 @@ export type MsgArg =
   | { playerId: number }
   | { tile: number }
   | { card: string }
-  | { char: string }
+  | { persona: string }
   | { event: string }
-  | { band: string }
+  | { group: string }
   | { n: number }
   | { i: number }
   | { text: string }
@@ -28,9 +28,9 @@ export interface Names {
   playerId(playerId: number): string;
   tile(tile: number): string;
   card(id: string): string;
-  chara(name: string): string;
+  persona(name: string): string;
   event(id: string): string;
-  band(name: string): string;
+  group(name: string): string;
 }
 
 /** Names straight from the data files; use `namesOf` for a match state. */
@@ -38,9 +38,9 @@ export const dataNames: Names = {
   playerId: (n) => `#${n + 1}`,
   tile: (n) => `#${n}`,
   card: (id) => id,
-  chara: (name) => name,
+  persona: (name) => name,
   event: (id) => id,
-  band: (name) => name,
+  group: (name) => name,
 };
 
 const isMsg = (v: unknown): v is Msg => !!v && typeof v === "object" && typeof (v as Msg).k === "string";
@@ -122,9 +122,9 @@ function fmtArg(arg: MsgArg, names: Names): string {
   if ("playerId" in arg) return names.playerId(arg.playerId);
   if ("tile" in arg) return names.tile(arg.tile);
   if ("card" in arg) return names.card(arg.card);
-  if ("char" in arg) return names.chara(arg.char);
+  if ("persona" in arg) return names.persona(arg.persona);
   if ("event" in arg) return names.event(arg.event);
-  if ("band" in arg) return names.group(arg.group);
+  if ("group" in arg) return names.group(arg.group);
   if ("text" in arg) return arg.text;
   if ("n" in arg) return n0(arg.n);
   if ("i" in arg) return String(arg.i);

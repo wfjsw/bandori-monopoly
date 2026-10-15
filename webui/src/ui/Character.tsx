@@ -11,16 +11,16 @@ import { Icon } from "./Icon";
 import { t as tr } from "../i18n/t";
 
 /** Band filter tabs (CharacterGallery / character select / deck editor). */
-export const BAND_TABS: { label: string; bands: string[] }[] = [
-  { label: "PPP", bands: ["Poppin' Party"] },
-  { label: "AG", bands: ["Afterglow"] },
-  { label: "PP", bands: ["Pastel✽Palettes"] },
-  { label: "Roselia", bands: ["Roselia"] },
-  { label: "HHW", bands: ["Hello, Happy World!"] },
-  { label: "Morfonica", bands: ["Morfonica"] },
-  { label: "RAS", bands: ["RAISE A SUILEN"] },
-  { label: "MyGO", bands: ["MyGO!!!!!"] },
-  { label: "Mujica", bands: ["Ave Mujica"] },
+export const BAND_TABS: { label: string; groups: string[] }[] = [
+  { label: "PPP", groups: ["Poppin' Party"] },
+  { label: "AG", groups: ["Afterglow"] },
+  { label: "PP", groups: ["Pastel✽Palettes"] },
+  { label: "Roselia", groups: ["Roselia"] },
+  { label: "HHW", groups: ["Hello, Happy World!"] },
+  { label: "Morfonica", groups: ["Morfonica"] },
+  { label: "RAS", groups: ["RAISE A SUILEN"] },
+  { label: "MyGO", groups: ["MyGO!!!!!"] },
+  { label: "Mujica", groups: ["Ave Mujica"] },
 ];
 export const tabLabels = () => [tr("common.all"), ...BAND_TABS.map((b) => b.label), tr("common.other")] as const;
 

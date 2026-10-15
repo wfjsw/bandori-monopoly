@@ -28,7 +28,7 @@ export interface SeatInfo {
   player: string;
   bot: boolean;
   mentality: "standard" | "chaos" | "advanced";
-  character: string;
+  persona: string;
   rank: number;
   score: number;
 }

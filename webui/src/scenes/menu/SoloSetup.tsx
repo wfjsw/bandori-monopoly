@@ -122,7 +122,7 @@ function SoloSetup({ close }: { close: () => void }) {
     startSolo(
       player,
       chars[0] ?? "",
-      names.map((name, i) => ({ name, mentality: mentalFor(name), character: chars[i + 1] ?? "" })),
+      names.map((name, i) => ({ name, mentality: mentalFor(name), persona: chars[i + 1] ?? "" })),
       weights
     );
     navigate({ name: "play", id: "solo" });
@@ -173,7 +173,7 @@ function SoloSetup({ close }: { close: () => void }) {
         <SeatRow
           name={player}
           seatLabel={tr("common.you")}
-          character={chars[0] ?? ""}
+          persona={chars[0] ?? ""}
           you
           onPick={() => openPicker(0)}
         />
@@ -182,7 +182,7 @@ function SoloSetup({ close }: { close: () => void }) {
             key={n}
             name={n}
             seatLabel={n}
-            character={chars[i + 1] ?? ""}
+            persona={chars[i + 1] ?? ""}
             mentality={mentalFor(n)}
             onMentality={() => setOverrides((o) => ({ ...o, [n]: other(mentalFor(n)) }))}
             onPick={() => openPicker(i + 1)}
@@ -203,7 +203,7 @@ function SoloSetup({ close }: { close: () => void }) {
 function SeatRow({
   name,
   seatLabel,
-  character,
+  persona,
   you,
   mentality,
   onMentality,
@@ -212,14 +212,14 @@ function SeatRow({
 }: {
   name: string;
   seatLabel: string;
-  character: string;
+  persona: string;
   you?: boolean;
   mentality?: BotMentality;
   onMentality?: () => void;
   onPick: () => void;
   onRemove?: () => void;
 }) {
-  const c = D.persona(character);
+  const c = D.persona(persona);
   return (
     <div className={cx(s.row, you && s.you)}>
       <button

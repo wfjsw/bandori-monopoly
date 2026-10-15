@@ -92,10 +92,10 @@ export function Select({ sess }: { sess: GameSession }) {
     hint = myTurn ? tr("select.banHintYou") : tr("select.banHintWait", { who: cur });
     const ok = myTurn && picked && free(picked);
     label = myTurn ? (ok ? tr("select.stepBan") : tr("select.noBan")) : tr("select.banning");
-    if (myTurn && !auto) onGo = () => void act({ act: "ban", character: ok ? picked : "" });
+    if (myTurn && !auto) onGo = () => void act({ act: "ban", persona: ok ? picked : "" });
   } else if (st.phase === "pick") {
     hint = myTurn ? tr("select.pickHintYou") : tr("select.pickHintWait", { who: cur });
-    if (myTurn && !auto && picked && free(picked)) onGo = () => void act({ act: "pick", character: picked });
+    if (myTurn && !auto && picked && free(picked)) onGo = () => void act({ act: "pick", persona: picked });
   } else if (st.phase === "deck") {
     label = tr("select.stepDeck");
     hint = me.deckReady ? tr("select.deckDone") : tr("select.deckHint");

@@ -7,8 +7,8 @@ export type CharArtKind = "stand" | "thumb" | "kv" | "sd" | "sdThumb" | "sdHappy
 
 interface Manifest {
   resources: Record<string, string>;
-  characters: Record<string, Partial<Record<CharArtKind, string>>>;
-  bands: Record<string, string>;
+  personas: Record<string, Partial<Record<CharArtKind, string>>>;
+  groups: Record<string, string>;
   rooms: Record<string, string>;
   cards: Record<string, string>;
   fx: Record<string, string>;
@@ -25,7 +25,7 @@ export async function loadManifest(): Promise<void> {
   manifest = (await r.json()) as Manifest;
 }
 
-const EMPTY: Manifest = { resources: {}, characters: {}, bands: {}, rooms: {}, cards: {}, fx: {}, scene: { img: {}, audio: {} }, fonts: {} };
+const EMPTY: Manifest = { resources: {}, personas: {}, groups: {}, rooms: {}, cards: {}, fx: {}, scene: { img: {}, audio: {} }, fonts: {} };
 
 /** Until the manifest is loaded (the boot screen), every lookup is simply "no asset". */
 function m(): Manifest {

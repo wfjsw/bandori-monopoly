@@ -13,7 +13,7 @@ export interface HistoryReplayRow {
   time: string;
   mode: number;
   rank: number;
-  character: string;
+  persona: string;
   /** Local replay-store id, empty/absent on rows written before ids existed. */
   replayId?: string;
 }

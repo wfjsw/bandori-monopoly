@@ -167,7 +167,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
                 return bb && <span className={s.status} title={tr("board.borrowedTip", { skill: cardTitle(bb.skill), who })}>{tr("board.borrowed", { who })}</span>;
               })()}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire} onMouseEnter={() => setFirePeek(i)} onMouseLeave={() => setFirePeek(null)}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
+              <span className={s.fire} onMouseEnter={() => setFirePeek(i)} onMouseLeave={() => setFirePeek(null)}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "charge")}/{stateMax(x, "charge")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
               <span className={s.grave} title={tr("board.graveyardPile")} onMouseEnter={() => setPeek(i)} onMouseLeave={() => setPeek(null)} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>

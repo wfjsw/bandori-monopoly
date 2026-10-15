@@ -290,8 +290,8 @@ export function canBuildHere(S: MatchState, tiles: TileData[], me: number, i: nu
 
 export interface AutopilotCtx {
   tiles: TileData[];
-  /** Characters with their own art set (`cnId`), for ban/pick. */
-  characters: { name: string; cnId: string }[];
+  /** Personas with their own art set (`cnId`), for ban/pick. */
+  personas: { name: string; cnId: string }[];
   /** Hand cards the player has already played this turn (client-tracked). */
   playedThisTurn: number;
   /** The character's preset deck (`rules.deck_preset`). */
@@ -710,10 +710,10 @@ export const policies: Record<PolicyName, Policy> = {
         if (S.phase === "ban") {
           if (mine.banDone) return null;
           // `AiStep`'s ban: 50% a random character, else no ban.
-          return { act: "ban", character: ctx.random() < 0.5 ? randomCharacter(S, ctx, false) : "" };
+          return { act: "ban", persona: ctx.random() < 0.5 ? randomCharacter(S, ctx, false) : "" };
         }
         if (mine.persona) return null;
-        return { act: "pick", character: randomCharacter(S, ctx, true) };
+        return { act: "pick", persona: randomCharacter(S, ctx, true) };
       }
       if (S.phase === "deck") {
         if (mine.deckReady) return null;
@@ -783,10 +783,10 @@ export const policies: Record<PolicyName, Policy> = {
         if (S.phase === "ban") {
           if (mine.banDone) return null;
           // Always ban something, if anything is left.
-          return { act: "ban", character: randomCharacter(S, ctx, false) };
+          return { act: "ban", persona: randomCharacter(S, ctx, false) };
         }
         if (mine.persona) return null;
-        return { act: "pick", character: randomCharacter(S, ctx, true) };
+        return { act: "pick", persona: randomCharacter(S, ctx, true) };
       }
       if (S.phase === "deck") {
         if (mine.deckReady) return null;

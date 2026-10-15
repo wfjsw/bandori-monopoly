@@ -102,7 +102,7 @@ function Fire({ close }: { close: () => void }) {
       <div className={s.fireOpts}>
         {[0, 1, 2, 3].map((n) => (
           <button key={n} type="button" className={cx(s.fireOpt, p.firePerGame === n && s.on)} onClick={() => {
-            updateProfile(rules.profile_set_fire_per_game(profileJson(), n));
+            updateProfile(rules.profile_set_charge_per_game(profileJson(), n));
             close();
             toast(n ? tr("fire.setToast", { n, mult: n + 1 }) : tr("fire.setNoneToast"));
           }}>
