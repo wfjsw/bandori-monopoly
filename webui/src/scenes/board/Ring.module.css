@@ -420,6 +420,8 @@
 }
 @keyframes arrowBob { 50% { transform: translateY(-5px); } }
 
-/* Phone canvas: pan / zoom buttons at a finger's size. */
-:global(:root[data-compact]) .zoomCtl { height: 42px; opacity: 0.9; }
-:global(:root[data-compact]) .zoomCtl button { width: 40px; height: 36px; line-height: 36px; font-size: 16px; }
+/* Phone canvas: pan / zoom buttons -- a thumb-sized strip in the corner, faint
+   until touched (pinch is the main way to zoom). */
+:global(:root[data-compact]) .zoomCtl { height: 36px; right: 4px; top: 4px; opacity: 0.6; }
+:global(:root[data-compact]) .zoomCtl:active, :global(:root[data-compact]) .zoomCtl:focus-within { opacity: 1; }
+:global(:root[data-compact]) .zoomCtl button { width: 34px; height: 30px; line-height: 30px; font-size: 15px; }
