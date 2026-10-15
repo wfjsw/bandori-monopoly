@@ -183,3 +183,11 @@ pub fn sweep_kani(player_id: i32) -> card_sdk::Asked {
 pub fn refill_kani(player_id: i32) -> card_sdk::Asked {
     refill(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn cover_kani(player_id: i32) -> card_sdk::Asked {
+    cover(player_id)
+}

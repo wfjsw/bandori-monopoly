@@ -176,3 +176,11 @@ fn after_settle(player_id: i32) -> card_sdk::Asked {
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn after_settle_kani(player_id: i32) -> card_sdk::Asked {
+    after_settle(player_id)
+}

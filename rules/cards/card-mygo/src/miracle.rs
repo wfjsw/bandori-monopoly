@@ -209,3 +209,17 @@ pub fn before_build_kani(player_id: i32) -> card_sdk::Asked {
 pub fn after_build_kani(player_id: i32) -> card_sdk::Asked {
     after_build(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn record_pass_kani(player_id: i32) -> card_sdk::Asked {
+    record_pass(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pass_player_kani(player_id: i32) -> card_sdk::Asked {
+    pass_player(player_id)
+}

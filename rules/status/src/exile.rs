@@ -138,3 +138,17 @@ pub fn clear(player_id: i32) {
     ctx::state::set(player_id, KEY_TO, -1);
     ctx::state::set(player_id, KEY_MAIN, 0);
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_exile_landed_kani(player_id: i32) -> card_sdk::Asked {
+    on_exile_landed(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_exile_granted_kani(player_id: i32) -> card_sdk::Asked {
+    on_exile_granted(player_id)
+}
