@@ -696,12 +696,17 @@ pub trait SnapSrc {
         0
     }
     /// Non-zero named counters on that instance (`card.counter('name')`;
-    /// missing = 0). The two on-card wire names are always listed when
-    /// non-zero. A host that tracks extra `FieldCard::counters` keys
-    /// overrides this.
+    /// missing = 0). The two on-card wire names (`card-sdk::abi::counter::{CP,
+    /// CRYSTALS}`) are always listed when non-zero. A host that tracks extra
+    /// `FieldCard::counters` keys overrides this.
     fn card_counter_names(&self, player_id: i32, card: &str) -> Vec<String> {
         let mut out = Vec::new();
-        for n in ["points", "bonus"] {
+        // ABI wire names — NOT the neutral vocabulary aliases. The vocab
+        // rename (2b67ce0d) swapped these to ["points","bonus"] but the
+        // actual counter names in `card-sdk::abi::counter` are still
+        // "cp" / "crystals"; the mismatch made `card.counter('crystals')`
+        // read 0 in every CEL guard (conf_fill_diff regression).
+        for n in ["cp", "crystals"] {
             if self.card_counter(player_id, card, n) != 0 {
                 out.push(n.to_string());
             }
@@ -1496,7 +1501,7 @@ pub fn fill_candidate<S: SnapSrc>(
         owner_money: world.money(p) as i64,
         owner_charge: world.charge(p) as i64,
         // The ruleset's named-counter key for the group pool.
-        owner_group_pool: world.group_pool(p, "bonus") as i64,
+        owner_group_pool: world.group_pool(p, "crystals") as i64,
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
         owner_out: world.player_out(p) as i64,
