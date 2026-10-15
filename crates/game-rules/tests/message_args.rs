@@ -175,6 +175,12 @@ fn chain_kinds_and_counters_have_locale_text() {
                 missing.push(format!("{loc}: {key}"));
             }
         }
+        // Kinds with no dedicated `log.why.*` phrase, named in the fallback.
+        for k in ["rollPlan", "playGate", "flipEffect", "26", "73", "74", "75", "78"] {
+            if game.get(format!("log.kind.{k}")).is_none() {
+                missing.push(format!("{loc}: log.kind.{k}"));
+            }
+        }
         for c in ["crystals", "cp", "points", "bonus"] {
             let key = format!("log.counter.{c}");
             if game.get(&key).is_none() {
