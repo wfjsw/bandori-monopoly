@@ -640,7 +640,10 @@ impl Room {
                     Presence {
                         streams: 0,
                         since: Instant::now(),
-                        away: false,
+                        // A seat dropped before the restart is still on the
+                        // AI; without this the reconnect would not look like
+                        // a return and `member_back` would never run.
+                        away: rec.info.members.iter().any(|x| x.id == m && x.away),
                     },
                 )
             })
@@ -1145,6 +1148,7 @@ impl Room {
                 m.away = false;
             }
             back = true;
+            self.persist();
             self.notify();
         }
         back
@@ -1183,6 +1187,11 @@ impl Room {
             } else if let Some(t) = self.leave(m) {
                 removed.push(t);
             }
+        }
+        if !dropped.is_empty() {
+            // `away` rides the room record so a restart still knows who is on
+            // the AI (see [`Room::from_record`]).
+            self.persist();
         }
         (dropped, removed)
     }
