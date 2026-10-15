@@ -107,7 +107,7 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
             p.field
                 .iter()
                 .filter(|f| f.group_skill)
-                .map(|f| f.crystals)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
                 .sum()
         })
         .unwrap_or(0);
@@ -120,7 +120,7 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
             p.field
                 .iter()
                 .filter(|f| f.group_skill)
-                .map(|f| f.crystals)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
                 .sum()
         })
         .unwrap_or(0);

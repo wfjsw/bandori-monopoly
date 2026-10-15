@@ -618,12 +618,12 @@ fn t13_smile_parade() {
         .find(|f| f.card.contains("笑容大游行"))
         .expect("card still on the field after (1)/(2)");
     // (2) 「并移除其上全部奇迹水晶」.
-    assert_eq!(f.crystals, 0, "(2) clears the crystals");
+    assert_eq!(f.counters.get("crystals").copied().unwrap_or(0), 0, "(2) clears the crystals");
     eprintln!(
         "t13 swap record: card tile = {} (end {}), crystals = {}",
         f.tile,
         (t28 + 2) % 60,
-        f.crystals
+        f.counters.get("crystals").copied().unwrap_or(0)
     );
     // （3）: any player settling on the card's tile discards it. P1 lands there.
     until_turn(&mut t, 1);

@@ -257,10 +257,10 @@ impl CardWorld for TestWorld {
     fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
         None
     }
-    fn ring_multiplier(&self) -> i32 {
+    fn rent_unit_mult(&self) -> i32 {
         10
     }
-    fn add_ring_bonus(&mut self, _: i32) -> i32 {
+    fn add_rent_unit_bonus(&mut self, _: i32) -> i32 {
         0
     }
     fn teleport_to(&mut self, _: i32, _: i32) {}
@@ -290,10 +290,10 @@ impl CardWorld for TestWorld {
     fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
-    fn group_crystals(&self, _: i32) -> i32 {
+    fn group_pool(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn add_group_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_group_pool(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
     fn charge(&self, _: i32) -> i32 {
@@ -321,15 +321,6 @@ impl CardWorld for TestWorld {
     }
     fn set_trigger_value(&mut self, value: i32) {
         self.trigger.value = value;
-    }
-    fn crystals(&self) -> i32 {
-        0
-    }
-    fn set_crystals(&mut self, _: i32) -> i32 {
-        0
-    }
-    fn add_crystals(&mut self, _: i32, _: i32) -> i32 {
-        0
     }
     fn take_card(&mut self, _: i32, _: game_rules::CardPile, _: &str) -> bool {
         false

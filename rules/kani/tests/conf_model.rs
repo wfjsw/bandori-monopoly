@@ -300,7 +300,7 @@ impl CardWorld for ConfWorld {
             return 0;
         }
         let t = &rules_kani::board::TILES[s as usize];
-        if rules_kani::board::is_ring(t) {
+        if rules_kani::board::is_deed(t) {
             t.price
         } else {
             let h = self.tiles_houses[s as usize].max(0);
@@ -336,7 +336,7 @@ impl CardWorld for ConfWorld {
             .map(|(i, _)| i as i32)
             .unwrap_or(-1)
     }
-    /// ABI v56: kind by wire spelling. Replaces `is_circle`/`is_ring`/`is_agent`.
+    /// ABI v56: kind by wire spelling. Replaces `is_start`/`is_deed`/`is_agent`.
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
         let s = rules_kani::board::tile_slot(tile);
         if s < 0 {
@@ -344,8 +344,8 @@ impl CardWorld for ConfWorld {
         }
         let t = &rules_kani::board::TILES[s as usize];
         match kind {
-            "circle" => rules_kani::board::is_circle(t),
-            "ring" => rules_kani::board::is_ring(t),
+            "circle" => rules_kani::board::is_start(t),
+            "ring" => rules_kani::board::is_deed(t),
             "agent" => rules_kani::board::is_agent(t),
             "property" => rules_kani::board::is_property(t),
             _ => false,

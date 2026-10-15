@@ -175,7 +175,7 @@ fn fire_bird_turn_end_burns_400_and_a_crystal() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "R:Fire bird" {
-                f.crystals = 1;
+                f.counters.insert("crystals".into(), 1);
             }
         }
     }
@@ -196,7 +196,7 @@ fn fire_bird_burns_on_turn_end() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "R:Fire bird" {
-                f.crystals = 5;
+                f.counters.insert("crystals".into(), 5);
             }
         }
     }
@@ -667,7 +667,7 @@ fn interaction_fire_bird_and_rent() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "R:Fire bird" {
-                f.crystals = 5;
+                f.counters.insert("crystals".into(), 5);
             }
         }
     }

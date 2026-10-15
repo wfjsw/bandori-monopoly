@@ -493,7 +493,7 @@ fn circle_rebuild_moves_the_pass_reward_off_circle() {
     drain(&mut t);
     let keys = t.recent_keys(16);
     assert!(
-        !keys.iter().any(|k| k.contains("circle")),
+        !keys.iter().any(|k| k.contains("pass_reward") || k.contains("land_start")),
         "the CiRCLE reward is gone while the rebuild is up: {keys:?}"
     );
     assert_eq!(t.money(1), before, "no CiRCLE payout: {}", t.money(1));

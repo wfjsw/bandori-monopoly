@@ -143,7 +143,7 @@ fn gain_prints_money() {
                 break;
             }
             let p = t.expect_prompt();
-            if p.title.key().contains("circle") || p.title.key().contains("reward") {
+            if p.title.key().contains("pass_reward") || p.title.key().contains("reward") {
                 // Prefer the money option (value 0 is usually the first).
                 let _ = t.answer(0, 0);
             } else {

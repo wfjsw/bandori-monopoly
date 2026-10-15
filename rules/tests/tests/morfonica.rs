@@ -469,7 +469,7 @@ fn nnm_option2_gains_x_times_circle_money_reward() {
     // -- x times the CiRCLE pass *money* reward (专有名词 11: 「[CiRCLE奖励]：
     // [获得]2000资金或抽1张卡」), not a flat x*2000. 广町七深 is Morfonica, so
     // the band skill rewrites the money reward to a 1000/1500/2000 cycle
-    // (`circleAffected`); the first one is 1000. That is the point of the
+    // (`passRewardAffected`); the first one is 1000. That is the point of the
     // reword: the figure tracks the live reward, not 2000.
     let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
     t.clean();

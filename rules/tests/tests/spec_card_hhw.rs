@@ -320,9 +320,9 @@ pub fn athletic_three_crystals(step: &Step<'_>) -> Result<(), String> {
         .and_then(|p| p.field.iter().find(|f| f.card == ATHLETIC));
     match post {
         None => Err("C-HHW-athletic-01: card not on the field after play".into()),
-        Some(f) if f.crystals != 3 => Err(format!(
+        Some(f) if f.counters.get("crystals").copied().unwrap_or(0) != 3 => Err(format!(
             "C-HHW-athletic-01: crystals {}, expected 3",
-            f.crystals
+            f.counters.get("crystals").copied().unwrap_or(0)
         )),
         Some(_) => Ok(()),
     }

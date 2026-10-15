@@ -32,7 +32,7 @@ fn drain_circle(t: &mut Table, pick: i32) {
         if t.prompt().is_none() {
             return;
         }
-        if t.prompt().unwrap().title.key().contains("circle") {
+        if t.prompt().unwrap().title.key().contains("pass_reward") {
             t.answer_one(pick).unwrap();
         } else {
             t.decline();
@@ -607,7 +607,7 @@ fn g_move_11_circle_reward_sits_between_walk_and_settle() {
     // Reward prompt is open before the landing settles.
     assert_eq!(
         t.prompt().map(|p| p.title.key().to_string()),
-        Some("ask.circle.title".into()),
+        Some("ask.pass_reward.title".into()),
         "the walk halted at the [经过] CiRCLE reward: {}",
         t.dump_prompt()
     );
@@ -623,7 +623,7 @@ fn g_move_11_circle_reward_sits_between_walk_and_settle() {
     t.answer_one(0).unwrap();
     drain(&mut t);
     let keys = t.keys_since(mark);
-    let reward = keys.iter().position(|k| k.contains("circle"));
+    let reward = keys.iter().position(|k| k.contains("pass_reward"));
     let settle = keys.iter().position(|k| k.contains("land"));
     let (Some(r), Some(s)) = (reward, settle) else {
         panic!("missing reward or settle: {keys:?}");

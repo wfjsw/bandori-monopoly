@@ -432,7 +432,7 @@ pub fn c_mor_starry_place(step: &Step<'_>) -> Result<(), String> {
         .field
         .iter()
         .find(|f| f.card == STARRY)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     else {
         return Ok(());
     };
@@ -494,7 +494,7 @@ pub fn c_mor_tritone_gain(step: &Step<'_>) -> Result<(), String> {
         .field
         .iter()
         .find(|f| f.card == TRITONE)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .ok_or("tritone not placed")?;
     if crystals != 3 {
         return Err(format!("tritone placed with {crystals} crystals, expected 3"));

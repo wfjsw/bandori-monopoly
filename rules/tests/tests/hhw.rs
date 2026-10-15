@@ -131,7 +131,7 @@ fn athletic_talent_burns_a_crystal_at_turn_end() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "HHW:运动的天赋" {
-                f.crystals = 1;
+                f.counters.insert("crystals".into(), 1);
             }
         }
     }
@@ -376,7 +376,7 @@ fn kokoro_skill_2_gains_1500_extra_on_passing_circle() {
     t.roll(0).unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("circle") {
+        if d.contains("pass_reward") {
             let _ = t.answer_one(0); // take the 2000
         } else {
             t.decline();
@@ -649,7 +649,7 @@ fn interaction_kokoro_circle_bonus_and_the_band_skill() {
     t.roll(0).unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("circle") {
+        if d.contains("pass_reward") {
             let _ = t.answer_one(0);
         } else {
             t.decline();

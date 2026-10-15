@@ -57,10 +57,10 @@ pub fn snapshot(w: &World) -> Snap {
                 format!("field:P{i}:{f}"),
                 format!(
                     "{}|uid={}|tile={}|crystals={}|immune={}|down={}|band={}",
-                    c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down, c.group_skill
+                    c.card, c.uid, c.tile, c.counters.get("crystals").copied().unwrap_or(0), c.immune, c.face_down, c.group_skill
                 ),
             );
-            m.insert(format!("crystals:P{i}:{}", c.card), c.crystals.to_string());
+            m.insert(format!("crystals:P{i}:{}", c.card), c.counters.get("crystals").copied().unwrap_or(0).to_string());
             for (k, v) in &c.props {
                 m.insert(format!("fprop:P{i}:{}:{k}", c.card), v.to_string());
             }
@@ -114,7 +114,7 @@ pub fn snapshot(w: &World) -> Snap {
             format!("bfield:{i}"),
             format!(
                 "{}|uid={}|tile={}|crystals={}|immune={}|down={}",
-                c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down
+                c.card, c.uid, c.tile, c.counters.get("crystals").copied().unwrap_or(0), c.immune, c.face_down
             ),
         );
         for (k, v) in &c.props {
@@ -162,7 +162,10 @@ pub fn snapshot(w: &World) -> Snap {
     );
 
     m.insert("extra_turns".into(), format!("{:?}", w.extra_turns));
-    m.insert("ring_bonus".into(), w.ring_bonus.to_string());
+    m.insert(
+        "rent_unit_bonus".into(),
+        w.rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0).to_string(),
+    );
     m.insert("out_count".into(), w.out_count.to_string());
     m.insert("targeted".into(), format!("{:?}", w.targeted));
     m.insert(
@@ -393,7 +396,7 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     if p == "extra_turns" {
         return Some("turn.extra");
     }
-    if p == "ring_bonus" {
+    if p == "rent_unit_bonus" {
         return Some("tile.rent");
     }
     if p == "targeted" {

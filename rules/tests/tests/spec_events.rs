@@ -799,7 +799,7 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
             .iter_mut()
             .find(|f| f.card == "event:协助CiRCLE重建")
         {
-            f.crystals = 1;
+            f.counters.insert("crystals".into(), 1);
         }
         // Walk a one-step main move whose path passes CiRCLE (tile 0).
         until_turn(&mut t, 1);
@@ -918,7 +918,7 @@ fn circle_rebuild_reverts_tile_texts_on_expire() -> Result<(), String> {
         .iter_mut()
         .find(|f| f.card == "event:协助CiRCLE重建")
     {
-        f.crystals = 1;
+        f.counters.insert("crystals".into(), 1);
     }
     until_turn(&mut t, 1);
     t.set_pos(1, 58);

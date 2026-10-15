@@ -265,7 +265,7 @@ pub fn drain_first(t: &mut Table) -> Result<(), String> {
         let decline = title == "ask.counteract.title"
             || title.starts_with("ask.buy.")
             || title.starts_with("ask.build.")
-            || title == "ask.circle.title";
+            || title == "ask.pass_reward.title";
         let force = title.starts_with("ask.force_buy.");
         for who in asked {
             let v = if p.kind == "tile" {

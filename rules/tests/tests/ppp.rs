@@ -121,7 +121,7 @@ fn popipapapipopa_crystals_reduce_spend() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "PPP:[衍生]Popipapapipopa" {
-                f.crystals = 3;
+                f.counters.insert("crystals".into(), 3);
             }
         }
     }
@@ -334,7 +334,7 @@ fn returns_leaves_ppp_band_skill_2_working() {
     if t.prompt().is_some() {
         let p = t.expect_prompt();
         assert!(
-            !p.title.key().contains("circle"),
+            !p.title.key().contains("pass_reward"),
             "CiRCLE reward offered anyway: {}",
             t.dump_prompt()
         );
@@ -443,7 +443,7 @@ fn bang_dream_crystal_teleport_build() {
         .field(0)
         .iter()
         .find(|f| f.card.contains("Poppin"))
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(0);
     assert!(
         band_x >= 1,
@@ -730,7 +730,7 @@ fn aoki_skill_spends_fire_for_crystal() {
         .field(0)
         .iter()
         .find(|f| f.group_skill)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(0);
     eprintln!("fire={} crystals={}", t.charge(0), band_x);
 }
@@ -882,7 +882,7 @@ fn band_no_circle_reward() {
     if t.prompt().is_some() {
         let p = t.expect_prompt();
         assert!(
-            !p.title.key().contains("circle"),
+            !p.title.key().contains("pass_reward"),
             "CiRCLE reward offered anyway: {}",
             t.dump_prompt()
         );
@@ -949,7 +949,7 @@ fn ix_band_sticker_to_crystal_to_cash() {
         .field(0)
         .iter()
         .find(|f| f.group_skill)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(0);
     assert_eq!(band_x, 1, "1 crystal added");
 }

@@ -275,7 +275,7 @@ fn s04_passing_circle_from_away_gives_the_reward() {
     t.roll(0).unwrap();
     // The reward asks money-or-card; take the money half.
     let p = t.expect_prompt();
-    assert_eq!(p.title.key(), "ask.circle.title", "{}", t.dump_prompt());
+    assert_eq!(p.title.key(), "ask.pass_reward.title", "{}", t.dump_prompt());
     t.answer_one(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), tile("CiRCLE"), "ended on CiRCLE");
@@ -303,7 +303,7 @@ fn s05_no_reward_when_the_move_started_on_circle() {
     let keys = t.keys_since(mark);
     // The wrap [经过]'d CiRCLE -- the reward step was reached and declined.
     assert!(
-        keys.iter().any(|k| k.contains("pass") || k.contains("circle") || k.contains("land")),
+        keys.iter().any(|k| k.contains("pass") || k.contains("pass_reward") || k.contains("land")),
         "the wrap passed CiRCLE: {keys:?}"
     );
     assert_eq!(
@@ -665,7 +665,7 @@ fn s05c_no_reward_prop_suppresses_and_is_consumed() {
     assert!(!armed, "NO_REWARD was consumed by the reward step");
 }
 
-// 专有名词 11 「[CiRCLE奖励]：[获得]2000资金或抽1张卡」 with a `circleAffected`
+// 专有名词 11 「[CiRCLE奖励]：[获得]2000资金或抽1张卡」 with a `passRewardAffected`
 // hook that cancels the payout: the raise sits between the pick and the
 // payout, so a cancellation skips the money/card movement entirely.
 // Morfonica's 「（2）[CiRCLE奖励]选择[获得]资金时…设资金量为1000，1500，2000的
@@ -686,7 +686,7 @@ fn s05d_circle_affected_cancellation_skips_the_payout() {
     assert_eq!(
         t.money(0) - before,
         1000,
-        "circleAffected cancelled the 2000 payout and replaced it: {}",
+        "passRewardAffected cancelled the 2000 payout and replaced it: {}",
         t.dump_prompt()
     );
 }

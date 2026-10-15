@@ -512,8 +512,8 @@ pub fn check_nonneg(t: &Table) -> Result<(), String> {
             }
         }
         for f in &p.field {
-            if f.crystals < 0 {
-                return Err(format!("negative crystals {} on {}", f.crystals, f.card));
+            if f.counters.get("crystals").copied().unwrap_or(0) < 0 {
+                return Err(format!("negative crystals {} on {}", f.counters.get("crystals").copied().unwrap_or(0), f.card));
             }
         }
         for c in &p.tokens {

@@ -502,8 +502,12 @@ fn cp_on_card_count_rides_the_field_card() {
         .into_iter()
         .find(|f| f.card == "通用:该清CP了")
         .expect("the card is on the field");
-    // The view's `FieldCard.cp` -- what `Ring.tsx` shows as the badge.
-    assert_eq!(f.cp, 6, "the field card carries the on-card count: {f:?}");
+    // The view's on-card counter badge (`FieldCard::counters["cp"]`).
+    assert_eq!(
+        f.counters.get("cp").copied().unwrap_or(0),
+        6,
+        "the field card carries the on-card count: {f:?}"
+    );
     // The per-player 「自己[场上]」 counter is gone (ruling: the card's own
     // count replaces it).
     assert_eq!(t.token(0, "cards:card-general.clear_cp_tok"), 0);
@@ -1055,7 +1059,7 @@ fn parking_blocks_skills_on_the_tile() {
 fn claim_circle_reward(t: &mut Table, who: usize) {
     let p = t.expect_prompt();
     assert!(
-        p.title.key().contains("circle"),
+        p.title.key().contains("pass_reward"),
         "expected the CiRCLE reward: {}",
         t.dump_prompt()
     );

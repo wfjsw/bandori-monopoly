@@ -109,12 +109,12 @@ fn title_idol_band_plus_2(step: &Step<'_>) -> Result<(), String> {
         .players
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == BAND_SKILL))
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(0);
     // Step 2 also writes the band card when its effect mentions [奇迹水晶]
     // (the band skill's text does). The clause checks the step-1 leg is among
     // the writes: the pool must have risen by at least 2.
-    let delta = band.crystals as i64 - pre as i64;
+    let delta = band.counters.get("crystals").copied().unwrap_or(0) as i64 - pre as i64;
     if delta < 2 {
         return Err(format!(
             "C-PP-title-idol-01: band crystals delta {delta}, expected >= 2 (step 1 +2)"
@@ -135,14 +135,14 @@ fn same_dream_band_plus_3(step: &Step<'_>) -> Result<(), String> {
         .players
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == BAND_SKILL))
-        .map(|f| f.crystals);
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
     let post = step
         .post
         .st
         .players
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == BAND_SKILL))
-        .map(|f| f.crystals);
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
     match (pre, post) {
         (Some(a), Some(b)) if b - a >= 3 => Ok(()),
         (Some(a), Some(b)) => Err(format!(

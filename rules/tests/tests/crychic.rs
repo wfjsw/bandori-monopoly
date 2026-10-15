@@ -353,7 +353,7 @@ fn if_only_it_lasted_hand_effect() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card.contains("CRYCHIC") {
-                f.crystals = 3;
+                f.counters.insert("crystals".into(), 3);
             }
         }
     }

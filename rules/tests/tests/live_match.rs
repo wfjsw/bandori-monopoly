@@ -116,7 +116,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         MatchMode::Casual,
         ScoreWeights::default(),
     );
-    m.set_character(1, "户山香澄");
+    m.set_persona(1, "户山香澄");
     m.quick_start();
     // The binding is observable the moment the match starts. Assert it *here*:
     // `PPP:Returns` is in a Poppin' Party deck pool and its `DeckAtGameStart`
@@ -273,7 +273,7 @@ fn ported_official_cards_run_in_a_match() {
     // R:（ykn）louder -- nudge the RiNG multiplier, no prompt. It is 凑友希那's
     // exclusive card, so the player must be her to play it.
     let mut m = match_with("R:（ykn）louder");
-    m.set_character(1, "凑友希那");
+    m.set_persona(1, "凑友希那");
     m.act(1, &play("R:（ykn）louder")).expect("play");
     let st = m.state();
     assert!(

@@ -88,7 +88,7 @@ fn any_crystals(t: &Table, card: &str) -> i32 {
         .board_field
         .iter()
         .find(|f| f.card == card)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(-1)
 }
 

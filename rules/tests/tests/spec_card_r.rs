@@ -294,17 +294,21 @@ const LOUDER: &str = "R:（ykn）louder";
 /// C-R-louder-01 -- ring price base multiplier +5.
 ///
 /// The book never defines 「价格基础乘数」 (OPEN-RING-MULT); the only
-/// observable ring multiplier slot is `World::ring_bonus`, which
-/// `ring_multiplier()` adds to `match_rules.ring_multiplier`. Spec asserts
-/// that slot rose by 5 and does not invent which price it scales.
+/// observable multiplier slot is the `rentUnitMult` rule-param bonus
+/// (`World::rule_param_bonus`), which `ring_multiplier()` adds to the match
+/// rules base. Spec asserts that slot rose by 5 and does not invent which
+/// price it scales.
 pub fn louder_mult(step: &Step<'_>) -> Result<(), String> {
     if !played(step, LOUDER) {
         return Ok(());
     }
-    let delta = step.post.ring_bonus as i64 - step.pre.ring_bonus as i64;
+    let bonus = |w: &game_core::engine::World| {
+        w.rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0)
+    };
+    let delta = bonus(step.post) as i64 - bonus(step.pre) as i64;
     if delta != 5 {
         return Err(format!(
-            "ring_bonus delta {delta}, expected +5 (「ring的价格基础乘数+5」)"
+            "rentUnitMult bonus delta {delta}, expected +5 (「ring的价格基础乘数+5」)"
         ));
     }
     Ok(())
@@ -325,17 +329,18 @@ fn louder_contract() {
         t.begin_turn(0);
         drain(&mut t);
         let times = rng.range(1, 3);
-        let base = t.world().ring_bonus;
+        let base = t.world().rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0);
         let pre = t.snapshot_world();
         t.observe(LOUDER_CLAUSES);
         for _ in 0..times {
             t.give_play(0, LOUDER).map_err(|e| format!("play rejected: {e}"))?;
             drain(&mut t);
         }
-        let delta = t.world().ring_bonus as i64 - base as i64;
+        let delta = t.world().rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0) as i64
+            - base as i64;
         if delta != 5 * times as i64 {
             return Err(format!(
-                "ring_bonus delta {delta}, expected {} after {times} plays",
+                "rentUnitMult bonus delta {delta}, expected {} after {times} plays",
                 5 * times
             ));
         }
@@ -343,7 +348,7 @@ fn louder_contract() {
             &pre,
             t.world(),
             &[
-                "ring_bonus",
+                "rent_unit_bonus",
                 "hand:P0",
                 "draw:P0",
                 "discard:P0",
@@ -835,7 +840,7 @@ fn nfo_face5_character_crystals() {
     // card vs a player-level counter). Spec pins the determined part: a
     // stock of exactly 6 [奇迹水晶] the user can later spend.
     let field = t.field(0);
-    let field_hit = field.iter().find(|f| f.crystals >= 6);
+    let field_hit = field.iter().find(|f| f.counters.get("crystals").copied().unwrap_or(0) >= 6);
     let player = t.p(0);
     let token_hit = player.tokens.iter().find(|tok| tok.value >= 6);
     assert!(
@@ -1082,7 +1087,7 @@ fn blue_rose_teleport_branch() {
         let mut t = vanilla2();
         // Every Live House deed: the buyable colour-group-6 tiles -- the
         // four RiNG tiles plus DUB MUSIC EXPERIMENT, 武道馆, Space and
-        // Live House Galaxy (`is_live_house` = buyable && group == 6).
+        // Live House Galaxy (`is_venue` = buyable && group == 6).
         let rings: Vec<usize> = [
             "RiNG 1",
             "RiNG 2",

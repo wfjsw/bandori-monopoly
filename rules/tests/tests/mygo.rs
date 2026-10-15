@@ -41,7 +41,7 @@ fn drain(t: &mut Table) {
 fn set_crystals(t: &mut Table, who: usize, card: &str, n: i32) {
     let w = t.m.world_mut();
     if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-        f.crystals = n;
+        f.counters.insert("crystals".into(), n);
     }
 }
 

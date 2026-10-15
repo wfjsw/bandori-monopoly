@@ -41,7 +41,7 @@ fn set_band_xtal(t: &mut Table, who: usize, n: i32) {
     let w = t.m.world_mut();
     for f in w.st.players[who].field.iter_mut() {
         if f.card == "skill:Pastel✽Palettes:与偶像一起" {
-            f.crystals = n;
+            f.counters.insert("crystals".into(), n);
         }
     }
 }
@@ -422,7 +422,7 @@ fn dream_ahead_extra_rent() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card.starts_with("PP:梦在前方") {
-                f.crystals = 5;
+                f.counters.insert("crystals".into(), 5);
             }
         }
     }

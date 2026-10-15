@@ -508,7 +508,7 @@ pub fn c_mygo_journey_place(step: &Step<'_>) -> Result<(), String> {
         .players
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == JOURNEY))
-        .map(|f| f.crystals);
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
     if crystals != Some(4) {
         return Err(format!("C-MYGO-journey-01: crystals {crystals:?}, expected 4"));
     }
@@ -675,7 +675,7 @@ pub fn c_mygo_rainday_place(step: &Step<'_>) -> Result<(), String> {
         .players
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == RAINDAY))
-        .map(|f| f.crystals);
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
     if c != Some(5) {
         return Err(format!("C-MYGO-rainday-01: crystals {c:?}, expected 5"));
     }
@@ -2903,8 +2903,8 @@ pub fn verify_journey_place(
         .iter()
         .find(|f| f.card == JOURNEY)
         .ok_or("card not on field")?;
-    if f.crystals != 4 {
-        return Err(format!("crystals {}, expected 4", f.crystals));
+    if f.counters.get("crystals").copied().unwrap_or(0) != 4 {
+        return Err(format!("crystals {}, expected 4", f.counters.get("crystals").copied().unwrap_or(0)));
     }
     if f.tile != pre.st.players[who].pos {
         return Err(format!("tile {}, expected {}", f.tile, pre.st.players[who].pos));
@@ -2943,7 +2943,7 @@ fn journey_place_verifier_rejects_mutants() {
         // WRONG: 5 crystals instead of 4.
         let mut wrong = post.clone();
         if let Some(f) = wrong.st.players[0].field.iter_mut().find(|f| f.card == JOURNEY) {
-            f.crystals = 5;
+            f.counters.insert("crystals".into(), 5);
         }
         if verify_journey_place(&pre, &wrong, &[]).is_ok() {
             return Err("WRONG (5 crystals) mutant accepted".into());

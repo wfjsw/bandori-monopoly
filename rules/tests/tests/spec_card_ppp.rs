@@ -303,7 +303,7 @@ pub fn c_ppp_bang_dream_01(step: &Step<'_>) -> Result<(), String> {
             .players
             .get(who)
             .and_then(|p| p.field.iter().find(|f| f.group_skill))
-            .map(|f| f.crystals)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
             .unwrap_or(0)
     };
     let (a, b) = (sum_band(step, true), sum_band(step, false));
@@ -343,7 +343,7 @@ fn bang_dream_contract() {
                 "band crystals {crystals0} -> {crystals1}, expected +1;                  field={:?}",
                 t.field(0)
                     .iter()
-                    .map(|f| (f.card.clone(), f.group_skill, f.crystals))
+                    .map(|f| (f.card.clone(), f.group_skill, f.counters.get("crystals").copied().unwrap_or(0)))
                     .collect::<Vec<_>>()
             ));
         }
@@ -385,13 +385,13 @@ pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let fire = |w: &game_core::engine::World| {
+    let charge = |w: &game_core::engine::World| {
         w.st.players.get(who).map(|p| (p.charge(), p.charge_max())).unwrap_or((0, 0))
     };
     let (pre_f, pre_max) = charge(step.pre);
     let (post_f, _) = charge(step.post);
     if pre_f < pre_max && post_f - pre_f != 1 {
-        return Err(format!("fire {} -> {}, expected +1", pre_f, post_f));
+        return Err(format!("charge {} -> {}, expected +1", pre_f, post_f));
     }
     Ok(())
 }
@@ -698,7 +698,7 @@ pub fn c_ppp_popipapapipopa_c1(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     let get = |w: &game_core::engine::World| {
         w.st.players.get(who).and_then(|p| {
-            p.field.iter().find(|f| f.card == POPIPAPAPIPOPA).map(|f| f.crystals)
+            p.field.iter().find(|f| f.card == POPIPAPAPIPOPA).map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         })
     };
     if let (Some(a), Some(b)) = (get(step.pre), get(step.post)) {
@@ -1884,7 +1884,7 @@ pub fn verify_bang_dream(
             .field
             .iter()
             .find(|f| f.group_skill)
-            .map(|f| f.crystals)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
             .unwrap_or(0)
     };
     let (a, b) = (band(pre), band(post));
@@ -1934,14 +1934,14 @@ fn bang_dream_verifier_rejects_mutants() {
 
     expect_reject("LESS crystal", &pre, &post, &events, &v, |w| {
         if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
-            f.crystals = pre
+            f.counters.insert("crystals".into(), pre
                 .st
                 .players[0]
                 .field
                 .iter()
                 .find(|f| f.group_skill)
-                .map(|f| f.crystals)
-                .unwrap_or(0);
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+                .unwrap_or(0));
         }
     });
     expect_reject("LESS teleport", &pre, &post, &events, &v, |w| {
@@ -1952,7 +1952,7 @@ fn bang_dream_verifier_rejects_mutants() {
     });
     expect_reject("WRONG crystal", &pre, &post, &events, &v, |w| {
         if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
-            f.crystals += 1;
+            *f.counters.entry("crystals".into()).or_default() += 1;
         }
     });
 }
@@ -2194,7 +2194,7 @@ pub fn verify_popipapapipopa_pass(
             .field
             .iter()
             .find(|f| f.card == POPIPAPAPIPOPA)
-            .map(|f| f.crystals)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
             .unwrap_or(0)
     };
     let (a, b) = (get(pre), get(post));
@@ -2242,7 +2242,7 @@ fn popipapapipopa_pass_verifier_rejects_mutants() {
             .iter_mut()
             .find(|f| f.card == POPIPAPAPIPOPA)
         {
-            f.crystals = 0;
+            f.counters.insert("crystals".into(), 0);
         }
     });
     expect_reject("MORE extra crystal", &pre, &post, &events, &v, |w| {
@@ -2251,7 +2251,7 @@ fn popipapapipopa_pass_verifier_rejects_mutants() {
             .iter_mut()
             .find(|f| f.card == POPIPAPAPIPOPA)
         {
-            f.crystals += 1;
+            *f.counters.entry("crystals".into()).or_default() += 1;
         }
     });
     // MORE: duplicate the crystal effect event (the window must contain
