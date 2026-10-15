@@ -145,10 +145,18 @@ async fn main() {
     let statics = static_dir.is_dir().then_some(static_dir);
     let app = server::router(server, Some(data_dir), statics);
 
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
-        .await
-        .expect("bind");
-    eprintln!("listening on http://0.0.0.0:{port}");
+    // `::` is dual-stack on Linux (net.ipv6.bindv6only=0) and also takes IPv4;
+    // fall back to plain IPv4 where IPv6 is disabled.
+    let (listener, host) = match tokio::net::TcpListener::bind(("::", port)).await {
+        Ok(l) => (l, "[::]"),
+        Err(_) => (
+            tokio::net::TcpListener::bind(("0.0.0.0", port))
+                .await
+                .expect("bind"),
+            "0.0.0.0",
+        ),
+    };
+    eprintln!("listening on http://{host}:{port}");
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
