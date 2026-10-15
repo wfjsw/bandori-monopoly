@@ -406,7 +406,7 @@ pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool 
         return false;
     };
     let cash = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-    matches!(t.kind.as_str(), "property" | "ring")
+    t.is_buyable()
         && st.phase == "play"
         && st.step == stage::END
         && st.turn == seat as i32

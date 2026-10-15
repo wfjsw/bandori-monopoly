@@ -27,11 +27,11 @@ use crate::strategy::{StrategyBook, STRATEGY_BOOK_FILE};
 
 /// What sort of tile this is: an **opaque string id** from the board data.
 ///
-/// The JSON data files carry short strings (`"circle"`, `"property"`, ...);
-/// the engine never interprets them. Meaning (start square, deed, which rule
-/// settles it) comes from the ruleset via [`crate::engine::rules::CardRules`]
-/// and from tile props stamped at bind time. Serde round-trips the raw
-/// spelling so the data format is unchanged.
+/// The JSON data files carry short strings; the engine never interprets
+/// them. Meaning (start square, deed, which rule settles it) comes from the
+/// ruleset via [`crate::engine::rules::CardRules`] and from tile props
+/// stamped at bind time. Serde round-trips the raw spelling so the data
+/// format is unchanged.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TileKind(pub String);
 

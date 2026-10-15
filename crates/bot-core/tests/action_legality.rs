@@ -40,7 +40,7 @@ fn data() -> Arc<GameData> {
 fn some_property(data: &GameData) -> usize {
     data.tiles
         .iter()
-        .position(|t| matches!(t.kind.as_str(), "property" | "ring"))
+        .position(|t| t.is_buyable())
         .expect("the data table has a buyable tile")
 }
 
