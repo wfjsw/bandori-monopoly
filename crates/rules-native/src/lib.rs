@@ -87,8 +87,8 @@ impl NativeRulesHandle {
         let mut pre: Vec<Vec<Option<game_rules::CompiledPre>>> = Vec::new();
         let mut by_id = HashMap::new();
         let mut declared: u128 = 0;
-        for band in RULESET {
-            for card in band.iter() {
+        for module in RULESET {
+            for card in module.iter() {
                 let idx = cards.len() as i32;
                 by_id.insert(card.id.to_string(), idx);
                 let on: Vec<ManifestOn> = card
@@ -200,8 +200,8 @@ impl NativeRulesHandle {
         use sha2::{Digest, Sha256};
         let mut h = Sha256::new();
         h.update(ABI_VERSION.to_le_bytes());
-        for band in RULESET {
-            for card in band.iter() {
+        for module in RULESET {
+            for card in module.iter() {
                 h.update(card.id.as_bytes());
                 h.update(0u8.to_le_bytes());
                 let mut props: Vec<_> = card.props.iter().collect();

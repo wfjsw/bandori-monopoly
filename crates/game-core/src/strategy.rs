@@ -119,7 +119,7 @@ pub struct SkillParams {
     /// enforces the numeric floor.
     pub min_charge: i32,
     /// Press only with at least this many named counters (`0` = none).
-    pub min_crystals: i32,
+    pub min_named_counter: i32,
     /// Markers to keep unspent (`0` = none).
     pub keep_markers: i32,
     pub min_round: i32,
@@ -131,7 +131,7 @@ impl Default for SkillParams {
         Self {
             play_weight_milli: 0,
             min_charge: 0,
-            min_crystals: 0,
+            min_named_counter: 0,
             keep_markers: 0,
             min_round: 0,
             max_round: i32::MAX,

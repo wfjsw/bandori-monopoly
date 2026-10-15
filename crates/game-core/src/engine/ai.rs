@@ -393,7 +393,7 @@ impl Cx<'_> {
         for id in candidates {
             if let Some(p) = &params {
                 let sk = p.skill(&id);
-                // `min_charge` / `min_crystals` / `keep_markers` are tuner
+                // `min_charge` / `min_named_counter` / `keep_markers` are tuner
                 // metadata in S1 -- the S1 heuristic enforces the weight and
                 // the round window only (`docs/BOT.md` §3.8).
                 if sk.play_weight_milli <= 0 || round < sk.min_round || round > sk.max_round {

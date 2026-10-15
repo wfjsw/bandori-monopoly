@@ -68,23 +68,18 @@ export interface Counter {
 export interface StateVar {
   value: number; min: number; max: number;
   expires?: "turnStart" | "turnEnd" | null;
+  flags?: number;
 }
 export interface FieldCard {
   uid: number; card: string; owner: number; user: number; tile: number;
-  /** Miracle crystals on this instance. A band skill's count is the player's 「乐队卡 / 团卡」 pool. */
-  crystals: number;
-  /** On-card [CP点] -- 「自己[场上]N个[CP点]」, the CP points attached to this
-   *  card (user ruling 2026-10-07). The other [CP点] kind is the tile mark
-   *  (`TileMark.category === "cp"`). Shown as the field card's counter badge. */
-  cp: number;
-  /** Extra named on-card counters beyond `cp` / `crystals` (those two stay
-   *  their own fields). Serde-defaulted `{}` on older frames. */
+  /** Named on-card counters of this instance (ruleset-defined keys). */
   counters: Record<string, number>;
   faceDown: boolean;
   /** Continuous numeric props on the instance (e.g. `handLimitDelta`,
    *  「手卡上限数量减1」). Serde-defaulted `{}`. */
   props?: Record<string, number>;
-  /** This instance is a band skill (`skill:<band>:<skill>`); its `crystals` are the band-card pool. */
+  /** This instance is a group skill (`skill:<group>:<skill>`); its named
+   *  counters are the group-card pool. */
   groupSkill?: boolean;
   note: Msg;
 }
@@ -333,7 +328,7 @@ export interface Command {
 
 export interface MatchRecord {
   time: string; mode: number; ranked: boolean; rank: number; players: number; persona: string;
-  exp: number; fireUsed: number; coins: number; stars: number; levelAfter: number;
+  exp: number; chargeUsed: number; coins: number; stars: number; levelAfter: number;
   /** Local replay-store id of this match's `.bdrec` (`game/record.ts`), "" when none. */
   replayId: string;
 }
@@ -342,14 +337,14 @@ export interface MatchRecord {
 export interface SavedDeck { persona: string; slot: number; name: string; cards: string[] }
 export interface PlayerProfile {
   saveVersion: number; playerName: string; playerId: string; createdAt: string;
-  level: number; exp: number; totalExp: number; fire: number; fireDate: string; firePerGame: number;
+  level: number; exp: number; totalExp: number; charge: number; chargeDate: string; chargePerGame: number;
   coins: number; stars: number; homeCharacter: string; games: number; soloGames: number;
   casualGames: number; rankedGames: number; rankedWins: number;
   history: MatchRecord[]; unreadResult: boolean; decks: SavedDeck[];
   [k: string]: unknown;
 }
 export interface MatchReward {
-  mode: number; rank: number; players: number; baseExp: number; fireUsed: number; multiplier: number;
+  mode: number; rank: number; players: number; baseExp: number; chargeUsed: number; multiplier: number;
   exp: number; levelBefore: number; levelAfter: number; progressBefore: number; progressAfter: number;
   coins: number; stars: number;
 }

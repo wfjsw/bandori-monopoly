@@ -290,7 +290,7 @@ export function showField(m: Model): void {
           <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
           <div className={s.pileCards}>
             {f.map((fc) => {
-              const note = fc.note ? fmtMsg(fc.note, names) : [fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "", fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : ""].filter(Boolean).join(" · ");
+              const note = fc.note ? fmtMsg(fc.note, names) : [fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "", fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : ""].filter(Boolean).join(" · ");
               return fc.faceDown ? (
                 <div key={fc.uid} className={s.fieldSlot}>
                   <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>

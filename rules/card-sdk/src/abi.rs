@@ -483,7 +483,17 @@ use alloc::{string::String, vec::Vec};
 ///      `affiliations` / `groupSkill`. Host helpers `group_*` / `persona_*`
 ///      (was `band_*` / `character_*`). SAVE_VERSION 9 → 10 (persisted
 ///      player/field keys renamed). RECORD_VERSION unchanged.
-pub const ABI_VERSION: i32 = 67;
+/// v68: **charge resource + named counters + rule params** (phase 2). State
+///      key `"charge"` (was `"fire"`); host imports `ruleset_charge_*`;
+///      `MatchRulesData.rule_params` map (was `ringMultiplier`) with the
+///      dice-rent unit under `rentUnitMult`; host `ruleset_rent_unit_mult` /
+///      `ruleset_add_rent_unit_bonus` (was `ring_*`); `FieldCard` named
+///      counters only (`counters` map, no `cp`/`crystals` fields);
+///      `ruleset_group_pool(player, name)` (was `group_crystals`);
+///      `StateVar.flags` for never-negative / engine-owned; trigger
+///      `chargePaying` (was `firePaying`). SAVE_VERSION 10 → 11 (state key,
+///      FieldCard shape, profile charge fields).
+pub const ABI_VERSION: i32 = 68;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

@@ -40,7 +40,7 @@ function Results({ m, reward, exit, sess, watch }: { m: Model; reward: MatchRewa
         <div className={s.sub}>{tr("results.players", { n: S.players.length, mode: modeName(S.mode), reason: reason ? ` · ${reason}` : "" })}</div>
         {reward ? (
           <div className={s.rewards}>
-            <div><small>{tr("common.exp")}</small><b>+{n0(reward.exp)}</b>{reward.fireUsed > 0 && <small>{tr("results.fireUsed", { n: reward.fireUsed, mult: reward.multiplier })}</small>}</div>
+            <div><small>{tr("common.exp")}</small><b>+{n0(reward.exp)}</b>{reward.chargeUsed > 0 && <small>{tr("results.chargeUsed", { n: reward.chargeUsed, mult: reward.multiplier })}</small>}</div>
             <div><small>{tr("common.level")}</small><b>{reward.levelBefore} → {reward.levelAfter}</b>{reward.levelAfter > reward.levelBefore && <span className={s.lvup}>{tr("results.levelUp")}</span>}</div>
             <div><img src={sceneImg("icon_star")} alt="" /><b>+{reward.stars}</b></div>
             {reward.coins !== 0 && <div><img src={sceneImg("icon_coin")} alt="" /><b>{reward.coins > 0 ? "+" : ""}{n0(reward.coins)}</b></div>}

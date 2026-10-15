@@ -201,7 +201,7 @@ impl MatchHandle {
                         st.ticks += n as u64;
                     }
                 }
-                Some(LogEntry::Cp(c)) => st.last_cp_at = c.at,
+                Some(LogEntry::Checkpoint(c)) => st.last_cp_at = c.at,
                 None => {}
             }
         }
@@ -362,14 +362,14 @@ impl MatchHandle {
         }
         if let Some(cp) = &out.cp {
             Self::flush_buf(&self.store, &self.id, &mut rec);
-            let entry = crate::store::Cp {
+            let entry = crate::store::Checkpoint {
                 at: rec.inputs,
                 tick: rec.ticks,
                 round: cp.round,
                 turn: cp.turn,
                 hash: cp.hash.clone(),
             };
-            let line = LogEntry::Cp(entry).to_line();
+            let line = LogEntry::Checkpoint(entry).to_line();
             if self.store.record_log_append(&self.id, &line).is_err() {
                 rec.gaps = true;
             } else {
@@ -424,7 +424,7 @@ impl MatchHandle {
             match LogEntry::parse_line(line) {
                 Some(LogEntry::Head(h)) => head = Some(h),
                 Some(LogEntry::Input(i)) => inputs.push(i),
-                Some(LogEntry::Cp(c)) => checkpoints.push(game_core::record::Checkpoint {
+                Some(LogEntry::Checkpoint(c)) => checkpoints.push(game_core::record::Checkpoint {
                     at: c.at,
                     tick: c.tick,
                     round: c.round,

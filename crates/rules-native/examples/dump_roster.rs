@@ -36,7 +36,7 @@ fn main() {
             }
             std::fs::write(&path, &json).unwrap();
             eprintln!(
-                "wrote {path} ({} cards, {} characters, {} bands)",
+                "wrote {path} ({} cards, {} personas, {} groups)",
                 roster.cards.len(),
                 roster.personas.len(),
                 roster.groups.len()
@@ -45,14 +45,14 @@ fn main() {
         Some(dir) => {
             let dir = PathBuf::from(dir);
             let cards = cards_json(&roster.cards);
-            let characters = characters_json(&roster.personas);
-            let bands = bands_json(&roster.groups);
+            let characters = personas_json(&roster.personas);
+            let bands = groups_json(&roster.groups);
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(dir.join("cards.json"), &cards).unwrap();
-            std::fs::write(dir.join("characters.json"), &characters).unwrap();
-            std::fs::write(dir.join("bands.json"), &bands).unwrap();
+            std::fs::write(dir.join("personas.json"), &characters).unwrap();
+            std::fs::write(dir.join("groups.json"), &bands).unwrap();
             eprintln!(
-                "wrote {}/{{cards,personas,groups}}.json ({} cards, {} characters, {} bands)",
+                "wrote {}/{{cards,personas,groups}}.json ({} cards, {} personas, {} groups)",
                 dir.display(),
                 roster.cards.len(),
                 roster.personas.len(),
@@ -61,8 +61,8 @@ fn main() {
         }
         None => {
             print!("// ===== cards.json =====\n{}", cards_json(&roster.cards));
-            print!("// ===== characters.json =====\n{}", characters_json(&roster.personas));
-            print!("// ===== bands.json =====\n{}", bands_json(&roster.groups));
+            print!("// ===== characters.json =====\n{}", personas_json(&roster.personas));
+            print!("// ===== bands.json =====\n{}", groups_json(&roster.groups));
         }
     }
 }
@@ -144,7 +144,7 @@ fn cards_json(cards: &[CardData]) -> String {
 
 /// `personas.json` row order: name, display, [variantOf], [variantTag], group,
 /// color, skill, text, cnId, [art], [costume], exclusiveCards, [preset].
-fn characters_json(chars: &[PersonaData]) -> String {
+fn personas_json(chars: &[PersonaData]) -> String {
     let mut out = String::from("{\n    \"personas\": [\n");
     for (i, c) in chars.iter().enumerate() {
         out.push_str(&indent(2));
@@ -186,7 +186,7 @@ fn characters_json(chars: &[PersonaData]) -> String {
 
 /// `groups.json` row order: name, shortName, [sharesExclusives], [bootArt],
 /// color, skill, text, logo.
-fn bands_json(groups: &[GroupData]) -> String {
+fn groups_json(groups: &[GroupData]) -> String {
     let mut out = String::from("{\n    \"groups\": [\n");
     for (i, b) in groups.iter().enumerate() {
         out.push_str(&indent(2));

@@ -98,7 +98,7 @@ export function StatusPill() {
       <div className={s.right}>
         <div className={s.fire}>
           <img src={sceneImg("icon_fire")} alt="" />
-          <b>{p.fire}</b>
+          <b>{p.charge}</b>
           <small>/5</small>
           <span className={s.timer}>
             <small>{tr("topbar.fireRemain")}</small>
@@ -107,7 +107,7 @@ export function StatusPill() {
           <button
             type="button"
             className={s.plus}
-            onClick={() => info(tr("topbar.fire"), tr("topbar.fireInfo", { n: p.firePerGame, mult: p.firePerGame + 1 }))}
+            onClick={() => info(tr("topbar.fire"), tr("topbar.fireInfo", { n: p.chargePerGame, mult: p.chargePerGame + 1 }))}
           >
             <Icon name="add" />
           </button>

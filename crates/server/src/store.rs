@@ -198,7 +198,7 @@ pub mod redis;
 pub enum LogEntry {
     Head(RecordHead),
     Input(Input),
-    Cp(Cp),
+    Checkpoint(Checkpoint),
 }
 
 /// The first log line: how the match was started and who is writing it. Lives
@@ -228,7 +228,7 @@ pub struct RecordHead {
 /// checkpoint always sits between two of them -- the same shape
 /// [`game_core::record::Checkpoint`] has.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Cp {
+pub struct Checkpoint {
     pub at: u32,
     #[serde(with = "game_core::record::u64_str")]
     pub tick: u64,

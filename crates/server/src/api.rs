@@ -181,7 +181,7 @@ pub async fn create_room(
     let engine = s.engine.clone();
     let store = s.store.clone();
     let bot_search = s.bots.is_some();
-    let (token, player, character, cn_id) = (
+    let (token, player, persona, cn_id) = (
         sess.token.clone(),
         sess.player.clone(),
         sess.persona.clone(),
@@ -199,7 +199,7 @@ pub async fn create_room(
         let who = NewMember {
             token: &token,
             player: &player,
-            persona: &character,
+            persona: &persona,
             cn_id: &cn_id,
         };
         let you = room.join(who, &req.password, "")?;

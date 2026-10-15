@@ -101,7 +101,7 @@ pub struct Out<T> {
     pub state: String,
     pub value: T,
     /// `cp` from the worker: `{round, turn, hash}` at a turn boundary.
-    pub cp: Option<Cp>,
+    pub cp: Option<Checkpoint>,
     pub ended: bool,
 }
 
@@ -117,16 +117,16 @@ impl Out<()> {
     }
 }
 
-/// The worker's turn-boundary checkpoint. [`crate::store::Cp`] is the same
+/// The worker's turn-boundary checkpoint. [`crate::store::Checkpoint`] is the same
 /// thing once the server has filled in the input count and tick total.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Cp {
+pub struct Checkpoint {
     pub round: i32,
     pub turn: i32,
     pub hash: String,
 }
 
-fn split(v: &Value) -> Result<(String, Option<Cp>, bool), String> {
+fn split(v: &Value) -> Result<(String, Option<Checkpoint>, bool), String> {
     let state = v
         .get("state")
         .and_then(Value::as_str)

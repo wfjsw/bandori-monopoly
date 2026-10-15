@@ -102,8 +102,8 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
   for (const tok of x.tokens ?? []) if (tok.value > 0) out.push({ label: tok.name, n: tok.value });
   for (const fc of x.field ?? []) {
     const card = cardTitle(fc.card);
-    if (fc.crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.crystals });
-    if (fc.cp > 0) out.push({ label: `${card} · CP`, n: fc.cp });
+    if (fc.counters["crystals"] ?? 0 > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.counters["crystals"] ?? 0 });
+    if (fc.counters["cp"] ?? 0 > 0) out.push({ label: `${card} · CP`, n: fc.counters["cp"] ?? 0 });
     for (const [name, n] of Object.entries(fc.counters ?? {})) if (n > 0) out.push({ label: `${card} · ${name}`, n });
   }
   return out;
