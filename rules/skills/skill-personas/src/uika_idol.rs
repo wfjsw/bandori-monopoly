@@ -21,7 +21,7 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
     "skill:三角初华（Sumimi）:成为偶像",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], "actor == owner && is_start(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 --
         // the offer exists only when such a tile exists. The colour-group
         // scan is residual (`is_color` / `tile_named`).

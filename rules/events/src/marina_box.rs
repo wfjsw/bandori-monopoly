@@ -26,7 +26,7 @@ pub const MARINA_BOX: CardDef = CardDef::new(
         // for a no-op.
         On::Hook(
             &[HookKind::PassTile],
-            "is_start(tile.id) && actor >= 0 && money(actor) >= 500",
+            "tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500",
             None,
             on_pass,
         ),

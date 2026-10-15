@@ -47,7 +47,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], "actor == owner && is_start(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key

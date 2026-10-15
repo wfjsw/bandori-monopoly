@@ -52,7 +52,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
             None,
             on_plan,
         ),
-        On::Hook(&[HookKind::Pass], "actor == owner && is_start(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
         // settle that marks the latch is the owner's own settle onto one of the
         // three named tiles. Both facts are CEL (`actor == owner` and the three

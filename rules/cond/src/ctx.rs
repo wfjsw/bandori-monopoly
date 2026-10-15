@@ -145,14 +145,7 @@ pub struct WindowCtx {
     /// `tile_named(name) -> id`, resolved at load. Empty is fine if no
     /// condition uses it.
     pub tile_ids: BTreeMap<String, i64>,
-    /// Tile ids of each kind, for `is_start(t)` / `is_deed(t)` /
-    /// `is_venue(t)` / `is_buyable(t)`.
-    pub circle_tiles: Vec<i64>,
-    pub ring_tiles: Vec<i64>,
-    pub live_house_tiles: Vec<i64>,
-    pub buyable_tiles: Vec<i64>,
-    /// ABI v56: data kind wire spelling per tile id (empty = unknown).
-    /// Backs `tile_is` for kinds outside the four CEL sugar lists.
+    /// Data kind wire spelling per tile id (empty = unknown). Backs `tile_is`.
     pub tile_kinds: Vec<String>,
     /// ABI v56: `(tile, attr) -> value` rows for `tile_attr`.
     pub tile_attrs: BTreeMap<(i64, String), i64>,

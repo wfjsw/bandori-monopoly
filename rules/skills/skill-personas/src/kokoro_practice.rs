@@ -50,7 +50,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // settle, for every completed move including a 「不触发结算」 one.
         On::Hook(
             &[HookKind::MoveAfter],
-            "actor == owner && is_deed(tile.id)",
+            ruleset_core::guards::OWN_DEED,
             None,
             on_move_end,
         ),

@@ -1565,6 +1565,13 @@ impl CardWorld for Run {
 
     // board extensions ------------------------------------------------------
     /// ABI v56: data kind by wire spelling (ruleset tile-kind binding).
+    fn tile_kind_of(&self, tile: i32) -> String {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.kind.as_str().to_string())
+            .unwrap_or_default()
+    }
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
         crate::tile_class::kind_is(self.data.tiles.get(tile.max(0) as usize), kind)
     }
@@ -6507,6 +6514,13 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
             .unwrap_or_default()
     }
     #[inline]
+    fn tile_kind_of(&self, tile: i32) -> String {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.kind.as_str().to_string())
+            .unwrap_or_default()
+    }
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
         crate::tile_class::kind_is(self.data.tiles.get(tile.max(0) as usize), kind)
     }
@@ -7087,32 +7101,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn tile_named(&self, name: &str) -> i64 {
         self.world.tile_named(self.data, name) as i64
     }
-    // The following three implement `rules_cond::view::CondView` (method names
-    // live in rules/cond -- out of scope). Kind strings are ruleset bindings.
-    fn is_start(&self, tile: i64) -> bool {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind.as_str() == "circle")
-    }
-    fn is_deed(&self, tile: i64) -> bool {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind.as_str() == "ring")
-    }
-    fn is_venue(&self, tile: i64) -> bool {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.is_buyable() && t.group == 10)
-    }
-    fn is_buyable(&self, tile: i64) -> bool {
-        self.data
-            .tiles
-            .get(tile.max(0) as usize)
-            .is_some_and(|t| t.is_buyable())
-    }
     fn tile_is(&self, tile: i64, kind: &str) -> bool {
         crate::tile_class::kind_is(self.data.tiles.get(tile.max(0) as usize), kind)
     }
@@ -7170,20 +7158,24 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn tile_id_table(&self) -> Vec<(String, i64)> {
         crate::cond_pre::collect_tile_ids(self).into_iter().collect()
     }
-    fn tile_kind_list(&self, kind: rules_cond::view::TileKind) -> Vec<i64> {
+    fn tile_kind_list(&self, kind: &str) -> Vec<i64> {
         let mut out = Vec::new();
         for tile in 0..self.data.tiles.len() as i64 {
-            let hit = match kind {
-                rules_cond::view::TileKind::Circle => self.is_start(tile),
-                rules_cond::view::TileKind::Ring => self.is_deed(tile),
-                rules_cond::view::TileKind::LiveHouse => self.is_venue(tile),
-                rules_cond::view::TileKind::Buyable => self.is_buyable(tile),
-            };
-            if hit {
+            if self.tile_is(tile, kind) {
                 out.push(tile);
             }
         }
         out
+    }
+    fn tile_kind_names(&self) -> Vec<String> {
+        self.data
+            .tiles
+            .iter()
+            .map(|t| t.kind.as_str().to_string())
+            .filter(|k| !k.is_empty())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
     }
 
     // -- turn plan / counters ----------------------------------------------

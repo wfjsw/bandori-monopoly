@@ -28,7 +28,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], "actor == owner && is_deed(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
         // （2）/（3） applicability: someone else's landing within five tiles of
         // this player. The pot-cost split and the fire balance stay residual
         // (dynamic). `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).

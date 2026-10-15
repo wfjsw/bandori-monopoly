@@ -202,7 +202,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
     skills_hhw_world(owner);
     let w = symbolic_pass_world(owner, CIRCLE);
 
-    let gid = crate::guard_id!("actor == owner && is_start(tile.id)");
+    let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
     let ov = TriggerOverlay::default();
     let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, CIRCLE as i64, &ov);
     let admitted = crate::guard!(gid, &ctx);
@@ -241,7 +241,7 @@ pub fn kokoro_02_noop_non_circle() {
     skills_hhw_world(owner);
     // A non-CiRCLE tile (index 5).
     let w = symbolic_pass_world(owner, 5);
-    let gid = crate::guard_id!("actor == owner && is_start(tile.id)");
+    let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
     let ov = TriggerOverlay::default();
     let ctx = ir_fill::fill_for_guard(&w, gid, owner, 0, true, 5i64, &ov);
     let admitted = crate::guard!(gid, &ctx);

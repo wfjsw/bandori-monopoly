@@ -450,7 +450,7 @@ fn diff_all_inventory_guards() {
         f.ir.set_insert(SetId::Circle, 1);
         f.ir.set_insert(SetId::ChainKinds, 9);
         // Mirror the function tables into the cel snapshot.
-        f.win.circle_tiles = vec![1];
+        f.win.tile_kinds = vec!["circle".to_string(), String::new()];
         f.win.chain = vec![rules_cond::ChainLink {
             kind: 9,
             from: 0,

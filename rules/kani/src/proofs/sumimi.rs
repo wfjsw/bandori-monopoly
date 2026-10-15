@@ -219,7 +219,7 @@ pub fn idolband_mutant_is_detected() {
 // ===========================================================================
 // C-SUMIMI-hina-01 -- pass CiRCLE → +1 [火罐]
 // `skill:三角初华（Sumimi）:成为偶像` `On::Hook(Pass)` with the single-source
-// guard `"actor == owner && is_start(tile.id)"`.
+// guard `ruleset_core::guards::OWN_START`.
 // Isolation: the turn-start pot placement (clause (2)) is a different entry.
 // Seat-symmetric (the user's own fire).
 // ===========================================================================
@@ -256,7 +256,7 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     hina_pass_world(user, tile);
 
     // single-source guard: the real CEL string, lowered once
-    let gid = crate::guard_id!("actor == owner && is_start(tile.id)");
+    let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
     let ov = ir_fill::TriggerOverlay::default();
     let admitted = world::with_world(|w| {
         let ctx = ir_fill::fill_for_guard(w, gid, user, 0, true, -1, &ov);

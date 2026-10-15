@@ -25,7 +25,7 @@ pub const MARINA_GIFTS: CardDef = CardDef::new(
     // 「其他玩家经过CiRCLE时」 -- another player's pass onto CiRCLE.
     &[On::Hook(
         &[HookKind::Pass],
-        "actor != owner && actor >= 0 && is_start(tile.id)",
+        "actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")",
         None,
         on_pass,
     )],

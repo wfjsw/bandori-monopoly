@@ -16,7 +16,7 @@
 //! Extra CEL spellings that flatten to the same identifier live in
 //! [`Name::aliases`] (`chain.count` is an alias of `effect.count`).
 
-use crate::view::{CondView, TileKind};
+use crate::view::CondView;
 
 /// Where a name binds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -669,58 +669,6 @@ pub const VOCAB: &[Name] = &[
         },
         doc: "tile_named(name) -> board id; -1 when unknown",
     },
-    Name {
-        cel: "is_start",
-        aliases: &["is_circle"],
-        flat: "is_start",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_start_tiles",
-            fill: |v| v.tile_kind_list(TileKind::Circle),
-        },
-        doc: "is_start(t) -> tile kind is the start square",
-    },
-    Name {
-        cel: "is_deed",
-        aliases: &["is_ring"],
-        flat: "is_deed",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_deed_tiles",
-            fill: |v| v.tile_kind_list(TileKind::Ring),
-        },
-        doc: "is_deed(t) -> tile kind is a flat deed",
-    },
-    Name {
-        cel: "is_venue",
-        aliases: &["is_live_house"],
-        flat: "is_venue",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_venue_tiles",
-            fill: |v| v.tile_kind_list(TileKind::LiveHouse),
-        },
-        doc: "is_venue(t) -> tile kind is a venue deed",
-    },
-    Name {
-        cel: "is_buyable",
-        aliases: &[],
-        flat: "is_buyable",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_buyable_tiles",
-            fill: |v| v.tile_kind_list(TileKind::Buyable),
-        },
-        doc: "is_buyable(t) -> tile kind is buyable (sugar over tile_in)",
-    },
     // -- ABI v56 generic tile queries ---------------------------------------
     Name {
         cel: "tile_is",
@@ -732,22 +680,16 @@ pub const VOCAB: &[Name] = &[
         fx: Fx::TileIs {
             var: "_tile_is",
             fill: |v| {
-                let kinds = [
-                    "circle",
-                    "cafe",
-                    "edogawa",
-                    "ryuseido",
-                    "property",
-                    "ring",
-                    "agent",
-                    "event",
-                ];
+                // Unique kinds the board stamps (ruleset data, no engine list).
                 let n = v.tile_count();
+                let mut kinds: Vec<String> = v.tile_kind_names();
+                kinds.sort();
+                kinds.dedup();
                 kinds
-                    .iter()
-                    .map(|&k| {
-                        let tiles = (0..n).filter(|&t| v.tile_is(t, k)).collect();
-                        (k.to_string(), tiles)
+                    .into_iter()
+                    .map(|k| {
+                        let tiles = (0..n).filter(|&t| v.tile_is(t, &k)).collect();
+                        (k, tiles)
                     })
                     .collect()
             },

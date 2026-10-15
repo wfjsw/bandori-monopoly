@@ -32,7 +32,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
             None,
             declare_cap,
         ),
-        On::Hook(&[HookKind::Pass], "actor == owner && is_start(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].

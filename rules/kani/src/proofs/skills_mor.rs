@@ -485,7 +485,7 @@ mod pass_fire {
             w.charge_max[user as usize] = charge_max_pin;
         });
 
-        let gid = crate::guard_id!("actor == owner && is_start(tile.id)");
+        let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
         let admitted = {
             let ctx = fill_pass_circle(user);
             crate::guard!(gid, &ctx)
@@ -594,7 +594,7 @@ mod pass_fire {
         // Force the residual: owner, but tile is not a CiRCLE (kind 0).
         let mut t = kani::any();
         kani::assume(t >= 0 && t < 60 && crate::board::TILES[t as usize].kind != 0);
-        let gid = crate::guard_id!("actor == owner && is_start(tile.id)");
+        let gid = crate::guard_id!(ruleset_core::guards::OWN_START);
         world::with_world_mut(|w| {
             w.trig_player = 0;
             w.trig_tile = t;

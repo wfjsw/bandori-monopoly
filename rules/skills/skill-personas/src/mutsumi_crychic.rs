@@ -29,7 +29,7 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
-        On::Hook(&[HookKind::Pass], "actor == owner && is_start(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         On::Hook(&[HookKind::RollAfter], "", Some(other), latch),
     ],
 )

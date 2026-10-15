@@ -26,7 +26,7 @@ pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
         On::Hook(&[HookKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", None, at_start),
-        On::Hook(&[HookKind::Pass], "actor == owner && is_start(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
     ],
 );
 

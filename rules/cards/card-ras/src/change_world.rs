@@ -20,7 +20,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         // walk this turn, over a buyable Live House the owner does not hold.
         On::Hook(
             &[HookKind::PassTile],
-            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_venue(tile.id) && is_buyable(tile.id) && tile.owner != owner",
+            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner",
             None,
             pass_tile,
         ),

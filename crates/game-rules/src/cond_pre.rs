@@ -15,7 +15,7 @@
 pub use rules_cond::{
     CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope,
 };
-use rules_cond::view::{CondView, TileKind};
+use rules_cond::view::CondView;
 
 /// Name-stable hash for string identities (persona / group / card id).
 /// Re-exported from [`rules_cond::id_of`] -- one hash, one spelling.
@@ -358,20 +358,6 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn tile_named(&self, name: &str) -> i64 {
         self.src.tile_named(name) as i64
     }
-    // The following three implement `rules_cond::view::CondView` (method names
-    // and `TileKind` variants live in rules/cond -- out of scope).
-    fn is_start(&self, tile: i64) -> bool {
-        self.src.tile_is(tile as i32, TileKind::Circle.as_str())
-    }
-    fn is_deed(&self, tile: i64) -> bool {
-        self.src.tile_is(tile as i32, TileKind::Ring.as_str())
-    }
-    fn is_venue(&self, tile: i64) -> bool {
-        self.src.tile_in(-1, tile as i32, TileKind::LiveHouse.as_str())
-    }
-    fn is_buyable(&self, tile: i64) -> bool {
-        self.src.tile_in(-1, tile as i32, TileKind::Buyable.as_str())
-    }
     fn tile_is(&self, tile: i64, kind: &str) -> bool {
         self.src.tile_is(tile as i32, kind)
     }
@@ -432,22 +418,26 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             .map(|(k, v)| (k, v))
             .collect()
     }
-    fn tile_kind_list(&self, kind: TileKind) -> Vec<i64> {
+    fn tile_kind_list(&self, kind: &str) -> Vec<i64> {
         let count = self.src.tile_count();
         let mut out = Vec::new();
-        let id = kind.as_str();
         for tile in 0..count {
-            let hit = match kind {
-                TileKind::LiveHouse | TileKind::Buyable => {
-                    self.src.tile_in(-1, tile, id)
-                }
-                _ => self.src.tile_is(tile, id),
-            };
-            if hit {
+            if self.src.tile_is(tile, kind) {
                 out.push(tile as i64);
             }
         }
         out
+    }
+    fn tile_kind_names(&self) -> Vec<String> {
+        let mut names = Vec::new();
+        let count = self.src.tile_count();
+        for tile in 0..count {
+            let k = self.src.tile_kind_of(tile);
+            if !k.is_empty() && !names.iter().any(|n| n == &k) {
+                names.push(k);
+            }
+        }
+        names
     }
 
     // -- turn plan / counters ----------------------------------------------
@@ -621,6 +611,11 @@ pub trait SnapSrc {
     /// stripped). Empty when the id is out of range. `fill_window` registers
     /// every name so a condition's `tile_named('…')` resolves.
     fn tile_name(&self, tile: i32) -> String;
+    /// Data kind wire spelling for `tile` (ruleset data; empty = unknown).
+    fn tile_kind_of(&self, tile: i32) -> String {
+        let _ = tile;
+        String::new()
+    }
     /// ABI v56 generic tile queries (the host `tile_is` / `tile_attr` /
     /// `tile_in`). Defaults fall back safely for fixture worlds.
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
@@ -747,6 +742,10 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn tile_name(&self, tile: i32) -> String {
         CardWorld::tile_name(self, tile)
+    }
+    #[inline]
+    fn tile_kind_of(&self, tile: i32) -> String {
+        CardWorld::tile_kind_of(self, tile)
     }
     #[inline]
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
@@ -1223,27 +1222,11 @@ pub fn admits_pre(
 pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let t = world.trigger();
     let tile_ids = collect_tile_ids(world);
-    let mut pass_reward_tiles = Vec::new();
-    let mut deed_tiles = Vec::new();
-    let mut venue_tiles = Vec::new();
-    let mut buyable_tiles = Vec::new();
     let mut tile_kinds = Vec::new();
     let mut tile_attrs = std::collections::BTreeMap::new();
     let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
-        if world.tile_is(tile, TileKind::Circle.as_str()) {
-            pass_reward_tiles.push(tile as i64);
-        }
-        if world.tile_is(tile, TileKind::Ring.as_str()) {
-            deed_tiles.push(tile as i64);
-        }
-        if world.tile_in(-1, tile, TileKind::LiveHouse.as_str()) {
-            venue_tiles.push(tile as i64);
-        }
-        if world.tile_in(-1, tile, TileKind::Buyable.as_str()) {
-            buyable_tiles.push(tile as i64);
-        }
-        // ABI v56 generic tile queries (kind / attr / class tables).
+        // Generic tile queries (kind / attr / class tables).
         fill_tile_generic(world, tile, &mut tile_kinds, &mut tile_attrs, &mut tile_classes);
     }
 
@@ -1342,10 +1325,6 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         players,
         tile_ids,
         // Field names come from `rules_cond::ctx::WindowCtx` (out of scope).
-        circle_tiles: pass_reward_tiles,
-        ring_tiles: deed_tiles,
-        live_house_tiles: venue_tiles,
-        buyable_tiles,
         tile_kinds,
         tile_attrs,
         tile_classes,
@@ -1363,26 +1342,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
 /// player being asked. Built once per ask; reused across the cards of one view.
 pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let tile_ids = collect_tile_ids(world);
-    let mut pass_reward_tiles = Vec::new();
-    let mut deed_tiles = Vec::new();
-    let mut venue_tiles = Vec::new();
-    let mut buyable_tiles = Vec::new();
     let mut tile_kinds = Vec::new();
     let mut tile_attrs = std::collections::BTreeMap::new();
     let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
-        if world.tile_is(tile, TileKind::Circle.as_str()) {
-            pass_reward_tiles.push(tile as i64);
-        }
-        if world.tile_is(tile, TileKind::Ring.as_str()) {
-            deed_tiles.push(tile as i64);
-        }
-        if world.tile_in(-1, tile, TileKind::LiveHouse.as_str()) {
-            venue_tiles.push(tile as i64);
-        }
-        if world.tile_in(-1, tile, TileKind::Buyable.as_str()) {
-            buyable_tiles.push(tile as i64);
-        }
         fill_tile_generic(world, tile, &mut tile_kinds, &mut tile_attrs, &mut tile_classes);
     }
     let players: Vec<PlayerSnap> = (0..world.player_count())
@@ -1440,10 +1403,6 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         players,
         tile_ids,
         // Field names come from `rules_cond::ctx::WindowCtx` (out of scope).
-        circle_tiles: pass_reward_tiles,
-        ring_tiles: deed_tiles,
-        live_house_tiles: venue_tiles,
-        buyable_tiles,
         tile_kinds,
         tile_attrs,
         tile_classes,
@@ -1463,20 +1422,8 @@ fn fill_tile_generic<S: SnapSrc>(
     tile_attrs: &mut std::collections::BTreeMap<(i64, String), i64>,
     tile_classes: &mut Vec<(i64, i64, String)>,
 ) {
-    // Kind: probe the eight wire spellings (`TileKind::as_str`) -- ruleset
-    // tile-kind bindings, kept verbatim.
-    let kinds = [
-        "circle",
-        "cafe",
-        "edogawa",
-        "ryuseido",
-        "property",
-        "ring",
-        "agent",
-        "event",
-    ];
-    let kind = kinds.iter().find(|k| world.tile_is(tile, k)).copied();
-    tile_kinds.push(kind.unwrap_or_default().to_string());
+    // Kind: ruleset-supplied wire spelling (no engine kind table).
+    tile_kinds.push(world.tile_kind_of(tile));
 
     // Attrs: the seven documented fields.
     for attr in ["group", "tier", "price", "house", "area", "rent", "index"] {

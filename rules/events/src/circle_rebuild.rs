@@ -25,13 +25,13 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
         // bail stays a residual guard (not in the CEL schema).
         On::Hook(
             &[HookKind::PassTile],
-            "is_start(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
+            "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
             None,
             on_pass,
         ),
         On::Hook(
             &[HookKind::SettleBody],
-            "is_start(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
+            "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
             Some(settle_applies),
             on_settle_body,
         ),

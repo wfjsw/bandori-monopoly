@@ -322,8 +322,13 @@ pub trait CardWorld: Clone + 'static {
     fn mortgage_value(&self, tile: i32) -> i32;
     fn owned_count(&self, player_id: i32) -> i32;
     fn owned_at(&self, player_id: i32, index: i32) -> i32;
+    /// Data kind wire spelling for `tile` (ruleset data; empty = unknown).
+    fn tile_kind_of(&self, tile: i32) -> String {
+        let _ = tile;
+        String::new()
+    }
     /// 1 iff `tile`'s data kind equals the `kind` wire spelling
-    /// (`TileKind::as_str`, a ruleset tile-kind binding). Unknown tile -> false.
+    /// (a ruleset tile-kind binding). Unknown tile -> false.
     /// Generic kind probe; no class vocabulary here.
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
         let _ = (tile, kind);

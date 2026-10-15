@@ -41,6 +41,8 @@ pub mod roster;
 pub mod roster_order;
 /// Ruleset-declared raise-point kind ids and tile kind/class strings.
 pub mod kind;
+/// Shared CEL guards.
+pub mod guards;
 
 /// State-map keys that name this ruleset's pots / statuses.
 pub mod state_key {

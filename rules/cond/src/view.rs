@@ -13,27 +13,6 @@
 //! `'static` values -- a live trait-object indirection per probe measured
 //! slower than the copy (GUARDS.md §4.2b).
 
-/// Which tile-kind set a condition's `is_*` family asks for.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum TileKind {
-    Circle,
-    Ring,
-    LiveHouse,
-    Buyable,
-}
-
-impl TileKind {
-    /// Opaque class/kind spelling for `tile_is` / `tile_in` (game data).
-    pub fn as_str(self) -> &'static str {
-        match self {
-            TileKind::Circle => "circle",
-            TileKind::Ring => "ring",
-            TileKind::LiveHouse => "livehouse",
-            TileKind::Buyable => "buyable",
-        }
-    }
-}
-
 /// Read-only queries a condition name may make. Int-only: every accessor
 /// returns `i64` (or `bool`, bound as a CEL bool).
 ///
@@ -161,14 +140,7 @@ pub trait CondView {
     // -- board --------------------------------------------------------------
     /// `tile_named(name) -> id`; `-1` when unknown (the guest's convention).
     fn tile_named(&self, name: &str) -> i64;
-    /// Tile-kind predicates (the guest's `is_start` family).
-    /// Sugar over [`Self::tile_is`] / [`Self::tile_in`]; kept abstract so each
-    /// view's existing results (including snapshot quirks) do not shift.
-    fn is_start(&self, tile: i64) -> bool;
-    fn is_deed(&self, tile: i64) -> bool;
-    fn is_venue(&self, tile: i64) -> bool;
-    fn is_buyable(&self, tile: i64) -> bool;
-    /// ABI v56: `tile_is(tile, kind)` -- data `TileKind` by wire spelling.
+    /// ABI v56: `tile_is(tile, kind)` -- data tile kind by wire spelling.
     fn tile_is(&self, tile: i64, kind: &str) -> bool;
     /// ABI v56: `tile_attr(tile, attr)` -- generic i32 field read.
     /// `kind` / `color` strings are [`Self::tile_is`] / future string attrs.
@@ -217,8 +189,10 @@ pub trait CondView {
     fn blocked_groups(&self) -> Vec<i64>;
     /// Every `tile_named` spelling the host registers.
     fn tile_id_table(&self) -> Vec<(String, i64)>;
-    /// Tile ids of one kind (the `is_*` family's backing list).
-    fn tile_kind_list(&self, kind: TileKind) -> Vec<i64>;
+    /// Tile ids whose data kind equals `kind` (backing list for `tile_is`).
+    fn tile_kind_list(&self, kind: &str) -> Vec<i64>;
+    /// Every distinct data kind spelling on the board (ruleset data).
+    fn tile_kind_names(&self) -> Vec<String>;
 
     // -- turn plan / counters ----------------------------------------------
     /// `plan.fixed_roll` -- this turn's fixed main-move roll
