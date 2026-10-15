@@ -8,7 +8,7 @@
 //! re-exports the generic surface plus these names).
 //!
 //! Host ABI v56: kind checks are `tile_is(t, "ring")`, field reads are
-//! `tile_attr`, class membership is `tile_in`. The `is_ring` / `is_circle` /
+//! `tile_attr`, class membership is `tile_in`. The `is_deed` / `is_start` /
 //! `is_buyable` / … spellings below are sugar over that generic trio.
 
 #![cfg_attr(target_arch = "wasm32", no_std)]
@@ -55,8 +55,8 @@ pub mod ctx {
         add_group_crystals, add_group_skill, add_card_crystals, add_crystals, add_crystals_at,
         add_charge_max, add_rent_unit_bonus, add_ring_bonus, group_crystals, group_skill,
         group_skills, card_crystals, persona_is, persona_skill, crystals, crystals_at, decay,
-        charge, charge_max, gain_charge, in_group, invoke_skill, is_agent, is_buyable, is_circle,
-        is_color, is_live_house, is_live_house_for, is_ring, is_shop, offer_build, offer_buy,
+        charge, charge_max, gain_charge, in_group, invoke_skill, is_agent, is_buyable, is_start,
+        is_color, is_venue, is_live_house_for, is_deed, is_shop, offer_build, offer_buy,
         offer_force_buy, pay_rent, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked,
         spend_charge,
     };
@@ -75,12 +75,12 @@ pub fn is_shop(tile: i32) -> bool {
 }
 
 /// A RiNG deed (never holds houses).
-pub fn is_ring(tile: i32) -> bool {
+pub fn is_deed(tile: i32) -> bool {
     card_sdk::ctx::tile_is(tile, "ring")
 }
 
 /// The CiRCLE tile.
-pub fn is_circle(tile: i32) -> bool {
+pub fn is_start(tile: i32) -> bool {
     card_sdk::ctx::tile_is(tile, "circle")
 }
 
@@ -90,7 +90,7 @@ pub fn is_agent(tile: i32) -> bool {
 }
 
 /// A Live House deed (buyable, colour group 6).
-pub fn is_live_house(tile: i32) -> bool {
+pub fn is_venue(tile: i32) -> bool {
     card_sdk::ctx::tile_in(-1, tile, "livehouse")
 }
 
