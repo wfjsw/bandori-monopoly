@@ -7142,13 +7142,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             return Vec::new();
         };
         let mut out = Vec::new();
-        let cp_val = self.world.card_counter(o, c, "cp") as i64;
-        if cp_val != 0 {
-            out.push(("cp".to_string(), cp_val));
+        let points_val = self.world.card_counter(o, c, "points") as i64;
+        if points_val != 0 {
+            out.push(("points".to_string(), points_val));
         }
-        let counter_val = self.world.card_counter(o, c, "crystals") as i64;
-        if counter_val != 0 {
-            out.push(("crystals".to_string(), counter_val));
+        let bonus_val = self.world.card_counter(o, c, "bonus") as i64;
+        if bonus_val != 0 {
+            out.push(("bonus".to_string(), bonus_val));
         }
         out
     }

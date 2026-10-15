@@ -124,7 +124,7 @@ const MOVER: CardDef = CardDef::new("TEST:mover", &[On::Play("", None, mover)]);
 /// name-filtered to `counter::CRYSTALS`, so the write that empties the card is
 /// what leaves the field. The spend site does not re-check the count.
 const CRYSTAL: CardDef = CardDef::new(
-    "TEST:crystal",
+    "TEST:named-counter",
     &[
         On::Play("", None, crystal_play),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystal_changed_guard), crystal_changed),
@@ -144,7 +144,7 @@ fn mover(player_id: i32) -> card_sdk::Asked {
 
 fn crystal_play(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "TEST:crystal", &Msg::new(key!("crystal_note")));
+    ctx::place_card(player_id, "TEST:named-counter", &Msg::new(key!("crystal_note")));
     ctx::set_crystals(1);
     // The decay tick: a write that takes the count to zero. `decay` no longer
     // discards at 0 -- only the handler below is the 「no crystals -> discard」
@@ -156,7 +156,7 @@ fn crystal_play(player_id: i32) -> card_sdk::Asked {
 fn crystal_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
-        && trigger::card_is("TEST:crystal")
+        && trigger::card_is("TEST:named-counter")
         && trigger::name() == card_sdk::abi::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only the write that did not raise the count speaks for the empty
@@ -169,9 +169,9 @@ fn crystal_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     // Which write emptied it: a removal, or a write that landed on none.
     let why = if trigger::value() < 0 {
-        key!("crystal_empty")
+        key!("named-counter-empty")
     } else {
-        key!("crystal_none")
+        key!("named-counter-none")
     };
     ctx::log(player_id, &Msg::new(why));
     Ok(())

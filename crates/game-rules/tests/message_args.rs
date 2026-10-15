@@ -19,7 +19,7 @@ fn is_internal_key(s: &str) -> bool {
         return true;
     }
     // Known on-card counter / mark names (ruleset wire keys).
-    if matches!(s, "crystals" | "cp" | "cpField" | "skillBlock") {
+    if matches!(s, "bonus" | "points" | "pointsField" | "skillBlock") {
         return true;
     }
     // Lower-camel engine state / prop keys (handLimit, startHand, skillState,
@@ -158,19 +158,19 @@ fn name_helpers_never_text_a_known_key() {
     use game_rules::{counter_name, mark_kind_name, state_key_name};
     let mut bad = Vec::new();
     for m in [
-        counter_name("crystals"),
-        counter_name("cp"),
+        counter_name("bonus"),
+        counter_name("points"),
         state_key_name("handLimit"),
         state_key_name("stay"),
         state_key_name("skillState"),
-        mark_kind_name("mark:cp"),
+        mark_kind_name("mark:points"),
         mark_kind_name("skillBlock"),
     ] {
         walk_msg(&m, "helper", &mut bad);
     }
     assert!(bad.is_empty(), "helpers leaked internal keys as Text: {bad:?}");
     // Known keys resolve to their own i18n names (wire keys, kept verbatim).
-    assert_eq!(counter_name("crystals").key(), "log.counter.crystals");
+    assert_eq!(counter_name("bonus").key(), "log.counter.bonus");
     assert_eq!(state_key_name("handLimit").key(), "log.state.hand_limit");
-    assert_eq!(mark_kind_name("mark:cp").key(), "mark:cp");
+    assert_eq!(mark_kind_name("mark:points").key(), "mark:points");
 }

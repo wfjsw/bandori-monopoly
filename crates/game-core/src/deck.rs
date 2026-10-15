@@ -27,7 +27,7 @@ pub fn cant_play(data: &GameData, c: &PersonaData, card: &CardData) -> Option<Ms
     }
     if !card.is_universal() && card.group != c.group {
         return Some(
-            Msg::new("err.deck_band").arg("band", crate::msg::Arg::Group(card.group.clone())),
+            Msg::new("err.deck_group").arg("group", crate::msg::Arg::Group(card.group.clone())),
         );
     }
     None

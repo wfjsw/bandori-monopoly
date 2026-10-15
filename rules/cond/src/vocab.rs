@@ -799,7 +799,7 @@ pub const VOCAB: &[Name] = &[
     },
     Name {
         cel: "persona",
-        aliases: &["character"],
+        aliases: &[],
         flat: "persona",
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,

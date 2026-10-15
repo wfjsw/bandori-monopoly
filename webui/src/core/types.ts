@@ -338,7 +338,7 @@ export interface SavedDeck { persona: string; slot: number; name: string; cards:
 export interface PlayerProfile {
   saveVersion: number; playerName: string; playerId: string; createdAt: string;
   level: number; exp: number; totalExp: number; charge: number; chargeDate: string; chargePerGame: number;
-  coins: number; stars: number; homeCharacter: string; games: number; soloGames: number;
+  coins: number; stars: number; homePersona: string; games: number; soloGames: number;
   casualGames: number; rankedGames: number; rankedWins: number;
   history: MatchRecord[]; unreadResult: boolean; decks: SavedDeck[];
   [k: string]: unknown;

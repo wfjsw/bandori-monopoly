@@ -118,10 +118,10 @@ fn a_card_whose_named_counters_run_out_leaves_the_field() {
     // TEST:named counter places itself with one named counter and spends it in the same
     // effect. The no-named-counter discard check is its `crystalsChanged` (wire
     // handler, not a re-check at the spend site.
-    // `TEST:crystal` / `crystal_empty` / `crystal_none` are rules/ fixture ids
+    // `TEST:named-counter` / `named-counter-empty` / `named-counter-none` are rules/ fixture ids
     // (rules/fixtures/test-cards) -- kept to match the fixture definitions.
-    let mut m = match_with_rules("TEST:crystal", rules_with_fixtures());
-    m.act(1, &play("TEST:crystal")).expect("play should run");
+    let mut m = match_with_rules("TEST:named-counter", rules_with_fixtures());
+    m.act(1, &play("TEST:named-counter")).expect("play should run");
     let st = m.state();
     let me = st
         .players
@@ -129,24 +129,24 @@ fn a_card_whose_named_counters_run_out_leaves_the_field() {
         .find(|p| p.member == 1)
         .expect("the human player");
     assert!(
-        me.field.iter().all(|f| f.card != "TEST:crystal"),
+        me.field.iter().all(|f| f.card != "TEST:named-counter"),
         "the card left the field: {:?}",
         me.field
     );
     assert!(
-        me.discard.iter().any(|c| c == "TEST:crystal"),
+        me.discard.iter().any(|c| c == "TEST:named-counter"),
         "it went to the discard pile: {:?}",
         me.discard
     );
     // The spend emptied it, so the removal spoke -- not the earlier write that
     // took the count up, which the guard must let pass.
     assert_eq!(
-        fixture_events(&st, "crystal_empty").len(),
+        fixture_events(&st, "named-counter-empty").len(),
         1,
         "the spend that emptied the card spoke"
     );
     assert!(
-        fixture_events(&st, "crystal_none").is_empty(),
+        fixture_events(&st, "named-counter-none").is_empty(),
         "the earlier write must not speak for the count the run ended on"
     );
 }

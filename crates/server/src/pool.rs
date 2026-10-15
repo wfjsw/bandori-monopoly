@@ -132,7 +132,7 @@ fn split(v: &Value) -> Result<(String, Option<Checkpoint>, bool), String> {
         .and_then(Value::as_str)
         .map(str::to_string)
         .ok_or_else(|| "worker returned no state".to_string())?;
-    let checkpoint = match v.get("cp") {
+    let checkpoint = match v.get("ckpt") {
         None | Some(Value::Null) => None,
         Some(c) => Some(serde_json::from_value(c.clone()).map_err(|e| format!("checkpoint: {e}"))?),
     };

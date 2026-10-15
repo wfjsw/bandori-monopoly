@@ -39,7 +39,7 @@ export function Gallery() {
       </div>
       <div className={s.panel}>
         <div className={s.grid}>
-          {list.map((c) => <CharCard key={c.name} c={c} home={c.name === p.homeCharacter} onClick={() => showDetail(c, list)} />)}
+          {list.map((c) => <CharCard key={c.name} c={c} home={c.name === p.homePersona} onClick={() => showDetail(c, list)} />)}
         </div>
       </div>
     </>
@@ -51,7 +51,7 @@ function Detail({ list, start }: { list: PersonaData[]; start: number }) {
   const p = useProfile()!;
   const c = list[i];
   const band = D.group(c.group);
-  const isHome = p.homeCharacter === c.name;
+  const isHome = p.homePersona === c.name;
   const lines = D.voiceLines.find((v) => v.id === c.cnId)?.lines.filter((l) => l.text && l.voice) ?? [];
   const exclusive = D.cards.filter((x) => x.owner === c.name && !x.derived);
   const step = (d: number) => setI((i + d + list.length) % list.length);
@@ -79,7 +79,7 @@ function Detail({ list, start }: { list: PersonaData[]; start: number }) {
         )}
         <div className={s.foot}>
           <div className={s.sds}><img src={charArt(D.artId(c), "sdThumb")} alt="" /><img src={charArt(D.artId(c), "sdHappyThumb")} alt="" /></div>
-          <Btn kind={isHome ? "white" : "pink"} icon="home" disabled={isHome} onClick={() => { patchProfile({ homeCharacter: c.name }); toast(tr("gallery.homeToast", { who: c.display })); }}>
+          <Btn kind={isHome ? "white" : "pink"} icon="home" disabled={isHome} onClick={() => { patchProfile({ homePersona: c.name }); toast(tr("gallery.homeToast", { who: c.display })); }}>
             {isHome ? tr("gallery.home") : tr("gallery.setHome")}
           </Btn>
         </div>

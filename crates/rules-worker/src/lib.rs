@@ -329,7 +329,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     // a no-op). Carried as `released`, not `error`.
                     let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended(), "released": released});
                     if let Some(ckpt) = checkpoint(&m, before) {
-                        v["cp"] = ckpt;
+                        v["ckpt"] = ckpt;
                     }
                     return Ok(v);
                 }
@@ -343,7 +343,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 v["error"] = out;
             }
             if let Some(ckpt) = checkpoint(&m, before) {
-                v["cp"] = ckpt;
+                v["ckpt"] = ckpt;
             }
             Ok(v)
         }
@@ -364,7 +364,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             }
             let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended()});
             if let Some(ckpt) = checkpoint(&m, before) {
-                v["cp"] = ckpt;
+                v["ckpt"] = ckpt;
             }
             Ok(v)
         }

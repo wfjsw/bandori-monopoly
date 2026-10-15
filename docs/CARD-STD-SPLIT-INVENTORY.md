@@ -33,10 +33,10 @@ Destination: `card-sdk` (generic) | `rules/ruleset-core` (new game crate) | `rul
 | 25 | `pre::MINE` (`actor == owner`) | generic | `card-sdk` | card-ownership pre, not game vocab |
 | 26 | shared guards `crystals_changed_guard` (x11), `mine` (x7), `always` (x4), `any` (x3) | game | `ruleset-core` | dedupe into shared fns |
 | 27 | `legacy_*` audit copies (~60) | game | deleted 2026-10-14 (ABI 61) | was NEGATION-AUDIT.md / GUARDS.md §5.1; do not port |
-| 28 | `HookKind`/`TriggerKind`/`ChainKind`/`GateKind` wire enums | generic (stay) | `card-sdk` | host needs the codes; document game-named variants' ownership |
-| 29 | `HookKind::CircleAffected` / `CpChanged` / `CrystalsChanged` / `FireSpent` etc. | game-named wire | stay in `card-sdk` + doc | keep code; ownership note |
+| 28 | `HookKind`/`TriggerKind`/`ChainKind`/`GateKind` | generic | `card-sdk` | transparent i32 newtypes (ABI v70); only engine-generic named consts |
+| 29 | game-named kinds (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 / `HouseAdded` 75 / `ChargePaying` 78) | game-named wire | `ruleset-core::kind` | ruleset-declared opaque ids; decimal wire spelling |
 | 30 | `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` / `prop::ALL_COLORS` | game data keys | stay as wire strings; class membership via generic `tile_in` | brief: overrides become generic class marks/props |
-| 31 | CEL `is_circle` / `is_ring` / `is_live_house` / `is_buyable` | game vocab | `rules/cond` sugar → `tile_is`/`tile_in` | keep spellings as sugar so existing conditions keep evaluating |
+| 31 | CEL `is_circle` / `is_ring` / `is_live_house` / `is_buyable` | game vocab | removed (ABI v70) | conditions use `tile_is`/`tile_in` only; Rust sugar in `ruleset-core` |
 | 32 | CEL `character_is` / `band_is` | game vocab | `rules/cond` + document | game vocab extension or boundary note |
 | 33 | CEL `owner.fire` / `owner.crystals` | game vocab | `rules/cond` + document | sugar over generic state/counter reads |
 | 34 | CEL `tile_is` / `tile_attr` / `tile_in` (NEW) | generic | `rules/cond` | three host views |

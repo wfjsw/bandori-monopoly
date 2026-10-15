@@ -445,19 +445,19 @@ async fn drive(
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter_map(|s| s["character"].as_str())
+                .filter_map(|s| s["persona"].as_str())
                 .collect();
             let pick = d
                 .personas
                 .iter()
                 .find(|c| !c.cn_id.is_empty() && !taken.contains(&c.name.as_str()))
                 .unwrap();
-            c.ok(&path, json!({ "act": "pick", "character": pick.name }))
+            c.ok(&path, json!({ "act": "pick", "persona": pick.name }))
                 .await;
             acted = key;
         } else if phase == "deck" && !st["players"][player_id]["deckReady"].as_bool().unwrap() {
             let ch = d
-                .persona(st["players"][player_id]["character"].as_str().unwrap())
+                .persona(st["players"][player_id]["persona"].as_str().unwrap())
                 .unwrap();
             c.ok(
                 &path,

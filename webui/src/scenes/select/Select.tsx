@@ -70,7 +70,7 @@ export function Select({ sess }: { sess: GameSession }) {
   if (!view || !me) return null;
   const st = view.state;
   const myTurn = st.turn === view.playerId;
-  const chosen = me.persona || picked || getProfile().homeCharacter || D.personas[0].name;
+  const chosen = me.persona || picked || getProfile().homePersona || D.personas[0].name;
   const preview = D.persona(chosen);
   const secs = Math.max(0, Math.ceil(st.timeLeft - (performance.now() - at) / 1000));
   const takenBy = new Map(st.players.map((x, playerId) => [x.persona, { name: x.player, playerId }] as const).filter(([c]) => c));

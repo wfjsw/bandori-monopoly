@@ -171,7 +171,7 @@ fn deck_rules_reject_with_csharp_reasons() {
         .unwrap();
     assert_eq!(
         deck::cant_play(&d, alpha, other_group).unwrap().key(),
-        "err.deck_band"
+        "err.deck_group"
     );
 
     let someone_elses = d
@@ -295,7 +295,7 @@ fn profile_create_and_apply_match() {
 
 #[test]
 fn profile_normalize_migrates_v1_saves() {
-    let v1 = r#"{"saveVersion":1,"level":900,"chargePerGame":9,"homeCharacter":"",
+    let v1 = r#"{"saveVersion":1,"level":900,"chargePerGame":9,"homePersona":"",
                  "history":[{"ranked":true,"rank":1},{"ranked":false,"rank":2}]}"#;
     let d = data();
     let p = PlayerProfile::from_json(&d, v1).unwrap();

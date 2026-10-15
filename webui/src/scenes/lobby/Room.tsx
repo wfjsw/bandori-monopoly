@@ -32,7 +32,7 @@ export function useOnline(id: string): OnlineSession | null {
   useEffect(() => {
     let alive = true;
     const p = getProfile();
-    const home = D.persona(p.homeCharacter);
+    const home = D.persona(p.homePersona);
     void resumeOnline(id, p.playerName, home?.name ?? "", home ? D.artId(home) : "").then((r) => {
       if (!alive) return;
       if ("k" in r) {

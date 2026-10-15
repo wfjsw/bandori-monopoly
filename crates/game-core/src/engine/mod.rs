@@ -355,8 +355,7 @@ struct Saved {
 /// archived engine bundle is what replays them (`docs/REPLAY.md`).
 /// v10: roster/player wire names are neutral (`persona` / `skillOwner` /
 /// `affiliations` / `groupSkill`, previously the legacy wire keys
-/// `character` / `skillCharacter` / `bands` / `bandSkill`). Older saves are
-/// refused; archived engine bundles replay them (`docs/REPLAY.md`).
+/// Persisted wire names. Older saves are not loaded (SAVE_VERSION).
 /// v11: state key `"charge"` (legacy key `"fire"`); `FieldCard` named counters
 /// only (`counters` map); profile `charge*` fields; `StateVar.flags`.
 pub const SAVE_VERSION: u32 = 11;

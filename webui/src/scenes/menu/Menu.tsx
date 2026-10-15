@@ -25,7 +25,7 @@ function randomLine(cnId: string) {
 
 export function Menu() {
   const p = useProfile()!;
-  const c = D.persona(p.homeCharacter) ?? D.personas[0];
+  const c = D.persona(p.homePersona) ?? D.personas[0];
   const first = useMemo(() => randomLine(c?.cnId ?? ""), [c?.cnId]);
   const [line, setLine] = useState(first?.text.replace(/\n/g, "") ?? tr("menu.talk"));
   const [bounce, setBounce] = useState(0);

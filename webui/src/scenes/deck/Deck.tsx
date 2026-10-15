@@ -40,7 +40,7 @@ const matches = (c: CardData, f: Filter) => (f === "all" ? cardKind(c) !== "deri
 export function Deck() {
   useMountEffect(() => markSeen("deck"));
   const p = useProfile()!; // re-render on every save
-  const [character, setCharacter] = useState<PersonaData>(() => D.persona(p.homeCharacter) ?? D.personas[0]);
+  const [character, setCharacter] = useState<PersonaData>(() => D.persona(p.homePersona) ?? D.personas[0]);
   const [slot, setSlot] = useState(() => rules.deck_chosen_slot(profileJson(), character.name));
   const [filter, setFilter] = useState<Filter>("all");
   const [clearArmed, setClearArmed] = useState(0);

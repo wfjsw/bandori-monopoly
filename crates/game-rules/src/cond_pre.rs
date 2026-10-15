@@ -701,7 +701,7 @@ pub trait SnapSrc {
     /// overrides this.
     fn card_counter_names(&self, player_id: i32, card: &str) -> Vec<String> {
         let mut out = Vec::new();
-        for n in ["cp", "crystals"] {
+        for n in ["points", "bonus"] {
             if self.card_counter(player_id, card, n) != 0 {
                 out.push(n.to_string());
             }
@@ -1473,7 +1473,7 @@ pub fn collect_tile_ids<S: SnapSrc>(world: &S) -> std::collections::BTreeMap<Str
     // Legacy §2.1 sample aliases (ruleset tile-name bindings): resolve through
     // the same `tile_named` lookup so a kind-spelled name still works if a
     // board ever carries one.
-    for name in ["circle", "shop", "ring", "agent", "liveHouse"] {
+    for name in ["start", "shop", "deed", "agent", "venue"] {
         let id = world.tile_named(name);
         if id >= 0 {
             tile_ids.insert(name.to_string(), id as i64);
@@ -1495,8 +1495,8 @@ pub fn fill_candidate<S: SnapSrc>(
         owner: owner as i64,
         owner_money: world.money(p) as i64,
         owner_charge: world.charge(p) as i64,
-        // "crystals" is the ruleset's named-counter key for the group pool.
-        owner_group_pool: world.group_pool(p, "crystals") as i64,
+        // The ruleset's named-counter key for the group pool.
+        owner_group_pool: world.group_pool(p, "bonus") as i64,
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
         owner_out: world.player_out(p) as i64,

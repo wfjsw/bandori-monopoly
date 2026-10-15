@@ -165,14 +165,15 @@ implementations). No edits to `schema.rs` / `eval.rs` tables.
 **Generic core vs game vocab (card-std-split).** The generic tile queries are
 `tile_is(tile, 'ring')` / `tile_attr(tile, 'group')` / `tile_in(owner, tile,
 'livehouse')` (host ABI v56). The older spellings `is_circle` / `is_ring` /
-`is_live_house` / `is_buyable` stay in the vocab as **sugar** over that trio so
+`is_live_house` / `is_buyable` were removed (ABI v70) -- conditions use only
+the generic trio so
 existing condition strings keep the same results. `character_is` / `band_is` /
 `owner.fire` / `owner.crystals` remain game vocabulary registered in the same
 table (a separate game-vocab extension is not cheaper than this boundary note).
 
 | field | what it is |
 |---|---|
-| `cel` | the CEL spelling (`actor`, `move.main`, `is_circle`, `tile_is`) |
+| `cel` | the CEL spelling (`actor`, `move.main`, `tile_is`, `tile_in`) |
 | `aliases` | other CEL spellings that flatten to the same `flat` (`chain.count` for `effect.count`, `trigger.kind` for `kind`) |
 | `flat` | the flat identifier after the `root.field` rewrite (`move_main`) |
 | `scope` | `Window` / `Candidate` / `Func { arity, cand }` |

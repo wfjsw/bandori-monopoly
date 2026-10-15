@@ -63,7 +63,7 @@ const joinable = (r: RoomInfo) => !r.playing && r.members.length < r.maxPlayers;
 /** Make sure this tab has a server session for the current profile. */
 export async function connect(): Promise<boolean> {
   const p = getProfile();
-  const home = D.persona(p.homeCharacter);
+  const home = D.persona(p.homePersona);
   return ensureSession(p.playerName, home?.name ?? "", home ? D.artId(home) : "");
 }
 
