@@ -207,20 +207,20 @@ fn fn_id_of(name: &str) -> Option<FnId> {
         "card_counter" => FnId::CardCounter,
         "counter_is" => FnId::CounterIs,
         "tile_named" => FnId::TileNamed,
-        "is_circle" => FnId::IsCircle,
-        "is_ring" => FnId::IsRing,
-        "is_live_house" => FnId::IsLiveHouse,
+        "is_start" | "is_circle" => FnId::IsStart,
+        "is_deed" | "is_ring" => FnId::IsDeed,
+        "is_venue" | "is_live_house" => FnId::IsVenue,
         "is_buyable" => FnId::IsBuyable,
         "tile_is" => FnId::TileIs,
         "tile_attr" => FnId::TileAttr,
         "tile_in" => FnId::TileIn,
         "money" => FnId::Money,
-        "fire" => FnId::Fire,
+        "charge" | "fire" => FnId::Fire,
         "crystals" => FnId::Crystals,
         "hand" => FnId::Hand,
         "pos" => FnId::Pos,
-        "persona" => FnId::Character,
-        "group" => FnId::Band,
+        "persona" | "character" => FnId::Character,
+        "group" | "band" => FnId::Band,
         "tiles" => FnId::Tiles,
         "persona_is" => FnId::CharacterIs,
         "group_is" => FnId::BandIs,
@@ -246,8 +246,8 @@ fn fn_id_of(name: &str) -> Option<FnId> {
 fn fn_arity(fid: FnId) -> usize {
     use FnId::*;
     match fid {
-        Slot | Tok | MoveTag | CardCounter | CounterIs | TileNamed | IsCircle | IsRing
-        | IsLiveHouse | IsBuyable | Money | Fire | Crystals | Hand | Pos | Character | Band
+        Slot | Tok | MoveTag | CardCounter | CounterIs | TileNamed | IsStart | IsDeed
+        | IsVenue | IsBuyable | Money | Fire | Crystals | Hand | Pos | Character | Band
         | Tiles | Blocked | ChainHas | ChainHits | GainsThisTurn | TargetedCount
         | RepeatedDigits | Between => 1,
         CharacterIs | BandIs | Neighbor | Dist | PlayersOn | NextDist | OthersWithin
@@ -387,9 +387,9 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("card_counter", CardCounter),
         ("counter_is", CounterIs),
         ("tile_named", TileNamed),
-        ("is_circle", IsCircle),
-        ("is_ring", IsRing),
-        ("is_live_house", IsLiveHouse),
+        ("is_start", IsStart),
+        ("is_deed", IsDeed),
+        ("is_venue", IsVenue),
         ("is_buyable", IsBuyable),
         ("tile_is", TileIs),
         ("tile_attr", TileAttr),
@@ -399,7 +399,7 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("crystals", Crystals),
         ("hand", Hand),
         ("pos", Pos),
-        ("character", Character),
+        ("persona", Character),
         ("group", Band),
         ("tiles", Tiles),
         ("persona_is", CharacterIs),

@@ -45,7 +45,7 @@ pub mod trig {
     pub const State: i64 = 23;
     pub const Counteracted: i64 = 24;
     pub const DrawOut: i64 = 25;
-    pub const CircleAffected: i64 = 26;
+    pub const PassRewardAffected: i64 = 26;
     pub const TwoCards: i64 = 27;
     pub const TurnStartBefore: i64 = 28;
     pub const PassBefore: i64 = 29;
@@ -122,7 +122,9 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("State", trig::State),
         ("Counteracted", trig::Counteracted),
         ("DrawOut", trig::DrawOut),
-        ("CircleAffected", trig::CircleAffected),
+        ("PassRewardAffected", trig::PassRewardAffected),
+        // ABI v69 alias for already-shipped condition strings.
+        ("CircleAffected", trig::PassRewardAffected),
         ("TwoCards", trig::TwoCards),
         ("TurnStartBefore", trig::TurnStartBefore),
         ("PassBefore", trig::PassBefore),

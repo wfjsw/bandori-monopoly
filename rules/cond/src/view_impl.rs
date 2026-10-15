@@ -228,13 +228,13 @@ impl CondView for SnapshotView<'_> {
     fn tile_named(&self, name: &str) -> i64 {
         self.win.tile_ids.get(name).copied().unwrap_or(-1)
     }
-    fn is_circle(&self, tile: i64) -> bool {
+    fn is_start(&self, tile: i64) -> bool {
         self.win.circle_tiles.contains(&tile)
     }
-    fn is_ring(&self, tile: i64) -> bool {
+    fn is_deed(&self, tile: i64) -> bool {
         self.win.ring_tiles.contains(&tile)
     }
-    fn is_live_house(&self, tile: i64) -> bool {
+    fn is_venue(&self, tile: i64) -> bool {
         self.win.live_house_tiles.contains(&tile)
     }
     fn is_buyable(&self, tile: i64) -> bool {
@@ -242,8 +242,8 @@ impl CondView for SnapshotView<'_> {
     }
     fn tile_is(&self, tile: i64, kind: &str) -> bool {
         match kind {
-            "circle" => self.is_circle(tile),
-            "ring" => self.is_ring(tile),
+            "circle" => self.is_start(tile),
+            "ring" => self.is_deed(tile),
             _ => self
                 .win
                 .tile_kinds
@@ -267,7 +267,7 @@ impl CondView for SnapshotView<'_> {
         // for the CEL sugar names.
         match class {
             "buyable" if player < 0 => self.is_buyable(tile),
-            "livehouse" if player < 0 => self.is_live_house(tile),
+            "livehouse" if player < 0 => self.is_venue(tile),
             _ => self
                 .win
                 .tile_classes
@@ -290,7 +290,7 @@ impl CondView for SnapshotView<'_> {
             if self.is_buyable(t) {
                 rows.push((-1, t, "buyable".to_string()));
             }
-            if self.is_live_house(t) {
+            if self.is_venue(t) {
                 rows.push((-1, t, "livehouse".to_string()));
             }
         }

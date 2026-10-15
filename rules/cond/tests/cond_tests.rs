@@ -382,9 +382,9 @@ fn tile_named() {
 #[test]
 fn tile_kind_predicates() {
     // `win()` fills circle_tiles with tile 0.
-    assert!(compile("is_circle(0)").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("is_circle(1)").unwrap().eval(&win(), &cand(0)));
-    assert!(!compile("is_ring(0)").unwrap().eval(&win(), &cand(0)));
+    assert!(compile("is_start(0)").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("is_start(1)").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("is_deed(0)").unwrap().eval(&win(), &cand(0)));
 }
 
 #[test]

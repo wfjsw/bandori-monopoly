@@ -250,9 +250,9 @@ fn eval_call(nodes: &[Node], n: &Node, ctx: &IrCtx) -> Val {
         3 => FnId::CardCounter,
         4 => FnId::CounterIs,
         5 => FnId::TileNamed,
-        6 => FnId::IsCircle,
-        7 => FnId::IsRing,
-        8 => FnId::IsLiveHouse,
+        6 => FnId::IsStart,
+        7 => FnId::IsDeed,
+        8 => FnId::IsVenue,
         9 => FnId::IsBuyable,
         10 => FnId::Money,
         11 => FnId::Fire,
@@ -327,9 +327,9 @@ pub fn call_fn(ctx: &IrCtx, fid: FnId, args: &[Val]) -> Val {
             // `counter_is('name')` ≡ `counter_name == id_of(name)`.
             Val::Bool(ctx.scalar_val(vars_counter_name_idx()) == Val::Int(want))
         }
-        FnId::IsCircle => set_has(ctx, SetId::Circle, int(0)),
-        FnId::IsRing => set_has(ctx, SetId::Ring, int(0)),
-        FnId::IsLiveHouse => set_has(ctx, SetId::LiveHouse, int(0)),
+        FnId::IsStart => set_has(ctx, SetId::Circle, int(0)),
+        FnId::IsDeed => set_has(ctx, SetId::Ring, int(0)),
+        FnId::IsVenue => set_has(ctx, SetId::LiveHouse, int(0)),
         FnId::IsBuyable => set_has(ctx, SetId::Buyable, int(0)),
         // ABI v56 generic tile queries. String args lower to `id_of` hashes.
         // Membership is modelled through the existing sets + named table

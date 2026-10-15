@@ -161,12 +161,12 @@ pub trait CondView {
     // -- board --------------------------------------------------------------
     /// `tile_named(name) -> id`; `-1` when unknown (the guest's convention).
     fn tile_named(&self, name: &str) -> i64;
-    /// Tile-kind predicates (the guest's `is_circle` family).
+    /// Tile-kind predicates (the guest's `is_start` family).
     /// Sugar over [`Self::tile_is`] / [`Self::tile_in`]; kept abstract so each
     /// view's existing results (including snapshot quirks) do not shift.
-    fn is_circle(&self, tile: i64) -> bool;
-    fn is_ring(&self, tile: i64) -> bool;
-    fn is_live_house(&self, tile: i64) -> bool;
+    fn is_start(&self, tile: i64) -> bool;
+    fn is_deed(&self, tile: i64) -> bool;
+    fn is_venue(&self, tile: i64) -> bool;
     fn is_buyable(&self, tile: i64) -> bool;
     /// ABI v56: `tile_is(tile, kind)` -- data `TileKind` by wire spelling.
     fn tile_is(&self, tile: i64, kind: &str) -> bool;
