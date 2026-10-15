@@ -628,19 +628,19 @@ struct Presence {
 }
 
 pub struct Room {
-    // DEV PHASE: `info` / `password` / `tokens` / `next_member` are held here
-    // rather than in the [`CrossState`]. The match blob and the sessions are
-    // already on the store; the roster is the remaining process-local durable
-    // data. When a real database lands (see `store`), these move behind the
-    // trait as a fourth bucket and `Room` keeps only the genuinely
-    // per-connection parts -- `presence` and `tx`.
+    // A read-through cache of the store's [`RoomRecord`]: `info` / `password` /
+    // `tokens` / `next_member` / `fair` are re-read at the start of every
+    // operation under the room lock ([`crate::state::Server::with_room`]) and
+    // written back on change. What is *only* here is the genuinely
+    // per-connection half -- the broadcast channel (`tx`) and the (local)
+    // presence bookkeeping.
     pub info: RoomInfo,
     password: String,
     /// Human member id -> session token.
     pub tokens: HashMap<i32, String>,
     next_member: i32,
-    /// The running match. The engine is in a worker process; this holds only
-    /// the `Match::save` blob and the order its operations apply in.
+    /// The running match. Stateless handle over the store's blob (any process
+    /// may hold one; the match lock sequences operations).
     pub game: Option<Arc<MatchHandle>>,
     pub engine: Arc<Pool>,
     pub store: Arc<dyn CrossState>,
@@ -650,7 +650,8 @@ pub struct Room {
     /// Does this server have a `bot-service` to drive Advanced bots
     /// (`docs/BOT.md` B5)? When false, [`Room::start`] rewrites those seats to
     /// Standard before the match is built, so they play as ordinary engine
-    /// bots instead of waiting on answers nobody will send.
+    /// bots instead of waiting on answers nobody will send. Per-process: a
+    /// deployment's processes should agree.
     pub bot_search: bool,
     /// The commit-reveal slot (`docs/FAIRNESS.md`): drawn at room creation and
     /// redrawn after every match. `None` only until the first [`Room::roll_fair`]
@@ -731,16 +732,18 @@ impl Room {
     }
 
     /// Rebuild a room the store already knows about -- what a restart does for
-    /// every [`RoomRecord`]. The match blob is picked up separately by
-    /// [`MatchHandle`]; presence starts at zero streams, so everyone is briefly
-    /// `away` until their SSE reconnects (well inside the presence timeout).
+    /// every [`RoomRecord`], and what [`crate::state::Server::room`] does the
+    /// first time this process touches a room. The match blob is picked up
+    /// separately by [`MatchHandle`]; presence starts at zero streams, so
+    /// everyone is briefly `away` until their SSE reconnects (well inside the
+    /// presence timeout).
     ///
     /// The commit-reveal slot rides the record (`docs/FAIRNESS.md`): same
     /// commitment, same already-collected nonces, so a restart is invisible to
     /// the fairness scheme. A record from before the slot was persisted falls
     /// back to a fresh one on [`Room::restore_game`].
     pub fn from_record(rec: RoomRecord, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Self {
-        let tokens: HashMap<i32, String> = rec.tokens.into_iter().collect();
+        let tokens: HashMap<i32, String> = rec.tokens.clone().into_iter().collect();
         let presence = tokens
             .keys()
             .map(|&m| {
@@ -758,16 +761,9 @@ impl Room {
             })
             .collect();
         let (tx, _) = broadcast::channel(64);
-        let fair = rec.fair.as_ref().and_then(FairState::from_record);
-        let mut info = rec.info;
-        if let Some(f) = &fair {
-            info.fair = Some(FairPublic {
-                commit: f.commit.clone(),
-            });
-        }
-        Self {
-            info,
-            password: rec.password,
+        let mut this = Self {
+            info: rec.info.clone(),
+            password: rec.password.clone(),
             tokens,
             next_member: rec.next_member,
             game: None,
@@ -777,7 +773,38 @@ impl Room {
             presence,
             dissolved: None,
             bot_search: false,
-            fair,
+            fair: None,
+        };
+        this.apply_record(&rec);
+        this
+    }
+
+    /// Refresh the durable half from the store's current [`RoomRecord`].
+    /// Called at the start of every operation under the room lock, so this
+    /// process never mutates a stale copy (another server may have joined,
+    /// started, or consumed the fair slot in between).
+    pub fn reload(&mut self) -> Result<(), String> {
+        let rec = self
+            .store
+            .room_get(&self.info.id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "room gone".to_string())?;
+        self.apply_record(&rec);
+        Ok(())
+    }
+
+    /// Fold a [`RoomRecord`] into this cache. The commit-reveal slot rides the
+    /// record: same commitment, same already-collected nonces.
+    fn apply_record(&mut self, rec: &RoomRecord) {
+        self.info = rec.info.clone();
+        self.password = rec.password.clone();
+        self.tokens = rec.tokens.iter().map(|(k, v)| (*k, v.clone())).collect();
+        self.next_member = rec.next_member;
+        self.fair = rec.fair.as_ref().and_then(FairState::from_record);
+        if let Some(f) = &self.fair {
+            self.info.fair = Some(FairPublic {
+                commit: f.commit.clone(),
+            });
         }
     }
 

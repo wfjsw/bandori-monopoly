@@ -1,11 +1,18 @@
 //! Server-wide state: the room table.
 //!
-//! Sessions and match blobs are **not** held here -- they live in the [`store`],
-//! so a non-Dummy store means no durable state in this process at all. What
-//! stays in memory is the room *handle*: its lock, its broadcast channel, and
-//! the per-connection presence counts. Locking: each room has its own mutex and
-//! code never holds one lock across a store or worker call. Critical sections
-//! are short and never await.
+//! Sessions, room records and match blobs live in the [`store`] -- two server
+//! processes sharing one store serve the same rooms, and a restart keeps
+//! them. What stays in memory is the room *handle* and its local broadcast
+//! channel: a read-through cache the process needs anyway for its SSE pumps,
+//! not a source of truth. Every mutation re-reads the record under the
+//! cross-process room lock ([`Server::with_room`]); [`Server::room`] loads a
+//! room on demand the first time this process touches it.
+//!
+//! Locking: the cross-process `room:{id}` lock serialises room mutations
+//! across processes; the per-room mutex serialises threads inside one. Code
+//! never holds either across a store or worker call unless the call *is* the
+//! critical section (a match operation takes its own `match:{room}` lock).
+//! Critical sections are short and never await.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -14,9 +21,10 @@ use std::time::Duration;
 use game_core::data::GameData;
 use game_core::engine::CardRules;
 
+use crate::error::{ApiError, ApiResult};
 use crate::pool::Pool;
 use crate::room::Room;
-use crate::store::CrossState;
+use crate::store::{self, CrossState};
 
 /// Seconds a seated player may be without an open stream before the AI takes over
 /// (`NetProtocol.Timeout`).
@@ -37,21 +45,30 @@ pub struct Server {
     pub rules: Arc<dyn CardRules>,
     /// Match execution. Workers hold no match state, so this is shared freely.
     pub engine: Arc<Pool>,
-    /// Cross-endpoint state (sessions, rooms, match blobs). Swappable: the
-    /// in-memory [`crate::store::dummy`] store for one process, Redis to share
-    /// or retain it. See `store` for what is deliberately *not* behind it.
+    /// Cross-endpoint state (sessions, rooms, match blobs, locks, presence).
+    /// Swappable: the in-memory [`crate::store::dummy`] store for one process
+    /// (shareable between [`Server`]s), Redis to share or retain it across
+    /// processes. See `store` for what is deliberately *not* behind it.
     pub store: Arc<dyn CrossState>,
+    /// Local cache of room handles (the broadcast channel lives here). The
+    /// store's room records are the source of truth; see [`Server::room`].
     pub rooms: Mutex<HashMap<String, Arc<Mutex<Room>>>>,
+    /// This process's identity: lock owner and presence stream prefix. Two
+    /// processes never share one.
+    pub instance: String,
     /// Overridable for tests.
     pub presence_timeout: Duration,
     /// Game clock speed (1.0 in production; tests run faster).
     pub time_scale: f32,
     /// The advanced-bot decision service (`docs/BOT.md` B5). `None` = no
     /// `--bot-service`: advanced bots then play as standard and the match
-    /// never asks this process for anything.
+    /// never asks this process for anything. All processes of one deployment
+    /// should agree -- the rewrite at match start is per-process.
     pub bots: Option<Arc<crate::botsvc::BotService>>,
     /// Seats with a decision request in flight, and when to next probe each
-    /// seat (idle throttle). Keyed `(room, member)`.
+    /// seat (idle throttle). Keyed `(room, member)`. Claims live in the store
+    /// so two processes never probe the same seat; this map is the local
+    /// half (ponder slot, probe pacing).
     pub bot_drive: Mutex<crate::botsvc::Drive>,
     /// Test knobs: force the search budget / outer deadline / ponder budget
     /// instead of the production defaults. `None` = compute from the prompt
@@ -84,6 +101,7 @@ impl Server {
             engine,
             store,
             rooms: Mutex::new(HashMap::new()),
+            instance: random_hex(8),
             presence_timeout: PRESENCE_TIMEOUT,
             time_scale: 1.0,
             bots: None,
@@ -115,10 +133,9 @@ impl Server {
         let _ = self.store.session_del(token);
     }
 
-    /// Rebuild every room the store knows about. This is what makes a restart
-    /// silent: the roster comes back from [`CrossState`], each room's match
-    /// blob is already there, and the clients' SSE reconnects into the same
-    /// game. Call once at startup, before the ticker starts.
+    /// Warm the room cache from the store. Not the source of truth --
+    /// [`Server::room`] loads whatever this missed -- but a restart that calls
+    /// this once brings every live room back before the first request.
     pub fn restore_rooms(&self) {
         let recs = match self.store.room_all() {
             Ok(r) => r,
@@ -144,8 +161,61 @@ impl Server {
         }
     }
 
+    /// A room handle: the cached one if this process already has it, otherwise
+    /// built on demand from the store's record. `None` = no such room (never
+    /// existed, or dissolved).
     pub fn room(&self, id: &str) -> Option<Arc<Mutex<Room>>> {
-        self.rooms.lock().unwrap().get(id).cloned()
+        if let Some(r) = self.rooms.lock().unwrap().get(id) {
+            return Some(r.clone());
+        }
+        let rec = self.store.room_get(id).ok().flatten()?;
+        let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
+        r.bot_search = self.bots.is_some();
+        r.restore_game();
+        let r = Arc::new(Mutex::new(r));
+        self.rooms
+            .lock()
+            .unwrap()
+            .insert(id.to_string(), r.clone());
+        Some(r)
+    }
+
+    /// Drop a room handle from the local cache (it dissolved).
+    pub fn forget_room(&self, id: &str) {
+        self.rooms.lock().unwrap().remove(id);
+    }
+
+    /// Run `f` on a room under the **cross-process room lock**, with the
+    /// record re-read from the store first -- so two servers cannot both
+    /// consume a `next_member` / fair slot or clobber each other's roster.
+    ///
+    /// The local mutex is taken inside the cross-process lock (one order,
+    /// everywhere). `f`'s error is passed through; a lock failure is an error
+    /// and never runs `f` unlocked.
+    pub fn with_room<T>(
+        &self,
+        id: &str,
+        f: impl FnOnce(&mut Room) -> ApiResult<T>,
+    ) -> ApiResult<T> {
+        let room = self.room(id).ok_or_else(|| ApiError::not_found("err.room.gone"))?;
+        let key = format!("room:{id}");
+        let owner = format!("{}:{}", self.instance, random_hex(4));
+        let out = store::try_with_lock(
+            self.store.as_ref(),
+            &key,
+            &owner,
+            store::LOCK_TTL_MS,
+            store::LOCK_DEADLINE,
+            || {
+                let mut r = room.lock().unwrap();
+                if let Err(e) = r.reload() {
+                    return Err(ApiError::not_found(format!("err.room.gone: {e}").as_str()));
+                }
+                f(&mut r)
+            },
+        )
+        .map_err(|e| ApiError::bad(e.to_string().as_str()))?;
+        out
     }
 }
 

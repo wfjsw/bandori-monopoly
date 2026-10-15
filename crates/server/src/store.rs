@@ -339,9 +339,41 @@ pub fn try_lock<'a>(
 
 /// Run `f` while holding the cross-process lock `key`.
 ///
-/// Retries with short sleeps up to `deadline`; a lock failure is an error and
-/// **never** falls through to unlocked execution. Match / room operations are
-/// short, so the [`LOCK_TTL_MS`] default needs no renewal.
+/// Retries with short sleeps up to `deadline`. The outer `Err` is the lock
+/// itself (never a fallthrough to unlocked execution); the inner `Result` is
+/// whatever `f` returned. Match / room operations are short, so the
+/// [`LOCK_TTL_MS`] default needs no renewal.
+pub fn try_with_lock<T, E>(
+    store: &dyn CrossState,
+    key: &str,
+    owner: &str,
+    ttl_ms: u64,
+    deadline: Duration,
+    f: impl FnOnce() -> Result<T, E>,
+) -> Result<Result<T, E>, StoreError> {
+    let start = std::time::Instant::now();
+    loop {
+        match try_lock(store, key, owner, ttl_ms) {
+            Ok(Some(_guard)) => {
+                let out = f();
+                // `_guard` drops (and releases) after `f` returns or panics.
+                return Ok(out);
+            }
+            Ok(None) => {
+                if start.elapsed() >= deadline {
+                    return Err(StoreError::Backend(format!(
+                        "lock {key} not acquired within {deadline:?}"
+                    )));
+                }
+                std::thread::sleep(Duration::from_millis(15));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// [`try_with_lock`] for callers whose error type is [`String`]: the lock
+/// failure is flattened into the same `Err` channel.
 pub fn with_lock<T>(
     store: &dyn CrossState,
     key: &str,
@@ -350,22 +382,9 @@ pub fn with_lock<T>(
     deadline: Duration,
     f: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
-    let start = std::time::Instant::now();
-    loop {
-        match try_lock(store, key, owner, ttl_ms) {
-            Ok(Some(_guard)) => {
-                let out = f();
-                // `_guard` drops (and releases) after `f` returns or panics.
-                return out;
-            }
-            Ok(None) => {
-                if start.elapsed() >= deadline {
-                    return Err(format!("lock {key} not acquired within {deadline:?}"));
-                }
-                std::thread::sleep(Duration::from_millis(15));
-            }
-            Err(e) => return Err(format!("lock {key}: {e}")),
-        }
+    match try_with_lock(store, key, owner, ttl_ms, deadline, f) {
+        Ok(inner) => inner,
+        Err(e) => Err(format!("lock {key}: {e}")),
     }
 }
 

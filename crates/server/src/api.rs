@@ -16,6 +16,7 @@ use crate::auth::{Auth, COOKIE};
 use crate::error::{ApiError, ApiResult};
 use crate::room::{NewMember, Room};
 use crate::state::{random_hex, room_code, Server, Session};
+use crate::store;
 
 type S = State<Arc<Server>>;
 
@@ -76,21 +77,23 @@ pub async fn get_session(Auth(sess): Auth) -> Json<SessionView> {
 }
 
 pub async fn health(State(s): S) -> Json<serde_json::Value> {
-    let rooms = s.rooms.lock().unwrap().len();
+    // The lobby's room count is the store's, not this process's cache.
+    let rooms = s.store.room_all().map(|r| r.len()).unwrap_or(0);
     Json(serde_json::json!({ "game": net::GAME, "version": net::VERSION, "rooms": rooms }))
 }
 
 // ------------------------------------------------------------------ rooms
 
 /// `GET /api/rooms` -- the lobby list (passwords never leave the server).
+/// Straight from the store: every process sees every room, including the ones
+/// this one has never touched.
 pub async fn list_rooms(State(s): S) -> Json<Vec<RoomInfo>> {
-    let rooms: Vec<Arc<Mutex<Room>>> = s.rooms.lock().unwrap().values().cloned().collect();
-    let mut list: Vec<RoomInfo> = rooms
-        .iter()
-        .filter_map(|r| {
-            let r = r.lock().unwrap();
-            r.dissolved.is_none().then(|| r.info.clone())
-        })
+    let mut list: Vec<RoomInfo> = s
+        .store
+        .room_all()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|rec| rec.info)
         .collect();
     list.sort_by(|a, b| a.playing.cmp(&b.playing).then(a.name.cmp(&b.name)));
     Json(list)
@@ -137,21 +140,21 @@ fn leave_current(s: &Server, sess: &Session) {
     let Some((rid, member)) = &sess.room else {
         return;
     };
-    if let Some(room) = s.room(rid) {
-        // Mid-match, leaving forfeits: run that on the handle first, with the
-        // room lock dropped, then take it again for the room bookkeeping.
-        let m = room.lock().unwrap().match_handle();
-        if let Some(m) = m {
-            let _ = m.act(*member, &game_core::net::NetMessage::act("leave"));
-        }
-        let dissolved = {
-            let mut r = room.lock().unwrap();
+    // Mid-match, leaving forfeits: run that on the handle first, with the room
+    // lock dropped (the match has its own lock), then take the room lock for
+    // the bookkeeping.
+    let m = s.room(rid).and_then(|room| room.lock().unwrap().match_handle());
+    if let Some(m) = m {
+        let _ = m.act(*member, &game_core::net::NetMessage::act("leave"));
+    }
+    let dissolved = s
+        .with_room(rid, |r| {
             r.leave(*member);
-            r.dissolved.is_some()
-        };
-        if dissolved {
-            s.rooms.lock().unwrap().remove(rid);
-        }
+            Ok(r.dissolved.is_some())
+        })
+        .unwrap_or(false);
+    if dissolved {
+        s.forget_room(rid);
     }
     s.set_room(&sess.token, None);
 }
@@ -167,9 +170,22 @@ pub async fn create_room(
     Json(req): Json<CreateRoom>,
 ) -> ApiResult<Json<Joined>> {
     leave_current(&s, &sess);
+    // Reserve the code in the store so two processes cannot both create the
+    // same short id (`SET NX` on `roomcode:{id}`).
     let id = loop {
         let id = room_code();
-        if s.room(&id).is_none() {
+        if s.store
+            .room_get(&id)
+            .map_err(|e| ApiError::bad(e.to_string().as_str()))?
+            .is_some()
+        {
+            continue;
+        }
+        let taken = !s
+            .store
+            .lock_acquire(&format!("roomcode:{id}"), &s.instance, store::LOCK_TTL_MS)
+            .unwrap_or(false);
+        if !taken {
             break id;
         }
     };
@@ -230,32 +246,47 @@ pub async fn join_room(
     Path(id): Path<String>,
     Json(req): Json<JoinReq>,
 ) -> ApiResult<Json<Joined>> {
-    let room = s
-        .room(&id)
-        .ok_or_else(|| ApiError::not_found("err.room.gone"))?;
     if sess.room.as_ref().is_some_and(|r| r.0 != id) {
         leave_current(&s, &sess);
     }
-    let (you, info) = {
-        let mut r = room.lock().unwrap();
+    let who = NewMember {
+        token: &sess.token,
+        player: &sess.player,
+        persona: &sess.persona,
+        cn_id: &sess.cn_id,
+    };
+    // Under the room lock with a fresh record: `next_member` is allocated from
+    // the store's copy, so two servers cannot hand out the same id.
+    let (you, info) = s.with_room(&id, |r| {
         if r.dissolved.is_some() {
             return Err(ApiError::not_found("err.room.gone"));
         }
-        let who = NewMember {
-            token: &sess.token,
-            player: &sess.player,
-            persona: &sess.persona,
-            cn_id: &sess.cn_id,
-        };
         let you = r.join(who, &req.password, &req.version)?;
-        (you, r.info.clone())
-    };
-    s.set_room(&sess.token, Some((id, you)));
+        Ok((you, r.info.clone()))
+    })?;
+    s.set_room(&sess.token, Some((id.clone(), you)));
     Ok(Json(Joined { room: info, you }))
 }
 
-/// The session's room and member id, checked against `id`.
+/// The session's room and member id, checked against `id`. Membership is
+/// verified against the **store's** roster (via [`Server::with_room`]), so a
+/// stale local cache cannot admit a non-member.
 pub fn member_room(s: &Server, sess: &Session, id: &str) -> ApiResult<(Arc<Mutex<Room>>, i32)> {
+    let me = member_in(sess, id)?;
+    let token = sess.token.clone();
+    let room = s.room(id).ok_or_else(|| ApiError::not_found("err.room.gone"))?;
+    s.with_room(id, |r| {
+        if r.member_of(&token) != Some(me) {
+            return Err(ApiError::bad("err.room.not_member"));
+        }
+        Ok(())
+    })?;
+    Ok((room, me))
+}
+
+/// The session's member id in `id`, with no roster check (the caller does that
+/// under the room lock).
+pub fn member_in(sess: &Session, id: &str) -> ApiResult<i32> {
     let (rid, member) = sess
         .room
         .clone()
@@ -263,13 +294,25 @@ pub fn member_room(s: &Server, sess: &Session, id: &str) -> ApiResult<(Arc<Mutex
     if rid != id {
         return Err(ApiError::bad("err.room.not_member"));
     }
-    let room = s
-        .room(id)
-        .ok_or_else(|| ApiError::not_found("err.room.gone"))?;
-    if room.lock().unwrap().member_of(&sess.token) != Some(member) {
-        return Err(ApiError::bad("err.room.not_member"));
-    }
-    Ok((room, member))
+    Ok(member)
+}
+
+/// Run `f` as `member` of the room: membership checked under the room lock,
+/// then the mutation runs against a freshly loaded record.
+pub fn as_member<T>(
+    s: &Server,
+    sess: &Session,
+    id: &str,
+    f: impl FnOnce(&mut Room, i32) -> ApiResult<T>,
+) -> ApiResult<T> {
+    let me = member_in(sess, id)?;
+    let token = sess.token.clone();
+    s.with_room(id, move |r| {
+        if r.member_of(&token) != Some(me) {
+            return Err(ApiError::bad("err.room.not_member"));
+        }
+        f(r, me)
+    })
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -284,10 +327,11 @@ pub async fn ready(
     Path(id): Path<String>,
     Json(req): Json<ReadyReq>,
 ) -> ApiResult<Json<RoomInfo>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
-    let mut r = room.lock().unwrap();
-    r.set_ready(me, req.on)?;
-    Ok(Json(r.info.clone()))
+    let info = as_member(&s, &sess, &id, |r, me| {
+        r.set_ready(me, req.on)?;
+        Ok(r.info.clone())
+    })?;
+    Ok(Json(info))
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -306,18 +350,19 @@ pub async fn bots(
     Path(id): Path<String>,
     Json(req): Json<BotReq>,
 ) -> ApiResult<Json<RoomInfo>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
-    let mut r = room.lock().unwrap();
-    match req.op.as_str() {
-        "add" => {
-            let m = game_core::state::BotMentality::parse(&req.mentality)
-                .ok_or_else(|| ApiError::bad("err.bad_mentality"))?;
-            r.add_bot(me, &s.data.match_rules.bot_names, m)?
+    let info = as_member(&s, &sess, &id, |r, me| {
+        match req.op.as_str() {
+            "add" => {
+                let m = game_core::state::BotMentality::parse(&req.mentality)
+                    .ok_or_else(|| ApiError::bad("err.bad_mentality"))?;
+                r.add_bot(me, &s.data.match_rules.bot_names, m)?
+            }
+            "remove" => r.remove_bot(me, req.member)?,
+            _ => return Err(ApiError::bad("err.bad_bot_op")),
         }
-        "remove" => r.remove_bot(me, req.member)?,
-        _ => return Err(ApiError::bad("err.bad_bot_op")),
-    }
-    Ok(Json(r.info.clone()))
+        Ok(r.info.clone())
+    })?;
+    Ok(Json(info))
 }
 
 pub async fn weights(
@@ -326,11 +371,12 @@ pub async fn weights(
     Path(id): Path<String>,
     Json(w): Json<ScoreWeights>,
 ) -> ApiResult<Json<RoomInfo>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
     let defaults = rules_weights(&s);
-    let mut r = room.lock().unwrap();
-    r.set_weights(me, w, defaults)?;
-    Ok(Json(r.info.clone()))
+    let info = as_member(&s, &sess, &id, |r, me| {
+        r.set_weights(me, w, defaults)?;
+        Ok(r.info.clone())
+    })?;
+    Ok(Json(info))
 }
 
 /// `POST /api/rooms/{id}/clock` -- host-only edit of the match clock / timer
@@ -341,10 +387,11 @@ pub async fn clock(
     Path(id): Path<String>,
     Json(c): Json<game_core::clock::ClockSettings>,
 ) -> ApiResult<Json<RoomInfo>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
-    let mut r = room.lock().unwrap();
-    r.set_clock(me, c)?;
-    Ok(Json(r.info.clone()))
+    let info = as_member(&s, &sess, &id, |r, me| {
+        r.set_clock(me, c)?;
+        Ok(r.info.clone())
+    })?;
+    Ok(Json(info))
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -360,17 +407,19 @@ pub async fn start(
     Path(id): Path<String>,
     Json(req): Json<StartReq>,
 ) -> ApiResult<Json<RoomInfo>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
     // The tick quantum this match will run on, sealed into its record header
     // so a replay reproduces the same `tick(dt)` f32s (docs/REPLAY.md §1).
     let step = crate::TICK_QUANTUM * s.time_scale;
     let info = tokio::task::spawn_blocking(move || {
-        let mut r = room.lock().unwrap();
-        // Creates the match immediately: the commitment was fixed at room
-        // creation and the player nonces are already in (`docs/FAIRNESS.md`).
-        // Nothing waits.
-        r.start(me, req.force, step)?;
-        Ok::<_, ApiError>(r.info.clone())
+        // Under the room lock with a fresh record: the fair slot is consumed
+        // here, so two servers cannot both roll it away.
+        as_member(&s, &sess, &id, |r, me| {
+            // Creates the match immediately: the commitment was fixed at room
+            // creation and the player nonces are already in (`docs/FAIRNESS.md`).
+            // Nothing waits.
+            r.start(me, req.force, step)?;
+            Ok(r.info.clone())
+        })
     })
     .await
     .map_err(|e| ApiError::bad(format!("start task: {e}").as_str()))??;
@@ -395,11 +444,11 @@ pub async fn nonce(
     Path(id): Path<String>,
     Json(req): Json<NonceReq>,
 ) -> ApiResult<Json<RoomInfo>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
     let info = tokio::task::spawn_blocking(move || {
-        let mut r = room.lock().unwrap();
-        r.submit_nonce(me, &req.nonce)?;
-        Ok::<_, ApiError>(r.info.clone())
+        as_member(&s, &sess, &id, |r, me| {
+            r.submit_nonce(me, &req.nonce)?;
+            Ok(r.info.clone())
+        })
     })
     .await
     .map_err(|e| ApiError::bad(format!("nonce task: {e}").as_str()))??;
@@ -498,13 +547,11 @@ pub async fn room_state(
     Auth(sess): Auth,
     Path(id): Path<String>,
 ) -> ApiResult<Json<RoomState>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
-    // Check the match out and drop the room lock: the round-trip must not hold
-    // it. The view is a worker call, so it also runs off the async runtime.
-    let (info, m) = {
-        let r = room.lock().unwrap();
-        (r.info.clone(), r.match_handle())
-    };
+    // Fresh roster under the room lock; the match view is a worker call and
+    // runs after the lock is dropped (the handle is stateless).
+    let (info, me, m) = as_member(&s, &sess, &id, |r, me| {
+        Ok((r.info.clone(), me, r.match_handle()))
+    })?;
     let game = match m {
         None => None,
         Some(m) => Some(
@@ -536,17 +583,19 @@ pub async fn anim_done(
     Path(id): Path<String>,
     Json(req): Json<AnimDoneReq>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
-    let m = {
-        let r = room.lock().unwrap();
-        r.match_handle()
-            .ok_or_else(|| ApiError::bad("err.room.no_match"))?
-    };
+    let (m, me) = as_member(&s, &sess, &id, |r, me| {
+        let m = r
+            .match_handle()
+            .ok_or_else(|| ApiError::bad("err.room.no_match"))?;
+        Ok((m, me))
+    })?;
     let released = tokio::task::spawn_blocking(move || m.anim_done(me, req.seq))
         .await
         .map_err(|e| ApiError::bad(format!("anim_done task: {e}").as_str()))?
         .map_err(|e| ApiError::bad(e.as_str()))?;
-    room.lock().unwrap().notify();
+    if let Some(room) = s.room(&id) {
+        room.lock().unwrap().notify();
+    }
     Ok(Json(serde_json::json!({ "ok": true, "released": released })))
 }
 
@@ -557,7 +606,6 @@ pub async fn act(
     Path(id): Path<String>,
     Json(msg): Json<NetMessage>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let (room, me) = member_room(&s, &sess, &id)?;
     // Console cheats (`engine/debug.rs`) are compiled out of release builds,
     // so a release server refuses `debug` at the door with `err.unknown_act`:
     // the same answer its engine would give, no cheat key leaks into the
@@ -571,12 +619,14 @@ pub async fn act(
             return Err(ApiError::bad("err.unknown_act"));
         }
     }
-    // Check the match out, drop the room lock, then run the command.
-    let m = {
-        let r = room.lock().unwrap();
-        r.match_handle()
-            .ok_or_else(|| ApiError::bad("err.room.no_match"))?
-    };
+    // Check the match out under the room lock, drop it, then run the command
+    // under the match lock.
+    let (m, me) = as_member(&s, &sess, &id, |r, me| {
+        let m = r
+            .match_handle()
+            .ok_or_else(|| ApiError::bad("err.room.no_match"))?;
+        Ok((m, me))
+    })?;
     let err = tokio::task::spawn_blocking(move || m.act(me, &msg))
         .await
         .map_err(|e| ApiError::bad(format!("act task: {e}").as_str()))?
@@ -584,7 +634,9 @@ pub async fn act(
     if let Some(e) = err {
         return Err(ApiError::bad(e));
     }
-    room.lock().unwrap().notify();
+    if let Some(room) = s.room(&id) {
+        room.lock().unwrap().notify();
+    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -609,11 +661,14 @@ pub async fn record(
     Auth(sess): Auth,
     Path(id): Path<String>,
 ) -> ApiResult<impl IntoResponse> {
-    let room = s.room(&id);
-    if let Some(room) = &room {
-        if room.lock().unwrap().info.playing {
-            return Err(ApiError::new(StatusCode::CONFLICT, "err.record.live"));
-        }
+    // `playing` is the store's flag (any instance may have started the match).
+    let playing = s
+        .store
+        .room_get(&id)
+        .map_err(|e| ApiError::bad(e.to_string().as_str()))?
+        .is_some_and(|rec| rec.info.playing);
+    if playing {
+        return Err(ApiError::new(StatusCode::CONFLICT, "err.record.live"));
     }
     let rec = s
         .store
@@ -621,14 +676,14 @@ pub async fn record(
         .map_err(|e| ApiError::bad(e.to_string().as_str()))?
         .ok_or_else(|| ApiError::not_found("err.record.none"))?;
     // "whoever the room's tokens put in this match" -- a member id, checked
-    // against the seats the record was sealed for.
-    let me = room
-        .as_ref()
-        .and_then(|r| r.lock().unwrap().member_of(&sess.token));
-    let me = me.or_else(|| match &sess.room {
+    // against the seats the record was sealed for. The room may already be
+    // dissolved; the session's own memory of the seat still counts.
+    let me = match &sess.room {
         Some((rid, member)) if *rid == id => Some(*member),
-        _ => None,
-    });
+        _ => s
+            .room(&id)
+            .and_then(|r| r.lock().unwrap().member_of(&sess.token)),
+    };
     if !me.is_some_and(|m| rec.members.contains(&m)) {
         return Err(ApiError::forbidden("err.record.forbidden"));
     }
