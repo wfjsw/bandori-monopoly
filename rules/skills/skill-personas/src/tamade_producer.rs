@@ -23,7 +23,12 @@ const BUILT_THIS: &str = "skill.tamade.builtThis";
 pub const TAMADE_PRODUCER: CardDef = CardDef::new(
     "skill:珠手知由:天才制作人",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.tamade.builtLast') == 0", None, at_turn_start),
+        // 「加盖房屋时半价，如果你上回合进行过房屋加盖，本回合加盖房屋变为免费」
+        // -- one hook arms the whole turn's price. The free turn (builtLast != 0)
+        // must still enter the body; gating the hook on `builtLast == 0` left
+        // that arm dead (and skipped the builtThis reset), so the second build
+        // paid full price.
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         On::Hook(&[ruleset_core::kind::HouseAdded], card_sdk::pre::MINE, None, on_built),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],

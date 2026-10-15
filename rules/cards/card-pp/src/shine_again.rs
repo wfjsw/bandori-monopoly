@@ -142,14 +142,22 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[持续]（1）: 「[拥有者][获得]……资金和1个正面[P✽P粉丝]」 -- C#
     // `H.GainFans(Seat, 1, up: true)` + `H.GainR(Seat, maxPrice / 5)`.
-    ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
+    // Write the fan counter directly (`set_tok`): `add_tok` opens a nested
+    // `markerGain` [反击] window inside the already-open pay pipeline, whose
+    // answers-replay can cancel the grant. C# `H.GainFans` is a direct count.
+    {
+        let up = ctx::tok(player_id, "P✽P粉丝(正)");
+        ctx::set_tok(player_id, "P✽P粉丝(正)", up + 1);
+    }
+    // 「购买价格」÷5 is a formula-fixed gain, not a payment -- `gain_raw` so
+    // the pay pipeline (PayChoose etc.) cannot re-enter this hook or alter it.
     let money = best / 5;
     if money > 0 {
-        ctx::gain(
+        ctx::gain_raw(
             player_id,
             money,
             &Msg::new(key!("shine_again_why")).i("n", money as i64),
-        )?;
+        );
     }
     Ok(())
 }

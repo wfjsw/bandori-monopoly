@@ -20,18 +20,21 @@ const ECHO: &str = "PP:[衍生]共鸣";
 // ---------------------------------------------------------------- helpers
 
 fn set_fans(t: &mut Table, who: usize, up: i32, down: i32) {
-    t.m.world_mut().st.players[who].tokens = vec![
-        Counter {
-            name: "P✽P粉丝(正)".into(),
-            value: up,
-            instance: None,
-        },
-        Counter {
-            name: "P✽P粉丝(反)".into(),
-            value: down,
-            instance: None,
-        },
-    ];
+    // Update the two fan counters in place -- do not replace the whole
+    // tokens vector (that would wipe `skillBlock` and every other token).
+    // Same shape as `pp.rs::set_fans` (SKILL-01).
+    let p = &mut t.m.world_mut().st.players[who];
+    for (name, value) in [("P✽P粉丝(正)", up), ("P✽P粉丝(反)", down)] {
+        match p.tokens.iter_mut().find(|c| c.name == name) {
+            Some(c) => c.value = value,
+            None => p.tokens.push(Counter {
+                name: name.into(),
+                value,
+                instance: None,
+            }),
+        }
+    }
+    p.tokens.retain(|c| c.value > 0 || c.name.starts_with("P✽P粉丝"));
 }
 
 fn fans(t: &Table, who: usize) -> (i32, i32) {
@@ -1581,6 +1584,10 @@ fn band_overflow_to_crystals() {
 
 /// C-PP-hina-lottery-02 -- each turn start rolls 1d4 and borrows that
 /// character's (2) skill until the next turn start.
+/// Book: 「结果为1是丸山彩；结果为2是白鹭千圣；结果为3是若宫伊芙；结果为4是大和麻弥。」
+/// `skill.hinaLottery.borrowed` is the 0-based pool index (Kani
+/// `hina_lottery_02_borrow`: face N -> N-1). The book pin is the borrowed
+/// character card on the field.
 #[test]
 fn hina_skill_2_borrows_skill() {
     let mut t = Table::vanilla(2);
@@ -1590,9 +1597,16 @@ fn hina_skill_2_borrows_skill() {
     t.begin_turn(0);
     drain(&mut t);
     let borrowed = t.state(0, "skill.hinaLottery.borrowed");
-    if borrowed != 2 {
+    // Face 2 -> pool index 1 = 白鹭千圣.
+    if borrowed != 1 {
         panic!(
-            "C-PP-hina-lottery-02: borrowed {borrowed}, expected 2 (白鹭千圣)"
+            "C-PP-hina-lottery-02: borrowed index {borrowed}, expected 1 (face 2 = 白鹭千圣)"
+        );
+    }
+    if !t.on_field(0, "skill:白鹭千圣:保持坦率的你") {
+        panic!(
+            "C-PP-hina-lottery-02: face 2 must borrow 白鹭千圣's (2); field {:?}",
+            t.field_ids(0)
         );
     }
 }

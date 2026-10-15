@@ -89,8 +89,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_crystals(3);
     // 规则书: 「向一名玩家场上放置一个怪盗标记」 -- C# `if (r.index >= 0)` gates the
     // mark on the gate's answer (the player actually hit, after any redirect).
+    // The mark is a held counter on that player (「…玩家场上」), named for the
+    // book's 「怪盗标记」; `skill:濑田薰:梦幻的王子殿下` reads and removes the
+    // same counter.
     if let Some(who) = hit {
-        ctx::add_tok(who, key!("kaoru_thief_tok"), 1, i32::MAX)?;
+        ctx::add_tok(who, "怪盗标记", 1, i32::MAX)?;
         // C# `card.Mem["marked"] = r.index; card.Mem["turn"] = H.TurnKey` -- the
         // PassPlayer force-stop only works on the turn the mark was placed.
         ctx::set_slot(player_id, "kaoru_thief_marked", who);

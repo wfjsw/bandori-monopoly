@@ -1128,7 +1128,7 @@ fn rimi_skill_teleports_to_farthest_agent() {
         let me = 30;
         let tiles = &rules_spec::data().tiles;
         let far_agent = (0..tiles.len())
-            .filter(|&i| format!("{:?}", tiles[i].kind).contains("Agent"))
+            .filter(|&i| tiles[i].kind.as_str() == "agent")
             .max_by_key(|&i| abs_dist(me, i))
             .expect("at least one agent tile");
         t.set_pos(0, me);
@@ -1154,7 +1154,7 @@ fn rimi_skill_teleports_to_farthest_agent() {
         // an `agent` tile at maximum absolute distance.
         let dest = t.pos(0);
         let tiles = &rules_spec::data().tiles;
-        let is_agent = format!("{:?}", tiles[dest].kind).contains("Agent");
+        let is_agent = tiles[dest].kind.as_str() == "agent";
         if !is_agent {
             return Err(format!(
                 "landed on {dest} ({}), not a 地产商 (C-PPP-rimi-skill-02)",

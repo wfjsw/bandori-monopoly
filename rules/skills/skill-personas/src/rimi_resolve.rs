@@ -10,9 +10,9 @@
 //! pot pays at turn end, so the two halves are a latch and a payout. 「Live
 //! House颜色格子」 is `is_live_house_for`, which sees a recolour too.
 //!
-//! （2） 「与你绝对距离最远的地产商」 is the buyable tile at the maximum `dist`
-//! from where the player stands; 「并[结算]」 is the teleport resolving, and
-//! 「可选择盖房」 is the build offer that follows.
+//! （2） 「与你绝对距离最远的地产商」 is the 地产商 (`kind=agent`) tile at the
+//! maximum absolute `dist` from where the player stands; 「并[结算]」 is the
+//! teleport resolving, and 「可选择盖房」 is the build offer that follows.
 
 use card_sdk::abi::{state_key, HookKind};
 use ruleset_core::ctx::{self, plan, state};
@@ -77,12 +77,14 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房」.
+/// 「地产商」 is the agent tile class (`kind=agent`), not the buyable set --
+/// 可购买格子 explicitly excludes 地产商 (rulebook 「[可购买格子]」).
 fn use_skill(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
     let mut best = 0;
     let mut far: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
     for t in 0..ctx::tile_count() {
-        if !ctx::is_buyable(t) {
+        if !ctx::is_agent(t) {
             continue;
         }
         let d = ctx::dist(at, t);

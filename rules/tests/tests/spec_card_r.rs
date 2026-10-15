@@ -1124,6 +1124,14 @@ pub fn student_council_add_resolve(step: &Step<'_>) -> Result<(), String> {
     if !played(step, COUNCIL) {
         return Ok(());
     }
+    // The play's zone write (`add_to_deck`) lands when the body commits. A
+    // follow-up prompt (the optional 「可支付…」 placement) pauses the body, so
+    // the counteract step itself is still mid-effect -- same at-rest rule as
+    // `g_counter_05` / the PP clauses. The test body checks the pile after
+    // the prompt loop closes.
+    if step.post_prompt_open {
+        return Ok(());
+    }
     let who = actor(step);
     let h = &step.post.hidden[who];
     let named = |c: &str| c.contains("觉悟");
@@ -1191,8 +1199,10 @@ fn student_council_contract() {
             ));
         }
         drain(&mut t);
-        // C-R-学生会的检查-02 is checked by the clause on the counteract
-        // step (and again here).
+        // C-R-学生会的检查-02. The clause also checks the counteract step when
+        // the body lands without a follow-up prompt; with the optional
+        // 「可支付…」 ask open it is mid-body (see the clause), and this
+        // at-rest check is the one that runs after the prompt loop.
         if !t.draw_pile(0).iter().any(|c| c.contains("觉悟")) {
             return Err(format!(
                 "「向抽牌堆中加入一张“觉悟”」 -- not in the draw; draw={:?} hand={:?} discard={:?} keys={:?}",
@@ -1216,6 +1226,7 @@ fn student_council_contract() {
                 "draw_n:P0",
                 "discard_pub:P0",
                 "turn.",
+                "pos:P0",
             ],
         )
     })

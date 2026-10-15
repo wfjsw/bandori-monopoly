@@ -4309,12 +4309,15 @@ impl Cx<'_> {
             Dest::Field => {}
         }
         // `cardAfter` -- the card's own effect is fully resolved and it has
-        // landed wherever its `Dest` sent it.
+        // landed wherever its `Dest` sent it. The played id rides `cards` too
+        // (the `card` / `skillUsed` pattern), so a residual can read
+        // `trigger::cards()` and match the id's band prefix.
         raise!(
             self,
             "cardAfter",
             i,
             card = Some(id.to_string()),
+            cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
         // `cardPlayed` (Fx) -- a card's hand effect resolved (its `Dest` is final).
@@ -4323,6 +4326,7 @@ impl Cx<'_> {
             "cardPlayed",
             i,
             card = Some(id.to_string()),
+            cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
         // The play is over: hand back the origin flag (`play_from_hand` is

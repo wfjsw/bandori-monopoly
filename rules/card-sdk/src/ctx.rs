@@ -2521,7 +2521,8 @@ pub mod trigger {
     }
 
     /// The cards the trigger is about: the drawn cards on a `drew` trigger (in
-    /// draw order), the skill id on a `skillUsed` trigger. Empty otherwise.
+    /// draw order), the skill id on a `skillUsed` trigger, the played card on
+    /// `card` / `cardAfter` / `cardPlayed`. Empty otherwise.
     pub fn cards() -> Vec<String> {
         let need = unsafe { sys::trig_cards(0, 0) };
         if need <= 0 {

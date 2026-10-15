@@ -1203,8 +1203,9 @@ fn kaoru_pass_gives_one_pot_per_step() {
     }
 }
 
-/// Engine key of the counter the rulebook calls 「怪盗标记」. Observed on the
-/// printed plant of `HHW:（薰）怪盗hello happy`; the label is the book's.
+/// Engine key of the counter the rulebook calls 「怪盗标记」. The printed plant
+/// of `HHW:（薰）怪盗hello happy` and `skill:濑田薰:梦幻的王子殿下` share the
+/// book's 「怪盗标记」; the wire name is accepted as a historical alias.
 const THIEF_TOK: &str = "cards:card-hhw.kaoru_thief_tok";
 
 /// Total [怪盗标记] units on every seat's field.
