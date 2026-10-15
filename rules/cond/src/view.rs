@@ -22,6 +22,18 @@ pub enum TileKind {
     Buyable,
 }
 
+impl TileKind {
+    /// Opaque class/kind spelling for `tile_is` / `tile_in` (game data).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TileKind::Circle => "circle",
+            TileKind::Ring => "ring",
+            TileKind::LiveHouse => "livehouse",
+            TileKind::Buyable => "buyable",
+        }
+    }
+}
+
 /// Read-only queries a condition name may make. Int-only: every accessor
 /// returns `i64` (or `bool`, bound as a CEL bool).
 ///
