@@ -159,3 +159,11 @@ pub fn at_turn_start_reset_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
     on_settle(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start_offer(player_id)
+}

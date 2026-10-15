@@ -163,3 +163,11 @@ pub fn offer_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
     on_pass(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_passed_kani(player_id: i32) -> card_sdk::Asked {
+    on_passed(player_id)
+}

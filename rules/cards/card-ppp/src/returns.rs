@@ -443,3 +443,11 @@ pub fn deck_before_game_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_played_kani(player_id: i32) -> card_sdk::Asked {
     on_played(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn choose_band_kani(player_id: i32) -> card_sdk::Asked {
+    choose_band(player_id)
+}

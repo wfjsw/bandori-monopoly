@@ -355,3 +355,17 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 pub fn enter_two_kani(player_id: i32) -> card_sdk::Asked {
     enter_two(player_id)
 }
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
+    offer_support(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn split_rent_kani(player_id: i32) -> card_sdk::Asked {
+    split_rent(player_id)
+}
