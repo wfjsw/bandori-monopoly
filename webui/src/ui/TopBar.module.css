@@ -62,3 +62,10 @@
 :global(:root[data-compact]) .compact .crumb { left: 68px; top: 6px; width: 212px; }
 :global(:root[data-compact]) .compact .section { height: 24px; width: 170px; font-size: 13px; padding: 3px 14px 0; border-radius: 12px 12px 12px 3px; }
 :global(:root[data-compact]) .compact .title { height: 34px; margin-top: -3px; border-radius: 17px; font-size: 17px; padding: 0 14px; }
+:global(:root[data-compact]) .compact .back { top: 4px; width: 50px; height: 50px; }
+:global(:root[data-compact]) .compact .back i { width: 28px; height: 28px; }
+:global(:root[data-compact]) .compact .crumb { left: 68px; top: 6px; width: 170px; }
+:global(:root[data-compact]) .compact .section { height: 20px; width: 140px; font-size: 12px; padding: 2px 12px 0; }
+:global(:root[data-compact]) .compact .title { height: 28px; font-size: 15px; padding: 0 12px; }
+:global(:root[data-compact]) .compact .section { height: 22px; padding: 3px 12px 0; line-height: 1.2; }
+:global(:root[data-compact]) .compact .title { margin-top: -2px; }

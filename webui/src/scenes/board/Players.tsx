@@ -1,7 +1,7 @@
 // Player panels on the left; the match log is placed in the right column.
 
 import { useCompactValue } from "../../app/Stage";
-import { COMPACT_PLAYERS_H } from "../../styles/layout";
+import { COMPACT_PLAYERS_H, COMPACT_SEAT_H } from "../../styles/layout";
 import { stateOf, stateMax } from "../../core/names";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
@@ -114,10 +114,11 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
 export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {
   const S = m.S;
   // The seat list's height: 548 on the 900px stage, what the phone canvas leaves otherwise.
-  const avail = useCompactValue() ? COMPACT_PLAYERS_H : 548;
+  const compact = useCompactValue();
+  const avail = compact ? COMPACT_PLAYERS_H : 548;
   const n = S.players.length;
   const gap = n > 6 ? 5 : 8;
-  const height = Math.min(70, Math.floor((avail - gap * (n - 1)) / n));
+  const height = Math.min(compact ? COMPACT_SEAT_H : 70, Math.floor((avail - gap * (n - 1)) / n));
   const t = timerOf(m, solo, elapsed);
   const order = turnOrder(S);
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
@@ -240,7 +241,7 @@ function CardRef({ card, text, onHover, onLeave }: { card: string; text: string;
   );
 }
 
-export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode }) {
+export function Log({ lines, colorOf, children, titled = true }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode; titled?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   // The log follows its own tail: re-pin only when new lines arrive, so a
   // reader who scrolled up is not thrown back down by a hover re-render.
@@ -249,7 +250,7 @@ export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: 
   const groups = turnGroups(lines);
   return (
     <div className={s.log}>
-      <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>
+      {titled && <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>}
       {children}
       <div className={s.lines} ref={ref}>
         {groups.map((g) => {

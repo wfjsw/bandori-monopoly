@@ -419,3 +419,7 @@
   animation: arrowBob 0.7s ease-in-out infinite;
 }
 @keyframes arrowBob { 50% { transform: translateY(-5px); } }
+
+/* Phone canvas: pan / zoom buttons at a finger's size. */
+:global(:root[data-compact]) .zoomCtl { height: 42px; opacity: 0.9; }
+:global(:root[data-compact]) .zoomCtl button { width: 40px; height: 36px; line-height: 36px; font-size: 16px; }

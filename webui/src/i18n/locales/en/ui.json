@@ -98,6 +98,7 @@
   "board.roll": "Rolled {{n}}",
   "board.rolledFor": "Roll for {{who}}",
   "board.round": "Round {{n}}",
+  "board.tabCard": "Card",
   "board.settleOk": "Settle",
   "board.settling": "Settling…",
   "board.baseTime": "Base",
