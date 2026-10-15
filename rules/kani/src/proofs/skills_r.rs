@@ -19,7 +19,7 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 crate::host_subset!(skills_r_dispatch {
     log | effect => arm_log,
     gain_charge => arm_gain_charge,
-    fire => arm_fire,
+    charge => arm_fire,
     charge_max => arm_charge_max,
     spend_charge => arm_spend_charge,
     player_count => arm_player_count,
