@@ -1566,15 +1566,10 @@ fn fix_note_halves_the_designated_build_costs() {
         t.dice(&[1]);
         let before = t.money(0);
         let _ = t.roll(0);
-        // Build prompt or END-stage offer: accept the build.
-        while let Some(p) = t.prompt() {
-            if p.kind == "build" || p.title.key().contains("build") {
-                let _ = t.answer(0, 0);
-            } else {
-                t.decline();
-            }
-        }
-        // Also try the END-stage build act if offered.
+        // G-SETTLE-06/07: the settle of a deed is the optional buy/build prompt.
+        // Decline it so exactly one END-stage `t.build()` runs (both paths apply
+        // fix_note; taking both would spend two half-price builds).
+        drain(&mut t);
         if t.step() == 4 {
             let _ = t.build(0);
             drain(&mut t);
