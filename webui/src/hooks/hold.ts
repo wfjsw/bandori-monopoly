@@ -14,8 +14,9 @@ const MOVE_PX = 10;
 const TOUCH_MOUSE_MS = 1000;
 
 let lastTouch = 0;
-/** When the last hold fired: the click that ends it must not act. */
-let heldAt = -Infinity;
+/** Clicks are swallowed until this time: Infinity while a hold is open, then a
+ *  short grace after release for the click that ends it. */
+let swallowUntil = -Infinity;
 let timer = 0;
 let startX = 0;
 let startY = 0;
@@ -25,7 +26,10 @@ let open: (() => void) | null = null;
 function dismiss(): void {
   const o = open;
   open = null;
-  o?.();
+  if (o) {
+    swallowUntil = Date.now() + 500;
+    o();
+  }
 }
 
 export interface HoldProps {
@@ -53,6 +57,7 @@ export function holdPeek(enter: () => void, leave: () => void): HoldProps {
     onPointerDown: (e) => {
       if (e.pointerType !== "touch") return;
       e.stopPropagation();
+      swallowUntil = -Infinity;
       lastTouch = Date.now();
       startX = e.clientX;
       startY = e.clientY;
@@ -61,7 +66,7 @@ export function holdPeek(enter: () => void, leave: () => void): HoldProps {
         timer = 0;
         dismiss();
         open = leave;
-        heldAt = Date.now();
+        swallowUntil = Infinity;
         enter();
       }, HOLD_MS);
     },
@@ -82,7 +87,7 @@ export function holdPeek(enter: () => void, leave: () => void): HoldProps {
     onContextMenu: (e) => { if (Date.now() - lastTouch < TOUCH_MOUSE_MS * 2) e.preventDefault(); },
     // Releasing a hold is not a tap.
     onClickCapture: (e) => {
-      if (Date.now() - heldAt < 600) {
+      if (Date.now() < swallowUntil) {
         e.stopPropagation();
         e.preventDefault();
       }

@@ -38,6 +38,9 @@ struct Cursor {
     last_event: i32,
     last_seq: i32,
     last_room: String,
+    /// The last poll could not build a view (worker not up yet, e.g. right
+    /// after a restart): poll again soon instead of waiting for a change note.
+    retry: bool,
 }
 
 fn parse_last_event_id(headers: &HeaderMap, query: Option<&str>) -> (i32, i32) {
@@ -71,8 +74,10 @@ fn frames(info: &RoomInfo, m: Option<&MatchHandle>, member: i32, cur: &mut Curso
         // Two round-trips through the worker pool: this member's view, and the
         // events since the cursor.
         let Ok(view) = match_view(m, member) else {
+            cur.retry = true;
             return out;
         };
+        cur.retry = false;
         if view.state.match_id != cur.match_id {
             cur.match_id = view.state.match_id;
             cur.last_event = 0;
@@ -136,6 +141,7 @@ pub async fn stream(
             last_event,
             last_seq: -1,
             last_room: String::new(),
+            retry: false,
         },
         id,
     ));
@@ -200,8 +206,10 @@ async fn pump(
                     .await;
                 break;
             }
+            let retry = cur.retry;
             tokio::select! {
                 _ = tx.closed() => break,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(1)), if retry => {}
                 note = rx.recv() => match note {
                     Ok(Note::Changed) | Err(broadcast::error::RecvError::Lagged(_)) => {
                         // Coalesce a burst of changes into one batch.
