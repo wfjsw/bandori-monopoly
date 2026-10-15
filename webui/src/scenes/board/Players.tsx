@@ -119,7 +119,11 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   const avail = compact ? COMPACT_PLAYERS_H : 548;
   const n = S.players.length;
   const gap = n > 6 ? 5 : 8;
-  const height = Math.min(compact ? COMPACT_SEAT_H : 70, Math.floor((avail - gap * (n - 1)) / n));
+  // Seats shrink to fit only down to a floor; past that the list scrolls
+  // instead of squeezing every row until its content is unreadable.
+  const maxH = compact ? COMPACT_SEAT_H : 70;
+  const minH = compact ? COMPACT_SEAT_H : 58;
+  const height = Math.max(minH, Math.min(maxH, Math.floor((avail - gap * (n - 1)) / n)));
   const t = timerOf(m, solo, elapsed);
   const order = turnOrder(S);
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
