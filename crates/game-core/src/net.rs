@@ -13,7 +13,7 @@ use crate::state::BotMentality;
 use crate::MatchMode;
 
 /// Game name the protocol handshake checks.
-pub const GAME: &str = "bandori-monopoly";
+pub const GAME: &str = "monopoly";
 /// Protocol version. The pre-port TCP/Steam protocol spoke `"8"`; this port
 /// speaks HTTP + SSE, so it starts a new number to keep old clients from
 /// half-working.
@@ -60,8 +60,14 @@ pub struct NetMessage {
     /// the field itself stays on every build so a record's `Input::Act` shape
     /// does not depend on the profile.
     pub debug: String,
-    /// `ban` / `pick`: the character id.
-    pub character: String,
+    /// `ban` / `pick`: the persona id.
+    ///
+    /// Seat persona. JSON key is `persona`.
+    /// `Input::Act` embeds this in `RecordBody`, and `body_check` re-serializes
+    /// archived `.bdrec` bodies byte-identically. Renaming the key breaks every
+    /// stored check hash (`parse_record`). Do not "neutralize" this rename.
+    
+    pub persona: String,
     /// `play` / `discard`: the card id.
     pub card: String,
     /// `deck` (the deck) / `answer` (the picked options).
@@ -81,7 +87,7 @@ impl Default for NetMessage {
         Self {
             act: String::new(),
             debug: String::new(),
-            character: String::new(),
+            persona: String::new(),
             card: String::new(),
             cards: Vec::new(),
             value: 0,
@@ -164,7 +170,11 @@ impl RoomInfo {
 pub struct RoomMember {
     pub id: i32,
     pub player: String,
-    pub character: String,
+    /// Seat persona. JSON key is `persona`.
+    /// `RecordBody` embeds `MatchSetup.members`, and `body_check` re-serializes
+    /// archived `.bdrec` bodies byte-identically. Do not rename the key.
+    
+    pub persona: String,
     pub cn_id: String,
     pub ready: bool,
     pub host: bool,
@@ -205,7 +215,7 @@ pub fn bot_name<'a, S: AsRef<str>>(
 
 /// Clean a display name: trim, then cap at 16 **UTF-16 code units**. A surrogate
 /// pair cut in half at the limit is dropped rather than leaving an invalid half
-/// character. May return "" (callers reject empty names).
+/// persona. May return "" (callers reject empty names).
 pub fn clean_name(name: &str) -> String {
     let mut out = String::new();
     let mut units = 0;

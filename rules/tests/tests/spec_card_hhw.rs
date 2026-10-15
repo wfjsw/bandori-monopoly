@@ -320,9 +320,9 @@ pub fn athletic_three_crystals(step: &Step<'_>) -> Result<(), String> {
         .and_then(|p| p.field.iter().find(|f| f.card == ATHLETIC));
     match post {
         None => Err("C-HHW-athletic-01: card not on the field after play".into()),
-        Some(f) if f.crystals != 3 => Err(format!(
+        Some(f) if f.counters.get("crystals").copied().unwrap_or(0) != 3 => Err(format!(
             "C-HHW-athletic-01: crystals {}, expected 3",
-            f.crystals
+            f.counters.get("crystals").copied().unwrap_or(0)
         )),
         Some(_) => Ok(()),
     }
@@ -365,6 +365,7 @@ fn athletic_places_three_crystals() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "hand_n:P0",
                 "draw_n:P0",
                 "discard_pub:P0",
@@ -783,6 +784,7 @@ fn kkr_pays_10000() {
                 // 「将此卡置于CiRCLE上」 -- a field placement whose tile is CiRCLE.
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "fprop:P0",
                 "board_field:",
                 "bfield:",
@@ -1188,11 +1190,11 @@ fn kaoru_pass_gives_one_pot_per_step() {
     drain(&mut t);
     t.set_pos(0, 0);
     t.set_pos(1, 30);
-    let before = t.fire(0);
+    let before = t.charge(0);
     t.dice(&[4]);
     t.roll(0).unwrap();
     drain(&mut t);
-    let delta = t.fire(0) - before;
+    let delta = t.charge(0) - before;
     if delta != 4 {
         panic!(
             "C-HHW-kaoru-01: fire delta {delta} on a 4-step walk, expected 4; keys={:?}",
@@ -1262,7 +1264,7 @@ fn kaoru_removes_a_phantom_mark_instead_of_a_pot() {
                 .collect::<Vec<_>>()
         );
     }
-    let fire_before = t.fire(0);
+    let fire_before = t.charge(0);
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
@@ -1271,7 +1273,7 @@ fn kaoru_removes_a_phantom_mark_instead_of_a_pot() {
         panic!(
             "C-HHW-kaoru-01: 怪盗标记 {marks_before} -> {marks_after}, expected -1; fire {} -> {}; tokens={:?}",
             fire_before,
-            t.fire(0),
+            t.charge(0),
             t.m
                 .world()
                 .st
@@ -1308,7 +1310,7 @@ fn kaoru_skill_plants_three_marks_for_seven_fire() {
         }
     }
     drain(&mut t);
-    let fire_after = t.fire(0);
+    let fire_after = t.charge(0);
     let marks = thief_marks(&t);
     if fire_after != 0 {
         panic!("C-HHW-kaoru-02: fire {fire_after} after spending 7 from 7");
@@ -1338,11 +1340,11 @@ fn misaki_pass_gives_two_fire() {
     drain(&mut t);
     let tg = rules_spec::tile("弦卷集团");
     t.set_pos(0, (tg + 60 - 2) % 60);
-    let before = t.fire(0);
+    let before = t.charge(0);
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    let delta = t.fire(0) - before;
+    let delta = t.charge(0) - before;
     if delta != 2 {
         panic!(
             "C-HHW-misaki-skill-01: fire delta {delta} after [经过]弦卷集团, expected 2; keys={:?}",

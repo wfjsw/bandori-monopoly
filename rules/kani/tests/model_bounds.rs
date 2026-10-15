@@ -5,7 +5,7 @@
 //! (const band offsets). A drift would make `tile_named` / `by_idx` return
 //! the wrong entry — a soundness bug, not a performance one.
 
-// Force-link `game_rules::native_shims` so the `bandori_*` C symbols that
+// Force-link `game_rules::native_shims` so the `ruleset_*` C symbols that
 // `card-sdk`'s `guest` feature declares resolve at test-binary link time.
 // (Same trick conf_model uses by calling `install_host`.)
 #[test]

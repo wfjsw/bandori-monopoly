@@ -54,7 +54,8 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
             refuse,
         ),
     ],
-);
+)
+    .board_role("status");
 
 /// The condition under which [除外] closes the act, pay and move gates.
 pub const EXILED: &str = "state(actor,'exile') > 0";

@@ -29,7 +29,7 @@ pub const TRITONE: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 任意时刻当你将要失去或支付资金时打出此卡，立刻获得此次失去的资金金额，此卡放置在场上，三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金"#)
         .cell(r#"G2"#)
-        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
+        .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {

@@ -1,7 +1,7 @@
 //! D2: offline deck-book derivation (`docs/BOT.md` §3.7).
 //!
 //! Fills `data/deck_book.json` (the D1 format, `game_core::deck_book`) with
-//! per-character decks that beat their back-off parent, measured by the
+//! per-persona decks that beat their back-off parent, measured by the
 //! engine's own end-of-match score at a round cap under the **real** card
 //! rules (`WasmRules`, `dist/cards`) -- StubRules cards do nothing, so they
 //! cannot tune a deck.
@@ -10,12 +10,12 @@
 //! CARGO_TARGET_DIR=target/coord CARGO_INCREMENTAL=0 \
 //!   cargo run -p game-rules --release --example deckbook -- \
 //!     --cap-rounds 40 --games-per-candidate 32 \
-//!     --characters 户山香澄,美竹兰 --threads 16 --budget-minutes 20 \
+//!     --personas 户山香澄,美竹兰 --threads 16 --budget-minutes 20 \
 //!     --levels me --margin 0 --seed 1 \
 //!     --out target/scratch/deckbook/deck_book.json --resume
 //! ```
 //!
-//! * **Candidates** per character: `deck::preset`, single-card drop / add
+//! * **Candidates** per persona: `deck::preset`, single-card drop / add
 //!   ablations over `deck::pool`, then greedy one-card swaps from the best so
 //!   far. Every candidate passes `deck::clean` / `deck::is_complete`.
 //! * **Evaluation**: games with the candidate in the target seat against the
@@ -38,7 +38,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use game_core::data::{CharacterData, GameData};
+use game_core::data::{PersonaData, GameData};
 use game_core::deck;
 use game_core::deck_book::{
     DeckBook, DeckBookEntry, DECK_BOOK_VERSION, POLICY_STANDARD,
@@ -56,11 +56,11 @@ use game_rules::{Ruleset, WasmRules};
 enum Level {
     /// `(me)` -- across random tables.
     Me,
-    /// `(me, seat, sorted multiset of opponents' bands)`.
-    SeatBands,
-    /// `(me, sorted multiset of opponents' bands)`.
-    Bands,
-    /// `(me, seat, opponents' characters in seat order)`.
+    /// `(me, seat, sorted multiset of opponents' groups)`.
+    SeatGroups,
+    /// `(me, sorted multiset of opponents' groups)`.
+    Groups,
+    /// `(me, seat, opponents' personas in seat order)`.
     Exact,
 }
 
@@ -68,8 +68,8 @@ impl Level {
     fn parse(s: &str) -> Option<Self> {
         match s.trim() {
             "me" => Some(Self::Me),
-            "seat_bands" | "seat-bands" => Some(Self::SeatBands),
-            "bands" => Some(Self::Bands),
+            "seat_groups" | "seat-groups" => Some(Self::SeatGroups),
+            "groups" => Some(Self::Groups),
             "exact" => Some(Self::Exact),
             _ => None,
         }
@@ -77,8 +77,8 @@ impl Level {
     fn as_str(&self) -> &'static str {
         match self {
             Self::Me => "me",
-            Self::SeatBands => "seat_bands",
-            Self::Bands => "bands",
+            Self::SeatGroups => "seat_groups",
+            Self::Groups => "groups",
             Self::Exact => "exact",
         }
     }
@@ -90,7 +90,7 @@ struct Config {
     games_per_candidate: usize,
     /// First successive-halving rung (also the greedy-neighbor rung).
     rung0: usize,
-    characters: Vec<String>,
+    personas: Vec<String>,
     threads: usize,
     budget: Option<Instant>,
     levels: Vec<Level>,
@@ -120,7 +120,7 @@ impl Config {
 fn parse_args() -> Config {
     let mut cap_rounds = 40i32;
     let mut games_per_candidate = 32usize;
-    let mut characters: Vec<String> = Vec::new();
+    let mut personas: Vec<String> = Vec::new();
     let mut threads = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
@@ -153,8 +153,8 @@ fn parse_args() -> Config {
             "--games-per-candidate" => {
                 games_per_candidate = take("--games-per-candidate").parse().unwrap_or(32)
             }
-            "--characters" => {
-                characters = take("--characters")
+            "--personas" => {
+                personas = take("--personas")
                     .split(',')
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
@@ -168,7 +168,7 @@ fn parse_args() -> Config {
                     .filter_map(|s| Level::parse(s))
                     .collect();
                 if levels.is_empty() {
-                    eprintln!("deckbook: --levels needs at least one of me,seat_bands,bands,exact");
+                    eprintln!("deckbook: --levels needs at least one of me,seat_groups,groups,exact");
                     std::process::exit(2);
                 }
             }
@@ -184,8 +184,8 @@ fn parse_args() -> Config {
             "--rung0" => rung0 = take("--rung0").parse().unwrap_or(0),
             "--help" | "-h" => {
                 println!(
-                    "deckbook --cap-rounds N --games-per-candidate N --characters a,b \
-                     --threads N --budget-minutes M --levels me|seat_bands|bands|exact \
+                    "deckbook --cap-rounds N --games-per-candidate N --personas a,b \
+                     --threads N --budget-minutes M --levels me|seat_groups|groups|exact \
                      --margin X --seed S --out PATH --resume --fp-rounds N \
                      --greedy-rounds N --greedy-games N --players N --rung0 N --checkpoint PATH"
                 );
@@ -207,7 +207,7 @@ fn parse_args() -> Config {
     Config {
         cap_rounds,
         games_per_candidate: games_per_candidate.max(rung0),
-        characters,
+        personas,
         threads,
         budget,
         levels,
@@ -291,7 +291,7 @@ fn cand_key(cards: &[String]) -> Vec<String> {
 ///   excluded (a plain `deck::fill` would just put *i* back).
 /// * **add:j** -- add pool card *j* not in the preset, cutting the preset's
 ///   last card in pool order to stay at 10.
-fn candidates(data: &GameData, c: &CharacterData) -> Vec<Cand> {
+fn candidates(data: &GameData, c: &PersonaData) -> Vec<Cand> {
     let pool: Vec<String> = deck::pool(data, c).into_iter().map(|k| k.id.clone()).collect();
     let preset = deck::preset(data, c);
     let mut out: Vec<Cand> = Vec::new();
@@ -334,7 +334,7 @@ fn candidates(data: &GameData, c: &CharacterData) -> Vec<Cand> {
 }
 
 /// One-card swaps of `base` against the pool (the greedy neighbourhood).
-fn swaps(data: &GameData, c: &CharacterData, base: &[String]) -> Vec<Cand> {
+fn swaps(data: &GameData, c: &PersonaData, base: &[String]) -> Vec<Cand> {
     let pool: Vec<String> = deck::pool(data, c).into_iter().map(|k| k.id.clone()).collect();
     let mut out: Vec<Cand> = Vec::new();
     let mut seen: Vec<Vec<String>> = Vec::new();
@@ -369,7 +369,7 @@ fn splitmix64(mut x: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// Opponent characters for one game, deterministic in the seed. Distinct, and
+/// Opponent personas for one game, deterministic in the seed. Distinct, and
 /// never `me`.
 fn sample_opponents(names: &[String], me: &str, seed: u64, n: usize) -> Vec<String> {
     let mut pool: Vec<&String> = names.iter().filter(|c| c.as_str() != me).collect();
@@ -383,21 +383,21 @@ fn sample_opponents(names: &[String], me: &str, seed: u64, n: usize) -> Vec<Stri
     out
 }
 
-/// Opponents constrained to one character per band in `bands` (a seat_bands /
-/// bands key), deterministic in the seed.
-fn sample_opponents_by_bands(
+/// Opponents constrained to one persona per group in `groups` (a seat_groups /
+/// groups key), deterministic in the seed.
+fn sample_opponents_by_groups(
     data: &GameData,
     me: &str,
-    bands: &[String],
+    groups: &[String],
     seed: u64,
 ) -> Vec<String> {
     let mut out = Vec::new();
     let mut s = seed;
-    for band in bands {
+    for group in groups {
         let mut pool: Vec<&String> = data
-            .characters
+            .personas
             .iter()
-            .filter(|c| c.name != me && &c.band == band)
+            .filter(|c| c.name != me && &c.group == group)
             .map(|c| &c.name)
             .collect();
         if pool.is_empty() {
@@ -416,7 +416,7 @@ struct Task {
     level: Level,
     me: String,
     seat: Option<u32>,
-    opponent_bands: Vec<String>,
+    opponent_groups: Vec<String>,
     opponents: Vec<String>,
     /// Back-off parent: the deck this entry must beat by `margin`. `None` = the
     /// designer preset (`deck::preset`), the level-5 back-off.
@@ -427,13 +427,13 @@ impl Task {
     fn id(&self) -> String {
         match self.level {
             Level::Me => format!("me:{}", self.me),
-            Level::SeatBands => format!(
-                "seat_bands:{}:{}:{}",
+            Level::SeatGroups => format!(
+                "seat_groups:{}:{}:{}",
                 self.me,
                 self.seat.unwrap_or(0),
-                self.opponent_bands.join("+")
+                self.opponent_groups.join("+")
             ),
-            Level::Bands => format!("bands:{}:{}", self.me, self.opponent_bands.join("+")),
+            Level::Groups => format!("groups:{}:{}", self.me, self.opponent_groups.join("+")),
             Level::Exact => format!(
                 "exact:{}:{}:{}",
                 self.me,
@@ -444,20 +444,20 @@ impl Task {
     }
 }
 
-/// The character names, in `characters.json` order.
+/// The persona names, in `personas.json` order.
 fn char_names(data: &GameData) -> Vec<String> {
-    data.characters.iter().map(|c| c.name.clone()).collect()
+    data.personas.iter().map(|c| c.name.clone()).collect()
 }
 
 /// Build the task list for the requested levels.
 fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
     let names = char_names(data);
-    let me_chars: Vec<String> = if cfg.characters.is_empty() {
+    let me_chars: Vec<String> = if cfg.personas.is_empty() {
         names.clone()
     } else {
-        cfg.characters
+        cfg.personas
             .iter()
-            .filter(|n| data.character(n).is_some())
+            .filter(|n| data.persona(n).is_some())
             .cloned()
             .collect()
     };
@@ -469,47 +469,47 @@ fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
                     level: Level::Me,
                     me: me.clone(),
                     seat: None,
-                    opponent_bands: vec![],
+                    opponent_groups: vec![],
                     opponents: vec![],
                     parent: None,
                 }),
-                Level::SeatBands => {
-                    // One representative band multiset per seat: the bands of
+                Level::SeatGroups => {
+                    // One representative group multiset per seat: the groups of
                     // three seed-derived opponents, held fixed so the key is
                     // coherent across the task's games.
                     for seat in 0..cfg.players as u32 {
                         let s = splitmix64(cfg.seed ^ (seat as u64) ^ 0xBAAD_5EED);
                         let opp = sample_opponents(&names, me, s, cfg.players - 1);
-                        let mut bands: Vec<String> = opp
+                        let mut groups: Vec<String> = opp
                             .iter()
                             .map(|o| {
-                                data.character(o).map(|c| c.band.clone()).unwrap_or_default()
+                                data.persona(o).map(|c| c.group.clone()).unwrap_or_default()
                             })
                             .collect();
-                        bands.sort();
+                        groups.sort();
                         tasks.push(Task {
-                            level: Level::SeatBands,
+                            level: Level::SeatGroups,
                             me: me.clone(),
                             seat: Some(seat),
-                            opponent_bands: bands,
+                            opponent_groups: groups,
                             opponents: vec![],
                             parent: None,
                         });
                     }
                 }
-                Level::Bands => {
+                Level::Groups => {
                     let s = splitmix64(cfg.seed ^ 0xBAAD);
                     let opp = sample_opponents(&names, me, s, cfg.players - 1);
-                    let mut bands: Vec<String> = opp
+                    let mut groups: Vec<String> = opp
                         .iter()
-                        .map(|o| data.character(o).map(|c| c.band.clone()).unwrap_or_default())
+                        .map(|o| data.persona(o).map(|c| c.group.clone()).unwrap_or_default())
                         .collect();
-                    bands.sort();
+                    groups.sort();
                     tasks.push(Task {
-                        level: Level::Bands,
+                        level: Level::Groups,
                         me: me.clone(),
                         seat: None,
-                        opponent_bands: bands,
+                        opponent_groups: groups,
                         opponents: vec![],
                         parent: None,
                     });
@@ -521,7 +521,7 @@ fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
                         level: Level::Exact,
                         me: me.clone(),
                         seat: Some(0),
-                        opponent_bands: vec![],
+                        opponent_groups: vec![],
                         opponents: opp,
                         parent: None,
                     });
@@ -546,10 +546,10 @@ fn field_deck(
     book: &DeckBook,
     sha: &str,
     seat: usize,
-    character: &str,
+    persona: &str,
     others: &[String],
 ) -> Vec<String> {
-    let Some(c) = data.character(character) else {
+    let Some(c) = data.persona(persona) else {
         return vec![];
     };
     book.lookup(data, c, seat, others, sha)
@@ -603,8 +603,8 @@ fn play_one_seed(
     let names = char_names(data);
     let opps = match task.level {
         Level::Me => sample_opponents(&names, &task.me, seed, cfg.players - 1),
-        Level::SeatBands | Level::Bands => {
-            sample_opponents_by_bands(data, &task.me, &task.opponent_bands, seed)
+        Level::SeatGroups | Level::Groups => {
+            sample_opponents_by_groups(data, &task.me, &task.opponent_groups, seed)
         }
         Level::Exact => {
             if task.opponents.len() != cfg.players - 1 {
@@ -627,7 +627,7 @@ fn play_one_seed(
         .map(|(i, c)| RoomMember {
             id: i as i32 + 1,
             player: format!("P{}", i + 1),
-            character: c.clone(),
+            persona: c.clone(),
             bot: false,
             mentality: BotMentality::Standard,
             ..Default::default()
@@ -645,7 +645,7 @@ fn play_one_seed(
     if st.phase != "deck" {
         return None;
     }
-    let Some(target_seat) = st.players.iter().position(|p| p.character == task.me) else {
+    let Some(target_seat) = st.players.iter().position(|p| p.persona == task.me) else {
         return None;
     };
     if let Some(want) = task.seat {
@@ -656,7 +656,7 @@ fn play_one_seed(
     // Per-seat decks: the candidate for us, the working book for the field.
     let mut decks: Vec<(i32, Vec<String>)> = Vec::new();
     for (i, p) in st.players.iter().enumerate() {
-        let list = if p.character == task.me {
+        let list = if p.persona == task.me {
             target_deck.to_vec()
         } else {
             let others: Vec<String> = st
@@ -664,9 +664,9 @@ fn play_one_seed(
                 .iter()
                 .enumerate()
                 .filter(|(j, _)| *j != i)
-                .map(|(_, q)| q.character.clone())
+                .map(|(_, q)| q.persona.clone())
                 .collect();
-            field_deck(data, book, sha, i, &p.character, &others)
+            field_deck(data, book, sha, i, &p.persona, &others)
         };
         if list.len() != deck::SIZE {
             return None;
@@ -700,7 +700,7 @@ fn play_one_seed(
     }
     let secs = t0.elapsed().as_secs_f64();
     let st = m.state();
-    let me = st.players.iter().find(|p| p.character == task.me)?;
+    let me = st.players.iter().find(|p| p.persona == task.me)?;
     Some(GameResult {
         score: me.score as f64,
         rank: me.rank as f64,
@@ -937,7 +937,7 @@ fn greedy(
     book: &DeckBook,
     sha: &str,
     task: &Task,
-    me: &CharacterData,
+    me: &PersonaData,
     start: &Cand,
     state: &mut RaceState,
     target_games: usize,
@@ -1047,11 +1047,11 @@ fn load_checkpoint(cfg: &Config) -> Checkpoint {
     serde_json::from_str(&text).unwrap_or_default()
 }
 
-fn save_checkpoint(cfg: &Config, cp: &Checkpoint) {
+fn save_checkpoint(cfg: &Config, ckpt: &Checkpoint) {
     if let Some(dir) = cfg.checkpoint.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    if let Ok(text) = serde_json::to_string_pretty(cp) {
+    if let Ok(text) = serde_json::to_string_pretty(ckpt) {
         let _ = std::fs::write(&cfg.checkpoint, text);
     }
 }
@@ -1083,7 +1083,7 @@ fn entry(task: &Task, cards: &[String]) -> DeckBookEntry {
         me: task.me.clone(),
         seat: task.seat,
         opponents: task.opponents.clone(),
-        opponent_bands: task.opponent_bands.clone(),
+        opponent_groups: task.opponent_groups.clone(),
         cards: cards.to_vec(),
     }
 }
@@ -1129,23 +1129,23 @@ fn main() {
 
     let tasks = build_tasks(&data, &cfg);
     if tasks.is_empty() {
-        eprintln!("deckbook: no tasks (bad --characters?)");
+        eprintln!("deckbook: no tasks (bad --personas?)");
         std::process::exit(2);
     }
     println!("deckbook: {} tasks", tasks.len());
 
-    let mut cp = load_checkpoint(&cfg);
-    if cp.ruleset_sha256 != sha && !cp.done.is_empty() {
+    let mut ckpt = load_checkpoint(&cfg);
+    if ckpt.ruleset_sha256 != sha && !ckpt.done.is_empty() {
         eprintln!(
             "deckbook: checkpoint ruleset {} != {sha} -- starting fresh",
-            cp.ruleset_sha256
+            ckpt.ruleset_sha256
         );
-        cp = Checkpoint::default();
+        ckpt = Checkpoint::default();
     }
-    cp.seed = cfg.seed;
-    cp.ruleset_sha256 = sha.clone();
-    cp.cap_rounds = cfg.cap_rounds;
-    cp.games_per_candidate = cfg.games_per_candidate;
+    ckpt.seed = cfg.seed;
+    ckpt.ruleset_sha256 = sha.clone();
+    ckpt.cap_rounds = cfg.cap_rounds;
+    ckpt.games_per_candidate = cfg.games_per_candidate;
 
     // Working book for the field (starts empty = preset). Rebuilt after each
     // derivation pass and between fictitious-play rounds.
@@ -1155,17 +1155,17 @@ fn main() {
     book.policy = POLICY_STANDARD.into();
     book.generated_at = now_stamp();
 
-    let mut game_ms = cp.ms_per_game;
+    let mut game_ms = ckpt.ms_per_game;
     let mut total_games = 0u64;
     let mut total_secs = 0.0f64;
 
     // ---- pass 0: derive -------------------------------------------------
     for fp in 0..=cfg.fp_rounds {
         if fp > 0 {
-            cp.fp_round = fp;
+            ckpt.fp_round = fp;
             // Rebuild the field from the entries emitted so far.
             book.me.clear();
-            for (tid, rec) in &cp.done {
+            for (tid, rec) in &ckpt.done {
                 if rec.emitted {
                     if let Some(t) = tasks.iter().find(|t| t.id() == *tid) {
                         book.me.push(entry(t, &rec.best_cards));
@@ -1184,7 +1184,7 @@ fn main() {
                 eprintln!("deckbook: budget exhausted -- skipping fictitious play round {fp}");
                 break;
             }
-            let keep = cp.done.clone();
+            let keep = ckpt.done.clone();
             for t in &tasks {
                 let prior = keep.get(&t.id()).cloned();
                 if cfg.deadline() {
@@ -1197,13 +1197,13 @@ fn main() {
                     &book,
                     &sha,
                     t,
-                    &mut cp,
+                    &mut ckpt,
                     &mut game_ms,
                     &mut total_games,
                     &mut total_secs,
                     prior,
                 );
-                save_checkpoint(&cfg, &cp);
+                save_checkpoint(&cfg, &ckpt);
             }
             continue;
         }
@@ -1211,7 +1211,7 @@ fn main() {
             if cfg.deadline() {
                 break;
             }
-            if fp == 0 && cfg.resume && cp.done.contains_key(&t.id()) {
+            if fp == 0 && cfg.resume && ckpt.done.contains_key(&t.id()) {
                 continue;
             }
             derive_one(
@@ -1221,13 +1221,13 @@ fn main() {
                 &book,
                 &sha,
                 t,
-                &mut cp,
+                &mut ckpt,
                 &mut game_ms,
                 &mut total_games,
                 &mut total_secs,
                 None,
             );
-            save_checkpoint(&cfg, &cp);
+            save_checkpoint(&cfg, &ckpt);
         }
     }
 
@@ -1237,7 +1237,7 @@ fn main() {
     out.ruleset_sha256 = sha.clone();
     out.policy = POLICY_STANDARD.into();
     out.generated_at = now_stamp();
-    for (tid, rec) in &cp.done {
+    for (tid, rec) in &ckpt.done {
         if !rec.emitted {
             continue;
         }
@@ -1247,15 +1247,15 @@ fn main() {
         let e = entry(t, &rec.best_cards);
         match t.level {
             Level::Me => out.me.push(e),
-            Level::SeatBands => out.seat_bands.push(e),
-            Level::Bands => out.bands.push(e),
+            Level::SeatGroups => out.seat_groups.push(e),
+            Level::Groups => out.groups.push(e),
             Level::Exact => out.exact.push(e),
         }
     }
     out.me.sort_by(|a, b| a.me.cmp(&b.me));
-    out.seat_bands
+    out.seat_groups
         .sort_by(|a, b| (a.seat, a.me.clone()).cmp(&(b.seat, b.me.clone())));
-    out.bands.sort_by(|a, b| a.me.cmp(&b.me));
+    out.groups.sort_by(|a, b| a.me.cmp(&b.me));
     out.exact.sort_by(|a, b| (a.seat, a.me.clone()).cmp(&(b.seat, b.me.clone())));
 
     if let Some(dir) = cfg.out.parent() {
@@ -1263,15 +1263,15 @@ fn main() {
     }
     let text = serde_json::to_string_pretty(&out).expect("book serializes");
     std::fs::write(&cfg.out, text).expect("write book");
-    cp.ms_per_game = game_ms;
-    save_checkpoint(&cfg, &cp);
+    ckpt.ms_per_game = game_ms;
+    save_checkpoint(&cfg, &ckpt);
 
     println!(
-        "deckbook: wrote {} ({} me / {} seat_bands / {} bands / {} exact entries)",
+        "deckbook: wrote {} ({} me / {} seat_groups / {} groups / {} exact entries)",
         cfg.out.display(),
         out.me.len(),
-        out.seat_bands.len(),
-        out.bands.len(),
+        out.seat_groups.len(),
+        out.groups.len(),
         out.exact.len(),
     );
     if total_games > 0 {
@@ -1290,14 +1290,14 @@ fn main() {
     }
 }
 
-/// Rough full-run wall time for every character at `gpc` games/candidate.
+/// Rough full-run wall time for every persona at `gpc` games/candidate.
 fn estimate(_tasks: &[Task], data: &GameData, cfg: &Config, gpc: usize, ms_per_game: f64) -> String {
-    let n_chars = if cfg.characters.is_empty() {
-        data.characters.len()
+    let n_chars = if cfg.personas.is_empty() {
+        data.personas.len()
     } else {
-        cfg.characters.len().max(1)
+        cfg.personas.len().max(1)
     };
-    // Per character: 1 + 10 drops + (pool-10) adds, then `greedy_rounds` swap
+    // Per persona: 1 + 10 drops + (pool-10) adds, then `greedy_rounds` swap
     // rounds of ~(pool-10)*10 neighbours, each racing to gpc with halving
     // (≈ 1.33x the final rung across the ladder, plus the anchor's full run).
     let pool = 21usize; // measured median pool
@@ -1332,7 +1332,7 @@ fn derive_one(
     book: &DeckBook,
     sha: &str,
     task: &Task,
-    cp: &mut Checkpoint,
+    ckpt: &mut Checkpoint,
     game_ms: &mut f64,
     total_games: &mut u64,
     total_secs: &mut f64,
@@ -1342,11 +1342,11 @@ fn derive_one(
     if cfg.deadline() {
         // Out of budget: keep whatever the previous pass measured.
         if let Some(p) = prior {
-            cp.done.entry(task.id()).or_insert(p);
+            ckpt.done.entry(task.id()).or_insert(p);
         }
         return;
     }
-    let Some(me) = data.character(&task.me) else {
+    let Some(me) = data.persona(&task.me) else {
         return;
     };
     let mut cands = candidates(data, me);
@@ -1476,7 +1476,7 @@ fn derive_one(
     );
     let wall = t0.elapsed().as_secs_f64();
     // A stop with no new games must not overwrite a previous record.
-    if games_total == 0 && cp.done.contains_key(&task.id()) {
+    if games_total == 0 && ckpt.done.contains_key(&task.id()) {
         return;
     }
     *total_games += games_total;
@@ -1498,7 +1498,7 @@ fn derive_one(
             0.0
         }
     );
-    cp.done.insert(
+    ckpt.done.insert(
         task.id(),
         TaskRecord {
             best_id: best.id.clone(),

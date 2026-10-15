@@ -47,11 +47,11 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
 1. 每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；
 2. 每个双色效果为将自己的所有反面[P✽P粉丝]变正。"#)
         .cell(r#"D15"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
-    ctx::add_band_crystals(player_id, 3, i32::MAX);
+    ctx::add_group_crystals(player_id, 3, i32::MAX);
     // 规则书[手]: 「并将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(
@@ -65,7 +65,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     ctx::set_crystals(fans / 3);
     // 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」
     // -- `cards_in(Deck)` is the reveal; a card's colour is the band prefix of
-    // its id (`PP:`, `R:`, ...), which is what `H.Db.Card(id)?.band` reads.
+    // its id (`PP:`, `R:`, ...), which is what `H.Db.Card(id)?.group` reads.
     // One distinct colour -> 1 mono mark; two or more -> 1 dual mark.
     let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
     let mut seen: alloc::vec::Vec<&str> = alloc::vec::Vec::new();

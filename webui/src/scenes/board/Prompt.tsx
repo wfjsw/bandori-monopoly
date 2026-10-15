@@ -521,7 +521,7 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
       <div className={s.detail} onDoubleClick={() => focus !== null && onConfirm?.(focus)}>
         {id && c ? (
           <>
-            <div className={s.dArt} style={{ borderColor: bandColor(c.band) }}><img src={cardArt(id)} alt="" /></div>
+            <div className={s.dArt} style={{ borderColor: bandColor(c.group) }}><img src={cardArt(id)} alt="" /></div>
             <div className={s.dTitle}>{cardTitle(id)}</div>
             {!!c.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
             <div className={s.dText}><SkillBody text={c.text} /></div>

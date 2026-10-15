@@ -1,14 +1,14 @@
-//! Levels, EXP, fire (stamina), coins.
+//! Levels, EXP, charge (stamina), coins.
 
 use serde::{Deserialize, Serialize};
 
 use crate::MatchMode;
 
 pub const MAX_LEVEL: i32 = 500;
-/// Fire refilled each day.
-pub const FIRE_DAILY_MAX: i32 = 5;
-/// Fire a player may spend on one match (each multiplies EXP).
-pub const FIRE_MAX_PER_GAME: i32 = 3;
+/// Charge refilled each day.
+pub const CHARGE_DAILY_MAX: i32 = 5;
+/// Charge a player may spend on one match (each multiplies EXP).
+pub const CHARGE_MAX_PER_GAME: i32 = 3;
 pub const STARS_PER_GAME: i32 = 1;
 
 const TOP_COINS: [i32; 3] = [500, 300, 100];
@@ -23,7 +23,7 @@ pub fn exp_to_next(level: i32) -> i32 {
     }
 }
 
-/// EXP for finishing `rank` (1 = first) of `players`, before the fire multiplier.
+/// EXP for finishing `rank` (1 = first) of `players`, before the charge multiplier.
 pub fn base_exp(ranked: bool, rank: i32, players: i32) -> i32 {
     let beaten = (players - rank).max(0);
     if ranked {
@@ -33,14 +33,14 @@ pub fn base_exp(ranked: bool, rank: i32, players: i32) -> i32 {
     }
 }
 
-pub fn exp_multiplier(fire_used: i32) -> i32 {
-    1 + fire_used.max(0)
+pub fn exp_multiplier(charge_used: i32) -> i32 {
+    1 + charge_used.max(0)
 }
 
 /// Ranked coin change. Top three gain 500/300/100; otherwise the last three lose
 /// 500/300/100 counting from the bottom.
 ///
-/// The two bands overlap in small games by design: with 4 players, 4th place is
+/// The two groups overlap in small games by design: with 4 players, 4th place is
 /// "last" and loses 500 even though 3rd gains 100.
 pub fn ranked_coins(rank: i32, players: i32) -> i32 {
     if rank >= 1 && rank as usize <= TOP_COINS.len() && rank <= players {
@@ -61,7 +61,7 @@ pub struct MatchReward {
     pub rank: i32,
     pub players: i32,
     pub base_exp: i32,
-    pub fire_used: i32,
+    pub charge_used: i32,
     pub multiplier: i32,
     pub exp: i32,
     pub level_before: i32,

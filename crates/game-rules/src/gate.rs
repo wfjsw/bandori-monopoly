@@ -10,10 +10,10 @@
 //! rollout's `can_pay`), so it must stay O(players).
 //!
 //! [`ExclusiveUse`] additionally carries the questioned exclusive: the card id
-//! hash in `trigger_card`, the card's `owner` character name in `name`
+//! hash in `trigger_card`, the card's `owner` persona name in `name`
 //! (`counter_is('名')`), `value = 1` when that owner is the actor's base
-//! character, and `step = 1` when it is the actor's own character. Player
-//! snaps also carry `character` / `band` hashes so `band_is` / `character_is`
+//! persona, and `step = 1` when it is the actor's own persona. Player
+//! snaps also carry `persona` / `group` hashes so `group_is` / `persona_is`
 //! can name the asked seat's identity (CRYCHIC's denial).
 
 use rules_cond::{id_of, PlayerSnap, WindowCtx};
@@ -115,9 +115,9 @@ pub fn window_of_card_world<W: CardWorld>(w: &W, actor: i32) -> WindowCtx {
 }
 
 /// The [`Gate::Exclusive`] window: status layers **plus** the questioned
-/// exclusive and each seat's `character` / `band` identity hashes (so
-/// `band_is(actor, 'CRYCHIC')` reads the character row's band -- the stable
-/// spelling, not the currently attached band-skill id).
+/// exclusive and each seat's `persona` / `group` identity hashes (so
+/// `group_is(actor, 'CRYCHIC')` reads the persona row's group -- the stable
+/// spelling, not the currently attached group-skill id).
 pub fn window_of_exclusive(
     w: &World,
     data: &GameData,
@@ -125,7 +125,7 @@ pub fn window_of_exclusive(
     ask: &ExclusiveAsk<'_>,
 ) -> WindowCtx {
     let mut win = window_of_world(w, actor);
-    win.kind = TriggerKind::ExclusiveUse as i64;
+    win.kind = TriggerKind::ExclusiveUse.as_i32() as i64;
     win.trigger_card = id_of(ask.card);
     win.name = ask.owner.to_string();
     win.value = ask.owner_is_base as i64;
@@ -135,10 +135,10 @@ pub fn window_of_exclusive(
             .st
             .players
             .get(i)
-            .map(|s| s.character.clone())
+            .map(|s| s.persona.clone())
             .unwrap_or_default();
-        p.character = id_of(&ch);
-        p.band = id_of(&data.character(&ch).map(|c| c.band.clone()).unwrap_or_default());
+        p.persona = id_of(&ch);
+        p.group = id_of(&data.persona(&ch).map(|c| c.group.clone()).unwrap_or_default());
     }
     win
 }

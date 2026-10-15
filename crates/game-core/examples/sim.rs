@@ -78,8 +78,8 @@ fn main() {
                 // Message keys, nested ones included (the debug form lists them all).
                 let keys = e.msg.to_string();
                 for (needle, label) in [
-                    ("log.circle_money", "circle money"),
-                    ("log.circle_card", "circle card"),
+                    ("log.pass_reward_money", "pass-reward money"),
+                    ("log.pass_reward_card", "pass-reward card"),
                     ("log.auction_won", "auction won"),
                     ("log.force_buy", "force buy"),
                     ("log.part.rent_half", "agent half rent"),

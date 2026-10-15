@@ -24,7 +24,7 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。"#)
         .cell(r#"M10"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「免除此次支付」

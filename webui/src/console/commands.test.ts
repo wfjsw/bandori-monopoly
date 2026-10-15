@@ -10,8 +10,8 @@ function harness(kind: ConsoleSession["kind"] = "solo", cheats = true) {
     view: { playerId: 0, hand: ["c1"], state: {
       phase: "play", round: 2, turn: 1, step: 2, seq: 12, busy: false, debugOpen: false,
       players: [
-        { player: "A", character: "Kasumi", money: 10_000, pos: 0, hand: 1, bankrupt: false, left: false },
-        { player: "B", character: "Yukina", money: 9_000, pos: 10, hand: 2, bankrupt: false, left: true },
+        { player: "A", persona: "Kasumi", money: 10_000, pos: 0, hand: 1, bankrupt: false, left: false },
+        { player: "B", persona: "Yukina", money: 9_000, pos: 10, hand: 2, bankrupt: false, left: true },
       ], prompt: { id: 0 },
     } } as MatchView,
     act: async (cmd) => { sent.push(cmd); return null; },
@@ -19,8 +19,8 @@ function harness(kind: ConsoleSession["kind"] = "solo", cheats = true) {
   };
   const ctx: ConsoleContext = {
     session: () => sess, cards: () => [
-      { id: "c1", name: "Card One", band: "B" }, { id: "c2", name: "Card One", band: "B" },
-      { id: "c3", name: "Unique Card", band: "Roselia" },
+      { id: "c1", name: "Card One", group: "B" }, { id: "c2", name: "Card One", group: "B" },
+      { id: "c3", name: "Unique Card", group: "Roselia" },
     ],
     tiles: () => Array.from({ length: 40 }, (_, index) => ({ index, name: "T", kind: "property" })),
     profile: () => ({}), engine: () => ({}), cheatsEnabled: () => cheats,
@@ -42,13 +42,13 @@ test("cheats select explicit seats and defaults, with validated card IDs", async
   await h.run("tp 10 1");
   await h.run("give c1 2 1");
   await h.run("draw 2");
-  await h.run("state fire 5");
+  await h.run("state charge 5");
   assert.equal(h.sent[0].target, 0);
   assert.equal(h.sent[1].target, 1);
   assert.equal(h.sent[2].card, "c1");
   assert.equal(h.sent[2].value, 2);
   assert.equal(h.sent[3].debug, "draw");
-  assert.equal(h.sent[4].character, "fire");
+  assert.equal(h.sent[4].persona, "charge");
 });
 
 test("malformed inputs never dispatch an action", async () => {
@@ -111,7 +111,7 @@ test("cheats accept their boundaries and default to the viewing seat", async () 
   const h = harness();
   h.sess.view!.playerId = 1;
   for (const line of ["money 0", "money 100000000", "tp 0", "tp 39", "draw 1", "draw 100",
-    'give "Unique Card"', "give c1 100 0", "state fire -1000000", "state fire 1000000"]) {
+    'give "Unique Card"', "give c1 100 0", "state charge -1000000", "state charge 1000000"]) {
     assert.equal(await h.run(line), "console.ok");
   }
   assert.deepEqual(h.sent, [
@@ -123,8 +123,8 @@ test("cheats accept their boundaries and default to the viewing seat", async () 
     { act: "debug", debug: "draw", value: 100, target: 1 },
     { act: "debug", debug: "give", card: "c3", value: 1, target: 1 },
     { act: "debug", debug: "give", card: "c1", value: 100, target: 0 },
-    { act: "debug", debug: "state", character: "fire", value: -1_000_000, target: 1 },
-    { act: "debug", debug: "state", character: "fire", value: 1_000_000, target: 1 },
+    { act: "debug", debug: "state", persona: "charge", value: -1_000_000, target: 1 },
+    { act: "debug", debug: "state", persona: "charge", value: 1_000_000, target: 1 },
   ]);
 });
 
@@ -139,10 +139,10 @@ test("an exact card ID takes precedence over another card's matching name", asyn
 
 test("missing, extra and out-of-range cheat arguments never dispatch", async () => {
   const h = harness();
-  for (const line of ["money", "tp", "draw", "give", "state fire", "money +1", "money 1e2",
+  for (const line of ["money", "tp", "draw", "give", "state charge", "money +1", "money 1e2",
     "money 9007199254740992", "tp 1 2", "draw 1 0 extra", "give missing", "give c1 0", "give c1 101",
-    "give c1 1 2", "give c1 1 0 extra", "state fire -1000001", "state fire 1000001",
-    "state fire 1.5", "state fire 1 2", "state fire 1 0 extra"]) {
+    "give c1 1 2", "give c1 1 0 extra", "state charge -1000001", "state charge 1000001",
+    "state charge 1.5", "state charge 1 2", "state charge 1 0 extra"]) {
     await assert.rejects(h.run(line), undefined, line);
   }
   assert.deepEqual(h.sent, []);
@@ -154,7 +154,7 @@ test("raw actions validate every protocol field before dispatching", async () =>
   for (const field of ["value", "target", "prompt"]) {
     for (const value of [null, "1", 0.5, -2_147_483_649, 2_147_483_648]) invalid.push({ act: "roll", [field]: value });
   }
-  for (const field of ["character", "card", "debug"]) {
+  for (const field of ["persona", "card", "debug"]) {
     for (const value of [null, 1, []]) invalid.push({ act: "roll", [field]: value });
   }
   for (const cards of [null, "c1", [1], ["c1", null]]) invalid.push({ act: "deck", cards });
@@ -164,7 +164,7 @@ test("raw actions validate every protocol field before dispatching", async () =>
   }
   assert.deepEqual(h.sent, []);
   const cmd = { act: "answer", value: -2_147_483_648, target: -1, prompt: 2_147_483_647,
-    character: "A", card: "Card\\Name", debug: "", cards: ["c1", "c2"] };
+    persona: "A", card: "Card\\Name", debug: "", cards: ["c1", "c2"] };
   await h.run(`act ${JSON.stringify(cmd)}`);
   assert.deepEqual(h.sent, [cmd]);
 });
@@ -177,8 +177,8 @@ test("inspection reports the visible match and works during replay and autopilot
   assert.deepEqual(await h.run("status"), { session: "replay", id: "test", auto: "bot", phase: "play",
     round: 2, turn: 1, step: 2, seq: 12, busy: false, prompt: 0, cheated: false });
   assert.deepEqual(await h.run("players"), [
-    { seat: 0, name: "A", character: "Kasumi", money: 10_000, pos: 0, hand: 1, out: false },
-    { seat: 1, name: "B", character: "Yukina", money: 9_000, pos: 10, hand: 2, out: true },
+    { seat: 0, name: "A", persona: "Kasumi", money: 10_000, pos: 0, hand: 1, out: false },
+    { seat: 1, name: "B", persona: "Yukina", money: 9_000, pos: 10, hand: 2, out: true },
   ]);
   assert.deepEqual(await h.run("hand"), [{ index: 0, id: "c1", name: "Card One" }]);
   assert.equal(await h.run("inspect"), state);
@@ -193,7 +193,7 @@ test("data search is case-insensitive, bounded and independent of a match", asyn
   const h = harness();
   h.ctx.session = () => null;
   h.ctx.cards = () => Array.from({ length: 150 }, (_, index) => ({
-    id: `c${index}`, name: `Card ${index}`, band: index % 2 ? "Roselia" : "Poppin'Party",
+    id: `c${index}`, name: `Card ${index}`, group: index % 2 ? "Roselia" : "Poppin'Party",
   }));
   const all = await h.run("cards") as { total: number; cards: unknown[] };
   assert.equal(all.total, 150);
@@ -234,7 +234,7 @@ test("local commands work without a match and missing views fail clearly", async
 test("read-only solo sessions reject all writes while autopilot modes can be changed", async () => {
   const h = harness();
   h.sess.readOnly = true;
-  for (const line of ["money 1", "tp 1", "give c1", "draw 1", "state fire 1", 'act {"act":"roll"}', "auto off"]) {
+  for (const line of ["money 1", "tp 1", "give c1", "draw 1", "state charge 1", 'act {"act":"roll"}', "auto off"]) {
     await assert.rejects(h.run(line), /console.readOnly/, line);
   }
   assert.deepEqual(h.sent, []);
@@ -271,7 +271,7 @@ test("command errors use translations and propagate formatted engine errors", as
 test("an engine built without cheats refuses the cheat commands and says so in help", async () => {
   for (const kind of ["solo", "online"] as const) {
     const h = harness(kind, false);
-    for (const line of ["money 1", "tp 1 0", "give c1", "draw 1", "state fire 1",
+    for (const line of ["money 1", "tp 1 0", "give c1", "draw 1", "state charge 1",
       'act {"act":"debug","debug":"money","value":1}']) {
       await assert.rejects(h.run(line), /console\.cheatsDisabled/, `${kind}: ${line}`);
     }

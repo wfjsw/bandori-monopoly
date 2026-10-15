@@ -38,7 +38,7 @@ pub fn rinpuu_01_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     post.stay[p] == pre.stay[p].saturating_add(1)
         && crate::world::arr4_eq(post.money, pre.money)
         && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.charge, pre.charge)
         && crate::world::arr8b_eq(post.hand, pre.hand)
         && crate::world::arr8b_eq(post.discard, pre.discard)
         && post.pay_amount == pre.pay_amount

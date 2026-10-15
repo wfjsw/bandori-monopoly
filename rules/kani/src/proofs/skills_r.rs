@@ -15,20 +15,20 @@ use crate::invoke;
 use crate::spec::skills_r as spec;
 use crate::world::{self, Effect, MAX_PLAYERS};
 
-// Ops the sayo/rinko/lisa Pass hooks reach (`gain_fire`, `log`, `player_*`).
+// Ops the sayo/rinko/lisa Pass hooks reach (`gain_charge`, `log`, `player_*`).
 crate::host_subset!(skills_r_dispatch {
     log | effect => arm_log,
-    gain_fire => arm_gain_fire,
+    gain_charge => arm_gain_charge,
     fire => arm_fire,
-    fire_max => arm_fire_max,
-    spend_fire => arm_spend_fire,
+    charge_max => arm_charge_max,
+    spend_charge => arm_spend_charge,
     player_count => arm_player_count,
     player_out => arm_player_out,
     player_pos => arm_player_pos,
     tile_named => arm_tile_named,
     tile_count => arm_tile_count,
-    in_band => arm_in_band,
-    character_is => arm_character_is,
+    in_group => arm_in_band,
+    persona_is => arm_character_is,
     raise => arm_raise,
     gate => arm_gate,
 });
@@ -49,7 +49,7 @@ fn skills_r_world(user: i32) {
     world::with_world_mut(|w| {
         w.trig_player = user;
         for p in 0..MAX_PLAYERS {
-            w.fire_max[p] = 10;
+            w.charge_max[p] = 10;
             w.stay[p] = 0;
         }
     });
@@ -80,7 +80,7 @@ fn sayo_fire_pass_iff_at(user: i32) {
     });
     let n = spec::sayo_circle_gain(someone_out);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_characters::sayo_thorns::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::sayo_thorns::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -88,11 +88,11 @@ fn sayo_fire_pass_iff_at(user: i32) {
     kani::cover!(someone_out, "someone out (gain 3)");
     kani::cover!(!someone_out, "nobody out (gain 2)");
     crate::kassert!(
-        spec::sayo_gain_fire_log_ok(effects, user, n),
+        spec::sayo_gain_charge_log_ok(effects, user, n),
         "C-R-踏上荆棘之路的觉悟-01: GainFire 2 or 3"
     );
     crate::kassert!(
-        post.fire[user as usize] == pre.fire[user as usize] + n,
+        post.charge[user as usize] == pre.charge[user as usize] + n,
         "C-R-踏上荆棘之路的觉悟-01: fire +n"
     );
 }
@@ -120,7 +120,7 @@ pub fn sayo_fire_mutant_is_detected() {
             w.out[p] = false;
         }
     });
-    invoke::unwrap_done(skill_characters::sayo_thorns::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::sayo_thorns::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::sayo_circle_gain(false) + 1;
@@ -138,17 +138,17 @@ fn rinko_fire_pass_iff_at(user: i32) {
     let user = user;
     skills_r_world(user);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_characters::rinko_1cm::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::rinko_1cm::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
     crate::kassert!(
-        spec::rinko_gain_fire_log_ok(effects, user),
+        spec::rinko_gain_charge_log_ok(effects, user),
         "C-R-即使1cm也要前进-01: exactly GainFire 3"
     );
     crate::kassert!(
-        post.fire[user as usize] == pre.fire[user as usize] + spec::rinko_circle_gain(),
+        post.charge[user as usize] == pre.charge[user as usize] + spec::rinko_circle_gain(),
         "C-R-即使1cm也要前进-01: fire +3"
     );
 }
@@ -171,7 +171,7 @@ pub fn rinko_fire_user1_pass_iff() {
 pub fn rinko_fire_mutant_is_detected() {
     let user = 0i32;
     skills_r_world(user);
-    invoke::unwrap_done(skill_characters::rinko_1cm::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::rinko_1cm::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::rinko_circle_gain() + 1;
@@ -189,17 +189,17 @@ fn lisa_fire_pass_iff_at(user: i32) {
     let user = user;
     skills_r_world(user);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_characters::lisa_goddess::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::lisa_goddess::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
 
     crate::kassert!(
-        spec::lisa_gain_fire_log_ok(effects, user),
+        spec::lisa_gain_charge_log_ok(effects, user),
         "C-R-慈爱女神-01: exactly GainFire 1"
     );
     crate::kassert!(
-        post.fire[user as usize] == pre.fire[user as usize] + spec::lisa_circle_gain(),
+        post.charge[user as usize] == pre.charge[user as usize] + spec::lisa_circle_gain(),
         "C-R-慈爱女神-01: fire +1"
     );
 }
@@ -222,7 +222,7 @@ pub fn lisa_fire_user1_pass_iff() {
 pub fn lisa_fire_mutant_is_detected() {
     let user = 0i32;
     skills_r_world(user);
-    invoke::unwrap_done(skill_characters::lisa_goddess::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::lisa_goddess::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::lisa_circle_gain() + 1;

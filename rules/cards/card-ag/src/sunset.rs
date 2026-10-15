@@ -26,7 +26,7 @@ pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("",
 1. 删除所有被[指定]格子上的1栋房；
 2. 所有被[指定]的玩家[支付][使用者]X资金。"#)
         .cell(r#"C5"#)
-        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
+        .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 /// Owned tiles with at least one house (C# `CardSunset.Built`).
 fn built(player_id: i32) -> Vec<i32> {

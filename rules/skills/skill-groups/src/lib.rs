@@ -1,0 +1,82 @@
+//! Band skills as card rules -- one file per skill, one crate for the lot.
+//!
+//! Separated from `rules/cards/` for the same reason as
+//! [`skill-personas`](../skill_personas): these are abilities a band comes
+//! with, not cards you draw. Same rule language ([`CardDef`]), separate crate.
+//!
+//! The rule text lives in the roster band row (`skill` is the name, `text` /
+//! `simple` the wording). A band skill's [奇迹水晶] live on its own field
+//! instance (`FieldCard::crystals`) -- `ctx::crystals` / `ctx::add_crystals`
+//! from inside this rule, `ctx::group_crystals` / `ctx::add_group_crystals` from
+//! any card meaning 「乐队卡 / 团卡」. One pool, no keyed-state side store.
+//!
+//! Hooks: the same two the character skills use, no third kind. A half the
+//! player presses is [`On::Play`] with its gate; a half a field event calls is
+//! [`On::Hook`] (the skill is a field card, C# `Fx`). See the module docs in
+//! `skill-personas` for the shape and for what is still missing (id
+//! resolution, not hooks).
+
+#![cfg_attr(target_arch = "wasm32", no_std)]
+
+extern crate alloc;
+
+use card_sdk::CardDef;
+
+pub mod ave_mujica;
+use ave_mujica::AVE_MUJICA;
+pub mod afterglow;
+use afterglow::AFTERGLOW;
+pub mod roselia;
+use roselia::ROSELIA;
+pub mod morfonica;
+use morfonica::MORFONICA;
+pub mod ras;
+use ras::RAS;
+pub mod mygo;
+use mygo::MYGO;
+pub mod sumimi;
+use sumimi::SUMIMI;
+pub mod pastel;
+use pastel::PASTEL;
+pub mod hhw;
+use hhw::HHW;
+pub mod circle_staff;
+use circle_staff::CIRCLE_STAFF;
+pub mod poppin;
+use poppin::POPPIN;
+pub mod crychic;
+use crychic::CRYCHIC;
+pub mod roster_table;
+
+// The 规则书 text for these is a Google Sheet (see `skill-rulebook-sheets` in
+// the project memory, or fetch `export?format=csv&gid=1398197110` on the
+// `1xZ3avBsNBXbl3bQ74lmPs0YQFgZkPD0Sdzmx7ZGGEDY` document), column `技能`.
+// the roster band row (`text`) is a faithful copy of it -- 12/12 rows match modulo
+// the sheet's literal backslash-n escapes -- so the JSON is safe to code against.
+//
+// All 12 band skills are written and bound (`bind_skills`). What is left on
+// each is its own `TODO(规则书)` / `TODO(ABI)` note -- 4 of the 12 carry one
+// (2026-10-06).
+//
+pub const CARDS: &[CardDef] = &[
+    AVE_MUJICA,
+    AFTERGLOW,
+    ROSELIA,
+    MORFONICA,
+    RAS,
+    MYGO,
+    SUMIMI,
+    PASTEL,
+    HHW,
+    CIRCLE_STAFF,
+    POPPIN,
+    CRYCHIC,
+];
+
+/// Spend the 「星星贴纸」 「使用因此卡获得的团卡的主动效果时需要支付」.
+pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
+    if ruleset_core::ctx::tok(player_id, "returns.copied") > 0 {
+        ruleset_core::ctx::add_tok(player_id, "星星贴纸", -1, i32::MAX)?;
+    }
+    Ok(())
+}

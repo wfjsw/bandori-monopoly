@@ -21,7 +21,7 @@ export interface ConsoleSession {
 }
 export interface ConsoleContext {
   session(): ConsoleSession | null;
-  cards(): { id: string; name: string; band: string }[];
+  cards(): { id: string; name: string; group: string }[];
   tiles(): { index: number; name: string; kind: string }[];
   profile(): unknown;
   engine(): unknown;
@@ -100,7 +100,7 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
         phase: st?.phase, round: st?.round, turn: st?.turn, step: st?.step,
         seq: st?.seq, busy: st?.busy, prompt: st?.prompt.id, cheated: st?.debugOpen };
     }
-    case "players": arity(0); return view().state.players.map((p, seat) => ({ seat, name: p.player, character: p.character, money: p.money, pos: p.pos, hand: p.hand, out: p.bankrupt || p.left }));
+    case "players": arity(0); return view().state.players.map((p, seat) => ({ seat, name: p.player, persona: p.persona, money: p.money, pos: p.pos, hand: p.hand, out: p.bankrupt || p.left }));
     case "hand": arity(0); return view().hand.map((id, index) => ({ index, id, name: ctx.cards().find((c) => c.id === id)?.name }));
     case "inspect": {
       arity(0, 2);
@@ -116,7 +116,7 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
     case "cards": {
       arity(0, 1);
       const query = (args[0] ?? "").toLowerCase();
-      const all = ctx.cards().filter((c) => `${c.id} ${c.name} ${c.band}`.toLowerCase().includes(query));
+      const all = ctx.cards().filter((c) => `${c.id} ${c.name} ${c.group}`.toLowerCase().includes(query));
       return { total: all.length, cards: all.slice(0, 100).map(({ id, name }) => ({ id, name })) };
     }
     case "tiles": arity(0); return ctx.tiles().map(({ index, name, kind }) => ({ index, name, kind }));
@@ -136,7 +136,7 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
       for (const field of ["value", "target", "prompt"] as const) {
         if (cmd[field] !== undefined && (!Number.isInteger(cmd[field]) || cmd[field]! < -2_147_483_648 || cmd[field]! > 2_147_483_647)) fail("console.invalidJson");
       }
-      for (const field of ["character", "card", "debug"] as const) {
+      for (const field of ["persona", "card", "debug"] as const) {
         if (cmd[field] !== undefined && typeof cmd[field] !== "string") fail("console.invalidJson");
       }
       if (cmd.cards !== undefined && (!Array.isArray(cmd.cards) || cmd.cards.some((c) => typeof c !== "string"))) fail("console.invalidJson");
@@ -158,7 +158,7 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
     }
     case "state": {
       if (!cheatsOn()) return fail("console.cheatsDisabled");
-      arity(2, 3); return send({ act: "debug", debug: "state", character: args[0], value: num(args[1], -1_000_000, 1_000_000), target: seat(args[2]) });
+      arity(2, 3); return send({ act: "debug", debug: "state", persona: args[0], value: num(args[1], -1_000_000, 1_000_000), target: seat(args[2]) });
     }
     default: return fail("console.unknown", { command: name });
   }

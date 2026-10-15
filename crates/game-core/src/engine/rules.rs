@@ -4,7 +4,7 @@
 //! structure needs them; an implementation decides what cards and events
 //! actually do. `game-rules` will implement this over the WASM card modules.
 //! [`StubRules`] gives every card and event no effect, which leaves a complete,
-//! playable game of plain BanG Dream Monopoly.
+//! playable game of plain Monopoly.
 
 use super::cx::{Cx, Flow};
 use crate::msg::Msg;
@@ -12,7 +12,7 @@ use crate::msg::Msg;
 /// Where a played card goes afterwards.
 ///
 /// The fates: Graveyard (discard pile, 弃卡区), Hand, Field (stays in play,
-/// 场上), Banished (「[移除]」, out of the game).
+/// 场上), Banished (「banish」, out of the game).
 /// Planned: the draw-pile fates `DeckTop` / `DeckBottom` / `DeckRandom` (put
 /// the card on top of / on the bottom of / shuffle it into the draw pile; the
 /// default is **shuffle**).
@@ -25,15 +25,15 @@ pub enum Dest {
     Hand,
     /// Stays in play (场上) -- a persistent effect.
     Field,
-    /// 「[移除]」 -- out of the game entirely.
+    /// 「banish」 -- out of the game entirely.
     Banished,
 }
 
 // `MoveFlags` is gone: a move is exactly one [`super::move_ctx::MoveKind`] and
 // what it resolves is `super::move_ctx::Settle` -- two categories, not one flag
-// soup. Card-owned move state (a [火罐] roll, say) rides on the move's tags.
+// soup. Card-owned move state (a [charge pots] roll, say) rides on the move's tags.
 
-/// Which way a move travels along the ring.
+/// Which way a move travels along the board loop (turn order).
 ///
 /// Replaces the ±1 `move_dir` integer: forward and backward are the only two
 /// directions a walk has, so they are two variants, not a sign bit. The guest
@@ -82,12 +82,12 @@ pub struct TriggerMove {
     /// Does the move settle where it lands? `false` = a card effect prevented
     /// settle entirely (the move still happens).
     pub resolve: bool,
-    /// Free-form per-card counters on the move (a [火罐] roll is card-owned
+    /// Free-form per-card counters on the move (a [charge pots] roll is card-owned
     /// state, tagged by whoever armed it).
     pub tags: Vec<(String, i32)>,
     /// The direction the move travels.
     pub dir: Dir,
-    /// The move's 移动起点 (its origin tile).
+    /// The move's move start (its origin tile).
     pub from: i32,
     /// Steps the move has left to walk.
     pub remaining: i32,
@@ -192,7 +192,7 @@ impl TriggerPay {
     }
 }
 
-/// Where a `roll` / `moveRoll` face came from (「当你使用火罐进行掷骰时」).
+/// Where a `roll` / `moveRoll` face came from (「when you roll using charge pots」).
 /// Mirrors `card_sdk::abi::roll_source`'s codes; the guest ABI still sees the
 /// `i32`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -200,8 +200,8 @@ pub enum RollSource {
     /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
     #[default]
     Unattributed,
-    /// A fire pot (the guest code `1`).
-    Fire,
+    /// A charge pot (the guest code `1`).
+    Charge,
     /// A hand / field card (the guest code `2`).
     Card,
     /// A skill press (the guest code `3`).
@@ -213,7 +213,7 @@ impl RollSource {
     pub const fn as_i32(self) -> i32 {
         match self {
             RollSource::Unattributed => 0,
-            RollSource::Fire => 1,
+            RollSource::Charge => 1,
             RollSource::Card => 2,
             RollSource::Skill => 3,
         }
@@ -222,7 +222,7 @@ impl RollSource {
     /// Decode the guest / CEL encoding.
     pub fn from_i32(v: i32) -> Self {
         match v {
-            1 => RollSource::Fire,
+            1 => RollSource::Charge,
             2 => RollSource::Card,
             3 => RollSource::Skill,
             _ => RollSource::Unattributed,
@@ -250,7 +250,7 @@ pub enum Negation {
 }
 
 /// One effect a chain link declares. The recipient is **named at declaration**,
-/// not at settlement: this is the stable thing a [反击] listens to.
+/// not at settlement: this is the stable thing a counteraction listens to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Effect {
     /// What it does -- the raise site's kind name (`"pay"`, `"target"`, `"stay"`, ...).
@@ -274,7 +274,7 @@ pub struct Effect {
 /// `"buyBefore"` vs `"buyAfter"`), so there is no separate `when` field.
 ///
 /// A link is either the **effect declaration** (L1, `seq == 1`, `answers == 0`)
-/// or a [反击] answering an earlier link (`answers` names it). Resolution is
+/// or a counteraction answering an earlier link (`answers` names it). Resolution is
 /// LIFO over the closed chain; see `game-rules`' `hand_counteractions`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trigger {
@@ -285,9 +285,9 @@ pub struct Trigger {
     /// The card this trigger is about (`t.Card`), or `None`.
     pub card: Option<String>,
     pub value: i32,
-    /// The turn step (0/1/2/3) active when this trigger fired. Stamped by
+    /// The turn step (0/1/2/3) active when this trigger raised. Stamped by
     /// `Cx::counteract`, not by the raise site. Only meaningful for kinds that
-    /// aren't step-specific (e.g. `mortgage` can fire during both step 1
+    /// aren't step-specific (e.g. `mortgage` can raise during both step 1
     /// and step 3).
     pub step: i32,
     /// The player whose card caused this trigger, or `None` when it was not
@@ -295,7 +295,7 @@ pub struct Trigger {
     /// raise site from the card's own player. `Some(by) if by != player_id`
     /// means "another player's card did this to me".
     pub by_card: Option<i32>,
-    /// Was this fired as part of the turn's [主要移动]?
+    /// Was this raised as part of the turn's main move?
     ///
     /// Lives on the trigger rather than in [`TriggerMove`] because a raise can
     /// be "the main move's settle" without carrying a move payload at all --
@@ -313,7 +313,7 @@ pub struct Trigger {
     /// on every non-roll trigger.
     pub roll_source: RollSource,
     /// How a counter invalidated this link. The effect body is skipped when this
-    /// is not [`Negation::None`]; the Before/After hooks still fire.
+    /// is not [`Negation::None`]; the Before/After hooks still run.
     pub negation: Negation,
     /// Recipients a counter spared from settlement (`spare(link, seat)`). The
     /// effect still settles for everyone else.
@@ -500,9 +500,9 @@ pub(crate) use raise;
 /// `slot` / `tile` / `key` plus the entry index, which the loader folds into
 /// the Vec's order.
 ///
-/// * `slot` -- `"settle"` or `"pass"` (the [结算] / [经过] half).
+/// * `slot` -- `"settle"` or `"pass"` (the settle / [pass] half).
 /// * `tile` -- `""` = the instance's own tile; otherwise a board tile *name*
-///   (`"CiRCLE"`) for a tile-bound text on a tile-less instance.
+///   (`"the start square"`) for a tile-bound text on a tile-less instance.
 /// * `key` -- `ui` namespace i18n key (`deed.note.*`); `""` suppresses the slot.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TileTextDecl {
@@ -538,8 +538,8 @@ pub trait CardRules: Send + Sync {
     /// An [`Gate::Exclusive`] question (`docs/GUARDS.md`): `Some(true)` = the
     /// ruleset's CEL-only `ExclusiveUse` `On::Gate` entries all allow this
     /// exclusive play. `None` (the default) means "no ruleset opinion": the
-    /// engine's generic own/base verdict stands. A band-skill card (CRYCHIC)
-    /// closes the gate to deny a variant its base character's exclusives.
+    /// engine's generic own/base verdict stands. A group-skill card (CRYCHIC)
+    /// closes the gate to deny a variant its base persona's exclusives.
     fn exclusive_use(
         &self,
         _w: &super::World,
@@ -598,12 +598,33 @@ pub trait CardRules: Send + Sync {
         false
     }
 
+    /// The rule id that settles a board tile of this **opaque kind**, or `""`
+    /// when the ruleset declares none (the engine's generic deed settlement
+    /// then applies). Supplied by the ruleset (`CardDef::governs` /
+    /// `board_role == "tile"`); the engine keeps no kind→rule table.
+    fn tile_rule_id(&self, _kind: &str) -> String {
+        String::new()
+    }
+
+    /// Board-wide **mark-owner** rule ids (`board_role == "mark"`): one
+    /// standing instance each on the neutral board owner.
+    fn mark_rule_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Board-wide **status-host** rule ids (`board_role == "status"`): one
+    /// standing instance each on the neutral board owner.
+    fn status_rule_ids(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// Resolve the tile `player` stopped on -- the **settle body**.
     ///
-    /// The default is the built-in plain-BanG Dream Monopoly settlement
-    /// (`land_at`'s body): buyable / circle / edogawa / cafe / ryuseido /
-    /// agent. `WasmRules` overrides this to run the tile's **rule instances**
-    /// (`docs/TILES.md`) and falls back to this default for a tile with none.
+    /// The default is the built-in plain-Monopoly settlement
+    /// (`land_at`'s body): generic deed buy / pay-rent / build, plus a plain
+    /// log for a non-deed. `WasmRules` overrides this to run the tile's
+    /// **rule instances** (`docs/TILES.md`) and falls back to this default for
+    /// a tile with none.
     fn settle_tile(
         &self,
         cx: &mut Cx,
@@ -626,7 +647,7 @@ pub trait CardRules: Send + Sync {
     /// (otherwise it is discarded).
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool>;
 
-    /// [反击] window on `t`; may raise prompts.
+    /// counteraction window on `t`; may raise prompts.
     ///
     /// `t` is mutable: a counteraction may rewrite the move face (`t.value` /
     /// `t.mv.roll`) and the engine then uses the new face.
@@ -672,11 +693,11 @@ pub trait CardRules: Send + Sync {
 /// Which status gate a [`CardRules::gate_open`] question is about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gate {
-    /// [主动] skills and 手卡的[手]效果.
+    /// [主动] skills and 手卡的hand效果.
     Act,
     /// Paying / receiving payment.
     Pay,
-    /// This turn's [主要移动].
+    /// This turn's main move.
     Move,
     /// May this exclusive card be played? Context rides along as an
     /// [`ExclusiveAsk`] on [`CardRules::exclusive_use`].
@@ -688,11 +709,11 @@ pub enum Gate {
 pub struct ExclusiveAsk<'a> {
     /// The exclusive card's id.
     pub card: &'a str,
-    /// The card's `owner` character name.
+    /// The card's `owner` persona name.
     pub owner: &'a str,
-    /// `owner == actor.character`.
+    /// `owner == actor.persona`.
     pub owner_is_self: bool,
-    /// `owner == base_character(actor.character)`.
+    /// `owner == base_persona(actor.persona)`.
     pub owner_is_base: bool,
 }
 

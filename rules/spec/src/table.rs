@@ -109,7 +109,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         {
@@ -185,7 +185,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         m.quick_start();
@@ -616,7 +616,7 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(key::EXILE_TO, -1);
-            p.state_set(key::FIRE, 0);
+            p.state_set(key::CHARGE, 0);
             p.tokens.retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
         for f in w.st.board_field.iter_mut() {
@@ -629,13 +629,13 @@ impl Table {
         w.st.embers = vec![0; n];
         w.st.marks.clear();
         w.scheduled.clear();
-        w.ring_bonus = 0;
+        w.rule_param_bonus.clear();
         self
     }
 
     /// Set a player's character **without** binding its skills.
     pub fn set_character_raw(&mut self, who: usize, name: &str) {
-        self.m.world_mut().st.players[who].character = name.into();
+        self.m.world_mut().st.players[who].persona = name.into();
     }
 
     pub fn set_money(&mut self, who: usize, money: i32) {
@@ -693,9 +693,9 @@ impl Table {
     /// Fire pots: `value` held, `max` cap.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
         let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(key::FIRE, value);
-        let min = p.state_min(key::FIRE);
-        p.state_set_bounds(key::FIRE, min, max);
+        p.state_set(key::CHARGE, value);
+        let min = p.state_min(key::CHARGE);
+        p.state_set_bounds(key::CHARGE, min, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -770,7 +770,7 @@ impl Table {
             .board_field
             .iter()
             .find(|f| f.card == format!("event:{id}"))
-            .map(|f| f.crystals)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
     // ------------------------------------------------------------ observe
@@ -854,7 +854,7 @@ impl Table {
 
     /// Crystals on `who`'s first field copy of `card` (None if not placed).
     pub fn crystals(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.crystals)
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
@@ -862,20 +862,20 @@ impl Table {
     pub fn set_crystals(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.crystals = n;
+            f.counters.insert("crystals".into(), n);
         }
     }
 
     /// On-card [CP点] on `who`'s first field copy of `card` (None if not placed).
     pub fn cp_on_card(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.cp)
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("cp").copied().unwrap_or(0))
     }
 
     /// Put `n` on-card [CP点] on `who`'s first field copy of `card` (test seam).
     pub fn set_cp_on_card(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.cp = n;
+            f.counters.insert("cp".into(), n);
         }
     }
 
@@ -894,7 +894,7 @@ impl Table {
             .field(who)
             .into_iter()
             .filter(|f| f.card.starts_with("skill:") && f.card.contains(needle))
-            .map(|f| (f.band_skill, f.card))
+            .map(|f| (f.group_skill, f.card))
             .collect();
         hits.sort_by_key(|(band, _)| !band);
         hits.into_iter()
@@ -911,8 +911,8 @@ impl Table {
         self.m.world().st.players[who].state_var(key)
     }
 
-    pub fn fire(&self, who: usize) -> i32 {
-        self.state(who, key::FIRE)
+    pub fn charge(&self, who: usize) -> i32 {
+        self.state(who, key::CHARGE)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

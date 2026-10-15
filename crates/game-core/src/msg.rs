@@ -3,7 +3,7 @@
 //! The engine and the server never produce display text. Every log line, prompt
 //! and error is a [`Msg`]: an i18next key plus typed arguments. Each client renders
 //! it in its own player's language (`webui/src/locales/*`), resolving players to
-//! player names, tiles / cards / characters to their (localized) data names.
+//! player names, tiles / cards / personas to their (localized) data names.
 //!
 //! Keys without a namespace live in the client's `game` namespace; card modules use
 //! `cards:<crate>.<key>`.
@@ -43,12 +43,12 @@ pub enum Arg {
     Tile(i32),
     /// A card id -> the card's title.
     Card(String),
-    /// A character name (data key) -> its display name.
-    Char(String),
+    /// A persona name (data key) -> its display name.
+    Persona(String),
     /// An event card id -> its name.
     Event(String),
-    /// A band name (data key) -> its display name.
-    Band(String),
+    /// A group name (data key) -> its display name.
+    Group(String),
     /// A number shown with thousands separators (money, prices).
     N(i64),
     /// A plain integer (counts, dice).
@@ -102,8 +102,8 @@ impl Msg {
         self.arg(name, Arg::Card(id.into()))
     }
 
-    pub fn chara(self, name: &str, character: impl Into<String>) -> Self {
-        self.arg(name, Arg::Char(character.into()))
+    pub fn persona(self, name: &str, persona: impl Into<String>) -> Self {
+        self.arg(name, Arg::Persona(persona.into()))
     }
 
     pub fn event(self, name: &str, id: impl Into<String>) -> Self {
@@ -173,9 +173,9 @@ impl fmt::Display for ArgDebug<'_> {
             Arg::PlayerId(s) => write!(f, "playerId:{s}"),
             Arg::Tile(t) => write!(f, "tile:{t}"),
             Arg::Card(c) => write!(f, "card:{c}"),
-            Arg::Char(c) => write!(f, "char:{c}"),
+            Arg::Persona(c) => write!(f, "persona:{c}"),
             Arg::Event(e) => write!(f, "event:{e}"),
-            Arg::Band(b) => write!(f, "band:{b}"),
+            Arg::Group(b) => write!(f, "group:{b}"),
             Arg::N(n) | Arg::I(n) => write!(f, "{n}"),
             Arg::Text(t) => write!(f, "{t:?}"),
             Arg::Msg(m) => write!(f, "({m})"),

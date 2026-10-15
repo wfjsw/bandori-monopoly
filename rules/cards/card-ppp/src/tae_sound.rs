@@ -16,7 +16,7 @@ pub const TAE_SOUND: CardDef =
         .tags(&[])
         .text(r#"传送到“江户川乐器店”并获得一个[火罐]"#)
         .cell(r#"B17"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", r#"花园多惠"#)]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"花园多惠"#)]));
 
 fn tae_sound(player_id: i32) -> card_sdk::Asked {
     let shop = ctx::tile_named("江户川乐器店");

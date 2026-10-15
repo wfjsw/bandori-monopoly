@@ -34,7 +34,7 @@ fn activation_header_precedes_the_host_effects_it_causes() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
-    // `TEST:payAddAny` is a placed card whose `payAdd` hook fires on every
+    // `TEST:payAddAny` is a placed card whose `payAdd` hook runs on every
     // payment -- a hook body with a host-effect-shaped outcome. Better: use
     // the tile hook and assert the header is first among this drive's events.
     t.give_play(0, "TEST:tileHook").unwrap();
@@ -188,12 +188,8 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::Bought,
         TriggerKind::BuildBefore,
         TriggerKind::BuildAfter,
-        TriggerKind::HouseAdded,
         TriggerKind::Mortgage,
         TriggerKind::CounterChanged,
-        TriggerKind::FireSpent,
-        TriggerKind::SkillUsed,
-        TriggerKind::CircleAffected,
         TriggerKind::Exile,
         TriggerKind::Abnormal,
         TriggerKind::Effect,
@@ -210,6 +206,13 @@ fn every_listened_trigger_kind_has_a_real_why() {
             "{k:?} must have a dedicated why phrase"
         );
         assert!(!why.key().is_empty(), "{k:?} why must not be blank");
+    }
+    // Ruleset-declared custom ids (26/73/74/75/78) carry no engine-named why
+    // phrase -- they fall through to the generic fallback by design.
+    for k in [26, 73, 74, 75, 78] {
+        let t = Trigger::new(TriggerKind(k), 0);
+        let why = trigger_reason(&t);
+        assert_eq!(why.key(), "log.why.generic", "custom id {k} uses generic why");
     }
 }
 /// A body that rolls and then pays (host request -> multi-pass) emits exactly

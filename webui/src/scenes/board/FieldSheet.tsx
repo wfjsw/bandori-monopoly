@@ -60,8 +60,8 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
           const note = fc.note ? fmtMsg(fc.note, names) : "";
           const live = [
             note,
-            fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "",
-            fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : "",
+            fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "",
+            fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : "",
           ].filter(Boolean).join(" · ");
           // A card on its owner's own field designates no one else: only a card
           // parked on another player's field has a designee.
@@ -85,8 +85,8 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   pills={pills}
                   actions={[]}
                 >
-                  {fc.crystals > 0 && <span className={s.crystal}>◆{fc.crystals}</span>}
-                  {fc.cp > 0 && <span className={s.cp} title={tr("board.cp", { n: fc.cp })}>CP{fc.cp}</span>}
+                  {(fc.counters["crystals"] ?? 0) > 0 && <span className={s.crystal}>◆{fc.counters["crystals"] ?? 0}</span>}
+                  {(fc.counters["cp"] ?? 0) > 0 && <span className={s.cp} title={tr("board.cp", { n: fc.counters["cp"] ?? 0 })}>CP{fc.counters["cp"] ?? 0}</span>}
                 </InspectCard>
               )}
               {designee >= 0 && <Avatar c={m.charOf(designee)} size={28} className={s.holder} />}

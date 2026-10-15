@@ -22,7 +22,7 @@ pub const GACHA10: CardDef = CardDef::new(
         .text(r#"[手]：
 [消耗]1500资金，抽1张卡。"#)
         .cell(r#"A7"#)
-        .fields(&[("band", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn gacha10(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「[消耗]1500资金」 -- effect content; `Pay::must = true` runs

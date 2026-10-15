@@ -1,0 +1,248 @@
+//! `skill:二叶筑紫:交给班长吧`
+//!
+//! 规则书（skill sheet, 二叶筑紫）:
+//! > （1）当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，
+//! > 发送给对方一个X（占位）标记并记录获得因此效果获得资金的数量，若为抽卡效果则记录
+//! > 2200。单轮结算（比如登上武道馆的结算）中此效果最多触发一次
+//! > （2）当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作。
+//! > 以此效果获得的金钱数量不能超过记录数字+300，超出部分由原主获得。此效果对"抽牌"
+//! > 动作发动时必须翻面记录数字为2200及以上的标记。
+//! > （3）当场上除你之外的玩家都拥有一枚翻面后的X标记时，移除所有X标记，你获得
+//! > 移除标记数量*800的资金（每次发动（3）技能时单个标记的收益减200，最低单标记收益200）。
+//!
+//! 「X（占位）标记」 is a two-faced mark: face-up when sent, face-down once
+//! claimed in （2）. A mark has a `count`, not a face, so the face is a second
+//! mark kind and 「翻面」 moves one from the up kind to the down kind -- the
+//! same composition the P✽P fan flips use.
+//!
+//! 「记录获得因此效果获得资金的数量」 rides beside the mark: a slot per
+//! recipient holding the recorded figure. 「若为抽卡效果则记录2200」 is the
+//! text's own constant for a draw.
+
+use card_sdk::abi::{state_key, HookKind};
+use ruleset_core::ctx::{self, state};
+use card_sdk::{key, CardDef, Msg, On};
+
+const UP: &str = "X";
+const DOWN: &str = "X标记(反)";
+/// Recorded figure per recipient, keyed `skill.tsugushi.rec:<player>`.
+fn rec_key(p: i32) -> alloc::string::String {
+    alloc::format!("skill.tsugushi.rec:{p}")
+}
+/// 「每次发动（3）技能时单个标记的收益减200，最低单标记收益200」.
+const RATE: &str = "skill.tsugushi.rate";
+
+pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
+    "skill:二叶筑紫:交给班长吧",
+    &[
+        On::Play("", Some(can_cash), cash),
+        On::Hook(&[HookKind::TurnStartBefore], "", None, declare),
+        On::Hook(&[HookKind::PayChoose], "", Some(mine), on_gain),
+        On::Hook(&[HookKind::PayChoose], "", Some(other), on_theirs),
+    ],
+).silent(&[1]);
+
+/// Residual guard for [`on_gain`]: the payee is the owner and some other
+/// survivor exists to redirect to. 「可以改为指定场上除你以外的一个角色」.
+fn mine(player_id: i32) -> bool {
+    // （1）「当你获得资金」 -- the skill fires on *receiving* money, so the
+    // hook's `target` (the payee) is the skill owner. A print carries
+    // `target = me`, `player_id = -1`.
+    ctx::trigger::target() == player_id
+        && ctx::trigger::value() > 0
+        && (0..ctx::player_count()).any(|p| p != player_id && !ctx::player_out(p))
+}
+
+/// Residual guard for [`on_theirs`]: someone else received money, holds an
+/// X mark, and the draw-cap carve-out (「对"抽牌"动作发动时必须翻面记录数字
+/// 为2200及以上的标记」) is satisfied.
+fn other(player_id: i32) -> bool {
+    // （2）「当有角色获得金钱」 -- someone *else* received money.
+    let t = ctx::trigger::target();
+    if t < 0 || t == player_id || ctx::trigger::value() <= 0 {
+        return false;
+    }
+    // 「你可以将对方的X标记翻面」 -- the mark is the offer's object.
+    if ctx::tok(t, UP) < 1 {
+        return false;
+    }
+    // 「此效果对"抽牌"动作发动时必须翻面记录数字为2200及以上的标记」
+    let recorded = state::get(player_id, &rec_key(t));
+    !(recorded < 2200 && ctx::slot(player_id, "skill.tsugushi.isDraw") != 0)
+}
+
+/// The per-lap rate starts at 800 and drops by 200 per (3), floored at 200.
+fn declare(player_id: i32) -> card_sdk::Asked {
+    if state::get(player_id, RATE) == 0 {
+        state::set(player_id, RATE, 800);
+    }
+    let _ = state_key::SKILL_STATE;
+    Ok(())
+}
+
+/// （1）「当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，
+/// 发送给对方一个X（占位）标记并记录…数量」.
+fn on_gain(player_id: i32) -> card_sdk::Asked {
+    let amount = ctx::trigger::value();
+    let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
+        .filter(|&p| p != player_id && !ctx::player_out(p))
+        .collect();
+    // 「可以改为指定场上除你以外的一个角色」 -- the 「可以」 is a yes/no first
+    // (`tsugushi_ask`: 「改为指定另一名角色进行该动作？」), then one pick over the
+    // other players (`tsugushi_who`: 「指定哪名角色？」). Declining the yes/no
+    // is "don't redirect" (the gain stays); `ask_pick` has no decline of its own.
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("tsugushi_title")),
+        &Msg::new(key!("tsugushi_ask")),
+    )? {
+        return Ok(());
+    }
+    let pick = ctx::ask_pick(
+        player_id,
+        &Msg::new(key!("tsugushi_title")),
+        &Msg::new(key!("tsugushi_who")),
+        &others
+            .iter()
+            .map(|&p| Msg::new(key!("tsugushi_option")).player_id("who", p))
+            .collect::<alloc::vec::Vec<_>>(),
+    )?;
+    let Some(&who) = others.get(pick) else {
+        return Ok(());
+    };
+    // 「可以改为指定…一个角色进行一次该动作」 -- the figure moves to them.
+    // The X mark and the record land *before* the forwarded gain: a downstream
+    // `payAfter` hook on that gain may return `Err(Prompt)`, and the mark must
+    // not be lost to that pause (the money has already moved by then).
+    ctx::trigger::set_pay_amount(0);
+    ctx::add_tok(who, UP, 1, i32::MAX)?;
+    state::set(player_id, &rec_key(who), amount);
+    ctx::gain(
+        who,
+        amount,
+        &Msg::new(key!("tsugushi_forwarded")).i("n", amount as i64),
+    )?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tsugushi_sent"))
+            .player_id("who", who)
+            .i("n", amount as i64),
+    );
+    Ok(())
+}
+
+/// （2）「当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作」.
+fn on_theirs(player_id: i32) -> card_sdk::Asked {
+    // 「当有角色获得金钱」 -- the gainer is the payee (`target`), not `player_id`
+    // (which is the payer, -1 on a print). Applicability is `other`.
+    let src = ctx::trigger::target();
+    let recorded = state::get(player_id, &rec_key(src));
+    let amount = ctx::trigger::value();
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("tsugushi_title")),
+        &Msg::new(key!("tsugushi_take")).player_id("who", src),
+    )? {
+        return Ok(());
+    }
+    // 「将对方的X标记翻面」
+    ctx::add_tok(src, UP, -1, i32::MAX)?;
+    ctx::add_tok(src, DOWN, 1, i32::MAX)?;
+    // 「以此效果获得的金钱数量不能超过记录数字+300，超出部分由原主获得」
+    let cap = recorded + 300;
+    let mine = amount.min(cap);
+    let theirs = amount - mine;
+    ctx::trigger::set_pay_amount(0);
+    ctx::gain(
+        player_id,
+        mine,
+        &Msg::new(key!("tsugushi_taken")).i("n", mine as i64),
+    )?;
+    if theirs > 0 {
+        ctx::gain(
+            src,
+            theirs,
+            &Msg::new(key!("tsugushi_excess")).i("n", theirs as i64),
+        )?;
+    }
+    Ok(())
+}
+
+/// （3） 「当场上除你之外的玩家都拥有一枚翻面后的X标记时」.
+fn can_cash(player_id: i32) -> Option<Msg> {
+    if ruleset_core::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
+    let all = (0..ctx::player_count())
+        .filter(|&p| p != player_id && !ctx::player_out(p))
+        .all(|p| ctx::tok(p, DOWN) >= 1);
+    if !all {
+        return Some(Msg::new(key!("tsugushi_not_ready")));
+    }
+    None
+}
+
+/// （3）「移除所有X标记，你获得移除标记数量*800的资金（每次发动（3）技能时单个标记
+/// 的收益减200，最低单标记收益200）」.
+fn cash(player_id: i32) -> card_sdk::Asked {
+    let mut n = 0;
+    for p in 0..ctx::player_count() {
+        let both = ctx::tok(p, UP) + ctx::tok(p, DOWN);
+        if both > 0 {
+            ctx::add_tok(p, UP, -ctx::tok(p, UP), i32::MAX)?;
+            ctx::add_tok(p, DOWN, -ctx::tok(p, DOWN), i32::MAX)?;
+            n += both;
+        }
+    }
+    let rate = state::get(player_id, RATE).max(200);
+    ctx::gain(
+        player_id,
+        n * rate,
+        &Msg::new(key!("tsugushi_cash")).i("n", (n * rate) as i64),
+    )?;
+    // 「每次发动（3）技能时单个标记的收益减200，最低单标记收益200」
+    state::set(player_id, RATE, (rate - 200).max(200));
+    ctx::log(player_id, &Msg::new(key!("tsugushi_done")));
+    Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::PersonaDef =
+ruleset_core::roster::PersonaDef::new(r#"二叶筑紫"#)
+    .display(r#"二叶筑紫"#)
+    .group(r#"Morfonica"#)
+    .color(r#"#EE7788"#)
+    .skill(r#"交给班长吧"#)
+    .text(r#"（1）当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，发送给对方一个X（占位）标记并记录获得因此效果获得资金的数量，若为抽卡效果则记录2200。单轮结算（比如登上武道馆的结算）中此效果最多触发一次（2）当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作。以此效果获得的金钱数量不能超过记录数字+300，超出部分由原主获得。此效果对“抽牌”动作发动时必须翻面记录数字为2200及以上的标记。（3）当场上除你之外的玩家都拥有一枚翻面后的X标记时，移除所有X标记，你获得移除标记数量*800的资金（每次发动（3）技能时单个标记的收益减200，最低单标记收益200）。"#)
+    .cn_id(r#"029"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"迷茫的庭园"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn cash_kani(player_id: i32) -> card_sdk::Asked {
+    cash(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn declare_kani(player_id: i32) -> card_sdk::Asked {
+    declare(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_gain_kani(player_id: i32) -> card_sdk::Asked {
+    on_gain(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_theirs_kani(player_id: i32) -> card_sdk::Asked {
+    on_theirs(player_id)
+}

@@ -1,4 +1,4 @@
-//! wasmi host: loading a set of card modules, the `bandori` import table, replay,
+//! wasmi host: loading a set of card modules, the `ruleset` import table, replay,
 //! and nested cross-module card calls.
 
 use std::collections::HashMap;
@@ -45,17 +45,17 @@ pub mod bot_cost {
     pub static GUEST_NS: AtomicU64 = AtomicU64::new(0);
     /// `World` clones at the card-host boundary (one per store built).
     pub static HOST_WORLD_CLONES: AtomicU64 = AtomicU64::new(0);
-    /// [反击] window opens: `hand_counteractions` rings that passed the
+    /// counteraction window opens: `hand_counteractions` rings that passed the
     /// valid-option-first pre-scan (at least one candidate survived the kind
     /// bitmask + seat eligibility + condition).
     pub static COUNTERACT_WINDOWS: AtomicU64 = AtomicU64::new(0);
-    /// [反击] windows skipped whole because no candidate could respond.
+    /// counteraction windows skipped whole because no candidate could respond.
     pub static COUNTERACT_WINDOWS_SKIPPED: AtomicU64 = AtomicU64::new(0);
     /// Per-candidate counteraction probes (condition / guard evaluations).
     pub static COUNTERACT_PROBES: AtomicU64 = AtomicU64::new(0);
     /// Probes answered from the per-window processed set (no re-evaluation).
     pub static COUNTERACT_PROBE_MEMO_HITS: AtomicU64 = AtomicU64::new(0);
-    /// [反击] cards actually declared (left a hand for a counter link).
+    /// counteraction cards actually declared (left a hand for a counter link).
     pub static COUNTERACT_DECLARED: AtomicU64 = AtomicU64::new(0);
 }
 
@@ -64,8 +64,8 @@ pub mod bot_cost {
 /// every machine.
 pub const DEFAULT_FUEL: u64 = 5_000_000;
 
-/// Fuel for the one-off `bandori_metadata` export, which builds the whole
-/// roster (every card, character and band) and so dwarfs a single effect run.
+/// Fuel for the one-off `ruleset_metadata` export, which builds the whole
+/// roster (every card, persona and group) and so dwarfs a single effect run.
 const METADATA_FUEL: u64 = 500_000_000;
 
 /// Maximum `play_card` nesting (card A plays B plays C ...).
@@ -89,6 +89,13 @@ pub struct CardInfo {
     /// declaration order. See [`ManifestTileText`].
     #[serde(default)]
     pub texts: Vec<ManifestTileText>,
+    /// Board role (`CardDef::board_role`, ABI v66): `""` / `"tile"` / `"mark"` /
+    /// `"status"`.
+    #[serde(default)]
+    pub board_role: String,
+    /// Tile kinds this rule governs (`CardDef::governs`, ABI v66).
+    #[serde(default)]
+    pub governs: Vec<String>,
 }
 
 impl CardInfo {
@@ -105,7 +112,7 @@ impl CardInfo {
             .iter()
             .enumerate()
             .filter(|(_, o)| {
-                o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&(t as i32)))
+                o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&t.as_i32()))
             })
             .map(|(i, _)| i as i32)
             .collect()
@@ -128,7 +135,7 @@ impl CardInfo {
         self.entry(OnKind::Play, None).is_some()
     }
 
-    /// Declares a [反击] at this trigger kind.
+    /// Declares a counteraction at this trigger kind.
     pub fn counteracts_to(&self, trigger: crate::TriggerKind) -> bool {
         self.entry(OnKind::Counteract, Some(trigger)).is_some()
     }
@@ -140,7 +147,7 @@ impl CardInfo {
 
     /// The field-card entries that answer `trigger`, whether declared as a
     /// settlement hook (`On::Hook`) or as a gate (`On::Gate`). Both run
-    /// automatically on a placed card and neither opens a [反击] window; they
+    /// automatically on a placed card and neither opens a counteraction window; they
     /// are separate declarations only so the type can say which is a question.
     /// **All** of them run, in declaration order -- each carries its own
     /// condition / guard and at most one body entry per entry per raise.
@@ -236,9 +243,9 @@ pub struct Prompt {
     pub ai_hint: i32,
 }
 
-/// Engine work a card effect needs mid-run (it may open [反击] windows or
+/// Engine work a card effect needs mid-run (it may open counteraction windows or
 /// prompt), paused so the engine can do it before the effect continues:
-/// trigger (and the [反击] window) before the money moves. The engine answers
+/// trigger (and the counteraction window) before the money moves. The engine answers
 /// with the final amount to move -- `0` means the payment was cancelled.
 // `Move` carries a `MoveCtx`, which has `f64` factors: no `Eq`.
 #[derive(Debug, Clone, PartialEq)]
@@ -272,7 +279,7 @@ pub enum HostRequest {
         src: Option<crate::Msg>,
     },
     /// An abnormal effect about to hit `player_id`: the engine runs the
-    /// abnormal [反击] gate and answers 1 (it goes through) or 0 (blocked).
+    /// abnormal counteraction gate and answers 1 (it goes through) or 0 (blocked).
     Gate { player_id: i32, kind: AbKind },
     /// A card targeting a player (`tile < 0`) or a tile: the engine runs the
     /// targeting pipeline and answers with the player (or tile) actually
@@ -292,7 +299,7 @@ pub enum HostRequest {
         plan: game_core::engine::MoveCtx,
     },
     /// A position write with no settle and no move bookkeeping (a forced
-    /// teleport). The engine runs the abnormal [反击] gate and applies the
+    /// teleport). The engine runs the abnormal counteraction gate and applies the
     /// write to the **live** world, so a move that follows in the same effect
     /// starts at the destination -- and the replay skips the call (an answer
     /// is logged), so it cannot re-teleport over a move that already ran.
@@ -320,7 +327,7 @@ pub enum HostRequest {
     },
     /// v40: the agent offer's chosen branch. `kind` names it:
     /// `0` = buy an unowned tile, `1` = build on an own one, `2` = half-rent
-    /// settle on another player's deed (the agent's 「半价收费的[结算]」).
+    /// settle on another player's deed (the agent's 「half-charge的settle」).
     AgentOffer {
         player_id: i32,
         agent: i32,
@@ -346,30 +353,30 @@ pub enum HostRequest {
     /// effect, filing to the event discard, the reshuffle-when-empty half).
     /// `docs/TILES.md`'s `ctx::draw_event`, what `tile:event`'s body calls.
     DrawEvent { player_id: i32 },
-    /// 「[支付]拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
-    /// pipeline (rent table / RiNG dice / the agent's 「半价收费」 half-flag).
-    /// `docs/TILES.md`'s `ctx::pay_rent`, what `tile:property` / `tile:ring` /
-    /// `tile:agent` bodies call.
+    /// 「pay拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
+    /// pipeline (rent table / the flat deed dice / the agent's 「half-charge」 half-flag).
+    /// `docs/TILES.md`'s `ctx::pay_rent`, what the deed tile rule / the flat-deed tile rule /
+    /// the agent tile rule bodies call.
     PayRent {
         player_id: i32,
         tile: i32,
         half: bool,
     },
-    /// 「可选择[消耗]购买格子地契和建造已有房子的资金总价」 on a
+    /// 「可选择spend购买格子地契和建造已有房子的资金总价」 on a
     /// non-main landing on unowned land. `ctx::offer_buy`.
     OfferBuy { player_id: i32, tile: i32 },
-    /// 「可选择[支付]…资金总价的两倍，从该玩家处强行购买」
+    /// 「可选择pay…资金总价的两倍，从该玩家处强行购买」
     /// on a mortgaged deed. `ctx::offer_force_buy`.
     OfferForceBuy { player_id: i32, tile: i32 },
-    /// 「可选择[消耗]…房屋建筑费进行升级建造」 on a non-main
+    /// 「可选择spend…房屋建筑费进行升级建造」 on a non-main
     /// landing on one's own land. `ctx::offer_build`.
     OfferBuildOne { player_id: i32, tile: i32 },
     /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
-    /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 [反击]
-    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行
+    /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 counteraction
+    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用charge pots进行
     /// 掷骰时」) with the roller, the face and `source`, then answers with the
     /// face any counteraction left on the link. `source` is an
-    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = a fire pot, ...).
+    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = a charge pot, ...).
     Roll {
         player_id: i32,
         count: i32,
@@ -384,7 +391,7 @@ pub enum HostRequest {
     RaiseBought { player_id: i32, tile: i32 },
     /// Raise a trigger point from a guest body (`ctx::raise`). `kind` is a
     /// [`TriggerKind`] as `i32` (mapped through `TriggerKind::as_str` for the
-    /// wire name, e.g. `CircleAffected` → `"circleAffected"`); `value` is the
+    /// wire name, e.g. `PassReward` → `"the pass-reward trigger"`); `value` is the
     /// trigger's `value`. Answers 1 when the link settled, 0 when a
     /// counteraction cancelled it.
     Raise {
@@ -412,8 +419,8 @@ pub enum HostRequest {
     /// balance directly (`World::gain_money` / a raw decrement) with a
     /// `log.gain` / `log.lose` line, **without** the `HostRequest::Pay` money
     /// pipeline: no `payAdd` / `payMul` / `payChoose` / `payAt`, no `effect`
-    /// [反击] window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
-    /// amount a [指定] split moves to land as-is (ONE OF US's 「被分享方资金
+    /// counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
+    /// amount a designate split moves to land as-is (ONE OF US's 「被分享方资金
     /// 直接增加」). Answers the amount actually moved (0 = the seat was out).
     AdjustMoney {
         player_id: i32,
@@ -421,15 +428,15 @@ pub enum HostRequest {
         src: Option<crate::Msg>,
     },
     /// Marker spend / gain (user ruling 2026-10-07): the engine raises
-    /// `markerSpend` / `markerGain` -- the marker's own [反击] window --
+    /// `markerSpend` / `markerGain` -- the marker's own counteraction window --
     /// **before** the markers move. Answers `1` (the move goes through) or `0`
     /// (a counteraction cancelled it, nothing moves). Marker *costs* otherwise
     /// keep today's timing: they are spent as the effect resolves and a
     /// whole-effect negation before the body already prevents them.
     Marker {
         player_id: i32,
-        /// Marker name (「火罐」/「奇迹水晶」/「P✽P粉丝」/…). `fire` is the
-        /// 火罐 pot shorthand (`key::FIRE`).
+        /// Marker name (charge / named counters/「P✽P粉丝」/…). `charge` is the
+        /// charge shorthand (`key::CHARGE`).
         name: String,
         /// Signed delta. Negative = spend (raises `markerSpend`), positive =
         /// gain (raises `markerGain`).
@@ -547,10 +554,10 @@ pub(crate) struct Inner {
     counteract_mask: Vec<u128>,
     /// Per-card bitmask of trigger kinds its hook/gate entries answer. Same
     /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
-    /// can never fire at a kind.
+    /// can never run at a kind.
     hook_mask: Vec<u128>,
     /// Roster metadata (ABI v63) gathered from every module's
-    /// `bandori_metadata`. Empty on pre-v63 / meta-less sets.
+    /// `ruleset_metadata`. Empty on pre-v63 / meta-less sets.
     metadata: card_sdk::meta::MetaDoc,
     /// The CEL-only gates (`TriggerKind::{ActGate, PayGate, MoveGate,
     /// ExclusiveUse}`): per gate kind, the `(card, entry)` pairs whose
@@ -577,7 +584,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     let mut out = Vec::new();
     for (ci, c) in cards.iter().enumerate() {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
                 out.push((ci as i32, ei as i32));
             }
         }
@@ -594,7 +601,7 @@ pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
             if o.kind != OnKind::Gate as i32 {
                 continue;
             }
-            if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k as i32 == t)) {
+            if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k.as_i32() == t)) {
                 continue;
             }
             if o.has_guard || o.pre.is_none() {
@@ -636,7 +643,7 @@ pub struct RulesetBuilder {
     modules: Vec<LoadedModule>,
     cards: Vec<CardInfo>,
     slots: Vec<Slot>,
-    /// Roster metadata rows gathered from every module's `bandori_metadata`
+    /// Roster metadata rows gathered from every module's `ruleset_metadata`
     /// (ABI v63). Merged in [`RulesetBuilder::build`].
     metadata: Vec<card_sdk::meta::MetaRow>,
     /// Lean compiled condition blobs (`Cond::to_bytes(false)`), keyed by
@@ -960,7 +967,7 @@ impl Ruleset {
         &self.inner.cards
     }
 
-    /// Roster metadata (ABI v63): every card / character / band row the
+    /// Roster metadata (ABI v63): every card / persona / group row the
     /// modules declared via `CardDef::meta` / the skill crates' tables.
     /// Sorted by `(kind, ordinal)` -- the data-file order. Convert with
     /// [`crate::roster::roster_from_meta`] to build a `GameData`.
@@ -979,7 +986,7 @@ impl Ruleset {
     /// all when the answer is no -- with `StubRules`, or at a kind nothing
     /// listens to, that is every raise.
     pub fn declares(&self, kind: crate::TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
     }
 
@@ -1026,11 +1033,11 @@ impl Ruleset {
     }
 
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
-    /// a [反击] at `kind`? One shift of the per-card bitmask -- the offer loop
+    /// a counteraction at `kind`? One shift of the per-card bitmask -- the offer loop
     /// never scans the entry table and never builds a `Run` for a card that
     /// cannot answer.
     pub fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v)
             && self
                 .inner
@@ -1041,7 +1048,7 @@ impl Ruleset {
 
     /// Hook/gate twin of [`Self::counteracts_to`].
     pub fn hooks_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v)
             && self
                 .inner
@@ -1081,13 +1088,55 @@ impl Ruleset {
             .unwrap_or(0)
     }
 
+    /// The rule id that settles a board tile of this opaque kind (ABI v66).
+    /// From `CardDef::governs` / `board_role == "tile"`; empty when none.
+    pub fn tile_rule_id(&self, kind: &str) -> String {
+        for c in &self.inner.cards {
+            if c.board_role != "tile" {
+                continue;
+            }
+            if c.governs.iter().any(|g| g == kind) {
+                return c.id.clone();
+            }
+            // Default: a single kind derived from the id's `tile:` suffix.
+            if c.governs.is_empty() {
+                if let Some(k) = c.id.strip_prefix("tile:") {
+                    if k == kind {
+                        return c.id.clone();
+                    }
+                }
+            }
+        }
+        String::new()
+    }
+
+    /// Standing **mark-owner** rule ids (`board_role == "mark"`).
+    pub fn mark_rule_ids(&self) -> Vec<String> {
+        self.inner
+            .cards
+            .iter()
+            .filter(|c| c.board_role == "mark")
+            .map(|c| c.id.clone())
+            .collect()
+    }
+
+    /// Standing **status-host** rule ids (`board_role == "status"`).
+    pub fn status_rule_ids(&self) -> Vec<String> {
+        self.inner
+            .cards
+            .iter()
+            .filter(|c| c.board_role == "status")
+            .map(|c| c.id.clone())
+            .collect()
+    }
+
     /// Run an effect from `world` with the answers collected so far.
     ///
     /// `world` is never modified. On [`Outcome::Done`] the caller commits the returned
     /// world; on [`Outcome::NeedInput`] it publishes the prompt, and once the answer
     /// arrives calls again with the **same** `world` and `answers` + the new answer.
     ///
-    /// `on_body` fires exactly when the effect **body** is entered -- the entry
+    /// `on_body` runs exactly when the effect **body** is entered -- the entry
     /// exists and `OP_RUN` is about to call it -- with the world copy the body
     /// will write into. The activation announcement (the client's card flash)
     /// goes there, so a drive with no entry, a guard reject or a probe is silent.
@@ -1201,7 +1250,7 @@ impl Ruleset {
     ///
     /// Returns `Ok(None)` when no entry is admitted (condition rejected, guard
     /// refused, or the card has no entry at this kind). [`HookRun::announced`]
-    /// is the "the condition + guard admitted" moment. `on_body` fires exactly
+    /// is the "the condition + guard admitted" moment. `on_body` runs exactly
     /// when an effect **body** is entered (after that entry's condition and
     /// guard admitted). The first entry whose body pauses (prompt / host) owns
     /// the outcome; the drive's multi-pass loop re-runs this whole sequence
@@ -1226,7 +1275,7 @@ impl Ruleset {
         }
         let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
         // `card.placed` must answer for the **running instance** (the guest's
-        // `ctx::is_placed()`): a game-start hook also fires for the same id
+        // `ctx::is_placed()`): a game-start hook also runs for the same id
         // while it sits in a pile / hand (`uid = -1`).
         let cand = crate::cond_pre::fill_candidate(
             world,
@@ -1327,7 +1376,7 @@ impl Ruleset {
         scope: &rules_cond::WindowScope,
     ) -> Result<bool, RuleError> {
         self.check(card)?;
-        // Only a card that declared a [反击] at this kind is ever asked.
+        // Only a card that declared a counteraction at this kind is ever asked.
         let Some(entry) = self.counteract_entry(card, &world.trigger()) else {
             return Ok(false);
         };
@@ -1365,7 +1414,7 @@ impl Ruleset {
     /// condition for `(card, seat)` against a shared window scope **without**
     /// building a `Run` or instantiating the guard. `Some(entry)` when the
     /// condition admits (or the entry has none) and the residual guard must be
-    /// asked; `None` when the card has no [反击] at this kind or the condition
+    /// asked; `None` when the card has no counteraction at this kind or the condition
     /// rejects it. The offer loop calls this first and only builds the `Run`
     /// for the survivors.
     pub fn counteract_pre_allows<W: CardWorld>(
@@ -1643,8 +1692,44 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// order. Empty when the card declares none.
     fn card_texts(&self, id: &str) -> Vec<ManifestTileText>;
     fn declares(&self, kind: crate::TriggerKind) -> bool;
+    /// Rule id that settles a board tile of this opaque kind (ABI v66).
+    /// Default scans [`Self::cards`] for `board_role == "tile"`.
+    fn tile_rule_id(&self, kind: &str) -> String {
+        for c in self.cards() {
+            if c.board_role != "tile" {
+                continue;
+            }
+            if c.governs.iter().any(|g| g == kind) {
+                return c.id.clone();
+            }
+            if c.governs.is_empty() {
+                if let Some(k) = c.id.strip_prefix("tile:") {
+                    if k == kind {
+                        return c.id.clone();
+                    }
+                }
+            }
+        }
+        String::new()
+    }
+    /// Standing mark-owner rule ids (`board_role == "mark"`).
+    fn mark_rule_ids(&self) -> Vec<String> {
+        self.cards()
+            .iter()
+            .filter(|c| c.board_role == "mark")
+            .map(|c| c.id.clone())
+            .collect()
+    }
+    /// Standing status-host rule ids (`board_role == "status"`).
+    fn status_rule_ids(&self) -> Vec<String> {
+        self.cards()
+            .iter()
+            .filter(|c| c.board_role == "status")
+            .map(|c| c.id.clone())
+            .collect()
+    }
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
-    /// a [反击] at `kind`? Default scans the entry table; [`Ruleset`] uses the
+    /// a counteraction at `kind`? Default scans the entry table; [`Ruleset`] uses the
     /// per-card kind bitmask.
     fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
         self.cards()
@@ -1652,7 +1737,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
             .is_some_and(|c| c.counteracts_to(kind))
     }
     /// The trigger's card declares recipients (`DESIGNATES`) -- those plays are
-    /// one [反击] timing (CROSS-TESTS C13): their `Effect` counters also answer
+    /// one counteraction timing (CROSS-TESTS C13): their `Effect` counters also answer
     /// the play's own `card` raise.
     fn trigger_designates(&self, t: &crate::Trigger) -> bool {
         t.kind == crate::TriggerKind::Card
@@ -1716,7 +1801,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         )
     }
     /// Condition pre-filter (BOT-RESEARCH.md #1): `Some(entry)` when the
-    /// card's [反击] at this window's kind exists and its condition admits.
+    /// card's counteraction at this window's kind exists and its condition admits.
     /// `None` skips the `Run` / guard entirely. Default builds the candidate
     /// from the world and evaluates the condition; [`Ruleset`] overrides with
     /// the same shape.
@@ -1831,6 +1916,15 @@ impl CardModules for Ruleset {
     }
     fn declares(&self, kind: crate::TriggerKind) -> bool {
         Ruleset::declares(self, kind)
+    }
+    fn tile_rule_id(&self, kind: &str) -> String {
+        Ruleset::tile_rule_id(self, kind)
+    }
+    fn mark_rule_ids(&self) -> Vec<String> {
+        Ruleset::mark_rule_ids(self)
+    }
+    fn status_rule_ids(&self) -> Vec<String> {
+        Ruleset::status_rule_ids(self)
     }
     fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
         Ruleset::counteracts_to(self, card, kind)
@@ -1992,7 +2086,7 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let mut i = 0;
         while let Some(c) = self.card(i) {
             for (ei, o) in c.on.iter().enumerate() {
-                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
                     entries.push((i, ei as i32));
                 }
             }
@@ -2215,7 +2309,7 @@ impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
 }
 
 /// A card stops for a prompt by **returning** [`abi::EXIT_NEED_INPUT`] from
-/// `bandori_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
+/// `ruleset_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
 /// value. Fold it back into the host's own [`need_input`] marker so every
 /// caller's `is_need_input` check (`Outcome::NeedInput` / `Outcome::NeedHost` /
 /// [`RuleError::GuardPrompted`]) keeps working unchanged.
@@ -2309,7 +2403,7 @@ fn call_card_msg<W: CardWorld>(
 }
 
 /// Validate one module and read its manifest. Also reads the optional
-/// `bandori_metadata` roster blob (ABI v63) when the module exports it.
+/// `ruleset_metadata` roster blob (ABI v63) when the module exports it.
 fn inspect(
     engine: &Engine,
     wasm: &[u8],
@@ -2350,6 +2444,8 @@ fn inspect(
             on: e.on,
             props: e.props.into_iter().collect(),
             texts: e.texts,
+            board_role: e.board_role,
+            governs: e.governs,
         })
         .collect();
     if cards.is_empty() {
@@ -2377,10 +2473,25 @@ fn inspect(
             read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
         meta = crate::roster::decode_metadata(&bytes).map_err(load)?;
     }
+    // Tile-class table (ABI v70) -- optional; empty means only the generic
+    // `class*` props answer `tile_in`.
+    if has_func(&inst, &mut store, export::CLASS_DEFS) {
+        set_fuel(&mut store, METADATA_FUEL).map_err(load)?;
+        let packed = inst
+            .get_typed_func::<(), i64>(&mut store, export::CLASS_DEFS)
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(|e| load(format!("{}: {e}", export::CLASS_DEFS)))?;
+        let (ptr, len) = abi::unpack(packed);
+        let bytes =
+            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        let defs: Vec<crate::tile_class::ClassDef> =
+            postcard::from_bytes(&bytes).unwrap_or_default();
+        crate::tile_class::set_class_defs(defs);
+    }
     Ok((module, cards, meta))
 }
 
-/// The abnormal [反击] gate, from inside a card run: on replay the logged
+/// The abnormal counteraction gate, from inside a card run: on replay the logged
 /// answer says whether the effect went through; otherwise the run is paused
 /// with a `Gate` request and the engine adjudicates it.
 ///
@@ -2438,7 +2549,7 @@ pub fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
             G::PlayerId(v) => E::PlayerId(v),
             G::Tile(v) => E::Tile(v),
             G::Card(v) => E::Card(v),
-            G::Char(v) => E::Char(v),
+            G::Persona(v) => E::Persona(v),
             G::N(v) => E::N(v),
             G::I(v) => E::I(v),
             G::Msg(v) => E::Msg(Box::new(engine_msg(*v))),
@@ -2451,7 +2562,7 @@ pub fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
 // Linkers, cached per (engine, world type). The linker is a pure function of
 // the world type -- every host function is a fixed registration -- but
 // building it walks ~160 `func_wrap` calls and cost ~1.3ms of every ~2ms
-// fire-up, so it must never be per call. Thread-local because the world type
+// linker init, so it must never be per call. Thread-local because the world type
 // is not `Send`-bounded and the cache is pure memoization.
 thread_local! {
     static LINKERS: std::cell::RefCell<HashMap<(usize, std::any::TypeId), Box<dyn std::any::Any>>> =
@@ -2468,7 +2579,7 @@ fn next_inner_id() -> u64 {
 
 // Instantiation points, cached per (ruleset, world type, module). With the
 // linker cached, resolving a module's imports against it is the rest of a
-// fire-up; `Prepared` does that once and every call instantiates from it.
+// linker init; `Prepared` does that once and every call instantiates from it.
 // Same thread-local reasoning as [`LINKERS`].
 thread_local! {
     static PREPARED: std::cell::RefCell<
@@ -2559,15 +2670,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "flash_card",
-        |mut c: C<W>, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
-            hostfns::flash_card(&mut c, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, cptr: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::flash_card(&mut c, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "flash_card_keyed",
-        |mut c: C<W>, kp: i32, kl: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
-            hostfns::flash_card_keyed(&mut c, kp, kl, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, kp: i32, kl: i32, cptr: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::flash_card_keyed(&mut c, kp, kl, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2587,8 +2698,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "place_mark",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::place_mark(&mut c, tile, kp, kl, cp, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::place_mark(&mut c, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2664,15 +2775,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "card_counter",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::card_counter(&mut c, player_id, cp, cl, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::card_counter(&mut c, player_id, cptr, cl, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_card_counter",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_card_counter(&mut c, player_id, cp, cl, np, nl, n, max).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_card_counter(&mut c, player_id, cptr, cl, np, nl, n, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2972,8 +3083,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "tile_in",
-        |mut c: C<W>, player_id: i32, tile: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::tile_in(&mut c, player_id, tile, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, tile: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::tile_in(&mut c, player_id, tile, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3350,8 +3461,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "card_text_mentions",
-        |mut c: C<W>, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::card_text_mentions(&mut c, cp, cl, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>, cptr: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::card_text_mentions(&mut c, cptr, cl, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3496,44 +3607,44 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "band_crystals",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::band_crystals(&mut c, player_id).map_err(HostErr::into_err)
+        "group_pool",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::group_pool(&mut c, player_id, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_band_crystals",
-        |mut c: C<W>, player_id: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_band_crystals(&mut c, player_id, n, max).map_err(HostErr::into_err)
+        "add_group_pool",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_group_pool(&mut c, player_id, np, nl, n, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "band_skill",
+        "group_skill",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            hostfns::band_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
+            hostfns::group_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "character_skill",
+        "persona_skill",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            hostfns::character_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
+            hostfns::persona_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "band_skills",
+        "group_skills",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            hostfns::band_skills(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
+            hostfns::group_skills(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_band_skill",
+        "add_group_skill",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, extra: i32| -> Result<i32, Error> {
-            hostfns::add_band_skill(&mut c, player_id, p, n, extra).map_err(HostErr::into_err)
+            hostfns::add_group_skill(&mut c, player_id, p, n, extra).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3559,23 +3670,23 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "fire",
+        "charge",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::fire(&mut c, player_id).map_err(HostErr::into_err)
+            hostfns::charge(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "fire_max",
+        "charge_max",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::fire_max(&mut c, player_id).map_err(HostErr::into_err)
+            hostfns::charge_max(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "gain_fire",
+        "gain_charge",
         |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            hostfns::gain_fire(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
+            hostfns::gain_charge(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3622,9 +3733,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "spend_fire",
+        "spend_charge",
         |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            hostfns::spend_fire(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
+            hostfns::spend_charge(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3671,16 +3782,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "character_is",
+        "persona_is",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::character_is(&mut c, player_id, p, n).map_err(HostErr::into_err)
+            hostfns::persona_is(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "in_band",
+        "in_group",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::in_band(&mut c, player_id, p, n).map_err(HostErr::into_err)
+            hostfns::in_group(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3700,8 +3811,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "unplace_card_named",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::unplace_card_named(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::unplace_card_named(&mut c, player_id, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3714,8 +3825,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "card_face_down",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::card_face_down(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::card_face_down(&mut c, player_id, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3742,8 +3853,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_card_face_down",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, down: i32| -> Result<i32, Error> {
-            hostfns::set_card_face_down(&mut c, player_id, cp, cl, down).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, down: i32| -> Result<i32, Error> {
+            hostfns::set_card_face_down(&mut c, player_id, cptr, cl, down).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3756,36 +3867,36 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_card_immune",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, on: i32| -> Result<i32, Error> {
-            hostfns::set_card_immune(&mut c, player_id, cp, cl, on).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, on: i32| -> Result<i32, Error> {
+            hostfns::set_card_immune(&mut c, player_id, cptr, cl, on).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_immune",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::card_immune(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::card_immune(&mut c, player_id, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_card_tile",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, tile: i32| -> Result<i32, Error> {
-            hostfns::set_card_tile(&mut c, player_id, cp, cl, tile).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::set_card_tile(&mut c, player_id, cptr, cl, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "place_card_on",
-        |mut c: C<W>, player_id: i32, tile: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::place_card_on(&mut c, player_id, tile, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, tile: i32, cptr: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::place_card_on(&mut c, player_id, tile, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "place_card_at",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::place_card_at(&mut c, player_id, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::place_card_at(&mut c, player_id, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3818,16 +3929,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "ring_multiplier",
+        "rent_unit_mult",
         |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::ring_multiplier(&mut c).map_err(HostErr::into_err)
+            hostfns::rent_unit_mult(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_ring_bonus",
+        "add_rent_unit_bonus",
         |mut c: C<W>, n: i32| -> Result<i32, Error> {
-            hostfns::add_ring_bonus(&mut c, n).map_err(HostErr::into_err)
+            hostfns::add_rent_unit_bonus(&mut c, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4434,9 +4545,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "add_fire_max",
+        "add_charge_max",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-            hostfns::add_fire_max(&mut c, player_id, n).map_err(HostErr::into_err)
+            hostfns::add_charge_max(&mut c, player_id, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4848,7 +4959,7 @@ impl CardWorld for NullWorld {
     }
     // named counters & bound units (user ruling 2026-10-10): the null world
     // holds none, so every read is 0 and every write is a no-op. The sugar
-    // (`crystals` / `tok` / `band_crystals`) defaults over these.
+    // (named counters / `tok` / `group_pool`) defaults over these.
     fn counter(&self, _: &str) -> i32 {
         0
     }
@@ -4912,19 +5023,19 @@ impl CardWorld for NullWorld {
     fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
-    fn band_crystals(&self, _: i32) -> i32 {
+    fn group_pool(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn add_band_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_group_pool(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn fire(&self, _: i32) -> i32 {
+    fn charge(&self, _: i32) -> i32 {
         0
     }
-    fn fire_max(&self, _: i32) -> i32 {
+    fn charge_max(&self, _: i32) -> i32 {
         0
     }
-    fn gain_fire(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
+    fn gain_charge(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
         0
     }
     fn give_stay(&mut self, _: i32, _: i32) {}
@@ -4939,10 +5050,10 @@ impl CardWorld for NullWorld {
     fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
         None
     }
-    fn ring_multiplier(&self) -> i32 {
+    fn rent_unit_mult(&self) -> i32 {
         10
     }
-    fn add_ring_bonus(&mut self, _: i32) -> i32 {
+    fn add_rent_unit_bonus(&mut self, _: i32) -> i32 {
         0
     }
     fn teleport_to(&mut self, _: i32, _: i32) {}
@@ -5024,7 +5135,7 @@ impl CardWorld for NullWorld {
     fn cant_move(&self, _: i32) -> i32 {
         1
     }
-    fn spend_fire(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
+    fn spend_charge(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
         0
     }
     fn stay_of(&self, _: i32) -> i32 {
@@ -5045,10 +5156,10 @@ impl CardWorld for NullWorld {
     fn turn_key(&self) -> i32 {
         0
     }
-    fn character_is(&self, _: i32, _: &str) -> i32 {
+    fn persona_is(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn in_band(&self, _: i32, _: &str) -> i32 {
+    fn in_group(&self, _: i32, _: &str) -> i32 {
         0
     }
 }
@@ -5063,13 +5174,15 @@ mod gate_tests {
             on,
             props: Default::default(),
             texts: Default::default(),
+            board_role: Default::default(),
+            governs: Default::default(),
         }
     }
 
     fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
         ManifestOn {
             kind: OnKind::Gate as i32,
-            triggers: vec![crate::TriggerKind::PayGate as i32],
+            triggers: vec![crate::TriggerKind::PayGate.as_i32() as i32],
             pre: pre.map(str::to_string),
             has_guard,
             messages: vec![],

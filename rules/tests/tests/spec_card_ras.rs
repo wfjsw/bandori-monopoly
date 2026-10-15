@@ -88,7 +88,7 @@ fn any_crystals(t: &Table, card: &str) -> i32 {
         .board_field
         .iter()
         .find(|f| f.card == card)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(-1)
 }
 
@@ -1375,10 +1375,10 @@ fn layer_press_contract() {
             t.answer_one(0).map_err(|e| format!("pick: {e}"))?;
         }
         drain(&mut t);
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-RAS-layer-03: fire {}, expected 0",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         if t.state(0, "layer_keep_count") != 0 {
@@ -1422,10 +1422,10 @@ fn rio_fire_contract() {
         t.dice(&[2]);
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         drain(&mut t);
-        if t.fire(0) != 1 {
+        if t.charge(0) != 1 {
             return Err(format!(
                 "C-RAS-rio-01: fire {}, expected 1 (cap 1; was {held})",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -1452,7 +1452,7 @@ fn rio_reroll_contract() {
     t.answer(0, 1).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 10, "C-RAS-rio-02: 择其一执行");
-    assert_eq!(t.fire(0), 0, "C-RAS-rio-02: 使用一个[火罐]");
+    assert_eq!(t.charge(0), 0, "C-RAS-rio-02: 使用一个[火罐]");
 }
 
 /// C-RAS-masking-01 -- [经过] 白雪学园 +1 [火罐], cap 2.
@@ -1471,7 +1471,7 @@ fn masking_fire_contract() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 19);
-    assert_eq!(t.fire(0), 1, "C-RAS-masking-01: 「每次[经过]“白雪学园”」");
+    assert_eq!(t.charge(0), 1, "C-RAS-masking-01: 「每次[经过]“白雪学园”」");
 }
 
 /// C-RAS-masking-02 -- spend X fire → +Xd10 on the main roll.
@@ -1500,7 +1500,7 @@ fn masking_dice_contract() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 3, "C-RAS-masking-02: 1 + 1 + 1");
-    assert_eq!(t.fire(0), 0, "C-RAS-masking-02: two pots spent");
+    assert_eq!(t.charge(0), 0, "C-RAS-masking-02: two pots spent");
 }
 
 /// C-RAS-chuchu-skill-01 -- build at half price.

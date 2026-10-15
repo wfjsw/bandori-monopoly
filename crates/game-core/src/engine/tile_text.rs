@@ -29,18 +29,18 @@
 //!
 //! TODO(规则书): the book's 「该改变[触发结算]的效果优先于其他任何改变[触发结算]
 //! 的效果」 is **not** implemented as a priority rule -- the engine runs hook
-//! instances in placement order / first claim (`event:协助CiRCLE重建` carries
+//! instances in placement order / first claim (`event:the start-square rebuild event` carries
 //! the same TODO on its settle body). Text precedence is built on that same
 //! ordering, so it is placement order / first claim here too.
 
-use crate::data::{tile_rule_id, GameData};
+use crate::data::GameData;
 use crate::engine::rules::{CardRules, TileTextDecl};
 use crate::engine::World;
 use crate::state::{FieldCard, TileTextEntry};
 
 /// The lookup-group half of `game_rules`'s `effect_order_key`
 /// (`docs/ENGINE.md` 「Effect ordering」), kept in step by hand -- `game-core`
-/// does not depend on `game-rules`. Status → band → character → field →
+/// does not depend on `game-rules`. Status → group → persona → field →
 /// hand → discard → deck → removed → Board (board-owned `tile:*` / `event:*` /
 /// `mark:*` sort after the player groups).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -48,8 +48,8 @@ use crate::state::{FieldCard, TileTextEntry};
 #[allow(dead_code)] // the full scan order, not just the groups we walk today
 enum LookupGroup {
     Status = 0,
-    Band = 1,
-    Character = 2,
+    Group = 1,
+    Persona = 2,
     Field = 3,
     Hand = 4,
     Discard = 5,
@@ -91,7 +91,7 @@ pub fn compose(world: &World, data: &GameData, rules: &dyn CardRules) -> Vec<Vec
         let Some(td) = data.tiles.get(t) else {
             continue;
         };
-        let want = tile_rule_id(&td.kind);
+        let want = rules.tile_rule_id(td.kind.as_str());
         if want.is_empty() || f.card != want {
             continue;
         }
@@ -111,10 +111,10 @@ pub fn compose(world: &World, data: &GameData, rules: &dyn CardRules) -> Vec<Vec
             let Ok(n) = u32::try_from(n) else {
                 continue;
             };
-            let group = if f.band_skill {
-                LookupGroup::Band
+            let group = if f.group_skill {
+                LookupGroup::Group
             } else if f.card.starts_with("skill:") {
-                LookupGroup::Character
+                LookupGroup::Persona
             } else {
                 LookupGroup::Field
             };

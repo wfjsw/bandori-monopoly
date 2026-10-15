@@ -21,7 +21,7 @@ pub const BELIEVE_YOU: CardDef =
         .tags(&[])
         .text(r#"至少有另一张手牌时可发动，消耗800资金，公开你的卡组与手牌，选择一名玩家，使其从你的手牌中选择一张放入弃牌堆，然后从你的卡组中选择两张加入你的手牌，重洗你的抽牌堆。"#)
         .cell(r#"F2"#)
-        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBelieveYou.WhyNot`: refuses without another hand card / 800 money

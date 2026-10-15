@@ -1,6 +1,6 @@
-//! Black-box tests for [反击] windows at **bot** seats (`can_counteract_now`).
+//! Black-box tests for counteraction windows at **bot** seats (`can_counteract_now`).
 //!
-//! The rulebook's eligibility is out / [除外] (plus `CannotPlay`: stunned,
+//! The rulebook's eligibility is out / exile (plus `CannotPlay`: stunned,
 //! no-hand). "Is a bot" is not a rulebook reason, so every mentality is offered
 //! exactly like a human and answers through the engine's AI fill
 //! (`Cx::fill_ai`): standard by its `CounterParams` propensity (default
@@ -17,7 +17,7 @@
 
 mod common;
 
-use common::{characters, data, int_arg, Table};
+use common::{personas, data, int_arg, Table};
 use game_core::msg::Arg;
 use game_core::state::{BotMentality, MatchEvent};
 use game_core::strategy::{
@@ -74,7 +74,7 @@ fn who_of(t: &Table, name: &str) -> Vec<i64> {
         .collect()
 }
 
-/// A strategy book that only names `who`'s [反击] propensity for `card`.
+/// A strategy book that only names `who`'s counteraction propensity for `card`.
 fn book_declaring(who: &str, card: &str, propensity_milli: i32) -> StrategyBook {
     let mut params = StrategyParams::default();
     params.counteract.insert(
@@ -91,17 +91,17 @@ fn book_declaring(who: &str, card: &str, propensity_milli: i32) -> StrategyBook 
     b.generated_at = "chain_bot".into();
     b.me.push(StrategyEntry {
         me: who.into(),
-        band: String::new(),
-        opponent_bands: Vec::new(),
+        group: String::new(),
+        opponent_groups: Vec::new(),
         deck: Vec::new(),
         params,
     });
     b
 }
 
-/// The first `n` characters, as [`Table::vanilla`] seats them.
+/// The first `n` personas, as [`Table::vanilla`] seats them.
 fn vanilla_book(n: usize, book: StrategyBook) -> Table {
-    let names = characters();
+    let names = personas();
     let chars: Vec<&str> = names.iter().take(n).map(String::as_str).collect();
     let mut t = Table::with_book(&chars, book, MatchMode::Solo);
     t.strip_skills();
@@ -113,7 +113,7 @@ fn vanilla_book(n: usize, book: StrategyBook) -> Table {
 /// Same as [`vanilla_book`], but on the online (Casual) clock so a held seat's
 /// prompt deadline actually runs out -- Solo never forces a local answer.
 fn vanilla_casual(n: usize) -> Table {
-    let names = characters();
+    let names = personas();
     let chars: Vec<&str> = names.iter().take(n).map(String::as_str).collect();
     let mut t = Table::with_data(data(), &chars, common::SEED, MatchMode::Casual);
     t.strip_skills();
@@ -125,7 +125,7 @@ fn vanilla_casual(n: usize) -> Table {
 /// [`Table::vanilla`] under a given match seed (the propensity draws ride the
 /// world RNG, so a rate test needs a spread of seeds).
 fn vanilla_seed(n: usize, seed: u64) -> Table {
-    let names = characters();
+    let names = personas();
     let chars: Vec<&str> = names.iter().take(n).map(String::as_str).collect();
     let mut t = Table::with_seed(&chars, seed);
     t.strip_skills();
@@ -191,10 +191,10 @@ fn a_standard_bot_declares_at_the_default_propensity() {
 }
 
 // The book can hold a card back (explicit `propensity_milli: 0`) -- and the
-// ring walk around a held-back bot is the old skip flow, deterministic.
+// cycle walk around a held-back bot is the old skip flow, deterministic.
 #[test]
 fn a_strategy_book_can_hold_a_counter_back() {
-    let names = characters();
+    let names = personas();
     let bot_char = names[1].clone();
     let mut t = vanilla_book(3, book_declaring(&bot_char, "TEST:probe", 0));
     t.make_bot(1, BotMentality::Standard);
@@ -210,7 +210,7 @@ fn a_strategy_book_can_hold_a_counter_back() {
     t.tick_until("the bot answers", |t| t.asked() != vec![1]);
     assert_eq!(t.asked(), vec![2], "priority advanced: {}", t.dump_prompt());
     t.counteract(2, "TEST:probe").unwrap();
-    // Lap 1 carried P2's declaration, so the ring re-opens the earlier seats:
+    // Lap 1 carried P2's declaration, so the cycle re-opens the earlier seats:
     // P0 holds nothing, the bot is offered once more (it still holds its probe).
     assert_eq!(t.asked(), vec![1], "second lap re-offers the bot: {}", t.dump_prompt());
     t.tick_until("the bot answers lap 2", |t| t.asked() != vec![1]);
@@ -230,7 +230,7 @@ fn a_strategy_book_can_hold_a_counter_back() {
 // this.
 #[test]
 fn a_standard_bot_declares_on_its_counteract_propensity() {
-    let names = characters();
+    let names = personas();
     let bot_char = names[1].clone();
     let mut t = vanilla_book(3, book_declaring(&bot_char, "TEST:probe", 1_000));
     t.make_bot(1, BotMentality::Standard);
@@ -253,7 +253,7 @@ fn a_standard_bot_declares_on_its_counteract_propensity() {
 // ruling's LIFO order: the later declaration (P2's) settles first.
 #[test]
 fn a_bot_counteraction_resolves_lifo_alongside_a_human() {
-    let names = characters();
+    let names = personas();
     let bot_char = names[1].clone();
     let mut t = vanilla_book(3, book_declaring(&bot_char, "TEST:probe", 1_000));
     t.make_bot(1, BotMentality::Standard);
@@ -261,7 +261,7 @@ fn a_bot_counteraction_resolves_lifo_alongside_a_human() {
     t.give(1, &["TEST:probe"]);
     t.give(2, &["TEST:probe"]);
     t.play(0, "TEST:aimer").unwrap();
-    // Ring (ruling 2026-10-07): P0 skipped (no counter), then the bot, then P2.
+    // Cycle (ruling 2026-10-07): P0 skipped (no counter), then the bot, then P2.
     assert_eq!(t.asked(), vec![1], "{}", t.dump_prompt());
     t.tick_until("the bot declares", |t| t.asked() != vec![1]);
     assert_eq!(t.asked(), vec![2], "{}", t.dump_prompt());
@@ -283,7 +283,7 @@ fn a_bot_counteraction_resolves_lifo_alongside_a_human() {
 // =====================================================================
 
 // An Advanced seat is held (`ai` off) for bot-service / the browser worker.
-// The [反击] offer is an ordinary prompt -- it must appear and wait on that
+// The counteraction offer is an ordinary prompt -- it must appear and wait on that
 // seat -- and the online clock's fallback (the skip) answers it when nothing
 // else does, so a window never stalls. Solo would wait forever by design.
 #[test]
@@ -315,7 +315,7 @@ fn an_advanced_seat_gets_the_offer_and_the_fallback_answers_it() {
 // Rulebook exclusions
 // =====================================================================
 
-// Out / [除外] are the book's only eligibility cuts (plus `CannotPlay`).
+// Out / exile are the book's only eligibility cuts (plus `CannotPlay`).
 // They are skipped per visit whatever the seat is driven by -- a bot seat
 // included. "Is a bot" is not a reason; these two are.
 //

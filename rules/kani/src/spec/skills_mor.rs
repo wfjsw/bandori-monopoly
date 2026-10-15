@@ -118,12 +118,12 @@ pub fn band_02_amount_mutant(taken: i32) -> i32 {
 //
 // Trigger: [经过] CiRCLE (the Pass hook onto a CiRCLE tile).
 // Condition: the seat's character is 桐谷透子 (host pre
-// `actor == owner && is_circle(tile.id)`).
+// `actor == owner && is_start(tile.id)`).
 // Effect: one fire pot is gained, at most up to the cap of 1.
 // Frame: the fire counter.
 // Classification: **PROVEN candidate** for the request (`GainFire{player,1}`).
-// The 「上限1」 cap is host-side (`game_core::gain_fire` honours `fire_max`);
-// the Kani host's `Op::gain_fire` does not — the at-cap leg is
+// The 「上限1」 cap is host-side (`game_core::gain_charge` honours `charge_max`);
+// the Kani host's `Op::gain_charge` does not — the at-cap leg is
 // **BLOCKED-HOST** (host-model gap), not a body-vs-book finding.
 // ===========================================================================
 
@@ -189,7 +189,7 @@ pub fn touko_02_x(rent: i32, n: i32) -> i32 {
 //
 // Same shape as C-MOR-touko-01 with cap 2.
 // Classification: **PROVEN candidate** (request); at-cap leg **BLOCKED-HOST**
-// (same Kani `gain_fire` gap).
+// (same Kani `gain_charge` gap).
 // ===========================================================================
 
 pub const NANAMI_01_FIRE_MAX: i32 = 2;
@@ -466,7 +466,7 @@ pub fn tsukushi_03_gain(n_marks: i32, pre_rate: i32) -> i32 {
     n_marks * tsukushi_03_rate(pre_rate)
 }
 
-/// Exact effect-log of one (3) fire: two token-clears per holder (UP and
+/// Exact effect-log of one (3) charge: two token-clears per holder (UP and
 /// DOWN counts written to 0 as negative deltas), then `GainMoney`, then the
 /// decayed rate `SetState`. Mark keys are OPEN-X标记 — match by player and
 /// delta. `holders` is `(seat, up_count, down_count)` for every seat that

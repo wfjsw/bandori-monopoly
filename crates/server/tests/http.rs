@@ -279,7 +279,7 @@ async fn auth_is_required() {
         .json()
         .await
         .unwrap();
-    assert_eq!(health["game"], "bandori-monopoly");
+    assert_eq!(health["game"], "monopoly");
 }
 
 #[tokio::test]
@@ -445,19 +445,19 @@ async fn drive(
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter_map(|s| s["character"].as_str())
+                .filter_map(|s| s["persona"].as_str())
                 .collect();
             let pick = d
-                .characters
+                .personas
                 .iter()
                 .find(|c| !c.cn_id.is_empty() && !taken.contains(&c.name.as_str()))
                 .unwrap();
-            c.ok(&path, json!({ "act": "pick", "character": pick.name }))
+            c.ok(&path, json!({ "act": "pick", "persona": pick.name }))
                 .await;
             acted = key;
         } else if phase == "deck" && !st["players"][player_id]["deckReady"].as_bool().unwrap() {
             let ch = d
-                .character(st["players"][player_id]["character"].as_str().unwrap())
+                .persona(st["players"][player_id]["persona"].as_str().unwrap())
                 .unwrap();
             c.ok(
                 &path,
@@ -766,7 +766,7 @@ async fn a_restart_restores_the_room_and_its_match() {
         .session_put(&server::state::Session {
             token: "tok-A".into(),
             player: "A".into(),
-            character: "".into(),
+            persona: "".into(),
             cn_id: "".into(),
             room: Some(("RESTORE".into(), 1)),
         })

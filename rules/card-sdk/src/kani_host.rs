@@ -1,6 +1,6 @@
 //! Generic host-import dispatch for Kani verification (no game vocabulary).
 //!
-//! Under `cfg(kani)` the `extern "C-unwind"` `bandori_*` imports cannot be
+//! Under `cfg(kani)` the `extern "C-unwind"` `ruleset_*` imports cannot be
 //! linked to host shims (Kani treats them as foreign C calls; see
 //! kani#2423). Instead `super::sys` becomes ordinary Rust that funnels every
 //! import through [`call`]. The verifier crate (`rules-kani`) installs a
@@ -10,7 +10,7 @@
 
 #![allow(missing_docs)]
 
-/// Opcodes, one per `bandori_*` import (see `ctx/sys.rs`).
+/// Opcodes, one per `ruleset_*` import (see `ctx/sys.rs`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u16)]
 pub enum Op {
@@ -82,8 +82,8 @@ pub enum Op {
     set_transfer_to_dest = 66,
     send_to_dest = 67,
     transfer_to_dest = 68,
-    ring_multiplier = 69,
-    add_ring_bonus = 70,
+    rent_unit_mult = 69,
+    add_rent_unit_bonus = 70,
     teleport_to = 71,
     unplace_card = 72,
     event_expire = 73,
@@ -139,33 +139,33 @@ pub enum Op {
     slot = 123,
     set_slot = 124,
     inc_slot = 125,
-    band_crystals = 126,
-    add_band_crystals = 127,
-    band_skill = 128,
-    character_skill = 129,
-    band_skills = 130,
-    add_band_skill = 131,
+    group_pool = 126,
+    add_group_pool = 127,
+    group_skill = 128,
+    persona_skill = 129,
+    group_skills = 130,
+    add_group_skill = 131,
     invoke_skill = 132,
     raise_bought = 133,
     raise = 134,
-    fire = 135,
-    fire_max = 136,
-    gain_fire = 137,
+    charge = 135,
+    charge_max = 136,
+    gain_charge = 137,
     give_stay = 138,
     give_stun = 139,
     give_exile = 140,
     give_extra_turn = 141,
     can_pay = 142,
     cant_move = 143,
-    spend_fire = 144,
+    spend_charge = 144,
     stay_of = 145,
     stun_of = 146,
     exile_of = 147,
     turn_player = 148,
     round_no = 149,
     turn_key = 150,
-    character_is = 151,
-    in_band = 152,
+    persona_is = 151,
+    in_group = 152,
     opt_int = 153,
     opt_str = 154,
     opt_tile = 155,
@@ -269,7 +269,7 @@ pub enum Op {
     fixed_roll = 253,
     set_next_steps = 254,
     turn_main_steps = 255,
-    add_fire_max = 256,
+    add_charge_max = 256,
     card_build = 257,
     set_can_build = 258,
     clear_dice = 259,

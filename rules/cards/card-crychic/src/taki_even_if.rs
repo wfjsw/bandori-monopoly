@@ -24,7 +24,7 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 进入移动阶段后，触发结算前可打出，进行一次重骰，你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止。"#)
         .cell(r#"M16"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", r#"椎名立希（CRYCHIC）"#)]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"椎名立希（CRYCHIC）"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(before) = trigger::move_roll() else {

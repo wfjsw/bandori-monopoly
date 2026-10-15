@@ -182,7 +182,7 @@ export function showDeedList(sess: GameSession): void {
 export function borrowedBand(x: MatchPlayer | undefined): { from: number; skill: string } | null {
   const from = x?.field?.find((f) => f.card === "PPP:Returns")?.props?.["returns.from"] ?? -1;
   if (!x || from < 0) return null;
-  const bands = x.field.filter((f) => f.bandSkill);
+  const bands = x.field.filter((f) => f.groupSkill);
   return bands.length > 1 ? { from, skill: bands[bands.length - 1].card } : null;
 }
 
@@ -190,10 +190,10 @@ export function showPlayerInfo(m: Model, i: number): void {
   const S = m.S;
   const x = S.players[i];
   const c = m.charOf(i);
-  const band = c ? D.band(c.band) : undefined;
+  const band = c ? D.group(c.group) : undefined;
   const deeds = D.tiles.map((_, k) => k).filter((k) => S.owners[k] === i);
   const lines = [
-    tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: stateOf(x, "fire"), fireMax: stateMax(x, "fire") }),
+    tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: stateOf(x, "charge"), fireMax: stateMax(x, "charge") }),
     tr("player.zones", { draw: x.draw, discard: x.discard.length }),
     stateOf(x, "stay") ? tr("player.stayN", { n: stateOf(x, "stay") }) : "", stateOf(x, "stun") + stateOf(x, "stunStart") ? tr("player.stunned") : "", stateOf(x, "exile") ? tr("player.exileN", { n: stateOf(x, "exile") }) : "",
     (() => { const bb = borrowedBand(x); return bb ? tr("player.borrowed", { skill: cardTitle(bb.skill), who: m.charOf(bb.from)?.display ?? "" }) : ""; })(),
@@ -205,7 +205,7 @@ export function showPlayerInfo(m: Model, i: number): void {
       <div className={s.infoTop}>
         <Avatar c={c} size={92} />
         <div>
-          <b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>
+          <b>{c?.display ?? "—"}</b><small>{c?.group ?? ""}</small>
           {/* The two skill stand-ins `bind_skills` puts on the field (the
               character's own skill and its band's) belong here, not on the
               board: name in pink, body under it. */}
@@ -300,7 +300,7 @@ export function showField(m: Model): void {
           <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
           <div className={s.pileCards}>
             {f.map((fc) => {
-              const note = fc.note ? fmtMsg(fc.note, names) : [fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "", fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : ""].filter(Boolean).join(" · ");
+              const note = fc.note ? fmtMsg(fc.note, names) : [fc.counters["crystals"] ?? 0 ? tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) : "", fc.counters["cp"] ?? 0 > 0 ? tr("board.cp", { n: fc.counters["cp"] ?? 0 }) : ""].filter(Boolean).join(" · ");
               return fc.faceDown ? (
                 <div key={fc.uid} className={s.fieldSlot}>
                   <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>

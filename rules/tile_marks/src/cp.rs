@@ -90,7 +90,8 @@ pub const MARK_CP: CardDef = CardDef::new(
         On::Message(&["place"], "", Some(place_ok), on_place),
         On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
     ],
-);
+)
+    .board_role("mark");
 
 /// The tile-mark filter every clause here uses: [CP点] is its own category
 /// (`data/rules.txt` 125), neutral, and the first matching row is the one.

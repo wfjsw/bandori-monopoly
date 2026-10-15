@@ -305,7 +305,7 @@ game's concepts and live in `ruleset-core` / the skill crates.
 
 ### Transport
 
-`bandori_metadata` (`export::METADATA`) returns a packed postcard
+`ruleset_metadata` (`export::METADATA`) returns a packed postcard
 `meta::MetaDoc` -- **not** through `ManifestEntry`, so the match path and the
 per-card manifest stay lean. The blob is built only when the host asks (load
 time, never per run). Host: `Ruleset::metadata()` / `::roster()`, then

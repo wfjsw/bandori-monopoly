@@ -25,7 +25,7 @@ type S = State<Arc<Server>>;
 #[serde(default, rename_all = "camelCase")]
 pub struct SessionReq {
     pub player: String,
-    pub character: String,
+    pub persona: String,
     pub cn_id: String,
 }
 
@@ -60,7 +60,7 @@ pub async fn create_session(
     let session = Session {
         token: random_hex(32),
         player,
-        character: req.character,
+        persona: req.persona,
         cn_id: req.cn_id,
         room: None,
     };
@@ -181,10 +181,10 @@ pub async fn create_room(
     let engine = s.engine.clone();
     let store = s.store.clone();
     let bot_search = s.bots.is_some();
-    let (token, player, character, cn_id) = (
+    let (token, player, persona, cn_id) = (
         sess.token.clone(),
         sess.player.clone(),
-        sess.character.clone(),
+        sess.persona.clone(),
         sess.cn_id.clone(),
     );
     // The slot roll reads the (cached) engine stamp; run it off the async
@@ -199,7 +199,7 @@ pub async fn create_room(
         let who = NewMember {
             token: &token,
             player: &player,
-            character: &character,
+            persona: &persona,
             cn_id: &cn_id,
         };
         let you = room.join(who, &req.password, "")?;
@@ -244,7 +244,7 @@ pub async fn join_room(
         let who = NewMember {
             token: &sess.token,
             player: &sess.player,
-            character: &sess.character,
+            persona: &sess.persona,
             cn_id: &sess.cn_id,
         };
         let you = r.join(who, &req.password, &req.version)?;

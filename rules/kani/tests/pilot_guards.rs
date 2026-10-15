@@ -51,7 +51,7 @@ fn aya_pay_add_guard_evaluates() {
 }
 
 #[test]
-fn is_circle_guard_evaluates() {
+fn is_start_guard_evaluates() {
     let prog = ir_fill::guard_by_src(ir_fill::src::IS_CIRCLE);
     for (actor, owner, tile, on_circle, expect) in [
         (0i64, 0i64, 1i64, true, true),

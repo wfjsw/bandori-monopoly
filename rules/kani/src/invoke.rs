@@ -52,10 +52,10 @@ pub static RULESET: &[&[card_sdk::CardDef]] = &[
     card_roselia::CARDS,
     #[cfg(feature = "band-sumimi")]
     card_sumimi::CARDS,
-    #[cfg(feature = "skills-bands")]
-    skill_bands::CARDS,
-    #[cfg(feature = "skills-characters")]
-    skill_characters::CARDS,
+    #[cfg(feature = "skills-groups")]
+    skill_groups::CARDS,
+    #[cfg(feature = "skills-personas")]
+    skill_personas::CARDS,
     #[cfg(feature = "tiles")]
     rules_tiles::CARDS,
     #[cfg(feature = "tiles")]
@@ -658,9 +658,9 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
         BUY_ADD => Some(H::BuyAdd),
         BUY_MUL => Some(H::BuyMul),
         BUY_SET => Some(H::BuySet),
-        HOUSE_ADDED => Some(H::HouseAdded),
+        HOUSE_ADDED => Some(ruleset_core::kind::HouseAdded),
         COUNTER_CHANGED => Some(H::CounterChanged),
-        FIRE_SPENT => Some(H::FireSpent),
+        FIRE_SPENT => Some(ruleset_core::kind::FireSpent),
         TELEPORTED => Some(H::Teleported),
         TARGETED => Some(H::Targeted),
         PASS => Some(H::Pass),
@@ -700,9 +700,9 @@ fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
         H::BuyAdd => "BuyAdd",
         H::BuyMul => "BuyMul",
         H::BuySet => "BuySet",
-        H::HouseAdded => "HouseAdded",
+        ruleset_core::kind::HouseAdded => "HouseAdded",
         H::CounterChanged => "CounterChanged",
-        H::FireSpent => "FireSpent",
+        ruleset_core::kind::FireSpent => "FireSpent",
         H::Teleported => "Teleported",
         H::Targeted => "Targeted",
         H::Pass => "Pass",

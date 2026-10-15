@@ -28,7 +28,7 @@ use crate::world::{self, Effect, MAX_LOG};
 //
 // Ops listed are what the unmodified body reaches (aliases folded:
 // `add_tok`→add_held, `set_crystals`/`decay`→set/add_counter_self,
-// `ask_*`→ask, `place_card`→place_card_at, `is_ring`→tile_is).
+// `ask_*`→ask, `place_card`→place_card_at, `is_deed`→tile_is).
 // Dead-path ops under the harness isolation are listed too, so an isolation
 // break surfaces as a spec failure rather than an undeclared-op panic.
 // ---------------------------------------------------------------------------
@@ -485,7 +485,7 @@ pub fn ako_dark_mutant_is_detected() {
 
 // ===========================================================================
 // C-R-Fire bird-01 -- pay 1600, place, X crystals
-// OPEN-FIRE-X: the body offers 1..=10 and pins `x.max(1)`.
+// OPEN-CHARGE-X: the body offers 1..=10 and pins `x.max(1)`.
 // NOTE: `ctx::ask_number` under Kani only supports ranges of width ≤ 4 and
 // `kani::assert`s on 1..=10. That SDK limit fails this harness closed (no
 // #[ignore]); it is not a body or spec gap.

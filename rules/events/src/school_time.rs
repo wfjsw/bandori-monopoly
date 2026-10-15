@@ -18,7 +18,7 @@ include!(concat!(env!("OUT_DIR"), "/schools.rs"));
 /// character. 规则书: 「如果剧情没有明说则移动到周边学区」 -- the fallback.
 fn school_tile(player_id: i32) -> i32 {
     for &(name, school) in SCHOOLS {
-        if ctx::character_is(player_id, name) {
+        if ctx::persona_is(player_id, name) {
             return ctx::tile_named(school);
         }
     }

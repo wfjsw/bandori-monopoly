@@ -4,8 +4,8 @@
 //! soyoskill,rikiskill,sakiskill,mutsumiskill,band}-*), live sheets
 //! the roster character / band rows.
 //!
-//! Host dual-store note (see `spec/crychic.rs`): `give_stay`/`spend_fire` write
-//! `World::stay`/`fire`; `state::{get,set,add}` on `state_key::{STAY,FIRE}`
+//! Host dual-store note (see `spec/crychic.rs`): `give_stay`/`spend_charge` write
+//! `World::stay`/`fire`; `state::{get,set,add}` on `state_key::{STAY,CHARGE}`
 //! write `player_keys`. Specs name the store the body uses.
 
 use crate::world::Effect;
@@ -20,8 +20,8 @@ pub fn tomoriskill_01_cap() -> (i32, i32) {
     (1, 1)
 }
 
-/// Pass body: +1 fire (unlogged `gain_fire`). Post `w.fire` +1.
-/// Effect log is empty in the Kani host (gain_fire is unlogged).
+/// Pass body: +1 fire (unlogged `gain_charge`). Post `w.charge` +1.
+/// Effect log is empty in the Kani host (gain_charge is unlogged).
 pub fn tomoriskill_01_log_ok(effects: &[Effect]) -> bool {
     effects.is_empty()
 }
@@ -30,8 +30,8 @@ pub fn tomoriskill_01_log_ok(effects: &[Effect]) -> bool {
 // C-CRYCHIC-tomoriskill-02 — 「（2）你回合内的任意时刻，可消耗1火罐清除自身一层[停留]」
 // ---------------------------------------------------------------------------
 
-/// Play body: `spend_fire(1)` + `state::add(STAY, -1)`. Both unlogged.
-/// Post: `w.fire` -1 (the spend store) and `player_keys[STAY]` -1.
+/// Play body: `spend_charge(1)` + `state::add(STAY, -1)`. Both unlogged.
+/// Post: `w.charge` -1 (the spend store) and `player_keys[STAY]` -1.
 pub fn tomoriskill_02_log_ok(effects: &[Effect]) -> bool {
     effects.is_empty()
 }

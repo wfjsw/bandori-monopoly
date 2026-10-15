@@ -23,7 +23,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         On::Hook(&[HookKind::RollAfter], "actor == owner && card.placed", None, roll_after),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
-        // source is `roll_source::FIRE` (「使用火罐进行掷骰」).
+        // source is `roll_source::CHARGE` (「使用火罐进行掷骰」).
         On::Counteract(
             &[ChainKind::Roll],
             "actor == owner && roll_source == 1",
@@ -37,7 +37,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。"#)
         .cell(r#"H16"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"和奏瑞依"#)]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"和奏瑞依"#)]));
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
@@ -91,7 +91,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// C# `CardLayerKeep.RollAfter` -- after a fire-pot roll, keep the unchosen die.
 /// `actor == owner && card.placed` is the pre.
 /// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
-/// source is `roll_source::FIRE` (the fire-pot reroll).
+/// source is `roll_source::CHARGE` (the fire-pot reroll).
 
 /// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
 /// is played from hand; its `play` body places it on the field. The unchosen

@@ -14,7 +14,7 @@
 //! versus outside it (the server would fall back to the engine heuristic).
 //! Both deadline policies are scored off the same latencies: the shipped one
 //! (`budget + 1.5 s`, `server::botsvc::ask_timeout`) and the old
-//! `budget + 400 ms` capped at 1.5 s that fired routinely on 4-thread
+//! `budget + 400 ms` capped at 1.5 s that triggered routinely on 4-thread
 //! searches. `--ponder` sends a speculative `ponder` before each decide.
 
 use std::time::{Duration, Instant};

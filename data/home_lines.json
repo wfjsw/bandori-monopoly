@@ -1,6 +1,6 @@
 {
  "_说明": "主界面名牌上的称呼（tag），不写就显示全名。主页点角色时说的台词是原版台词 + 语音，在 voice_lines.json（Tools/import_voice_lines.py 生成）。",
- "characters": [
+ "personas": [
   {"name": "户山香澄", "tag": "香澄"},
   {"name": "花园多惠", "tag": "多惠"},
   {"name": "牛込里美", "tag": "里美"},

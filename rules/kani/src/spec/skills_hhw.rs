@@ -78,7 +78,7 @@ pub const KAORU_SMILE_SHIP: i32 = 26;
 
 /// Spend exactly 7 fire; place exactly 3 怪盗标记 on the nearest player's
 /// field; the move starts from 微笑号.
-/// `spend_fire` is not an `Effect` variant under the host (it returns a bool
+/// `spend_charge` is not an `Effect` variant under the host (it returns a bool
 /// and mutates `fire[]`), so the observable is the post fire count.
 pub fn kaoru_02_fire_spent(pre_fire: i32) -> i32 {
     (pre_fire - kaoru_02_cost()).max(0)

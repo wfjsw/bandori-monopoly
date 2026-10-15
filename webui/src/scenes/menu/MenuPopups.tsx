@@ -65,8 +65,8 @@ function History() {
         return (
           <div key={i} className={s.histRow}>
             <div className={cx(s.rank, r.rank === 1 && s.first)}>{r.rank}<small>/{r.players}</small></div>
-            <div className={s.who}><b>{D.character(r.character)?.display ?? r.character}</b><small>{modeLabel(r.mode)} · {r.time}</small></div>
-            <div className={s.gain}>+{n0(r.exp)} EXP{r.fireUsed > 0 && <small>{tr("history.fireUsed", { n: r.fireUsed })}</small>}</div>
+            <div className={s.who}><b>{D.persona(r.persona)?.display ?? r.persona}</b><small>{modeLabel(r.mode)} · {r.time}</small></div>
+            <div className={s.gain}>+{n0(r.exp)} EXP{r.chargeUsed > 0 && <small>{tr("history.chargeUsed", { n: r.chargeUsed })}</small>}</div>
             <div className={s.gain}>{r.coins ? tr("history.gainCoins", { coins: (r.coins > 0 ? "+" : "") + n0(r.coins) }) : ""}{r.stars > 0 && <small>{tr("history.starsGained", { n: r.stars })}</small>}</div>
             {/* 「回放」 -- open this match's `.bdrec` in the player. No link
                 (an online match, or one the store no longer holds) disables
@@ -101,8 +101,8 @@ function Fire({ close }: { close: () => void }) {
       <p>{tr("fire.info")}</p>
       <div className={s.fireOpts}>
         {[0, 1, 2, 3].map((n) => (
-          <button key={n} type="button" className={cx(s.fireOpt, p.firePerGame === n && s.on)} onClick={() => {
-            updateProfile(rules.profile_set_fire_per_game(profileJson(), n));
+          <button key={n} type="button" className={cx(s.fireOpt, p.chargePerGame === n && s.on)} onClick={() => {
+            updateProfile(rules.profile_set_charge_per_game(profileJson(), n));
             close();
             toast(n ? tr("fire.setToast", { n, mult: n + 1 }) : tr("fire.setNoneToast"));
           }}>

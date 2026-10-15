@@ -97,8 +97,8 @@ pub struct ConfWorld {
     pub money: [i32; 4],
     pub pos: [i32; 4],
     pub out: [bool; 4],
-    pub fire: [i32; 4],
-    pub fire_max: [i32; 4],
+    pub charge: [i32; 4],
+    pub charge_max: [i32; 4],
     pub stay: [i32; 4],
     pub tiles_owner: [i32; 60],
     pub tiles_houses: [i32; 60],
@@ -151,8 +151,8 @@ impl ConfWorld {
             money: [0; 4],
             pos: [0; 4],
             out: [false; 4],
-            fire: [0; 4],
-            fire_max: [3; 4],
+            charge: [0; 4],
+            charge_max: [3; 4],
             stay: [0; 4],
             tiles_owner: [-1; 60],
             tiles_houses: [0; 60],
@@ -300,7 +300,7 @@ impl CardWorld for ConfWorld {
             return 0;
         }
         let t = &rules_kani::board::TILES[s as usize];
-        if rules_kani::board::is_ring(t) {
+        if rules_kani::board::is_deed(t) {
             t.price
         } else {
             let h = self.tiles_houses[s as usize].max(0);
@@ -336,7 +336,7 @@ impl CardWorld for ConfWorld {
             .map(|(i, _)| i as i32)
             .unwrap_or(-1)
     }
-    /// ABI v56: kind by wire spelling. Replaces `is_circle`/`is_ring`/`is_agent`.
+    /// ABI v56: kind by wire spelling. Replaces `is_start`/`is_deed`/`is_agent`.
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
         let s = rules_kani::board::tile_slot(tile);
         if s < 0 {
@@ -344,8 +344,8 @@ impl CardWorld for ConfWorld {
         }
         let t = &rules_kani::board::TILES[s as usize];
         match kind {
-            "circle" => rules_kani::board::is_circle(t),
-            "ring" => rules_kani::board::is_ring(t),
+            "circle" => rules_kani::board::is_start(t),
+            "ring" => rules_kani::board::is_deed(t),
             "agent" => rules_kani::board::is_agent(t),
             "property" => rules_kani::board::is_property(t),
             _ => false,
@@ -592,10 +592,10 @@ impl CardWorld for ConfWorld {
     fn transfer_to_dest(&mut self, _to: i32, dest: i32) -> Option<i32> {
         self.send_to_dest(dest)
     }
-    fn ring_multiplier(&self) -> i32 {
+    fn rent_unit_mult(&self) -> i32 {
         10
     }
-    fn add_ring_bonus(&mut self, _n: i32) -> i32 {
+    fn add_rent_unit_bonus(&mut self, _n: i32) -> i32 {
         0
     }
     fn teleport_to(&mut self, player_id: i32, tile: i32) {
@@ -666,34 +666,34 @@ impl CardWorld for ConfWorld {
         0
     }
     // fire / stay
-    fn fire(&self, player_id: i32) -> i32 {
-        self.fire[player_id.max(0) as usize % 4]
+    fn charge(&self, player_id: i32) -> i32 {
+        self.charge[player_id.max(0) as usize % 4]
     }
-    fn fire_max(&self, player_id: i32) -> i32 {
-        self.fire_max[player_id.max(0) as usize % 4]
+    fn charge_max(&self, player_id: i32) -> i32 {
+        self.charge_max[player_id.max(0) as usize % 4]
     }
-    fn gain_fire(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
-        // Matches `game_core::engine::ops::gain_fire`: return the amount
+    fn gain_charge(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
+        // Matches `game_core::engine::ops::gain_charge`: return the amount
         // actually gained (clamped under cap), not the new total.
         let p = player_id.max(0) as usize % 4;
         if n <= 0 {
             return 0;
         }
-        let got = n.clamp(0, (self.fire_max[p] - self.fire[p]).max(0));
+        let got = n.clamp(0, (self.charge_max[p] - self.charge[p]).max(0));
         if got <= 0 {
             return 0;
         }
-        self.fire[p] += got;
-        self.events.push(format!("gain_fire {player_id} {got}"));
+        self.charge[p] += got;
+        self.events.push(format!("gain_charge {player_id} {got}"));
         got
     }
-    fn spend_fire(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
+    fn spend_charge(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
         let p = player_id.max(0) as usize % 4;
         if n <= 0 {
             return 1;
         }
-        if self.fire[p] >= n {
-            self.fire[p] -= n;
+        if self.charge[p] >= n {
+            self.charge[p] -= n;
             1
         } else {
             0
@@ -734,10 +734,10 @@ impl CardWorld for ConfWorld {
     fn turn_key(&self) -> i32 {
         1
     }
-    fn character_is(&self, _player_id: i32, _name: &str) -> i32 {
+    fn persona_is(&self, _player_id: i32, _name: &str) -> i32 {
         0
     }
-    fn in_band(&self, _player_id: i32, _name: &str) -> i32 {
+    fn in_group(&self, _player_id: i32, _name: &str) -> i32 {
         0
     }
     fn trigger(&self) -> game_rules::Trigger {
@@ -1017,7 +1017,7 @@ pub struct Snap {
     pub money: [i32; 4],
     pub pos: [i32; 4],
     pub out: [bool; 4],
-    pub fire: [i32; 4],
+    pub charge: [i32; 4],
     pub stay: [i32; 4],
     pub tiles_owner: Vec<i32>,
     pub tiles_houses: Vec<i32>,
@@ -1035,7 +1035,7 @@ fn snap_real(w: &ConfWorld) -> Snap {
         money: w.money,
         pos: w.pos,
         out: w.out,
-        fire: w.fire,
+        charge: w.charge,
         stay: w.stay,
         tiles_owner: w.tiles_owner.to_vec(),
         tiles_houses: w.tiles_houses.to_vec(),
@@ -1058,7 +1058,7 @@ fn snap_model() -> Snap {
             money: w.money,
             pos: w.pos,
             out: w.out,
-            fire: w.fire,
+            charge: w.charge,
             stay: w.stay,
             tiles_owner: w.tiles.iter().map(|t| t.owner).collect(),
             tiles_houses: w.tiles.iter().map(|t| t.houses).collect(),
@@ -1085,8 +1085,8 @@ fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
     if real.out != model.out {
         diffs.push(format!("out real={:?} model={:?}", real.out, model.out));
     }
-    if real.fire != model.fire {
-        diffs.push(format!("fire real={:?} model={:?}", real.fire, model.fire));
+    if real.charge != model.charge {
+        diffs.push(format!("fire real={:?} model={:?}", real.charge, model.charge));
     }
     if real.stay != model.stay {
         diffs.push(format!("stay real={:?} model={:?}", real.stay, model.stay));
@@ -1171,8 +1171,8 @@ fn base_conf() -> ConfWorld {
     w.money = [1500, 2000, 3000, 0];
     w.pos = [2, 10, 25, 0];
     w.out = [false, false, false, true];
-    w.fire = [1, 0, 2, 0];
-    w.fire_max = [3, 3, 3, 3];
+    w.charge = [1, 0, 2, 0];
+    w.charge_max = [3, 3, 3, 3];
     w.stay = [0, 1, 0, 0];
     w.tiles_owner[1] = 0; // board index 2
     w.tiles_houses[1] = 2;
@@ -1190,8 +1190,8 @@ fn base_model() -> KWorld {
     w.money = [1500, 2000, 3000, 0];
     w.pos = [2, 10, 25, 0];
     w.out = [false, false, false, true];
-    w.fire = [1, 0, 2, 0];
-    w.fire_max = [3, 3, 3, 3];
+    w.charge = [1, 0, 2, 0];
+    w.charge_max = [3, 3, 3, 3];
     w.stay = [0, 1, 0, 0];
     w.tiles[1].owner = 0;
     w.tiles[1].houses = 2;
@@ -1311,15 +1311,15 @@ fn op_teleport_to_matches_engine() {
 }
 
 #[test]
-fn op_gain_fire_matches_engine() {
+fn op_gain_charge_matches_engine() {
     let _g = model_lock();
-    let (mp, ml) = intern_msg("conf.fire");
+    let (mp, ml) = intern_msg("conf.charge");
     diff_op(
-        "gain_fire",
+        "gain_charge",
         &[],
-        |c| game_rules::hostfns::gain_fire(c, 0, 2, mp, ml).unwrap() as i64,
+        |c| game_rules::hostfns::gain_charge(c, 0, 2, mp, ml).unwrap() as i64,
         [0, 2, mp, ml, 0, 0],
-        Op::gain_fire,
+        Op::gain_charge,
     );
 }
 

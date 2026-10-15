@@ -26,13 +26,40 @@ fn drain(t: &mut Table) {
     panic!("prompts never stopped: {}", t.dump_prompt());
 }
 
+/// Drain, reporting whether a G-SETTLE-06/07 deed buy/build prompt was
+/// offered. That prompt *is* the settle of an unowned/own [可购买格子]; a
+/// declined offer logs no `land`/`rent` key, so the prompt is the marker.
+fn drain_settle(t: &mut Table) -> bool {
+    let mut saw = false;
+    for _ in 0..40 {
+        let Some(p) = t.prompt() else {
+            return saw;
+        };
+        let k = p.title.key();
+        if k.contains("buy") || k.contains("build") {
+            saw = true;
+        }
+        t.decline();
+    }
+    panic!("prompts never stopped: {}", t.dump_prompt());
+}
+
+/// Did the window settle? A `land`/`rent` key, or a G-SETTLE buy/build prompt
+/// (declined or accepted -- the offer is the settle).
+fn settled(keys: &[String], saw_settle_prompt: bool) -> bool {
+    saw_settle_prompt
+        || keys
+            .iter()
+            .any(|k| k.contains("land") || k.contains("rent"))
+}
+
 /// Drain, answering the CiRCLE reward with `pick` (0 = money, 1 = card).
 fn drain_circle(t: &mut Table, pick: i32) {
     for _ in 0..40 {
         if t.prompt().is_none() {
             return;
         }
-        if t.prompt().unwrap().title.key().contains("circle") {
+        if t.prompt().unwrap().title.key().contains("pass_reward") {
             t.answer_one(pick).unwrap();
         } else {
             t.decline();
@@ -184,7 +211,7 @@ fn g_move_03_end_settles_start_does_not() {
         t.dice(&[steps]);
         let mark = t.mark();
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
-        drain(&mut t);
+        let saw_settle_prompt = drain_settle(&mut t);
         let end = (start + steps as usize) % BOARD_TILES;
         if t.pos(0) != end {
             return Err(format!("ended on {} want {end}", t.pos(0)));
@@ -194,21 +221,22 @@ fn g_move_03_end_settles_start_does_not() {
         // `agent_skip` even when they have nothing to do and are not used as
         // the settle marker here -- skip agent/circle ends for this check.
         let end_kind = rules_spec::data().tiles[end].kind.clone();
-        if matches!(end_kind, game_core::data::TileKind::Agent | game_core::data::TileKind::Circle) {
+        if matches!(end_kind.as_str(), "agent" | "circle") {
             return Ok(());
         }
-        let settled = keys.iter().any(|k| k.contains("land") || k.contains("rent"));
-        if !settled {
+        if !settled(&keys, saw_settle_prompt) {
             return Err(format!(
-                "end tile {end} did not settle (行动阶段 15): {keys:?}"
+                "end tile {end} did not settle (行动阶段 15): {keys:?} settle_prompt={saw_settle_prompt}"
             ));
         }
         // 「移动起点不触发[经过]」: only the end settles. A second land/rent
-        // line means the start (or a mid-path tile) also settled.
+        // line means the start (or a mid-path tile) also settled. A G-SETTLE
+        // buy/build prompt counts as one settle site.
         let lands = keys
             .iter()
             .filter(|k| k.contains("land") || k.contains("rent"))
-            .count();
+            .count()
+            + usize::from(saw_settle_prompt);
         if lands > 1 {
             return Err(format!(
                 "start {start} looks like a settle site too ({lands} settle lines): {keys:?}"
@@ -466,19 +494,31 @@ fn g_move_08_second_main_move_does_nothing() {
 /// [主要移动]会表明到达终点后是否[结算]」 (`rulebook-doc.md:132,141`).
 #[test]
 fn g_move_09_settle_follows_the_main_move() {
-    // Landing on an unowned [可购买格子] announces the buy (the settle body).
+    // Landing on an unowned [可购买格子] offers the buy (the settle body,
+    // G-SETTLE-06).
     let mut t = at(0);
     t.set_pos(1, 40);
     t.dice(&[3]); // -> 水族馆 (index 3)
     let mark = t.mark();
     t.roll(0).unwrap();
-    drain_circle(&mut t, 0);
-    drain(&mut t);
+    let mut saw_settle_prompt = false;
+    for _ in 0..40 {
+        let Some(p) = t.prompt() else { break };
+        let k = p.title.key();
+        if k.contains("pass_reward") {
+            t.answer_one(0).unwrap();
+        } else {
+            if k.contains("buy") || k.contains("build") {
+                saw_settle_prompt = true;
+            }
+            t.decline();
+        }
+    }
     assert_eq!(t.pos(0), 3);
     let keys = t.keys_since(mark);
     assert!(
-        keys.iter().any(|k| k.contains("land")),
-        "the end tile settled (「到达[移动终点]后需进行[结算]」): {keys:?}"
+        settled(&keys, saw_settle_prompt),
+        "the end tile settled (「到达[移动终点]后需进行[结算]」): {keys:?} settle_prompt={saw_settle_prompt}"
     );
 
     // A 「不[结算]」 move skips the settle. `通用:@Tsugu ycm`'s high half is
@@ -607,7 +647,7 @@ fn g_move_11_circle_reward_sits_between_walk_and_settle() {
     // Reward prompt is open before the landing settles.
     assert_eq!(
         t.prompt().map(|p| p.title.key().to_string()),
-        Some("ask.circle.title".into()),
+        Some("ask.pass_reward.title".into()),
         "the walk halted at the [经过] CiRCLE reward: {}",
         t.dump_prompt()
     );
@@ -621,12 +661,19 @@ fn g_move_11_circle_reward_sits_between_walk_and_settle() {
         "the landing has not settled yet: {keys_mid:?}"
     );
     t.answer_one(0).unwrap();
-    drain(&mut t);
+    // G-SETTLE-06: the settle of the unowned landing deed is the optional
+    // buy prompt -- offered after the reward, before the turn ends.
+    let saw_settle_prompt = drain_settle(&mut t);
     let keys = t.keys_since(mark);
-    let reward = keys.iter().position(|k| k.contains("circle"));
-    let settle = keys.iter().position(|k| k.contains("land"));
+    let reward = keys.iter().position(|k| k.contains("pass_reward"));
+    // A declined buy/build logs no key; the prompt itself sits after every
+    // key so far (including the reward).
+    let settle = keys
+        .iter()
+        .position(|k| k.contains("land") || k.contains("rent"))
+        .or(if saw_settle_prompt { Some(keys.len()) } else { None });
     let (Some(r), Some(s)) = (reward, settle) else {
-        panic!("missing reward or settle: {keys:?}");
+        panic!("missing reward or settle: {keys:?} settle_prompt={saw_settle_prompt}");
     };
     assert!(r < s, "reward before the landing settle: {keys:?}");
     assert_eq!(t.pos(0), 1);

@@ -160,9 +160,9 @@ fn tomoe_savior_hands_the_deed_over_at_half_price() {
     );
 }
 
-// After the handover the acquisition is a 「购买」: band:Afterglow:商店街的宠儿
+// After the handover the acquisition is a 「购买」: group:Afterglow:商店街的宠儿
 // 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」 must hear
-// it. The listener runs (`cards:skill-bands.afterglow_free_house` is in the
+// it. The listener runs (`cards:skill-groups.afterglow_free_house` is in the
 // event stream) -- 「must hear it」 is the clause under test here.
 #[test]
 fn tomoe_savior_buy_listener_hears_the_acquisition() {
@@ -187,7 +187,7 @@ fn tomoe_savior_buy_listener_hears_the_acquisition() {
     );
 }
 
-// 规则书 band:Afterglow:商店街的宠儿: 「自动免费在上面加盖一栋房子」 -- the free
+// 规则书 group:Afterglow:商店街的宠儿: 「自动免费在上面加盖一栋房子」 -- the free
 // house itself, as part of the same handover.
 #[test]
 fn tomoe_savior_buy_listener_places_the_free_house() {
@@ -395,7 +395,7 @@ fn mutsumi_never_2_runs_the_band_skill_2() {
     assert_eq!(t.money(0), m0, "no money clause in (2)");
 }
 
-// 规则书 band:CRYCHIC:美好的往日幻影（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」
+// 规则书 group:CRYCHIC:美好的往日幻影（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」
 // -- part of the (2) body mutsumi_never's (2) must run.
 #[test]
 fn mutsumi_never_2_band_2_removes_the_crychic_cards() {
@@ -476,7 +476,7 @@ fn mutsumi_never_2_runs_the_band_skill_2_on_a_crystal_shortfall() {
 // 「（2）使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有
 // 乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。」
 //
-// The taken copy works for the user: band:Afterglow:商店街的宠儿
+// The taken copy works for the user: group:Afterglow:商店街的宠儿
 // 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」 must fire
 // on the taker's own buy.
 #[test]
@@ -593,11 +593,11 @@ fn umiri_take_does_not_make_the_user_that_bands_character() {
     let dump = t.dump_prompt();
     assert!(
         t.option("PlayerId(1)").is_some() || t.option("美竹兰").is_some(),
-        "P1 is an offered Afterglow character: {dump}"
+        "P1 is an offered Afterglow persona: {dump}"
     );
     assert!(
         t.option("PlayerId(0)").is_none() && t.option("八幡海铃").is_none(),
-        "「不视为那个乐队的角色」 -- P0 is not offered as an Afterglow character: {dump}"
+        "「不视为那个乐队的角色」 -- P0 is not offered as an Afterglow persona: {dump}"
     );
 }
 
@@ -673,7 +673,7 @@ fn umiri_copies_go_away_when_the_card_returns() {
 // 2 houses -> 1000*2/4 = 500, split over the one other player.
 //
 // `MatchPrompt` carries i18n *keys*, not resolved UI text: the offer's prompt is
-// `cards:skill-characters.numazu_maid_title` / `numazu_maid_ask` (zh-CN
+// `cards:skill-personas.numazu_maid_title` / `numazu_maid_ask` (zh-CN
 // 「失去 1 个 PAREO 标记，向其他玩家分摊收取 {{n}}？」), so the needle below
 // matches that key rather than the rendered 「PAREO」/「失去」 text. The card's
 // own house-removal prompts are `cards:card-ras.pareo_far_ask_*` /

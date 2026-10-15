@@ -31,7 +31,7 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。"#)
         .cell(r#"C13"#)
-        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
+        .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).
 fn best_price(player_id: i32) -> i32 {

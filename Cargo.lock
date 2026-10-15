@@ -913,6 +913,7 @@ dependencies = [
  "game-core",
  "postcard",
  "rules-cond",
+ "ruleset-core",
  "serde",
  "serde_json",
  "sha2",
@@ -1742,8 +1743,8 @@ dependencies = [
  "rules-tiles",
  "ruleset-core",
  "serde",
- "skill-bands",
- "skill-characters",
+ "skill-groups",
+ "skill-personas",
 ]
 
 [[package]]
@@ -1773,8 +1774,8 @@ dependencies = [
  "ruleset-core",
  "serde_json",
  "sha2",
- "skill-bands",
- "skill-characters",
+ "skill-groups",
+ "skill-personas",
 ]
 
 [[package]]
@@ -2044,7 +2045,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
-name = "skill-bands"
+name = "skill-groups"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
@@ -2053,7 +2054,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skill-characters"
+name = "skill-personas"
 version = "0.1.0"
 dependencies = [
  "card-sdk",

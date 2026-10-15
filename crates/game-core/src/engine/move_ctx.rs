@@ -10,7 +10,7 @@ use crate::msg::Msg;
 use crate::state::MovePlan;
 
 /// How the player gets there: exactly one per move -- a walk that travels a
-/// [路径], or a [传送] to its destination. Mirrors `card_sdk::abi::MoveKind`
+/// [路径], or a teleport to its destination. Mirrors `card_sdk::abi::MoveKind`
 /// bit-for-bit.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MoveKind {
@@ -83,7 +83,7 @@ pub struct MoveCtx {
     /// defaults it to the mover, and a substitution (幻觉来了 「上一名玩家代替
     /// 进行此次投掷」) writes the stand-in through `plan::set_roller`.
     pub roller: usize,
-    /// The turn's [主要移动], as opposed to a card's side move.
+    /// The turn's main move, as opposed to a card's side move.
     pub main: bool,
     /// An event-driven forced move (「移动X」 / 「移动1d20」): not a main move, so
     /// it goes through even when the turn's main move is already spent
@@ -94,19 +94,19 @@ pub struct MoveCtx {
     pub why: Option<Msg>,
 
     // -- what kind of move ---------------------------------------------------
-    /// How the player gets there: one walk or one [传送].
+    /// How the player gets there: one walk or one teleport.
     pub kind: MoveKind,
     /// The teleport's destination, or `-1` (a teleport with no named
     /// destination derives it from the roll).
     pub teleport_to: i32,
     /// Does the move settle where it lands (`settleBefore` -> `settle` -> `land`
     /// -> `settleAfter`)? Clear it to prevent settle at all -- the player still
-    /// moves. 其他规则注意事项 1.2: 「是否[结算]」 gates **only** the settle
-    /// stages (14–15). A walk still [经过]-resolves the tiles it travels, and
+    /// moves. 其他规则注意事项 1.2: 「是否settle」 gates **only** the settle
+    /// stages (14–15). A walk still [pass]-resolves the tiles it travels, and
     /// (R2 / M6a, `SETTLE-STAGES.md` §6) a teleport still raises `passTile` +
     /// `passPlayer` at its destination -- 专名词 9 gives the teleport a [路径]
-    /// of just the endpoint, and B41 fires [经过],[重叠] there before the
-    /// (gated) [结算]. The movement tail (`moveAfter` / `moveResolved`) runs
+    /// of just the endpoint, and B41 raises [pass],overlap there before the
+    /// (gated) settle. The movement tail (`moveAfter` / `moveResolved`) runs
     /// either way.
     pub resolve: bool,
 
@@ -171,7 +171,7 @@ pub struct MoveCtx {
     /// A queued second walk, in steps (the follow-up walk once the first
     /// settles).
     pub more_steps: i32,
-    /// Passing CiRCLE pays nothing on this walk.
+    /// Passing the start square pays nothing on this walk.
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
     pub no_buy: bool,
 
@@ -179,7 +179,7 @@ pub struct MoveCtx {
     /// A counteraction cancelled the movement.
     pub cancelled: bool,
     /// Card-owned per-move state, keyed by name. The engine never reads it --
-    /// it is scratch space for the card that armed the effect (e.g. a fire-roll
+    /// it is scratch space for the card that armed the effect (e.g. a charge-roll
     /// counter the card tracks itself).
     pub tags: Vec<(String, i32)>,
     /// 「使你的下次主要移动结果对那些玩家一起执行」 -- players who replay this

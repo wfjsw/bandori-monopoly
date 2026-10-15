@@ -26,7 +26,7 @@ pub struct Observed {
 }
 
 impl Observed {
-    /// True when the input was accepted and no clause fired.
+    /// True when the input was accepted and no clause ran.
     pub fn clean(&self) -> bool {
         self.act_result.is_ok() && self.violations.is_empty()
     }

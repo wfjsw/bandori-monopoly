@@ -542,7 +542,7 @@ fn t12_student_council_check() {
     while let Some(p) = t.prompt() {
         if p.kind == "tile" {
             t.answer_tile(0, t1).unwrap();
-        } else if let Some(k) = t.option("yes") {
+        } else if let Some(k) = t.option("ask.yes") {
             t.answer(0, k).unwrap();
         } else {
             t.decline();
@@ -631,12 +631,12 @@ fn t13_smile_parade() {
         .find(|f| f.card.contains("笑容大游行"))
         .expect("card still on the field after (1)/(2)");
     // (2) 「并移除其上全部奇迹水晶」.
-    assert_eq!(f.crystals, 0, "(2) clears the crystals");
+    assert_eq!(f.counters.get("crystals").copied().unwrap_or(0), 0, "(2) clears the crystals");
     eprintln!(
         "t13 swap record: card tile = {} (end {}), crystals = {}",
         f.tile,
         (t28 + 2) % 60,
-        f.crystals
+        f.counters.get("crystals").copied().unwrap_or(0)
     );
     // （3）: any player settling on the card's tile discards it. P1 lands there.
     until_turn(&mut t, 1);
@@ -819,7 +819,7 @@ fn t18_rana_interesting_woman() {
     loop {
         let Some(_) = t.prompt() else { break };
         // Prefer the force-stop branch so (4)/(5) are exercised.
-        let k = t.option("停").or_else(|| t.option("芭菲")).or_else(|| t.option("yes"));
+        let k = t.option("停").or_else(|| t.option("芭菲")).or_else(|| t.option("ask.yes"));
         if let Some(k) = k {
             t.answer(1, k).unwrap();
         } else {
@@ -874,12 +874,12 @@ fn t19_saaya_names_the_sky() {
     pass(&mut t, 0);
     eprintln!(
         "t19 record: fire = {}, field = {:?}, tiles = {:?} (3d20 = 5+5+5 -> tile #15 = index 14)",
-        t.fire(0),
+        t.charge(0),
         t.field_ids(0),
         t.field(0).iter().map(|f| (f.card.clone(), f.tile)).collect::<Vec<_>>()
     );
     // (2): 「[经过]此卡后在回合结束后获得1个[火罐]」.
-    assert_eq!(t.fire(0), 1, "+1 fire at turn end after passing the card");
+    assert_eq!(t.charge(0), 1, "+1 fire at turn end after passing the card");
     // (2): 「然后投掷3d20将此卡放置在投掷结果的格子上」 → 5+5+5 = 15 → tile #15.
     let field = t.field(0);
     let f = field
@@ -1201,13 +1201,13 @@ fn t27_ikumi_marks() {
     let mut saw_offer = false;
     loop {
         let Some(_) = t.prompt() else { break };
-        if t.option("yes").is_some() || t.option("停").is_some() || t.option("2000").is_some() {
+        if t.option("ask.yes").is_some() || t.option("停").is_some() || t.option("2000").is_some() {
             saw_offer = true;
         }
         eprintln!("t27 prompt: {}", t.dump_prompt());
         // Take the force-stop (ask.yes).
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("停"))
             .or_else(|| t.option("2000"));
         if let Some(k) = k {
@@ -1271,7 +1271,7 @@ fn t28_hanae_rabbits() {
     eprintln!(
         "t28 record: marks = {:?}, fire = {} (cap 4), took_reward = {took_reward}",
         t.marks(),
-        t.fire(0)
+        t.charge(0)
     );
     // The reward path must actually run, or the exclusion below is vacuous.
     assert!(took_reward, "the CiRCLE reward must be offered and taken");
@@ -1308,7 +1308,7 @@ fn t29_croquettes() {
     loop {
         let Some(_) = t.prompt() else { break };
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("可乐饼"))
             .or_else(|| t.option("转移"));
         if let Some(k) = k {

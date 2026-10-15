@@ -13,7 +13,6 @@ use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::{prop, FieldCard, MoneyFlow, TileQuote, TileQuoteKind};
 use game_core::MatchMode;
-use game_core::data::TileKind;
 
 mod common;
 use common::data_arc as data;
@@ -69,20 +68,14 @@ fn first_tile(f: impl Fn(&game_core::data::TileData) -> bool) -> usize {
     d.tiles.iter().position(f).expect("tile exists")
 }
 
-/// A property with a real build ladder (`rent.len() >= 2`).
+/// A deed with a real build ladder (`rent.len() >= 2`).
 fn prop_tile() -> usize {
-    first_tile(|t| t.kind == TileKind::Property && t.rent.len() >= 2)
+    first_tile(|t| t.is_buyable() && t.rent.len() >= 2)
 }
 
-fn ring_tile() -> usize {
-    first_tile(|t| t.kind == TileKind::Ring)
-}
-
-fn all_rings() -> Vec<usize> {
-    let d = data();
-    (0..d.tiles.len())
-        .filter(|&i| d.tiles[i].kind == TileKind::Ring)
-        .collect()
+/// A deed with no upgrade ladder (`rent.len() < 2`).
+fn flat_deed_tile() -> usize {
+    first_tile(|t| t.is_buyable() && t.rent.len() < 2)
 }
 
 /// Tile `t`'s quote for `member`, or panic with the whole vector for debugging.
@@ -135,21 +128,19 @@ fn mine_at_the_build_cap_shows_own_rent() {
 }
 
 #[test]
-fn mine_on_a_ring_shows_own_rent_because_rings_cannot_upgrade() {
+fn mine_on_a_flat_deed_shows_own_rent_because_it_cannot_upgrade() {
     let mut m = stub(4);
-    let t = ring_tile();
+    let t = flat_deed_tile();
     let me = seat(&m, 1);
-    // Own every RiNG so the dice range is the full-board one.
-    for &r in &all_rings() {
-        m.world_mut().st.owners[r] = me;
-    }
+    m.world_mut().st.owners[t] = me;
     let qq = q(&m, 1, t);
     assert_eq!(qq.kind, TileQuoteKind::OwnRent);
     assert_eq!(qq.flow, MoneyFlow::Receive);
-    let mult = data().match_rules.ring_multiplier.max(1);
-    let n = all_rings().len() as i32;
-    assert_eq!(qq.value, n * mult, "min of rings x mult x 1d20");
-    assert_eq!(qq.max, Some(n * mult * 20));
+    // No upgrade ladder: the table rent is the (empty-table) base.
+    let tile = &data().tiles[t];
+    let rent = tile.rent.first().copied().unwrap_or(0);
+    assert_eq!(qq.value, rent);
+    assert_eq!(qq.max, None);
 }
 
 #[test]
@@ -190,17 +181,18 @@ fn rent_houses_override_is_honoured() {
 }
 
 #[test]
-fn ring_rent_is_a_dice_range() {
+fn others_flat_deed_shows_the_rent_id_pay() {
     let mut m = stub(7);
-    let t = ring_tile();
+    let t = flat_deed_tile();
     let other = seat(&m, other_member(&m, 1));
     m.world_mut().st.owners[t] = other;
     let qq = q(&m, 1, t);
     assert_eq!(qq.kind, TileQuoteKind::Rent);
     assert_eq!(qq.flow, MoneyFlow::MustPay);
-    let mult = data().match_rules.ring_multiplier.max(1);
-    assert_eq!(qq.value, mult, "1 ring: mult x 1d20 min");
-    assert_eq!(qq.max, Some(mult * 20));
+    let tile = &data().tiles[t];
+    let rent = tile.rent.first().copied().unwrap_or(0);
+    assert_eq!(qq.value, rent);
+    assert_eq!(qq.max, None);
 }
 
 #[test]

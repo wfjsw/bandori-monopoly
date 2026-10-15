@@ -36,7 +36,7 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
 1. [使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半并在上述的两个格子间放置1个[奇迹水晶]（上限1），被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半；
 2. [使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]改为向前或后移动1格到被[指定]格子且[结算]。"#)
         .cell(r#"I8"#)
-        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"千早爱音"#)]));
+        .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"千早爱音"#)]));
 
 /// Slot key prefix that maps a marked tile to its linked partner.
 const LINK: &str = "anon_tokyo_link_";

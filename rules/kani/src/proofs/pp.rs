@@ -32,16 +32,16 @@ fn tok_neg() -> u16 {
 // Per-harness host-op subset for `PP:同一个梦想` (TRIAGE-LOG `op-subset`).
 //
 // Unmodified body (`same_dream.rs` + `resonance::try_resonance`) reaches:
-//   add_band_crystals, tok→count_held_name, add_tok→add_held, log, gain,
+//   add_group_pool, tok→count_held_name, add_tok→add_held, log, gain,
 //   player_count, hand_count (try_resonance entry).
 // Isolation (no [共鸣] in hand) keeps try_resonance at `hand_count <= 0`, so
-// ask / take_card / to_discard / in_band are on a dead path — still declared
+// ask / take_card / to_discard / in_group are on a dead path — still declared
 // so that if isolation breaks the proof FAILS loudly (outside_subset) rather
 // than silently passing. `effect` / `gain_typed` / `count_held` ride the same
 // handlers as their siblings.
 // ---------------------------------------------------------------------------
 crate::host_subset!(same_dream_dispatch {
-    add_band_crystals => arm_add_band_crystals,
+    add_group_pool => arm_add_band_crystals,
     count_held | count_held_name => arm_count_held,
     add_held => arm_add_held,
     set_held_name => arm_set_held_name,
@@ -52,8 +52,8 @@ crate::host_subset!(same_dream_dispatch {
     take_card => arm_take_card,
     to_discard => arm_to_discard,
     ask => arm_ask,
-    in_band => arm_in_band,
-    band_crystals => arm_band_crystals,
+    in_group => arm_in_band,
+    group_pool => arm_band_crystals,
     money => arm_money,
 });
 
@@ -121,7 +121,7 @@ fn any_player_in() -> i32 {
 }
 
 fn set_band_crystals(p: i32, v: i32) {
-    world::with_world_mut(|w| w.band_crystals[p as usize] = v);
+    world::with_world_mut(|w| w.group_pool[p as usize] = v);
 }
 
 fn fans_pos_of(p: usize) -> i32 {
@@ -139,7 +139,7 @@ fn effects_of() -> ([Effect; 24], usize) {
 }
 
 fn band_crystals_of(p: i32) -> i32 {
-    world::with_world(|w| w.band_crystals[p as usize])
+    world::with_world(|w| w.group_pool[p as usize])
 }
 
 /// Crystals on the card instance the body just wrote (`set_crystals` /
@@ -170,7 +170,7 @@ pub fn same_dream_01_probe_setup_only() {
     let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     crate::kassert!(false, "probe: setup reached");
 }
 
@@ -184,7 +184,7 @@ pub fn same_dream_01_probe_post_invoke() {
     let user = 0i32;
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     crate::kassert!(false, "probe: post-invoke reached");
 }
@@ -323,7 +323,7 @@ pub fn floor_f_spec_compare() {
     let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     let pre_up = fans_pos_of(user as usize);
     let pre_down = fans_neg_of(user as usize);
     let pre = world::snapshot();
@@ -375,7 +375,7 @@ fn same_dream_01_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     let pre_up = fans_pos_of(user as usize);
     let pre_down = fans_neg_of(user as usize);
 
@@ -462,7 +462,7 @@ pub fn same_dream_02_money_mutant_is_detected() {
     kani::assume(fans_pos_of(user as usize) >= 1);
     let pre_up = fans_pos_of(user as usize);
     let pre_band = 0;
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     invoke::unwrap_done(card_pp::same_dream::same_dream_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -495,12 +495,12 @@ pub fn title_idol_01_band_plus_2_iff() {
     let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     // Step 1 is unconditional +2. Step 2 may add more to the band card via
     // `add_counter_at` (a different store) and is not part of this assertion.
-    // `add_band_crystals` is the pool the quote names for step 1.
+    // `add_group_pool` is the pool the quote names for step 1.
     crate::kassert!(
         band == pre_band + 2,
         "C-PP-title-idol-01: band pool rises by exactly 2 from step 1"
@@ -515,7 +515,7 @@ pub fn title_idol_01_mutant_is_detected() {
     let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     crate::kassert!(
@@ -704,7 +704,7 @@ pub fn guide_01_band_and_crystals_iff() {
     let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     let up = fans_pos_of(user as usize);
     let down = fans_neg_of(user as usize);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
@@ -739,7 +739,7 @@ pub fn guide_01_mutant_is_detected() {
     let down = fans_neg_of(user as usize);
     let owned = up + down;
     kani::assume(owned % 3 != 0 && owned >= 1);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = 0);
+    world::with_world_mut(|w| w.group_pool[user as usize] = 0);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let cry = self_crystals();
     crate::kassert!(
@@ -1182,7 +1182,7 @@ pub fn ranger_01_02_steps_by_count_iff() {
     kani::assume(others == 0 || others == 1);
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     if others == 1 {
         world::with_world_mut(|ww| {
             let uid = ww.next_uid;
@@ -1232,7 +1232,7 @@ pub fn flower_01_place_on_tile_iff() {
     let user = any_player_in();
     let pre_band = kani::any();
     kani::assume(pre_band >= 0 && pre_band <= 50);
-    world::with_world_mut(|w| w.band_crystals[user as usize] = pre_band);
+    world::with_world_mut(|w| w.group_pool[user as usize] = pre_band);
     // Give the user two owned tiles so ask_tile has a choice.
     world::with_world_mut(|w| w.tiles[1].owner = user);
     world::with_world_mut(|w| w.tiles[2].owner = user);
@@ -1301,7 +1301,7 @@ pub fn chisato_mask_01_total_iff() {
     crate::kassert!(placed, "C-PP-chisato-mask-01: card on the user's field");
 }
 
-// C-PP-first-accident-02 MOVED to proofs/skills_pp.rs (needs `skills-characters`
+// C-PP-first-accident-02 MOVED to proofs/skills_pp.rs (needs `skills-personas`
 // for the 丸山彩 (2) body; the pp unit's features do not compile that crate,
 // so the harness was cfg'd out and `cargo kani` "Failed to match" it).
 

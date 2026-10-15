@@ -46,7 +46,7 @@ function player(over: Partial<MatchPlayer> = {}): MatchPlayer {
     rank: 0,
     mentality: "standard",
     state: {},
-    skillCharacter: "",
+    skillOwner: "",
     bands: "",
     tokens: [],
     skillNote: { k: "" },

@@ -23,7 +23,7 @@ pub type Error = wasmi::Error;
 ///
 /// Same signal as `card_sdk::abi::EXIT_NEED_INPUT`, at a different layer: the
 /// sentinel is the guest <-> host wire form (an import *returns* it, and
-/// `host::fold_exit` turns the `bandori_on` return back into this marker), while
+/// `host::fold_exit` turns the `ruleset_on` return back into this marker), while
 /// this is the trap raised by the imports whose guest wrappers still read a
 /// plain `bool`/`Option` -- `gate`, `target`, `card_move`, the buy/build
 /// routines. Those have nowhere to carry a sentinel without it reading as

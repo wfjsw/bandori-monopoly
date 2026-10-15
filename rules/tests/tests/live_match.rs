@@ -23,7 +23,7 @@ use game_rules::{Ruleset, WasmRules};
 fn data() -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/game-core/tests/fixtures/roster.json"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
     )
     .expect("roster fixture"))
     .expect("roster fixture parses");
@@ -116,7 +116,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         MatchMode::Casual,
         ScoreWeights::default(),
     );
-    m.set_character(1, "户山香澄");
+    m.set_persona(1, "户山香澄");
     m.quick_start();
     // The binding is observable the moment the match starts. Assert it *here*:
     // `PPP:Returns` is in a Poppin' Party deck pool and its `DeckAtGameStart`
@@ -136,7 +136,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         );
         assert!(
             ids.iter().any(|id| id.starts_with("skill:Poppin' Party:")),
-            "band skill follows from the character's band: {ids:?}"
+            "band skill follows from the character's group: {ids:?}"
         );
     }
     // Let the bots run so a `TurnStartBefore` has fired for the human.
@@ -166,7 +166,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         "character skill stays bound: {ids:?}"
     );
     // 「初始0，上限1」 -- the skill card is what assigns fire.max.
-    let fire = st.players[1].state.get("fire").copied().unwrap_or_default();
+    let fire = st.players[1].state.get("charge").copied().unwrap_or_default();
     assert_eq!(fire.max, 1, "the skill assigned the cap: {fire:?}");
 }
 
@@ -273,7 +273,7 @@ fn ported_official_cards_run_in_a_match() {
     // R:（ykn）louder -- nudge the RiNG multiplier, no prompt. It is 凑友希那's
     // exclusive card, so the player must be her to play it.
     let mut m = match_with("R:（ykn）louder");
-    m.set_character(1, "凑友希那");
+    m.set_persona(1, "凑友希那");
     m.act(1, &play("R:（ykn）louder")).expect("play");
     let st = m.state();
     assert!(

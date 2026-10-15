@@ -17,11 +17,11 @@
 //! Host notes:
 //! * `Op::log` is narration only (not an effect-log entry).
 //! * `Op::state_set` is host-faithful now (value in `a4`, logged as `n`).
-//! * `state_add` / `spend_fire` / `add_band_crystals` are unlogged.
+//! * `state_add` / `spend_charge` / `add_group_pool` are unlogged.
 //! * instance crystals ride `field_crystals(last_uid)` (not the player-key map).
 //!
-//! Feature gates: band-skill harnesses need `skills-bands` (the module's
-//! gate); character-skill harnesses need `skills-characters` (the `*_kani`
+//! Feature gates: band-skill harnesses need `skills-groups` (the module's
+//! gate); character-skill harnesses need `skills-personas` (the `*_kani`
 //! wrappers live in that crate).
 //!
 //! Bounds: every harness that calls a body uses `#[kani::unwind(32)]`.
@@ -81,7 +81,7 @@ fn sparse2(
 // `skill:高松灯（CRYCHIC）:跌跌撞撞...` use_skill. Seat-symmetric.
 // ===========================================================================
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 mod tomori_spend {
     use super::{effects_of, key_get, sparse2};
     use crate::intern;
@@ -89,11 +89,11 @@ mod tomori_spend {
     use crate::spec::skills_crychic as spec;
     use crate::world::{self, Effect};
 
-    /// Unmodified `use_skill` reaches: raise (FirePaying window), spend_fire,
+    /// Unmodified `use_skill` reaches: raise (ChargePaying window), spend_charge,
     /// state_add(STAY, -1), log.
     crate::host_subset!(tomori_spend_dispatch {
         raise => arm_raise,
-        spend_fire => arm_spend_fire,
+        spend_charge => arm_spend_charge,
         state_add | inc_slot => arm_state_add,
         log | effect => arm_log,
     });
@@ -102,19 +102,19 @@ mod tomori_spend {
     /// symbolic so both the spend-yes and spend-no early-out are reachable.
     fn tomoriskill_02_iff_at(user: i32) {
         debug_assert!(user == 0 || user == 1);
-        let fire: i32 = kani::any();
+        let charge: i32 = kani::any();
         kani::assume(fire >= 0 && fire <= 3);
         let stay: i32 = kani::any();
         kani::assume(stay >= 1 && stay <= 3);
         let stay_key = intern::intern("stay");
         sparse2(tomori_spend_dispatch, user, |w| {
-            w.fire[user as usize] = fire;
+            w.charge[user as usize] = fire;
             // The body's `state::add(STAY, -1)` writes the keyed store.
             w.key_set(user, stay_key, stay);
         });
 
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_characters::tomori_crychic::use_skill_kani(user));
+        invoke::unwrap_done(skill_personas::tomori_crychic::use_skill_kani(user));
         kani::cover!(true, "body returned");
         let post = world::snapshot();
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -130,7 +130,7 @@ mod tomori_spend {
 
         if fire >= 1 {
             crate::kassert!(
-                post.fire[user as usize] == fire - 1,
+                post.charge[user as usize] == fire - 1,
                 "C-CRYCHIC-tomoriskill-02: fire -1"
             );
             crate::kassert!(
@@ -140,7 +140,7 @@ mod tomori_spend {
         } else {
             // Early-out: neither store moves.
             crate::kassert!(
-                post.fire[user as usize] == fire,
+                post.charge[user as usize] == fire,
                 "C-CRYCHIC-tomoriskill-02: fire unchanged when spend is refused"
             );
             crate::kassert!(
@@ -172,11 +172,11 @@ mod tomori_spend {
     pub fn tomoriskill_02_mutant_is_detected() {
         let stay_key = intern::intern("stay");
         sparse2(tomori_spend_dispatch, 0, |w| {
-            w.fire[0] = 1;
+            w.charge[0] = 1;
             w.key_set(0, stay_key, 1);
         });
         let user = 0i32;
-        invoke::unwrap_done(skill_characters::tomori_crychic::use_skill_kani(user));
+        invoke::unwrap_done(skill_personas::tomori_crychic::use_skill_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -192,7 +192,7 @@ mod tomori_spend {
 
 }
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 pub use tomori_spend::*;
 
 // ===========================================================================
@@ -202,7 +202,7 @@ pub use tomori_spend::*;
 // Concrete seat combos in `n_players = 2`: (owner=0, actor=1) and (owner=1, actor=0).
 // ===========================================================================
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 mod soyo_cancel {
     use super::{effects_of, sparse2};
     use crate::intern;
@@ -254,7 +254,7 @@ mod soyo_cancel {
         let armed_key = intern::intern("skill.soyoCrychic.armed").0;
 
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_characters::soyo_crychic::on_pay_kani(owner));
+        invoke::unwrap_done(skill_personas::soyo_crychic::on_pay_kani(owner));
         kani::cover!(true, "body returned");
         let post = world::snapshot();
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -296,7 +296,7 @@ mod soyo_cancel {
     pub fn soyoskill_01_decline_noop() {
         soyo_world(0, 1, 1);
         let owner = 0i32;
-        invoke::unwrap_done(skill_characters::soyo_crychic::on_pay_kani(owner));
+        invoke::unwrap_done(skill_personas::soyo_crychic::on_pay_kani(owner));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -312,7 +312,7 @@ mod soyo_cancel {
     pub fn soyoskill_01_mutant_is_detected() {
         soyo_world(0, 1, 0);
         let owner = 0i32;
-        invoke::unwrap_done(skill_characters::soyo_crychic::on_pay_kani(owner));
+        invoke::unwrap_done(skill_personas::soyo_crychic::on_pay_kani(owner));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -331,7 +331,7 @@ mod soyo_cancel {
     }
 }
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 pub use soyo_cancel::*;
 
 // ===========================================================================
@@ -357,7 +357,7 @@ fn band_01_iff_at(user: i32) {
 
     let limit_key = intern::intern("handLimit").0;
     let seen_key = intern::intern("skill.crychic.seen").0;
-    invoke::unwrap_done(skill_bands::crychic::at_turn_start_kani(user));
+    invoke::unwrap_done(skill_groups::crychic::at_turn_start_kani(user));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -424,7 +424,7 @@ fn band_03_crossing_iff_at(user: i32) {
     });
 
     let pre_crystals = self_crystals();
-    invoke::unwrap_done(skill_bands::crychic::on_drawn_kani(user));
+    invoke::unwrap_done(skill_groups::crychic::on_drawn_kani(user));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -490,7 +490,7 @@ pub fn band_03_no_crossing_noop() {
         w.key_set(0, seen_key, 3);
     });
     let user = 0i32;
-    invoke::unwrap_done(skill_bands::crychic::on_drawn_kani(user));
+    invoke::unwrap_done(skill_groups::crychic::on_drawn_kani(user));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -517,7 +517,7 @@ pub fn band_03_mutant_is_detected() {
         w.key_set(0, seen_key, 4);
     });
     let user = 0i32;
-    invoke::unwrap_done(skill_bands::crychic::on_drawn_kani(user));
+    invoke::unwrap_done(skill_groups::crychic::on_drawn_kani(user));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);

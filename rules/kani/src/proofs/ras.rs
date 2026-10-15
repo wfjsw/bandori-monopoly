@@ -49,7 +49,7 @@ crate::host_subset!(pareo_dispatch {
     add_held => arm_add_held,
     count_held | count_held_name => arm_count_held,
     log | effect => arm_log,
-    band_skill | character_skill => arm_band_skill,
+    group_skill | persona_skill => arm_band_skill,
     invoke_skill => arm_invoke_skill,
     owned_count => arm_owned_count,
     owned_at => arm_owned_at,
@@ -154,7 +154,7 @@ fn unstoppable_card_03_money_iff_at(user: i32, face: i32) {
     );
     // Frame: nothing but the money moved.
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: no movement (teleport is BLOCKED-HOST)");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire unchanged");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
     crate::kassert!(post.discard == pre.discard, "frame: discard unchanged");
     for q in 0..MAX_PLAYERS {

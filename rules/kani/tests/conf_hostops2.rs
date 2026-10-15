@@ -7,7 +7,7 @@
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use card_sdk::kani_host::Op;
-// Pull in `native_shims` so the `bandori_*` host-import symbols link
+// Pull in `native_shims` so the `ruleset_*` host-import symbols link
 // (unmodified card bodies / ctx:: call them on native).
 use game_rules::native_shims as _;
 use rules_kani::world::{self as kworld, World as KWorld};
@@ -208,19 +208,19 @@ fn add_counter_clamps_to_max() {
     assert_eq!(got, 0, "floor at 0");
 }
 
-/// `gain_fire` clamps at `fire_max` and returns the amount gained.
+/// `gain_charge` clamps at `charge_max` and returns the amount gained.
 #[test]
-fn gain_fire_clamps_at_cap() {
+fn gain_charge_clamps_at_cap() {
     let _g = model_lock();
     let mut w = base();
-    w.fire[0] = 2;
-    w.fire_max[0] = 3;
+    w.charge[0] = 2;
+    w.charge_max[0] = 3;
     install(w);
-    let got = rules_kani::host::dispatch(Op::gain_fire, [0, 5, 0, 0, 0, 0]);
+    let got = rules_kani::host::dispatch(Op::gain_charge, [0, 5, 0, 0, 0, 0]);
     assert_eq!(got, 1, "only (cap-was) is gained");
-    assert_eq!(kworld::with_world(|w| w.fire[0]), 3);
+    assert_eq!(kworld::with_world(|w| w.charge[0]), 3);
     // at cap → 0
-    let got = rules_kani::host::dispatch(Op::gain_fire, [0, 5, 0, 0, 0, 0]);
+    let got = rules_kani::host::dispatch(Op::gain_charge, [0, 5, 0, 0, 0, 0]);
     assert_eq!(got, 0, "at cap gains nothing");
 }
 
@@ -351,7 +351,7 @@ fn neighbor_is_the_next_present_seat() {
 }
 
 /// `Op::raise` returns `(!cancelled)`: **1 = the link settled**. Returning 0
-/// makes `spend_fire` treat the cost as substituted and skip the real spend
+/// makes `spend_charge` treat the cost as substituted and skip the real spend
 /// (class C — `chart_rush` lost no [火罐]). Pin the settled polarity.
 #[test]
 fn raise_returns_settled_not_cancelled() {
@@ -383,12 +383,12 @@ fn raise_bought_reports_landed() {
     assert_eq!(did, 1, "hand-over landed when no hook denies");
 }
 
-/// `Op::ring_multiplier` is a multiplier: 0 would zero rent. Identity is 1.
+/// `Op::rent_unit_mult` is a multiplier: 0 would zero rent. Identity is 1.
 #[test]
 fn ring_multiplier_is_never_zero() {
     let _g = model_lock();
     install(base());
-    let mult = rules_kani::host::dispatch(Op::ring_multiplier, [0, 0, 0, 0, 0, 0]);
+    let mult = rules_kani::host::dispatch(Op::rent_unit_mult, [0, 0, 0, 0, 0, 0]);
     assert!(mult >= 1, "ring multiplier must be >= 1, got {mult}");
 }
 

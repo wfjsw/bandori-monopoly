@@ -75,7 +75,7 @@ pub fn resolve_play_log_ok(effects: &[Effect], player: i32) -> bool {
 pub fn resolve_play_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     only_player_money_delta(pre, post, player, resolve_gain_amount(), 1)
         && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.charge, pre.charge)
         && crate::world::arr4_eq(post.stay, pre.stay)
         && crate::world::arr8b_eq(post.hand, pre.hand)
         && crate::world::arr8b_eq(post.discard, pre.discard)
@@ -140,7 +140,7 @@ pub fn sprechchor_log_ok(effects: &[Effect], player: i32, x: i32) -> bool {
 pub fn sprechchor_post_ok(pre: &Snapshot, post: &Snapshot, player: i32, x: i32) -> bool {
     only_player_money_delta(pre, post, player, sprechchor_gain(x), 1)
         && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.charge, pre.charge)
         && crate::world::arr4_eq(post.stay, pre.stay)
 }
 
@@ -207,7 +207,7 @@ pub fn ako_dark_stun_n_mutant() -> i32 {
 // C-R-louder-01 -- `R:（ykn）louder`
 // 「每次打出此卡时使ring的价格基础乘数+5」
 // OPEN-RING-MULT: the book never defines 「价格基础乘数」. The only observable
-// the host offers is `add_ring_bonus` / `ring_multiplier`, both protocol stubs
+// the host offers is `add_rent_unit_bonus` / `rent_unit_mult`, both protocol stubs
 // with no world slot -- classified BLOCKED-HOST in the unit table. The pure
 // spec below is the determined arithmetic (+5) the stub *should* observe.
 // ===========================================================================
@@ -225,7 +225,7 @@ pub fn louder_mult_ok(pre_mult: i32, post_mult: i32) -> bool {
 // ===========================================================================
 // C-R-Fire bird-01 -- `R:Fire bird`
 // 「支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶」
-// OPEN-FIRE-X: the book gives no range; the executable contract asks 1..=10
+// OPEN-CHARGE-X: the book gives no range; the executable contract asks 1..=10
 // and the body pins `X.max(1)`. Spec uses the body's offered range as the
 // 'chooses some X' the text does determine (a positive count).
 // ===========================================================================
@@ -456,7 +456,7 @@ pub fn nfo_stay_n_mutant() -> i32 {
 // ===========================================================================
 // Character skills -- fire-pot deltas (C-R-踏上荆棘之路的觉悟-01,
 // C-R-即使1cm也要前进-01, C-R-慈爱女神-01, C-R-来练习吧-04/05).
-// Caps are host-side (`fire_max`); the Kani `gain_fire` arm does not clamp
+// Caps are host-side (`charge_max`); the Kani `gain_charge` arm does not clamp
 // (see the unit table). Specs pin the *delta* the text names.
 // ===========================================================================
 
@@ -496,13 +496,13 @@ pub fn yukina_fire_drop_ok(post_fire: i32) -> bool {
 }
 
 /// Exactly one `GainFire` of `n`.
-pub fn gain_fire_log_ok(effects: &[Effect], player: i32, n: i32) -> bool {
+pub fn gain_charge_log_ok(effects: &[Effect], player: i32, n: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainFire { player: p, n: m } if p == player && m == n)
 }
 
 /// MUTANT: +1 extra fire.
-pub fn gain_fire_n_mutant(n: i32) -> i32 {
+pub fn gain_charge_n_mutant(n: i32) -> i32 {
     n + 1
 }
 
@@ -595,8 +595,8 @@ pub const OPEN_SAYO_TIMING: &str = "OPEN-SAYO-TIMING";
 pub const OPEN_R1: &str = "OPEN-R1";
 /// OPEN-ROUND10: rounding of 1.5× and 20%.
 pub const OPEN_ROUND10: &str = "OPEN-ROUND10";
-/// OPEN-FIRE-X: Fire bird 「X（自选）」 range.
-pub const OPEN_FIRE_X: &str = "OPEN-FIRE-X";
+/// OPEN-CHARGE-X: Fire bird 「X（自选）」 range.
+pub const OPEN_FIRE_X: &str = "OPEN-CHARGE-X";
 /// OPEN-BAND-PRETEND: band (2) 「视为 Live House」.
 pub const OPEN_BAND_PRETEND: &str = "OPEN-BAND-PRETEND";
 

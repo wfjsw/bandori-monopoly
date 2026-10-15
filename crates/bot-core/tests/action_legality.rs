@@ -40,7 +40,7 @@ fn data() -> Arc<GameData> {
 fn some_property(data: &GameData) -> usize {
     data.tiles
         .iter()
-        .position(|t| matches!(t.kind.as_str(), "property" | "ring"))
+        .position(|t| t.is_buyable())
         .expect("the data table has a buyable tile")
 }
 
@@ -284,7 +284,7 @@ fn a_deed_rich_broke_bot_does_not_mortgage_to_buy_land() {
     m.quick_start();
     let tile = some_property(&data);
     // P owns every other property outright (mortgageable). `purchase_funds`
-    // sums `price / 2` over unmortgaged non-ring deeds, so give enough to
+    // sums `price / 2` over unmortgaged deeds, so give enough to
     // cover the target's price from mortgage value alone.
     {
         let w = m.world_mut();
@@ -301,7 +301,7 @@ fn a_deed_rich_broke_bot_does_not_mortgage_to_buy_land() {
         w.st.houses = vec![0; data.tiles.len()];
         w.st.mortgaged = vec![false; data.tiles.len()];
         for (u, t) in data.tiles.iter().enumerate() {
-            if u != tile && t.kind == game_core::data::TileKind::Property {
+            if u != tile && t.is_buyable() && t.rent.len() >= 2 {
                 w.st.owners[u] = me as i32;
             }
         }

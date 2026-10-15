@@ -83,7 +83,7 @@ fn g_settle_02_circle_and_edogawa_draw_one() {
         // the card half so the hand-count assertion sees only the settle draw
         // plus the reward -- actually take money so the settle draw is alone.
         while let Some(p) = t.prompt() {
-            if p.title.key() == "ask.circle.title" {
+            if p.title.key() == "ask.pass_reward.title" {
                 t.answer_one(0).unwrap();
             } else {
                 break;

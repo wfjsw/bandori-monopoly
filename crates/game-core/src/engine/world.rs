@@ -21,8 +21,6 @@ pub const START_MONEY: i32 = 10_000;
 pub const START_HAND: usize = 2;
 /// Base hand limit.
 pub const HAND_LIMIT: usize = 5;
-/// CiRCLE reward in money.
-pub const CIRCLE_MONEY: i32 = 2000;
 /// Events kept for `events_since`.
 pub const EVENT_KEEP: usize = 400;
 /// Events carried in every `MatchState` snapshot.
@@ -35,7 +33,7 @@ pub struct Hidden {
     /// Top of the pile is the **end** of the vec.
     pub draw: Vec<String>,
     pub discard: Vec<String>,
-    /// The player's next [主要移动] walks exactly this many steps instead of
+    /// The player's next main move walks exactly this many steps instead of
     /// the roll; consumed by that move.
     #[serde(default)]
     pub next_steps: Option<i32>,
@@ -149,10 +147,10 @@ pub struct TurnCtx {
     /// not payments, so they are exempt.
     #[serde(default)]
     pub no_money_loss: Vec<usize>,
-    /// This turn's [主要移动] roll is fixed to this face.
+    /// This turn's main move roll is fixed to this face.
     #[serde(default)]
     pub fixed_roll: Option<i32>,
-    /// Steps this turn's [主要移动] walked; 0 = none yet.
+    /// Steps this turn's main move walked; 0 = none yet.
     #[serde(default)]
     pub main_steps: i32,
     /// Abnormal effects that got through to each player this turn (indexed by
@@ -160,7 +158,7 @@ pub struct TurnCtx {
     #[serde(default)]
     pub abnormal: Vec<i32>,
     /// The play being resolved settles its number-range dice at the theoretical
-    /// extreme: `1` = max, `-1` = min, `0` = plain. Set mid-play by a [反击]
+    /// extreme: `1` = max, `-1` = min, `0` = plain. Set mid-play by a counteraction
     /// (「以理论最大值或最小值结算」) and cleared when the play ends, so it does
     /// not leak into the next one.
     #[serde(default)]
@@ -170,26 +168,26 @@ pub struct TurnCtx {
     #[serde(default)]
     pub play_from_hand: bool,
     /// Seats whose designation on the play being resolved is cancelled
-    /// (「取消其对目标之一的[指定]」). A per-pair cancel: the rest of the play's
+    /// (「取消其对目标之一的designate」). A per-pair cancel: the rest of the play's
     /// designations still land. Cleared at the start of each play.
     #[serde(default)]
     pub cancelled_designations: Vec<i32>,
-    /// Which of the play's tagged `ctx::n` numbers the CiRCLE band skill has
+    /// Which of the play's tagged `ctx::n` numbers the the start square group skill has
     /// doubled (-1 = none). Lives on the play, not on a guest run, so a
     /// pre-effect hook can arm it for the body that follows. Cleared at the
     /// start of each play.
     #[serde(default, with = "opt_i32_neg1")]
     pub play_doubled: Option<i32>,
     /// Money paid to other players during this turn's [触发结算]s.
-    /// 「本回合的[结算]向其他玩家支付了至少1000资金」.
+    /// 「本回合的settle向其他玩家支付了至少1000资金」.
     #[serde(default)]
     pub paid_in_settle: i32,
-    /// Where each player stood when the turn started. 「在Livehouse地块开始
+    /// Where each player stood when the turn started. 「在场地地块开始
     /// 回合时」 is a question about that square, not the one a mid-turn walk has
     /// since reached.
     #[serde(default)]
     pub turn_start_pos: Vec<i32>,
-    /// Each player's pos / [停留] / [晕眩] / [除外] when the turn started.
+    /// Each player's pos / stay / stun / exile when the turn started.
     /// 「回到起始地点并取消所有受到的效果」 restores from here.
     #[serde(default)]
     pub turn_snap: Vec<TurnSnap>,
@@ -209,7 +207,7 @@ pub struct TurnCtx {
     /// Turn-scoped lingering card instances (`docs/PURCHASE.md` P5). Each entry
     /// is `(card_id, owner, expires_turn)`; the entry lives until `expires_turn`
     /// and is cleared at turn start. This is the hand-card home for 「本回合」
-    /// effects: a card that wants 「本回合购买格子时[消耗]资金降低N」 lingers with a
+    /// effects: a card that wants 「本回合购买格子时spend资金降低N」 lingers with a
     /// `BuyAdd` hook on its own def, and one that wants 「本回合无法加盖房屋」
     /// lingers carrying `prop::NO_BUILD`.
     #[serde(default)]
@@ -267,12 +265,12 @@ pub struct Scheduled {
     pub card: String,
     /// The player the card acts for (passed to its `counteract`).
     pub owner: i32,
-    /// Whose turn end fires it.
+    /// Whose turn end raises it.
     pub target: usize,
     /// Let one `target` turn end pass first -- set when "the end of your next
     /// turn" is scheduled during that player's own current turn.
     pub skip: bool,
-    /// Fire before the status wear-off, rather than after it.
+    /// Charge before the status wear-off, rather than after it.
     #[serde(default)]
     pub early: bool,
     /// The card **instance** that asked for the callback, captured at schedule
@@ -280,7 +278,7 @@ pub struct Scheduled {
     /// be on the field when the turn ends.
     ///
     /// `-1` when the card was not in play when it scheduled (`On::AtEnd` may
-    /// run for a card in a hand or pile); the run then reads 0 crystals, which
+    /// run for a card in a hand or pile); the run then reads 0 named counters, which
     /// is right -- there is no instance to read them from. Two copies of a card
     /// that both schedule produce two entries with two uids, so the callback is
     /// never ambiguous. `#[serde(default)]` so a save from before this field
@@ -344,7 +342,7 @@ struct WindowCache {
 /// One pending walk segment awaiting lazy flush (`Cx::walk`).
 ///
 /// A walk's `roll` / `move` event is not logged per step: steps accumulate
-/// here and the segment is published when the walk reaches CiRCLE / its last
+/// here and the segment is published when the walk reaches the start square / its last
 /// step -- **or** when anything else is about to be logged (a hook's `"card"`
 /// flash, a pay, a prompt's log line), so the client animates the approach
 /// before the thing that interrupted it. Silent hooks do not split the walk.
@@ -611,8 +609,10 @@ pub struct World {
     pub next_turn_pending: bool,
     /// Deeds of players who left, waiting to be auctioned.
     pub leftovers: VecDeque<Vec<usize>>,
-    /// Added to the RiNG rent multiplier by cards.
-    pub ring_bonus: i32,
+    /// Per-name bonuses added to [`crate::data::MatchRulesData::rule_params`]
+    /// by cards (generic named rule parameters).
+    #[serde(default)]
+    pub rule_param_bonus: std::collections::BTreeMap<String, i32>,
     pub ask_seq: i32,
     pub signals: Vec<Signal>,
     /// Turn-end callbacks waiting for their turn end.
@@ -624,7 +624,7 @@ pub struct World {
     pub targeted: Vec<i32>,
     /// 「当前回合内你每获得过一次资金」 -- per player, times money landed on them
     /// during the **current turn** (a print, a pay-player credit, or a
-    /// `gain_fixed`). Zeroed for everyone at each turn start, so a [反击] read at
+    /// `gain_fixed`). Zeroed for everyone at each turn start, so a counteraction read at
     /// a turn's end sees just that turn. The count a hand card reads without any
     /// field stand-in (HHW:（育美）(2)).
     #[serde(default)]
@@ -638,7 +638,7 @@ pub struct World {
     /// Stamped on first creation from the creating run's `current_card`.
     /// Bankruptcy of the owning rule's player removes every copy of the
     /// marker, wherever it sits (`remove_from_game`). Neutral board marks
-    /// ([CP点], `owner == -1`) have no player-owned rule and stay.
+    /// ([tile marks], `owner == -1`) have no player-owned rule and stay.
     #[serde(default)]
     pub marker_owner: std::collections::BTreeMap<String, String>,
     /// Pending walk segments + flush pacing (see [`WalkSeg`]). Transient: not
@@ -725,7 +725,7 @@ impl World {
             event_removed: vec![],
             next_turn_pending: false,
             leftovers: VecDeque::new(),
-            ring_bonus: 0,
+            rule_param_bonus: Default::default(),
             ask_seq: 0,
             signals: vec![],
             scheduled: vec![],
@@ -791,7 +791,7 @@ impl World {
     ///
     /// Lazy walk flush: any other event while a [`WalkSeg`] is pending
     /// publishes the approach first, so the client walks to the tile before
-    /// showing the card flash / pay / effect that fired there. The flush's own
+    /// showing the card flash / pay / effect that ran there. The flush's own
     /// event re-enters here under [`WalkFlush::flushing`] and is not re-flushed.
     pub fn log(&mut self, kind: &str, player_id: i32, msg: Msg) -> &mut MatchEvent {
         let _tg = crate::engine::rtimer::guard(&crate::engine::rtimer::LOG_NS);
@@ -902,7 +902,7 @@ impl World {
     /// A card's effect activated -- or was negated before its body could run.
     /// One `"card"` event carries both the log line and the client's card flash:
     /// `kind` is the trigger kind ([`crate::state::card_trigger`]), `owner` the
-    /// card's player, `target` the affected player and `tile` where it fired
+    /// card's player, `target` the affected player and `tile` where it ran
     /// (`-1` when not applicable). `msg` names the card via [`Msg::card`].
     /// `parent` groups this activation under another one (`-1` = top-level).
     pub fn card_activation(
@@ -957,12 +957,12 @@ impl World {
         st.event_discard = self.event_discard.clone();
         st.event_removed = self.event_removed.clone();
         // Active events ride their rule instance (`docs/EVENTS.md`): the view's
-        // counters mirror the instance's crystals / props so the client shows
-        // what the body is counting without a second store.
+        // counters mirror the instance's named counters / props so the client
+        // shows what the body is counting without a second store.
         for e in st.event_active.iter_mut() {
             let rid = crate::data::event_rule_id(&e.id);
             if let Some(f) = st.board_field.iter().find(|f| f.card == rid && f.tile < 0) {
-                e.counter = f.crystals;
+                e.counter = f.counters.values().sum();
                 e.counter2 = f.props.get("count2").copied().unwrap_or(0);
                 e.note = f.note.clone();
                 e.face_down = f.face_down;

@@ -18,12 +18,12 @@ fn symbolic_play_world() -> World {
     for p in 0..MAX_PLAYERS {
         w.pos[p] = kani::any();
         kani::assume((0..8).contains(&w.pos[p]));
-        w.fire[p] = kani::any();
+        w.charge[p] = kani::any();
         // The book gives +1 [火罐] "获得一个[火罐]"; the global hold cap
-        // (rulebook-doc.md:240, host fire_max) clamps a gain at the cap, so
+        // (rulebook-doc.md:240, host charge_max) clamps a gain at the cap, so
         // the clause's exact effect is only defined below the cap. At-cap
         // behaviour is the cap rule, proven separately.
-        kani::assume((0..w.fire_max[p]).contains(&w.fire[p]));
+        kani::assume((0..w.charge_max[p]).contains(&w.charge[p]));
         w.out[p] = false;
     }
     let player: i32 = kani::any();
@@ -50,23 +50,23 @@ pub fn tae_sound_teleport_and_fire_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    kani::cover!(pre.fire[player as usize] == 0, "pre fire 0");
+    kani::cover!(pre.charge[player as usize] == 0, "pre fire 0");
     kani::cover!(pre.pos[player as usize] != TILE_SHOP, "pre not on shop");
 
     crate::kassert!(
         spec::tae_sound_effects_ok(effects, player, TILE_SHOP),
-        "teleport+fire: effect log must be exactly Teleport(shop), GainFire(1)"
+        "teleport+charge: effect log must be exactly Teleport(shop), GainFire(1)"
     );
     crate::kassert!(
-        spec::tae_sound_post_ok(&post, player, TILE_SHOP, pre.fire[player as usize]),
-        "teleport+fire: post must be on shop with fire+1"
+        spec::tae_sound_post_ok(&post, player, TILE_SHOP, pre.charge[player as usize]),
+        "teleport+charge: post must be on shop with fire+1"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
     for p in 0..MAX_PLAYERS {
         if p != player as usize {
             crate::kassert!(post.pos[p] == pre.pos[p], "frame: other players unmoved");
-            crate::kassert!(post.fire[p] == pre.fire[p], "frame: other players' fire");
+            crate::kassert!(post.charge[p] == pre.charge[p], "frame: other players' fire");
         }
     }
 }

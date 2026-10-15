@@ -19,7 +19,7 @@ pub const BACKSTAGE_TOUR: CardDef =
         .tags(&[])
         .text(r#"看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金"#)
         .cell(r#"F4"#)
-        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBackstageTour.WhyNot` refuses the play when the draw pile and the

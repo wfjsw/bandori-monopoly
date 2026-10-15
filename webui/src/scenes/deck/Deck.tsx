@@ -14,7 +14,7 @@ import { DECK_NAME_MAX, deckLabelWith, parseDeckList, sanitizeDeckName, type Dec
 import { useProfile } from "../../core/hooks";
 import { useMountEffect } from "../../hooks/mount";
 import { markSeen, profileJson, updateProfile } from "../../core/store";
-import type { CardData, CharacterData } from "../../core/types";
+import type { CardData, PersonaData } from "../../core/types";
 import { Btn } from "../../ui/Button";
 import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, showCard, type CardAction, type CardKind } from "../../ui/Card";
 import { BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
@@ -40,7 +40,7 @@ const matches = (c: CardData, f: Filter) => (f === "all" ? cardKind(c) !== "deri
 export function Deck() {
   useMountEffect(() => markSeen("deck"));
   const p = useProfile()!; // re-render on every save
-  const [character, setCharacter] = useState<CharacterData>(() => D.character(p.homeCharacter) ?? D.characters[0]);
+  const [character, setCharacter] = useState<PersonaData>(() => D.persona(p.homePersona) ?? D.personas[0]);
   const [slot, setSlot] = useState(() => rules.deck_chosen_slot(profileJson(), character.name));
   const [filter, setFilter] = useState<Filter>("all");
   const [clearArmed, setClearArmed] = useState(0);
@@ -57,7 +57,7 @@ export function Deck() {
 
   const pool = useMemo(() => {
     const ids: string[] = JSON.parse(rules.deck_pool(character.name));
-    const derived = D.cards.filter((c) => c.derived && (c.owner === character.name || c.band === character.band)).map((c) => c.id);
+    const derived = D.cards.filter((c) => c.derived && (c.owner === character.name || c.group === character.group)).map((c) => c.id);
     return [...ids, ...derived.filter((id) => !ids.includes(id))].map((id) => D.card(id)!).filter(Boolean);
   }, [character]);
 
@@ -65,7 +65,7 @@ export function Deck() {
   /** Id the next create/duplicate will get (game-core allocates max+1). */
   const nextId = () => list.reduce((m, d) => Math.max(m, d.id), 0) + 1;
 
-  const pick = (c: CharacterData) => {
+  const pick = (c: PersonaData) => {
     setCharacter(c);
     setSlot(rules.deck_chosen_slot(profileJson(), c.name));
     setFilter("all");
@@ -203,7 +203,7 @@ export function Deck() {
       <div className={s.char}>
         <div className={s.glow} style={{ background: character.color }} />
         <Live2DStand key={D.artId(character)} id={D.artId(character)} className={s.stand} zoom={1.25} focusTop={0.13} headroom={0.103} />
-        <div className={s.band}><BandMark band={character.band} /></div>
+        <div className={s.group}><BandMark band={character.group} /></div>
         <div className={s.plate}><NamePlate c={character} width={350} /></div>
         <Btn icon="swap_horiz" className={s.side} onClick={() => showPicker(character, pick)}>{tr("deck.changeChar")}</Btn>
         <Btn icon="groups" className={cx(s.side, s.second)} onClick={() => showBandCards(character)}>{tr("deck.bandCards")}</Btn>
@@ -316,13 +316,13 @@ function RenameDialog({ initial, initialLabel, onSave, close }: {
   );
 }
 
-function Picker({ current, onPick, close }: { current: CharacterData; onPick: (c: CharacterData) => void; close: () => void }) {
+function Picker({ current, onPick, close }: { current: PersonaData; onPick: (c: PersonaData) => void; close: () => void }) {
   const [tab, setTab] = useState<string>(tr("common.all"));
   return (
     <div className={s.picker}>
       <Chips items={tabLabels()} on={tab as (ReturnType<typeof tabLabels>)[number]} onPick={setTab} />
       <div className={s.pickerGrid}>
-        {D.characters.filter((c) => inTab(c, tab)).map((c) => {
+        {D.personas.filter((c) => inTab(c, tab)).map((c) => {
           const built = parseDeckList(rules.deck_list(profileJson(), c.name)).length;
           return <CharCard key={c.name} c={c} chosen={c.name === current.name} stamp={built ? tr("deck.builtCount", { n: built }) : undefined} stampKind="teal" onClick={() => { close(); onPick(c); }} />;
         })}
@@ -331,18 +331,18 @@ function Picker({ current, onPick, close }: { current: CharacterData; onPick: (c
   );
 }
 
-function showPicker(current: CharacterData, onPick: (c: CharacterData) => void): void {
+function showPicker(current: PersonaData, onPick: (c: PersonaData) => void): void {
   openModal(tr("deck.changeChar"), (close) => <Picker current={current} onPick={onPick} close={close} />, { size: "xl" });
 }
 
-function showBandCards(c: CharacterData): void {
-  const band = D.band(c.band);
+function showBandCards(c: PersonaData): void {
+  const band = D.group(c.group);
   openModal(tr("deck.bandCards"), (
     <div className={s.bandCards}>
-      <div className={s.row}><BandMark band={c.band} /><b>{band?.skill ?? ""}</b></div>
+      <div className={s.row}><BandMark band={c.group} /><b>{band?.skill ?? ""}</b></div>
       <SkillBody text={skillText(band) || tr("select.bandSkillTbd")} />
       <div className={s.bandGrid}>
-        {D.cards.filter((x) => x.band === c.band && !x.owner && !x.derived).map((x) => <InspectCard key={x.id} id={x.id} />)}
+        {D.cards.filter((x) => x.group === c.group && !x.owner && !x.derived).map((x) => <InspectCard key={x.id} id={x.id} />)}
       </div>
     </div>
   ), { size: "wide" });

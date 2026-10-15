@@ -35,7 +35,7 @@ pub const STAR_BEAT: CardDef = CardDef::new(
 1. 获得2个星星贴纸，本回合的主要移动改为[传送]到(45×“资金数包含5的玩家数量+1”) mod 60格并结算；
 2. 本回合的主要移动改为移动(2×“资金数包含5的玩家数量+1”)d10格并结算。"#)
         .cell(r#"B8"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

@@ -5,22 +5,22 @@
 //!     cargo run -p rules-native --example dump_roster -- --fixture crates/game-core/tests/fixtures/roster.json
 //!
 //! * `--fixture <path>` writes the single-file test fixture
-//!   (`{cards, characters, bands}`) that `Roster::from_fixture` loads. This is
+//!   (`{cards, personas, groups}`) that `Roster::from_fixture` loads. This is
 //!   the checked-in gate artifact: `crates/rules-native/tests/roster_equiv.rs`
 //!   asserts it is byte-equal to a fresh dump.
 //! * A bare directory argument writes the three-file shape
-//!   (`{cards,characters,bands}.json`) that `tools/roster-dump.mjs` caches
+//!   (`{cards,personas,groups}.json`) that `tools/roster-dump.mjs` caches
 //!   under `target/roster-dump/` for `tools/roster.py`.
 //! * No argument prints the three files' rows to stdout.
 //!
 //! Display-only columns that live outside the engine structs (`simple`,
 //! `counterReason`) stay in `data/skill_simple.json` and are **not** printed
-//! here -- they are not part of `CardData` / `CharacterData` / `BandData`.
+//! here -- they are not part of `CardData` / `PersonaData` / `GroupData`.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use game_core::data::{BandData, CardData, CharacterData};
+use game_core::data::{GroupData, CardData, PersonaData};
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -36,33 +36,33 @@ fn main() {
             }
             std::fs::write(&path, &json).unwrap();
             eprintln!(
-                "wrote {path} ({} cards, {} characters, {} bands)",
+                "wrote {path} ({} cards, {} personas, {} groups)",
                 roster.cards.len(),
-                roster.characters.len(),
-                roster.bands.len()
+                roster.personas.len(),
+                roster.groups.len()
             );
         }
         Some(dir) => {
             let dir = PathBuf::from(dir);
             let cards = cards_json(&roster.cards);
-            let characters = characters_json(&roster.characters);
-            let bands = bands_json(&roster.bands);
+            let personas = personas_json(&roster.personas);
+            let groups = groups_json(&roster.groups);
             std::fs::create_dir_all(&dir).unwrap();
             std::fs::write(dir.join("cards.json"), &cards).unwrap();
-            std::fs::write(dir.join("characters.json"), &characters).unwrap();
-            std::fs::write(dir.join("bands.json"), &bands).unwrap();
+            std::fs::write(dir.join("personas.json"), &personas).unwrap();
+            std::fs::write(dir.join("groups.json"), &groups).unwrap();
             eprintln!(
-                "wrote {}/{{cards,characters,bands}}.json ({} cards, {} characters, {} bands)",
+                "wrote {}/{{cards,personas,groups}}.json ({} cards, {} personas, {} groups)",
                 dir.display(),
                 roster.cards.len(),
-                roster.characters.len(),
-                roster.bands.len()
+                roster.personas.len(),
+                roster.groups.len()
             );
         }
         None => {
             print!("// ===== cards.json =====\n{}", cards_json(&roster.cards));
-            print!("// ===== characters.json =====\n{}", characters_json(&roster.characters));
-            print!("// ===== bands.json =====\n{}", bands_json(&roster.bands));
+            print!("// ===== personas.json =====\n{}", personas_json(&roster.personas));
+            print!("// ===== groups.json =====\n{}", groups_json(&roster.groups));
         }
     }
 }
@@ -115,7 +115,7 @@ fn key_str_array(k: &str, vs: &[String], level: usize) -> String {
     out
 }
 
-/// `cards.json` row order: id, band, rawName, name, owner, derived, tags, text, cell.
+/// `cards.json` row order: id, group, rawName, name, owner, derived, tags, text, cell.
 fn cards_json(cards: &[CardData]) -> String {
     let mut out = String::from("{\n    \"cards\": [\n");
     for (i, c) in cards.iter().enumerate() {
@@ -123,7 +123,7 @@ fn cards_json(cards: &[CardData]) -> String {
         out.push_str("{\n");
         let fields = [
             key_str("id", &c.id, 3),
-            key_str("band", &c.band, 3),
+            key_str("group", &c.group, 3),
             key_str("rawName", &c.raw_name, 3),
             key_str("name", &c.name, 3),
             key_str("owner", &c.owner, 3),
@@ -142,10 +142,10 @@ fn cards_json(cards: &[CardData]) -> String {
     out
 }
 
-/// `characters.json` row order: name, display, [variantOf], [variantTag], band,
+/// `personas.json` row order: name, display, [variantOf], [variantTag], group,
 /// color, skill, text, cnId, [art], [costume], exclusiveCards, [preset].
-fn characters_json(chars: &[CharacterData]) -> String {
-    let mut out = String::from("{\n    \"characters\": [\n");
+fn personas_json(chars: &[PersonaData]) -> String {
+    let mut out = String::from("{\n    \"personas\": [\n");
     for (i, c) in chars.iter().enumerate() {
         out.push_str(&indent(2));
         out.push_str("{\n");
@@ -159,7 +159,7 @@ fn characters_json(chars: &[CharacterData]) -> String {
         if !c.variant_tag.is_empty() {
             fields.push(key_str("variantTag", &c.variant_tag, 3));
         }
-        fields.push(key_str("band", &c.band, 3));
+        fields.push(key_str("group", &c.group, 3));
         fields.push(key_str("color", &c.color, 3));
         fields.push(key_str("skill", &c.skill, 3));
         fields.push(key_str("text", &c.text, 3));
@@ -184,11 +184,11 @@ fn characters_json(chars: &[CharacterData]) -> String {
     out
 }
 
-/// `bands.json` row order: name, shortName, [sharesExclusives], [bootArt],
+/// `groups.json` row order: name, shortName, [sharesExclusives], [bootArt],
 /// color, skill, text, logo.
-fn bands_json(bands: &[BandData]) -> String {
-    let mut out = String::from("{\n    \"bands\": [\n");
-    for (i, b) in bands.iter().enumerate() {
+fn groups_json(groups: &[GroupData]) -> String {
+    let mut out = String::from("{\n    \"groups\": [\n");
+    for (i, b) in groups.iter().enumerate() {
         out.push_str(&indent(2));
         out.push_str("{\n");
         let mut fields = vec![
@@ -209,7 +209,7 @@ fn bands_json(bands: &[BandData]) -> String {
         out.push('\n');
         out.push_str(&indent(2));
         out.push('}');
-        out.push_str(if i + 1 < bands.len() { ",\n" } else { "\n" });
+        out.push_str(if i + 1 < groups.len() { ",\n" } else { "\n" });
     }
     out.push_str("    ]\n}\n");
     out

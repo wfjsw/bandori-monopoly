@@ -47,7 +47,7 @@ pub fn backstage_02_post_ok(pre: &Snapshot, post: &Snapshot, player: i32, flippe
     let p = player as usize;
     post.money[p] == pre.money[p] + backstage_02_gain(flipped)
         && crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.charge, pre.charge)
         && crate::world::arr4_eq(post.stay, pre.stay)
 }
 
@@ -607,7 +607,7 @@ pub fn log_empty(effects: &[Effect]) -> bool {
 pub fn money_frame_unchanged(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
     let p = player as usize;
     crate::world::arr4_eq(post.pos, pre.pos)
-        && crate::world::arr4_eq(post.fire, pre.fire)
+        && crate::world::arr4_eq(post.charge, pre.charge)
         && crate::world::arr4_eq(post.stay, pre.stay)
         && crate::world::arr8b_eq(post.hand, pre.hand)
         && crate::world::arr8b_eq(post.discard, pre.discard)

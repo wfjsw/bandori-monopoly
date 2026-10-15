@@ -2,7 +2,7 @@
 //!
 //! One [`Msg`] per [`Trigger`], derived host-side from the trigger's kind and
 //! payload (who / target / tile / value / the chain link it answers). Bracketed
-//! terms ([经过], [重叠], [结算], [支付]…) match the rulebook's wording, the way
+//! terms ([pass], overlap, settle, pay…) match the rulebook's wording, the way
 //! existing `log.*` keys do. A kind with no dedicated phrase falls back to
 //! `log.why.{{kind}}`, so nothing ever renders blank.
 //!
@@ -141,7 +141,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BuyAssign => Msg::new("log.why.bought")
             .player_id("who", who)
             .tile("tile", tile),
-        TriggerKind::BuildBefore | TriggerKind::BuildAfter | TriggerKind::HouseAdded => {
+        TriggerKind::BuildBefore | TriggerKind::BuildAfter => {
             Msg::new("log.why.build")
                 .player_id("who", who)
                 .tile("tile", tile)
@@ -190,25 +190,15 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .player_id("who", who)
             .player_id("target", target),
 
-        // ---- counters / marks / fire -------------------------------------
+        // ---- counters / marks --------------------------------------------
         TriggerKind::CounterChanged => Msg::new("log.why.counter_changed")
             .msg("name", counter_name(t.name.as_deref().unwrap_or("")))
             .i("value", value),
-        TriggerKind::FireSpent => Msg::new("log.why.fire_spent")
-            .player_id("who", who)
-            .i("value", value),
-        TriggerKind::SkillUsed => match &card {
-            Some(c) => Msg::new("log.why.skill_used")
-                .player_id("who", who)
-                .card("card", c.clone()),
-            None => Msg::new("log.why.skill_used_no_card").player_id("who", who),
-        },
         TriggerKind::MarkerSpend | TriggerKind::MarkerGain => Msg::new("log.why.marker")
             .player_id("who", who)
             .i("value", value),
 
-        // ---- circle / misc -----------------------------------------------
-        TriggerKind::CircleAffected => Msg::new("log.why.circle").player_id("who", who),
+        // ---- misc ---------------------------------------------------------
         TriggerKind::Counteracted => Msg::new("log.why.counteracted")
             .player_id("who", who)
             .player_id("target", target),
@@ -226,7 +216,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
     }
 }
 
-/// The `{{why}}` of a [反击] resolution: the answered link's card and what it
+/// The `{{why}}` of a counteraction resolution: the answered link's card and what it
 /// was doing. `answered_card` names the link's card; the link's own [`Trigger`]
 /// supplies the rest.
 pub fn counteract_reason(answered_card: &str, answered: &Trigger) -> Msg {
@@ -244,11 +234,10 @@ pub fn counteract_reason(answered_card: &str, answered: &Trigger) -> Msg {
 /// nested `log.counter.other` so the wire spelling is still quoted -- never a
 /// raw `Text` arg (those are for player-entered names only).
 pub fn counter_name(name: &str) -> Msg {
-    match name {
-        "crystals" | card_sdk::abi::counter::CRYSTALS => Msg::new("log.counter.crystals"),
-        "cp" | card_sdk::abi::counter::CP => Msg::new("log.counter.cp"),
-        other => Msg::new("log.counter.other").text("name", other),
+    if name.is_empty() {
+        return Msg::new("log.counter.other").text("name", name);
     }
+    Msg::new(format!("log.counter.{name}"))
 }
 
 /// A trigger-kind wire name, for the generic why fallback. Never raw.
@@ -261,7 +250,7 @@ fn kind_name(kind: &str) -> Msg {
 pub fn state_key_name(key: &str) -> Msg {
     match key {
         card_sdk::abi::state_key::HAND_LIMIT => Msg::new("log.state.hand_limit"),
-        card_sdk::abi::state_key::FIRE => Msg::new("log.state.fire"),
+        card_sdk::abi::state_key::CHARGE => Msg::new("log.state.charge"),
         card_sdk::abi::state_key::STAY => Msg::new("log.state.stay"),
         card_sdk::abi::state_key::STUN | card_sdk::abi::state_key::STUN_START => {
             Msg::new("log.state.stun")
@@ -278,7 +267,7 @@ pub fn state_key_name(key: &str) -> Msg {
 }
 
 /// A tile-mark kind. The kind string **is** the i18n key (one mechanism,
-/// shared with the designation work): `mark:cp`, `mark:designate`,
+/// shared with the designation work): the tile-mark owner, `mark:designate`,
 /// `skillBlock`, `ember`, or a card's own display name (怪盗标记). The view
 /// resolves known keys and falls back to the literal, so a raw key never
 /// reaches the player as a `Text` arg. Empty kind becomes `log.mark.none`.

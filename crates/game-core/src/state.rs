@@ -98,8 +98,8 @@ pub enum TileQuoteKind {
 
 /// One tile's "what to expect" number, from a viewer's seat.
 /// Parallel to the board's tiles in [`MatchView`] (`tileQuotes[i]`).
-/// `value` is the figure; `max` is the upper bound of a dice range (RiNG
-/// rent is `rings × ring_multiplier × 1d20`, so `value` is the minimum).
+/// `value` is the figure; `max` is the upper bound of a dice range (the flat deed
+/// rent is `deed-level × rent_unit_mult × 1d20`, so `value` is the minimum).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TileQuote {
@@ -116,9 +116,9 @@ pub struct TileQuote {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct TileTextEntry {
-    /// Rule id that speaks (`tile:circle`, `event:协助CiRCLE重建`, ...).
+    /// Rule id that speaks (the start-square tile rule, `event:the start-square rebuild event`, ...).
     pub from: String,
-    /// `"settle"` or `"pass"` (the [结算] / [经过] half).
+    /// `"settle"` or `"pass"` (the settle / [pass] half).
     pub slot: String,
     /// i18n key in the `ui` namespace (`deed.note.*`); `""` = this speaker
     /// suppresses the slot (renders nothing).
@@ -172,7 +172,7 @@ pub struct MatchState {
     /// `roll_first` while a main move is still owed, `moving`, `over_hand`).
     /// [`Self::skip_move`] is the same live latch, so the two always agree
     /// (it was once re-derived from stay / exile, which did not: unstoppable,
-    /// mid-turn [停留], [除外] -- a bot trusting it sent `end` into
+    /// mid-turn stay, exile -- a bot trusting it sent `end` into
     /// `err.roll_first`).
     pub can_end_here: bool,
     /// The movement this turn is taking.
@@ -346,21 +346,32 @@ impl MatchState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Tick {
-    /// Loses one layer at its owner's start of turn (the [晕眩] that only
+    /// Loses one layer at its owner's start of turn (the stun that only
     /// starts counting then).
     TurnStart,
     /// Loses one layer at its owner's end of turn (「停留」 / 「晕眩」 wear-off).
     TurnEnd,
 }
 
+/// Generic flags on a [`StateVar`]: how the engine treats the key, without
+/// naming the key in match arms.
+pub mod state_flag {
+    /// Status-like counter: writes floor at 0 (「清除」).
+    pub const NEVER_NEGATIVE: u8 = 1;
+    /// Engine-owned key (turn rules / status gates), not a card's scratch.
+    pub const ENGINE_OWNED: u8 = 2;
+}
+
 /// One keyed state item: `value`, the bounds a consumer may enforce, and when
 /// it wears off.
 ///
 /// The engine holds these and enforces **nothing** -- it is storage, no more. A
-/// character skill that mandates a fire-pot (火罐) cap writes `max`, and whoever
+/// ruleset skill that mandates a resource cap writes `max`, and whoever
 /// moves `value` is free to honour the bounds or ignore them: enforcement
 /// belongs to the consumer, not to the holder. `min`/`max` default to 0: a
-/// declared cap of 0 means "none yet" / uncapped.
+/// declared cap of 0 means "none yet" / uncapped. [`Self::flags`] carries the
+/// generic declarations ([`state_flag`]) so special-casing never needs the key
+/// name.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StateVar {
@@ -373,6 +384,8 @@ pub struct StateVar {
     pub max: i32,
     /// When this wears off, if it is a timed counter. See [`Tick`].
     pub expires: Option<Tick>,
+    /// Generic [`state_flag`] bits (serde-defaulted).
+    pub flags: u8,
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the
@@ -381,9 +394,9 @@ pub struct StateVar {
 pub mod key {
     /// 「停留」 layers -- wear off at end of turn.
     pub const STAY: &str = "stay";
-    /// Latch set when an [异常移动效果] lands on the player and cleared when
-    /// their next [主要移动] completes. Longer-lived than `TurnCtx::abnormal`
-    /// (which is per calendar turn): 「若受到[异常移动效果]影响，此卡不生效」
+    /// Latch set when an abnormal move lands on the player and cleared when
+    /// their next main move completes. Longer-lived than `TurnCtx::abnormal`
+    /// (which is per calendar turn): 「若受到abnormal move影响，此卡不生效」
     /// (是我自己的问题 (2)) reads this so a forced move on another player's
     /// turn still suppresses the card at the owner's next main-move end.
     pub const ABNORMAL_HIT: &str = "abnormalHit";
@@ -394,20 +407,21 @@ pub mod key {
     pub const STUN_START: &str = "stunStart";
     /// Turns spent off the board (「除外」).
     pub const EXILE: &str = "exile";
-    /// Tile the [除外] return [传送] lands on, or -1 for none.
+    /// Tile the exile return teleport lands on, or -1 for none.
     pub const EXILE_TO: &str = "exileTo";
-    /// 「在[除外]层数归0后[传送]至该格子，视为当回合的主要移动」 -- when the
-    /// exile ticks out, the return teleport **is** that turn's [主要移动]
+    /// 「在exile层数归0后teleport至该格子，视为当回合的主要移动」 -- when the
+    /// exile ticks out, the return teleport **is** that turn's main move
     /// (MyGO:无路矢). The expiry tick reads and consumes it:
     /// `TurnCtx::main_moved` is set so the player cannot also roll.
     pub const EXILE_MAIN: &str = "exileMain";
-    /// Fire pots (火罐) held. Its `max` is the mandated cap, written by the
-    /// character skill -- and that is the one number to show: there is no
+    /// A capped spendable resource held by the player (ruleset-defined; the
+    /// shipped ruleset uses it for spendable pots). Its `max` is the mandated cap, written
+    /// by the owning skill -- and that is the one number to show: there is no
     /// separate "effective cap" beside it.
-    pub const FIRE: &str = "fire";
+    pub const CHARGE: &str = "charge";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
-    /// Turn key of a live 「无法从手牌中使用[反击]」 lock (骰子已经掷下). Mirrors
+    /// Turn key of a live 「无法从手牌中使用counteraction」 lock (骰子已经掷下). Mirrors
     /// `card_sdk::abi::state_key::NO_COUNTERACT_TURN`.
     pub const NO_COUNTERACT_TURN: &str = "noCounteractTurn";
     /// Layers of "cannot be stopped" (「不可阻挡」).
@@ -439,13 +453,11 @@ pub mod key {
     /// enforces), as opposed to a card's own scratch / latch key? Only the
     /// latter may be carried across a pause from a card's world copy -- a
     /// stale copy of a status gate must not clobber the live one.
+    ///
+    /// Driven by [`state_flag::ENGINE_OWNED`] on the item when present; new
+    /// items take [`super::default_flags`].
     pub fn is_engine_owned(key: &str) -> bool {
-        matches!(
-            key,
-            STAY | STUN | STUN_START | EXILE | EXILE_TO | FIRE | NO_HAND | UNSTOPPABLE
-                | HAND_LIMIT | START_HAND | SKILL_STATE | BUILT | BOUGHT | REDEEMED | MORTGAGED
-                | NO_BUILD
-        )
+        super::default_flags(key) & super::state_flag::ENGINE_OWNED != 0
             // `skill.*` is skill scratch -- a hook writes it and the hook's own
             // `swap_world` commits it; it must not be pulled back off a stale
             // body copy at a pause.
@@ -465,7 +477,7 @@ pub mod prop {
     /// onto the field instance at placement and gone with the card. `-1` cuts
     /// the owner's hand limit.
     pub const HAND_LIMIT_DELTA: &str = "handLimitDelta";
-    /// 「可在眩晕时打出」: `1` = the card skips the [晕眩] gate when played from
+    /// 「可在眩晕时打出」: `1` = the card skips the stun gate when played from
     /// hand.
     pub const PLAYABLE_STUNNED: &str = "playableStunned";
     /// Bot-only **estimated execution cost**. Mirrors
@@ -475,8 +487,8 @@ pub mod prop {
     /// Opt-in field counteraction / shared-choice metadata (ABI v47).
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
-    pub const COUNTERACT_FIRE_COST: &str = "counteractFireCost";
-    /// 「有[指定]目标」: `1` = this play names recipients (the play's other
+    pub const COUNTERACT_CHARGE_COST: &str = "counteractChargeCost";
+    /// 「有designate目标」: `1` = this play names recipients (the play's other
     /// living players). Mirrors `card_sdk::abi::prop::DESIGNATES`.
     pub const DESIGNATES: &str = "designates";
     /// 「此卡不受任何其他效果影响」: `1` = the placed instance is immune
@@ -510,20 +522,27 @@ pub mod prop {
     pub const RENT_LEN: &str = "rentLen";
     /// Rent at level N: `rent[0]` … `rent[len - 1]`.
     pub const RENT_PREFIX: &str = "rent:";
-    /// RiNG rent multiplier (`match_rules.ring_multiplier`). TODO(规则书).
-    pub const RING_MULT: &str = "ringMult";
+    /// Generic dice-rent multiplier (ABI v66). When set (`> 0`) on a tile rule
+    /// instance, rent is `count_owned_kind(owner, kind) × mult × 1d20` instead
+    /// of the rent table. Stamped by the tile rule's static props (or at bind
+    /// from the match-rules parameter the rule declares).
+    pub const RENT_DICE_MULT: &str = "rentDiceMult";
+    /// This tile is the start square (from the tile rule's static props).
+    pub const START: &str = "start";
+    /// `1` = this deed cannot be mortgaged (tile-rule static prop).
+    pub const NO_MORTGAGE: &str = "noMortgage";
 
     // ------------------------------------------------- tile rule modifiers
     // What a card that bends a tile writes onto its rule instance, replacing
     // the engine flags these used to be. See `docs/TILES.md`.
 
-    /// 「无法获取[CiRCLE奖励]」 on this tile's `tile:circle` instance.
+    /// 「无法获取[the pass reward]」 on this tile's the start-square tile rule instance.
     pub const NO_REWARD: &str = "noReward";
     /// Rent scale in milli-units (500 = x0.5). Replaces `rent_factor`.
     pub const RENT_FACTOR: &str = "rentFactor";
     /// Payment scale in milli-units (500 = x0.5). Replaces `pay_factor`.
     pub const PAY_FACTOR: &str = "payFactor";
-    /// 「[拥有者]不可盖房」. Replaces the `noBuild` state key.
+    /// 「owner不可盖房」. Replaces the `noBuild` state key.
     pub const NO_BUILD: &str = "noBuild";
     /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `why_not_build_on`
     /// refuses a build whose house cost is `>=` this. On a board-owned instance;
@@ -565,17 +584,30 @@ pub mod prop {
 /// that attaches a rule to a tile places it here (`place_card_on(BOARD_OWNER, tile, …)`).
 pub const BOARD_OWNER: i32 = -1;
 
-/// Is `key` one of the engine's status counters, whose value cannot go
-/// negative (「清除」 floors at 0)?
-fn is_status_key(key: &str) -> bool {
-    matches!(
-        key,
-        key::STAY | key::STUN | key::STUN_START | key::EXILE | key::FIRE
-    )
+/// Default [`state_flag`] bits for a new key. Only generic engine-mechanism
+/// names appear here (status layers, the capped resource, turn latches) --
+/// game vocabulary never does. Ruleset-invented keys start unflagged.
+fn default_flags(key: &str) -> u8 {
+    use state_flag::{ENGINE_OWNED, NEVER_NEGATIVE};
+    match key {
+        key::STAY | key::STUN | key::STUN_START | key::EXILE | key::CHARGE => {
+            NEVER_NEGATIVE | ENGINE_OWNED
+        }
+        key::EXILE_TO | key::EXILE_MAIN | key::NO_HAND | key::UNSTOPPABLE | key::HAND_LIMIT
+        | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT | key::REDEEMED
+        | key::MORTGAGED | key::NO_BUILD => ENGINE_OWNED,
+        _ => 0,
+    }
+}
+
+/// Is this state item a status counter, whose value cannot go negative
+/// (「清除」 floors at 0)? Reads the item's [`state_flag::NEVER_NEGATIVE`].
+fn is_status_var(v: &StateVar) -> bool {
+    v.flags & state_flag::NEVER_NEGATIVE != 0
 }
 
 /// The tick the rulebook names for a timed status counter (规则书:
-/// [停留]/[晕眩] 「玩家的每回合结束时移除一层」; `stunStart` is the layer that
+/// stay/stun 「玩家的每回合结束时移除一层」; `stunStart` is the layer that
 /// starts counting next turn, `Tick::TurnStart`). `state_set` stamps this on
 /// any write whose item has no tick, so the book's wear-off holds no matter
 /// which writer landed the layer.
@@ -637,16 +669,16 @@ impl BotMentality {
 /// instead of naming stay / stun / exile. `true` = the door is open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct StatusGates {
-    /// [主动] skills and [手] effects (rules.txt 49/50).
+    /// [主动] skills and hand effects (rules.txt 49/50).
     pub act: bool,
-    /// This turn's [主要移动] / non-[传送] move effects (rules.txt 47).
+    /// This turn's main move / non-teleport move effects (rules.txt 47).
     pub r#move: bool,
     /// May receive payment (rules.txt 49/50).
     pub pay: bool,
     /// The piece stands on a board square (rules.txt 50 「不失为存在于任何格子上」
     /// is the *negation* -- exiled pieces are off-board).
     pub on_board: bool,
-    /// May be [指定]d (rules.txt 50 「不能被[指定]」).
+    /// May be designated (rules.txt 50 「不能被designate」).
     pub targetable: bool,
 }
 
@@ -662,7 +694,7 @@ pub struct MatchPlayer {
     pub roll: i32,
     pub ban_done: bool,
     pub ban: String,
-    pub character: String,
+    pub persona: String,
     pub deck_ready: bool,
     pub money: i32,
     pub pos: i32,
@@ -675,8 +707,8 @@ pub struct MatchPlayer {
     pub left: bool,
     pub out_order: i32,
     pub skill_note: Msg,
-    pub skill_character: String,
-    pub bands: String,
+    pub skill_owner: String,
+    pub affiliations: String,
     pub tokens: Vec<Counter>,
     /// Keyed state: the counters this player carries -- status pots plus the
     /// arbitrary named slots content invents -- as `{value, min, max}` items.
@@ -688,7 +720,7 @@ pub struct MatchPlayer {
     /// client reads this map by name and TS types are structural, so renaming
     /// a key breaks the board render silently rather than at compile time. The
     /// names the client actually reads today are `stay`, `stun`, `stunStart`,
-    /// `exile`, `exileTo`, `fire`, and `handLimit`. Treat those as frozen;
+    /// `exile`, `exileTo`, `charge`, and `handLimit`. Treat those as frozen;
     /// invent new ones freely.
     pub state: BTreeMap<String, StateVar>,
     pub field: Vec<FieldCard>,
@@ -708,7 +740,7 @@ impl Default for MatchPlayer {
             roll: 0,
             ban_done: false,
             ban: String::new(),
-            character: String::new(),
+            persona: String::new(),
             deck_ready: false,
             money: 0,
             pos: 0,
@@ -720,8 +752,8 @@ impl Default for MatchPlayer {
             left: false,
             out_order: 0,
             skill_note: Msg::default(),
-            skill_character: String::new(),
-            bands: String::new(),
+            skill_owner: String::new(),
+            affiliations: String::new(),
             tokens: vec![],
             state: {
                 // The two counters that start non-zero (hand limit 5, no exile
@@ -786,10 +818,10 @@ impl MatchPlayer {
     /// Write `value`, clamped to the item's declared bounds.
     ///
     /// The engine holds the bounds and enforces them on write: a status counter
-    /// (stay / stun / exile / fire) never goes negative (「清除」 floors at 0),
-    /// and a declared `max > 0` is a real cap (fire pots 「上限M」). `max == 0`
+    /// (stay / stun / exile / charge) never goes negative (「清除」 floors at 0),
+    /// and a declared `max > 0` is a real cap (「上限M」). `max == 0`
     /// still means "uncapped". A consumer that wants a different policy (e.g.
-    /// `gain_fire`'s partial gain + log) does its own arithmetic first.
+    /// `gain_charge`'s partial gain + log) does its own arithmetic first.
     ///
     /// A **fresh** stay / stun / stunStart item also picks up the rulebook's
     /// wear-off tick (see [`default_expiry`]): 「每回合结束时移除一层」 is a
@@ -797,15 +829,18 @@ impl MatchPlayer {
     /// layer, so a raw `state_set("stun", n)` cannot leave a permanent stun
     /// that skips every later turn. The tick is re-asserted whenever it has
     /// been cleared (`state_set_expires(..., None)`) -- the book has no
-    /// non-ticking [晕眩] -- but a non-default tick the writer asked for stays.
+    /// non-ticking stun -- but a non-default tick the writer asked for stays.
     pub fn state_set(&mut self, key: &str, value: i32) -> i32 {
         let e = self.state.entry(key.to_string()).or_default();
+        if e.flags == 0 {
+            e.flags = default_flags(key);
+        }
         if e.expires.is_none() {
             e.expires = default_expiry(key);
         }
         let mut v = value;
         // Status counters cannot go negative -- clearing floors at 0.
-        if is_status_key(key) {
+        if is_status_var(e) {
             v = v.max(0);
         }
         // A declared cap is honoured (`max > 0`; `max == 0` is uncapped).
@@ -874,20 +909,20 @@ impl MatchPlayer {
         self.state_get(key::EXILE)
     }
 
-    /// Tile the [除外] return [传送] lands on, or -1.
+    /// Tile the exile return teleport lands on, or -1.
     pub fn exile_to(&self) -> i32 {
         self.state_get(key::EXILE_TO)
     }
 
-    /// Fire pots (火罐) held.
-    pub fn fire(&self) -> i32 {
-        self.state_get(key::FIRE)
+    /// Capped spendable resource held.
+    pub fn charge(&self) -> i32 {
+        self.state_get(key::CHARGE)
     }
 
-    /// The mandated fire-pot cap -- the `max` of the `fire` item, written by a
-    /// character skill. Not something the engine imposes.
-    pub fn fire_max(&self) -> i32 {
-        self.state_max(key::FIRE)
+    /// The mandated resource cap -- the `max` of the `charge` item, written by a
+    /// persona skill. Not something the engine imposes.
+    pub fn charge_max(&self) -> i32 {
+        self.state_max(key::CHARGE)
     }
 
     pub fn no_hand(&self) -> i32 {
@@ -910,18 +945,18 @@ impl MatchPlayer {
         let exile = self.exile();
         let unstoppable = self.unstoppable();
         StatusGates {
-            // [晕眩] 「无法使用[主动]技能和手卡的[手]效果」 +
-            // [除外] same + 「玩家技能…停止生效」.
+            // stun 「无法使用[主动]技能和手卡的hand效果」 +
+            // exile same + 「玩家技能…停止生效」.
             act: stun <= 0 && exile <= 0,
             // [无法移动] (rules.txt 47) via stay (unless [不可阻挡]
-            // 「无视已存在的[停留]」), stun, exile.
+            // 「无视已存在的stay」), stun, exile.
             r#move: !(exile > 0 || stun > 0 || (stay > 0 && unstoppable <= 0)),
-            // [晕眩] / [除外] 「无法收付款」.
+            // stun / exile 「无法收付款」.
             pay: stun <= 0 && exile <= 0,
-            // [除外] 「玩家棋子不失为存在于任何格子上」 -- inverted: the piece
+            // exile 「玩家棋子不失为存在于任何格子上」 -- inverted: the piece
             // is *not* on a board square while exiled.
             on_board: exile <= 0,
-            // [除外] 「不能被[指定]」.
+            // exile 「不能被designate」.
             targetable: exile <= 0,
         }
     }
@@ -1113,7 +1148,7 @@ pub struct MatchEvent {
     pub parent: i32,
     /// On a walk's `roll` / `move` event: how many more steps the same walk
     /// takes after this segment's `to` (a walk publishes one segment per
-    /// CiRCLE it passes, so the client cannot see the whole route otherwise).
+    /// pass-reward tile it passes, so the client cannot see the whole route otherwise).
     /// `0` = the segment ends the walk.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub ahead: i32,
@@ -1131,7 +1166,7 @@ pub struct MatchEvent {
     pub uid: i32,
     /// Should the client show the card **flash** (and the field-slot pulse)
     /// for this activation? `false` when every produced effect is
-    /// owner-self-only (own fire, counters, latches, hand-limit, bank money
+    /// owner-self-only (own charge, counters, latches, hand-limit, bank money
     /// on self) -- the log entry (header + outcome lines) still appears; only
     /// the animation goes. `true` when anything reached another player, the
     /// board (cards, marks, houses, deeds, tile props), or movement. v54.
@@ -1167,7 +1202,7 @@ pub mod card_trigger {
     pub const SKILL: &str = "skill";
     /// A drawn event card's effect.
     pub const EVENT: &str = "event";
-    /// A [反击] card's body.
+    /// A counteraction card's body.
     pub const COUNTER: &str = "counter";
     /// A placed / field card's hook firing (tile, rent, pass, settle, ...).
     pub const HOOK: &str = "hook";
@@ -1232,20 +1267,9 @@ pub struct FieldCard {
     pub owner: i32,
     pub user: i32,
     pub tile: i32,
-    /// Named on-card counter [`counter::CRYSTALS`] (奇迹水晶). The generic
-    /// counter API (`ctx::counter` / `add_counter`) is the only writer; this
-    /// field is that name's storage on the instance. Serde-stable.
-    pub crystals: i32,
-    /// Named on-card counter [`counter::CP`] -- 「自己[场上]N个[CP点]」, the CP
-    /// points **attached to this card** (user ruling 2026-10-07). Distinct from
-    /// the [CP点] **tile marks** bound to the standing `mark:cp` instance
-    /// (see [`TileMark`]). Dies with this instance. Serde-defaulted so pre-CP
-    /// saves load. Generic name: [`counter::CP`].
-    #[serde(default)]
-    pub cp: i32,
-    /// Extra named on-card counters beyond [`counter::CP`] /
-    /// [`counter::CRYSTALS`]. The two known names stay as fields so current
-    /// saves load unchanged; anything else lives here (serde-defaulted).
+    /// Named on-card counters of this instance. The generic counter API
+    /// (`ctx::counter` / `add_counter`) is the only writer. Names are
+    /// ruleset-defined strings; the engine treats them as opaque keys.
     #[serde(default)]
     pub counters: BTreeMap<String, i32>,
     pub face_down: bool,
@@ -1258,17 +1282,17 @@ pub struct FieldCard {
     /// `place_raw` test arrangement sees it too.
     #[serde(default)]
     pub props: BTreeMap<String, i32>,
-    /// This instance is a **band skill** (`skill:<band>:<skill>`, stamped at
-    /// placement from `GameData::is_band_skill`). 「乐队卡 / 团卡」 crystal
-    /// reads and writes land on this instance's [`Self::crystals`] -- see
-    /// `World::band_crystals`. A character skill is `skill:<character>:<skill>`
+    /// This instance is a **group skill** (`skill:<group>:<skill>`, stamped at
+    /// placement from `GameData::is_group_skill`). the group-skill named counter
+    /// reads and writes land on this instance's [`Self::counters`] -- see
+    /// `World::group_pool`. A persona skill is `skill:<persona>:<skill>`
     /// and is *not* flagged, even when it sits on someone else's field.
     #[serde(default)]
-    pub band_skill: bool,
-    /// A 「拿取」ed band-skill copy. 「相同乐队技能卡的效果不可叠加」 -- the
+    pub group_skill: bool,
+    /// A taken group-skill copy. 「group-skill card effects do not stack」 -- the
     /// hook dispatch skips an extra when a non-extra attachment of the same id
-    /// is already on the field -- and 「不视为那个乐队的角色」 (`in_band` reads
-    /// only the character).
+    /// is already on the field -- and 「not treated as that group's persona」 (`in_group` reads
+    /// only the persona).
     #[serde(default)]
     pub extra: bool,
     pub note: Msg,
@@ -1282,29 +1306,19 @@ impl Default for FieldCard {
             owner: -1,
             user: -1,
             tile: -1,
-            crystals: 0,
-            cp: 0,
             counters: BTreeMap::new(),
             face_down: false,
             immune: false,
             props: BTreeMap::new(),
-            band_skill: false,
+            group_skill: false,
             extra: false,
             note: Msg::default(),
         }
     }
 }
 
-/// Named counters on a field-card instance (the generic counter API's names).
-/// Mirrors `card_sdk::abi::counter` (the two crates cannot share a definition;
-/// keep them in step). Storage: [`FieldCard::cp`] / [`FieldCard::crystals`] /
-/// [`FieldCard::counters`].
-pub mod counter {
-    /// On-card [CP点] (「自己[场上]N个[CP点]」).
-    pub const CP: &str = "cp";
-    /// 奇迹水晶.
-    pub const CRYSTALS: &str = "crystals";
-}
+/// Named counters on a field-card instance live in [`FieldCard::counters`]
+/// under ruleset-defined name strings. The engine holds no well-known names.
 
 /// Tile-mark **categories** -- what sort of thing a [`TileMark`] is. A category
 /// is the mark's identity for the board, as against `TileMark::kind` (the i18n
@@ -1312,17 +1326,14 @@ pub mod counter {
 /// player mark). Mirrors `card_sdk::abi::mark` (the two crates cannot share a
 /// definition; keep them in step).
 ///
-/// [CP点] is its own category, not a `kind` string mixed in with the player
-/// marks (`data/rules.txt` 125: 「CP点：放置于路面上的指示物」), and it carries
+/// [tile marks] is its own category, not a `kind` string mixed in with the player
+/// marks (`data/rules.txt` 125: 「tile marks：放置于路面上的指示物」), and it carries
 /// **no player owner** -- see [`TileMark::owner`].
 pub mod mark_category {
-    /// A player/generic mark (the default): 兔子 / 奇迹水晶 / PAREO / 抹茶巴菲 …
+    /// A player/generic mark (the default): a player token / named counter / cosmetic mark / 抹茶巴菲 …
     /// Placed by a seat, coloured by that seat in the view.
     pub const PLAYER: &str = "";
-    /// [CP点] -- 「放置于路面上的指示物」. Neutral: `owner` is always
-    /// [`super::BOARD_OWNER`], never a seat.
-    pub const CP: &str = "cp";
-    /// A [指定] of tiles by a field card / skill while it is in play. Owned by
+    /// A designate of tiles by a field card / skill while it is in play. Owned by
     /// the designating instance; dies with it. `owner` is the designating
     /// seat (label colour). Mirrors `card_sdk::abi::mark::DESIGNATE_CATEGORY`.
     pub const DESIGNATE: &str = "designate";
@@ -1331,9 +1342,6 @@ pub mod mark_category {
 /// Well-known tile-mark kinds (the i18n key / stable id on `TileMark::kind`).
 /// Mirrors `card_sdk::abi::mark`.
 pub mod mark_kind {
-    /// The [CP点] mark's stable kind. Its display label comes from the
-    /// category (「CP点」), not from this string.
-    pub const CP: &str = "mark:cp";
     /// The designation mark's stable kind. Display comes from
     /// [`TileMark::card`] (the designating card id). Mirrors
     /// `card_sdk::abi::mark::DESIGNATE_KIND`.
@@ -1363,25 +1371,24 @@ pub struct TileMark {
     pub uid: i32,
     pub tile: i32,
     /// `card` for a card placed on the tile (see `card`); otherwise the i18n key
-    /// naming the mark (e.g. `cards:hhw-hagumi-marks.mark`). [CP点] uses the
-    /// stable [`mark_kind::CP`] -- the label comes from [`Self::category`].
+    /// naming the mark (e.g. a named-counter mark). The label comes from
+    /// [`Self::category`] when the mark is a named counter of a field card.
     pub kind: String,
     /// Which category of mark this is: [`mark_category::PLAYER`] (default) or
-    /// [`mark_category::CP`]. Serde-defaulted so pre-category saves still load.
+    /// [`mark_category::DESIGNATE`]. Serde-defaulted so pre-category saves still load.
     pub category: String,
     /// The seat that placed a **player** mark (colours it in the view), or
-    /// [`BOARD_OWNER`] (`-1`) for a neutral mark. [CP点] is always neutral --
-    /// 「These marks should not be owned by any player」 -- so a CP mark's owner
-    /// is [`BOARD_OWNER`] and its provenance lives in [`Self::src`] /
-    /// [`Self::card`] instead.
+    /// [`BOARD_OWNER`] (`-1`) for a neutral mark. Neutral marks (tile marks /
+    /// named-counter marks) stay unowned -- their provenance lives in
+    /// [`Self::src`] / [`Self::card`] instead.
     pub owner: i32,
     pub count: i32,
     /// Provenance for the log / the view's 「来自」: the card id that placed the
     /// mark (empty when none). Not an owner.
     pub card: String,
     /// Provenance for the rules: the **card instance** (`FieldCard::uid`) that
-    /// placed the mark, or `None`. 「此卡在格子上添加的[CP点]及其产物」
-    /// (通用:该清CP了 (1)) keys on this, not on [`Self::owner`]. Per-unit
+    /// placed the mark, or `None`. 「此卡在格子上添加的[tile marks]及其产物」
+    /// (通用:the mark-emptying card (1)) keys on this, not on [`Self::owner`]. Per-unit
     /// attribute -- not ownership. Serde-defaulted so pre-`src` saves still load
     /// (the wire spelling is still `-1` for none).
     #[serde(default, with = "opt_i32_neg1")]
@@ -1415,11 +1422,6 @@ impl Default for TileMark {
 }
 
 impl TileMark {
-    /// Is this a [CP点]? CP marks are a category of their own, not a `kind`
-    /// string among the player marks.
-    pub fn is_cp(&self) -> bool {
-        self.category == mark_category::CP
-    }
 }
 
 /// Named units held by a player. Under the bound-counter model
@@ -1503,7 +1505,7 @@ pub struct SkillAction {
 mod tests {
     use super::*;
 
-    /// 规则书 [停留]/[晕眩] 「玩家的每回合结束时移除一层」 and `stunStart`'s
+    /// 规则书 stay/stun 「玩家的每回合结束时移除一层」 and `stunStart`'s
     /// turn-start tick are properties of the status: a write that names no
     /// expiry still wears off. (Fuzz soak iter 1517 -- a raw `state_set("stun",
     /// 1)` left a permanent stun that skipped every later turn and turned

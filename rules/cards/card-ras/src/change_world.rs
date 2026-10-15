@@ -20,7 +20,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         // walk this turn, over a buyable Live House the owner does not hold.
         On::Hook(
             &[HookKind::PassTile],
-            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_live_house(tile.id) && is_buyable(tile.id) && tile.owner != owner",
+            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner",
             None,
             pass_tile,
         ),
@@ -46,7 +46,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"将此卡放置于你的一个有房屋的livehouse格子上，你的本次移动掷骰变为3d20，期间每经过一个不属于你的livehouse格子，此卡获得一个奇迹水晶，此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数，触发后将该卡放入弃牌堆"#)
         .cell(r#"H5"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 const ID: &str = "RAS:Change the world";
 
@@ -124,7 +124,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// move passing a non-owned buyable Live House adds a crystal.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && move.main && card.placed &&
-    // slot('change_world_turn') == turn_key && is_live_house(tile.id) &&
+    // slot('change_world_turn') == turn_key && is_venue(tile.id) &&
     // is_buyable(tile.id) && tile.owner != owner` is the pre.
     let t = trigger::tile();
     ctx::add_crystals(1, 0)?;

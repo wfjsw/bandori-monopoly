@@ -1114,8 +1114,8 @@ fn c24_hanae_cancels_a_hand_effect() {
     // Nobody pays X. P1 +500, P0 +2000, P1's fire = 0.
     assert_eq!(t.money(1), 10_000 + 500, "P1 +500");
     assert_eq!(t.money(0), 10_000 + 2000, "P0 +2000");
-    assert_eq!(t.fire(1), 0, "fire spent");
-    eprintln!("c24 record: prompt trail done, fire P1 = {}", t.fire(1));
+    assert_eq!(t.charge(1), 0, "fire spent");
+    eprintln!("c24 record: prompt trail done, fire P1 = {}", t.charge(1));
 }
 
 // =====================================================================
@@ -1150,13 +1150,13 @@ fn c25_hanae_vs_skill_main() {
         t.pos(0),
         t.money(0),
         t.money(1),
-        t.fire(0),
-        t.fire(1)
+        t.charge(0),
+        t.charge(1)
     );
     assert_eq!(t.pos(0), 5, "P0 does not move");
     assert_eq!(t.money(0), 10_000 + 2000, "P0 +2000");
     assert_eq!(t.money(1), 10_000 + 500, "P1 +500");
-    assert_eq!(t.fire(1), 0);
+    assert_eq!(t.charge(1), 0);
 }
 
 // =====================================================================

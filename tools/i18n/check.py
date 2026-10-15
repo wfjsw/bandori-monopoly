@@ -30,7 +30,7 @@ LOCALES = ROOT / "webui" / "src" / "i18n" / "locales"
 LANGS = ("zh-CN", "en")
 # webui files that emit protocol messages (their keys belong to the `game` namespace)
 PROTOCOL = {"net/api.ts", "game/session.ts", "i18n/msg.ts"}
-DYNAMIC = ("err.join.",)  # built at run time: net::describe
+DYNAMIC = ("err.join.", "anim.chainKind.", "anim.chainSrc.")  # built at run time: net::describe, Board.tsx ChainOrigin
 SPECIAL = ("blank", "list")  # message plumbing, not sentences
 
 
@@ -92,7 +92,7 @@ def main() -> int:
         report(lang, "game.json is missing keys the code emits", (k for k in engine_used if k not in game))
         report(lang, "game.json has keys no code emits", (k for k in game if k not in engine_used and not any(k.startswith(d) for d in DYNAMIC)))
         report(lang, "ui.json is missing keys the code emits", (k for k in ui_used if k not in ui))
-        report(lang, "ui.json has keys no code uses", (k for k in ui if k not in ui_used))
+        report(lang, "ui.json has keys no code uses", (k for k in ui if k not in ui_used and not any(k.startswith(d) for d in DYNAMIC)))
 
     # card modules: key!(...) must exist in that crate's locale files
     for crate in sorted(ROOT.glob("rules/*/src/lib.rs")):

@@ -115,7 +115,7 @@ fn tsugu_ge26_can_buy_any_unowned() {
 #[test]
 fn tsugu_buy_gate_refused_does_not_log_a_buy() {
     let mut t = Table::vanilla(2);
-    t.set_character_raw(1, "户山香澄"); // Poppin' Party -- `in_band` scan
+    t.set_character_raw(1, "户山香澄"); // Poppin' Party -- `in_group` scan
     t.place_raw(1, "skill:Poppin' Party:星之鼓动"); // the `BuyGate` lock
     t.dice(&[9, 9, 8]); // 26
     t.give_play(0, "通用:@Tsugu ycm").unwrap();
@@ -178,7 +178,7 @@ fn agent_quote_carries_the_tsugu_buy_add() {
 fn data() -> std::sync::Arc<game_core::data::GameData> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     let roster =
-        game_core::data::Roster::from_fixture(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/game-core/tests/fixtures/roster.json")).expect("roster fixture")).expect("roster fixture parses");
+        game_core::data::Roster::from_fixture(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json")).expect("roster fixture")).expect("roster fixture parses");
     std::sync::Arc::new(
         game_core::data::GameData::load(
             |f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()),
@@ -502,8 +502,12 @@ fn cp_on_card_count_rides_the_field_card() {
         .into_iter()
         .find(|f| f.card == "通用:该清CP了")
         .expect("the card is on the field");
-    // The view's `FieldCard.cp` -- what `Ring.tsx` shows as the badge.
-    assert_eq!(f.cp, 6, "the field card carries the on-card count: {f:?}");
+    // The view's on-card counter badge (`FieldCard::counters["cp"]`).
+    assert_eq!(
+        f.counters.get("cp").copied().unwrap_or(0),
+        6,
+        "the field card carries the on-card count: {f:?}"
+    );
     // The per-player 「自己[场上]」 counter is gone (ruling: the card's own
     // count replaces it).
     assert_eq!(t.token(0, "cards:card-general.clear_cp_tok"), 0);
@@ -1055,7 +1059,7 @@ fn parking_blocks_skills_on_the_tile() {
 fn claim_circle_reward(t: &mut Table, who: usize) {
     let p = t.expect_prompt();
     assert!(
-        p.title.key().contains("circle"),
+        p.title.key().contains("pass_reward"),
         "expected the CiRCLE reward: {}",
         t.dump_prompt()
     );
@@ -1129,19 +1133,19 @@ fn tsugu_skill_gains_fire_on_pass() {
     let mut t = Table::new(&["都筑诗船", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
-    assert_eq!(t.state_var(0, "fire").max, 2, "上限2");
+    assert_eq!(t.state_var(0, "charge").max, 2, "上限2");
     t.set_pos(0, 55);
     t.dice(&[6]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.fire(0), 1, "events {:?}", t.recent_keys(6));
+    assert_eq!(t.charge(0), 1, "events {:?}", t.recent_keys(6));
 }
 
 // 规则书: 「（初始1，上限2）」
 #[test]
 fn tsugu_skill_starts_with_one_fire() {
     let mut t = Table::new(&["都筑诗船", "户山香澄"]);
-    assert_eq!(t.fire(0), 1, "初始1");
+    assert_eq!(t.charge(0), 1, "初始1");
 }
 
 // 规则书: 「你的主要阶段中可消耗1火罐使你与一名其他玩家接下来的两次移动掷骰先后-1d6与+1d6」
@@ -1156,7 +1160,7 @@ fn tsugu_skill_spends_fire_and_pairs() {
     // Pick the partner.
     t.answer(0, 0).unwrap();
     // 规则书: 「消耗1火罐」
-    assert_eq!(t.fire(0), 0);
+    assert_eq!(t.charge(0), 0);
     assert_eq!(t.state(0, "skill.tukushiTry.left"), 2, "two rolls armed");
 }
 

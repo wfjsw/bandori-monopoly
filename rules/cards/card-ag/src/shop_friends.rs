@@ -19,7 +19,7 @@ pub const SHOP_FRIENDS: CardDef =
         .tags(&[])
         .text(r#"投掷1d6mod6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动"#)
         .cell(r#"C4"#)
-        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
+        .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 /// C# `CardShopFriends.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

@@ -71,10 +71,10 @@ async fn main() {
         .unwrap_or_else(|e| panic!("cannot load game data from {}: {e}", data_dir.display())),
     );
     eprintln!(
-        "loaded {} tiles, {} cards, {} characters",
+        "loaded {} tiles, {} cards, {} personas",
         data.tiles.len(),
         data.cards.len(),
-        data.characters.len()
+        data.personas.len()
     );
     let rules: Arc<dyn CardRules> = match ruleset {
         Some(set) => Arc::new(game_rules::WasmRules::new(set, data.clone())),

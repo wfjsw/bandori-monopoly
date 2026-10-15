@@ -299,12 +299,12 @@ pub fn transfer_to_dest(to: i32, dest: i32) -> i32 {
     kani_host::call_i32(Op::transfer_to_dest, [to, dest, 0, 0, 0, 0])
 }
 
-pub fn ring_multiplier() -> i32 {
-    kani_host::call_i32(Op::ring_multiplier, [0, 0, 0, 0, 0, 0])
+pub fn rent_unit_mult() -> i32 {
+    kani_host::call_i32(Op::rent_unit_mult, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn add_ring_bonus(n: i32) -> i32 {
-    kani_host::call_i32(Op::add_ring_bonus, [n, 0, 0, 0, 0, 0])
+pub fn add_rent_unit_bonus(n: i32) -> i32 {
+    kani_host::call_i32(Op::add_rent_unit_bonus, [n, 0, 0, 0, 0, 0])
 }
 
 pub fn teleport_to(player_id: i32, tile: i32) {
@@ -527,28 +527,28 @@ pub fn inc_slot(player_id: i32, ptr: i32, len: i32, by: i32) -> i32 {
     kani_host::call_i32(Op::inc_slot, [player_id, ptr, len, by, 0, 0])
 }
 
-pub fn band_crystals(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::band_crystals, [player_id, 0, 0, 0, 0, 0])
+pub fn group_pool(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::group_pool, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    kani_host::call_i32(Op::add_band_crystals, [player_id, n, max, 0, 0, 0])
+pub fn add_group_pool(player_id: i32, n: i32, max: i32) -> i32 {
+    kani_host::call_i32(Op::add_group_pool, [player_id, n, max, 0, 0, 0])
 }
 
-pub fn band_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
-    kani_host::call_i32(Op::band_skill, [player_id, buf, cap, 0, 0, 0])
+pub fn group_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::group_skill, [player_id, buf, cap, 0, 0, 0])
 }
 
-pub fn character_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
-    kani_host::call_i32(Op::character_skill, [player_id, buf, cap, 0, 0, 0])
+pub fn persona_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::persona_skill, [player_id, buf, cap, 0, 0, 0])
 }
 
-pub fn band_skills(player_id: i32, buf: i32, cap: i32) -> i32 {
-    kani_host::call_i32(Op::band_skills, [player_id, buf, cap, 0, 0, 0])
+pub fn group_skills(player_id: i32, buf: i32, cap: i32) -> i32 {
+    kani_host::call_i32(Op::group_skills, [player_id, buf, cap, 0, 0, 0])
 }
 
-pub fn add_band_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32 {
-    kani_host::call_i32(Op::add_band_skill, [player_id, p, n, extra, 0, 0])
+pub fn add_group_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32 {
+    kani_host::call_i32(Op::add_group_skill, [player_id, p, n, extra, 0, 0])
 }
 
 pub fn invoke_skill(player_id: i32, p: i32, n: i32) -> i32 {
@@ -563,16 +563,16 @@ pub fn raise(player_id: i32, kind: i32, value: i32) -> i32 {
     kani_host::call_i32(Op::raise, [player_id, kind, value, 0, 0, 0])
 }
 
-pub fn fire(player_id: i32) -> i32 {
+pub fn charge(player_id: i32) -> i32 {
     kani_host::call_i32(Op::fire, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn fire_max(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::fire_max, [player_id, 0, 0, 0, 0, 0])
+pub fn charge_max(player_id: i32) -> i32 {
+    kani_host::call_i32(Op::charge_max, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn gain_fire(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::gain_fire, [player_id, n, ptr, len, 0, 0])
+pub fn gain_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::gain_charge, [player_id, n, ptr, len, 0, 0])
 }
 
 pub fn give_stay(player_id: i32, n: i32) {
@@ -599,8 +599,8 @@ pub fn cant_move(player_id: i32) -> i32 {
     kani_host::call_i32(Op::cant_move, [player_id, 0, 0, 0, 0, 0])
 }
 
-pub fn spend_fire(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::spend_fire, [player_id, n, ptr, len, 0, 0])
+pub fn spend_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::spend_charge, [player_id, n, ptr, len, 0, 0])
 }
 
 pub fn stay_of(player_id: i32) -> i32 {
@@ -627,12 +627,12 @@ pub fn turn_key() -> i32 {
     kani_host::call_i32(Op::turn_key, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn character_is(player_id: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::character_is, [player_id, ptr, len, 0, 0, 0])
+pub fn persona_is(player_id: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::persona_is, [player_id, ptr, len, 0, 0, 0])
 }
 
-pub fn in_band(player_id: i32, ptr: i32, len: i32) -> i32 {
-    kani_host::call_i32(Op::in_band, [player_id, ptr, len, 0, 0, 0])
+pub fn in_group(player_id: i32, ptr: i32, len: i32) -> i32 {
+    kani_host::call_i32(Op::in_group, [player_id, ptr, len, 0, 0, 0])
 }
 
 pub fn opt_int(v: i32) {
@@ -1055,8 +1055,8 @@ pub fn turn_main_steps() -> i32 {
     kani_host::call_i32(Op::turn_main_steps, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
-    kani_host::call_i32(Op::add_fire_max, [player_id, n, 0, 0, 0, 0])
+pub fn add_charge_max(player_id: i32, n: i32) -> i32 {
+    kani_host::call_i32(Op::add_charge_max, [player_id, n, 0, 0, 0, 0])
 }
 
 pub fn card_build(player_id: i32, tile: i32) -> i32 {

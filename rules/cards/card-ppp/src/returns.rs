@@ -34,7 +34,7 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "PPP:Returns";
 /// Index into `SKILLS` of the currently borrowed band, on the Returns instance
 /// (`FieldCard::props`) -- scoped to this card, not the player's state map.
-const PROP_BAND: &str = "returns.band";
+const PROP_BAND: &str = "returns.group";
 /// Seat the borrowed band card was copied from, on the Returns instance -- the
 /// board reads it to say whose card the owner holds. -1 = nothing borrowed.
 const PROP_FROM: &str = "returns.from";
@@ -86,7 +86,7 @@ pub const RETURNS: CardDef = CardDef::new(
 （3）使用因此卡获得的团卡的主动效果时需要支付1星星贴纸。
 （4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。"#)
         .cell(r#"B5"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
 /// first, then band, then general) -- a snapshot of the roster; Returns is
@@ -119,15 +119,15 @@ const GENERAL_POOL: [&str; 10] = [
 
 /// C# `DeckRules.Pool`'s exclusive front (the player's own character card).
 fn exclusive_of(player_id: i32) -> Option<&'static str> {
-    if ctx::character_is(player_id, "户山香澄") {
+    if ctx::persona_is(player_id, "户山香澄") {
         Some("PPP:（香澄）大家我都喜欢哦")
-    } else if ctx::character_is(player_id, "花园多惠") {
+    } else if ctx::persona_is(player_id, "花园多惠") {
         Some("PPP:（多惠）寻找更好的声音")
-    } else if ctx::character_is(player_id, "牛込里美") {
+    } else if ctx::persona_is(player_id, "牛込里美") {
         Some("PPP:（里美）我的心就像巧克力螺")
-    } else if ctx::character_is(player_id, "山吹沙绫") {
+    } else if ctx::persona_is(player_id, "山吹沙绫") {
         Some("PPP:（沙绫）总有一天要给这片天空命名")
-    } else if ctx::character_is(player_id, "市谷有咲") {
+    } else if ctx::persona_is(player_id, "市谷有咲") {
         Some("PPP:（有咲）等等等一下")
     } else {
         None
@@ -220,7 +220,7 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(PROP_BAND, -1);
     ctx::set_prop(PROP_FROM, -1);
     // [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果」 -- arm the token
-    // `skill-bands::poppin` reads to skip its no-build-on-main-settle rule.
+    // `skill-groups::poppin` reads to skip its no-build-on-main-settle rule.
     ctx::set_tok(player_id, "returns.noBuild4", 1);
     ctx::log(
         player_id,
@@ -235,20 +235,20 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
 
 // [持续]（1）「无效[拥有者]Poppin' Party团卡的（4）效果。」 -- while Returns is
 // in play the PPP band card's main-settle build restriction is lifted. Read by
-// `skill-bands::poppin` off the owner's field (`find_card("PPP:Returns")`).
+// `skill-groups::poppin` off the owner's field (`find_card("PPP:Returns")`).
 // [持续]（2）「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡
 // 获得的团卡不一样则替换并移除上面的所有[奇迹水晶]」 -- a `turnStart` press.
 // The borrowed band sits beside the PPP one (ruling 2026-10-06); only a prior
 // borrow is swapped out, and its crystals leave with it.
 // [持续]（3）「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the copy
-// is marked with `returns.copied`, and `skill_bands::skill_ok` charges the
+// is marked with `returns.copied`, and `skill_groups::skill_ok` charges the
 // sticker before a press.
 // [持续]（4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」 -- the
 // `cardPlayed` hook is in; a card's band is the prefix of its id (`通用:`, `G:`),
-// which is what `H.Db.Card(c.Id)?.band == "通用"` reads.
+// which is what `H.Db.Card(c.Id)?.group == "通用"` reads.
 
 /// （4）'s applicability: the played card is a 通用 one (a card's band is the
-/// prefix of its id -- `H.Db.Card(c.Id)?.band == "通用"`). The actor is
+/// prefix of its id -- `H.Db.Card(c.Id)?.group == "通用"`). The actor is
 /// `pre::MINE`'s job and is not re-checked here (docs/GUARDS.md).
 fn on_played_is_general(_player_id: i32) -> bool {
     ctx::trigger::cards()
@@ -264,7 +264,7 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-const BANDS: [&str; 12] = [
+const GROUPS: [&str; 12] = [
     "Poppin' Party",
     "Afterglow",
     "Pastel✽Palettes",
@@ -309,7 +309,7 @@ fn band_of(p: i32) -> &'static str {
         "CRYCHIC",
         "CiRCLE",
     ] {
-        if ctx::in_band(p, b) {
+        if ctx::in_group(p, b) {
             return b;
         }
     }
@@ -372,9 +372,9 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     let cards: alloc::vec::Vec<String> = pool
         .iter()
         .map(|&p| {
-            ctx::band_skill(p).unwrap_or_else(|| {
+            ctx::group_skill(p).unwrap_or_else(|| {
                 let band = band_of(p);
-                BANDS
+                GROUPS
                     .iter()
                     .position(|b| *b == band)
                     .and_then(|i| SKILLS.get(i))
@@ -397,7 +397,7 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     let band = band_of(who);
     let mut want = "";
     let mut idx = -1;
-    for (i, b) in BANDS.iter().enumerate() {
+    for (i, b) in GROUPS.iter().enumerate() {
         if *b == band {
             idx = i as i32;
             want = SKILLS[i];

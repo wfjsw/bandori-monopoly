@@ -42,7 +42,7 @@ pub fn snapshot(w: &World) -> Snap {
         m.insert(format!("bankrupt:P{i}"), p.bankrupt.to_string());
         m.insert(format!("left:P{i}"), p.left.to_string());
         m.insert(format!("assets:P{i}"), p.assets.to_string());
-        m.insert(format!("character:P{i}"), p.character.clone());
+        m.insert(format!("persona:P{i}"), p.persona.clone());
         m.insert(format!("hand_n:P{i}"), p.hand.to_string());
         m.insert(format!("draw_n:P{i}"), p.draw.to_string());
         m.insert(format!("discard_pub:P{i}"), p.discard.join("|"));
@@ -60,11 +60,11 @@ pub fn snapshot(w: &World) -> Snap {
             m.insert(
                 format!("field:P{i}:{f}"),
                 format!(
-                    "{}|uid={}|tile={}|crystals={}|immune={}|down={}|band={}",
-                    c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down, c.band_skill
+                    "{}|uid={}|tile={}|pool={}|immune={}|down={}|group={}",
+                    c.card, c.uid, c.tile, c.counters.values().sum::<i32>(), c.immune, c.face_down, c.group_skill
                 ),
             );
-            m.insert(format!("crystals:P{i}:{}", c.card), c.crystals.to_string());
+            m.insert(format!("pool:P{i}:{}", c.card), c.counters.values().sum::<i32>().to_string());
             for (k, v) in &c.props {
                 m.insert(format!("fprop:P{i}:{}:{k}", c.card), v.to_string());
             }
@@ -131,8 +131,8 @@ pub fn snapshot(w: &World) -> Snap {
         m.insert(
             format!("bfield:{i}"),
             format!(
-                "{}|uid={}|tile={}|crystals={}|immune={}|down={}",
-                c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down
+                "{}|uid={}|tile={}|pool={}|immune={}|down={}",
+                c.card, c.uid, c.tile, c.counters.values().sum::<i32>(), c.immune, c.face_down
             ),
         );
         for (k, v) in &c.props {
@@ -172,7 +172,7 @@ pub fn snapshot(w: &World) -> Snap {
     );
 
     m.insert("extra_turns".into(), format!("{:?}", w.extra_turns));
-    m.insert("ring_bonus".into(), w.ring_bonus.to_string());
+    m.insert("rule_param_bonus".into(), format!("{:?}", w.rule_param_bonus));
     m.insert("out_count".into(), w.out_count.to_string());
     m.insert("targeted".into(), format!("{:?}", w.targeted));
     m.insert(
@@ -215,8 +215,8 @@ pub fn is_bookkeeping(path: &str) -> bool {
         return true;
     }
     // Movement scratch the engine writes on every walk, plus the
-    // [异常移动效果] hit latch (set when an abnormal move lands, cleared when
-    // the next [主要移动] completes) -- engine bookkeeping, not a card's
+    // abnormal move hit latch (set when an abnormal move lands, cleared when
+    // the next main move completes) -- engine bookkeeping, not a card's
     // frame-visible effect. Cards read it; the frame condition does not.
     if let Some(rest) = path.strip_prefix("state:P") {
         let key = rest.split(':').nth(1).unwrap_or("");
@@ -316,12 +316,15 @@ pub fn frame(
     let a = snapshot(pre);
     let b = snapshot(post);
     let deltas = diff(&a, &b, false);
+    // Named-counter pools (`pool:P<seat>:<card>`) are instance-scoped: they
+    // appear and die with the field card. Always in-frame, like `mark:`.
     let bad: Vec<String> = deltas
         .iter()
         .filter(|d| {
-            !allowed_prefixes
-                .iter()
-                .any(|p| d.path == *p || d.path.starts_with(p))
+            !d.path.starts_with("pool:")
+                && !allowed_prefixes
+                    .iter()
+                    .any(|p| d.path == *p || d.path.starts_with(p))
         })
         .map(|d| format!("{}: {} -> {}", d.path, d.before, d.after))
         .collect();

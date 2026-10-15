@@ -13,7 +13,7 @@
 //!
 //! ## Per-harness host-op subset (TRIAGE-LOG `op-subset`)
 //!
-//! A card body only reaches a handful of `bandori_*` ops. Installing the
+//! A card body only reaches a handful of `ruleset_*` ops. Installing the
 //! full ~300-op [`crate::host::dispatch`] match makes CBMC build that match
 //! at every `ctx::*` site — the dominant SSA cost on band proofs. Declare
 //! the subset instead:
@@ -192,7 +192,7 @@ macro_rules! kassert {
 ///     gain | gain_typed | gain_fixed => arm_gain,
 ///     count_held | count_held_name => arm_count_held,
 ///     add_held => arm_add_held,
-///     add_band_crystals => arm_add_band_crystals,
+///     add_group_pool => arm_add_band_crystals,
 ///     player_count => arm_player_count,
 ///     hand_count => arm_hand_count,
 /// });

@@ -23,7 +23,7 @@ pub const CRUSH_DRUM: CardDef = CardDef::new(
 [手]：
 移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数"#)
         .cell(r#"H14"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"佐藤益木"#)]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"佐藤益木"#)]));
 
 /// C# `CardCrushDrum.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

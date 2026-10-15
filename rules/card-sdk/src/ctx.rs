@@ -317,7 +317,7 @@ pub fn owned_tiles(player_id: i32) -> Vec<i32> {
 
 /// Does the tile's **data kind** equal `kind` (the `TileKind` wire spelling:
 /// `"ring"`, `"circle"`, `"agent"`, `"property"`, …)? Generic host query —
-/// game sugar (`is_ring` / `is_circle` / …) lives in `ruleset-core`.
+/// game sugar (`is_deed` / `is_start` / …) lives in `ruleset-core`.
 #[cfg_attr(kani, inline(always))]
 pub fn tile_is(tile: i32, kind: &str) -> bool {
     let (p, l) = s(kind);
@@ -1420,8 +1420,8 @@ pub fn add_tok(player_id: i32, name: &str, by: i32, max: i32) -> Result<i32, Pro
 ///
 /// Which keys mean what, and what their caps are, belongs to whoever uses them:
 /// a character skill that mandates a fire-pot cap writes [`Self::max`] on
-/// [`state_key::FIRE`], and the card that gains pots is free to honour it (the
-/// `fire` / `gain_fire` helpers do) or ignore it. There is no engine-side
+/// [`state_key::CHARGE`], and the card that gains pots is free to honour it (the
+/// `fire` / `gain_charge` helpers do) or ignore it. There is no engine-side
 /// `match key`, and a raw [`Self::set`] / [`Self::add`] is never clamped.
 pub mod state {
     use super::{s, sys};
@@ -1533,11 +1533,11 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 }
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
-/// (e.g. [`TriggerKind::CircleAffected`]); `value` is the trigger's `value`.
+/// (e.g. `ruleset_core::kind::PassRewardAffected`); `value` is the trigger's `value`.
 /// Returns true when the link settled (nobody cancelled it). A hook that
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prompt> {
-    asked(unsafe { sys::raise(player_id, kind as i32, value) }).map(|v| v != 0)
+    asked(unsafe { sys::raise(player_id, kind.as_i32(), value) }).map(|v| v != 0)
 }
 
 // ---------------------------------------------------------- status hosts
@@ -2761,7 +2761,7 @@ pub mod effect {
     /// Append an effect to the current link, naming its recipient now -- at
     /// declaration, not at settlement.
     pub fn declare(kind: TriggerKind, target: i32, from: i32, tile: i32, value: i32) {
-        unsafe { sys::declare_effect(kind as i32, target, from, tile, value) }
+        unsafe { sys::declare_effect(kind.as_i32(), target, from, tile, value) }
     }
 }
 

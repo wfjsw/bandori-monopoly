@@ -151,8 +151,8 @@ crate::host_subset!(umiri_dispatch {
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     set_slot => arm_set_slot,
-    band_skills => arm_band_skills,
-    add_band_skill => arm_add_band_skill,
+    group_skills => arm_band_skills,
+    add_group_skill => arm_add_band_skill,
     log | effect => arm_log,
 });
 
@@ -228,7 +228,7 @@ fn black_bday_low_iff_at(user: i32) {
         "C-MUJICA-黑色生日-01: money moved 800"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
 }

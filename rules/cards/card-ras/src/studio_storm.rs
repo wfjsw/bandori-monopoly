@@ -17,7 +17,7 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
     "RAS:练习室里的风暴",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed && is_circle(tile.id)", None, pass_tile),
+        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed && tile_is(tile.id, \"circle\")", None, pass_tile),
         // （2）「在距此卡所在格子X个格子处[结算]时」 is 行动阶段 15
         // (`SETTLE-STAGES.md` §4 M2) -- an entry in the settle's effect list.
         // `docs/TILES.md` names the long-term home as a remote-settle rule
@@ -32,7 +32,7 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
         .text(r#"（1）当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上，每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）
 （2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的(4-X)/4倍，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动"#)
         .cell(r#"H8"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 const ID: &str = "RAS:练习室里的风暴";
 

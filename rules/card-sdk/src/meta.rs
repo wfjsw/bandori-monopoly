@@ -2,14 +2,14 @@
 //!
 //! Cards, characters and bands used to be described by flat JSON that the host
 //! loaded separately from the ruleset. The metadata is now authored in the same
-//! Rust that defines the rule (`CardDef::meta`, the skill crates' `BandDef` /
-//! `CharacterDef`) and exported on request through `bandori_metadata` -- never
+//! Rust that defines the rule (`CardDef::meta`, the skill crates' `GroupDef` /
+//! `PersonaDef`) and exported on request through `ruleset_metadata` -- never
 //! through [`crate::abi::ManifestEntry`], so the match path stays lean.
 //!
 //! This module is the **generic** half: an authoring shape for one card row
 //! ([`CardMeta`]), a wire row ([`MetaRow`]) / whole-roster blob ([`MetaDoc`]),
 //! and the ordinal lookup that restores the canonical data-file order. Game
-//! vocabulary (`band`, `owner`, `CharacterDef`, `BandDef`) lives in the game
+//! vocabulary (`band`, `owner`, `PersonaDef`, `GroupDef`) lives in the game
 //! crates; this game's card-row keys are the `fields` map entries named in
 //! `ruleset_core::meta_key`.
 
@@ -34,7 +34,7 @@ use alloc::vec::Vec;
 ///         .text("当你本回合未进行过抵押/赎回操作且…")
 ///         .tags(&["手"])
 ///         .cell("B2")
-///         .fields(&[("band", "Sumimi"), ("owner", "")]));
+///         .fields(&[("group", "Sumimi"), ("owner", "")]));
 /// ```
 #[derive(Clone, Copy)]
 pub struct CardMeta {
@@ -200,7 +200,7 @@ impl MetaRow {
     }
 }
 
-/// Wire: the whole roster metadata blob (`bandori_metadata`'s postcard payload).
+/// Wire: the whole roster metadata blob (`ruleset_metadata`'s postcard payload).
 /// Sorted by `(kind, ordinal)` so the bytes are deterministic.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MetaDoc {
@@ -214,7 +214,7 @@ impl MetaDoc {
     }
 }
 
-/// Convert a typed game def (`CharacterDef`, `BandDef`, ...) into a wire row.
+/// Convert a typed game def (`PersonaDef`, `GroupDef`, ...) into a wire row.
 /// Implemented by the game's skill crates; `card-sdk` stays vocabulary-free.
 pub trait ToMetaRow {
     fn to_meta_row(&self) -> MetaRow;
@@ -259,7 +259,7 @@ pub struct RosterList {
     pub rows: fn() -> Vec<MetaRow>,
 }
 
-/// What `bandori_metadata` needs beyond `BAND_TABLE`: the card ordinal table
+/// What `ruleset_metadata` needs beyond `BAND_TABLE`: the card ordinal table
 /// and the non-card roster lists. Defined at the ruleset assembly site
 /// (`card-all`), which is the one place that sees every skill table.
 pub struct RosterSources {
@@ -278,5 +278,5 @@ impl RosterSources {
     }
 }
 
-/// `'static` empty sources for `bandori_ruleset!` without a `; roster` clause.
+/// `'static` empty sources for `ruleset!` without a `; roster` clause.
 pub static EMPTY_ROSTER: RosterSources = RosterSources::empty();

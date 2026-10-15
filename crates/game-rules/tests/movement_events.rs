@@ -1,5 +1,5 @@
 //! Movement playback order: the client must walk to a tile before the card
-//! that fired there flashes, and a walk split by mid-route events must chain
+//! that ran there flashes, and a walk split by mid-route events must chain
 //! (`from` == previous `to`, total `value` == the step count).
 
 mod common;
@@ -8,7 +8,7 @@ use common::*;
 
 use game_core::state::MatchEvent;
 
-fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: usize) {
+fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: usize) {
     let mut t = Table::vanilla(2);
     t.set_pos(0, from);
     t.set_pos(1, 20);
@@ -17,7 +17,7 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
     let mark = t.mark();
     t.roll(0).unwrap();
 
-    assert_eq!(t.expect_prompt().title.key(), "ask.circle.title");
+    assert_eq!(t.expect_prompt().title.key(), "ask.pass_reward.title");
     assert_eq!(t.pos(0), 0);
     assert_eq!(t.money(0), 10_000, "the reward has not been chosen yet");
     let events = t.events_since(mark);
@@ -37,11 +37,11 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
         (from as i32, 0, segment, steps)
     );
     // The client lights the whole route at once: the head event says how many
-    // steps the walk still has after this CiRCLE-cut segment.
+    // steps the walk still has after this pass-reward-cut segment.
     assert_eq!(first.ahead, steps - segment.abs(), "steps left after the segment");
     let first_id = first.id;
     t.m.tick(0.5);
-    assert_eq!(t.pos(0), 0, "wait at CiRCLE until the reward is chosen");
+    assert_eq!(t.pos(0), 0, "wait at the start square until the reward is chosen");
     assert_eq!(
         t.mark(),
         events.last().unwrap().id,
@@ -54,9 +54,9 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
     let events = t.events_since(mark);
     let reward = events
         .iter()
-        .find(|e| e.msg.key() == "log.circle_money")
+        .find(|e| e.msg.key() == "log.pass_reward_money")
         .unwrap();
-    assert!(first_id < reward.id, "walk to CiRCLE, then pay the reward");
+    assert!(first_id < reward.id, "walk to the start square, then pay the reward");
     let walks: Vec<_> = events
         .iter()
         .filter(|e| matches!(e.r#type.as_str(), "roll" | "move"))
@@ -66,7 +66,7 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
         "answering must not repeat the approach"
     );
     if landing == 0 {
-        assert_eq!(walks.len(), 1, "landing on CiRCLE needs no continuation");
+        assert_eq!(walks.len(), 1, "landing on the start square needs no continuation");
     } else {
         assert_eq!(walks.len(), 2);
         let rest = walks[1];
@@ -92,18 +92,18 @@ fn circle_stop(from: usize, reverse: bool, steps: i32, segment: i32, landing: us
 }
 
 #[test]
-fn forward_walk_stops_for_circle_reward() {
-    circle_stop(57, false, 6, 3, 3);
+fn forward_walk_stops_for_pass_reward() {
+    pass_reward_stop(57, false, 6, 3, 3);
 }
 
 #[test]
-fn reverse_walk_stops_for_circle_reward() {
-    circle_stop(3, true, 6, -3, 57);
+fn reverse_walk_stops_for_pass_reward() {
+    pass_reward_stop(3, true, 6, -3, 57);
 }
 
 #[test]
-fn landing_on_circle_emits_the_walk_before_the_reward() {
-    circle_stop(58, false, 2, 2, 0);
+fn landing_on_pass_reward_emits_the_walk_before_the_reward() {
+    pass_reward_stop(58, false, 2, 2, 0);
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn a_long_walk_announces_each_lap_before_its_reward() {
     t.m.world_mut().turn.fixed_roll = Some(64);
     let mark = t.mark();
     t.roll(0).unwrap();
-    assert_eq!(t.expect_prompt().title.key(), "ask.circle.title");
+    assert_eq!(t.expect_prompt().title.key(), "ask.pass_reward.title");
     let first = t
         .events_since(mark)
         .into_iter()
@@ -125,7 +125,7 @@ fn a_long_walk_announces_each_lap_before_its_reward() {
         (58, 0, 2, 64)
     );
     t.answer_one(0).unwrap();
-    assert_eq!(t.expect_prompt().title.key(), "ask.circle.title");
+    assert_eq!(t.expect_prompt().title.key(), "ask.pass_reward.title");
     let lap = t
         .events_since(first.id)
         .into_iter()
@@ -146,7 +146,7 @@ fn a_long_walk_announces_each_lap_before_its_reward() {
 // =====================================================================
 // Lazy walk flush: a card flash (or any other event) mid-walk must land
 // **after** the `roll`/`move` event that walks the client to the tile it
-// fired on, and the split segments must chain.
+// ran on, and the split segments must chain.
 // =====================================================================
 
 fn walks(events: &[MatchEvent]) -> Vec<&MatchEvent> {
@@ -254,7 +254,7 @@ fn a_mid_route_pass_tile_flash_splits_the_walk_around_it() {
 
 #[test]
 fn a_pass_before_flash_waits_for_the_walk_to_the_previous_tile() {
-    // `passBefore` fires before the step onto 23, so the flush it forces
+    // `passBefore` runs before the step onto 23, so the flush it forces
     // covers steps up to tile 22 -- the tile before the hook's.
     let mut t = flash_walk("TEST:pass_before_flash", "TEST.pass_before_flash.tile", 23);
     t.dice(&[5]);
@@ -332,6 +332,6 @@ fn a_silent_walk_is_not_split() {
     let only = segs[0];
     assert_eq!(only.r#type, "roll");
     assert_eq!((only.from, only.to, only.value, only.dice), (20, 24, 4, 4));
-    assert!(cards(&events).is_empty(), "no card fired: {events:?}");
+    assert!(cards(&events).is_empty(), "no card ran: {events:?}");
     assert_eq!(t.pos(0), 24);
 }

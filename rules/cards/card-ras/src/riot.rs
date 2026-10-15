@@ -27,7 +27,7 @@ pub const RIOT: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当你被其他人的卡效果影响时打出此卡，所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。"#)
         .cell(r#"H2"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡」

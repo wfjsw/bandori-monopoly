@@ -218,7 +218,7 @@ pub fn colors_05_money_log_ok(effects: &[Effect], player: i32) -> bool {
         )
 }
 
-/// C-AG-colors-05 fire branch: refill the pot to the cap (`gain_fire(need)`).
+/// C-AG-colors-05 fire branch: refill the pot to the cap (`gain_charge(need)`).
 pub fn colors_05_fire_log_ok(effects: &[Effect], player: i32, need: i32) -> bool {
     effects.len() == 1
         && matches!(
@@ -500,7 +500,7 @@ pub fn frame_money_only(pre: &Snapshot, post: &Snapshot, touched: &[usize]) -> b
         }
     }
     pre.pos == post.pos
-        && pre.fire == post.fire
+        && pre.charge == post.charge
         && pre.stay == post.stay
         && crate::world::arr4b_eq(pre.out, post.out)
         && pre.pay_amount == post.pay_amount

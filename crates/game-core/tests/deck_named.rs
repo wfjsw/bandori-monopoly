@@ -1,4 +1,4 @@
-//! Named decks: arbitrary count per character, rename / duplicate / delete /
+//! Named decks: arbitrary count per persona, rename / duplicate / delete /
 //! reorder, and lossless migration of the old fixed-slot profile JSON.
 
 use game_core::deck;
@@ -9,7 +9,7 @@ use common::data;
 #[test]
 fn create_duplicate_rename_delete_and_reorder() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("Alpha").unwrap();
     let preset = deck::preset(&d, c);
     let mut p = PlayerProfile::default();
 
@@ -59,7 +59,7 @@ fn create_duplicate_rename_delete_and_reorder() {
     let order: Vec<i32> = deck::list(&p, c).iter().map(|x| x.slot).collect();
     assert_eq!(order, vec![1, 2, 3, 4, 5]);
 
-    // Cap at DECKS_MAX per character (other characters unaffected).
+    // Cap at DECKS_MAX per persona (other personas unaffected).
     while deck::list(&p, c).len() < deck::DECKS_MAX {
         assert!(deck::create(&d, &mut p, c, "", &Vec::<String>::new()).is_some());
     }
@@ -67,18 +67,18 @@ fn create_duplicate_rename_delete_and_reorder() {
         deck::create(&d, &mut p, c, "", &Vec::<String>::new()).is_none(),
         "at the cap"
     );
-    let other = d.character("花园多惠").unwrap();
+    let other = d.persona("Beta").unwrap();
     assert!(
         deck::create(&d, &mut p, other, "", &Vec::<String>::new()).is_some(),
-        "the cap is per character"
+        "the cap is per persona"
     );
 }
 
 #[test]
 fn old_slot_profile_migrates_to_named_decks() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
-    let other = d.character("花园多惠").unwrap();
+    let c = d.persona("Alpha").unwrap();
+    let other = d.persona("Beta").unwrap();
     let preset = deck::preset(&d, c);
     let full = serde_json::to_string(&preset).unwrap();
     let a = preset[0].clone();
@@ -90,16 +90,16 @@ fn old_slot_profile_migrates_to_named_decks() {
       "saveVersion": 3,
       "playerName": "灯",
       "playerId": "123456789",
-      "homeCharacter": "户山香澄",
+      "homePersona": "Alpha",
       "decks": [
-        {{"character": "户山香澄", "slot": 2, "cards": {full}}},
-        {{"character": "花园多惠", "slot": 1, "cards": []}},
-        {{"character": "户山香澄", "slot": 1, "cards": []}},
-        {{"character": "户山香澄", "slot": 3, "cards": ["{a}"]}}
+        {{"persona": "Alpha", "slot": 2, "cards": {full}}},
+        {{"persona": "Beta", "slot": 1, "cards": []}},
+        {{"persona": "Alpha", "slot": 1, "cards": []}},
+        {{"persona": "Alpha", "slot": 3, "cards": ["{a}"]}}
       ],
       "deckChoices": [
-        {{"character": "户山香澄", "slot": 2}},
-        {{"character": "花园多惠", "slot": 1}}
+        {{"persona": "Alpha", "slot": 2}},
+        {{"persona": "Beta", "slot": 1}}
       ]
     }}"#
     );
@@ -122,7 +122,7 @@ fn old_slot_profile_migrates_to_named_decks() {
     // The empty old slot is kept as a deck (clearable/deletable, not dropped).
     assert!(deck::is_empty(&d, &p, c, 1));
     assert_eq!(deck::list(&p, c).len(), 3);
-    assert_eq!(deck::list(&p, other).len(), 1, "other characters keep theirs");
+    assert_eq!(deck::list(&p, other).len(), 1, "other personas keep theirs");
     assert_eq!(
         deck::chosen_slot(&d, &p, other),
         0,
@@ -138,8 +138,8 @@ fn old_slot_profile_migrates_to_named_decks() {
     // the chosen deck is not offered until it is complete again.
     let stale = r#"{
       "saveVersion": 3,
-      "decks": [{"character": "户山香澄", "slot": 1, "cards": ["nope:gone"]}],
-      "deckChoices": [{"character": "户山香澄", "slot": 1}]
+      "decks": [{"persona": "Alpha", "slot": 1, "cards": ["nope:gone"]}],
+      "deckChoices": [{"persona": "Alpha", "slot": 1}]
     }"#;
     let p2 = PlayerProfile::from_json(&d, stale).unwrap();
     assert_eq!(deck::list(&p2, c).len(), 1);
@@ -155,7 +155,7 @@ fn old_slot_profile_migrates_to_named_decks() {
 #[test]
 fn profile_json_carries_deck_names_and_stays_compatible() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("Alpha").unwrap();
     let mut p = PlayerProfile::default();
     let id = deck::create(&d, &mut p, c, "  双刀流  ", &deck::preset(&d, c)).unwrap();
     let json = serde_json::to_string(&p).unwrap();
@@ -168,7 +168,7 @@ fn profile_json_carries_deck_names_and_stays_compatible() {
     // The new `name` field is the only addition to SavedDeck; old slot JSON
     // (no `name`) still parses with an auto name.
     let no_name: SavedDeck =
-        serde_json::from_str(r#"{"character":"x","slot":1,"cards":["a"]}"#).unwrap();
+        serde_json::from_str(r#"{"persona":"x","slot":1,"cards":["a"]}"#).unwrap();
     assert_eq!(no_name.name, "");
     assert_eq!(sanitize_deck_name("  a  "), "a");
     assert_eq!(sanitize_deck_name("   "), "");
@@ -177,14 +177,14 @@ fn profile_json_carries_deck_names_and_stays_compatible() {
 #[test]
 fn hand_edited_deck_ids_are_repaired_on_load() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("Alpha").unwrap();
     let messy = r#"{
       "saveVersion": 4,
       "decks": [
-        {"character": "户山香澄", "slot": 0, "cards": [], "name": "  "},
-        {"character": "户山香澄", "slot": 2, "cards": [], "name": "A"},
-        {"character": "户山香澄", "slot": 2, "cards": [], "name": "B"},
-        {"character": "户山香澄", "slot": -3, "cards": [], "name": "C"}
+        {"persona": "Alpha", "slot": 0, "cards": [], "name": "  "},
+        {"persona": "Alpha", "slot": 2, "cards": [], "name": "A"},
+        {"persona": "Alpha", "slot": 2, "cards": [], "name": "B"},
+        {"persona": "Alpha", "slot": -3, "cards": [], "name": "C"}
       ]
     }"#;
     let p = PlayerProfile::from_json(&d, messy).unwrap();

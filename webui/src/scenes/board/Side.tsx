@@ -85,8 +85,8 @@ export function skillMarks(p: Model["S"]["players"][number] | undefined, id: str
   const fc = p?.field?.find((c) => c.card === id);
   if (!p || !fc) return [];
   const out: { key: string; label: string; title: string }[] = [];
-  if (fc.crystals > 0) out.push({ key: "crystals", label: `◆${fc.crystals}`, title: tr("board.crystals", { n: fc.crystals }) });
-  if (fc.cp > 0) out.push({ key: "cp", label: `CP${fc.cp}`, title: tr("board.cp", { n: fc.cp }) });
+  if (fc.counters["crystals"] ?? 0 > 0) out.push({ key: "crystals", label: `◆${fc.counters["crystals"] ?? 0}`, title: tr("board.crystals", { n: fc.counters["crystals"] ?? 0 }) });
+  if (fc.counters["cp"] ?? 0 > 0) out.push({ key: "cp", label: `CP${fc.counters["cp"] ?? 0}`, title: tr("board.cp", { n: fc.counters["cp"] ?? 0 }) });
   for (const [name, n] of Object.entries(fc.counters ?? {})) {
     if (n > 0) out.push({ key: `c:${name}`, label: `${name}×${n}`, title: `${name} ×${n}` });
   }
@@ -362,7 +362,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
         <div className={cx(s.preview, hover && !stand && s.previewOn)}>
           {hover && !stand && (
             <>
-              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
+              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.group) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
               <div className={s.pTitle}>{cardTitle(hover.id)}</div>
               {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
               <div className={s.pText} ref={textRef}><SkillBody text={hover.text ?? hc?.text ?? ""} /></div>

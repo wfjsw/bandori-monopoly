@@ -219,11 +219,11 @@ modules. The bot links them directly.
   each backend converts at its boundary. The sandbox linker is unchanged
   from the outside (`Ruleset::run` / `run_hook` / `can_counteract` /
   `cant_play` / `declares` / `card_props` keep their semantics).
-* **Guest side.** `bandori_ruleset!` (`card-sdk/src/rt.rs`) emits
+* **Guest side.** `ruleset!` (`card-sdk/src/rt.rs`) emits
   `pub static RULESET: &[&[CardDef]]` on native instead of the
-  `#[no_mangle]` `bandori_*` exports (those stay for wasm32), so every rule
+  `#[no_mangle]` `ruleset_*` exports (those stay for wasm32), so every rule
   crate links into one binary. Each `mod sys` import carries
-  `#[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_<name>")]`
+  `#[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_<name>")]`
   so the bare names cannot collide with libc (`log`, `draw`, `target`, ...).
   `crates/rules-native/src/symbols.rs` defines those 296 `#[no_mangle]`
   shims (`extern "C-unwind"`) over a thread-local `NativeHost`.
@@ -748,10 +748,10 @@ worker runs the same wasmi-interpreted card modules the page's `web-glue` runs
 the real ruleset). §3.6's original idea -- `game-rules` linked **natively** into
 the wasm32 module so card runs get the browser's JIT -- needs:
 1. `card-sdk`'s **native** mode on wasm32. Its `mod sys` imports are
-   `cfg(target_arch = "wasm32")`-gated to the `bandori_*` wasm exports today;
+   `cfg(target_arch = "wasm32")`-gated to the `ruleset_*` wasm exports today;
    the native mode is `cfg_attr(not(target_arch = "wasm32"), link_name = ...)`.
    A third configuration ("wasm32 host, native guest") has to compile the
-   guest as plain Rust and resolve the `bandori_*` shims inside the module.
+   guest as plain Rust and resolve the `ruleset_*` shims inside the module.
 2. The **rules-native drift** closed (`crates/rules-native/tests/drift.rs`'s
    known divergence, §5 B1). A bot that drifts from the sandbox is weaker
    (§1), but a *worker* whose rules disagree with the page's live engine makes
@@ -1086,7 +1086,7 @@ the 2-5 ms ISMCTS wants.
   `CompiledPre` on the native handle (the `RulesHandle::pre` default-`None`
   bug left them silently uncompiled).
 * `tests/abi_link_names.rs` — every `mod sys` import has both the native
-  `link_name` and a `bandori_*` shim.
+  `link_name` and a `ruleset_*` shim.
 
 **Wiring.** `bot-service` has a `native-rules` cargo feature (off by
 default) that swaps its `CardRules` to `rules_native::native_rules` for the
@@ -2208,7 +2208,7 @@ Reading:
    harmless to matches by §1.
 
 **Workspace note (pre-existing).** `cargo test -p server -p rules-native`
-(or any run that builds both) fails `LNK2019` on all 289 `bandori_*` symbols:
+(or any run that builds both) fails `LNK2019` on all 289 `ruleset_*` symbols:
 feature unification turns `card-sdk/guest` on for the server test binaries
 (rules-native enables it), which compiles `ctx.rs` in, but the `#[no_mangle]`
 shims live in `rules-native/src/symbols.rs` and only link into binaries that

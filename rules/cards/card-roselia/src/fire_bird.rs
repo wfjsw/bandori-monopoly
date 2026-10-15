@@ -30,7 +30,7 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶，自己场地上存在此卡时，每回合结束时失去400资金并移除1个奇迹水晶，自己的所有格子收费变成1.5倍，奇迹水晶耗尽时将此卡放入弃牌堆"#)
         .cell(r#"E6"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
+        .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 const ID: &str = "R:Fire bird";
 

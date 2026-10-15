@@ -155,11 +155,11 @@ pub fn move_path(
 pub fn circle_reward_in(events: &[game_core::state::MatchEvent]) -> bool {
     events.iter().any(|e| {
         let k = spec_kit::event_key(e);
-        // The reward's own lines only. `log.land_circle` is the CiRCLE
+        // The reward's own lines only. `log.land_start` is the CiRCLE
         // landing *settle* (「[结算]是：抽取一张手卡」), not [CiRCLE奖励].
         k.contains("circle_money")
             || k.contains("circle_card")
-            || k.contains("ask.circle")
+            || k.contains("ask.pass_reward")
     })
 }
 
@@ -438,7 +438,7 @@ pub fn g_move_05(step: &Step<'_>) -> Result<(), String> {
 ///   exactly 2000; when it draws, the player draws exactly 1.
 /// * **Frame:** n/a (the reward itself is a money / hand write).
 /// * **Rulings & OPEN:** [晕眩] 「无法收付款」 forces the card half (回
-///   合階段&註釋 `C44`); that path is scenario-tested. A `circleAffected`
+///   合階段&註釋 `C44`); that path is scenario-tested. A `passRewardAffected`
 ///   rewrite replaces the payout and is skipped here. The exact 「iff」 --
 ///   no reward when 移动起点 == CiRCLE -- is also checked when the window
 ///   is clean.
@@ -479,7 +479,7 @@ pub fn g_move_06(step: &Step<'_>) -> Result<(), String> {
         });
         let rewritten = step.events.iter().any(|e| {
             let k = spec_kit::event_key(e);
-            k.contains("circleAffected") || e.r#type == "card"
+            k.contains("26") || e.r#type == "card"
         });
         // Pin the payout only when this window is *just* the reward answer
         // (no walk continuation, no landing settle, no card rewrite). A
@@ -527,8 +527,8 @@ pub fn g_move_06(step: &Step<'_>) -> Result<(), String> {
     }
     if start.is_some() && !circle_reward_modified(step, circle as usize) {
         let start = start.unwrap();
-        let start_is_circle = start == circle;
-        if passed && !start_is_circle && !rewarded {
+        let start_is_start = start == circle;
+        if passed && !start_is_start && !rewarded {
             // The reward step may still be waiting on a prompt (the walk
             // halted at CiRCLE). That is the reward being reached.
             if !step.post_prompt_open {
@@ -540,7 +540,7 @@ pub fn g_move_06(step: &Step<'_>) -> Result<(), String> {
         }
         // 「且[移动起点]不为CiRCLE」 bars the reward whenever the move began
         // on CiRCLE -- including a wrap that re-passes it.
-        if start_is_circle && rewarded {
+        if start_is_start && rewarded {
             return Err(format!(
                 "start is CiRCLE but a [CiRCLE奖励] fired (「且[移动起点]不为CiRCLE」): {:?}",
                 step.event_keys()
@@ -787,7 +787,7 @@ pub fn g_move_10(step: &Step<'_>) -> Result<(), String> {
 ///   settle line; vanilla (no field cards).
 /// * **Effect:** the event stream orders them: the walk (`roll`/`move`)
 ///   precedes every `overlap`, and every `overlap` precedes the settle
-///   lines (`log.land*` / `log.rent` / `log.circle_*` payouts of the
+///   lines (`log.land*` / `log.rent` / `log.pass_reward_*` payouts of the
 ///   landing). A [经过] line that is not a walk (the CiRCLE reward) sits
 ///   after the walk that reached it and before the settle of the landing.
 /// * **Frame:** n/a.

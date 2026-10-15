@@ -316,6 +316,7 @@ fn anon_tokyo_limit_and_link_pay() {
                 "discard_pub:P0",
                 "marks:",
                 "mark:",
+                "pool:",
                 "field:P0",
                 "crystals:P0",
                 "state:P0",
@@ -508,7 +509,7 @@ pub fn c_mygo_journey_place(step: &Step<'_>) -> Result<(), String> {
         .players
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == JOURNEY))
-        .map(|f| f.crystals);
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
     if crystals != Some(4) {
         return Err(format!("C-MYGO-journey-01: crystals {crystals:?}, expected 4"));
     }
@@ -675,7 +676,7 @@ pub fn c_mygo_rainday_place(step: &Step<'_>) -> Result<(), String> {
         .players
         .get(who)
         .and_then(|p| p.field.iter().find(|f| f.card == RAINDAY))
-        .map(|f| f.crystals);
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0));
     if c != Some(5) {
         return Err(format!("C-MYGO-rainday-01: crystals {c:?}, expected 5"));
     }
@@ -1279,7 +1280,7 @@ fn tomori_card_crystal_pays_fire_and_removes() {
         }
         rest(&mut u);
         drain(&mut u);
-        let fire = u.fire(0);
+        let fire = u.charge(0);
         let c = u.crystals(0, TOMORI_CARD).unwrap_or(-1);
         // Book: -03 removes one crystal instead of the fire cost.
         // Expected: fire unchanged (1), crystals 2 -> 1.
@@ -1933,7 +1934,7 @@ fn tomori_skill_fire_on_passing_ring() {
         if t.pos(0) != 9 {
             return Err(format!("setup: landed on {}", t.pos(0)));
         }
-        let f = t.fire(0);
+        let f = t.charge(0);
         if f != start + 1 {
             return Err(format!(
                 "C-MYGO-tomori-skill-01: fire {start} -> {f}, expected {}",
@@ -1949,8 +1950,8 @@ fn tomori_skill_fire_on_passing_ring() {
 #[test]
 fn tomori_skill_fire_cap_and_initial() {
     let t = Table::new(&["高松灯", "千早爱音"]);
-    assert_eq!(t.fire(0), 4, "C-MYGO-tomori-skill-01: initial 4");
-    assert_eq!(t.p(0).state_max("fire"), 4, "C-MYGO-tomori-skill-01: cap 4");
+    assert_eq!(t.charge(0), 4, "C-MYGO-tomori-skill-01: initial 4");
+    assert_eq!(t.p(0).state_max("charge"), 4, "C-MYGO-tomori-skill-01: cap 4");
 }
 
 /// C-MYGO-tomori-skill-02/03/04: force-teleport for 4 pots; d20<=6 stay +
@@ -1972,7 +1973,7 @@ fn tomori_skill_teleport_windows() {
         t.roll(1).map_err(|e| format!("roll: {e}"))?;
         // A counter/skill window should offer the 4-pot force-teleport.
         if t.prompt().is_some() {
-            if let Some(k) = t.option("诗超绊").or_else(|| t.option("tomori")).or_else(|| t.option("fire")) {
+            if let Some(k) = t.option("诗超绊").or_else(|| t.option("tomori")).or_else(|| t.option("charge")) {
                 let _ = t.answer(0, k);
             } else {
                 t.decline();
@@ -1985,7 +1986,7 @@ fn tomori_skill_teleport_windows() {
         t.set_pos(0, 10);
         t.set_pos(1, 13);
         t.set_fire(0, 4, 4);
-        let fire_before = t.fire(0);
+        let fire_before = t.charge(0);
         t.dice(&[1]);
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         let mut took = false;
@@ -1993,7 +1994,7 @@ fn tomori_skill_teleport_windows() {
             if let Some(k) = t
                 .option("诗超绊")
                 .or_else(|| t.option("tomori"))
-                .or_else(|| t.option("fire"))
+                .or_else(|| t.option("charge"))
             {
                 t.answer(0, k).map_err(|e| format!("take skill: {e}"))?;
                 took = true;
@@ -2005,11 +2006,11 @@ fn tomori_skill_teleport_windows() {
         drain(&mut t);
         if took {
             // Book -04: spend 1 pot to [传送] to the other player's tile.
-            if t.fire(0) != fire_before - 1 {
+            if t.charge(0) != fire_before - 1 {
                 return Err(format!(
                     "C-MYGO-tomori-skill-04: fire {} -> {}, expected -1",
                     fire_before,
-                    t.fire(0)
+                    t.charge(0)
                 ));
             }
             if t.pos(0) != 13 {
@@ -2045,7 +2046,7 @@ fn anon_skill_fire_on_passing_circle() {
         if t.pos(0) != 0 {
             return Err(format!("setup: landed on {}", t.pos(0)));
         }
-        let f = t.fire(0);
+        let f = t.charge(0);
         if f != start + 1 {
             return Err(format!(
                 "C-MYGO-anon-skill-01: fire {start} -> {f}, expected {}",
@@ -2061,8 +2062,8 @@ fn anon_skill_fire_on_passing_circle() {
 #[test]
 fn anon_skill_fire_cap_and_initial() {
     let t = Table::new(&["千早爱音", "高松灯"]);
-    assert_eq!(t.fire(0), 2, "C-MYGO-anon-skill-01: initial 2");
-    assert_eq!(t.p(0).state_max("fire"), 3, "C-MYGO-anon-skill-01: cap 3");
+    assert_eq!(t.charge(0), 2, "C-MYGO-anon-skill-01: initial 2");
+    assert_eq!(t.p(0).state_max("charge"), 3, "C-MYGO-anon-skill-01: cap 3");
 }
 
 /// C-MYGO-anon-skill-02: after [停留]/[传送] resolves, spend 2 pots to draw.
@@ -2099,7 +2100,7 @@ fn anon_skill_draw_after_abnormal_resolves() {
             return Err("setup: P0 did not gain a [停留]".into());
         }
         let skill = t.skill_id(0, "重新开始");
-        let fire = t.fire(0);
+        let fire = t.charge(0);
         let hand = t.hand(0).len();
         let draw_n = t.draw_pile(0).len();
         // Press in the post-settle window. The book is 「可以消耗2个火罐，
@@ -2124,7 +2125,7 @@ fn anon_skill_draw_after_abnormal_resolves() {
                 pressed
             ));
         }
-        let f = t.fire(0);
+        let f = t.charge(0);
         let h = t.hand(0).len();
         let d = t.draw_pile(0).len();
         if fire < 2 {
@@ -2166,7 +2167,7 @@ fn rana_skill_fire_on_passing_circle() {
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         rest(&mut t);
         drain(&mut t);
-        let f = t.fire(0);
+        let f = t.charge(0);
         if f != 3 {
             return Err(format!("C-MYGO-rana-skill-01: fire {f}, expected 3"));
         }
@@ -2179,8 +2180,8 @@ fn rana_skill_fire_on_passing_circle() {
 #[test]
 fn rana_skill_fire_cap_and_initial() {
     let t = Table::new(&["要乐奈", "高松灯"]);
-    assert_eq!(t.fire(0), 3, "C-MYGO-rana-skill-01: initial 3");
-    assert_eq!(t.p(0).state_max("fire"), 3, "C-MYGO-rana-skill-01: cap 3");
+    assert_eq!(t.charge(0), 3, "C-MYGO-rana-skill-01: initial 3");
+    assert_eq!(t.p(0).state_max("charge"), 3, "C-MYGO-rana-skill-01: cap 3");
 }
 
 /// C-MYGO-rana-skill-02/03/04/06: Space teleport, foreign-owner settle,
@@ -2203,10 +2204,10 @@ fn rana_skill_space_and_overlap() {
                 t.pos(0)
             ));
         }
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-MYGO-rana-skill-02: fire {}, expected 0",
-                t.fire(0)
+                t.charge(0)
             ));
         }
 
@@ -2342,10 +2343,10 @@ fn soyo_skill_fire_on_passing_circle() {
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
         rest(&mut t);
         drain(&mut t);
-        if t.fire(0) != 1 {
+        if t.charge(0) != 1 {
             return Err(format!(
                 "C-MYGO-soyo-skill-01: fire {}, expected 1",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -2357,8 +2358,8 @@ fn soyo_skill_fire_on_passing_circle() {
 #[test]
 fn soyo_skill_fire_cap_and_initial() {
     let t = Table::new(&["长崎素世", "高松灯"]);
-    assert_eq!(t.fire(0), 1, "C-MYGO-soyo-skill-01: initial 1");
-    assert_eq!(t.p(0).state_max("fire"), 1, "C-MYGO-soyo-skill-01: cap 1");
+    assert_eq!(t.charge(0), 1, "C-MYGO-soyo-skill-01: initial 1");
+    assert_eq!(t.p(0).state_max("charge"), 1, "C-MYGO-soyo-skill-01: cap 1");
 }
 
 /// C-MYGO-soyo-skill-02: after the move dice, spend 1 pot to treat the
@@ -2393,10 +2394,10 @@ fn soyo_skill_endpoint_as_coloured_agent() {
         rest(&mut t);
         drain(&mut t);
         // Determined part: the pot is spent when the skill ran.
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-MYGO-soyo-skill-02: fire {}, expected 0 (「消耗一个火罐」)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -2425,7 +2426,7 @@ fn rikki_skill_fire_on_any_stay_gain() {
         if t.state(1, "stay") != 1 {
             return Err("setup: P1 did not gain a stay".into());
         }
-        let f = t.fire(0);
+        let f = t.charge(0);
         if f != start + 1 {
             return Err(format!(
                 "C-MYGO-rikki-skill-01: fire {start} -> {f}, expected {}",
@@ -2441,8 +2442,8 @@ fn rikki_skill_fire_on_any_stay_gain() {
 #[test]
 fn rikki_skill_fire_cap_and_initial() {
     let t = Table::new(&["椎名立希", "高松灯"]);
-    assert_eq!(t.fire(0), 0, "C-MYGO-rikki-skill-01: initial 0");
-    assert_eq!(t.p(0).state_max("fire"), 5, "C-MYGO-rikki-skill-01: cap 5");
+    assert_eq!(t.charge(0), 0, "C-MYGO-rikki-skill-01: initial 0");
+    assert_eq!(t.p(0).state_max("charge"), 5, "C-MYGO-rikki-skill-01: cap 5");
 }
 
 /// C-MYGO-rikki-skill-02: 运营, 1 pot, +1 crystal on a field card, once/turn.
@@ -2460,10 +2461,10 @@ fn rikki_skill_adds_crystal_once_per_turn() {
             .option("MyGO:轮符雨")
             .ok_or_else(|| format!("target prompt: {}", t.dump_prompt()))?;
         t.answer(0, k).map_err(|e| format!("target: {e}"))?;
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-MYGO-rikki-skill-02: fire {}, expected 0",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         let c = t.crystals(0, "MyGO:轮符雨").unwrap_or(-1);
@@ -2904,8 +2905,8 @@ pub fn verify_journey_place(
         .iter()
         .find(|f| f.card == JOURNEY)
         .ok_or("card not on field")?;
-    if f.crystals != 4 {
-        return Err(format!("crystals {}, expected 4", f.crystals));
+    if f.counters.get("crystals").copied().unwrap_or(0) != 4 {
+        return Err(format!("crystals {}, expected 4", f.counters.get("crystals").copied().unwrap_or(0)));
     }
     if f.tile != pre.st.players[who].pos {
         return Err(format!("tile {}, expected {}", f.tile, pre.st.players[who].pos));
@@ -2944,7 +2945,7 @@ fn journey_place_verifier_rejects_mutants() {
         // WRONG: 5 crystals instead of 4.
         let mut wrong = post.clone();
         if let Some(f) = wrong.st.players[0].field.iter_mut().find(|f| f.card == JOURNEY) {
-            f.crystals = 5;
+            f.counters.insert("crystals".into(), 5);
         }
         if verify_journey_place(&pre, &wrong, &[]).is_ok() {
             return Err("WRONG (5 crystals) mutant accepted".into());

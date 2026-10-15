@@ -799,7 +799,7 @@ fn circle_rebuild_counts_down_on_passes_then_discards() {
             .iter_mut()
             .find(|f| f.card == "event:协助CiRCLE重建")
         {
-            f.crystals = 1;
+            f.counters.insert("crystals".into(), 1);
         }
         // Walk a one-step main move whose path passes CiRCLE (tile 0).
         until_turn(&mut t, 1);
@@ -918,7 +918,7 @@ fn circle_rebuild_reverts_tile_texts_on_expire() -> Result<(), String> {
         .iter_mut()
         .find(|f| f.card == "event:协助CiRCLE重建")
     {
-        f.crystals = 1;
+        f.counters.insert("crystals".into(), 1);
     }
     until_turn(&mut t, 1);
     t.set_pos(1, 58);
@@ -1488,11 +1488,11 @@ fn chart_rush_empties_fire_pots_and_rolls() {
         t.set_draw(0, &["通用:GREAT"]);
         // Draw 冲榜 directly (it is derived -- not in the starting deck).
         draw_event_quiet(&mut t, 0, "冲榜", &[]);
-        if t.fire(0) != 0 || t.fire(1) != 0 {
+        if t.charge(0) != 0 || t.charge(1) != 0 {
             return Err(format!(
                 "E-chart-rush-01: fire pots left ({},{})",
-                t.fire(0),
-                t.fire(1)
+                t.charge(0),
+                t.charge(1)
             ));
         }
         // One-shot derived: filed away.
@@ -1566,15 +1566,10 @@ fn fix_note_halves_the_designated_build_costs() {
         t.dice(&[1]);
         let before = t.money(0);
         let _ = t.roll(0);
-        // Build prompt or END-stage offer: accept the build.
-        while let Some(p) = t.prompt() {
-            if p.kind == "build" || p.title.key().contains("build") {
-                let _ = t.answer(0, 0);
-            } else {
-                t.decline();
-            }
-        }
-        // Also try the END-stage build act if offered.
+        // G-SETTLE-06/07: the settle of a deed is the optional buy/build prompt.
+        // Decline it so exactly one END-stage `t.build()` runs (both paths apply
+        // fix_note; taking both would spend two half-price builds).
+        drain(&mut t);
         if t.step() == 4 {
             let _ = t.build(0);
             drain(&mut t);

@@ -3,7 +3,7 @@
 
 import { D } from "../../core/data";
 import { overHand } from "../../core/hand";
-import type { CharacterData, Command, MatchPlayer, MatchState, MatchView } from "../../core/types";
+import type { PersonaData, Command, MatchPlayer, MatchState, MatchView } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { toast } from "../../ui/Toast";
 import { fmtMsg } from "../../i18n/msg";
@@ -22,7 +22,7 @@ export interface Model {
   myTurn: boolean;
   asking: boolean;
   out: boolean;
-  charOf(i: number): CharacterData | undefined;
+  charOf(i: number): PersonaData | undefined;
   colorOf(i: number): string;
   /** tr("common.you") for yourself. */
   nameOf(i: number): string;
@@ -34,7 +34,7 @@ export function model(v: MatchView): Model {
   // A replay's spectator perspective has no seat (`playerId` -1); give the
   // read-only chrome an empty player rather than crash on `me.*`.
   const me = S.players[v.playerId] ?? blankPlayer();
-  const charOf = (i: number) => D.character(S.players[i]?.character ?? "");
+  const charOf = (i: number) => D.persona(S.players[i]?.persona ?? "");
   return {
     v,
     S,
@@ -60,7 +60,7 @@ function blankPlayer(): MatchPlayer {
     roll: 0,
     banDone: false,
     ban: "",
-    character: "",
+    persona: "",
     deckReady: false,
     money: 0,
     pos: 0,
@@ -75,8 +75,8 @@ function blankPlayer(): MatchPlayer {
     score: 0,
     rank: 0,
     state: {},
-    skillCharacter: "",
-    bands: "",
+    skillOwner: "",
+    affiliations: "",
     tokens: [],
     skillNote: { k: "" },
     field: [],

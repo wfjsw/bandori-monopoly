@@ -28,7 +28,7 @@ pub const SPARKLER: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"将此卡放置于场上并放置2个奇迹水晶（上限2），你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合，最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。"#)
         .cell(r#"J5"#)
-        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
+        .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn sparkler(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于场上并放置2个奇迹水晶（上限2）」

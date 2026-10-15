@@ -38,7 +38,7 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。"#)
         .cell(r#"L9"#)
-        .fields(&[("band", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]));
+        .fields(&[("group", r#"Sumimi"#), ("owner", r#"三角初华（Sumimi）"#)]));
 
 const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 

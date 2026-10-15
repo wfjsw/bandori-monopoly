@@ -15,7 +15,8 @@
 use card_sdk::CardDef;
 
 /// The board-owned `noHand` rule. One instance on `BOARD_OWNER`, `tile = -1`.
-pub const STATUS_NO_HAND: CardDef = CardDef::new("status:no_hand", &[]);
+pub const STATUS_NO_HAND: CardDef = CardDef::new("status:no_hand", &[])
+    .board_role("status");
 
 /// Turn-start fold (2 -> 1). Returns the new value.
 pub fn tick_start(v: i32) -> i32 {

@@ -8,14 +8,14 @@ export interface TileData {
   color: string; tier: number; area: string; price: number; house: number; rent: number[]; note: string;
 }
 export interface CardData {
-  id: string; band: string; name: string; rawName: string; owner: string;
+  id: string; group: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string; cell: string;
   /** The [反击] card's trigger-condition clause (「…时」), extracted once from
    *  `text` and checked for every 反击-tagged card. Why the card is offered. */
   counterReason?: string;
 }
-export interface CharacterData {
-  name: string; display: string; band: string; color: string; skill: string; text: string;
+export interface PersonaData {
+  name: string; display: string; group: string; color: string; skill: string; text: string;
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
@@ -24,7 +24,7 @@ export interface CharacterData {
   /** Short label for compact displays of a variant. */
   variantTag?: string;
 }
-export interface BandData {
+export interface GroupData {
   name: string; shortName: string; color: string; skill: string; text: string;
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
@@ -39,14 +39,14 @@ export interface VoiceLine { text: string; voice: string; motion: string; from: 
 
 export interface MatchPlayer {
   member: number; player: string; bot: boolean; ai: boolean; roll: number; banDone: boolean; ban: string;
-  character: string; deckReady: boolean; money: number; pos: number; hand: number; draw: number;
+  persona: string; deckReady: boolean; money: number; pos: number; hand: number; draw: number;
   discard: string[]; mulligan: boolean; bankrupt: boolean; left: boolean; outOrder: number;
   assets: number; score: number; rank: number;
   /** Bot decision policy (`"standard"` / `"chaos"`). Ignored on a human seat. */
   mentality: BotMentality;
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
   state: Record<string, StateVar>;
-  skillCharacter: string; bands: string; tokens: Counter[];
+  skillOwner: string; affiliations: string; tokens: Counter[];
   skillNote: Msg; field: FieldCard[];
 }
 /**
@@ -68,24 +68,19 @@ export interface Counter {
 export interface StateVar {
   value: number; min: number; max: number;
   expires?: "turnStart" | "turnEnd" | null;
+  flags?: number;
 }
 export interface FieldCard {
   uid: number; card: string; owner: number; user: number; tile: number;
-  /** Miracle crystals on this instance. A band skill's count is the player's 「乐队卡 / 团卡」 pool. */
-  crystals: number;
-  /** On-card [CP点] -- 「自己[场上]N个[CP点]」, the CP points attached to this
-   *  card (user ruling 2026-10-07). The other [CP点] kind is the tile mark
-   *  (`TileMark.category === "cp"`). Shown as the field card's counter badge. */
-  cp: number;
-  /** Extra named on-card counters beyond `cp` / `crystals` (those two stay
-   *  their own fields). Serde-defaulted `{}` on older frames. */
+  /** Named on-card counters of this instance (ruleset-defined keys). */
   counters: Record<string, number>;
   faceDown: boolean;
   /** Continuous numeric props on the instance (e.g. `handLimitDelta`,
    *  「手卡上限数量减1」). Serde-defaulted `{}`. */
   props?: Record<string, number>;
-  /** This instance is a band skill (`skill:<band>:<skill>`); its `crystals` are the band-card pool. */
-  bandSkill?: boolean;
+  /** This instance is a group skill (`skill:<group>:<skill>`); its named
+   *  counters are the group-card pool. */
+  groupSkill?: boolean;
   note: Msg;
 }
 /**
@@ -304,7 +299,7 @@ export interface ClockSettings {
  */
 export type BotMentality = "standard" | "chaos" | "advanced";
 export interface RoomMember {
-  id: number; player: string; character: string; cnId: string;
+  id: number; player: string; persona: string; cnId: string;
   ready: boolean; host: boolean; bot: boolean; away: boolean;
   mentality: BotMentality;
 }
@@ -327,31 +322,31 @@ export interface FairPublic {
 
 /** A match command (NetMessage); only the fields a command uses matter. */
 export interface Command {
-  act: string; character?: string; card?: string; cards?: string[];
+  act: string; persona?: string; card?: string; cards?: string[];
   value?: number; prompt?: number; target?: number;
   /** Replayable solo console operation. Rejected by the engine online. */
   debug?: string;
 }
 
 export interface MatchRecord {
-  time: string; mode: number; ranked: boolean; rank: number; players: number; character: string;
-  exp: number; fireUsed: number; coins: number; stars: number; levelAfter: number;
+  time: string; mode: number; ranked: boolean; rank: number; players: number; persona: string;
+  exp: number; chargeUsed: number; coins: number; stars: number; levelAfter: number;
   /** Local replay-store id of this match's `.bdrec` (`game/record.ts`), "" when none. */
   replayId: string;
 }
 /** `slot` is the stable deck id within the character; `name` is UI-only
  * metadata ("" = auto, displayed as 「卡组 n」/"Deck n"). Never sent in a match. */
-export interface SavedDeck { character: string; slot: number; name: string; cards: string[] }
+export interface SavedDeck { persona: string; slot: number; name: string; cards: string[] }
 export interface PlayerProfile {
   saveVersion: number; playerName: string; playerId: string; createdAt: string;
-  level: number; exp: number; totalExp: number; fire: number; fireDate: string; firePerGame: number;
-  coins: number; stars: number; homeCharacter: string; games: number; soloGames: number;
+  level: number; exp: number; totalExp: number; charge: number; chargeDate: string; chargePerGame: number;
+  coins: number; stars: number; homePersona: string; games: number; soloGames: number;
   casualGames: number; rankedGames: number; rankedWins: number;
   history: MatchRecord[]; unreadResult: boolean; decks: SavedDeck[];
   [k: string]: unknown;
 }
 export interface MatchReward {
-  mode: number; rank: number; players: number; baseExp: number; fireUsed: number; multiplier: number;
+  mode: number; rank: number; players: number; baseExp: number; chargeUsed: number; multiplier: number;
   exp: number; levelBefore: number; levelAfter: number; progressBefore: number; progressAfter: number;
   coins: number; stars: number;
 }

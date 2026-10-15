@@ -39,8 +39,8 @@ dependencies = [
  "rules-tile-marks",
  "rules-tiles",
  "ruleset-core",
- "skill-bands",
- "skill-characters",
+ "skill-groups",
+ "skill-personas",
 ]
 
 [[package]]
@@ -311,7 +311,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skill-bands"
+name = "skill-groups"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
@@ -320,7 +320,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "skill-characters"
+name = "skill-personas"
 version = "0.1.0"
 dependencies = [
  "card-sdk",

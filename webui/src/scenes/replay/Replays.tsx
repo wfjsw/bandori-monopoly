@@ -35,7 +35,7 @@ const mentalityName = (m: string) =>
 function seatsText(h: RecordHeader): string {
   return h.seats
     .map((x) => {
-      const who = D.character(x.character)?.display ?? x.player;
+      const who = D.persona(x.persona)?.display ?? x.player;
       return x.bot ? `${who}（${mentalityName(x.mentality)}）` : who;
     })
     .join("、");
@@ -43,7 +43,7 @@ function seatsText(h: RecordHeader): string {
 
 function winnerText(h: RecordHeader): string {
   const w = h.seats.find((x) => x.rank === 1) ?? h.seats[0];
-  return w ? (D.character(w.character)?.display ?? w.player) : "—";
+  return w ? (D.persona(w.persona)?.display ?? w.player) : "—";
 }
 
 /** `compat`'s table: format / abi fatal, the rest warnings. */

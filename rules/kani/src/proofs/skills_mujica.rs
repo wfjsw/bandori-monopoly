@@ -124,7 +124,7 @@ fn band_init_iff_at(user: i32) {
     });
     let pre_state = world::with_world(|ww| ww.key_get(user, skill_state));
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_bands::ave_mujica::at_turn_start_kani(user));
+    invoke::unwrap_done(skill_groups::ave_mujica::at_turn_start_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -224,7 +224,7 @@ fn band_bend_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     let pre_amount = bend_world(user);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_bands::ave_mujica::bend_kani(user));
+    invoke::unwrap_done(skill_groups::ave_mujica::bend_kani(user));
     let post = world::snapshot();
 
     kani::cover!(pre_amount == 300, "300 → 450");
@@ -275,7 +275,7 @@ pub fn band_state2_user1_bend_hook_rewrites_amount() {
 pub fn band_state2_bend_mutant_is_detected() {
     let user = 0i32;
     let pre_amount = bend_world(user);
-    invoke::unwrap_done(skill_bands::ave_mujica::bend_kani(user));
+    invoke::unwrap_done(skill_groups::ave_mujica::bend_kani(user));
     let post = world::snapshot();
     if pre_amount > 0 && pre_amount != (pre_amount * 3 + 1) / 2 {
         crate::kassert!(

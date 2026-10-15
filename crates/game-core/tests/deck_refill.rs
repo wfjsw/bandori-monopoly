@@ -150,7 +150,7 @@ fn raw_draw_also_restores_the_deck_and_filing_refills_a_dry_deck() {
 fn last_event_refills_only_after_the_draw_resolves() {
     let (data, mut w) = setup();
     let rules = Probe::default();
-    w.event_deck = vec!["对邦".into()];
+    w.event_deck = vec!["EVT1".into()];
     w.event_discard = vec!["a".into(), "b".into()];
     let mut cx = Cx::new(w, &data, &rules, &[]);
     cx.card_draw_event(0).unwrap();
@@ -160,7 +160,8 @@ fn last_event_refills_only_after_the_draw_resolves() {
     // the just-filed event included (user ruling 2026-10-07).
     let mut deck = w.event_deck.clone();
     deck.sort();
-    assert_eq!(deck, ["a", "b", "对邦"]);
+    // Sorted ASCII order: `EVT1` before `a` / `b`.
+    assert_eq!(deck, ["EVT1", "a", "b"]);
     assert!(w.event_discard.is_empty());
 }
 

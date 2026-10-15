@@ -26,7 +26,7 @@ pub const PRESENCE_TIMEOUT: Duration = Duration::from_secs(20);
 pub struct Session {
     pub token: String,
     pub player: String,
-    pub character: String,
+    pub persona: String,
     pub cn_id: String,
     /// Room id and member id while in a room.
     pub room: Option<(String, i32)>,
@@ -170,7 +170,7 @@ pub fn random_u64() -> u64 {
     u64::from_le_bytes(buf)
 }
 
-/// Short room code, unambiguous characters only.
+/// Short room code, unambiguous personas only.
 pub fn room_code() -> String {
     const ALPHABET: &[u8] = b"23456789ABCDEFGHJKMNPQRSTUVWXYZ";
     let mut buf = [0u8; 6];

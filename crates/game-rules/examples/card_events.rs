@@ -1,4 +1,4 @@
-//! Card-activation counts per seeded real-rules game: 4 named characters,
+//! Card-activation counts per seeded real-rules game: 4 named personas,
 //! seeds `1 2 3 5 8`, 40 rounds. A before/after pair for a guard→condition
 //! batch -- `card` events may drop, every other kind must be identical.
 //!
@@ -18,7 +18,7 @@ use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
 
 /// The four seats: the owners of the two cards this batch touched, plus the
-/// first two roster characters.
+/// first two roster personas.
 const CHARS: [&str; 4] = ["朝日六花", "纯田真奈", "户山香澄", "花园多惠"];
 const SEEDS: [u64; 5] = [1, 2, 3, 5, 8];
 
@@ -79,7 +79,7 @@ fn main() {
         );
         // Seat `k` plays `CHARS[k]` (Table::with_seed's convention).
         for (k, c) in CHARS.iter().enumerate() {
-            m.set_character(k as i32 + 1, c);
+            m.set_persona(k as i32 + 1, c);
         }
         m.quick_start();
         let mut kinds: BTreeMap<String, usize> = BTreeMap::new();

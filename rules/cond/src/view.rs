@@ -13,15 +13,6 @@
 //! `'static` values -- a live trait-object indirection per probe measured
 //! slower than the copy (GUARDS.md §4.2b).
 
-/// Which tile-kind set a condition's `is_*` family asks for.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum TileKind {
-    Circle,
-    Ring,
-    LiveHouse,
-    Buyable,
-}
-
 /// Read-only queries a condition name may make. Int-only: every accessor
 /// returns `i64` (or `bool`, bound as a CEL bool).
 ///
@@ -88,8 +79,8 @@ pub trait CondView {
     /// Owner overlay (`owner.money` etc.). Same numbers as `money(owner())`
     /// in a well-filled snapshot; the overlay is the per-probe answer.
     fn owner_money(&self) -> i64;
-    fn owner_fire(&self) -> i64;
-    fn owner_crystals(&self) -> i64;
+    fn owner_charge(&self) -> i64;
+    fn owner_group_pool(&self, name: &str) -> i64;
     fn owner_hand(&self) -> i64;
     fn owner_pos(&self) -> i64;
     fn owner_out(&self) -> i64;
@@ -97,8 +88,8 @@ pub trait CondView {
     fn owner_stun(&self) -> i64;
     fn owner_exile(&self) -> i64;
     fn owner_no_hand(&self) -> i64;
-    fn owner_character(&self) -> i64;
-    fn owner_band(&self) -> i64;
+    fn owner_persona(&self) -> i64;
+    fn owner_group(&self) -> i64;
     fn owner_tiles(&self) -> i64;
     /// The candidate card's id hash (`card.id`).
     fn card_id(&self) -> i64;
@@ -116,12 +107,12 @@ pub trait CondView {
     /// name)`); missing = 0.
     fn tok_named(&self, name: &str) -> i64;
     /// Is `band` blocked for this candidate (`blocked(band)`)?
-    fn blocked(&self, band: i64) -> bool;
+    fn blocked(&self, group: i64) -> bool;
 
     // -- player table (any seat) -------------------------------------------
     fn money(&self, seat: i64) -> i64;
-    fn fire(&self, seat: i64) -> i64;
-    fn crystals(&self, seat: i64) -> i64;
+    fn charge(&self, seat: i64) -> i64;
+    fn group_pool(&self, seat: i64, name: &str) -> i64;
     fn hand(&self, seat: i64) -> i64;
     fn pos(&self, seat: i64) -> i64;
     fn out(&self, seat: i64) -> i64;
@@ -135,12 +126,12 @@ pub trait CondView {
     /// Every `(seat, key, value)` row for the baked `state` table. The eager
     /// evaluator copies this into `_state`; missing pairs answer 0.
     fn state_table(&self) -> Vec<(i64, String, i64)>;
-    /// Character **name** hash (`character_is(p, "名")` compares this to
-    /// `id_of("名")` -- the same name `ctx::character_is` matches).
-    fn character(&self, seat: i64) -> i64;
-    /// Band **name** hash (`band_is(p, "Band")` compares this to
-    /// `id_of("Band")` -- the same name `ctx::in_band` matches).
-    fn band(&self, seat: i64) -> i64;
+    /// Character **name** hash (`persona_is(p, "名")` compares this to
+    /// `id_of("名")` -- the same name `ctx::persona_is` matches).
+    fn persona(&self, seat: i64) -> i64;
+    /// Band **name** hash (`group_is(p, "Band")` compares this to
+    /// `id_of("Band")` -- the same name `ctx::in_group` matches).
+    fn group(&self, seat: i64) -> i64;
     /// Owned-tile count.
     fn tiles(&self, seat: i64) -> i64;
     /// Seat count (for `neighbor`).
@@ -149,14 +140,7 @@ pub trait CondView {
     // -- board --------------------------------------------------------------
     /// `tile_named(name) -> id`; `-1` when unknown (the guest's convention).
     fn tile_named(&self, name: &str) -> i64;
-    /// Tile-kind predicates (the guest's `is_circle` family).
-    /// Sugar over [`Self::tile_is`] / [`Self::tile_in`]; kept abstract so each
-    /// view's existing results (including snapshot quirks) do not shift.
-    fn is_circle(&self, tile: i64) -> bool;
-    fn is_ring(&self, tile: i64) -> bool;
-    fn is_live_house(&self, tile: i64) -> bool;
-    fn is_buyable(&self, tile: i64) -> bool;
-    /// ABI v56: `tile_is(tile, kind)` -- data `TileKind` by wire spelling.
+    /// ABI v56: `tile_is(tile, kind)` -- data tile kind by wire spelling.
     fn tile_is(&self, tile: i64, kind: &str) -> bool;
     /// ABI v56: `tile_attr(tile, attr)` -- generic i32 field read.
     /// `kind` / `color` strings are [`Self::tile_is`] / future string attrs.
@@ -202,11 +186,13 @@ pub trait CondView {
     /// `"crystals"`) are always present when non-zero.
     fn card_counter_table(&self) -> Vec<(String, i64)>;
     /// Bands blocked for this candidate.
-    fn blocked_bands(&self) -> Vec<i64>;
+    fn blocked_groups(&self) -> Vec<i64>;
     /// Every `tile_named` spelling the host registers.
     fn tile_id_table(&self) -> Vec<(String, i64)>;
-    /// Tile ids of one kind (the `is_*` family's backing list).
-    fn tile_kind_list(&self, kind: TileKind) -> Vec<i64>;
+    /// Tile ids whose data kind equals `kind` (backing list for `tile_is`).
+    fn tile_kind_list(&self, kind: &str) -> Vec<i64>;
+    /// Every distinct data kind spelling on the board (ruleset data).
+    fn tile_kind_names(&self) -> Vec<String>;
 
     // -- turn plan / counters ----------------------------------------------
     /// `plan.fixed_roll` -- this turn's fixed main-move roll

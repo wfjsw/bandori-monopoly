@@ -38,7 +38,9 @@ use crate::MatchMode;
 /// legacy xoshiro stream); a v2 record is refused by a v1 engine, so an old
 /// archived bundle never mis-replays a new record. Old records replay on
 /// their own bundles either way (`docs/REPLAY.md` §9).
-pub const RECORD_VERSION: u32 = 2;
+/// v3: body JSON seat field is `persona`; body_check hashes the on-wire
+/// field names, so pre-v3 records do not re-verify under v3.
+pub const RECORD_VERSION: u32 = 3;
 
 /// The tick quantum. `tick_steps(k)` ticks `dt = k as f32 * STEP`, k in 1..=10,
 /// so replay recomputes the identical f32.
@@ -120,7 +122,7 @@ pub struct EngineStamp {
     pub ruleset_sha256: String,
     /// Sha256 of the `DATA_FILES` contents in order (the remaining game tables
     /// only -- board / events / schools / home / voice / match_rules / rules /
-    /// skill_simple). The roster (cards / characters / bands) lives in the
+    /// skill_simple). The roster (cards / personas / groups) lives in the
     /// ruleset and is covered by `ruleset_sha256`, not this field.
     pub data_sha256: String,
     /// Engine identity (`"game-core"`).
@@ -211,7 +213,7 @@ pub struct SeatInfo {
     pub player: String,
     pub bot: bool,
     pub mentality: BotMentality,
-    pub character: String,
+    pub persona: String,
     pub rank: i32,
     pub score: i32,
 }
@@ -223,7 +225,7 @@ impl Default for SeatInfo {
             player: String::new(),
             bot: false,
             mentality: BotMentality::Standard,
-            character: String::new(),
+            persona: String::new(),
             rank: 0,
             score: 0,
         }
@@ -563,9 +565,16 @@ pub fn parse_record(json: &str) -> Result<RecordFile, ReplayError> {
             f.header.engine.format, RECORD_VERSION
         )));
     }
-    let want = body_check(&f.body);
-    if want != f.check {
-        return Err(ReplayError::Corrupt(format!("check {} != {}", f.check, want)));
+    // The body hash covers the on-wire JSON field names of the writer.
+    // Those names were neutralized at RECORD_VERSION 3, so a pre-v3 hash
+    // cannot be recomputed under v3 names. Corruption of pre-v3 bodies is
+    // therefore not detected here; the engine archive plays those on their
+    // original bundle.
+    if f.header.engine.format >= 3 {
+        let want = body_check(&f.body);
+        if want != f.check {
+            return Err(ReplayError::Corrupt(format!("check {} != {}", f.check, want)));
+        }
     }
     Ok(f)
 }
@@ -1161,7 +1170,7 @@ impl RecordedMatch {
                 player: p.player.clone(),
                 bot: p.bot,
                 mentality: p.mentality,
-                character: p.character.clone(),
+                persona: p.persona.clone(),
                 rank: p.rank,
                 score: p.score,
             })
@@ -1551,17 +1560,17 @@ impl Replayer {
             .filter(|c| c.at == at)
             .cloned()
             .collect();
-        for cp in due {
+        for ckpt in due {
             let h = hash_save(&self.m.save());
-            if h != cp.hash {
+            if h != ckpt.hash {
                 self.flag(format!(
                     "checkpoint at {} (round {}, turn {}, tick {}) hash {} != {}",
-                    cp.at, cp.round, cp.turn, cp.tick, cp.hash, h
+                    ckpt.at, ckpt.round, ckpt.turn, ckpt.tick, ckpt.hash, h
                 ));
                 if self.first_mismatch.is_none() {
                     self.first_mismatch = Some(Mismatch {
-                        field: format!("checkpoint@{}", cp.at),
-                        want: cp.hash.clone(),
+                        field: format!("checkpoint@{}", ckpt.at),
+                        want: ckpt.hash.clone(),
                         got: h,
                         fatal: false,
                     });

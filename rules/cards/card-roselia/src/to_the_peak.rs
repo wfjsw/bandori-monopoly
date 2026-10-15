@@ -17,7 +17,7 @@ pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", S
         .tags(&[])
         .text(r#"移动到下一个可被购买的livehouse格子。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋，视为你的主要移动。"#)
         .cell(r#"E4"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
+        .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`),
 /// where `IsColor` sees both the `anyColor` tile prop and this player's
@@ -31,7 +31,7 @@ fn livehouses(player_id: i32) -> Vec<i32> {
 /// C# `WhyNotBuildOn`'s 「RiNG 不能加盖房屋」: a RiNG deed is the buyable
 /// group-6 tile with no rent table, so `rent_of <= 0` is the test (the
 /// vocabulary has no `TileData.kind` query).
-fn is_ring(t: i32) -> bool {
+fn is_deed(t: i32) -> bool {
     ctx::rent_of(t) <= 0
 }
 
@@ -40,7 +40,7 @@ fn why_not_build_on(player_id: i32, t: i32) -> Option<&'static str> {
     if ctx::tile_owner(t) != player_id {
         return Some("only_own");
     }
-    if is_ring(t) {
+    if is_deed(t) {
         return Some("ring");
     }
     if ctx::mortgaged_of(t) {

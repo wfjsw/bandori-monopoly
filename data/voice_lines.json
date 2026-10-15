@@ -1,6 +1,6 @@
 {
  "_说明": "主页点角色时说的原版台词（Tools/import_voice_lines.py 从 Bestdori CN 素材生成，重新运行会覆盖）。voice = Resources/BandoriVoice/<id>/<voice>.mp3；motion = 台词原本配的 Live2D 动作，空着就随机做一个反应动作。",
- "characters": [
+ "personas": [
   {"id": "001", "name": "户山香澄", "lines": [
    {"text": "今天的乐队练习也要努力哦！\n今天的慰问品，居、居然！带来了点心！", "voice": "area0727-001", "motion": "jaan01", "from": "actionset/Scenarioarea0727"},
    {"text": "谢谢你今天陪我一起看电影！", "voice": "area0493-001", "motion": "smile02", "from": "actionset/Scenarioarea0493"},

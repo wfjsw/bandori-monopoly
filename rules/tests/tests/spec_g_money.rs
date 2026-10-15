@@ -143,7 +143,7 @@ fn gain_prints_money() {
                 break;
             }
             let p = t.expect_prompt();
-            if p.title.key().contains("circle") || p.title.key().contains("reward") {
+            if p.title.key().contains("pass_reward") || p.title.key().contains("reward") {
                 // Prefer the money option (value 0 is usually the first).
                 let _ = t.answer(0, 0);
             } else {
@@ -543,6 +543,8 @@ fn buy_costs_price_plus_houses() {
         let pre = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         settle_on(&mut t, 0, land);
+        // G-SETTLE-06/07: decline the settle-time buy prompt, then buy via the button.
+        drain(&mut t);
         t.buy(0).unwrap();
         drain(&mut t);
 
@@ -598,6 +600,8 @@ fn build_costs_the_marked_house_fee() {
         let pre = t.snapshot_world();
         t.observe(rules_spec::global::money::CLAUSES);
         settle_on(&mut t, 0, land);
+        // G-SETTLE-06/07: decline the settle-time build prompt, then build via the button.
+        drain(&mut t);
         t.build(0).unwrap();
         drain(&mut t);
 

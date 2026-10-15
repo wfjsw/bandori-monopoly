@@ -102,20 +102,20 @@ fn g25_title_idol_crystals_are_not_fire_pots() {
     t.begin_turn(0);
     drain(&mut t);
     t.set_fire(0, 3, 3);
-    let fire_before = t.fire(0);
+    let fire_before = t.charge(0);
     t.give_play(0, "PP:TITLE IDOL").unwrap();
     drain(&mut t);
     assert_eq!(
-        t.fire(0),
+        t.charge(0),
         fire_before,
         "TITLE IDOL's crystals are not fire pots: {}",
-        t.fire(0)
+        t.charge(0)
     );
     // The skill still needs (and spends) 3 fire.
     let skill = t.skill_id(0, "投币式停车场的猫");
     t.skill(0, &skill).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 0, "3 fire spent for the teleport");
+    assert_eq!(t.charge(0), 0, "3 fire spent for the teleport");
     eprintln!(
         "g25 record: pos after Rana (2) = {} (Space = {})",
         t.pos(0),
@@ -151,7 +151,7 @@ fn g26_popipa_crystals_and_kasumi_fire_on_one_settle() {
     drain_playing(&mut t, 0, "PPP:[衍生]Popipapapipopa");
     drain(&mut t);
     // P0 gains 1 fire from the hill settle regardless.
-    assert_eq!(t.fire(0), 1, "Kasumi's (1) gives 1 fire on the hill settle");
+    assert_eq!(t.charge(0), 1, "Kasumi's (1) gives 1 fire on the hill settle");
     // The rent is reduced by 150 per crystal spent (3 -> 450).
     assert_eq!(
         t.money(1),
@@ -185,7 +185,7 @@ fn g27_crystal_move_does_not_touch_fire_or_the_dice_set() {
     let skill = t.skill_id(0, "与燃烧的红色一起驰骋");
     skill_with(&mut t, 0, &skill, 1).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 0, "1 fire spent for +1d10");
+    assert_eq!(t.charge(0), 0, "1 fire spent for +1d10");
     // The crystals on the cards are untouched by the fire spend.
     assert_eq!(t.crystals(0, "R:Fire bird"), Some(3));
     assert_eq!(t.crystals(0, "Mor:蝴蝶飞舞的星月夜"), Some(1));
@@ -405,7 +405,7 @@ fn g31_aya_fan_flip_leaves_the_rabbit_marks() {
     t.roll(1).unwrap();
     drain(&mut t);
     assert_eq!(t.marks_on(mark_tile).len(), 0, "the pass removes the rabbits");
-    assert_eq!(t.fire(1), 2, "多惠 gains 1 fire per rabbit");
+    assert_eq!(t.charge(1), 2, "多惠 gains 1 fire per rabbit");
 }
 
 // =====================================================================

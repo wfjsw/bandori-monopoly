@@ -21,7 +21,7 @@ pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, gre
 2. 将一张“PERFECT”加入抽卡区并洗切；
 3. [获得]2000资金。"#)
         .cell(r#"A4"#)
-        .fields(&[("band", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn great(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「1. [移除]此卡」

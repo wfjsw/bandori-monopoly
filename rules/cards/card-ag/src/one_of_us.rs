@@ -50,7 +50,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"将此卡放置在场上，选择场上的另一个Afterglow角色或者拥有商店街格子的角色，指定双方各一块地契，触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有此地契"#)
         .cell(r#"C10"#)
-        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
+        .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.
@@ -64,7 +64,7 @@ fn candidates(player_id: i32) -> Vec<i32> {
     // `(H.BandOf(p) == "Afterglow" || H.OwnedBy(p).Any(H.IsShop)) && H.OwnedBy(p).Count > 0`.
     ctx::others(player_id)
         .into_iter()
-        .filter(|&p| ctx::owned_count(p) > 0 && (ctx::in_band(p, "Afterglow") || owns_shop(p)))
+        .filter(|&p| ctx::owned_count(p) > 0 && (ctx::in_group(p, "Afterglow") || owns_shop(p)))
         .collect()
 }
 

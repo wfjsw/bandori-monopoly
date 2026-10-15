@@ -20,7 +20,7 @@ pub const RIMI_CHOCO: CardDef = CardDef::new(
         .text(r#"[手]：
 立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子绝对距离1到4格或以内的任何格子并[结算]，期间[不可阻挡]。"#)
         .cell(r#"B19"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", r#"牛込里美"#)]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"牛込里美"#)]));
 
 /// C# `CardRimiChoco.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

@@ -76,7 +76,7 @@ fn sightings(st: &MatchState, seat: usize) -> BTreeSet<String> {
 
 fn allowed_for(data: &GameData, st: &MatchState, seat: usize) -> BTreeSet<String> {
     let mut s = BTreeSet::new();
-    if let Some(c) = st.players.get(seat).and_then(|p| data.character(&p.character)) {
+    if let Some(c) = st.players.get(seat).and_then(|p| data.persona(&p.persona)) {
         for k in deck::pool(data, c) {
             s.insert(k.id.clone());
         }
@@ -210,10 +210,10 @@ fn determinize_reproduces_the_view() {
                         let member_i = view.state.players[i].member;
                         for c in fork.hand_of(member_i) {
                             if !allowed.contains(&c) {
-                                let ch = &view.state.players[i].character;
+                                let ch = &view.state.players[i].persona;
                                 let seen = sightings(&view.state, i);
                                 let in_pool = data
-                                    .character(ch)
+                                    .persona(ch)
                                     .map(|cd| {
                                         deck::pool(&data, cd).iter().any(|x| x.id == c)
                                             || deck::derived(&data, cd).iter().any(|x| x.id == c)

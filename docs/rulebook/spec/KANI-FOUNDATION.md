@@ -40,7 +40,7 @@ rules/kani::board            static 60-tile board from data/board.json
 | **world** | `rules/kani/src/world.rs` | symbolic players / piles / tiles / keys / effect log / snapshots |
 | **board** | `rules/kani/src/board.rs` | static tile table (kind / group / price / house cost) |
 | **intern** | `rules/kani/src/intern.rs` | u16 name ids (`MAX_INTERN=256`); `intern_or_fail` panics under Kani when exhausted |
-| **host** | `rules/kani/src/host.rs` | `bandori_*` backend: one `dispatch(Op, Args) -> i64`. Unmodeled → loud fail |
+| **host** | `rules/kani/src/host.rs` | `ruleset_*` backend: one `dispatch(Op, Args) -> i64`. Unmodeled → loud fail |
 | **invoke** | `rules/kani/src/invoke.rs` | registry lookup of shipped `CardDef` / skill / event; calls the unmodified `On` body |
 | **harness kit** | `rules/kani/src/harness.rs` | `clause_proof!`, `clause_mutant!`, `assert_frame!`, `cover_both!`, `any_player`, `any_in` |
 | **shim** | `rules/kani/src/shim.rs` | `guard!` / `guard_id!` — real single-source guard verdict; `guard_assumed!` only for non-lowerable leftovers (greppable) |
@@ -657,7 +657,7 @@ tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out
 
 ## Adding a host import (checklist — a miss breaks EVERY Kani proof)
 
-A new `bandori_*` import in `rules/card-sdk/src/ctx/sys.rs` must also be added
+A new `ruleset_*` import in `rules/card-sdk/src/ctx/sys.rs` must also be added
 to the Kani side, or `card-sdk` stops compiling under `cfg(kani)` and every
 harness FAILS in seconds (this happened with `join_redirect_target` /
 `set_join_used`):

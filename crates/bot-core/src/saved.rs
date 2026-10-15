@@ -26,7 +26,7 @@
 //!   prompt fallback; auction `worth` = the quoted price capped at
 //!   `money - 1000`.
 //! * `World.turn` (`TurnCtx`) extras, `scheduled`, `targeted`, `gains`,
-//!   `ring_bonus`, `leftovers`, `next_turn_pending`, `ask_seq`, `signals` --
+//!   `rent_unit_bonus`, `leftovers`, `next_turn_pending`, `ask_seq`, `signals` --
 //!   none of these are in [`game_core::state::MatchState`]. Stub: engine
 //!   defaults.
 //!

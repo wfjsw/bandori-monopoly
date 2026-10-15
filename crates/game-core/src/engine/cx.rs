@@ -226,7 +226,7 @@ pub struct Reply {
 }
 
 /// The card id a prompt option declares (`Arg::Card` on the option's label).
-/// Used by the [反击] offer, whose options are `ask.counteract.play` messages
+/// Used by the counteraction offer, whose options are `ask.counteract.play` messages
 /// naming the card each would declare.
 fn option_card(m: &Msg) -> Option<String> {
     m.a.get("card").and_then(|a| match a {
@@ -421,9 +421,9 @@ pub struct Cx<'a> {
     /// `"card"` activation event ids currently open, innermost last. A nested
     /// drive groups under the top of this stack; `-1` at the bottom.
     pub activation: Vec<i32>,
-    /// The 移动起点 of the move currently being walked / teleported, or `-1`
-    /// when no move is in flight. 「[经过]CiRCLE且[移动起点]不为CiRCLE」 reads it
-    /// (`circle_reward`). Transient (not serialized) -- the walk sets it as it
+    /// The move start of the move currently being walked / teleported, or `-1`
+    /// when no move is in flight. 「[pass]the start square且[move start]不为the start square」 reads it
+    /// (the built-in pass reward). Transient (not serialized) -- the walk sets it as it
     /// starts and the reward step is the only reader.
     pub(crate) move_start: i32,
     /// Guest state writes overlaid on the live world for a host routine's
@@ -536,7 +536,7 @@ impl PlayMemo {
 /// the top of the body.
 ///
 /// This is the merged view for 「…时」 a status the guest just cleared (e.g.
-/// 壱雫空 zeroing [晕眩] and then paying) must be visible to `can_pay` without
+/// 壱雫空 zeroing stun and then paying) must be visible to `can_pay` without
 /// the clear landing twice -- the body replays from the top, so a *persisted*
 /// clear would be re-applied on top of itself and an additive write would
 /// double-count. Only decreases cross; see [`Cx::overlay_guest_state`].
@@ -648,7 +648,7 @@ impl<'a> Cx<'a> {
         self.w.recent.replace_msg(id, msg)
     }
 
-    /// Set `value` on already-posted events (a `"dice"` face, a `"fire"` spend).
+    /// Set `value` on already-posted events (a `"dice"` face, a `"charge"` spend).
     pub fn replace_event_values(&mut self, pairs: &[(i32, i32)]) {
         for &(id, value) in pairs {
             self.w.recent.set_value(id, value);
@@ -776,7 +776,7 @@ impl<'a> Cx<'a> {
         t.plan.no_buy = f.plan.no_buy;
         // A card body may latch a decision across the pauses its host routines
         // cause -- e.g. 黑色生日 freezing 「资金在1000以下」 at resolution so the
-        // replay's re-run takes the same branch across its two [支付] entries.
+        // replay's re-run takes the same branch across its two pay entries.
         // That write lives on the card's world copy and is dropped when the run
         // pauses. Carry it over -- but *only* for keys a body explicitly
         // registers under the `latch.` prefix. (A latch is "already taken", so
@@ -799,7 +799,7 @@ impl<'a> Cx<'a> {
     ///
     /// Called at the `NeedHost` boundary: the routine (`pay` / `gain` / `move` /
     /// ...) runs against the live world, so a status the guest just **cleared**
-    /// (e.g. 壱雫空 zeroing [晕眩] and then paying) has to be visible to
+    /// (e.g. 壱雫空 zeroing stun and then paying) has to be visible to
     /// `can_pay` -- without being *persisted*, because the body replays from
     /// the top and would re-apply the write (double-counting an additive one).
     /// [`Self::restore_guests_to`] drops it again, keeping only the routine's
@@ -962,7 +962,7 @@ impl<'a> Cx<'a> {
     }
 
     /// The `ExclusiveUse` gate with the per-world memo (same stamp rule as
-    /// [`Self::rules_cant_play`]). `true` = a band-skill gate entry closed this
+    /// [`Self::rules_cant_play`]). `true` = a group-skill gate entry closed this
     /// exclusive play. The engine's generic own/base verdict is the caller's
     /// cheap pre-check; this only asks the ruleset.
     pub fn exclusive_gate_denied(&self, player: usize, card: &str, ask: &ExclusiveAsk<'_>) -> bool {
@@ -1040,7 +1040,7 @@ impl<'a> Cx<'a> {
         }
         // Halt for player input: flush any pending walk segment first, so the
         // client has animated the approach to this point before the prompt
-        // shows (a [反击] window mid-walk, a CiRCLE reward, …).
+        // shows (a counteraction window mid-walk, a the start square reward, …).
         self.w.flush_walk();
         self.w.st.prompt = ask.view.clone();
         Err(Halt(HaltKind::Ask(Box::new(ask))))
@@ -1053,7 +1053,7 @@ impl<'a> Cx<'a> {
     /// while an alternative exists -- and a tile prompt gets a random target
     /// rather than "none".
     ///
-    /// A [反击] offer is the one exception -- and for both policies it is a
+    /// A counteraction offer is the one exception -- and for both policies it is a
     /// real decision, not a pass (user ruling 2026-10-08, "bots must be able
     /// to counteract"): chaos declares on
     /// [`CHAOS_COUNTER_CHANCE`](super::CHAOS_COUNTER_CHANCE) of the offers it
@@ -1107,13 +1107,13 @@ impl<'a> Cx<'a> {
         }
     }
 
-    /// Standard's [反击] answer: the first offered card whose
-    /// [`crate::strategy::CounterParams`] propensity fires, else `fallback`
+    /// Standard's counteraction answer: the first offered card whose
+    /// [`crate::strategy::CounterParams`] propensity hits, else `fallback`
     /// (the skip). Each candidate draws from the world RNG (so it replays) --
-    /// one draw per offered card until one fires, so with `k` offered cards
+    /// one draw per offered card until one hits, so with `k` offered cards
     /// the per-offer declare rate is `1 - (1 - p)^k` on a uniform per-card
     /// propensity `p` (600‰ default: 60 % for one card, 84 % for two). A
-    /// zero propensity draws nothing and never fires, which is how a book
+    /// zero propensity draws nothing and never hits, which is how a book
     /// holds a card back.
     fn counteract_pick(&mut self, seat: usize, ask: &Ask, fallback: i32, n: i32) -> i32 {
         let p = self.strategy_of(seat);
@@ -1186,7 +1186,7 @@ impl<'a> Cx<'a> {
     /// body could run. One `"card"` event carries both the log line and the
     /// client's card flash. `kind` is a [`crate::state::card_trigger`]
     /// constant; `owner` is the card's player, `target` the affected player and
-    /// `tile` where it fired (`-1` when not applicable). A negated activation
+    /// `tile` where it ran (`-1` when not applicable). A negated activation
     /// still shows the card, marked 无效, and logs 「<卡名> 的效果被无效」.
     pub fn card_activated(
         &mut self,
@@ -1262,7 +1262,7 @@ impl<'a> Cx<'a> {
     /// `Blocked(i)` -- why a player can't move money.
     pub(crate) fn blocked(&self, i: usize) -> &'static str {
         let s = &self.w.st.players[i];
-        // The status hosts' clause: [除外] names the stronger refusal.
+        // The status hosts' clause: exile names the stronger refusal.
         if !s.status_gates().on_board {
             "status.exiled"
         } else {

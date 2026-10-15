@@ -16,7 +16,7 @@ pub const BALLOON_SHOW: CardDef =
         .tags(&[])
         .text(r#"投掷4次3d20mod60并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动"#)
         .cell(r#"F11"#)
-        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardBalloonShow.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

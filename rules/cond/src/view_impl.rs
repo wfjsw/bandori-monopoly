@@ -5,7 +5,7 @@
 //! `LiveSnap`) can implement [`CondView`] directly and skip the eager fill.
 
 use crate::ctx::{CandidateCtx, WindowCtx};
-use crate::view::{CondView, TileKind};
+use crate::view::{CondView};
 
 /// The view a condition evaluates against: window + candidate overlay.
 pub struct SnapshotView<'a> {
@@ -114,11 +114,11 @@ impl CondView for SnapshotView<'_> {
     fn owner_money(&self) -> i64 {
         self.cand.owner_money
     }
-    fn owner_fire(&self) -> i64 {
-        self.cand.owner_fire
+    fn owner_charge(&self) -> i64 {
+        self.cand.owner_charge
     }
-    fn owner_crystals(&self) -> i64 {
-        self.cand.owner_crystals
+    fn owner_group_pool(&self, _name: &str) -> i64 {
+        self.cand.owner_group_pool
     }
     fn owner_hand(&self) -> i64 {
         self.cand.owner_hand
@@ -141,11 +141,11 @@ impl CondView for SnapshotView<'_> {
     fn owner_no_hand(&self) -> i64 {
         self.cand.owner_no_hand
     }
-    fn owner_character(&self) -> i64 {
-        self.cand.owner_character
+    fn owner_persona(&self) -> i64 {
+        self.cand.owner_persona
     }
-    fn owner_band(&self) -> i64 {
-        self.cand.owner_band
+    fn owner_group(&self) -> i64 {
+        self.cand.owner_group
     }
     fn owner_tiles(&self) -> i64 {
         self.cand.owner_tiles
@@ -165,17 +165,17 @@ impl CondView for SnapshotView<'_> {
     fn tok_named(&self, name: &str) -> i64 {
         self.cand.tok_named(name)
     }
-    fn blocked(&self, band: i64) -> bool {
-        self.cand.blocked(band)
+    fn blocked(&self, group: i64) -> bool {
+        self.cand.blocked(group)
     }
     fn money(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.money).unwrap_or(0)
     }
-    fn fire(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.fire).unwrap_or(0)
+    fn charge(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.charge).unwrap_or(0)
     }
-    fn crystals(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.crystals).unwrap_or(0)
+    fn group_pool(&self, seat: i64, _name: &str) -> i64 {
+        self.win.player(seat).map(|p| p.group_pool).unwrap_or(0)
     }
     fn hand(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.hand).unwrap_or(0)
@@ -213,11 +213,11 @@ impl CondView for SnapshotView<'_> {
         }
         rows
     }
-    fn character(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.character).unwrap_or(0)
+    fn persona(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.persona).unwrap_or(0)
     }
-    fn band(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.band).unwrap_or(0)
+    fn group(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.group).unwrap_or(0)
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.tiles).unwrap_or(0)
@@ -228,29 +228,12 @@ impl CondView for SnapshotView<'_> {
     fn tile_named(&self, name: &str) -> i64 {
         self.win.tile_ids.get(name).copied().unwrap_or(-1)
     }
-    fn is_circle(&self, tile: i64) -> bool {
-        self.win.circle_tiles.contains(&tile)
-    }
-    fn is_ring(&self, tile: i64) -> bool {
-        self.win.ring_tiles.contains(&tile)
-    }
-    fn is_live_house(&self, tile: i64) -> bool {
-        self.win.live_house_tiles.contains(&tile)
-    }
-    fn is_buyable(&self, tile: i64) -> bool {
-        self.win.buyable_tiles.contains(&tile)
-    }
     fn tile_is(&self, tile: i64, kind: &str) -> bool {
-        match kind {
-            "circle" => self.is_circle(tile),
-            "ring" => self.is_ring(tile),
-            _ => self
-                .win
-                .tile_kinds
-                .get(tile as usize)
-                .map(|k| k == kind)
-                .unwrap_or(false),
-        }
+        self.win
+            .tile_kinds
+            .get(tile as usize)
+            .map(|k| k == kind)
+            .unwrap_or(false)
     }
     fn tile_attr(&self, tile: i64, attr: &str) -> i64 {
         self.win
@@ -263,38 +246,13 @@ impl CondView for SnapshotView<'_> {
             })
     }
     fn tile_in(&self, player: i64, tile: i64, class: &str) -> bool {
-        // Precomputed true triples (fill_window), plus the four baked lists
-        // for the CEL sugar names.
-        match class {
-            "buyable" if player < 0 => self.is_buyable(tile),
-            "livehouse" if player < 0 => self.is_live_house(tile),
-            _ => self
-                .win
-                .tile_classes
-                .iter()
-                .any(|&(p, t, ref c)| p == player && t == tile && c == class),
-        }
-    }
-    fn tile_in_rows(&self) -> Vec<(i64, i64, String)> {
-        // Same set as probing `tile_in` over every (player, tile, class): the
-        // baked triples, except that the player-less `buyable` / `livehouse`
-        // answer from the kind lists (see `tile_in`) rather than the triples.
-        let mut rows: Vec<(i64, i64, String)> = self
-            .win
+        self.win
             .tile_classes
             .iter()
-            .filter(|(p, _, c)| !(*p < 0 && (c == "buyable" || c == "livehouse")))
-            .cloned()
-            .collect();
-        for t in 0..self.tile_count() {
-            if self.is_buyable(t) {
-                rows.push((-1, t, "buyable".to_string()));
-            }
-            if self.is_live_house(t) {
-                rows.push((-1, t, "livehouse".to_string()));
-            }
-        }
-        rows
+            .any(|&(p, t, ref c)| p == player && t == tile && c == class)
+    }
+    fn tile_in_rows(&self) -> Vec<(i64, i64, String)> {
+        self.win.tile_classes.clone()
     }
     fn slot_table(&self) -> Vec<(String, i64)> {
         self.cand.slots.iter().map(|(k, v)| (k.clone(), *v)).collect()
@@ -313,19 +271,32 @@ impl CondView for SnapshotView<'_> {
             .map(|(k, v)| (k.clone(), *v))
             .collect()
     }
-    fn blocked_bands(&self) -> Vec<i64> {
-        self.cand.blocked_bands.clone()
+    fn blocked_groups(&self) -> Vec<i64> {
+        self.cand.blocked_groups.clone()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
         self.win.tile_ids.iter().map(|(k, v)| (k.clone(), *v)).collect()
     }
-    fn tile_kind_list(&self, kind: TileKind) -> Vec<i64> {
-        match kind {
-            TileKind::Circle => self.win.circle_tiles.clone(),
-            TileKind::Ring => self.win.ring_tiles.clone(),
-            TileKind::LiveHouse => self.win.live_house_tiles.clone(),
-            TileKind::Buyable => self.win.buyable_tiles.clone(),
-        }
+    fn tile_kind_list(&self, kind: &str) -> Vec<i64> {
+        self.win
+            .tile_kinds
+            .iter()
+            .enumerate()
+            .filter(|(_, k)| k.as_str() == kind)
+            .map(|(i, _)| i as i64)
+            .collect()
+    }
+    fn tile_kind_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .win
+            .tile_kinds
+            .iter()
+            .filter(|k| !k.is_empty())
+            .cloned()
+            .collect();
+        names.sort();
+        names.dedup();
+        names
     }
 
     // -- turn plan / counters ----------------------------------------------

@@ -25,7 +25,7 @@ function randomLine(cnId: string) {
 
 export function Menu() {
   const p = useProfile()!;
-  const c = D.character(p.homeCharacter) ?? D.characters[0];
+  const c = D.persona(p.homePersona) ?? D.personas[0];
   const first = useMemo(() => randomLine(c?.cnId ?? ""), [c?.cnId]);
   const [line, setLine] = useState(first?.text.replace(/\n/g, "") ?? tr("menu.talk"));
   const [bounce, setBounce] = useState(0);
@@ -67,7 +67,7 @@ export function Menu() {
           <button type="button" className={cx(s.small, s.replay)} onClick={() => navigate({ name: "replay" })}><Icon name="hourglass" />{tr("menu.replay")}</button>
           <button type="button" className={cx(s.small, s.settings)} onClick={showSettings}><Icon name="chevrons" />{tr("menu.settings")}</button>
           <button type="button" className={cx(s.small, s.fire)} onClick={showFire}>
-            <div className={s.ribbon}>{tr("menu.fireRibbon", { n: p.firePerGame })}</div>
+            <div className={s.ribbon}>{tr("menu.fireRibbon", { n: p.chargePerGame })}</div>
             <img src={sceneImg("icon_fire")} alt="" />{tr("menu.settings")}
           </button>
         </div>

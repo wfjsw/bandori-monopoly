@@ -1,4 +1,4 @@
-//! Backend-neutral `bandori` host import bodies.
+//! Backend-neutral `ruleset` host import bodies.
 //!
 //! Extracted once from `host.rs`'s `build_linker` closures and maintained by
 //! hand since. Every import is a plain function over [`HostCtx`]; the sandbox
@@ -32,7 +32,7 @@ pub fn guest_str<C: HostCtx>(c: &mut C, ptr: i32, len: i32) -> Result<String, Ho
     String::from_utf8(bytes).map_err(|_| HostErr::trap("guest string is not UTF-8"))
 }
 
-/// The abnormal-move [反击] gate, from inside a card run (see `host.rs`).
+/// The abnormal-move counteraction gate, from inside a card run (see `host.rs`).
 pub fn abnormal_gate<C: HostCtx>(c: &mut C, player_id: i32, kind: AbKind) -> Result<bool, HostErr> {
     let v = crate::inline::request_or_pause(
         c,
@@ -76,8 +76,8 @@ pub fn no_flash<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
 }
 
 /// `ctx::flash_card` -- proactive "look here" flash of another card.
-pub fn flash_card<C: HostCtx>(c: &mut C, cp: i32, cl: i32, p: i32, n: i32) -> Result<(), HostErr> {
-    let card_id = guest_str(c, cp, cl)?;
+pub fn flash_card<C: HostCtx>(c: &mut C, cptr: i32, cl: i32, p: i32, n: i32) -> Result<(), HostErr> {
+    let card_id = guest_str(c, cptr, cl)?;
     let msg = guest_msg(c, p, n)?;
     c.st_mut().w().flash_card(&card_id, msg);
     Ok(())
@@ -88,13 +88,13 @@ pub fn flash_card_keyed<C: HostCtx>(
     c: &mut C,
     kp: i32,
     kl: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     p: i32,
     n: i32,
 ) -> Result<(), HostErr> {
     let key = guest_str(c, kp, kl)?;
-    let card_id = guest_str(c, cp, cl)?;
+    let card_id = guest_str(c, cptr, cl)?;
     let msg = guest_msg(c, p, n)?;
     c.st_mut().w().flash_card_keyed(&key, &card_id, msg);
     Ok(())
@@ -117,7 +117,7 @@ pub fn place_mark<C: HostCtx>(
     tile: i32,
     kp: i32,
     kl: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     owner: i32,
     src: i32,
@@ -127,7 +127,7 @@ pub fn place_mark<C: HostCtx>(
     nl: i32,
 ) -> Result<i32, HostErr> {
     let kind = guest_str(c, kp, kl)?;
-    let category = guest_str(c, cp, cl)?;
+    let category = guest_str(c, cptr, cl)?;
     let note = guest_msg(c, np, nl)?;
     let fresh = stack != 0; // Stack::Fresh = 1
     Ok(c.st_mut().w().place_mark(
@@ -222,12 +222,12 @@ pub fn add_counter_at<C: HostCtx>(
 pub fn card_counter<C: HostCtx>(
     c: &mut C,
     player_id: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     np: i32,
     nl: i32,
 ) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+    let card = guest_str(c, cptr, cl)?;
     let name = guest_str(c, np, nl)?;
     Ok(c.st().wr().card_counter(player_id, &card, &name))
 }
@@ -235,14 +235,14 @@ pub fn card_counter<C: HostCtx>(
 pub fn add_card_counter<C: HostCtx>(
     c: &mut C,
     player_id: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     np: i32,
     nl: i32,
     n: i32,
     max: i32,
 ) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+    let card = guest_str(c, cptr, cl)?;
     let name = guest_str(c, np, nl)?;
     Ok(c.st_mut().w().add_card_counter(player_id, &card, &name, n, max))
 }
@@ -333,7 +333,7 @@ pub fn gain<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) 
             let src = guest_msg(c, p, n)?;
                         // A card-driven gain runs the same `Money` pipeline as a payment --
             // print (game -> player) -- so PayAdd / PayChoose / the `effect`
-            // [反击] window all see it. The pause/resume is the same as `pay`:
+            // counteraction window all see it. The pause/resume is the same as `pay`:
             // the engine answers with the amount that actually moved.
             {
                 let req = HostRequest::Pay {
@@ -399,7 +399,7 @@ pub fn adjust_money<C: HostCtx>(
 pub fn pay<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let src = guest_msg(c, p, n)?;
                         // A card-driven payment is paused so the engine can raise a `pay`
-            // trigger (and the [反击] window) before the money moves. The answer is
+            // trigger (and the counteraction window) before the money moves. The answer is
             // the final amount to move -- 0 cancels the payment outright.
             //
             // The pause is the sentinel **as the return value**, not a trap:
@@ -539,7 +539,7 @@ pub fn owned_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32
 }
 
 /// `tile_is(tile, kind_ptr, kind_len) -> i32` -- data kind by wire spelling.
-/// Replaces `is_circle` / `is_ring` / `is_agent`.
+/// Generic kind probe by ruleset tile-kind spelling.
 pub fn tile_is<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
     let kind = guest_str(c, kp, kl)?;
     Ok(c.st().wr().tile_is(tile, &kind) as i32)
@@ -554,16 +554,15 @@ pub fn tile_attr<C: HostCtx>(c: &mut C, tile: i32, ap: i32, al: i32) -> Result<i
 }
 
 /// `tile_in(player_id, tile, class_ptr, class_len) -> i32` -- class membership.
-/// Replaces `is_buyable` / `is_shop` / `is_live_house` / `is_live_house_for` /
-/// `is_color`.
+/// Generic class probe by ruleset class-name binding.
 pub fn tile_in<C: HostCtx>(
     c: &mut C,
     player_id: i32,
     tile: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
 ) -> Result<i32, HostErr> {
-    let class = guest_str(c, cp, cl)?;
+    let class = guest_str(c, cptr, cl)?;
     Ok(c.st().wr().tile_in(player_id, tile, &class) as i32)
 }
 
@@ -931,8 +930,8 @@ pub fn placed_cards<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -
             Ok(bytes.len() as i32)
 }
 
-pub fn card_text_mentions<C: HostCtx>(c: &mut C, cp: i32, cl: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn card_text_mentions<C: HostCtx>(c: &mut C, cptr: i32, cl: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             let needle = guest_str(c, np, nl)?;
             Ok(c.st().wr().card_text_mentions(&card, &needle) as i32)
 }
@@ -1088,54 +1087,62 @@ pub fn inc_slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, by: i32) 
             Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
-// `band_crystals` / `add_band_crystals` stay on the guest surface for now
-// (`ctx::band_crystals` still imports them); they are sugar over the
-// band-skill instance's `counter::CRYSTALS` (see `ops.rs` `band_skill_uid`).
-pub fn band_crystals<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().band_crystals(player_id))
+// `group_pool` / `add_group_pool` stay on the guest surface: a named pool on
+// the group-skill field instance (see `ops.rs` `group_skill_uid`).
+pub fn group_pool<C: HostCtx>(c: &mut C, player_id: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().group_pool(player_id, &name))
 }
 
-pub fn add_band_crystals<C: HostCtx>(c: &mut C, player_id: i32, n: i32, max: i32) -> Result<i32, HostErr> {
-    Ok(c.st_mut().w().add_band_crystals(player_id, n, max))
+pub fn add_group_pool<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut().w().add_group_pool(player_id, &name, n, max))
 }
 
-pub fn band_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let s = c.st().wr().band_skill_id(player_id).unwrap_or_default();
+pub fn group_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
+            let s = c.st().wr().group_skill_id(player_id).unwrap_or_default();
             let bytes =
-                postcard::to_allocvec(&s).map_err(|e| HostErr::trap(format!("band_skill encode: {e}")))?;
+                postcard::to_allocvec(&s).map_err(|e| HostErr::trap(format!("group_skill encode: {e}")))?;
             if bytes.len() as i32 <= cap {
                 c.write_guest( buf, &bytes)?;
             }
             Ok(bytes.len() as i32)
 }
 
-pub fn character_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
+pub fn persona_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
             let s = c
                 .st()
                 .wr()
-                .character_skill_id(player_id)
+                .persona_skill_id(player_id)
                 .unwrap_or_default();
             let bytes = postcard::to_allocvec(&s)
-                .map_err(|e| HostErr::trap(format!("character_skill encode: {e}")))?;
+                .map_err(|e| HostErr::trap(format!("persona_skill encode: {e}")))?;
             if bytes.len() as i32 <= cap {
                 c.write_guest( buf, &bytes)?;
             }
             Ok(bytes.len() as i32)
 }
 
-pub fn band_skills<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let list = c.st().wr().band_skills(player_id);
+pub fn group_skills<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
+            let list = c.st().wr().group_skills(player_id);
             let bytes = postcard::to_allocvec(&list)
-                .map_err(|e| HostErr::trap(format!("band_skills encode: {e}")))?;
+                .map_err(|e| HostErr::trap(format!("group_skills encode: {e}")))?;
             if bytes.len() as i32 <= cap {
                 c.write_guest( buf, &bytes)?;
             }
             Ok(bytes.len() as i32)
 }
 
-pub fn add_band_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, extra: i32) -> Result<i32, HostErr> {
+pub fn add_group_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, extra: i32) -> Result<i32, HostErr> {
             let id = guest_str(c, p, n)?;
-            Ok(c.st_mut().w().add_band_skill(player_id, &id, extra != 0))
+            Ok(c.st_mut().w().add_group_skill(player_id, &id, extra != 0))
 }
 
 pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
@@ -1221,25 +1228,25 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
             }
 }
 
-pub fn fire<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+pub fn charge<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().fire(player_id)
+        c.st().wr().charge(player_id)
     })
 }
 
-pub fn fire_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+pub fn charge_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().fire_max(player_id)
+        c.st().wr().charge_max(player_id)
     })
 }
 
-pub fn gain_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
-            // Marker window: `markerGain` opens before the fire moves.
+            // Marker window: `markerGain` opens before the charge moves.
             //
-            // The pause is a **trap**, not the sentinel: `ctx::gain_fire`
+            // The pause is a **trap**, not the sentinel: `ctx::gain_charge`
             // returns `Result<i32, Prompt>` and a great many bodies discard
-            // that result (`ctx::gain_fire(...);`). With the sentinel the body
+            // that result (`ctx::gain_charge(...);`). With the sentinel the body
             // would catch the `Err(Prompt)` and keep going, which the replay
             // model's `finish` boundary check traps ("card published a prompt
             // and kept going" -- the card goes out) while the inline answer
@@ -1251,7 +1258,7 @@ pub fn gain_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) 
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "fire".into(),
+                        name: "charge".into(),
                         delta: n,
                     },
                     crate::inline::Pause::Trap,
@@ -1260,7 +1267,7 @@ pub fn gain_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) 
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().gain_fire(player_id, n, why))
+            Ok(c.st_mut().w().gain_charge(player_id, n, why))
 }
 
 pub fn give_stay<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), HostErr> {
@@ -1320,16 +1327,16 @@ pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> 
     })
 }
 
-pub fn spend_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
             // Marker window (user ruling 2026-10-07): `markerSpend` opens
-            // **before** the fire moves. A cancelled link spends nothing.
+            // **before** the charge moves. A cancelled link spends nothing.
             if n > 0 {
                 let ok = crate::inline::request_or_pause(
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "fire".into(),
+                        name: "charge".into(),
                         delta: -n,
                     },
                     crate::inline::Pause::Sentinel,
@@ -1340,7 +1347,7 @@ pub fn spend_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32)
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().spend_fire(player_id, n, why))
+            Ok(c.st_mut().w().spend_charge(player_id, n, why))
 }
 
 pub fn stay_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
@@ -1373,14 +1380,14 @@ pub fn turn_key<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().turn_key())
 }
 
-pub fn character_is<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+pub fn persona_is<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().character_is(player_id, &name))
+            Ok(c.st().wr().persona_is(player_id, &name))
 }
 
-pub fn in_band<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+pub fn in_group<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().in_band(player_id, &name))
+            Ok(c.st().wr().in_group(player_id, &name))
 }
 
 
@@ -1400,8 +1407,8 @@ pub fn tok_names<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, buf: i32
             Ok(bytes.len() as i32)
 }
 
-pub fn unplace_card_named<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn unplace_card_named<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             Ok(c.st_mut().w().unplace_card_named(player_id, &card) as i32)
 }
 
@@ -1411,8 +1418,8 @@ pub fn can_build_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
     Ok((c.st().wr().can_build_on(player_id, tile) && pay_gate_open(c, player_id)) as i32)
 }
 
-pub fn card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             Ok(c.st().wr().card_face_down(player_id, &card) as i32)
 }
 
@@ -1434,14 +1441,14 @@ pub fn play_from_hand<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 pub fn gain_fixed<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             // V4 (`NEGATION-AUDIT`): Tritone's 「立刻获得此次失去的资金金额」 is
             // money movement and goes through the same `Money` pipeline as any
-            // other gain -- the `effect` [反击] window, the modifier stages and
+            // other gain -- the `effect` counteraction window, the modifier stages and
             // the `pay` settlement all see it. (It used to debit/credit the
             // world copy directly, outside every 支付阶段 window.)
             gain(c, player_id, amount, p, n)
 }
 
-pub fn set_card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, down: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn set_card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, down: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             Ok(c.st_mut()
                 .w()
                 .set_card_face_down(player_id, &card, down != 0) as i32)
@@ -1466,8 +1473,8 @@ fn field_uid_of<C: HostCtx>(c: &C, player_id: i32, card: &str) -> i32 {
 /// 「不受任何效果影响」 on a named placed card. Resolved through the instance
 /// (`is_immune_at` / `set_immune_at`): the card name is not an identity, so
 /// this hits the first field copy.
-pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, on: i32) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, on: i32) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
         return Ok(0);
@@ -1475,8 +1482,8 @@ pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, 
     Ok(c.st_mut().w().set_immune_at(uid, on != 0) as i32)
 }
 
-pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
         return Ok(0);
@@ -1484,8 +1491,8 @@ pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> R
     Ok(c.st().wr().is_immune_at(uid) as i32)
 }
 
-pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, tile: i32) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, tile: i32) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
         return Ok(0);
@@ -1493,14 +1500,14 @@ pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, ti
     Ok(c.st_mut().w().set_tile_at(uid, tile) as i32)
 }
 
-pub fn place_card_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, cp: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn place_card_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, cptr: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             let note = guest_msg(c, p, n)?;
             Ok(c.st_mut().w().place_card_on(player_id, tile, &card, note))
 }
 
-pub fn place_card_at<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn place_card_at<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             let note = guest_msg(c, p, n)?;
             Ok(c.st_mut().w().place_card(player_id, &card, note))
 }
@@ -1523,15 +1530,15 @@ pub fn transfer_to_dest<C: HostCtx>(c: &mut C, to: i32, dest: i32) -> Result<i32
         Ok(c.st_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
 }
 
-pub fn ring_multiplier<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+pub fn rent_unit_mult<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().ring_multiplier()
+        c.st().wr().rent_unit_mult()
     })
 }
 
-pub fn add_ring_bonus<C: HostCtx>(c: &mut C, n: i32) -> Result<i32, HostErr> {
+pub fn add_rent_unit_bonus<C: HostCtx>(c: &mut C, n: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st_mut().w().add_ring_bonus(n)
+        c.st_mut().w().add_rent_unit_bonus(n)
     })
 }
 
@@ -1612,7 +1619,7 @@ pub fn designation_cancelled<C: HostCtx>(c: &mut C, seat: i32) -> Result<i32, Ho
 
 pub fn target<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, single: i32) -> Result<i32, HostErr> {
             // Paused like `gate`: the engine runs the targeting pipeline (it
-            // raises hooks and opens the `target` [反击] window) and the replay
+            // raises hooks and opens the `target` counteraction window) and the replay
             // reads its answer.
                         {
                 let req = HostRequest::Target {
@@ -1871,7 +1878,7 @@ pub fn ask<C: HostCtx>(c: &mut C, kind: i32, player_id: i32, tp: i32, tl: i32, x
 
 pub fn trig_kind<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().trigger().kind as i32
+        c.st().wr().trigger().kind.as_i32()
     })
 }
 
@@ -2088,7 +2095,7 @@ pub fn trig_effect_kind<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostErr> {
         let t = c.st().wr().trigger();
         t.effects
             .get(i.max(0) as usize)
-            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind) as i32)
+            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind).as_i32() as i32)
     })
 }
 
@@ -2305,9 +2312,9 @@ pub fn turn_main_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     })
 }
 
-pub fn add_fire_max<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
+pub fn add_charge_max<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st_mut().w().add_fire_max(player_id, n)
+        c.st_mut().w().add_charge_max(player_id, n)
     })
 }
 
@@ -2510,7 +2517,7 @@ pub fn move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 /// Resolve `Target` to the receiver instance uids that could answer, in field
 /// order. `Uid` names one; `Card` names the first field copy of that card id on
-/// that seat; `Board` names a standing board pseudo card (`mark:cp` and kin)
+/// that seat; `Board` names a standing board pseudo card (the tile-mark owner and kin)
 /// via [`CardWorld::mark_rule_instances`].
 fn resolve_receivers<C: HostCtx>(
     c: &C,
@@ -2614,10 +2621,10 @@ pub fn send<C: HostCtx>(
         let fuel = c.fuel()?;
         let st = c.st_mut();
         // The handler runs **as the receiver instance** (user ruling
-        // 2026-10-10: `mark:cp` answers `"place"` and binds units to its own
+        // 2026-10-10: the tile-mark owner answers `"place"` and binds units to its own
         // counter). `enter_card` would start a fresh uid like `invoke_skill`;
         // pin `current_uid` to the resolved receiver so `ctx::place_mark`
-        // stamps `instance = mark:cp` and `ctx::self_uid()` is that card.
+        // stamps `instance = the tile-mark owner` and `ctx::self_uid()` is that card.
         let saved = st.w().enter_card(&rule_id);
         st.w().set_self_uid(uid);
         let was_from_hand = st.w().play_from_hand();

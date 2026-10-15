@@ -8,7 +8,7 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play("", None, p
         .derived(true)
         .tags(&[r#"手"#, r#"衍生"#])
         .text(r#"[手]：获得1000资金。"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
+        .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 fn press(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 1000, &Msg::new(key!("press_why")))?;

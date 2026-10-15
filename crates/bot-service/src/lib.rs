@@ -579,7 +579,7 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         .unwrap_or("")
         .to_string();
     // One **searching** ponder per seat per public turn. The "next turn is
-    // near" gate alone still fires every 200 ms while it holds; without this
+    // near" gate alone still ticks every 200 ms while it holds; without this
     // bound the speculative search would cost more CPU than the decide it
     // might save. Everything else on the idle probe is a cheap no-op.
     if idle {

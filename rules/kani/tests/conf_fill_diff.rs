@@ -51,7 +51,7 @@ use rules_kani::world::{self as kworld, World as KWorld};
 #[derive(Clone, Debug)]
 struct Seat {
     money: i32,
-    fire: i32,
+    charge: i32,
     crystals: i32,
     hand: i32,
     pos: i32,
@@ -64,8 +64,8 @@ struct Seat {
     no_hand: i32,
     /// `[不可阻挡]` layers.
     unstoppable: i32,
-    character: &'static str,
-    band: &'static str,
+    persona: &'static str,
+    group: &'static str,
     /// Non-zero named tokens (`tok('…')`).
     tokens: Vec<(&'static str, i32)>,
     /// Non-zero latches (`slot('…')`) — a subset of `SLOT_NAMES`.
@@ -81,7 +81,7 @@ impl Default for Seat {
     fn default() -> Self {
         Self {
             money: 1500,
-            fire: 0,
+            charge: 0,
             crystals: 0,
             hand: 3,
             pos: 0,
@@ -92,8 +92,8 @@ impl Default for Seat {
             exile: 0,
             no_hand: 0,
             unstoppable: 0,
-            character: "",
-            band: "",
+            persona: "",
+            group: "",
             tokens: Vec::new(),
             slots: Vec::new(),
             gains: 0,
@@ -235,13 +235,13 @@ fn board_tile_named(name: &str) -> i32 {
         .unwrap_or(-1)
 }
 
-fn board_is_circle(tile: i32) -> bool {
+fn board_is_start(tile: i32) -> bool {
     matches!(rules_kani::board::TILES.get(tile as usize), Some(t) if t.kind == 0)
 }
-fn board_is_ring(tile: i32) -> bool {
+fn board_is_deed(tile: i32) -> bool {
     matches!(rules_kani::board::TILES.get(tile as usize), Some(t) if t.kind == 3)
 }
-fn board_is_live_house(tile: i32) -> bool {
+fn board_is_venue(tile: i32) -> bool {
     matches!(rules_kani::board::TILES.get(tile as usize), Some(t) if (t.kind == 1 || t.kind == 3) && t.group == 6)
 }
 fn board_is_buyable(tile: i32) -> bool {
@@ -258,11 +258,11 @@ fn board_price(tile: i32) -> i32 {
 /// through `TriggerKind::from_str`.
 fn chain_kind_str(kind: i64) -> &'static str {
     match kind {
-        x if x == TriggerKind::Pay as i64 => "pay",
-        x if x == TriggerKind::Target as i64 => "target",
-        x if x == TriggerKind::Abnormal as i64 => "abnormal",
-        x if x == TriggerKind::Card as i64 => "card",
-        x if x == TriggerKind::Settle as i64 => "settle",
+        x if x == TriggerKind::Pay.as_i32() as i64 => "pay",
+        x if x == TriggerKind::Target.as_i32() as i64 => "target",
+        x if x == TriggerKind::Abnormal.as_i32() as i64 => "abnormal",
+        x if x == TriggerKind::Card.as_i32() as i64 => "card",
+        x if x == TriggerKind::Settle.as_i32() as i64 => "settle",
         _ => "pay",
     }
 }
@@ -287,7 +287,7 @@ impl SnapSrc for Fixture {
                 None
             },
             roll_source: match t.roll_source {
-                1 => RollSource::Fire,
+                1 => RollSource::Charge,
                 2 => RollSource::Card,
                 3 => RollSource::Skill,
                 _ => RollSource::Unattributed,
@@ -348,17 +348,19 @@ impl SnapSrc for Fixture {
     fn tile_name(&self, tile: i32) -> String {
         board_tile_name(tile)
     }
-    fn is_circle(&self, tile: i32) -> bool {
-        board_is_circle(tile)
+    fn tile_is(&self, tile: i32, kind: &str) -> bool {
+        match kind {
+            "circle" => board_is_start(tile),
+            "ring" => board_is_deed(tile),
+            _ => false,
+        }
     }
-    fn is_ring(&self, tile: i32) -> bool {
-        board_is_ring(tile)
-    }
-    fn is_live_house(&self, tile: i32) -> bool {
-        board_is_live_house(tile)
-    }
-    fn is_buyable(&self, tile: i32) -> bool {
-        board_is_buyable(tile)
+    fn tile_in(&self, _player_id: i32, tile: i32, class: &str) -> bool {
+        match class {
+            "buyable" => board_is_buyable(tile),
+            "livehouse" => board_is_venue(tile),
+            _ => false,
+        }
     }
     fn player_count(&self) -> i32 {
         self.n_players
@@ -366,11 +368,16 @@ impl SnapSrc for Fixture {
     fn money(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.money).unwrap_or(0)
     }
-    fn fire(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.fire).unwrap_or(0)
+    fn charge(&self, p: i32) -> i32 {
+        self.seats.get(p as usize).map(|s| s.charge).unwrap_or(0)
     }
-    fn band_crystals(&self, p: i32) -> i32 {
+    fn group_pool(&self, p: i32, name: &str) -> i32 {
+        // Fixture holds one unnamed group-pool scalar; any name reads it.
+        let _ = name;
         self.seats.get(p as usize).map(|s| s.crystals).unwrap_or(0)
+    }
+    fn card_pool(&self, p: i32, card: &str, name: &str) -> i32 {
+        self.card_counter(p, card, name)
     }
     fn hand_size(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.hand).unwrap_or(0)
@@ -421,22 +428,22 @@ impl SnapSrc for Fixture {
         }
         rows.into_iter().filter(|(_, v)| *v != 0).collect()
     }
-    fn character_skill_id(&self, _p: i32) -> Option<String> {
+    fn persona_skill_id(&self, _p: i32) -> Option<String> {
         None
     }
-    fn band_skill_id(&self, _p: i32) -> Option<String> {
+    fn group_skill_id(&self, _p: i32) -> Option<String> {
         None
     }
-    fn character_name(&self, p: i32) -> Option<String> {
+    fn persona_name(&self, p: i32) -> Option<String> {
         self.seats
             .get(p as usize)
-            .map(|s| s.character.to_string())
+            .map(|s| s.persona.to_string())
             .filter(|s| !s.is_empty())
     }
-    fn band_name(&self, p: i32) -> Option<String> {
+    fn group_name(&self, p: i32) -> Option<String> {
         self.seats
             .get(p as usize)
-            .map(|s| s.band.to_string())
+            .map(|s| s.group.to_string())
             .filter(|s| !s.is_empty())
     }
     fn tok(&self, p: i32, name: &str) -> i32 {
@@ -459,13 +466,6 @@ impl SnapSrc for Fixture {
     }
     fn owned_count(&self, p: i32) -> i32 {
         self.tiles.iter().filter(|t| t.owner == p).count() as i32
-    }
-    fn card_crystals(&self, _p: i32, _card: &str) -> i32 {
-        self.card_counters
-            .iter()
-            .find(|(n, _)| *n == "crystals")
-            .map(|(_, v)| *v as i32)
-            .unwrap_or(0)
     }
     fn card_counter(&self, _p: i32, _card: &str, name: &str) -> i32 {
         self.card_counters
@@ -523,18 +523,18 @@ fn to_world(fx: &Fixture) -> KWorld {
     w.n_players = fx.n_players;
     for (p, s) in fx.seats.iter().enumerate() {
         w.money[p] = s.money;
-        w.fire[p] = s.fire;
-        w.band_crystals[p] = s.crystals;
+        w.charge[p] = s.charge;
+        w.group_pool[p] = s.crystals;
         w.pos[p] = s.pos;
         w.out[p] = s.out;
         w.stay[p] = s.stay;
         // `hand_size_view` = resonance + non-slot-1 bits + `hand_n`.
         w.hand_n = s.hand.clamp(0, 255) as u8;
-        if !s.character.is_empty() {
-            w.character_id[p] = intern::intern(s.character).0;
+        if !s.persona.is_empty() {
+            w.persona_id[p] = intern::intern(s.persona).0;
         }
-        if !s.band.is_empty() {
-            w.band_id[p] = intern::intern(s.band).0;
+        if !s.group.is_empty() {
+            w.group_id[p] = intern::intern(s.group).0;
         }
         w.player_keys[p].set(intern::intern(ir_fill::KEY_STUN), s.stun);
         w.player_keys[p].set(intern::intern(ir_fill::KEY_STUN_START), s.stun_start);
@@ -563,7 +563,7 @@ fn to_world(fx: &Fixture) -> KWorld {
     w.trig_target = fx.trig.target;
     w.trig_tile = fx.trig.tile;
     w.trig_value = fx.trig.value as i32;
-    w.trig_kind = fx.trig.kind as i32;
+    w.trig_kind = fx.trig.kind.as_i32() as i32;
     w.turn_player = fx.trig.turn_player;
     w.turn_key = fx.trig.turn_key;
     w
@@ -572,7 +572,7 @@ fn to_world(fx: &Fixture) -> KWorld {
 fn to_overlay(fx: &Fixture) -> TriggerOverlay {
     let t = &fx.trig;
     let mut ov = TriggerOverlay::default();
-    ov.kind = Some(t.kind as i32);
+    ov.kind = Some(t.kind.as_i32() as i32);
     ov.value = Some(t.value);
     ov.step = t.step;
     ov.by = t.by;
@@ -942,8 +942,8 @@ fn fx_chain_pay_move() -> Fixture {
         by: 1,
         pay_is_rent: true,
         chain: vec![
-            (TriggerKind::Pay as i64, 0, 1),
-            (TriggerKind::Target as i64, 1, 0),
+            (TriggerKind::Pay.as_i32() as i64, 0, 1),
+            (TriggerKind::Target.as_i32() as i64, 1, 0),
         ],
         mv: Some(MoveFx {
             roll: Some(5),
@@ -962,15 +962,15 @@ fn fx_chain_pay_move() -> Fixture {
     fx
 }
 
-/// (6) No chain, Abnormal window, band_is, character_is, counter_is, not placed.
+/// (6) No chain, Abnormal window, group_is, persona_is, counter_is, not placed.
 fn fx_no_chain_abnormal() -> Fixture {
     let mut fx = Fixture::new("no_chain_abnormal", 4);
     for (i, s) in fx.seats.iter_mut().enumerate() {
         s.pos = 5 + i as i32 * 11;
     }
-    fx.seats[0].band = "Pastel✽Palettes";
-    fx.seats[0].character = "丸山彩";
-    fx.seats[0].fire = 2;
+    fx.seats[0].group = "Pastel✽Palettes";
+    fx.seats[0].persona = "丸山彩";
+    fx.seats[0].charge = 2;
     fx.seats[0].hand = 7;
     fx.seats[0].slots = vec![("skill.manaDonut.half", 1), ("detour_next_roll", 1)];
     fx.trig = Trig {
@@ -1171,11 +1171,11 @@ fn fixtures_flip_the_guards_they_target() {
     let aya = "actor == owner && value > 0";
     let chain_pay =
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";
-    let is_circle = "actor == owner && is_circle(tile.id)";
+    let is_start = ruleset_core::guards::OWN_START;
     // No `actor == owner` clause — the fans fixture's actor is seat 1.
     let fans = "value > 0 && tok('P✽P粉丝(正)') >= 1";
     let placed = "card.placed";
-    let band = "band_is(owner, 'Pastel✽Palettes')";
+    let band = "group_is(owner, 'Pastel✽Palettes')";
 
     let f1 = fx_aya_poorest_value();
     assert!(prod_eval(aya, &f1, 0), "fixture 1: aya guard should hold");
@@ -1185,12 +1185,12 @@ fn fixtures_flip_the_guards_they_target() {
     assert!(!prod_eval(aya, &f2, 0), "fixture 2: value==0 → aya false");
 
     let f3 = fx_tile_kinds();
-    assert!(prod_eval(is_circle, &f3, 0) == false, "tile 8 is ring, not circle");
+    assert!(prod_eval(is_start, &f3, 0) == false, "tile 8 is ring, not circle");
     // Circle tile 0:
     let mut f3b = f3.clone();
     f3b.trig.tile = 0;
-    assert!(prod_eval(is_circle, &f3b, 0));
-    assert!(ir_eval(guard_index(is_circle), &f3b, 0));
+    assert!(prod_eval(is_start, &f3b, 0));
+    assert!(ir_eval(guard_index(is_start), &f3b, 0));
 
     let f5 = fx_chain_pay_move();
     assert!(prod_eval(chain_pay, &f5, 0), "chain Pay present");

@@ -60,7 +60,7 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）"#)
         .cell(r#"F12"#)
-        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // C# `CardCharityShow.Play` arms the two turn-long effects and logs.
@@ -97,7 +97,7 @@ fn mine(player_id: i32, t: i32) -> bool {
     // `ctx::placed_tile` answers "is this id in play on that player, and on which
     // tile". `place_card` does not bind a tile yet (`Some(-1)`), so accept that
     // as "on CiRCLE" -- the only circle tile the rule names.
-    if ctx::is_circle(t) {
+    if ctx::is_start(t) {
         return match ctx::find_card(player_id, KOKORO_ID).and_then(ctx::tile_at) {
             Some(pt) => pt == t || pt < 0,
             None => false,

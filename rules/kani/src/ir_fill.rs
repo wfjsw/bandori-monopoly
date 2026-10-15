@@ -42,8 +42,8 @@
 //! | `effect_count` | `ov.chain_n` (default 0) |
 //! | `owner` / `owner_id` | the candidate seat |
 //! | `owner_money` | `w.money[owner]` |
-//! | `owner_fire` | `w.fire[owner]` |
-//! | `owner_crystals` | `w.band_crystals[owner]` |
+//! | `owner_fire` | `w.charge[owner]` |
+//! | `owner_crystals` | `w.group_pool[owner]` |
 //! | `owner_hand` | `hand_size` view (resonance + non-slot-1 bits + `hand_n`) |
 //! | `owner_pos` | `w.pos[owner]` |
 //! | `owner_out` | `w.out[owner]` as 0/1 |
@@ -51,8 +51,8 @@
 //! | `owner_stun` | `w.key_get(owner, STUN)` |
 //! | `owner_exile` | `w.key_get(owner, EXILE)` |
 //! | `owner_no_hand` | `w.key_get(owner, NO_HAND)` |
-//! | `owner_character` | `id_of(resolve(w.character_id[owner]))` (name hash, matching `fill_window`) |
-//! | `owner_band` | `id_of(resolve(w.band_id[owner]))` |
+//! | `owner_character` | `id_of(resolve(w.persona_id[owner]))` (name hash, matching `fill_window`) |
+//! | `owner_band` | `id_of(resolve(w.group_id[owner]))` |
 //! | `owner_tiles` | count of `w.tiles[*].owner == owner` |
 //! | `card_id` | argument (`id_of(card_name)`) |
 //! | `card_placed` | argument |
@@ -371,8 +371,8 @@ impl TriggerOverlay {
 pub mod src {
     /// PP:[丸山彩]憧憬的前方 `On::Hook(PayAdd)`.
     pub const AYA_PAY_ADD: &str = "actor == owner && value > 0";
-    /// A function-carrying guard (`is_circle`).
-    pub const IS_CIRCLE: &str = "actor == owner && is_circle(tile.id)";
+    /// A function-carrying guard (`is_start`).
+    pub const IS_CIRCLE: &str = ruleset_core::guards::OWN_START;
     /// A chain/kind-carrying guard (`effect.has(Pay)`).
     pub const CHAIN_PAY: &str =
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";
@@ -475,8 +475,8 @@ fn id_of_name_id(id: NameId) -> i64 {
 fn fill_seat(c: &mut IrCtx, w: &World) {
     for p in 0..world::MAX_PLAYERS {
         c.seat[p][SeatField::Money as usize] = w.money[p] as i64;
-        c.seat[p][SeatField::Fire as usize] = w.fire[p] as i64;
-        c.seat[p][SeatField::Crystals as usize] = w.band_crystals[p] as i64;
+        c.seat[p][SeatField::Fire as usize] = w.charge[p] as i64;
+        c.seat[p][SeatField::Crystals as usize] = w.group_pool[p] as i64;
         c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
         c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
         c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
@@ -484,8 +484,8 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
         c.seat[p][SeatField::Stun as usize] = key_get_name(w, p as i32, KEY_STUN);
         c.seat[p][SeatField::Exile as usize] = key_get_name(w, p as i32, KEY_EXILE);
         c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
-        c.seat[p][SeatField::Character as usize] = id_of_name_id(NameId(w.character_id[p]));
-        c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.band_id[p]));
+        c.seat[p][SeatField::Character as usize] = id_of_name_id(NameId(w.persona_id[p]));
+        c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.group_id[p]));
         c.seat[p][SeatField::Tiles as usize] = owned_tiles(w, p as i32);
         // Turn trackers (World `gains_this_turn` / `targeted_count` /
         // `between_seat`). `gains_this_turn` is incremented by `Op::gain`;
@@ -524,7 +524,7 @@ fn fill_board_sets(c: &mut IrCtx, w: &World) {
             let i = outer * 8 + k;
             if i < 60 {
                 let t = board::TILES[i];
-                // Membership ids are the **0-based slot** (`tile.id` / `is_circle(t)`).
+                // Membership ids are the **0-based slot** (`tile.id` / `is_start(t)`).
                 // `TILES[i].index` is the 1-based board.json index — do not insert that.
                 let id = i as i64;
                 match t.kind {
@@ -886,8 +886,8 @@ pub fn fill_from_world(
     c.set_scalar(VarId::Owner, owner as i64);
     c.set_scalar(VarId::OwnerId, owner as i64);
     c.set_scalar(VarId::OwnerMoney, w.money[op] as i64);
-    c.set_scalar(VarId::OwnerFire, w.fire[op] as i64);
-    c.set_scalar(VarId::OwnerCrystals, w.band_crystals[op] as i64);
+    c.set_scalar(VarId::OwnerFire, w.charge[op] as i64);
+    c.set_scalar(VarId::OwnerCrystals, w.group_pool[op] as i64);
     c.set_scalar(VarId::OwnerHand, hand_size_view(w, op));
     c.set_scalar(VarId::OwnerPos, w.pos[op] as i64);
     c.set_scalar(VarId::OwnerOut, w.out[op] as i64);
@@ -897,11 +897,11 @@ pub fn fill_from_world(
     c.set_scalar(VarId::OwnerNoHand, key_get_name(w, owner, KEY_NO_HAND));
     c.set_scalar(
         VarId::OwnerCharacter,
-        id_of_name_id(NameId(w.character_id[op])),
+        id_of_name_id(NameId(w.persona_id[op])),
     );
     c.set_scalar(
         VarId::OwnerBand,
-        id_of_name_id(NameId(w.band_id[op])),
+        id_of_name_id(NameId(w.group_id[op])),
     );
     c.set_scalar(VarId::OwnerTiles, owned_tiles(w, owner));
     c.set_scalar(VarId::CardId, card);
@@ -969,7 +969,7 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     c.set_scalar(VarId::TurnKey, w.turn_key as i64);
     let op = if owner >= 0 { owner as usize } else { 0 };
     c.set_scalar(VarId::OwnerMoney, w.money[op] as i64);
-    c.set_scalar(VarId::OwnerFire, w.fire[op] as i64);
+    c.set_scalar(VarId::OwnerFire, w.charge[op] as i64);
     c.set_scalar(VarId::OwnerOut, w.out[op] as i64);
     c.set_scalar(VarId::OwnerStay, w.stay[op] as i64);
     c.set_scalar(VarId::OwnerPos, w.pos[op] as i64);
@@ -1303,8 +1303,8 @@ pub fn fill_for_guard(
     set_if!(VarId::Owner, owner as i64);
     set_if!(VarId::OwnerId, owner as i64);
     set_if!(VarId::OwnerMoney, w.money[op] as i64);
-    set_if!(VarId::OwnerFire, w.fire[op] as i64);
-    set_if!(VarId::OwnerCrystals, w.band_crystals[op] as i64);
+    set_if!(VarId::OwnerFire, w.charge[op] as i64);
+    set_if!(VarId::OwnerCrystals, w.group_pool[op] as i64);
     set_if!(VarId::OwnerHand, hand_size_view(w, op));
     set_if!(VarId::OwnerPos, w.pos[op] as i64);
     set_if!(VarId::OwnerOut, w.out[op] as i64);
@@ -1314,9 +1314,9 @@ pub fn fill_for_guard(
     set_if!(VarId::OwnerNoHand, key_get_name(w, owner, KEY_NO_HAND));
     set_if!(
         VarId::OwnerCharacter,
-        id_of_name_id(NameId(w.character_id[op]))
+        id_of_name_id(NameId(w.persona_id[op]))
     );
-    set_if!(VarId::OwnerBand, id_of_name_id(NameId(w.band_id[op])));
+    set_if!(VarId::OwnerBand, id_of_name_id(NameId(w.group_id[op])));
     set_if!(VarId::OwnerTiles, owned_tiles(w, owner));
     set_if!(VarId::CardId, card);
     set_if!(VarId::CardPlaced, card_placed as i64);
@@ -1349,7 +1349,7 @@ pub fn fill_for_guard(
                     c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
                 }
                 if sf & (1 << (SeatField::Fire as u32)) != 0 {
-                    c.seat[p][SeatField::Fire as usize] = w.fire[p] as i64;
+                    c.seat[p][SeatField::Fire as usize] = w.charge[p] as i64;
                 }
                 if sf & (1 << (SeatField::Pos as u32)) != 0 {
                     c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
@@ -1367,17 +1367,17 @@ pub fn fill_for_guard(
                     c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
                 }
                 if sf & (1 << (SeatField::Crystals as u32)) != 0 {
-                    c.seat[p][SeatField::Crystals as usize] = w.band_crystals[p] as i64;
+                    c.seat[p][SeatField::Crystals as usize] = w.group_pool[p] as i64;
                 }
                 if sf & (1 << (SeatField::Hand as u32)) != 0 {
                     c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
                 }
                 if sf & (1 << (SeatField::Character as u32)) != 0 {
                     c.seat[p][SeatField::Character as usize] =
-                        id_of_name_id(NameId(w.character_id[p]));
+                        id_of_name_id(NameId(w.persona_id[p]));
                 }
                 if sf & (1 << (SeatField::Band as u32)) != 0 {
-                    c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.band_id[p]));
+                    c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.group_id[p]));
                 }
                 if sf & (1 << (SeatField::Gains as u32)) != 0 {
                     c.seat[p][SeatField::Gains as usize] = w.gains_this_turn[p] as i64;
@@ -1455,7 +1455,7 @@ pub fn fill_for_guard(
     }
 
     // Board sets / geometry bins only when the guard's fns need them.
-    let needs_sets = (needs.fns >> 6) & 0xF != 0 // IsCircle..IsBuyable
+    let needs_sets = (needs.fns >> 6) & 0xF != 0 // IsStart..IsBuyable
         || (needs.fns >> 20) & 1 != 0 // Blocked
         || (needs.fns >> 22) & 3 != 0; // ChainHas / ChainHits
     if needs_sets {
@@ -1482,8 +1482,8 @@ pub fn fill_for_guard(
     c
 }
 
-/// Fill a context for the `is_circle` pilot: a placed card on `tile`.
-pub fn fill_is_circle(w: &World, owner: i32, tile: i64) -> IrCtx {
+/// Fill a context for the `is_start` pilot: a placed card on `tile`.
+pub fn fill_is_start(w: &World, owner: i32, tile: i64) -> IrCtx {
     let mut c = fill_from_world(w, owner, 0, true, tile, &TriggerOverlay::default());
     c.set_scalar(VarId::TileId, tile);
     if tile >= 0 && (tile as usize) < 60 {

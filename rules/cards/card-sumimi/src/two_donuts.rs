@@ -34,7 +34,7 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"（1）获得[除外]直至你原本所在格子被其他玩家经过。（2）你原本所在格子被其他玩家经过时，可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家本次移动终点间的任一格并触发结算，之后你们各获得2火罐（超出上限的每个火罐转化为500资金）"#)
         .cell(r#"L4"#)
-        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
+        .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 const ID: &str = "Sumimi:一人两个甜甜圈";
 /// C# `DonutFx.Orig` -- the tile the exile waits on.

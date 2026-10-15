@@ -26,7 +26,7 @@ fn data() -> Arc<GameData> {
     // but `data()` is also called standalone by `match_with_rules`.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     let roster = Roster::from_fixture(&std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/tests/fixtures/roster.json"),
     )
     .expect("roster fixture"))
     .expect("roster fixture parses");
@@ -112,14 +112,47 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     m
 }
 
+/// Decline every open choice (optional buy / build on deed settle, etc.) so a
+/// card body that pauses mid-move can resume. The last option is the refusal
+/// (`ask.no_buy` / `ask.no_build`).
+fn decline_prompts(m: &mut Match) {
+    for _ in 0..32 {
+        let st = m.state();
+        if st.prompt.id == 0 {
+            return;
+        }
+        let n = st.prompt.options.len().max(2);
+        let prompt = st.prompt.id;
+        let who = st
+            .prompt
+            .players
+            .iter()
+            .zip(st.prompt.answers.iter())
+            .find(|(_, &a)| a < 0)
+            .map(|(&p, _)| p)
+            .unwrap_or(1);
+        m.act(
+            who,
+            &NetMessage {
+                prompt,
+                value: n as i32 - 1,
+                ..NetMessage::act("answer")
+            },
+        )
+        .expect("decline");
+    }
+}
+
 
 #[test]
-fn a_card_whose_crystals_run_out_leaves_the_field() {
-    // TEST:crystal places itself with one crystal and spends it in the same
-    // effect. The 「no crystals -> discard」 check is its `crystalsChanged`
+fn a_card_whose_named_counters_run_out_leaves_the_field() {
+    // TEST:named counter places itself with one named counter and spends it in the same
+    // effect. The no-named-counter discard check is its `counterChanged` (wire
     // handler, not a re-check at the spend site.
-    let mut m = match_with_rules("TEST:crystal", rules_with_fixtures());
-    m.act(1, &play("TEST:crystal")).expect("play should run");
+    // `TEST:named-counter` / `named-counter-empty` / `named-counter-none` are rules/ fixture ids
+    // (rules/fixtures/test-cards) -- kept to match the fixture definitions.
+    let mut m = match_with_rules("TEST:named-counter", rules_with_fixtures());
+    m.act(1, &play("TEST:named-counter")).expect("play should run");
     let st = m.state();
     let me = st
         .players
@@ -127,24 +160,24 @@ fn a_card_whose_crystals_run_out_leaves_the_field() {
         .find(|p| p.member == 1)
         .expect("the human player");
     assert!(
-        me.field.iter().all(|f| f.card != "TEST:crystal"),
+        me.field.iter().all(|f| f.card != "TEST:named-counter"),
         "the card left the field: {:?}",
         me.field
     );
     assert!(
-        me.discard.iter().any(|c| c == "TEST:crystal"),
+        me.discard.iter().any(|c| c == "TEST:named-counter"),
         "it went to the discard pile: {:?}",
         me.discard
     );
     // The spend emptied it, so the removal spoke -- not the earlier write that
     // took the count up, which the guard must let pass.
     assert_eq!(
-        fixture_events(&st, "crystal_empty").len(),
+        fixture_events(&st, "named-counter-empty").len(),
         1,
         "the spend that emptied the card spoke"
     );
     assert!(
-        fixture_events(&st, "crystal_none").is_empty(),
+        fixture_events(&st, "named-counter-none").is_empty(),
         "the earlier write must not speak for the count the run ended on"
     );
 }
@@ -294,6 +327,9 @@ fn a_card_can_shape_a_move_and_run_it_now() {
     let mut m = match_with_rules("TEST:mover", rules_with_fixtures());
     let before = m.state().players[1].pos;
     m.act(1, &play("TEST:mover")).expect("play the mover");
+    // Deed settle is the optional buy (G-SETTLE-06): decline so the move and
+    // the rest of the card body can finish.
+    decline_prompts(&mut m);
     let st = m.state();
     assert!(fixture_events(&st, "mover_planned").len() == 1, "planned");
     let done = fixture_events(&st, "mover_done");
@@ -375,7 +411,7 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
     // the effect never settles at all -- as against `negate_effect`, which
     // would let a listener see the effect and only void what lands.
     //
-    // Both players are human: a [反击] window is never offered to a bot.
+    // Both players are human: a counteraction window is never offered to a bot.
     let members = vec![member(1, false), member(2, false)];
     let mut m = Match::new(
         data(),

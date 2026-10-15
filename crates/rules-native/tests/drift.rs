@@ -165,7 +165,7 @@ fn native_is_deterministic() {
 ///
 /// Root causes closed 2026-10-09 (docs/BOT.md §5 "native-rules drift"):
 /// `RulesHandle::pre` defaulted to `None` on `NativeRulesHandle`, so every
-/// CEL condition read as absent and G4-deleted guards fired unfiltered; and
+/// CEL condition read as absent and G4-deleted guards ran unfiltered; and
 /// `card-sdk`'s native ABI passed 64-bit guest buffers as truncated `i32`
 /// pointers (`cards_in` &co. returned empty, `rt::leak` handed the host a
 /// garbage handle). Both now match the sandbox byte for byte.

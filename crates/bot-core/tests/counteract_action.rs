@@ -1,4 +1,4 @@
-//! The [反击] offer's action surface (`docs/BOT.md` §3.4): one searched
+//! The counteraction offer's action surface (`docs/BOT.md` §3.4): one searched
 //! decision per **offered card** (the option label names it -- `MatchPrompt::card`
 //! is the answered link, not the offer), plus the fallback's skip, and each one
 //! maps back to the right `answer` option index. The search must be able to
@@ -9,7 +9,7 @@ use bot_core::view::AiAnswer;
 use game_core::msg::Msg;
 use game_core::state::{MatchPrompt, MatchState};
 
-/// A [反击] offer naming two cards plus the 「不打」 skip, waiting on seat 1.
+/// A counteraction offer naming two cards plus the 「不打」 skip, waiting on seat 1.
 fn counteract_prompt() -> MatchPrompt {
     let mut p = MatchPrompt::default();
     p.id = 7;
@@ -73,7 +73,7 @@ fn each_declaration_maps_back_to_its_own_option_index() {
 }
 
 /// The engine's `aiAnswer` (an option index) maps onto the card that option
-/// names -- `MatchPrompt::card` is empty on a [反击] offer and must not be
+/// names -- `MatchPrompt::card` is empty on a counteraction offer and must not be
 /// mistaken for the declaration.
 #[test]
 fn the_heuristic_answer_names_the_offered_card_it_picked() {

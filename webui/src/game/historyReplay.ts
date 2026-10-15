@@ -13,7 +13,7 @@ export interface HistoryReplayRow {
   time: string;
   mode: number;
   rank: number;
-  character: string;
+  persona: string;
   /** Local replay-store id, empty/absent on rows written before ids existed. */
   replayId?: string;
 }
@@ -82,7 +82,7 @@ export function resolveHistoryReplay(
     const h = e.header;
     if (h.mode !== row.mode) continue;
     const mine = h.seats.find((x) => !x.bot);
-    if (!mine || mine.character !== row.character || mine.rank !== row.rank) continue;
+    if (!mine || mine.persona !== row.persona || mine.rank !== row.rank) continue;
     const at = recordMinutes(h.created);
     if (want == null || at == null) continue;
     const dt = Math.abs(at - want);

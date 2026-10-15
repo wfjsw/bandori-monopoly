@@ -29,7 +29,7 @@ pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]).meta(&card
         .text(r#"[特]：
 拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。"#)
         .cell(r#"D8"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Offer the [共鸣] cost. Returns whether the player paid it, which is the
 /// caller's signal to run its own [共鸣] branch.
@@ -55,8 +55,8 @@ pub fn try_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
     // 「将此卡放入弃卡区」
     ctx::to_discard(player_id, RESONANCE.id);
     // 「为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]」
-    if ctx::in_band(player_id, "Pastel✽Palettes") {
-        ctx::add_band_crystals(player_id, 2, i32::MAX);
+    if ctx::in_group(player_id, "Pastel✽Palettes") {
+        ctx::add_group_crystals(player_id, 2, i32::MAX);
     }
     Ok(true)
 }

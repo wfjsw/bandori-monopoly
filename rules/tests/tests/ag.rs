@@ -479,8 +479,8 @@ fn glory_counter_is_offered_to_a_bot_seat() {
     b.generated_at = "ag".into();
     b.me.push(StrategyEntry {
         me: bot_char,
-        band: String::new(),
-        opponent_bands: Vec::new(),
+        group: String::new(),
+        opponent_groups: Vec::new(),
         deck: Vec::new(),
         params,
     });
@@ -617,8 +617,8 @@ fn one_of_us_places_on_field() {
 #[test]
 fn ran_skill_starts_with_one_fire() {
     let mut t = Table::new(&["美竹兰", "户山香澄"]);
-    assert_eq!(t.fire(0), 1, "初始1");
-    assert_eq!(t.state_var(0, "fire").max, 1, "上限1");
+    assert_eq!(t.charge(0), 1, "初始1");
+    assert_eq!(t.state_var(0, "charge").max, 1, "上限1");
 }
 
 // 规则书: 美竹兰「（2）投掷移动步数前可使用一个[火罐]选择本次移动向后」
@@ -640,7 +640,7 @@ fn ran_skill_can_move_backward() {
     t.dice(&[4]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    eprintln!("pos={} fire={}", t.pos(0), t.fire(0));
+    eprintln!("pos={} fire={}", t.pos(0), t.charge(0));
 }
 
 // 规则书: 青叶摩卡「（2）当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]传送到其所在格子」
@@ -663,7 +663,7 @@ fn moca_skill_teleports_to_the_actor() {
             eprintln!("moca prompt: {}", t.dump_prompt());
         }
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("传送"))
             .or_else(|| t.option("火罐"));
         if let Some(k) = k {
@@ -674,12 +674,12 @@ fn moca_skill_teleports_to_the_actor() {
         }
     }
     skip_all(&mut t);
-    eprintln!("pos0={} fire={}", t.pos(0), t.fire(0));
+    eprintln!("pos0={} fire={}", t.pos(0), t.charge(0));
     // 「你可以消耗一个[火罐]传送到其所在格子」.
     assert!(offered, "我行我素 (2) window must open when another plays a card");
     assert!(took, "the teleport must be offered");
     assert_eq!(t.pos(0), 30, "teleported to the actor");
-    assert_eq!(t.fire(0), 0, "spent 1 fire");
+    assert_eq!(t.charge(0), 0, "spent 1 fire");
 }
 
 // 规则书: 宇田川巴「（2）移动阶段前，你可以使用一个[火罐]，使此次移动的起点向绝对距离“银河拉面馆”更近的方向移动10格」
@@ -696,7 +696,7 @@ fn utsugi_skill_shifts_start_toward_ramen() {
         eprintln!("prompt: {}", t.dump_prompt());
     }
     skip_all(&mut t);
-    eprintln!("pos={} fire={}", t.pos(0), t.fire(0));
+    eprintln!("pos={} fire={}", t.pos(0), t.charge(0));
 }
 
 // 规则书: 上原绯玛丽「（2）移动阶段前，你可以消耗一个火罐指定你的此次移动仅在单/双数格上进行」
@@ -713,7 +713,7 @@ fn himari_skill_parity_move() {
         eprintln!("prompt: {}", t.dump_prompt());
     }
     skip_all(&mut t);
-    eprintln!("pos={} fire={}", t.pos(0), t.fire(0));
+    eprintln!("pos={} fire={}", t.pos(0), t.charge(0));
 }
 
 // 规则书: 上原绯玛丽「（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」
@@ -741,13 +741,13 @@ fn himari_rest_tick_logs_count() {
 #[test]
 fn himari_rest_tick_logs_gain() {
     let keys = himari_end_turn_keys(2, 0);
-    assert!(keys.iter().any(|k| k.contains("log.gain_fire")), "{keys:?}");
+    assert!(keys.iter().any(|k| k.contains("log.gain_charge")), "{keys:?}");
 }
 
 #[test]
 fn himari_rest_tick_logs_cap() {
     let keys = himari_end_turn_keys(2, 1);
-    assert!(keys.iter().any(|k| k.contains("log.gain_fire_capped")), "{keys:?}");
+    assert!(keys.iter().any(|k| k.contains("log.gain_charge_capped")), "{keys:?}");
 }
 
 // 规则书: 白金燐子「（1）每次[经过]CiRCLE时获得三个[火罐]（上限3）」 -- at the cap the
@@ -763,7 +763,7 @@ fn rinko_pass_circle_at_cap_logs_refusal() {
     t.roll(0).unwrap();
     skip_all(&mut t);
     let keys = t.recent_keys(24);
-    assert!(keys.iter().any(|k| k.contains("log.gain_fire_capped")), "{keys:?}");
+    assert!(keys.iter().any(|k| k.contains("log.gain_charge_capped")), "{keys:?}");
 }
 
 // 规则书: 羽泽鸫「（2）当你进行主要移动时，你可以失去一个[火罐]使本次移动反向」
@@ -784,7 +784,7 @@ fn tsuzushi_skill_reverses_a_move() {
     t.dice(&[4]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    eprintln!("pos={} fire={}", t.pos(0), t.fire(0));
+    eprintln!("pos={} fire={}", t.pos(0), t.charge(0));
 }
 
 // =====================================================================

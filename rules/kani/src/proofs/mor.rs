@@ -133,7 +133,7 @@ fn rui_demon_01_iff_at(user: i32) {
     );
     // Frame: no positions / fire / stay / piles from the money legs.
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
     crate::kassert!(post.discard == pre.discard, "frame: discard");
@@ -255,7 +255,7 @@ fn xiaobai_01_iff_at(user: i32) {
     // Frame: the counteruser's money is untouched by this body.
     crate::kassert!(post.money[user as usize] == pre.money[user as usize], "frame: counteruser money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 #[kani::proof]
@@ -299,14 +299,14 @@ pub fn xiaobai_01_mutant_is_detected() {
 // `_iff_at(user)` covers both seats of each path.
 // ===========================================================================
 
-/// `Mor:秘密与青春的虹彩` counteract body ops. `character_is` is the residual
+/// `Mor:秘密与青春的虹彩` counteract body ops. `persona_is` is the residual
 /// grade gate (`can_counteract`); declared so a broken isolation FAILs loudly.
 crate::host_subset!(rainbow_dispatch {
     trig_value => arm_trig_value,
     trig_player => arm_trig_player,
     trig_set_pay_amount => arm_trig_set_pay_amount,
     log | effect => arm_log,
-    character_is => arm_character_is,
+    persona_is => arm_character_is,
 });
 
 /// `half == true`: user is the payer (`from == user`). Else user is the payee.
@@ -675,7 +675,7 @@ pub fn courage_03_empty_when_no_agent_misfire() {
             "C-MOR-courage-03: frame money unchanged on the empty branch"
         );
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     }
 }
 
@@ -979,7 +979,7 @@ fn starry_01_place_iff_at(user: i32) {
         "C-MOR-starry-01: user pays 1000·X (floored at 0)"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 #[kani::proof]
@@ -1120,7 +1120,7 @@ pub fn starry_06_mutant_is_detected() {
 // ===========================================================================
 // C-MOR-starry-05  `Mor:蝴蝶飞舞的星月夜`
 // 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」
-// PassTile hook arm. `is_circle` uses 1-based `board::tile_slot`; we pin
+// PassTile hook arm. `is_start` uses 1-based `board::tile_slot`; we pin
 // `trig_tile = 1` (board index 1 is the CiRCLE) so the gate holds. The
 // RollAfter arm of the same hook is BLOCKED-HOST on `Op::trig_move_main`
 // (unmodeled) and is not driven here (starry-03/04). Seat-symmetric.
@@ -1152,7 +1152,7 @@ fn starry_pass_world(user: i32, crystals: i32) {
     set_self_crystals(crystals);
     sparse2(starry_hook_dispatch, user, |w| {
         w.trig_tile = 1; // board index 1 = CiRCLE (kind 0)
-        w.trig_kind = card_sdk::abi::TriggerKind::PassTile as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::PassTile.as_i32() as i32;
         w.field_n = 1;
     });
 }
@@ -1477,7 +1477,7 @@ crate::host_subset!(tritone_dispatch {
 
 fn tritone_counteract_world(user: i32, amount: i32) {
     sparse2(tritone_dispatch, user, |w| {
-        w.trig_kind = card_sdk::abi::TriggerKind::Effect as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::Effect.as_i32() as i32;
         w.pay_amount = amount; // trigger::value()
         w.trig_value = amount;
     });
@@ -1539,7 +1539,7 @@ fn tritone_02_tick_iff_at(user: i32) {
     let owed_key = crate::intern::intern_or_fail("tritone_owed");
     sparse2(tritone_dispatch, user, |w| {
         w.key_set(user, owed_key, owed);
-        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd.as_i32() as i32;
         // Own turn end: the tick is gated on `trig_player == user`.
         w.field_n = 1;
         w.dest = 2; // sentinel (Field): not Graveyard
@@ -1601,7 +1601,7 @@ pub fn tritone_02_mutant_is_detected() {
     let owed_key = crate::intern::intern_or_fail("tritone_owed");
     sparse2(tritone_dispatch, user, |w| {
         w.key_set(user, owed_key, owed);
-        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd as i32;
+        w.trig_kind = card_sdk::abi::TriggerKind::TurnEnd.as_i32() as i32;
         w.field_n = 1;
         w.money[user as usize] = 10_000;
     });

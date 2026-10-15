@@ -34,7 +34,7 @@ pub const DREAM_RETURN: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。"#)
         .cell(r#"F16"#)
-        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
 /// player, unmortgaged, and with a positive rent.
@@ -98,7 +98,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[反击]: 「并为乐队技能卡上添加两个...奇迹水晶」 -- C#
     // `H.AddBandCrystals(i, 2, CardName + "：记录 ...")`.
-    ctx::add_band_crystals(player_id, 2, i32::MAX);
+    ctx::add_group_crystals(player_id, 2, i32::MAX);
     // 「分别记录这两名玩家」 -- the band skill 「传播笑容」 keeps the record in
     // `skill.hhw.who` / `skill.hhw.who2`; this writes both.
     ctx::state::set(player_id, "skill.hhw.who", owner);

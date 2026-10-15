@@ -4,8 +4,8 @@
 //! `card-sdk` stays vocabulary-free -- [`card_sdk::meta::CardMeta`] carries the
 //! shared card-row shape plus a generic `fields` map, and this module names the
 //! keys this game puts in that map (`meta_key`). The typed
-//! [`CharacterDef`] / [`BandDef`] tables live with their skill rules
-//! (`rules/skills/skill-characters`, `rules/skills/skill-bands`); the shared
+//! [`PersonaDef`] / [`GroupDef`] tables live with their skill rules
+//! (`rules/skills/skill-personas`, `rules/skills/skill-groups`); the shared
 //! ordinal tables that restore data-file order live in [`roster_order`].
 
 use alloc::string::String;
@@ -18,7 +18,7 @@ use card_sdk::meta::{MetaRow, ToMetaRow};
 /// (`roster_from_meta`) and by the JSON field names the data files use.
 pub mod meta_key {
     /// Card row: the band the card belongs to (`band`).
-    pub const BAND: &str = "band";
+    pub const GROUP: &str = "group";
     /// Card row: the exclusive owner character name (`owner`);
     /// `""` = not exclusive.
     pub const OWNER: &str = "owner";
@@ -53,12 +53,12 @@ pub mod meta_key {
 }
 
 /// One playable character from `the roster`, beside its skill rule
-/// (`rules/skills/skill-characters`). Byte-exact text: use raw string literals.
+/// (`rules/skills/skill-personas`). Byte-exact text: use raw string literals.
 #[derive(Clone, Copy)]
-pub struct CharacterDef {
+pub struct PersonaDef {
     pub name: &'static str,
     pub display: &'static str,
-    pub band: &'static str,
+    pub group: &'static str,
     pub color: &'static str,
     pub skill: &'static str,
     pub text: &'static str,
@@ -71,12 +71,12 @@ pub struct CharacterDef {
     pub variant_tag: &'static str,
 }
 
-impl CharacterDef {
+impl PersonaDef {
     pub const fn new(name: &'static str) -> Self {
         Self {
             name,
             display: name,
-            band: "",
+            group: "",
             color: "",
             skill: "",
             text: "",
@@ -94,8 +94,8 @@ impl CharacterDef {
         self.display = display;
         self
     }
-    pub const fn band(mut self, band: &'static str) -> Self {
-        self.band = band;
+    pub const fn group(mut self, group: &'static str) -> Self {
+        self.group = group;
         self
     }
     pub const fn color(mut self, color: &'static str) -> Self {
@@ -140,10 +140,10 @@ impl CharacterDef {
     }
 }
 
-impl ToMetaRow for CharacterDef {
+impl ToMetaRow for PersonaDef {
     fn to_meta_row(&self) -> MetaRow {
         MetaRow {
-            kind: alloc_string("character"),
+            kind: alloc_string("persona"),
             ordinal: 0,
             id: alloc_string(self.name),
             name: alloc_string(self.name),
@@ -153,7 +153,7 @@ impl ToMetaRow for CharacterDef {
             derived: false,
             cell: String::new(),
             fields: Vec::from([
-                (alloc_string(meta_key::BAND), alloc_string(self.band)),
+                (alloc_string(meta_key::GROUP), alloc_string(self.group)),
                 (alloc_string(meta_key::DISPLAY), alloc_string(self.display)),
                 (alloc_string(meta_key::COLOR), alloc_string(self.color)),
                 (alloc_string(meta_key::SKILL), alloc_string(self.skill)),
@@ -188,9 +188,9 @@ impl ToMetaRow for CharacterDef {
 }
 
 /// One band roster row, beside its skill rule
-/// (`rules/skills/skill-bands`). Byte-exact text: use raw string literals.
+/// (`rules/skills/skill-groups`). Byte-exact text: use raw string literals.
 #[derive(Clone, Copy)]
-pub struct BandDef {
+pub struct GroupDef {
     pub name: &'static str,
     pub short_name: &'static str,
     pub color: &'static str,
@@ -201,7 +201,7 @@ pub struct BandDef {
     pub boot_art: &'static str,
 }
 
-impl BandDef {
+impl GroupDef {
     pub const fn new(name: &'static str) -> Self {
         Self {
             name,
@@ -245,10 +245,10 @@ impl BandDef {
     }
 }
 
-impl ToMetaRow for BandDef {
+impl ToMetaRow for GroupDef {
     fn to_meta_row(&self) -> MetaRow {
         MetaRow {
-            kind: alloc_string("band"),
+            kind: alloc_string("group"),
             ordinal: 0,
             id: alloc_string(self.name),
             name: alloc_string(self.name),

@@ -106,8 +106,8 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
         .map(|p| {
             p.field
                 .iter()
-                .filter(|f| f.band_skill)
-                .map(|f| f.crystals)
+                .filter(|f| f.group_skill)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
                 .sum()
         })
         .unwrap_or(0);
@@ -119,8 +119,8 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
         .map(|p| {
             p.field
                 .iter()
-                .filter(|f| f.band_skill)
-                .map(|f| f.crystals)
+                .filter(|f| f.group_skill)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
                 .sum()
         })
         .unwrap_or(0);
@@ -184,6 +184,7 @@ fn crychic_debut_blocks_rent_decrease() {
                 "state:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "turn.no_money_loss",
                 "scheduled",
             ],
@@ -303,6 +304,7 @@ fn crychic_ifonly_cashs_out_band_crystals() {
                 "draw:P0",
                 "discard:P0",
                 "crystals:P0",
+                "pool:",
                 "field:P0",
             ],
         )

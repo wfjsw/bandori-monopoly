@@ -61,19 +61,19 @@ impl Cx<'_> {
         self.w.log("text", -1, Msg::new(key).list("rolls", list));
     }
 
-    pub(crate) fn bannable(&self, character: &str) -> bool {
-        self.data.character(character).is_some() && !self.w.st.bans.iter().any(|b| b == character)
+    pub(crate) fn bannable(&self, persona: &str) -> bool {
+        self.data.persona(persona).is_some() && !self.w.st.bans.iter().any(|b| b == persona)
     }
 
-    pub(crate) fn pickable(&self, character: &str) -> bool {
-        self.bannable(character) && self.w.st.players.iter().all(|s| s.character != character)
+    pub(crate) fn pickable(&self, persona: &str) -> bool {
+        self.bannable(persona) && self.w.st.players.iter().all(|s| s.persona != persona)
     }
 
-    /// Prefers characters with their own art set (`cnId`).
-    pub(crate) fn random_character(&mut self, for_pick: bool) -> String {
+    /// Prefers personas with their own art set (`cnId`).
+    pub(crate) fn random_persona(&mut self, for_pick: bool) -> String {
         let all: Vec<&str> = self
             .data
-            .characters
+            .personas
             .iter()
             .map(|c| c.name.as_str())
             .filter(|c| {
@@ -87,7 +87,7 @@ impl Cx<'_> {
         let with_art: Vec<&str> = all
             .iter()
             .copied()
-            .filter(|c| self.data.character(c).is_some_and(|x| !x.cn_id.is_empty()))
+            .filter(|c| self.data.persona(c).is_some_and(|x| !x.cn_id.is_empty()))
             .collect();
         let list = if with_art.is_empty() { all } else { with_art };
         if list.is_empty() {
@@ -113,20 +113,20 @@ impl Cx<'_> {
         self.w.log("text", -1, Msg::new("log.pick_phase"));
     }
 
-    /// Record a ban; empty `character` = no ban.
-    pub(crate) fn do_ban(&mut self, i: usize, character: &str) {
+    /// Record a ban; empty `persona` = no ban.
+    pub(crate) fn do_ban(&mut self, i: usize, persona: &str) {
         let s = &mut self.w.st.players[i];
         s.ban_done = true;
-        s.ban = character.into();
-        if !character.is_empty() {
-            self.w.st.bans.push(character.into());
+        s.ban = persona.into();
+        if !persona.is_empty() {
+            self.w.st.bans.push(persona.into());
         }
-        let text = if character.is_empty() {
+        let text = if persona.is_empty() {
             Msg::new("log.no_ban").player_id("who", i)
         } else {
             Msg::new("log.ban")
                 .player_id("who", i)
-                .chara("chara", character)
+                .persona("chara", persona)
         };
         self.w.log("ban", i as i32, text);
         self.w.st.turn -= 1;
@@ -138,8 +138,8 @@ impl Cx<'_> {
     }
 
     /// Record a pick. Bots submit their deck as soon as the deck phase opens.
-    pub(crate) fn do_pick(&mut self, i: usize, character: &str) {
-        self.w.st.players[i].character = character.into();
+    pub(crate) fn do_pick(&mut self, i: usize, persona: &str) {
+        self.w.st.players[i].persona = persona.into();
         let d = self.data;
         self.w.bind_skills(d, self.rules, i as i32);
         self.w.log(
@@ -147,7 +147,7 @@ impl Cx<'_> {
             i as i32,
             Msg::new("log.pick")
                 .player_id("who", i)
-                .chara("chara", character),
+                .persona("chara", persona),
         );
         self.w.st.turn += 1;
         if self.w.st.turn as usize >= self.w.player_count() {
@@ -172,17 +172,17 @@ impl Cx<'_> {
         }
     }
 
-    /// A complete legal deck, or the character's preset. A
+    /// A complete legal deck, or the persona's preset. A
     /// chaos bot without a supplied list submits a random legal deck instead
     /// of the designer's preset; a standard one takes the deck book's entry
     /// for its public table when the book has one (`docs/BOT.md` §3.7).
     pub(crate) fn submit_deck(&mut self, i: usize, cards: Option<&[String]>) {
-        let character = self.w.st.players[i].character.clone();
-        let list = match self.data.character(&character) {
+        let persona = self.w.st.players[i].persona.clone();
+        let list = match self.data.persona(&persona) {
             Some(c) => match cards {
                 Some(ids) if deck::is_complete(self.data, c, ids) => deck::clean(self.data, c, ids),
                 _ => {
-                    let c = self.data.character(&character).expect("checked");
+                    let c = self.data.persona(&persona).expect("checked");
                     if self.is_chaos(i) {
                         let picked = {
                             let (data, rng) = (&*self.data, &mut self.w.rng);
@@ -194,8 +194,8 @@ impl Cx<'_> {
                             deck::preset(self.data, c)
                         }
                     } else {
-                        // Public key only: own character, own seat, the other
-                        // seats' characters in seat order. Pure -- no RNG.
+                        // Public key only: own persona, own seat, the other
+                        // seats' personas in seat order. Pure -- no RNG.
                         let opponents: Vec<String> = self
                             .w
                             .st
@@ -203,7 +203,7 @@ impl Cx<'_> {
                             .iter()
                             .enumerate()
                             .filter(|(j, _)| *j != i)
-                            .map(|(_, p)| p.character.clone())
+                            .map(|(_, p)| p.persona.clone())
                             .collect();
                         let sha = self.rules.ruleset_sha256().unwrap_or("stub");
                         crate::deck_book::suggest(self.data, c, i, &opponents, sha)

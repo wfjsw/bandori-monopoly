@@ -7,7 +7,7 @@ import { navigate } from "../../app/router";
 import { cx } from "../../core/cx";
 import { D, rules } from "../../core/data";
 import { getProfile } from "../../core/store";
-import type { BotMentality, CharacterData, ScoreWeights } from "../../core/types";
+import type { BotMentality, PersonaData, ScoreWeights } from "../../core/types";
 import { SoloSession, botSoloCapMs, discardSolo, resumeSolo, setBotSoloCapMs, startSolo, warmSoloEngine } from "../../game/session";
 import { Btn } from "../../ui/Button";
 import { Avatar, CharCard, inTab, tabLabels } from "../../ui/Character";
@@ -58,7 +58,7 @@ function SoloSetup({ close }: { close: () => void }) {
    */
   const [chars, setChars] = useState<string[]>(() => {
     const saved = localStorage.getItem(CHAR_KEY);
-    const you = saved && D.character(saved) ? saved : "";
+    const you = saved && D.persona(saved) ? saved : "";
     return [you, ...Array(bots).fill("")];
   });
   const names = useMemo(() => botNames(player, bots), [player, bots]);
@@ -90,7 +90,7 @@ function SoloSetup({ close }: { close: () => void }) {
     return taken;
   };
 
-  const pick = (seat: number, c: CharacterData | null) => {
+  const pick = (seat: number, c: PersonaData | null) => {
     const name = c?.name ?? "";
     setChars((cs) => cs.map((x, i) => (i === seat ? name : x)));
     if (seat === 0) {
@@ -122,7 +122,7 @@ function SoloSetup({ close }: { close: () => void }) {
     startSolo(
       player,
       chars[0] ?? "",
-      names.map((name, i) => ({ name, mentality: mentalFor(name), character: chars[i + 1] ?? "" })),
+      names.map((name, i) => ({ name, mentality: mentalFor(name), persona: chars[i + 1] ?? "" })),
       weights
     );
     navigate({ name: "play", id: "solo" });
@@ -173,7 +173,7 @@ function SoloSetup({ close }: { close: () => void }) {
         <SeatRow
           name={player}
           seatLabel={tr("common.you")}
-          character={chars[0] ?? ""}
+          persona={chars[0] ?? ""}
           you
           onPick={() => openPicker(0)}
         />
@@ -182,7 +182,7 @@ function SoloSetup({ close }: { close: () => void }) {
             key={n}
             name={n}
             seatLabel={n}
-            character={chars[i + 1] ?? ""}
+            persona={chars[i + 1] ?? ""}
             mentality={mentalFor(n)}
             onMentality={() => setOverrides((o) => ({ ...o, [n]: other(mentalFor(n)) }))}
             onPick={() => openPicker(i + 1)}
@@ -203,7 +203,7 @@ function SoloSetup({ close }: { close: () => void }) {
 function SeatRow({
   name,
   seatLabel,
-  character,
+  persona,
   you,
   mentality,
   onMentality,
@@ -212,14 +212,14 @@ function SeatRow({
 }: {
   name: string;
   seatLabel: string;
-  character: string;
+  persona: string;
   you?: boolean;
   mentality?: BotMentality;
   onMentality?: () => void;
   onPick: () => void;
   onRemove?: () => void;
 }) {
-  const c = D.character(character);
+  const c = D.persona(persona);
   return (
     <div className={cx(s.row, you && s.you)}>
       <button
@@ -262,7 +262,7 @@ function CharPicker({
 }: {
   current: string;
   taken: Map<string, string>;
-  onPick: (c: CharacterData | null) => void;
+  onPick: (c: PersonaData | null) => void;
   close: () => void;
 }) {
   const [tab, setTab] = useState<string>(tr("common.all"));
@@ -278,7 +278,7 @@ function CharPicker({
           <span className={s.randomFace}><Icon name="cyclone" size={44} /></span>
           <div className={s.randomName}>{tr("solo.charRandom")}</div>
         </button>
-        {D.characters.filter((c) => inTab(c, tab)).map((c) => {
+        {D.personas.filter((c) => inTab(c, tab)).map((c) => {
           const who = taken.get(c.name);
           return (
             <CharCard

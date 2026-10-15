@@ -19,7 +19,7 @@ fn ask(w: &TestWorld, src: &str, owner: i32, card: &str, placed: bool) -> bool {
     pre.eval(&win, &cand)
 }
 
-/// A world with `n` seats on a `size`-tile ring at `pos`, owning `owners`.
+/// A world with `n` seats on a `size`-board loop at `pos`, owning `owners`.
 fn world(_size: i32, pos: &[i32], owners: &[i32]) -> TestWorld {
     let mut w = TestWorld::new(1);
     w.pos = pos.to_vec();
@@ -89,7 +89,7 @@ fn card_tile_matches_ctx_self_tile() {
 
 // ------------------------------------------------------------- geometry
 
-/// Reference `ctx::dist` -- the shorter way around the ring.
+/// Reference `ctx::dist` -- the shorter way around the board loop.
 fn ref_dist(n: i32, a: i32, b: i32) -> i32 {
     if n <= 0 {
         return 0;

@@ -114,7 +114,7 @@ class Autopilot {
   private ctx(): AutopilotCtx {
     return {
       tiles: D.tiles,
-      characters: D.characters,
+      personas: D.personas,
       playedThisTurn: this.played,
       deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
       // Deck book entry for the public table, else the preset
@@ -518,13 +518,13 @@ export class SoloSession extends GameSession {
     // The solo setup screen's picks, its `""` (random) seats resolved here
     // among the free characters -- everything not explicitly picked. The
     // engine sees a character on every seat and starts past ban / pick.
-    const chars = resolveSoloCharacters([playerCharacter, ...bots.map((b) => b.character)]);
-    const seat = (id: number, name: string, character: string, bot: boolean, mentality: BotMentality): RoomMember => {
-      const c = D.character(character);
+    const chars = resolveSoloCharacters([playerCharacter, ...bots.map((b) => b.persona)]);
+    const seat = (id: number, name: string, persona: string, bot: boolean, mentality: BotMentality): RoomMember => {
+      const c = D.persona(persona);
       return {
         id,
         player: name,
-        character,
+        persona,
         cnId: c ? D.artId(c) : "",
         ready: true,
         host: id === 1,
@@ -695,7 +695,7 @@ export class SoloSession extends GameSession {
   private autopilotCtx(): AutopilotCtx {
     return {
       tiles: D.tiles,
-      characters: D.characters,
+      personas: D.personas,
       playedThisTurn: 0,
       deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
       deckSuggest: (c, seat, opponents) =>
@@ -797,7 +797,7 @@ export interface SoloBot {
   name: string;
   mentality: BotMentality;
   /** Explicit character name, or `""` for a random free one at start. */
-  character: string;
+  persona: string;
 }
 
 /**
@@ -807,7 +807,7 @@ export interface SoloBot {
  */
 export function resolveSoloCharacters(want: readonly string[]): string[] {
   const taken = new Set(want.filter(Boolean));
-  const free = D.characters.map((c) => c.name).filter((n) => !taken.has(n));
+  const free = D.personas.map((c) => c.name).filter((n) => !taken.has(n));
   return want.map((w) => {
     if (w) return w;
     if (!free.length) return "";
@@ -964,9 +964,9 @@ export function startOnline(room: RoomInfo, you: number, view: MatchView | null 
  * Re-attach to room `id` after a refresh: the tab's server session still
  * holds the player (the presence timeout hands it to the AI only after a while).
  */
-export async function resumeOnline(id: string, player: string, character: string, cnId: string): Promise<OnlineSession | Msg> {
+export async function resumeOnline(id: string, player: string, persona: string, cnId: string): Promise<OnlineSession | Msg> {
   if (session instanceof OnlineSession && session.id === id && !session.dissolved) return session;
-  if (!(await ensureSession(player, character, cnId))) return { k: "err.offline" };
+  if (!(await ensureSession(player, persona, cnId))) return { k: "err.offline" };
   const r = await api.roomState(id);
   if (!r.ok || !r.data) return r.error ?? { k: "err.room.gone" };
   return startOnline(r.data.room, r.data.you, r.data.game);

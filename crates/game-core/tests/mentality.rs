@@ -140,7 +140,7 @@ fn chaos_bot_buys_with_no_reserve() {
 ///
 /// The window is raised **every** time (never "just once"): the routine is
 /// replayed from its snapshot after the answer lands, so a prompt that only
-/// fires on the first pass desyncs the answer log.
+/// runs on the first pass desyncs the answer log.
 #[derive(Default)]
 struct PromptRules {
     /// Answer to the card-body prompt (fallback = 0).
@@ -174,7 +174,7 @@ impl game_core::engine::CardRules for PromptRules {
 
     /// A counteract window on every main-move roll: one offered card plus the
     /// skip (the shape `ask.counteract.*` uses -- the offered card id rides the
-    /// option label, as in the real ring).
+    /// option label, as in a live ask).
     fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
         if t.kind != "roll" {
             return Ok(());
@@ -257,12 +257,12 @@ fn standard_takes_the_prompt_fallback() {
     assert_eq!(*rules.play_pick.lock().unwrap(), Some(0), "standard ignored the fallback");
 }
 
-/// A [反击] offer is a real decision for standard too -- user ruling 2026-10-08,
+/// A counteraction offer is a real decision for standard too -- user ruling 2026-10-08,
 /// *"bots must be able to counteract"*. The default propensity
 /// [`game_core::strategy::DEFAULT_COUNTERACT_PROPENSITY_MILLI`] (600‰ per
 /// offered card) declares on some offers and passes the rest; both branches
 /// must actually happen. (The old default was 0 = never, which left every
-/// [反击] card dead in a standard bot's hand.)
+/// counteraction card dead in a standard bot's hand.)
 #[test]
 fn standard_counters_at_the_default_propensity() {
     let mut declared = 0usize;

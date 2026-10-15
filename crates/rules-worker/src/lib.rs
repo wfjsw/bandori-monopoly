@@ -6,8 +6,8 @@
 //! request shape.
 //!
 //! Recording (`docs/REPLAY.md` §4) rides on top of the same protocol: `info`
-//! hands out the [`EngineStamp`], every **mutating** op carries a `"cp"` turn
-//! boundary when the turn key moved, and `replay` re-runs a `.bdrec` and
+//! hands out the [`EngineStamp`], every **mutating** op carries a turn-boundary
+//! checkpoint when the turn key moved, and `replay` re-runs a `.bdrec` and
 //! reports the hash it ended on.
 
 use game_core::data::{GameData, DATA_FILES};
@@ -104,7 +104,7 @@ impl Ctx {
             // it), so read the ones it skipped -- otherwise this hash disagrees
             // with the browser's and the record names an engine bundle the
             // replay loader has never seen. The roster (`cards.json` /
-            // `characters.json` / `bands.json`) is no longer in `DATA_FILES`:
+            // `personas.json` / `groups.json`) is no longer in `DATA_FILES`:
             // it comes from the ruleset and is covered by the ruleset hash.
             let owned;
             let text: Option<&str> = match contents.iter().find(|(f, _)| f == name) {
@@ -296,7 +296,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
 
         // Mutating ops: restore -> op -> save. The caller gets the new blob and
         // is responsible for keeping it; the worker forgets it here. Each one
-        // also reports the turn-boundary checkpoint (`cp`) when the turn key
+        // also reports the turn-boundary checkpoint when the turn key
         // moved, so the server can append it to the record log
         // (`docs/REPLAY.md` §4).
         "act" | "tick" | "quick_start" | "finish" | "anim_done" => {
@@ -328,8 +328,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     // Report whether this ack released a hold (a stale one is
                     // a no-op). Carried as `released`, not `error`.
                     let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended(), "released": released});
-                    if let Some(cp) = checkpoint(&m, before) {
-                        v["cp"] = cp;
+                    if let Some(ckpt) = checkpoint(&m, before) {
+                        v["ckpt"] = ckpt;
                     }
                     return Ok(v);
                 }
@@ -342,8 +342,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             if !out.is_null() {
                 v["error"] = out;
             }
-            if let Some(cp) = checkpoint(&m, before) {
-                v["cp"] = cp;
+            if let Some(ckpt) = checkpoint(&m, before) {
+                v["ckpt"] = ckpt;
             }
             Ok(v)
         }
@@ -363,8 +363,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                 m.member_back(member);
             }
             let mut v = json!({"ok": true, "state": m.save(), "changed": true, "ended": m.ended()});
-            if let Some(cp) = checkpoint(&m, before) {
-                v["cp"] = cp;
+            if let Some(ckpt) = checkpoint(&m, before) {
+                v["ckpt"] = ckpt;
             }
             Ok(v)
         }

@@ -96,21 +96,21 @@ impl Setup {
         out.act_result
     }
 
-    fn ban(&mut self, who: usize, character: &str) -> Result<(), String> {
+    fn ban(&mut self, who: usize, persona: &str) -> Result<(), String> {
         self.act(
             who,
             NetMessage {
-                character: character.into(),
+                persona: persona.into(),
                 ..NetMessage::act("ban")
             },
         )
     }
 
-    fn pick(&mut self, who: usize, character: &str) -> Result<(), String> {
+    fn pick(&mut self, who: usize, persona: &str) -> Result<(), String> {
         self.act(
             who,
             NetMessage {
-                character: character.into(),
+                persona: persona.into(),
                 ..NetMessage::act("pick")
             },
         )
@@ -207,11 +207,11 @@ fn chars(n: usize) -> Vec<String> {
 }
 
 /// The character's preset deck (a complete legal 10-card list).
-fn preset_deck(character: &str) -> Vec<String> {
+fn preset_deck(persona: &str) -> Vec<String> {
     let d = data();
     let c = d
-        .character(character)
-        .unwrap_or_else(|| panic!("no character {character:?}"));
+        .persona(persona)
+        .unwrap_or_else(|| panic!("no character {persona:?}"));
     game_core::deck::preset(d.as_ref(), c)
 }
 
@@ -448,7 +448,7 @@ fn start_sequence_ban_pick_deck_then_match_start() {
     }
     assert_eq!(s.phase(), "deck");
     for seat in 0..5 {
-        let who = s.world().st.players[seat].character.clone();
+        let who = s.world().st.players[seat].persona.clone();
         let deck = preset_deck(&who);
         s.deck(seat, deck)
             .unwrap_or_else(|e| panic!("deck seat {seat}: {e}"));
@@ -458,7 +458,7 @@ fn start_sequence_ban_pick_deck_then_match_start() {
     s.open_keep();
     assert_eq!(s.phase(), "play");
     for (i, p) in s.world().st.players.iter().enumerate() {
-        assert_eq!(p.character, names[i], "seat {i} character");
+        assert_eq!(p.persona, names[i], "seat {i} character");
         assert!(p.deck_ready, "seat {i} deck");
     }
 }
@@ -476,7 +476,7 @@ fn start_tile_circle_and_10000_money() {
         s.pick(seat, &names[seat]).expect("pick");
     }
     for seat in 0..5 {
-        let who = s.world().st.players[seat].character.clone();
+        let who = s.world().st.players[seat].persona.clone();
         s.deck(seat, preset_deck(&who)).expect("deck");
     }
     s.open_keep();
@@ -513,7 +513,7 @@ fn opening_draw_two_and_one_mulligan() {
     }
     s.strip_skills();
     for seat in 0..3 {
-        let who = s.world().st.players[seat].character.clone();
+        let who = s.world().st.players[seat].persona.clone();
         s.deck(seat, preset_deck(&who)).expect("deck");
     }
     s.open_keep();
@@ -548,7 +548,7 @@ fn opening_draw_two_and_one_mulligan() {
     }
     s.strip_skills();
     for seat in 0..3 {
-        let who = s.world().st.players[seat].character.clone();
+        let who = s.world().st.players[seat].persona.clone();
         s.deck(seat, preset_deck(&who)).expect("deck");
     }
     s.open_redraw(0);
@@ -600,6 +600,9 @@ fn turn_phases_and_immediate_next_turn() {
     // The main move (loaded die) runs → 结束.
     t.dice(&[3]);
     t.roll(0).expect("roll");
+    // G-SETTLE-06/07 may open a buy/build prompt; answer it so the stage can
+    // finish the settle and reach 结束.
+    t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END, "after the main move the stage is 结束");
     assert!(t.world().turn.main_moved, "main_moved latch");
 
@@ -736,6 +739,7 @@ fn main_move_is_required_exactly_once() {
     assert_eq!(t.turn(), 0);
     t.dice(&[2]);
     t.roll(0).expect("the required [主要移动]");
+    t.settle_answering_defaults();
     t.end(0).expect("end after [主要移动]");
     assert_eq!(t.turn(), 1);
 }
@@ -778,7 +782,7 @@ fn ranked_last_alive_wins() {
         s.pick(seat, &names[k]).expect("pick");
     }
     for seat in 0..5 {
-        let who = s.world().st.players[seat].character.clone();
+        let who = s.world().st.players[seat].persona.clone();
         s.deck(seat, preset_deck(&who)).expect("deck");
     }
     s.open_keep();
@@ -820,11 +824,13 @@ fn stage_order_is_monotonic_inside_a_turn() {
     assert_eq!(t.step(), stage::OPS);
     t.dice(&[1]);
     t.roll(0).expect("roll");
+    t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END);
     t.end(0).expect("end");
     assert_eq!(t.step(), stage::OPS);
     t.dice(&[1]);
     t.roll(1).expect("roll");
+    t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END);
 }
 

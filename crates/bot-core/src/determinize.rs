@@ -25,7 +25,7 @@
 //! them is shuffled.
 //!
 //! Allowed contents for an opponent (the consistency tests check exactly
-//! this): `deck::pool(character) ∪ deck::derived(character)` minus every
+//! this): `deck::pool(persona) ∪ deck::derived(persona)` minus every
 //! public sighting (their discard + their field cards + board fields they
 //! own). Mid-game created copies can make the count exceed what the starting
 //! deck accounts for; the sampler then draws with replacement from the
@@ -308,7 +308,7 @@ fn sample_opponent(
     // Allowed: what their deck rules allow (pool + mid-game derived), minus
     // every public sighting.
     let mut allowed: Vec<String> = Vec::new();
-    if let Some(c) = data.character(&p.character) {
+    if let Some(c) = data.persona(&p.persona) {
         for k in deck::pool(data, c) {
             allowed.push(k.id.clone());
         }
@@ -325,7 +325,7 @@ fn sample_opponent(
     let mut picked: Vec<String> = Vec::with_capacity(need);
     let mut short = false;
     if pool.is_empty() {
-        // Nothing legal left (every card seen / unknown character). The counts
+        // Nothing legal left (every card seen / unknown persona). The counts
         // still have to hold; fill with synthetic ids the engine tolerates
         // (a card no rule knows is a no-op draw). Mark as degraded.
         short = true;

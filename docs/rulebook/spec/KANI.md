@@ -39,7 +39,7 @@ unbounded constructs.
 
 ## 2. Backend design
 
-### 2.1 Why not `#[no_mangle] bandori_*` shims?
+### 2.1 Why not `#[no_mangle] ruleset_*` shims?
 
 The first attempt defined host imports as `#[no_mangle] extern "C-unwind"`
 (the same shape `rules-native` uses). Kani **does not resolve** those as
@@ -55,7 +55,7 @@ import through one generic hook:
 
 | file | role |
 |---|---|
-| `rules/card-sdk/src/kani_host.rs` | `Op` enum (one variant per `bandori_*`), `install(Backend)`, `call(Op, [i32;6]) -> i64` |
+| `rules/card-sdk/src/kani_host.rs` | `Op` enum (one variant per `ruleset_*`), `install(Backend)`, `call(Op, [i32;6]) -> i64` |
 | `rules/card-sdk/src/ctx/sys_kani.rs` | generated wrappers, same signatures as the `extern` block |
 | `rules/card-sdk/src/ctx/sys.rs` | `#[cfg(not(kani))]` keeps the real `extern "C-unwind"` block; `#[cfg(kani)]` re-exports `sys_kani` |
 

@@ -7,7 +7,7 @@
 import { memo, type CSSProperties, type ReactNode } from "react";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
-import { D, cardTitle, cardText, cardColor, skillCard, GENERAL_BAND } from "../core/data";
+import { D, cardTitle, cardText, cardColor, skillCard, GENERAL_GROUP } from "../core/data";
 import type { CardData } from "../core/types";
 import { Btn } from "./Button";
 import s from "./Card.module.css";
@@ -21,12 +21,12 @@ export type CardKind = "exclusive" | "band" | "general" | "derived";
 export function cardKind(c: CardData): CardKind {
   if (c.derived) return "derived";
   if (c.owner) return "exclusive";
-  return c.band === GENERAL_BAND ? "general" : "band";
+  return c.group === GENERAL_GROUP ? "general" : "band";
 }
 
 export const CARD_KIND_LABEL: Record<CardKind, string> = {
   exclusive: "card.kind.exclusive",
-  band: "card.kind.band",
+  band: "card.kind.group",
   general: "card.kind.general",
   derived: "card.kind.derived",
 };
@@ -116,8 +116,8 @@ function CardDetail({ id, actions, note, close }: { id: string; actions: CardAct
       <div className={s.info}>
         <div className={s.kindRow}>
           {c && <KindChip kind={cardKind(c)} />}
-          {c?.band && <span>{c.owner ? `${c.band} · ${c.owner}` : c.band}</span>}
-          {!c && skillCard(id)?.band && <span>{skillCard(id)!.band}</span>}
+          {c?.group && <span>{c.owner ? `${c.group} · ${c.owner}` : c.group}</span>}
+          {!c && skillCard(id)?.group && <span>{skillCard(id)!.group}</span>}
         </div>
         {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
         <div className={s.text}><SkillBody text={cardText(id)} /></div>

@@ -46,7 +46,7 @@ pub use bot_service::{decide_request, invalidate_request, ponder_request, BotAns
 /// iteration overrun** (`docs/BOT.md` §5 B7: the ISMCTS loop is anytime
 /// *between* iterations and always finishes the one it is in, and on the real
 /// ruleset one iteration costs 0.4–1.3 s). Without this margin the outer
-/// deadline fires routinely on searched surfaces and every one of them falls
+/// deadline triggers routinely on searched surfaces and every one of them falls
 /// back to the heuristic.
 pub const ITERATION_OVERRUN_MS: u64 = 1_500;
 /// Hard ceiling on one ask's outer deadline, whatever the budget says.
@@ -66,7 +66,7 @@ pub const PONDER_BUDGET_MS: u64 = 300;
 /// overrun and queue / apply latency, capped at [`MAX_ASK_TIMEOUT`].
 ///
 /// This is the policy `docs/BOT.md` §5 B7 recommends for the real ruleset
-/// (`budget + 1.5 s`, the old `budget + 400 ms` fired on 4-thread searches).
+/// (`budget + 1.5 s`, the old `budget + 400 ms` triggered on 4-thread searches).
 pub fn ask_timeout(budget_ms: u64) -> Duration {
     Duration::from_millis(budget_ms.saturating_add(ITERATION_OVERRUN_MS)).min(MAX_ASK_TIMEOUT)
 }
@@ -522,7 +522,7 @@ mod tests {
         // Capped: a huge budget cannot park the probe for minutes.
         assert_eq!(ask_timeout(60_000), MAX_ASK_TIMEOUT);
         // And it is strictly wider than the old `budget + 400 ms` policy,
-        // which routinely fired on 4-thread searches.
+        // which routinely triggered on 4-thread searches.
         assert!(ask_timeout(800) > Duration::from_millis(800 + 400));
     }
 

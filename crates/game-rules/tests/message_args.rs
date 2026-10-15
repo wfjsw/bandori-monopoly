@@ -18,13 +18,13 @@ fn is_internal_key(s: &str) -> bool {
     if s.starts_with("cards:") || s.starts_with("mark:") || s.starts_with("skill.") {
         return true;
     }
-    // Known on-card counter names.
-    if matches!(s, "crystals" | "cp" | "cpField" | "skillBlock") {
+    // Known on-card counter / mark names (ruleset wire keys).
+    if matches!(s, "bonus" | "points" | "pointsField" | "skillBlock") {
         return true;
     }
     // Lower-camel engine state / prop keys (handLimit, startHand, skillState,
     // unstoppable, noHand, stunStart, exileTo, ...). Rulebook terms are
-    // Chinese or bracketed ([停留]); card-declared counters are display names.
+    // Chinese or bracketed (stay); card-declared counters are display names.
     if s.chars().next().is_some_and(|c| c.is_ascii_lowercase())
         && s.chars().any(|c| c.is_ascii_uppercase())
         && s.chars().all(|c| c.is_ascii_alphanumeric())
@@ -76,7 +76,7 @@ fn check_events(events: &[MatchEvent], label: &str) {
 }
 
 /// A seeded game with skills and cards in play: every outcome / why line that
-/// fired must name its subject via a typed arg, never a raw key.
+/// ran must name its subject via a typed arg, never a raw key.
 #[test]
 fn no_log_message_renders_an_internal_key_as_text() {
     let mut t = Table::vanilla(2);
@@ -111,15 +111,15 @@ fn no_log_message_renders_an_internal_key_as_text() {
 fn no_shipped_outcome_renders_an_internal_key_as_text() {
     let mut t = Table::vanilla(2);
     t.strip_skills();
-    t.set_character_raw(0, "濑田薰");
-    t.set_character_raw(1, "和奏瑞依");
+    t.set_persona_raw(0, "濑田薰");
+    t.set_persona_raw(1, "和奏瑞依");
     t.clean();
     t.begin_turn(0);
     while t.prompt().is_some() {
         t.decline();
     }
     let mark = t.mark();
-    // A few turns: hooks fire, caps re-arm, opt-ins decline.
+    // A few turns: hooks run, caps re-arm, opt-ins decline.
     for _ in 0..3 {
         t.set_pos(0, 0);
         t.dice(&[3]);
@@ -158,19 +158,19 @@ fn name_helpers_never_text_a_known_key() {
     use game_rules::{counter_name, mark_kind_name, state_key_name};
     let mut bad = Vec::new();
     for m in [
-        counter_name("crystals"),
-        counter_name("cp"),
+        counter_name("bonus"),
+        counter_name("points"),
         state_key_name("handLimit"),
         state_key_name("stay"),
         state_key_name("skillState"),
-        mark_kind_name("mark:cp"),
+        mark_kind_name("mark:points"),
         mark_kind_name("skillBlock"),
     ] {
         walk_msg(&m, "helper", &mut bad);
     }
     assert!(bad.is_empty(), "helpers leaked internal keys as Text: {bad:?}");
-    // Known keys resolve to their own i18n names.
-    assert_eq!(counter_name("crystals").key(), "log.counter.crystals");
+    // Known keys resolve to their own i18n names (wire keys, kept verbatim).
+    assert_eq!(counter_name("bonus").key(), "log.counter.bonus");
     assert_eq!(state_key_name("handLimit").key(), "log.state.hand_limit");
-    assert_eq!(mark_kind_name("mark:cp").key(), "mark:cp");
+    assert_eq!(mark_kind_name("mark:points").key(), "mark:points");
 }

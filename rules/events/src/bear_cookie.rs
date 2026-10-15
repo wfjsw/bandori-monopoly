@@ -12,12 +12,12 @@ pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::
 
 /// 「技能中含有火罐」 -- the player's character or band skill text mentions 「火罐」.
 fn skill_mentions_fire_pot(p: i32) -> bool {
-    if let Some(skill) = ctx::character_skill(p) {
+    if let Some(skill) = ctx::persona_skill(p) {
         if ctx::card_text_mentions(&skill, "火罐") {
             return true;
         }
     }
-    if let Some(skill) = ctx::band_skill(p) {
+    if let Some(skill) = ctx::group_skill(p) {
         if ctx::card_text_mentions(&skill, "火罐") {
             return true;
         }
@@ -33,7 +33,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         if !skill_mentions_fire_pot(p) {
             continue;
         }
-        // 「不能超过上限」 -- `gain_fire` already caps at the player's own max.
+        // 「不能超过上限」 -- `gain_charge` already caps at the player's own max.
         let room = (rules_status::fire::max(p) - rules_status::fire::get(p)).max(0);
         let afford = (ctx::money_of(p) / 1000).max(0);
         let cap = room.min(afford);

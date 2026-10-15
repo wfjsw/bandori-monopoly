@@ -38,7 +38,7 @@ pub fn snapshot(w: &World) -> Snap {
         m.insert(format!("bankrupt:P{i}"), p.bankrupt.to_string());
         m.insert(format!("left:P{i}"), p.left.to_string());
         m.insert(format!("assets:P{i}"), p.assets.to_string());
-        m.insert(format!("character:P{i}"), p.character.clone());
+        m.insert(format!("persona:P{i}"), p.persona.clone());
         m.insert(format!("hand_n:P{i}"), p.hand.to_string());
         m.insert(format!("draw_n:P{i}"), p.draw.to_string());
         m.insert(format!("discard_pub:P{i}"), p.discard.join("|"));
@@ -57,10 +57,13 @@ pub fn snapshot(w: &World) -> Snap {
                 format!("field:P{i}:{f}"),
                 format!(
                     "{}|uid={}|tile={}|crystals={}|immune={}|down={}|band={}",
-                    c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down, c.band_skill
+                    c.card, c.uid, c.tile, c.counters.get("crystals").copied().unwrap_or(0), c.immune, c.face_down, c.group_skill
                 ),
             );
-            m.insert(format!("crystals:P{i}:{}", c.card), c.crystals.to_string());
+            m.insert(
+                format!("crystals:P{i}:{}", c.card),
+                c.counters.get("crystals").copied().unwrap_or(0).to_string(),
+            );
             for (k, v) in &c.props {
                 m.insert(format!("fprop:P{i}:{}:{k}", c.card), v.to_string());
             }
@@ -114,7 +117,7 @@ pub fn snapshot(w: &World) -> Snap {
             format!("bfield:{i}"),
             format!(
                 "{}|uid={}|tile={}|crystals={}|immune={}|down={}",
-                c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down
+                c.card, c.uid, c.tile, c.counters.get("crystals").copied().unwrap_or(0), c.immune, c.face_down
             ),
         );
         for (k, v) in &c.props {
@@ -162,7 +165,10 @@ pub fn snapshot(w: &World) -> Snap {
     );
 
     m.insert("extra_turns".into(), format!("{:?}", w.extra_turns));
-    m.insert("ring_bonus".into(), w.ring_bonus.to_string());
+    m.insert(
+        "rent_unit_bonus".into(),
+        w.rule_param_bonus.get("rentUnitMult").copied().unwrap_or(0).to_string(),
+    );
     m.insert("out_count".into(), w.out_count.to_string());
     m.insert("targeted".into(), format!("{:?}", w.targeted));
     m.insert(
@@ -352,7 +358,7 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     if p.starts_with("state:P") {
         let key = p.rsplit(':').next().unwrap_or("");
         return Some(match key {
-            "fire" => "fire",
+            "fire" => "charge",
             "stay" => "status.stay",
             "stun" | "stunStart" => "status.stun",
             "exile" | "exileTo" => "status.exile",
@@ -393,7 +399,7 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     if p == "extra_turns" {
         return Some("turn.extra");
     }
-    if p == "ring_bonus" {
+    if p == "rent_unit_bonus" {
         return Some("tile.rent");
     }
     if p == "targeted" {
@@ -407,7 +413,7 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     }
     // Identity / layout that no rule should be writing, but that also is not
     // a named surface. Flag as `state` so a stray write is still visible.
-    if p.starts_with("character:P") || p == "board_owner" {
+    if p.starts_with("persona:P") || p == "board_owner" {
         return None;
     }
     if p.starts_with("roll:P") || p.starts_with("assets:P") {

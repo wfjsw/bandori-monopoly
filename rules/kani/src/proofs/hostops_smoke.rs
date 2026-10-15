@@ -19,7 +19,7 @@ use card_sdk::kani_host::{Args, Op};
 
 use crate::board;
 use crate::host;
-use crate::world::{self, BuySnap, MoveSnap, World, ROLL_CARD, ROLL_FIRE, ROLL_SKILL};
+use crate::world::{self, BuySnap, MoveSnap, World, ROLL_CARD, ROLL_CHARGE, ROLL_SKILL};
 
 fn install_empty() {
     host::install();
@@ -63,7 +63,7 @@ pub fn rent_of_property_table() {
 pub fn rent_of_ring_is_price() {
     install_empty();
     let ring: i32 = kani::any();
-    kani::assume(board::data_at(ring).map_or(false, board::is_ring));
+    kani::assume(board::data_at(ring).map_or(false, board::is_deed));
     let got = call(Op::rent_of, [ring, 0, 0, 0, 0, 0]);
     let price = board::data_at(ring).unwrap().price as i64;
     crate::kassert!(got == price, "RiNG rent_of is the tile's base price");
@@ -219,7 +219,7 @@ pub fn trig_roll_source_reads() {
     world::with_world_mut(|w| w.trig_roll_source = src);
     let got = call(Op::trig_roll_source, [0; 6]);
     crate::kassert!(got == src as i64);
-    kani::cover!(src == ROLL_FIRE, "fire pot");
+    kani::cover!(src == ROLL_CHARGE, "fire pot");
     kani::cover!(src == ROLL_CARD, "card");
     kani::cover!(src == ROLL_SKILL, "skill");
 }

@@ -39,7 +39,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **Source:** `rulebook-doc.md:150`
 * **Quote:** 「CiRCLE和江户川乐器店的[结算]是：抽取一张手卡。」
 * **Trigger:** an observed input whose window logs a landing on a `circle` or
-  `edogawa` tile (`log.land_circle` / `log.land_draw`).
+  `edogawa` tile (`log.land_start` / `log.land_draw`).
 * **Condition:** the window has no card activation (a card can replace the
   body -- L6 「技能和卡的效果优先」).
 * **Effect:** exactly one hand card is drawn (`draw` event `value == 1`); no

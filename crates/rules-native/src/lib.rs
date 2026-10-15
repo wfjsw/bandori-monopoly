@@ -2,7 +2,7 @@
 //!
 //! `docs/BOT.md` §3.1 (B1). The same `rules/*` crates the sandboxed
 //! `WasmRules` loads as wasm modules are **linked** into this binary; the
-//! `bandori` host imports become `#[no_mangle]` shims over a thread-local
+//! `ruleset` host imports become `#[no_mangle]` shims over a thread-local
 //! [`NativeHost`], and the guest entry point is a direct call to
 //! `card_sdk::rt::on` -- no wasmtime/wasmi `Store`, no instantiation.
 //!
@@ -23,6 +23,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
 use card_sdk::abi::{export, ManifestOn, ManifestTileText, OnKind, ABI_VERSION};
+use game_rules::tile_class;
 use card_sdk::On;
 use game_rules::{
     Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome,
@@ -31,8 +32,8 @@ use game_rules::{
 use game_rules::hostfns;
 use game_rules::{CardWorld, Msg, RulesBridge};
 
-/// The linked ruleset table, as `bandori_ruleset!` publishes it on a native
-/// build (one band table per rule crate, in `card-all`'s aggregation order).
+/// The linked ruleset table, as `ruleset!` publishes it on a native
+/// build (one group table per rule crate, in `card-all`'s aggregation order).
 pub static RULESET: &[&[card_sdk::CardDef]] = &[
     card_ag::CARDS,
     card_crychic::CARDS,
@@ -46,8 +47,8 @@ pub static RULESET: &[&[card_sdk::CardDef]] = &[
     card_ras::CARDS,
     card_roselia::CARDS,
     card_sumimi::CARDS,
-    skill_bands::CARDS,
-    skill_characters::CARDS,
+    skill_groups::CARDS,
+    skill_personas::CARDS,
     rules_tiles::CARDS,
     rules_tile_marks::CARDS,
     rules_status::CARDS,
@@ -83,12 +84,13 @@ impl NativeIndex {
 
 impl NativeRulesHandle {
     pub fn new() -> Self {
+        tile_class::set_class_defs(ruleset_core::kind::class_defs());
         let mut cards = Vec::new();
         let mut pre: Vec<Vec<Option<game_rules::CompiledPre>>> = Vec::new();
         let mut by_id = HashMap::new();
         let mut declared: u128 = 0;
-        for band in RULESET {
-            for card in band.iter() {
+        for module in RULESET {
+            for card in module.iter() {
                 let idx = cards.len() as i32;
                 by_id.insert(card.id.to_string(), idx);
                 let on: Vec<ManifestOn> = card
@@ -125,7 +127,7 @@ impl NativeRulesHandle {
                 // Same bitset the sandbox builds (): trigger
                 // kinds only.  values share the 0..128 numbering, so
                 // also setting those bits would make  say yes for
-                // kinds nothing listens to and open [反击] windows the sandbox
+                // kinds nothing listens to and open counteraction windows the sandbox
                 // skips -- a drift the check caught.
                 for o in &on {
                     for t in &o.triggers {
@@ -170,6 +172,8 @@ impl NativeRulesHandle {
                             key: (*key).to_string(),
                         })
                         .collect(),
+                    board_role: card.board_role.to_string(),
+                    governs: card.governs.iter().map(|k| (*k).to_string()).collect(),
                 });
             }
         }
@@ -188,7 +192,7 @@ impl NativeRulesHandle {
     }
 
     pub fn declares(&self, kind: TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
     }
 
@@ -198,8 +202,8 @@ impl NativeRulesHandle {
         use sha2::{Digest, Sha256};
         let mut h = Sha256::new();
         h.update(ABI_VERSION.to_le_bytes());
-        for band in RULESET {
-            for card in band.iter() {
+        for module in RULESET {
+            for card in module.iter() {
                 h.update(card.id.as_bytes());
                 h.update(0u8.to_le_bytes());
                 let mut props: Vec<_> = card.props.iter().collect();
@@ -230,21 +234,21 @@ impl Default for NativeRulesHandle {
 }
 
 /// Roster metadata (ABI v63) from the linked rule tables -- the native
-/// counterpart of the sandbox's `bandori_metadata` export. Same sources the
-/// wasm module's `card-all` passes to `bandori_ruleset!(; roster:)`.
+/// counterpart of the sandbox's `ruleset_metadata` export. Same sources the
+/// wasm module's `card-all` passes to `ruleset!(; roster:)`.
 pub fn roster_metadata() -> card_sdk::meta::MetaDoc {
     static SOURCES: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
         card_ordinals: ruleset_core::roster_order::CARDS,
         lists: &[
             card_sdk::meta::RosterList {
-                kind: "character",
-                ordinals: ruleset_core::roster_order::CHARACTERS,
-                rows: skill_characters::roster_table::meta_rows,
+                kind: "persona",
+                ordinals: ruleset_core::roster_order::PERSONAS,
+                rows: skill_personas::roster_table::meta_rows,
             },
             card_sdk::meta::RosterList {
-                kind: "band",
-                ordinals: ruleset_core::roster_order::BANDS,
-                rows: skill_bands::roster_table::meta_rows,
+                kind: "group",
+                ordinals: ruleset_core::roster_order::GROUPS,
+                rows: skill_groups::roster_table::meta_rows,
             },
         ],
     };
@@ -272,7 +276,7 @@ impl RulesHandle for NativeRulesHandle {
     /// The compiled condition of `cards[i].on[entry]` (docs/GUARDS.md G0).
     /// **Must not fall back to the `RulesHandle` default (`None`)** -- that
     /// reads as "no condition" and `admits_pre` / `admits_gate` then admit
-    /// every entry, which is how a `pre::MINE` hook fired for the wrong
+    /// every entry, which is how a `pre::MINE` hook ran for the wrong
     /// player on native while the sandbox skipped it (the drift `tests/drift.rs`
     /// caught in round 1).
     fn pre(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledPre> {
@@ -345,7 +349,7 @@ impl HostCtx for NativeHost {
     }
 }
 
-/// The `#[no_mangle] bandori_*` shims live in `game_rules::native_shims`
+/// The `#[no_mangle] ruleset_*` shims live in `game_rules::native_shims`
 /// (the crate every `card-sdk/guest` consumer links) and dispatch into this
 /// crate's [`NativeHost`] through the [`game_rules::native_shims::HostOps`]
 /// blanket impl. See `docs/BOT.md` B1.
@@ -970,3 +974,15 @@ pub fn native_rules(data: Arc<game_core::data::GameData>) -> NativeRules {
 // `MAX_NESTING` is used by hostfns via the nested call path; re-export so
 // tests can assert the same bound.
 pub use game_rules::MAX_NESTING as MAX_PLAY_NESTING;
+
+#[cfg(test)]
+mod intern_tests {
+    #[test]
+    fn first_slot_round_trips_eight_byte_name() {
+        let _f = card_sdk::native::enter();
+        let (h, n) = card_sdk::native::intern(b"counter1");
+        assert_ne!(h, 0, "handle 0 is the length-only probe");
+        assert_eq!(n, 8);
+        assert_eq!(card_sdk::native::read(h, 8), b"counter1");
+    }
+}

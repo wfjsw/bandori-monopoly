@@ -137,7 +137,7 @@ pub fn mark_cp_land_gain_iff() {
         }
     }
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
 }
 

@@ -16,7 +16,7 @@
 //! Extra CEL spellings that flatten to the same identifier live in
 //! [`Name::aliases`] (`chain.count` is an alias of `effect.count`).
 
-use crate::view::{CondView, TileKind};
+use crate::view::CondView;
 
 /// Where a name binds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -429,22 +429,22 @@ pub const VOCAB: &[Name] = &[
         doc: "the owner's money",
     },
     Name {
-        cel: "owner.fire",
+        cel: "owner.charge",
         aliases: &[],
-        flat: "owner_fire",
+        flat: "owner_charge",
         scope: Scope::Candidate,
         ty: Ty::Int,
-        get: |v| v.owner_fire(),
+        get: |v| v.owner_charge(),
         fx: NO_FX,
         doc: "the owner's fire pot",
     },
     Name {
         cel: "owner.crystals",
         aliases: &[],
-        flat: "owner_crystals",
+        flat: "owner_group_pool",
         scope: Scope::Candidate,
         ty: Ty::Int,
-        get: |v| v.owner_crystals(),
+        get: |v| v.owner_group_pool("crystals"),
         fx: NO_FX,
         doc: "the owner's band crystals (the band-skill pool, not on-card)",
     },
@@ -519,22 +519,22 @@ pub const VOCAB: &[Name] = &[
         doc: "1 = 「不可持有手牌」",
     },
     Name {
-        cel: "owner.character",
+        cel: "owner.persona",
         aliases: &[],
-        flat: "owner_character",
+        flat: "owner_persona",
         scope: Scope::Candidate,
         ty: Ty::Int,
-        get: |v| v.owner_character(),
+        get: |v| v.owner_persona(),
         fx: NO_FX,
         doc: "the owner's character id hash",
     },
     Name {
-        cel: "owner.band",
+        cel: "owner.group",
         aliases: &[],
-        flat: "owner_band",
+        flat: "owner_group",
         scope: Scope::Candidate,
         ty: Ty::Int,
-        get: |v| v.owner_band(),
+        get: |v| v.owner_group(),
         fx: NO_FX,
         doc: "the owner's band id hash",
     },
@@ -669,58 +669,6 @@ pub const VOCAB: &[Name] = &[
         },
         doc: "tile_named(name) -> board id; -1 when unknown",
     },
-    Name {
-        cel: "is_circle",
-        aliases: &[],
-        flat: "is_circle",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_circle_tiles",
-            fill: |v| v.tile_kind_list(TileKind::Circle),
-        },
-        doc: "is_circle(t) -> tile kind is circle",
-    },
-    Name {
-        cel: "is_ring",
-        aliases: &[],
-        flat: "is_ring",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_ring_tiles",
-            fill: |v| v.tile_kind_list(TileKind::Ring),
-        },
-        doc: "is_ring(t) -> tile kind is ring",
-    },
-    Name {
-        cel: "is_live_house",
-        aliases: &[],
-        flat: "is_live_house",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_live_house_tiles",
-            fill: |v| v.tile_kind_list(TileKind::LiveHouse),
-        },
-        doc: "is_live_house(t) -> tile kind is live house",
-    },
-    Name {
-        cel: "is_buyable",
-        aliases: &[],
-        flat: "is_buyable",
-        scope: Scope::Func { arity: 1, cand: false },
-        ty: Ty::Bool,
-        get: NO_GET,
-        fx: Fx::IntHas {
-            var: "_buyable_tiles",
-            fill: |v| v.tile_kind_list(TileKind::Buyable),
-        },
-        doc: "is_buyable(t) -> tile kind is buyable (sugar over tile_in)",
-    },
     // -- ABI v56 generic tile queries ---------------------------------------
     Name {
         cel: "tile_is",
@@ -732,22 +680,16 @@ pub const VOCAB: &[Name] = &[
         fx: Fx::TileIs {
             var: "_tile_is",
             fill: |v| {
-                let kinds = [
-                    "circle",
-                    "cafe",
-                    "edogawa",
-                    "ryuseido",
-                    "property",
-                    "ring",
-                    "agent",
-                    "event",
-                ];
+                // Unique kinds the board stamps (ruleset data, no engine list).
                 let n = v.tile_count();
+                let mut kinds: Vec<String> = v.tile_kind_names();
+                kinds.sort();
+                kinds.dedup();
                 kinds
-                    .iter()
-                    .map(|&k| {
-                        let tiles = (0..n).filter(|&t| v.tile_is(t, k)).collect();
-                        (k.to_string(), tiles)
+                    .into_iter()
+                    .map(|k| {
+                        let tiles = (0..n).filter(|&t| v.tile_is(t, &k)).collect();
+                        (k, tiles)
                     })
                     .collect()
             },
@@ -804,17 +746,17 @@ pub const VOCAB: &[Name] = &[
         doc: "money(p) -> seat's money",
     },
     Name {
-        cel: "fire",
+        cel: "charge",
         aliases: &[],
-        flat: "fire",
+        flat: "charge",
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
         fx: Fx::SeatInt {
             var: "_fire",
-            field: |v, s| v.fire(s),
+            field: |v, s| v.charge(s),
         },
-        doc: "fire(p) -> seat's fire pot",
+        doc: "charge(p) -> seat's fire pot",
     },
     Name {
         cel: "crystals",
@@ -825,7 +767,7 @@ pub const VOCAB: &[Name] = &[
         get: NO_GET,
         fx: Fx::SeatInt {
             var: "_crystals",
-            field: |v, s| v.crystals(s),
+            field: |v, s| v.group_pool(s, "crystals"),
         },
         doc: "crystals(p) -> seat's band crystals (the band-skill pool)",
     },
@@ -856,30 +798,30 @@ pub const VOCAB: &[Name] = &[
         doc: "pos(p) -> seat's board position",
     },
     Name {
-        cel: "character",
+        cel: "persona",
         aliases: &[],
-        flat: "character",
+        flat: "persona",
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
         fx: Fx::SeatInt {
-            var: "_character",
-            field: |v, s| v.character(s),
+            var: "_persona",
+            field: |v, s| v.persona(s),
         },
-        doc: "character(p) -> seat's character id hash",
+        doc: "persona(p) -> seat's persona id hash",
     },
     Name {
-        cel: "band",
-        aliases: &[],
-        flat: "band",
+        cel: "group",
+        aliases: &["band"],
+        flat: "group",
         scope: Scope::Func { arity: 1, cand: false },
         ty: Ty::Int,
         get: NO_GET,
         fx: Fx::SeatInt {
-            var: "_band",
-            field: |v, s| v.band(s),
+            var: "_group",
+            field: |v, s| v.group(s),
         },
-        doc: "band(p) -> seat's band id hash",
+        doc: "group(p) -> seat's group id hash",
     },
     Name {
         cel: "tiles",
@@ -895,30 +837,30 @@ pub const VOCAB: &[Name] = &[
         doc: "tiles(p) -> seat's owned-tile count",
     },
     Name {
-        cel: "character_is",
+        cel: "persona_is",
         aliases: &[],
-        flat: "character_is",
+        flat: "persona_is",
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
         fx: Fx::SeatIntIs {
             var: "_character",
-            field: |v, s| v.character(s),
+            field: |v, s| v.persona(s),
         },
-        doc: "character_is(p, '名') / character_is(p, id) -> seat plays that character",
+        doc: "persona_is(p, '名') / persona_is(p, id) -> seat plays that character",
     },
     Name {
-        cel: "band_is",
+        cel: "group_is",
         aliases: &[],
-        flat: "band_is",
+        flat: "group_is",
         scope: Scope::Func { arity: 2, cand: false },
         ty: Ty::Bool,
         get: NO_GET,
         fx: Fx::SeatIntIs {
             var: "_band",
-            field: |v, s| v.band(s),
+            field: |v, s| v.group(s),
         },
-        doc: "band_is(p, 'Band') / band_is(p, id) -> seat is in that band",
+        doc: "group_is(p, 'Band') / group_is(p, id) -> seat is in that band",
     },
     Name {
         cel: "blocked",
@@ -929,7 +871,7 @@ pub const VOCAB: &[Name] = &[
         get: NO_GET,
         fx: Fx::IntHas {
             var: "_blocked",
-            fill: |v| v.blocked_bands(),
+            fill: |v| v.blocked_groups(),
         },
         doc: "blocked(band) -> skill blocked for this candidate",
     },

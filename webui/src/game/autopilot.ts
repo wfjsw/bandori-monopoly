@@ -290,8 +290,8 @@ export function canBuildHere(S: MatchState, tiles: TileData[], me: number, i: nu
 
 export interface AutopilotCtx {
   tiles: TileData[];
-  /** Characters with their own art set (`cnId`), for ban/pick. */
-  characters: { name: string; cnId: string }[];
+  /** Personas with their own art set (`cnId`), for ban/pick. */
+  personas: { name: string; cnId: string }[];
   /** Hand cards the player has already played this turn (client-tracked). */
   playedThisTurn: number;
   /** The character's preset deck (`rules.deck_preset`). */
@@ -327,9 +327,9 @@ export function botParams(view: MatchView, ctx: AutopilotCtx): StrategyParams {
   const me = view.playerId;
   const f = ctx.strategyFor;
   if (!f) return DEFAULT_STRATEGY;
-  const opponents = S.players.filter((_, j) => j !== me).map((p) => p.character);
+  const opponents = S.players.filter((_, j) => j !== me).map((p) => p.persona);
   try {
-    const p = f(S.players[me]?.character ?? "", me, opponents);
+    const p = f(S.players[me]?.persona ?? "", me, opponents);
     return p && typeof p === "object" ? { ...DEFAULT_STRATEGY, ...p } : DEFAULT_STRATEGY;
   } catch {
     return DEFAULT_STRATEGY;
@@ -341,10 +341,10 @@ const pick = <T>(xs: T[], random: () => number): T | undefined =>
 
 /** `RandomCharacter` -- prefers characters with their own art set. */
 function randomCharacter(S: MatchState, ctx: AutopilotCtx, forPick: boolean): string {
-  const taken = new Set(S.players.map((p) => p.character).filter(Boolean));
+  const taken = new Set(S.players.map((p) => p.persona).filter(Boolean));
   const ok = (name: string) => !S.bans.includes(name) && (!forPick || !taken.has(name));
-  const all = ctx.characters.map((c) => c.name).filter(ok);
-  const withArt = ctx.characters.filter((c) => c.cnId && ok(c.name)).map((c) => c.name);
+  const all = ctx.personas.map((c) => c.name).filter(ok);
+  const withArt = ctx.personas.filter((c) => c.cnId && ok(c.name)).map((c) => c.name);
   return pick(withArt.length ? withArt : all, ctx.random) ?? "";
 }
 
@@ -710,19 +710,19 @@ export const policies: Record<PolicyName, Policy> = {
         if (S.phase === "ban") {
           if (mine.banDone) return null;
           // `AiStep`'s ban: 50% a random character, else no ban.
-          return { act: "ban", character: ctx.random() < 0.5 ? randomCharacter(S, ctx, false) : "" };
+          return { act: "ban", persona: ctx.random() < 0.5 ? randomCharacter(S, ctx, false) : "" };
         }
-        if (mine.character) return null;
-        return { act: "pick", character: randomCharacter(S, ctx, true) };
+        if (mine.persona) return null;
+        return { act: "pick", persona: randomCharacter(S, ctx, true) };
       }
       if (S.phase === "deck") {
         if (mine.deckReady) return null;
         // The deck book's entry for this public table, else the preset
         // (`docs/BOT.md` §3.7). Key is public: own character, own seat, the
         // other seats' characters in seat order.
-        const opponents = S.players.filter((_, j) => j !== me).map((p) => p.character);
-        const cards = ctx.deckSuggest(mine.character, me, opponents);
-        return { act: "deck", cards: cards.length ? cards : ctx.deckPreset(mine.character) };
+        const opponents = S.players.filter((_, j) => j !== me).map((p) => p.persona);
+        const cards = ctx.deckSuggest(mine.persona, me, opponents);
+        return { act: "deck", cards: cards.length ? cards : ctx.deckPreset(mine.persona) };
       }
       return null;
     },
@@ -783,16 +783,16 @@ export const policies: Record<PolicyName, Policy> = {
         if (S.phase === "ban") {
           if (mine.banDone) return null;
           // Always ban something, if anything is left.
-          return { act: "ban", character: randomCharacter(S, ctx, false) };
+          return { act: "ban", persona: randomCharacter(S, ctx, false) };
         }
-        if (mine.character) return null;
-        return { act: "pick", character: randomCharacter(S, ctx, true) };
+        if (mine.persona) return null;
+        return { act: "pick", persona: randomCharacter(S, ctx, true) };
       }
       if (S.phase === "deck") {
         if (mine.deckReady) return null;
         // A random legal deck, not the designer's preset.
-        const cards = ctx.deckRandom(mine.character);
-        return { act: "deck", cards: cards.length ? cards : ctx.deckPreset(mine.character) };
+        const cards = ctx.deckRandom(mine.persona);
+        return { act: "deck", cards: cards.length ? cards : ctx.deckPreset(mine.persona) };
       }
       return null;
     },

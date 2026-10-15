@@ -100,7 +100,7 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"（1）[反击] 当有人同一回合内打出两张卡时，将此卡放置于对方场上。（2）场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。"#)
         .cell(r#"L7"#)
-        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
+        .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
 /// Residual the condition cannot express: the actor is still in the game
 /// (`actor != owner` is the `pre`).

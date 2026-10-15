@@ -11,7 +11,7 @@ import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { cardColor, cardText, cardTitle, D } from "../core/data";
 import { t as tr } from "../i18n/t";
-import type { CharacterData } from "../core/types";
+import type { PersonaData } from "../core/types";
 import { Avatar } from "./Character";
 import { SkillBody } from "./SkillBody";
 import s from "./CardPreview.module.css";
@@ -25,7 +25,7 @@ function PreviewTag({ tag }: { tag: string }) {
 }
 
 /** A coloured pill under the preview's title (a field card's owner / designee). */
-export interface CardPill { label: string; color: string; /** The player's character, drawn as a small avatar in the pill. */ char?: CharacterData }
+export interface CardPill { label: string; color: string; /** The player's character, drawn as a small avatar in the pill. */ char?: PersonaData }
 
 export interface CardPreviewProps {
   /** The card to preview; `null` hides the panel. */

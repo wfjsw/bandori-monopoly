@@ -1,7 +1,7 @@
 //! Symbolic host backend, installed into `card_sdk::kani_host`.
 //!
 //! Under `cfg(kani)` the card-sdk `sys` surface is ordinary Rust that funnels
-//! every `bandori_*` import through [`card_sdk::kani_host::call`]. This module
+//! every `ruleset_*` import through [`card_sdk::kani_host::call`]. This module
 //! is that backend: a general model of the world ([`crate::world`]) plus an
 //! effect log. Game vocabulary lives here, not in card-sdk.
 //!
@@ -522,8 +522,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // The counteract window is PROTOCOL-LEVEL (KANI.md §6) — no cancel
         // path is explored. `targeted_count` is bumped on success.
                 Op::target => arm_target(a),
-        Op::character_is => arm_character_is(a),
-        Op::in_band => arm_in_band(a),
+        Op::persona_is => arm_character_is(a),
+        Op::in_group => arm_in_band(a),
                 Op::self_uid => arm_self_uid(a),
 
         // ---- money ----
@@ -799,16 +799,16 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::mark_src_at | Op::mark_instance_at => -1,
 
         // ---- status ----
-                Op::fire => arm_fire(a),
-                Op::fire_max => arm_fire_max(a),
-                Op::gain_fire => arm_gain_fire(a),
-        Op::add_fire_max => {
+                Op::charge => arm_fire(a),
+                Op::charge_max => arm_charge_max(a),
+                Op::gain_charge => arm_gain_charge(a),
+        Op::add_charge_max => {
             world::with_world_mut(|w| {
-                w.fire_max[player_idx(a0)] = w.fire_max[player_idx(a0)].saturating_add(a1);
+                w.charge_max[player_idx(a0)] = w.charge_max[player_idx(a0)].saturating_add(a1);
             });
             0
         }
-                Op::spend_fire => arm_spend_fire(a),
+                Op::spend_charge => arm_spend_charge(a),
         // `ctx::n(k, v)` doubles when `play_doubled() == k`. Default is
         // **no doubling** (`-1` / `None` in the engine) — the old stub returned
         // 0, so `n(0, 600)` wrongly yielded 1200.
@@ -853,11 +853,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::card_move => arm_card_move(a),
 
         // ---- band / skills ----
-        Op::band_crystals => arm_band_crystals(a),
-        Op::add_band_crystals => arm_add_band_crystals(a),
-                Op::band_skill | Op::character_skill => arm_band_skill(a),
-                Op::band_skills => arm_band_skills(a),
-                Op::add_band_skill => arm_add_band_skill(a),
+        Op::group_pool => arm_band_crystals(a),
+        Op::add_group_pool => arm_add_band_crystals(a),
+                Op::group_skill | Op::persona_skill => arm_band_skill(a),
+                Op::group_skills => arm_band_skills(a),
+                Op::add_group_skill => arm_add_band_skill(a),
                 Op::invoke_skill => arm_invoke_skill(a),
 
         // ---- events ----
@@ -983,10 +983,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::raise => arm_raise(a),
         Op::raise_bought => arm_raise_bought(a),
         Op::gate => arm_gate(a),
-        Op::ring_multiplier => arm_ring_multiplier(a),
+        Op::rent_unit_mult => arm_ring_multiplier(a),
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
-                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_ring_bonus | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
 
         other => unmodeled(other),
     }
@@ -1014,8 +1014,8 @@ pub fn arm_add_band_crystals(a: Args) -> i64 {
     let [a0, a1, ..] = a;
     world::with_world_mut(|w| {
         let p = player_idx(a0);
-        w.band_crystals[p] = (w.band_crystals[p] + a1).clamp(0, 99);
-        w.band_crystals[p] as i64
+        w.group_pool[p] = (w.group_pool[p] + a1).clamp(0, 99);
+        w.group_pool[p] as i64
     })
 }
 
@@ -1243,7 +1243,7 @@ pub fn arm_ask(a: Args) -> i64 {
 
 pub fn arm_band_crystals(a: Args) -> i64 {
     let [a0, ..] = a;
-    world::with_world(|w| w.band_crystals[player_idx(a0)]) as i64
+    world::with_world(|w| w.group_pool[player_idx(a0)]) as i64
 }
 
 pub fn arm_band_skill(a: Args) -> i64 {
@@ -1419,7 +1419,7 @@ pub fn arm_cards_in(a: Args) -> i64 {
 pub fn arm_character_is(a: Args) -> i64 {
     let [a0, a1, a2, ..] = a;
     let want = name_id(a1, a2);
-    world::with_world(|w| (w.character_id[player_idx(a0)] == want.0) as i64)
+    world::with_world(|w| (w.persona_id[player_idx(a0)] == want.0) as i64)
 }
 
 pub fn arm_count_held(a: Args) -> i64 {
@@ -1575,12 +1575,12 @@ pub fn arm_field_instances(a: Args) -> i64 {
 
 pub fn arm_fire(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
-    world::with_world(|w| w.fire[player_idx(a0)]) as i64
+    world::with_world(|w| w.charge[player_idx(a0)]) as i64
 }
 
-pub fn arm_fire_max(a: Args) -> i64 {
+pub fn arm_charge_max(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
-    world::with_world(|w| w.fire_max[player_idx(a0)]) as i64
+    world::with_world(|w| w.charge_max[player_idx(a0)]) as i64
 }
 
 pub fn arm_gain(a: Args) -> i64 {
@@ -1599,10 +1599,10 @@ pub fn arm_gain(a: Args) -> i64 {
     a1 as i64
 }
 
-pub fn arm_gain_fire(a: Args) -> i64 {
+pub fn arm_gain_charge(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
-            // engine `gain_fire`: `got = n.clamp(0, (fire_max - fire).max(0))`;
+            // engine `gain_charge`: `got = n.clamp(0, (charge_max - fire).max(0))`;
             // 0 when out / n<=0 / cap<=0. Returns the amount gained.
             world::with_world_mut(|w| {
                 let p = player_idx(a0);
@@ -1610,15 +1610,15 @@ pub fn arm_gain_fire(a: Args) -> i64 {
                 if n <= 0 || w.out[p] {
                     return 0;
                 }
-                let cap = w.fire_max[p];
+                let cap = w.charge_max[p];
                 if cap <= 0 {
                     return 0;
                 }
-                let got = n.clamp(0, (cap - w.fire[p]).max(0));
+                let got = n.clamp(0, (cap - w.charge[p]).max(0));
                 if got <= 0 {
                     return 0;
                 }
-                w.fire[p] += got;
+                w.charge[p] += got;
                 w.push(Effect::GainFire {
                     player: a0,
                     n: got,
@@ -1745,7 +1745,7 @@ pub fn arm_houses_of(a: Args) -> i64 {
 pub fn arm_in_band(a: Args) -> i64 {
     let [a0, a1, a2, ..] = a;
     let want = name_id(a1, a2);
-    world::with_world(|w| (w.band_id[player_idx(a0)] == want.0) as i64)
+    world::with_world(|w| (w.group_id[player_idx(a0)] == want.0) as i64)
 }
 
 pub fn arm_inc_slot(a: Args) -> i64 {
@@ -2488,13 +2488,13 @@ pub fn arm_slot(a: Args) -> i64 {
         }
 }
 
-pub fn arm_spend_fire(a: Args) -> i64 {
+pub fn arm_spend_charge(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
             let p = player_idx(a0);
             world::with_world_mut(|w| {
-                if w.fire[p] >= a1 && a1 > 0 {
-                    w.fire[p] -= a1;
+                if w.charge[p] >= a1 && a1 > 0 {
+                    w.charge[p] -= a1;
                     1
                 } else if a1 == 0 {
                     1
@@ -2716,8 +2716,8 @@ pub fn arm_tile_is(a: Args) -> i64 {
                 let t = &board::TILES[s as usize];
                 // Compare via interned wire spellings.
                 let hit = [
-                    ("circle", board::is_circle(t)),
-                    ("ring", board::is_ring(t)),
+                    ("circle", board::is_start(t)),
+                    ("ring", board::is_deed(t)),
                     ("agent", board::is_agent(t)),
                     ("property", board::is_property(t)),
                     ("cafe", t.kind == 4),

@@ -24,7 +24,7 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
         On::Hook(
             &[card_sdk::abi::HookKind::SettleBefore],
-            "actor != owner && move.main && card.placed && fire(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
+            "actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
             None,
             pull,
         ),
@@ -37,7 +37,7 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"（1）打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得两个X差值*120的资金。（2）此卡不会被你乐队技能的（2）效果移除，乐队技能的（2）效果发动时展示此卡并将其洗入抽牌堆。（3）若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上，你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的（2）技能。"#)
         .cell(r#"M13"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", r#"高松灯（CRYCHIC）"#)]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"高松灯（CRYCHIC）"#)]));
 
 fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得
@@ -79,7 +79,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
     // 规则书（3）: 「若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上」
     // -- C# `H.InBand(i, "MyGO!!!!!")` then `H.PlaceFromPlay(c, i, tile)` at the
     // first owned tile (`H.V(i, "firstTile") - 1` falling back to `list.Min()`).
-    if ctx::in_band(player_id, "MyGO!!!!!") {
+    if ctx::in_group(player_id, "MyGO!!!!!") {
         let owned = ctx::owned_tiles(player_id);
         if let Some(&first) = owned.iter().min() {
             let remembered = ctx::slot(player_id, "firstTile") - 1;
@@ -110,7 +110,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
 
 /// （3）: when another player's main-move endpoint is within 5 of this card's
 /// tile and the owner has 1 fire, pull them onto the card's tile with no settle.
-/// （3）: applicability is the entry's condition (`fire(owner) >= 1 &&`
+/// （3）: applicability is the entry's condition (`charge(owner) >= 1 &&`
 /// `dist(pos(actor), card.tile) <= 5`); the ask is the 「可」 opt-in. Spend
 /// after accept is a cost, not an applicability check.
 fn pull(player_id: i32) -> card_sdk::Asked {

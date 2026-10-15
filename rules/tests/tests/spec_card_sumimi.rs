@@ -289,8 +289,8 @@ pub fn c_sumimi_twoinone_character(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre_ch = step.pre.st.players[who].character.clone();
-    let post_ch = step.post.st.players[who].character.clone();
+    let pre_ch = step.pre.st.players[who].persona.clone();
+    let post_ch = step.post.st.players[who].persona.clone();
     let expect_ch = match pre_ch.as_str() {
         "纯田真奈" => "三角初华（Sumimi）",
         "三角初华（Sumimi）" => "纯田真奈",
@@ -314,7 +314,7 @@ pub fn c_sumimi_twoinone_fire(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre_ch = step.pre.st.players[who].character.clone();
+    let pre_ch = step.pre.st.players[who].persona.clone();
     // The swap targets the other Sumimi character; its 初始火罐数 is what
     // must land (真奈 1 / 初华 2).
     let expect_fire = match pre_ch.as_str() {
@@ -327,7 +327,7 @@ pub fn c_sumimi_twoinone_fire(step: &Step<'_>) -> Result<(), String> {
         .st
         .players
         .get(who)
-        .map(|p| p.state_get("fire"))
+        .map(|p| p.state_get("charge"))
         .unwrap_or(-1);
     if post_fire != expect_fire {
         return Err(format!(
@@ -371,10 +371,10 @@ fn twoinone_swaps_fire_pots() {
         t.observe(&fire_clause);
         t.play(0, TWO_IN_ONE)
             .map_err(|e| format!("play rejected: {e}"))?;
-        if t.fire(0) != expect_fire {
+        if t.charge(0) != expect_fire {
             return Err(format!(
                 "fire {}, expected {expect_fire} (initial of the other Sumimi character from {start})",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -405,7 +405,7 @@ fn twoinone_swaps_character() {
         t.observe(&ch_clause);
         t.play(0, TWO_IN_ONE)
             .map_err(|e| format!("play rejected: {e}"))?;
-        let ch = t.p(0).character.clone();
+        let ch = t.p(0).persona.clone();
         if ch != expect {
             return Err(format!("character {start} -> {ch}, expected {expect}"));
         }
@@ -431,7 +431,7 @@ fn twoinone_opens_the_other_exclusive() {
     if r.is_err() {
         panic!(
             "after swapping to 三角初华（Sumimi） (char={}, field={:?}), their exclusive was refused: {r:?}",
-            t.p(0).character,
+            t.p(0).persona,
             t.field_ids(0)
         );
     }
@@ -528,10 +528,10 @@ fn childhood_starts_from_shodoshima_and_gives_fire() {
                 t.pos(0)
             ));
         }
-        if t.fire(0) != 1 {
+        if t.charge(0) != 1 {
             return Err(format!(
                 "fire {}, expected exactly 1 (started 0, 「移动后获得一个火罐」)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -832,14 +832,14 @@ fn sumimi_skills_fire_on_circle_pass() {
         t.set_fire(0, init.min(1), max);
         let circle = tile("CiRCLE");
         t.set_pos(0, (circle + 58) % 60);
-        let before = t.fire(0);
+        let before = t.charge(0);
         t.dice(&[3]);
         t.roll(0).expect("roll");
         drain(&mut t);
-        if t.fire(0) != before + 1 {
+        if t.charge(0) != before + 1 {
             panic!(
                 "{who_char}: fire {before} -> {} after passing CiRCLE, expected +1 (init {init} cap {max})",
-                t.fire(0)
+                t.charge(0)
             );
         }
     }
@@ -875,8 +875,8 @@ fn mana_shop_pay_spends_pot_and_halves_spending() {
     if !offered {
         panic!("no mana_donut offer on passing 购物中心: {}", t.dump_prompt());
     }
-    if t.fire(0) != 0 {
-        panic!("fire {}, expected 0 after 「消耗一个火罐」", t.fire(0));
+    if t.charge(0) != 0 {
+        panic!("fire {}, expected 0 after 「消耗一个火罐」", t.charge(0));
     }
     // Half window armed (the engine's two-layer TurnEnd expiry).
     let half = t.state(0, "skill.manaDonut.half");
@@ -925,8 +925,8 @@ fn hina_pot_placement_keeps_cap() {
         }
     }
     drain(&mut t);
-    if t.fire(0) < 0 || t.fire(0) > 2 {
-        panic!("fire {} outside the cap 2", t.fire(0));
+    if t.charge(0) < 0 || t.charge(0) > 2 {
+        panic!("fire {} outside the cap 2", t.charge(0));
     }
 }
 

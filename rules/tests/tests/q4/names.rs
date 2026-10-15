@@ -309,7 +309,7 @@ pub fn report(log: &NameLog, cols: &[Anomaly]) -> Vec<String> {
 pub fn surface_for_name(name: &str) -> &'static str {
     if let Some(k) = name.strip_prefix("state:") {
         return match k {
-            "fire" => "fire",
+            "fire" => "charge",
             "stay" => "status.stay",
             _ => "state",
         };

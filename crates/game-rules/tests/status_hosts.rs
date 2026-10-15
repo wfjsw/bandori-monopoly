@@ -1,5 +1,5 @@
 //! `status:*` host clauses -- tick, clamp, gate, un-latch, exile return as
-//! the main move, fire cap / partial gain / `markerSpend` cancel, stun
+//! the main move, charge cap / partial gain / `markerSpend` cancel, stun
 //! payee. (`docs/STATUS-HOSTS.md` §5 Phase D.)
 
 mod common;
@@ -16,7 +16,7 @@ fn drain(t: &mut Table) {
 // Tick: stay / stun wear off one layer at turn end; stunStart at turn start
 // =====================================================================
 
-/// 规则书 48: 「玩家的每回合结束时移除一层」 -- [停留] drops one layer at
+/// 规则书 48: 「玩家的每回合结束时移除一层」 -- stay drops one layer at
 /// the owner's turn end, not all at once.
 #[test]
 fn stay_ticks_one_layer_at_turn_end() {
@@ -30,7 +30,7 @@ fn stay_ticks_one_layer_at_turn_end() {
     assert_eq!(stay, 1, "one layer wears off at turn end, one remains");
 }
 
-/// 规则书 49: same tick for [晕眩].
+/// 规则书 49: same tick for stun.
 #[test]
 fn stun_ticks_one_layer_at_turn_end() {
     let mut t = Table::vanilla(2);
@@ -84,8 +84,8 @@ fn status_counters_floor_at_zero() {
 // Gates
 // =====================================================================
 
-/// 规则书 47/48: [停留] 「处于该状态时[无法移动]」 -- the move gate closes.
-/// 规则书 51: [不可阻挡] 「无视已存在的[停留]」 -- it opens again.
+/// 规则书 47/48: stay 「处于该状态时[无法移动]」 -- the move gate closes.
+/// 规则书 51: [不可阻挡] 「无视已存在的stay」 -- it opens again.
 #[test]
 fn stay_blocks_move_unless_unstoppable() {
     let mut t = Table::vanilla(2);
@@ -97,7 +97,7 @@ fn stay_blocks_move_unless_unstoppable() {
     assert!(g.r#move, "[不可阻挡] 「无视已存在的[停留]」");
 }
 
-/// 规则书 49: [晕眩] closes move / act / pay.
+/// 规则书 49: stun closes move / act / pay.
 #[test]
 fn stun_closes_move_act_pay() {
     let mut t = Table::vanilla(2);
@@ -106,7 +106,7 @@ fn stun_closes_move_act_pay() {
     assert!(!g.r#move && !g.act && !g.pay, "[晕眩] closes move/act/pay");
 }
 
-/// 规则书 50: [除外] closes move / act / pay / on-board / targeted.
+/// 规则书 50: exile closes move / act / pay / on-board / targeted.
 #[test]
 fn exile_closes_all_but_presence_is_inverted() {
     let mut t = Table::vanilla(2);
@@ -118,10 +118,10 @@ fn exile_closes_all_but_presence_is_inverted() {
 }
 
 // =====================================================================
-// Un-latch: the last [停留] layer restores the main move
+// Un-latch: the last stay layer restores the main move
 // =====================================================================
 
-/// Dropping the last [停留] layer un-skips the turn's main move
+/// Dropping the last stay layer un-skips the turn's main move
 /// (`status:stay` count-changed clause).
 #[test]
 fn stay_unlatch_restores_main_move() {
@@ -136,8 +136,8 @@ fn stay_unlatch_restores_main_move() {
     );
 }
 
-/// [除外] is not part of the `skip_move` latch (glossary 13 grants
-/// [无法移动] but not 「跳过主要移动阶段」): clearing [停留] releases the latch
+/// exile is not part of the `skip_move` latch (glossary 13 grants
+/// [无法移动] but not 「跳过主要移动阶段」): clearing stay releases the latch
 /// even while exiled; the move gate itself stays closed.
 #[test]
 fn stay_unlatch_ignores_exile() {
@@ -154,12 +154,12 @@ fn stay_unlatch_ignores_exile() {
 // Exile return as the main move (MyGO:无路矢 `exileMain`)
 // =====================================================================
 
-/// The return [传送] is consumed as that turn's [主要移动]: the player
+/// The return teleport is consumed as that turn's main move: the player
 /// cannot also roll.
 #[test]
 fn exile_return_counts_as_main_move() {
     let mut t = Table::vanilla(2);
-    // One [除外] layer, return to tile 5, as the main move.
+    // One exile layer, return to tile 5, as the main move.
     t.set_state(0, "exile", 1);
     t.set_state(0, "exileTo", 5);
     t.set_state(0, "exileMain", 1);
@@ -187,34 +187,34 @@ fn exile_return_counts_as_main_move() {
 }
 
 // =====================================================================
-// Fire: cap, partial gain
+// Charge: cap, partial gain
 // =====================================================================
 
-/// 规则书 126: 「您持有的火罐数量不能超过持有上限」 -- gain is partial.
+/// rulebook 126: 「your charge-pot count cannot exceed the cap」 -- gain is partial.
 #[test]
-fn fire_gain_is_partial_under_the_cap() {
+fn charge_gain_is_partial_under_the_cap() {
     let mut t = Table::vanilla(2);
-    t.set_fire(0, 1, 2);
-    let got = t.m.world_mut().gain_fire(0, 5, game_core::msg::Msg::new("test"));
-    let have = t.fire(0);
+    t.set_charge(0, 1, 2);
+    let got = t.m.world_mut().gain_charge(0, 5, game_core::msg::Msg::new("test"));
+    let have = t.charge(0);
     assert!(have <= 2, "capped at 2, have {have} (gain reported {got})");
     assert_eq!(have, 2, "partial gain fills to the cap");
 }
 
 /// A cap change pulls the value down under the new ceiling.
 #[test]
-fn fire_cap_drop_pulls_value_down() {
+fn charge_cap_drop_pulls_value_down() {
     let mut t = Table::vanilla(2);
-    t.set_fire(0, 5, 5);
-    t.m.world_mut().add_fire_max(0, -3);
-    assert!(t.fire(0) <= 2, "value pulled under the new cap of 2");
+    t.set_charge(0, 5, 5);
+    t.m.world_mut().add_charge_max(0, -3);
+    assert!(t.charge(0) <= 2, "value pulled under the new cap of 2");
 }
 
 // =====================================================================
 // Stun payee (play.rs 「stunned cannot receive」)
 // =====================================================================
 
-/// 规则书 49: 「无法收付款」 -- a [晕眩]d player cannot *receive* payment.
+/// 规则书 49: 「无法收付款」 -- a stund player cannot *receive* payment.
 #[test]
 fn stun_payee_is_refused() {
     let mut t = Table::vanilla(3);

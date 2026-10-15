@@ -101,7 +101,7 @@ fn pre_play_blocks_without_gate() {
     assert_eq!(guard_cost::SKIPPED_BY_CONDITION.load(Relaxed), 1);
 }
 
-/// A rejecting condition on a field hook means the hook does not fire.
+/// A rejecting condition on a field hook means the hook does not run.
 #[test]
 fn pre_hook_does_not_fire() {
     let _guard = lock_guard_cost();
@@ -115,9 +115,9 @@ fn pre_hook_does_not_fire() {
         kind: TriggerKind::PayAdd,
         player_id: 0,
     };
-    let fired = r.run_hook(&w, call, &[], None).unwrap();
+    let ran = r.run_hook(&w, call, &[], None).unwrap();
     assert!(
-        fired.is_none(),
+        ran.is_none(),
         "condition `false` must keep the hook from firing"
     );
     assert!(guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1);
@@ -146,9 +146,9 @@ fn pre_gate_does_not_answer() {
     };
     let mut flashed = false;
     let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
-    let fired = r.run_hook(&w, call, &[], Some(&mut on_body)).unwrap();
+    let ran = r.run_hook(&w, call, &[], Some(&mut on_body)).unwrap();
     assert!(
-        fired.is_none(),
+        ran.is_none(),
         "condition `false` must keep the gate from answering"
     );
     assert!(!flashed, "a rejecting gate must not flash");

@@ -50,7 +50,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         .tags(&[r#"反击"#, r#"特"#])
         .text(r#"（1）[特] 若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。（2）（此卡可作为[反击]打出）使用一次Crychic角色的技能"#)
         .cell(r#"M3"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 const ID: &str = "CRYCHIC:春日影";
 

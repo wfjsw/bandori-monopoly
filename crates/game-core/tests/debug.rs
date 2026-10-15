@@ -85,7 +85,7 @@ fn cheats_update_views_and_survive_save_restore() {
     let mut m = ready_game(MatchMode::Solo);
     let human = m.state().player_of(1) as usize;
     let bot = m.state().player_of(2) as usize;
-    m.world_mut().st.players[human].state_set_bounds("fire", 0, 5);
+    m.world_mut().st.players[human].state_set_bounds("charge", 0, 5);
     m.act(1, &cheat("money", 50_000, -1)).unwrap();
     m.act(1, &cheat("tp", 10, bot as i32)).unwrap();
     let card = data().cards[0].id.clone();
@@ -99,15 +99,15 @@ fn cheats_update_views_and_survive_save_restore() {
         vec![&card, &card]
     );
     let mut state = cheat("state", 1_000, human as i32);
-    state.character = "fire".into();
+    state.persona = "charge".into();
     m.act(1, &state).unwrap();
     let st = m.state();
     assert!(st.debug_open);
     assert_eq!(st.players[human].money, 50_000);
     assert_eq!(st.players[bot].pos, 10);
-    let cap = st.players[human].state_max("fire");
+    let cap = st.players[human].state_max("charge");
     assert_eq!(
-        st.players[human].state_get("fire"),
+        st.players[human].state_get("charge"),
         if cap > 0 { 1_000.min(cap) } else { 1_000 }
     );
     assert!(m.take_changed());

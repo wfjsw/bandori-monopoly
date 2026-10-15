@@ -12,10 +12,10 @@ card-sdk = { workspace = true, features = ["guest"] }
 ruleset-core = { path = "../../rules/ruleset-core" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = { workspace = true }
-# The shipped ruleset as an rlib (same crates the wasm module links).
-# The shipped ruleset, crate by crate (same list `card-all` aggregates for the
-# wasm module -- kept explicit here so the native link does not depend on the
-# cdylib's crate-type dance).
+# Ruleset binding: the shipped ruleset as an rlib (same crates the wasm module
+# links). Crate/path names stay as the ruleset ships them; this list is the
+# same one `card-all` aggregates for the wasm module -- kept explicit here so
+# the native link does not depend on the cdylib's crate-type dance).
 card-ag = { path = "../../rules/cards/card-ag" }
 card-crychic = { path = "../../rules/cards/card-crychic" }
 card-general = { path = "../../rules/cards/card-general" }
@@ -28,8 +28,8 @@ card-ppp = { path = "../../rules/cards/card-ppp" }
 card-ras = { path = "../../rules/cards/card-ras" }
 card-roselia = { path = "../../rules/cards/card-roselia" }
 card-sumimi = { path = "../../rules/cards/card-sumimi" }
-skill-bands = { path = "../../rules/skills/skill-bands" }
-skill-characters = { path = "../../rules/skills/skill-characters" }
+skill-groups = { path = "../../rules/skills/skill-groups" }
+skill-personas = { path = "../../rules/skills/skill-personas" }
 rules-tiles = { path = "../../rules/tiles" }
 rules-tile-marks = { path = "../../rules/tile_marks" }
 rules-status = { path = "../../rules/status" }

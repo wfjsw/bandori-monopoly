@@ -432,7 +432,7 @@ pub fn c_mor_starry_place(step: &Step<'_>) -> Result<(), String> {
         .field
         .iter()
         .find(|f| f.card == STARRY)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     else {
         return Ok(());
     };
@@ -494,7 +494,7 @@ pub fn c_mor_tritone_gain(step: &Step<'_>) -> Result<(), String> {
         .field
         .iter()
         .find(|f| f.card == TRITONE)
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .ok_or("tritone not placed")?;
     if crystals != 3 {
         return Err(format!("tritone placed with {crystals} crystals, expected 3"));
@@ -527,7 +527,10 @@ pub fn c_mor_noble_gate(step: &Step<'_>) -> Result<(), String> {
 
 /// C-MOR-noble-02 -- own tile: mark "noTarget" on the tile.
 pub fn c_mor_noble_mark(step: &Step<'_>) -> Result<(), String> {
-    if !card_fired(step, NOBLE) {
+    if !card_fired(step, NOBLE) || step.post_prompt_open {
+        // 「立刻进行一次触发结算」 on the user's own deed opens the
+        // G-SETTLE-06/07 buy/build prompt; the mark (rule 2) lands only
+        // after that settle is answered.
         return Ok(());
     }
     let who = step.player_of_act();
@@ -2272,10 +2275,10 @@ fn touko_fire_cap_and_neighbour_skill() {
         t.dice(&[3]);
         t.roll(0).unwrap();
         decline_all(&mut t);
-        if t.fire(0) != 1 {
+        if t.charge(0) != 1 {
             return Err(format!(
                 "C-MOR-touko-01: fire {}, expected 1 (gained one on [经过] CiRCLE)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
 
@@ -2314,10 +2317,10 @@ fn touko_fire_cap_and_neighbour_skill() {
                 ));
             }
         }
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-MOR-touko-02: fire {}, expected 0 (spent)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -2340,10 +2343,10 @@ fn nanami_fire_cap_is_two() {
         t.observe(CLAUSES);
         t.roll(0).unwrap();
         decline_all(&mut t);
-        if t.fire(0) != 2 {
+        if t.charge(0) != 2 {
             return Err(format!(
                 "C-MOR-nanami-01: fire {}, expected 2 (gained one, capped)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())

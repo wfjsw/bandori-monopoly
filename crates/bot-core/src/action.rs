@@ -56,7 +56,7 @@ pub enum Action {
     Offer { index: i32 },
     /// An auction bid (`amount < 0` = pass).
     Bid { amount: i32 },
-    /// A [反击] offer: declare a card, or skip (`None`).
+    /// A counteraction offer: declare a card, or skip (`None`).
     Counteract { card: Option<String> },
     /// An agent / tile pick: option index into the prompt's `items`
     /// (`items.len()` = "none").
@@ -139,7 +139,7 @@ pub fn searchable_prompt(p: &MatchPrompt) -> bool {
                 return false;
             }
             let title = p.title.k.as_ref();
-            // Force-buy / buy / build offers, [反击] chains, and non-trivial
+            // Force-buy / buy / build offers, counteraction chains, and non-trivial
             // choices (pay / target / card-rule prompts) are all searched.
             // Mulligan and other 2-option defaults fall out via the caller's
             // heuristic when the list comes back empty... they don't: keep
@@ -217,7 +217,7 @@ fn turn_actions(
     out
 }
 
-/// The card id a [反击] offer option declares (`Arg::Card` on the option's
+/// The card id a counteraction offer option declares (`Arg::Card` on the option's
 /// `ask.counteract.play` label -- the same read `cx::option_card` makes).
 /// `MatchPrompt::card` is the *answered* link's card, not the offered one, so
 /// the per-option label is the only place an offered card id lives.
@@ -228,7 +228,7 @@ pub fn option_card_id(m: &game_core::msg::Msg) -> Option<String> {
     }
 }
 
-/// The abstracted action for a [反击] offer's option index (`None` = the
+/// The abstracted action for a counteraction offer's option index (`None` = the
 /// fallback's skip). One action per offered card, so the search can branch on
 /// *which* card to declare.
 pub fn counteract_action(p: &MatchPrompt, index: i32) -> Action {
@@ -250,7 +250,7 @@ pub fn counteract_action(p: &MatchPrompt, index: i32) -> Action {
     }
 }
 
-/// The `act` option index for a [反击] declaration: the offer whose label names
+/// The `act` option index for a counteraction declaration: the offer whose label names
 /// `card`, else the first non-fallback option, else the fallback.
 fn counteract_option_index(p: &MatchPrompt, card: &str) -> i32 {
     if !card.is_empty() {
@@ -362,7 +362,7 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
         "choice" => {
             let title = p.title.k.as_ref();
             if title == "ask.counteract.title" {
-                // [反击] offer: one declaration per offered card (the option
+                // counteraction offer: one declaration per offered card (the option
                 // label names it -- `MatchPrompt::card` is the answered link,
                 // not the offer), plus the fallback's skip.
                 for i in 0..p.options.len() {
@@ -406,7 +406,7 @@ pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool 
         return false;
     };
     let cash = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-    matches!(t.kind.as_str(), "property" | "ring")
+    t.is_buyable()
         && st.phase == "play"
         && st.step == stage::END
         && st.turn == seat as i32
@@ -427,7 +427,8 @@ pub fn can_build(data: &GameData, st: &MatchState, seat: usize, i: usize) -> boo
     let Some(t) = data.tiles.get(i) else {
         return false;
     };
-    t.kind == game_core::data::TileKind::Property
+    t.is_buyable()
+        && t.rent.len() >= 2
         && st.phase == "play"
         && st.step == stage::END
         && st.turn == seat as i32
@@ -555,7 +556,7 @@ impl WithSeat for game_core::net::NetMessage {
 /// `estCost` -- into one preference number per abstracted action. The
 /// heuristic's own choice gets `1.0`; alternatives get a kind-specific base
 /// (buy / build follow the thresholds, card plays are cheaper = better, a
-/// [反击] skip is the default). This is *search* guidance only -- never
+/// counteraction skip is the default). This is *search* guidance only -- never
 /// legality, never the answer. `hand` / `est_cost` are parallel view columns.
 pub fn action_priors(
     data: &GameData,
@@ -712,7 +713,7 @@ fn heuristic_preferred(
 ) -> Option<Action> {
     if st.prompt.id > 0 && st.prompt.waiting(seat as i32) {
         let a = ai_answer?;
-        // A [反击] offer maps through the per-option card label; the generic
+        // A counteraction offer maps through the per-option card label; the generic
         // path only sees `MatchPrompt::card` (the answered link).
         if st.prompt.title.k.as_ref() == "ask.counteract.title" {
             return Some(counteract_action(&st.prompt, a.answer));
@@ -759,13 +760,13 @@ pub enum Trivial {
 /// * **one legal action** -- the choice is forced; searching only re-discovers
 ///   it. This alone is 27–34% of searched bot CPU (`bot_cpu` §6).
 /// * **no money / ownership / card-cost consequence** -- every candidate is a
-///   decline / auction pass / [反击] skip. The search cannot buy anything the
+///   decline / auction pass / counteraction skip. The search cannot buy anything the
 ///   heuristic does not already know. (The "all priors identical" alternative
 ///   is deliberately *not* used on its own: two equal-prior card plays still
 ///   differ tactically, so it is only a skip when the menu is already free.)
 ///
 /// Always keeps the full search for buys / builds / force-buy offers /
-/// auctions with a real bid / [反击] declarations / card plays / agent picks /
+/// auctions with a real bid / counteraction declarations / card plays / agent picks /
 /// tile choices / mortgages -- anything that moves money, ownership or cards.
 pub fn trivial_decision(actions: &[Action]) -> Option<Trivial> {
     // A/B: `BOT_STRENGTH_AB_NO_FASTPATH` turns the whole skip off (the pre-C1

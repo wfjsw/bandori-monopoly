@@ -166,7 +166,7 @@ pub fn aya_haruka_02_shave_iff() {
 
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged at rewrite time");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire unchanged");
     crate::kassert!(post.stay == pre.stay, "frame: stay unchanged");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand unchanged");
     crate::kassert!(post.discard == pre.discard, "frame: discard unchanged");

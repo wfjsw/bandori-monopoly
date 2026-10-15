@@ -131,7 +131,7 @@ fn athletic_talent_burns_a_crystal_at_turn_end() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "HHW:运动的天赋" {
-                f.crystals = 1;
+                f.counters.insert("crystals".into(), 1);
             }
         }
     }
@@ -376,7 +376,7 @@ fn kokoro_skill_2_gains_1500_extra_on_passing_circle() {
     t.roll(0).unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("circle") {
+        if d.contains("pass_reward") {
             let _ = t.answer_one(0); // take the 2000
         } else {
             t.decline();
@@ -515,7 +515,7 @@ fn misaki_skill_1_gains_fire_pots_after_passing_the_tsuzumi_group() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 2, "events: {:?}", t.recent_keys(10));
+    assert_eq!(t.charge(0), 2, "events: {:?}", t.recent_keys(10));
 }
 
 #[test]
@@ -528,12 +528,12 @@ fn kaoru_skill_1_own_walk_gains_one_pot_per_step() {
     drain(&mut t);
     t.set_pos(0, 0);
     t.set_pos(1, 30); // far from the path
-    let before = t.fire(0);
+    let before = t.charge(0);
     t.dice(&[4]);
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(
-        t.fire(0),
+        t.charge(0),
         before + 4,
         "four steps, four pots: keys={:?}",
         t.recent_keys(15)
@@ -551,17 +551,17 @@ fn kaoru_skill_1_another_players_walk_gives_nothing() {
     drain(&mut t);
     t.set_pos(0, 30); // off P1's path
     t.set_pos(1, 0);
-    let before = t.fire(0);
+    let before = t.charge(0);
     let marks_before = t.marks().len();
     t.dice(&[5]);
     t.roll(1).unwrap();
     drain(&mut t);
     assert_eq!(
-        t.fire(0),
+        t.charge(0),
         before,
         "P1's walk gives kaoru nothing via [经过]: fire {} -> {} keys={:?}",
         before,
-        t.fire(0),
+        t.charge(0),
         t.recent_keys(15)
     );
     assert_eq!(t.marks().len(), marks_before, "no marks touched");
@@ -578,13 +578,13 @@ fn kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step() {
     drain(&mut t);
     t.set_pos(0, 10);
     t.set_pos(1, 7);
-    let before = t.fire(0);
+    let before = t.charge(0);
     t.dice(&[5]); // 7 -> 8,9,10,11,12: passes 10 mid-route
     t.roll(1).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(1), 12, "the walk ended past P0");
     assert_eq!(
-        t.fire(0),
+        t.charge(0),
         before + 1,
         "exactly one 被[经过] pot, not one per step: keys={:?}",
         t.recent_keys(15)
@@ -649,7 +649,7 @@ fn interaction_kokoro_circle_bonus_and_the_band_skill() {
     t.roll(0).unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("circle") {
+        if d.contains("pass_reward") {
             let _ = t.answer_one(0);
         } else {
             t.decline();

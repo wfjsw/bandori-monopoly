@@ -864,6 +864,7 @@ fn soul_places_and_loads_crystals() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "fprop:P0",
             ],
         )
@@ -1228,8 +1229,8 @@ fn firepot_starts_at_one_with_cap_one() {
     forall(3, 0xA6_00C0, |_rng, _i| {
         for name in ["美竹兰", "青叶摩卡", "上原绯玛丽", "宇田川巴", "羽泽鸫"] {
             let t = Table::new(&[name, "户山香澄"]);
-            let fire = t.fire(0);
-            let cap = t.state_var(0, "fire").max;
+            let fire = t.charge(0);
+            let cap = t.state_var(0, "charge").max;
             if fire != 1 {
                 return Err(format!(
                     "C-AG-firepot-01: {name} 初始1, fire {fire}"
@@ -1279,10 +1280,10 @@ fn ran_skill_moves_backward() {
                 expected
             ));
         }
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-AG-ran-02: the move spent one [火罐], fire {}",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -1315,7 +1316,7 @@ fn moca_skill_teleports_to_the_actor() {
                 offered = true;
             }
             let k = t
-                .option("yes")
+                .option("ask.yes")
                 .or_else(|| t.option("传送"))
                 .or_else(|| t.option("火罐"));
             if let Some(k) = k {
@@ -1341,8 +1342,8 @@ fn moca_skill_teleports_to_the_actor() {
                 t.pos(0)
             ));
         }
-        if t.fire(0) != 0 {
-            return Err(format!("C-AG-moca-02: fire {}, expected 0", t.fire(0)));
+        if t.charge(0) != 0 {
+            return Err(format!("C-AG-moca-02: fire {}, expected 0", t.charge(0)));
         }
         Ok(())
     })
@@ -1364,7 +1365,7 @@ fn exclusive_cards_require_the_named_character() {
         ("AG:（鸫）微小的『能做到』的事", "羽泽鸫"),
     ];
     for (card, owner) in cases {
-        // Wrong character: the play must be refused.
+        // Wrong persona: the play must be refused.
         let mut t = Table::vanilla(2);
         t.set_character_raw(0, "户山香澄");
         let r = t.give_play(0, card);
@@ -1372,7 +1373,7 @@ fn exclusive_cards_require_the_named_character() {
             skip_all(&mut t);
             panic!("exclusive card {card} must be refused to a foreign character");
         }
-        // Right character: the play must be accepted (body may prompt).
+        // Right persona: the play must be accepted (body may prompt).
         let mut t = Table::vanilla(2);
         t.set_character_raw(0, owner);
         let r = t.give_play(0, card);

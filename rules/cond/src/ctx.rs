@@ -28,14 +28,14 @@ pub struct ChainLink {
 }
 
 /// Snapshot of one seat's stats, indexed by seat id. Used by the `money(p)` /
-/// `fire(p)` / `character_is(p, …)` family so a condition can talk about a
+/// `charge(p)` / `persona_is(p, …)` family so a condition can talk about a
 /// seat that is not the candidate's owner.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PlayerSnap {
     pub money: i64,
-    pub fire: i64,
-    pub crystals: i64,
+    pub charge: i64,
+    pub group_pool: i64,
     pub hand: i64,
     pub pos: i64,
     /// 1 = out of the game.
@@ -48,8 +48,8 @@ pub struct PlayerSnap {
     /// `state(p, 'key')` backing map (`MatchPlayer.state`): every keyed
     /// player-state value on this seat. Missing key = 0.
     pub state: std::collections::BTreeMap<String, i64>,
-    pub character: i64,
-    pub band: i64,
+    pub persona: i64,
+    pub group: i64,
     /// Count of tiles the seat owns.
     pub tiles: i64,
     /// Money-ins this turn (`gains_this_turn(p)`).
@@ -145,14 +145,7 @@ pub struct WindowCtx {
     /// `tile_named(name) -> id`, resolved at load. Empty is fine if no
     /// condition uses it.
     pub tile_ids: BTreeMap<String, i64>,
-    /// Tile ids of each kind, for `is_circle(t)` / `is_ring(t)` /
-    /// `is_live_house(t)` / `is_buyable(t)`.
-    pub circle_tiles: Vec<i64>,
-    pub ring_tiles: Vec<i64>,
-    pub live_house_tiles: Vec<i64>,
-    pub buyable_tiles: Vec<i64>,
-    /// ABI v56: data kind wire spelling per tile id (empty = unknown).
-    /// Backs `tile_is` for kinds outside the four CEL sugar lists.
+    /// Data kind wire spelling per tile id (empty = unknown). Backs `tile_is`.
     pub tile_kinds: Vec<String>,
     /// ABI v56: `(tile, attr) -> value` rows for `tile_attr`.
     pub tile_attrs: BTreeMap<(i64, String), i64>,
@@ -194,8 +187,8 @@ pub struct CandidateCtx {
     /// `owner.money` binds without a lookup. The host fills both from one
     /// source; they must agree.
     pub owner_money: i64,
-    pub owner_fire: i64,
-    pub owner_crystals: i64,
+    pub owner_charge: i64,
+    pub owner_group_pool: i64,
     pub owner_hand: i64,
     pub owner_pos: i64,
     pub owner_out: i64,
@@ -203,8 +196,8 @@ pub struct CandidateCtx {
     pub owner_stun: i64,
     pub owner_exile: i64,
     pub owner_no_hand: i64,
-    pub owner_character: i64,
-    pub owner_band: i64,
+    pub owner_persona: i64,
+    pub owner_group: i64,
     pub owner_tiles: i64,
     /// `card.*`
     pub card_id: i64,
@@ -225,7 +218,7 @@ pub struct CandidateCtx {
     /// data `ctx::tok(player_id, name)` reads. Missing name = `0`.
     pub tok_names: BTreeMap<String, i64>,
     /// Bands whose skill is blocked for this candidate (`blocked(band)`).
-    pub blocked_bands: Vec<i64>,
+    pub blocked_groups: Vec<i64>,
 }
 
 impl CandidateCtx {
@@ -241,7 +234,7 @@ impl CandidateCtx {
         self.tok_names.get(name).copied().unwrap_or(0)
     }
 
-    pub fn blocked(&self, band: i64) -> bool {
-        self.blocked_bands.contains(&band)
+    pub fn blocked(&self, group: i64) -> bool {
+        self.blocked_groups.contains(&group)
     }
 }

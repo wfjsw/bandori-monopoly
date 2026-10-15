@@ -18,10 +18,6 @@ pub enum FnId {
     CardCounter,
     CounterIs,
     TileNamed,
-    IsCircle,
-    IsRing,
-    IsLiveHouse,
-    IsBuyable,
     Money,
     Fire,
     Crystals,
@@ -92,6 +88,21 @@ pub enum SetId {
     ChainKinds,
     ChainHits,
     BlockedBands,
+}
+
+impl SetId {
+    /// Opaque tile-kind / class spelling this set filters on (game data).
+    /// Host code asks `tile_is` / `tile_in` with this string and never names
+    /// the kinds itself.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SetId::Circle => "circle",
+            SetId::Ring => "ring",
+            SetId::LiveHouse => "livehouse",
+            SetId::Buyable => "buyable",
+            SetId::ChainKinds | SetId::ChainHits | SetId::BlockedBands => "",
+        }
+    }
 }
 
 pub const SET_COUNT: usize = 7;

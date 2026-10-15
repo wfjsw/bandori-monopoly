@@ -18,7 +18,7 @@ pub const DEBUT_SUCCESS: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。"#)
         .cell(r#"M11"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 fn debut_success(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「打出此卡后，本回合内你的资金不会下降」 -- C# `H._turnCtx.NoMoneyLoss = true`.
@@ -37,7 +37,7 @@ fn debut_success(player_id: i32) -> card_sdk::Asked {
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」
     rules_status::stun::add(player_id, 1);
-    ctx::add_band_crystals(player_id, 1, 0);
+    ctx::add_group_crystals(player_id, 1, 0);
     Ok(())
 }
 

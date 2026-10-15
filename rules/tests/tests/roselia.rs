@@ -48,6 +48,9 @@ fn land_and_buy(t: &mut Table, who: usize, tile: usize) {
     t.set_pos(who, (tile + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(who).unwrap();
+    // G-SETTLE-06/07: the settle of an unowned buyable is the optional buy
+    // prompt. Decline it so the end-step `buy` button still runs.
+    drain(t);
     t.buy(who).expect("buy the unowned deed");
     drain(t);
 }
@@ -175,7 +178,7 @@ fn fire_bird_turn_end_burns_400_and_a_crystal() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "R:Fire bird" {
-                f.crystals = 1;
+                f.counters.insert("crystals".into(), 1);
             }
         }
     }
@@ -196,7 +199,7 @@ fn fire_bird_burns_on_turn_end() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "R:Fire bird" {
-                f.crystals = 5;
+                f.counters.insert("crystals".into(), 5);
             }
         }
     }
@@ -460,7 +463,9 @@ fn yukina_skill_1_first_circle_pass_gives_no_reward() {
     t.set_pos(0, 58);
     t.dice(&[3]);
     t.roll(0).unwrap();
-    assert!(t.prompt().is_none(), "no CiRCLE reward: {}", t.dump_prompt());
+    // G-SETTLE-06/07: landing on the unowned deed past CiRCLE opens a buy
+    // prompt; that is not the CiRCLE reward. Decline it and check no payout.
+    drain(&mut t);
     assert_eq!(t.money(0), 10_000);
 }
 
@@ -476,7 +481,7 @@ fn yukina_skill_3_gains_a_fire_pot_on_a_ring() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), r2);
-    assert_eq!(t.fire(0), 1, "1 fire pot, cap 1");
+    assert_eq!(t.charge(0), 1, "1 fire pot, cap 1");
 }
 
 #[test]
@@ -492,7 +497,7 @@ fn yukina_skill_3_loses_fire_pots_off_a_ring() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), blue);
-    assert_eq!(t.fire(0), 0, "fire pots dropped off a Ring");
+    assert_eq!(t.charge(0), 0, "fire pots dropped off a Ring");
 }
 
 #[test]
@@ -506,7 +511,7 @@ fn rinko_skill_1_gains_three_fire_pots_passing_circle() {
     t.dice(&[3]); // pass CiRCLE
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 3, "gained 3, cap 3");
+    assert_eq!(t.charge(0), 3, "gained 3, cap 3");
 }
 
 #[test]
@@ -534,7 +539,7 @@ fn rinko_skill_2_fixes_the_move_roll_to_x_times_six() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 12, "2 * 6 = 12, events {:?}", t.recent_keys(10));
-    assert_eq!(t.fire(0), 0, "2 pots spent");
+    assert_eq!(t.charge(0), 0, "2 pots spent");
 }
 
 #[test]
@@ -574,7 +579,7 @@ fn sayo_skill_1_gains_fire_pots_passing_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 2);
+    assert_eq!(t.charge(0), 2);
 }
 
 #[test]
@@ -588,7 +593,7 @@ fn lisa_skill_1_gains_a_fire_pot_passing_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 1);
+    assert_eq!(t.charge(0), 1);
 }
 
 #[test]
@@ -668,7 +673,7 @@ fn interaction_fire_bird_and_rent() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "R:Fire bird" {
-                f.crystals = 5;
+                f.counters.insert("crystals".into(), 5);
             }
         }
     }

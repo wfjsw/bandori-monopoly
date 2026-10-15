@@ -3,15 +3,15 @@
 //!
 //! Bots and the browser 托管 otherwise submit `deck::preset` (standard) or
 //! `deck::random` (chaos), blind to the table. The book answers "what does a
-//! standard seat with *this* character at *this* table want to run?", falling
+//! standard seat with *this* persona at *this* table want to run?", falling
 //! back in levels when the exact table was never tuned.
 //!
 //! * **Key = public information only.** At the deck phase every pick and the
 //!   seat order are public; opponents' decks are not. The key is
-//!   `(my character, my seat, opponents' characters in seat order)`.
+//!   `(my persona, my seat, opponents' personas in seat order)`.
 //! * **Back-off**, first hit wins ([`DeckBook::lookup`]): exact
 //!   `(me, seat, opponents in order)` → `(me, seat, multiset of opponents'
-//!   bands)` → `(me, multiset of opponents' bands)` → `(me)` → `deck::preset`.
+//!   groups)` → `(me, multiset of opponents' groups)` → `(me)` → `deck::preset`.
 //! * **Validity.** The book records the ruleset hash (the same string
 //!   [`crate::record::EngineStamp::ruleset_sha256`] carries --
 //!   `Ruleset::sha256()`, or `"stub"` without card modules) and the policy it
@@ -36,7 +36,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{CharacterData, GameData};
+use crate::data::{PersonaData, GameData};
 use crate::deck;
 
 /// File format version (`DeckBook::version`). Bump on any schema change; a
@@ -57,21 +57,21 @@ pub const DECK_BOOK_FILE: &str = "deck_book.json";
 ///
 /// | level | key fields |
 /// |---|---|
-/// | `exact` | `me`, `seat`, `opponents` (characters in seat order) |
-/// | `seat_bands` | `me`, `seat`, `opponent_bands` (sorted multiset) |
-/// | `bands` | `me`, `opponent_bands` (sorted multiset) |
+/// | `exact` | `me`, `seat`, `opponents` (personas in seat order) |
+/// | `seat_groups` | `me`, `seat`, `opponent_groups` (sorted multiset) |
+/// | `groups` | `me`, `opponent_groups` (sorted multiset) |
 /// | `me` | `me` |
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DeckBookEntry {
-    /// Own character (`CharacterData::name`).
+    /// Own persona (`PersonaData::name`).
     pub me: String,
     /// Own seat (turn order index). Used by the two seat levels only.
     pub seat: Option<u32>,
-    /// Opponents' characters in seat order (exact level).
+    /// Opponents' personas in seat order (exact level).
     pub opponents: Vec<String>,
-    /// Sorted multiset of the opponents' band names (band levels).
-    pub opponent_bands: Vec<String>,
+    /// Sorted multiset of the opponents' group names (group levels).
+    pub opponent_groups: Vec<String>,
     /// Card ids; validated with `deck::clean` / `deck::is_complete` at lookup.
     pub cards: Vec<String>,
 }
@@ -88,12 +88,12 @@ pub struct DeckBook {
     pub policy: String,
     /// Free-form generation stamp (date, tool version); display only.
     pub generated_at: String,
-    /// 1. `(me, seat, opponents' characters in seat order)`.
+    /// 1. `(me, seat, opponents' personas in seat order)`.
     pub exact: Vec<DeckBookEntry>,
-    /// 2. `(me, seat, sorted multiset of opponents' bands)`.
-    pub seat_bands: Vec<DeckBookEntry>,
-    /// 3. `(me, sorted multiset of opponents' bands)`.
-    pub bands: Vec<DeckBookEntry>,
+    /// 2. `(me, seat, sorted multiset of opponents' groups)`.
+    pub seat_groups: Vec<DeckBookEntry>,
+    /// 3. `(me, sorted multiset of opponents' groups)`.
+    pub groups: Vec<DeckBookEntry>,
     /// 4. `(me)`.
     pub me: Vec<DeckBookEntry>,
     /// Warned once about being stale / mismatched (never serialized).
@@ -108,8 +108,8 @@ impl PartialEq for DeckBook {
             && self.policy == other.policy
             && self.generated_at == other.generated_at
             && self.exact == other.exact
-            && self.seat_bands == other.seat_bands
-            && self.bands == other.bands
+            && self.seat_groups == other.seat_groups
+            && self.groups == other.groups
             && self.me == other.me
     }
 }
@@ -136,8 +136,8 @@ impl DeckBook {
     /// warns about being stale -- there is nothing to go stale.
     pub fn is_empty(&self) -> bool {
         self.exact.is_empty()
-            && self.seat_bands.is_empty()
-            && self.bands.is_empty()
+            && self.seat_groups.is_empty()
+            && self.groups.is_empty()
             && self.me.is_empty()
     }
 
@@ -171,16 +171,16 @@ impl DeckBook {
     /// level wins, an entry whose cards do not clean down to a complete deck
     /// falls through to the next level.
     ///
-    /// * `me` -- own character.
+    /// * `me` -- own persona.
     /// * `seat` -- own seat (turn order index).
-    /// * `opponents` -- the other seats' characters in seat order (ascending
+    /// * `opponents` -- the other seats' personas in seat order (ascending
     ///   seat index, excluding `me`).
     /// * `ruleset_sha256` -- the running ruleset's hash
     ///   ([`crate::engine::CardRules::ruleset_sha256`], `"stub"` when unknown).
     pub fn lookup(
         &self,
         data: &GameData,
-        me: &CharacterData,
+        me: &PersonaData,
         seat: usize,
         opponents: &[String],
         ruleset_sha256: &str,
@@ -188,8 +188,8 @@ impl DeckBook {
         if !self.usable(ruleset_sha256) {
             return None;
         }
-        let bands = opponent_bands(data, opponents);
-        // 1. exact: (me, seat, opponents' characters in seat order)
+        let groups = opponent_groups(data, opponents);
+        // 1. exact: (me, seat, opponents' personas in seat order)
         if let Some(d) = first_valid(
             data,
             me,
@@ -199,23 +199,23 @@ impl DeckBook {
         ) {
             return Some(d);
         }
-        // 2. (me, seat, sorted multiset of opponents' bands)
+        // 2. (me, seat, sorted multiset of opponents' groups)
         if let Some(d) = first_valid(
             data,
             me,
-            self.seat_bands.iter().filter(|e| {
-                e.me == me.name && e.seat == Some(seat as u32) && e.opponent_bands == bands
+            self.seat_groups.iter().filter(|e| {
+                e.me == me.name && e.seat == Some(seat as u32) && e.opponent_groups == groups
             }),
         ) {
             return Some(d);
         }
-        // 3. (me, sorted multiset of opponents' bands)
+        // 3. (me, sorted multiset of opponents' groups)
         if let Some(d) = first_valid(
             data,
             me,
-            self.bands
+            self.groups
                 .iter()
-                .filter(|e| e.me == me.name && e.opponent_bands == bands),
+                .filter(|e| e.me == me.name && e.opponent_groups == groups),
         ) {
             return Some(d);
         }
@@ -228,22 +228,22 @@ impl DeckBook {
     }
 }
 
-/// Sorted multiset of the opponents' band names (`CharacterData::band`). An
-/// unknown character contributes `""` -- deterministic, and it only ever makes
-/// a band-level key miss.
-fn opponent_bands(data: &GameData, opponents: &[String]) -> Vec<String> {
-    let mut bands: Vec<String> = opponents
+/// Sorted multiset of the opponents' group names (`PersonaData::group`). An
+/// unknown persona contributes `""` -- deterministic, and it only ever makes
+/// a group-level key miss.
+fn opponent_groups(data: &GameData, opponents: &[String]) -> Vec<String> {
+    let mut groups: Vec<String> = opponents
         .iter()
-        .map(|c| data.character(c).map(|c| c.band.clone()).unwrap_or_default())
+        .map(|c| data.persona(c).map(|c| c.group.clone()).unwrap_or_default())
         .collect();
-    bands.sort();
-    bands
+    groups.sort();
+    groups
 }
 
 /// The first entry whose cards clean down to a complete deck, cleaned.
 fn first_valid<'e>(
     data: &GameData,
-    me: &CharacterData,
+    me: &PersonaData,
     entries: impl Iterator<Item = &'e DeckBookEntry>,
 ) -> Option<Vec<String>> {
     for e in entries {
@@ -260,7 +260,7 @@ fn first_valid<'e>(
 /// Chaos never calls this; it stays `deck::random`.
 pub fn suggest(
     data: &GameData,
-    me: &CharacterData,
+    me: &PersonaData,
     seat: usize,
     opponents: &[String],
     ruleset_sha256: &str,

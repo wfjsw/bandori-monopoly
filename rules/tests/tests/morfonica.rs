@@ -386,7 +386,7 @@ fn courage_sums_3d20_for_the_tile_number() {
 fn courage_agent_tile_gives_1000() {
     // 规则书: 「若为地产商地块，获得1000资金」
     let mut t = Table::vanilla(2);
-    assert_eq!(data().tiles[tile("主要街道")].kind, game_core::data::TileKind::Agent);
+    assert_eq!(data().tiles[tile("主要街道")].kind, game_core::data::TileKind("agent".into()));
     t.dice(&[2, 2, 1]); // sum 5 -> #5 = 主要街道 (agent)
     t.give_play(0, "Mor:勇气展翅高飞之时").unwrap();
     assert_eq!(t.money(0), 10_000 + 1000);
@@ -469,7 +469,7 @@ fn nnm_option2_gains_x_times_circle_money_reward() {
     // -- x times the CiRCLE pass *money* reward (专有名词 11: 「[CiRCLE奖励]：
     // [获得]2000资金或抽1张卡」), not a flat x*2000. 广町七深 is Morfonica, so
     // the band skill rewrites the money reward to a 1000/1500/2000 cycle
-    // (`circleAffected`); the first one is 1000. That is the point of the
+    // (`passRewardAffected`); the first one is 1000. That is the point of the
     // reword: the figure tracks the live reward, not 2000.
     let mut t = Table::new(&["广町七深", "户山香澄", "花园多惠"]);
     t.clean();
@@ -619,6 +619,11 @@ fn noble_on_own_tile_places_a_no_target_mark() {
     t.set_pos(0, tsukinomori);
     t.give(0, &["Mor:高贵的微蓝"]);
     t.play(0, "Mor:高贵的微蓝").unwrap();
+    // G-SETTLE-06/07: 「立刻进行一次触发结算」 on your own deed opens the
+    // optional build prompt; answer it so the mark (rule 2) lands.
+    while let Some(_) = t.prompt() {
+        t.decline();
+    }
     let ms = t.marks_on(tsukinomori);
     assert_eq!(ms.len(), 1, "{ms:?}");
     assert_eq!(ms[0].owner, 0);
@@ -1167,7 +1172,7 @@ fn toko_fire_pot_cap_is_one() {
     t.dice(&[3]); // passes CiRCLE
     t.roll(0).unwrap();
     decline_all(&mut t);
-    assert_eq!(t.fire(0), 1, "capped at 1");
+    assert_eq!(t.charge(0), 1, "capped at 1");
 }
 
 #[test]
@@ -1189,7 +1194,7 @@ fn toko_skill2_splits_half_the_rent_over_the_neighbours() {
     assert_eq!(t.money(0), 10_000 + 200);
     assert_eq!(t.money(1), 10_000 - 100);
     assert_eq!(t.money(2), 10_000 - 100);
-    assert_eq!(t.fire(0), 0, "the fire pot was spent");
+    assert_eq!(t.charge(0), 0, "the fire pot was spent");
 }
 
 #[test]
@@ -1220,7 +1225,7 @@ fn nana_fire_pot_cap_is_two() {
     t.dice(&[3]); // passes CiRCLE
     t.roll(0).unwrap();
     decline_all(&mut t);
-    assert_eq!(t.fire(0), 2, "gains one, capped at 2");
+    assert_eq!(t.charge(0), 2, "gains one, capped at 2");
 }
 
 #[test]

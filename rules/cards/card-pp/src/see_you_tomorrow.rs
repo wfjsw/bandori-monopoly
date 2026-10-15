@@ -29,7 +29,7 @@ pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
 [手]：
 将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正。"#)
         .cell(r#"D6"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";

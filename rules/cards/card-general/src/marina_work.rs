@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
     &[On::Counteract(
-        &[ChainKind::CircleAffected],
+        &[ruleset_core::kind::PassRewardAffected],
         card_sdk::pre::MINE,
         None,
         counteract,
@@ -26,7 +26,7 @@ pub const MARINA_WORK: CardDef = CardDef::new(
         .text(r#"[手]：
 [反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。"#)
         .cell(r#"A14"#)
-        .fields(&[("band", r#"通用"#), ("owner", r#"月岛麻里奈"#)]));
+        .fields(&[("group", r#"通用"#), ("owner", r#"月岛麻里奈"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果」

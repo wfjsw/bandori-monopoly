@@ -90,7 +90,7 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | C-PP-shine-again-01 | [反击] rescue price/5 + 1 fan | PROTOCOL-LEVEL | `shine_again_01_formula` (pure) | pending | [反击] window; regression hint: fan leg missing in engine | — |
 | C-PP-shine-again-02 | [共鸣] record colour + 1 fan | OPEN | — | — | | OPEN-共鸣 |
 | C-PP-first-accident-01 | place + 重叠的声音→deck + draw 1 | PROVEN* | `first_accident_01_place_deck_draw_iff` | triage3: FAILED was **B** spec rejected 持续 `SetToken`; fixed, re-time pending | — | — |
-| C-PP-first-accident-02 | owner cannot use PP (2) skills | FAILS | `first_accident_02_blocks_pp_skill_2_iff` (skills_pp) | triage3: FAILED 8.9 s was **B** harness cfg'd on skills-characters (pp unit lacks it) → 'Failed to match'. Moved to skills_pp.rs, re-time pending | book: no PP (2); body writes a skillBlock token but 丸山彩 (2) still opens | — |
+| C-PP-first-accident-02 | owner cannot use PP (2) skills | FAILS | `first_accident_02_blocks_pp_skill_2_iff` (skills_pp) | triage3: FAILED 8.9 s was **B** harness cfg'd on skills-personas (pp unit lacks it) → 'Failed to match'. Moved to skills_pp.rs, re-time pending | book: no PP (2); body writes a skillBlock token but 丸山彩 (2) still opens | — |
 | C-PP-flower-01 | place on owned tile + band +2 | PROVEN* (formula) | `flower_01_band_after` (spec) | — | ask_tile prompt is expensive | — |
 | C-PP-flower-02 | pass → force stop, move becomes settle | OPEN | — | — | definition of [强制停下] truncated | OPEN-强制停下 |
 | C-PP-flower-03 | [共鸣] +1500; card → discard | OPEN | — | — | | OPEN-共鸣 |

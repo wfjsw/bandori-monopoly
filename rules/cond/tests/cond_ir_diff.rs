@@ -112,8 +112,8 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: Val) {
         VarId::Owner => f.cand.owner = raw,
         VarId::OwnerId => f.cand.owner = raw,
         VarId::OwnerMoney => f.cand.owner_money = raw,
-        VarId::OwnerFire => f.cand.owner_fire = raw,
-        VarId::OwnerCrystals => f.cand.owner_crystals = raw,
+        VarId::OwnerFire => f.cand.owner_charge = raw,
+        VarId::OwnerCrystals => f.cand.owner_group_pool = raw,
         VarId::OwnerHand => f.cand.owner_hand = raw,
         VarId::OwnerPos => f.cand.owner_pos = raw,
         VarId::OwnerOut => f.cand.owner_out = raw,
@@ -121,8 +121,8 @@ fn set_scalar(f: &mut Fixture, id: VarId, ty: VarTy, v: Val) {
         VarId::OwnerStun => f.cand.owner_stun = raw,
         VarId::OwnerExile => f.cand.owner_exile = raw,
         VarId::OwnerNoHand => f.cand.owner_no_hand = raw,
-        VarId::OwnerCharacter => f.cand.owner_character = raw,
-        VarId::OwnerBand => f.cand.owner_band = raw,
+        VarId::OwnerCharacter => f.cand.owner_persona = raw,
+        VarId::OwnerBand => f.cand.owner_group = raw,
         VarId::OwnerTiles => f.cand.owner_tiles = raw,
         VarId::CardId => f.cand.card_id = raw,
         VarId::CardPlaced => f.cand.card_placed = raw != 0,
@@ -450,7 +450,8 @@ fn diff_all_inventory_guards() {
         f.ir.set_insert(SetId::Circle, 1);
         f.ir.set_insert(SetId::ChainKinds, 9);
         // Mirror the function tables into the cel snapshot.
-        f.win.circle_tiles = vec![1];
+        f.win.tile_kinds = vec![String::new(), "circle".to_string()];
+        f.win.tile_count = 2;
         f.win.chain = vec![rules_cond::ChainLink {
             kind: 9,
             from: 0,

@@ -38,7 +38,7 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
 [持续]：
 其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子[强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半。"#)
         .cell(r#"B15"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", r#"户山香澄"#)]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", r#"户山香澄"#)]));
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
 
@@ -97,7 +97,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     // 规则书[持续]: 「为[使用者]的团卡添加一个[奇迹水晶]」 -- C# `H.AddBandCrystals(user, 1, ...)`.
     if !ctx::player_out(player_id) {
-        ctx::add_band_crystals(player_id, 1, i32::MAX);
+        ctx::add_group_crystals(player_id, 1, i32::MAX);
     }
     Ok(())
 }

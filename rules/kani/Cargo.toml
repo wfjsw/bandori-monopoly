@@ -23,7 +23,7 @@ all = [
     "band-ag", "band-crychic", "band-general", "band-hhw", "band-morfonica",
     "band-mujica", "band-mygo", "band-pp", "band-ppp", "band-ras",
     "band-roselia", "band-sumimi",
-    "skills-bands", "skills-characters",
+    "skills-groups", "skills-personas",
     "tiles", "events",
 ]
 band-ag = ["dep:card-ag"]
@@ -38,8 +38,8 @@ band-ppp = ["dep:card-ppp"]
 band-ras = ["dep:card-ras"]
 band-roselia = ["dep:card-roselia"]
 band-sumimi = ["dep:card-sumimi"]
-skills-bands = ["dep:skill-bands"]
-skills-characters = ["dep:skill-characters"]
+skills-groups = ["dep:skill-groups"]
+skills-personas = ["dep:skill-personas"]
 tiles = ["dep:rules-tiles", "dep:rules-tile-marks"]
 events = ["dep:rules-events"]
 
@@ -60,8 +60,8 @@ card-ppp = { path = "../cards/card-ppp", optional = true }
 card-ras = { path = "../cards/card-ras", optional = true }
 card-roselia = { path = "../cards/card-roselia", optional = true }
 card-sumimi = { path = "../cards/card-sumimi", optional = true }
-skill-bands = { path = "../skills/skill-bands", optional = true }
-skill-characters = { path = "../skills/skill-characters", optional = true }
+skill-groups = { path = "../skills/skill-groups", optional = true }
+skill-personas = { path = "../skills/skill-personas", optional = true }
 rules-tiles = { path = "../tiles", optional = true }
 rules-tile-marks = { path = "../tile_marks", optional = true }
 rules-events = { path = "../events", optional = true }
@@ -72,7 +72,7 @@ serde = { workspace = true }
 
 # Conformance tests (`tests/conf_model.rs`): thin adapter over the real host
 # (`game_rules::hostfns`) so the symbolic model can be diffed against it.
-# `native_shims` supplies the `bandori_*` symbols card bodies link against on
+# `native_shims` supplies the `ruleset_*` symbols card bodies link against on
 # native, so `invoke::play` runs unmodified guest code against either backend.
 # `build.rs` generates the guard IR table (`generated::cond_irs`) from the guard
 # condition strings on every build; it is never committed.

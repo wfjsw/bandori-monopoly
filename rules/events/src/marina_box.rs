@@ -26,7 +26,7 @@ pub const MARINA_BOX: CardDef = CardDef::new(
         // for a no-op.
         On::Hook(
             &[HookKind::PassTile],
-            "is_circle(tile.id) && actor >= 0 && money(actor) >= 500",
+            "tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500",
             None,
             on_pass,
         ),
@@ -51,7 +51,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 规则书: 「所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次
 /// 1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金」
 /// -- the passer is asked whether to spend; only a 「yes」 pays 500 and rolls.
-/// The CiRCLE tile is the entry's condition (`is_circle(tile.id)`).
+/// The CiRCLE tile is the entry's condition (`is_start(tile.id)`).
 /// Applicability is the entry's condition (`money(actor) >= 500`); the ask is
 /// the 「可」 opt-in.
 fn on_pass(_player_id: i32) -> card_sdk::Asked {

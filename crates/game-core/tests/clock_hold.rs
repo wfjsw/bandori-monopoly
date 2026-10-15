@@ -182,7 +182,7 @@ fn the_anim_hold_cap_releases_after_ten_seconds_of_ticks() {
     // Bonus-first drain: pin the combined pool, not raw base.
     let total = m.state().time_left;
 
-    // 10s of ticks, no ack: the cap fires and the clock starts.
+    // 10s of ticks, no ack: the cap is reached and the clock starts.
     // ANIM_HOLD_CAP = 10.0; tick 9.9s first (still held), then over the cap.
     for _ in 0..99 {
         m.tick(0.1);

@@ -250,7 +250,7 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
             {seats.map((x) => (
               <option key={x.member} value={x.member}>
                 {x.player}
-                {x.character ? ` · ${D.character(x.character)?.display ?? x.character}` : ""}
+                {x.persona ? ` · ${D.persona(x.persona)?.display ?? x.persona}` : ""}
                 {x.bot ? ` (${x.mentality === "chaos" ? tr("solo.mentalityChaos") : x.mentality === "advanced" ? tr("solo.mentalityAdvanced") : tr("solo.mentalityStandard")})` : ""}
               </option>
             ))}

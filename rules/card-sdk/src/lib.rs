@@ -81,7 +81,7 @@ pub mod rt;
 /// One card: its id and its entry points, declared as a table keyed by trigger
 /// kind -- the same shape the engine's triggers have. The host reads the table
 /// from the manifest and calls only the entries that match what is happening,
-/// through one export (`bandori_on`).
+/// through one export (`ruleset_on`).
 ///
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
@@ -151,9 +151,18 @@ pub struct CardDef {
     pub texts: &'static [(i32, &'static str, &'static str, &'static str)],
     /// Deck/gallery metadata for this card (`CardDef::meta`, ABI v63). Lives
     /// beside the rule so the roster is authored with the rule; rides the
-    /// separate `bandori_metadata` export, **not** [`abi::ManifestEntry`].
+    /// separate `ruleset_metadata` export, **not** [`abi::ManifestEntry`].
     /// `None` = the card has no Rust metadata yet (partial lift).
     pub meta: Option<&'static crate::meta::CardMeta>,
+    /// Board role of a standing rule (`CardDef::board_role`, ABI v66):
+    /// `"tile"` (one instance per governed board-tile kind), `"mark"`
+    /// (board-wide mark owner), `"status"` (board-wide status host), or `""`
+    /// for an ordinary card. The engine never names the roles' contents.
+    pub board_role: &'static str,
+    /// Tile kinds this rule governs (`CardDef::governs`, ABI v66) when
+    /// [`Self::board_role`] is `"tile"`. Empty = derive the single kind from
+    /// the id's `tile:` suffix. Multi-kind rules list every kind.
+    pub governs: &'static [&'static str],
 }
 
 impl CardDef {
@@ -168,6 +177,8 @@ impl CardDef {
             flash: &[],
             texts: &[],
             meta: None,
+            board_role: "",
+            governs: &[],
         }
     }
 
@@ -184,6 +195,8 @@ impl CardDef {
             flash: self.flash,
             texts: self.texts,
             meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
         }
     }
 
@@ -201,6 +214,8 @@ impl CardDef {
             flash: self.flash,
             texts: self.texts,
             meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
         }
     }
 
@@ -230,6 +245,8 @@ impl CardDef {
             flash: self.flash,
             texts: self.texts,
             meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
         }
     }
 
@@ -250,6 +267,8 @@ impl CardDef {
             flash: self.flash,
             texts: self.texts,
             meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
         }
     }
 
@@ -277,6 +296,8 @@ impl CardDef {
             flash: entries,
             texts: self.texts,
             meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
         }
     }
 
@@ -338,11 +359,13 @@ impl CardDef {
             flash: self.flash,
             texts,
             meta: self.meta,
+            board_role: self.board_role,
+            governs: self.governs,
         }
     }
 
     /// Deck/gallery metadata for this card (`docs/CARDS.md` 「Card metadata」).
-    /// Lives beside the rule; exported through `bandori_metadata`, never
+    /// Lives beside the rule; exported through `ruleset_metadata`, never
     /// through [`abi::ManifestEntry`]. Replaces any earlier `meta` call.
     ///
     /// ```ignore
@@ -354,7 +377,7 @@ impl CardDef {
     ///         .text("...")
     ///         .tags(&["手"])
     ///         .cell("B2")
-    ///         .fields(&[("band", "Sumimi"), ("owner", "")]));
+    ///         .fields(&[("group", "Sumimi"), ("owner", "")]));
     /// ```
     pub const fn meta(self, meta: &'static crate::meta::CardMeta) -> Self {
         Self {
@@ -367,6 +390,56 @@ impl CardDef {
             flash: self.flash,
             texts: self.texts,
             meta: Some(meta),
+            board_role: self.board_role,
+            governs: self.governs,
+        }
+    }
+
+    /// Board role of a standing rule (ABI v66): `"tile"` / `"mark"` /
+    /// `"status"`, or `""` (the default) for an ordinary card. Replaces any
+    /// earlier `board_role` call.
+    ///
+    /// ```ignore
+    /// pub const MARK: CardDef = CardDef::new("mark:cp", &[...]).board_role("mark");
+    /// ```
+    pub const fn board_role(self, role: &'static str) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
+            board_role: role,
+            governs: self.governs,
+        }
+    }
+
+    /// Tile kinds this rule governs (ABI v66) when [`Self::board_role`] is
+    /// `"tile"`. Empty derives a single kind from the id's `tile:` suffix.
+    /// Replaces any earlier `governs` call.
+    ///
+    /// ```ignore
+    /// pub const EVENT: CardDef = CardDef::new("tile:event", &[...])
+    ///     .board_role("tile")
+    ///     .governs(&["cafe", "ryuseido"]);
+    /// ```
+    pub const fn governs(self, kinds: &'static [&'static str]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            labels: self.labels,
+            silent: self.silent,
+            quiet_when_empty: self.quiet_when_empty,
+            flash: self.flash,
+            texts: self.texts,
+            meta: self.meta,
+            board_role: self.board_role,
+            governs: kinds,
         }
     }
 
@@ -586,9 +659,9 @@ impl On {
     /// what the manifest carries.
     pub fn triggers(&self) -> Vec<i32> {
         match self {
-            On::Counteract(k, ..) => k.iter().map(|x| *x as i32).collect(),
-            On::Hook(k, ..) => k.iter().map(|x| *x as i32).collect(),
-            On::Gate(k, ..) => k.iter().map(|x| *x as i32).collect(),
+            On::Counteract(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::Hook(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::Gate(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             // Message names travel as the manifest's `triggers` string list
             // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
             // The names ride a separate manifest field; see `rt.rs`.

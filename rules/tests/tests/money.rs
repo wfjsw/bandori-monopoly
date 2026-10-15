@@ -552,9 +552,9 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
         // A neutral [CP点] row on CiRCLE -- units of the standing `mark:cp`
         // counter, so they outlive any placer.
         w.place_mark(
-            w.mark_cp_uid(),
-            game_core::state::mark_kind::CP,
-            game_core::state::mark_category::CP,
+            w.mark_owner_uid("mark:cp"),
+            card_sdk::abi::mark::CP_KIND,
+            card_sdk::abi::mark::CP_CATEGORY,
             tile("CiRCLE") as i32,
             game_core::state::BOARD_OWNER,
             -1,
@@ -578,7 +578,9 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
         t.marks_on(tile("Space"))
     );
     assert!(
-        t.marks_on(tile("CiRCLE")).iter().any(|m| m.is_cp()),
+        t.marks_on(tile("CiRCLE"))
+            .iter()
+            .any(|m| m.category == card_sdk::abi::mark::CP_CATEGORY),
         "neutral CP marks stay: {:?}",
         t.marks_on(tile("CiRCLE"))
     );

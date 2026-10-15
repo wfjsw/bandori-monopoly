@@ -348,7 +348,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
         Fx::SeatIntIs { var, .. } => {
             let var = var.to_string();
             // Second arg is either an int id or a string name (the guest's
-            // `character_is(p, "名")` / `band_is(p, "Band")` spelling). A
+            // `persona_is(p, "名")` / `group_is(p, "Band")` spelling). A
             // string hashes through `id_of` -- the same name-stable id the
             // view's `character` / `band` accessors return.
             ctx.add_function(
@@ -405,8 +405,8 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
             let var = var.to_string();
             // The arg is an int id or a string name: a string hashes through
             // `id_of` -- the same name-stable id `counter_is('cp')` /
-            // `character_is(p, "名")` compare against. Int callers
-            // (`chain_has(roll)`, `is_circle(t)`, `blocked(band)`) pass the
+            // `persona_is(p, "名")` compare against. Int callers
+            // (`chain_has(roll)`, `is_start(t)`, `blocked(band)`) pass the
             // wire value directly and are unaffected.
             ctx.add_function(
                 fname,

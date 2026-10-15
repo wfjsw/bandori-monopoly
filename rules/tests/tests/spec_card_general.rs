@@ -587,6 +587,7 @@ pub fn c_gen_fever_frame(step: &Step<'_>) -> Result<(), String> {
         "discard_pub:P".to_string(),
         "field:P".to_string(),
         "crystals:P".to_string(),
+        "pool:P".to_string(),
         "fprop:P".to_string(),
         "extra_turns".into(),
         "pos:P".into(),
@@ -1668,6 +1669,7 @@ pub fn c_gen_parking_frame(step: &Step<'_>) -> Result<(), String> {
         "owner:T".into(),
         format!("state:P"),
         "mark:".into(),
+            "pool:".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
     frame(step.pre, step.post, &allowed)
@@ -2158,8 +2160,10 @@ pub fn c_gen_clearcp_frame(step: &Step<'_>) -> Result<(), String> {
         "discard_pub:P".to_string(),
         "field:P".to_string(),
         "crystals:P".to_string(),
+        "pool:P".to_string(),
         "fprop:P".to_string(),
         "mark:".into(),
+            "pool:".into(),
     ];
     let allowed: Vec<&str> = allowed.iter().map(String::as_str).collect();
     frame(step.pre, step.post, &allowed)

@@ -492,10 +492,10 @@ fn l05_one_skill_several_counteractions() {
         t.money(0),
         t.money(3),
         t.pos(2),
-        t.fire(0),
-        t.fire(1),
-        t.fire(2),
-        t.fire(3)
+        t.charge(0),
+        t.charge(1),
+        t.charge(2),
+        t.charge(3)
     );
     eprintln!("l05 windows: {seen:?}");
     assert_eq!(t.pos(0), 5, "P0 does not move");
@@ -656,11 +656,11 @@ fn l08_status_hand_offs() {
         t.state(0, "stay"),
         t.state(1, "stay"),
         t.state(3, "stay"),
-        t.fire(2),
-        t.fire(0)
+        t.charge(2),
+        t.charge(0)
     );
-    assert_eq!(t.fire(2), 3, "立希 (1): one per stay layer");
-    assert_eq!(t.fire(0), 1, "祥子 (1): one per layer received");
+    assert_eq!(t.charge(2), 3, "立希 (1): one per stay layer");
+    assert_eq!(t.charge(0), 1, "祥子 (1): one per layer received");
 
     // 2. On P0's turn, P0 can't move because of its stay.
     until_turn(&mut t, 0);

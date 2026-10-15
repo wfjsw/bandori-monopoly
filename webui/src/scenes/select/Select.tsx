@@ -10,7 +10,7 @@ import { D, skillText } from "../../core/data";
 import { useAutoplay, useMatchView, useTick, useWakeLock } from "../../core/hooks";
 import { useLatestRef } from "../../hooks/latest";
 import { getProfile } from "../../core/store";
-import type { CharacterData, Command } from "../../core/types";
+import type { PersonaData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
 import { AutoBanner, AutoToggle, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
@@ -52,16 +52,16 @@ export function Select({ sess }: { sess: GameSession }) {
   // modal is not opened (it would block the board for nothing).
   const me = view?.state.players[view.playerId];
   const actRef = useLatestRef(act);
-  const pickRef = useLatestRef({ auto, hasChar: !!me?.character });
+  const pickRef = useLatestRef({ auto, hasChar: !!me?.persona });
   useEffect(() => {
     if (!view || !me || sess.autoMode !== "off") return;
-    if (view.state.phase === "deck" && !me.deckReady && deckOpenedFor.current !== me.character && !isModalOpen("deck")) {
-      deckOpenedFor.current = me.character;
-      showDeckPick(sess, me.character, actRef.current);
+    if (view.state.phase === "deck" && !me.deckReady && deckOpenedFor.current !== me.persona && !isModalOpen("deck")) {
+      deckOpenedFor.current = me.persona;
+      showDeckPick(sess, me.persona, actRef.current);
     }
   });
 
-  const pickChar = useCallback((c: CharacterData) => {
+  const pickChar = useCallback((c: PersonaData) => {
     if (pickRef.current.auto) return;
     sfx("place");
     if (!pickRef.current.hasChar) setPicked(c.name);
@@ -70,10 +70,10 @@ export function Select({ sess }: { sess: GameSession }) {
   if (!view || !me) return null;
   const st = view.state;
   const myTurn = st.turn === view.playerId;
-  const chosen = me.character || picked || getProfile().homeCharacter || D.characters[0].name;
-  const preview = D.character(chosen);
+  const chosen = me.persona || picked || getProfile().homePersona || D.personas[0].name;
+  const preview = D.persona(chosen);
   const secs = Math.max(0, Math.ceil(st.timeLeft - (performance.now() - at) / 1000));
-  const takenBy = new Map(st.players.map((x, playerId) => [x.character, { name: x.player, playerId }] as const).filter(([c]) => c));
+  const takenBy = new Map(st.players.map((x, playerId) => [x.persona, { name: x.player, playerId }] as const).filter(([c]) => c));
   const free = (n: string) => !st.bans.includes(n) && !takenBy.has(n);
   const cur = st.players[st.turn]?.player ?? "";
   const leave = () => {
@@ -92,14 +92,14 @@ export function Select({ sess }: { sess: GameSession }) {
     hint = myTurn ? tr("select.banHintYou") : tr("select.banHintWait", { who: cur });
     const ok = myTurn && picked && free(picked);
     label = myTurn ? (ok ? tr("select.stepBan") : tr("select.noBan")) : tr("select.banning");
-    if (myTurn && !auto) onGo = () => void act({ act: "ban", character: ok ? picked : "" });
+    if (myTurn && !auto) onGo = () => void act({ act: "ban", persona: ok ? picked : "" });
   } else if (st.phase === "pick") {
     hint = myTurn ? tr("select.pickHintYou") : tr("select.pickHintWait", { who: cur });
-    if (myTurn && !auto && picked && free(picked)) onGo = () => void act({ act: "pick", character: picked });
+    if (myTurn && !auto && picked && free(picked)) onGo = () => void act({ act: "pick", persona: picked });
   } else if (st.phase === "deck") {
     label = tr("select.stepDeck");
     hint = me.deckReady ? tr("select.deckDone") : tr("select.deckHint");
-    if (!me.deckReady && !auto) onGo = () => showDeckPick(sess, me.character, act);
+    if (!me.deckReady && !auto) onGo = () => showDeckPick(sess, me.persona, act);
   }
 
   const [modeLabel, modeCls] = modeChip(st.mode);
@@ -136,7 +136,7 @@ export function Select({ sess }: { sess: GameSession }) {
           </div>
           <div className={s.gridPanel}>
             <div className={s.grid}>
-              {D.characters.filter((c) => inTab(c, tab)).map((c) => {
+              {D.personas.filter((c) => inTab(c, tab)).map((c) => {
                 const banned = st.bans.includes(c.name);
                 const taken = takenBy.get(c.name);
                 const mine = taken?.playerId === view.playerId;
@@ -160,7 +160,7 @@ export function Select({ sess }: { sess: GameSession }) {
             <PanelTab className={s.orderTab}>{tr("select.order")}</PanelTab>
             <div className={s.strip}>
               {st.players.map((x, i) => {
-                const c = D.character(x.character);
+                const c = D.persona(x.persona);
                 const turn = (st.phase === "ban" || st.phase === "pick") && st.turn === i;
                 return (
                   <div key={i} className={cx(s.playerId, turn && s.turn)}>
@@ -171,7 +171,7 @@ export function Select({ sess }: { sess: GameSession }) {
                       {st.phase === "deck" && x.deckReady && <span className={s.ok}><Icon name="check" /></span>}
                     </div>
                     <div className={s.name}>{i === view.playerId ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && x.roll > 0 && <b> {x.roll}</b>}</div>
-                    {st.mode === 2 && x.ban && <div className={s.ban}>{tr("select.banMark", { name: D.character(x.ban)?.display ?? "" })}</div>}
+                    {st.mode === 2 && x.ban && <div className={s.ban}>{tr("select.banMark", { name: D.persona(x.ban)?.display ?? "" })}</div>}
                   </div>
                 );
               })}
@@ -186,13 +186,13 @@ export function Select({ sess }: { sess: GameSession }) {
   );
 }
 
-function Preview({ c }: { c: CharacterData }) {
+function Preview({ c }: { c: PersonaData }) {
   const [tab, setTab] = useState<"char" | "band">("char");
-  const band = D.band(c.band);
+  const band = D.group(c.group);
   const char = tab === "char";
   return (
     <div className={s.left}>
-      <div className={s.band}><BandMark band={c.band} /></div>
+      <div className={s.group}><BandMark band={c.group} /></div>
       {/* The eyes share one line across characters (the anchor ignores each
           model's height). `fit="top"` gives the head the room vertical
           centring wastes, and `headroom` clamps the tallest hairdos (004) so
@@ -204,7 +204,7 @@ function Preview({ c }: { c: CharacterData }) {
           <button type="button" className={cx(s.skillTab, char && s.skillTabOn)} onClick={() => setTab("char")}>{tr("select.skillChar")}</button>
           <button type="button" className={cx(s.skillTab, !char && s.skillTabOn)} onClick={() => setTab("band")}>{tr("select.skillBand")}</button>
           <b>{char ? c.skill || tr("select.skillTbd") : band?.skill || tr("select.bandSkillTbd")}</b>
-          <span>{c.band}</span>
+          <span>{c.group}</span>
         </div>
         <div className={s.skillText}><SkillTextToggle className={s.skillSwitch} /><SkillBody text={skillText(char ? c : band)} /></div>
       </div>

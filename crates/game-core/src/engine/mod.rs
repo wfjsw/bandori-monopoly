@@ -353,7 +353,11 @@ struct Saved {
 /// [`crate::clock::ClockSettings`] plus a `legacy_clock` flag (see
 /// [`crate::record::MatchSetup::clock`]). Older saves are refused -- the
 /// archived engine bundle is what replays them (`docs/REPLAY.md`).
-pub const SAVE_VERSION: u32 = 9;
+/// v10: roster/player wire names are neutral (`persona` / `skillOwner` /
+/// `affiliations` / `groupSkill`). Older saves are not loaded (SAVE_VERSION).
+/// v11: state key `"charge"`; `FieldCard` named counters only (`counters`
+/// map); profile `charge*` fields; `StateVar.flags`.
+pub const SAVE_VERSION: u32 = 11;
 
 /// A running match.
 pub struct Match {
@@ -607,17 +611,17 @@ impl Match {
     ) -> Self {
         let members = &members[..members.len().min(10)];
         let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
-        // Solo with a character already on every seat (the solo setup screen's
+        // Solo with a persona already on every seat (the solo setup screen's
         // picks, its randoms resolved before the match is built) skips the
         // timed ban / pick entirely and opens the deck phase instead. Online
-        // never takes this path: there `RoomMember::character` is the lobby
+        // never takes this path: there `RoomMember::persona` is the lobby
         // avatar, not a match pick, and the pick phase must stay. An unknown
         // or duplicated pick is not a preset -- fall through to the pick phase.
         let preset = mode == MatchMode::Solo
             && !members.is_empty()
-            && members.iter().all(|m| data.character(&m.character).is_some())
+            && members.iter().all(|m| data.persona(&m.persona).is_some())
             && {
-                let mut names: Vec<&str> = members.iter().map(|m| m.character.as_str()).collect();
+                let mut names: Vec<&str> = members.iter().map(|m| m.persona.as_str()).collect();
                 names.sort_unstable();
                 names.dedup();
                 names.len() == members.len()
@@ -645,9 +649,9 @@ impl Match {
                     ai: m.bot && m.mentality != crate::state::BotMentality::Advanced,
                     mentality: m.mentality,
                     // Carries through `roll_order`, so the seat that rolls high
-                    // keeps the character its member was given.
-                    character: if preset {
-                        m.character.clone()
+                    // keeps the persona its member was given.
+                    persona: if preset {
+                        m.persona.clone()
                     } else {
                         String::new()
                     },
@@ -706,7 +710,7 @@ impl Match {
                 cx.w.st.phase = "pick".into();
                 cx.w.st.turn = 0;
                 for i in 0..cx.w.player_count() {
-                    let c = cx.w.st.players[i].character.clone();
+                    let c = cx.w.st.players[i].persona.clone();
                     cx.do_pick(i, &c);
                 }
             });
@@ -846,7 +850,7 @@ impl Match {
             // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
             // hidden hand). The public `skip_move` is that same live latch --
             // it used to be re-derived from stay / exile, which disagrees with
-            // the gate (unstoppable, mid-turn [停留], a [除外] granted this
+            // the gate (unstoppable, mid-turn stay, a exile granted this
             // turn by MyGO:无路矢): a policy that trusted it sent `end` into
             // `err.roll_first` forever.
             {
@@ -1051,11 +1055,11 @@ impl Match {
     }
 
     /// The member's hand -- private, never part of [`Match::state`].
-    /// Test seam: set a player's character (exclusive-card checks read it).
+    /// Test seam: set a player's persona (exclusive-card checks read it).
     #[doc(hidden)]
-    pub fn set_character(&mut self, member: i32, character: &str) {
+    pub fn set_persona(&mut self, member: i32, persona: &str) {
         if let Some(i) = self.player_index(member) {
-            self.world.st.players[i].character = character.to_string();
+            self.world.st.players[i].persona = persona.to_string();
             self.world
                 .bind_skills(self.data.as_ref(), &*self.rules, i as i32);
         }
@@ -1288,7 +1292,7 @@ impl Match {
                 ..Default::default()
             };
             let reason = why_not_act(&cx, i, &m, busy);
-            // `skill:<owner>:<name>` -- the owner is the character or band the
+            // `skill:<owner>:<name>` -- the owner is the persona or group the
             // skill came from (granted copies keep the original owner).
             let source = id
                 .strip_prefix("skill:")
@@ -1323,11 +1327,11 @@ impl Match {
     /// prompt-open fill ran: [`Cx::ai_auction_worth`] for an auction ceiling,
     /// [`Cx::auto_mortgage`] for a mortgage selection, and
     /// [`Cx::ai_answer_for_entry`] for every other prompt (the fallback, or a
-    /// [反击] propensity roll).
+    /// counteraction propensity roll).
     ///
     /// `None` when the seat has no open prompt or has already answered. The
     /// result is **not** bit-identical to the live match's precomputed fill
-    /// whenever that fill drew from the match RNG (auction ceilings, [反击]
+    /// whenever that fill drew from the match RNG (auction ceilings, counteraction
     /// propensity) -- the fork owns a fresh stream. That is expected and
     /// listed in the hidden-state audit (`docs/BOT.md` §1).
     pub fn compute_ai_answer(&mut self, member: i32) -> Option<RawAiAnswer> {
@@ -1373,7 +1377,7 @@ impl Match {
             }
             _ => {
                 // `fill_ai`'s per-seat body, on a throwaway `Ask` view of the
-                // same prompt (the fallback / [反击] propensity path). The
+                // same prompt (the fallback / counteraction propensity path). The
                 // prompt's own `Ask` is already filled on a stubbed fork, so
                 // read the entry through the shared helper rather than
                 // `fill_ai` (which skips non-`AI_UNSET` slots).
@@ -1872,14 +1876,14 @@ impl Match {
         let turn = self.world.st.turn as usize;
         if self.world.st.phase == "ban" {
             self.direct(|cx| {
-                // Standard: 50% a random character, else no ban. Chaos always
+                // Standard: 50% a random persona, else no ban. Chaos always
                 // bans something if anything is left. A human seat (time-out)
                 // never bans.
                 let chaos = cx.is_chaos(turn);
                 let pick = if cx.w.st.players[turn].auto_setup()
                     && (chaos || cx.w.rng.chance(0.5))
                 {
-                    cx.random_character(false)
+                    cx.random_persona(false)
                 } else {
                     String::new()
                 };
@@ -1887,7 +1891,7 @@ impl Match {
             });
         } else {
             self.direct(|cx| {
-                let c = cx.random_character(true);
+                let c = cx.random_persona(true);
                 cx.do_pick(turn, &c);
             });
         }
@@ -1965,7 +1969,7 @@ impl Match {
                 return;
             }
             if !self.timed_out {
-                // Still held (anim ack pending, cap not yet fired): do not
+                // Still held (anim ack pending, cap not yet reached): do not
                 // consume base/bonus.
                 if self.clock_hold.is_some() {
                     return;
@@ -2282,7 +2286,7 @@ impl Match {
                 if phase != "ban" || self.world.st.turn != i as i32 {
                     return Err(Msg::new("err.not_your_ban"));
                 }
-                let c = m.character.clone();
+                let c = m.persona.clone();
                 if !c.is_empty() && !self.with_cx(|cx| cx.bannable(&c)) {
                     return Err(Msg::new("err.cannot_ban"));
                 }
@@ -2293,7 +2297,7 @@ impl Match {
                 if phase != "pick" || self.world.st.turn != i as i32 {
                     return Err(Msg::new("err.not_your_pick"));
                 }
-                let c = m.character.clone();
+                let c = m.persona.clone();
                 if !self.with_cx(|cx| cx.pickable(&c)) {
                     return Err(Msg::new("err.chara_taken"));
                 }
@@ -2306,7 +2310,7 @@ impl Match {
                 }
                 let ok = self
                     .data
-                    .character(&self.world.st.players[i].character)
+                    .persona(&self.world.st.players[i].persona)
                     .is_some_and(|c| crate::deck::is_complete(&self.data, c, &m.cards));
                 if !ok {
                     return Err(Msg::new("err.deck_invalid"));
@@ -2406,7 +2410,7 @@ impl Match {
                     if !can_pay {
                         return Err(Msg::new("err.cannot_bid"));
                     }
-                    // B4 (`PIPELINE-AUDIT` K10b) -- 规则书 L76 「需[支付]或[消耗]
+                    // B4 (`PIPELINE-AUDIT` K10b) -- 规则书 L76 「需pay或spend
                     // 资金且资金不足时可以选择抵押拥有的地契」: a bid may be funded
                     // by 抵押, so eligibility is cash **plus** what the seat could
                     // raise, not cash alone. The old `m.value > money` gate let a
@@ -2623,16 +2627,16 @@ impl Match {
         }
     }
 
-    /// Skip the remaining pre-game phases with random characters and preset decks.
+    /// Skip the remaining pre-game phases with random personas and preset decks.
     pub fn quick_start(&mut self) {
         if matches!(self.world.st.phase.as_str(), "play" | "ended") {
             return;
         }
         self.direct(|cx| {
             for i in 0..cx.w.player_count() {
-                if cx.w.st.players[i].character.is_empty() {
-                    let c = cx.random_character(true);
-                    cx.w.st.players[i].character = c;
+                if cx.w.st.players[i].persona.is_empty() {
+                    let c = cx.random_persona(true);
+                    cx.w.st.players[i].persona = c;
                 }
                 let d = cx.data;
                 cx.w.bind_skills(d, cx.rules, i as i32);

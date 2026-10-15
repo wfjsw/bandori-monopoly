@@ -90,7 +90,7 @@ pub trait CrossState: Send + Sync {
     fn match_del(&self, room: &str) -> Result<(), StoreError>;
 
     /// The room's **record log** for the match in progress: one JSON line per
-    /// [`RecordHead`] / [`Input`] / [`Cp`] (`docs/REPLAY.md` §4). It lives
+    /// [`RecordHead`] / [`Input`] / [`Checkpoint`] (`docs/REPLAY.md` §4). It lives
     /// beside the match blob rather than inside it -- the blob is the engine's
     ///, and the log is the driver's. Cleared when the match is sealed into a
     /// [`StoredRecord`].
@@ -157,7 +157,7 @@ pub struct RoomFair {
 pub struct SessionRecord {
     pub token: String,
     pub player: String,
-    pub character: String,
+    pub persona: String,
     pub cn_id: String,
     pub room: Option<(String, i32)>,
 }
@@ -167,7 +167,7 @@ impl From<&Session> for SessionRecord {
         Self {
             token: s.token.clone(),
             player: s.player.clone(),
-            character: s.character.clone(),
+            persona: s.persona.clone(),
             cn_id: s.cn_id.clone(),
             room: s.room.clone(),
         }
@@ -179,7 +179,7 @@ impl From<SessionRecord> for Session {
         Session {
             token: r.token,
             player: r.player,
-            character: r.character,
+            persona: r.persona,
             cn_id: r.cn_id,
             room: r.room,
         }
@@ -193,12 +193,12 @@ pub mod redis;
 
 /// One line of a room's record log. Externally tagged, so a line is either a
 /// [`RecordHead`] (written once, at `start`), an [`Input`] of the match, or the
-/// [`Cp`] checkpoint that follows it.
+/// [`Checkpoint`] checkpoint that follows it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LogEntry {
     Head(RecordHead),
     Input(Input),
-    Cp(Cp),
+    Checkpoint(Checkpoint),
 }
 
 /// The first log line: how the match was started and who is writing it. Lives
@@ -228,7 +228,7 @@ pub struct RecordHead {
 /// checkpoint always sits between two of them -- the same shape
 /// [`game_core::record::Checkpoint`] has.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Cp {
+pub struct Checkpoint {
     pub at: u32,
     #[serde(with = "game_core::record::u64_str")]
     pub tick: u64,

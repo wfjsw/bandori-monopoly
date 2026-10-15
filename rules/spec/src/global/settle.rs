@@ -49,7 +49,7 @@ pub fn half_ceil10(full: i32) -> i32 {
 /// RiNG has no table entry (OPEN-RING-RENT); returns `None`.
 pub fn table_rent_at(step: &Step<'_>, tile: usize) -> Option<i32> {
     let t = step.data.tiles.get(tile)?;
-    if t.kind == TileKind::Ring || t.rent.is_empty() {
+    if t.kind.as_str() == "ring" || t.rent.is_empty() {
         return None;
     }
     let h = step
@@ -78,7 +78,7 @@ pub fn level_cap(step: &Step<'_>, tile: usize) -> i32 {
     let Some(t) = step.data.tiles.get(tile) else {
         return 0;
     };
-    if t.kind == TileKind::Ring {
+    if t.kind.as_str() == "ring" {
         return 0;
     }
     t.rent.len().saturating_sub(1) as i32
@@ -136,7 +136,7 @@ pub fn agent_colour_set(step: &Step<'_>, agent: usize) -> Vec<usize> {
     let Some(a) = step.data.tiles.get(agent) else {
         return Vec::new();
     };
-    if a.kind != TileKind::Agent {
+    if a.kind.as_str() != "agent" {
         return Vec::new();
     }
     let g = a.group;
@@ -205,7 +205,7 @@ pub fn g_settle_01(step: &Step<'_>) -> Result<(), String> {
 /// * **Source:** `rulebook-doc.md:150`
 /// * **Quote:** 「CiRCLE和江户川乐器店的[结算]是：抽取一张手卡。」
 /// * **Trigger:** an observed input whose window logs a landing on a `circle`
-///   or `edogawa` tile (`log.land_circle` / `log.land_draw`).
+///   or `edogawa` tile (`log.land_start` / `log.land_draw`).
 /// * **Condition:** the window has no card activation (a card can replace the
 ///   body -- L6 「技能和卡的效果优先」 -- and then this clause does not apply).
 /// * **Effect:** exactly one hand card is drawn (`draw` event `value == 1`).
@@ -224,7 +224,7 @@ const G_SETTLE_02: Clause = Clause::new(
 pub fn g_settle_02(step: &Step<'_>) -> Result<(), String> {
     let landed = step.events.iter().any(|e| {
         let k = key_of(e);
-        k == "log.land_circle" || k == "log.land_draw"
+        k == "log.land_start" || k == "log.land_draw"
     });
     if !landed || has_card_activation(step) {
         return Ok(());
@@ -616,7 +616,7 @@ pub fn g_settle_08(step: &Step<'_>) -> Result<(), String> {
         let Some(tile) = step.data.tiles.get(t) else {
             continue;
         };
-        if tile.kind == TileKind::Ring {
+        if tile.kind.as_str() == "ring" {
             return Err(format!("build on RiNG tile {t} (「所有RiNG不可升级」)"));
         }
         let cap = level_cap(step, t);
@@ -1347,7 +1347,7 @@ pub fn verify_level_cap(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        if tile.kind == TileKind::Ring {
+        if tile.kind.as_str() == "ring" {
             return Err(format!("MORE: build on RiNG tile {t}"));
         }
         let cap = tile.rent.len().saturating_sub(1) as i32;
@@ -1362,7 +1362,7 @@ pub fn verify_level_cap(
         let pre_h = pre.st.houses.get(t).copied().unwrap_or(0);
         let post_h = post.st.houses.get(t).copied().unwrap_or(0);
         let cap = data.tiles[t].rent.len().saturating_sub(1) as i32;
-        if data.tiles[t].kind == TileKind::Ring {
+        if data.tiles[t].kind.as_str() == "ring" {
             continue;
         }
         if pre_h <= cap && post_h > cap {
@@ -1409,7 +1409,7 @@ pub fn verify_rent_amount(
         let Some(tile) = data.tiles.get(t) else {
             continue;
         };
-        if tile.kind == TileKind::Ring || tile.rent.is_empty() {
+        if tile.kind.as_str() == "ring" || tile.rent.is_empty() {
             continue;
         }
         let h = pre.st.houses.get(t).copied().unwrap_or(0).max(0) as usize;

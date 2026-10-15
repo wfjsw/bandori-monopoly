@@ -41,7 +41,7 @@ fn drain(t: &mut Table) {
 fn set_crystals(t: &mut Table, who: usize, card: &str, n: i32) {
     let w = t.m.world_mut();
     if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-        f.crystals = n;
+        f.counters.insert("crystals".into(), n);
     }
 }
 
@@ -157,7 +157,7 @@ fn light_crystal_pays_skill_fire_cost() {
         "the crystal paid the skill cost and (3) removed the card: {:?}",
         t.field_ids(0)
     );
-    assert_eq!(t.fire(0), 0, "no fire was available or spent");
+    assert_eq!(t.charge(0), 0, "no fire was available or spent");
 }
 
 #[test]
@@ -981,14 +981,14 @@ fn miracle_ineffective_if_discarded_with_crystals() {
 fn tomori_fire_cap_is_four() {
     // 规则书: 「（初始4，上限4）」 -- the cap is 4.
     let t = Table::new(&["高松灯", "千早爱音"]);
-    assert_eq!(t.p(0).state_max("fire"), 4, "cap 4");
+    assert_eq!(t.p(0).state_max("charge"), 4, "cap 4");
 }
 
 #[test]
 fn tomori_initial_fire_is_four() {
     // 规则书: 「（初始4，上限4）」 -- the pot starts at 4.
     let t = Table::new(&["高松灯", "千早爱音"]);
-    assert_eq!(t.fire(0), 4, "starts with 4 fire");
+    assert_eq!(t.charge(0), 4, "starts with 4 fire");
 }
 
 #[test]
@@ -1005,7 +1005,7 @@ fn tomori_fire_on_landing_on_ring() {
     rest(&mut t);
     drain(&mut t);
     assert_eq!(t.pos(0), 8);
-    assert_eq!(t.fire(0), 4, "+1 for [经过] RiNG, at cap 4");
+    assert_eq!(t.charge(0), 4, "+1 for [经过] RiNG, at cap 4");
 }
 
 #[test]
@@ -1022,7 +1022,7 @@ fn tomori_fire_on_passing_through_ring() {
     rest(&mut t);
     drain(&mut t);
     assert_eq!(t.pos(0), 9);
-    assert_eq!(t.fire(0), 4, "+1 for [经过] RiNG 1 on the way");
+    assert_eq!(t.charge(0), 4, "+1 for [经过] RiNG 1 on the way");
 }
 
 // ---------------------------------------------------------------- 千早爱音 重新开始
@@ -1031,14 +1031,14 @@ fn tomori_fire_on_passing_through_ring() {
 fn anon_char_fire_cap_is_three() {
     // 规则书: 「（初始2，上限3）」
     let t = Table::new(&["千早爱音", "高松灯"]);
-    assert_eq!(t.p(0).state_max("fire"), 3, "cap 3");
+    assert_eq!(t.p(0).state_max("charge"), 3, "cap 3");
 }
 
 #[test]
 fn anon_char_initial_fire_is_two() {
     // 规则书: 「（初始2，上限3）」
     let t = Table::new(&["千早爱音", "高松灯"]);
-    assert_eq!(t.fire(0), 2, "starts with 2 fire");
+    assert_eq!(t.charge(0), 2, "starts with 2 fire");
 }
 
 #[test]
@@ -1054,7 +1054,7 @@ fn anon_char_fire_on_passing_circle() {
     rest(&mut t);
     drain(&mut t);
     assert_eq!(t.pos(0), 0);
-    assert_eq!(t.fire(0), 2, "+1 for [经过] CiRCLE");
+    assert_eq!(t.charge(0), 2, "+1 for [经过] CiRCLE");
 }
 
 // ---------------------------------------------------------------- 长崎素世 通透的颜色
@@ -1063,14 +1063,14 @@ fn anon_char_fire_on_passing_circle() {
 fn soyo_char_fire_cap_is_one() {
     // 规则书: 「（初始1，上限1）」
     let t = Table::new(&["长崎素世", "高松灯"]);
-    assert_eq!(t.p(0).state_max("fire"), 1, "cap 1");
+    assert_eq!(t.p(0).state_max("charge"), 1, "cap 1");
 }
 
 #[test]
 fn soyo_char_initial_fire_is_one() {
     // 规则书: 「（初始1，上限1）」
     let t = Table::new(&["长崎素世", "高松灯"]);
-    assert_eq!(t.fire(0), 1, "starts with 1 fire");
+    assert_eq!(t.charge(0), 1, "starts with 1 fire");
 }
 
 // ---------------------------------------------------------------- 椎名立希 决定练习日的会议
@@ -1079,8 +1079,8 @@ fn soyo_char_initial_fire_is_one() {
 fn taki_fire_cap_is_five_and_initial_zero() {
     // 规则书: 「（初始0，上限5）」
     let t = Table::new(&["椎名立希", "高松灯"]);
-    assert_eq!(t.p(0).state_max("fire"), 5, "cap 5");
-    assert_eq!(t.fire(0), 0, "starts with 0 fire");
+    assert_eq!(t.p(0).state_max("charge"), 5, "cap 5");
+    assert_eq!(t.charge(0), 0, "starts with 0 fire");
 }
 
 #[test]
@@ -1099,7 +1099,7 @@ fn taki_fire_when_a_player_gains_stay() {
     t.give_play(0, "MyGO:那天的雨").unwrap();
     assert_eq!(t.state(1, "stay"), 1, "P1 gained a stay layer");
     assert_eq!(t.state(0, "stay"), 0, "P0 is outside the zone");
-    assert_eq!(t.fire(0), 1, "P0 gains one fire for that stay layer");
+    assert_eq!(t.charge(0), 1, "P0 gains one fire for that stay layer");
 }
 
 #[test]
@@ -1114,7 +1114,7 @@ fn taki_skill_adds_crystal_once_per_turn() {
     t.skill(0, &skill).unwrap();
     let k = t.option("MyGO:轮符雨").expect("target prompt");
     t.answer(0, k).unwrap();
-    assert_eq!(t.fire(0), 0, "one fire spent");
+    assert_eq!(t.charge(0), 0, "one fire spent");
     assert_eq!(crystals(&t, 0, "MyGO:轮符雨"), 1);
     t.set_fire(0, 1, 5);
     assert!(
@@ -1129,14 +1129,14 @@ fn taki_skill_adds_crystal_once_per_turn() {
 fn rana_cat_fire_cap_is_three() {
     // 规则书: 「（初始3，上限3）」
     let t = Table::new(&["要乐奈", "高松灯"]);
-    assert_eq!(t.p(0).state_max("fire"), 3, "cap 3");
+    assert_eq!(t.p(0).state_max("charge"), 3, "cap 3");
 }
 
 #[test]
 fn rana_cat_initial_fire_is_three() {
     // 规则书: 「（初始3，上限3）」
     let t = Table::new(&["要乐奈", "高松灯"]);
-    assert_eq!(t.fire(0), 3, "starts with 3 fire");
+    assert_eq!(t.charge(0), 3, "starts with 3 fire");
 }
 
 #[test]
@@ -1151,7 +1151,7 @@ fn rana_cat_space_teleport_spends_three_fire() {
     rest(&mut t);
     drain(&mut t);
     assert_eq!(t.pos(0), 42, "teleported to Space (tile 42)");
-    assert_eq!(t.fire(0), 0, "three fire spent");
+    assert_eq!(t.charge(0), 0, "three fire spent");
 }
 
 #[test]
@@ -1501,7 +1501,7 @@ fn anon_char_draws_after_abnormal_resolves() {
     drain(&mut t);
     assert_eq!(t.state(0, "stay"), 1, "the stay landed");
     if used {
-        assert_eq!(t.fire(0), 0, "2 fire spent");
+        assert_eq!(t.charge(0), 0, "2 fire spent");
         assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one");
     } else {
         assert!(

@@ -28,7 +28,7 @@ pub const J11: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"将此卡置于自身场上，为其添加2个[奇迹水晶]，每回合结束时移除1个，为0时置入弃牌堆。在此期间任意需要失去资金或被其他卡指定的时刻，可将此卡置入弃牌堆并使自身及前后1格内的其他玩家获得1层眩晕。"#)
         .cell(r#"J11"#)
-        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
+        .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // C# `H.PlaceFromPlay(c, -1, -1, 2)` -- place with 2 miracle crystals.
@@ -44,7 +44,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardJ11.Fire` / `CardJ11.Ask`'s body -- discard the card to [stun] its
 /// owner and every player within 1 tile.
-fn fire(player_id: i32) {
+fn charge(player_id: i32) {
     ctx::set_dest(ctx::Dest::Graveyard);
     rules_status::stun::add(player_id, 1);
     let here = ctx::player_pos(player_id);
@@ -90,7 +90,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             )? {
                 return Ok(());
             }
-            fire(player_id);
+            charge(player_id);
             trigger::set_pay_amount(0);
         }
         // C# `CardJ11.Targeted` (MatchHost.cs:5903-5910): another player's card
@@ -109,7 +109,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             )? {
                 return Ok(());
             }
-            fire(player_id);
+            charge(player_id);
         }
         _ => {}
     }

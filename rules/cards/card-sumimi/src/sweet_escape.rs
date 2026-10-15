@@ -20,12 +20,12 @@ pub const SWEET_ESCAPE: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子并触发结算，若为可购买格子则必须购买，视为你的主要移动。"#)
         .cell(r#"L8"#)
-        .fields(&[("band", r#"Sumimi"#), ("owner", "")]));
+        .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
-/// C# `TileData.kind == "ring"` -- `ctx::is_ring` (ABI v9) reads the board's
+/// C# `TileData.kind == "ring"` -- `ctx::is_deed` (ABI v9) reads the board's
 /// `TileKind::Ring` directly.
-fn is_ring(t: i32) -> bool {
-    ctx::is_ring(t)
+fn is_deed(t: i32) -> bool {
+    ctx::is_deed(t)
 }
 
 /// C# `H.PriceTag` -- the tile's 「收费标价」.
@@ -35,7 +35,7 @@ fn price_tag(t: i32) -> i32 {
     }
     // 规则书: 「[收费标价]」 -- C# `H.PriceTag` returns `H.RingMultiplier` for
     // `kind == "ring"` tiles and the rent table otherwise.
-    if is_ring(t) {
+    if is_deed(t) {
         return ctx::ring_multiplier();
     }
     ctx::rent_of(t)

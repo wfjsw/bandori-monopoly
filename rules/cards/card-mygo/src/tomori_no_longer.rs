@@ -27,11 +27,11 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // `counter::CRYSTALS`.
         On::Hook(&[HookKind::CounterChanged], "", Some(sweep_guard), sweep),
         // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
-        // `FirePaying` pre-spend substitution. The offer exists only for a
+        // `ChargePaying` pre-spend substitution. The offer exists only for a
         // positive spend with a crystal to trade; accepting cancels the fire
         // spend and burns one crystal instead.
         On::Hook(
-            &[HookKind::FirePaying],
+            &[ruleset_core::kind::ChargePaying],
             "actor == owner && card.counter('crystals') >= 1 && value > 0",
             None,
             cover,
@@ -48,14 +48,14 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"（1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数 （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶] （3）此卡上的奇迹水晶耗尽后，[移除]此卡"#)
         .cell(r#"I3"#)
-        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"高松灯"#)]));
+        .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"高松灯"#)]));
 
 /// Set while (2)'s substitution is running, so [`refill`] knows the decrease
 /// is the skill-cost swap and must not be refunded.
 const SLOT_COVERING: &str = "tomori_no_longer.covering";
 
 /// （2）'s substitution. Applicability is the entry's condition (`value > 0`).
-/// Cancelling the `FirePaying` link is the substitution: the fire pots never
+/// Cancelling the `ChargePaying` link is the substitution: the fire pots never
 /// move, and one crystal is removed instead.
 fn cover(player_id: i32) -> card_sdk::Asked {
     let spent = ctx::trigger::value();

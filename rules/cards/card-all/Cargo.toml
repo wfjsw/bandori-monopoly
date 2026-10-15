@@ -24,8 +24,8 @@ card-ppp = { path = "../card-ppp" }
 card-ras = { path = "../card-ras" }
 card-roselia = { path = "../card-roselia" }
 card-sumimi = { path = "../card-sumimi" }
-skill-bands = { path = "../../skills/skill-bands" }
-skill-characters = { path = "../../skills/skill-characters" }
+skill-groups = { path = "../../skills/skill-groups" }
+skill-personas = { path = "../../skills/skill-personas" }
 rules-tiles = { path = "../../tiles" }
 rules-tile-marks = { path = "../../tile_marks" }
 rules-status = { path = "../../status" }

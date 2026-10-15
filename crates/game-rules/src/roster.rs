@@ -1,15 +1,15 @@
 //! Roster metadata conversion (ABI v63, `docs/CARDS.md` 「Card metadata」).
 //!
 //! The ruleset exports a generic [`card_sdk::meta::MetaDoc`]; this module maps
-//! it onto [`game_core::data::Roster`] -- the plain `CardData` / `CharacterData`
-//! / `BandData` vectors `GameData` iterates in roster order. The field keys are
+//! it onto [`game_core::data::Roster`] -- the plain `CardData` / `PersonaData`
+//! / `GroupData` vectors `GameData` iterates in roster order. The field keys are
 //! this game's data-contract names (the roster row columns), mirrored by
 //! `ruleset_core::roster::meta_key`.
 
 use card_sdk::meta::{MetaDoc, MetaRow};
-use game_core::data::{BandData, CardData, CharacterData, Roster};
+use game_core::data::{GroupData, CardData, PersonaData, Roster};
 
-/// Decode a `bandori_metadata` postcard blob into [`MetaDoc`].
+/// Decode a `ruleset_metadata` postcard blob into [`MetaDoc`].
 pub fn decode_metadata(bytes: &[u8]) -> Result<MetaDoc, String> {
     postcard::from_bytes(bytes).map_err(|e| format!("metadata: {e}"))
 }
@@ -21,27 +21,27 @@ pub fn decode_metadata(bytes: &[u8]) -> Result<MetaDoc, String> {
 /// converter does not know is ignored (the host may carry other lists).
 pub fn roster_from_meta(doc: &MetaDoc) -> Roster {
     let mut cards = Vec::new();
-    let mut characters = Vec::new();
-    let mut bands = Vec::new();
+    let mut personas = Vec::new();
+    let mut groups = Vec::new();
     for row in &doc.rows {
         match row.kind.as_str() {
             "card" => cards.push(card_from_row(row)),
-            "character" => characters.push(character_from_row(row)),
-            "band" => bands.push(band_from_row(row)),
+            "persona" => personas.push(persona_from_row(row)),
+            "group" => groups.push(group_from_row(row)),
             _ => {}
         }
     }
     Roster {
         cards,
-        characters,
-        bands,
+        personas,
+        groups,
     }
 }
 
 fn card_from_row(r: &MetaRow) -> CardData {
     CardData {
         id: r.id.clone(),
-        band: r.field("band").to_string(),
+        group: r.field("group").to_string(),
         name: r.name.clone(),
         raw_name: r.raw_name.clone(),
         owner: r.field("owner").to_string(),
@@ -52,11 +52,11 @@ fn card_from_row(r: &MetaRow) -> CardData {
     }
 }
 
-fn character_from_row(r: &MetaRow) -> CharacterData {
-    CharacterData {
+fn persona_from_row(r: &MetaRow) -> PersonaData {
+    PersonaData {
         name: r.name.clone(),
         display: r.field("display").to_string(),
-        band: r.field("band").to_string(),
+        group: r.field("group").to_string(),
         color: r.field("color").to_string(),
         skill: r.field("skill").to_string(),
         text: r.text.clone(),
@@ -70,8 +70,8 @@ fn character_from_row(r: &MetaRow) -> CharacterData {
     }
 }
 
-fn band_from_row(r: &MetaRow) -> BandData {
-    BandData {
+fn group_from_row(r: &MetaRow) -> GroupData {
+    GroupData {
         name: r.name.clone(),
         short_name: r.field("shortName").to_string(),
         color: r.field("color").to_string(),

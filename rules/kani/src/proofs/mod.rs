@@ -31,13 +31,13 @@ pub mod mygo;
 pub mod mujica;
 #[cfg(feature = "band-crychic")]
 pub mod crychic;
-#[cfg(all(feature = "band-sumimi", feature = "skills-characters"))]
+#[cfg(all(feature = "band-sumimi", feature = "skills-personas"))]
 pub mod sumimi;
 #[cfg(feature = "band-general")]
 pub mod general;
 #[cfg(feature = "events")]
 pub mod events;
-#[cfg(all(feature = "band-pp", feature = "skills-characters"))]
+#[cfg(all(feature = "band-pp", feature = "skills-personas"))]
 pub mod skills_pp;
 #[cfg(all(feature = "band-ppp", feature = "skills-characters"))]
 pub mod skills_ppp;
@@ -47,17 +47,17 @@ pub mod skills_r;
 pub mod skills_ag;
 #[cfg(all(feature = "band-hhw", feature = "skills-characters"))]
 pub mod skills_hhw;
-#[cfg(all(feature = "band-morfonica", feature = "skills-bands"))]
+#[cfg(all(feature = "band-morfonica", feature = "skills-groups"))]
 pub mod skills_mor;
-#[cfg(all(feature = "band-ras", feature = "skills-characters"))]
+#[cfg(all(feature = "band-ras", feature = "skills-personas"))]
 pub mod skills_ras;
-#[cfg(all(feature = "band-mygo", feature = "skills-bands"))]
+#[cfg(all(feature = "band-mygo", feature = "skills-groups"))]
 pub mod skills_mygo;
-#[cfg(all(feature = "band-mujica", feature = "skills-bands"))]
+#[cfg(all(feature = "band-mujica", feature = "skills-groups"))]
 pub mod skills_mujica;
-#[cfg(all(feature = "band-crychic", feature = "skills-bands"))]
+#[cfg(all(feature = "band-crychic", feature = "skills-groups"))]
 pub mod skills_crychic;
-#[cfg(all(feature = "band-sumimi", feature = "skills-bands"))]
+#[cfg(all(feature = "band-sumimi", feature = "skills-groups"))]
 pub mod skills_sumimi;
 #[cfg(feature = "band-general")]
 pub mod skills_general;
@@ -65,9 +65,9 @@ pub mod skills_general;
 pub mod tiles;
 #[cfg(feature = "tiles")]
 pub mod tile_marks;
-#[cfg(feature = "skills-bands")]
+#[cfg(feature = "skills-groups")]
 pub mod skills_bands;
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 pub mod skills_characters;
 pub mod cond_ops;
 #[cfg(feature = "band-pp")]

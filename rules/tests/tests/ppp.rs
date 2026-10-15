@@ -121,7 +121,7 @@ fn popipapapipopa_crystals_reduce_spend() {
         let w = t.m.world_mut();
         for f in w.st.players[0].field.iter_mut() {
             if f.card == "PPP:[衍生]Popipapapipopa" {
-                f.crystals = 3;
+                f.counters.insert("crystals".into(), 3);
             }
         }
     }
@@ -217,7 +217,7 @@ fn returns_borrow_options_carry_band_cards() {
         );
         assert!(
             card.contains("Afterglow") || card.contains("Pastel"),
-            "option {i} shows that player's own band: {card}"
+            "option {i} shows that player's own group: {card}"
         );
         seen += 1;
     }
@@ -228,7 +228,7 @@ fn returns_borrow_options_carry_band_cards() {
     let ids = t.field_ids(0);
     assert!(
         ids.iter().any(|c| c.contains("Pastel") || c.contains("与偶像一起")),
-        "answering option 1 borrows that player's band: {ids:?}"
+        "answering option 1 borrows that player's group: {ids:?}"
     );
 }
 
@@ -334,7 +334,7 @@ fn returns_leaves_ppp_band_skill_2_working() {
     if t.prompt().is_some() {
         let p = t.expect_prompt();
         assert!(
-            !p.title.key().contains("circle"),
+            !p.title.key().contains("pass_reward"),
             "CiRCLE reward offered anyway: {}",
             t.dump_prompt()
         );
@@ -443,7 +443,7 @@ fn bang_dream_crystal_teleport_build() {
         .field(0)
         .iter()
         .find(|f| f.card.contains("Poppin"))
-        .map(|f| f.crystals)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(0);
     assert!(
         band_x >= 1,
@@ -662,7 +662,7 @@ fn megumi_card_teleports_and_gains_fire() {
     t.set_fire(0, 0, 4); // the character's cap so the pot can hold one
     t.give_play(0, "PPP:（多惠）寻找更好的声音").unwrap();
     assert_eq!(t.pos(0), EDOGAWA);
-    assert_eq!(t.fire(0), 1, "events {:?}", t.recent_keys(8));
+    assert_eq!(t.charge(0), 1, "events {:?}", t.recent_keys(8));
 }
 
 // =====================================================================
@@ -685,7 +685,7 @@ fn kasumi_skill_teleports_to_own_tile() {
     t.answer(0, 0).unwrap();
     skip_all(&mut t);
     assert_eq!(t.pos(0), HILL);
-    assert_eq!(t.fire(0), 0, "spent 1 fire");
+    assert_eq!(t.charge(0), 0, "spent 1 fire");
 }
 
 // 规则书: 户山香澄「（1）其他玩家“星之鼓动山丘”上[结算]时获得一个[火罐]（初始0，上限1）」
@@ -699,7 +699,7 @@ fn kasumi_skill_gains_fire_on_hill_settle() {
     t.dice(&[1]);
     t.roll(1).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.fire(0), 1, "events {:?}", t.recent_keys(8));
+    assert_eq!(t.charge(0), 1, "events {:?}", t.recent_keys(8));
 }
 
 // 规则书: 市谷有咲「（3）[经过]“流星堂”时可使用2个[火罐]为自己的团卡添加1个[奇迹水晶]」
@@ -729,10 +729,10 @@ fn aoki_skill_spends_fire_for_crystal() {
     let band_x = t
         .field(0)
         .iter()
-        .find(|f| f.band_skill)
-        .map(|f| f.crystals)
+        .find(|f| f.group_skill)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(0);
-    eprintln!("fire={} crystals={}", t.fire(0), band_x);
+    eprintln!("fire={} crystals={}", t.charge(0), band_x);
 }
 
 // 规则书: 花园多惠「（1）每次你领取[CiRCLE奖励]时投掷3d20…放置一个[多惠兔子]」
@@ -816,7 +816,7 @@ fn saaya_skill_offers_on_big_spend() {
             eprintln!("saaya prompt: {}", t.dump_prompt());
         }
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("200"))
             .or_else(|| t.option("获得"));
         if let Some(k) = k {
@@ -826,11 +826,11 @@ fn saaya_skill_offers_on_big_spend() {
             t.decline();
         }
     }
-    eprintln!("money: {} {} fire={}", t.money(0), t.money(1), t.fire(0));
+    eprintln!("money: {} {} fire={}", t.money(0), t.money(1), t.charge(0));
     // 「可让那名玩家获得200资金且自己获得1个saaya标记和1个[火罐]」.
     assert!(offered, "焕然一新的天空中 (1) window must open on a >=1000 payment");
     assert!(took, "the trade option must be offered");
-    assert_eq!(t.fire(0), 1, "P0 gains 1 fire");
+    assert_eq!(t.charge(0), 1, "P0 gains 1 fire");
     assert_eq!(
         t.money(1),
         10_000 - 1520 + 200,
@@ -853,7 +853,7 @@ fn rimi_skill_teleports_to_farthest_agent() {
     eprintln!("rimi option: {msg}");
     t.answer(0, 0).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.fire(0), 0, "spent 3 fire");
+    assert_eq!(t.charge(0), 0, "spent 3 fire");
 }
 
 // =====================================================================
@@ -882,7 +882,7 @@ fn band_no_circle_reward() {
     if t.prompt().is_some() {
         let p = t.expect_prompt();
         assert!(
-            !p.title.key().contains("circle"),
+            !p.title.key().contains("pass_reward"),
             "CiRCLE reward offered anyway: {}",
             t.dump_prompt()
         );
@@ -948,8 +948,8 @@ fn ix_band_sticker_to_crystal_to_cash() {
     let band_x = t
         .field(0)
         .iter()
-        .find(|f| f.band_skill)
-        .map(|f| f.crystals)
+        .find(|f| f.group_skill)
+        .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         .unwrap_or(0);
     assert_eq!(band_x, 1, "1 crystal added");
 }

@@ -81,9 +81,9 @@ fn with_band(t: &mut Table) {
 
 /// Vanilla table with seat 0 named `character` (exclusive-card gate) but
 /// without bound skills.
-fn exclusive_table(character: &str) -> Table {
+fn exclusive_table(persona: &str) -> Table {
     let mut t = Table::vanilla(2);
-    t.set_character_raw(0, character);
+    t.set_character_raw(0, persona);
     t
 }
 
@@ -272,6 +272,7 @@ fn pipopa_contract() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
             ],
         )
     })
@@ -302,8 +303,8 @@ pub fn c_ppp_bang_dream_01(step: &Step<'_>) -> Result<(), String> {
         w.st
             .players
             .get(who)
-            .and_then(|p| p.field.iter().find(|f| f.band_skill))
-            .map(|f| f.crystals)
+            .and_then(|p| p.field.iter().find(|f| f.group_skill))
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
             .unwrap_or(0)
     };
     let (a, b) = (sum_band(step, true), sum_band(step, false));
@@ -343,7 +344,7 @@ fn bang_dream_contract() {
                 "band crystals {crystals0} -> {crystals1}, expected +1;                  field={:?}",
                 t.field(0)
                     .iter()
-                    .map(|f| (f.card.clone(), f.band_skill, f.crystals))
+                    .map(|f| (f.card.clone(), f.group_skill, f.counters.get("crystals").copied().unwrap_or(0)))
                     .collect::<Vec<_>>()
             ));
         }
@@ -359,6 +360,7 @@ fn bang_dream_contract() {
                 "discard:P0",
                 "pos:P0",
                 "crystals:P0",
+                "pool:",
                 "field:P0",
                 "houses:T",
                 "turn.",
@@ -385,13 +387,13 @@ pub fn c_ppp_better_sound_01(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let fire = |w: &game_core::engine::World| {
-        w.st.players.get(who).map(|p| (p.fire(), p.fire_max())).unwrap_or((0, 0))
+    let charge = |w: &game_core::engine::World| {
+        w.st.players.get(who).map(|p| (p.charge(), p.charge_max())).unwrap_or((0, 0))
     };
-    let (pre_f, pre_max) = fire(step.pre);
-    let (post_f, _) = fire(step.post);
+    let (pre_f, pre_max) = charge(step.pre);
+    let (post_f, _) = charge(step.post);
     if pre_f < pre_max && post_f - pre_f != 1 {
-        return Err(format!("fire {} -> {}, expected +1", pre_f, post_f));
+        return Err(format!("charge {} -> {}, expected +1", pre_f, post_f));
     }
     Ok(())
 }
@@ -420,13 +422,13 @@ fn better_sound_contract() {
         if t.pos(0) != EDOGAWA {
             return Err(format!("pos {}, expected 江户川乐器店 {EDOGAWA}", t.pos(0)));
         }
-        if t.fire(0) != held + 1 {
-            return Err(format!("fire {}, expected {}", t.fire(0), held + 1));
+        if t.charge(0) != held + 1 {
+            return Err(format!("fire {}, expected {}", t.charge(0), held + 1));
         }
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "state:P0:fire", "turn."],
+            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "state:P0:charge", "turn."],
         )
     })
     .expect("C-PPP-better-sound-01");
@@ -698,7 +700,7 @@ pub fn c_ppp_popipapapipopa_c1(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     let get = |w: &game_core::engine::World| {
         w.st.players.get(who).and_then(|p| {
-            p.field.iter().find(|f| f.card == POPIPAPAPIPOPA).map(|f| f.crystals)
+            p.field.iter().find(|f| f.card == POPIPAPAPIPOPA).map(|f| f.counters.get("crystals").copied().unwrap_or(0))
         })
     };
     if let (Some(a), Some(b)) = (get(step.pre), get(step.post)) {
@@ -809,7 +811,8 @@ fn popipapapipopa_crystal_reduces_spend() {
         frame(
             &pre,
             t.world(),
-            &["money:P0", "money:P1", "crystals:P0", "field:P0", "pos:P0", "hand:P0", "draw:P0", "discard:P0", "turn."],
+            &["money:P0", "money:P1", "crystals:P0",
+                "pool:", "field:P0", "pos:P0", "hand:P0", "draw:P0", "discard:P0", "turn."],
         )
     })
     .expect("C-PPP-popipapapipopa-c2");
@@ -1066,10 +1069,10 @@ fn kasumi_fire_on_hill_settle() {
         t.roll(1).unwrap();
         skip_all(&mut t);
 
-        if t.fire(0) != held + 1 {
+        if t.charge(0) != held + 1 {
             return Err(format!(
                 "fire {}, expected {} (C-PPP-kasumi-skill-01) events {:?}",
-                t.fire(0),
+                t.charge(0),
                 held + 1,
                 t.recent_keys(8)
             ));
@@ -1091,15 +1094,15 @@ fn kasumi_skill_teleports_to_own() {
         t.set_pos(0, CIRCLE);
         t.set_fire(0, 1, 1);
         let sid = t.skill_id(0, "非凡之星");
-        let fire0 = t.fire(0);
+        let fire0 = t.charge(0);
         t.skill(0, &sid).map_err(|e| format!("skill press: {e}"))?;
         answer_pick_tile(&mut t, 0, dest)?;
         skip_all(&mut t);
 
-        if t.fire(0) != fire0 - 1 {
+        if t.charge(0) != fire0 - 1 {
             return Err(format!(
                 "fire {}, expected {} (C-PPP-kasumi-skill-02)",
-                t.fire(0),
+                t.charge(0),
                 fire0 - 1
             ));
         }
@@ -1131,7 +1134,7 @@ fn rimi_skill_teleports_to_farthest_agent() {
         t.set_pos(0, me);
         t.set_fire(0, 3, 3);
         let sid = t.skill_id(0, "里美的决心");
-        let fire0 = t.fire(0);
+        let fire0 = t.charge(0);
         t.skill(0, &sid).map_err(|e| format!("skill press: {e}"))?;
         // Take whatever option the engine offers; the assertion below is the
         // pin on 「最远的地产商」.
@@ -1140,10 +1143,10 @@ fn rimi_skill_teleports_to_farthest_agent() {
         }
         skip_all(&mut t);
 
-        if t.fire(0) != fire0 - 3 {
+        if t.charge(0) != fire0 - 3 {
             return Err(format!(
                 "fire {}, expected {} (C-PPP-rimi-skill-02)",
-                t.fire(0),
+                t.charge(0),
                 fire0 - 3
             ));
         }
@@ -1197,18 +1200,18 @@ fn aoki_fire_for_band_crystal() {
         }
         skip_all(&mut t);
 
-        if t.fire(0) == 2 && t.crystals(0, BAND).unwrap_or(0) == crystals0 {
+        if t.charge(0) == 2 && t.crystals(0, BAND).unwrap_or(0) == crystals0 {
             return Err(format!(
                 "no optional 2-fire spend offered on 流星堂 pass \
                  (C-PPP-aoki-skill-03); fire={} crystals={}",
-                t.fire(0),
+                t.charge(0),
                 t.crystals(0, BAND).unwrap_or(0)
             ));
         }
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "fire {}, expected 0 after spending 2 (C-PPP-aoki-skill-03)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         if t.crystals(0, BAND).unwrap_or(0) != crystals0 + 1 {
@@ -1575,7 +1578,7 @@ fn auction_off_raises_fire_cap() {
         );
     }
     // [持续]「火罐上限加1」 over the vanilla baseline of 0.
-    let max1 = t.p(0).fire_max();
+    let max1 = t.p(0).charge_max();
     if max1 != 1 {
         panic!(
             "fire max {max1}, expected 1 (C-PPP-auction-off-c1: 上限加1 over baseline 0)"
@@ -1883,8 +1886,8 @@ pub fn verify_bang_dream(
         w.st.players[who]
             .field
             .iter()
-            .find(|f| f.band_skill)
-            .map(|f| f.crystals)
+            .find(|f| f.group_skill)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
             .unwrap_or(0)
     };
     let (a, b) = (band(pre), band(post));
@@ -1933,15 +1936,15 @@ fn bang_dream_verifier_rejects_mutants() {
     let v = verify_bang_wrap(dest);
 
     expect_reject("LESS crystal", &pre, &post, &events, &v, |w| {
-        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.band_skill) {
-            f.crystals = pre
+        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
+            f.counters.insert("crystals".into(), pre
                 .st
                 .players[0]
                 .field
                 .iter()
-                .find(|f| f.band_skill)
-                .map(|f| f.crystals)
-                .unwrap_or(0);
+                .find(|f| f.group_skill)
+                .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
+                .unwrap_or(0));
         }
     });
     expect_reject("LESS teleport", &pre, &post, &events, &v, |w| {
@@ -1951,8 +1954,8 @@ fn bang_dream_verifier_rejects_mutants() {
         w.st.players[1].money += 1;
     });
     expect_reject("WRONG crystal", &pre, &post, &events, &v, |w| {
-        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.band_skill) {
-            f.crystals += 1;
+        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
+            *f.counters.entry("crystals".into()).or_default() += 1;
         }
     });
 }
@@ -1972,9 +1975,9 @@ pub fn verify_better_sound(
             post.st.players[who].pos
         ));
     }
-    let dfire = post.st.players[who].fire() as i64 - pre.st.players[who].fire() as i64;
+    let dfire = post.st.players[who].charge() as i64 - pre.st.players[who].charge() as i64;
     // Cap may block; when room existed the delta is exactly 1.
-    let room = pre.st.players[who].fire() < pre.st.players[who].fire_max();
+    let room = pre.st.players[who].charge() < pre.st.players[who].charge_max();
     if room && dfire != 1 {
         return Err(format!("fire delta {dfire}, expected +1"));
     }
@@ -2009,7 +2012,7 @@ fn better_sound_verifier_rejects_mutants() {
     verify_better_sound(&pre, &post, &events, 0).expect("genuine better-sound post");
 
     expect_reject("LESS fire", &pre, &post, &events, &verify_better_wrap, |w| {
-        w.st.players[0].state_set("fire", 0);
+        w.st.players[0].state_set("charge", 0);
     });
     expect_reject("LESS teleport", &pre, &post, &events, &verify_better_wrap, |w| {
         w.st.players[0].pos = 0;
@@ -2018,7 +2021,7 @@ fn better_sound_verifier_rejects_mutants() {
         w.st.players[1].money += 1;
     });
     expect_reject("WRONG fire", &pre, &post, &events, &verify_better_wrap, |w| {
-        w.st.players[0].state_set("fire", 2);
+        w.st.players[0].state_set("charge", 2);
     });
 }
 
@@ -2194,7 +2197,7 @@ pub fn verify_popipapapipopa_pass(
             .field
             .iter()
             .find(|f| f.card == POPIPAPAPIPOPA)
-            .map(|f| f.crystals)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
             .unwrap_or(0)
     };
     let (a, b) = (get(pre), get(post));
@@ -2242,7 +2245,7 @@ fn popipapapipopa_pass_verifier_rejects_mutants() {
             .iter_mut()
             .find(|f| f.card == POPIPAPAPIPOPA)
         {
-            f.crystals = 0;
+            f.counters.insert("crystals".into(), 0);
         }
     });
     expect_reject("MORE extra crystal", &pre, &post, &events, &v, |w| {
@@ -2251,7 +2254,7 @@ fn popipapapipopa_pass_verifier_rejects_mutants() {
             .iter_mut()
             .find(|f| f.card == POPIPAPAPIPOPA)
         {
-            f.crystals += 1;
+            *f.counters.entry("crystals".into()).or_default() += 1;
         }
     });
     // MORE: duplicate the crystal effect event (the window must contain

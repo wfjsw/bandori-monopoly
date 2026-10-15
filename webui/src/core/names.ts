@@ -11,23 +11,23 @@ export const stateOf = (x: MatchPlayer, key: string): number => x.state?.[key]?.
 /** The mandated cap on a keyed state item; 0 when no skill has declared one. */
 export const stateMax = (x: MatchPlayer, key: string): number => x.state?.[key]?.max ?? 0;
 
-/** Use the seat's character once chosen; pre-selection seats still have users. */
-export function characterName(player?: Pick<MatchPlayer, "character" | "player">): string {
-  return player?.character ? D.character(player.character)?.display ?? player.character : player?.player ?? "";
+/** Use the seat's persona once chosen; pre-selection seats still have users. */
+export function personaName(player?: Pick<MatchPlayer, "persona" | "player">): string {
+  return player?.persona ? D.persona(player.persona)?.display ?? player.persona : player?.player ?? "";
 }
 
-/** In-match messages identify seats by character, tiles/cards from the data. */
+/** In-match messages identify seats by persona, tiles/cards from the data. */
 export function namesOf(st?: MatchState | null): Names {
   return {
-    playerId: (n) => characterName(st?.players[n]) || `#${n + 1}`,
+    playerId: (n) => personaName(st?.players[n]) || `#${n + 1}`,
     tile: (n) => {
       const t = D.tiles[n];
       return t ? t.name.replace(/\n/g, "") : `#${n}`;
     },
     card: (id) => cardTitle(id),
-    chara: (name) => D.character(name)?.display ?? name,
+    persona: (name) => D.persona(name)?.display ?? name,
     event: (id) => D.event(id)?.name ?? id,
-    band: (b) => D.band(b)?.name ?? b,
+    group: (b) => D.group(b)?.name ?? b,
   };
 }
 
@@ -37,6 +37,6 @@ export function turnNamesOf(st?: MatchState | null): Names {
   return { ...names, playerId: (n) => {
     const player = st?.players[n];
     const who = names.playerId(n);
-    return player?.character && player.player ? who + tr("common.paren", { x: player.player }) : who;
+    return player?.persona && player.player ? who + tr("common.paren", { x: player.player }) : who;
   } };
 }

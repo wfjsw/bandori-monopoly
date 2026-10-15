@@ -4,7 +4,7 @@
 //! uses, so the web client has one set of types for online and solo play.
 //!
 //! * `load_data` -- the contents of `/data/*` (`DATA_FILES`, no roster)
-//! * `roster_json` -- cards / characters / bands from the built ruleset
+//! * `roster_json` -- cards / personas / groups from the built ruleset
 //! * deck rules and saved deck slots (`deck_*`)
 //! * profile and progression (`profile_*`), persisted by the client
 //! * [`SoloMatch`] -- the full match engine running locally
@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{BandData, CardData, CharacterData, GameData, Roster, DATA_FILES};
+use game_core::data::{GroupData, CardData, PersonaData, GameData, Roster, DATA_FILES};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
@@ -114,9 +114,9 @@ fn parse<T: serde::de::DeserializeOwned>(what: &str, s: &str) -> Result<T, JsErr
     serde_json::from_str(s).map_err(|e| JsError::new(&format!("{what}: {e}")))
 }
 
-fn character<'a>(d: &'a GameData, name: &str) -> Result<&'a CharacterData, JsError> {
-    d.character(name)
-        .ok_or_else(|| JsError::new(&format!("unknown character {name}")))
+fn persona<'a>(d: &'a GameData, name: &str) -> Result<&'a PersonaData, JsError> {
+    d.persona(name)
+        .ok_or_else(|| JsError::new(&format!("unknown persona {name}")))
 }
 
 /// Build `GameData` from a [`load_data`] payload plus a roster, and install it.
@@ -181,8 +181,8 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
 }
 
 /// The ruleset roster in the three legacy data-file shapes, one object:
-/// `{"cards":[...],"characters":[...],"bands":[...]}` with camelCase rows
-/// (the old `cards.json` / `characters.json` / `bands.json` shapes minus the
+/// `{"cards":[...],"personas":[...],"groups":[...]}` with camelCase rows
+/// (the old `cards.json` / `personas.json` / `groups.json` shapes minus the
 /// display-only overlay fields, which live in `skill_simple.json`).
 ///
 /// Empty arrays when no ruleset is built -- does not throw. Call
@@ -193,14 +193,14 @@ pub fn roster_json() -> String {
     #[derive(Serialize)]
     struct RosterJson {
         cards: Vec<CardData>,
-        characters: Vec<CharacterData>,
-        bands: Vec<BandData>,
+        personas: Vec<PersonaData>,
+        groups: Vec<GroupData>,
     }
     let r = roster();
     json(&RosterJson {
         cards: r.cards,
-        characters: r.characters,
-        bands: r.bands,
+        personas: r.personas,
+        groups: r.groups,
     })
 }
 
@@ -261,28 +261,28 @@ pub fn data_files() -> String {
 
 // ------------------------------------------------------------------ decks
 
-/// Card ids `character` may put in a deck, in display order.
+/// Card ids `persona` may put in a deck, in display order.
 #[wasm_bindgen]
-pub fn deck_pool(character_name: &str) -> Result<String, JsError> {
+pub fn deck_pool(persona_name: &str) -> Result<String, JsError> {
     let d = data()?;
-    let c = character(&d, character_name)?;
+    let c = persona(&d, persona_name)?;
     Ok(json(
         &deck::pool(&d, c).iter().map(|k| &k.id).collect::<Vec<_>>(),
     ))
 }
 
 #[wasm_bindgen]
-pub fn deck_preset(character_name: &str) -> Result<String, JsError> {
+pub fn deck_preset(persona_name: &str) -> Result<String, JsError> {
     let d = data()?;
-    Ok(json(&deck::preset(&d, character(&d, character_name)?)))
+    Ok(json(&deck::preset(&d, persona(&d, persona_name)?)))
 }
 
 /// The deck 托管 / a standard bot should submit at this table: the deck book's
-/// entry for the public key when it has one, else the character's preset
+/// entry for the public key when it has one, else the persona's preset
 /// (`docs/BOT.md` §3.7). Pure -- no RNG.
 ///
 /// * `seat` -- own seat (turn order index).
-/// * `opponents_json` -- the other seats' characters in seat order
+/// * `opponents_json` -- the other seats' personas in seat order
 ///   (`["...", ...]`). Never an opponent's deck.
 ///
 /// The book must match the running ruleset's hash (the one `ruleset_build`
@@ -290,12 +290,12 @@ pub fn deck_preset(character_name: &str) -> Result<String, JsError> {
 /// otherwise the whole book is ignored and this is just [`deck_preset`].
 #[wasm_bindgen]
 pub fn deck_suggest(
-    character_name: &str,
+    persona_name: &str,
     seat: i32,
     opponents_json: &str,
 ) -> Result<String, JsError> {
     let d = data()?;
-    let c = character(&d, character_name)?;
+    let c = persona(&d, persona_name)?;
     let opponents: Vec<String> = parse("opponents", opponents_json)?;
     Ok(json(&game_core::deck_book::suggest(
         &d,
@@ -308,10 +308,10 @@ pub fn deck_suggest(
 
 /// Usable ids from `ids_json`, at most 10, in pool order.
 #[wasm_bindgen]
-pub fn deck_clean(character_name: &str, ids_json: &str) -> Result<String, JsError> {
+pub fn deck_clean(persona_name: &str, ids_json: &str) -> Result<String, JsError> {
     let d = data()?;
     let ids: Vec<String> = parse("ids", ids_json)?;
-    Ok(json(&deck::clean(&d, character(&d, character_name)?, &ids)))
+    Ok(json(&deck::clean(&d, persona(&d, persona_name)?, &ids)))
 }
 
 /// The standard seat's resolved **strategy parameters** for this public table
@@ -321,22 +321,22 @@ pub fn deck_clean(character_name: &str, ids_json: &str) -> Result<String, JsErro
 /// [`deck_suggest`]. Pure -- no RNG.
 ///
 /// * `seat` -- own seat (turn order index). The strategy key is public and
-///   seat-less (`(character, opponents' bands)` → `(character)` → `(band)`);
+///   seat-less (`(persona, opponents' groups)` → `(persona)` → `(group)`);
 ///   the argument mirrors [`deck_suggest`]'s shape.
-/// * `opponents_json` -- the other seats' characters in seat order. Only
-///   their bands enter the key.
+/// * `opponents_json` -- the other seats' personas in seat order. Only
+///   their groups enter the key.
 ///
 /// The book must match the running ruleset's hash, the `standard` policy and
 /// this build's `params_version`; otherwise the whole book is ignored and
 /// this is just the defaults.
 #[wasm_bindgen]
 pub fn strategy_for(
-    character_name: &str,
+    persona_name: &str,
     seat: i32,
     opponents_json: &str,
 ) -> Result<String, JsError> {
     let d = data()?;
-    let c = character(&d, character_name)?;
+    let c = persona(&d, persona_name)?;
     let opponents: Vec<String> = parse("opponents", opponents_json)?;
     let _ = seat;
     Ok(json(&d.strategy_book.resolve(
@@ -348,11 +348,11 @@ pub fn strategy_for(
     )))
 }
 
-/// Why `character` may not use `card` (a `Msg` as JSON), or `undefined`.
+/// Why `persona` may not use `card` (a `Msg` as JSON), or `undefined`.
 #[wasm_bindgen]
-pub fn deck_why_not(character_name: &str, card: &str) -> Result<Option<String>, JsError> {
+pub fn deck_why_not(persona_name: &str, card: &str) -> Result<Option<String>, JsError> {
     let d = data()?;
-    let c = character(&d, character_name)?;
+    let c = persona(&d, persona_name)?;
     let k = d.card(card).ok_or_else(|| JsError::new("unknown card"))?;
     Ok(deck::cant_play(&d, c, k).map(|m| json(&m)))
 }
@@ -360,7 +360,7 @@ pub fn deck_why_not(character_name: &str, card: &str) -> Result<Option<String>, 
 #[wasm_bindgen]
 pub fn deck_slot_cards(
     profile_json: &str,
-    character_name: &str,
+    persona_name: &str,
     slot: i32,
 ) -> Result<String, JsError> {
     let d = data()?;
@@ -368,7 +368,7 @@ pub fn deck_slot_cards(
     Ok(json(&deck::cards(
         &d,
         &p,
-        character(&d, character_name)?,
+        persona(&d, persona_name)?,
         slot,
     )))
 }
@@ -378,26 +378,26 @@ pub fn deck_slot_cards(
 #[wasm_bindgen]
 pub fn deck_save(
     profile_json: &str,
-    character_name: &str,
+    persona_name: &str,
     slot: i32,
     ids_json: &str,
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let ids: Vec<String> = parse("ids", ids_json)?;
-    deck::save(&d, &mut p, character(&d, character_name)?, slot, &ids);
+    deck::save(&d, &mut p, persona(&d, persona_name)?, slot, &ids);
     Ok(json(&p))
 }
 
-/// Saved custom decks of `character`, in display order:
+/// Saved custom decks of `persona`, in display order:
 /// `[{"id": <int>, "name": <str>, "cards": [id, ...]}, ...]`. `name` is the
 /// user-editable label ("" = auto, shown as 「卡组 n」/"Deck n"); `cards` are
 /// cleaned to what is usable today. Id 0 (the preset) is not included.
 #[wasm_bindgen]
-pub fn deck_list(profile_json: &str, character_name: &str) -> Result<String, JsError> {
+pub fn deck_list(profile_json: &str, persona_name: &str) -> Result<String, JsError> {
     let d = data()?;
     let p: PlayerProfile = parse("profile", profile_json)?;
-    let c = character(&d, character_name)?;
+    let c = persona(&d, persona_name)?;
 
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
@@ -422,14 +422,14 @@ pub fn deck_list(profile_json: &str, character_name: &str) -> Result<String, JsE
 #[wasm_bindgen]
 pub fn deck_create(
     profile_json: &str,
-    character_name: &str,
+    persona_name: &str,
     name: &str,
     ids_json: &str,
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let ids: Vec<String> = parse("ids", ids_json)?;
-    deck::create(&d, &mut p, character(&d, character_name)?, name, &ids);
+    deck::create(&d, &mut p, persona(&d, persona_name)?, name, &ids);
     Ok(json(&p))
 }
 
@@ -438,12 +438,12 @@ pub fn deck_create(
 #[wasm_bindgen]
 pub fn deck_duplicate(
     profile_json: &str,
-    character_name: &str,
+    persona_name: &str,
     slot: i32,
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::duplicate(&d, &mut p, character(&d, character_name)?, slot);
+    deck::duplicate(&d, &mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -452,13 +452,13 @@ pub fn deck_duplicate(
 #[wasm_bindgen]
 pub fn deck_rename(
     profile_json: &str,
-    character_name: &str,
+    persona_name: &str,
     slot: i32,
     name: &str,
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::rename(&mut p, character(&d, character_name)?, slot, name);
+    deck::rename(&mut p, persona(&d, persona_name)?, slot, name);
     Ok(json(&p))
 }
 
@@ -467,12 +467,12 @@ pub fn deck_rename(
 #[wasm_bindgen]
 pub fn deck_delete(
     profile_json: &str,
-    character_name: &str,
+    persona_name: &str,
     slot: i32,
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::delete(&mut p, character(&d, character_name)?, slot);
+    deck::delete(&mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
@@ -481,30 +481,30 @@ pub fn deck_delete(
 #[wasm_bindgen]
 pub fn deck_move(
     profile_json: &str,
-    character_name: &str,
+    persona_name: &str,
     slot: i32,
     delta: i32,
 ) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::move_by(&mut p, character(&d, character_name)?, slot, delta);
+    deck::move_by(&mut p, persona(&d, persona_name)?, slot, delta);
     Ok(json(&p))
 }
 
 #[wasm_bindgen]
-pub fn deck_choose(profile_json: &str, character_name: &str, slot: i32) -> Result<String, JsError> {
+pub fn deck_choose(profile_json: &str, persona_name: &str, slot: i32) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    deck::choose(&mut p, character(&d, character_name)?, slot);
+    deck::choose(&mut p, persona(&d, persona_name)?, slot);
     Ok(json(&p))
 }
 
 /// Last chosen deck id if it still holds a complete deck, else 0 (preset).
 #[wasm_bindgen]
-pub fn deck_chosen_slot(profile_json: &str, character_name: &str) -> Result<i32, JsError> {
+pub fn deck_chosen_slot(profile_json: &str, persona_name: &str) -> Result<i32, JsError> {
     let d = data()?;
     let p: PlayerProfile = parse("profile", profile_json)?;
-    Ok(deck::chosen_slot(&d, &p, character(&d, character_name)?))
+    Ok(deck::chosen_slot(&d, &p, persona(&d, persona_name)?))
 }
 
 // ------------------------------------------------------------------ profile
@@ -539,9 +539,9 @@ pub fn profile_refresh_daily(profile_json: &str, today: &str) -> Result<String, 
 }
 
 #[wasm_bindgen]
-pub fn profile_set_fire_per_game(profile_json: &str, count: i32) -> Result<String, JsError> {
+pub fn profile_set_charge_per_game(profile_json: &str, count: i32) -> Result<String, JsError> {
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    p.set_fire_per_game(count);
+    p.set_charge_per_game(count);
     Ok(json(&p))
 }
 
@@ -559,13 +559,13 @@ pub fn profile_apply_match(
     mode: i32,
     rank: i32,
     players: i32,
-    character_name: &str,
+    persona_name: &str,
     now: &str,
     replay_id: &str,
 ) -> Result<String, JsError> {
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let mode = MatchMode::from_i32(mode).unwrap_or_default();
-    let reward = p.apply_match(mode, rank, players, character_name, now, replay_id);
+    let reward = p.apply_match(mode, rank, players, persona_name, now, replay_id);
     Ok(json(&Applied { profile: p, reward }))
 }
 
@@ -842,7 +842,7 @@ impl SoloMatch {
         self.m.inner_mut().tick(dt);
     }
 
-    /// Skip ban/pick/deck with random characters and preset decks.
+    /// Skip ban/pick/deck with random personas and preset decks.
     pub fn quick_start(&mut self) {
         self.m.quick_start();
     }

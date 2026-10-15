@@ -629,7 +629,7 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
             "decisionKey": format!("{key:016x}"),
         })));
     }
-    // One searching ponder per seat per public turn (the idle probe fires
+    // One searching ponder per seat per public turn (the idle probe ticks
     // every 200 ms while the "next turn is near" gate holds).
     if idle {
         let turn_id = (view.state.round, view.state.turn);

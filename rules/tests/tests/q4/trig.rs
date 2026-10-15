@@ -38,7 +38,7 @@ fn event_names(e: &MatchEvent, rule: &str) -> bool {
     for v in e.msg.a.values() {
         match v {
             game_core::msg::Arg::Card(c) if c == rule => return true,
-            game_core::msg::Arg::Text(s) | game_core::msg::Arg::Char(s) | game_core::msg::Arg::Band(s)
+            game_core::msg::Arg::Text(s) | game_core::msg::Arg::Persona(s) | game_core::msg::Arg::Group(s)
                 if s == rule || s.contains(rule) =>
             {
                 return true

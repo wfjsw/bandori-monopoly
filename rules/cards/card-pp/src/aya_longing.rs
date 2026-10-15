@@ -37,7 +37,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
 （1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
 （2）[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。"#)
         .cell(r#"D16"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"丸山彩"#)]));
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
 fn shave_x(player_id: i32) -> i32 {

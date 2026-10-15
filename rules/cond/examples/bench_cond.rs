@@ -51,17 +51,13 @@ fn window() -> WindowCtx {
         players: (0..4)
             .map(|i| PlayerSnap {
                 money: 500 + i * 100,
-                character: i,
-                band: i % 2,
+                persona: i,
+                group: i % 2,
                 ..PlayerSnap::default()
             })
             .collect(),
         tile_ids: [("festival".to_string(), 9)].into_iter().collect(),
-        circle_tiles: vec![0],
-        ring_tiles: vec![],
-        live_house_tiles: vec![],
-        buyable_tiles: vec![],
-        tile_kinds: vec![],
+        tile_kinds: vec!["circle".to_string()],
         tile_attrs: Default::default(),
         tile_classes: vec![],
         tile_count: 12,
@@ -74,9 +70,9 @@ fn candidate(owner: i64) -> CandidateCtx {
     CandidateCtx {
         owner,
         owner_money: 500 + owner * 100,
-        owner_fire: 2,
-        owner_character: owner,
-        owner_band: owner % 2,
+        owner_charge: 2,
+        owner_persona: owner,
+        owner_group: owner % 2,
         card_id: 42,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
         tok_names: [("水母标记".to_string(), 1)].into_iter().collect(),

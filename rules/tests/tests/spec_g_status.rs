@@ -40,7 +40,22 @@ fn finish_turn(t: &mut Table, who: usize) {
         return;
     }
     let _ = t.roll(who);
+    // G-SETTLE-06/07: a deed settle opens an optional buy/build prompt and
+    // halts the routine; decline it so the turn end runs.
+    drain(t);
     let _ = t.end(who);
+    drain(t);
+}
+
+/// Answer every open prompt with its decline.
+fn drain(t: &mut Table) {
+    for _ in 0..40 {
+        if t.prompt().is_none() {
+            return;
+        }
+        t.decline();
+    }
+    panic!("prompts never stopped: {}", t.dump_prompt());
 }
 
 /// A `"text"` `log.end_turn` line for `who` (the window's turn-end mark).

@@ -28,14 +28,14 @@ crate::host_subset!(skills_pp_dispatch {
     set_held_name => arm_set_held_name,
     place_card_at => arm_place_card,
     set_dest => arm_set_dest,
-    add_band_crystals => arm_add_band_crystals,
-    band_crystals => arm_band_crystals,
+    add_group_pool => arm_add_band_crystals,
+    group_pool => arm_band_crystals,
     counter_self => arm_counter_self,
     add_counter_self => arm_add_counter_self,
     player_count => arm_player_count,
     player_out => arm_player_out,
-    character_is => arm_character_is,
-    in_band => arm_in_band,
+    persona_is => arm_character_is,
+    in_group => arm_in_band,
     ask => arm_ask,
     hand_count => arm_hand_count,
     take_card => arm_take_card,
@@ -70,11 +70,11 @@ fn skills_pp_world(user: i32) {
     world::with_world_mut(|w| {
         w.trig_player = user;
         w.symbolic_answers = true;
-        // Pin owner as Pastel✽Palettes + 丸山彩 so band_is guards admit
+        // Pin owner as Pastel✽Palettes + 丸山彩 so group_is guards admit
         // (the sparse world leaves character/band at 0). Overwritten per-harness
         // when a different character is under proof.
-        w.band_id[user as usize] = crate::intern::intern("Pastel✽Palettes").0;
-        w.character_id[user as usize] = crate::intern::intern("丸山彩").0;
+        w.group_id[user as usize] = crate::intern::intern("Pastel✽Palettes").0;
+        w.persona_id[user as usize] = crate::intern::intern("丸山彩").0;
         w.hand_resonance = [0; MAX_PLAYERS];
         for p in 0..2 {
             w.key_set(p as i32, up, w.fans_pos[p]);
@@ -94,12 +94,12 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
     // Pin the owner as a Pastel✽Palettes character so the hook's guard admits.
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
-    w.character_id[me as usize] = crate::intern::intern("丸山彩").0;
+    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.persona_id[me as usize] = crate::intern::intern("丸山彩").0;
     let pre_pos = w.fans_pos[me as usize];
     world::reset_world(w);
 
-    let gid = crate::guard_id!("band_is(owner, 'Pastel✽Palettes')");
+    let gid = crate::guard_id!("group_is(owner, 'Pastel✽Palettes')");
     let pre_w = world::with_world(|ww| {
         // re-read a shallow view: fill_from_world takes &World
         // We already reset; build ctx from the live world via a snapshot pass.
@@ -112,8 +112,8 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
         let mut t = world::World::new();
         t.n_players = world::with_world(|ww| ww.n_players);
         for p in 0..MAX_PLAYERS {
-            t.band_id[p] = world::with_world(|ww| ww.band_id[p]);
-            t.character_id[p] = world::with_world(|ww| ww.character_id[p]);
+            t.group_id[p] = world::with_world(|ww| ww.group_id[p]);
+            t.persona_id[p] = world::with_world(|ww| ww.persona_id[p]);
             t.money[p] = world::with_world(|ww| ww.money[p]);
             t.out[p] = world::with_world(|ww| ww.out[p]);
             t.fans_pos[p] = world::with_world(|ww| ww.fans_pos[p]);
@@ -136,7 +136,7 @@ fn aya_with_01_five_fans_iff_at(user: i32) {
         return;
     }
 
-    invoke::unwrap_done(skill_characters::aya_with::at_start_kani(me));
+    invoke::unwrap_done(skill_personas::aya_with::at_start_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.fans_pos[me as usize] == spec::skills_pp::char_start_five_fans(pre_pos),
@@ -183,10 +183,10 @@ pub fn aya_with_01_mutant_is_detected() {
     let me = 0i32;
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre_pos = w.fans_pos[me as usize];
     world::reset_world(w);
-    invoke::unwrap_done(skill_characters::aya_with::at_start_kani(me));
+    invoke::unwrap_done(skill_personas::aya_with::at_start_kani(me));
     let post = world::snapshot();
     crate::kassert!(
         post.fans_pos[me as usize] != spec::skills_pp::char_start_five_fans_mutant(pre_pos),
@@ -207,7 +207,7 @@ fn aya_with_02_pay_discount_iff_at(user: i32) {
 
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let up = w.fans_pos[me as usize];
     let pre_amount = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 5_000);
@@ -216,7 +216,7 @@ fn aya_with_02_pay_discount_iff_at(user: i32) {
     w.pay_amount = pre_amount;
     world::reset_world(w);
 
-    invoke::unwrap_done(skill_characters::aya_with::on_pay_kani(me));
+    invoke::unwrap_done(skill_personas::aya_with::on_pay_kani(me));
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize]; // fans flipped reverse
     kani::cover!(y > 0, "chose some Y");
@@ -256,7 +256,7 @@ pub fn aya_with_02_mutant_is_detected() {
     let me = 0i32;
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let up = w.fans_pos[me as usize];
     kani::assume(up >= 1);
     let pre_amount = kani::any();
@@ -265,7 +265,7 @@ pub fn aya_with_02_mutant_is_detected() {
     w.trig_value = pre_amount;
     w.pay_amount = pre_amount;
     world::reset_world(w);
-    invoke::unwrap_done(skill_characters::aya_with::on_pay_kani(me));
+    invoke::unwrap_done(skill_personas::aya_with::on_pay_kani(me));
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize];
     if y >= 1 {
@@ -317,11 +317,11 @@ pub fn band_idol_02_body_never_overflows() {
     let me = 0i32;
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let down = w.fans_neg[me as usize];
     kani::assume(down >= 1);
     world::reset_world(w);
-    invoke::unwrap_done(skill_bands::pastel::at_start_kani(me));
+    invoke::unwrap_done(skill_groups::pastel::at_start_kani(me));
     // Book allows crystals = min(X - down, 10) when X > down. The body's
     // prompt max is `have`, so X > down is impossible and no AddCounter
     // overflow is produced. Assert the gap is reachable in the *spec*:
@@ -348,7 +348,7 @@ fn band_idol_04_tick_iff_at(user: i32) {
 
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre = kani::any();
     kani::assume(pre >= 0 && pre <= 10);
     // Crystals live on the on-card `crystals` counter (`field_crystals`),
@@ -356,7 +356,7 @@ fn band_idol_04_tick_iff_at(user: i32) {
     w.self_crystals = pre;
     w.trig_player = me;
     world::reset_world(w);
-    invoke::unwrap_done(skill_bands::pastel::at_turn_start_kani(me));
+    invoke::unwrap_done(skill_groups::pastel::at_turn_start_kani(me));
     let post = world::snapshot();
     let _ = post;
     let cry = world::with_world(|ww| ww.field_crystals(ww.last_uid));
@@ -475,7 +475,7 @@ fn band_idol_01_start_grant_iff_at(user: i32) {
 
     skills_pp_world(me);
     let mut w = world::with_world(|ww| ww.clone());
-    w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
+    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     // Place the band card so `placed_cards` finds it (first copy).
     world::reset_world(w);
     // The body requires the card on someone's field. Place it via the host.
@@ -494,11 +494,11 @@ fn band_idol_01_start_grant_iff_at(user: i32) {
         ww.next_uid = 2;
     });
     let pre_down = world::with_world(|ww| ww.fans_neg);
-    invoke::unwrap_done(skill_bands::pastel::at_start_kani(me));
+    invoke::unwrap_done(skill_groups::pastel::at_start_kani(me));
     let post_down = world::with_world(|ww| ww.fans_neg);
     for p in 0..MAX_PLAYERS {
         let is_pp = world::with_world(|ww| {
-            ww.band_id[p] == crate::intern::intern("Pastel✽Palettes").0
+            ww.group_id[p] == crate::intern::intern("Pastel✽Palettes").0
         });
         if is_pp || p >= world::with_world(|ww| ww.n_players) as usize {
             crate::kassert!(
@@ -542,7 +542,7 @@ pub fn band_idol_03_no_reward_formula() {
     );
 }
 // ===========================================================================
-// C-PP-first-accident-02 (moved from proofs/pp.rs — needs `skills-characters`
+// C-PP-first-accident-02 (moved from proofs/pp.rs — needs `skills-personas`
 // for the 丸山彩 (2) body; the pp unit's features do not compile that crate,
 // so the harness was cfg'd out and `cargo kani` "Failed to match" it).
 // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」

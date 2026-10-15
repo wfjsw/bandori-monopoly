@@ -5,7 +5,7 @@
 //! Black-box: a real [`Match`] driven the way a client drives it (`act`
 //! commands, prompt answers), with the board arranged through the `world_mut`
 //! test seam. Every player is a human in a Solo match, so nothing happens on
-//! its own -- no bot turns, no prompt time-outs -- and a [反击] window is
+//! its own -- no bot turns, no prompt time-outs -- and a counteraction window is
 //! offered to whoever holds an eligible card.
 //!
 //! Seats are fixed: player `k` is member `k + 1` and sits in seat `k`, so every
@@ -44,13 +44,13 @@ pub const SEED: u64 = 20261006;
 /// (`Roster::from_fixture`) rather than the ruleset: `data()` is a `OnceLock`
 /// that `rules()` itself calls, so it cannot ask the ruleset without inverting
 /// that dependency. Least invasive and matches the game-core tests; swap for a
-/// `dump_roster` fixture when `data/{cards,characters,bands}.json` retire.
+/// `dump_roster` fixture when `data/{cards,personas,groups}.json` retire.
 pub fn data() -> Arc<GameData> {
     static DATA: OnceLock<Arc<GameData>> = OnceLock::new();
     DATA.get_or_init(|| {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
         let roster = Roster::from_fixture(&std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../game-core/tests/fixtures/roster.json"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/tests/fixtures/roster.json"),
         )
         .expect("roster fixture"))
         .expect("roster fixture parses");
@@ -99,9 +99,9 @@ pub fn tile(name: &str) -> usize {
         .unwrap_or_else(|| panic!("no tile named {name:?}"))
 }
 
-/// Every character name in the roster, in roster order.
-pub fn characters() -> Vec<String> {
-    data().characters.iter().map(|c| c.name.clone()).collect()
+/// Every persona name in the roster, in roster order.
+pub fn personas() -> Vec<String> {
+    data().personas.iter().map(|c| c.name.clone()).collect()
 }
 
 pub struct Table {
@@ -120,7 +120,7 @@ impl Table {
     /// [`Self::new`] with extra cards on top of each player's opening draw
     /// pile **before** `quick_start`, so a `deckBeforeGame` hook sees them.
     pub fn with_opening_draw(chars: &[&str], top_first: &[&str]) -> Self {
-        let names = characters();
+        let names = personas();
         let cs: Vec<&str> = names.iter().take(chars.len()).map(String::as_str).collect();
         let mut t = Self::new_with_draw(&cs, top_first);
         t.strip_skills();
@@ -156,7 +156,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         {
@@ -223,7 +223,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         m.quick_start();
@@ -257,10 +257,10 @@ impl Table {
     }
 
     /// `n` players with no skills at all and a clean board -- the setting for a
-    /// card's own behaviour. Characters are still set (exclusive cards read
-    /// them; use [`Table::set_character_raw`] to change one).
+    /// card's own behaviour. Personas are still set (exclusive cards read
+    /// them; use [`Table::set_persona_raw`] to change one).
     pub fn vanilla(n: usize) -> Self {
-        let names = characters();
+        let names = personas();
         let chars: Vec<&str> = names.iter().take(n).map(String::as_str).collect();
         let mut t = Self::new(&chars);
         t.strip_skills();
@@ -513,7 +513,7 @@ impl Table {
     }
 
     /// Index of the first option whose message (key or any argument) mentions
-    /// `needle` -- e.g. a card id in a [反击] window (`ask.counteract.play`).
+    /// `needle` -- e.g. a card id in a counteraction window (`ask.counteract.play`).
     pub fn option(&self, needle: &str) -> Option<i32> {
         let p = self.prompt()?;
         p.options
@@ -531,7 +531,7 @@ impl Table {
         })
     }
 
-    /// Is the open prompt a [反击] window offering `card`? Matches both the
+    /// Is the open prompt a counteraction window offering `card`? Matches both the
     /// hand-card label (`ask.counteract.play`) and the field-skill label
     /// (`ask.counteract.skill`).
     pub fn counteract_offered(&self, card: &str) -> bool {
@@ -544,7 +544,7 @@ impl Table {
         })
     }
 
-    /// Declare `card` in the open [反击] window as `who`.
+    /// Declare `card` in the open counteraction window as `who`.
     pub fn counteract(&mut self, who: usize, card: &str) -> Result<(), String> {
         let k = self
             .option(card)
@@ -577,7 +577,7 @@ impl Table {
 
     // ------------------------------------------------------------ arrange
 
-    /// Strip every bound skill (character and band) and the state they set.
+    /// Strip every bound skill (persona and group) and the state they set.
     pub fn strip_skills(&mut self) -> &mut Self {
         let w = self.m.world_mut();
         for p in w.st.players.iter_mut() {
@@ -588,11 +588,11 @@ impl Table {
         self
     }
 
-    /// A clean board: empty hands and piles, 10000 each, everyone on CiRCLE,
+    /// A clean board: empty hands and piles, 10000 each, everyone on the start square,
     /// no deeds / houses / mortgages / marks, no non-skill field cards, no
-    /// statuses, no pending turn-end callbacks. Start-time resources (fire pots
+    /// statuses, no pending turn-end callbacks. Start-time resources (charge pots
     /// 「初始N」, P✽P fans) are wiped too -- their caps stay, so a skill's
-    /// 「上限M」 still reads back. Use [`Table::set_fire`] to put a specific pot
+    /// 「上限M」 still reads back. Use [`Table::set_charge`] to put a specific pot
     /// back.
     pub fn clean(&mut self) -> &mut Self {
         let w = self.m.world_mut();
@@ -613,9 +613,9 @@ impl Table {
             for k in [key::STAY, key::STUN, key::STUN_START, key::EXILE, key::NO_HAND] {
                 p.state.remove(k);
             }
-            // A start-time gate like the fire pots: a band skill's 「无法获取
-            // [CiRCLE奖励]」 armed during `quick_start` must not leak into a
-            // `clean()`-ed board's CiRCLE pass. The veto is `prop::NO_REWARD`
+            // A start-time gate like the charge pots: a group skill's 「无法获取
+            // [the pass reward]」 armed during `quick_start` must not leak into a
+            // `clean()`-ed board's the start square pass. The veto is `prop::NO_REWARD`
             // on the source's rule instance now (`docs/TILES.md`), not a
             // per-player state latch.
             for f in p.field.iter_mut() {
@@ -623,7 +623,7 @@ impl Table {
             }
             p.state_set(key::EXILE_TO, -1);
             // Start-time resources: the value, not the cap.
-            p.state_set(key::FIRE, 0);
+            p.state_set(key::CHARGE, 0);
             p.tokens
                 .retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
@@ -637,13 +637,13 @@ impl Table {
         w.st.embers = vec![0; n];
         w.st.marks.clear();
         w.scheduled.clear();
-        w.ring_bonus = 0;
+        w.rule_param_bonus.clear();
         self
     }
 
-    /// Set a player's character **without** binding its skills.
-    pub fn set_character_raw(&mut self, who: usize, name: &str) {
-        self.m.world_mut().st.players[who].character = name.into();
+    /// Set a player's persona **without** binding its skills.
+    pub fn set_persona_raw(&mut self, who: usize, name: &str) {
+        self.m.world_mut().st.players[who].persona = name.into();
     }
 
     pub fn set_money(&mut self, who: usize, money: i32) {
@@ -697,12 +697,12 @@ impl Table {
         self.m.world_mut().st.players[who].state.insert(key.into(), v);
     }
 
-    /// Fire pots: `value` held, `max` cap.
-    pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
+    /// Charge pots: `value` held, `max` cap.
+    pub fn set_charge(&mut self, who: usize, value: i32, max: i32) {
         let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(key::FIRE, value);
-        let min = p.state_min(key::FIRE);
-        p.state_set_bounds(key::FIRE, min, max);
+        p.state_set(key::CHARGE, value);
+        let min = p.state_min(key::CHARGE);
+        p.state_set_bounds(key::CHARGE, min, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -771,16 +771,16 @@ impl Table {
         self.active_event(id).is_some()
     }
 
-    /// Crystal count on the event's board-owner rule instance (the public
+    /// Named bonus counter count on the event's board-owner rule instance (the public
     /// `ActiveEvent::counter` mirrors it).
-    pub fn event_crystals(&self, id: &str) -> Option<i32> {
+    pub fn event_counters(&self, id: &str) -> Option<i32> {
         self.m
             .world()
             .st
             .board_field
             .iter()
             .find(|f| f.card == format!("event:{id}"))
-            .map(|f| f.crystals)
+            .map(|f| f.counters.values().sum::<i32>())
     }
 
     // ------------------------------------------------------------ observe
@@ -851,37 +851,37 @@ impl Table {
         self.field(who).iter().any(|f| f.card == card)
     }
 
-    /// Crystals on `who`'s first field copy of `card` (None if not placed).
-    pub fn crystals(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.crystals)
+    /// Named bonus counters on `who`'s first field copy of `card` (None if not placed).
+    pub fn counters(&self, who: usize, card: &str) -> Option<i32> {
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.values().sum::<i32>())
     }
 
-    /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
-    /// card is not placed. This is where band-card crystals go now -- the band
+    /// Put `n` [named counters] on `who`'s first field copy of `card`. No-op when the
+    /// card is not placed. This is where group-card named counters go now -- the group
     /// skill's own instance, not a keyed state.
-    pub fn set_crystals(&mut self, who: usize, card: &str, n: i32) {
+    pub fn set_counters(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.crystals = n;
+            f.counters.insert(ruleset_core::counter::CRYSTALS.into(), n);
         }
     }
 
-    /// On-card [CP点] on `who`'s first field copy of `card` (None if not
-    /// placed) -- `FieldCard::cp`, 「自己[场上]N个[CP点]」 (user ruling
-    /// 2026-10-07: the CP points attached to the card). This is the number the
+    /// On-card [tile marks] on `who`'s first field copy of `card` (None if not
+    /// placed) -- the on-card mark counter, 「自己fieldN个[tile marks]」 (user
+    /// ruling 2026-10-07: the mark points attached to the card). This is the number the
     /// view's field-card counter badge shows.
-    pub fn cp_on_card(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.cp)
+    pub fn marks_on_card(&self, who: usize, card: &str) -> Option<i32> {
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get(ruleset_core::counter::CP).copied().unwrap_or(0))
     }
 
-    /// Put `n` on-card [CP点] on `who`'s first field copy of `card` (test seam,
-    /// the same shape as [`Self::set_crystals`]). No-op when the card is not
+    /// Put `n` on-card [tile marks] on `who`'s first field copy of `card` (test seam,
+    /// the same shape as [`Self::set_counters`]). No-op when the card is not
     /// placed. Does not raise `cpChanged` -- that rides a real write through
     /// `ctx::add_cp` / `add_cp_at`; use this only to arrange a starting count.
-    pub fn set_cp_on_card(&mut self, who: usize, card: &str, n: i32) {
+    pub fn set_marks_on_card(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.cp = n;
+            f.counters.insert(ruleset_core::counter::CP.into(), n);
         }
     }
 
@@ -895,20 +895,20 @@ impl Table {
 
     /// The skill on `who`'s field whose id contains `needle`.
     ///
-    /// Band skills win over character skills when both match: a needle like
-    /// `"CRYCHIC"` names the band (`skill:CRYCHIC:美好的往日幻影`) but also
-    /// appears inside 若叶睦（CRYCHIC）'s character-skill id, and the band one is
-    /// what a 「乐队技能卡」 clause means. Unique needles (a skill's own name)
+    /// Group skills win over persona skills when both match: a needle like
+    /// `"CRYCHIC"` names the group (`skill:CRYCHIC:美好的往日幻影`) but also
+    /// appears inside 若叶睦（CRYCHIC）'s persona-skill id, and the group one is
+    /// what a group-skill clause means. Unique needles (a skill's own name)
     /// resolve the same either way.
     pub fn skill_id(&self, who: usize, needle: &str) -> String {
         let mut hits: Vec<(bool, String)> = self
             .field(who)
             .into_iter()
             .filter(|f| f.card.starts_with("skill:") && f.card.contains(needle))
-            .map(|f| (f.band_skill, f.card))
+            .map(|f| (f.group_skill, f.card))
             .collect();
-        // Band skills first (stable within each group).
-        hits.sort_by_key(|(band, _)| !band);
+        // Group skills first (stable within each group).
+        hits.sort_by_key(|(is_group, _)| !is_group);
         hits.into_iter()
             .next()
             .map(|(_, c)| c)
@@ -923,8 +923,8 @@ impl Table {
         self.m.world().st.players[who].state_var(key)
     }
 
-    pub fn fire(&self, who: usize) -> i32 {
-        self.state(who, key::FIRE)
+    pub fn charge(&self, who: usize) -> i32 {
+        self.state(who, key::CHARGE)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

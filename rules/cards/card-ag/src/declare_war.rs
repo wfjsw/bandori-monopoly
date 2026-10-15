@@ -22,7 +22,7 @@ pub const DECLARE_WAR: CardDef = CardDef::new(
         .text(r#"[手]：
 [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。"#)
         .cell(r#"C2"#)
-        .fields(&[("band", r#"Afterglow"#), ("owner", "")]));
+        .fields(&[("group", r#"Afterglow"#), ("owner", "")]));
 
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你拥有的格子被其他玩家的卡效果影响时」

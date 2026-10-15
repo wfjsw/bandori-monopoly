@@ -105,8 +105,8 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
   for (const tok of x.tokens ?? []) if (tok.value > 0) out.push({ label: tok.name, n: tok.value });
   for (const fc of x.field ?? []) {
     const card = cardTitle(fc.card);
-    if (fc.crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.crystals });
-    if (fc.cp > 0) out.push({ label: `${card} · CP`, n: fc.cp });
+    if (fc.counters["crystals"] ?? 0 > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.counters["crystals"] ?? 0 });
+    if (fc.counters["cp"] ?? 0 > 0) out.push({ label: `${card} · CP`, n: fc.counters["cp"] ?? 0 });
     for (const [name, n] of Object.entries(fc.counters ?? {})) if (n > 0) out.push({ label: `${card} · ${name}`, n });
   }
   return out;
@@ -173,7 +173,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
                 return bb && <span className={s.status} title={tr("board.borrowedTip", { skill: cardTitle(bb.skill), who })}>{tr("board.borrowed", { who })}</span>;
               })()}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
+              <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "charge")}/{stateMax(x, "charge")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
               <span className={s.grave} title={tr("board.graveyardPile")} {...holdPeek(() => setPeek(i), () => setPeek(null))} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>

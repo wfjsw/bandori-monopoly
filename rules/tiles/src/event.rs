@@ -11,7 +11,10 @@ use ruleset_core::ctx;
 use card_sdk::abi::text_slot;
 use card_sdk::{CardDef, Msg, On};
 
-pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle("", None, settle)]).texts(&[(
+pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle("", None, settle)])
+    .board_role("tile")
+    .governs(&["cafe", "ryuseido"])
+    .texts(&[(
     0,
     text_slot::SETTLE,
     "",

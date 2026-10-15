@@ -37,7 +37,7 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
 [持续]：
 [消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区。"#)
         .cell(r#"G12"#)
-        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
+        .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();

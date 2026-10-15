@@ -1,7 +1,7 @@
 //! Strategy book format, back-off lookup and plumbing (`docs/BOT.md` §3.8 S1).
 //!
 //! The gate for S1 is byte-identical behaviour with the empty book (bar the
-//! [反击] default, which user ruling 2026-10-08 moved from "never declare" to
+//! counteraction default, which user ruling 2026-10-08 moved from "never declare" to
 //! `DEFAULT_COUNTERACT_PROPENSITY_MILLI` -- "bots must be able to counteract");
 //! the tests below pin the lookup contract, the stale-book fallback, the
 //! partial-params merge, and that a live parameter change is actually read by
@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use game_core::data::{CharacterData, GameData};
+use game_core::data::{PersonaData, GameData};
 use game_core::engine::{Match, StubRules, BUY_RESERVE};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -22,8 +22,8 @@ use game_core::strategy::{
 };
 use game_core::MatchMode;
 
-fn me<'a>(d: &'a GameData) -> &'a CharacterData {
-    d.character("户山香澄").unwrap()
+fn me<'a>(d: &'a GameData) -> &'a PersonaData {
+    d.persona("Alpha").unwrap()
 }
 
 /// A parameter set that only names `field`, everything else default.
@@ -33,11 +33,11 @@ fn params_with(f: impl FnOnce(&mut StrategyParams)) -> StrategyParams {
     p
 }
 
-fn entry(me: &str, band: &str, opponent_bands: &[&str], params: StrategyParams) -> StrategyEntry {
+fn entry(me: &str, group: &str, opponent_groups: &[&str], params: StrategyParams) -> StrategyEntry {
     StrategyEntry {
         me: me.into(),
-        band: band.into(),
-        opponent_bands: opponent_bands.iter().map(|s| s.to_string()).collect(),
+        group: group.into(),
+        opponent_groups: opponent_groups.iter().map(|s| s.to_string()).collect(),
         deck: Vec::new(),
         params,
     }
@@ -51,12 +51,12 @@ fn book(entries: Vec<StrategyEntry>) -> StrategyBook {
     b.generated_at = "test".into();
     b.params_version = PARAMS_VERSION;
     for e in entries {
-        if !e.me.is_empty() && !e.opponent_bands.is_empty() {
-            b.char_bands.push(e);
+        if !e.me.is_empty() && !e.opponent_groups.is_empty() {
+            b.persona_groups.push(e);
         } else if !e.me.is_empty() {
             b.me.push(e);
         } else {
-            b.band.push(e);
+            b.groups.push(e);
         }
     }
     b
@@ -86,13 +86,13 @@ fn defaults_equal_todays_constants() {
     assert_eq!(p.bid_frac_milli, 750);
     assert_eq!(p.mortgage_house_key_milli, 1_000);
     assert_eq!(p.mortgage_price_key_milli, 1_000);
-    // Sparse maps are empty = neutral / the [反击] base rate (see below).
+    // Sparse maps are empty = neutral / the counteraction base rate (see below).
     assert!(p.cards.is_empty());
     assert!(p.skills.is_empty());
     assert!(p.counteract.is_empty());
     assert_eq!(p.card("anything"), CardPlayParams::default());
     assert_eq!(p.skill("anything"), SkillParams::default());
-    // Ruling 2026-10-08 ("bots must be able to counteract"): the [反击] default
+    // Ruling 2026-10-08 ("bots must be able to counteract"): the counteraction default
     // is the one default that is NOT one of the old constants -- it moved from
     // "never declare" to `DEFAULT_COUNTERACT_PROPENSITY_MILLI`.
     assert_eq!(
@@ -148,32 +148,32 @@ fn default_params_are_the_old_formulas() {
 #[test]
 fn lookup_backs_off_in_order() {
     let d = data();
-    let c = me(&d); // 户山香澄, Poppin' Party
-    let char_bands = params_with(|p| p.buy_reserve = 1_111);
+    let c = me(&d); // Alpha, GroupA
+    let persona_groups = params_with(|p| p.buy_reserve = 1_111);
     let me_only = params_with(|p| p.buy_reserve = 2_222);
-    let band = params_with(|p| p.buy_reserve = 3_333);
+    let group_params = params_with(|p| p.buy_reserve = 3_333);
     let b = book(vec![
-        entry("户山香澄", "", &["Afterglow"], char_bands.clone()),
-        entry("户山香澄", "", &[], me_only.clone()),
-        entry("", "Poppin' Party", &[], band.clone()),
+        entry("Alpha", "", &["GroupB"], persona_groups.clone()),
+        entry("Alpha", "", &[], me_only.clone()),
+        entry("", "GroupA", &[], group_params.clone()),
     ]);
     let lookup = |who: &str, opponents: &[&str]| {
         let opp: Vec<String> = opponents.iter().map(|s| s.to_string()).collect();
-        let c = d.character(who).unwrap();
+        let c = d.persona(who).unwrap();
         b.lookup(&d, c, &opp, None, Some("stub"))
     };
 
-    // 1. (me, opponents' bands multiset)
-    assert_eq!(lookup("户山香澄", &["美竹兰"]), Some(char_bands));
-    // 2. same character, other bands.
-    assert_eq!(lookup("户山香澄", &["花园多惠"]), Some(me_only));
-    // 3. band level: another Poppin' Party character the `me` levels do not name.
-    assert_eq!(lookup("花园多惠", &["美竹兰"]), Some(band));
-    // 4. defaults: an Afterglow character the `me` levels do not name.
-    assert_eq!(lookup("美竹兰", &["花园多惠"]), None);
+    // 1. (me, opponents' groups multiset)
+    assert_eq!(lookup("Alpha", &["Delta"]), Some(persona_groups));
+    // 2. same persona, other groups.
+    assert_eq!(lookup("Alpha", &["Beta"]), Some(me_only));
+    // 3. group level: another GroupA persona the `me` levels do not name.
+    assert_eq!(lookup("Beta", &["Delta"]), Some(group_params));
+    // 4. defaults: an GroupB persona the `me` levels do not name.
+    assert_eq!(lookup("Delta", &["Beta"]), None);
     // Resolve with nothing matching at all falls to the defaults.
     let empty = StrategyBook::default();
-    let opp: Vec<String> = vec!["美竹兰".to_string()];
+    let opp: Vec<String> = vec!["Delta".to_string()];
     assert_eq!(
         empty.resolve(&d, c, &opp, None, Some("stub")),
         StrategyParams::default()
@@ -187,8 +187,8 @@ fn first_hit_within_a_level_wins() {
     let first = params_with(|p| p.buy_reserve = 1);
     let second = params_with(|p| p.buy_reserve = 2);
     let b = book(vec![
-        entry("户山香澄", "", &[], first.clone()),
-        entry("户山香澄", "", &[], second),
+        entry("Alpha", "", &[], first.clone()),
+        entry("Alpha", "", &[], second),
     ]);
     assert_eq!(b.lookup(&d, c, &[], None, Some("stub")), Some(first));
 }
@@ -200,28 +200,28 @@ fn stale_hash_policy_and_params_version_ignore_the_book() {
     let d = data();
     let c = me(&d);
     let p = params_with(|p| p.buy_reserve = 42);
-    let opp: Vec<String> = vec!["美竹兰".to_string()];
+    let opp: Vec<String> = vec!["Delta".to_string()];
 
     // Stale ruleset hash: the whole book is ignored.
-    let mut b = book(vec![entry("户山香澄", "", &[], p.clone())]);
+    let mut b = book(vec![entry("Alpha", "", &[], p.clone())]);
     b.ruleset_sha256 = "some-other-ruleset".into();
     assert_eq!(b.lookup(&d, c, &opp, None, Some("stub")), None);
     assert_eq!(b.resolve(&d, c, &opp, None, Some("stub")), StrategyParams::default());
 
     // Policy mismatch: same story.
-    let mut b = book(vec![entry("户山香澄", "", &[], p.clone())]);
+    let mut b = book(vec![entry("Alpha", "", &[], p.clone())]);
     b.policy = "chaos".into();
     assert_eq!(b.lookup(&d, c, &opp, None, Some("stub")), None);
 
     // A different parameter schema: same story.
-    let mut b = book(vec![entry("户山香澄", "", &[], p.clone())]);
+    let mut b = book(vec![entry("Alpha", "", &[], p.clone())]);
     b.params_version = PARAMS_VERSION + 1;
     assert_eq!(b.lookup(&d, c, &opp, None, Some("stub")), None);
 
     // A caller without a ruleset in hand only skips the hash check.
-    let ok = book(vec![entry("户山香澄", "", &[], p.clone())]);
+    let ok = book(vec![entry("Alpha", "", &[], p.clone())]);
     assert_eq!(ok.lookup(&d, c, &opp, None, None), Some(p));
-    let mut b = book(vec![entry("户山香澄", "", &[], params_with(|p| p.buy_reserve = 42))]);
+    let mut b = book(vec![entry("Alpha", "", &[], params_with(|p| p.buy_reserve = 42))]);
     b.policy = "chaos".into();
     assert_eq!(b.lookup(&d, c, &opp, None, None), None);
 }
@@ -248,19 +248,19 @@ fn parses_the_documented_shape_and_merges_partial_params() {
       "policy": "standard",
       "generated_at": "2026-10-08",
       "params_version": 1,
-      "char_bands": [
+      "persona_groups": [
         {
-          "me": "户山香澄",
-          "opponent_bands": ["Afterglow"],
+          "me": "Alpha",
+          "opponent_groups": ["GroupB"],
           "params": { "buy_reserve": 5000 }
         }
       ],
       "me": [
-        { "me": "户山香澄", "params": { "build_reserve": 1, "play_card_chance_milli": 250 } }
+        { "me": "Alpha", "params": { "build_reserve": 1, "play_card_chance_milli": 250 } }
       ],
-      "band": [
+      "groups": [
         {
-          "band": "Poppin' Party",
+          "group": "GroupA",
           "deck": ["a", "b"],
           "params": {
             "cards": { "卡": { "play_weight_milli": 0 } },
@@ -278,7 +278,7 @@ fn parses_the_documented_shape_and_merges_partial_params() {
     let d = data();
     let c = me(&d);
     // Partial params merge over the defaults: only the named fields move.
-    let opp = vec!["美竹兰".to_string()]; // Afterglow
+    let opp = vec!["Delta".to_string()]; // GroupB
     let p = b.lookup(&d, c, &opp, None, Some("stub")).unwrap();
     assert_eq!(p.buy_reserve, 5_000);
     assert_eq!(p.build_reserve, 3_500, "untouched fields take the default");
@@ -286,22 +286,22 @@ fn parses_the_documented_shape_and_merges_partial_params() {
     assert_eq!(p.play_card_chance_milli, 700);
 
     // The next level's partial params, likewise.
-    let opp: Vec<String> = vec!["花园多惠".to_string()]; // Poppin' Party
+    let opp: Vec<String> = vec!["Beta".to_string()]; // GroupA
     let p = b.lookup(&d, c, &opp, None, Some("stub")).unwrap();
     assert_eq!(p.build_reserve, 1);
     assert_eq!(p.play_card_chance_milli, 250);
     assert_eq!(p.buy_reserve, BUY_RESERVE);
 
-    // A deck-tagged entry only applies to that deck. The band level names
-    // Poppin' Party -- use a character the `me` levels do not.
-    let band_c = d.character("花园多惠").unwrap();
+    // A deck-tagged entry only applies to that deck. The group level names
+    // GroupA -- use a persona the `me` levels do not.
+    let other_c = d.persona("Beta").unwrap();
     let any: Vec<String> = vec![];
     assert!(b
-        .lookup(&d, band_c, &[], Some(&any), Some("stub"))
+        .lookup(&d, other_c, &[], Some(&any), Some("stub"))
         .is_none());
     let named = vec!["a".to_string(), "b".to_string()];
     let p = b
-        .lookup(&d, band_c, &[], Some(&named), Some("stub"))
+        .lookup(&d, other_c, &[], Some(&named), Some("stub"))
         .expect("deck matches the entry");
     assert_eq!(p.card("卡").play_weight_milli, 0);
     assert_eq!(p.card("other").play_weight_milli, 1_000);
@@ -311,7 +311,7 @@ fn parses_the_documented_shape_and_merges_partial_params() {
         DEFAULT_COUNTERACT_PROPENSITY_MILLI
     );
     // Unknown deck cannot disprove the pair.
-    assert!(b.lookup(&d, band_c, &[], None, Some("stub")).is_some());
+    assert!(b.lookup(&d, other_c, &[], None, Some("stub")).is_some());
 
     assert!(StrategyBook::parse("{").is_err());
 }
@@ -387,14 +387,14 @@ fn a_live_parameter_change_moves_the_standard_bot() {
     assert!(baseline > 0, "the default policy must buy something");
 
     // Same seeds, buy reserve (all three phases) so high no purchase can
-    // leave it. Cover every character `quick_start` might deal out.
+    // leave it. Cover every persona `quick_start` might deal out.
     let mut book = StrategyBook::default();
     book.version = STRATEGY_BOOK_VERSION;
     book.ruleset_sha256 = "stub".into();
     book.policy = POLICY_STANDARD.into();
     book.generated_at = "test".into();
     book.params_version = PARAMS_VERSION;
-    for c in &d.characters {
+    for c in &d.personas {
         book.me.push(entry(
             &c.name,
             "",
@@ -413,18 +413,18 @@ fn a_live_parameter_change_moves_the_standard_bot() {
     assert_eq!(blocked, 0, "a 1 000 000 buy reserve must stop every purchase");
 }
 
-/// `strategy::for_seat` resolves from public state alone (own character + the
-/// other seats' characters) -- the key the book is allowed to see.
+/// `strategy::for_seat` resolves from public state alone (own persona + the
+/// other seats' personas) -- the key the book is allowed to see.
 #[test]
 fn for_seat_reads_the_book_from_public_state() {
     let mut d = data();
-    // One `me` entry per character, so whatever `quick_start` deals out hits.
+    // One `me` entry per persona, so whatever `quick_start` deals out hits.
     let mut b = StrategyBook::default();
     b.version = STRATEGY_BOOK_VERSION;
     b.ruleset_sha256 = "stub".into();
     b.policy = POLICY_STANDARD.into();
     b.params_version = PARAMS_VERSION;
-    for c in &d.characters {
+    for c in &d.personas {
         b.me.push(entry(
             &c.name,
             "",

@@ -45,7 +45,8 @@ pub const STATUS_STUN: CardDef = CardDef::new(
             refuse,
         ),
     ],
-);
+)
+    .board_role("status");
 
 /// The condition under which [晕眩] closes the act, pay and move gates.
 pub const STUNNED: &str = "state(actor,'stun') + state(actor,'stunStart') > 0";

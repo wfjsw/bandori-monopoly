@@ -66,7 +66,7 @@ fn open_at_mulligan(chars: &[&str], top_first: &[&str]) -> Match {
     }
     for (k, c) in chars.iter().enumerate() {
         if !c.is_empty() {
-            m.set_character(k as i32 + 1, c);
+            m.set_persona(k as i32 + 1, c);
         }
     }
     {
@@ -212,7 +212,7 @@ fn not_buyable_tile() -> usize {
     data()
         .tiles
         .iter()
-        .position(|t| t.kind == TileKind::Circle)
+        .position(|t| t.kind == TileKind("circle".into()))
         .expect("CiRCLE")
 }
 
@@ -229,7 +229,7 @@ fn not_buyable_tile() -> usize {
 #[test]
 fn g_cards_08_starting_deck_is_ten_distinct() {
     let d = data();
-    let c = d.character("美竹兰").expect("美竹兰");
+    let c = d.persona("美竹兰").expect("美竹兰");
     let pool: Vec<String> = game_core::deck::pool(d.as_ref(), c)
         .into_iter()
         .map(|k| k.id.clone())
@@ -251,7 +251,7 @@ fn g_cards_08_starting_deck_is_ten_distinct() {
 #[test]
 fn g_cards_07_derived_cards_never_in_starting_deck() {
     let d = data();
-    let c = d.character("美竹兰").expect("美竹兰");
+    let c = d.persona("美竹兰").expect("美竹兰");
     let derived: Vec<&game_core::data::CardData> = d.cards.iter().filter(|k| k.derived).collect();
     assert!(!derived.is_empty(), "the pool has [衍生] cards to reject");
     for k in &derived {
@@ -902,7 +902,7 @@ fn g_cards_13_event_discard_reshuffles_only_when_pile_empty() {
     let cafe = data()
         .tiles
         .iter()
-        .position(|v| v.kind == TileKind::Cafe)
+        .position(|v| v.kind == TileKind("cafe".into()))
         .expect("cafe");
 
     // Pile still holds one after the draw: no reshuffle of the discard.
