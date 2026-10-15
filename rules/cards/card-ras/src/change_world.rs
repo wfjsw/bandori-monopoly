@@ -20,7 +20,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         // walk this turn, over a buyable Live House the owner does not hold.
         On::Hook(
             &[HookKind::PassTile],
-            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_live_house(tile.id) && is_buyable(tile.id) && tile.owner != owner",
+            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_venue(tile.id) && is_buyable(tile.id) && tile.owner != owner",
             None,
             pass_tile,
         ),
@@ -124,7 +124,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// move passing a non-owned buyable Live House adds a crystal.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && move.main && card.placed &&
-    // slot('change_world_turn') == turn_key && is_live_house(tile.id) &&
+    // slot('change_world_turn') == turn_key && is_venue(tile.id) &&
     // is_buyable(tile.id) && tile.owner != owner` is the pre.
     let t = trigger::tile();
     ctx::add_crystals(1, 0)?;

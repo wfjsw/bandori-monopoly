@@ -208,7 +208,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .i("value", value),
 
         // ---- circle / misc -----------------------------------------------
-        TriggerKind::CircleAffected => Msg::new("log.why.circle").player_id("who", who),
+        TriggerKind::PassRewardAffected => Msg::new("log.why.pass_reward").player_id("who", who),
         TriggerKind::Counteracted => Msg::new("log.why.counteracted")
             .player_id("who", who)
             .player_id("target", target),

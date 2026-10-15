@@ -25,7 +25,7 @@ pub const SAKIKO_CUT: CardDef = CardDef::new(
 fn mortgageable(player_id: i32) -> alloc::vec::Vec<i32> {
     ctx::owned_tiles(player_id)
         .into_iter()
-        .filter(|&t| ctx::is_buyable(t) && !ctx::is_ring(t) && !ctx::mortgaged_of(t))
+        .filter(|&t| ctx::is_buyable(t) && !ctx::is_deed(t) && !ctx::mortgaged_of(t))
         .collect()
 }
 

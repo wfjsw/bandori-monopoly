@@ -1551,17 +1551,17 @@ impl Replayer {
             .filter(|c| c.at == at)
             .cloned()
             .collect();
-        for cp in due {
+        for ckpt in due {
             let h = hash_save(&self.m.save());
-            if h != cp.hash {
+            if h != ckpt.hash {
                 self.flag(format!(
                     "checkpoint at {} (round {}, turn {}, tick {}) hash {} != {}",
-                    cp.at, cp.round, cp.turn, cp.tick, cp.hash, h
+                    ckpt.at, ckpt.round, ckpt.turn, ckpt.tick, ckpt.hash, h
                 ));
                 if self.first_mismatch.is_none() {
                     self.first_mismatch = Some(Mismatch {
-                        field: format!("checkpoint@{}", cp.at),
-                        want: cp.hash.clone(),
+                        field: format!("checkpoint@{}", ckpt.at),
+                        want: ckpt.hash.clone(),
                         got: h,
                         fatal: false,
                     });

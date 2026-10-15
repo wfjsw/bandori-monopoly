@@ -133,11 +133,11 @@ pub fn is_shop(t: &TileData) -> bool {
     is_buyable(t) && t.group == 10
 }
 
-pub fn is_ring(t: &TileData) -> bool {
+pub fn is_deed(t: &TileData) -> bool {
     t.kind == 3
 }
 
-pub fn is_circle(t: &TileData) -> bool {
+pub fn is_start(t: &TileData) -> bool {
     t.kind == 0
 }
 
@@ -149,10 +149,10 @@ pub fn is_agent(t: &TileData) -> bool {
 /// 1=property 2=agent 3=ring 4=cafe 5=edogawa 6=ryuseido).
 pub fn tile_is(t: &TileData, kind: &str) -> bool {
     match kind {
-        "circle" => is_circle(t),
+        "circle" => is_start(t),
         "property" => is_property(t),
         "agent" => is_agent(t),
-        "ring" => is_ring(t),
+        "ring" => is_deed(t),
         "cafe" => t.kind == 4,
         "edogawa" => t.kind == 5,
         "ryuseido" => t.kind == 6,

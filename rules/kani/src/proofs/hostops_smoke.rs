@@ -63,7 +63,7 @@ pub fn rent_of_property_table() {
 pub fn rent_of_ring_is_price() {
     install_empty();
     let ring: i32 = kani::any();
-    kani::assume(board::data_at(ring).map_or(false, board::is_ring));
+    kani::assume(board::data_at(ring).map_or(false, board::is_deed));
     let got = call(Op::rent_of, [ring, 0, 0, 0, 0, 0]);
     let price = board::data_at(ring).unwrap().price as i64;
     crate::kassert!(got == price, "RiNG rent_of is the tile's base price");

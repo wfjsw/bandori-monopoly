@@ -18,20 +18,20 @@ use game_core::MatchMode;
 mod common;
 use common::data_arc as data;
 
-/// A rules stand-in with exactly one event rule: `event:对邦` stays in play
+/// A rules stand-in with exactly one event rule: `event:EVT1` stays in play
 /// (「将此卡放置于场地中央」) and every other event falls through the built-in
 /// fallback.
 struct OneEvent;
 
 impl CardRules for OneEvent {
     fn has_rule(&self, id: &str) -> bool {
-        id == "event:对邦"
+        id == "event:EVT1"
     }
     fn play(&self, _cx: &mut Cx, _player_id: usize, _card: &str) -> Flow<Dest> {
         Ok(Dest::Graveyard)
     }
     fn event(&self, _cx: &mut Cx, _player_id: usize, id: &str) -> Flow<bool> {
-        Ok(id == "对邦")
+        Ok(id == "EVT1")
     }
 }
 
@@ -64,7 +64,7 @@ fn stub_rules_draw_files_the_event_away() {
     let d = data();
     m.quick_start();
     let before = m.state().event_discard.len() + m.state().event_removed.len();
-    m.world_mut().bind_event(&d, &StubRules, 0, "对邦");
+    m.world_mut().bind_event(&d, &StubRules, 0, "EVT1");
     // `StubRules::has_rule` is false: nothing is bound, nothing is active.
     assert!(
         m.state().event_active.is_empty(),
@@ -82,15 +82,15 @@ fn bind_event_places_a_rule_instance_on_the_board_owner() {
     let mut m = new_match(Arc::new(OneEvent));
     let d = data();
     m.quick_start();
-    let uid = m.world_mut().bind_event(&d, &OneEvent, 0, "对邦");
+    let uid = m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
     assert!(uid >= 0, "no instance bound");
     let st = m.state();
     assert_eq!(st.event_active.len(), 1, "active {:?}", st.event_active);
-    assert_eq!(st.event_active[0].id, "对邦");
+    assert_eq!(st.event_active[0].id, "EVT1");
     assert_eq!(st.event_active[0].player_id, 0);
     let insts = m.world().event_rule_instances();
     assert_eq!(insts.len(), 1, "instances {insts:?}");
-    assert_eq!(insts[0].1, event_rule_id("对邦"));
+    assert_eq!(insts[0].1, event_rule_id("EVT1"));
     assert_eq!(m.world().field_by_uid(uid).unwrap().owner, BOARD_OWNER);
 }
 
@@ -100,8 +100,8 @@ fn bind_event_is_idempotent() {
     let mut m = new_match(Arc::new(OneEvent));
     let d = data();
     m.quick_start();
-    let a = m.world_mut().bind_event(&d, &OneEvent, 0, "对邦");
-    let b = m.world_mut().bind_event(&d, &OneEvent, 0, "对邦");
+    let a = m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
+    let b = m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
     assert_eq!(a, b);
     assert_eq!(m.world().event_rule_instances().len(), 1);
     assert_eq!(m.state().event_active.len(), 1);
@@ -113,12 +113,12 @@ fn expire_event_unbinds_and_discards() {
     let mut m = new_match(Arc::new(OneEvent));
     let d = data();
     m.quick_start();
-    m.world_mut().bind_event(&d, &OneEvent, 0, "对邦");
-    m.world_mut().expire_event("对邦", false);
+    m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
+    m.world_mut().expire_event("EVT1", false);
     assert!(m.state().event_active.is_empty());
     assert!(m.world().event_rule_instances().is_empty());
     assert!(
-        m.world().event_discard.iter().any(|e| e == "对邦"),
+        m.world().event_discard.iter().any(|e| e == "EVT1"),
         "discard {:?}",
         m.world().event_discard
     );
@@ -130,11 +130,11 @@ fn expire_event_removed_banishes() {
     let mut m = new_match(Arc::new(OneEvent));
     let d = data();
     m.quick_start();
-    m.world_mut().bind_event(&d, &OneEvent, 0, "对邦");
-    m.world_mut().expire_event("对邦", true);
+    m.world_mut().bind_event(&d, &OneEvent, 0, "EVT1");
+    m.world_mut().expire_event("EVT1", true);
     assert!(m.state().event_active.is_empty());
-    assert!(m.world().event_discard.iter().all(|e| e != "对邦"));
-    assert!(m.world().event_removed.iter().any(|e| e == "对邦"));
+    assert!(m.world().event_discard.iter().all(|e| e != "EVT1"));
+    assert!(m.world().event_removed.iter().any(|e| e == "EVT1"));
 }
 
 // `docs/EVENTS.md`: 「背面朝上放置于事件牌堆顶部」 -- `event_deck_push` puts the
@@ -161,12 +161,13 @@ fn empty_event_deck_takes_the_discard_after_resolution() {
     let w = m.world_mut();
     w.event_deck.clear();
     w.event_discard = vec!["a".into(), "b".into()];
-    w.expire_event("对邦", false);
+    w.expire_event("EVT1", false);
     assert!(m.world().event_deck.is_empty(), "not mid-resolution");
     m.world_mut().refill_event_deck();
     let mut deck = m.world().event_deck.clone();
     deck.sort();
-    assert_eq!(deck, ["a", "b", "对邦"]);
+    // Sorted ASCII order: `EVT1` before `a` / `b`.
+    assert_eq!(deck, ["EVT1", "a", "b"]);
     assert!(m.world().event_discard.is_empty());
 }
 

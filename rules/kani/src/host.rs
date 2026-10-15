@@ -2663,8 +2663,8 @@ pub fn arm_tile_is(a: Args) -> i64 {
                 let t = &board::TILES[s as usize];
                 // Compare via interned wire spellings.
                 let hit = [
-                    ("circle", board::is_circle(t)),
-                    ("ring", board::is_ring(t)),
+                    ("circle", board::is_start(t)),
+                    ("ring", board::is_deed(t)),
                     ("agent", board::is_agent(t)),
                     ("property", board::is_property(t)),
                     ("cafe", t.kind == 4),

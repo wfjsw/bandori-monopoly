@@ -12,7 +12,7 @@
 //! (2) and (3) are both keyed on that flag.
 //!
 //! (1) 「若选择抽卡」 is the CiRCLE reward being the card, which is the
-//! `circleAffected` moment -- the reward has been chosen, and this skill
+//! `passRewardAffected` moment -- the reward has been chosen, and this skill
 //! rewrites the draw it implies.
 
 use alloc::string::String;
@@ -23,7 +23,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const AKAO_COOL: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
-    &[On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle)],
+    &[On::Hook(&[HookKind::PassRewardAffected], card_sdk::pre::MINE, None, on_circle)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 /// Face-down cards this player has on the field.

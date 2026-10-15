@@ -100,18 +100,18 @@ impl Worker {
 pub struct Out<T> {
     pub state: String,
     pub value: T,
-    /// `cp` from the worker: `{round, turn, hash}` at a turn boundary.
-    pub cp: Option<Checkpoint>,
+    /// The worker's turn-boundary checkpoint: `{round, turn, hash}` at a turn boundary.
+    pub checkpoint: Option<Checkpoint>,
     pub ended: bool,
 }
 
 impl Out<()> {
     fn unit(v: Value) -> Result<Self, String> {
-        let (state, cp, ended) = split(&v)?;
+        let (state, checkpoint, ended) = split(&v)?;
         Ok(Self {
             state,
             value: (),
-            cp,
+            checkpoint,
             ended,
         })
     }
@@ -132,12 +132,12 @@ fn split(v: &Value) -> Result<(String, Option<Checkpoint>, bool), String> {
         .and_then(Value::as_str)
         .map(str::to_string)
         .ok_or_else(|| "worker returned no state".to_string())?;
-    let cp = match v.get("cp") {
+    let checkpoint = match v.get("cp") {
         None | Some(Value::Null) => None,
-        Some(c) => Some(serde_json::from_value(c.clone()).map_err(|e| format!("cp: {e}"))?),
+        Some(c) => Some(serde_json::from_value(c.clone()).map_err(|e| format!("checkpoint: {e}"))?),
     };
     let ended = v.get("ended").and_then(Value::as_bool).unwrap_or(false);
-    Ok((state, cp, ended))
+    Ok((state, checkpoint, ended))
 }
 
 /// N warm workers, shared across rooms.
@@ -320,7 +320,7 @@ impl Pool {
         cmd: &NetMessage,
     ) -> Result<Out<Option<Msg>>, String> {
         let v = self.call(json!({"op": "act", "state": state, "member": member, "cmd": cmd}))?;
-        let (state, cp, ended) = split(&v)?;
+        let (state, checkpoint, ended) = split(&v)?;
         let err = match v.get("error") {
             None | Some(Value::Null) => None,
             Some(e) => Some(serde_json::from_value(e.clone()).map_err(|e| e.to_string())?),
@@ -328,7 +328,7 @@ impl Pool {
         Ok(Out {
             state,
             value: err,
-            cp,
+            checkpoint,
             ended,
         })
     }
@@ -336,12 +336,12 @@ impl Pool {
     /// `value` is whether the match changed (`"changed"` in the reply).
     pub fn tick(&self, state: &str, dt: f32) -> Result<Out<bool>, String> {
         let v = self.call(json!({"op": "tick", "state": state, "dt": dt}))?;
-        let (state, cp, ended) = split(&v)?;
+        let (state, checkpoint, ended) = split(&v)?;
         let changed = v.get("changed").and_then(Value::as_bool).unwrap_or(false);
         Ok(Out {
             state,
             value: changed,
-            cp,
+            checkpoint,
             ended,
         })
     }
@@ -354,12 +354,12 @@ impl Pool {
     /// `value` is whether the ack released a clock hold.
     pub fn anim_done(&self, state: &str, member: i32, seq: i32) -> Result<Out<bool>, String> {
         let v = self.call(json!({"op": "anim_done", "state": state, "member": member, "seq": seq}))?;
-        let (state, cp, ended) = split(&v)?;
+        let (state, checkpoint, ended) = split(&v)?;
         let released = v.get("released").and_then(Value::as_bool).unwrap_or(false);
         Ok(Out {
             state,
             value: released,
-            cp,
+            checkpoint,
             ended,
         })
     }

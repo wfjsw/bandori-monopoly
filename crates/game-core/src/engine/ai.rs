@@ -38,7 +38,7 @@ pub const MAX_PLAYS_PER_TURN: usize = 2;
 pub const CHAOS_RESERVE: i32 = 1_000;
 /// Chaos declares a counteraction on this share of the counteract offers it gets
 /// (a random offered card); the rest of the offers it passes. Rolled per offer
-/// from the match RNG, so a repeated offer ring naturally stops after a skip.
+/// from the match RNG, so a repeated offer cycle naturally stops after a skip.
 pub const CHAOS_COUNTER_CHANCE: f64 = 0.3;
 
 /// Would buying `price` leave [`BUY_RESERVE`]?
@@ -276,7 +276,7 @@ impl Cx<'_> {
     }
 
     /// A random playable card the rules say a bot would play.
-    /// Chaos ignores the rule's `ai_play` heuristic (it will even fire counteraction
+    /// Chaos ignores the rule's `ai_play` heuristic (it will even raise a counteraction
     /// cards from hand) and only asks `cant_play`.
     ///
     /// Standard additionally gates on the card's [`crate::strategy::CardPlayParams`]
@@ -316,11 +316,11 @@ impl Cx<'_> {
             if self.cant_play(i, &id, false).is_some() || !self.rules.ai_play(self, i, &id) {
                 continue;
             }
-            let cp = p.card(&id);
-            if cp.play_weight_milli <= 0
-                || cp.hold_for_counteract
-                || round < cp.min_round
-                || round > cp.max_round
+            let params = p.card(&id);
+            if params.play_weight_milli <= 0
+                || params.hold_for_counteract
+                || round < params.min_round
+                || round > params.max_round
             {
                 continue;
             }
@@ -329,7 +329,7 @@ impl Cx<'_> {
                 continue;
             }
             ok.push(id);
-            weights.push(cp.play_weight_milli);
+            weights.push(params.play_weight_milli);
         }
         if ok.is_empty() {
             return None;

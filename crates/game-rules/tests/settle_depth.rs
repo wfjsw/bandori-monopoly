@@ -21,7 +21,7 @@ fn settle_chain_on_small_stack() {
     t.set_pos(0, 3);
     t.dice(&[2]);
     place_on_tile(&mut t, 0, "TEST:settleNest", 5);
-    t.set_crystals(0, "TEST:settleNest", DEPTH);
+    t.set_counters(0, "TEST:settleNest", DEPTH);
 
     // 512 KiB: a quarter of a `spawn_blocking` worker, an eighth of main.
     // Master's `card_settle_at ↔ settle_at` cycle aborts here at DEPTH.
@@ -45,10 +45,10 @@ fn settle_chain_on_small_stack() {
                     t.decline();
                 }
                 eprintln!("drained {n} prompts");
-                let left = t.crystals(0, "TEST:settleNest").unwrap_or(0);
+                let left = t.counters(0, "TEST:settleNest").unwrap_or(0);
                 assert!(
                     left < DEPTH,
-                    "settle chain did not run (crystals still {left})"
+                    "settle chain did not run (named counters still {left})"
                 );
             })
             .expect("spawn 512 KiB thread")

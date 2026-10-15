@@ -70,7 +70,7 @@ impl Cx<'_> {
     }
 
     /// Prefers personas with their own art set (`cnId`).
-    pub(crate) fn random_character(&mut self, for_pick: bool) -> String {
+    pub(crate) fn random_persona(&mut self, for_pick: bool) -> String {
         let all: Vec<&str> = self
             .data
             .personas

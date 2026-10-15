@@ -7,7 +7,7 @@ use common::*;
 #[test]
 fn rimi_choco_prompt_is_a_walk_pick() {
     let mut t = Table::vanilla(2);
-    t.set_character_raw(0, "牛込里美");
+    t.set_persona_raw(0, "牛込里美");
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
     t.give_play(0, "PPP:（里美）我的心就像巧克力螺").unwrap();

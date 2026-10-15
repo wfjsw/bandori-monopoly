@@ -22,10 +22,10 @@ pub const SWEET_ESCAPE: CardDef = CardDef::new(
         .cell(r#"L8"#)
         .fields(&[("group", r#"Sumimi"#), ("owner", "")]));
 
-/// C# `TileData.kind == "ring"` -- `ctx::is_ring` (ABI v9) reads the board's
+/// C# `TileData.kind == "ring"` -- `ctx::is_deed` (ABI v9) reads the board's
 /// `TileKind::Ring` directly.
-fn is_ring(t: i32) -> bool {
-    ctx::is_ring(t)
+fn is_deed(t: i32) -> bool {
+    ctx::is_deed(t)
 }
 
 /// C# `H.PriceTag` -- the tile's 「收费标价」.
@@ -35,7 +35,7 @@ fn price_tag(t: i32) -> i32 {
     }
     // 规则书: 「[收费标价]」 -- C# `H.PriceTag` returns `H.RingMultiplier` for
     // `kind == "ring"` tiles and the rent table otherwise.
-    if is_ring(t) {
+    if is_deed(t) {
         return ctx::ring_multiplier();
     }
     ctx::rent_of(t)

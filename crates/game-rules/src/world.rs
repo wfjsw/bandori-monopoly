@@ -42,11 +42,11 @@ pub struct Trigger {
     /// The amount (`t.Pay.amount` on pay triggers).
     pub value: i32,
     /// The turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active
-    /// when this trigger fired.
+    /// when this trigger ran.
     pub step: i32,
     /// The player whose card caused this trigger, or `None`.
     pub by_card: Option<i32>,
-    /// Was this fired as part of the turn's main move? Meaningful even
+    /// Was this run as part of the turn's main move? Meaningful even
     /// without a move payload (a tile settle body needs it).
     pub main: bool,
     /// The move that caused this trigger, when one did.
@@ -294,7 +294,7 @@ pub trait CardWorld: Clone + 'static {
     }
     fn tile_owner(&self, tile: i32) -> i32;
     fn player_pos(&self, player_id: i32) -> i32;
-    /// Tile `steps` around the ring from a player (-1 when the player is out).
+    /// Tile `steps` around the board loop from a player (-1 when the player is out).
     fn tile_steps_ahead(&self, player_id: i32, steps: i32) -> i32;
     fn rent_of(&self, tile: i32) -> i32;
     fn buy_price(&self, tile: i32) -> i32;
@@ -323,9 +323,8 @@ pub trait CardWorld: Clone + 'static {
     fn owned_count(&self, player_id: i32) -> i32;
     fn owned_at(&self, player_id: i32, index: i32) -> i32;
     /// 1 iff `tile`'s data kind equals the `kind` wire spelling
-    /// (`TileKind::as_str`: circle|cafe|edogawa|ryuseido|property|ring|agent|
-    /// event). Unknown tile -> false. Replaces `is_circle` / `is_ring` /
-    /// `is_agent`. No class vocabulary here.
+    /// (`TileKind::as_str`, a ruleset tile-kind binding). Unknown tile -> false.
+    /// Generic kind probe; no class vocabulary here.
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
         let _ = (tile, kind);
         false
@@ -345,10 +344,10 @@ pub trait CardWorld: Clone + 'static {
             }
         }
     }
-    /// Class membership (`"buyable"` / `"shop"` / `"livehouse"` / `"color:<g>"`,
-    /// plus generic `class:` / `classFor:<p>:` props). Replaces `is_buyable` /
-    /// `is_shop` / `is_live_house` / `is_live_house_for` / `is_color`.
-    /// See [`crate::tile_class`] -- THE ruleset's class registration.
+    /// Class membership (`"buyable"` / `"shop"` / venue-class / `"color:<g>"`,
+    /// plus generic `class:` / `classFor:<p>:` props). Class strings are
+    /// ruleset bindings. See [`crate::tile_class`] -- THE ruleset's class
+    /// registration.
     fn tile_in(&self, player_id: i32, tile: i32, class: &str) -> bool {
         let _ = (player_id, tile, class);
         false
@@ -405,9 +404,9 @@ pub trait CardWorld: Clone + 'static {
     fn set_mortgaged(&mut self, tile: i32, v: i32);
     /// Hand a deed over outright (no money moves).
     fn set_owner(&mut self, tile: i32, player_id: i32);
-    /// Undirected ring distance between two tiles.
+    /// Undirected board-loop distance between two tiles.
     fn dist(&self, a: i32, b: i32) -> i32;
-    /// Steps forward from `a` to `b` around the ring.
+    /// Steps forward from `a` to `b` around the board loop.
     fn tile_forward(&self, a: i32, b: i32) -> i32;
     /// Next present player in direction `dir` (±1), or -1.
     fn neighbor(&self, player_id: i32, dir: i32) -> i32;
@@ -878,7 +877,7 @@ pub trait CardWorld: Clone + 'static {
     /// matches. Defaults to the owner component of the persona skill id
     /// (`skill:<persona>:<skill>`; neither name contains `:` in the shipped
     /// data); override with the direct lookup where one exists.
-    fn character_name(&self, player_id: i32) -> Option<String> {
+    fn persona_name(&self, player_id: i32) -> Option<String> {
         self.persona_skill_id(player_id)
             .and_then(|id| skill_id_owner(&id))
     }
@@ -886,7 +885,7 @@ pub trait CardWorld: Clone + 'static {
     /// Defaults to the owner component of the group skill id
     /// (`skill:<group>:<skill>`); override with the direct lookup where one
     /// exists.
-    fn band_name(&self, player_id: i32) -> Option<String> {
+    fn group_name(&self, player_id: i32) -> Option<String> {
         self.group_skill_id(player_id)
             .and_then(|id| skill_id_owner(&id))
     }
@@ -902,7 +901,7 @@ pub trait CardWorld: Clone + 'static {
     fn add_group_skill(&mut self, _player_id: i32, _id: &str, _extra: bool) -> i32 {
         -1
     }
-    /// Fire pots held. Sugar over the keyed state.
+    /// Charge pots held. Sugar over the keyed state.
     fn charge(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::CHARGE)
     }
@@ -946,7 +945,7 @@ pub trait CardWorld: Clone + 'static {
     /// Does this player's persona belong to group `name`?
     fn in_group(&self, player_id: i32, name: &str) -> i32;
 
-    // --------------------------------------------------- ring & movement
+    // ------------------------------------------------- board & movement
     /// The the flat deed rent multiplier right now.
     fn rent_unit_mult(&self) -> i32;
     /// Nudge the the flat deed multiplier; returns the new value.

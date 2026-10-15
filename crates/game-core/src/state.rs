@@ -99,7 +99,7 @@ pub enum TileQuoteKind {
 /// One tile's "what to expect" number, from a viewer's seat.
 /// Parallel to the board's tiles in [`MatchView`] (`tileQuotes[i]`).
 /// `value` is the figure; `max` is the upper bound of a dice range (the flat deed
-/// rent is `rings × rent_unit_mult × 1d20`, so `value` is the minimum).
+/// rent is `deed-level × rent_unit_mult × 1d20`, so `value` is the minimum).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TileQuote {
@@ -1357,17 +1357,16 @@ pub struct TileMark {
     pub uid: i32,
     pub tile: i32,
     /// `card` for a card placed on the tile (see `card`); otherwise the i18n key
-    /// naming the mark (e.g. `cards:hhw-hagumi-marks.mark`). [tile marks] uses the
-    /// stable [`mark_kind::CP`] -- the label comes from [`Self::category`].
+    /// naming the mark (e.g. a named-counter mark). The label comes from
+    /// [`Self::category`] when the mark is a named counter of a field card.
     pub kind: String,
     /// Which category of mark this is: [`mark_category::PLAYER`] (default) or
-    /// [`mark_category::CP`]. Serde-defaulted so pre-category saves still load.
+    /// [`mark_category::DESIGNATE`]. Serde-defaulted so pre-category saves still load.
     pub category: String,
     /// The seat that placed a **player** mark (colours it in the view), or
-    /// [`BOARD_OWNER`] (`-1`) for a neutral mark. [tile marks] is always neutral --
-    /// 「These marks should not be owned by any player」 -- so a CP mark's owner
-    /// is [`BOARD_OWNER`] and its provenance lives in [`Self::src`] /
-    /// [`Self::card`] instead.
+    /// [`BOARD_OWNER`] (`-1`) for a neutral mark. Neutral marks (tile marks /
+    /// named-counter marks) stay unowned -- their provenance lives in
+    /// [`Self::src`] / [`Self::card`] instead.
     pub owner: i32,
     pub count: i32,
     /// Provenance for the log / the view's 「来自」: the card id that placed the

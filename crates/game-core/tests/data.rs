@@ -1,4 +1,4 @@
-//! P2 tests against the real game data in `web/data/` (copied by the asset pipeline).
+//! P2 tests against the data dir (board / events) plus the synthetic roster fixture.
 
 use game_core::net::{clean_name, NetMessage};
 use game_core::profile::{PlayerProfile, Seen};
@@ -8,24 +8,28 @@ mod common;
 use common::data;
 
 #[test]
-fn band_traits_and_variants_come_from_data() {
+fn group_traits_and_variants_come_from_data() {
     let d = data();
-    assert_eq!(d.base_persona("高松灯（CRYCHIC）"), "高松灯");
-    assert_eq!(d.base_persona("三角初华（Sumimi）"), "三角初华");
-    assert_eq!(d.base_persona("高松灯"), "高松灯");
-    let sumimi = d.persona("三角初华（Sumimi）").unwrap();
-    let crychic = d.persona("高松灯（CRYCHIC）").unwrap();
-    assert!(d.group_shares_exclusives(sumimi) && !d.group_shares_exclusives(crychic));
-    assert!(d.groups.iter().all(|b| b.name != "CRYCHIC" || !b.boot_art.is_empty()));
+    assert_eq!(d.base_persona("Gamma"), "Alpha");
+    assert_eq!(d.base_persona("Epsilon"), "Delta");
+    assert_eq!(d.base_persona("Alpha"), "Alpha");
+    let sharing = d.persona("Gamma").unwrap();
+    let exclusive = d.persona("Epsilon").unwrap();
+    assert!(
+        d.group_shares_exclusives(sharing) && !d.group_shares_exclusives(exclusive),
+        "GroupA shares exclusives; GroupB does not"
+    );
+    assert!(d.groups.iter().all(|g| !g.boot_art.is_empty() || g.name == "通用"));
 }
 
 #[test]
-fn game_data_counts_match_the_original() {
+fn game_data_counts_match_the_board_and_fixture() {
     let d = data();
+    // Board / events come from `data/`; roster comes from the synthetic fixture.
     assert_eq!(d.tiles.len(), 60);
-    assert_eq!(d.cards.len(), 184);
-    assert_eq!(d.personas.len(), 54);
-    assert_eq!(d.groups.len(), 12);
+    assert_eq!(d.cards.len(), 21);
+    assert_eq!(d.personas.len(), 5);
+    assert_eq!(d.groups.len(), 3);
     assert_eq!(d.events.len(), 28);
     assert_eq!(d.match_rules.rule_params.get("rentUnitMult"), Some(&10));
     assert!(!d.rules_text.is_empty());
@@ -51,22 +55,23 @@ fn game_data_counts_match_the_original() {
 #[test]
 fn lookups() {
     let d = data();
-    assert_eq!(d.card("AG:Y.O.L.O").unwrap().group, "Afterglow");
+    assert_eq!(d.card("B:01").unwrap().group, "GroupB");
     assert!(d.card("nope").is_none());
-    assert_eq!(d.cards.iter().filter(|c| c.is_universal()).count(), 14);
+    assert_eq!(d.cards.iter().filter(|c| c.is_universal()).count(), 13);
 
-    let kasumi = d.persona("户山香澄").unwrap();
-    assert_eq!(kasumi.art_id(), "001");
-    assert!(!d.voice_lines_for(kasumi).is_empty());
-    // Characters added later carry an explicit `art` id instead of cnId.
+    let alpha = d.persona("Alpha").unwrap();
+    assert_eq!(alpha.art_id(), "syn-001");
+    assert!(d.voice_lines_for(alpha).is_empty(), "fixture personas ship no voice lines");
+    // Personas added later carry an explicit `art` id instead of cnId.
     assert!(d
         .personas
         .iter()
         .any(|c| !c.art.is_empty() && c.art_id() == c.art));
 
-    assert_eq!(d.school_of("户山香澄"), "花咲川女子学院");
-    assert_eq!(d.school_of("nobody"), "周边学区");
-    assert_eq!(d.group("Poppin' Party").unwrap().short_name, "PPP");
+    // Fixture personas are not in `schools.json`; both fall back.
+    let fallback = d.school_of("nobody");
+    assert_eq!(d.school_of("Alpha"), fallback);
+    assert_eq!(d.group("GroupA").unwrap().short_name, "GA");
     assert!(d.group("nope").is_none());
 }
 
@@ -132,7 +137,7 @@ fn match_state_round_trips_with_camel_case_names() {
 }
 
 #[test]
-fn every_character_has_a_complete_legal_preset() {
+fn every_persona_has_a_complete_legal_preset() {
     let d = data();
     for c in &d.personas {
         let p = deck::preset(&d, c);
@@ -152,37 +157,42 @@ fn every_character_has_a_complete_legal_preset() {
 #[test]
 fn deck_rules_reject_with_csharp_reasons() {
     let d = data();
-    let kasumi = d.persona("户山香澄").unwrap();
+    let alpha = d.persona("Alpha").unwrap();
     let derived = d.cards.iter().find(|c| c.derived).unwrap();
     assert_eq!(
-        deck::cant_play(&d, kasumi, derived).unwrap().key(),
+        deck::cant_play(&d, alpha, derived).unwrap().key(),
         "err.deck_derived"
     );
 
-    let other_band = d
+    let other_group = d
         .cards
         .iter()
-        .find(|c| !c.is_universal() && !c.exclusive() && c.group != kasumi.group && !c.derived)
+        .find(|c| !c.is_universal() && !c.exclusive() && c.group != alpha.group && !c.derived)
         .unwrap();
     assert_eq!(
-        deck::cant_play(&d, kasumi, other_band).unwrap().key(),
+        deck::cant_play(&d, alpha, other_group).unwrap().key(),
         "err.deck_band"
     );
 
     let someone_elses = d
         .cards
         .iter()
-        .find(|c| c.exclusive() && c.owner != kasumi.name && !c.derived)
+        .find(|c| {
+            c.exclusive()
+                && c.owner != alpha.name
+                && !c.derived
+                && !deck::shares_exclusives(&d, alpha, c)
+        })
         .unwrap();
     assert_eq!(
-        deck::cant_play(&d, kasumi, someone_elses).unwrap().key(),
+        deck::cant_play(&d, alpha, someone_elses).unwrap().key(),
         "err.deck_exclusive"
     );
 
-    // Sumimi members share exclusives (the original has exactly two members).
-    let sumimi: Vec<_> = d.personas.iter().filter(|c| c.group == "Sumimi").collect();
-    assert_eq!(sumimi.len(), 2);
-    let (a, b) = (sumimi[0], sumimi[1]);
+    // GroupA members share exclusives (the fixture has three members).
+    let sharing: Vec<_> = d.personas.iter().filter(|c| c.group == "GroupA").collect();
+    assert_eq!(sharing.len(), 3);
+    let (a, b) = (sharing[0], sharing[1]);
     let shared = d
         .cards
         .iter()
@@ -204,7 +214,7 @@ fn deck_rules_reject_with_csharp_reasons() {
 #[test]
 fn deck_save_choose_and_clear() {
     let d = data();
-    let c = d.persona("户山香澄").unwrap();
+    let c = d.persona("Alpha").unwrap();
     let mut p = PlayerProfile::default();
     let preset = deck::preset(&d, c);
     let id = deck::create(&d, &mut p, c, "", &preset).unwrap();
@@ -254,7 +264,7 @@ fn profile_create_and_apply_match() {
     assert_eq!(p.charge, 5);
 
     p.set_charge_per_game(3);
-    let r = p.apply_match(MatchMode::Ranked, 1, 6, "户山香澄", "2026-10-05 20:00", "r1a2b3");
+    let r = p.apply_match(MatchMode::Ranked, 1, 6, "Alpha", "2026-10-05 20:00", "r1a2b3");
     assert_eq!(
         (r.base_exp, r.charge_used, r.multiplier, r.exp),
         (200, 3, 4, 800)
@@ -264,7 +274,7 @@ fn profile_create_and_apply_match() {
     assert_eq!((p.level, p.exp, p.total_exp), (5, 150, 800));
     assert_eq!((r.coins, p.coins, p.ranked_wins, p.stars), (500, 500, 1, 1));
     assert_eq!(
-        p.stat_of("户山香澄").map(|s| (s.uses, s.firsts)),
+        p.stat_of("Alpha").map(|s| (s.uses, s.firsts)),
         Some((1, 1))
     );
     assert!(p.has_new(&d, Seen::History));
@@ -295,7 +305,6 @@ fn profile_normalize_migrates_v1_saves() {
         p.home_persona, d.match_rules.default_home_persona,
         "empty home -> data default"
     );
-    assert!(d.persona(&p.home_persona).is_some());
     assert_eq!(p.history[0].mode, MatchMode::Ranked);
     assert_eq!(p.history[1].mode, MatchMode::Casual);
     // MatchMode is an integer on disk (`0`/`1`/`2`).
@@ -308,18 +317,18 @@ fn profile_normalize_migrates_v1_saves() {
 #[test]
 fn live2d_picks() {
     let d = data();
-    let c = d.persona("户山香澄").unwrap();
+    let c = d.persona("Alpha").unwrap();
     let mut p = PlayerProfile::default();
-    let opts = ["001", "001b"];
-    assert_eq!(p.live2d_for(c, &opts), "001");
-    assert!(p.set_live2d(c, "001b", &opts));
-    assert_eq!(p.live2d_for(c, &opts), "001b");
+    let opts = ["syn-001", "syn-001b"];
+    assert_eq!(p.live2d_for(c, &opts), "syn-001");
+    assert!(p.set_live2d(c, "syn-001b", &opts));
+    assert_eq!(p.live2d_for(c, &opts), "syn-001b");
     assert_eq!(
-        p.live2d_for(c, &["001"]),
-        "001",
+        p.live2d_for(c, &["syn-001"]),
+        "syn-001",
         "pick no longer offered falls back"
     );
-    assert!(p.set_live2d(c, "001", &opts));
+    assert!(p.set_live2d(c, "syn-001", &opts));
     assert!(p.live2d_picks.is_empty(), "default is not stored");
 }
 

@@ -498,7 +498,7 @@ fn main() {
             declared as f64 / n,
         );
         println!(
-            "  time share of {:.1}s wall: fire-up {:.2}s ({:.1}%) [store {:.2}s + instantiate {:.2}s], guest call {:.2}s ({:.1}%), engine shell {:.2}s ({:.1}%)",
+            "  time share of {:.1}s wall: startup {:.2}s ({:.1}%) [store {:.2}s + instantiate {:.2}s], guest call {:.2}s ({:.1}%), engine shell {:.2}s ({:.1}%)",
             wall,
             store_s + inst_s,
             100.0 * (store_s + inst_s) / wall.max(1e-9),
@@ -510,7 +510,7 @@ fn main() {
             100.0 * (wall - inst_s - store_s - guest_s) / wall.max(1e-9),
         );
         println!(
-            "  (guest call includes host import callbacks; per-run avg {:.0} µs fire-up + {:.0} µs guest)",
+            "  (guest call includes host import callbacks; per-run avg {:.0} µs startup + {:.0} µs guest)",
             (inst_ns + store_ns) as f64 / inst.max(1) as f64 / 1e3,
             guest_ns as f64 / inst.max(1) as f64 / 1e3,
         );

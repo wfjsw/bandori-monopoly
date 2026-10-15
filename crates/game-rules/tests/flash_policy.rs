@@ -297,18 +297,18 @@ fn a_thrown_away_drive_posts_none() {
     // A guard-rejecting hook: the body never runs.
     t.place_raw(0, "TEST:pre_reject");
     let mark = t.mark();
-    // Land so the hook would fire if it were admitted.
+    // Land so the hook would run if it were admitted.
     t.set_pos(0, 0);
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    let fired: Vec<_> = t
+    let ran: Vec<_> = t
         .events_since(mark)
         .into_iter()
         .filter(|e| e.r#type == "card" && e.card == "TEST:pre_reject" && e.flash)
         .collect();
     assert!(
-        fired.is_empty(),
+        ran.is_empty(),
         "a rejected drive posts no flash: {}",
         t.recent_keys(20).join(", ")
     );

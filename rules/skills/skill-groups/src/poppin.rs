@@ -94,7 +94,7 @@ fn before_settle_applies(player_id: i32) -> bool {
     if actor == player_id {
         // Own settle: only a CiRCLE pass (the （2） veto re-arm) or a main-move
         // settle (the （4） build veto). Anything else is a no-op body.
-        return ctx::is_circle(ctx::trigger::tile())
+        return ctx::is_start(ctx::trigger::tile())
             || (ctx::trigger::move_is_main() && !returns_neutralises_skill4(player_id));
     }
     let hill = ctx::tile_named("星之鼓动山丘");
@@ -158,7 +158,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         // （2） -- this player's own pass earns nothing. The veto is already
         // armed on this instance at the turn start; re-arm so a pass that
         // arrives before the first turn start of the match is covered too.
-        if ctx::is_circle(ctx::trigger::tile()) {
+        if ctx::is_start(ctx::trigger::tile()) {
             ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
         }
         // （4） -- no building off a main-move settle. Neutralised by Returns'

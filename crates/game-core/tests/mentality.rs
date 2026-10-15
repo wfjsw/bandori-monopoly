@@ -140,7 +140,7 @@ fn chaos_bot_buys_with_no_reserve() {
 ///
 /// The window is raised **every** time (never "just once"): the routine is
 /// replayed from its snapshot after the answer lands, so a prompt that only
-/// fires on the first pass desyncs the answer log.
+/// runs on the first pass desyncs the answer log.
 #[derive(Default)]
 struct PromptRules {
     /// Answer to the card-body prompt (fallback = 0).
@@ -174,7 +174,7 @@ impl game_core::engine::CardRules for PromptRules {
 
     /// A counteract window on every main-move roll: one offered card plus the
     /// skip (the shape `ask.counteract.*` uses -- the offered card id rides the
-    /// option label, as in the real ring).
+    /// option label, as in a live ask).
     fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
         if t.kind != "roll" {
             return Ok(());

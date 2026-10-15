@@ -274,7 +274,7 @@ impl RulesHandle for NativeRulesHandle {
     /// The compiled condition of `cards[i].on[entry]` (docs/GUARDS.md G0).
     /// **Must not fall back to the `RulesHandle` default (`None`)** -- that
     /// reads as "no condition" and `admits_pre` / `admits_gate` then admit
-    /// every entry, which is how a `pre::MINE` hook fired for the wrong
+    /// every entry, which is how a `pre::MINE` hook ran for the wrong
     /// player on native while the sandbox skipped it (the drift `tests/drift.rs`
     /// caught in round 1).
     fn pre(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledPre> {

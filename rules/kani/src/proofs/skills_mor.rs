@@ -52,13 +52,13 @@ fn effects_of(buf: &mut [Effect; world::MAX_LOG]) -> usize {
     log_n
 }
 
-/// Light IrCtx for the `actor == owner` family (PayAfter / CircleAffected).
+/// Light IrCtx for the `actor == owner` family (PayAfter / PassRewardAffected).
 #[allow(dead_code)]
 fn fill_mine(owner: i32) -> rules_cond_ir::ctx::IrCtx {
     world::with_world(|w| crate::ir_fill::fill_pay_add(w, owner))
 }
 
-/// Light IrCtx for `actor == owner && is_circle(tile.id)` — the Pass hook.
+/// Light IrCtx for `actor == owner && is_start(tile.id)` — the Pass hook.
 /// (Full `fill_from_world` is a CBMC cliff; `conf_fill_diff` pins the binding.)
 #[allow(dead_code)]
 fn fill_pass_circle(owner: i32) -> rules_cond_ir::ctx::IrCtx {
@@ -485,7 +485,7 @@ mod pass_fire {
             w.charge_max[user as usize] = charge_max_pin;
         });
 
-        let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
+        let gid = crate::guard_id!("actor == owner && is_start(tile.id)");
         let admitted = {
             let ctx = fill_pass_circle(user);
             crate::guard!(gid, &ctx)
@@ -594,7 +594,7 @@ mod pass_fire {
         // Force the residual: owner, but tile is not a CiRCLE (kind 0).
         let mut t = kani::any();
         kani::assume(t >= 0 && t < 60 && crate::board::TILES[t as usize].kind != 0);
-        let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
+        let gid = crate::guard_id!("actor == owner && is_start(tile.id)");
         world::with_world_mut(|w| {
             w.trig_player = 0;
             w.trig_tile = t;

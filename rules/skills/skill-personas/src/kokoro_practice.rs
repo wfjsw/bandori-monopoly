@@ -25,8 +25,8 @@ use card_sdk::{key, CardDef, Msg, On};
 const WAIVED: &str = "skill.kokoroPractice.waived";
 
 /// A RiNG tile is any of the four the board names.
-fn is_ring(t: i32) -> bool {
-    t >= 0 && ctx::is_ring(t)
+fn is_deed(t: i32) -> bool {
+    t >= 0 && ctx::is_deed(t)
 }
 
 pub const KOKORO_PRACTICE: CardDef = CardDef::new(
@@ -50,7 +50,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // settle, for every completed move including a 「不触发结算」 one.
         On::Hook(
             &[HookKind::MoveAfter],
-            "actor == owner && is_ring(tile.id)",
+            "actor == owner && is_deed(tile.id)",
             None,
             on_move_end,
         ),
@@ -104,13 +104,13 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     // （1） 「首次经过CiRCLE不获得经过奖励」 -- the flag was armed at game start;
     // this is the pass it waives, so disarm it now (after `circle_reward` has
     // already consulted and honoured it). Subsequent passes earn normally.
-    if ctx::is_circle(t) && state::get(player_id, WAIVED) == 0 {
+    if ctx::is_start(t) && state::get(player_id, WAIVED) == 0 {
         state::set(player_id, WAIVED, 1);
         ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 0);
     }
     // （2） 「可以在[经过]的第一个RiNG停止移动」 -- offered on the first RiNG
     // the walk passes.
-    if is_ring(t) && ctx::trigger::move_remaining() > 0 {
+    if is_deed(t) && ctx::trigger::move_remaining() > 0 {
         if ctx::ask_yes(
             player_id,
             &Msg::new(key!("kokoro_practice_stop_title")),
@@ -124,7 +124,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         }
     }
     // （3） 「任何时刻当你不位于RiNG时，失去所有的火罐」.
-    if !is_ring(t) {
+    if !is_deed(t) {
         let have = state::get(player_id, state_key::CHARGE);
         if have > 0 {
             rules_status::fire::spend(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
@@ -165,7 +165,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 /// （3）「移动终点为任意"RiNG"时，获得一个火罐（上限1）」 -- the move's end
 /// tile, 行动阶段 13 (`SETTLE-STAGES.md` §4 M1). `moveAfter` runs after [重叠]
 /// and before any settle, for every completed move -- a 「不触发结算」 move
-/// grants the pot too. `actor == owner && is_ring(tile.id)` is the pre.
+/// grants the pot too. `actor == owner && is_deed(tile.id)` is the pre.
 fn on_move_end(player_id: i32) -> card_sdk::Asked {
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
     Ok(())

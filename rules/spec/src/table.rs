@@ -109,7 +109,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         {
@@ -185,7 +185,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         m.quick_start();

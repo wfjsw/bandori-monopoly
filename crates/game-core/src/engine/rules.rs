@@ -33,7 +33,7 @@ pub enum Dest {
 // what it resolves is `super::move_ctx::Settle` -- two categories, not one flag
 // soup. Card-owned move state (a [charge pots] roll, say) rides on the move's tags.
 
-/// Which way a move travels along the ring.
+/// Which way a move travels along the board loop (turn order).
 ///
 /// Replaces the ±1 `move_dir` integer: forward and backward are the only two
 /// directions a walk has, so they are two variants, not a sign bit. The guest
@@ -201,7 +201,7 @@ pub enum RollSource {
     #[default]
     Unattributed,
     /// A charge pot (the guest code `1`).
-    Fire,
+    Charge,
     /// A hand / field card (the guest code `2`).
     Card,
     /// A skill press (the guest code `3`).
@@ -213,7 +213,7 @@ impl RollSource {
     pub const fn as_i32(self) -> i32 {
         match self {
             RollSource::Unattributed => 0,
-            RollSource::Fire => 1,
+            RollSource::Charge => 1,
             RollSource::Card => 2,
             RollSource::Skill => 3,
         }
@@ -222,7 +222,7 @@ impl RollSource {
     /// Decode the guest / CEL encoding.
     pub fn from_i32(v: i32) -> Self {
         match v {
-            1 => RollSource::Fire,
+            1 => RollSource::Charge,
             2 => RollSource::Card,
             3 => RollSource::Skill,
             _ => RollSource::Unattributed,
@@ -285,9 +285,9 @@ pub struct Trigger {
     /// The card this trigger is about (`t.Card`), or `None`.
     pub card: Option<String>,
     pub value: i32,
-    /// The turn step (0/1/2/3) active when this trigger fired. Stamped by
+    /// The turn step (0/1/2/3) active when this trigger raised. Stamped by
     /// `Cx::counteract`, not by the raise site. Only meaningful for kinds that
-    /// aren't step-specific (e.g. `mortgage` can fire during both step 1
+    /// aren't step-specific (e.g. `mortgage` can raise during both step 1
     /// and step 3).
     pub step: i32,
     /// The player whose card caused this trigger, or `None` when it was not
@@ -295,7 +295,7 @@ pub struct Trigger {
     /// raise site from the card's own player. `Some(by) if by != player_id`
     /// means "another player's card did this to me".
     pub by_card: Option<i32>,
-    /// Was this fired as part of the turn's main move?
+    /// Was this raised as part of the turn's main move?
     ///
     /// Lives on the trigger rather than in [`TriggerMove`] because a raise can
     /// be "the main move's settle" without carrying a move payload at all --
@@ -313,7 +313,7 @@ pub struct Trigger {
     /// on every non-roll trigger.
     pub roll_source: RollSource,
     /// How a counter invalidated this link. The effect body is skipped when this
-    /// is not [`Negation::None`]; the Before/After hooks still fire.
+    /// is not [`Negation::None`]; the Before/After hooks still run.
     pub negation: Negation,
     /// Recipients a counter spared from settlement (`spare(link, seat)`). The
     /// effect still settles for everyone else.

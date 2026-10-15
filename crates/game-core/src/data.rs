@@ -199,12 +199,11 @@ pub struct Roster {
 }
 
 impl Roster {
-    /// Parse the generated test fixture (`crates/game-core/tests/fixtures/
-    /// roster.json`, written by `cargo run -p rules-native --example
-    /// dump_roster -- --fixture`). One JSON object `{cards, personas, groups}`
-    /// in the same camelCase row shapes the roster metadata carries. Tests of
-    /// crates that have no ruleset (game-core / game-rules / bot-core / server)
-    /// load this instead of depending on the card crates.
+    /// Parse the synthetic test fixture (`crates/game-core/tests/fixtures/
+    /// roster.json`). One JSON object `{cards, personas, groups}` in the same
+    /// camelCase row shapes the roster metadata carries. Tests of crates that
+    /// have no ruleset (game-core / game-rules / bot-core / server) load this
+    /// instead of depending on the card crates.
     pub fn from_fixture(text: &str) -> Result<Self, String> {
         #[derive(serde::Deserialize)]
         struct Fixture {
@@ -225,9 +224,9 @@ impl Roster {
     }
 
     /// Serialize back to the fixture document (`{cards, personas, groups}`),
-    /// the byte-stable form `cargo run -p rules-native --example dump_roster --
-    /// --fixture` writes. The rules-native gate compares this against the
-    /// checked-in fixture so the two can never drift.
+    /// the byte-stable pretty JSON form [`Self::from_fixture`] reads. External
+    /// gates may compare this against a checked-in fixture so the two cannot
+    /// drift.
     pub fn to_fixture_json(&self) -> String {
         #[derive(serde::Serialize)]
         struct Fixture<'a> {
@@ -375,12 +374,12 @@ pub fn skill_id(owner: &str, skill: &str) -> String {
 
 /// The rule id of an **event card**'s effect (the crate under `rules/events`).
 ///
-/// The id names the event (`data/events.json`), so drawing 「对邦」 resolves the
-/// rule `event:对邦`. The `event:` prefix keeps it from ever colliding with a
-/// card id or a `tile:*` / `skill:*` rule id, the same way [`skill_id`] and
-/// [`tile_rule_id`] do. Gaps in the text are the rule body's `TODO(规则书)`;
-/// an event with no rule in the ruleset falls back to the engine's
-/// `StubRules::event` (log 「还没有移植」 and file it away).
+/// The id names the event (`data/events.json`), so drawing a ruleset event id
+/// resolves the rule `event:<id>`. The `event:` prefix keeps it from ever
+/// colliding with a card id or a `tile:*` / `skill:*` rule id, the same way
+/// [`skill_id`] and [`tile_rule_id`] do. Gaps in the text are the rule body's
+/// `TODO(规则书)`; an event with no rule in the ruleset falls back to the
+/// engine's `StubRules::event` (log 「还没有移植」 and file it away).
 pub fn event_rule_id(id: &str) -> String {
     format!("event:{id}")
 }
@@ -415,7 +414,7 @@ pub struct GameData {
 
 /// Data files, as named in `web/data/`. The roster (`cards` / `personas` /
 /// `groups`) is **not** here: it comes from the ruleset (ABI v63
-/// `ruleset_metadata`) or, in tests, from the generated fixture
+/// `ruleset_metadata`) or, in tests, from the synthetic fixture
 /// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
 /// `skill_simple.json` and the card display overlay stay because they are
 /// display-only and the client merges them.

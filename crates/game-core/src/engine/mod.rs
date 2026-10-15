@@ -354,11 +354,11 @@ struct Saved {
 /// [`crate::record::MatchSetup::clock`]). Older saves are refused -- the
 /// archived engine bundle is what replays them (`docs/REPLAY.md`).
 /// v10: roster/player wire names are neutral (`persona` / `skillOwner` /
-/// `affiliations` / `groupSkill`, was `character` / `skillCharacter` /
-/// `bands` / `bandSkill`). Older saves are refused; archived engine bundles
-/// replay them (`docs/REPLAY.md`).
-/// v11: state key `"charge"` (was `"fire"`); `FieldCard` named counters only
-/// (`counters` map); profile `charge*` fields; `StateVar.flags`.
+/// `affiliations` / `groupSkill`, previously the legacy wire keys
+/// `character` / `skillCharacter` / `bands` / `bandSkill`). Older saves are
+/// refused; archived engine bundles replay them (`docs/REPLAY.md`).
+/// v11: state key `"charge"` (legacy key `"fire"`); `FieldCard` named counters
+/// only (`counters` map); profile `charge*` fields; `StateVar.flags`.
 pub const SAVE_VERSION: u32 = 11;
 
 /// A running match.
@@ -1059,7 +1059,7 @@ impl Match {
     /// The member's hand -- private, never part of [`Match::state`].
     /// Test seam: set a player's persona (exclusive-card checks read it).
     #[doc(hidden)]
-    pub fn set_character(&mut self, member: i32, persona: &str) {
+    pub fn set_persona(&mut self, member: i32, persona: &str) {
         if let Some(i) = self.player_index(member) {
             self.world.st.players[i].persona = persona.to_string();
             self.world
@@ -1882,7 +1882,7 @@ impl Match {
                 let pick = if cx.w.st.players[turn].auto_setup()
                     && (chaos || cx.w.rng.chance(0.5))
                 {
-                    cx.random_character(false)
+                    cx.random_persona(false)
                 } else {
                     String::new()
                 };
@@ -1890,7 +1890,7 @@ impl Match {
             });
         } else {
             self.direct(|cx| {
-                let c = cx.random_character(true);
+                let c = cx.random_persona(true);
                 cx.do_pick(turn, &c);
             });
         }
@@ -1968,7 +1968,7 @@ impl Match {
                 return;
             }
             if !self.timed_out {
-                // Still held (anim ack pending, cap not yet fired): do not
+                // Still held (anim ack pending, cap not yet reached): do not
                 // consume base/bonus.
                 if self.clock_hold.is_some() {
                     return;
@@ -2634,7 +2634,7 @@ impl Match {
         self.direct(|cx| {
             for i in 0..cx.w.player_count() {
                 if cx.w.st.players[i].persona.is_empty() {
-                    let c = cx.random_character(true);
+                    let c = cx.random_persona(true);
                     cx.w.st.players[i].persona = c;
                 }
                 let d = cx.data;

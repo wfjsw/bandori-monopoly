@@ -182,7 +182,7 @@ pub struct TurnCtx {
     /// 「本回合的settle向其他玩家支付了至少1000资金」.
     #[serde(default)]
     pub paid_in_settle: i32,
-    /// Where each player stood when the turn started. 「在Livehouse地块开始
+    /// Where each player stood when the turn started. 「在场地地块开始
     /// 回合时」 is a question about that square, not the one a mid-turn walk has
     /// since reached.
     #[serde(default)]
@@ -265,12 +265,12 @@ pub struct Scheduled {
     pub card: String,
     /// The player the card acts for (passed to its `counteract`).
     pub owner: i32,
-    /// Whose turn end fires it.
+    /// Whose turn end raises it.
     pub target: usize,
     /// Let one `target` turn end pass first -- set when "the end of your next
     /// turn" is scheduled during that player's own current turn.
     pub skip: bool,
-    /// Fire before the status wear-off, rather than after it.
+    /// Charge before the status wear-off, rather than after it.
     #[serde(default)]
     pub early: bool,
     /// The card **instance** that asked for the callback, captured at schedule
@@ -789,7 +789,7 @@ impl World {
     ///
     /// Lazy walk flush: any other event while a [`WalkSeg`] is pending
     /// publishes the approach first, so the client walks to the tile before
-    /// showing the card flash / pay / effect that fired there. The flush's own
+    /// showing the card flash / pay / effect that ran there. The flush's own
     /// event re-enters here under [`WalkFlush::flushing`] and is not re-flushed.
     pub fn log(&mut self, kind: &str, player_id: i32, msg: Msg) -> &mut MatchEvent {
         let _tg = crate::engine::rtimer::guard(&crate::engine::rtimer::LOG_NS);
@@ -899,7 +899,7 @@ impl World {
     /// A card's effect activated -- or was negated before its body could run.
     /// One `"card"` event carries both the log line and the client's card flash:
     /// `kind` is the trigger kind ([`crate::state::card_trigger`]), `owner` the
-    /// card's player, `target` the affected player and `tile` where it fired
+    /// card's player, `target` the affected player and `tile` where it ran
     /// (`-1` when not applicable). `msg` names the card via [`Msg::card`].
     /// `parent` groups this activation under another one (`-1` = top-level).
     pub fn card_activation(

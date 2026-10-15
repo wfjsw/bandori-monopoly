@@ -421,13 +421,13 @@ fn run_match(
 
         // One probe pass per due seat (a long request makes the other seats
         // overdue; they drain one per pass exactly like the live 200 ms
-        // cadence would have fired them).
-        let mut fired = false;
+        // cadence would have run them).
+        let mut probed = false;
         for si in 0..n {
             if t + 1e-9 < next_probe[si] {
                 continue;
             }
-            fired = true;
+            probed = true;
             let member = advanced[si];
             let c0 = process_cpu();
             let view = view_frame(&m, member);
@@ -481,7 +481,7 @@ fn run_match(
                     });
                     catch_up(&mut m, wall.as_secs_f64(), &mut t, &mut st.engine_cpu_ms);
                     // Phase-preserving cadence: overdue slots drain over the
-                    // next passes (the live probe fires every 200 ms).
+                    // next passes (the live probe ticks every 200 ms).
                     next_probe[si] += 0.2;
                     if next_probe[si] < t - 4.0 {
                         next_probe[si] = t + 0.2;
@@ -601,7 +601,7 @@ fn run_match(
 
             next_probe[si] = t + if act_refused { 0.2 } else { 0.05 };
         }
-        if fired {
+        if probed {
             continue;
         }
         // Nothing due: advance the engine to the next probe deadline.
@@ -943,7 +943,7 @@ fn main() {
         ponder_searched.calls
     );
     println!(
-        "     (the live spawn_ponder path fires every 200 ms per idle advanced seat)"
+        "     (the live spawn_ponder path ticks every 200 ms per idle advanced seat)"
     );
     println!(
         "  3. obvious searched decides (1 legal action): {} calls, {:.1} CPU-s = {:.1}%",
@@ -1133,7 +1133,7 @@ fn main() {
 fn dump_bot_cost() {
     use game_core::engine::bot_cost as gc;
     use game_rules::bot_cost as gr;
-    use game_rules::cond_pre::guard_cost as cp;
+    use game_rules::cond_pre::guard_cost as guard_cost;
     let g = |v: &std::sync::atomic::AtomicU64| v.load(std::sync::atomic::Ordering::Relaxed);
     println!("-- bot-cost counters (whole run) --");
     println!(
@@ -1161,10 +1161,10 @@ fn dump_bot_cost() {
     );
     println!(
         "  cond_pre: evals {}  skipped-by-condition {}  guard-asked {}  cond-eval {:.1}s",
-        g(&cp::COND_EVALS),
-        g(&cp::SKIPPED_BY_CONDITION),
-        g(&cp::GUARD_ASKED),
-        g(&cp::COND_EVAL_NS) as f64 / 1e9
+        g(&guard_cost::COND_EVALS),
+        g(&guard_cost::SKIPPED_BY_CONDITION),
+        g(&guard_cost::GUARD_ASKED),
+        g(&guard_cost::COND_EVAL_NS) as f64 / 1e9
     );
 }
 

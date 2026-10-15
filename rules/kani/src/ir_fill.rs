@@ -371,8 +371,8 @@ impl TriggerOverlay {
 pub mod src {
     /// PP:[丸山彩]憧憬的前方 `On::Hook(PayAdd)`.
     pub const AYA_PAY_ADD: &str = "actor == owner && value > 0";
-    /// A function-carrying guard (`is_circle`).
-    pub const IS_CIRCLE: &str = "actor == owner && is_circle(tile.id)";
+    /// A function-carrying guard (`is_start`).
+    pub const IS_CIRCLE: &str = "actor == owner && is_start(tile.id)";
     /// A chain/kind-carrying guard (`effect.has(Pay)`).
     pub const CHAIN_PAY: &str =
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";
@@ -524,7 +524,7 @@ fn fill_board_sets(c: &mut IrCtx, w: &World) {
             let i = outer * 8 + k;
             if i < 60 {
                 let t = board::TILES[i];
-                // Membership ids are the **0-based slot** (`tile.id` / `is_circle(t)`).
+                // Membership ids are the **0-based slot** (`tile.id` / `is_start(t)`).
                 // `TILES[i].index` is the 1-based board.json index — do not insert that.
                 let id = i as i64;
                 match t.kind {
@@ -1449,7 +1449,7 @@ pub fn fill_for_guard(
     }
 
     // Board sets / geometry bins only when the guard's fns need them.
-    let needs_sets = (needs.fns >> 6) & 0xF != 0 // IsCircle..IsBuyable
+    let needs_sets = (needs.fns >> 6) & 0xF != 0 // IsStart..IsBuyable
         || (needs.fns >> 20) & 1 != 0 // Blocked
         || (needs.fns >> 22) & 3 != 0; // ChainHas / ChainHits
     if needs_sets {
@@ -1476,8 +1476,8 @@ pub fn fill_for_guard(
     c
 }
 
-/// Fill a context for the `is_circle` pilot: a placed card on `tile`.
-pub fn fill_is_circle(w: &World, owner: i32, tile: i64) -> IrCtx {
+/// Fill a context for the `is_start` pilot: a placed card on `tile`.
+pub fn fill_is_start(w: &World, owner: i32, tile: i64) -> IrCtx {
     let mut c = fill_from_world(w, owner, 0, true, tile, &TriggerOverlay::default());
     c.set_scalar(VarId::TileId, tile);
     if tile >= 0 && (tile as usize) < 60 {

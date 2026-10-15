@@ -57,9 +57,9 @@ enum Level {
     /// `(me)` -- across random tables.
     Me,
     /// `(me, seat, sorted multiset of opponents' groups)`.
-    SeatBands,
+    SeatGroups,
     /// `(me, sorted multiset of opponents' groups)`.
-    Bands,
+    Groups,
     /// `(me, seat, opponents' personas in seat order)`.
     Exact,
 }
@@ -68,8 +68,8 @@ impl Level {
     fn parse(s: &str) -> Option<Self> {
         match s.trim() {
             "me" => Some(Self::Me),
-            "seat_groups" | "seat-groups" => Some(Self::SeatBands),
-            "groups" => Some(Self::Bands),
+            "seat_groups" | "seat-groups" => Some(Self::SeatGroups),
+            "groups" => Some(Self::Groups),
             "exact" => Some(Self::Exact),
             _ => None,
         }
@@ -77,8 +77,8 @@ impl Level {
     fn as_str(&self) -> &'static str {
         match self {
             Self::Me => "me",
-            Self::SeatBands => "seat_groups",
-            Self::Bands => "groups",
+            Self::SeatGroups => "seat_groups",
+            Self::Groups => "groups",
             Self::Exact => "exact",
         }
     }
@@ -427,13 +427,13 @@ impl Task {
     fn id(&self) -> String {
         match self.level {
             Level::Me => format!("me:{}", self.me),
-            Level::SeatBands => format!(
+            Level::SeatGroups => format!(
                 "seat_groups:{}:{}:{}",
                 self.me,
                 self.seat.unwrap_or(0),
                 self.opponent_groups.join("+")
             ),
-            Level::Bands => format!("groups:{}:{}", self.me, self.opponent_groups.join("+")),
+            Level::Groups => format!("groups:{}:{}", self.me, self.opponent_groups.join("+")),
             Level::Exact => format!(
                 "exact:{}:{}:{}",
                 self.me,
@@ -473,7 +473,7 @@ fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
                     opponents: vec![],
                     parent: None,
                 }),
-                Level::SeatBands => {
+                Level::SeatGroups => {
                     // One representative group multiset per seat: the groups of
                     // three seed-derived opponents, held fixed so the key is
                     // coherent across the task's games.
@@ -488,7 +488,7 @@ fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
                             .collect();
                         groups.sort();
                         tasks.push(Task {
-                            level: Level::SeatBands,
+                            level: Level::SeatGroups,
                             me: me.clone(),
                             seat: Some(seat),
                             opponent_groups: groups,
@@ -497,7 +497,7 @@ fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
                         });
                     }
                 }
-                Level::Bands => {
+                Level::Groups => {
                     let s = splitmix64(cfg.seed ^ 0xBAAD);
                     let opp = sample_opponents(&names, me, s, cfg.players - 1);
                     let mut groups: Vec<String> = opp
@@ -506,7 +506,7 @@ fn build_tasks(data: &GameData, cfg: &Config) -> Vec<Task> {
                         .collect();
                     groups.sort();
                     tasks.push(Task {
-                        level: Level::Bands,
+                        level: Level::Groups,
                         me: me.clone(),
                         seat: None,
                         opponent_groups: groups,
@@ -603,7 +603,7 @@ fn play_one_seed(
     let names = char_names(data);
     let opps = match task.level {
         Level::Me => sample_opponents(&names, &task.me, seed, cfg.players - 1),
-        Level::SeatBands | Level::Bands => {
+        Level::SeatGroups | Level::Groups => {
             sample_opponents_by_bands(data, &task.me, &task.opponent_groups, seed)
         }
         Level::Exact => {
@@ -1047,11 +1047,11 @@ fn load_checkpoint(cfg: &Config) -> Checkpoint {
     serde_json::from_str(&text).unwrap_or_default()
 }
 
-fn save_checkpoint(cfg: &Config, cp: &Checkpoint) {
+fn save_checkpoint(cfg: &Config, ckpt: &Checkpoint) {
     if let Some(dir) = cfg.checkpoint.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    if let Ok(text) = serde_json::to_string_pretty(cp) {
+    if let Ok(text) = serde_json::to_string_pretty(ckpt) {
         let _ = std::fs::write(&cfg.checkpoint, text);
     }
 }
@@ -1134,18 +1134,18 @@ fn main() {
     }
     println!("deckbook: {} tasks", tasks.len());
 
-    let mut cp = load_checkpoint(&cfg);
-    if cp.ruleset_sha256 != sha && !cp.done.is_empty() {
+    let mut ckpt = load_checkpoint(&cfg);
+    if ckpt.ruleset_sha256 != sha && !ckpt.done.is_empty() {
         eprintln!(
             "deckbook: checkpoint ruleset {} != {sha} -- starting fresh",
-            cp.ruleset_sha256
+            ckpt.ruleset_sha256
         );
-        cp = Checkpoint::default();
+        ckpt = Checkpoint::default();
     }
-    cp.seed = cfg.seed;
-    cp.ruleset_sha256 = sha.clone();
-    cp.cap_rounds = cfg.cap_rounds;
-    cp.games_per_candidate = cfg.games_per_candidate;
+    ckpt.seed = cfg.seed;
+    ckpt.ruleset_sha256 = sha.clone();
+    ckpt.cap_rounds = cfg.cap_rounds;
+    ckpt.games_per_candidate = cfg.games_per_candidate;
 
     // Working book for the field (starts empty = preset). Rebuilt after each
     // derivation pass and between fictitious-play rounds.
@@ -1155,17 +1155,17 @@ fn main() {
     book.policy = POLICY_STANDARD.into();
     book.generated_at = now_stamp();
 
-    let mut game_ms = cp.ms_per_game;
+    let mut game_ms = ckpt.ms_per_game;
     let mut total_games = 0u64;
     let mut total_secs = 0.0f64;
 
     // ---- pass 0: derive -------------------------------------------------
     for fp in 0..=cfg.fp_rounds {
         if fp > 0 {
-            cp.fp_round = fp;
+            ckpt.fp_round = fp;
             // Rebuild the field from the entries emitted so far.
             book.me.clear();
-            for (tid, rec) in &cp.done {
+            for (tid, rec) in &ckpt.done {
                 if rec.emitted {
                     if let Some(t) = tasks.iter().find(|t| t.id() == *tid) {
                         book.me.push(entry(t, &rec.best_cards));
@@ -1184,7 +1184,7 @@ fn main() {
                 eprintln!("deckbook: budget exhausted -- skipping fictitious play round {fp}");
                 break;
             }
-            let keep = cp.done.clone();
+            let keep = ckpt.done.clone();
             for t in &tasks {
                 let prior = keep.get(&t.id()).cloned();
                 if cfg.deadline() {
@@ -1197,13 +1197,13 @@ fn main() {
                     &book,
                     &sha,
                     t,
-                    &mut cp,
+                    &mut ckpt,
                     &mut game_ms,
                     &mut total_games,
                     &mut total_secs,
                     prior,
                 );
-                save_checkpoint(&cfg, &cp);
+                save_checkpoint(&cfg, &ckpt);
             }
             continue;
         }
@@ -1211,7 +1211,7 @@ fn main() {
             if cfg.deadline() {
                 break;
             }
-            if fp == 0 && cfg.resume && cp.done.contains_key(&t.id()) {
+            if fp == 0 && cfg.resume && ckpt.done.contains_key(&t.id()) {
                 continue;
             }
             derive_one(
@@ -1221,13 +1221,13 @@ fn main() {
                 &book,
                 &sha,
                 t,
-                &mut cp,
+                &mut ckpt,
                 &mut game_ms,
                 &mut total_games,
                 &mut total_secs,
                 None,
             );
-            save_checkpoint(&cfg, &cp);
+            save_checkpoint(&cfg, &ckpt);
         }
     }
 
@@ -1237,7 +1237,7 @@ fn main() {
     out.ruleset_sha256 = sha.clone();
     out.policy = POLICY_STANDARD.into();
     out.generated_at = now_stamp();
-    for (tid, rec) in &cp.done {
+    for (tid, rec) in &ckpt.done {
         if !rec.emitted {
             continue;
         }
@@ -1247,8 +1247,8 @@ fn main() {
         let e = entry(t, &rec.best_cards);
         match t.level {
             Level::Me => out.me.push(e),
-            Level::SeatBands => out.seat_groups.push(e),
-            Level::Bands => out.groups.push(e),
+            Level::SeatGroups => out.seat_groups.push(e),
+            Level::Groups => out.groups.push(e),
             Level::Exact => out.exact.push(e),
         }
     }
@@ -1263,8 +1263,8 @@ fn main() {
     }
     let text = serde_json::to_string_pretty(&out).expect("book serializes");
     std::fs::write(&cfg.out, text).expect("write book");
-    cp.ms_per_game = game_ms;
-    save_checkpoint(&cfg, &cp);
+    ckpt.ms_per_game = game_ms;
+    save_checkpoint(&cfg, &ckpt);
 
     println!(
         "deckbook: wrote {} ({} me / {} seat_groups / {} groups / {} exact entries)",
@@ -1332,7 +1332,7 @@ fn derive_one(
     book: &DeckBook,
     sha: &str,
     task: &Task,
-    cp: &mut Checkpoint,
+    ckpt: &mut Checkpoint,
     game_ms: &mut f64,
     total_games: &mut u64,
     total_secs: &mut f64,
@@ -1342,7 +1342,7 @@ fn derive_one(
     if cfg.deadline() {
         // Out of budget: keep whatever the previous pass measured.
         if let Some(p) = prior {
-            cp.done.entry(task.id()).or_insert(p);
+            ckpt.done.entry(task.id()).or_insert(p);
         }
         return;
     }
@@ -1476,7 +1476,7 @@ fn derive_one(
     );
     let wall = t0.elapsed().as_secs_f64();
     // A stop with no new games must not overwrite a previous record.
-    if games_total == 0 && cp.done.contains_key(&task.id()) {
+    if games_total == 0 && ckpt.done.contains_key(&task.id()) {
         return;
     }
     *total_games += games_total;
@@ -1498,7 +1498,7 @@ fn derive_one(
             0.0
         }
     );
-    cp.done.insert(
+    ckpt.done.insert(
         task.id(),
         TaskRecord {
             best_id: best.id.clone(),

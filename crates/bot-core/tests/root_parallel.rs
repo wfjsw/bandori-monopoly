@@ -298,8 +298,8 @@ fn early_stop_is_off_in_deterministic_mode_and_the_iteration_cap_binds() {
 #[test]
 fn early_stop_never_runs_past_the_budget_and_reports_itself() {
     // Anytime contract: with `early_stop` on the search still returns a
-    // searched answer, and when the rule fires it says so. The rule is
-    // allowed not to fire (an ambiguous root just runs the budget) -- the
+    // searched answer, and when the rule triggers it says so. The rule is
+    // allowed not to trigger (an ambiguous root just runs the budget) -- the
     // assertion is on the contract, not on the machine's speed.
     let (m, member) = parked();
     let seat = seat_of(&m, member);
@@ -316,7 +316,7 @@ fn early_stop_never_runs_past_the_budget_and_reports_itself() {
     if out.early_stopped {
         assert!(
             out.elapsed < Duration::from_millis(120),
-            "early stop fired but the search still ran the budget: {:?}",
+            "early stop triggered but the search still ran the budget: {:?}",
             out.elapsed
         );
     }
@@ -410,7 +410,7 @@ fn predict_upcoming_view_is_a_turn_start_ops_surface() {
     assert!(predict_upcoming_view(&prompted).is_none());
 
     // A long wait (not next, not ending) is not near: the seat after us is
-    // mid-turn (运营), and the ring's next after them is not us.
+    // mid-turn (运营), and the turn order's next after them is not us.
     let mut far = idle.clone();
     far.state.turn = (idle.player_id + 1) % 3;
     far.state.step = stage::OPS;

@@ -138,7 +138,7 @@ impl SeatView {
 /// * it is already our turn (a routine is running or the turn just began --
 ///   the next decision is this turn's 运营 / 结束 surface);
 /// * the current player's turn is at 结束 (about to end, so our turn is next);
-/// * we are the next active seat in the ring.
+/// * we are the next active seat in turn order.
 ///
 /// False for a long wait (three other seats still to act) and for setup
 /// phases. This is the gate that replaces "send a `ponder` on every idle
@@ -161,11 +161,11 @@ pub fn next_turn_near(st: &MatchState, player_id: i32) -> bool {
     if st.turn < 0 {
         return false;
     }
-    // The current player's turn is ending (结束), or we are next in the ring.
+    // The current player's turn is ending (结束), or we are next in turn order.
     st.step == stage::END || next_active(st) == Some(player_id)
 }
 
-/// The next non-out seat after `st.turn` in the engine's ring (no extra-turn
+/// The next non-out seat after `st.turn` in the engine's turn order (no extra-turn
 /// bookkeeping -- a public state cannot see `extra_turns`, and an extra turn
 /// for the current player only makes "we are next" false for us, which is
 /// the safe direction).
@@ -238,7 +238,7 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
 
     let mut next = view.clone();
     let wrap = st.turn >= 0 && {
-        // `next_turn` bumps `round` when the ring wraps to an equal-or-earlier
+        // `next_turn` bumps `round` when the turn order wraps to an equal-or-earlier
         // index (`engine/play.rs`). Only applies when we are taking over from
         // someone else's turn.
         let n = st.players.len() as i32;

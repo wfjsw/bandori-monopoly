@@ -67,11 +67,11 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// 任意"RiNG"时可使用一个"抹茶芭菲"获得400资金」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
-    if ctx::is_circle(t) {
+    if ctx::is_start(t) {
         rules_status::fire::gain(player_id, 1, &Msg::new(key!("rana_parking_gain")))?;
         return Ok(());
     }
-    if ctx::is_ring(t) && ctx::tok(player_id, PARFAIT) >= 1 {
+    if ctx::is_deed(t) && ctx::tok(player_id, PARFAIT) >= 1 {
         if ctx::ask_yes(
             player_id,
             &Msg::new(key!("rana_parking_title")),

@@ -48,8 +48,8 @@ use crate::state::{FieldCard, TileTextEntry};
 #[allow(dead_code)] // the full scan order, not just the groups we walk today
 enum LookupGroup {
     Status = 0,
-    Band = 1,
-    Character = 2,
+    Group = 1,
+    Persona = 2,
     Field = 3,
     Hand = 4,
     Discard = 5,
@@ -112,9 +112,9 @@ pub fn compose(world: &World, data: &GameData, rules: &dyn CardRules) -> Vec<Vec
                 continue;
             };
             let group = if f.group_skill {
-                LookupGroup::Band
+                LookupGroup::Group
             } else if f.card.starts_with("skill:") {
-                LookupGroup::Character
+                LookupGroup::Persona
             } else {
                 LookupGroup::Field
             };

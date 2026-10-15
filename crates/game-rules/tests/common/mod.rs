@@ -100,7 +100,7 @@ pub fn tile(name: &str) -> usize {
 }
 
 /// Every persona name in the roster, in roster order.
-pub fn characters() -> Vec<String> {
+pub fn personas() -> Vec<String> {
     data().personas.iter().map(|c| c.name.clone()).collect()
 }
 
@@ -120,7 +120,7 @@ impl Table {
     /// [`Self::new`] with extra cards on top of each player's opening draw
     /// pile **before** `quick_start`, so a `deckBeforeGame` hook sees them.
     pub fn with_opening_draw(chars: &[&str], top_first: &[&str]) -> Self {
-        let names = characters();
+        let names = personas();
         let cs: Vec<&str> = names.iter().take(chars.len()).map(String::as_str).collect();
         let mut t = Self::new_with_draw(&cs, top_first);
         t.strip_skills();
@@ -156,7 +156,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         {
@@ -223,7 +223,7 @@ impl Table {
         }
         for (k, c) in chars.iter().enumerate() {
             if !c.is_empty() {
-                m.set_character(k as i32 + 1, c);
+                m.set_persona(k as i32 + 1, c);
             }
         }
         m.quick_start();
@@ -257,10 +257,10 @@ impl Table {
     }
 
     /// `n` players with no skills at all and a clean board -- the setting for a
-    /// card's own behaviour. Characters are still set (exclusive cards read
-    /// them; use [`Table::set_character_raw`] to change one).
+    /// card's own behaviour. Personas are still set (exclusive cards read
+    /// them; use [`Table::set_persona_raw`] to change one).
     pub fn vanilla(n: usize) -> Self {
-        let names = characters();
+        let names = personas();
         let chars: Vec<&str> = names.iter().take(n).map(String::as_str).collect();
         let mut t = Self::new(&chars);
         t.strip_skills();
@@ -592,7 +592,7 @@ impl Table {
     /// no deeds / houses / mortgages / marks, no non-skill field cards, no
     /// statuses, no pending turn-end callbacks. Start-time resources (charge pots
     /// 「初始N」, P✽P fans) are wiped too -- their caps stay, so a skill's
-    /// 「上限M」 still reads back. Use [`Table::set_fire`] to put a specific pot
+    /// 「上限M」 still reads back. Use [`Table::set_charge`] to put a specific pot
     /// back.
     pub fn clean(&mut self) -> &mut Self {
         let w = self.m.world_mut();
@@ -642,7 +642,7 @@ impl Table {
     }
 
     /// Set a player's persona **without** binding its skills.
-    pub fn set_character_raw(&mut self, who: usize, name: &str) {
+    pub fn set_persona_raw(&mut self, who: usize, name: &str) {
         self.m.world_mut().st.players[who].persona = name.into();
     }
 
@@ -697,8 +697,8 @@ impl Table {
         self.m.world_mut().st.players[who].state.insert(key.into(), v);
     }
 
-    /// Fire pots: `value` held, `max` cap.
-    pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
+    /// Charge pots: `value` held, `max` cap.
+    pub fn set_charge(&mut self, who: usize, value: i32, max: i32) {
         let p = &mut self.m.world_mut().st.players[who];
         p.state_set(key::CHARGE, value);
         let min = p.state_min(key::CHARGE);
@@ -773,7 +773,7 @@ impl Table {
 
     /// Named bonus counter count on the event's board-owner rule instance (the public
     /// `ActiveEvent::counter` mirrors it).
-    pub fn event_crystals(&self, id: &str) -> Option<i32> {
+    pub fn event_counters(&self, id: &str) -> Option<i32> {
         self.m
             .world()
             .st
@@ -852,14 +852,14 @@ impl Table {
     }
 
     /// Named bonus counters on `who`'s first field copy of `card` (None if not placed).
-    pub fn crystals(&self, who: usize, card: &str) -> Option<i32> {
+    pub fn counters(&self, who: usize, card: &str) -> Option<i32> {
         self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.values().sum::<i32>())
     }
 
     /// Put `n` [named counters] on `who`'s first field copy of `card`. No-op when the
     /// card is not placed. This is where group-card named counters go now -- the group
     /// skill's own instance, not a keyed state.
-    pub fn set_crystals(&mut self, who: usize, card: &str, n: i32) {
+    pub fn set_counters(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
             f.counters.insert("crystals".into(), n);
@@ -867,18 +867,18 @@ impl Table {
     }
 
     /// On-card [tile marks] on `who`'s first field copy of `card` (None if not
-    /// placed) -- `FieldCard::cp`, 「自己fieldN个[tile marks]」 (user ruling
-    /// 2026-10-07: the CP points attached to the card). This is the number the
+    /// placed) -- the on-card mark counter, 「自己fieldN个[tile marks]」 (user
+    /// ruling 2026-10-07: the mark points attached to the card). This is the number the
     /// view's field-card counter badge shows.
-    pub fn cp_on_card(&self, who: usize, card: &str) -> Option<i32> {
+    pub fn marks_on_card(&self, who: usize, card: &str) -> Option<i32> {
         self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("cp").copied().unwrap_or(0))
     }
 
     /// Put `n` on-card [tile marks] on `who`'s first field copy of `card` (test seam,
-    /// the same shape as [`Self::set_crystals`]). No-op when the card is not
+    /// the same shape as [`Self::set_counters`]). No-op when the card is not
     /// placed. Does not raise `cpChanged` -- that rides a real write through
     /// `ctx::add_cp` / `add_cp_at`; use this only to arrange a starting count.
-    pub fn set_cp_on_card(&mut self, who: usize, card: &str, n: i32) {
+    pub fn set_marks_on_card(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
             f.counters.insert("cp".into(), n);
@@ -908,7 +908,7 @@ impl Table {
             .map(|f| (f.group_skill, f.card))
             .collect();
         // Group skills first (stable within each group).
-        hits.sort_by_key(|(band, _)| !band);
+        hits.sort_by_key(|(is_group, _)| !is_group);
         hits.into_iter()
             .next()
             .map(|(_, c)| c)

@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
     &[On::Counteract(
-        &[ChainKind::CircleAffected],
+        &[ChainKind::PassRewardAffected],
         card_sdk::pre::MINE,
         None,
         counteract,

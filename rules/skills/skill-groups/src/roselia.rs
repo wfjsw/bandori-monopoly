@@ -24,7 +24,7 @@ pub const ROSELIA: CardDef = CardDef::new(
         // （2）/（1）'s 「购买价格减半」 is the buy price's `BuyMul` stage
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
         // The Live-House / one-shot split is residual (`is_live_house_for` is a
-        // per-player colour, not CEL's tile-kind `is_live_house`).
+        // per-player colour, not CEL's tile-kind `is_venue`).
         On::Hook(&[HookKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
         On::Hook(

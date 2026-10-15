@@ -360,7 +360,7 @@ impl World {
                 .sum::<i32>()
     }
 
-    /// The tile `steps` ahead of a player as pure geometry on the ring -- no
+    /// The tile `steps` ahead of a player as pure geometry on the board loop -- no
     /// walk shaping, just wrap.
     pub fn tile_steps_ahead(&self, data: &GameData, player_id: i32, steps: i32) -> i32 {
         let n = data.tiles.len() as i32;
@@ -1409,11 +1409,11 @@ impl World {
         rules: &dyn super::rules::CardRules,
         player_id: i32,
     ) {
-        let character = self
+        let persona = self
             .player_id(player_id)
             .map(|s| s.persona.clone())
             .unwrap_or_default();
-        for id in data.skill_rules_of(&character) {
+        for id in data.skill_rules_of(&persona) {
             if !self.placed_cards(player_id).contains(&id) {
                 let props = rules.card_props(&id);
                 self.place_card(data, player_id, &id, Msg::default(), props);

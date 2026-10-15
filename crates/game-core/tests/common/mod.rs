@@ -1,12 +1,11 @@
-//! Shared test harness: [`GameData`] from `data/` with a roster parsed from
-//! the generated fixture.
+//! Shared test harness: [`GameData`] from `data/` with a synthetic roster
+//! fixture.
 //!
 //! `game-core` must not depend on the card crates, so tests cannot ask a
 //! ruleset for the roster. The checked-in fixture
-//! (`crates/game-core/tests/fixtures/roster.json`, written by
-//! `cargo run -p rules-native --example dump_roster -- --fixture`) is the
-//! bridge: [`Roster::from_fixture`] loads it without `game-core` touching the
-//! card crates. Regenerate with the command in `roster_equiv.rs`.
+//! (`crates/game-core/tests/fixtures/roster.json`) is a tiny engine-generic
+//! roster (Alpha/Beta/... in GroupA/GroupB) loaded via [`Roster::from_fixture`]
+//! so the crate never touches the card crates or a shipped ruleset roster.
 #![allow(dead_code)] // each test binary uses a subset of the helpers
 
 use std::path::Path;
@@ -18,7 +17,7 @@ pub fn data_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data")
 }
 
-/// `GameData` from `data/`, roster from the generated fixture.
+/// `GameData` from `data/`, roster from the synthetic fixture.
 pub fn data() -> GameData {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let dir = root.join("../../data");

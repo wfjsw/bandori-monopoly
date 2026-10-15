@@ -215,7 +215,7 @@ pub fn base_quote(data: &GameData, st: &MatchState, t: usize, kind: BuyKind) -> 
 
 /// Ask the rules crate's `buy_quote` for `tiles` -- each `(tile, seller)`, the
 /// seller `-1` for the bank -- on behalf of `player` at `kind`. One batched
-/// call, so a hooking ruleset fires its hooks once for the whole list and the
+/// call, so a hooking ruleset runs its hooks once for the whole list and the
 /// callers all see the same figure (quote == charge).
 pub fn quote_for(
     rules: &dyn crate::engine::rules::CardRules,

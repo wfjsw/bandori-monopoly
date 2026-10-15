@@ -17,7 +17,7 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
     "RAS:练习室里的风暴",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed && is_circle(tile.id)", None, pass_tile),
+        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed && is_start(tile.id)", None, pass_tile),
         // （2）「在距此卡所在格子X个格子处[结算]时」 is 行动阶段 15
         // (`SETTLE-STAGES.md` §4 M2) -- an entry in the settle's effect list.
         // `docs/TILES.md` names the long-term home as a remote-settle rule

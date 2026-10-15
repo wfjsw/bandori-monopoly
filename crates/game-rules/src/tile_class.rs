@@ -3,9 +3,8 @@
 //! Generic class-membership props (`class:<class>` / `classFor:<p>:<class>`)
 //! are checked **first** by the caller -- they are the per-player override
 //! mechanism, not more hard-coded host logic. What lives here is the static
-//! class definition table that replaces the old game-named predicates
-//! (`is_buyable` / `is_shop` / `is_live_house` / `is_live_house_for` /
-//! `is_color`).
+//! class definition table that replaces the old per-predicate readers
+//! (`is_buyable` / `is_shop` / venue / colour helpers).
 //!
 //! Kind checks are **not** classes -- they are `tile_is` / `TileData.kind`.
 
@@ -64,14 +63,14 @@ pub fn tile_in(
 }
 
 /// The ruleset class definitions (static half of `tile_in`, after the generic
-/// `class*` props). Matching today's hard-coded predicates exactly:
+/// `class*` props). Class-name strings are ruleset bindings. Matching today's
+/// hard-coded predicates exactly:
 ///
-/// * `"buyable"` -> `TileData::is_buyable()` (property|ring) -- old `is_buyable`
-/// * `"shop"` -> buyable && group == 10 -- old `is_shop`
-/// * `"livehouse"` -> buyable && group == 6, or for one player buyable &&
-///   colour 6 -- old `is_live_house` / `is_live_house_for`
-/// * `"color:<g>"` -> old `is_color` (own group / `ALL_COLORS` / `anyColor` /
-///   `colorFor:<p>`)
+/// * `"buyable"` -> `TileData::is_buyable()`
+/// * `"shop"` -> buyable && group == 10
+/// * `"livehouse"` (ruleset venue-class binding) -> buyable && group == 6, or
+///   for one player buyable && colour 6
+/// * `"color:<g>"` -> own group / `ALL_COLORS` / `anyColor` / `colorFor:<p>`
 /// * unknown -> false
 pub fn class_matches(
     data: Option<&TileData>,
@@ -86,6 +85,7 @@ pub fn class_matches(
         "buyable" => t.is_buyable(),
         "shop" => t.is_buyable() && t.group == 10,
         "livehouse" => {
+            // Ruleset venue-class binding.
             if player_id < 0 {
                 t.is_buyable() && t.group == 6
             } else {
@@ -178,6 +178,7 @@ pub fn class_rows_plain(
                 "buyable" => t.is_buyable(),
                 "shop" => t.is_buyable() && t.group == 10,
                 "livehouse" => {
+                    // Ruleset venue-class binding.
                     if p < 0 {
                         t.is_buyable() && t.group == 6
                     } else {

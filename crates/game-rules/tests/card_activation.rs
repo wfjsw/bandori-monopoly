@@ -2,7 +2,7 @@
 //! flash -- and its 「效果适用」 line names what applied and why. Exactly one
 //! per real body run --
 //!
-//! * a field-card hook on a tile fires once when its guard admits the landing,
+//! * a field-card hook on a tile runs once when its guard admits the landing,
 //!   and stays completely silent when the guard rejects;
 //! * a counteraction whose own link an answer negated still shows the card,
 //!   marked `negated` (its body does not run), logging 「<卡名> 的效果被无效」;
@@ -68,20 +68,20 @@ fn field_card_hook_on_a_tile_activates_once_and_stays_silent_when_the_guard_reje
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    let fired = activations_since(&t, mark, "TEST:tileHook");
+    let ran = activations_since(&t, mark, "TEST:tileHook");
     assert_eq!(
-        fired.len(),
+        ran.len(),
         1,
-        "exactly one activation when the hook fires: {}",
+        "exactly one activation when the hook runs: {}",
         t.recent_keys(20).join(", ")
     );
-    assert_eq!(fired[0].kind, "hook", "a settle hook is a hook activation");
-    assert!(!fired[0].negated, "a hook that ran is not negated");
-    assert_eq!(fired[0].player_id, 0, "the card's owner bars the flash");
-    assert_eq!(fired[0].value, 3, "the tile it fired on rides the event");
+    assert_eq!(ran[0].kind, "hook", "a settle hook is a hook activation");
+    assert!(!ran[0].negated, "a hook that ran is not negated");
+    assert_eq!(ran[0].player_id, 0, "the card's owner bars the flash");
+    assert_eq!(ran[0].value, 3, "the tile it ran on rides the event");
     // An already-in-play card's effect logs 「效果适用」 + why (not 「发动」).
     assert_eq!(
-        fired[0].msg.key(),
+        ran[0].msg.key(),
         "log.effect_applied",
         "the header names what applied and why"
     );
@@ -90,7 +90,7 @@ fn field_card_hook_on_a_tile_activates_once_and_stays_silent_when_the_guard_reje
     let children: Vec<_> = t
         .events_since(mark)
         .into_iter()
-        .filter(|e| e.parent == fired[0].id)
+        .filter(|e| e.parent == ran[0].id)
         .collect();
     assert!(
         !children.is_empty(),
@@ -235,11 +235,11 @@ fn hook_whose_cel_pre_rejects_stays_silent() {
     t.play(0, "TEST:selfCharge").unwrap();
     drain(&mut t);
 
-    let fired = activations_since(&t, mark, "TEST:preHook");
+    let ran = activations_since(&t, mark, "TEST:preHook");
     assert!(
-        fired.is_empty(),
+        ran.is_empty(),
         "a rejecting condition must not flash: {:?} / {}",
-        fired,
+        ran,
         t.recent_keys(20).join(", ")
     );
     // The payment itself went through (its own activation is a separate card).
@@ -418,11 +418,11 @@ fn gate_whose_cel_pre_rejects_stays_silent() {
     t.give_play(1, "TEST:stunner").unwrap();
     drain(&mut t);
 
-    let fired = activations_since(&t, mark, "TEST:preGate");
+    let ran = activations_since(&t, mark, "TEST:preGate");
     assert!(
-        fired.is_empty(),
+        ran.is_empty(),
         "a rejecting gate condition must not flash: {:?} / {}",
-        fired,
+        ran,
         t.recent_keys(20).join(", ")
     );
     // The body never ran, so nothing about the card reached the log either.
@@ -457,11 +457,11 @@ fn rollplan_whose_cel_pre_rejects_stays_silent() {
     t.roll(0).unwrap();
     drain(&mut t);
 
-    let fired = activations_since(&t, mark, "TEST:preRollPlan");
+    let ran = activations_since(&t, mark, "TEST:preRollPlan");
     assert!(
-        fired.is_empty(),
+        ran.is_empty(),
         "a rejecting RollPlan condition must not flash: {:?} / {}",
-        fired,
+        ran,
         t.recent_keys(20).join(", ")
     );
     assert!(
@@ -491,11 +491,11 @@ fn atend_whose_cel_pre_rejects_stays_silent() {
     t.end(0).unwrap();
     drain(&mut t);
 
-    let fired = activations_since(&t, mark, "TEST:preAtEnd");
+    let ran = activations_since(&t, mark, "TEST:preAtEnd");
     assert!(
-        fired.is_empty(),
+        ran.is_empty(),
         "a rejecting AtEnd condition must not flash: {:?} / {}",
-        fired,
+        ran,
         t.recent_keys(20).join(", ")
     );
     assert!(

@@ -26,7 +26,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle),
+        On::Hook(&[HookKind::PassRewardAffected], card_sdk::pre::MINE, None, on_circle),
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
         // applicability (residual guard; `pre::MINE` already states the actor).
         On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_has_rabbits), on_pass),

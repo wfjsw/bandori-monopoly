@@ -76,8 +76,8 @@ pub fn no_flash<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
 }
 
 /// `ctx::flash_card` -- proactive "look here" flash of another card.
-pub fn flash_card<C: HostCtx>(c: &mut C, cp: i32, cl: i32, p: i32, n: i32) -> Result<(), HostErr> {
-    let card_id = guest_str(c, cp, cl)?;
+pub fn flash_card<C: HostCtx>(c: &mut C, cptr: i32, cl: i32, p: i32, n: i32) -> Result<(), HostErr> {
+    let card_id = guest_str(c, cptr, cl)?;
     let msg = guest_msg(c, p, n)?;
     c.st_mut().w().flash_card(&card_id, msg);
     Ok(())
@@ -88,13 +88,13 @@ pub fn flash_card_keyed<C: HostCtx>(
     c: &mut C,
     kp: i32,
     kl: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     p: i32,
     n: i32,
 ) -> Result<(), HostErr> {
     let key = guest_str(c, kp, kl)?;
-    let card_id = guest_str(c, cp, cl)?;
+    let card_id = guest_str(c, cptr, cl)?;
     let msg = guest_msg(c, p, n)?;
     c.st_mut().w().flash_card_keyed(&key, &card_id, msg);
     Ok(())
@@ -117,7 +117,7 @@ pub fn place_mark<C: HostCtx>(
     tile: i32,
     kp: i32,
     kl: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     owner: i32,
     src: i32,
@@ -127,7 +127,7 @@ pub fn place_mark<C: HostCtx>(
     nl: i32,
 ) -> Result<i32, HostErr> {
     let kind = guest_str(c, kp, kl)?;
-    let category = guest_str(c, cp, cl)?;
+    let category = guest_str(c, cptr, cl)?;
     let note = guest_msg(c, np, nl)?;
     let fresh = stack != 0; // Stack::Fresh = 1
     Ok(c.st_mut().w().place_mark(
@@ -222,12 +222,12 @@ pub fn add_counter_at<C: HostCtx>(
 pub fn card_counter<C: HostCtx>(
     c: &mut C,
     player_id: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     np: i32,
     nl: i32,
 ) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+    let card = guest_str(c, cptr, cl)?;
     let name = guest_str(c, np, nl)?;
     Ok(c.st().wr().card_counter(player_id, &card, &name))
 }
@@ -235,14 +235,14 @@ pub fn card_counter<C: HostCtx>(
 pub fn add_card_counter<C: HostCtx>(
     c: &mut C,
     player_id: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
     np: i32,
     nl: i32,
     n: i32,
     max: i32,
 ) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+    let card = guest_str(c, cptr, cl)?;
     let name = guest_str(c, np, nl)?;
     Ok(c.st_mut().w().add_card_counter(player_id, &card, &name, n, max))
 }
@@ -539,7 +539,7 @@ pub fn owned_at<C: HostCtx>(c: &mut C, player_id: i32, index: i32) -> Result<i32
 }
 
 /// `tile_is(tile, kind_ptr, kind_len) -> i32` -- data kind by wire spelling.
-/// Replaces `is_circle` / `is_ring` / `is_agent`.
+/// Generic kind probe by ruleset tile-kind spelling.
 pub fn tile_is<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
     let kind = guest_str(c, kp, kl)?;
     Ok(c.st().wr().tile_is(tile, &kind) as i32)
@@ -554,16 +554,15 @@ pub fn tile_attr<C: HostCtx>(c: &mut C, tile: i32, ap: i32, al: i32) -> Result<i
 }
 
 /// `tile_in(player_id, tile, class_ptr, class_len) -> i32` -- class membership.
-/// Replaces `is_buyable` / `is_shop` / `is_live_house` / `is_live_house_for` /
-/// `is_color`.
+/// Generic class probe by ruleset class-name binding.
 pub fn tile_in<C: HostCtx>(
     c: &mut C,
     player_id: i32,
     tile: i32,
-    cp: i32,
+    cptr: i32,
     cl: i32,
 ) -> Result<i32, HostErr> {
-    let class = guest_str(c, cp, cl)?;
+    let class = guest_str(c, cptr, cl)?;
     Ok(c.st().wr().tile_in(player_id, tile, &class) as i32)
 }
 
@@ -931,8 +930,8 @@ pub fn placed_cards<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -
             Ok(bytes.len() as i32)
 }
 
-pub fn card_text_mentions<C: HostCtx>(c: &mut C, cp: i32, cl: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn card_text_mentions<C: HostCtx>(c: &mut C, cptr: i32, cl: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             let needle = guest_str(c, np, nl)?;
             Ok(c.st().wr().card_text_mentions(&card, &needle) as i32)
 }
@@ -1331,7 +1330,7 @@ pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> 
 pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
             // Marker window (user ruling 2026-10-07): `markerSpend` opens
-            // **before** the fire moves. A cancelled link spends nothing.
+            // **before** the charge moves. A cancelled link spends nothing.
             if n > 0 {
                 let ok = crate::inline::request_or_pause(
                     c,
@@ -1408,8 +1407,8 @@ pub fn tok_names<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, buf: i32
             Ok(bytes.len() as i32)
 }
 
-pub fn unplace_card_named<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn unplace_card_named<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             Ok(c.st_mut().w().unplace_card_named(player_id, &card) as i32)
 }
 
@@ -1419,8 +1418,8 @@ pub fn can_build_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
     Ok((c.st().wr().can_build_on(player_id, tile) && pay_gate_open(c, player_id)) as i32)
 }
 
-pub fn card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             Ok(c.st().wr().card_face_down(player_id, &card) as i32)
 }
 
@@ -1448,8 +1447,8 @@ pub fn gain_fixed<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n:
             gain(c, player_id, amount, p, n)
 }
 
-pub fn set_card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, down: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn set_card_face_down<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, down: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             Ok(c.st_mut()
                 .w()
                 .set_card_face_down(player_id, &card, down != 0) as i32)
@@ -1474,8 +1473,8 @@ fn field_uid_of<C: HostCtx>(c: &C, player_id: i32, card: &str) -> i32 {
 /// 「不受任何效果影响」 on a named placed card. Resolved through the instance
 /// (`is_immune_at` / `set_immune_at`): the card name is not an identity, so
 /// this hits the first field copy.
-pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, on: i32) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, on: i32) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
         return Ok(0);
@@ -1483,8 +1482,8 @@ pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, 
     Ok(c.st_mut().w().set_immune_at(uid, on != 0) as i32)
 }
 
-pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
         return Ok(0);
@@ -1492,8 +1491,8 @@ pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> R
     Ok(c.st().wr().is_immune_at(uid) as i32)
 }
 
-pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, tile: i32) -> Result<i32, HostErr> {
-    let card = guest_str(c, cp, cl)?;
+pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, tile: i32) -> Result<i32, HostErr> {
+    let card = guest_str(c, cptr, cl)?;
     let uid = field_uid_of(c, player_id, &card);
     if uid < 0 {
         return Ok(0);
@@ -1501,14 +1500,14 @@ pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, ti
     Ok(c.st_mut().w().set_tile_at(uid, tile) as i32)
 }
 
-pub fn place_card_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, cp: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn place_card_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, cptr: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             let note = guest_msg(c, p, n)?;
             Ok(c.st_mut().w().place_card_on(player_id, tile, &card, note))
 }
 
-pub fn place_card_at<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
+pub fn place_card_at<C: HostCtx>(c: &mut C, player_id: i32, cptr: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+            let card = guest_str(c, cptr, cl)?;
             let note = guest_msg(c, p, n)?;
             Ok(c.st_mut().w().place_card(player_id, &card, note))
 }

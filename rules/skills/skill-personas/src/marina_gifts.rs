@@ -25,7 +25,7 @@ pub const MARINA_GIFTS: CardDef = CardDef::new(
     // 「其他玩家经过CiRCLE时」 -- another player's pass onto CiRCLE.
     &[On::Hook(
         &[HookKind::Pass],
-        "actor != owner && actor >= 0 && is_circle(tile.id)",
+        "actor != owner && actor >= 0 && is_start(tile.id)",
         None,
         on_pass,
     )],
@@ -38,7 +38,7 @@ const PAYOUT: i32 = 1200;
 
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     // 「其他玩家经过CiRCLE时」 is the condition
-    // (`actor != owner && actor >= 0 && is_circle(tile.id)`).
+    // (`actor != owner && actor >= 0 && is_start(tile.id)`).
     let passer = ctx::trigger::player_id();
     // 「可向你支付一次500资金」 -- the passer's call.
     let offered = ctx::ask_yes(

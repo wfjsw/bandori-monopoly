@@ -37,7 +37,7 @@ pub fn can_use(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
     cant_play(data, c, card).is_none()
 }
 
-/// Members of a group with the `shares_exclusives` trait (Sumimi) may use each
+/// Members of a group with the `shares_exclusives` trait may use each
 /// other's exclusive cards.
 pub fn shares_exclusives(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
     data.group_shares_exclusives(c)
@@ -50,7 +50,7 @@ pub fn shares_exclusives(data: &GameData, c: &PersonaData, card: &CardData) -> b
 pub fn pool<'a>(data: &'a GameData, c: &PersonaData) -> Vec<&'a CardData> {
     let usable: Vec<&CardData> = data.cards.iter().filter(|k| can_use(data, c, k)).collect();
     let excl = usable.iter().copied().filter(|k| k.exclusive());
-    let band = usable
+    let group_cards = usable
         .iter()
         .copied()
         .filter(|k| !k.exclusive() && !k.is_universal());
@@ -58,7 +58,7 @@ pub fn pool<'a>(data: &'a GameData, c: &PersonaData) -> Vec<&'a CardData> {
         .iter()
         .copied()
         .filter(|k| !k.exclusive() && k.is_universal());
-    excl.chain(band).chain(general).collect()
+    excl.chain(group_cards).chain(general).collect()
 }
 
 /// Derived cards that can appear for `c` during a match (never in a starting deck).

@@ -285,7 +285,7 @@ pub fn band_01_clear_mutant_is_detected() {
 // `tile_named` resolves only 「江户川乐器店」 and returns -1 for every other
 // name, so a legal "passing CiRCLE" setup cannot be built (BLOCKED-HOST
 // `tile_named`). The shared fire spec is proven on `hina_01_pass_circle_iff`
-// (whose body is the plain `gain_charge` under the real `is_circle` guard).
+// (whose body is the plain `gain_charge` under the real `is_start` guard).
 // This harness covers the no-op half that does NOT need `tile_named`: when
 // the Pass body is entered on a non-CiRCLE, non-shop tile the shop branch
 // would hit `rent_of` (also unmodeled) — so the only safe entry is the

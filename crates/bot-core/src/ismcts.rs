@@ -74,10 +74,10 @@ pub struct SearchConfig {
     /// bit-identical; the production paths (`bot-service`, `bot-glue`) turn
     /// it on. See [`SearchConfig::deterministic`].
     pub early_stop: bool,
-    /// Minimum completed iterations before an early stop may fire. 4 is
+    /// Minimum completed iterations before an early stop may trigger. 4 is
     /// enough for a visit lead to exist at all and is below the real
     /// ruleset's ~4-iteration floor (one wasmtime rollout is hundreds of ms),
-    /// so the rule can fire there too -- the all-root-actions-tried guard
+    /// so the rule can trigger there too -- the all-root-actions-tried guard
     /// below is the real protection against an unexpanded-action artifact.
     pub min_iterations: u64,
     /// Second, optional early-stop rule: stop when the leader's value
@@ -267,7 +267,7 @@ pub struct SearchOutcome {
     /// True when the search stopped before the budget because the best root
     /// action could not be overtaken (`SearchConfig::early_stop`). The
     /// budget / iteration cap are still honoured; this only reports that the
-    /// new rule fired. Root-parallel: true when **any** thread early-stopped.
+    /// new rule triggered. Root-parallel: true when **any** thread early-stopped.
     pub early_stopped: bool,
     /// Full root statistics (visits + value sums + heuristic evals), sorted
     /// like [`Self::root_stats`].
@@ -1016,7 +1016,7 @@ fn early_stop_should_break(
     let remaining_s = remaining.as_secs_f64();
     // Inflated remainder (1.3×) plus a +1 margin. `min_iterations` is the
     // *guard* above, not part of the margin -- folding it in (as an earlier
-    // draft did) made the rule unable to fire on the real ruleset at all,
+    // draft did) made the rule unable to trigger on the real ruleset at all,
     // where one thread completes only ~4 iterations per decision. 1.3× is
     // enough headroom for a cheaper-next-iteration rate error; the strength
     // A/B (§5 C2) is the gate on whether it is enough.

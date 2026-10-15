@@ -29,7 +29,7 @@ pub const MORFONICA: CardDef = CardDef::new(
         // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
         // half of the CiRCLE pick.
         On::Hook(
-            &[HookKind::CircleAffected],
+            &[HookKind::PassRewardAffected],
             "actor == owner && value == 0",
             None,
             on_circle,
@@ -68,7 +68,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// （2）「[CiRCLE奖励]选择[获得]资金时」 -- `circleAffected` now fires between the
+// （2）「[CiRCLE奖励]选择[获得]资金时」 -- `passRewardAffected` now fires between the
 // pick and the payout, with `t.value` = 0 (money) / 1 (card). The guard keys on
 // the money half only, so the draw option is left alone.
 

@@ -4,7 +4,7 @@
 //! * a silent entry produces no `"card"` event and no header;
 //! * a non-silent sibling entry on the same card still flashes;
 //! * a nested activation from a silent body still announces normally;
-//! * the debug guard (silent + visible effect) fires in a test fixture.
+//! * the debug guard (silent + visible effect) runs in a test fixture.
 
 mod common;
 
@@ -26,7 +26,7 @@ fn drain(t: &mut Table) {
     }
 }
 
-/// Place `card` on player 0's field and land so its settle hooks fire.
+/// Place `card` on player 0's field and land so its settle hooks run.
 fn place_and_land(t: &mut Table, card: &str) -> i32 {
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
@@ -47,15 +47,15 @@ fn place_and_land(t: &mut Table, card: &str) -> i32 {
 fn silent_entry_produces_no_card_event_and_the_sibling_still_flashes() {
     let mut t = Table::vanilla(2);
     let mark = place_and_land(&mut t, "TEST:silentPair");
-    let fired = activations_since(&t, mark, "TEST:silentPair");
+    let ran = activations_since(&t, mark, "TEST:silentPair");
     assert_eq!(
-        fired.len(),
+        ran.len(),
         1,
         "only the flashing sibling announces: {}",
         t.recent_keys(30).join(", ")
     );
     assert_eq!(
-        fired[0].msg.key(),
+        ran[0].msg.key(),
         "log.effect_applied",
         "the sibling's header is a real 「效果适用」"
     );
@@ -64,7 +64,7 @@ fn silent_entry_produces_no_card_event_and_the_sibling_still_flashes() {
     let all: Vec<_> = t
         .events_since(mark)
         .into_iter()
-        .filter(|e| e.parent == fired[0].id)
+        .filter(|e| e.parent == ran[0].id)
         .collect();
     let flash_lines: Vec<_> = all
         .iter()
@@ -82,7 +82,7 @@ fn silent_entry_produces_no_card_event_and_the_sibling_still_flashes() {
 /// entry's own flash).
 ///
 /// `TEST:silentPay`'s silent settle body gains money; that runs the money
-/// pipeline's `payTotalAdd` stage, which fires `TEST:totalCut`'s hook.
+/// pipeline's `payTotalAdd` stage, which runs `TEST:totalCut`'s hook.
 #[test]
 fn nested_activation_from_a_silent_body_still_announces() {
     let mut t = Table::vanilla(2);
@@ -163,9 +163,9 @@ fn quiet_when_empty_retracts_a_no_op_header() {
     let mark = place_and_land(&mut t, "TEST:silentQuiet");
     // Entry 1 (settle hook, scratch-only body) must not appear.
     // Entry 2 (turn-end log) is a different drive; this landing is entry 1.
-    let fired = activations_since(&t, mark, "TEST:silentQuiet");
+    let ran = activations_since(&t, mark, "TEST:silentQuiet");
     assert!(
-        fired.is_empty(),
+        ran.is_empty(),
         "a no-op QuietWhenEmpty body must not leave a header: {:?}",
         t.recent_keys(25)
     );
@@ -192,18 +192,18 @@ fn quiet_when_empty_keeps_a_header_when_the_body_logged() {
     while t.prompt().is_some() {
         t.decline();
     }
-    let fired: Vec<_> = t
+    let ran: Vec<_> = t
         .events_since(mark)
         .into_iter()
         .filter(|e| e.r#type == "card" && e.card == "TEST:silentQuiet")
         .collect();
     assert_eq!(
-        fired.len(),
+        ran.len(),
         1,
         "a logging QuietWhenEmpty body keeps its header: {}",
         t.recent_keys(25).join(", ")
     );
-    assert_eq!(fired[0].msg.key(), "log.effect_applied");
+    assert_eq!(ran[0].msg.key(), "log.effect_applied");
 }
 
 
@@ -235,12 +235,12 @@ fn self_only_activation_has_no_flash() {
     while t.prompt().is_some() {
         t.decline();
     }
-    let fired = activations_since(&t, mark, "TEST:tileHook");
-    assert_eq!(fired.len(), 1, "the hook still announces: {}", t.recent_keys(20).join(", "));
+    let ran = activations_since(&t, mark, "TEST:tileHook");
+    assert_eq!(ran.len(), 1, "the hook still announces: {}", t.recent_keys(20).join(", "));
     assert!(
-        !fired[0].flash,
+        !ran[0].flash,
         "a log-only hook is SelfOnly: {:?}",
-        fired[0]
+        ran[0]
     );
 }
 
@@ -260,16 +260,16 @@ fn cross_player_activation_flashes() {
     while t.prompt().is_some() {
         t.decline();
     }
-    let fired: Vec<_> = t
+    let ran: Vec<_> = t
         .events_since(mark)
         .into_iter()
         .filter(|e| e.r#type == "card" && e.card == "TEST:xfer1000")
         .collect();
-    assert_eq!(fired.len(), 1, "the play announces: {}", t.recent_keys(20).join(", "));
+    assert_eq!(ran.len(), 1, "the play announces: {}", t.recent_keys(20).join(", "));
     assert!(
-        fired[0].flash,
+        ran[0].flash,
         "a transfer to another player must flash: {:?}",
-        fired[0]
+        ran[0]
     );
 }
 
@@ -292,9 +292,9 @@ fn declined_optional_prompt_leaves_no_trace() {
     while t.prompt().is_some() {
         t.decline();
     }
-    let fired = activations_since(&t, mark, "TEST:silentAsk");
+    let ran = activations_since(&t, mark, "TEST:silentAsk");
     assert!(
-        fired.is_empty(),
+        ran.is_empty(),
         "a declined optional prompt must leave no header: {}",
         t.recent_keys(25).join(", ")
     );
@@ -328,9 +328,9 @@ fn accepted_optional_prompt_keeps_the_header() {
     while t.prompt().is_some() {
         t.decline();
     }
-    let fired = activations_since(&t, mark, "TEST:silentAsk");
+    let ran = activations_since(&t, mark, "TEST:silentAsk");
     assert_eq!(
-        fired.len(),
+        ran.len(),
         1,
         "an accepted offer keeps its header: {}",
         t.recent_keys(25).join(", ")

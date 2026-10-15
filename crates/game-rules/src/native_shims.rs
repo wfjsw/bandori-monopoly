@@ -34,9 +34,9 @@ pub trait HostOps {
     fn op_flash(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_no_flash` (v55)
     fn op_no_flash(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_flash_card` (v55) -- 4 args in the array (cp, cl, p, n).
+    /// `ruleset_flash_card` (v55) -- 4 args in the array (cptr, cl, p, n).
     fn op_flash_card(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_flash_card_keyed` (v55) -- 6 args (kp, kl, cp, cl, p, n).
+    /// `ruleset_flash_card_keyed` (v55) -- 6 args (kp, kl, cptr, cl, p, n).
     fn op_flash_card_keyed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_flash_tile` (v55) -- 3 args (tile, p, n).
     fn op_flash_tile(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
@@ -578,7 +578,7 @@ pub trait HostOps {
     fn op_card_face_down(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_place_mark` -- 11 args, explicit params (the array is only 6).
     /// `stack`: 0 = merge, 1 = fresh row.
-    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
+    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
     /// `ruleset_count_marks_f`
     fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr>;
     /// `ruleset_bump_mark_f`
@@ -600,9 +600,9 @@ pub trait HostOps {
     /// `ruleset_add_counter_at`
     fn op_add_counter_at(&mut self, uid: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr>;
     /// `ruleset_card_counter`
-    fn op_card_counter(&mut self, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
+    fn op_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32) -> Result<i64, HostErr>;
     /// `ruleset_add_card_counter`
-    fn op_add_card_counter(&mut self, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr>;
+    fn op_add_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr>;
     /// `ruleset_count_held`
     fn op_count_held(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr>;
     /// `ruleset_add_held`
@@ -1555,8 +1555,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_card_face_down(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_face_down(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::place_mark(self, tile, kp, kl, cp, cl, owner, src, count, stack, np, nl)? as i64)
+    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::place_mark(self, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl)? as i64)
     }
     fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::count_marks_f(self, tile, fp, fl)? as i64)
@@ -1588,11 +1588,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_add_counter_at(&mut self, uid: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::add_counter_at(self, uid, np, nl, n, max)? as i64)
     }
-    fn op_card_counter(&mut self, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::card_counter(self, player_id, cp, cl, np, nl)? as i64)
+    fn op_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::card_counter(self, player_id, cptr, cl, np, nl)? as i64)
     }
-    fn op_add_card_counter(&mut self, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::add_card_counter(self, player_id, cp, cl, np, nl, n, max)? as i64)
+    fn op_add_card_counter(&mut self, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::add_card_counter(self, player_id, cptr, cl, np, nl, n, max)? as i64)
     }
     fn op_count_held(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::count_held(self, np, nl, player_id)? as i64)
@@ -2211,8 +2211,8 @@ pub unsafe extern "C-unwind" fn ruleset_shuffle_into_deck(player_id: i32, hand: 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_place_card_at([player_id, cp, cl, ptr, len, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_place_card_at(player_id: i32, cptr: i32, cl: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_place_card_at([player_id, cptr, cl, ptr, len, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3616,8 +3616,8 @@ pub unsafe extern "C-unwind" fn ruleset_linger(player_id: i32, expires: i32) -> 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_immune(player_id: i32, cp: i32, cl: i32) -> i32 {
-    with_host(|h| match h.op_card_immune([player_id, cp, cl, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_card_immune(player_id: i32, cptr: i32, cl: i32) -> i32 {
+    with_host(|h| match h.op_card_immune([player_id, cptr, cl, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3632,8 +3632,8 @@ pub unsafe extern "C-unwind" fn ruleset_card_mortgage(player_id: i32, tile: i32)
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_card_text_mentions([cp, cl, np, nl, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_card_text_mentions(cptr: i32, cl: i32, np: i32, nl: i32) -> i32 {
+    with_host(|h| match h.op_card_text_mentions([cptr, cl, np, nl, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3664,8 +3664,8 @@ pub unsafe extern "C-unwind" fn ruleset_paid_in_settle() -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_place_card_on(player_id: i32, tile: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_place_card_on([player_id, tile, cp, cl, ptr, len, ]) {
+pub unsafe extern "C-unwind" fn ruleset_place_card_on(player_id: i32, tile: i32, cptr: i32, cl: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_place_card_on([player_id, tile, cptr, cl, ptr, len, ]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3688,16 +3688,16 @@ pub unsafe extern "C-unwind" fn ruleset_set_build_discount(n: i32, layers: i32) 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_card_immune(player_id: i32, cp: i32, cl: i32, on: i32) -> i32 {
-    with_host(|h| match h.op_set_card_immune([player_id, cp, cl, on, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_set_card_immune(player_id: i32, cptr: i32, cl: i32, on: i32) -> i32 {
+    with_host(|h| match h.op_set_card_immune([player_id, cptr, cl, on, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_card_tile(player_id: i32, cp: i32, cl: i32, tile: i32) -> i32 {
-    with_host(|h| match h.op_set_card_tile([player_id, cp, cl, tile, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_set_card_tile(player_id: i32, cptr: i32, cl: i32, tile: i32) -> i32 {
+    with_host(|h| match h.op_set_card_tile([player_id, cptr, cl, tile, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3736,8 +3736,8 @@ pub unsafe extern "C-unwind" fn ruleset_turn_start_pos(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32 {
-    with_host(|h| match h.op_unplace_card_named([player_id, cp, cl, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_unplace_card_named(player_id: i32, cptr: i32, cl: i32) -> i32 {
+    with_host(|h| match h.op_unplace_card_named([player_id, cptr, cl, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3891,8 +3891,8 @@ pub unsafe extern "C-unwind" fn ruleset_set_build_cost_pct(pct: i32) {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_set_card_face_down(player_id: i32, cp: i32, cl: i32, down: i32) -> i32 {
-    with_host(|h| match h.op_set_card_face_down([player_id, cp, cl, down, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_set_card_face_down(player_id: i32, cptr: i32, cl: i32, down: i32) -> i32 {
+    with_host(|h| match h.op_set_card_face_down([player_id, cptr, cl, down, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3900,15 +3900,15 @@ pub unsafe extern "C-unwind" fn ruleset_set_card_face_down(player_id: i32, cp: i
 
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_face_down(player_id: i32, cp: i32, cl: i32) -> i32 {
-    with_host(|h| match h.op_card_face_down([player_id, cp, cl, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_card_face_down(player_id: i32, cptr: i32, cl: i32) -> i32 {
+    with_host(|h| match h.op_card_face_down([player_id, cptr, cl, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_place_mark(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_place_mark(tile, kp, kl, cp, cl, owner, src, count, stack, np, nl) {
+pub unsafe extern "C-unwind" fn ruleset_place_mark(tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
+    with_host(|h| match h.op_place_mark(tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3984,15 +3984,15 @@ pub unsafe extern "C-unwind" fn ruleset_add_counter_at(uid: i32, np: i32, nl: i3
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_card_counter(player_id: i32, cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_card_counter(player_id, cp, cl, np, nl) {
+pub unsafe extern "C-unwind" fn ruleset_card_counter(player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32) -> i32 {
+    with_host(|h| match h.op_card_counter(player_id, cptr, cl, np, nl) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_card_counter(player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
-    with_host(|h| match h.op_add_card_counter(player_id, cp, cl, np, nl, n, max) {
+pub unsafe extern "C-unwind" fn ruleset_add_card_counter(player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
+    with_host(|h| match h.op_add_card_counter(player_id, cptr, cl, np, nl, n, max) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -4140,15 +4140,15 @@ pub unsafe extern "C-unwind" fn ruleset_no_flash() {
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_flash_card(cp: i32, cl: i32, p: i32, n: i32) {
-    with_host(|h| match h.op_flash_card([cp, cl, p, n, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_flash_card(cptr: i32, cl: i32, p: i32, n: i32) {
+    with_host(|h| match h.op_flash_card([cptr, cl, p, n, 0, 0]) {
         Ok(_) => {},
         Err(e) => abort_host(e),
     })
 }
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_flash_card_keyed(kp: i32, kl: i32, cp: i32, cl: i32, p: i32, n: i32) {
-    with_host(|h| match h.op_flash_card_keyed([kp, kl, cp, cl, p, n]) {
+pub unsafe extern "C-unwind" fn ruleset_flash_card_keyed(kp: i32, kl: i32, cptr: i32, cl: i32, p: i32, n: i32) {
+    with_host(|h| match h.op_flash_card_keyed([kp, kl, cptr, cl, p, n]) {
         Ok(_) => {},
         Err(e) => abort_host(e),
     })

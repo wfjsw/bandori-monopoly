@@ -1087,7 +1087,7 @@ impl World {
         let Some(t) = board::data_at(tile) else {
             return 0;
         };
-        if board::is_ring(t) {
+        if board::is_deed(t) {
             t.price
         } else {
             board::table_rent(t, self.rent_houses(tile))

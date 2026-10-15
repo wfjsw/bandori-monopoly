@@ -32,7 +32,7 @@ pub const ASAHI_AIM: CardDef = CardDef::new(
     &[
         // （1）「非"旭汤澡堂"或任意"Live House"」 -- the tile is a real buy,
         // not the bathhouse. `is_live_house_for` is the per-player colour check
-        // (not CEL's tile-kind `is_live_house`), so it is the residual.
+        // (not CEL's tile-kind `is_venue`), so it is the residual.
         On::Hook(
             &[HookKind::Bought],
             "actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')",
@@ -45,7 +45,7 @@ pub const ASAHI_AIM: CardDef = CardDef::new(
 
 /// Residual guard for [`on_bought`]: the tile is not already a Live House for
 /// this player (`ctx::is_live_house_for` -- per-player colour, not CEL's
-/// tile-kind `is_live_house`).
+/// tile-kind `is_venue`).
 fn not_live_house_for_me(player_id: i32) -> bool {
     !ctx::is_live_house_for(player_id, ctx::trigger::tile())
 }

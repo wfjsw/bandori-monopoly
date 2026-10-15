@@ -151,7 +151,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
         TriggerKind::PassTile => {
             // 规则书（2）: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」 -- C#
             // `m.Seat == Seat && H.Tile(t)?.kind == "circle" && Crystals > 0`.
-            if trigger::player_id() == player_id && ctx::is_circle(trigger::tile()) {
+            if trigger::player_id() == player_id && ctx::is_start(trigger::tile()) {
                 ctx::log(
                     player_id,
                     &Msg::new(key!("starry_night_circle")).player_id("who", player_id),

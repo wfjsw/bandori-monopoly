@@ -60,7 +60,7 @@ pub fn snapshot(w: &World) -> Snap {
             m.insert(
                 format!("field:P{i}:{f}"),
                 format!(
-                    "{}|uid={}|tile={}|pool={}|immune={}|down={}|band={}",
+                    "{}|uid={}|tile={}|pool={}|immune={}|down={}|group={}",
                     c.card, c.uid, c.tile, c.counters.values().sum::<i32>(), c.immune, c.face_down, c.group_skill
                 ),
             );

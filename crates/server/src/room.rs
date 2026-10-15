@@ -119,7 +119,7 @@ struct RecState {
     /// Tick calls recorded -- the sum of every `Ticks.n`.
     ticks: u64,
     /// `at` of the last checkpoint, so a run closes at a turn boundary.
-    last_cp_at: u32,
+    last_ckpt_at: u32,
     /// Buffered ticks were lost (a restart mid-match). The record is then
     /// unverifiable: see `RecordHeader::gaps`.
     gaps: bool,
@@ -201,7 +201,7 @@ impl MatchHandle {
                         st.ticks += n as u64;
                     }
                 }
-                Some(LogEntry::Checkpoint(c)) => st.last_cp_at = c.at,
+                Some(LogEntry::Checkpoint(c)) => st.last_ckpt_at = c.at,
                 None => {}
             }
         }
@@ -335,7 +335,7 @@ impl MatchHandle {
         match &input {
             Input::Ticks { k, .. } => {
                 rec.ticks += 1;
-                let closed = rec.last_cp_at == rec.inputs;
+                let closed = rec.last_ckpt_at == rec.inputs;
                 match rec.buf {
                     Some((k2, n)) if k2 == *k && !closed => rec.buf = Some((k2, n + 1)),
                     _ => {
@@ -360,7 +360,7 @@ impl MatchHandle {
                 rec.inputs += 1;
             }
         }
-        if let Some(ckpt) = &out.cp {
+        if let Some(ckpt) = &out.checkpoint {
             Self::flush_buf(&self.store, &self.id, &mut rec);
             let entry = crate::store::Checkpoint {
                 at: rec.inputs,
@@ -373,7 +373,7 @@ impl MatchHandle {
             if self.store.record_log_append(&self.id, &line).is_err() {
                 rec.gaps = true;
             } else {
-                rec.last_cp_at = rec.inputs;
+                rec.last_ckpt_at = rec.inputs;
             }
         }
     }

@@ -18,7 +18,7 @@ fn is_internal_key(s: &str) -> bool {
     if s.starts_with("cards:") || s.starts_with("mark:") || s.starts_with("skill.") {
         return true;
     }
-    // Known on-card counter names.
+    // Known on-card counter / mark names (ruleset wire keys).
     if matches!(s, "crystals" | "cp" | "cpField" | "skillBlock") {
         return true;
     }
@@ -76,7 +76,7 @@ fn check_events(events: &[MatchEvent], label: &str) {
 }
 
 /// A seeded game with skills and cards in play: every outcome / why line that
-/// fired must name its subject via a typed arg, never a raw key.
+/// ran must name its subject via a typed arg, never a raw key.
 #[test]
 fn no_log_message_renders_an_internal_key_as_text() {
     let mut t = Table::vanilla(2);
@@ -111,15 +111,15 @@ fn no_log_message_renders_an_internal_key_as_text() {
 fn no_shipped_outcome_renders_an_internal_key_as_text() {
     let mut t = Table::vanilla(2);
     t.strip_skills();
-    t.set_character_raw(0, "濑田薰");
-    t.set_character_raw(1, "和奏瑞依");
+    t.set_persona_raw(0, "濑田薰");
+    t.set_persona_raw(1, "和奏瑞依");
     t.clean();
     t.begin_turn(0);
     while t.prompt().is_some() {
         t.decline();
     }
     let mark = t.mark();
-    // A few turns: hooks fire, caps re-arm, opt-ins decline.
+    // A few turns: hooks run, caps re-arm, opt-ins decline.
     for _ in 0..3 {
         t.set_pos(0, 0);
         t.dice(&[3]);
@@ -169,7 +169,7 @@ fn name_helpers_never_text_a_known_key() {
         walk_msg(&m, "helper", &mut bad);
     }
     assert!(bad.is_empty(), "helpers leaked internal keys as Text: {bad:?}");
-    // Known keys resolve to their own i18n names.
+    // Known keys resolve to their own i18n names (wire keys, kept verbatim).
     assert_eq!(counter_name("crystals").key(), "log.counter.crystals");
     assert_eq!(state_key_name("handLimit").key(), "log.state.hand_limit");
     assert_eq!(mark_kind_name("mark:cp").key(), "mark:cp");

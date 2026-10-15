@@ -340,7 +340,7 @@ async fn probe_one(
         // Nothing this seat must answer right now. Speculate on its **next
         // own decision** instead of the dead idle view (BOT-RESEARCH #5,
         // `docs/BOT.md` §3.5): only when that decision is near (the seat is
-        // next in the ring / the current turn is ending / it is already our
+        // next seat in turn order / the current turn is ending / it is already our
         // turn mid-routine) is a `ponder` sent -- and the service predicts
         // the turn-start 运营 surface from it. An idle view has no searchable
         // surface; the pre-C1 polls searched 0 of ~14 k ponders
@@ -445,7 +445,7 @@ where
     }
 }
 
-/// Fire-and-forget `op: "ponder"` for an idle advanced seat (BOT-RESEARCH #5).
+/// Non-blocking `op: "ponder"` for an idle advanced seat (BOT-RESEARCH #5).
 /// The tick / probe returns immediately -- the search runs on its own task and
 /// only lands in the service's cache. One in flight per seat; when the seat's
 /// own decision arrives the slot is cancelled / ignored and the real `decide`

@@ -105,7 +105,7 @@ pub struct MoveCtx {
     /// stages (14–15). A walk still [pass]-resolves the tiles it travels, and
     /// (R2 / M6a, `SETTLE-STAGES.md` §6) a teleport still raises `passTile` +
     /// `passPlayer` at its destination -- 专名词 9 gives the teleport a [路径]
-    /// of just the endpoint, and B41 fires [pass],overlap there before the
+    /// of just the endpoint, and B41 raises [pass],overlap there before the
     /// (gated) settle. The movement tail (`moveAfter` / `moveResolved`) runs
     /// either way.
     pub resolve: bool,

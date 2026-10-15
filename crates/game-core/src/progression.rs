@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::MatchMode;
 
 pub const MAX_LEVEL: i32 = 500;
-/// Fire refilled each day.
+/// Charge refilled each day.
 pub const CHARGE_DAILY_MAX: i32 = 5;
-/// Fire a player may spend on one match (each multiplies EXP).
+/// Charge a player may spend on one match (each multiplies EXP).
 pub const CHARGE_MAX_PER_GAME: i32 = 3;
 pub const STARS_PER_GAME: i32 = 1;
 

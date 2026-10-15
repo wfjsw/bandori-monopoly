@@ -114,7 +114,7 @@ pub struct SkillParams {
     /// Press weight in the skill window. `0` = never (today's standard
     /// policy); `1000` = always when usable; in between = odds per offer.
     pub play_weight_milli: i32,
-    /// Press only with at least this many fires in hand / on the field
+    /// Press only with at least this many charges in hand / on the field
     /// (`0` = no threshold). Meaning is the tuner's; the heuristic only
     /// enforces the numeric floor.
     pub min_charge: i32,
@@ -160,7 +160,7 @@ impl Default for CounterParams {
     fn default() -> Self {
         Self {
             // An entry that omits `propensity_milli` holds the card back at
-            // the base level (a `by_kind` override can still fire). Absent
+            // the base level (a `by_kind` override can still apply). Absent
             // cards do not use this -- they take the seat's
             // `counteract_propensity_milli`.
             propensity_milli: 0,

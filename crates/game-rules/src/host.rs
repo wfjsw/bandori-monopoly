@@ -554,7 +554,7 @@ pub(crate) struct Inner {
     counteract_mask: Vec<u128>,
     /// Per-card bitmask of trigger kinds its hook/gate entries answer. Same
     /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
-    /// can never fire at a kind.
+    /// can never run at a kind.
     hook_mask: Vec<u128>,
     /// Roster metadata (ABI v63) gathered from every module's
     /// `ruleset_metadata`. Empty on pre-v63 / meta-less sets.
@@ -1136,7 +1136,7 @@ impl Ruleset {
     /// world; on [`Outcome::NeedInput`] it publishes the prompt, and once the answer
     /// arrives calls again with the **same** `world` and `answers` + the new answer.
     ///
-    /// `on_body` fires exactly when the effect **body** is entered -- the entry
+    /// `on_body` runs exactly when the effect **body** is entered -- the entry
     /// exists and `OP_RUN` is about to call it -- with the world copy the body
     /// will write into. The activation announcement (the client's card flash)
     /// goes there, so a drive with no entry, a guard reject or a probe is silent.
@@ -1250,7 +1250,7 @@ impl Ruleset {
     ///
     /// Returns `Ok(None)` when no entry is admitted (condition rejected, guard
     /// refused, or the card has no entry at this kind). [`HookRun::announced`]
-    /// is the "the condition + guard admitted" moment. `on_body` fires exactly
+    /// is the "the condition + guard admitted" moment. `on_body` runs exactly
     /// when an effect **body** is entered (after that entry's condition and
     /// guard admitted). The first entry whose body pauses (prompt / host) owns
     /// the outcome; the drive's multi-pass loop re-runs this whole sequence
@@ -1275,7 +1275,7 @@ impl Ruleset {
         }
         let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
         // `card.placed` must answer for the **running instance** (the guest's
-        // `ctx::is_placed()`): a game-start hook also fires for the same id
+        // `ctx::is_placed()`): a game-start hook also runs for the same id
         // while it sits in a pile / hand (`uid = -1`).
         let cand = crate::cond_pre::fill_candidate(
             world,
@@ -2655,15 +2655,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "flash_card",
-        |mut c: C<W>, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
-            hostfns::flash_card(&mut c, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, cptr: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::flash_card(&mut c, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "flash_card_keyed",
-        |mut c: C<W>, kp: i32, kl: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
-            hostfns::flash_card_keyed(&mut c, kp, kl, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, kp: i32, kl: i32, cptr: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::flash_card_keyed(&mut c, kp, kl, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2683,8 +2683,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "place_mark",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::place_mark(&mut c, tile, kp, kl, cp, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cptr: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::place_mark(&mut c, tile, kp, kl, cptr, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2760,15 +2760,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "card_counter",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::card_counter(&mut c, player_id, cp, cl, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::card_counter(&mut c, player_id, cptr, cl, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_card_counter",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_card_counter(&mut c, player_id, cp, cl, np, nl, n, max).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_card_counter(&mut c, player_id, cptr, cl, np, nl, n, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3068,8 +3068,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "tile_in",
-        |mut c: C<W>, player_id: i32, tile: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::tile_in(&mut c, player_id, tile, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, tile: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::tile_in(&mut c, player_id, tile, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3446,8 +3446,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "card_text_mentions",
-        |mut c: C<W>, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::card_text_mentions(&mut c, cp, cl, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>, cptr: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::card_text_mentions(&mut c, cptr, cl, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3796,8 +3796,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "unplace_card_named",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::unplace_card_named(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::unplace_card_named(&mut c, player_id, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3810,8 +3810,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "card_face_down",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::card_face_down(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::card_face_down(&mut c, player_id, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3838,8 +3838,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_card_face_down",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, down: i32| -> Result<i32, Error> {
-            hostfns::set_card_face_down(&mut c, player_id, cp, cl, down).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, down: i32| -> Result<i32, Error> {
+            hostfns::set_card_face_down(&mut c, player_id, cptr, cl, down).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3852,36 +3852,36 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "set_card_immune",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, on: i32| -> Result<i32, Error> {
-            hostfns::set_card_immune(&mut c, player_id, cp, cl, on).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, on: i32| -> Result<i32, Error> {
+            hostfns::set_card_immune(&mut c, player_id, cptr, cl, on).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_immune",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::card_immune(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32| -> Result<i32, Error> {
+            hostfns::card_immune(&mut c, player_id, cptr, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_card_tile",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, tile: i32| -> Result<i32, Error> {
-            hostfns::set_card_tile(&mut c, player_id, cp, cl, tile).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::set_card_tile(&mut c, player_id, cptr, cl, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "place_card_on",
-        |mut c: C<W>, player_id: i32, tile: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::place_card_on(&mut c, player_id, tile, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, tile: i32, cptr: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::place_card_on(&mut c, player_id, tile, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "place_card_at",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::place_card_at(&mut c, player_id, cp, cl, p, n).map_err(HostErr::into_err)
+        |mut c: C<W>, player_id: i32, cptr: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::place_card_at(&mut c, player_id, cptr, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4944,7 +4944,7 @@ impl CardWorld for NullWorld {
     }
     // named counters & bound units (user ruling 2026-10-10): the null world
     // holds none, so every read is 0 and every write is a no-op. The sugar
-    // (`crystals` / `tok` / `group_pool`) defaults over these.
+    // (named counters / `tok` / `group_pool`) defaults over these.
     fn counter(&self, _: &str) -> i32 {
         0
     }

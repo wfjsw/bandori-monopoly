@@ -34,7 +34,7 @@ fn activation_header_precedes_the_host_effects_it_causes() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
-    // `TEST:payAddAny` is a placed card whose `payAdd` hook fires on every
+    // `TEST:payAddAny` is a placed card whose `payAdd` hook runs on every
     // payment -- a hook body with a host-effect-shaped outcome. Better: use
     // the tile hook and assert the header is first among this drive's events.
     t.give_play(0, "TEST:tileHook").unwrap();
@@ -193,7 +193,7 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::CounterChanged,
         TriggerKind::FireSpent,
         TriggerKind::SkillUsed,
-        TriggerKind::CircleAffected,
+        TriggerKind::PassRewardAffected,
         TriggerKind::Exile,
         TriggerKind::Abnormal,
         TriggerKind::Effect,

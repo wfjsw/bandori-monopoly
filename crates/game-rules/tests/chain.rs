@@ -1,5 +1,5 @@
 //! Black-box tests for the counteraction chain builder: one round per timing, the
-//! ring order of rulebook 89 under **ruling 2026-10-07**, counters to counters
+//! seat order of rulebook 89 under **ruling 2026-10-07**, counters to counters
 //! (the 「新的时点」), and LIFO resolution.
 //!
 //! Ruling 2026-10-07 (verbatim): "Revise the chain counteraction mechanism.
@@ -8,7 +8,7 @@
 //! player. Adjust as appropriate."
 //!
 //! The chain rule this pins down:
-//! 1. **Start seat:** the ask ring starts with the **initial user** -- the
+//! 1. **Start seat:** the ask cycle starts with the **initial user** -- the
 //!    player whose action or effect raised the link. If there is no player,
 //!    the active turn player. (The old rule started at the seat *after* the
 //!    trigger player and asked them last.)
@@ -101,14 +101,14 @@ fn give_n(t: &mut Table, who: usize, card: &str, n: usize) {
 }
 
 // =====================================================================
-// Clause 89, ruling 2026-10-07: the ring
+// Clause 89, ruling 2026-10-07: the cycle
 // =====================================================================
 
 // ruling 2026-10-07: 「Including the initial user, each user in the chain…」 --
-// the ask ring starts with the **initial user**, the player whose action raised
+// the ask cycle starts with the **initial user**, the player whose action raised
 // the link (P0 played TEST:aimer), not with the seat after them.
 // Rewritten from `the_next_seat_is_asked_first_and_the_triggering_player_last`
-// (old expectation: ring 1, 2, 0 -- next seat first, triggerer last).
+// (old expectation: seat order 1, 2, 0 -- next seat first, triggerer last).
 #[test]
 fn the_initial_user_is_asked_first() {
     let mut t = Table::vanilla(3);
@@ -116,7 +116,7 @@ fn the_initial_user_is_asked_first() {
     t.give(1, &["TEST:probe"]);
     t.give(2, &["TEST:probe"]);
     t.play(0, "TEST:aimer").unwrap();
-    // Ring order (ruling 2026-10-07): 0 (initial user), 1, 2.
+    // Seat order (ruling 2026-10-07): 0 (initial user), 1, 2.
     assert_eq!(t.asked(), vec![0], "the initial user first: {}", t.dump_prompt());
     t.decline();
     assert_eq!(t.asked(), vec![1], "then the next seat: {}", t.dump_prompt());
@@ -136,7 +136,7 @@ fn the_initial_user_is_asked_first() {
 // keeps the floor while it still holds an eligible card, and may declare twice
 // in one visit. Rewritten from `a_player_may_declare_again_when_the_ring_returns`
 // (old expectation: one activation per visit, the second declaration only when
-// the ring came back) and from `a_declaration_passes_priority_to_the_next_seat`
+// the cycle came back) and from `a_declaration_passes_priority_to_the_next_seat`
 // (old expectation: a declaration alone hands priority on).
 #[test]
 fn one_seat_declares_twice_in_one_visit_before_the_next_seat_is_asked() {
@@ -218,7 +218,7 @@ fn an_explicit_pass_advances_priority() {
 }
 
 // ruling 2026-10-07: a seat with no eligible counteraction is skipped without
-// a prompt (eligibility is re-checked before every offer), so the ring jumps
+// a prompt (eligibility is re-checked before every offer), so the cycle jumps
 // from the initial user straight to the next seat that still holds one.
 #[test]
 fn a_seat_with_no_eligible_card_is_skipped_without_a_prompt() {
@@ -241,7 +241,7 @@ fn a_seat_with_no_eligible_card_is_skipped_without_a_prompt() {
 
 // ruling 2026-10-07: 「Including the initial user」 + laps until quiet -- a
 // later seat's declaration keeps the round going and re-opens the earlier
-// seats on the next lap. (The old rule also looped the ring, but started at
+// seats on the next lap. (The old rule also looped the cycle, but started at
 // the seat after the trigger player; here the re-opened seat P0 is the
 // initial user and is asked first on every lap.)
 #[test]
@@ -348,7 +348,7 @@ fn the_round_closes_after_a_quiet_lap() {
 // =====================================================================
 
 // 规则书（89）: 「多个效果可counteraction同一个时点」 -- two players answer X itself,
-// not each other's counters. ruling 2026-10-07: the ring starts at the initial
+// not each other's counters. ruling 2026-10-07: the cycle starts at the initial
 // user (P0); P0 holds no counter so it is skipped and P1 is asked first, and
 // each declaration exhausts its seat before priority advances.
 #[test]
@@ -456,7 +456,7 @@ fn lifo_resolution_with_multiple_links_from_one_seat() {
 
 // 规则书（89）: 「所有玩家同意所有对一个时点的counteraction已发动后可对新的时点发动counteraction」
 // -- a counter is a new timing, answered only once the round on X has closed.
-// ruling 2026-10-07: the ring on X starts at the initial user and laps until
+// ruling 2026-10-07: the cycle on X starts at the initial user and laps until
 // quiet, so a seat still holding an eligible card is re-offered on the quiet
 // lap before the round closes. Rewritten: the old rule closed X's round after
 // a single pass from P2; now P2's first pass only ends its visit in lap 1 and
@@ -613,7 +613,7 @@ fn a_negated_counters_body_does_not_run() {
 // ruling 2026-10-07: 「the player whose action or effect raised the link. If
 // there is no player, the active turn player.」 A rent payment is board-driven
 // (`by_card` is None -- docs/CARDS.md), so the link has no player and the ask
-// ring starts at the active turn player P0, not at the payer/payee's next seat.
+// cycle starts at the active turn player P0, not at the payer/payee's next seat.
 #[test]
 fn a_no_player_trigger_starts_at_the_turn_player() {
     let mut t = Table::vanilla(3);
@@ -627,7 +627,7 @@ fn a_no_player_trigger_starts_at_the_turn_player() {
     t.give(2, &["TEST:probe"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    // The rent pay raises an effect link with no player; the ring starts at
+    // The rent pay raises an effect link with no player; the cycle starts at
     // the active turn player (P0) -- ruling 2026-10-07.
     assert_eq!(
         t.asked(),

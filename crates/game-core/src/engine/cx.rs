@@ -1108,12 +1108,12 @@ impl<'a> Cx<'a> {
     }
 
     /// Standard's counteraction answer: the first offered card whose
-    /// [`crate::strategy::CounterParams`] propensity fires, else `fallback`
+    /// [`crate::strategy::CounterParams`] propensity hits, else `fallback`
     /// (the skip). Each candidate draws from the world RNG (so it replays) --
-    /// one draw per offered card until one fires, so with `k` offered cards
+    /// one draw per offered card until one hits, so with `k` offered cards
     /// the per-offer declare rate is `1 - (1 - p)^k` on a uniform per-card
     /// propensity `p` (600‰ default: 60 % for one card, 84 % for two). A
-    /// zero propensity draws nothing and never fires, which is how a book
+    /// zero propensity draws nothing and never hits, which is how a book
     /// holds a card back.
     fn counteract_pick(&mut self, seat: usize, ask: &Ask, fallback: i32, n: i32) -> i32 {
         let p = self.strategy_of(seat);
@@ -1186,7 +1186,7 @@ impl<'a> Cx<'a> {
     /// body could run. One `"card"` event carries both the log line and the
     /// client's card flash. `kind` is a [`crate::state::card_trigger`]
     /// constant; `owner` is the card's player, `target` the affected player and
-    /// `tile` where it fired (`-1` when not applicable). A negated activation
+    /// `tile` where it ran (`-1` when not applicable). A negated activation
     /// still shows the card, marked 无效, and logs 「<卡名> 的效果被无效」.
     pub fn card_activated(
         &mut self,

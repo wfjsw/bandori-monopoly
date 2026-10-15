@@ -97,7 +97,7 @@ fn mine(player_id: i32, t: i32) -> bool {
     // `ctx::placed_tile` answers "is this id in play on that player, and on which
     // tile". `place_card` does not bind a tile yet (`Some(-1)`), so accept that
     // as "on CiRCLE" -- the only circle tile the rule names.
-    if ctx::is_circle(t) {
+    if ctx::is_start(t) {
         return match ctx::find_card(player_id, KOKORO_ID).and_then(ctx::tile_at) {
             Some(pt) => pt == t || pt < 0,
             None => false,

@@ -177,8 +177,8 @@ fn wait_ops(m: &mut Match, me: i32) {
 fn skill_ids(m: &Match, me: i32) -> Vec<String> {
     let st = m.state();
     let seat = st.player_of(me) as usize;
-    let character = &st.players[seat].persona;
-    m.data().skill_rules_of(character)
+    let persona = &st.players[seat].persona;
+    m.data().skill_rules_of(persona)
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn skills_list_only_activatable_rules_during_ops() {
         refuse: None,
     }), 5);
     let ids = skill_ids(&m, 1);
-    assert!(!ids.is_empty(), "the picked character has at least one skill");
+    assert!(!ids.is_empty(), "the picked persona has at least one skill");
     let rules = Arc::new(TestRules {
         play: vec![ids[0].clone()],
         refuse: None,

@@ -20,18 +20,18 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
         On::Play("", None, play),
         // 「每次有人经过CiRCLE时」 / 「CiRCLE的[触发结算]」 -- the two tiles this
         // event re-homes are the hooks' applicability, not their effect. The
-        // body-top tile check is the condition now (`is_circle(tile.id)` and
+        // body-top tile check is the condition now (`is_start(tile.id)` and
         // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
         // bail stays a residual guard (not in the CEL schema).
         On::Hook(
             &[HookKind::PassTile],
-            "is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
+            "is_start(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
             None,
             on_pass,
         ),
         On::Hook(
             &[HookKind::SettleBody],
-            "is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
+            "is_start(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
             Some(settle_applies),
             on_settle_body,
         ),
@@ -86,7 +86,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// reward is paid out on a pass of the cafe instead.
 fn on_pass(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
-    if ctx::is_circle(at) {
+    if ctx::is_start(at) {
         // Re-arm the veto the reward step just consumed, so the next pass of
         // CiRCLE is silent too.
         ctx::set_tile_prop(at, prop::NO_REWARD, 1);
@@ -125,7 +125,7 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
 fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
     let who = trigger::player_id();
-    if ctx::is_circle(at) {
+    if ctx::is_start(at) {
         trigger::set_cancelled();
         // 「选择获得2层[停留]或失去500资金」 -- the settler picks one.
         let pick = ctx::ask_pick(

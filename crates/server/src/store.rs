@@ -90,7 +90,7 @@ pub trait CrossState: Send + Sync {
     fn match_del(&self, room: &str) -> Result<(), StoreError>;
 
     /// The room's **record log** for the match in progress: one JSON line per
-    /// [`RecordHead`] / [`Input`] / [`Cp`] (`docs/REPLAY.md` §4). It lives
+    /// [`RecordHead`] / [`Input`] / [`Checkpoint`] (`docs/REPLAY.md` §4). It lives
     /// beside the match blob rather than inside it -- the blob is the engine's
     ///, and the log is the driver's. Cleared when the match is sealed into a
     /// [`StoredRecord`].
@@ -193,7 +193,7 @@ pub mod redis;
 
 /// One line of a room's record log. Externally tagged, so a line is either a
 /// [`RecordHead`] (written once, at `start`), an [`Input`] of the match, or the
-/// [`Cp`] checkpoint that follows it.
+/// [`Checkpoint`] checkpoint that follows it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LogEntry {
     Head(RecordHead),

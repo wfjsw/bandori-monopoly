@@ -498,13 +498,13 @@ fn tampered_act_is_caught_as_divergence_at_the_next_checkpoint() {
                 at as usize > act_at,
                 "checkpoint {at} should sit after the tampered input {act_at}"
             );
-            let cp = file
+            let ckpt = file
                 .body
                 .checkpoints
                 .iter()
                 .find(|c| c.at == at)
                 .expect("checkpoint exists");
-            assert_eq!(cp.hash, mm.want, "mismatch carries the recorded hash");
+            assert_eq!(ckpt.hash, mm.want, "mismatch carries the recorded hash");
         }
         // The act's own Ok/Err bit disagreed first -- also a divergence.
         None => assert_eq!(mm.field, "diverged", "{mm:?}"),
@@ -806,22 +806,22 @@ fn origin_and_header_fields_survive() {
 /// of `Init::Seed` and must reproduce identically on the replayer -- including
 /// the `do_pick` / `submit_deck` / `begin_play` side effects it triggers.
 #[test]
-fn solo_preset_characters_round_trip() {
+fn solo_preset_personas_round_trip() {
     let d = data();
-    let chars: Vec<String> = d
+    let personas: Vec<String> = d
         .personas
         .iter()
         .take(4)
         .map(|c| c.name.clone())
         .collect();
-    assert!(chars.len() >= 2, "need at least two characters in data");
+    assert!(personas.len() >= 2, "need at least two personas in data");
     for seed in [1u64, 42, 999, 31337] {
         for n in 2..=4usize {
             let members: Vec<RoomMember> = (0..n)
                 .map(|i| RoomMember {
                     id: i as i32 + 1,
                     player: format!("P{}", i + 1),
-                    persona: chars[i % chars.len()].clone(),
+                    persona: personas[i % personas.len()].clone(),
                     bot: true,
                     mentality: if i % 2 == 0 {
                         BotMentality::Standard
@@ -868,12 +868,12 @@ fn solo_preset_characters_round_trip() {
 #[test]
 fn ruleset_mismatch_is_named_and_non_fatal() {
     let d = data();
-    let chars: Vec<String> = d.personas.iter().take(2).map(|c| c.name.clone()).collect();
+    let personas: Vec<String> = d.personas.iter().take(2).map(|c| c.name.clone()).collect();
     let members: Vec<RoomMember> = (0..2)
         .map(|i| RoomMember {
             id: i as i32 + 1,
             player: format!("P{}", i + 1),
-            persona: chars[i].clone(),
+            persona: personas[i].clone(),
             bot: true,
             mentality: BotMentality::Standard,
             ..Default::default()

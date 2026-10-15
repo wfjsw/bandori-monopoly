@@ -31,7 +31,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
         On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
         On::Hook(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
-        On::Hook(&[HookKind::CircleAffected], "", Some(in_lock), force_card),
+        On::Hook(&[HookKind::PassRewardAffected], "", Some(in_lock), force_card),
         // 「CRYCHIC variants may not use base character's exclusives」 -- a
         // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
         // is the generic own/base rule; this entry closes the base case for
@@ -184,7 +184,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 //   player's hand size, which is a global rule rather than one card's `WhyNot`.
 //   The engine's play path consults the played card's own gate, not every placed
 //   card's.
-// （1）「领取CiRCLE奖励时必须选择抽一张卡」 -- `circleAffected` fires between the
+// （1）「领取CiRCLE奖励时必须选择抽一张卡」 -- `passRewardAffected` fires between the
 // pick and the payout, so the money half can be cancelled and replaced with the
 // draw the clause mandates.
 // （2）「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- a zone-by-zone sweep that

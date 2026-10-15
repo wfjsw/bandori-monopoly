@@ -31,7 +31,7 @@ fn livehouses(player_id: i32) -> Vec<i32> {
 /// C# `WhyNotBuildOn`'s 「RiNG 不能加盖房屋」: a RiNG deed is the buyable
 /// group-6 tile with no rent table, so `rent_of <= 0` is the test (the
 /// vocabulary has no `TileData.kind` query).
-fn is_ring(t: i32) -> bool {
+fn is_deed(t: i32) -> bool {
     ctx::rent_of(t) <= 0
 }
 
@@ -40,7 +40,7 @@ fn why_not_build_on(player_id: i32, t: i32) -> Option<&'static str> {
     if ctx::tile_owner(t) != player_id {
         return Some("only_own");
     }
-    if is_ring(t) {
+    if is_deed(t) {
         return Some("ring");
     }
     if ctx::mortgaged_of(t) {

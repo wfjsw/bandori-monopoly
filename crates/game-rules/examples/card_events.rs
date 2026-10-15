@@ -79,7 +79,7 @@ fn main() {
         );
         // Seat `k` plays `CHARS[k]` (Table::with_seed's convention).
         for (k, c) in CHARS.iter().enumerate() {
-            m.set_character(k as i32 + 1, c);
+            m.set_persona(k as i32 + 1, c);
         }
         m.quick_start();
         let mut kinds: BTreeMap<String, usize> = BTreeMap::new();

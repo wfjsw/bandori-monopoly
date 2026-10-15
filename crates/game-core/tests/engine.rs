@@ -125,7 +125,8 @@ fn bot_games_play_to_the_end_and_rank_everyone() {
 
 #[test]
 fn ranked_games_run_the_ban_phase() {
-    let members: Vec<RoomMember> = (1..=5).map(|i| member(i, true)).collect();
+    // Two seats so the five-persona fixture can absorb two bans and still pick.
+    let members: Vec<RoomMember> = (1..=2).map(|i| member(i, true)).collect();
     let mut m = new_match(&members, 3, MatchMode::Ranked);
     let mut saw_ban = false;
     for _ in 0..2000 {
@@ -142,20 +143,20 @@ fn ranked_games_run_the_ban_phase() {
         .players
         .iter()
         .all(|s| !s.persona.is_empty() && s.deck_ready));
-    let mut chars: Vec<&str> = st.players.iter().map(|s| s.persona.as_str()).collect();
-    chars.sort();
-    chars.dedup();
-    assert_eq!(chars.len(), 5, "characters are unique");
+    let mut personas: Vec<&str> = st.players.iter().map(|s| s.persona.as_str()).collect();
+    personas.sort();
+    personas.dedup();
+    assert_eq!(personas.len(), 2, "personas are unique");
     assert!(
         st.players.iter().all(|s| !st.bans.contains(&s.persona)),
-        "nobody picked a banned character"
+        "nobody picked a banned persona"
     );
 }
 
 /// Solo with a persona on every seat (the solo setup screen's picks) skips
 /// the timed ban / pick entirely and opens the deck phase on those personas.
 #[test]
-fn solo_preset_characters_skip_the_pick_phase() {
+fn solo_preset_personas_skip_the_pick_phase() {
     let d = data();
     let names: Vec<String> = d.personas.iter().take(3).map(|c| c.name.clone()).collect();
     let members: Vec<RoomMember> = (1..=3)
@@ -170,7 +171,7 @@ fn solo_preset_characters_skip_the_pick_phase() {
     let m = new_match(&members, 42, MatchMode::Solo);
     let st = m.state();
     // Past ban / pick: the human still has a deck to choose.
-    assert_eq!(st.phase, "deck", "preset characters land on the deck phase");
+    assert_eq!(st.phase, "deck", "preset personas land on the deck phase");
     assert!(st.bans.is_empty(), "solo preset skips bans too");
     for mem in &members {
         let p = st

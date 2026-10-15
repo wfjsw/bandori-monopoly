@@ -200,11 +200,11 @@ pub const CIRCLE_MONEY: i32 = 2000;
 /// Pass gate: 「[经过]CiRCLE且[移动起点]不为CiRCLE」.
 /// `start < 0` = no move in flight (a card calling the reward outright) —
 /// the clause does not bar it (reading recorded in `rules/tiles/src/circle.rs`).
-pub fn circle_pass_pays(at: i32, self_tile: i32, mover: i32, exile: i32, start: i32, start_is_circle: bool, at_is_circle: bool) -> bool {
+pub fn circle_pass_pays(at: i32, self_tile: i32, mover: i32, exile: i32, start: i32, start_is_start: bool, at_is_start: bool) -> bool {
     at == self_tile
         && mover >= 0
         && exile <= 0
-        && !(start >= 0 && start_is_circle && at_is_circle)
+        && !(start >= 0 && start_is_start && at_is_start)
 }
 
 /// Money half: exactly one `GainMoney` of 2000 to the mover.

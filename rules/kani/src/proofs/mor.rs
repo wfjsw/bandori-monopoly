@@ -1087,7 +1087,7 @@ pub fn starry_06_mutant_is_detected() {
 // ===========================================================================
 // C-MOR-starry-05  `Mor:蝴蝶飞舞的星月夜`
 // 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」
-// PassTile hook arm. `is_circle` uses 1-based `board::tile_slot`; we pin
+// PassTile hook arm. `is_start` uses 1-based `board::tile_slot`; we pin
 // `trig_tile = 1` (board index 1 is the CiRCLE) so the gate holds. The
 // RollAfter arm of the same hook is BLOCKED-HOST on `Op::trig_move_main`
 // (unmodeled) and is not driven here (starry-03/04). Seat-symmetric.

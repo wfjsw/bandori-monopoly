@@ -118,7 +118,7 @@ pub fn band_02_amount_mutant(taken: i32) -> i32 {
 //
 // Trigger: [经过] CiRCLE (the Pass hook onto a CiRCLE tile).
 // Condition: the seat's character is 桐谷透子 (host pre
-// `actor == owner && is_circle(tile.id)`).
+// `actor == owner && is_start(tile.id)`).
 // Effect: one fire pot is gained, at most up to the cap of 1.
 // Frame: the fire counter.
 // Classification: **PROVEN candidate** for the request (`GainFire{player,1}`).
