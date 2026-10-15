@@ -348,6 +348,17 @@ impl SnapSrc for Fixture {
     fn tile_name(&self, tile: i32) -> String {
         board_tile_name(tile)
     }
+    fn tile_kind_of(&self, tile: i32) -> String {
+        // Wire kind spelling — same values the IR's `SetId::Circle` /
+        // `SetId::Ring` sets encode (`board::TILES[i].kind` 0 / 3).
+        if board_is_start(tile) {
+            "circle".to_string()
+        } else if board_is_deed(tile) {
+            "ring".to_string()
+        } else {
+            String::new()
+        }
+    }
     fn tile_is(&self, tile: i32, kind: &str) -> bool {
         match kind {
             "circle" => board_is_start(tile),
