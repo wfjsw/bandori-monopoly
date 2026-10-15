@@ -1,7 +1,51 @@
 {
  "version": 1,
- "current": "1c32bcc1f41d149c118332a7cbc465d52b4f86e4fa25a6315f16b6d83034565d",
+ "current": "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41",
  "bundles": [
+  {
+   "id": "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41",
+   "created": "2026-10-15T21:31:48.944Z",
+   "glueSha256": "16d9c9eb8c54befcf08ea9c41b953c82a33b73d1f742a28c3433f5b31655ec93",
+   "bytes": 7820306,
+   "stamp": {
+    "format": 3,
+    "save_version": 11,
+    "abi": 72,
+    "ruleset_sha256": "2d63ca4cf6521b7bd37919b5dd5aa5ac38b012acda1bdfb7df655df424d8ab0c",
+    "data_sha256": "e1c9dec09a505ef55d320f14d5383cf260a5cb8399ca80019386bc9531c179fb",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41"
+   },
+   "key": "3|11|72|2d63ca4cf6521b7bd37919b5dd5aa5ac38b012acda1bdfb7df655df424d8ab0c|e1c9dec09a505ef55d320f14d5383cf260a5cb8399ca80019386bc9531c179fb",
+   "source_id": "f74b1d31a3fc689829d7049d5397bea446cce63ddcc5e3d7b119fdd21be810e8",
+   "ref": "refs/b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41.bdrec",
+   "ref_sha256": "b13683d8a602e92eda13908f9cb28cb4ede0f0b6723a5ef4943918a0b40d6079",
+   "commit": "05a0668b9d837f3ba7b8c69320d7dd28fc3f9434",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/bundle.json": "40af8266dee5d8ee82947d8cd4ea741db9099caa721e87ef1f973cb43d051431",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/board.json": "263add6d1e030e74fed36547714b67c9b48a13917ff5fb6e189e31a34e55d17a",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/events.json": "3259c94decf72877ec9acc432ddd99ddf3207d0aaad1b10685b7c2f93ad5b446",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/home_lines.json": "16c97d8980e24a432c95b5398921483c2988d2e022f4821248fddf23f3bfc3ab",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/match_rules.json": "e8bbab8ee71c5c662ec60d4df6fad41d2beb130fe6059028a41ee0a702a75145",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/rules.txt": "b61c071aeacf21ebfc8a2ba7c0ba1cbfb0fa258132cb3a70a95c161be228fe45",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/schools.json": "d8c658d0b7ebab9c30ee1b3413d5e951f40cafcf2c79efdc3d3938fe4a8e73a7",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/skill_simple.json": "4adf4f18bed611890359cd85a8857295b1e0b28870faf79d0ef9b0ab1e670948",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/data/voice_lines.json": "7fb99d64e781425f8a5072d68a4b40883cda458a2dafb7ab590ed75f7bce1799",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/glue.js": "ecfb6186759535644f01385621511713838b77dc5a25a557f9782146e377c58d",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/glue_bg.wasm": "eaa71a857603677c5ebea5e162ccfc2774b0f28907f53a6983e44be79e15bfcb",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/rules/conds-9a4e0706c8a44616d9a5eb0f04e1a6fe58fcffb0d9f8aa8655591dacc0c3e4ea.bin": "9a4e0706c8a44616d9a5eb0f04e1a6fe58fcffb0d9f8aa8655591dacc0c3e4ea",
+    "b4a99f4216b01a7bc531f70e1b66e74824af0c037da86fb4c40b7a914c796c41/rules/index.json": "bd0ed8ee810197fa567b524410b87ae064094271f82c544ff3cf23c10bb1465f",
+    "modules/bf1e9da94baf69be718d5bf2c5bccb500c148e2c6bf2ceed1bfe1dbc79469edd.wasm": "bf1e9da94baf69be718d5bf2c5bccb500c148e2c6bf2ceed1bfe1dbc79469edd"
+   }
+  },
   {
    "id": "7c739594e9abd3e90e988ce9d9da8161da41f733174645fbe8e90e7e820832b0",
    "created": "2026-10-15T06:28:48.558Z",
