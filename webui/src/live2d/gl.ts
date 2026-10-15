@@ -37,10 +37,6 @@ uniform vec3 u_screen;
 uniform float u_alpha_test;
 void main() {
   vec4 t = texture2D(u_tex, v_uv);
-  // Premultiplied colour can never exceed alpha. Some mobile decoders hand
-  // back the straight-alpha RGB bled under transparent pixels (gray), which
-  // the multiply blend then paints as gray patches on cheeks and mouth.
-  t.rgb = min(t.rgb, vec3(t.a));
   if (t.a < u_alpha_test) discard;
   // t.rgb is premultiplied. Multiply scales straight and premultiplied color
   // alike; screenColor composites as s + c - s*c on the straight color, i.e.
@@ -192,7 +188,9 @@ export class Live2DRenderer {
         await nextFrame();
         if (token !== this.uploadToken || this.disposed) return false;
         const rows = Math.min(TEXTURE_BAND_ROWS, h - y);
-        const band = typeof createImageBitmap === "function" ? await createImageBitmap(src, 0, y, w, rows, { premultiplyAlpha: "premultiply" }) : null;
+        // WebKit (iOS Safari) mangles the alpha of cropped ImageBitmaps (gray
+        // patches under multiply layers); it takes the whole-image path below.
+        const band = typeof createImageBitmap === "function" && !IS_WEBKIT ? await createImageBitmap(src, 0, y, w, rows) : null;
         if (token !== this.uploadToken || this.disposed) {
           band?.close();
           return false;
@@ -427,6 +425,10 @@ export class Live2DRenderer {
     this.gl.deleteProgram(this.program);
   }
 }
+const IS_WEBKIT =
+  typeof navigator !== "undefined" &&
+  (/iP(hone|ad|od)/.test(navigator.userAgent) || (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Android/.test(navigator.userAgent)));
+
 /** Rows per frame of a progressive texture upload. */
 const TEXTURE_BAND_ROWS = 128;
 
