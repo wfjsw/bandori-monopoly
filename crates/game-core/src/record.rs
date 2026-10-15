@@ -38,8 +38,8 @@ use crate::MatchMode;
 /// legacy xoshiro stream); a v2 record is refused by a v1 engine, so an old
 /// archived bundle never mis-replays a new record. Old records replay on
 /// their own bundles either way (`docs/REPLAY.md` §9).
-/// v3: body JSON field `persona` (was `character`); body_check hashes the
-/// on-wire field names, so pre-v3 records do not re-verify under v3.
+/// v3: body JSON seat field is `persona`; body_check hashes the on-wire
+/// field names, so pre-v3 records do not re-verify under v3.
 pub const RECORD_VERSION: u32 = 3;
 
 /// The tick quantum. `tick_steps(k)` ticks `dt = k as f32 * STEP`, k in 1..=10,
@@ -566,10 +566,10 @@ pub fn parse_record(json: &str) -> Result<RecordFile, ReplayError> {
         )));
     }
     // The body hash covers the on-wire JSON field names of the writer.
-    // Those names were neutralized at RECORD_VERSION 3 (`persona` was
-    // `character`), so a pre-v3 hash cannot be recomputed under v3 names.
-    // Corruption of pre-v3 bodies is therefore not detected here; the engine
-    // archive plays those on their original bundle.
+    // Those names were neutralized at RECORD_VERSION 3, so a pre-v3 hash
+    // cannot be recomputed under v3 names. Corruption of pre-v3 bodies is
+    // therefore not detected here; the engine archive plays those on their
+    // original bundle.
     if f.header.engine.format >= 3 {
         let want = body_check(&f.body);
         if want != f.check {
