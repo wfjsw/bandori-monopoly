@@ -389,3 +389,8 @@
 }
 @keyframes chainLetter { from { transform: translate(-90px, -50px) rotate(-25deg) scale(0.3); opacity: 0; } }
 @keyframes chainTitleOut { to { opacity: 0; } }
+
+/* Compact (phone) stage: link number and title scaled down with the cards. */
+:global(:root[data-compact]) .chainNo { font-size: 50px; left: -10px; bottom: -18px; -webkit-text-stroke-width: 1.5px; }
+:global(:root[data-compact]) .chainTheirs .chainNo { left: auto; right: -10px; }
+:global(:root[data-compact]) .chainTitle { font-size: 64px; }

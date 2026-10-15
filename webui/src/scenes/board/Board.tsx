@@ -188,7 +188,9 @@ export function Board({ sess }: { sess: GameSession }) {
   };
 
   const nLinks = anim.chain?.links.length ?? 0;
-  const cardW = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
+  const cardW0 = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
+  // Compact (phone) stages are drawn larger relative to the board: shrink to desktop proportions.
+  const cardW = compact ? Math.round(cardW0 * 0.6) : cardW0;
   return (
     <>
       <TopBar
