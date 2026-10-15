@@ -3789,6 +3789,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "set_persona",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::set_persona(&mut c, player_id, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "in_group",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
             hostfns::in_group(&mut c, player_id, p, n).map_err(HostErr::into_err)
@@ -5159,6 +5166,7 @@ impl CardWorld for NullWorld {
     fn persona_is(&self, _: i32, _: &str) -> i32 {
         0
     }
+    fn set_persona(&mut self, _: i32, _: &str) {}
     fn in_group(&self, _: i32, _: &str) -> i32 {
         0
     }

@@ -60,6 +60,7 @@ crate::host_subset!(two_donuts_dispatch {
 /// isolated (never entered) — still declared so isolation cannot drift.
 crate::host_subset!(two_in_one_dispatch {
     persona_is => arm_character_is,
+    set_persona => arm_set_persona,
     field_instances => arm_field_instances,
     unplace_at | unplace_card | unplace_card_named => arm_unplace_card,
     place_card_at => arm_place_card_at,
@@ -527,9 +528,9 @@ pub fn twodonuts_01_mutant_is_detected() {
 // ===========================================================================
 // C-SUMIMI-twoinone-01b -- fire becomes the other character's 初始火罐数
 // `Sumimi:Sumimi是二人一体的` play body.
-// C-SUMIMI-twoinone-01 (character identity) is a known engine gap (the
-// bound skill is swapped but `player.persona` stays) — the fire half is
-// what this harness pins. C-SUMIMI-twoinone-02 is PROTOCOL-LEVEL.
+// C-SUMIMI-twoinone-01 (character identity) is the `set_persona` half of the
+// swap — the fire half is what this harness pins. C-SUMIMI-twoinone-02 is
+// PROTOCOL-LEVEL.
 // Seat-symmetric (the user's own character / fire).
 // ===========================================================================
 

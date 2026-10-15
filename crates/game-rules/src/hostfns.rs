@@ -1385,6 +1385,12 @@ pub fn persona_is<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Resu
             Ok(c.st().wr().persona_is(player_id, &name))
 }
 
+pub fn set_persona<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<(), HostErr> {
+            let name = guest_str(c, p, n)?;
+            c.st_mut().w().set_persona(player_id, &name);
+            Ok(())
+}
+
 pub fn in_group<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let name = guest_str(c, p, n)?;
             Ok(c.st().wr().in_group(player_id, &name))

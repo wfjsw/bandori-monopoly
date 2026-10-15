@@ -631,6 +631,10 @@ pub fn persona_is(player_id: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::persona_is, [player_id, ptr, len, 0, 0, 0])
 }
 
+pub fn set_persona(player_id: i32, ptr: i32, len: i32) {
+    kani_host::call_unit(Op::set_persona, [player_id, ptr, len, 0, 0, 0]);
+}
+
 pub fn in_group(player_id: i32, ptr: i32, len: i32) -> i32 {
     kani_host::call_i32(Op::in_group, [player_id, ptr, len, 0, 0, 0])
 }

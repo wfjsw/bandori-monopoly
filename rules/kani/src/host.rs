@@ -523,6 +523,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // path is explored. `targeted_count` is bumped on success.
                 Op::target => arm_target(a),
         Op::persona_is => arm_character_is(a),
+                Op::set_persona => arm_set_persona(a),
         Op::in_group => arm_in_band(a),
                 Op::self_uid => arm_self_uid(a),
 
@@ -1420,6 +1421,15 @@ pub fn arm_character_is(a: Args) -> i64 {
     let [a0, a1, a2, ..] = a;
     let want = name_id(a1, a2);
     world::with_world(|w| (w.persona_id[player_idx(a0)] == want.0) as i64)
+}
+
+pub fn arm_set_persona(a: Args) -> i64 {
+    let [a0, a1, a2, ..] = a;
+    let name = name_id(a1, a2);
+    world::with_world_mut(|w| {
+        w.persona_id[player_idx(a0)] = name.0;
+    });
+    0
 }
 
 pub fn arm_count_held(a: Args) -> i64 {

@@ -737,6 +737,7 @@ impl CardWorld for ConfWorld {
     fn persona_is(&self, _player_id: i32, _name: &str) -> i32 {
         0
     }
+    fn set_persona(&mut self, _player_id: i32, _name: &str) {}
     fn in_group(&self, _player_id: i32, _name: &str) -> i32 {
         0
     }

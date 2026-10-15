@@ -520,7 +520,12 @@ use alloc::{string::String, vec::Vec};
 ///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
 ///      No new import; host semantics of `set_pay_amount` composition change.
 ///      SAVE_VERSION unchanged (no save field).
-pub const ABI_VERSION: i32 = 71;
+/// v72: **persona write** -- new host import `set_persona(player_id, name)`
+///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
+///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
+///      exclusive gate and `persona_is` see the new identity; skills are
+///      swapped separately. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 72;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

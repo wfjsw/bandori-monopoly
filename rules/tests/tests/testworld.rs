@@ -459,6 +459,7 @@ impl CardWorld for TestWorld {
     fn persona_is(&self, _: i32, _: &str) -> i32 {
         0
     }
+    fn set_persona(&mut self, _: i32, _: &str) {}
     fn in_group(&self, _: i32, _: &str) -> i32 {
         0
     }

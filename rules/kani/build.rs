@@ -24,7 +24,7 @@ const ARRAY_OPS: &[&str] = &[
     "group_pool", "add_group_pool", "group_skill", "persona_skill", "group_skills", "add_group_skill", "invoke_skill", "raise_bought",
     "raise", "charge", "charge_max", "gain_charge", "give_stay", "give_stun", "give_exile", "give_extra_turn",
     "can_pay", "cant_move", "spend_charge", "stay_of", "stun_of", "exile_of", "turn_player", "round_no",
-    "turn_key", "persona_is", "in_group", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
+    "turn_key", "persona_is", "set_persona", "in_group", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
     "ask", "trig_kind", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",
     "trig_pay_is_rent", "trig_move_kind", "trig_move_resolve", "trig_move_tag", "trig_move_main", "trig_move_dir", "trig_move_remaining", "trig_move_from",
     "trig_move_total", "trig_cards", "trig_move_roll", "trig_roll_source", "trig_buy_kind", "trig_seller", "trig_price", "trig_set_price",
