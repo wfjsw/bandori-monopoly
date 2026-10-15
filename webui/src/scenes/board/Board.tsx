@@ -4,7 +4,8 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { navigate } from "../../app/router";
-import { useStageFill } from "../../app/Stage";
+import { useCompactValue, useStageFill } from "../../app/Stage";
+import { RightTabs } from "./RightTabs";
 import { namesOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
 import { cx } from "../../core/cx";
@@ -121,6 +122,7 @@ export function Board({ sess }: { sess: GameSession }) {
   // The match screen is the one scene that fills the window: no top / bottom
   // letterbox, so the columns stretch and the ring centres in the middle one.
   useStageFill();
+  const compact = useCompactValue();
   // Screen stays on during a live match only -- not in a replay (which also
   // renders this Board) and not once the match has ended.
   useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
@@ -255,12 +257,21 @@ export function Board({ sess }: { sess: GameSession }) {
         <div className={s.right}>
           {/* Half the sidebar: the standing card detail (hover / click / flash).
               The log keeps the other half. */}
-          <div className={s.standSlot}>
-            <CardStand flash={anim.flash?.card} />
-          </div>
-          <div className={s.logSlot}>
-            <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
-          </div>
+          {compact ? (
+            <RightTabs
+              flash={anim.flash?.card}
+              log={<Log lines={anim.log} colorOf={m.colorOf} titled={false}><SettleVote m={m} sess={sess} /></Log>}
+            />
+          ) : (
+            <>
+              <div className={s.standSlot}>
+                <CardStand flash={anim.flash?.card} />
+              </div>
+              <div className={s.logSlot}>
+                <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </>

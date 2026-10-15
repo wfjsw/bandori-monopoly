@@ -105,7 +105,7 @@ export function useLive2DModel(opts: {
         const uploaded = renderer.setModelProgressive(data.model, data.textures);
         const wrap = wrapRef.current;
         if (wrap) {
-          renderer.resize(wrap.clientWidth, wrap.clientHeight, window.devicePixelRatio || 1);
+          renderer.resize(wrap.clientWidth, wrap.clientHeight, Math.min(window.devicePixelRatio || 1, 2));
         }
         animRef.current = bundle
           ? createAnim({
@@ -158,7 +158,7 @@ export function useLive2DModel(opts: {
   useResizeObserver(wrapRef, () => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    rendererRef.current?.resize(wrap.clientWidth, wrap.clientHeight, window.devicePixelRatio || 1);
+    rendererRef.current?.resize(wrap.clientWidth, wrap.clientHeight, Math.min(window.devicePixelRatio || 1, 2));
     dirtyRef.current = true;
   });
 

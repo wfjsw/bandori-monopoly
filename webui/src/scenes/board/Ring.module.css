@@ -419,3 +419,9 @@
   animation: arrowBob 0.7s ease-in-out infinite;
 }
 @keyframes arrowBob { 50% { transform: translateY(-5px); } }
+
+/* Phone canvas: pan / zoom buttons -- a thumb-sized strip in the corner, faint
+   until touched (pinch is the main way to zoom). */
+:global(:root[data-compact]) .zoomCtl { height: 36px; right: 4px; top: 4px; opacity: 0.6; }
+:global(:root[data-compact]) .zoomCtl:active, :global(:root[data-compact]) .zoomCtl:focus-within { opacity: 1; }
+:global(:root[data-compact]) .zoomCtl button { width: 34px; height: 30px; line-height: 30px; font-size: 15px; }

@@ -6,7 +6,7 @@
 /* Scrolls vertically only. Your own seat's ring (`.me`: 3px outline + 2px
    offset) sits 5px outside its panel; the padding keeps it inside the scroll
    box, so it neither clips nor makes the list scroll sideways. */
-.playersWrap { position: absolute; left: 0; top: 107px; bottom: calc(160px + var(--replay-bar-bottom, 0px)); width: 100%; }
+.playersWrap { position: absolute; left: 0; top: var(--players-top, 107px); bottom: calc(var(--players-bottom, 160px) + var(--replay-bar-bottom, 0px)); width: 100%; }
 .players { position: absolute; inset: 0; box-sizing: border-box; padding: 5px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
 /* Two lines beside the avatar: character … money, then status /
    hand / fire / graveyard. Each line is one row high, so a 54-70px panel
@@ -107,3 +107,12 @@
 .cardPeekHead { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; }
 .cardPeekHead b { color: var(--pink); font-size: 15px; }
 .panel:hover { filter: brightness(1.04); }
+
+/* Phone canvas: less air around the seats, same content. */
+:global(:root[data-compact]) .players { padding: 3px; }
+:global(:root[data-compact]) .panel { border-width: 2px; column-gap: 3px; row-gap: 0; padding: 0 8px 0 4px; }
+:global(:root[data-compact]) .me { outline-width: 2px; outline-offset: 1px; box-shadow: var(--shadow), inset 5px 0 0 var(--me-blue); }
+:global(:root[data-compact]) .log { padding: 8px 10px 6px; }
+:global(:root[data-compact]) .lines { font-size: 12px; line-height: 1.45; margin-top: 4px; }
+:global(:root[data-compact]) .stageLine { font-size: 11px; margin: 3px 0 1px; }
+:global(:root[data-compact]) .turnGroup { margin: 6px 0 1px; padding-left: 6px; }

@@ -189,3 +189,20 @@ New copies of these shapes should compose the primitive, not restate it.
 | hex colours in modules | 304 | 242 (the rest are the map tile palette) |
 | `!important` | 1 | 0 |
 | `:root` tokens | 21 | 96 |
+## Phone (compact) stage
+
+There is **one** board layout. A phone held in landscape (`pointer: coarse`,
+short side <= 560px; `?compact=1` forces it for desktop testing) only changes
+the *numbers*: `Stage` swaps the 900px design height for `COMPACT_H` (540) so
+the scale -- and every font and touch target -- is ~1.7x larger, and sets
+`data-compact` on `<html>`, which re-points the layout tokens in `base.css`
+(`--board-col-*`, `--topbar-h`, `--players-top`, ...). Rules for keeping the two
+from diverging:
+
+* Never hide information in compact. If it does not fit, narrow a token or
+  shrink a gap; do not `display: none` it.
+* New geometry goes in a token (with a `styles/layout.ts` mirror if TS needs
+  it), never a `[data-compact]` selector with its own copy of the layout. A
+  `:global(:root[data-compact])` override is for sizes only (see `TopBar`).
+* The compact stage applies to the board only (`useStageFill`); other scenes
+  still scale the 1600 x 900 design.

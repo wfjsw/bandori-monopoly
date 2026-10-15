@@ -8,7 +8,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(22px + var(--replay-bar-bottom, 0px));
+  bottom: calc(var(--actions-bottom, 22px) + var(--replay-bar-bottom, 0px));
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
@@ -526,3 +526,10 @@
     transition: none;
   }
 }
+/* Phone canvas: the hand strip's controls are the thing pressed all game -- bigger. */
+:global(:root[data-compact]) .speed { width: 40px; height: 32px; }
+:global(:root[data-compact]) .handHint { font-size: 11px; }
+:global(:root[data-compact]) .act { height: 68px; min-height: 68px; }
+:global(:root[data-compact]) .dice { height: 68px; }
+
+:global(:root[data-compact]) .preview { width: 240px; }
