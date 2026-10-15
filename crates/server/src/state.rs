@@ -152,6 +152,7 @@ impl Server {
             let id = rec.info.id.clone();
             let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
             r.bot_search = self.bots.is_some();
+            r.presence_timeout = self.presence_timeout;
             r.restore_game();
             eprintln!(
                 "restored room {id} (match: {})",
@@ -171,6 +172,7 @@ impl Server {
         let rec = self.store.room_get(id).ok().flatten()?;
         let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
         r.bot_search = self.bots.is_some();
+        r.presence_timeout = self.presence_timeout;
         r.restore_game();
         let r = Arc::new(Mutex::new(r));
         self.rooms
@@ -211,6 +213,7 @@ impl Server {
                 if let Err(e) = r.reload() {
                     return Err(ApiError::not_found(format!("err.room.gone: {e}").as_str()));
                 }
+                r.presence_timeout = self.presence_timeout;
                 f(&mut r)
             },
         )

@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use game_core::msg::Msg;
 use game_core::net::{self, NetMessage, RoomInfo, RoomMember};
@@ -618,22 +617,14 @@ pub enum Note {
     Dissolved(Msg),
 }
 
-#[derive(Debug, Clone)]
-struct Presence {
-    streams: u32,
-    /// When the last stream closed (or the member joined).
-    since: Instant,
-    /// The AI has taken over the player.
-    away: bool,
-}
-
 pub struct Room {
     // A read-through cache of the store's [`RoomRecord`]: `info` / `password` /
     // `tokens` / `next_member` / `fair` are re-read at the start of every
     // operation under the room lock ([`crate::state::Server::with_room`]) and
     // written back on change. What is *only* here is the genuinely
-    // per-connection half -- the broadcast channel (`tx`) and the (local)
-    // presence bookkeeping.
+    // per-connection half -- the broadcast channel (`tx`). Presence is in the
+    // store's TTL keys (one per live SSE stream), so a stream on another
+    // process counts just the same.
     pub info: RoomInfo,
     password: String,
     /// Human member id -> session token.
@@ -645,7 +636,6 @@ pub struct Room {
     pub engine: Arc<Pool>,
     pub store: Arc<dyn CrossState>,
     pub tx: broadcast::Sender<Note>,
-    presence: HashMap<i32, Presence>,
     pub dissolved: Option<Msg>,
     /// Does this server have a `bot-service` to drive Advanced bots
     /// (`docs/BOT.md` B5)? When false, [`Room::start`] rewrites those seats to
@@ -653,6 +643,11 @@ pub struct Room {
     /// bots instead of waiting on answers nobody will send. Per-process: a
     /// deployment's processes should agree.
     pub bot_search: bool,
+    /// How long a member may have no live stream before they count as away
+    /// ([`crate::state::PRESENCE_TIMEOUT`], overridable in tests). Mirrors the
+    /// server's knob so the presence TTLs this room sets are the same number
+    /// the reaper uses.
+    pub presence_timeout: std::time::Duration,
     /// The commit-reveal slot (`docs/FAIRNESS.md`): drawn at room creation and
     /// redrawn after every match. `None` only until the first [`Room::roll_fair`]
     /// (or when a stored room carries none and the re-roll has not run yet).
@@ -705,9 +700,9 @@ impl Room {
             engine,
             store,
             tx,
-            presence: HashMap::new(),
             dissolved: None,
             bot_search: false,
+            presence_timeout: crate::state::PRESENCE_TIMEOUT,
             fair: None,
         }
     }
@@ -744,22 +739,6 @@ impl Room {
     /// back to a fresh one on [`Room::restore_game`].
     pub fn from_record(rec: RoomRecord, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Self {
         let tokens: HashMap<i32, String> = rec.tokens.clone().into_iter().collect();
-        let presence = tokens
-            .keys()
-            .map(|&m| {
-                (
-                    m,
-                    Presence {
-                        streams: 0,
-                        since: Instant::now(),
-                        // A seat dropped before the restart is still on the
-                        // AI; without this the reconnect would not look like
-                        // a return and `member_back` would never run.
-                        away: rec.info.members.iter().any(|x| x.id == m && x.away),
-                    },
-                )
-            })
-            .collect();
         let (tx, _) = broadcast::channel(64);
         let mut this = Self {
             info: rec.info.clone(),
@@ -770,9 +749,9 @@ impl Room {
             engine,
             store,
             tx,
-            presence,
             dissolved: None,
             bot_search: false,
+            presence_timeout: crate::state::PRESENCE_TIMEOUT,
             fair: None,
         };
         this.apply_record(&rec);
@@ -890,14 +869,9 @@ impl Room {
         });
         self.tokens.insert(id, who.token.into());
         self.persist();
-        self.presence.insert(
-            id,
-            Presence {
-                streams: 0,
-                since: Instant::now(),
-                away: false,
-            },
-        );
+        // Presence: an `idle` key covers "joined but no stream yet"; a live
+        // SSE stream adds its own. Either keeps the member present.
+        self.presence_touch(id, "idle", self.presence_timeout);
         self.notify();
         Ok(id)
     }
@@ -907,7 +881,7 @@ impl Room {
     /// this. Returns the token that left.
     pub fn leave(&mut self, member: i32) -> Option<String> {
         let token = self.tokens.remove(&member);
-        self.presence.remove(&member);
+        let _ = self.store.presence_clear(&self.info.id, member);
         // A leaver's nonce goes with them (`docs/FAIRNESS.md`): only the
         // members who actually sit down for the match contribute.
         if let Some(f) = self.fair.as_mut() {
@@ -1269,53 +1243,86 @@ impl Room {
 
     // ---------------------------------------------------------------- presence
 
-    /// Note a stream opening. Returns true when the member had been marked
-    /// away and is back -- the caller then runs `member_back` on the handle
-    /// (with the room lock dropped).
-    pub fn stream_opened(&mut self, member: i32) -> bool {
-        let Some(p) = self.presence.get_mut(&member) else {
-            return false;
-        };
-        p.streams += 1;
+    /// Refresh one presence key of `member` (a live stream id, or `"idle"` for
+    /// the join / post-stream grace period). The TTL is what makes a stream a
+    /// dead process stopped refreshing vanish on its own.
+    fn presence_touch(&self, member: i32, stream: &str, ttl: std::time::Duration) {
+        let _ = self.store.presence_set(
+            &self.info.id,
+            member,
+            stream,
+            ttl.as_millis().max(1) as u64,
+        );
+    }
+
+    /// Note a stream opening. `stream` is this connection's presence key (the
+    /// SSE pump refreshes it on its keep-alive). Returns true when the member
+    /// had been marked away and is back -- the caller then runs `member_back`
+    /// on the handle (with the room lock dropped).
+    pub fn stream_opened(&mut self, member: i32, stream: &str) -> bool {
+        self.presence_touch(member, stream, self.sse_presence_ttl());
+        // The idle key is a backstop only; a live stream is the real presence.
+        // Refreshing it costs nothing and keeps the count honest if the stream
+        // key races its TTL.
+        self.presence_touch(member, "idle", self.presence_timeout);
         let mut back = false;
-        if p.away {
-            p.away = false;
-            if let Some(m) = self.info.members.iter_mut().find(|m| m.id == member) {
+        if let Some(m) = self.info.members.iter_mut().find(|m| m.id == member) {
+            if m.away {
                 m.away = false;
+                back = true;
             }
-            back = true;
+        }
+        if back {
             self.persist();
             self.notify();
         }
         back
     }
 
-    pub fn stream_closed(&mut self, member: i32) {
-        if let Some(p) = self.presence.get_mut(&member) {
-            p.streams = p.streams.saturating_sub(1);
-            if p.streams == 0 {
-                p.since = Instant::now();
-            }
-        }
+    /// That stream closed. The `idle` key takes over for `presence_timeout`,
+    /// so a member whose last stream just dropped is not reaped instantly.
+    pub fn stream_closed(&mut self, member: i32, stream: &str) {
+        let _ = self.store.presence_del(&self.info.id, member, stream);
+        self.presence_touch(member, "idle", self.presence_timeout);
+    }
+
+    /// How long one SSE stream's key lives without a refresh. The pump
+    /// refreshes it every loop (~2 s); this bound is what drops a stream a
+    /// dead process stopped refreshing. Deliberately **not** the presence
+    /// timeout -- that is the `idle` key's job (the away timer).
+    fn sse_presence_ttl(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(60)
     }
 
     /// Apply presence time-outs. Returns the members dropped mid-match (the
     /// caller runs `member_left` on the handle and clears them) and, outside a
     /// match, the tokens removed from the room.
+    ///
+    /// A member is stale when **no** presence key of theirs is alive -- no
+    /// live stream on any process, and the post-drop grace has expired. The
+    /// timeout is baked into the keys' TTLs ([`Self::presence_touch`]); the
+    /// argument here is the reaper's own view of it and must agree.
     pub fn tick_presence(&mut self, timeout: std::time::Duration) -> (Vec<i32>, Vec<String>) {
+        let _ = timeout; // the TTLs set at stream_opened/join carry it
         let mut dropped = vec![];
         let mut removed = vec![];
         let stale: Vec<i32> = self
-            .presence
+            .info
+            .members
             .iter()
-            .filter(|(_, p)| p.streams == 0 && !p.away && p.since.elapsed() >= timeout)
-            .map(|(&m, _)| m)
+            .filter(|m| {
+                !m.away
+                    && !m.bot
+                    && self
+                        .store
+                        .presence_count(&self.info.id, m.id)
+                        .unwrap_or(1)
+                        == 0
+            })
+            .map(|m| m.id)
             .collect();
         for m in stale {
             if self.info.playing {
-                if let Some(p) = self.presence.get_mut(&m) {
-                    p.away = true;
-                }
                 if let Some(x) = self.info.members.iter_mut().find(|x| x.id == m) {
                     x.away = true;
                 }
@@ -1326,7 +1333,7 @@ impl Room {
         }
         if !dropped.is_empty() {
             // `away` rides the room record so a restart still knows who is on
-            // the AI (see [`Room::from_record`]).
+            // the AI (and so another instance's SSE sees the change).
             self.persist();
         }
         (dropped, removed)

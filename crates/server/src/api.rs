@@ -197,6 +197,7 @@ pub async fn create_room(
     let engine = s.engine.clone();
     let store = s.store.clone();
     let bot_search = s.bots.is_some();
+    let presence_timeout = s.presence_timeout;
     let (token, player, persona, cn_id) = (
         sess.token.clone(),
         sess.player.clone(),
@@ -211,6 +212,7 @@ pub async fn create_room(
         // Advanced bots need the bot-service; without one they play as standard
         // (`docs/BOT.md` B5, `Room::start`).
         room.bot_search = bot_search;
+        room.presence_timeout = presence_timeout;
         room.roll_fair().map_err(|e| ApiError::bad(e.as_str()))?;
         let who = NewMember {
             token: &token,
