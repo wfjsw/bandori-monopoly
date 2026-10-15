@@ -119,7 +119,11 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   const avail = compact ? COMPACT_PLAYERS_H : 548;
   const n = S.players.length;
   const gap = n > 6 ? 5 : 8;
-  const height = Math.min(compact ? COMPACT_SEAT_H : 70, Math.floor((avail - gap * (n - 1)) / n));
+  // Seats shrink to fit only down to a floor; past that the list scrolls
+  // instead of squeezing every row until its content is unreadable.
+  const maxH = compact ? COMPACT_SEAT_H : 70;
+  const minH = compact ? COMPACT_SEAT_H : 58;
+  const height = Math.max(minH, Math.min(maxH, Math.floor((avail - gap * (n - 1)) / n)));
   const t = timerOf(m, solo, elapsed);
   const order = turnOrder(S);
   // Graveyard hover peek (like the draw pile's in Side): which seat, and its
@@ -163,10 +167,10 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
             </div>
             <div className={s.who}>
               <b>{c ? (c.variantTag ? `${c.variantOf}(${c.variantTag})` : c.display) : "—"}</b>
-              {x.player && <span className={s.nick} title={x.player}>{x.player}</span>}
             </div>
             <div className={s.money}><img src={sceneImg("icon_coin")} alt="" /><b>{n0(x.money)}</b></div>
             <div className={s.sub}>
+              {x.player && <span className={s.nick} title={x.player}>{x.player}</span>}
               {status.map((t) => <span key={t} className={s.status}>{t}</span>)}
               {(() => {
                 const bb = borrowedBand(x);
