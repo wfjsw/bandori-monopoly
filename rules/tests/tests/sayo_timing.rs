@@ -27,6 +27,20 @@ fn offer(t: &mut Table) {
     assert_eq!(p.options.len(), 3);
 }
 
+/// Decline every open prompt. G-SETTLE-06/07: the settle of a deed is the
+/// optional buy/build prompt, a separate settle from the move-extension
+/// window under test -- and it must never *be* that window.
+fn drain(t: &mut Table) {
+    while let Some(p) = t.prompt() {
+        assert!(
+            !p.text.key().contains("move_extension"),
+            "unexpected move-extension prompt: {}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
+}
+
 #[test]
 fn offer_shows_resolved_distance_and_each_landing_before_walking() {
     let mut t = sayo();
@@ -45,6 +59,9 @@ fn choosing_one_or_two_extends_this_move_and_spends_six_once() {
         offer(&mut t);
         t.answer(0, 2 - add).unwrap();
         t.counteract(0, SKILL).unwrap();
+        // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt;
+        // answer it so the walk routine finishes and writes main_steps.
+        drain(&mut t);
         assert_eq!(t.pos(0), 6 + add as usize);
         assert_eq!(t.charge(0), 4);
         assert_eq!(t.m.world().turn.main_steps, 5 + add);
@@ -82,7 +99,9 @@ fn insufficient_fire_or_teleport_does_not_offer_or_spend() {
         let fire = t.charge(0);
         t.dice(&[5]);
         t.roll(0).unwrap();
-        assert!(t.prompt().is_none(), "{}", t.dump_prompt());
+        // G-SETTLE-06/07: the landing settle may open a buy prompt; that is
+        // not the skill offer (drain asserts as much).
+        drain(&mut t);
         assert_eq!(t.charge(0), fire);
     }
 }
@@ -138,6 +157,9 @@ fn use_is_once_per_turn_and_resets_on_the_next_turn() {
     offer(&mut t);
     t.answer(0, 1).unwrap();
     t.counteract(0, SKILL).unwrap();
+    // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt;
+    // answer it so the walk routine finishes before world_mut.
+    drain(&mut t);
     t.set_fire(0, 10, 10);
     // Even if another effect allowed another main move in the same turn,
     // replenished pots must not allow a second use.
@@ -146,7 +168,8 @@ fn use_is_once_per_turn_and_resets_on_the_next_turn() {
     t.m.world_mut().st.step = game_core::state::stage::OPS;
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.prompt().is_none(), "{}", t.dump_prompt());
+    // G-SETTLE-06/07 is not a second skill offer (drain asserts as much).
+    drain(&mut t);
     assert_eq!(t.charge(0), 10);
     t.begin_turn(0);
     t.set_pos(0, 1);

@@ -42,6 +42,20 @@ fn distance(t: &mut Table, extra: i32) {
     assert!(t.hand(0).iter().any(|id| id == CARD), "not declared yet");
 }
 
+/// Decline every open prompt. G-SETTLE-06/07: the settle of a deed is the
+/// optional buy/build prompt, a separate settle from the move-extension
+/// window under test -- and it must never *be* that window.
+fn drain(t: &mut Table) {
+    while let Some(p) = t.prompt() {
+        assert!(
+            !p.text.key().contains("move_extension"),
+            "unexpected move-extension prompt: {}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
+}
+
 #[test]
 fn card_uses_final_override_and_shows_landings_before_walking() {
     let mut t = table();
@@ -54,6 +68,9 @@ fn card_uses_final_override_and_shows_landings_before_walking() {
     distance(&mut t, 2);
     assert_eq!(t.expect_prompt().text.a.get("tile"), Some(&Arg::Tile(10)));
     t.counteract(0, CARD).unwrap();
+    // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt;
+    // answer it so the walk routine finishes and writes main_steps.
+    drain(&mut t);
     assert_eq!(t.pos(0), 10);
     assert_eq!(t.m.world().turn.main_steps, 9);
     assert_eq!(t.charge(0), 0);
@@ -66,6 +83,9 @@ fn either_extension_applies_after_card_payment_without_a_third_prompt() {
         roll(&mut t);
         distance(&mut t, extra);
         t.counteract(0, CARD).unwrap();
+        // G-SETTLE-06/07: the landing settle is a separate buy prompt, not a
+        // third move-extension offer.
+        drain(&mut t);
         assert_eq!(t.pos(0), 6 + extra as usize);
         assert_eq!(t.m.world().turn.main_steps, 5 + extra);
         assert_eq!(t.charge(0), 0);
@@ -86,6 +106,9 @@ fn card_and_six_pots_are_alternatives_after_the_distance_choice() {
     assert!(t.option(SKILL).is_some());
     assert_eq!(t.charge(0), 10);
     t.counteract(0, CARD).unwrap();
+    // G-SETTLE-06/07: the landing settle is a buy prompt, not a subsequent
+    // paid offer (drain asserts as much).
+    drain(&mut t);
     assert_eq!(t.pos(0), 8);
     assert_eq!(t.charge(0), 10);
     assert!(t.prompt().is_none(), "no subsequent paid offer");
@@ -99,6 +122,9 @@ fn choosing_six_pots_keeps_the_card_and_the_skill_in_place() {
     roll(&mut t);
     distance(&mut t, 2);
     t.counteract(0, SKILL).unwrap();
+    // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt;
+    // answer it so the walk routine finishes before world_mut.
+    drain(&mut t);
     assert_eq!(t.pos(0), 8);
     assert_eq!(t.charge(0), 4);
     assert_eq!(t.hand(0), vec![CARD]);
@@ -110,6 +136,8 @@ fn choosing_six_pots_keeps_the_card_and_the_skill_in_place() {
     t.m.world_mut().st.step = game_core::state::stage::OPS;
     t.dice(&[1]);
     t.roll(0).unwrap();
+    // G-SETTLE-06/07 is not another card use (drain asserts as much).
+    drain(&mut t);
     assert!(
         t.prompt().is_none(),
         "paid use also prevents another card use"
@@ -149,6 +177,9 @@ fn back_then_pass_keeps_both_sources_and_original_distance() {
     distance(&mut t, 2);
     t.decline();
     t.decline();
+    // G-SETTLE-06/07: the walk's landing settle is a buy prompt, not a
+    // leftover source offer.
+    drain(&mut t);
     assert_eq!(t.pos(0), 6);
     assert_eq!(t.hand(0), vec![CARD]);
     assert_eq!(t.charge(0), 10);
@@ -163,6 +194,8 @@ fn back_then_card_payment_uses_only_the_new_distance() {
     t.decline();
     distance(&mut t, 2);
     t.counteract(0, CARD).unwrap();
+    // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt.
+    drain(&mut t);
     assert_eq!(t.pos(0), 8);
     assert!(!t.hand(0).iter().any(|id| id == CARD));
     assert!(t.prompt().is_none());
@@ -206,6 +239,9 @@ fn duplicate_cards_cannot_be_declared_in_the_same_shared_window() {
     roll(&mut t);
     distance(&mut t, 2);
     t.counteract(0, CARD).unwrap();
+    // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt; the
+    // shared declaration window is already closed (drain asserts as much).
+    drain(&mut t);
     assert_eq!(t.pos(0), 8);
     assert_eq!(t.hand(0), vec![CARD]);
     assert_eq!(t.charge(0), 10);
@@ -219,12 +255,17 @@ fn card_consumes_the_shared_once_per_turn_use_and_next_turn_resets_it() {
     roll(&mut t);
     distance(&mut t, 1);
     t.counteract(0, CARD).unwrap();
+    // G-SETTLE-06/07: landing on the unowned deed opens the buy prompt;
+    // answer it so the walk routine finishes before world_mut.
+    drain(&mut t);
     t.set_hand(0, &[CARD]);
     t.m.world_mut().turn.main_moved = false;
     t.m.world_mut().turn.plan = Default::default();
     t.m.world_mut().st.step = game_core::state::stage::OPS;
     t.dice(&[1]);
     t.roll(0).unwrap();
+    // G-SETTLE-06/07 is not a second use of the shared window.
+    drain(&mut t);
     assert!(t.prompt().is_none());
     assert_eq!(t.charge(0), 10);
     assert_eq!(t.hand(0), vec![CARD]);
@@ -242,6 +283,9 @@ fn declining_the_initial_window_keeps_both_sources() {
     t.set_fire(0, 10, 10);
     roll(&mut t);
     t.decline();
+    // G-SETTLE-06/07: the walk's landing settle is a buy prompt, not a
+    // leftover source offer.
+    drain(&mut t);
     assert_eq!(t.pos(0), 6);
     assert_eq!(t.charge(0), 10);
     assert_eq!(t.hand(0), vec![CARD]);
@@ -258,6 +302,8 @@ fn card_payment_preserves_its_counteraction_response_window() {
     t.counteract(0, CARD).unwrap();
     assert!(t.counteract_offered("TEST:deny"));
     t.counteract(1, "TEST:deny").unwrap();
+    // G-SETTLE-06/07: the walk's landing settle is a buy prompt.
+    drain(&mut t);
     assert_eq!(t.pos(0), 6);
     assert_eq!(t.charge(0), 10);
     assert!(t.prompt().is_none());
@@ -286,17 +332,13 @@ fn teleport_and_forced_side_move_do_not_offer_the_card() {
     t.m.world_mut().turn.plan.kind = MoveKind::Teleport;
     t.dice(&[5]);
     t.roll(0).unwrap();
-    assert!(t.prompt().is_none());
+    // G-SETTLE-06/07: a teleport/forced landing settle may open a buy
+    // prompt; that is not the card (drain asserts as much).
+    drain(&mut t);
     let mut t = table();
     t.m.world_mut().turn.plan.forced = true;
     t.give_play(0, "TEST:mover").unwrap();
-    while t.prompt().is_some() {
-        assert_ne!(
-            t.expect_prompt().text.key(),
-            "ask.counteract.move_extension"
-        );
-        t.decline();
-    }
+    drain(&mut t);
     assert!(t.hand(0).iter().any(|c| c == CARD));
 }
 

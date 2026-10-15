@@ -527,7 +527,10 @@ pub fn c_mor_noble_gate(step: &Step<'_>) -> Result<(), String> {
 
 /// C-MOR-noble-02 -- own tile: mark "noTarget" on the tile.
 pub fn c_mor_noble_mark(step: &Step<'_>) -> Result<(), String> {
-    if !card_fired(step, NOBLE) {
+    if !card_fired(step, NOBLE) || step.post_prompt_open {
+        // 「立刻进行一次触发结算」 on the user's own deed opens the
+        // G-SETTLE-06/07 buy/build prompt; the mark (rule 2) lands only
+        // after that settle is answered.
         return Ok(());
     }
     let who = step.player_of_act();
