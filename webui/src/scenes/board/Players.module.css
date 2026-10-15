@@ -29,14 +29,11 @@
 .bot { position: absolute; left: 1px; bottom: 0; width: 16px; height: 16px; border-radius: 50%; background: var(--sub); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
 .bot i { width: 11px; height: 11px; }
 .chaos { background: var(--pink); }
-.who { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; container-type: inline-size; }
+.who { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
 /* The character name stays on one line and truncates when space is tight. */
-.who b { flex: 0 0 auto; max-width: 100%; min-width: 0; font-size: 16px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nick { flex: 0 1 auto; min-width: 2.5em; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who b { flex: 0 1 auto; min-width: 0; font-size: 16px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nick { flex: 0 1 auto; margin-right: auto; min-width: 0; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .compact .nick { font-size: 12px; }
-/* The character name has priority: when the name cell is too narrow to show both
-   (crowded table / phone), drop the player name instead of squeezing the character to "…". */
-@container (max-width: 120px) { .nick { display: none; } }
 .money { display: flex; align-items: center; gap: 5px; justify-content: flex-end; }
 .money img { width: 22px; }
 .money b { font-size: 19px; line-height: 1.2; }
