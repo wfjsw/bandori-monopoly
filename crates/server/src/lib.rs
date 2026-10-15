@@ -386,8 +386,9 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
 // ------------------------------------------------------- advanced bots (B5)
 
 /// Members of `room` that the bot service drives: bot seats tagged
-/// [`BotMentality::Advanced`]. Claims each one whose probe time is due, so a
-/// seat is only ever asked about once (`docs/BOT.md` B5).
+/// [`BotMentality::Advanced`]. Claims each one whose probe time is due via the
+/// store, so a seat is only ever asked about once even across processes
+/// (`docs/BOT.md` B5).
 fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
     if server.bots.is_none() {
         return Vec::new();
@@ -404,14 +405,9 @@ fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
             .map(|m| m.id)
             .collect()
     };
-    if members.is_empty() {
-        return Vec::new();
-    }
-    let now = Instant::now();
-    let mut drive = server.bot_drive.lock().unwrap();
     members
         .into_iter()
-        .filter(|&m| drive.claim(room_id, m, now))
+        .filter(|&m| botsvc::claim_seat(server.store.as_ref(), &server.instance, room_id, m))
         .collect()
 }
 
@@ -427,11 +423,13 @@ fn spawn_probe(
 ) {
     tokio::spawn(async move {
         let acted = probe_one(&server, &bots, &room_id, member, &m).await;
-        server
-            .bot_drive
-            .lock()
-            .unwrap()
-            .release(&room_id, member, acted);
+        botsvc::release_seat(
+            server.store.as_ref(),
+            &server.instance,
+            &room_id,
+            member,
+            acted,
+        );
     });
 }
 

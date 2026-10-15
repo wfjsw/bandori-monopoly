@@ -130,6 +130,12 @@ pub trait CrossState: Send + Sync {
     /// alone (compare-and-delete) -- a stale release must not free it.
     fn lock_release(&self, key: &str, owner: &str) -> Result<(), StoreError>;
 
+    /// An ownerless TTL marker: a cooldown, a "seen" stamp. Set by anyone,
+    /// live until its TTL. `marker_live` is the check; setting an already-live
+    /// marker refreshes it.
+    fn marker_set(&self, key: &str, ttl_ms: u64) -> Result<(), StoreError>;
+    fn marker_live(&self, key: &str) -> Result<bool, StoreError>;
+
     // ------------------------------------------------------------ pub/sub
     //
     // Room change notes and dissolves. Delivery is best-effort: every consumer

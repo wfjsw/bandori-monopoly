@@ -251,6 +251,24 @@ impl CrossState for Store {
         Ok(())
     }
 
+    fn marker_set(&self, key: &str, ttl_ms: u64) -> Result<(), StoreError> {
+        lock(&self.inner.locks)?.insert(
+            key.to_string(),
+            Ttl {
+                value: String::new(),
+                expires: self.now() + Duration::from_millis(ttl_ms),
+            },
+        );
+        Ok(())
+    }
+
+    fn marker_live(&self, key: &str) -> Result<bool, StoreError> {
+        let now = self.now();
+        Ok(lock(&self.inner.locks)?
+            .get(key)
+            .is_some_and(|t| t.live(now)))
+    }
+
     fn publish(&self, channel: &str, msg: &str) -> Result<(), StoreError> {
         let mut subs = lock(&self.inner.subs)?;
         if let Some(list) = subs.get_mut(channel) {

@@ -302,6 +302,22 @@ impl CrossState for Store {
         Ok(())
     }
 
+    fn marker_set(&self, key: &str, ttl_ms: u64) -> Result<(), StoreError> {
+        self.call(|c| {
+            redis::cmd("SET")
+                .arg(format!("{NS_LOCK}{key}"))
+                .arg("1")
+                .arg("PX")
+                .arg(ttl_ms)
+                .query::<()>(c)
+        })
+        .map(|_| ())
+    }
+
+    fn marker_live(&self, key: &str) -> Result<bool, StoreError> {
+        self.call(|c| c.exists::<_, bool>(format!("{NS_LOCK}{key}")))
+    }
+
     fn publish(&self, channel: &str, msg: &str) -> Result<(), StoreError> {
         self.call(|c| redis::cmd("PUBLISH").arg(channel).arg(msg).query::<()>(c))
             .map(|_| ())

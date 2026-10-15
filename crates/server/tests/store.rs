@@ -133,6 +133,34 @@ fn rec_meta_round_trips() {
     assert!(s.rec_meta_get("R").unwrap().is_none());
 }
 
+#[test]
+fn markers_are_ownerless_ttl_stamps() {
+    let s = dummy();
+    assert!(!s.marker_live("botwait:R:1").unwrap());
+    s.marker_set("botwait:R:1", 40).unwrap();
+    assert!(s.marker_live("botwait:R:1").unwrap());
+    s.marker_set("botwait:R:1", 40).unwrap(); // refresh
+    std::thread::sleep(Duration::from_millis(25));
+    assert!(s.marker_live("botwait:R:1").unwrap(), "refreshed");
+    std::thread::sleep(Duration::from_millis(40));
+    assert!(!s.marker_live("botwait:R:1").unwrap(), "expired");
+}
+
+/// Two processes claiming the same bot seat: exactly one wins, and the
+/// cooldown after a release spaces the next probe.
+#[test]
+fn bot_seat_claims_are_cross_process() {
+    use server::botsvc::{claim_seat, release_seat};
+    let s = dummy();
+    assert!(claim_seat(&s, "a", "R", 1), "first claim");
+    assert!(!claim_seat(&s, "b", "R", 1), "second process");
+    assert!(claim_seat(&s, "b", "R", 2), "other seats are independent");
+    release_seat(&s, "a", "R", 1, false);
+    assert!(!claim_seat(&s, "b", "R", 1), "cooldown after release");
+    std::thread::sleep(Duration::from_millis(250));
+    assert!(claim_seat(&s, "b", "R", 1), "cooldown expired");
+}
+
 /// Two handles over the same dummy state -- what two `Server`s share.
 #[test]
 fn dummy_store_is_shareable_across_handles() {
