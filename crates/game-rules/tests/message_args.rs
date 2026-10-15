@@ -152,6 +152,39 @@ fn no_shipped_outcome_renders_an_internal_key_as_text() {
     }
     check_events(&t.events_since(mark), "shipped-game");
 }
+/// Every trigger-kind wire name the chain start can show has an
+/// `anim.chainKind.*` label, and every counter name a `log.counter.*` phrase,
+/// in both locales -- otherwise the player reads the raw key (`moveBefore`).
+#[test]
+fn chain_kinds_and_counters_have_locale_text() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../webui/src/i18n/locales");
+    let load = |loc: &str, file: &str| -> serde_json::Value {
+        let p = format!("{dir}/{loc}/{file}.json");
+        serde_json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap()
+    };
+    let mut missing = Vec::new();
+    for loc in ["zh-CN", "en"] {
+        let (ui, game) = (load(loc, "ui"), load(loc, "game"));
+        for id in 1..=400 {
+            let k = game_rules::TriggerKind::from_i32(id).as_str();
+            if k.is_empty() {
+                continue;
+            }
+            let key = format!("anim.chainKind.{k}");
+            if ui.get(&key).is_none() && ui.get(format!("anim.chainKind.{id}")).is_none() {
+                missing.push(format!("{loc}: {key}"));
+            }
+        }
+        for c in ["crystals", "cp", "points", "bonus"] {
+            let key = format!("log.counter.{c}");
+            if game.get(&key).is_none() {
+                missing.push(format!("{loc}: {key}"));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "missing locale text: {missing:?}");
+}
+
 /// The name helpers must produce nested Msg, never a Text arg for a known key.
 #[test]
 fn name_helpers_never_text_a_known_key() {
