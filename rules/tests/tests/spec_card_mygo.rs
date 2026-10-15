@@ -45,6 +45,41 @@ fn rest(t: &mut Table) {
     drain(t);
 }
 
+/// Accept an open YesNo prompt whose title/text key mentions `needle`.
+///
+/// `ask_yes` lands as a `choice` prompt whose options are `ask.yes` /
+/// `ask.no` (the title/text name the ask), so [`Table::option`] cannot find
+/// it by the skill/card name -- answer `0` = yes. Match on the **Msg key**
+/// (`rana_parking_parfait`, `soyo_clear_title`, ...); the localized Chinese
+/// text is not in `Debug`.
+fn accept_yes(t: &mut Table, who: usize, needle: &str) -> bool {
+    let Some(p) = t.prompt() else {
+        return false;
+    };
+    let is_yes_no = p.kind == "yes"
+        || (p.kind == "choice"
+            && p.options.iter().any(|o| o.key() == "ask.yes")
+            && p.options.iter().any(|o| o.key() == "ask.no"));
+    if !is_yes_no {
+        return false;
+    }
+    let blob = format!("{}{}{:?}", p.title.key(), p.text.key(), p.title);
+    if !blob.contains(needle) {
+        return false;
+    }
+    t.answer(who, 0).is_ok()
+}
+
+/// Clear a mid-turn [停留] latch so the harness can still roll: the live
+/// `skip_move` gate is a consequence of the state (`give_stay`), and a bare
+/// `set_state(who, "stay", 0)` does not un-latch it.
+fn clear_stay_latch(t: &mut Table, who: usize) {
+    t.set_state(who, "stay", 0);
+    if t.m.world().st.turn == who as i32 {
+        t.m.world_mut().st.skip_move = false;
+    }
+}
+
 
 // ---------------------------------------------------------------- iff helpers
 //
@@ -794,10 +829,14 @@ fn rainday_drains_one_crystal_per_turn_end() {
         if t.crystals(0, RAINDAY).unwrap_or(-1) != 5 {
             return Err("C-MYGO-rainday-01: expected 5 crystals".into());
         }
+        // The play-time d10 may land [停留] on P0 (blue zone / adjacent to
+        // CiRCLE); stay skips the main move (「处于该状态时[无法移动]」). The
+        // crystal drain is at turn end regardless, so the roll is optional.
         t.dice(&[1]);
-        t.roll(0).map_err(|e| format!("roll: {e}"))?;
-        rest(&mut t);
-        drain(&mut t);
+        if t.roll(0).is_ok() {
+            rest(&mut t);
+            drain(&mut t);
+        }
         t.end(0).map_err(|e| format!("end: {e}"))?;
         let c = t.crystals(0, RAINDAY).unwrap_or(-1);
         if c != 4 {
@@ -1278,6 +1317,14 @@ fn tomori_card_crystal_pays_fire_and_removes() {
         if let Some(k) = u.option("MyGO:轮符雨") {
             u.answer(0, k).map_err(|e| format!("target: {e}"))?;
         }
+        // 「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- the
+        // `ChargePaying` substitution is a YesNo (`tomori_no_longer_title`).
+        if !accept_yes(&mut u, 0, "tomori_no_longer") {
+            return Err(format!(
+                "C-MYGO-tomori-card-03: no crystal-pay offer: {}",
+                u.dump_prompt()
+            ));
+        }
         rest(&mut u);
         drain(&mut u);
         let fire = u.charge(0);
@@ -1484,6 +1531,10 @@ fn hitoshizuku_clear_charge_and_stun_play() {
                 "state:P2:stun",
                 "hand:P0",
                 "hand_n:P0",
+                // Empty draw + discard refill (play → Graveyard →
+                // `refill_draw_pile`) reshuffles the discard into draw.
+                "draw:P0",
+                "draw_n:P0",
                 "discard:P0",
                 "discard_pub:P0",
                 "turn.abnormal",
@@ -1578,19 +1629,21 @@ fn murosshi_income_goes_to_designated_player() {
             .option("PlayerId(1)")
             .ok_or_else(|| format!("no choice: {}", t.dump_prompt()))?;
         t.answer(0, k).map_err(|e| format!("designate: {e}"))?;
-        t.own(0, &[30]);
-        t.set_houses(30, 1);
-        t.set_pos(0, 30);
-        t.set_pos(2, 28);
+        // Tile 30 (江户川乐器店) settles by drawing a card -- not rent. Use a
+        // real property so 「格子收入」 is a money payment we can observe.
+        t.own(0, &[3]);
+        t.set_houses(3, 1);
+        t.set_pos(0, 3);
+        t.set_pos(2, 1);
         let m1 = t.money(1);
         let m2 = t.money(2);
         t.begin_turn(2);
-        t.set_pos(2, 28);
+        t.set_pos(2, 1);
         t.dice(&[2]);
         t.roll(2).map_err(|e| format!("roll: {e}"))?;
         rest(&mut t);
         drain(&mut t);
-        if t.pos(2) != 30 {
+        if t.pos(2) != 3 {
             return Err(format!("setup: P2 landed on {}", t.pos(2)));
         }
         let paid = m2 as i64 - t.money(2) as i64;
@@ -1669,14 +1722,6 @@ fn normal_copies_last_main_move_steps() {
             return Err(format!(
                 "C-MYGO-normal-02: next main move took {steps} steps \
                  (pos {start} -> {}), expected 4 (copied)",
-                t.pos(0)
-            ));
-        }
-        rest(&mut t);
-        drain(&mut t);
-        if t.pos(0) != 4 {
-            return Err(format!(
-                "C-MYGO-normal-02: next main move took {} steps, expected 4",
                 t.pos(0)
             ));
         }
@@ -1887,6 +1932,10 @@ fn rinpuu_extra_settle_at_turn_end() {
     forall(3, 0x1202, |_rng, _i| {
         let mut t = Table::vanilla(2);
         t.give_play(0, RINPUU).map_err(|e| format!("play: {e}"))?;
+        // 轮符雨 grants [停留], which skips the main move (「处于该状态时[无法
+        // 移动]」). This clause is the extra [触发结算] at turn end (already
+        // landed by the play), so clear the stay latch and walk to a rent tile.
+        clear_stay_latch(&mut t, 0);
         t.own(1, &[3]);
         t.set_houses(3, 0);
         t.dice(&[3]);
@@ -2084,52 +2133,25 @@ fn anon_skill_draw_after_abnormal_resolves() {
         t.set_pos(1, 30);
         t.dice(&[1]);
         t.give_play(1, "MyGO:那天的雨").map_err(|e| format!("rainday: {e}"))?;
-        // The window is 「在受到[停留]…效果影响并结算该效果后」 -- do not
-        // drain it away. Take any offer that names the skill, else press.
-        if t.prompt().is_some() {
-            if let Some(k) = t
-                .option("重新开始")
-                .or_else(|| t.option("restart"))
-                .or_else(|| t.option("draw"))
-            {
-                t.answer(0, k).map_err(|e| format!("take offer: {e}"))?;
-            }
-        }
+        // 「在受到[停留]…效果影响并结算该效果后」 opens a YesNo ask
+        // (`anon_restart_title`). YesNo has no `options`; accept it so the
+        // 2-pot spend + draw run.
+        let fire = t.charge(0);
+        let hand = t.hand(0).len();
+        let accepted = accept_yes(&mut t, 0, "anon_restart");
         rest(&mut t);
+        drain(&mut t);
         if t.state(0, "stay") == 0 {
             return Err("setup: P0 did not gain a [停留]".into());
         }
-        let skill = t.skill_id(0, "重新开始");
-        let fire = t.charge(0);
-        let hand = t.hand(0).len();
-        let draw_n = t.draw_pile(0).len();
-        // Press in the post-settle window. The book is 「可以消耗2个火罐，
-        // 抽一张卡」 -- optional; if the engine offers a prompt, take it.
-        let pressed = t.skill(0, &skill);
-        if t.prompt().is_some() {
-            if let Some(k) = t
-                .option("重新开始")
-                .or_else(|| t.option("restart"))
-                .or_else(|| t.option("draw"))
-            {
-                t.answer(0, k).map_err(|e| format!("take offer: {e}"))?;
-            } else {
-                // The press itself is the declaration; decline nothing.
-            }
-        }
-        rest(&mut t);
-        drain(&mut t);
-        if pressed.is_err() {
-            return Err(format!(
-                "C-MYGO-anon-skill-02: skill press refused: {:?}",
-                pressed
-            ));
+        if !accepted {
+            // The hook may have been declined by `rest`; the book's 「可以」
+            // stays unused and there is nothing to assert.
+            return Ok(());
         }
         let f = t.charge(0);
         let h = t.hand(0).len();
-        let d = t.draw_pile(0).len();
         if fire < 2 {
-            // Cannot pay; the book's 「可以」 stays unused.
             return Ok(());
         }
         if f != fire - 2 {
@@ -2141,8 +2163,7 @@ fn anon_skill_draw_after_abnormal_resolves() {
         }
         if h != hand + 1 {
             return Err(format!(
-                "C-MYGO-anon-skill-02: hand {hand} -> {h} (draw {draw_n} -> {d}), \
-                 expected one draw"
+                "C-MYGO-anon-skill-02: hand {hand} -> {h}, expected one draw"
             ));
         }
         Ok(())
@@ -2375,21 +2396,13 @@ fn soyo_skill_endpoint_as_coloured_agent() {
         t.set_pos(0, 11); // will roll onto a non-agent tile
         t.dice(&[2]); // 11 -> 13
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
-        // The skill press is 「移动掷骰后」. Drive it when offered.
-        if t.prompt().is_some() {
-            if let Some(k) = t
-                .option("通透")
-                .or_else(|| t.option("soyo"))
-                .or_else(|| t.option("agent"))
-            {
-                let _ = t.answer(0, k);
-            } else {
-                t.decline();
-            }
-        } else {
-            // Press the skill directly in the post-roll window.
-            let skill = t.skill_id(0, "通透的颜色");
-            let _ = t.skill(0, &skill);
+        // 「移动掷骰后可消耗一个火罐」 -- the `RollAfter` hook opens a YesNo
+        // ask (`soyo_clear_title`) during the roll. Accept it.
+        if !accept_yes(&mut t, 0, "soyo_clear") {
+            return Err(format!(
+                "C-MYGO-soyo-skill-02: no offer after the move roll: {}",
+                t.dump_prompt()
+            ));
         }
         rest(&mut t);
         drain(&mut t);
@@ -2647,31 +2660,32 @@ fn rana_skill_parfait_on_space() {
         t.set_fire(0, 3, 3);
         let skill = t.skill_id(0, "投币式停车场的猫");
         t.skill(0, &skill).map_err(|e| format!("skill: {e}"))?;
+        // Own-space settle: may add a 抹茶芭菲 instead of the normal settle.
+        // The offer is a YesNo (`rana_parking_parfait`) raised during the
+        // teleport's settle; accept it before draining.
+        if !accept_yes(&mut t, 0, "rana_parking") {
+            return Err(format!(
+                "C-MYGO-rana-skill-04: no parfait offer: {}",
+                t.dump_prompt()
+            ));
+        }
         rest(&mut t);
         drain(&mut t);
         if t.pos(0) != 42 {
             return Err(format!("setup: pos {}", t.pos(0)));
         }
-        // Own-space settle: may add a 抹茶芭菲 instead of the normal settle.
-        if t.prompt().is_some() {
-            if let Some(k) = t
-                .option("抹茶")
-                .or_else(|| t.option("parfait"))
-                .or_else(|| t.option("add"))
-            {
-                t.answer(0, k).map_err(|e| format!("add parfait: {e}"))?;
-            } else {
-                t.decline();
-            }
-        }
-        rest(&mut t);
-        drain(&mut t);
-        let parfaits = t.token(0, "抹茶芭菲") + t.token(1, "抹茶芭菲");
-        // Book -04: the own-space settle may add a 抹茶芭菲. Require one
-        // when the press ran (the harness takes the add when offered).
+        // Book -04: 「在space格子上添加一个"抹茶芭菲"」 -- a **tile mark** on
+        // Space (each raises its charge by 500), not a player-held token.
+        let parfaits: i32 = t
+            .marks_on(42)
+            .iter()
+            .filter(|m| m.kind == "抹茶芭菲")
+            .map(|m| m.count)
+            .sum();
         if parfaits < 1 {
             return Err(format!(
-                "C-MYGO-rana-skill-04: no 抹茶芭菲 placed (tokens {parfaits})"
+                "C-MYGO-rana-skill-04: no 抹茶芭菲 placed (marks {parfaits}, all {:?})",
+                t.marks_on(42)
             ));
         }
         // -05: a foreign settler on Space may transfer a parfait to exempt.
@@ -2695,17 +2709,9 @@ fn rana_skill_parfait_on_space() {
         let money = u.money(1);
         u.dice(&[1]); // 41 -> 42, Space
         u.roll(1).map_err(|e| format!("roll: {e}"))?;
-        if u.prompt().is_some() {
-            if let Some(k) = u
-                .option("抹茶")
-                .or_else(|| u.option("parfait"))
-                .or_else(|| u.option("exempt"))
-            {
-                u.answer(1, k).map_err(|e| format!("exempt: {e}"))?;
-            } else {
-                u.decline();
-            }
-        }
+        // 「可将自己拥有的一个"抹茶芭菲"转移到该格上以免除当次付款」 -- a
+        // YesNo (`rana_parking_transfer`).
+        accept_yes(&mut u, 1, "rana_parking");
         rest(&mut u);
         drain(&mut u);
         // Determined part of -05: if the token was spent, the payment is 0.

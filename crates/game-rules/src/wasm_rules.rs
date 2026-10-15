@@ -2706,11 +2706,17 @@ impl<M: CardModules> RulesBridge<M> {
         // A hook cannot re-trigger on its own movement: while this uid's hook
         // runs, nested money pipelines skip it. This is the termination
         // argument for `MAX_MONEY_DEPTH` (see `play.rs`).
-        if uid >= 0 {
+        //
+        // `On::Play` is an activation, not a hook: its body may drive a move
+        // whose settle pays money, and that card's own `payTotalCancel` /
+        // `payAdd` hooks must still hear it (MyGO 「投币式停车场的猫」 (2)
+        // 「免除付款」). Only hook bodies mark the uid busy.
+        let marked = uid >= 0 && !matches!(call, Call::Play { .. });
+        if marked {
             cx.reentrant_hooks.push(uid);
         }
         let result = self.drive_inner_body(cx, call, card_id, uid, trigger, guarded);
-        if uid >= 0 {
+        if marked {
             cx.reentrant_hooks.pop();
         }
         result

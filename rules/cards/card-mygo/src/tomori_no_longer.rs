@@ -66,9 +66,11 @@ fn cover(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::set_slot(player_id, SLOT_COVERING, 1);
+    ctx::set_slot(player_id, SLOT_COVERING, ctx::slot(player_id, SLOT_COVERING) + 1);
     ctx::add_crystals(-1, i32::MAX)?;
-    ctx::set_slot(player_id, SLOT_COVERING, 0);
+    // `CounterChanged` is raised after the run commits (`wasm_rules` counter_log),
+    // so do **not** clear the flag here -- [`refill`] consumes it when the
+    // deferred hook fires.
     ctx::trigger::set_cancelled();
     ctx::log(
         player_id,
@@ -90,8 +92,11 @@ fn refill(player_id: i32) -> card_sdk::Asked {
     if delta >= 0 {
         return Ok(());
     }
-    // The substitution (`cover`) sets this flag around its own `-1`.
-    if ctx::slot(player_id, SLOT_COVERING) != 0 {
+    // The substitution (`cover`) parks a count here for each of its own `-1`s;
+    // `CounterChanged` is deferred past the cover body, so consume one now.
+    let covering = ctx::slot(player_id, SLOT_COVERING);
+    if covering > 0 {
+        ctx::set_slot(player_id, SLOT_COVERING, covering - 1);
         return Ok(());
     }
     let back = -delta;
