@@ -7,7 +7,7 @@
 // info is the shared one: the owner's colour on the frame, the standing hover
 // preview, click-to-inspect.
 
-import { memo, type CSSProperties } from "react";
+import { memo, useState, type CSSProperties } from "react";
 import { useDockRaise } from "../../hooks/dock";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
@@ -15,7 +15,7 @@ import { D } from "../../core/data";
 import { namesOf } from "../../core/names";
 import { fmtMsg } from "../../i18n/msg";
 import type { Model } from "./model";
-import { InspectCard } from "../../ui/Card";
+import { InspectCard, showCard } from "../../ui/Card";
 import { previewFrom, previewHide } from "../../ui/CardPreview";
 import { Avatar } from "../../ui/Character";
 import { showEvent } from "./Popups";
@@ -38,6 +38,9 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const names = namesOf(S);
   const dock = useDockRaise();
   const hoverSeat = useHoverSeat();
+  // Touch screens: the first tap only highlights a card (like the hand); a
+  // second tap on the same card opens its detail popup.
+  const [picked, setPicked] = useState<number | null>(null);
   // Skill rules (`skill:`) are engine plumbing on the field, not cards in play.
   const rows = S.players
     .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
@@ -84,6 +87,12 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
                   note={live}
                   pills={pills}
                   actions={[]}
+                  on={picked === fc.uid}
+                  onClick={() => {
+                    if (window.matchMedia("(pointer: coarse)").matches && picked !== fc.uid) return void setPicked(fc.uid);
+                    setPicked(null);
+                    void showCard(fc.card, [], live, pills);
+                  }}
                 >
                   {(fc.counters["crystals"] ?? 0) > 0 && <span className={s.crystal}>◆{fc.counters["crystals"] ?? 0}</span>}
                   {(fc.counters["cp"] ?? 0) > 0 && <span className={s.cp} title={tr("board.cp", { n: fc.counters["cp"] ?? 0 })}>CP{fc.counters["cp"] ?? 0}</span>}
