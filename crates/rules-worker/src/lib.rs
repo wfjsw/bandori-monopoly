@@ -262,6 +262,9 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             // Prefer the derived 256-bit seed (every new match,
             // `docs/FAIRNESS.md`); a bare u64 `seed` is the legacy path, kept
             // for pre-fairness callers and tests only.
+            // G-FLOW-12 / G-FLOW-14: refuse a seat count the book forbids.
+            let mode = MatchMode::from_i32(mode).unwrap_or_default();
+            mode.check_seats(members.len())?;
             let m = match req.get("seed256").and_then(Value::as_str) {
                 Some(hex) => {
                     let key = game_core::fair::unhex32(hex)
@@ -271,7 +274,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                         ctx.rules.clone(),
                         &members,
                         game_core::rng::Seed256(key),
-                        MatchMode::from_i32(mode).unwrap_or_default(),
+                        mode,
                         weights,
                         clock,
                         false,
@@ -284,7 +287,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                         ctx.rules.clone(),
                         &members,
                         seed,
-                        MatchMode::from_i32(mode).unwrap_or_default(),
+                        mode,
                         weights,
                         clock,
                         false,

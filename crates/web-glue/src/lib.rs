@@ -775,6 +775,10 @@ impl SoloMatch {
             Some(s) => parse("clock", s)?,
         };
         let mode = MatchMode::from_i32(mode).unwrap_or_default();
+        // G-FLOW-12 / G-FLOW-14: the lobby refuses a seat count the book
+        // forbids (娱乐 3-10, 正规 5-6). Solo is unbounded.
+        mode.check_seats(members.len())
+            .map_err(|e| JsError::new(&e))?;
         let seed = Seed256::from_hex(seed_hex).map_err(|e| JsError::new(&e))?;
         let setup = MatchSetup {
             members,

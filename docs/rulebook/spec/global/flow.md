@@ -363,11 +363,11 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
 
 ## Findings
 
-* **G-FLOW-12** (genuine, stays failing): 娱乐 mode's book bound is
-  「游玩人数为3到10人」. The engine's `Match::new` seats any 2..=10 players
-  regardless of mode -- `casual_requires_3_to_10_players` constructs a
-  2-seat Casual match and it starts play. Test:
-  `g_flow::casual_requires_3_to_10_players`.
-* **G-FLOW-14** (genuine, stays failing): 正规 mode's book bound is
-  「游玩人数须在5到6人」. Same constructor seats 4 in Ranked and starts play.
+* **G-FLOW-12** (fixed 2026-10-15): 娱乐 mode's book bound is
+  「游玩人数为3到10人」. `MatchMode::seat_range` / `check_seats` carry the
+  bound; the lobby entries (web-glue `SoloMatch::new`, rules-worker `new`)
+  refuse out-of-range seat counts. `Match::new` stays a harness constructor.
+  Test: `g_flow::casual_requires_3_to_10_players`.
+* **G-FLOW-14** (fixed 2026-10-15): 正规 mode's book bound is
+  「游玩人数须在5到6人」. Same `check_seats` / lobby refusal.
   Test: `g_flow::ranked_requires_5_to_6_players`.

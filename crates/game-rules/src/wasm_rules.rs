@@ -8084,16 +8084,27 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     };
                 }
                 // `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0.
+                //
+                // 强制购买 is immune (rulebook 其他规则 6: 「抵押，赎回，和强制购买
+                // 的资金变动不受任何效果影响，除非效果写明改动抵押，赎回，或强制
+                // 购买」). The price is the printed 2×(price+houses) figure; a
+                // generic buy-stage hook does not 「写明」 force-buy, so it must
+                // not retune this quote. `BuyGate` still runs above (can-you-buy,
+                // not a price). TODO(规则书): a hook that *does* write
+                // 「强制购买」 as its target has no wire spelling yet -- when one
+                // lands, only that entry may rewrite the Force base.
                 let mut price = base;
-                for &kind in &BUY_STAGES {
-                    if !declares(kind) {
-                        continue;
+                if q.kind != game_core::engine::purchase::BuyKind::Force {
+                    for &kind in &BUY_STAGES {
+                        if !declares(kind) {
+                            continue;
+                        }
+                        price = at(&mut run, kind, price)
+                            .buy
+                            .map(|b| b.price)
+                            .unwrap_or(price)
+                            .max(0);
                     }
-                    price = at(&mut run, kind, price)
-                        .buy
-                        .map(|b| b.price)
-                        .unwrap_or(price)
-                        .max(0);
                 }
                 Quote {
                     price,

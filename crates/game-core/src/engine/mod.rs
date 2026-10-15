@@ -610,6 +610,10 @@ impl Match {
         legacy_clock: bool,
     ) -> Self {
         let members = &members[..members.len().min(10)];
+        // G-FLOW-12 / G-FLOW-14: the book seats 娱乐 at 3-10 and 正规 at 5-6.
+        // `MatchMode::check_seats` is the bound; the lobby (web-glue) is the
+        // refusal point. `Match::new` stays a harness constructor so unit
+        // tests and the sim can hand-build small tables. Solo is unbounded.
         let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
         // Solo with a persona already on every seat (the solo setup screen's
         // picks, its randoms resolved before the match is built) skips the
