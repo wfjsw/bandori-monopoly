@@ -22,7 +22,13 @@ void main() {
 `;
 
 const FRAGMENT_SRC = `
+// Phones default to fp16 for mediump: UVs into a 2048px atlas then snap to
+// ~2px steps (smeared, jagged textures). Ask for highp wherever it exists.
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 varying vec2 v_uv;
 uniform sampler2D u_tex;
 uniform float u_opacity;
@@ -182,7 +188,7 @@ export class Live2DRenderer {
         await nextFrame();
         if (token !== this.uploadToken || this.disposed) return false;
         const rows = Math.min(TEXTURE_BAND_ROWS, h - y);
-        const band = typeof createImageBitmap === "function" ? await createImageBitmap(src, 0, y, w, rows) : null;
+        const band = typeof createImageBitmap === "function" ? await createImageBitmap(src, 0, y, w, rows, { premultiplyAlpha: "premultiply" }) : null;
         if (token !== this.uploadToken || this.disposed) {
           band?.close();
           return false;
