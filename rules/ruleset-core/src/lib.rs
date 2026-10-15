@@ -203,10 +203,8 @@ pub fn group_crystals(player_id: i32) -> i32 {
 
 /// A named pool on the player's group-skill instance.
 pub fn group_pool(player_id: i32, name: &str) -> i32 {
-    unsafe {
-        let b = name.as_bytes();
-        raw::sys::group_pool(player_id, b.as_ptr() as i32, b.len() as i32)
-    }
+    let (p, l) = raw::s(name);
+    unsafe { raw::sys::group_pool(player_id, p, l) }
 }
 
 pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
@@ -214,10 +212,8 @@ pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
 }
 
 pub fn add_group_pool(player_id: i32, name: &str, n: i32, max: i32) -> i32 {
-    unsafe {
-        let b = name.as_bytes();
-        raw::sys::add_group_pool(player_id, b.as_ptr() as i32, b.len() as i32, n, max)
-    }
+    let (p, l) = raw::s(name);
+    unsafe { raw::sys::add_group_pool(player_id, p, l, n, max) }
 }
 
 /// Rule id of `player_id`'s band skill, or `None`.

@@ -112,6 +112,37 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     m
 }
 
+/// Decline every open choice (optional buy / build on deed settle, etc.) so a
+/// card body that pauses mid-move can resume. The last option is the refusal
+/// (`ask.no_buy` / `ask.no_build`).
+fn decline_prompts(m: &mut Match) {
+    for _ in 0..32 {
+        let st = m.state();
+        if st.prompt.id == 0 {
+            return;
+        }
+        let n = st.prompt.options.len().max(2);
+        let prompt = st.prompt.id;
+        let who = st
+            .prompt
+            .players
+            .iter()
+            .zip(st.prompt.answers.iter())
+            .find(|(_, &a)| a < 0)
+            .map(|(&p, _)| p)
+            .unwrap_or(1);
+        m.act(
+            who,
+            &NetMessage {
+                prompt,
+                value: n as i32 - 1,
+                ..NetMessage::act("answer")
+            },
+        )
+        .expect("decline");
+    }
+}
+
 
 #[test]
 fn a_card_whose_named_counters_run_out_leaves_the_field() {
@@ -296,6 +327,9 @@ fn a_card_can_shape_a_move_and_run_it_now() {
     let mut m = match_with_rules("TEST:mover", rules_with_fixtures());
     let before = m.state().players[1].pos;
     m.act(1, &play("TEST:mover")).expect("play the mover");
+    // Deed settle is the optional buy (G-SETTLE-06): decline so the move and
+    // the rest of the card body can finish.
+    decline_prompts(&mut m);
     let st = m.state();
     assert!(fixture_events(&st, "mover_planned").len() == 1, "planned");
     let done = fixture_events(&st, "mover_done");
