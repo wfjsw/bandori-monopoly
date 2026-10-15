@@ -4041,7 +4041,10 @@ impl Cx<'_> {
                 )
                 .value = got;
         }
-        if self.w.st.players[i].ai && self.playing() {
+        // 「任何时刻若持有手卡超过上限则需要立刻将手卡弃至上限张」 -- discard
+        // down immediately, bot and human alike (the human `discard` command
+        // remains for voluntary / other overflow paths).
+        if self.playing() {
             while self.over_hand(i) {
                 let hand_len = self.w.hidden[i].hand.len();
                 let k = self.w.rng.below(hand_len);

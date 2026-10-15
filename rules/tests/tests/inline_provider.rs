@@ -37,7 +37,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use game_core::data::{GameData, Roster};
-use game_core::engine::{Answered, AnswerProvider, Ask, CardRules, Match, StubRules};
+use game_core::engine::{
+    Answered, AnswerProvider, Ask, CardRules, Cx, Dest, Flow, Match, StubRules,
+};
+use game_core::msg::Msg;
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
@@ -300,20 +303,50 @@ fn equivalence(seed: u64, n: usize, rules: Arc<dyn CardRules>) -> (usize, usize)
     (base_run.swallowed, inl_run.swallowed)
 }
 
-/// StubRules: no card effects, so no HostRequests and no swallowed prompts.
-/// The engine-level provider plumbing alone must reproduce the checkpoints
+/// Thin `CardRules` wrapper: generic deed settlement plus one ask per main
+/// land. Tile pass-reward / agent asks live in `rules/tiles` (not engine
+/// built-ins); this keeps the answer-provider plumbing test fed without
+/// restoring those built-ins.
+struct AskingStub;
+
+impl CardRules for AskingStub {
+    fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
+        StubRules.play(cx, player_id, card)
+    }
+    fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool> {
+        StubRules.event(cx, player_id, id)
+    }
+    fn settle_tile(&self, cx: &mut Cx, player_id: usize, tile: usize, main: bool) -> Flow<()> {
+        cx.land_at_built_in(player_id, tile, main)?;
+        if main {
+            let ask = Ask::choice(
+                vec![player_id],
+                Msg::new("ask.buy.title"),
+                Msg::new("ask.buy.text"),
+                vec![Msg::new("ask.buy.yes"), Msg::new("ask.no_buy")],
+                1,
+                15.0,
+            );
+            let _ = cx.ask(ask)?;
+        }
+        Ok(())
+    }
+}
+
+/// AskingStub: no card effects, one engine-level ask per main land. The
+/// engine-level provider plumbing alone must reproduce the checkpoints
 /// exactly.
 #[test]
 fn stub_rules_inline_matches_halt_replay_exactly() {
     for seed in [3u64, 7, 11] {
-        let mut base = new_match(seed, 4, Arc::new(StubRules));
+        let mut base = new_match(seed, 4, Arc::new(AskingStub));
         let base_run = drive(&mut base, MAX_ROUNDS);
         let log = base.take_prompt_log();
         assert!(!log.is_empty(), "seed {seed}: baseline recorded no prompts");
         assert_eq!(base_run.swallowed, 0);
 
         let served = Arc::new(AtomicUsize::new(0));
-        let mut inl = new_match(seed, 4, Arc::new(StubRules));
+        let mut inl = new_match(seed, 4, Arc::new(AskingStub));
         inl.set_provider(Some(Box::new(Replay {
             answers: log.clone().into(),
             served: served.clone(),
