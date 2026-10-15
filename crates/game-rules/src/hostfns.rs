@@ -1878,7 +1878,7 @@ pub fn ask<C: HostCtx>(c: &mut C, kind: i32, player_id: i32, tp: i32, tl: i32, x
 
 pub fn trig_kind<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().trigger().kind as i32
+        c.st().wr().trigger().kind.as_i32()
     })
 }
 
@@ -2095,7 +2095,7 @@ pub fn trig_effect_kind<C: HostCtx>(c: &mut C, i: i32) -> Result<i32, HostErr> {
         let t = c.st().wr().trigger();
         t.effects
             .get(i.max(0) as usize)
-            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind) as i32)
+            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind).as_i32() as i32)
     })
 }
 

@@ -141,7 +141,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::BuyAssign => Msg::new("log.why.bought")
             .player_id("who", who)
             .tile("tile", tile),
-        TriggerKind::BuildBefore | TriggerKind::BuildAfter | TriggerKind::HouseAdded => {
+        TriggerKind::BuildBefore | TriggerKind::BuildAfter => {
             Msg::new("log.why.build")
                 .player_id("who", who)
                 .tile("tile", tile)
@@ -190,25 +190,15 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .player_id("who", who)
             .player_id("target", target),
 
-        // ---- counters / marks / fire -------------------------------------
+        // ---- counters / marks --------------------------------------------
         TriggerKind::CounterChanged => Msg::new("log.why.counter_changed")
             .msg("name", counter_name(t.name.as_deref().unwrap_or("")))
             .i("value", value),
-        TriggerKind::FireSpent => Msg::new("log.why.fire_spent")
-            .player_id("who", who)
-            .i("value", value),
-        TriggerKind::SkillUsed => match &card {
-            Some(c) => Msg::new("log.why.skill_used")
-                .player_id("who", who)
-                .card("card", c.clone()),
-            None => Msg::new("log.why.skill_used_no_card").player_id("who", who),
-        },
         TriggerKind::MarkerSpend | TriggerKind::MarkerGain => Msg::new("log.why.marker")
             .player_id("who", who)
             .i("value", value),
 
-        // ---- circle / misc -----------------------------------------------
-        TriggerKind::PassRewardAffected => Msg::new("log.why.pass_reward").player_id("who", who),
+        // ---- misc ---------------------------------------------------------
         TriggerKind::Counteracted => Msg::new("log.why.counteracted")
             .player_id("who", who)
             .player_id("target", target),

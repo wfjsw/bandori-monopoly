@@ -157,7 +157,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
 /// so a listener may replace the amount or cancel it outright; if it stands,
 /// the default 专有名词 11 figure is paid.
 fn gain_circle_money(player_id: i32) -> card_sdk::Asked {
-    if ctx::raise(player_id, TriggerKind::PassRewardAffected, REWARD_MONEY)? {
+    if ctx::raise(player_id, ruleset_core::kind::PassRewardAffected, REWARD_MONEY)? {
         ctx::gain(
             player_id,
             CIRCLE_MONEY,

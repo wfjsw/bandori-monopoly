@@ -24,7 +24,7 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
     "skill:珠手知由:天才制作人",
     &[
         On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.tamade.builtLast') == 0", None, at_turn_start),
-        On::Hook(&[HookKind::HouseAdded], card_sdk::pre::MINE, None, on_built),
+        On::Hook(&[ruleset_core::kind::HouseAdded], card_sdk::pre::MINE, None, on_built),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )

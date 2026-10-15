@@ -24,7 +24,7 @@ pub const NUMAZU_MAID: CardDef = CardDef::new(
         // （2）「所有你拥有的格子中取最高值」 -- the offer exists only when some
         // deed carries a positive `build_cost × houses`. Derived scan, residual.
         On::Hook(
-            &[HookKind::HouseAdded],
+            &[ruleset_core::kind::HouseAdded],
             "actor == owner && tok('PAREO标记') >= 1",
             Some(has_house_product),
             on_built,

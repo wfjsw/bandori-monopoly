@@ -32,7 +32,7 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
         On::Hook(&[HookKind::Pass], "actor == owner && is_start(tile.id)", None, on_pass),
         On::Hook(&[HookKind::RollAfter], "", Some(paired), on_roll),
         On::Hook(&[HookKind::PayChoose], "", Some(paired), on_pay),
-        On::Hook(&[HookKind::HouseAdded], "", Some(partner), on_built),
+        On::Hook(&[ruleset_core::kind::HouseAdded], "", Some(partner), on_built),
     ],
 );
 

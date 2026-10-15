@@ -17,7 +17,7 @@ pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
         On::Play("", None, l12),
-        On::Hook(&[card_sdk::abi::HookKind::FireSpent], "", Some(fire_spent_guard), fire_spent),
+        On::Hook(&[ruleset_core::kind::FireSpent], "", Some(fire_spent_guard), fire_spent),
     ],
 )
 .meta(&card_sdk::meta::CardMeta::new()

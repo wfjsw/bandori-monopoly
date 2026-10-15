@@ -40,7 +40,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
             None,
             pay_choose,
         ),
-        On::Hook(&[HookKind::SkillUsed], "", Some(skill_used_guard), skill_used),
+        On::Hook(&[ruleset_core::kind::SkillUsed], "", Some(skill_used_guard), skill_used),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )

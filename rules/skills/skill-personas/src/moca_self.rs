@@ -37,7 +37,7 @@ pub const MOCA_SELF: CardDef = CardDef::new(
         // another seat, under the per-source CD, with a pot to spend. Fire is
         // CEL; the dynamic CD key is residual.
         On::Hook(&[HookKind::CardPlayed], "charge(owner) >= 1", Some(other_and_cooled), on_card),
-        On::Hook(&[HookKind::SkillUsed], "charge(owner) >= 1", Some(other_and_cooled), on_skill),
+        On::Hook(&[ruleset_core::kind::SkillUsed], "charge(owner) >= 1", Some(other_and_cooled), on_skill),
     ],
 ).silent(&[0]);
 

@@ -192,10 +192,10 @@ pub struct Run {
     draw_log: Vec<(i32, String)>,
     /// Players whose deck this run shuffled -- `reshuffled` once it commits.
     reshuffle_log: Vec<i32>,
-    /// Charge spent during the run, raised as `chargeSpent` once the run commits
+    /// Charge spent during the run, raised as kind 73 once the run commits
     /// (same shape as `paid_log`).
     charge_spent_log: Vec<(i32, i32)>,
-    /// Houses added during the run, raised as `houseAdded` once it commits.
+    /// Houses added during the run, raised as kind 75 once it commits.
     house_log: Vec<(i32, i32, i32)>,
     /// Named-counter writes this run made, `(owner, card, name, change)` -- the
     /// engine raises `counterChanged` for each once the run commits. `change`
@@ -4052,10 +4052,10 @@ impl<M: CardModules> RulesBridge<M> {
                 })?;
             }
             for (player_id, n) in after.charge_spent_log {
-                self.raise_core(cx, "fireSpent", player_id, |t| t.value = n)?;
+                self.raise_core(cx, "73", player_id, |t| t.value = n)?;
             }
             for (player_id, tile, nth) in after.house_log {
-                self.raise_core(cx, "houseAdded", player_id, |t| {
+                self.raise_core(cx, "75", player_id, |t| {
                     t.tile = tile;
                     t.value = nth;
                 })?;
@@ -5267,7 +5267,7 @@ impl<M: CardModules> RulesBridge<M> {
                     // scope's `_hand` table are stale from here.
                     memo.on_declaration();
                     let mut link =
-                        CoreTrigger::new(if uid >= 0 { "skillUsed" } else { "card" }, cursor);
+                        CoreTrigger::new(if uid >= 0 { "74" } else { "card" }, cursor);
                     if uid >= 0 {
                         link.cards = vec![id.clone()];
                     }
@@ -6715,7 +6715,7 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
 /// which would re-enter this trait and overflow the stack.
 impl rules_cond::view::CondView for LiveSnap<'_> {
     fn kind(&self) -> i64 {
-        self.trigger.kind as i64
+        self.trigger.kind.as_i32() as i64
     }
     fn actor(&self) -> i64 {
         self.trigger.player_id as i64
@@ -6839,7 +6839,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.trigger
             .effects
             .iter()
-            .map(|e| crate::TriggerKind::from_str(e.kind) as i64)
+            .map(|e| crate::TriggerKind::from_str(e.kind).as_i32() as i64)
             .collect()
     }
     fn chain_hits(&self) -> Vec<i64> {
@@ -8349,7 +8349,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::DeckAtGameStart
             | TriggerKind::Drew
             | TriggerKind::DrewBefore
-            | TriggerKind::ChargePaying
+            | TriggerKind(78)
             | TriggerKind::FlipEffect
             | TriggerKind::Reshuffled
             | TriggerKind::Bought
@@ -8536,7 +8536,7 @@ mod tests {
             "drew",
             "reshuffled",
             "bought",
-            "passRewardAffected",
+            "26",
             "settleBody",
             "beforeOut",
             "teleported",
@@ -8552,9 +8552,9 @@ mod tests {
             "turnBonusTime",
             "turnBaseTime",
             // v28 post-commit points (what a committed effect did)
-            "fireSpent",
-            "skillUsed",
-            "houseAdded",
+            "73",
+            "74",
+            "75",
             // v29: named counter writes
             "crystalsChanged",
             // v36: [tile marks] writes

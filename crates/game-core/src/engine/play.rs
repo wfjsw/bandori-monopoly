@@ -803,7 +803,7 @@ impl Cx<'_> {
         // `skillUsed` -- 「使用自己原有的技能（2）时」. Raised
         // before the body so a listener sees the use, not its aftermath -- and so
         // a counteraction answering it can negate the press before anything happens.
-        let mut t = super::rules::Trigger::new("skillUsed", player_id);
+        let mut t = super::rules::Trigger::new("74", player_id);
         t.card = Some(card.to_string());
         // The skill id rides `cards` too (the `drew` pattern), so a listener can
         // read the id it is reacting to (`trigger::cards`) and name a mark after
@@ -2784,7 +2784,7 @@ impl Cx<'_> {
         // to raise nothing here, so a real 盖房 never offered the skill.
         // Raised before `buildAfter` (the Fx point before the action hook,
         // matching `buy()`'s `bought` → `buyAfter`).
-        raise!(self, "houseAdded", i, tile = t as i32, value = h)?;
+        raise!(self, "75", i, tile = t as i32, value = h)?;
         // `buildAfter` -- only after the house actually commits (not on the
         // refund path above).
         raise!(self, "buildAfter", i, tile = t as i32)?;

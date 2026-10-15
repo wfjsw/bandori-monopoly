@@ -29,7 +29,7 @@ pub const MORFONICA: CardDef = CardDef::new(
         // （2）「选择[获得]资金时」 -- `value == REWARD_MONEY` (0) is the money
         // half of the CiRCLE pick.
         On::Hook(
-            &[HookKind::PassRewardAffected],
+            &[ruleset_core::kind::PassRewardAffected],
             "actor == owner && value == 0",
             None,
             on_circle,

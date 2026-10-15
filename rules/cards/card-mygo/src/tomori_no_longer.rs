@@ -31,7 +31,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // positive spend with a crystal to trade; accepting cancels the fire
         // spend and burns one crystal instead.
         On::Hook(
-            &[HookKind::ChargePaying],
+            &[ruleset_core::kind::ChargePaying],
             "actor == owner && card.counter('crystals') >= 1 && value > 0",
             None,
             cover,

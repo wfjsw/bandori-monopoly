@@ -479,7 +479,7 @@ pub fn g_move_06(step: &Step<'_>) -> Result<(), String> {
         });
         let rewritten = step.events.iter().any(|e| {
             let k = spec_kit::event_key(e);
-            k.contains("passRewardAffected") || e.r#type == "card"
+            k.contains("26") || e.r#type == "card"
         });
         // Pin the payout only when this window is *just* the reward answer
         // (no walk continuation, no landing settle, no card rewrite). A

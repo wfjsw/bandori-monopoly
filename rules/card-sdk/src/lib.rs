@@ -659,9 +659,9 @@ impl On {
     /// what the manifest carries.
     pub fn triggers(&self) -> Vec<i32> {
         match self {
-            On::Counteract(k, ..) => k.iter().map(|x| *x as i32).collect(),
-            On::Hook(k, ..) => k.iter().map(|x| *x as i32).collect(),
-            On::Gate(k, ..) => k.iter().map(|x| *x as i32).collect(),
+            On::Counteract(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::Hook(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::Gate(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             // Message names travel as the manifest's `triggers` string list
             // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
             // The names ride a separate manifest field; see `rt.rs`.

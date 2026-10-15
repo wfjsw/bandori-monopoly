@@ -1532,11 +1532,11 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 }
 
 /// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
-/// (e.g. [`TriggerKind::PassRewardAffected`]); `value` is the trigger's `value`.
+/// (e.g. `ruleset_core::kind::PassRewardAffected`); `value` is the trigger's `value`.
 /// Returns true when the link settled (nobody cancelled it). A hook that
 /// prompts pauses the run (`Err(Prompt)`).
 pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prompt> {
-    asked(unsafe { sys::raise(player_id, kind as i32, value) }).map(|v| v != 0)
+    asked(unsafe { sys::raise(player_id, kind.as_i32(), value) }).map(|v| v != 0)
 }
 
 // ---------------------------------------------------------- status hosts
@@ -2760,7 +2760,7 @@ pub mod effect {
     /// Append an effect to the current link, naming its recipient now -- at
     /// declaration, not at settlement.
     pub fn declare(kind: TriggerKind, target: i32, from: i32, tile: i32, value: i32) {
-        unsafe { sys::declare_effect(kind as i32, target, from, tile, value) }
+        unsafe { sys::declare_effect(kind.as_i32(), target, from, tile, value) }
     }
 }
 

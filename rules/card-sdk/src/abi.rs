@@ -499,7 +499,17 @@ use alloc::{string::String, vec::Vec};
 ///      -> `is_start`/`is_deed`/`is_venue` (old names remain aliases).
 ///      i18n keys `ask.circle.*` / `log.circle_*` -> `ask.pass_reward.*` /
 ///      `log.pass_reward_*` / `log.land_start`. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 69;
+/// v70: **rule-defined kind ids** (phase 3). `TriggerKind` / `HookKind` /
+///      `ChainKind` / `GateKind` are transparent `i32` newtypes; engine-generic
+///      raise points are associated consts. Game-named kinds
+///      (`PassRewardAffected` 26 / `FireSpent` 73 / `SkillUsed` 74 /
+///      `HouseAdded` 75 / `ChargePaying` 78) leave the SDK and live as
+///      ruleset-declared opaque ids (`ruleset-core::kind`). Custom ids
+///      serialize as decimal (`"26"`); no legacy aliases (`circleAffected`,
+///      `crystalsChanged`, `firePaying`, …). CEL `is_start`/`is_deed`/
+///      `is_venue`/`is_buyable` sugar removed in favour of `tile_is`/`tile_in`/
+///      `tile_attr` only. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 70;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1202,253 +1212,330 @@ impl CardPile {
 pub const REWARD_MONEY: i32 = 0;
 pub const REWARD_CARD: i32 = 1;
 
-/// Trigger kinds a counteraction can be checked against.
+/// Trigger / hook / chain / gate kind id (wire `i32`).
 ///
-/// The values are a wire enum: the host fills them at the same points the
-/// engine raises its `Trigger`s. Kinds the engine does not raise yet still exist
-/// here so a card's `can_counteract` can state its real condition; it simply
-/// never sees that kind until the engine raises it (TODO in `game-core`).
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TriggerKind {
-    #[default]
+/// Engine-generic raise points are associated constants. **Game-named kinds are
+/// not named here**: the ruleset declares opaque custom ids (see
+/// `ruleset-core::kind`) and the engine fires/dispatches by numeric id. A
+/// custom id serializes as its decimal spelling (`"26"`); generic kinds keep
+/// their camelCase wire names. No legacy aliases.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct TriggerKind(pub i32);
+
+/// Field-card hook points (see [`TriggerKind`]). Same id space.
+pub type HookKind = TriggerKind;
+/// [反击] chain-link selectors (see [`TriggerKind`]). Same id space.
+pub type ChainKind = TriggerKind;
+/// Declaration / resolution questions (see [`TriggerKind`]). Same id space.
+pub type GateKind = TriggerKind;
+
+#[allow(non_upper_case_globals)]
+impl TriggerKind {
     /// Unset. `from_str`'s fallback and the `Default` -- never raised.
-    None = 0,
+    pub const None: Self = Self(0);
+
     /// The main move's pre-roll point (行动阶段 8 「移动掷骰前」) -- raised before
     /// the d20 is cast, with `value = -1` as a "no roll yet" sentinel so a
     /// counter matching [`Self::Roll`] / [`Self::MoveRoll`] stays dormant before
     /// the dice exist. Payload: `@m` the move.
-    Roll = 1,
+    pub const Roll: Self = Self(1);
+
     /// The move roll resolved (行动阶段 9–10 「移动掷骰时/后」) -- after the dice,
     /// before the walk. `value` is the face; a counteraction may reroll it with
     /// `set_move_roll` (`t.value` is read back). Payload: `@m` the move.
-    MoveRoll = 2,
+    pub const MoveRoll: Self = Self(2);
+
     /// A turn begins (行动阶段 2 「回合开始时」) -- after the exile/stun status
     /// ticks, so a hook sees the turn as it opens. `turnStartBefore` is the
     /// pre-half. Payload: `tile` = the player's position.
-    TurnStart = 3,
+    pub const TurnStart: Self = Self(3);
+
     /// One tile stepped over during a move (行动阶段 12 「[经过]」) -- raised after
     /// the player arrives on `tile`, for **every** path tile (CiRCLE and the
     /// destination), not just the end. `passBefore` is the pre-half;
     /// [`Self::PassTile`] is the Fx hook for the same step.
-    Pass = 4,
+    pub const Pass: Self = Self(4);
+
     /// End-tile [重叠] (行动阶段 13) -- one raise per other player sharing the
     /// landing tile. `target` = that player. Raised at the move's end, never
     /// mid-walk (a mid-route pass is [`Self::PassTile`]).
-    PassPlayer = 5,
+    pub const PassPlayer: Self = Self(5);
+
     /// 行动阶段 14 「[触发结算]前」/「[移动终点]」 -- the pre-settle window. A
     /// relocation here redirects the settle (it re-runs this window at the new
     /// tile, `SETTLE-STAGES.md` §7 Q7). Payload: `tile` = the tile about to settle.
-    SettleBefore = 6,
+    pub const SettleBefore: Self = Self(6);
+
     /// 行动阶段 15 opening 「触发结算」/「[结算]时」 -- the settle's declaration
     /// and [反击] window. `set_cancelled()` = 「本次结算」 never happened: no
     /// body, no `settleAfter`; [`Self::TileResolved`] still fires. `target` =
     /// the tile's owner (-1 = the bank).
-    Settle = 7,
+    pub const Settle: Self = Self(7);
+
     /// A deed was just mortgaged, after it applied (运营阶段 「抵押地契」).
     /// `mortgageBefore` is the pre-half that can block. Payload: `tile` = the deed.
-    Mortgage = 8,
+    pub const Mortgage: Self = Self(8);
+
     /// A payment's settlement hook -- what the payment actually is, after the
     /// [反击] chain and the modifier stages, before any money moves (规则书
     /// 支付阶段 5). `player_id` = payer, `target` = payee (-1 = the bank),
     /// `value` = amount. `set_cancelled()` stops the payment outright (`NEGATION-AUDIT`
     /// V5). The [反击] key for a payment is [`Self::Effect`] (`kind: "pay"`).
-    Pay = 9,
+    pub const Pay: Self = Self(9);
+
     /// Money left a player (规则书 支付阶段 6–7) -- after the deduction commits.
     /// `player_id` = payer, `target` = payee, `value` = what moved. The [反击]
     /// window 「[消耗]或[支付]」/「被…收取资金」 opens here, on a payer-side loss
     /// only -- a print (`gain`) raises [`Self::PayAfter`] alone.
-    Paid = 10,
+    pub const Paid: Self = Self(10);
+
     /// A bankruptcy's asset cash-in is done, before the seat is cleared.
     /// `bankruptBefore` is the pre-half (before cash-in); [`Self::BankruptResolved`]
     /// the terminal. The seat is already marked dead before `bankruptBefore` (B3).
-    Bankrupt = 11,
+    pub const Bankrupt: Self = Self(11);
+
     /// A card is being played from hand -- before its `play` body. `card` = the
     /// card id, `by_card` = its player. `set_cancelled()` negates the play: the
     /// card still goes to its `Dest`, but the body does not run. Also the kind of
     /// every declared [反击] link (`seq` / `answers` say which link it is).
-    Card = 12,
+    pub const Card: Self = Self(12);
+
     /// An event was drawn and revealed -- before it resolves. `card` = the event
     /// id. `set_cancelled()` negates the draw: the effect never resolves and the
     /// card is filed away. `eventAfter` is the post-half.
-    Event = 13,
+    pub const Event: Self = Self(13);
+
     /// An abnormal effect settled on `target` (`t.value` is the [`AbKind`]).
     /// The declaration gates are [`GateKind::AbnormalGuard`] + the [`Self::Effect`]
     /// [反击]; this hook reports what actually landed, self-applied included.
-    Abnormal = 14,
+    pub const Abnormal: Self = Self(14);
+
     /// A single-target effect settled on `target`. Now a settlement hook: the
     /// [反击] key for 「被…效果影响」 is [`Self::Effect`]. Declaration-side gates:
     /// [`GateKind::Untargetable`] / [`GateKind::Redirect`].
-    Target = 15,
+    pub const Target: Self = Self(15);
+
     /// Wire name `stop`: a player was forced to stop (「强制停下」,
     /// [`AbKind::Stop`]). Not raised by the current engine; kept for wire
     /// compatibility.
-    Stop = 16,
+    pub const Stop: Self = Self(16);
+
     /// Wire name `teleport`: a teleport was performed. Not raised by the current
     /// engine; kept for wire compatibility. The teleport-specific points today
     /// are [`Self::MoveBefore`] (before) and [`Self::Teleported`] (after).
-    Teleport = 17,
+    pub const Teleport: Self = Self(17);
+
     /// Wire name `skillTeleport`: 「当你使用技能进行传送后」 (R:必然的联系（莉莎）).
     /// Not raised by the current engine; kept for wire compatibility.
-    SkillTeleport = 18,
+    pub const SkillTeleport: Self = Self(18);
+
     /// Wire name `stun`: a [晕眩] layer landed. Not raised by the current engine
     /// (the landing reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`]);
     /// kept for wire compatibility.
-    Stun = 19,
+    pub const Stun: Self = Self(19);
+
     /// Wire name `stay`: a [停留] layer landed. Not raised by the current engine
     /// (see [`Self::Stun`]); kept for wire compatibility.
-    Stay = 20,
+    pub const Stay: Self = Self(20);
+
     /// Wire name `exile`: 「任意玩家获得[除外]…时」 -- an [除外] layer was granted
     /// by any path (火种燃尽之后会怎么样呢？ listens here). Raised from the grant
     /// log, `value = 1`. Distinct from [`Self::Abnormal`], which is the landing
     /// itself.
-    Exile = 21,
+    pub const Exile: Self = Self(21);
+
     /// Wire name `forced`: a [强制移动] landed. Not raised by the current engine
     /// (see [`Self::Stun`]); kept for wire compatibility.
-    Forced = 22,
+    pub const Forced: Self = Self(22);
+
     /// Wire name `state`: 「当有其他玩家切换状态时」 -- a player toggled skill
     /// state (Mujica:欢迎来到ave mujica的世界). Not raised by the current
     /// engine; kept for wire compatibility.
-    State = 23,
+    pub const State: Self = Self(23);
+
     /// Wire name `counteracted`: 「有玩家对你使用[反击]后」 -- a [反击] was
     /// declared against `target` by `player_id` (Mujica:无法将视线移开). Not
     /// raised by the current engine; kept for wire compatibility.
-    Counteracted = 24,
+    pub const Counteracted: Self = Self(24);
+
     /// Wire name `drawOut`: 「回合外受到抽卡效果时」 -- a draw hit you outside
     /// your own turn (CRYCHIC:优雅的呐喊). Not raised by the current engine;
     /// kept for wire compatibility. The per-draw points today are
     /// [`Self::DrewBefore`] / [`Self::Drawn`] / [`Self::Drew`].
-    DrawOut = 25,
-    /// The CiRCLE reward was picked but not paid out (「[获得]资金」 vs the card).
-    /// `value` = which half ([`REWARD_MONEY`] / [`REWARD_CARD`]); the stunned
-    /// path forces the card. `set_cancelled()` skips the payout.
-    PassRewardAffected = 26,
+    pub const DrawOut: Self = Self(25);
+
     /// Wire name `twoCards`: 「当有人同一回合内打出两张卡时」 (Sumimi:Here the
     /// world). Not raised by the current engine; kept for wire compatibility.
-    TwoCards = 27,
+    pub const TwoCards: Self = Self(27);
+
     /// v10: the missing pre-half of `TurnStart`.
-    TurnStartBefore = 28,
+    pub const TurnStartBefore: Self = Self(28);
+
     /// v10: the missing pre-half of `Pass`.
-    PassBefore = 29,
+    pub const PassBefore: Self = Self(29);
+
     /// v10: the missing pre-half of `Mortgage`.
-    MortgageBefore = 30,
+    pub const MortgageBefore: Self = Self(30);
+
     /// v10: the missing pre-half of `Bankrupt`.
-    BankruptBefore = 31,
+    pub const BankruptBefore: Self = Self(31);
+
     /// v10: the missing post-half of `Card`.
-    CardAfter = 32,
+    pub const CardAfter: Self = Self(32);
+
     /// v10: the missing post-half of `Event`.
-    EventAfter = 33,
+    pub const EventAfter: Self = Self(33);
+
     /// v10: the missing post-half of `SettleBefore`/`Settle` (fires after
     /// `land()` resolves).
-    SettleAfter = 34,
+    pub const SettleAfter: Self = Self(34);
+
     /// v10: new action hook -- before a buy resolves.
-    BuyBefore = 35,
+    pub const BuyBefore: Self = Self(35);
+
     /// v10: new action hook -- after a buy resolves.
-    BuyAfter = 36,
+    pub const BuyAfter: Self = Self(36);
+
     /// v10: new action hook -- before building a house resolves.
-    BuildBefore = 37,
+    pub const BuildBefore: Self = Self(37);
+
     /// v10: new action hook -- after building a house resolves.
-    BuildAfter = 38,
+    pub const BuildAfter: Self = Self(38);
+
     /// v10: new action hook -- before a hand discard resolves.
-    DiscardBefore = 39,
+    pub const DiscardBefore: Self = Self(39);
+
     /// v10: new action hook -- after a hand discard resolves.
-    DiscardAfter = 40,
+    pub const DiscardAfter: Self = Self(40);
+
     /// v10: new action hook -- before ending the turn.
-    EndTurnBefore = 41,
+    pub const EndTurnBefore: Self = Self(41);
+
     /// v10: new action hook -- after ending the turn.
-    EndTurnAfter = 42,
+    pub const EndTurnAfter: Self = Self(42);
+
     /// v10: new action hook -- before a player forfeits.
-    LeaveBefore = 43,
+    pub const LeaveBefore: Self = Self(43);
+
     /// v10: new action hook -- after a player forfeits.
-    LeaveAfter = 44,
+    pub const LeaveAfter: Self = Self(44);
 
     // v17: field-card hook points. These are NOT [反击] points -- the
     // engine runs every placed card's `counteract` against them automatically. They
     // are distinct kinds from the counteraction kinds above so a card can tell a
     // field effect from a hand counteraction by its kind alone.
     /// A turn just ended (any player's).
-    TurnEnd = 45,
+    pub const TurnEnd: Self = Self(45);
+
     /// **One card was drawn** (per single card; `t.card` names it, still in
     /// hand). This is the drawn card's *own* hook; the per-draw field-card
     /// points are [`Self::DrewBefore`] / [`Self::Drew`].
-    Drawn = 46,
+    pub const Drawn: Self = Self(46);
+
     /// The player passed/stopped on a tile during a move (行动阶段 12 「[经过]」).
-    PassTile = 47,
+    pub const PassTile: Self = Self(47);
+
     /// A payment settled (规则书 支付阶段 6–7 「资金变动」).
-    PayAfter = 48,
+    pub const PayAfter: Self = Self(48);
+
     /// A move roll resolved (行动阶段 10 「移动掷骰后」).
-    RollAfter = 49,
+    pub const RollAfter: Self = Self(49);
+
     /// A card's hand effect resolved.
-    CardPlayed = 50,
+    pub const CardPlayed: Self = Self(50);
+
     /// The player was targeted.
-    Targeted = 51,
+    pub const Targeted: Self = Self(51);
+
     /// The player is about to pay (may modify/decline).
-    PayChoose = 52,
+    pub const PayChoose: Self = Self(52);
+
     /// v23: first step of a turn end (结束阶段前), before the `On::AtEnd`
     /// callbacks and the status wear-off.
-    TurnEndBefore = 53,
+    pub const TurnEndBefore: Self = Self(53);
+
     /// v23: after [`Self::TurnEnd`]; the scheduled turn-end callbacks run here.
-    TurnEndAfter = 54,
+    pub const TurnEndAfter: Self = Self(54);
+
     /// v23: a payment's amount, first modifier pass (规则书 支付阶段 2, before
     /// any money moves).
-    PayAdd = 55,
+    pub const PayAdd: Self = Self(55);
+
     /// v23: second modifier pass (规则书 支付阶段 4), after [`Self::PayAdd`].
-    PayMul = 56,
+    pub const PayMul: Self = Self(56);
+
     /// v23: after [`Self::PayChoose`], before the `pay` [反击] window
     /// (规则书 支付阶段 5).
-    PayAt = 57,
+    pub const PayAt: Self = Self(57);
+
     /// v23: this card (named on `t.card`) just went to the discard pile.
-    Discarded = 58,
+    pub const Discarded: Self = Self(58);
+
     /// v23: **before match start** (「游戏开始前」) -- raised once per
     /// player before the opening hands are drawn, and dispatched to *every*
     /// effect source: field cards including skills (per player, in field order)
     /// and the card ids in that player's piles/hands. Start positions and the
     /// authoritative initial hand size are decided here.
-    DeckBeforeGame = 59,
+    pub const DeckBeforeGame: Self = Self(59);
+
     /// v23: **after match start** (「游戏开始时」) -- raised once per
     /// player after the opening draw and mulligan, dispatched to every effect
     /// source as [`Self::DeckBeforeGame`] is. Initial tokens/resources (fire
     /// pots 「初始N」, P✽P fans) are created here.
-    DeckAtGameStart = 60,
+    pub const DeckAtGameStart: Self = Self(60);
+
     /// v23: **after one card was drawn** (per single card; an
     /// N-card draw raises this N times, each payload naming one card). This is
     /// the per-draw field-card point; the drawn card's own hook is
     /// [`Self::Drawn`].
-    Drew = 61,
+    pub const Drew: Self = Self(61);
+
     /// v23: a player's discard pile was shuffled back into its deck.
-    Reshuffled = 62,
+    pub const Reshuffled: Self = Self(62);
+
     /// v23: a player became the owner of `t.tile` (buy or auction).
-    Bought = 63,
+    pub const Bought: Self = Self(63);
+
     /// v23/31: the **settle body** point -- a field card placed on the tile may
     /// replace the tile's rule instances' effect: do it and call
     /// `trigger::set_cancelled()`. Was `SettleInstead`; renamed when the body
     /// became the tile's rule instances (`docs/TILES.md`).
-    SettleBody = 64,
+    pub const SettleBody: Self = Self(64);
+
     /// v23: a player is about to leave the game (bankrupt or forfeit).
-    BeforeOut = 65,
+    pub const BeforeOut: Self = Self(65);
+
     /// v23: a teleport finished (after its settlement, or at once if it does not
     /// settle).
-    Teleported = 66,
+    pub const Teleported: Self = Self(66);
+
     /// v23: the main move's `RollPlan` pass (行动阶段 8, before the dice are
     /// rolled). The host runs every placed card's `On::RollPlan` here.
-    RollPlan = 67,
+    pub const RollPlan: Self = Self(67);
+
     /// v25: an abnormal effect is about to hit
     /// `t.target` (`trigger::abnormal_kind()` says which). A field card blocks it
     /// with `trigger::set_cancelled()`. Then, if someone else caused it, the
     /// `effect` [反击] window opens on the declaration; a landing is reported by
     /// [`Self::Abnormal`].
-    AbnormalGuard = 68,
+    pub const AbnormalGuard: Self = Self(68);
+
     /// v26: is `t.player_id` untouchable by `t.by_card`'s
     /// effects? A field card claims it with `trigger::set_cancelled()`. Asked
     /// before targeting `t.player_id`, before an abnormal effect, and before a
     /// card-driven payment from/to `t.player_id`.
-    ImmuneAll = 69,
+    pub const ImmuneAll: Self = Self(69);
+
     /// v26: `t.by_card`'s card is about to
     /// target `t.player_id`. Block with `trigger::set_cancelled()`.
-    Untargetable = 70,
+    pub const Untargetable: Self = Self(70);
+
     /// v26: a single-target card is about to target
     /// `t.target`; a field card takes the hit with `trigger::set_target(player_id)`.
-    Redirect = 71,
+    pub const Redirect: Self = Self(71);
+
     /// v27: **a card effect is declared at someone**. This is the [反击] key for
     /// 「被其他玩家的卡效果影响」 -- one stable fact, not a union of outcome
     /// kinds. It is raised when a link's recipients are named, before any
@@ -1458,16 +1545,8 @@ pub enum TriggerKind {
     /// they fire as the effect settles and can no longer reconstruct this
     /// clause. A counter that means "an effect hit me" listens here and asks
     /// `effect::`; one that means "a payment settled" listens at [`HookKind::PayAfter`].
-    Effect = 72,
-    /// v28: a house was just added to
-    /// `t.tile` (now `t.value` houses) by `t.player_id`.
-    HouseAdded = 75,
-    /// v28: `t.player_id` just spent `t.value` fire
-    /// (「每当你消耗火罐时」). Fires after the spend commits.
-    FireSpent = 73,
-    /// v28: `t.player_id` just used their character skill
-    /// (「使用自己原有的技能（2）时」). `t.card` is the skill rule's id.
-    SkillUsed = 74,
+    pub const Effect: Self = Self(72);
+
     /// v50: a named on-card counter on a placed instance was just written.
     /// `t.card` is the card whose count moved, `t.player_id` its owner,
     /// `t.value` is the **signed change applied**, and `t.name` is the counter
@@ -1476,7 +1555,8 @@ pub enum TriggerKind {
     /// `CrystalsChanged` and v36 `CpChanged` hooks (same payload shape plus
     /// the name). 「…时」 clauses on a count (「此卡上不再拥有[奇迹水晶]时」,
     /// 通用:该清CP了's graveyard rule) listen here and filter on the name.
-    CounterChanged = 76,
+    pub const CounterChanged: Self = Self(76);
+
     /// v30: **before one card is drawn** (per single card; an N-card draw raises
     /// this N times). `t.card` is the card that would be drawn (the deck's top,
     /// or empty when the pile is dry). This is the per-draw *replacement* point:
@@ -1484,18 +1564,14 @@ pub enum TriggerKind {
     /// and performs its own look/pick -- whatever it adds to the hand is the
     /// replacement draw, and the after points ([`Self::Drawn`] / [`Self::Drew`])
     /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
-    DrewBefore = 77,
-    /// v56: **before** one fire spend commits (`ctx::spend_charge`). `t.value` is
-    /// the requested amount. A hook that substitutes the cost (「以代替此次技能
-    /// 的火罐消耗」) cancels the trigger and performs its own payment; the engine
-    /// then treats the spend as satisfied and does not touch the fire pots.
-    /// Hook-only. (78 was `CpChanged`; v50 folded it into [`Self::CounterChanged`].)
-    ChargePaying = 78,
+    pub const DrewBefore: Self = Self(77);
+
     /// v56: a face-down counter is being flipped face-up (「将X个反面…变正」).
     /// `t.value` is the effect's **intended** X (the number the clause names),
     /// raised *before* the counters move so a listener still sees the pre-flip
     /// count. Hook-only.
-    FlipEffect = 94,
+    pub const FlipEffect: Self = Self(94);
+
     /// v36: a card instance's attached [CP点] count was just written (placed or
     /// cleared). `t.card` is the card the marks are attached to, `t.player_id`
     /// its owner, and `t.value` is the **change applied** to the attached count
@@ -1507,18 +1583,22 @@ pub enum TriggerKind {
     /// May `t.player_id` buy `t.tile` at all? A placed card
     /// refuses with `trigger::set_cancelled()` plus a reason. Runs for every
     /// [`BuyKind`], Force included (Poppin's hill lock).
-    BuyGate = 79,
+    pub const BuyGate: Self = Self(79);
+
     /// The buy price's first modifier stage (fixed ±), before
     /// [`Self::BuyMul`] and [`Self::BuySet`]. `t.value` / `set_price`.
-    BuyAdd = 80,
+    pub const BuyAdd: Self = Self(80);
+
     /// Second modifier stage (×), after [`Self::BuyAdd`].
-    BuyMul = 81,
+    pub const BuyMul: Self = Self(81);
+
     /// Third modifier stage (free / fixed price), after
     /// [`Self::BuyMul`]. Each stage floors the price at 0.
-    BuySet = 82,
+    pub const BuySet: Self = Self(82);
+
     /// The deal is committing, before the `bought` hook.
     /// Rewrites `deal_owner` / `deal_houses` / `deal_mortgaged`.
-    BuyAssign = 83,
+    pub const BuyAssign: Self = Self(83);
 
     // v42: the command-wide **pre-split** payment stage (`PIPELINE-AUDIT` Q2)
     // and the terminal `<thing>Resolved` hooks (Q6).
@@ -1530,25 +1610,30 @@ pub enum TriggerKind {
     /// [`Self::PayTotalMul`] and [`Self::PayTotalCancel`] (add → mul → cancel).
     /// The per-share counterparts are [`Self::PayAdd`] / [`Self::PayMul`] /
     /// [`Self::PayChoose`] / [`Self::PayAt`], which run on each settled leg.
-    PayTotalAdd = 84,
+    pub const PayTotalAdd: Self = Self(84);
+
     /// The pre-split × stage (规则书 支付阶段 4), after
     /// [`Self::PayTotalAdd`]. `t.value` / `set_pay_amount`.
-    PayTotalMul = 85,
+    pub const PayTotalMul: Self = Self(85);
+
     /// The pre-split cancel (规则书 支付阶段 5's
     /// 「取消支付」 on the command rather than on one pair), after
     /// [`Self::PayTotalMul`]. `trigger::set_cancelled()` drops the whole
     /// command: no leg runs and nothing moves.
-    PayTotalCancel = 86,
+    pub const PayTotalCancel: Self = Self(86);
+
     /// Terminal: the tile's settlement is fully resolved (after
     /// [`Self::SettleAfter`], including when the settle was cancelled -- the
     /// resolution is complete as nothing). `PIPELINE-AUDIT` Q6.
-    TileResolved = 87,
+    pub const TileResolved: Self = Self(87);
+
     /// Terminal: the move (and any settlement it asked for) is fully resolved.
     /// Fires at the end of a walk / teleport, after the settle pipeline.
-    MoveResolved = 88,
+    pub const MoveResolved: Self = Self(88);
+
     /// Terminal: the bankruptcy is fully resolved -- cash-in done, the seat
     /// cleared, the leftover auctions finished. `PIPELINE-AUDIT` K11.
-    BankruptResolved = 89,
+    pub const BankruptResolved: Self = Self(89);
 
     // v43: the move-head / move-tail pair (`SETTLE-STAGES.md` §7).
     /// **Before any move** -- walk or teleport, main or card-driven, settling or
@@ -1559,14 +1644,15 @@ pub enum TriggerKind {
     /// own head; this is the generic move point.
     /// For a walk, `value` is the resolved base distance and `move_total` /
     /// `move_remaining` include existing extra steps, before any are walked.
-    MoveBefore = 90,
+    pub const MoveBefore: Self = Self(90);
+
     /// **After a completed move** -- 「移动后」/「主要移动结束时」 and the
     /// 「[移动终点]」 condition anchor. Fires after `passPlayer`, before
     /// `settleBefore`, for every completed move -- including a 「不触发结算」
     /// one (其他规则注意事项 1.2: 「是否[结算]」 gates only the settle). The
     /// teleport-specific `teleported` and the final `moveResolved` stay where
     /// they are; this is the move-end point the tail effects belong on.
-    MoveAfter = 91,
+    pub const MoveAfter: Self = Self(91);
 
     // v44: marker spend / gain counteraction windows (user ruling 2026-10-07).
     /// **Before a marker spend** (火罐 / 奇迹水晶 / P✽P粉丝 / any token) moves.
@@ -1574,27 +1660,34 @@ pub enum TriggerKind {
     /// negated. Marker *costs* keep today's timing otherwise: they are spent as
     /// the effect resolves and a whole-effect negation before the body already
     /// prevents them.
-    MarkerSpend = 92,
+    pub const MarkerSpend: Self = Self(92);
+
     /// **Before a marker gain** moves. Same window shape as [`Self::MarkerSpend`].
-    MarkerGain = 93,
+    pub const MarkerGain: Self = Self(93);
+
     /// v58: **status gate** (`rules/status`). May `t.player_id` use [主动]
     /// skills / 手卡的[手]效果? Answered by `On::Gate` entries that are
     /// **CEL-only** (no residual guard): the host evaluates the condition
     /// natively wherever the question is asked, including pure reads.
-    ActGate = 95,
+    pub const ActGate: Self = Self(95);
+
     /// v58: may `t.player_id` pay or receive payment (「无法收付款」)?
     /// CEL-only, like [`Self::ActGate`].
-    PayGate = 96,
+    pub const PayGate: Self = Self(96);
+
     /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
-    MoveGate = 97,
+    pub const MoveGate: Self = Self(97);
+
     /// v59: **exclusive-use gate**. May `t.player_id` play this exclusive card
     /// (`card.owner` / base-`variant_of` / band-skill denial)? CEL-only, like
     /// [`Self::ActGate`]. Window carries the card in `trigger_card` / `name`.
-    ExclusiveUse = 98,
+    pub const ExclusiveUse: Self = Self(98);
+
     /// v61: turn-clock modifier -- the 免费时间 (`bonus_time`) **refill** in
     /// seconds the acting seat gets as its turn starts (`t.value`; the host
     /// then caps the total). Rewrite with `trigger::set_pay_amount`.
-    TurnBonusTime = 99,
+    pub const TurnBonusTime: Self = Self(99);
+
     /// v61: turn-clock modifier -- the 恢复时间 (`base_time`) **refill** in
     /// seconds the acting seat's turn adds at turn start (`t.value`; the
     /// default is the match's `turnBaseTime` budget). Rewrite with
@@ -1608,340 +1701,243 @@ pub enum TriggerKind {
     /// `baseTimeSet` board prop replaces the whole calculation (SET at turn
     /// start, 元祖！邦多利酱). Pre-settings (`legacy_clock`) matches instead
     /// *set* `base = value` each turn.
-    TurnBaseTime = 100,
-}
+    pub const TurnBaseTime: Self = Self(100);
 
-impl TriggerKind {
-    pub fn from_i32(v: i32) -> Self {
-        match v {
-            1 => Self::Roll,
-            2 => Self::MoveRoll,
-            3 => Self::TurnStart,
-            4 => Self::Pass,
-            5 => Self::PassPlayer,
-            6 => Self::SettleBefore,
-            7 => Self::Settle,
-            8 => Self::Mortgage,
-            9 => Self::Pay,
-            10 => Self::Paid,
-            11 => Self::Bankrupt,
-            12 => Self::Card,
-            13 => Self::Event,
-            14 => Self::Abnormal,
-            15 => Self::Target,
-            16 => Self::Stop,
-            17 => Self::Teleport,
-            18 => Self::SkillTeleport,
-            19 => Self::Stun,
-            20 => Self::Stay,
-            21 => Self::Exile,
-            22 => Self::Forced,
-            23 => Self::State,
-            24 => Self::Counteracted,
-            25 => Self::DrawOut,
-            26 => Self::PassRewardAffected,
-            27 => Self::TwoCards,
-            28 => Self::TurnStartBefore,
-            29 => Self::PassBefore,
-            30 => Self::MortgageBefore,
-            31 => Self::BankruptBefore,
-            32 => Self::CardAfter,
-            33 => Self::EventAfter,
-            34 => Self::SettleAfter,
-            35 => Self::BuyBefore,
-            36 => Self::BuyAfter,
-            37 => Self::BuildBefore,
-            38 => Self::BuildAfter,
-            39 => Self::DiscardBefore,
-            40 => Self::DiscardAfter,
-            41 => Self::EndTurnBefore,
-            42 => Self::EndTurnAfter,
-            43 => Self::LeaveBefore,
-            44 => Self::LeaveAfter,
-            45 => Self::TurnEnd,
-            46 => Self::Drawn,
-            47 => Self::PassTile,
-            48 => Self::PayAfter,
-            49 => Self::RollAfter,
-            50 => Self::CardPlayed,
-            51 => Self::Targeted,
-            52 => Self::PayChoose,
-            53 => Self::TurnEndBefore,
-            54 => Self::TurnEndAfter,
-            55 => Self::PayAdd,
-            56 => Self::PayMul,
-            57 => Self::PayAt,
-            58 => Self::Discarded,
-            59 => Self::DeckBeforeGame,
-            60 => Self::DeckAtGameStart,
-            61 => Self::Drew,
-            62 => Self::Reshuffled,
-            63 => Self::Bought,
-            64 => Self::SettleBody,
-            65 => Self::BeforeOut,
-            66 => Self::Teleported,
-            67 => Self::RollPlan,
-            68 => Self::AbnormalGuard,
-            69 => Self::ImmuneAll,
-            70 => Self::Untargetable,
-            71 => Self::Redirect,
-            72 => Self::Effect,
-            75 => Self::HouseAdded,
-            73 => Self::FireSpent,
-            74 => Self::SkillUsed,
-            76 => Self::CounterChanged,
-            77 => Self::DrewBefore,
-            78 => Self::ChargePaying,
-            94 => Self::FlipEffect,
-
-            79 => Self::BuyGate,
-            80 => Self::BuyAdd,
-            81 => Self::BuyMul,
-            82 => Self::BuySet,
-            83 => Self::BuyAssign,
-            84 => Self::PayTotalAdd,
-            85 => Self::PayTotalMul,
-            86 => Self::PayTotalCancel,
-            87 => Self::TileResolved,
-            88 => Self::MoveResolved,
-            89 => Self::BankruptResolved,
-            90 => Self::MoveBefore,
-            91 => Self::MoveAfter,
-            92 => Self::MarkerSpend,
-            93 => Self::MarkerGain,
-            95 => Self::ActGate,
-            96 => Self::PayGate,
-            97 => Self::MoveGate,
-            98 => Self::ExclusiveUse,
-            99 => Self::TurnBonusTime,
-            100 => Self::TurnBaseTime,
-            _ => Self::None,
-        }
+    /// The wire value, shared with every kind view.
+    pub const fn as_i32(self) -> i32 {
+        self.0
     }
 
-    /// The trigger-kind wire string.
+    /// Any code is a valid opaque id.
+    pub const fn from_i32(v: i32) -> Self {
+        Self(v)
+    }
+
+    /// The trigger-kind wire string. Generic kinds keep their camelCase
+    /// spelling; a registered ruleset-declared custom id is its decimal form.
+    /// An unregistered id reads as `""` (no `Box::leak` in `no_std`).
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "",
-            Self::Roll => "roll",
-            Self::MoveRoll => "moveRoll",
-            Self::TurnStart => "turnStart",
-            Self::Pass => "pass",
-            Self::PassPlayer => "passPlayer",
-            Self::SettleBefore => "settleBefore",
-            Self::Settle => "settle",
-            Self::Mortgage => "mortgage",
-            Self::Pay => "pay",
-            Self::Paid => "paid",
-            Self::Bankrupt => "bankrupt",
-            Self::Card => "card",
-            Self::Event => "event",
-            Self::Abnormal => "abnormal",
-            Self::Target => "target",
-            Self::Stop => "stop",
-            Self::Teleport => "teleport",
-            Self::SkillTeleport => "skillTeleport",
-            Self::Stun => "stun",
-            Self::Stay => "stay",
-            Self::Exile => "exile",
-            Self::Forced => "forced",
-            Self::State => "state",
-            Self::Counteracted => "counteracted",
-            Self::DrawOut => "drawOut",
-            Self::PassRewardAffected => "passRewardAffected",
-            Self::TwoCards => "twoCards",
-            Self::TurnStartBefore => "turnStartBefore",
-            Self::PassBefore => "passBefore",
-            Self::MortgageBefore => "mortgageBefore",
-            Self::BankruptBefore => "bankruptBefore",
-            Self::CardAfter => "cardAfter",
-            Self::EventAfter => "eventAfter",
-            Self::SettleAfter => "settleAfter",
-            Self::BuyBefore => "buyBefore",
-            Self::BuyAfter => "buyAfter",
-            Self::BuildBefore => "buildBefore",
-            Self::BuildAfter => "buildAfter",
-            Self::DiscardBefore => "discardBefore",
-            Self::DiscardAfter => "discardAfter",
-            Self::EndTurnBefore => "endTurnBefore",
-            Self::EndTurnAfter => "endTurnAfter",
-            Self::LeaveBefore => "leaveBefore",
-            Self::LeaveAfter => "leaveAfter",
-            Self::TurnEnd => "turnEnd",
-            Self::Drawn => "drawn",
-            Self::PassTile => "passTile",
-            Self::PayAfter => "payAfter",
-            Self::RollAfter => "rollAfter",
-            Self::CardPlayed => "cardPlayed",
-            Self::Targeted => "targeted",
-            Self::PayChoose => "payChoose",
-            Self::TurnEndBefore => "turnEndBefore",
-            Self::TurnEndAfter => "turnEndAfter",
-            Self::PayAdd => "payAdd",
-            Self::PayMul => "payMul",
-            Self::PayAt => "payAt",
-            Self::Discarded => "discarded",
-            Self::DeckBeforeGame => "deckBeforeGame",
-            Self::DeckAtGameStart => "deckAtGameStart",
-            Self::Drew => "drew",
-            Self::Reshuffled => "reshuffled",
-            Self::Bought => "bought",
-            Self::SettleBody => "settleBody",
-            Self::BeforeOut => "beforeOut",
-            Self::Teleported => "teleported",
-            Self::RollPlan => "rollPlan",
-            Self::AbnormalGuard => "abnormalGuard",
-            Self::ImmuneAll => "immuneAll",
-            Self::Untargetable => "untargetable",
-            Self::Redirect => "redirect",
-            Self::Effect => "effect",
-            Self::HouseAdded => "houseAdded",
-            Self::FireSpent => "fireSpent",
-            Self::SkillUsed => "skillUsed",
-            Self::CounterChanged => "counterChanged",
-            Self::DrewBefore => "drewBefore",
-            Self::ChargePaying => "chargePaying",
-            Self::FlipEffect => "flipEffect",
-
-            Self::BuyGate => "buyGate",
-            Self::BuyAdd => "buyAdd",
-            Self::BuyMul => "buyMul",
-            Self::BuySet => "buySet",
-            Self::BuyAssign => "buyAssign",
-            Self::PayTotalAdd => "payTotalAdd",
-            Self::PayTotalMul => "payTotalMul",
-            Self::PayTotalCancel => "payTotalCancel",
-            Self::TileResolved => "tileResolved",
-            Self::MoveResolved => "moveResolved",
-            Self::BankruptResolved => "bankruptResolved",
-            Self::MoveBefore => "moveBefore",
-            Self::MoveAfter => "moveAfter",
-            Self::MarkerSpend => "markerSpend",
-            Self::MarkerGain => "markerGain",
-            Self::ActGate => "actGate",
-            Self::PayGate => "payGate",
-            Self::MoveGate => "moveGate",
-            Self::ExclusiveUse => "exclusiveUse",
-            Self::TurnBonusTime => "turnBonusTime",
-            Self::TurnBaseTime => "turnBaseTime",
+        match self.0 {
+            0 => "",
+            1 => "roll",
+            2 => "moveRoll",
+            3 => "turnStart",
+            4 => "pass",
+            5 => "passPlayer",
+            6 => "settleBefore",
+            7 => "settle",
+            8 => "mortgage",
+            9 => "pay",
+            10 => "paid",
+            11 => "bankrupt",
+            12 => "card",
+            13 => "event",
+            14 => "abnormal",
+            15 => "target",
+            16 => "stop",
+            17 => "teleport",
+            18 => "skillTeleport",
+            19 => "stun",
+            20 => "stay",
+            21 => "exile",
+            22 => "forced",
+            23 => "state",
+            24 => "counteracted",
+            25 => "drawOut",
+            27 => "twoCards",
+            28 => "turnStartBefore",
+            29 => "passBefore",
+            30 => "mortgageBefore",
+            31 => "bankruptBefore",
+            32 => "cardAfter",
+            33 => "eventAfter",
+            34 => "settleAfter",
+            35 => "buyBefore",
+            36 => "buyAfter",
+            37 => "buildBefore",
+            38 => "buildAfter",
+            39 => "discardBefore",
+            40 => "discardAfter",
+            41 => "endTurnBefore",
+            42 => "endTurnAfter",
+            43 => "leaveBefore",
+            44 => "leaveAfter",
+            45 => "turnEnd",
+            46 => "drawn",
+            47 => "passTile",
+            48 => "payAfter",
+            49 => "rollAfter",
+            50 => "cardPlayed",
+            51 => "targeted",
+            52 => "payChoose",
+            53 => "turnEndBefore",
+            54 => "turnEndAfter",
+            55 => "payAdd",
+            56 => "payMul",
+            57 => "payAt",
+            58 => "discarded",
+            59 => "deckBeforeGame",
+            60 => "deckAtGameStart",
+            61 => "drew",
+            62 => "reshuffled",
+            63 => "bought",
+            64 => "settleBody",
+            65 => "beforeOut",
+            66 => "teleported",
+            67 => "rollPlan",
+            68 => "abnormalGuard",
+            69 => "immuneAll",
+            70 => "untargetable",
+            71 => "redirect",
+            72 => "effect",
+            76 => "counterChanged",
+            77 => "drewBefore",
+            94 => "flipEffect",
+            79 => "buyGate",
+            80 => "buyAdd",
+            81 => "buyMul",
+            82 => "buySet",
+            83 => "buyAssign",
+            84 => "payTotalAdd",
+            85 => "payTotalMul",
+            86 => "payTotalCancel",
+            87 => "tileResolved",
+            88 => "moveResolved",
+            89 => "bankruptResolved",
+            90 => "moveBefore",
+            91 => "moveAfter",
+            92 => "markerSpend",
+            93 => "markerGain",
+            95 => "actGate",
+            96 => "payGate",
+            97 => "moveGate",
+            98 => "exclusiveUse",
+            99 => "turnBonusTime",
+            100 => "turnBaseTime",
+            26 => "26",  // ruleset-declared custom id
+            73 => "73",  // ruleset-declared custom id
+            74 => "74",  // ruleset-declared custom id
+            75 => "75",  // ruleset-declared custom id
+            78 => "78",  // ruleset-declared custom id
+            _ => "",
         }
     }
 
-    /// Inverse of [`as_str`] (`game-rules` maps engine trigger kinds through here).
+    /// Inverse of [`Self::as_str`]. Generic camelCase names and decimal custom
+    /// ids parse; anything else is [`Self::None`].
     pub fn from_str(s: &str) -> Self {
+        if !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()) {
+            return Self(s.parse::<i32>().unwrap_or(0));
+        }
         match s {
-            "roll" => Self::Roll,
-            "moveRoll" => Self::MoveRoll,
-            "turnStart" => Self::TurnStart,
-            "pass" => Self::Pass,
-            "passPlayer" => Self::PassPlayer,
-            "settleBefore" => Self::SettleBefore,
-            "settle" => Self::Settle,
-            "mortgage" => Self::Mortgage,
-            "pay" => Self::Pay,
-            "paid" => Self::Paid,
-            "bankrupt" => Self::Bankrupt,
-            "card" => Self::Card,
-            "event" => Self::Event,
-            "abnormal" => Self::Abnormal,
-            "target" => Self::Target,
-            "stop" => Self::Stop,
-            "teleport" => Self::Teleport,
-            "skillTeleport" => Self::SkillTeleport,
-            "stun" => Self::Stun,
-            "stay" => Self::Stay,
-            "exile" => Self::Exile,
-            "forced" => Self::Forced,
-            "state" => Self::State,
-            "counteracted" => Self::Counteracted,
-            "drawOut" => Self::DrawOut,
-            "passRewardAffected" | "circleAffected" => Self::PassRewardAffected,
-            "twoCards" => Self::TwoCards,
-            "turnStartBefore" => Self::TurnStartBefore,
-            "passBefore" => Self::PassBefore,
-            "mortgageBefore" => Self::MortgageBefore,
-            "bankruptBefore" => Self::BankruptBefore,
-            "cardAfter" => Self::CardAfter,
-            "eventAfter" => Self::EventAfter,
-            "settleAfter" => Self::SettleAfter,
-            "buyBefore" => Self::BuyBefore,
-            "buyAfter" => Self::BuyAfter,
-            "buildBefore" => Self::BuildBefore,
-            "buildAfter" => Self::BuildAfter,
-            "discardBefore" => Self::DiscardBefore,
-            "discardAfter" => Self::DiscardAfter,
-            "endTurnBefore" => Self::EndTurnBefore,
-            "endTurnAfter" => Self::EndTurnAfter,
-            "leaveBefore" => Self::LeaveBefore,
-            "leaveAfter" => Self::LeaveAfter,
-            "turnEnd" => Self::TurnEnd,
-            "drawn" => Self::Drawn,
-            "passTile" => Self::PassTile,
-            "payAfter" => Self::PayAfter,
-            "rollAfter" => Self::RollAfter,
-            "cardPlayed" => Self::CardPlayed,
-            "targeted" => Self::Targeted,
-            "payChoose" => Self::PayChoose,
-            "turnEndBefore" => Self::TurnEndBefore,
-            "turnEndAfter" => Self::TurnEndAfter,
-            "payAdd" => Self::PayAdd,
-            "payMul" => Self::PayMul,
-            "payAt" => Self::PayAt,
-            "discarded" => Self::Discarded,
-            "deckBeforeGame" => Self::DeckBeforeGame,
-            "deckAtGameStart" => Self::DeckAtGameStart,
-            "drew" => Self::Drew,
-            "reshuffled" => Self::Reshuffled,
-            "bought" => Self::Bought,
-            "settleBody" => Self::SettleBody,
-            "beforeOut" => Self::BeforeOut,
-            "teleported" => Self::Teleported,
-            "rollPlan" => Self::RollPlan,
-            "abnormalGuard" => Self::AbnormalGuard,
-            "immuneAll" => Self::ImmuneAll,
-            "untargetable" => Self::Untargetable,
-            "redirect" => Self::Redirect,
-            "effect" => Self::Effect,
-            "houseAdded" => Self::HouseAdded,
-            "fireSpent" => Self::FireSpent,
-            "skillUsed" => Self::SkillUsed,
-            "counterChanged" | "crystalsChanged" | "cpChanged" => Self::CounterChanged,
-            "drewBefore" => Self::DrewBefore,
-            "chargePaying" => Self::ChargePaying,
-            "flipEffect" => Self::FlipEffect,
-
-            "buyGate" => Self::BuyGate,
-            "buyAdd" => Self::BuyAdd,
-            "buyMul" => Self::BuyMul,
-            "buySet" => Self::BuySet,
-            "buyAssign" => Self::BuyAssign,
-            "payTotalAdd" => Self::PayTotalAdd,
-            "payTotalMul" => Self::PayTotalMul,
-            "payTotalCancel" => Self::PayTotalCancel,
-            "tileResolved" => Self::TileResolved,
-            "moveResolved" => Self::MoveResolved,
-            "bankruptResolved" => Self::BankruptResolved,
-            "moveBefore" => Self::MoveBefore,
-            "moveAfter" => Self::MoveAfter,
-            "markerSpend" => Self::MarkerSpend,
-            "markerGain" => Self::MarkerGain,
-            "actGate" => Self::ActGate,
-            "payGate" => Self::PayGate,
-            "moveGate" => Self::MoveGate,
-            "exclusiveUse" => Self::ExclusiveUse,
-            "turnBonusTime" => Self::TurnBonusTime,
-            "turnBaseTime" => Self::TurnBaseTime,
+            "roll" => Self(1),
+            "moveRoll" => Self(2),
+            "turnStart" => Self(3),
+            "pass" => Self(4),
+            "passPlayer" => Self(5),
+            "settleBefore" => Self(6),
+            "settle" => Self(7),
+            "mortgage" => Self(8),
+            "pay" => Self(9),
+            "paid" => Self(10),
+            "bankrupt" => Self(11),
+            "card" => Self(12),
+            "event" => Self(13),
+            "abnormal" => Self(14),
+            "target" => Self(15),
+            "stop" => Self(16),
+            "teleport" => Self(17),
+            "skillTeleport" => Self(18),
+            "stun" => Self(19),
+            "stay" => Self(20),
+            "exile" => Self(21),
+            "forced" => Self(22),
+            "state" => Self(23),
+            "counteracted" => Self(24),
+            "drawOut" => Self(25),
+            "twoCards" => Self(27),
+            "turnStartBefore" => Self(28),
+            "passBefore" => Self(29),
+            "mortgageBefore" => Self(30),
+            "bankruptBefore" => Self(31),
+            "cardAfter" => Self(32),
+            "eventAfter" => Self(33),
+            "settleAfter" => Self(34),
+            "buyBefore" => Self(35),
+            "buyAfter" => Self(36),
+            "buildBefore" => Self(37),
+            "buildAfter" => Self(38),
+            "discardBefore" => Self(39),
+            "discardAfter" => Self(40),
+            "endTurnBefore" => Self(41),
+            "endTurnAfter" => Self(42),
+            "leaveBefore" => Self(43),
+            "leaveAfter" => Self(44),
+            "turnEnd" => Self(45),
+            "drawn" => Self(46),
+            "passTile" => Self(47),
+            "payAfter" => Self(48),
+            "rollAfter" => Self(49),
+            "cardPlayed" => Self(50),
+            "targeted" => Self(51),
+            "payChoose" => Self(52),
+            "turnEndBefore" => Self(53),
+            "turnEndAfter" => Self(54),
+            "payAdd" => Self(55),
+            "payMul" => Self(56),
+            "payAt" => Self(57),
+            "discarded" => Self(58),
+            "deckBeforeGame" => Self(59),
+            "deckAtGameStart" => Self(60),
+            "drew" => Self(61),
+            "reshuffled" => Self(62),
+            "bought" => Self(63),
+            "settleBody" => Self(64),
+            "beforeOut" => Self(65),
+            "teleported" => Self(66),
+            "rollPlan" => Self(67),
+            "abnormalGuard" => Self(68),
+            "immuneAll" => Self(69),
+            "untargetable" => Self(70),
+            "redirect" => Self(71),
+            "effect" => Self(72),
+            "counterChanged" => Self(76),
+            "drewBefore" => Self(77),
+            "flipEffect" => Self(94),
+            "buyGate" => Self(79),
+            "buyAdd" => Self(80),
+            "buyMul" => Self(81),
+            "buySet" => Self(82),
+            "buyAssign" => Self(83),
+            "payTotalAdd" => Self(84),
+            "payTotalMul" => Self(85),
+            "payTotalCancel" => Self(86),
+            "tileResolved" => Self(87),
+            "moveResolved" => Self(88),
+            "bankruptResolved" => Self(89),
+            "moveBefore" => Self(90),
+            "moveAfter" => Self(91),
+            "markerSpend" => Self(92),
+            "markerGain" => Self(93),
+            "actGate" => Self(95),
+            "payGate" => Self(96),
+            "moveGate" => Self(97),
+            "exclusiveUse" => Self(98),
+            "turnBonusTime" => Self(99),
+            "turnBaseTime" => Self(100),
             _ => Self::None,
         }
     }
 
-    /// Which of the three vocabularies this event belongs to. Derived from the
-    /// typed views below -- there is no second list to keep in step.
+    /// Which of the three vocabularies this event belongs to.
+    ///
+    /// Custom (ruleset-declared) ids default to [`EventRole::Hook`]; codes the
+    /// engine raises as [反击] links are listed by number in `CUSTOM_LINKS`.
     pub const fn role(self) -> EventRole {
-        let v = self as i32;
-        if GateKind::from_i32(v).is_some() {
+        let v = self.0;
+        if list_has(GATE_CODES, v) {
             EventRole::Gate
-        } else if ChainKind::from_i32(v).is_some() {
+        } else if list_has(CHAIN_CODES, v) || list_has(CUSTOM_LINKS, v) {
             EventRole::Link
         } else {
             EventRole::Hook
@@ -1949,21 +1945,42 @@ impl TriggerKind {
     }
 }
 
+const fn list_has(list: &[i32], v: i32) -> bool {
+    let mut i = 0;
+    while i < list.len() {
+        if list[i] == v {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Generic gate codes (see [`GateKind`] docs).
+const GATE_CODES: &[i32] = &[68, 69, 70, 71, 79, 95, 96, 97, 98];
+/// Generic chain-link codes (see [`ChainKind`] docs).
+const CHAIN_CODES: &[i32] = &[
+    1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
+    47, 64, 72, 90, 91, 92, 93,
+];
+/// Ruleset-declared custom ids that are also [反击] links (wire 26 / 73 / 74 /
+/// 75 / 78). The engine dispatches them by opaque id; the names live in
+/// `ruleset-core::kind`.
+const CUSTOM_LINKS: &[i32] = &[26, 73, 74, 75, 78];
+
 /// Which vocabulary an event kind belongs to.
 ///
-/// [`TriggerKind`] is the *wire* enum: every event the engine raises, and what
-/// crosses the guest boundary. Cards do not declare against it -- they declare
-/// against one of the three typed views, and the type says what the event is
-/// for:
+/// [`TriggerKind`] is the *wire* id space: every event the engine raises, and
+/// what crosses the guest boundary. Cards declare against one of the three
+/// typed views ([`ChainKind`] / [`HookKind`] / [`GateKind`], aliases of
+/// [`TriggerKind`]); the `On` variant says what the event is for:
 ///
 /// * [`ChainKind`] -- a chain link answers it, so a [反击] window opens.
 /// * [`HookKind`] -- a field-card (`Fx`) settlement point; placed cards run
 ///   automatically, no window.
 /// * [`GateKind`] -- a question posed to placed cards at declaration or at
 ///   resolution (`may this effect name S?` / `does anything land on S?`).
-///
-/// The `matches!` list that used to be `is_hook_only` is now
-/// [`TriggerKind::role`] reading these types.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EventRole {
@@ -1973,506 +1990,6 @@ pub enum EventRole {
     Hook = 1,
     /// A query to placed cards -- no window.
     Gate = 2,
-}
-
-macro_rules! declare_kinds {
-    ($(#[$doc:meta])* $name:ident { $($(#[$vdoc:meta])* $variant:ident = $val:expr,)* }) => {
-        $(#[$doc])*
-        #[repr(i32)]
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum $name {
-            $($(#[$vdoc])* $variant = $val,)*
-        }
-
-        impl $name {
-            /// The wire value, shared with [`TriggerKind`].
-            pub const fn as_i32(self) -> i32 {
-                self as i32
-            }
-
-            pub const fn from_i32(v: i32) -> Option<Self> {
-                Some(match v {
-                    $($val => Self::$variant,)*
-                    _ => return None,
-                })
-            }
-        }
-
-        impl PartialEq<TriggerKind> for $name {
-            fn eq(&self, other: &TriggerKind) -> bool {
-                *self as i32 == *other as i32
-            }
-        }
-
-        impl PartialEq<$name> for TriggerKind {
-            fn eq(&self, other: &$name) -> bool {
-                *self as i32 == *other as i32
-            }
-        }
-    };
-}
-
-declare_kinds! {
-    /// What a chain link answers: the [反击] selectors.
-    ///
-    /// A card declares these on `On::Counteract`. These are the moments at which a
-    /// counter may be played -- an effect being *declared*, not an outcome
-    /// having settled. [`HookKind`] and [`GateKind`] values are deliberately
-    /// absent: a counteraction cannot be offered at a settlement hook or at a gate.
-    ChainKind {
-        /// See [`TriggerKind::Roll`] -- as a chain link a counter may block the
-        /// roll (the dice are not cast yet).
-        Roll = 1,
-        /// See [`TriggerKind::MoveRoll`] -- the [反击] that rerolls the dice
-        /// (`set_move_roll`) answers here.
-        MoveRoll = 2,
-        /// See [`TriggerKind::TurnStart`] -- a counter at the turn's opening
-        /// (after the status ticks).
-        TurnStart = 3,
-        /// See [`TriggerKind::Pass`] -- a counter to 「当你经过…时」 at each
-        /// traversed tile (the mid-route counterpart of [`Self::PassTile`]).
-        Pass = 4,
-        /// See [`TriggerKind::PassPlayer`] -- the end-tile [重叠] [反击]
-        /// (`target` = the player overlapped).
-        PassPlayer = 5,
-        /// See [`TriggerKind::SettleBefore`] -- the 「[触发结算]前」 counter
-        /// (行动阶段 14).
-        SettleBefore = 6,
-        /// See [`TriggerKind::Settle`] -- 「[结算]时」 (行动阶段 15 opening).
-        /// `set_cancelled()` = the settle never happened (no body, no
-        /// `settleAfter`); `tileResolved` still fires.
-        Settle = 7,
-        /// v32: the settle **body** is its own chain link (`docs/TILES.md`), so
-        /// 「replace the body」 (「将本次结算改为…」) and 「the settle never
-        /// happened」 are two separate [反击] targets. Cancelling `Settle` skips
-        /// the body *and* `settleAfter`; cancelling `SettleBody` skips only the
-        /// body and `settleAfter` still runs.
-        SettleBody = 64,
-        /// See [`TriggerKind::Mortgage`] -- a counter after the mortgage applied.
-        Mortgage = 8,
-        /// See [`TriggerKind::Paid`] -- 「[消耗]或[支付]」/「被…收取资金」: the
-        /// window opens on a payer-side loss, after the money moved.
-        Paid = 10,
-        /// See [`TriggerKind::Bankrupt`] -- a counter after the cash-in, before
-        /// the seat is cleared.
-        Bankrupt = 11,
-        /// See [`TriggerKind::Card`] -- the play's [反击] window; also the kind of
-        /// every declared counter link (a counter to a counter is answered here).
-        Card = 12,
-        /// See [`TriggerKind::Event`] -- a counter to the event draw, before it
-        /// resolves.
-        Event = 13,
-        /// See [`TriggerKind::Stop`] -- wire name `stop`; not raised by the
-        /// current engine, kept for wire compatibility.
-        Stop = 16,
-        /// See [`TriggerKind::Teleport`] -- not raised by the current engine;
-        /// kept for wire compatibility.
-        Teleport = 17,
-        /// See [`TriggerKind::SkillTeleport`] -- 「当你使用技能进行传送后」;
-        /// not raised by the current engine, kept for wire compatibility.
-        SkillTeleport = 18,
-        /// See [`TriggerKind::Stun`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        Stun = 19,
-        /// See [`TriggerKind::Stay`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        Stay = 20,
-        /// See [`TriggerKind::Exile`] -- 「任意玩家获得[除外]…时」, raised from
-        /// the grant log (not the landing, which is [`TriggerKind::Abnormal`]).
-        Exile = 21,
-        /// See [`TriggerKind::Forced`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        Forced = 22,
-        /// See [`TriggerKind::State`] -- 「当有其他玩家切换状态时」; not raised
-        /// by the current engine, kept for wire compatibility.
-        State = 23,
-        /// See [`TriggerKind::Counteracted`] -- 「有玩家对你使用[反击]后」; not
-        /// raised by the current engine, kept for wire compatibility.
-        Counteracted = 24,
-        /// See [`TriggerKind::DrawOut`] -- 「回合外受到抽卡效果时」; not raised
-        /// by the current engine, kept for wire compatibility.
-        DrawOut = 25,
-        /// See [`TriggerKind::PassRewardAffected`] -- a counter to the CiRCLE reward
-        /// pick, before the payout.
-        PassRewardAffected = 26,
-        /// See [`TriggerKind::TwoCards`] -- 「当有人同一回合内打出两张卡时」; not
-        /// raised by the current engine, kept for wire compatibility.
-        TwoCards = 27,
-        /// See [`TriggerKind::TurnStartBefore`] -- the 「回合开始前」 half
-        /// (行动阶段 1), before the status ticks.
-        TurnStartBefore = 28,
-        /// See [`TriggerKind::PassBefore`] -- the pre-half of each [经过] step
-        /// (行动阶段 12), before the player arrives.
-        PassBefore = 29,
-        /// See [`TriggerKind::MortgageBefore`] -- a counter that blocks the
-        /// mortgage, before any guard.
-        MortgageBefore = 30,
-        /// See [`TriggerKind::BankruptBefore`] -- a counter before the asset
-        /// cash-in (the seat is already dead -- B3).
-        BankruptBefore = 31,
-        /// See [`TriggerKind::CardAfter`] -- a counter after the play's `Dest`
-        /// handling. No [反击] key of its own for 「被…效果影响」: that is
-        /// [`Self::Effect`].
-        CardAfter = 32,
-        /// See [`TriggerKind::EventAfter`] -- a counter after the event is filed
-        /// away.
-        EventAfter = 33,
-        /// See [`TriggerKind::SettleAfter`] -- 「[结算]后」/「[触发结算]后」
-        /// (行动阶段 16's 「结算后」 half).
-        SettleAfter = 34,
-        /// See [`TriggerKind::BuyBefore`] -- a counter before a buy resolves
-        /// (`docs/PURCHASE.md`).
-        BuyBefore = 35,
-        /// See [`TriggerKind::BuyAfter`] -- a counter after the deed changes hands.
-        BuyAfter = 36,
-        /// See [`TriggerKind::BuildBefore`] -- a counter before a house build pays.
-        BuildBefore = 37,
-        /// See [`TriggerKind::BuildAfter`] -- a counter after the house commits.
-        BuildAfter = 38,
-        /// See [`TriggerKind::DiscardBefore`] -- a counter before a hand discard.
-        DiscardBefore = 39,
-        /// See [`TriggerKind::DiscardAfter`] -- a counter after the card is in the pile.
-        DiscardAfter = 40,
-        /// See [`TriggerKind::EndTurnBefore`] -- a counter at the player's
-        /// end-turn command (auto-skips raise only [`Self::EndTurnAfter`]).
-        EndTurnBefore = 41,
-        /// See [`TriggerKind::EndTurnAfter`] -- a counter on any turn end.
-        EndTurnAfter = 42,
-        /// See [`TriggerKind::LeaveBefore`] -- a counter before a forfeit.
-        LeaveBefore = 43,
-        /// See [`TriggerKind::LeaveAfter`] -- a counter after the player is cleared.
-        LeaveAfter = 44,
-        /// The effect declaration itself -- the [反击] key for 「被…效果影响」.
-        Effect = 72,
-        /// See [`TriggerKind::HouseAdded`] -- 「盖房」, after the house count is written.
-        HouseAdded = 75,
-        /// See [`TriggerKind::FireSpent`] -- 「每当你消耗火罐时」, after the spend commits.
-        FireSpent = 73,
-        /// See [`TriggerKind::SkillUsed`] -- 「使用自己原有的技能（2）时」, after the press.
-        SkillUsed = 74,
-        /// v43: the move head (`SETTLE-STAGES.md` §7 「移动前」) -- a counteraction
-        /// that cancels or alters the move answers here, once the plan is fixed
-        /// and before the first step / the teleport.
-        MoveBefore = 90,
-        /// v43: the move tail (行动阶段 13 「移动后」/「主要移动结束时」) --
-        /// after `passPlayer`, before `settleBefore`, for every completed move.
-        MoveAfter = 91,
-        /// v43: one [经过] step (`SETTLE-STAGES.md` §4 M4) -- the chain
-        /// counterpart of [`TriggerKind::PassTile`], so a [反击] that answers
-        /// 「当你经过…时」 can target a mid-route pass rather than the end-tile
-        /// [重叠]. Same moment as [`Self::Pass`]; `PassBefore` is the pre-half.
-        PassTile = 47,
-        /// v44: a marker spend (user ruling 2026-10-07) -- its own [反击]
-        /// window, opened **before** the markers move. No shipped card listens
-        /// yet; a fixture in `rules/fixtures/test-cards` pins the shape.
-        MarkerSpend = 92,
-        /// v44: a marker gain, same window shape as [`Self::MarkerSpend`].
-        MarkerGain = 93,
-    }
-}
-
-declare_kinds! {
-    /// What a placed card can hook: everything except the [`GateKind`] questions.
-    ///
-    /// A card declares these on `On::Hook`. The engine runs every *placed*
-    /// card's entry against them automatically -- no declaration, no prompt.
-    ///
-    /// This **overlaps** [`ChainKind`] on purpose. A kind may be both a [反击]
-    /// point and a hook point -- `SettleBefore` is a moment at which a hand card
-    /// can be played *and* a field card can counteract -- and the two declarations
-    /// are distinct entries (`On::Counteract` vs `On::Hook`). The engine's dispatch
-    /// has always worked this way; the types now say so. Kinds that are *only*
-    /// hooks (the settlement / field-card points) simply have no [`ChainKind`]
-    /// counterpart.
-    HookKind {
-        /// See [`TriggerKind::Roll`] -- a field card runs here automatically.
-        Roll = 1,
-        /// See [`TriggerKind::MoveRoll`].
-        MoveRoll = 2,
-        /// See [`TriggerKind::TurnStart`].
-        TurnStart = 3,
-        /// See [`TriggerKind::Pass`] -- each [经过] step.
-        Pass = 4,
-        /// See [`TriggerKind::PassPlayer`] -- the end-tile [重叠].
-        PassPlayer = 5,
-        /// See [`TriggerKind::SettleBefore`] -- 「[触发结算]前」 (行动阶段 14).
-        SettleBefore = 6,
-        /// See [`TriggerKind::Settle`] -- 「[结算]时」 (行动阶段 15 opening).
-        Settle = 7,
-        /// See [`TriggerKind::Mortgage`].
-        Mortgage = 8,
-        /// See [`TriggerKind::Pay`] -- settlement hook only; a counteraction
-        /// cannot be offered here (the payment's [反击] key is
-        /// [`TriggerKind::Effect`]).
-        Pay = 9,
-        /// See [`TriggerKind::Paid`].
-        Paid = 10,
-        /// See [`TriggerKind::Bankrupt`].
-        Bankrupt = 11,
-        /// See [`TriggerKind::Card`].
-        Card = 12,
-        /// See [`TriggerKind::Event`].
-        Event = 13,
-        /// See [`TriggerKind::Abnormal`] -- settlement hook only (the [反击]
-        /// key is [`TriggerKind::Effect`] with `kind: "abnormal"`).
-        Abnormal = 14,
-        /// See [`TriggerKind::Target`] -- settlement hook only (same: the [反击]
-        /// key is [`TriggerKind::Effect`]).
-        Target = 15,
-        /// See [`TriggerKind::Stop`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        Stop = 16,
-        /// See [`TriggerKind::Teleport`] -- not raised by the current engine;
-        /// kept for wire compatibility.
-        Teleport = 17,
-        /// See [`TriggerKind::SkillTeleport`] -- not raised by the current
-        /// engine; kept for wire compatibility.
-        SkillTeleport = 18,
-        /// See [`TriggerKind::Stun`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        Stun = 19,
-        /// See [`TriggerKind::Stay`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        Stay = 20,
-        /// See [`TriggerKind::Exile`] -- 「任意玩家获得[除外]…时」.
-        Exile = 21,
-        /// See [`TriggerKind::Forced`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        Forced = 22,
-        /// See [`TriggerKind::State`] -- not raised by the current engine; kept
-        /// for wire compatibility.
-        State = 23,
-        /// See [`TriggerKind::Counteracted`] -- not raised by the current
-        /// engine; kept for wire compatibility.
-        Counteracted = 24,
-        /// See [`TriggerKind::DrawOut`] -- not raised by the current engine;
-        /// kept for wire compatibility.
-        DrawOut = 25,
-        /// See [`TriggerKind::PassRewardAffected`].
-        PassRewardAffected = 26,
-        /// See [`TriggerKind::TwoCards`] -- not raised by the current engine;
-        /// kept for wire compatibility.
-        TwoCards = 27,
-        /// See [`TriggerKind::TurnStartBefore`] -- 「回合开始前」 (行动阶段 1).
-        TurnStartBefore = 28,
-        /// See [`TriggerKind::PassBefore`].
-        PassBefore = 29,
-        /// See [`TriggerKind::MortgageBefore`].
-        MortgageBefore = 30,
-        /// See [`TriggerKind::BankruptBefore`].
-        BankruptBefore = 31,
-        /// See [`TriggerKind::CardAfter`].
-        CardAfter = 32,
-        /// See [`TriggerKind::EventAfter`].
-        EventAfter = 33,
-        /// See [`TriggerKind::SettleAfter`] -- 「[结算]后」/「[触发结算]后」.
-        SettleAfter = 34,
-        /// See [`TriggerKind::BuyBefore`].
-        BuyBefore = 35,
-        /// See [`TriggerKind::BuyAfter`].
-        BuyAfter = 36,
-        /// See [`TriggerKind::BuildBefore`].
-        BuildBefore = 37,
-        /// See [`TriggerKind::BuildAfter`].
-        BuildAfter = 38,
-        /// See [`TriggerKind::DiscardBefore`].
-        DiscardBefore = 39,
-        /// See [`TriggerKind::DiscardAfter`].
-        DiscardAfter = 40,
-        /// See [`TriggerKind::EndTurnBefore`].
-        EndTurnBefore = 41,
-        /// See [`TriggerKind::EndTurnAfter`].
-        EndTurnAfter = 42,
-        /// See [`TriggerKind::LeaveBefore`].
-        LeaveBefore = 43,
-        /// See [`TriggerKind::LeaveAfter`].
-        LeaveAfter = 44,
-        /// See [`TriggerKind::TurnEnd`] -- a turn just ended
-        /// (any player's). Hook-only: no [`ChainKind`] counterpart.
-        TurnEnd = 45,
-        /// See [`TriggerKind::Drawn`] -- the drawn card's own hook (it is still
-        /// in hand, named on `t.card`). Hook-only.
-        Drawn = 46,
-        /// See [`TriggerKind::PassTile`] -- the [经过] step (行动阶段 12).
-        /// Also a [`ChainKind`] (v43).
-        PassTile = 47,
-        /// See [`TriggerKind::PayAfter`] -- the 「资金变动」 hook (规则书 支付阶段 7).
-        /// Hook-only.
-        PayAfter = 48,
-        /// See [`TriggerKind::RollAfter`] -- a hook that may
-        /// rewrite the face (`set_move_roll`). Hook-only.
-        RollAfter = 49,
-        /// See [`TriggerKind::CardPlayed`] -- a card's hand
-        /// effect resolved. Hook-only.
-        CardPlayed = 50,
-        /// See [`TriggerKind::Targeted`] -- the player was named.
-        /// Hook-only.
-        Targeted = 51,
-        /// See [`TriggerKind::PayChoose`] -- may modify/decline
-        /// the payment. Hook-only.
-        PayChoose = 52,
-        /// See [`TriggerKind::TurnEndBefore`] -- first step of a turn end,
-        /// before the `On::AtEnd` callbacks and the status wear-off. Hook-only.
-        TurnEndBefore = 53,
-        /// See [`TriggerKind::TurnEndAfter`] -- the scheduled turn-end callbacks
-        /// run here. Hook-only.
-        TurnEndAfter = 54,
-        /// See [`TriggerKind::PayAdd`] -- 支付阶段 2, fixed ± on each share.
-        /// Hook-only.
-        PayAdd = 55,
-        /// See [`TriggerKind::PayMul`] -- 支付阶段 4, × on each share. Hook-only.
-        PayMul = 56,
-        /// See [`TriggerKind::PayAt`] -- after `PayChoose`, before the `pay`
-        /// [反击] window. Hook-only.
-        PayAt = 57,
-        /// See [`TriggerKind::Discarded`] -- this card (on
-        /// `t.card`) just went to the discard pile. Hook-only.
-        Discarded = 58,
-        /// See [`TriggerKind::DeckBeforeGame`] -- 「游戏开始前」, dispatched to
-        /// every effect source. Hook-only.
-        DeckBeforeGame = 59,
-        /// See [`TriggerKind::DeckAtGameStart`] -- 「游戏开始时」. Hook-only.
-        DeckAtGameStart = 60,
-        /// See [`TriggerKind::Drew`] -- the per-draw field-card point (one raise
-        /// per single card). Hook-only.
-        Drew = 61,
-        /// See [`TriggerKind::Reshuffled`] -- a discard pile was shuffled back.
-        /// Hook-only.
-        Reshuffled = 62,
-        /// See [`TriggerKind::Bought`] -- a player became the owner
-        /// of `t.tile` (buy or auction). Hook-only.
-        Bought = 63,
-        /// The settle **body** (`docs/TILES.md`) -- a field card placed on the
-        /// tile may `set_cancelled()` here to *replace* the body (Parking Space,
-        /// 笑容大游行). The same kind is also a [`ChainKind`] (v32), so a hand
-        /// card may [反击] the body as its own link.
-        SettleBody = 64,
-        /// See [`TriggerKind::BeforeOut`] -- a player is about to leave the game.
-        /// Hook-only.
-        BeforeOut = 65,
-        /// See [`TriggerKind::Teleported`] -- a teleport finished. Hook-only
-        /// (the teleport's [反击] key is [`TriggerKind::MoveBefore`]).
-        Teleported = 66,
-        /// See [`TriggerKind::RollPlan`] -- the main-move `RollPlan` pass, before
-        /// the dice. Hook-only (`On::RollPlan` is its own entry).
-        RollPlan = 67,
-        /// See [`TriggerKind::FireSpent`] -- 「每当你消耗火罐时」.
-        FireSpent = 73,
-        /// See [`TriggerKind::SkillUsed`] -- 「使用自己原有的技能（2）时」.
-        SkillUsed = 74,
-        /// See [`TriggerKind::HouseAdded`] -- a house was just added to `t.tile`.
-        HouseAdded = 75,
-        /// v50: a named on-card counter on a placed instance was just written.
-        /// `t.name` is the counter name ([`counter::CRYSTALS`], [`counter::CP`],
-        /// …); filter on it in the residual guard (`trigger::name() == …`).
-        /// Replaces the v29 `CrystalsChanged` (76) and v36 `CpChanged` (78)
-        /// hooks (same payload plus the name). Hook-only.
-        CounterChanged = 76,
-        /// See [`TriggerKind::DrewBefore`] -- the per-draw *replacement* point
-        /// (「此次加手视为抽卡动作」). Hook-only.
-        DrewBefore = 77,
-        /// See [`TriggerKind::ChargePaying`] -- before one fire spend commits;
-        /// cancel to substitute the cost. Hook-only.
-        ChargePaying = 78,
-        /// See [`TriggerKind::FlipEffect`] -- a face-down counter is being
-        /// flipped face-up. Hook-only.
-        FlipEffect = 94,
-        /// v61: see [`TriggerKind::TurnBonusTime`].
-        TurnBonusTime = 99,
-        /// v61: see [`TriggerKind::TurnBaseTime`].
-        TurnBaseTime = 100,
-        /// v40: the buy price's first modifier stage (`docs/PURCHASE.md`) --
-        /// fixed ±, before [`Self::BuyMul`] / [`Self::BuySet`]. `t.value` /
-        /// `set_price` on the run; each stage floors the price at 0.
-        BuyAdd = 80,
-        /// v40: the buy price's × stage, after [`Self::BuyAdd`].
-        BuyMul = 81,
-        /// v40: the buy price's free / fixed stage, after [`Self::BuyMul`].
-        BuySet = 82,
-        /// v40: the deal is committing (before `bought`); rewrite
-        /// `deal_owner` / `deal_houses` / `deal_mortgaged`.
-        BuyAssign = 83,
-        /// v42: the payment command's **pre-split** fixed ± stage (「分摊前」,
-        /// 规则书 支付阶段 2 on the command total) -- see
-        /// [`TriggerKind::PayTotalAdd`]. Command-wide, before any 「[分摊]」
-        /// divides it; the per-share stages are `PayAdd` / `PayMul` /
-        /// `PayChoose` / `PayAt`.
-        PayTotalAdd = 84,
-        /// v42: the pre-split × stage (规则书 支付阶段 4), after
-        /// [`Self::PayTotalAdd`].
-        PayTotalMul = 85,
-        /// v42: the pre-split cancel (规则书 支付阶段 5's 「取消支付」 on the
-        /// command), after [`Self::PayTotalMul`]; `set_cancelled()` drops the
-        /// whole command.
-        PayTotalCancel = 86,
-        /// v42: terminal -- the tile's settlement is fully resolved (also when
-        /// it was cancelled). See [`TriggerKind::TileResolved`].
-        TileResolved = 87,
-        /// v42: terminal -- the move (and any settle it asked for) is done.
-        /// See [`TriggerKind::MoveResolved`].
-        MoveResolved = 88,
-        /// v42: terminal -- the bankruptcy is fully resolved. See
-        /// [`TriggerKind::BankruptResolved`].
-        BankruptResolved = 89,
-        /// v43: the move head (`SETTLE-STAGES.md` §7 「移动前」) -- every move
-        /// (walk or teleport, main or card-driven, settling or not) once its
-        /// plan is fixed and before the first step / the teleport. Also a
-        /// [`ChainKind`]: counteractions that cancel or alter the move go here.
-        MoveBefore = 90,
-        /// v43: the move tail (行动阶段 13 「移动后」/「主要移动结束时」) --
-        /// after `passPlayer`, before `settleBefore`, for every completed move
-        /// including a 「不触发结算」 one. Also a [`ChainKind`].
-        MoveAfter = 91,
-        // PassTile (47) was already a HookKind; v43 makes it a [`ChainKind`]
-        // too (see ChainKind).
-    }
-}
-
-declare_kinds! {
-    /// Questions posed to placed cards, at declaration or at resolution.
-    ///
-    /// A card declares these on `On::Gate`. These are not occurrences -- nothing
-    /// "happened" -- so they are not triggers and cannot be [反击]'d. They ask
-    /// a placed card whether an effect may name someone, or whether anything
-    /// lands on them.
-    GateKind {
-        /// An abnormal effect is about to hit `t.target`; block with
-        /// `trigger::set_cancelled()`. Then the `effect` [反击] window opens on
-        /// the declaration (if someone else caused it), and a landing is
-        /// reported by the [`TriggerKind::Abnormal`] hook -- that hook is the
-        /// outcome and cannot be [反击]'d.
-        AbnormalGuard = 68,
-        /// Is `t.player_id` untouchable by `t.by_card`'s effects? Asked at
-        /// **resolution** -- the effect is named, the chain forms, and it lands
-        /// as nothing. Claim with `trigger::set_cancelled()`.
-        ImmuneAll = 69,
-        /// `t.by_card`'s card is about to name `t.player_id`. Asked at
-        /// **declaration** -- block and the effect cannot name them at all, so
-        /// no chain forms against them. Claim with `trigger::set_cancelled()`.
-        Untargetable = 70,
-        /// A single-target effect is about to name `t.target`; a placed card
-        /// takes the hit with `trigger::set_target(player_id)`. **Declaration
-        /// re-naming**: the recipient set is settled before the chain opens, so
-        /// whoever holds the name is the one who answers.
-        Redirect = 71,
-        /// v40: may `t.player_id` buy `t.tile` at all (`docs/PURCHASE.md`)?
-        /// A placed card refuses with `trigger::set_cancelled()` plus a
-        /// reason. Runs for every [`BuyKind`], Force included.
-        BuyGate = 79,
-        /// v58: **status gate** (`rules/status`). May `t.player_id` use [主动]
-        /// skills / 手卡的[手]效果? Answered by `On::Gate` entries that are
-        /// **CEL-only** (no residual guard): the host evaluates the condition
-        /// natively wherever the question is asked, including pure reads.
-        ActGate = 95,
-        /// v58: may `t.player_id` pay or receive payment (「无法收付款」)?
-        /// CEL-only, like [`Self::ActGate`].
-        PayGate = 96,
-        /// v58: may `t.player_id` make the [主要移动] ([无法移动])? CEL-only.
-        MoveGate = 97,
-        /// v59: **exclusive-use gate**. May `t.player_id` play this exclusive
-        /// card? CEL-only. See [`TriggerKind::ExclusiveUse`].
-        ExclusiveUse = 98,
-    }
 }
 
 pub fn pack(ptr: u32, len: u32) -> i64 {

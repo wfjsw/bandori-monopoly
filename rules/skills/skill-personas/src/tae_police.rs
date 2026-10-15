@@ -26,7 +26,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::PassRewardAffected], card_sdk::pre::MINE, None, on_circle),
+        On::Hook(&[ruleset_core::kind::PassRewardAffected], card_sdk::pre::MINE, None, on_circle),
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
         // applicability (residual guard; `pre::MINE` already states the actor).
         On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_has_rabbits), on_pass),
@@ -34,7 +34,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         // [火罐]将其抵消」 -- a [反击] from the bound skill (always in play), so it
         // must be offered from the field (`COUNTERACT_FROM_FIELD`, the same shape
         // as 冰川纱夜（2）'s move-length counteraction).
-        On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], "", Some(can_negate), negate),
+        On::Counteract(&[ChainKind::Card, ruleset_core::kind::SkillUsed], "", Some(can_negate), negate),
     ],
 )
     .props(&[

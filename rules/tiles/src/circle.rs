@@ -192,7 +192,7 @@ pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
     // `value == 0` and correctly does not fire there. Raised on both paths
     // rather than only the choice, so a reward rewrite applies however the
     // option was arrived at.
-    if ctx::raise(mover, TriggerKind::PassRewardAffected, pick)? {
+    if ctx::raise(mover, ruleset_core::kind::PassRewardAffected, pick)? {
         if pick == REWARD_CARD {
             ctx::log(
                 mover,

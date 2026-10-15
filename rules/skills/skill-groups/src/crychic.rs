@@ -31,7 +31,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
         On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
         On::Hook(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
-        On::Hook(&[HookKind::PassRewardAffected], "", Some(in_lock), force_card),
+        On::Hook(&[ruleset_core::kind::PassRewardAffected], "", Some(in_lock), force_card),
         // 「CRYCHIC variants may not use base character's exclusives」 -- a
         // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
         // is the generic own/base rule; this entry closes the base case for

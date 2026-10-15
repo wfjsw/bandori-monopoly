@@ -112,7 +112,7 @@ impl CardInfo {
             .iter()
             .enumerate()
             .filter(|(_, o)| {
-                o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&(t as i32)))
+                o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&t.as_i32()))
             })
             .map(|(i, _)| i as i32)
             .collect()
@@ -584,7 +584,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     let mut out = Vec::new();
     for (ci, c) in cards.iter().enumerate() {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
                 out.push((ci as i32, ei as i32));
             }
         }
@@ -601,7 +601,7 @@ pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
             if o.kind != OnKind::Gate as i32 {
                 continue;
             }
-            if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k as i32 == t)) {
+            if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k.as_i32() == t)) {
                 continue;
             }
             if o.has_guard || o.pre.is_none() {
@@ -986,7 +986,7 @@ impl Ruleset {
     /// all when the answer is no -- with `StubRules`, or at a kind nothing
     /// listens to, that is every raise.
     pub fn declares(&self, kind: crate::TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
     }
 
@@ -1037,7 +1037,7 @@ impl Ruleset {
     /// never scans the entry table and never builds a `Run` for a card that
     /// cannot answer.
     pub fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v)
             && self
                 .inner
@@ -1048,7 +1048,7 @@ impl Ruleset {
 
     /// Hook/gate twin of [`Self::counteracts_to`].
     pub fn hooks_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v)
             && self
                 .inner
@@ -2086,7 +2086,7 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let mut i = 0;
         while let Some(c) = self.card(i) {
             for (ei, o) in c.on.iter().enumerate() {
-                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&(kind as i32)) {
+                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
                     entries.push((i, ei as i32));
                 }
             }
@@ -5167,7 +5167,7 @@ mod gate_tests {
     fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
         ManifestOn {
             kind: OnKind::Gate as i32,
-            triggers: vec![crate::TriggerKind::PayGate as i32],
+            triggers: vec![crate::TriggerKind::PayGate.as_i32() as i32],
             pre: pre.map(str::to_string),
             has_guard,
             messages: vec![],

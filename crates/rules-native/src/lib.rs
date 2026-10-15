@@ -190,7 +190,7 @@ impl NativeRulesHandle {
     }
 
     pub fn declares(&self, kind: TriggerKind) -> bool {
-        let v = kind as i32;
+        let v = kind.as_i32();
         (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
     }
 

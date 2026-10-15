@@ -39,6 +39,8 @@ pub mod counter {
 pub mod roster;
 /// Generated `(key -> ordinal)` tables restoring `data/*.json` order.
 pub mod roster_order;
+/// Ruleset-declared raise-point kind ids and tile kind/class strings.
+pub mod kind;
 
 /// State-map keys that name this ruleset's pots / statuses.
 pub mod state_key {
@@ -177,7 +179,7 @@ pub fn spend_charge(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
     }
-    if !card_sdk::ctx::raise(player_id, card_sdk::abi::TriggerKind::ChargePaying, n)? {
+    if !card_sdk::ctx::raise(player_id, crate::kind::ChargePaying, n)? {
         return Ok(true);
     }
     let (p, l) = raw::mj(why);

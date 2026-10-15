@@ -31,7 +31,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
         // dice, so there are not two faces to subtract.
         On::Hook(&[HookKind::RollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
-        On::Hook(&[HookKind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
+        On::Hook(&[ruleset_core::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
         On::Hook(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
     ],
