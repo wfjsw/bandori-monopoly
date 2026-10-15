@@ -23,6 +23,16 @@
      behind the bottom one). */
   overflow: hidden;
 }
+/* Too many cards for the width even at the tightest overlap (a phone): the
+   sheet scrolls sideways; vertical stays clipped. The row keeps its natural
+   width, centred when it fits (auto margins), left-aligned when it doesn't. */
+.sheet {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.sheet::-webkit-scrollbar { display: none; }
 /* Retracted, the row rides up so only its bottom `--field-peek` px show.
    That zone is the face's own bottom (Card `.field .title` 38px + `.marks`
    18px + the face's 4px padding = 60px) -- name and markers in view either
@@ -32,7 +42,9 @@
   align-items: stretch;
   justify-content: center;
   pointer-events: none;
-  max-width: 100%;
+  flex: none;
+  margin-inline: auto;
+  padding-inline: 6px;
   transform: translateY(calc(-100% + var(--field-peek)));
   transition: transform var(--dur-slow) var(--ease-sheet);
 }

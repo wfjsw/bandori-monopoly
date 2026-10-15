@@ -7,7 +7,7 @@
 // info is the shared one: the owner's colour on the frame, the standing hover
 // preview, click-to-inspect.
 
-import { memo, useState, type CSSProperties } from "react";
+import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useDockRaise } from "../../hooks/dock";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
@@ -23,13 +23,21 @@ import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { t as tr } from "../../i18n/t";
 import s from "./FieldSheet.module.css";
 
+/** Card face width (px) and the step bounds of the overlapped row. */
+const CARD_W = 120;
+const SLOT_MAX = 112;
+const SLOT_MIN = 44;
+
 /**
  * The straight row spread (`--row-slot`: the px step between card centres),
- * tightening with the count so the cards always fit the centre column. The
- * field row has no arc -- unlike the hand's `fanArc`.
+ * tightening with the count so the cards fit the sheet's `width`. Below
+ * `SLOT_MIN` the cards stop overlapping further (they would be too thin to tap)
+ * and the sheet scrolls sideways instead. The field row has no arc -- unlike
+ * the hand's `fanArc`.
  */
-export function rowSpread(n: number): Record<string, string> {
-  const slot = n > 1 ? Math.min(112, 480 / (n - 1)) : 0;
+export function rowSpread(n: number, width = 480 + CARD_W): Record<string, string> {
+  const fit = n > 1 ? (width - CARD_W) / (n - 1) : 0;
+  const slot = n > 1 ? Math.max(SLOT_MIN, Math.min(SLOT_MAX, fit)) : 0;
   return { "--row-slot": `${slot.toFixed(1)}px` };
 }
 
@@ -38,6 +46,19 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const names = namesOf(S);
   const dock = useDockRaise();
   const hoverSeat = useHoverSeat();
+  // The sheet's real width: on a phone the centre column is far narrower than
+  // a desktop one, so the row spread follows it (and scrolls when still too long).
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(480 + CARD_W);
+  const any = S.players.some((x) => (x.field ?? []).length) || (S.eventActive ?? []).length > 0;
+  useEffect(() => {
+    const el = sheetRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    ro.observe(el);
+    setWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, [any]);
   // Touch screens: the first tap only highlights a card (like the hand); a
   // second tap on the same card opens its detail popup.
   const [picked, setPicked] = useState<number | null>(null);
@@ -54,8 +75,8 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   const total = rows.reduce((a, [, f]) => a + f.length, 0) + events.length;
   if (!total) return null;
   return (
-    <div className={cx(s.sheet, dock.raised && s.up)} {...dock.hover}>
-      <div className={s.row} style={rowSpread(total) as CSSProperties}>
+    <div ref={sheetRef} className={cx(s.sheet, dock.raised && s.up)} {...dock.hover}>
+      <div className={s.row} style={rowSpread(total, width) as CSSProperties}>
         {rows.flatMap(([i, f]) => f.map((fc) => {
           // The frame takes the owner's colour (`fc.owner`), not the field it
           // happens to sit on -- a borrowed card still reads as its owner's.
