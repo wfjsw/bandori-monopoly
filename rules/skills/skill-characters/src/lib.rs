@@ -249,11 +249,3 @@ pub const CARDS: &[CardDef] = &[
     MUMEI_STREAMER,
     KAEDE_SUPPORT,
 ];
-
-// Kani-only direct-call exports (ppcost). Production builds omit these.
-
-#[cfg(kani)]
-#[inline(always)]
-pub fn run_kani(player_id: i32) -> card_sdk::Asked {
-    run(player_id)
-}
