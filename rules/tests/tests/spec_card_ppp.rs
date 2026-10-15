@@ -428,7 +428,7 @@ fn better_sound_contract() {
         frame(
             &pre,
             t.world(),
-            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "state:P0:fire", "turn."],
+            &["hand:P0", "draw:P0", "discard:P0", "pos:P0", "state:P0:charge", "turn."],
         )
     })
     .expect("C-PPP-better-sound-01");
