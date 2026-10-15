@@ -36,7 +36,7 @@ pub fn data() -> Arc<GameData> {
     DATA.get_or_init(|| {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
         let roster = Roster::from_fixture(&std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/game-core/tests/fixtures/roster.json"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/roster.json"),
         )
         .expect("roster fixture"))
         .expect("roster fixture parses");
