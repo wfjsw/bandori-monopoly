@@ -541,3 +541,55 @@ pub fn band_idol_03_no_reward_formula() {
         "empty reward log is the required shape"
     );
 }
+// ===========================================================================
+// C-PP-first-accident-02 (moved from proofs/pp.rs — needs `skills-characters`
+// for the 丸山彩 (2) body; the pp unit's features do not compile that crate,
+// so the harness was cfg'd out and `cargo kani` "Failed to match" it).
+// 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」
+// ===========================================================================
+
+/// Shared body at a concrete seat.
+fn first_accident_02_iff_at(me: i32) {
+    skills_pp_world(me);
+    let pre_amount = kani::any();
+    kani::assume(pre_amount >= 1 && pre_amount <= 5_000);
+    let pre_up = world::with_world(|w| w.fans_pos[me as usize]);
+    world::with_world_mut(|w| {
+        w.trig_player = me;
+        w.trig_value = pre_amount;
+        w.pay_amount = pre_amount;
+    });
+    // 1) play 初次演出事故 — sets the skillBlock token
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), me));
+    let blocked = world::with_world(|ww| {
+        ww.key_get(me, crate::intern::intern("skillBlock:Pastel✽Palettes")) > 0
+            || ww.key_get(me, crate::intern::intern("skillBlock")) > 0
+    });
+    kani::cover!(blocked, "skillBlock token written");
+    crate::kassert!(blocked, "C-PP-first-accident-02: skillBlock token must be set");
+
+    // 2) 丸山彩 (2) must refuse
+    let pre_amount2 = world::with_world(|ww| ww.pay_amount);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
+    let post = world::snapshot();
+    crate::kassert!(
+        post.pay_amount == pre_amount2,
+        "C-PP-first-accident-02: PP (2) must not rewrite the pay amount"
+    );
+    crate::kassert!(
+        post.fans_pos[me as usize] == pre_up,
+        "C-PP-first-accident-02: PP (2) must not flip fans"
+    );
+}
+
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn first_accident_02_blocks_pp_skill_2_iff() {
+    first_accident_02_iff_at(0);
+}
+
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn first_accident_02_blocks_pp_skill_2_user1_iff() {
+    first_accident_02_iff_at(1);
+}
