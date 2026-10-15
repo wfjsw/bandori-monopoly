@@ -68,7 +68,7 @@
   "misaki_card_moved": "{{who}} [teleported] to {{tile}} (Misaki)",
   "misaki_card_pay": "(Misaki)",
   "misaki_card_title": "The other me",
-  "smile_parade_agent": "Settled as the 弦卷集团 agent on {{tile}}",
+  "smile_parade_agent": "Settled as the Tsurumaki Group agent on {{tile}}",
   "smile_parade_decayed": "{{who}}'s Smile Parade ran out of miracle crystals and went to the discard",
   "smile_parade_move": "Move this card to {{tile}} and clear its crystals?",
   "smile_parade_moved": "Moved to {{tile}}; crystals cleared",

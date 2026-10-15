@@ -2,7 +2,7 @@
 // fallback for the old layout engines) and the two scroll behaviours the UI
 // needs (pin to bottom on new content; snap to top when the subject changes).
 
-import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useLatestRef } from "./latest.ts";
 
 type ElementLike = RefObject<HTMLElement | null> | (() => HTMLElement | null | undefined);
@@ -54,9 +54,12 @@ export function useResizeObserver(
 }
 
 /**
- * Keep the scroller pinned to its bottom while `enabled` (the console output,
- * the match log). Re-pins when any of `inputs` changes -- the content whose
- * arrival is the reason to follow. `inputs` must have a constant length.
+ * Follow new content at the bottom of the scroller (the console output, the
+ * match log) while `enabled` -- but only if the user is already at the end;
+ * once they scroll up to read, new content leaves their position alone, and
+ * scrolling back to the end resumes following. Re-checks when any of `inputs`
+ * changes -- the content whose arrival is the reason to follow. `inputs` must
+ * have a constant length.
  */
 export function useScrollFollow(
   ref: RefObject<HTMLElement | null>,
@@ -64,10 +67,22 @@ export function useScrollFollow(
   enabled = true,
 ): void {
   const live = useLatestRef({ ref, enabled });
+  const atEnd = useRef(true);
+  const bound = useRef<HTMLElement | null>(null);
+  const wasOn = useRef(enabled);
   useEffect(() => {
     const { ref: r, enabled: on } = live.current;
     const el = r.current;
-    if (on && el) el.scrollTop = el.scrollHeight;
+    if (el && bound.current !== el) {
+      bound.current = el;
+      // A hidden pane (display: none) has no height; its events say nothing.
+      el.addEventListener("scroll", () => {
+        if (el.clientHeight > 0) atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 2;
+      });
+    }
+    if (on && !wasOn.current) atEnd.current = true; // re-enabled: jump to the end
+    wasOn.current = on;
+    if (on && el && atEnd.current) el.scrollTop = el.scrollHeight;
     // `inputs` is the caller's dep list (constant length).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...inputs, enabled, live]);
