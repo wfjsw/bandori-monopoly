@@ -121,13 +121,18 @@ pub async fn stream(
         let back = r.stream_opened(member);
         (r.tx.subscribe(), back)
     };
-    if back {
-        // Room lock dropped: `member_back` is a worker round-trip.
-        if let Some(m) = room.lock().unwrap().match_handle() {
-            if let Err(e) = m.member_back(member) {
-                eprintln!("member_back failed: {e}");
-            }
+    // Every (re)connect asks the engine to hand the seat back, not only when
+    // presence says the member was away: presence is in-memory, so a seat put
+    // on 托管 before a restart (or by a path presence never saw) would
+    // otherwise stay on the AI. The engine ignores it for a seat not on AI.
+    // Room lock dropped: `member_back` is a worker round-trip.
+    let handle = room.lock().unwrap().match_handle();
+    if let Some(m) = handle {
+        match m.member_back(member) {
+            Ok(()) => room.lock().unwrap().notify(),
+            Err(e) => eprintln!("member_back failed: {e}"),
         }
+    } else if back {
         room.lock().unwrap().notify();
     }
     let (tx, out) = mpsc::channel::<Event>(256);
