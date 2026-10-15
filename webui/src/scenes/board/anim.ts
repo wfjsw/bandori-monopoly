@@ -69,6 +69,9 @@ type Item = { ev: MatchEvent } | { mark: StageMark };
 
 /** How long the new-turn announcement stays on screen. */
 const TURN_MS = 1500;
+/** Chain overlay pacing: a link joining, a link settling. */
+const CHAIN_LINK_MS = 700;
+const CHAIN_RESOLVE_MS = 900;
 
 /** The log label key of an engine stage number. */
 function stageKey(step: number): string {
@@ -112,6 +115,17 @@ export class Animator {
    *  cards-in-play row slides out and lights up (Master Duel's activated-card
    *  cue). `uid` is the field instance. */
   pulse: { uid: number; id: number; ms: number } | null = null;
+  /** The [反击] chain under construction / resolving (Master Duel style): the
+   *  links so far (1 = the initiating card), the link settling now, and the
+   *  links already settled. `shown` turns on with the second link -- a lone
+   *  initiating card is not a chain. */
+  chain: {
+    links: { seq: number; card: string; owner: number; fresh: number }[];
+    shown: boolean;
+    resolving: boolean;
+    active: number;
+    done: number[];
+  } | null = null;
   hop: { playerId: number; id: number } | null = null;
   /** The walk under way: the tiles still ahead (the last is the landing).
    *  The board lights them so the destination and path read before and
@@ -574,6 +588,70 @@ export class Animator {
     }
   }
 
+  /** Wait for the card face on the flash to leave (its hold is a timer). */
+  private async flashGone(): Promise<void> {
+    while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
+  }
+
+  /** A link joins the chain: the card flashes (the initiating card first),
+   *  the second link raises the Chain banner, then the card is appended to the
+   *  chain stack with the link animation. */
+  private async chainLink(e: MatchEvent, fast: boolean): Promise<void> {
+    const seq = e.value;
+    const quiet = this.noFlash() || fast;
+    if (seq <= 1 || !this.chain) this.chain = { links: [], shown: false, resolving: false, active: 0, done: [] };
+    const link = { seq, card: e.card, owner: e.playerId, fresh: ++this.seq };
+    if (!quiet) {
+      await this.cardFlash({ ...e, kind: "counter", msg: e.msg, results: [], negated: false }, false);
+      await this.flashGone();
+      if (this.disposed) return;
+    }
+    this.chain.links = [...this.chain.links, link];
+    if (seq >= 2) {
+      if (!this.chain.shown && !quiet) {
+        if (!fast) sfx("prompt");
+        this.showBanner(tr("anim.chain"));
+        await this.nap(900);
+      }
+      this.chain.shown = true;
+      if (!quiet) sfx("place");
+      this.bump();
+      await (quiet ? Promise.resolve() : this.nap(CHAIN_LINK_MS));
+    }
+  }
+
+  /** The closed chain settles newest-first: a Resolve banner, then each link
+   *  lifts out of the stack in turn, down to link 1. */
+  private async chainResolve(e: MatchEvent, fast: boolean): Promise<void> {
+    const quiet = this.noFlash() || fast;
+    const ch = this.chain;
+    if (e.value === 0) {
+      if (!ch) return;
+      ch.resolving = true;
+      if (!quiet) {
+        sfx("prompt");
+        this.showBanner(tr("anim.resolve"));
+        await this.nap(900);
+      }
+      this.bump();
+      return;
+    }
+    if (!ch) return;
+    ch.active = e.value;
+    this.bump();
+    if (!quiet) {
+      sfx("card_play");
+      await this.nap(CHAIN_RESOLVE_MS);
+    }
+    ch.done = [...ch.done, e.value];
+    // Link 1 settles last: the chain is over.
+    if (e.value === 1) {
+      if (!quiet) await this.nap(300);
+      if (this.chain === ch) this.chain = null;
+    }
+    this.bump();
+  }
+
   private async play(e: MatchEvent, fast: boolean): Promise<void> {
     const body = fmtMsg(e.msg, this.names());
     this.addLog(e);
@@ -692,6 +770,8 @@ export class Animator {
         if (this.noFlash()) break;
         await this.cardFlash(e, fast);
         break;
+      case "chain": await this.chainLink(e, fast); break;
+      case "resolve": await this.chainResolve(e, fast); break;
       case "flash":
         // Proactive "look here" cue (`ctx::flash_card` / `flash_tile`): the
         // named card's face, or a tile banner when there is no card. Parent-

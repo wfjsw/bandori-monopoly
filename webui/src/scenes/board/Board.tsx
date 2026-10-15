@@ -233,6 +233,26 @@ export function Board({ sess }: { sess: GameSession }) {
                 <span>{anim.turnAnnouncement.label}</span>
               </div>
             )}
+            {anim.chain?.shown && (
+              <div className={cx(s.chain, anim.chain.resolving && s.chainResolving)}>
+                {[...anim.chain.links].reverse().map((l, k, all) => (
+                  <div
+                    key={l.seq}
+                    className={cx(
+                      s.chainLink,
+                      l.fresh > 0 && !anim.chain!.resolving && s.chainIn,
+                      anim.chain!.active === l.seq && !anim.chain!.done.includes(l.seq) && s.chainActive,
+                      anim.chain!.done.includes(l.seq) && s.chainDone,
+                    )}
+                    style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)" }}
+                  >
+                    <span className={s.chainNo}>{l.seq}</span>
+                    <CardFace id={l.card} size="mini" width={84} />
+                    {k < all.length - 1 && <i className={s.chainBar} />}
+                  </div>
+                ))}
+              </div>
+            )}
             {anim.flash && (
               <div key={anim.flash.id} className={cx(s.flash, anim.flash.out && s.flashOut)}>
                 <div

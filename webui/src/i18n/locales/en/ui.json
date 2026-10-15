@@ -10,6 +10,8 @@
   "anim.eventEnd": "Event left",
   "anim.forceBuy": "Force buy",
   "anim.leftOf": "{{who}} left the match",
+  "anim.chain": "Chain",
+  "anim.resolve": "Resolve",
   "anim.pay": "Payment",
   "anim.payRent": "Rent paid",
   "anim.place": "Placed on the field",

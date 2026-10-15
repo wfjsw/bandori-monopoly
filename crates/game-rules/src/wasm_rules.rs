@@ -5294,6 +5294,30 @@ impl<M: CardModules> RulesBridge<M> {
                     {
                         chain[timing].link.join_redirect = Some(cursor as i32);
                     }
+                    // Master Duel's chain build-up: the first counter opens the
+                    // chain, so L1 (the initiating card) is announced first,
+                    // then each declaration is a `"chain"` event whose `value`
+                    // is its link number. The client flashes the card and
+                    // appends it to the chain overlay.
+                    if chain.len() == 1 && !chain[0].id.is_empty() {
+                        let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
+                        cx.log_event(
+                            "chain",
+                            l1_seat,
+                            Msg::new("log.chain_link").n("n", 1).card("card", l1_id.clone()),
+                            -1,
+                            &l1_id,
+                            1,
+                        );
+                    }
+                    cx.log_event(
+                        "chain",
+                        cursor as i32,
+                        Msg::new("log.chain_link").n("n", at as i64 + 1).card("card", id.clone()),
+                        -1,
+                        &id,
+                        at as i32 + 1,
+                    );
                     chain.push(ChainLink {
                         seat: cursor,
                         idx,
@@ -5455,11 +5479,25 @@ impl<M: CardModules> RulesBridge<M> {
         order: &[usize],
         mut next: usize,
     ) -> Flow<()> {
+        // The closed chain starts resolving: one `"resolve"` banner cue
+        // (`value` 0), then one per link as it settles, newest first
+        // (`value` = link number), and finally L1 itself (`value` 1).
+        if next == 0 && !order.is_empty() {
+            cx.log_event("resolve", -1, Msg::new("log.chain_resolve"), -1, "", 0);
+        }
         while next < order.len() {
             let idx = order[next];
             let seat = chain[idx].seat;
             let card = chain[idx].idx;
             let id = chain[idx].id.clone();
+            cx.log_event(
+                "resolve",
+                seat as i32,
+                Msg::new("log.chain_resolve_link").n("n", idx as i64 + 1).card("card", id.clone()),
+                -1,
+                &id,
+                idx as i32 + 1,
+            );
             let answered = chain[idx].answered;
             let negated = chain[idx].link.is_cancelled();
             let uid = chain[idx].uid;
@@ -5582,6 +5620,17 @@ impl<M: CardModules> RulesBridge<M> {
                 }
             }
             next += 1;
+        }
+        if !order.is_empty() {
+            let (l1_seat, l1_id) = (chain[0].seat as i32, chain[0].id.clone());
+            cx.log_event(
+                "resolve",
+                l1_seat,
+                Msg::new("log.chain_resolve_link").n("n", 1).card("card", l1_id.clone()),
+                -1,
+                &l1_id,
+                1,
+            );
         }
         Ok(())
     }

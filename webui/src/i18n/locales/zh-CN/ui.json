@@ -10,6 +10,8 @@
   "anim.eventEnd": "事件离场",
   "anim.forceBuy": "强制购买",
   "anim.leftOf": "{{who}} 离开了对局",
+  "anim.chain": "连锁",
+  "anim.resolve": "连锁结算",
   "anim.pay": "支付",
   "anim.payRent": "付地租",
   "anim.place": "放到场上",
