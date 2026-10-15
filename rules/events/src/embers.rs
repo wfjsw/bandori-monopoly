@@ -140,7 +140,9 @@ fn clear_copies(who: i32) {
     }
     ctx::log(
         who,
-        &Msg::new("log.event.embers_clear").player_id("who", who),
+        &Msg::new("log.event.embers_clear")
+            .player_id("who", who)
+            .card("event", ID),
     );
 }
 
