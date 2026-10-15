@@ -8,7 +8,7 @@
 #![cfg_attr(target_arch = "wasm32", no_std)]
 
 /// Roster metadata sources (ABI v63): card ordinals + the skill crates'
-/// character / band tables. `ruleset_metadata` builds the blob on request.
+/// persona / group tables. `ruleset_metadata` builds the blob on request.
 static ROSTER: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
     card_ordinals: ruleset_core::roster_order::CARDS,
     lists: &[
