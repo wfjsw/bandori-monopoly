@@ -1359,6 +1359,23 @@ impl CardWorld for Run {
         got
     }
     fn remove_marks(&mut self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        // `tile < 0`: every tile, narrated as one line instead of one per tile.
+        if tile < 0 {
+            let mut total = 0;
+            for t in 0..self.data.tiles.len() as i32 {
+                total += self.world.remove_marks(t, filter);
+            }
+            if total != 0 {
+                let who = self.trigger.player_id;
+                self.outcome(
+                    who,
+                    Msg::new("log.outcome.mark_remove_all")
+                        .msg("kind", crate::trigger_why::mark_kind_name(filter.kind))
+                        .i("n", total as i64),
+                );
+            }
+            return total;
+        }
         let got = self.world.remove_marks(tile, filter);
         if got != 0 {
             let who = self.trigger.player_id;

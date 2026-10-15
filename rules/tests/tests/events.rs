@@ -1655,7 +1655,8 @@ fn embers_copies_are_removed_on_exile() {
     // The removal lines name the mark ("余烬") and the clear line names the event.
     for e in t.m.world().recent.iter() {
         match e.msg.key() {
-            "log.outcome.mark_remove" => {
+            "log.outcome.mark_remove" => panic!("per-tile removal line should be collapsed"),
+            "log.outcome.mark_remove_all" => {
                 let kind = format!("{:?}", e.msg.a.get("kind"));
                 assert!(!kind.contains("log.mark.none"), "unnamed mark removed: {kind}");
             }

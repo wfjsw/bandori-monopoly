@@ -366,6 +366,7 @@
   "log.outcome.mark_add": "place {{n}} \"{{kind}}\" on {{tile}}",
   "log.outcome.mark_move": "move {{n}} \"{{kind}}\"",
   "log.outcome.mark_remove": "remove {{n}} \"{{kind}}\"",
+  "log.outcome.mark_remove_all": "remove all \"{{kind}}\" on the board ({{n}} total)",
   "log.outcome.negated_by": "negated by {{card}}",
   "log.outcome.place": "{{who}} places {{card}} on the field",
   "log.outcome.plan_dice": "{{who}}'s move dice changed",

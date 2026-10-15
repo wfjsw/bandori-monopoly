@@ -134,10 +134,9 @@ fn any_exiled() -> bool {
 
 /// 「移除所有此卡的复制品」
 fn clear_copies(who: i32) {
-    for t in 0..ctx::tile_count() {
-        // `MarkFilter::any()` keeps the old `owner: -2` "any owner" match.
-        ctx::remove_marks(t, &MarkFilter::any().kind(EMBER));
-    }
+    // `MarkFilter::any()` keeps the old `owner: -2` "any owner" match; tile -1
+    // is every tile, logged as one line.
+    ctx::remove_marks(-1, &MarkFilter::any().kind(EMBER));
     ctx::log(
         who,
         &Msg::new("log.event.embers_clear")
