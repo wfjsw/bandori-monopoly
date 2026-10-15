@@ -121,12 +121,12 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-PP-aya-with-01 | start +5 positive fans | PROVEN* | `aya_with_01_five_fans_iff`, `aya_with_01_mutant_is_detected` | pending | grant-(2) half needs a non-PP seat (not fully asserted) | — |
+| C-PP-aya-with-01 | start +5 positive fans | PROVEN* | `aya_with_01_five_fans_iff`, `aya_with_01_mutant_is_detected` | triage3: VACUOUS was **C** `guard_needs` band_is seat-arg (no seat rows filled); fixed, re-time pending | grant-(2) half needs a non-PP seat (not fully asserted) | — |
 | C-PP-hina-lottery-01 | same shared (1) | PROVEN* (same shape as aya-with-01) | — | — | — | — |
 | C-PP-chisato-frank-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
 | C-PP-maya-dawn-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
 | C-PP-eve-unify-01 | same shared (1) | PROVEN* (same shape) | — | — | — | — |
-| C-PP-aya-with-02 | pay discount Y×100 + fan-side flip | PROVEN* | `aya_with_02_pay_discount_iff`, `aya_with_02_mutant_is_detected` | pending | — | — |
+| C-PP-aya-with-02 | pay discount Y×100 + fan-side flip | PROVEN* | `aya_with_02_pay_discount_iff`, `aya_with_02_mutant_is_detected` | triage3: TIMEOUT **E** (`ask_number` → Msg → memchr cliff) | — | — |
 | C-PP-hina-lottery-02 | turn-start 1d4 borrow (2) | PROVEN* (map) / FAILS (body) | `hina_lottery_02_borrow_map` | pending | regression: `skill.hinaLottery.borrowed` stays -1 (borrow never lands) | — |
 | C-PP-chisato-frank-02 | receive +Y×100 | PROVEN* (formula) | `chisato_frank_02_formula` | pending | — | — |
 | C-PP-maya-dawn-02 | draw → watch Y+1, pick 1 | PROVEN* (formula) | `maya_dawn_02_watch_formula` | pending | prompt/pick body is expensive | — |
@@ -139,9 +139,9 @@ behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | C-PP-band-idol-01 | non-PP +1 reverse fan, once | PROVEN* | `band_idol_01_start_grant_iff` | pending | non-repeat half not fully asserted | — |
-| C-PP-band-idol-02 | overflow X-down → crystals (cap 10) | FAILS | `band_idol_02_overflow_formula`, `band_idol_02_body_never_overflows` | pending | body's own flip caps X at `have`, so X>down is unreachable; no general flip-effect trigger | — |
+| C-PP-band-idol-02 | overflow X-down → crystals (cap 10) | FAILS | `band_idol_02_overflow_formula`, `band_idol_02_body_never_overflows` | triage3: FAILED was **C/B** `outside_subset` (`placed_cards` missing); added, re-time pending | body's own flip caps X at `have`, so X>down is unreachable; no general flip-effect trigger | — |
 | C-PP-band-idol-03 | no CiRCLE reward | PROTOCOL-LEVEL | `band_idol_03_no_reward_formula` | pending | reward step is engine walk / plan flag | — |
-| C-PP-band-idol-04 | +1 crystal; opt. -5 draw 1 | PROVEN* | `band_idol_04_tick_iff` | pending | host `add_crystals` max ignored | — |
+| C-PP-band-idol-04 | +1 crystal; opt. -5 draw 1 | PROVEN* | `band_idol_04_tick_iff` | triage3: FAILED was **C/B** `outside_subset` (`set_self_prop` missing); added, re-time pending | host `add_crystals` max ignored | — |
 
 ---
 
