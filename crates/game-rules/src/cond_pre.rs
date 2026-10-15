@@ -251,13 +251,13 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         if self.owner_seat < 0 {
             return 0;
         }
-        id_of(&self.src.character_name(self.owner_seat).unwrap_or_default())
+        id_of(&self.src.persona_name(self.owner_seat).unwrap_or_default())
     }
     fn owner_group(&self) -> i64 {
         if self.owner_seat < 0 {
             return 0;
         }
-        id_of(&self.src.band_name(self.owner_seat).unwrap_or_default())
+        id_of(&self.src.group_name(self.owner_seat).unwrap_or_default())
     }
     fn owner_tiles(&self) -> i64 {
         if self.owner_seat >= 0 { self.src.owned_count(self.owner_seat) as i64 } else { 0 }
@@ -342,10 +342,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         rows
     }
     fn persona(&self, seat: i64) -> i64 {
-        id_of(&self.src.character_name(seat as i32).unwrap_or_default())
+        id_of(&self.src.persona_name(seat as i32).unwrap_or_default())
     }
     fn group(&self, seat: i64) -> i64 {
-        id_of(&self.src.band_name(seat as i32).unwrap_or_default())
+        id_of(&self.src.group_name(seat as i32).unwrap_or_default())
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.src.owned_count(seat as i32) as i64
@@ -358,13 +358,15 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn tile_named(&self, name: &str) -> i64 {
         self.src.tile_named(name) as i64
     }
-    fn is_circle(&self, tile: i64) -> bool {
+    // The following three implement `rules_cond::view::CondView` (method names
+    // and `TileKind` variants live in rules/cond -- out of scope).
+    fn is_start(&self, tile: i64) -> bool {
         self.src.tile_is(tile as i32, TileKind::Circle.as_str())
     }
-    fn is_ring(&self, tile: i64) -> bool {
+    fn is_deed(&self, tile: i64) -> bool {
         self.src.tile_is(tile as i32, TileKind::Ring.as_str())
     }
-    fn is_live_house(&self, tile: i64) -> bool {
+    fn is_venue(&self, tile: i64) -> bool {
         self.src.tile_in(-1, tile as i32, TileKind::LiveHouse.as_str())
     }
     fn is_buyable(&self, tile: i64) -> bool {
@@ -681,10 +683,10 @@ pub trait SnapSrc {
     fn group_skill_id(&self, player_id: i32) -> Option<String>;
     /// The player's persona **name** -- the spelling `ctx::persona_is`
     /// matches. `persona_is(p, "名")` compares `id_of(name)` to this.
-    fn character_name(&self, player_id: i32) -> Option<String>;
+    fn persona_name(&self, player_id: i32) -> Option<String>;
     /// The player's group **name** -- the spelling `ctx::in_group` matches.
     /// `group_is(p, "Group")` compares `id_of(name)` to this.
-    fn band_name(&self, player_id: i32) -> Option<String>;
+    fn group_name(&self, player_id: i32) -> Option<String>;
     /// Named token counter (`ctx::tok`); 0 when absent.
     fn tok(&self, player_id: i32, name: &str) -> i32;
     /// Non-zero named token counters (`ctx::tok_names`); `tok('name')` missing = 0.
@@ -692,7 +694,8 @@ pub trait SnapSrc {
     fn owned_count(&self, player_id: i32) -> i32;
     fn card_pool(&self, player_id: i32, card: &str, name: &str) -> i32;
     /// Named counter `name` on the instance of `card` at `player_id`
-    /// (`"cp"` / `"crystals"` / any `FieldCard::counters` key). Missing = 0.
+    /// (ruleset counter keys such as `"crystals"`, or any
+    /// `FieldCard::counters` key). Missing = 0.
     fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
         let _ = (player_id, card, name);
         0
@@ -702,8 +705,13 @@ pub trait SnapSrc {
     /// non-zero. A host that tracks extra `FieldCard::counters` keys
     /// overrides this.
     fn card_counter_names(&self, player_id: i32, card: &str) -> Vec<String> {
-        let _ = (player_id, card);
-        Vec::new()
+        let mut out = Vec::new();
+        for n in ["cp", "crystals"] {
+            if self.card_counter(player_id, card, n) != 0 {
+                out.push(n.to_string());
+            }
+        }
+        out
     }
     fn tile_owner(&self, tile: i32) -> i32;
     fn houses_of(&self, tile: i32) -> i32;
@@ -837,12 +845,12 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::group_skill_id(self, player_id)
     }
     #[inline]
-    fn character_name(&self, player_id: i32) -> Option<String> {
-        CardWorld::character_name(self, player_id)
+    fn persona_name(&self, player_id: i32) -> Option<String> {
+        CardWorld::persona_name(self, player_id)
     }
     #[inline]
-    fn band_name(&self, player_id: i32) -> Option<String> {
-        CardWorld::band_name(self, player_id)
+    fn group_name(&self, player_id: i32) -> Option<String> {
+        CardWorld::group_name(self, player_id)
     }
     #[inline]
     fn tok(&self, player_id: i32, name: &str) -> i32 {
@@ -863,6 +871,14 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
         CardWorld::card_counter(self, player_id, card, name)
+    }
+    #[inline]
+    fn card_counter_names(&self, player_id: i32, card: &str) -> Vec<String> {
+        CardWorld::field_instances(self, player_id)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map(|(uid, _)| CardWorld::counter_names_at(self, uid))
+            .unwrap_or_default()
     }
     #[inline]
     fn tile_owner(&self, tile: i32) -> i32 {
@@ -911,8 +927,9 @@ impl<W: CardWorld> SnapSrc for W {
     }
 }
 
-/// Does this condition's **verdict** depend on hand contents? A ring's only
-/// world change is declarations removing cards from hands (`build_round`), so
+/// Does this condition's **verdict** depend on hand contents? A counteraction
+/// window's only world change is declarations removing cards from hands
+/// (`build_round`), so
 /// a verdict that reads no hand field is stable for the whole window and can be
 /// memoised across laps. `owner_hand` is the candidate overlay's hand size;
 /// `hand(p)` is the window's per-seat hand-size table.
@@ -1206,22 +1223,22 @@ pub fn admits_pre(
 pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let t = world.trigger();
     let tile_ids = collect_tile_ids(world);
-    let mut circle_tiles = Vec::new();
-    let mut ring_tiles = Vec::new();
-    let mut live_house_tiles = Vec::new();
+    let mut pass_reward_tiles = Vec::new();
+    let mut deed_tiles = Vec::new();
+    let mut venue_tiles = Vec::new();
     let mut buyable_tiles = Vec::new();
     let mut tile_kinds = Vec::new();
     let mut tile_attrs = std::collections::BTreeMap::new();
     let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
         if world.tile_is(tile, TileKind::Circle.as_str()) {
-            circle_tiles.push(tile as i64);
+            pass_reward_tiles.push(tile as i64);
         }
         if world.tile_is(tile, TileKind::Ring.as_str()) {
-            ring_tiles.push(tile as i64);
+            deed_tiles.push(tile as i64);
         }
         if world.tile_in(-1, tile, TileKind::LiveHouse.as_str()) {
-            live_house_tiles.push(tile as i64);
+            venue_tiles.push(tile as i64);
         }
         if world.tile_in(-1, tile, TileKind::Buyable.as_str()) {
             buyable_tiles.push(tile as i64);
@@ -1247,8 +1264,8 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
                 .into_iter()
                 .map(|(k, v)| (k, v as i64))
                 .collect(),
-            persona: id_of(&world.character_name(p).unwrap_or_default()),
-            group: id_of(&world.band_name(p).unwrap_or_default()),
+            persona: id_of(&world.persona_name(p).unwrap_or_default()),
+            group: id_of(&world.group_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
             gains: world.gains_this_turn(p) as i64,
             targeted: world.targeted_count(p) as i64,
@@ -1324,9 +1341,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         name: t.name.clone().unwrap_or_default(),
         players,
         tile_ids,
-        circle_tiles,
-        ring_tiles,
-        live_house_tiles,
+        // Field names come from `rules_cond::ctx::WindowCtx` (out of scope).
+        circle_tiles: pass_reward_tiles,
+        ring_tiles: deed_tiles,
+        live_house_tiles: venue_tiles,
         buyable_tiles,
         tile_kinds,
         tile_attrs,
@@ -1345,22 +1363,22 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
 /// player being asked. Built once per ask; reused across the cards of one view.
 pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let tile_ids = collect_tile_ids(world);
-    let mut circle_tiles = Vec::new();
-    let mut ring_tiles = Vec::new();
-    let mut live_house_tiles = Vec::new();
+    let mut pass_reward_tiles = Vec::new();
+    let mut deed_tiles = Vec::new();
+    let mut venue_tiles = Vec::new();
     let mut buyable_tiles = Vec::new();
     let mut tile_kinds = Vec::new();
     let mut tile_attrs = std::collections::BTreeMap::new();
     let mut tile_classes = Vec::new();
     for tile in 0..world.tile_count() {
         if world.tile_is(tile, TileKind::Circle.as_str()) {
-            circle_tiles.push(tile as i64);
+            pass_reward_tiles.push(tile as i64);
         }
         if world.tile_is(tile, TileKind::Ring.as_str()) {
-            ring_tiles.push(tile as i64);
+            deed_tiles.push(tile as i64);
         }
         if world.tile_in(-1, tile, TileKind::LiveHouse.as_str()) {
-            live_house_tiles.push(tile as i64);
+            venue_tiles.push(tile as i64);
         }
         if world.tile_in(-1, tile, TileKind::Buyable.as_str()) {
             buyable_tiles.push(tile as i64);
@@ -1384,8 +1402,8 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
                 .into_iter()
                 .map(|(k, v)| (k, v as i64))
                 .collect(),
-            persona: id_of(&world.character_name(p).unwrap_or_default()),
-            group: id_of(&world.band_name(p).unwrap_or_default()),
+            persona: id_of(&world.persona_name(p).unwrap_or_default()),
+            group: id_of(&world.group_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
             gains: world.gains_this_turn(p) as i64,
             targeted: world.targeted_count(p) as i64,
@@ -1421,9 +1439,10 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         name: String::new(),
         players,
         tile_ids,
-        circle_tiles,
-        ring_tiles,
-        live_house_tiles,
+        // Field names come from `rules_cond::ctx::WindowCtx` (out of scope).
+        circle_tiles: pass_reward_tiles,
+        ring_tiles: deed_tiles,
+        live_house_tiles: venue_tiles,
         buyable_tiles,
         tile_kinds,
         tile_attrs,
@@ -1444,7 +1463,8 @@ fn fill_tile_generic<S: SnapSrc>(
     tile_attrs: &mut std::collections::BTreeMap<(i64, String), i64>,
     tile_classes: &mut Vec<(i64, i64, String)>,
 ) {
-    // Kind: probe the eight wire spellings (`TileKind::as_str`).
+    // Kind: probe the eight wire spellings (`TileKind::as_str`) -- ruleset
+    // tile-kind bindings, kept verbatim.
     let kinds = [
         "circle",
         "cafe",
@@ -1485,6 +1505,7 @@ fn fill_tile_generic<S: SnapSrc>(
 fn class_names() -> &'static [String] {
     static NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
     NAMES.get_or_init(|| {
+        // Ruleset class-name bindings, kept verbatim.
         let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
             .iter()
             .map(|s| s.to_string())
@@ -1508,7 +1529,7 @@ pub fn collect_tile_ids<S: SnapSrc>(world: &S) -> std::collections::BTreeMap<Str
             tile_ids.insert(name, tile as i64);
         }
     }
-    // Legacy §2.1 sample aliases (`tile_named("circle")` etc.): resolve through
+    // Legacy §2.1 sample aliases (ruleset tile-name bindings): resolve through
     // the same `tile_named` lookup so a kind-spelled name still works if a
     // board ever carries one.
     for name in ["circle", "shop", "ring", "agent", "liveHouse"] {
@@ -1533,6 +1554,7 @@ pub fn fill_candidate<S: SnapSrc>(
         owner: owner as i64,
         owner_money: world.money(p) as i64,
         owner_charge: world.charge(p) as i64,
+        // "crystals" is the ruleset's named-counter key for the group pool.
         owner_group_pool: world.group_pool(p, "crystals") as i64,
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
@@ -1541,8 +1563,8 @@ pub fn fill_candidate<S: SnapSrc>(
         owner_stun: world.stun_of(p) as i64,
         owner_exile: world.state_get(p, game_core::state::key::EXILE) as i64,
         owner_no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-        owner_persona: id_of(&world.character_name(p).unwrap_or_default()),
-        owner_group: id_of(&world.band_name(p).unwrap_or_default()),
+        owner_persona: id_of(&world.persona_name(p).unwrap_or_default()),
+        owner_group: id_of(&world.group_name(p).unwrap_or_default()),
         owner_tiles: world.owned_count(p) as i64,
         card_id: id_of(card),
         card_placed: placed,

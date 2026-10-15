@@ -61,6 +61,12 @@ pub struct NetMessage {
     /// does not depend on the profile.
     pub debug: String,
     /// `ban` / `pick`: the persona id.
+    ///
+    /// JSON key stays the legacy `"character"` spelling on purpose:
+    /// `Input::Act` embeds this in `RecordBody`, and `body_check` re-serializes
+    /// archived `.bdrec` bodies byte-identically. Renaming the key breaks every
+    /// stored check hash (`parse_record`). Do not "neutralize" this rename.
+    #[serde(rename = "character")]
     pub persona: String,
     /// `play` / `discard`: the card id.
     pub card: String,
@@ -164,6 +170,10 @@ impl RoomInfo {
 pub struct RoomMember {
     pub id: i32,
     pub player: String,
+    /// Seat persona. JSON key stays the legacy `"character"` spelling:
+    /// `RecordBody` embeds `MatchSetup.members`, and `body_check` re-serializes
+    /// archived `.bdrec` bodies byte-identically. Do not rename the key.
+    #[serde(rename = "character")]
     pub persona: String,
     pub cn_id: String,
     pub ready: bool,
