@@ -466,21 +466,65 @@ narrow, since the full record reveals every hand and the deck order.
   `SET EX`; the in-memory store bounds itself to a 64-entry LRU instead of a
   clock). The in-progress log gets the same expiry so a box that dies mid-match
   does not leak a list.
-* **`gaps`.** A restart mid-match loses the buffered tick run (up to 100
-  ticks). The sealed record then has `header.gaps = true` and is not
-  checkpoint-verifiable. Everything else about it still plays.
-* **Tick quantization.** The match clock is a fixed-step accumulator:
+* **`gaps`.** The open tick run and the record-log counters live in the store
+  (`RecMeta`), written under the match lock, so a process that dies mid-match
+  (or a second server taking over) continues the same log. `header.gaps = true`
+  only when something was actually lost: a store write failed, or a holder died
+  between the blob put and its log append (the `dirty` flag). A gapped record
+  still plays; it is just not checkpoint-verifiable.
+* **Tick quantization.** The match clock is a fixed-step accumulator **per
+  room**, held only while this process owns the room's tick lease (below):
   `k = floor(acc / 0.05).min(10)` whole quanta per ticker wake-up, each worth
   `0.05 * time_scale` of game time. The record seals that quantum into
   `header.step`, so a replay feeds the engine the identical `tick(dt)` f32s.
 
+## Several servers, one store
+
+Every piece of game-relevant state lives behind `CrossState` (sessions, room
+records, match blobs, record logs, the fair slot, presence, the coordination
+keys). Two server processes pointed at one Redis can serve the same match --
+players of one room may be connected to different servers -- and either can
+restart at any point. Redis is the only shared state; the engine workers are
+stateless (`Match` blob in, blob out).
+
+What is process-local, and why that is fine:
+
+* **SSE cursors and the local broadcast fan-out** -- per-connection caches.
+  Pumps also re-poll the store every ~2 s, so a missed note is latency.
+* **Bot ponder trees / the decision cache** -- performance only.
+* **The turn-clock's monotonic origin** (`server_time_ms`) -- per process. A
+  client that lands on another process re-syncs via `POST /api/clock`; the
+  engine's own `base_time` / `bonus_time` are in the match blob and do not
+  care.
+* **The bot ponder slot** (`Drive::pondering`) -- one speculative search per
+  seat per process; a second process speculating on the same seat wastes work
+  but cannot corrupt anything.
+
+Coordination keys (all TTL'd, so a dead holder frees itself):
+
+| key | TTL | who takes it |
+|---|---|---|
+| `room:{id}` | 10 s | one room mutation (re-reads the record inside) |
+| `match:{room}` | 10 s | one match op: get-blob → worker → put-blob → log |
+| `tick:{room}` | 3 s | the room's ticker lease (renewed each beat) |
+| `botclaim:{room}:{member}` | 15 s | one advanced-bot probe |
+| `botwait:{room}:{member}` | 50–200 ms | the post-probe cooldown |
+| `roomcode:{id}` | 10 s | a room id at creation (`SET NX`) |
+| `presence:{room}:{member}:{stream}` | 60 s / timeout | one live SSE stream, refreshed by its pump |
+
 ## Presence
 
-An open stream counts as connected. A player without a stream for 20 s:
+An open stream counts as connected. Each live SSE stream owns a store key
+(`presence:{room}:{member}:{stream}`) that its pump refreshes every loop; an
+`idle` key covers "joined but no stream yet" and the grace after the last
+stream closes. A player with **no live key** for `presence_timeout`:
 
-* in a match: the AI takes the player (`members[].away = true`); reopening the stream
-  hands it back;
+* in a match: the AI takes the player (`members[].away = true`); reopening the
+  stream hands it back;
 * in the lobby: removed from the room.
+
+Because the keys are in the store, a stream held open on server B keeps the
+member present as far as server A's reaper is concerned.
 
 ## Differences from the original
 

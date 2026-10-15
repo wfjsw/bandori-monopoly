@@ -326,7 +326,7 @@
 /* Zig-zag down the chain: my cards left, everyone else's right. */
 .chainMine { align-self: flex-start; rotate: -5deg; }
 .chainTheirs { align-self: flex-end; rotate: 5deg; }
-.chainTheirs .chainNo { left: auto; right: -18px; }
+.chainTheirs .chainNo { left: auto; right: calc(-18px * var(--k, 1)); }
 .chainOrigin {
   display: flex;
   align-items: center;
@@ -346,9 +346,9 @@
 .chainDice { display: block; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)); }
 .chainNo {
   position: absolute;
-  left: -18px;
-  bottom: -30px;
-  font-size: 84px;
+  left: calc(-18px * var(--k, 1));
+  bottom: calc(-30px * var(--k, 1));
+  font-size: calc(84px * var(--k, 1));
   line-height: 1;
   font-weight: 900;
   font-style: italic;
@@ -374,7 +374,7 @@
   white-space: nowrap;
   z-index: calc(var(--z-fx-banner) + 1);
   display: flex;
-  font-size: 110px;
+  font-size: calc(110px * var(--k, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.04em;

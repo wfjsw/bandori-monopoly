@@ -2,7 +2,7 @@
 // with the cards-in-play row over its top edge, and the collapsed hand
 // underneath. Controls sit below the players; the right is a full match log.
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { navigate } from "../../app/router";
 import { useCompactValue, useStageFill } from "../../app/Stage";
 import { RightTabs } from "./RightTabs";
@@ -188,7 +188,20 @@ export function Board({ sess }: { sess: GameSession }) {
   };
 
   const nLinks = anim.chain?.links.length ?? 0;
-  const cardW = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
+  const cardW0 = nLinks <= 2 ? 150 : nLinks <= 4 ? 125 : nLinks <= 6 ? 105 : nLinks <= 8 ? 90 : 78;
+  // The chain is sized as a fraction of the FX layer (the centre column), so it
+  // fills the same share of it on a desktop and on a phone's shorter compact canvas.
+  const fxRef = useRef<HTMLDivElement>(null);
+  const [fxH, setFxH] = useState(FX_REF_H);
+  useLayoutEffect(() => {
+    const el = fxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setFxH(el.offsetHeight || FX_REF_H));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const chainK = fxH / FX_REF_H;
+  const cardW = Math.round(cardW0 * chainK);
   return (
     <>
       <TopBar
@@ -225,7 +238,7 @@ export function Board({ sess }: { sess: GameSession }) {
               the action banner and the card activation flash are detached from
               the map -- sized and placed by this column, never clipped or
               scaled by the ring's window or zoom. */}
-          <div className={s.fx}>
+          <div className={s.fx} ref={fxRef} style={{ ["--k" as string]: chainK }}>
             {anim.banner && (
               <div key={anim.banner.id} className={s.banner}>
                 <b>{anim.banner.title}</b>
@@ -257,7 +270,7 @@ export function Board({ sess }: { sess: GameSession }) {
                     >
                       {l.card
                         ? <CardFace id={l.card} size="big" width={cardW} className={s.chainFace} />
-                        : <ChainOrigin msg={l.origin} names={names} w={cardW} />}
+                        : <ChainOrigin msg={l.origin} names={names} w={cardW} k={chainK} />}
                       <span className={s.chainNo}>{l.seq}</span>
                     </div>
                   );
@@ -314,12 +327,15 @@ export function Board({ sess }: { sess: GameSession }) {
   );
 }
 
+/** The FX layer height (design px) the chain's desktop sizes were drawn for: 900 stage - 110 top bar. */
+const FX_REF_H = 790;
+
 const ROLL_KINDS = new Set(["roll", "moveRoll"]);
 
 /** The tile standing in for a chain's link 1 when the timing is no card (a
  *  roll, a payment, a landing ...): an icon, what happened, and the
  *  particulars the engine recorded on the trigger. */
-function ChainOrigin({ msg, names, w }: { msg?: Msg; names: ReturnType<typeof namesOf>; w: number }) {
+function ChainOrigin({ msg, names, w, k }: { msg?: Msg; names: ReturnType<typeof namesOf>; w: number; k: number }) {
   const text = (k: string) => (msg?.a?.[k] as { text?: string } | undefined)?.text ?? "";
   const num = (k: string) => (msg?.a?.[k] as { i?: number } | undefined)?.i ?? 0;
   const kind = text("kind");
@@ -362,8 +378,8 @@ function ChainOrigin({ msg, names, w }: { msg?: Msg; names: ReturnType<typeof na
     ...fx.map(fxLine),
   ].filter(Boolean);
   return (
-    <div className={s.chainOrigin} style={{ width: Math.max(w, 124), minHeight: w * 1.5, fontSize: Math.max(11, w * 0.1) }}>
-      {ROLL_KINDS.has(kind) && <DiceIcon size={Math.max(34, w * 0.4)} />}
+    <div className={s.chainOrigin} style={{ width: Math.max(w, 124 * k), minHeight: w * 1.5, fontSize: Math.max(11 * k, w * 0.1) }}>
+      {ROLL_KINDS.has(kind) && <DiceIcon size={Math.max(34 * k, w * 0.4)} />}
       <b>{label}</b>
       {lines.map((l, k) => <span key={k}>{l}</span>)}
     </div>

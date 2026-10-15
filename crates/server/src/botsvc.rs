@@ -549,13 +549,13 @@ mod tests {
 
 // ---------------------------------------------------------------- drive loop
 
-/// Per-server bookkeeping for asking after advanced seats: which ones have a
-/// request in flight, and when to next probe each (so an idle seat is not
-/// re-viewed every 50 ms tick).
+/// Per-server bookkeeping for asking after advanced seats. **Only the ponder
+/// slot lives here** (a pure performance cache: one speculative search per
+/// seat, cancelled when the seat's own decision arrives). Probe *claims* and
+/// their pacing are store keys ([`claim_seat`] / [`release_seat`]), so two
+/// server processes never ask the service about the same seat at once.
 #[derive(Debug, Default)]
 pub struct Drive {
-    in_flight: std::collections::HashSet<(String, i32)>,
-    next_probe: HashMap<(String, i32), Instant>,
     /// Speculative `ponder` outstanding, keyed `(room, member)` → token. One
     /// per seat: a second ponder for the same seat is skipped until the first
     /// replies (or is cancelled by that seat's own decision).
@@ -564,40 +564,61 @@ pub struct Drive {
 }
 
 /// How soon to look again after a seat turned out to have nothing to do.
-const IDLE_PROBE: Duration = Duration::from_millis(200);
+pub const IDLE_PROBE: Duration = Duration::from_millis(200);
 /// How soon to look again right after applying an answer (the seat may have
 /// another decision immediately -- play a card, then roll).
-const BUSY_PROBE: Duration = Duration::from_millis(50);
+pub const BUSY_PROBE: Duration = Duration::from_millis(50);
+/// A probe claim lives this long without a release (the service wedged, the
+/// process died). Longer than [`crate::botsvc::MAX_ASK_TIMEOUT`] so a live
+/// probe always finishes inside its claim.
+pub const PROBE_CLAIM_TTL_MS: u64 = 15_000;
+
+/// Claim `seat` for a probe, across processes. `false` when another process
+/// has it in flight or the post-probe cooldown has not expired.
+pub fn claim_seat(store: &dyn crate::store::CrossState, owner: &str, room: &str, member: i32) -> bool {
+    if store
+        .marker_live(&probe_wait_key(room, member))
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    store
+        .lock_acquire(&probe_claim_key(room, member), owner, PROBE_CLAIM_TTL_MS)
+        .unwrap_or(false)
+}
+
+/// Release a probe claim and start the cooldown. `acted` picks the delay.
+pub fn release_seat(
+    store: &dyn crate::store::CrossState,
+    owner: &str,
+    room: &str,
+    member: i32,
+    acted: bool,
+) {
+    let _ = store.lock_release(&probe_claim_key(room, member), owner);
+    let _ = store.marker_set(
+        &probe_wait_key(room, member),
+        if acted {
+            BUSY_PROBE.as_millis() as u64
+        } else {
+            IDLE_PROBE.as_millis() as u64
+        },
+    );
+}
+
+fn probe_claim_key(room: &str, member: i32) -> String {
+    format!("botclaim:{room}:{member}")
+}
+
+fn probe_wait_key(room: &str, member: i32) -> String {
+    format!("botwait:{room}:{member}")
+}
 
 impl Drive {
-    /// Claim `seat` for a probe if it is idle and its probe time is due.
-    /// Returns false when the tick should leave it alone.
-    pub fn claim(&mut self, room: &str, member: i32, now: Instant) -> bool {
-        let key = (room.to_string(), member);
-        if self.in_flight.contains(&key) {
-            return false;
-        }
-        if let Some(at) = self.next_probe.get(&key) {
-            if now < *at {
-                return false;
-            }
-        }
-        self.in_flight.insert(key);
-        true
-    }
-
-    /// Release `seat` after a probe. `acted` picks the next probe delay.
-    pub fn release(&mut self, room: &str, member: i32, acted: bool) {
-        let key = (room.to_string(), member);
-        self.in_flight.remove(&key);
-        self.next_probe.insert(
-            key,
-            Instant::now() + if acted { BUSY_PROBE } else { IDLE_PROBE },
-        );
-    }
-
     /// Claim the ponder slot for `seat`. False when one is already outstanding
-    /// (one in flight per seat) or the room is gone.
+    /// (one in flight per seat) or the room is gone. Local on purpose: a
+    /// second process speculating on the same seat is wasted work, not a
+    /// correctness bug.
     pub fn claim_ponder(&mut self, room: &str, member: i32) -> Option<u64> {
         let key = (room.to_string(), member);
         if self.pondering.contains_key(&key) {
@@ -633,8 +654,6 @@ impl Drive {
 
     /// Drop a room's seats (the match ended or the room went away).
     pub fn forget_room(&mut self, room: &str) {
-        self.in_flight.retain(|(r, _)| r != room);
-        self.next_probe.retain(|(r, _), _| r != room);
         self.pondering.retain(|(r, _), _| r != room);
     }
 }

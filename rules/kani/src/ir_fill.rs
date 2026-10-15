@@ -1034,24 +1034,51 @@ impl GuardNeeds {
 /// Used by [`guard_needs`] so [`fill_for_guard`] fills only what the IR reads.
 /// `state(p, 'key')` (FnId 37) reads the separate `IrCtx::state` table, not a
 /// [`SeatField`].
+/// FnId → SeatField bitmask. Use `FnId::* as i64` (never magic numbers —
+/// the vocab renames shifted discriminants and silently broke the seat fill).
 fn seat_field_bits(fid: i64) -> u32 {
     let bit = |f: SeatField| 1u32 << (f as u32);
     match fid {
-        10 => bit(SeatField::Money),
-        11 => bit(SeatField::Fire),
-        12 => bit(SeatField::Crystals),
-        13 => bit(SeatField::Hand),
-        14 => bit(SeatField::Pos),
-        15 => bit(SeatField::Character),
-        16 => bit(SeatField::Band),
-        17 => bit(SeatField::Tiles),
-        18 => bit(SeatField::Character),
-        19 => bit(SeatField::Band),
-        24 => bit(SeatField::Gains),
-        25 => bit(SeatField::Targeted),
-        33 => bit(SeatField::Between),
+        f if f == FnId::Money as i64 => bit(SeatField::Money),
+        f if f == FnId::Fire as i64 => bit(SeatField::Fire),
+        f if f == FnId::Crystals as i64 => bit(SeatField::Crystals),
+        f if f == FnId::Hand as i64 => bit(SeatField::Hand),
+        f if f == FnId::Pos as i64 => bit(SeatField::Pos),
+        f if f == FnId::Character as i64 => bit(SeatField::Character),
+        f if f == FnId::Band as i64 => bit(SeatField::Band),
+        f if f == FnId::Tiles as i64 => bit(SeatField::Tiles),
+        f if f == FnId::CharacterIs as i64 => bit(SeatField::Character),
+        f if f == FnId::BandIs as i64 => bit(SeatField::Band),
+        f if f == FnId::GainsThisTurn as i64 => bit(SeatField::Gains),
+        f if f == FnId::TargetedCount as i64 => bit(SeatField::Targeted),
+        f if f == FnId::Between as i64 => bit(SeatField::Between),
         _ => 0,
     }
+}
+
+/// Fns whose argument 0 is a player seat. Derived from the `FnId` enum so a
+/// rename cannot silently drop one. Returns `true` for every FnId whose
+/// first argument is a seat index.
+fn fn_takes_seat_arg0(fid: i64) -> bool {
+    matches!(
+        fid,
+        f if f == FnId::Money as i64
+            || f == FnId::Fire as i64
+            || f == FnId::Crystals as i64
+            || f == FnId::Hand as i64
+            || f == FnId::Pos as i64
+            || f == FnId::Character as i64
+            || f == FnId::Band as i64
+            || f == FnId::Tiles as i64
+            || f == FnId::CharacterIs as i64
+            || f == FnId::BandIs as i64
+            || f == FnId::Blocked as i64
+            || f == FnId::Neighbor as i64
+            || f == FnId::GainsThisTurn as i64
+            || f == FnId::TargetedCount as i64
+            || f == FnId::Between as i64
+            || f == FnId::State as i64
+    )
 }
 
 /// Collect what guard `gid`'s program reads from an [`IrCtx`].
@@ -1084,26 +1111,17 @@ pub fn guard_needs(gid: usize) -> GuardNeeds {
                         while j < 3 {
                             if j < nargs && first + j < nodes.len() {
                                 let arg = nodes[first + j];
-                                // Fns whose arg 0 is a seat: 10..=17 (`f(p)`),
-                                // 18 `character_is(p, name)`, 19 `band_is(p, name)`,
-                                // 21/24/25/33 (neighbor / gains / targeted /
-                                // between), 37 `state(p, key)`. Arg 1 of 18/19/37
-                                // is a name/id hash, NOT a seat — only j==0
-                                // counts as the seat (class C: the name hash
-                                // was being taken as `seat_const`, which made
-                                // `band_is(owner, …)` fill **no** seat rows and
-                                // the guard never admitted).
-                                let seat_arg = (10..=17).contains(&node.payload)
-                                    || node.payload == 18
-                                    || node.payload == 19
-                                    || node.payload == 21
-                                    || node.payload == 24
-                                    || node.payload == 25
-                                    || node.payload == 33
-                                    || node.payload == 37;
+                                // Fns whose arg 0 is a seat (derived from the
+                                // FnId enum via `fn_takes_seat_arg0`, not
+                                // magic numbers — the vocab renames shifted
+                                // discriminants and silently broke the fill).
+                                // Arg 1 of CharacterIs/BandIs/State is a
+                                // name/id hash, NOT a seat — only j==0
+                                // counts as the seat.
+                                let seat_arg = fn_takes_seat_arg0(node.payload);
                                 if arg.kind == rules_cond_ir::nodes::Kind::ConstInt {
-                                    // FnId 0..=4 take a name id.
-                                    if node.payload <= 4 {
+                                    // FnId Slot..=CounterIs (0..=4) take a name id.
+                                    if node.payload <= FnId::CounterIs as i64 {
                                         n.note_named(arg.payload);
                                     } else if seat_arg && j == 0 {
                                         if n.seat_const < 0 {

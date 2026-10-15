@@ -287,8 +287,11 @@ design — all of them forced by something the design already says:
   clock has to name the quantum it used or a replay would feed the engine
   different `tick(dt)` f32s and diverge. Solo is unscaled, so its `step` is
   still `STEP`. `Replayer` has always read `header.step`.
-* **`RecordHeader.gaps`** (new, `#[serde(default)]`) marks a record whose
-  buffered tick run was lost to a restart. §1's "mark the record
+* **`RecordHeader.gaps`** (new, `#[serde(default)]`) marks a record where
+  something was actually lost -- a store write failed, or a process died
+  between the blob put and its log append (the `RecMeta.dirty` flag). The open
+  tick run itself is persisted under the match lock, so a clean handover
+  between processes (or a restart) loses nothing. §1's "mark the record
   unverifiable" needed somewhere to put the flag.
 * **The record is sealed zstd-compressed, and served as `application/zstd`
   with no `Content-Encoding`.** §1 asked for `Content-Encoding: gzip`; the
@@ -391,8 +394,10 @@ design — all of them forced by something the design already says:
   bundled events keep a log view working. The engine archive (§9) removes the
   usual cause -- replaying with a build the record never saw.
 * **Cross-backend wasm float NaN.** Test it.
-* **Server restart** loses up to 100 buffered ticks. Set a `gaps` flag and mark
-  the record unverifiable.
+* **Server restart / process death mid-op** can lose one input's log line (the
+  window between the blob put and the log append). The `dirty` flag turns that
+  into `gaps` and the record is marked unverifiable. The open tick run is in
+  the store, so it is not lost.
 * **Concurrent work.** Bot mentality must flow through `MatchSetup`.
 * **Keyframe memory in wasm.** Cap it by bytes.
 * **Privacy.** A full record is intended; it is post-match and
