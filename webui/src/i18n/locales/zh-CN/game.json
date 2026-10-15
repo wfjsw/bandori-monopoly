@@ -366,6 +366,7 @@
   "log.outcome.mark_add": "在 {{tile}} 放置 {{n}} 个「{{kind}}」",
   "log.outcome.mark_move": "移动 {{n}} 个「{{kind}}」",
   "log.outcome.mark_remove": "移除 {{n}} 个「{{kind}}」",
+  "log.outcome.mark_remove_all": "移除全场所有「{{kind}}」（共 {{n}} 个）",
   "log.outcome.negated_by": "被 {{card}} 无效",
   "log.outcome.place": "{{who}} 将 {{card}} 放置到场上",
   "log.outcome.plan_dice": "{{who}} 的移动掷骰变更",
