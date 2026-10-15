@@ -257,7 +257,9 @@
   box-sizing: border-box;
   padding: 0 max(3px, calc(var(--u, 12px) * 0.24));
   border-radius: 0 0 0 max(3px, calc(var(--u, 12px) * 0.2));
-  font-size: max(10px, calc(var(--u, 12px) * 0.95));
+  /* No px floor and no viewport media query: the tab scales with the tile name
+     (smallest name tier is 0.8u) on every screen, landscape phones included. */
+  font-size: calc(var(--u, 12px) * 0.8);
   font-weight: 800;
   line-height: calc(var(--u, 12px) * 1.45);
   color: #fff;
@@ -272,10 +274,6 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   pointer-events: auto;
   cursor: help;
-}
-/* The 10px floor outgrows the shrunken mobile tile name; scale with it instead. */
-@media (max-width: 600px) {
-  .markDesignate { font-size: calc(var(--u, 12px) * 0.75); }
 }
 /* Light seat colours flip the ink dark; the white halo keeps either case
    legible on a busy face. */
