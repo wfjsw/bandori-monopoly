@@ -79,7 +79,7 @@ async function fetchTexture(url: string): Promise<TexImageSource> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   const blob = await res.blob();
-  if (typeof createImageBitmap === "function") return createImageBitmap(blob);
+  if (typeof createImageBitmap === "function") return createImageBitmap(blob, { premultiplyAlpha: "premultiply" });
   const img = new Image();
   img.src = URL.createObjectURL(blob);
   try {

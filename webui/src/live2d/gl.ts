@@ -37,6 +37,10 @@ uniform vec3 u_screen;
 uniform float u_alpha_test;
 void main() {
   vec4 t = texture2D(u_tex, v_uv);
+  // Premultiplied colour can never exceed alpha. Some mobile decoders hand
+  // back the straight-alpha RGB bled under transparent pixels (gray), which
+  // the multiply blend then paints as gray patches on cheeks and mouth.
+  t.rgb = min(t.rgb, vec3(t.a));
   if (t.a < u_alpha_test) discard;
   // t.rgb is premultiplied. Multiply scales straight and premultiplied color
   // alike; screenColor composites as s + c - s*c on the straight color, i.e.
