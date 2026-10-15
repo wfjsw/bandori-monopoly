@@ -65,7 +65,7 @@ export interface LogLine {
  *  engine's stage number (1..4 = 开始 / 运营 / 移动 / 结束). */
 interface StageMark { step: number; newTurn: boolean; label?: string; turn?: number }
 
-type Item = { ev: MatchEvent } | { mark: StageMark };
+type Item = { ev: MatchEvent } | { mark: StageMark } | { view: MatchView };
 
 /** How long the new-turn announcement stays on screen. */
 const TURN_MS = 1500;
@@ -141,6 +141,8 @@ export class Animator {
   /** The view the board is drawing: the state as of before the events being
    *  played. Walks start from its positions. */
   shownView: () => MatchView | null = () => this.view();
+  /** Adopt a view as the one the board draws (a `view` queue item reached). */
+  onView: (v: MatchView) => void = () => undefined;
   /** Called when the queue has drained: the board catches up with the state. */
   onDrain: () => void = () => undefined;
   private readonly replay: boolean;
@@ -247,6 +249,15 @@ export class Animator {
   /** Names for message arguments (players/tiles/cards of the running match). */
   private names(): Names {
     return namesOf(this.view()?.state);
+  }
+
+  /** A new view arrived. Queued behind the events that led to it, the board
+   *  adopts it the moment those have played -- not before (state running
+   *  ahead of the animation) and not after later turns' events. */
+  pushView(v: MatchView): void {
+    if (!this.animating && !this.queue.length) return this.onView(v);
+    this.queue.push({ view: v });
+    void this.run();
   }
 
   push(e: MatchEvent): void {
@@ -458,6 +469,7 @@ export class Animator {
     while (this.queue.length && !this.disposed) {
       const it = this.queue.shift()!;
       try {
+        if ("view" in it) { this.onView(it.view); this.bump(); continue; }
         if ("mark" in it) await this.enterStage(it.mark, this.fast());
         else await this.play(it.ev, this.fast());
       } catch (err) {
@@ -516,6 +528,7 @@ export class Animator {
     let at = end;
     for (const it of this.queue) {
       if ("mark" in it) break;
+      if ("view" in it) continue;
       const q = it.ev;
       if (q.type === "move" && q.playerId === playerId && q.from === at && q.value) {
         const dir = q.value > 0 ? 1 : -1;
@@ -738,6 +751,10 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
   if (!animRef.current) {
     const a = new Animator(bump, () => viewRef.current, sess.kind === "replay");
     a.shownView = () => shownRef.current;
+    a.onView = (v) => {
+      shownRef.current = v;
+      set({ view: v, at: performance.now() });
+    };
     a.onDrain = () => {
       if (viewRef.current !== shownRef.current) set({ view: viewRef.current, at: performance.now() });
     };
@@ -755,7 +772,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
       (v) => {
         const prev = viewRef.current?.state;
         viewRef.current = v;
-        if (!a.animating) set({ view: v, at: performance.now() });
+        a.pushView(v);
         // Queue stage changes for the match log after their events. Only a
         // new turn gets an announcement over the board.
         const now = v.state;
