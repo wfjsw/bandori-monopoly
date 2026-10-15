@@ -91,19 +91,21 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书(2): 「且你的所有资金支付与消耗减半」 -- C# `CardMocaHalf.PayMul`
-/// (`p.from == Player && p.amount > 0` -> `p.amount = CeilTo(amount / 2.0, 10)`).
-/// The `PayMul` pass (after `PayAdd`, before `PayChoose`) rewrites the amount
-/// via `ctx::trigger::set_pay_amount`.
+/// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PayMul` pass (after
+/// `PayAdd`, before `PayChoose`) rewrites the amount via
+/// `ctx::trigger::set_pay_amount`.
+///
+/// User ruling 2026-10-15 (OPEN-取整 family): a 减半 modifier transforms the
+/// running amount exactly and must NOT CeilTo in its own body; the engine
+/// rounds up to a multiple of 10 once after all add/mul modifiers. Integer
+/// fold rounds the .5 up (`(amount + 1) / 2`) so a sole modifier still settles
+/// at `round10(exact)` (25 → 12.5 → 20).
 fn pay_mul(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     if amount <= 0 {
         return Ok(());
     }
-    // `CeilTo(amount / 2.0, 10)` -- half, rounded up to a multiple of 10.
-    let half = (amount as i64 + 1) / 2;
-    let half = ((half + 9) / 10) * 10;
-    let half = half.clamp(0, i32::MAX as i64) as i32;
+    let half = ((amount as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     trigger::set_pay_amount(half);
     ctx::log(
         player_id,

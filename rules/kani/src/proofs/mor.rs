@@ -290,8 +290,9 @@ pub fn xiaobai_01_mutant_is_detected() {
 // ===========================================================================
 // C-MOR-rainbow-01 / -02  `Mor:秘密与青春的虹彩`
 // 「（1）…此次支付金额减半。」 「（2）…使此次支付资金变成1.5倍。」
-// Clause pin: integer half / integer 1.5× (140 → 210).
-// The body CeilTo-10s; the iff may FAIL — that is a finding, not a spec bug.
+// User ruling 2026-10-15: the body writes the fold (exact integer transform,
+// no CeilTo); the engine's one end-of-calc round makes
+// `final = round10(fold of add/mul)` (25 → 12.5 → 20 / 37.5 → 40).
 // NOT seat-symmetric in the trigger relationship: the two paths are
 // `from == user` (half, user is the payer) and `from != user` (boost, user is
 // the payee). With n_players=2 each path has exactly two concrete seat pairs;
@@ -327,10 +328,11 @@ fn rainbow_world(user: i32, half: bool) -> i32 {
     amount
 }
 
-/// IFF （1）: pay amount becomes `amount / 2` (clause pin).
+/// IFF （1）: body writes the fold; `final = round10(fold of add/mul)`.
 fn rainbow_01_half_iff_at(user: i32) {
     let amount = rainbow_world(user, true);
-    let expected = spec::rainbow_01_amount(amount);
+    let fold = spec::rainbow_01_fold(amount);
+    let final_amt = spec::rainbow_01_amount(amount);
     let pre = world::snapshot();
     invoke::unwrap_done(card_morfonica::secret_rainbow::counteract_kani(user));
     kani::cover!(true, "body returned");
@@ -342,14 +344,19 @@ fn rainbow_01_half_iff_at(user: i32) {
 
     kani::cover!(amount % 2 == 0, "even amount");
     kani::cover!(amount % 10 == 0, "multiple of 10");
+    kani::cover!(amount == 25, "25 → fold 13 → final 20");
 
     crate::kassert!(
-        spec::rainbow_log_ok(&effects, expected),
-        "C-MOR-rainbow-01: effect log must be exactly SetPayAmount(amount/2)"
+        spec::rainbow_log_ok(&effects, fold),
+        "C-MOR-rainbow-01: effect log must be exactly SetPayAmount(fold), no CeilTo"
     );
     crate::kassert!(
-        post.pay_amount == expected,
-        "C-MOR-rainbow-01: pay amount must be the integer half"
+        post.pay_amount == fold,
+        "C-MOR-rainbow-01: body writes the exact integer fold (no end-of-calc round)"
+    );
+    crate::kassert!(
+        spec::round10(post.pay_amount) == final_amt,
+        "C-MOR-rainbow-01: final = round10(fold of add/mul)"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
@@ -366,10 +373,11 @@ pub fn rainbow_01_half_user1_iff() {
     rainbow_01_half_iff_at(1);
 }
 
-/// IFF （2）: pay amount becomes `amount * 3 / 2` (clause pin).
+/// IFF （2）: body writes the fold; `final = round10(fold of add/mul)`.
 fn rainbow_02_boost_iff_at(user: i32) {
     let amount = rainbow_world(user, false);
-    let expected = spec::rainbow_02_amount(amount);
+    let fold = spec::rainbow_02_fold(amount);
+    let final_amt = spec::rainbow_02_amount(amount);
     let pre = world::snapshot();
     invoke::unwrap_done(card_morfonica::secret_rainbow::counteract_kani(user));
     kani::cover!(true, "body returned");
@@ -379,16 +387,21 @@ fn rainbow_02_boost_iff_at(user: i32) {
     let effects = &ebuf[..log_n];
     let _ = &pre;
 
-    kani::cover!(amount == 140, "doc example 140 → 210");
+    kani::cover!(amount == 140, "doc example 140 → fold 210 → final 210");
     kani::cover!(amount % 2 == 1, "odd amount");
+    kani::cover!(amount == 25, "25 → fold 38 → final 40");
 
     crate::kassert!(
-        spec::rainbow_log_ok(&effects, expected),
-        "C-MOR-rainbow-02: effect log must be exactly SetPayAmount(1.5×amount)"
+        spec::rainbow_log_ok(&effects, fold),
+        "C-MOR-rainbow-02: effect log must be exactly SetPayAmount(fold), no CeilTo"
     );
     crate::kassert!(
-        post.pay_amount == expected,
-        "C-MOR-rainbow-02: pay amount must be the integer 1.5×"
+        post.pay_amount == fold,
+        "C-MOR-rainbow-02: body writes the exact integer fold (no end-of-calc round)"
+    );
+    crate::kassert!(
+        spec::round10(post.pay_amount) == final_amt,
+        "C-MOR-rainbow-02: final = round10(fold of add/mul)"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }

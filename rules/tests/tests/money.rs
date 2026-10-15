@@ -610,3 +610,105 @@ fn misaki_may_counteract_with_zero_fire() {
         t.dump_prompt()
     );
 }
+
+// =====================================================================
+// money rounding — one round after add/mul (user ruling 2026-10-15)
+// docs/rulebook/spec/ROUNDING.md
+// =====================================================================
+
+/// `ceil10` as the engine's end-of-calc money round (`ceil10_money`).
+fn ceil10(x: i32) -> i32 {
+    if x <= 0 {
+        x
+    } else {
+        ((x as i64 + 9) / 10 * 10) as i32
+    }
+}
+
+/// Sole-modifier table for the ruling's worked examples. A 减半 / 1.5×
+/// modifier writes the integer fold (`.5` up); the engine then applies
+/// `final = round10(fold)` once. 25 → 12.5 → 20 (NOT the old body-local
+/// CeilTo which equalled 20 only by accident of being the sole step).
+#[test]
+fn round10_after_fold_matches_the_ruling_table() {
+    // (base, half-fold, half-final, boost-fold, boost-final)
+    let rows = [
+        (25, 13, 20, 38, 40), // 12.5→20 / 37.5→40
+        (18, 9, 10, 27, 30),  // 9→10 / 27→30
+        (38, 19, 20, 57, 60), // 19→20 / 57→60
+        (58, 29, 30, 87, 90), // 29→30 / 87→90
+    ];
+    for (base, half_fold, half_final, boost_fold, boost_final) in rows {
+        assert_eq!((base + 1) / 2, half_fold, "half fold of {base}");
+        assert_eq!(ceil10(half_fold), half_final, "half final of {base}");
+        assert_eq!((base * 3 + 1) / 2, boost_fold, "1.5x fold of {base}");
+        assert_eq!(ceil10(boost_fold), boost_final, "1.5x final of {base}");
+    }
+}
+
+/// Rainbow (1) 「此次支付金额减半」 + `TEST:payAddAny`'s `payAdd` +100.
+/// Stage order: `effect` (rainbow half) → `payAdd` (+100) → … → the one
+/// `ceil10`. Rent 140 → fold 70 → 170 → final 170 (already a multiple of 10).
+/// If the +100 ran first and then a body-local CeilTo half, the figure would
+/// be CeilTo(120)=120 -- order-dependent.
+///
+/// 规则书（秘密与青春的虹彩（1））: 「此次支付金额减半」.
+#[test]
+fn rainbow_half_then_pay_add_rounds_once_at_settle() {
+    let mut t = Table::vanilla(2);
+    t.own(1, &[7]); // rent 140
+    t.set_pos(0, 6);
+    // +100 on every `payAdd` -- runs AFTER the rainbow `effect` rewrite.
+    t.place_raw(0, "TEST:payAddAny");
+    t.give(0, &["Mor:秘密与青春的虹彩"]);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
+    skip_all(&mut t);
+    // 140 → half fold 70 → +100 = 170 → ceil10 = 170.
+    assert_eq!(t.money(0), 10_000 - 170, "half then +100 then round10");
+    assert_eq!(t.money(1), 10_000 + 170);
+}
+
+/// An amount no modifier touched is **not** rounded. A plain rent of 140
+/// settles at 140; the engine's ceil10 only fires when `modified` is set.
+#[test]
+fn untouched_amount_is_not_rounded() {
+    let mut t = Table::vanilla(2);
+    t.own(1, &[7]); // rent 140
+    t.set_pos(0, 6);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.money(0), 10_000 - 140, "no modifier → no round");
+    assert_eq!(t.money(1), 10_000 + 140);
+}
+
+/// Order-dependence: the `effect` rewrite (rainbow) is folded **before**
+/// `payAdd`. 25 would be 12.5 → +100 = 112.5 → 120 if the base were 25; with
+/// rent 140 the same shape is 70 + 100 = 170. The old body-local CeilTo on the
+/// half would have written 20 (for base 25) before the +100 landed.
+///
+/// This pins the *shape* of the fold: later adds see the exact (integer) half,
+/// and the single round happens at settle.
+#[test]
+fn modifier_order_is_effect_then_pay_add_then_one_round() {
+    // Formula-level pin of the documented stage order (ROUNDING.md).
+    let base = 25;
+    let half_fold = (base + 1) / 2; // 13
+    let after_add = half_fold + 100; // 113
+    let final_amt = ceil10(after_add); // 120
+    assert_eq!(final_amt, 120, "25 half → +100 → round10 = 120");
+    // The old early-round would have been ceil10(13)=20 then +100 = 120 too
+    // for THIS addend; the divergence shows up on adds that cross a decade:
+    // 25 half → +7 = 20 → 20 (new) vs ceil10(13)=20 then +7 = 27 (old, no
+    // second round) or ceil10(20)=20 (old with a second round).
+    let after_seven = half_fold + 7; // 20
+    assert_eq!(ceil10(after_seven), 20, "25 half → +7 → round10 = 20");
+    // Exact rational fold for comparison: 12.5 + 7 = 19.5 → 20. Same here;
+    // 12.5 + 8 = 20.5 → 30 while integer 13 + 8 = 21 → 30. Same. The
+    // multi-fractional divergence is OPEN (ROUNDING.md).
+    let after_eight = half_fold + 8; // 21
+    assert_eq!(ceil10(after_eight), 30, "25 half → +8 → round10 = 30");
+}

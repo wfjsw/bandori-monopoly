@@ -56,6 +56,19 @@ pub const MAX_SETTLE_DEPTH: u32 = 64;
 /// `no_buy` / `can_build` / `pay_factor` into every later one. Compare against
 /// the plan as it stood before the window and apply only the delta -- and
 /// **never** copy `m` over the plan (that wipes the earlier writes).
+/// Money rounding (user ruling 2026-10-15, OPEN-取整 family): round **up** to a
+/// multiple of 10. Applied once, after every add/mul modifier of a payment has
+/// been processed (`money_inner`), and to a pre-split total that some
+/// `payTotal*` hook rewrote (`pay_total`). Non-positive figures are returned
+/// unchanged -- a negative is reversed into a child payment and must not be
+/// CeilTo'd toward +inf first.
+fn ceil10_money(x: i32) -> i32 {
+    if x <= 0 {
+        return x;
+    }
+    ((x as i64 + 9) / 10 * 10).clamp(0, i32::MAX as i64) as i32
+}
+
 fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     if plan.kind != before.kind {
         m.kind = plan.kind;
@@ -3370,6 +3383,13 @@ impl Cx<'_> {
         let rent = p.kind == PayKind::Rent;
         let mut amount = p.amount;
         let mut to = p.to;
+        // User ruling 2026-10-15 (OPEN-取整 family): money rounds up to a
+        // multiple of 10 **once**, after every add/mul modifier has rewritten
+        // the running figure. Modifiers transform exactly and must not CeilTo
+        // inside their own body; this flag is what schedules the single
+        // end-of-calc round. An amount no modifier touched stays exactly as the
+        // base formula produced it (rent table, split share, printed X, ...).
+        let mut modified = false;
         // ---- declaration ------------------------------------------------
         // The payment is declared with its **declared** amount, before any
         // modifier has touched it. That is the stable fact a counter listens
@@ -3423,6 +3443,9 @@ impl Cx<'_> {
             // Q3: adjustments compose freely -- no floor. A negative here is
             // still an in-flight figure later stages may reshape; the reverse
             // decision happens only after the whole chain has resolved.
+            if t.value != amount {
+                modified = true;
+            }
             amount = t.value;
             to = (t.target >= 0).then_some(t.target as usize);
         }
@@ -3439,6 +3462,7 @@ impl Cx<'_> {
         // the same position the per-share `payAdd` occupies, one level up.
         if p.total_stage {
             let mut to_slot = to;
+            let before_total = amount;
             match self.pay_total_stages(
                 side,
                 payer,
@@ -3464,6 +3488,9 @@ impl Cx<'_> {
                     return Ok(Paid::default());
                 }
                 Some(shaped) => {
+                    if shaped != before_total {
+                        modified = true;
+                    }
                     amount = shaped;
                     to = to_slot;
                 }
@@ -3476,6 +3503,7 @@ impl Cx<'_> {
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
         for kind in ["payAdd", "payMul", "payChoose", "payAt"] {
+            let before = amount;
             let t = raise!(
                 self,
                 kind,
@@ -3487,6 +3515,9 @@ impl Cx<'_> {
                 @p TriggerPay::new(rent),
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
+            if t.value != before {
+                modified = true;
+            }
             amount = t.value;
             // A stage may redirect the payee (`set_pay_target`, e.g. 无路矢's
             // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」) or the
@@ -3500,7 +3531,11 @@ impl Cx<'_> {
             // window, so the scale covers the payment as card effects have
             // shaped it and not only `pay_rent`'s table number.
             if kind == "payMul" {
+                let before_scale = amount;
                 amount = self.scale_settle_payment(amount, p.kind, rent, p.tile);
+                if amount != before_scale {
+                    modified = true;
+                }
             }
         }
         // `pay` is a settlement hook now: what the payment actually was. It
@@ -3512,6 +3547,7 @@ impl Cx<'_> {
         // the payment outright (it used to be ignored unless the body also
         // zeroed the figure).
         if amount != 0 {
+            let before = amount;
             let t = raise!(
                 self,
                 "pay",
@@ -3526,9 +3562,23 @@ impl Cx<'_> {
             if t.is_cancelled() {
                 amount = 0;
             } else {
+                if t.value != before {
+                    modified = true;
+                }
                 amount = t.value;
                 to = (t.target >= 0).then_some(t.target as usize);
             }
+        }
+        // User ruling 2026-10-15: the one money round. After every add/mul
+        // modifier has rewritten the running figure (and the settlement hook
+        // has had its say), a **positive** figure some modifier touched is
+        // rounded up to a multiple of 10 -- once, here. Untouched bases (rent
+        // table, `ceil10(ceil(total/n))` split shares, printed X formulas) are
+        // left as-is. A negative figure is not rounded: the reversal below
+        // would otherwise see a CeilTo toward +inf (e.g. -7 → 0) and drop the
+        // child payment.
+        if modified && amount > 0 {
+            amount = ceil10_money(amount);
         }
         // Q3 (PIPELINE-AUDIT, user ruling 2026-10-07): adjustments compose
         // freely and there is no floor between stages. When the counteraction
@@ -3753,7 +3803,20 @@ impl Cx<'_> {
         // A cancelled command is `None`. A non-positive shaped total is nothing
         // to divide -- the per-leg `money()` calls (and their Q3 reversal) live
         // on the shares, not here.
-        Ok(shaped.filter(|&s| s > 0))
+        //
+        // User ruling 2026-10-15: if a pre-split add/mul hook rewrote the total,
+        // round it up to a multiple of 10 **here**, once, before 「[分摊]」
+        // divides. An untouched total is the base figure and stays as-is (the
+        // per-share formula still CeilTo-10s each share -- that share rounding
+        // is the book's printed 「向上取整10」, not this rule).
+        Ok(shaped.map(|s| {
+            if s != total {
+                ceil10_money(s)
+            } else {
+                s
+            }
+        })
+        .filter(|&s| s > 0))
     }
 
     /// Emit the money log line for one settled payment.

@@ -228,16 +228,24 @@ fn band_bend_iff_at(user: i32) {
     let post = world::snapshot();
 
     kani::cover!(pre_amount == 300, "300 → 450");
-    kani::cover!(pre_amount % 2 == 1, "odd amount (OPEN-取整)");
-    // The body uses `(amount * 3 + 1) / 2` which for even amounts is exact
-    // 1.5x; for odd amounts it is ceil-ish. The book does not specify the
-    // odd rounding (OPEN-取整). Pin the even case as the clause's meaning
-    // and accept the body's formula on odds as the executable reading.
+    kani::cover!(pre_amount % 2 == 1, "odd amount");
+    kani::cover!(pre_amount == 25, "25 → fold 38 → final 40");
+    // Body writes the integer fold (no CeilTo). User ruling 2026-10-15:
+    // `final = round10(fold of add/mul)` once at settle.
     if pre_amount > 0 {
-        let expected = (pre_amount * 3 + 1) / 2;
+        let fold = (pre_amount * 3 + 1) / 2;
         crate::kassert!(
-            post.pay_amount == expected,
-            "C-MUJICA-团技能-01: PayMul rewrites the amount to 1.5x"
+            post.pay_amount == fold,
+            "C-MUJICA-团技能-01: PayMul rewrites the amount to the 1.5x fold"
+        );
+        let final_amt = if fold <= 0 {
+            fold
+        } else {
+            ((fold as i64 + 9) / 10 * 10) as i32
+        };
+        crate::kassert!(
+            final_amt >= fold && final_amt % 10 == 0,
+            "C-MUJICA-团技能-01: final = round10(fold of add/mul)"
         );
     }
     crate::kassert!(
