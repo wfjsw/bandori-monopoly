@@ -216,13 +216,15 @@ fn gf07_main_move_is_1d20_and_the_path_skips_the_start() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     assert_eq!(t.pos(0), 3, "three steps clockwise from CiRCLE");
-    // The end settled: the unowned 水族馆 announced its buy (the buy itself is
-    // an end-step action, not a prompt).
+    // G-SETTLE-06/07: the settle of the unowned 水族馆 IS the optional buy
+    // prompt (the buy itself is the prompt's yes).
     assert!(
-        t.recent_keys(6).iter().any(|k| k.contains("land")),
-        "the end tile settled: {:?}",
-        t.recent_keys(6)
+        t.prompt().is_some() || t.recent_keys(12).iter().any(|k| k.contains("land") || k.contains("buy")),
+        "the end tile settled: prompt={:?} keys={:?}",
+        t.dump_prompt(),
+        t.recent_keys(12)
     );
+    drain(&mut t);
     assert_eq!(t.owner(3), None, "unowned");
 }
 
@@ -358,7 +360,10 @@ fn s06_unowned_buy_price_includes_the_houses() {
     t.set_houses(land, 2);
     t.set_money(0, 10_000);
     settle_on(&mut t, 0, land);
-    // The buy is the end step's offer (「[主要移动]和所需[结算]完成后进入结束阶段」).
+    // G-SETTLE-06/07: the settle of an unowned buyable IS the optional buy.
+    // Decline that prompt, then buy through the end-step button so the price
+    // (deed + houses) is still what the button quotes.
+    drain(&mut t);
     t.buy(0).unwrap();
     drain(&mut t);
     assert_eq!(t.owner(land), Some(0), "deed and ownership gained");
@@ -409,6 +414,9 @@ fn s08_build_costs_the_house_and_respects_the_cap() {
     // 购物中心: up to 3 houses, each at the house cost.
     for n in 1..=3 {
         settle_on(&mut t, 0, land);
+        // G-SETTLE-06/07: decline the settle-time build prompt, then build
+        // through the end-step button.
+        drain(&mut t);
         t.build(0).unwrap();
         drain(&mut t);
         assert_eq!(t.houses(land), n, "house {n} up");
@@ -420,6 +428,7 @@ fn s08_build_costs_the_house_and_respects_the_cap() {
     );
     // Cap reached: the fourth build is refused.
     settle_on(&mut t, 0, land);
+    drain(&mut t);
     assert!(t.build(0).is_err() || t.houses(land) == 3, "购物中心 caps at 3");
     assert_eq!(t.houses(land), 3);
 }
@@ -764,12 +773,14 @@ fn t05_pass_fires_per_step_and_never_for_the_start() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     assert_eq!(t.pos(0), 13, "walked 11, 12, 13");
-    // The end settled -- so the end is in the path.
+    // G-SETTLE-06/07: the settle of the end tile may open a buy/build prompt.
     assert!(
-        t.recent_keys(6).iter().any(|k| k.contains("land")),
-        "the end tile settled: {:?}",
-        t.recent_keys(6)
+        t.prompt().is_some() || t.recent_keys(12).iter().any(|k| k.contains("land") || k.contains("buy")),
+        "the end tile settled: prompt={:?} keys={:?}",
+        t.dump_prompt(),
+        t.recent_keys(12)
     );
+    drain(&mut t);
     // The start (10) is not in the path: no land event for it.
 }
 

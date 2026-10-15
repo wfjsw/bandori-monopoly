@@ -600,6 +600,9 @@ fn turn_phases_and_immediate_next_turn() {
     // The main move (loaded die) runs → 结束.
     t.dice(&[3]);
     t.roll(0).expect("roll");
+    // G-SETTLE-06/07 may open a buy/build prompt; answer it so the stage can
+    // finish the settle and reach 结束.
+    t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END, "after the main move the stage is 结束");
     assert!(t.world().turn.main_moved, "main_moved latch");
 
@@ -736,6 +739,7 @@ fn main_move_is_required_exactly_once() {
     assert_eq!(t.turn(), 0);
     t.dice(&[2]);
     t.roll(0).expect("the required [主要移动]");
+    t.settle_answering_defaults();
     t.end(0).expect("end after [主要移动]");
     assert_eq!(t.turn(), 1);
 }
@@ -820,11 +824,13 @@ fn stage_order_is_monotonic_inside_a_turn() {
     assert_eq!(t.step(), stage::OPS);
     t.dice(&[1]);
     t.roll(0).expect("roll");
+    t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END);
     t.end(0).expect("end");
     assert_eq!(t.step(), stage::OPS);
     t.dice(&[1]);
     t.roll(1).expect("roll");
+    t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END);
 }
 

@@ -348,7 +348,7 @@ fn louder_contract() {
             &pre,
             t.world(),
             &[
-                "rent_unit_bonus",
+                "rule_param_bonus",
                 "hand:P0",
                 "draw:P0",
                 "discard:P0",
