@@ -1580,12 +1580,19 @@ impl CardWorld for Run {
     }
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
         if n > 0 {
-            // 「任意玩家获得exile…时」 -- the grant is a raise point (embers).
-            self.exile_log.push(player_id);
-            self.outcome(
-                player_id,
-                Msg::new("log.outcome.exile").player_id("target", player_id),
-            );
+            // 「该效果生效时无法重复获得该效果」 -- a refused re-acquisition is
+            // not a grant: no embers raise and no `outcome.exile` line (the
+            // layer itself is refused in `give_exile` below).
+            let already =
+                self.world.state_get(player_id, game_core::state::key::EXILE) > 0;
+            if !already {
+                // 「任意玩家获得exile…时」 -- the grant is a raise point (embers).
+                self.exile_log.push(player_id);
+                self.outcome(
+                    player_id,
+                    Msg::new("log.outcome.exile").player_id("target", player_id),
+                );
+            }
         }
         self.world.give_exile(player_id, n, to);
     }
@@ -8096,16 +8103,27 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     };
                 }
                 // `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0.
+                //
+                // 强制购买 is immune (rulebook 其他规则 6: 「抵押，赎回，和强制购买
+                // 的资金变动不受任何效果影响，除非效果写明改动抵押，赎回，或强制
+                // 购买」). The price is the printed 2×(price+houses) figure; a
+                // generic buy-stage hook does not 「写明」 force-buy, so it must
+                // not retune this quote. `BuyGate` still runs above (can-you-buy,
+                // not a price). TODO(规则书): a hook that *does* write
+                // 「强制购买」 as its target has no wire spelling yet -- when one
+                // lands, only that entry may rewrite the Force base.
                 let mut price = base;
-                for &kind in &BUY_STAGES {
-                    if !declares(kind) {
-                        continue;
+                if q.kind != game_core::engine::purchase::BuyKind::Force {
+                    for &kind in &BUY_STAGES {
+                        if !declares(kind) {
+                            continue;
+                        }
+                        price = at(&mut run, kind, price)
+                            .buy
+                            .map(|b| b.price)
+                            .unwrap_or(price)
+                            .max(0);
                     }
-                    price = at(&mut run, kind, price)
-                        .buy
-                        .map(|b| b.price)
-                        .unwrap_or(price)
-                        .max(0);
                 }
                 Quote {
                     price,

@@ -59,8 +59,8 @@ counted under the first tag; the dual is named in the row.)
 
 | clause ID | unit | class | what the book says | what the implementation does | evidence | status |
 |---|---|---|---|---|---|---|
-| G-FLOW-12 | flow | MORE | 「游玩人数为3到10人。」 (`rulebook-doc.md:107`) | `Match::new` seats any 2..=10 players in Casual and starts play. | `casual_requires_3_to_10_players` | REGRESSION-ONLY |
-| G-FLOW-14 | flow | MORE | 「游玩人数须在5到6人。」 (`rulebook-doc.md:117`) | Same constructor seats 4 in Ranked and starts play. | `ranked_requires_5_to_6_players` | REGRESSION-ONLY |
+| G-FLOW-12 | flow | MORE | 「游玩人数为3到10人。」 (`rulebook-doc.md:107`) | **FIXED 2026-10-15**: `MatchMode::check_seats` carries the bound; web-glue `SoloMatch::new` and rules-worker `new` refuse. `Match::new` stays a harness constructor (unit tests hand-build small tables). | `casual_requires_3_to_10_players` | was REGRESSION-ONLY |
+| G-FLOW-14 | flow | MORE | 「游玩人数须在5到6人。」 (`rulebook-doc.md:117`) | **FIXED 2026-10-15**: same `check_seats` / lobby refusal. | `ranked_requires_5_to_6_players` | was REGRESSION-ONLY |
 
 ---
 

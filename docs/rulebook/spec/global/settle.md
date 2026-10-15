@@ -182,11 +182,15 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 * **Quote:** 「如果格子地契未抵押则**[支付]拥有格子的玩家格子地契所标记的现等级地租。**」
 * **Trigger:** a `rent` event on a buyable tile owned by someone else.
 * **Condition:** the tile was not mortgaged in `pre`; no card activation; not
-  a RiNG (OPEN-RING-RENT); not an agent half-charge window.
+  a RiNG (OPEN-RING-RENT); not an agent half-charge window -- neither the
+  all-owned sweep (`log.agent_all_owned`) nor the choose-one else-branch
+  kind=2 commit (`log.agent_offer_commit`).
 * **Effect:** the payer pays the owner exactly `rent[h]` where `h` is the
   standing house count (「现等级」).
 * **Frame:** only the two money balances move (ledger -- G-MONEY-01).
-* **Rulings & OPEN:** OPEN-RING-RENT. Agent half-rate is G-SETTLE-13.
+* **Rulings & OPEN:** OPEN-RING-RENT. Agent half-rate is G-SETTLE-13 /
+  the agent else-branch (kind=2). A further L6 「支付减半」 may reshape the
+  charge.
 * **Executable:** `g_settle_10`.
   Scenarios: `g_settle_10_rent_is_the_marked_current_level`,
   `g_settle_10_frame_only_money_moves`.

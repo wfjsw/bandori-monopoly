@@ -961,12 +961,17 @@ pub fn g_money_09(step: &Step<'_>) -> Result<(), String> {
 /// * **Trigger:** a `rent` event whose message carries the half-charge
 ///   marker (`full` / `cut`).
 /// * **Condition:** `full` is the pre-half rate (the 现等级地租).
-/// * **Effect:** `cut == ceil(full / 2 / 10) * 10` and the money that moved
-///   is `cut`.
+/// * **Effect:** `cut == ceil(full / 2 / 10) * 10`. The ledger may still be
+///   reshaped by later add/mul modifiers (HHW double, soyo extra half, a
+///   standing 支付减半) -- the clause pins the half-charge **rate**, not the
+///   post-modifier figure.
 /// * **Frame:** n/a on the rate; the pair's money is the ledger's job.
 /// * **Rulings & OPEN:** 「同色」 is the board's colour group (OPEN-Agent同色
 ///   -- whether 「该格获得所有颜色」 widens the set is undecided). The
 ///   rounding is 「向上取整10」, not banker's rounding: 301 → 160.
+///   `pay_rent` writes `cut` as the pre-modifier Pay amount, so an engine that
+///   forgot to halve fails the rate check (`cut == full`); the ledger equality
+///   can only see modifiers and is not pinned.
 /// * **Executable:** [`g_money_10`].
 const G_MONEY_10: Clause = Clause::new(
     "G-MONEY-10",
@@ -990,12 +995,13 @@ pub fn g_money_10(step: &Step<'_>) -> Result<(), String> {
                 "G-MONEY-10: half charge of {full} became {cut}, expected {want} (ceil 10)"
             ));
         }
-        if e.value as i64 != cut {
-            return Err(format!(
-                "G-MONEY-10: half charge recorded {cut} but the ledger moved {}",
-                e.value
-            ));
-        }
+        // The clause pins the half-charge **rate** (`cut == ceil10(full/2)`).
+        // Do **not** pin the ledger to `cut`: the running figure is free to be
+        // reshaped by later add/mul modifiers (HHW:传播笑容 「支付双倍价格」,
+        // soyo 「地产商的减半收费基础上额外减半」, a standing 「支付减半」 /
+        // `RENT_FACTOR`, …). `pay_rent` writes `cut` as the pre-modifier Pay
+        // amount, so an engine that forgot to halve would fail the rate check
+        // above (`cut == full`); the ledger equality can only see modifiers.
     }
     Ok(())
 }

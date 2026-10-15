@@ -2966,12 +2966,13 @@ impl Cx<'_> {
             return Ok(Paid::default());
         }
         if p.kind != PayKind::ForceBuy {
-            // The payer is gated by `can_pay` (the status hosts' pay gate). The
-            // payee is gated only by stun (rulebook 49: 「无法收付款」 --
-            // stunned cannot *receive* either); exile is not a receiving block
-            // -- 「exile期间本应获得的格子收入由此前指定的那名玩家获得」 still
-            // moves it (and a redirect hook can name a different payee). An out
-            // payee is refused just above.
+            // The payer is gated by `can_pay` (the status hosts' pay gate -- stun
+            // and exile both close it). The payee is gated by stun up front
+            // (rulebook 49: 「无法收付款」 -- stunned cannot *receive* either).
+            // Exile is **not** blocked here: 「exile期间本应获得的格子收入由
+            // 此前指定的那名玩家获得」 (MyGO:无路矢) reroutes the payee from a
+            // `payAdd` hook, which runs below. The unredirected exile payee is
+            // refused at transfer time instead (see the final-payee gate).
             let stunned_payee = p.to.filter(|&t| self.w.st.players[t].stunned());
             if let Some(x) = p.from.filter(|&f| !self.can_pay(f)).or(stunned_payee) {
                 let text = Msg::new(if p.from.is_some() {
@@ -3270,6 +3271,37 @@ impl Cx<'_> {
             )?;
             return Ok(Paid::default());
         }
+        // [除外] 「无法收付款」 (rulebook 50): a final payee still on the exile
+        // gate cannot receive. A `set_pay_target` redirect (MyGO:无路矢's
+        // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」) has already
+        // moved `to` off the exiled seat by now -- only an unredirected leg
+        // lands here. Refuse it the same way the early stun payee gate does.
+        // `ForceBuy` skips the status pay gate (same as the early gate).
+        if p.kind != PayKind::ForceBuy {
+            if let Some(t) = to.filter(|&t| !self.out(t) && self.w.st.players[t].exile() > 0) {
+                let text = Msg::new(if p.from.is_some() {
+                    "log.blocked_pay"
+                } else {
+                    "log.blocked_gain"
+                })
+                .player_id("who", t)
+                .msg("status", Msg::new(self.blocked(t)))
+                .n("amount", amount);
+                self.w.log("text", t as i32, text);
+                raise!(
+                    self,
+                    "payAfter",
+                    side,
+                    player_id = payer,
+                    target = t as i32,
+                    value = 0,
+                    by_card = p.by_card,
+                    @p TriggerPay::new(rent),
+                    tile = p.tile.map_or(-1, |t| t as i32)
+                )?;
+                return Ok(Paid::default());
+            }
+        }
         let mut loss = if p.from.is_some() { amount } else { 0 };
         if let Some(f) = p.from {
             if self.w.st.players[f].money < loss {
@@ -3308,7 +3340,7 @@ impl Cx<'_> {
                 self.w.bump_gain(t as i32, 1);
             }
         }
-        self.log_money(&p, loss, gain);
+        self.log_money(&p, to, loss, gain);
         // `payAfter` (Fx) -- every settled payment, then the `paid` counteraction
         // window only when the payer lost money.
         let moved = if p.from.is_some() { loss } else { gain };
@@ -3432,10 +3464,10 @@ impl Cx<'_> {
     }
 
     /// Emit the money log line for one settled payment.
-    fn log_money(&mut self, p: &Pay, loss: i32, gain: i32) {
+    fn log_money(&mut self, p: &Pay, to: Option<usize>, loss: i32, gain: i32) {
         let typ = p.typ.unwrap_or(if p.kind == PayKind::Rent {
             PayEvent::Rent
-        } else if p.from.is_some() && p.to.is_some() {
+        } else if p.from.is_some() && to.is_some() {
             PayEvent::Pay
         } else if p.from.is_some() {
             PayEvent::Lose
@@ -3456,7 +3488,7 @@ impl Cx<'_> {
         let mut text = match &p.text {
             Some(t) => t.clone().n("amount", amount),
             None => {
-                let m = match (p.from, p.to) {
+                let m = match (p.from, to) {
                     (Some(f), Some(t)) => {
                         Msg::new("log.pay").player_id("who", f).player_id("to", t)
                     }
@@ -3467,7 +3499,7 @@ impl Cx<'_> {
                 m.n("amount", amount).opt("src", src)
             }
         };
-        if let (Some(_), Some(t)) = (p.from, p.to) {
+        if let (Some(_), Some(t)) = (p.from, to) {
             if gain != loss {
                 text = Msg::new("log.with_received")
                     .msg("base", text)
@@ -3475,9 +3507,9 @@ impl Cx<'_> {
                     .n("gain", gain);
             }
         }
-        let player_id = p.from.or(p.to).map_or(-1, |s| s as i32);
+        let player_id = p.from.or(to).map_or(-1, |s| s as i32);
         let other = if p.from.is_some() {
-            p.to.map_or(-1, |t| t as i32)
+            to.map_or(-1, |t| t as i32)
         } else {
             -1
         };

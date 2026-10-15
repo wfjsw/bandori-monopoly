@@ -268,8 +268,8 @@ fn turn_order_ties_resolve_to_unique_faces() {
     }
 }
 
-/// G-FLOW-12 -- 娱乐 mode 3 to 10 players. A 2-seat Casual match is outside
-/// the book's range.
+/// G-FLOW-12 -- 娱乐 mode 3 to 10 players. A 2-seat Casual table is outside
+/// the book's range; the lobby must refuse it.
 #[test]
 fn casual_requires_3_to_10_players() {
     // 3 and 10 are legal.
@@ -277,67 +277,51 @@ fn casual_requires_3_to_10_players() {
     assert_eq!(ok3.players(), 3);
     let ok10 = Setup::new(10, MatchMode::Casual);
     assert_eq!(ok10.players(), 10);
-    // The engine's own constructor accepts 2 -- if it also starts play at 2
-    // seats in Casual, that is a book gap (3到10人). Pin the *book* bound.
-    let members: Vec<RoomMember> = (1..=2i32)
-        .map(|id| RoomMember {
-            id,
-            player: format!("P{}", id - 1),
-            bot: true,
-            ..Default::default()
-        })
-        .collect();
-    let mut m = Match::new(
-        data(),
-        rules(),
-        &members,
-        SEED,
-        MatchMode::Casual,
-        ScoreWeights::default(),
-    );
-    m.quick_start();
-    settle_match(&mut m);
-    let n = m.world().st.players.len();
-    let mode = m.world().st.mode;
-    assert_eq!(mode, MatchMode::Casual as i32);
-    // Book: 「游玩人数为3到10人」. If the engine seated 2, that is a
-    // discrepancy -- a plain failing assertion.
+    // Book: 「游玩人数为3到10人」 (`rulebook-doc.md:108`). `MatchMode::check_seats`
+    // is the bound every lobby entry (web-glue `SoloMatch::new`,
+    // rules-worker `new`) calls before a match is built.
+    assert_eq!(MatchMode::Casual.seat_range(), Some((3, 10)));
+    assert!(MatchMode::Casual.check_seats(3).is_ok());
+    assert!(MatchMode::Casual.check_seats(10).is_ok());
     assert!(
-        (3..=10).contains(&n),
-        "G-FLOW-12: 娱乐 mode seated {n} players, book says 3到10人"
+        MatchMode::Casual.check_seats(2).is_err(),
+        "G-FLOW-12: 娱乐 mode must refuse 2 seats"
+    );
+    assert!(
+        MatchMode::Casual.check_seats(11).is_err(),
+        "G-FLOW-12: 娱乐 mode must refuse 11 seats"
+    );
+    let err = MatchMode::Casual.check_seats(2).unwrap_err();
+    assert!(
+        err.contains("G-FLOW-12") && err.contains("3到10"),
+        "G-FLOW-12: refusal must name the clause and the bound, got {err:?}"
     );
 }
 
-/// G-FLOW-14 -- 正规 mode 5 to 6 players.
+/// G-FLOW-14 -- 正规 mode 5 to 6 players. A 4-seat Ranked table is outside
+/// the book's range; the lobby must refuse it.
 #[test]
 fn ranked_requires_5_to_6_players() {
     let ok5 = Setup::new(5, MatchMode::Ranked);
     assert_eq!(ok5.players(), 5);
     let ok6 = Setup::new(6, MatchMode::Ranked);
     assert_eq!(ok6.players(), 6);
-    // A 4-seat Ranked match is outside the book's 5到6人.
-    let members: Vec<RoomMember> = (1..=4i32)
-        .map(|id| RoomMember {
-            id,
-            player: format!("P{}", id - 1),
-            bot: true,
-            ..Default::default()
-        })
-        .collect();
-    let mut m = Match::new(
-        data(),
-        rules(),
-        &members,
-        SEED,
-        MatchMode::Ranked,
-        ScoreWeights::default(),
-    );
-    m.quick_start();
-    settle_match(&mut m);
-    let n = m.world().st.players.len();
+    // Book: 「游玩人数须在5到6人」 (`rulebook-doc.md:118`).
+    assert_eq!(MatchMode::Ranked.seat_range(), Some((5, 6)));
+    assert!(MatchMode::Ranked.check_seats(5).is_ok());
+    assert!(MatchMode::Ranked.check_seats(6).is_ok());
     assert!(
-        (5..=6).contains(&n),
-        "G-FLOW-14: 正规 mode seated {n} players, book says 5到6人"
+        MatchMode::Ranked.check_seats(4).is_err(),
+        "G-FLOW-14: 正规 mode must refuse 4 seats"
+    );
+    assert!(
+        MatchMode::Ranked.check_seats(7).is_err(),
+        "G-FLOW-14: 正规 mode must refuse 7 seats"
+    );
+    let err = MatchMode::Ranked.check_seats(4).unwrap_err();
+    assert!(
+        err.contains("G-FLOW-14") && err.contains("5到6"),
+        "G-FLOW-14: refusal must name the clause and the bound, got {err:?}"
     );
 }
 

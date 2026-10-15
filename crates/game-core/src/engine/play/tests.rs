@@ -44,7 +44,10 @@ fn setup(players: i32) -> (Arc<GameData>, World) {
         Arc::new(StubRules),
         &members,
         1,
-        MatchMode::Casual,
+        // Solo is the practice table (not the book's 娱乐): these routine
+        // tests hand-build 2-seat boards and must not trip G-FLOW-12's
+        // 「游玩人数为3到10人」 bound.
+        MatchMode::Solo,
         ScoreWeights::default(),
     );
     m.quick_start();

@@ -63,19 +63,86 @@ pub fn pile_multiset(w: &World, i: usize) -> BTreeMap<String, usize> {
     m
 }
 
+/// Body text that overrides the default 「进入弃卡区」 (特别注意 3).
+///
+/// Event cards live in `GameData::events` (`EventData`), not `GameData::cards`
+/// (`CardData`) -- a `event:<id>` lookup on `card()` is `None` and the skip
+/// would never fire. Resolve both, stripping the `event:` rule-id prefix.
+fn card_or_event_text<'a>(data: &'a game_core::data::GameData, id: &str) -> &'a str {
+    if let Some(c) = data.card(id) {
+        return c.text.as_str();
+    }
+    let short = id.strip_prefix("event:").unwrap_or(id);
+    data.event(short)
+        .or_else(|| data.event(id))
+        .map(|e| e.text.as_str())
+        .unwrap_or("")
+}
+
+/// Does this body place / remove itself instead of 「进入弃卡区」?
+///
+/// 「将此卡…」 is the self-disposition shape (「将此卡放置于场地中央」 /
+/// 「将此卡永久放置于场上」 / 「将此卡移除」) -- any of those override the
+/// default discard. [移除] is the tag form; 返回手牌 / 加入手卡 are the
+/// return-to-hand overrides.
+fn overrides_discard(data: &game_core::data::GameData, id: &str) -> bool {
+    let text = card_or_event_text(data, id);
+    text.contains("[移除]")
+        || text.contains("返回手牌")
+        || text.contains("加入手卡")
+        || text.contains("将此卡")
+}
+
 /// How many copies of `id` sit in `w` player `i`'s hand / discard / field.
+///
+/// Event cards (`event:*`) file to the **event** zones (`event_discard` /
+/// `event_active` / the board-owned `event:*` rule instance), not the player's
+/// private piles -- count those as the discard / field of an event card so a
+/// `keep()` (「将此卡放置于场地中央」) or a later 「放入事件弃牌」 is visible.
 fn counts(w: &World, i: usize, id: &str) -> (usize, usize, usize) {
     let Some(h) = w.hidden.get(i) else {
         return (0, 0, 0);
     };
     let hand = h.hand.iter().filter(|c| *c == id).count();
-    let discard = h.discard.iter().filter(|c| *c == id).count();
-    let field = w
+    let is_event = id.starts_with("event:");
+    let short = id.strip_prefix("event:").unwrap_or(id);
+    let player_discard = h.discard.iter().filter(|c| *c == id).count();
+    let discard = if is_event {
+        player_discard
+            + w.st
+                .event_discard
+                .iter()
+                .filter(|c| *c == short || *c == id)
+                .count()
+            + w.st
+                .event_removed
+                .iter()
+                .filter(|c| *c == short || *c == id)
+                .count()
+    } else {
+        player_discard
+    };
+    let player_field = w
         .st
         .players
         .get(i)
         .map(|p| p.field.iter().filter(|f| f.card == id).count())
         .unwrap_or(0);
+    let field = if is_event {
+        player_field
+            + w.st
+                .event_active
+                .iter()
+                .filter(|e| e.id == short || e.id == id)
+                .count()
+            + w.st
+                .board_field
+                .iter()
+                .filter(|f| f.card == id && f.tile < 0)
+                .count()
+    } else {
+        player_field
+    };
     (hand, discard, field)
 }
 
@@ -251,9 +318,11 @@ pub fn g_cards_02(step: &Step<'_>) -> Result<(), String> {
 /// * **Trigger:** a hand play (`kind == play`) of a card that is **not**
 ///   tagged [持续], settled to rest.
 /// * **Condition:** the card was in the player's hand in `pre` and the play
-///   was accepted. Skip when the card's own text [移除]s it or returns it to
-///   hand (card effects override the rulebook -- 特别注意 3), and skip when a
-///   prompt is still open (the play may be mid-resolution).
+///   was accepted. Skip event cards (`event:*` -- 事件卡, not 手卡; their
+///   discard is `event_discard`). Skip when the card's own text [移除]s it,
+///   returns it to hand, or places itself (「将此卡…」 -- card effects override
+///   the rulebook -- 特别注意 3), and skip when a prompt is still open (the
+///   play may be mid-resolution).
 /// * **Effect:** the card is in the player's discard in `post`, not in hand
 ///   and not on the field.
 /// * **Frame:** n/a (read of that card's zone).
@@ -286,15 +355,18 @@ pub fn g_cards_03(step: &Step<'_>) -> Result<(), String> {
     if tagged(step.data, id, "持续") {
         return Ok(());
     }
+    // 「手卡」 is the card-deck hand pile. Event cards (`event:*`) are 事件卡
+    // with their own zones (event_active / event_discard / event_removed) --
+    // 「使用后的非[持续]手卡进入弃卡区」 does not send them to the player's
+    // discard. The soak can arrange an event id into a hand and play it; the
+    // body's `keep()` / 「放入事件弃牌」 / 「永久移除」 owns where it lands.
+    if id.starts_with("event:") || step.data.event(id.strip_prefix("event:").unwrap_or(id)).is_some() {
+        return Ok(());
+    }
     // Card effects override (特别注意 3): a body that places itself on the
     // board / a tile, [移除]s itself, or returns it to hand is not
     // 「进入弃卡区」.
-    let text = step.data.card(id).map(|c| c.text.as_str()).unwrap_or("");
-    if text.contains("[移除]")
-        || text.contains("返回手牌")
-        || text.contains("加入手卡")
-        || text.contains("将此卡放置")
-    {
+    if overrides_discard(step.data, id) {
         return Ok(());
     }
     let who = step.player_of_act();

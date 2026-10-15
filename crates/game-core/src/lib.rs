@@ -46,6 +46,44 @@ impl MatchMode {
             _ => None,
         }
     }
+
+    /// Book seat bounds for this mode (`rulebook-doc.md` 开始游戏 / 娱乐 / 正规).
+    ///
+    /// * 娱乐 (Casual) -- 「游玩人数为3到10人」 (G-FLOW-12).
+    /// * 正规 (Ranked) -- 「游玩人数须在5到6人」 (G-FLOW-14).
+    /// * Solo is a practice table, not the book's 娱乐 mode: unbounded here
+    ///   (the engine still caps at 10 seats).
+    ///
+    /// `None` = no book bound. `Some((lo, hi))` is inclusive.
+    pub fn seat_range(self) -> Option<(usize, usize)> {
+        match self {
+            Self::Solo => None,
+            Self::Casual => Some((3, 10)),
+            Self::Ranked => Some((5, 6)),
+        }
+    }
+
+    /// Does `n` fall inside this mode's book seat bound?
+    pub fn seats_ok(self, n: usize) -> bool {
+        self.seat_range().is_none_or(|(lo, hi)| (lo..=hi).contains(&n))
+    }
+
+    /// Reject a seat count the book forbids. Empty `Err` text is impossible:
+    /// every refusal names the clause bound.
+    pub fn check_seats(self, n: usize) -> Result<(), String> {
+        if self.seats_ok(n) {
+            return Ok(());
+        }
+        let (clause, lo, hi) = match self {
+            Self::Casual => ("G-FLOW-12", 3, 10),
+            Self::Ranked => ("G-FLOW-14", 5, 6),
+            Self::Solo => return Ok(()),
+        };
+        Err(format!(
+            "{clause}: {:?} mode seats {n} players, book says {lo}到{hi}人",
+            self
+        ))
+    }
 }
 
 impl Serialize for MatchMode {

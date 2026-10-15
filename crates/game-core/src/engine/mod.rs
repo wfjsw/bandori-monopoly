@@ -610,6 +610,10 @@ impl Match {
         legacy_clock: bool,
     ) -> Self {
         let members = &members[..members.len().min(10)];
+        // G-FLOW-12 / G-FLOW-14: the book seats 娱乐 at 3-10 and 正规 at 5-6.
+        // `MatchMode::check_seats` is the bound; the lobby (web-glue) is the
+        // refusal point. `Match::new` stays a harness constructor so unit
+        // tests and the sim can hand-build small tables. Solo is unbounded.
         let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
         // Solo with a persona already on every seat (the solo setup screen's
         // picks, its randoms resolved before the match is built) skips the
@@ -2791,6 +2795,21 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             }
             if m.card.is_empty() {
                 return Some(Msg::new("err.skill_unknown"));
+            }
+            // stun 「无法使用[主动]技能」 / exile 「玩家技能…停止生效」 close the
+            // status act gate. A card that prints 「可在眩晕时打出」
+            // (`prop::PLAYABLE_STUNNED`) is the one stun exception; exile has
+            // none. Mirrors `cannot_play` for hand plays.
+            let stun_ok = cx
+                .rules
+                .card_prop(&m.card, crate::state::prop::PLAYABLE_STUNNED)
+                != 0;
+            let gates = st.players[i].status_gates();
+            if !gates.on_board {
+                return Some(Msg::new("err.play_exiled"));
+            }
+            if !cx.w.gate_open(cx.rules, Gate::Act, i) && !stun_ok {
+                return Some(Msg::new("err.play_stunned"));
             }
             // The rule's own gate (`On::Play`'s), so the cost check stays in the
             // rule body where the 规则书 clause lives.
