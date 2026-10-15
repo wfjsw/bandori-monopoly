@@ -1209,33 +1209,33 @@ specs. Production `cfg(not(kani))` untouched.
 | id | before | failing assertion (CBMC log) | class | action | after |
 |---|---|---|---|---|---|
 | `pp::together_01_mutant_is_detected` | FAILED 543 s | `mutant: card must not match the +1 bonus` | **B** | `min(X,down)` collapses body+mutant to `down` when `down<=6`; assume `down>=7` | **SUCCESSFUL 499 s** |
-| `pp::guide_01_band_and_crystals_iff` | FAILED 659 s | `C-PP-guide-01: card carries owned/3 crystals` | **B** | read on-card `crystals` (`field_crystals`), not player key `"奇迹水晶"` | pending |
-| `pp::guide_01_mutant_is_detected` | SUCCESSFUL (vacuous) | — | **F→B** | same wrong read made `cry==0` always; now reads the real counter | pending |
-| `pp::eve_bushido_01_gain_iff` | FAILED 332 s | `C-PP-eve-bushido-01: 12d4 sum in 12..=48` | **C** | `roll_dice` clamped count to `min(8)` → 8d4 (8..=32); raise to `min(100)` (engine `1..=100`) | pending |
-| `pp::no_expect_02_place_deck_draw_iff` | FAILED 370 s | `C-PP-no-expect-02: place on field + draw 1` | **B** | exact-match spec rejected 持续 `set_slot` → `SetState`; ignore bookkeeping | pending |
-| `pp::first_accident_01_place_deck_draw_iff` | FAILED 354 s | `C-PP-first-accident-01: place on field + draw 1` | **B** | same; body stamps `set_tok` → `SetToken`; ignore bookkeeping | pending |
-| `pp::eve_bushido_04_crystal_per_draw_iff` | FAILED 321 s | `C-PP-eve-bushido-04: +1 crystal (pre<3)` | **B** | crystal storage: body writes `field_crystals`, proof read player key | pending |
-| `pp::guide_04_turn_end_crystal_iff` | FAILED 344 s | `C-PP-guide-04: +1 crystal at turn end` | **B** | same | pending |
-| `pp::dream_ahead_01_crystal_per_draw_iff` | FAILED 357 s | `C-PP-dream-ahead-01: +1 crystal (pre<5)` | **B** | same; X is slot `"dream_ahead_x"` not `"dreamAhead.X"` | pending |
-| `crychic::ifonly_02_discard_at_seven_iff` | FAILED 175 s | `C-CRYCHIC-ifonly-02: card must go to discard` | **C** | host `set_dest` never committed the field fate (`apply_dest`); now unplaces + to-discard. **Not D** — body `set_dest(Graveyard)` is the SDK's documented field-fate API | pending |
-| `crychic::ifonly_02_user1_discard_at_seven_iff` | FAILED 154 s | same | **C** | same | pending |
+| `pp::guide_01_band_and_crystals_iff` | FAILED 659 s | `C-PP-guide-01: card carries owned/3 crystals` | **B** | read on-card `crystals` (`field_crystals`), not player key `"奇迹水晶"` | **SUCCESSFUL 396 s** |
+| `pp::guide_01_mutant_is_detected` | SUCCESSFUL (vacuous) | — | **F→B** | same wrong read made `cry==0` always; now reads the real counter | **SUCCESSFUL 442 s** |
+| `pp::eve_bushido_01_gain_iff` | FAILED 332 s | `C-PP-eve-bushido-01: 12d4 sum in 12..=48` | **C** | `roll_dice` clamped count to `min(8)` → 8d4 (8..=32); raise to `min(100)` (engine `1..=100`) | **SUCCESSFUL 283 s** |
+| `pp::no_expect_02_place_deck_draw_iff` | FAILED 370 s | `C-PP-no-expect-02: place on field + draw 1` | **B** | exact-match spec rejected 持续 `set_slot` → `SetState`; ignore bookkeeping | **SUCCESSFUL 382 s** |
+| `pp::first_accident_01_place_deck_draw_iff` | FAILED 354 s | `C-PP-first-accident-01: place on field + draw 1` | **B** | same; body stamps `set_tok` → `SetToken`; ignore bookkeeping | **SUCCESSFUL 462 s** |
+| `pp::eve_bushido_04_crystal_per_draw_iff` | FAILED 321 s | `C-PP-eve-bushido-04: +1 crystal (pre<3)` | **B** | crystal storage: body writes `field_crystals`, proof read player key | **SUCCESSFUL 296 s** |
+| `pp::guide_04_turn_end_crystal_iff` | FAILED 344 s | `C-PP-guide-04: +1 crystal at turn end` | **B** | same; also `pre<=4` entered the ≥5 cash-in (unplaces the card) → `pre<=3` | FAILED 664 s (cash-in region); `pre<=3` queued |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | FAILED 357 s | `C-PP-dream-ahead-01: +1 crystal (pre<5)` | **B** | same; X is slot `"dream_ahead_x"` not `"dreamAhead.X"` | TIMEOUT 1800 s (E, symex; was FAILED 357 s) — re-queue |
+| `crychic::ifonly_02_discard_at_seven_iff` | FAILED 175 s | `C-CRYCHIC-ifonly-02: card must go to discard` | **C** | host `set_dest` never committed the field fate (`apply_dest`); now unplaces + to-discard. **Not D** — body `set_dest(Graveyard)` is the SDK's documented field-fate API | **SUCCESSFUL 253 s** |
+| `crychic::ifonly_02_user1_discard_at_seven_iff` | FAILED 154 s | same | **C** | same | **SUCCESSFUL 461 s** |
 | `crychic::soyoreturn_01_branch2_iff` | TIMEOUT 1800 s | (no VCC — died in BMC/symex) | **E** | phase: symex over `arm_cards_in` deck/hand scan + `ask_pick` prompt paths; body ABI, no cheap lever | pending |
 | `crychic::soyoreturn_01_user1_branch2_iff` | TIMEOUT 1800 s | same | **E** | same | pending |
-| `mor::rui_demon_01_iff` | FAILED 369 s | `C-MOR-rui-demon-01: post money must match the face-value legs` | **B** | spec's other-seat legs swapped. Book 「向全场玩家支付100…之后全场玩家向你支付300」: others **+100 then −300** (spec had −100 then +300) | pending |
-| `mor::rui_demon_01_user1_iff` | FAILED 297 s | same | **B** | same | pending |
-| `mor::rainbow_01_half_iff` | FAILED 203 s | `C-MOR-rainbow-01: effect log must be exactly SetPayAmount(amount/2)` | **D** GENUINE | keep FAILING. Book 「此次支付金额减半」; body does C# `CeilTo(half, 10)` | pending |
+| `mor::rui_demon_01_iff` | FAILED 369 s | `C-MOR-rui-demon-01: post money must match the face-value legs` | **B** | spec's other-seat legs swapped. Book 「向全场玩家支付100…之后全场玩家向你支付300」: others **+100 then −300** (spec had −100 then +300) | **SUCCESSFUL 629 s** |
+| `mor::rui_demon_01_user1_iff` | FAILED 297 s | same | **B** | same | **SUCCESSFUL 612 s** |
+| `mor::rainbow_01_half_iff` | FAILED 203 s | `C-MOR-rainbow-01: effect log must be exactly SetPayAmount(amount/2)` | **D** GENUINE | keep FAILING. Book 「此次支付金额减半」; body does C# `CeilTo(half, 10)` | FAILED 238 s (D kept) |
 | `mor::rainbow_01_half_user1_iff` | FAILED 180 s | same | **D** | keep | pending |
 | `mor::rainbow_02_boost_iff` | FAILED 203 s | `C-MOR-rainbow-02: …SetPayAmount(1.5×amount)` | **D** GENUINE | keep. Book 「变成1.5倍」; body CeilTo-10 | pending |
 | `mor::rainbow_02_boost_user1_iff` | FAILED 262 s | same | **D** | keep | pending |
-| `mor::rainbow_01_mutant_is_detected` | FAILED 157 s | `mutant: card must not match off-by-one half` | **D** | same root: CeilTo-10 body collides with `amount/2+1` on e.g. amount∈{18,38,…} | pending |
+| `mor::rainbow_01_mutant_is_detected` | FAILED 157 s | `mutant: card must not match off-by-one half` | **D** | same root: CeilTo-10 body collides with `amount/2+1` on e.g. amount∈{18,38,…} | FAILED 209 s (D kept) |
 | `mor::rainbow_02_mutant_is_detected` | FAILED 150 s | `mutant: card must not match off-by-one boost` | **D** | same | pending |
-| `mor::courage_01_pay_iff_blocked_host` | UNWINDING 217 s | `unwinding assertion loop 0` at `courage_world_owned` | **A** | 60-trip `for t in 0..60` at unwind 32; 8×8 chunk walk (TUNING) | pending |
-| `mor::courage_01_pay_user1_iff_blocked_host` | UNWINDING 169 s | same loop at `courage_world_owned` | **A** | same fix (shared helper) | pending |
+| `mor::courage_01_pay_iff_blocked_host` | UNWINDING 217 s | `unwinding assertion loop 0` at `courage_world_owned` | **A** | 60-trip loop → 8×8 walk; then `exactly one PayTo` (pay vs agent arm not partitioned) | FAILED 730 s (arm split) → partitioned, queued |
+| `mor::courage_01_pay_user1_iff_blocked_host` | UNWINDING 169 s | same loop at `courage_world_owned` | **A** | same fix (shared helper) | FAILED 504 s (arm split) → partitioned, queued |
 | `pp::ranger_01_02_steps_by_count_iff` | FAILED 453 s | `C-PP-ranger-01: +500 iff count >= 1` | **B+C** | host `arm_cards_in` had no Field/Deck case (class C); proof counted the Ranger itself (class B, [手] play is not on the field during its body) | pending |
 | `skills_pp::band_idol_02/04` (pre-empted) | (not yet run) | same crystal-storage shape as pp | **B** | `field_crystals` not player key `"奇迹水晶"` | pending |
 | `mor::courage_01_mutant_is_detected` | UNWINDING 121 s | same `courage_world_owned` loop | **A** | same 8×8 chunk walk | pending |
-| `mor::toko_swap_iff_blocked_host` | UNWINDING 273 s | `unwinding assertion loop 0` at `toko_swap::pairs` | **A** | body `for theirs in 0..60` at unwind 32; raise to 64 (card body untouchable) | pending |
-| `mor::toko_swap_user1_iff_blocked_host` | UNWINDING 419 s | same | **A** | same | pending |
+| `mor::toko_swap_iff_blocked_host` | UNWINDING 273 s | `unwinding assertion loop 0` at `toko_swap::pairs` | **A** | body `for theirs in 0..60` at unwind 32; raise to 64 (card body untouchable) | queued |
+| `mor::toko_swap_user1_iff_blocked_host` | UNWINDING 419 s | same | **A** | same | queued |
 
 ### Host-model fixes (commit `2548b2b4`)
 
@@ -1314,3 +1314,70 @@ Unwinding assertions ON; no `#[ignore]`; no allowlist; no weakened specs;
 rainbow rows stay FAILING as the genuine book/body gap. Production
 `cfg(not(kani))` untouched. `cargo build -p rules-kani` + `cargo test -p
 rules-kani` ×3 green (also `--features band-ppp,skills-characters,skills-bands`).
+
+## triage3 batch 2 — re-time results + skills_pp central rows
+
+Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-triage3-results/`):
+
+| id | after |
+|---|---|
+| `pp::together_01_mutant_is_detected` | **SUCCESSFUL 499 s** (was FAILED 543 s) |
+| `pp::guide_01_band_and_crystals_iff` | **SUCCESSFUL 396 s** |
+| `pp::guide_01_mutant_is_detected` | **SUCCESSFUL 442 s** (was vacuous) |
+| `pp::eve_bushido_01_gain_iff` | **SUCCESSFUL 283 s** |
+| `pp::no_expect_02_place_deck_draw_iff` | **SUCCESSFUL 382 s** |
+| `pp::first_accident_01_place_deck_draw_iff` | **SUCCESSFUL 462 s** |
+| `pp::eve_bushido_04_crystal_per_draw_iff` | **SUCCESSFUL 296 s** |
+| `crychic::ifonly_02_discard_at_seven_iff` | **SUCCESSFUL 253 s** |
+| `crychic::ifonly_02_user1_discard_at_seven_iff` | **SUCCESSFUL 461 s** |
+| `mor::rui_demon_01_iff` | **SUCCESSFUL 629 s** |
+| `mor::rui_demon_01_user1_iff` | **SUCCESSFUL 612 s** |
+| `mor::rainbow_01_half_iff` | FAILED 238 s (D kept) |
+| `mor::rainbow_01_mutant_is_detected` | FAILED 209 s (D kept) |
+| `pp::guide_04_turn_end_crystal_iff` | FAILED 664 s — crystal storage fixed, but `pre<=4` entered the ≥5 cash-in (unplaces the card). `pre<=3` queued |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | TIMEOUT 1800 s (E, symex on `add_crystals` prompt path) — re-queued |
+| `mor::courage_01_*` | FAILED (pay vs agent arm not partitioned) — partitioned, queued |
+
+### skills_pp central rows (new)
+
+| id | before | failing assertion | class | action |
+|---|---|---|---|---|
+| `skills_pp::aya_with_01_five_fans_iff` + user1 | VACUOUS 550/723 s | cover `admitted` unreachable (0 of 1) | **C** | `guard_needs` treated `band_is`'s name-hash ConstInt as `seat_const` and missed FnId 18/19 in the symbolic-seat set → **no seat rows filled**, guard never admits. Fixed in `ir_fill.rs` |
+| `skills_pp::aya_with_02_pay_discount_iff` + user1 + mutant | TIMEOUT 1800 s ×3 | (died in BMC/symex) | **E** | `ask_number` prompt path pulls `Msg` → `memchr` (same string cliff as other prompt proofs). No cheap proof-file lever |
+| `skills_pp::band_idol_02_body_never_overflows` | FAILED 414 s | `host op outside declared per-harness subset` | **C/B** | body `at_start` calls `placed_cards` (Op not in subset); `at_turn_start` calls `set_prop` → `set_self_prop` (also missing). Both arms exist. Added to subset |
+| `skills_pp::band_idol_04_tick_iff` + user1 | FAILED 357/330 s | same `outside_subset` | **C/B** | same (`set_self_prop` from `set_prop(NO_REWARD)`) |
+
+`band_idol_02_overflow_formula`, `hina_lottery_02_borrow_map`, `maya_dawn_02_watch_formula`, `eve_unify_02_extra_dice_formula` are SUCCESSFUL (pure-formula class).
+
+### batch-2 re-time results (in progress)
+
+| id | after |
+|---|---|
+| `pp::guide_04_turn_end_crystal_iff` | **SUCCESSFUL** (`pre<=3` isolated the cash-in) |
+| `mor::courage_01_pay_iff_blocked_host` | **SUCCESSFUL** (pay-vs-agent arm split) |
+| `mor::courage_01_pay_user1_iff_blocked_host` | **SUCCESSFUL** |
+| `skills_pp::band_idol_02_body_never_overflows` | **SUCCESSFUL** (1/1 cover; `placed_cards` in subset) |
+| `skills_pp::band_idol_04_tick_iff` | **SUCCESSFUL** (2/2 covers; `set_self_prop` in subset) |
+| `skills_pp::band_idol_04_tick_user1_iff` | **SUCCESSFUL** |
+| `skills_pp::aya_with_01_five_fans_iff` + user1 | queued (guard_needs fix) |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | queued |
+| `mor::toko_swap_*` | queued (unwind 64) |
+
+### ppp central rows (new)
+
+| id | before | failing assertion | class | action |
+|---|---|---|---|---|
+| `ppp::pipopa_01_iff` + user1 | FAILED 354 s | `log must be exactly GainMoney(1000), PlaceCard(…, Field)` | **C** | `arm_place_card` leaked `w.dest` (the running card's fate) into `PlaceCard.dest`. pipopa does `set_dest(Banished)` for 「此卡[移除]」 then `place_card` a Popipapapipopa — effect recorded dest=3 not 2. Fixed: PlaceCard.dest is always Field (2) |
+
+### batch-2 re-time final
+
+| id | after |
+|---|---|
+| `skills_pp::aya_with_01_five_fans_iff` | **SUCCESSFUL** (1/1 cover; guard_needs fix) |
+| `skills_pp::aya_with_01_five_fans_user1_iff` | **SUCCESSFUL** (1/1 cover) |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | **TIMEOUT 1800 s** (class E — `add_crystals` `?` prompt path + `Msg`/memchr symex; body ABI) |
+| `ppp::pipopa_01_*` | queued (PlaceCard.dest fix) |
+| `ppp::bang_dream_02_teleport_owned_iff` | queued (8×8 walk) |
+| `mor::toko_swap_*` | queued (unwind 64) |
+
+`aya_with_02_*` TIMEOUT remains class E (`ask_number` prompt → Msg → memchr).

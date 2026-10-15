@@ -1084,20 +1084,28 @@ pub fn guard_needs(gid: usize) -> GuardNeeds {
                         while j < 3 {
                             if j < nargs && first + j < nodes.len() {
                                 let arg = nodes[first + j];
+                                // Fns whose arg 0 is a seat: 10..=17 (`f(p)`),
+                                // 18 `character_is(p, name)`, 19 `band_is(p, name)`,
+                                // 21/24/25/33 (neighbor / gains / targeted /
+                                // between), 37 `state(p, key)`. Arg 1 of 18/19/37
+                                // is a name/id hash, NOT a seat — only j==0
+                                // counts as the seat (class C: the name hash
+                                // was being taken as `seat_const`, which made
+                                // `band_is(owner, …)` fill **no** seat rows and
+                                // the guard never admitted).
+                                let seat_arg = (10..=17).contains(&node.payload)
+                                    || node.payload == 18
+                                    || node.payload == 19
+                                    || node.payload == 21
+                                    || node.payload == 24
+                                    || node.payload == 25
+                                    || node.payload == 33
+                                    || node.payload == 37;
                                 if arg.kind == rules_cond_ir::nodes::Kind::ConstInt {
-                                    // FnId 0..=4 take a name id; 10..=17 and
-                                    // `state` (37) take a seat as arg 0.
+                                    // FnId 0..=4 take a name id.
                                     if node.payload <= 4 {
                                         n.note_named(arg.payload);
-                                    } else if (10..=17).contains(&node.payload)
-                                        || node.payload == 18
-                                        || node.payload == 19
-                                        || node.payload == 21
-                                        || node.payload == 24
-                                        || node.payload == 25
-                                        || node.payload == 33
-                                        || node.payload == 37 && j == 0
-                                    {
+                                    } else if seat_arg && j == 0 {
                                         if n.seat_const < 0 {
                                             n.seat_const = arg.payload;
                                         }
@@ -1108,9 +1116,7 @@ pub fn guard_needs(gid: usize) -> GuardNeeds {
                                     // the id itself is not needed here.
                                 } else {
                                     // Symbolic seat/name argument.
-                                    if (10..=17).contains(&node.payload)
-                                        || (node.payload == 37 && j == 0)
-                                    {
+                                    if seat_arg && j == 0 {
                                         n.seat_arg_symbolic = true;
                                     }
                                 }

@@ -55,7 +55,7 @@ Harnesses written: **22** (13 card + 9 skill). Run to verdict: **1** so far
 | C-CRYCHIC-debut-02 | 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」 | PROVEN | `debut_02_turn_end_iff`, `debut_02_mutant_is_detected` | see log | `GiveStun{1}` + unlogged `band_crystals+1` | — |
 | C-CRYCHIC-karaoke-01 | 「进行至多5次掷骰，并选择其中一个结果…」 | PROTOCOL-LEVEL | — | — | dice loop + walk-as-main-move | — |
 | C-CRYCHIC-ifonly-01 | 「移除…奇迹水晶，获得2000+500*X资金」 | PROVEN | `ifonly_01_cashout_iff`, `ifonly_01_mutant_is_detected` | see log | `GainMoney{2000+500X}` + `PlaceCard` field; crystals drained unlogged | — |
-| C-CRYCHIC-ifonly-02 | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | PROVEN* | `ifonly_02_discard_at_seven_iff` | triage3: was **C** host, not D — body `set_dest(Graveyard)` is the SDK field-fate API; Kani host lacked `apply_dest` commit. Fixed, re-time pending | — | — |
+| C-CRYCHIC-ifonly-02 | 「若你的手牌大于等于7，此卡立即置入弃牌堆」 | PROVEN | `ifonly_02_discard_at_seven_iff` | **SUCCESSFUL 253/461 s** (class C host `set_dest` commit; body is correct) | — | — |
 | C-CRYCHIC-human-01 | 「从1-20间选择并声明X…掷骰小于等于X…添加一个奇迹水晶」 | mixed | — | — | placement + X write-down is `ask_number` + `set_slot`/props; roll hook needs move-roll | — |
 | C-CRYCHIC-human-02 | 「回合开始时…两个或以上奇迹水晶…移除…+（20-X）」 | PROTOCOL-LEVEL | — | — | turn-start consume + move-modifier latch | [异常移动效果] set is G-STATUS's clause |
 | C-CRYCHIC-grab-01 | 「（1）获得一层[停留]」 | PROVEN (stay) / BLOCKED-HOST (PASSER value) | `grab_01_stay_iff`, `grab_01_mutant_is_detected` | see log | `GiveStay{1}` exact; `state::set(PASSER,-1)` value host-dropped | — |
@@ -146,7 +146,7 @@ worktree still has the old grep — read the log).
 | crychic | debut_01_play_logs_nothing | written, verdict pending | | |
 | crychic | ifonly_01_cashout_iff | written, verdict pending | | |
 | crychic | ifonly_01_mutant_is_detected | written, verdict pending | | |
-| crychic | ifonly_02_discard_at_seven_iff | triage3: FAILED was class C host (`set_dest` fate); fixed, re-time pending | | |
+| crychic | ifonly_02_discard_at_seven_iff | **SUCCESSFUL 253 s** (was FAILED; class C host) | | |
 | crychic | soyoreturn_01_branch2_iff | triage3: TIMEOUT 1800 s class E (symex `arm_cards_in` + `ask_pick`) | | |
 | skills_crychic | tomoriskill_02_spend_iff | written, verdict pending | | |
 | skills_crychic | tomoriskill_02_mutant_is_detected | written, verdict pending | | |
