@@ -191,21 +191,22 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
         let (id, dt, k) = (id.clone(), *dt, *k);
         let server = server.clone();
         jobs.push(tokio::task::spawn_blocking(move || {
-            let room = server.room(&id);
-            let Some(room) = room else {
-                return (id, vec![], false, vec![], None);
-            };
-            // 1. presence and check-out -- the room lock is held only here
-            // (the tick lease already keeps two processes from both doing this).
+            // 1. presence and check-out under the **room lock** (the tick
+            // lease keeps two processes from both ticking; the room lock keeps
+            // a player action from clobbering the roster write).
             let (m, playing, dropped, removed) = {
-                let mut r = room.lock().unwrap();
-                let _ = r.reload();
-                let m = r.match_handle();
-                let playing = r.info.playing;
-                let (dropped, removed) = r.tick_presence(timeout);
-                (m, playing, dropped, removed)
+                let out = server.with_room(&id, |r| {
+                    let m = r.match_handle();
+                    let playing = r.info.playing;
+                    let (dropped, removed) = r.tick_presence(timeout);
+                    Ok((m, playing, dropped, removed))
+                });
+                match out {
+                    Ok(v) => v,
+                    Err(_) => return (id, vec![], false, vec![], None),
+                }
             };
-            // 2. the round-trips, with no lock held.
+            // 2. the round-trips, with no room lock held.
             let mut changed = false;
             let mut ended = false;
             // Advanced seats the bot service should be asked about (claimed,
@@ -227,27 +228,30 @@ pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
                     drive = claim_advanced(&server, &id);
                 }
             }
-            // 3. bookkeeping -- short lock again.
-            let mut r = room.lock().unwrap();
-            let _ = r.reload();
-            if ended {
-                r.info.playing = false;
-                changed = true;
-                server.bot_drive.lock().unwrap().forget_room(&id);
-            }
-            // A finished match rolls the next commit-reveal slot right here,
-            // in the same breath as `playing = false` (`docs/FAIRNESS.md`):
-            // the new commitment is published before anybody can post a nonce
-            // for it, and the clients re-submit without waiting on anything.
-            if r.fair_needs_roll() {
-                if let Err(e) = r.roll_fair() {
-                    eprintln!("room {id} fair slot roll failed: {e}");
+            // 3. bookkeeping, again under the room lock.
+            let mut gone = false;
+            let _ = server.with_room(&id, |r| {
+                if ended {
+                    r.info.playing = false;
+                    changed = true;
+                    server.bot_drive.lock().unwrap().forget_room(&id);
                 }
-            }
-            if changed {
-                r.notify();
-            }
-            (id, removed, r.dissolved.is_some(), drive, m)
+                // A finished match rolls the next commit-reveal slot right
+                // here, in the same breath as `playing = false`
+                // (`docs/FAIRNESS.md`): the new commitment is published before
+                // anybody can post a nonce for it.
+                if r.fair_needs_roll() {
+                    if let Err(e) = r.roll_fair() {
+                        eprintln!("room {id} fair slot roll failed: {e}");
+                    }
+                }
+                if changed {
+                    r.notify();
+                }
+                gone = r.dissolved.is_some();
+                Ok(())
+            });
+            (id, removed, gone, drive, m)
         }));
     }
     for job in jobs {
