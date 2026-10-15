@@ -365,6 +365,7 @@ fn athletic_places_three_crystals() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "hand_n:P0",
                 "draw_n:P0",
                 "discard_pub:P0",
@@ -783,6 +784,7 @@ fn kkr_pays_10000() {
                 // 「将此卡置于CiRCLE上」 -- a field placement whose tile is CiRCLE.
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "fprop:P0",
                 "board_field:",
                 "bfield:",

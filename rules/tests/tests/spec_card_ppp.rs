@@ -272,6 +272,7 @@ fn pipopa_contract() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
             ],
         )
     })
@@ -359,6 +360,7 @@ fn bang_dream_contract() {
                 "discard:P0",
                 "pos:P0",
                 "crystals:P0",
+                "pool:",
                 "field:P0",
                 "houses:T",
                 "turn.",
@@ -809,7 +811,8 @@ fn popipapapipopa_crystal_reduces_spend() {
         frame(
             &pre,
             t.world(),
-            &["money:P0", "money:P1", "crystals:P0", "field:P0", "pos:P0", "hand:P0", "draw:P0", "discard:P0", "turn."],
+            &["money:P0", "money:P1", "crystals:P0",
+                "pool:", "field:P0", "pos:P0", "hand:P0", "draw:P0", "discard:P0", "turn."],
         )
     })
     .expect("C-PPP-popipapapipopa-c2");

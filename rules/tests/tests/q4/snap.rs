@@ -60,7 +60,8 @@ pub fn snapshot(w: &World) -> Snap {
                     c.card, c.uid, c.tile, c.counters.get("crystals").copied().unwrap_or(0), c.immune, c.face_down, c.group_skill
                 ),
             );
-            m.insert(format!("crystals:P{i}:{}", c.card), c.counters.get("crystals").copied().unwrap_or(0).to_string());
+            m.insert(format!("crystals:P{i}:{}",
+                "pool:", c.card), c.counters.get("crystals").copied().unwrap_or(0).to_string());
             for (k, v) in &c.props {
                 m.insert(format!("fprop:P{i}:{}:{k}", c.card), v.to_string());
             }

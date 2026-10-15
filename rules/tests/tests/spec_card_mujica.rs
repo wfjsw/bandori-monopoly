@@ -676,6 +676,7 @@ fn sparkler_places_two_crystals() {
             &[
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "hand:P0",
                 "draw:P0",
                 "discard:P0",
@@ -822,7 +823,9 @@ fn crystal_swap_moves_one() {
             t.world(),
             &[
                 "crystals:P0",
+                "pool:",
                 "crystals:P1",
+                "pool:",
                 "field:P0",
                 "field:P1",
                 "hand:P0",

@@ -235,6 +235,7 @@ fn title_idol_crystals() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "token:P0",
                 "state:P0",
             ],
@@ -281,6 +282,7 @@ fn title_idol_echo_adds_two() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "token:P0",
                 "state:P0",
             ],
@@ -342,6 +344,7 @@ fn same_dream_three_steps() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "token:P0",
             ],
         )

@@ -864,6 +864,7 @@ fn soul_places_and_loads_crystals() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "fprop:P0",
             ],
         )

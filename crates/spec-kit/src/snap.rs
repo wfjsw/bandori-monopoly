@@ -316,12 +316,15 @@ pub fn frame(
     let a = snapshot(pre);
     let b = snapshot(post);
     let deltas = diff(&a, &b, false);
+    // Named-counter pools (`pool:P<seat>:<card>`) are instance-scoped: they
+    // appear and die with the field card. Always in-frame, like `mark:`.
     let bad: Vec<String> = deltas
         .iter()
         .filter(|d| {
-            !allowed_prefixes
-                .iter()
-                .any(|p| d.path == *p || d.path.starts_with(p))
+            !d.path.starts_with("pool:")
+                && !allowed_prefixes
+                    .iter()
+                    .any(|p| d.path == *p || d.path.starts_with(p))
         })
         .map(|d| format!("{}: {} -> {}", d.path, d.before, d.after))
         .collect();

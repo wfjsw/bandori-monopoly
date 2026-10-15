@@ -566,6 +566,7 @@ fn fire_bird_place_contract() {
                 "discard:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "fprop:P0",
                 "hand_n:P0",
                 "draw_n:P0",
@@ -613,6 +614,7 @@ fn fire_bird_turn_end_burn() {
                 "money:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "fprop:P0",
             ],
         )
@@ -652,7 +654,8 @@ fn fire_bird_exhaust_to_discard() {
         frame(
             &pre,
             t.world(),
-            &["money:P0", "field:P0", "crystals:P0", "fprop:P0", "discard:P0", "draw:P0"],
+            &["money:P0", "field:P0", "crystals:P0",
+                "pool:", "fprop:P0", "discard:P0", "draw:P0"],
         )
     })
     .expect("Fire bird exhaust");

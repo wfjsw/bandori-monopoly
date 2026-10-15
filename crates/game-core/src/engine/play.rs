@@ -1973,41 +1973,11 @@ impl Cx<'_> {
         if tile.is_buyable() {
             let owner = self.w.st.owners[at];
             if owner < 0 {
-                if main {
-                    let houses = self.w.st.houses[at];
-                    let extra =
-                        (houses > 0).then(|| Msg::new("log.part.with_houses").i("h", houses));
-                    let price = self.buy_price(at);
-                    self.w.log(
-                        "text",
-                        i as i32,
-                        Msg::new("log.land_unowned")
-                            .player_id("who", i)
-                            .tile("tile", at)
-                            .n("price", price)
-                            .opt("extra", extra),
-                    );
-                } else {
-                    self.offer_buy(i, at)?;
-                }
+                // The settle of an unowned buyable IS the optional buy
+                // (规则书 「可选择[消耗]…获得格子地契和拥有权」).
+                self.offer_buy(i, at)?;
             } else if owner as usize != i {
                 self.pay_rent(i, at, false)?;
-            } else if main {
-                let note = if self.w.st.mortgaged[at] {
-                    Some(Msg::new("log.part.mortgaged"))
-                } else if self.why_not_build(i, at).is_none() {
-                    Some(Msg::new("log.part.can_build"))
-                } else {
-                    None
-                };
-                self.w.log(
-                    "text",
-                    i as i32,
-                    Msg::new("log.land_own")
-                        .player_id("who", i)
-                        .tile("tile", at)
-                        .opt("note", note),
-                );
             } else {
                 self.offer_build(i, at)?;
             }

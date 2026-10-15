@@ -184,6 +184,7 @@ fn crychic_debut_blocks_rent_decrease() {
                 "state:P0",
                 "field:P0",
                 "crystals:P0",
+                "pool:",
                 "turn.no_money_loss",
                 "scheduled",
             ],
@@ -303,6 +304,7 @@ fn crychic_ifonly_cashs_out_band_crystals() {
                 "draw:P0",
                 "discard:P0",
                 "crystals:P0",
+                "pool:",
                 "field:P0",
             ],
         )

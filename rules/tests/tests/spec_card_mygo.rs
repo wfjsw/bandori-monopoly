@@ -316,6 +316,7 @@ fn anon_tokyo_limit_and_link_pay() {
                 "discard_pub:P0",
                 "marks:",
                 "mark:",
+                "pool:",
                 "field:P0",
                 "crystals:P0",
                 "state:P0",

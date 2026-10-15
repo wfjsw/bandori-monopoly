@@ -561,6 +561,7 @@ fn leave_frame_only_touches_the_out_seat_and_deeds() {
             "crystals:P1".into(),
             "out_count".into(),
             "mark:".into(),
+            "pool:".into(),
             // Named-counter pools on the leaving player's field cards die
             // with the instance (same as marks).
             "pool:".into(),
