@@ -176,18 +176,52 @@ pub fn xiaobai_01_effects_ok_mutant(effects: &[Effect], payee: i32, amount: i32)
 // 「（1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。」
 // 「（2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。」
 // Ruling 2026-10-06: grades come from a static normalised table.
-// Rounding: the clause pins integer half / integer 1.5× (140 → 210).
-// The body additionally CeilTo-10s; that is a candidate finding (see proofs).
+// Rounding (user ruling 2026-10-15, OPEN-取整 family): the card is an add/mul
+// modifier -- it writes the **fold** (exact integer transform, no CeilTo) and
+// the engine applies `final = round10(fold of add/mul)` once at settle.
+// A sole 减半 of 25 is fold 12.5 → final 20; a sole 1.5× of 25 is 37.5 → 40.
 // ===========================================================================
 
-/// Clause pin: integer half (toward zero for positives = `amount / 2`).
-pub fn rainbow_01_amount(amount: i32) -> i32 {
-    amount / 2
+/// Round up to a multiple of 10 (the engine's end-of-calc money round).
+pub fn round10(x: i32) -> i32 {
+    if x <= 0 {
+        return x;
+    }
+    ((x as i64 + 9) / 10 * 10).clamp(0, i32::MAX as i64) as i32
 }
 
-/// Clause pin: integer 1.5× (`amount * 3 / 2`).
+/// `round10(num / den)` with the division kept exact until the one round.
+/// `ceil(num/den/10)*10` = `ceil(num/(den*10))*10`.
+pub fn round10_ratio(num: i64, den: i64) -> i32 {
+    if num <= 0 {
+        return 0;
+    }
+    let x = (num + den * 10 - 1) / (den * 10);
+    (x * 10).clamp(0, i32::MAX as i64) as i32
+}
+
+/// fold of the card's own 减半 -- what the body writes (integer ceil-half).
+/// `((amount + 1) / 2)` rounds the .5 up so a sole modifier still settles at
+/// `round10(exact half)`.
+pub fn rainbow_01_fold(amount: i32) -> i32 {
+    (amount + 1) / 2
+}
+
+/// Clause pin: `final = round10(fold of add/mul)` for a sole 减半
+/// = `round10(amount / 2)` with the half kept exact (25 → 20).
+pub fn rainbow_01_amount(amount: i32) -> i32 {
+    round10_ratio(amount as i64, 2)
+}
+
+/// fold of the card's own 1.5× -- what the body writes (integer ceil-1.5×).
+pub fn rainbow_02_fold(amount: i32) -> i32 {
+    (amount * 3 + 1) / 2
+}
+
+/// Clause pin: `final = round10(fold of add/mul)` for a sole 1.5×
+/// = `round10(amount * 3 / 2)` with the product kept exact (25 → 40).
 pub fn rainbow_02_amount(amount: i32) -> i32 {
-    amount * 3 / 2
+    round10_ratio(amount as i64 * 3, 2)
 }
 
 /// Exactly one effect: `SetPayAmount { to: expected }`.
@@ -195,14 +229,14 @@ pub fn rainbow_log_ok(effects: &[Effect], expected: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == expected)
 }
 
-/// MUTANT of half: off-by-one high.
+/// MUTANT of half: off-by-one high on the fold the body writes.
 pub fn rainbow_01_amount_mutant(amount: i32) -> i32 {
-    amount / 2 + 1
+    rainbow_01_fold(amount) + 1
 }
 
-/// MUTANT of 1.5×: off-by-one high.
+/// MUTANT of 1.5×: off-by-one high on the fold the body writes.
 pub fn rainbow_02_amount_mutant(amount: i32) -> i32 {
-    amount * 3 / 2 + 1
+    rainbow_02_fold(amount) + 1
 }
 
 // ===========================================================================

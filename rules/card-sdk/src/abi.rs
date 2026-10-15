@@ -379,6 +379,17 @@ use alloc::{string::String, vec::Vec};
 ///      (`is_ring(t) = tile_is(t, "ring")`, …) lives in `ruleset-core`.
 ///      `tile_group` / `tile_price` stay as generic field sugar.
 ///      Guest ABI otherwise unchanged; SAVE_VERSION unchanged.
+/// v65: **money rounds once after add/mul** (user ruling 2026-10-15,
+///      OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
+///      `payAdd` / `payMul` / `payTotal*` / `set_pay_factor`) transform the
+///      running amount exactly and must not CeilTo-10 inside their own body;
+///      `money_inner` / `pay_total` round a positive figure **up to a multiple
+///      of 10 once** after every add/mul modifier has been processed. An
+///      amount no modifier touched is left as the base formula produced it.
+///      Printed 「向上取整10」 sites (agent half-rent, `[分摊]` share formula,
+///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
+///      No new import; host semantics of `set_pay_amount` composition change.
+///      SAVE_VERSION unchanged (no save field).
 /// v64: **turn-clock props** -- `prop::BASE_TIME_SET` / `prop::BONUS_TIME_SET`
 ///      on a board-owned instance override the host turn clock (`base_time`
 ///      = 恢复时间, `bonus_time` = 免费时间) as each turn starts (元祖！邦多利酱).
@@ -457,7 +468,7 @@ use alloc::{string::String, vec::Vec};
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
 ///      decrement under the hood. SAVE_VERSION unchanged by this batch (the
 ///      engine batch's SAVE_VERSION 6 → 7 is independent).
-pub const ABI_VERSION: i32 = 64;
+pub const ABI_VERSION: i32 = 65;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]

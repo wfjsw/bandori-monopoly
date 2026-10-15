@@ -69,36 +69,46 @@ pub fn half_speed_02_empty_dest_is_graveyard(dest: i32) -> bool {
 // ===========================================================================
 // C-AG-half-speed-04
 // 「且你的所有资金支付与消耗减半」
-// OPEN-减半取整: odd amounts unspecified. The body halves then rounds the
-// *result* up to a multiple of 10 (`CeilTo(amount / 2.0, 10)`). For even
-// amounts that are already a multiple of 10 the determined half is `amount/2`.
+// User ruling 2026-10-15 (OPEN-取整 family): the card is an add/mul modifier
+// -- it writes the fold (exact integer half, no CeilTo) and the engine applies
+// `final = round10(fold of add/mul)` once at settle.
 // ===========================================================================
+
+/// Round up to a multiple of 10 (the engine's end-of-calc money round).
+pub fn round10(x: i32) -> i32 {
+    if x <= 0 {
+        return x;
+    }
+    ((x as i64 + 9) / 10 * 10).clamp(0, i32::MAX as i64) as i32
+}
+
+/// fold of the card's own 减半 -- what the body writes (integer ceil-half).
+pub fn half_speed_04_fold(pre_amount: i32) -> i32 {
+    if pre_amount <= 0 {
+        return 0;
+    }
+    ((pre_amount as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32
+}
+
+/// Clause pin: `final = round10(fold of add/mul)` for a sole 减半
+/// = `round10(amount / 2)` with the half kept exact (25 → 20).
+pub fn half_speed_04_amount_ceil10(pre_amount: i32) -> i32 {
+    round10(half_speed_04_fold(pre_amount))
+}
 
 /// Determined half: the pay amount is halved (integer half of an even amount).
 pub fn half_speed_04_amount_even(pre_amount: i32) -> i32 {
     pre_amount / 2
 }
 
-/// The body's full rewrite (ceil-to-10 of the half). Used as the iff target
-/// for amounts the book does determine under the 基础[结算] 7 reading
-/// (「向上取整10」 = round the *payment* up to a multiple of 10).
-pub fn half_speed_04_amount_ceil10(pre_amount: i32) -> i32 {
-    if pre_amount <= 0 {
-        return 0;
-    }
-    let half = (pre_amount as i64 + 1) / 2;
-    let half = ((half + 9) / 10) * 10;
-    half.clamp(0, i32::MAX as i64) as i32
-}
-
-/// Exact log of a positive-amount rewrite.
+/// Exact log of a positive-amount rewrite (the fold, not the end-of-calc round).
 pub fn half_speed_04_log_ok(effects: &[Effect], expected_to: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == expected_to)
 }
 
-/// MUTANT: off-by-one high.
+/// MUTANT: off-by-one high on the fold the body writes.
 pub fn half_speed_04_amount_mutant(pre_amount: i32) -> i32 {
-    half_speed_04_amount_ceil10(pre_amount) + 1
+    half_speed_04_fold(pre_amount) + 1
 }
 
 // ===========================================================================

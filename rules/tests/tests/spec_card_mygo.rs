@@ -1366,15 +1366,16 @@ fn rikki_act_stay_holders_quarter_pay() {
         let paid = money1 as i64 - t.money(1) as i64;
         let gained = t.money(2) as i64 - money2 as i64;
         // Book: all [支付] become 1/4 of the original. Rent of 富士见坂 is
-        // 60 at 0 houses -> 15.
-        if paid != 15 {
+        // 60 at 0 houses -> quarter 15; user ruling 2026-10-15 then applies
+        // the one end-of-calc `ceil10` → 20.
+        if paid != 20 {
             return Err(format!(
-                "C-MYGO-rikki-act-02: paid {paid}, expected 15 (60 / 4)"
+                "C-MYGO-rikki-act-02: paid {paid}, expected 20 (round10(60 / 4))"
             ));
         }
-        if gained != 15 {
+        if gained != 20 {
             return Err(format!(
-                "C-MYGO-rikki-act-02: owner gained {gained}, expected 15"
+                "C-MYGO-rikki-act-02: owner gained {gained}, expected 20"
             ));
         }
         Ok(())
@@ -3081,13 +3082,15 @@ pub fn verify_rikki_quarter_pay(
     _events: &[MatchEvent],
 ) -> Result<(), String> {
     // P1 pays P2. Rent of the chosen tile (富士见坂, 0 houses) is 60.
+    // ×0.25 is a modifier: quarter 15, then the engine's one end-of-calc
+    // `ceil10` (user ruling 2026-10-15) → 20.
     let paid = pre.st.players[1].money as i64 - post.st.players[1].money as i64;
     let gained = post.st.players[2].money as i64 - pre.st.players[2].money as i64;
-    if paid != 15 {
-        return Err(format!("P1 paid {paid}, expected 15 (60 / 4)"));
+    if paid != 20 {
+        return Err(format!("P1 paid {paid}, expected 20 (round10(60 / 4))"));
     }
-    if gained != 15 {
-        return Err(format!("P2 gained {gained}, expected 15"));
+    if gained != 20 {
+        return Err(format!("P2 gained {gained}, expected 20"));
     }
     // Frame: every other player's money is unchanged.
     for i in 0..post.st.players.len() {
@@ -3109,8 +3112,10 @@ fn rikki_quarter_pay_verifier_rejects_mutants() {
     t.set_money(2, 10_000);
     let pre = t.snapshot_world();
     let mut post = pre.clone();
-    post.st.players[1].money = 9_985;
-    post.st.players[2].money = 10_015;
+    // User ruling 2026-10-15: quarter 15 of rent 60, then the one end-of-calc
+    // `ceil10` → 20.
+    post.st.players[1].money = 9_980;
+    post.st.players[2].money = 10_020;
     if let Err(e) = verify_rikki_quarter_pay(&pre, &post, &[]) {
         panic!("compliant post rejected: {e}");
     }

@@ -152,12 +152,18 @@ fn can_counteract(player_id: i32) -> bool {
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value() as i64;
     let from = trigger::player_id();
-    // 规则书[反击]（1）: 「此次支付金额减半」 -- C# `pay.amount = CeilTo(amount / 2.0, 10)`.
-    // 规则书[反击]（2）: 「使此次支付资金变成1.5倍」 -- C# `pay.amount = CeilTo(amount * 1.5, 10)`.
-    // `CeilTo` rounds up to a multiple of 10.
+    // 规则书[反击]（1）: 「此次支付金额减半」.
+    // 规则书[反击]（2）: 「使此次支付资金变成1.5倍」.
+    //
+    // User ruling 2026-10-15 (OPEN-取整 family): this is an add/mul modifier --
+    // it must transform the running amount **exactly** and must NOT CeilTo
+    // inside its own body. The engine rounds up to a multiple of 10 once,
+    // after every add/mul modifier of the payment has been processed
+    // (`money_inner`). Integer fold: half and 1.5× round the .5 up
+    // (`(amount + 1) / 2` / `(amount * 3 + 1) / 2`), so a sole modifier still
+    // settles at `round10(exact)` (25 → 12.5 → 20).
     if from == player_id {
         let half = (amount + 1) / 2;
-        let half = ((half + 9) / 10) * 10;
         trigger::set_pay_amount(half as i32);
         ctx::log(
             player_id,
@@ -167,7 +173,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         );
     } else {
         let boosted = (amount * 3 + 1) / 2;
-        let boosted = ((boosted + 9) / 10) * 10;
         trigger::set_pay_amount(boosted as i32);
         ctx::log(
             player_id,

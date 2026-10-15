@@ -726,7 +726,7 @@ fn rikki_settle_quarter_pay_exact() {
     t.set_character_raw(0, "椎名立希");
     t.set_state(1, "stay", 1);
     t.set_pos(1, 11); // 富士见坂; within +/-2: 9..13
-    t.own(2, &[11]); // 富士见坂 rent 60 -> quarter 15
+    t.own(2, &[11]); // 富士见坂 rent 60 -> quarter 15 -> round10 20
     t.give_play(0, "MyGO:（立希）想认真去做").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
@@ -743,8 +743,10 @@ fn rikki_settle_quarter_pay_exact() {
     rest(&mut t);
     drain(&mut t);
     assert_eq!(t.pos(1), 11, "settled on the chosen tile");
-    assert_eq!(t.money(2), 10_000 + 15, "60 / 4 = 15");
-    assert_eq!(t.money(1), 10_000 - 15);
+    // ×0.25 is a modifier: exact quarter 15, then the engine's one end-of-calc
+    // `ceil10` (user ruling 2026-10-15) → 20.
+    assert_eq!(t.money(2), 10_000 + 20, "round10(60 / 4) = 20");
+    assert_eq!(t.money(1), 10_000 - 20);
 }
 
 #[test]
