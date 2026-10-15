@@ -23,7 +23,7 @@ pub const CRYSTAL_SWAP: CardDef =
         .tags(&[])
         .text(r#"将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上。"#)
         .cell(r#"J13"#)
-        .fields(&[("band", r#"Ave Mujica"#), ("owner", "")]));
+        .fields(&[("group", r#"Ave Mujica"#), ("owner", "")]));
 
 /// One pool entry: a card instance on some player's field.
 ///
@@ -36,7 +36,7 @@ struct Slot {
     uid: i32,
     player_id: i32,
     card: String,
-    band: bool,
+    group_skill: bool,
 }
 
 impl Slot {
@@ -56,7 +56,7 @@ impl Slot {
     /// ({{n}})"`.
     fn label(&self) -> Msg {
         let n = self.get() as i64;
-        if self.band {
+        if self.group_skill {
             Msg::new(key!("crystal_swap_band"))
                 .player_id("who", self.player_id)
                 .i("n", n)
@@ -75,14 +75,14 @@ impl Slot {
 /// Label-only: the crystal read/write is per uid either way. A borrowed
 /// *character* skill (another player's `skill:<character>:…` placed here) would
 /// be mislabelled 「团卡」; the count still moves on the right instance.
-fn is_band_label(card: &str, player_id: i32) -> bool {
+fn is_group_label(card: &str, player_id: i32) -> bool {
     let Some(rest) = card.strip_prefix("skill:") else {
         return false;
     };
     let Some((owner, _)) = rest.split_once(':') else {
         return false;
     };
-    !ctx::character_is(player_id, owner)
+    !ctx::persona_is(player_id, owner)
 }
 
 /// C# `CardCrystalSwap.Slots` -- every card on every live player's field that
@@ -102,7 +102,7 @@ fn slots() -> Vec<Slot> {
             v.push(Slot {
                 uid,
                 player_id: s,
-                band: is_band_label(&c, s),
+                group_skill: is_group_label(&c, s),
                 card: c,
             });
         }

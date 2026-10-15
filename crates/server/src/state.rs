@@ -26,7 +26,7 @@ pub const PRESENCE_TIMEOUT: Duration = Duration::from_secs(20);
 pub struct Session {
     pub token: String,
     pub player: String,
-    pub character: String,
+    pub persona: String,
     pub cn_id: String,
     /// Room id and member id while in a room.
     pub room: Option<(String, i32)>,

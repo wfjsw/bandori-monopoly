@@ -7,7 +7,7 @@
 
 use std::collections::HashSet;
 
-use crate::data::{CardData, CharacterData, GameData};
+use crate::data::{CardData, PersonaData, GameData};
 use crate::msg::Msg;
 use crate::profile::{sanitize_deck_name, DeckChoice, PlayerProfile, SavedDeck};
 
@@ -18,59 +18,59 @@ pub const SIZE: usize = 10;
 pub const DECKS_MAX: usize = 100;
 
 /// `None` if `c` may put `card` in a starting deck.
-pub fn cant_play(data: &GameData, c: &CharacterData, card: &CardData) -> Option<Msg> {
+pub fn cant_play(data: &GameData, c: &PersonaData, card: &CardData) -> Option<Msg> {
     if card.derived {
         return Some(Msg::new("err.deck_derived"));
     }
     if card.exclusive() && card.owner != c.name && !shares_exclusives(data, c, card) {
-        return Some(Msg::new("err.deck_exclusive").chara("owner", card.owner.clone()));
+        return Some(Msg::new("err.deck_exclusive").persona("owner", card.owner.clone()));
     }
-    if !card.general() && card.band != c.band {
+    if !card.is_universal() && card.group != c.group {
         return Some(
-            Msg::new("err.deck_band").arg("band", crate::msg::Arg::Band(card.band.clone())),
+            Msg::new("err.deck_band").arg("band", crate::msg::Arg::Group(card.group.clone())),
         );
     }
     None
 }
 
-pub fn can_use(data: &GameData, c: &CharacterData, card: &CardData) -> bool {
+pub fn can_use(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
     cant_play(data, c, card).is_none()
 }
 
 /// Members of a band with the `shares_exclusives` trait (Sumimi) may use each
 /// other's exclusive cards.
-pub fn shares_exclusives(data: &GameData, c: &CharacterData, card: &CardData) -> bool {
-    data.band_shares_exclusives(c)
+pub fn shares_exclusives(data: &GameData, c: &PersonaData, card: &CardData) -> bool {
+    data.group_shares_exclusives(c)
         && card.exclusive()
-        && data.character(&card.owner).is_some_and(|o| o.band == c.band)
+        && data.persona(&card.owner).is_some_and(|o| o.group == c.group)
 }
 
 /// Cards `c` may use: exclusives first, then band cards, then general cards
 /// (each group in the roster's canonical deck-pool order).
-pub fn pool<'a>(data: &'a GameData, c: &CharacterData) -> Vec<&'a CardData> {
+pub fn pool<'a>(data: &'a GameData, c: &PersonaData) -> Vec<&'a CardData> {
     let usable: Vec<&CardData> = data.cards.iter().filter(|k| can_use(data, c, k)).collect();
     let excl = usable.iter().copied().filter(|k| k.exclusive());
     let band = usable
         .iter()
         .copied()
-        .filter(|k| !k.exclusive() && !k.general());
+        .filter(|k| !k.exclusive() && !k.is_universal());
     let general = usable
         .iter()
         .copied()
-        .filter(|k| !k.exclusive() && k.general());
+        .filter(|k| !k.exclusive() && k.is_universal());
     excl.chain(band).chain(general).collect()
 }
 
 /// Derived cards that can appear for `c` during a match (never in a starting deck).
-pub fn derived<'a>(data: &'a GameData, c: &CharacterData) -> Vec<&'a CardData> {
+pub fn derived<'a>(data: &'a GameData, c: &PersonaData) -> Vec<&'a CardData> {
     data.cards
         .iter()
-        .filter(|k| k.derived && (k.general() || k.band == c.band))
+        .filter(|k| k.derived && (k.is_universal() || k.group == c.group))
         .collect()
 }
 
 /// Keep only usable ids, at most 10, in pool order.
-pub fn clean<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S]) -> Vec<String> {
+pub fn clean<S: AsRef<str>>(data: &GameData, c: &PersonaData, ids: &[S]) -> Vec<String> {
     let wanted: HashSet<&str> = ids.iter().map(AsRef::as_ref).collect();
     pool(data, c)
         .into_iter()
@@ -81,7 +81,7 @@ pub fn clean<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S]) -> Ve
 }
 
 /// `clean`, then pad from the pool up to 10.
-pub fn fill<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S]) -> Vec<String> {
+pub fn fill<S: AsRef<str>>(data: &GameData, c: &PersonaData, ids: &[S]) -> Vec<String> {
     let mut list = clean(data, c, ids);
     for k in pool(data, c) {
         if list.len() >= SIZE {
@@ -94,8 +94,8 @@ pub fn fill<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S]) -> Vec
     clean(data, c, &list)
 }
 
-/// The designer's preset (`CharacterData::preset`), filled up to 10.
-pub fn preset(data: &GameData, c: &CharacterData) -> Vec<String> {
+/// The designer's preset (`PersonaData::preset`), filled up to 10.
+pub fn preset(data: &GameData, c: &PersonaData) -> Vec<String> {
     fill(data, c, &c.preset)
 }
 
@@ -106,7 +106,7 @@ pub fn preset(data: &GameData, c: &CharacterData) -> Vec<String> {
 /// falls back to [`preset`].
 pub fn random(
     data: &GameData,
-    c: &CharacterData,
+    c: &PersonaData,
     mut below: impl FnMut(usize) -> usize,
 ) -> Vec<String> {
     let mut ids: Vec<String> = pool(data, c).into_iter().map(|k| k.id.clone()).collect();
@@ -118,25 +118,25 @@ pub fn random(
     clean(data, c, &out)
 }
 
-pub fn is_complete<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S]) -> bool {
+pub fn is_complete<S: AsRef<str>>(data: &GameData, c: &PersonaData, ids: &[S]) -> bool {
     clean(data, c, ids).len() == SIZE
 }
 
 // --- DeckService: named saved decks on the profile --------------------------------
 
-fn find<'p>(p: &'p PlayerProfile, c: &CharacterData, id: i32) -> Option<&'p SavedDeck> {
+fn find<'p>(p: &'p PlayerProfile, c: &PersonaData, id: i32) -> Option<&'p SavedDeck> {
     p.decks
         .iter()
-        .find(|d| d.character == c.name && d.slot == id)
+        .find(|d| d.persona == c.name && d.slot == id)
 }
 
 /// Saved custom decks of `c`, in display order. Id 0 (the preset) is not one.
-pub fn list<'p>(p: &'p PlayerProfile, c: &CharacterData) -> Vec<&'p SavedDeck> {
-    p.decks.iter().filter(|d| d.character == c.name).collect()
+pub fn list<'p>(p: &'p PlayerProfile, c: &PersonaData) -> Vec<&'p SavedDeck> {
+    p.decks.iter().filter(|d| d.persona == c.name).collect()
 }
 
 /// Next free deck id for `c` (one past its highest), or `None` at [`DECKS_MAX`].
-fn next_id(p: &PlayerProfile, c: &CharacterData) -> Option<i32> {
+fn next_id(p: &PlayerProfile, c: &PersonaData) -> Option<i32> {
     let decks = list(p, c);
     if decks.len() >= DECKS_MAX {
         return None;
@@ -145,7 +145,7 @@ fn next_id(p: &PlayerProfile, c: &CharacterData) -> Option<i32> {
 }
 
 /// Deck in `id`; id 0 is the preset.
-pub fn cards(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: i32) -> Vec<String> {
+pub fn cards(data: &GameData, p: &PlayerProfile, c: &PersonaData, id: i32) -> Vec<String> {
     if id <= 0 {
         return preset(data, c);
     }
@@ -154,11 +154,11 @@ pub fn cards(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: i32) -> 
         .unwrap_or_default()
 }
 
-pub fn is_empty(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: i32) -> bool {
+pub fn is_empty(data: &GameData, p: &PlayerProfile, c: &PersonaData, id: i32) -> bool {
     id > 0 && cards(data, p, c, id).is_empty()
 }
 
-pub fn slot_complete(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: i32) -> bool {
+pub fn slot_complete(data: &GameData, p: &PlayerProfile, c: &PersonaData, id: i32) -> bool {
     cards(data, p, c, id).len() == SIZE
 }
 
@@ -168,14 +168,14 @@ pub fn slot_complete(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: 
 pub fn save<S: AsRef<str>>(
     data: &GameData,
     p: &mut PlayerProfile,
-    c: &CharacterData,
+    c: &PersonaData,
     id: i32,
     ids: &[S],
 ) -> bool {
     let Some(d) = p
         .decks
         .iter_mut()
-        .find(|d| d.character == c.name && d.slot == id)
+        .find(|d| d.persona == c.name && d.slot == id)
     else {
         return false;
     };
@@ -193,7 +193,7 @@ pub fn save<S: AsRef<str>>(
 pub fn create<S: AsRef<str>>(
     data: &GameData,
     p: &mut PlayerProfile,
-    c: &CharacterData,
+    c: &PersonaData,
     name: &str,
     ids: &[S],
 ) -> Option<i32> {
@@ -202,13 +202,13 @@ pub fn create<S: AsRef<str>>(
     let at = p
         .decks
         .iter()
-        .rposition(|d| d.character == c.name)
+        .rposition(|d| d.persona == c.name)
         .map(|i| i + 1)
         .unwrap_or(p.decks.len());
     p.decks.insert(
         at,
         SavedDeck {
-            character: c.name.clone(),
+            persona: c.name.clone(),
             slot: id,
             name: sanitize_deck_name(name),
             cards,
@@ -219,17 +219,17 @@ pub fn create<S: AsRef<str>>(
 
 /// Copy deck `id` to a new deck right after it (auto-named). Returns the new
 /// id, or `None` if `id` is missing or at [`DECKS_MAX`].
-pub fn duplicate(data: &GameData, p: &mut PlayerProfile, c: &CharacterData, id: i32) -> Option<i32> {
+pub fn duplicate(data: &GameData, p: &mut PlayerProfile, c: &PersonaData, id: i32) -> Option<i32> {
     let at = p
         .decks
         .iter()
-        .position(|d| d.character == c.name && d.slot == id)?;
+        .position(|d| d.persona == c.name && d.slot == id)?;
     let new_id = next_id(p, c)?;
     let cards = clean(data, c, &p.decks[at].cards);
     p.decks.insert(
         at + 1,
         SavedDeck {
-            character: c.name.clone(),
+            persona: c.name.clone(),
             slot: new_id,
             name: String::new(),
             cards,
@@ -240,11 +240,11 @@ pub fn duplicate(data: &GameData, p: &mut PlayerProfile, c: &CharacterData, id: 
 
 /// Rename deck `id` ([`sanitize_deck_name`]; empty restores the auto name).
 /// Duplicates are allowed. Returns whether the profile changed.
-pub fn rename(p: &mut PlayerProfile, c: &CharacterData, id: i32, name: &str) -> bool {
+pub fn rename(p: &mut PlayerProfile, c: &PersonaData, id: i32, name: &str) -> bool {
     let Some(d) = p
         .decks
         .iter_mut()
-        .find(|d| d.character == c.name && d.slot == id)
+        .find(|d| d.persona == c.name && d.slot == id)
     else {
         return false;
     };
@@ -258,23 +258,23 @@ pub fn rename(p: &mut PlayerProfile, c: &CharacterData, id: i32, name: &str) -> 
 
 /// Delete deck `id`. A chosen default pointing at it falls back to the preset.
 /// Returns whether the profile changed.
-pub fn delete(p: &mut PlayerProfile, c: &CharacterData, id: i32) -> bool {
+pub fn delete(p: &mut PlayerProfile, c: &PersonaData, id: i32) -> bool {
     let Some(i) = p
         .decks
         .iter()
-        .position(|d| d.character == c.name && d.slot == id)
+        .position(|d| d.persona == c.name && d.slot == id)
     else {
         return false;
     };
     p.decks.remove(i);
     p.deck_choices
-        .retain(|d| !(d.character == c.name && d.slot == id));
+        .retain(|d| !(d.persona == c.name && d.slot == id));
     true
 }
 
 /// Move deck `id` by `delta` places in `c`'s display order (-1 up, +1 down).
 /// Returns whether the profile changed.
-pub fn move_by(p: &mut PlayerProfile, c: &CharacterData, id: i32, delta: i32) -> bool {
+pub fn move_by(p: &mut PlayerProfile, c: &PersonaData, id: i32, delta: i32) -> bool {
     if delta == 0 {
         return false;
     }
@@ -282,7 +282,7 @@ pub fn move_by(p: &mut PlayerProfile, c: &CharacterData, id: i32, delta: i32) ->
         .decks
         .iter()
         .enumerate()
-        .filter(|(_, d)| d.character == c.name)
+        .filter(|(_, d)| d.persona == c.name)
         .map(|(i, _)| i)
         .collect();
     let Some(pos) = idxs.iter().position(|&i| p.decks[i].slot == id) else {
@@ -298,16 +298,16 @@ pub fn move_by(p: &mut PlayerProfile, c: &CharacterData, id: i32, delta: i32) ->
 }
 
 /// Id chosen last time, if it still holds a complete deck; else 0 (preset).
-pub fn chosen_slot(data: &GameData, p: &PlayerProfile, c: &CharacterData) -> i32 {
-    match p.deck_choices.iter().find(|d| d.character == c.name) {
+pub fn chosen_slot(data: &GameData, p: &PlayerProfile, c: &PersonaData) -> i32 {
+    match p.deck_choices.iter().find(|d| d.persona == c.name) {
         Some(d) if d.slot > 0 && slot_complete(data, p, c, d.slot) => d.slot,
         _ => 0,
     }
 }
 
 /// Remember the chosen deck (0 = preset). Returns whether the profile changed.
-pub fn choose(p: &mut PlayerProfile, c: &CharacterData, id: i32) -> bool {
-    match p.deck_choices.iter_mut().find(|d| d.character == c.name) {
+pub fn choose(p: &mut PlayerProfile, c: &PersonaData, id: i32) -> bool {
+    match p.deck_choices.iter_mut().find(|d| d.persona == c.name) {
         Some(d) if d.slot == id => false,
         Some(d) => {
             d.slot = id;
@@ -315,7 +315,7 @@ pub fn choose(p: &mut PlayerProfile, c: &CharacterData, id: i32) -> bool {
         }
         None => {
             p.deck_choices.push(DeckChoice {
-                character: c.name.clone(),
+                persona: c.name.clone(),
                 slot: id,
             });
             true

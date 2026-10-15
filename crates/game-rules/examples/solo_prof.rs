@@ -54,12 +54,12 @@ fn main() {
                     let _ = m.act(1, &NetMessage::act("ban"));
                     did = "ban".into();
                 } else if st.phase == "pick" && st.turn == me {
-                    if let Some(c) = data.characters.iter().find(|c| st.players.iter().all(|p| p.character != c.name)) {
-                        let _ = m.act(1, &NetMessage { character: c.name.clone(), ..NetMessage::act("pick") });
+                    if let Some(c) = data.personas.iter().find(|c| st.players.iter().all(|p| p.persona != c.name)) {
+                        let _ = m.act(1, &NetMessage { persona: c.name.clone(), ..NetMessage::act("pick") });
                         did = "pick".into();
                     }
                 } else if st.phase == "deck" && !st.players[mi].deck_ready {
-                    if let Some(c) = data.character(&st.players[mi].character) {
+                    if let Some(c) = data.persona(&st.players[mi].persona) {
                         let cards = game_core::deck::preset(&data, c);
                         let _ = m.act(1, &NetMessage { cards, ..NetMessage::act("deck") });
                         did = "deck".into();

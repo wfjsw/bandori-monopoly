@@ -17,7 +17,7 @@ pub const SAKIKO_LEAD: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的支付价格减半。"#)
         .cell(r#"M14"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", r#"丰川祥子（CRYCHIC）"#)]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"丰川祥子（CRYCHIC）"#)]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSakikoLead.WhyNot`: refuses with 「没有和你重合的玩家」 when no

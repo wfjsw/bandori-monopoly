@@ -42,15 +42,15 @@ pub const FOREVER: CardDef = CardDef::new(
         .text(r#"（1）[手] 移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。
 （2）[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆。"#)
         .cell(r#"M8"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 const ID: &str = "CRYCHIC:如果能一直持续下去...";
 
 fn forever(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。」
-    let x = ctx::band_crystals(player_id);
+    let x = ctx::group_crystals(player_id);
     if x > 0 {
-        ctx::add_band_crystals(player_id, -x, 0); // 规则书（1）[手]: 「移除你乐队技能卡上的奇迹水晶」
+        ctx::add_group_crystals(player_id, -x, 0); // 规则书（1）[手]: 「移除你乐队技能卡上的奇迹水晶」
     }
     ctx::gain(
         player_id,

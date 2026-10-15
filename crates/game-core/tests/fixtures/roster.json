@@ -2,7 +2,7 @@
   "cards": [
     {
       "id": "通用:@Tsugu ycm",
-      "band": "通用",
+      "group": "通用",
       "name": "@Tsugu ycm",
       "rawName": "@Tsugu ycm",
       "owner": "",
@@ -15,7 +15,7 @@
     },
     {
       "id": "PPP:Popipa",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "Popipa",
       "rawName": "Popipa",
       "owner": "",
@@ -28,7 +28,7 @@
     },
     {
       "id": "AG:宣战布告",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "宣战布告",
       "rawName": "宣战布告",
       "owner": "",
@@ -42,7 +42,7 @@
     },
     {
       "id": "PP:再次闪耀",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "再次闪耀",
       "rawName": "再次闪耀",
       "owner": "",
@@ -58,7 +58,7 @@
     },
     {
       "id": "R:（ykn）louder",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "louder",
       "rawName": "（ykn）louder",
       "owner": "凑友希那",
@@ -69,7 +69,7 @@
     },
     {
       "id": "HHW:因为我一直相信着你",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "因为我一直相信着你",
       "rawName": "因为我一直相信着你",
       "owner": "",
@@ -80,7 +80,7 @@
     },
     {
       "id": "Mor:迷茫之蝶们的三全音",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "迷茫之蝶们的三全音",
       "rawName": "迷茫之蝶们的三全音",
       "owner": "",
@@ -93,7 +93,7 @@
     },
     {
       "id": "RAS:R. I. O. T.",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "R. I. O. T.",
       "rawName": "R. I. O. T.",
       "owner": "",
@@ -106,7 +106,7 @@
     },
     {
       "id": "MyGO:即使迷茫着",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "即使迷茫着",
       "rawName": "即使迷茫着",
       "owner": "",
@@ -120,7 +120,7 @@
     },
     {
       "id": "Mujica:（睦/mortis）表演的本能",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "表演的本能",
       "rawName": "（睦/mortis）表演的本能",
       "owner": "若叶睦",
@@ -133,7 +133,7 @@
     },
     {
       "id": "Sumimi:兼顾偶像与乐队",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "兼顾偶像与乐队",
       "rawName": "兼顾偶像与乐队",
       "owner": "",
@@ -144,7 +144,7 @@
     },
     {
       "id": "CRYCHIC:想要成为人类",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "想要成为人类",
       "rawName": "想要成为人类",
       "owner": "",
@@ -155,7 +155,7 @@
     },
     {
       "id": "通用:登上武道馆",
-      "band": "通用",
+      "group": "通用",
       "name": "登上武道馆",
       "rawName": "登上武道馆",
       "owner": "",
@@ -168,7 +168,7 @@
     },
     {
       "id": "PPP:[衍生]Pipopa",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "Pipopa",
       "rawName": "[衍生]Pipopa",
       "owner": "",
@@ -182,7 +182,7 @@
     },
     {
       "id": "AG:Y.O.L.O",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "Y.O.L.O",
       "rawName": "Y.O.L.O",
       "owner": "",
@@ -193,7 +193,7 @@
     },
     {
       "id": "PP:同一个梦想",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "同一个梦想",
       "rawName": "同一个梦想",
       "owner": "",
@@ -206,7 +206,7 @@
     },
     {
       "id": "R:学生会的检查",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "学生会的检查",
       "rawName": "学生会的检查",
       "owner": "",
@@ -217,7 +217,7 @@
     },
     {
       "id": "HHW:笑容大游行",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "笑容大游行",
       "rawName": "笑容大游行",
       "owner": "",
@@ -231,7 +231,7 @@
     },
     {
       "id": "Mor:夏日合宿",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "夏日合宿",
       "rawName": "夏日合宿",
       "owner": "",
@@ -242,7 +242,7 @@
     },
     {
       "id": "RAS:EXIST",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "EXIST",
       "rawName": "EXIST",
       "owner": "",
@@ -253,7 +253,7 @@
     },
     {
       "id": "MyGO:（灯）不再迷茫",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "不再迷茫",
       "rawName": "（灯）不再迷茫",
       "owner": "高松灯",
@@ -264,7 +264,7 @@
     },
     {
       "id": "Mujica:欢迎来到ave mujica的世界",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "欢迎来到ave mujica的世界",
       "rawName": "欢迎来到ave mujica的世界",
       "owner": "",
@@ -277,7 +277,7 @@
     },
     {
       "id": "Sumimi:Sumimi不会解散哦",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "Sumimi不会解散哦",
       "rawName": "Sumimi不会解散哦",
       "owner": "",
@@ -288,7 +288,7 @@
     },
     {
       "id": "CRYCHIC:春日影",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "春日影",
       "rawName": "春日影",
       "owner": "",
@@ -302,7 +302,7 @@
     },
     {
       "id": "通用:GREAT",
-      "band": "通用",
+      "group": "通用",
       "name": "GREAT",
       "rawName": "GREAT",
       "owner": "",
@@ -315,7 +315,7 @@
     },
     {
       "id": "PPP:[衍生]Popipapapipopa",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "Popipapapipopa",
       "rawName": "[衍生]Popipapapipopa",
       "owner": "",
@@ -329,7 +329,7 @@
     },
     {
       "id": "AG:商店街的青梅竹马",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "商店街的青梅竹马",
       "rawName": "商店街的青梅竹马",
       "owner": "",
@@ -340,7 +340,7 @@
     },
     {
       "id": "PP:初次演出事故",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "初次演出事故",
       "rawName": "初次演出事故",
       "owner": "",
@@ -354,7 +354,7 @@
     },
     {
       "id": "R:向着顶点",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "向着顶点",
       "rawName": "向着顶点",
       "owner": "",
@@ -365,7 +365,7 @@
     },
     {
       "id": "HHW:出发！后台之旅！",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "出发！后台之旅！",
       "rawName": "出发！后台之旅！",
       "owner": "",
@@ -376,7 +376,7 @@
     },
     {
       "id": "Mor:你的光芒将照亮前路",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "你的光芒将照亮前路",
       "rawName": "你的光芒将照亮前路",
       "owner": "",
@@ -387,7 +387,7 @@
     },
     {
       "id": "RAS:狂乱Hey Kids!!",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "狂乱Hey Kids!!",
       "rawName": "狂乱Hey Kids!!",
       "owner": "",
@@ -400,7 +400,7 @@
     },
     {
       "id": "MyGO:轮符雨",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "轮符雨",
       "rawName": "轮符雨",
       "owner": "",
@@ -411,7 +411,7 @@
     },
     {
       "id": "Mujica:祥，移动",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "祥，移动",
       "rawName": "祥，移动",
       "owner": "",
@@ -422,7 +422,7 @@
     },
     {
       "id": "Sumimi:一人两个甜甜圈",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "一人两个甜甜圈",
       "rawName": "一人两个甜甜圈",
       "owner": "",
@@ -433,7 +433,7 @@
     },
     {
       "id": "CRYCHIC:去唱卡拉ok吧",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "去唱卡拉ok吧",
       "rawName": "去唱卡拉ok吧",
       "owner": "",
@@ -444,7 +444,7 @@
     },
     {
       "id": "通用:[衍生]PERFECT",
-      "band": "通用",
+      "group": "通用",
       "name": "PERFECT",
       "rawName": "[衍生]PERFECT",
       "owner": "",
@@ -458,7 +458,7 @@
     },
     {
       "id": "PPP:Returns",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "Returns",
       "rawName": "Returns",
       "owner": "",
@@ -473,7 +473,7 @@
     },
     {
       "id": "AG:即使夕阳落山",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "即使夕阳落山",
       "rawName": "即使夕阳落山",
       "owner": "",
@@ -487,7 +487,7 @@
     },
     {
       "id": "PP:[衍生]重叠的声音",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "重叠的声音",
       "rawName": "[衍生]重叠的声音",
       "owner": "",
@@ -502,7 +502,7 @@
     },
     {
       "id": "R:曲奇时间",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "曲奇时间",
       "rawName": "曲奇时间",
       "owner": "",
@@ -513,7 +513,7 @@
     },
     {
       "id": "HHW:（薰）怪盗hello happy",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "怪盗hello happy",
       "rawName": "（薰）怪盗hello happy",
       "owner": "濑田薰",
@@ -524,7 +524,7 @@
     },
     {
       "id": "Mor:蝴蝶飞舞的星月夜",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "蝴蝶飞舞的星月夜",
       "rawName": "蝴蝶飞舞的星月夜",
       "owner": "",
@@ -535,7 +535,7 @@
     },
     {
       "id": "RAS:Change the world",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "Change the world",
       "rawName": "Change the world",
       "owner": "",
@@ -546,7 +546,7 @@
     },
     {
       "id": "MyGO:壱雫空",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "壱雫空",
       "rawName": "壱雫空",
       "owner": "",
@@ -557,7 +557,7 @@
     },
     {
       "id": "Mujica:燃尽前的线香花火",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "燃尽前的线香花火",
       "rawName": "燃尽前的线香花火",
       "owner": "",
@@ -568,7 +568,7 @@
     },
     {
       "id": "Sumimi:现在她是Sumimi的小初啦",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "现在她是Sumimi的小初啦",
       "rawName": "现在她是Sumimi的小初啦",
       "owner": "",
@@ -581,7 +581,7 @@
     },
     {
       "id": "CRYCHIC:想要抓住...",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "想要抓住...",
       "rawName": "想要抓住...",
       "owner": "",
@@ -592,7 +592,7 @@
     },
     {
       "id": "通用:[衍生]FEVER!",
-      "band": "通用",
+      "group": "通用",
       "name": "FEVER!",
       "rawName": "[衍生]FEVER!",
       "owner": "",
@@ -607,7 +607,7 @@
     },
     {
       "id": "PPP:Tomorrow's Door",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "Tomorrow's Door",
       "rawName": "Tomorrow's Door",
       "owner": "",
@@ -618,7 +618,7 @@
     },
     {
       "id": "AG:(兰) 像往常一样",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "像往常一样",
       "rawName": "(兰) 像往常一样",
       "owner": "美竹兰",
@@ -629,7 +629,7 @@
     },
     {
       "id": "PP:[衍生]明天见",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "明天见",
       "rawName": "[衍生]明天见",
       "owner": "",
@@ -644,7 +644,7 @@
     },
     {
       "id": "R:Fire bird",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "Fire bird",
       "rawName": "Fire bird",
       "owner": "",
@@ -655,7 +655,7 @@
     },
     {
       "id": "HHW:微笑巡逻队",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "微笑巡逻队",
       "rawName": "微笑巡逻队",
       "owner": "",
@@ -666,7 +666,7 @@
     },
     {
       "id": "Mor:勇气展翅高飞之时",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "勇气展翅高飞之时",
       "rawName": "勇气展翅高飞之时",
       "owner": "",
@@ -677,7 +677,7 @@
     },
     {
       "id": "RAS:成为最强",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "成为最强",
       "rawName": "成为最强",
       "owner": "",
@@ -688,7 +688,7 @@
     },
     {
       "id": "MyGO:无路矢",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "无路矢",
       "rawName": "无路矢",
       "owner": "",
@@ -699,7 +699,7 @@
     },
     {
       "id": "Mujica:骰子已经掷下",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "骰子已经掷下",
       "rawName": "骰子已经掷下",
       "owner": "",
@@ -712,7 +712,7 @@
     },
     {
       "id": "Sumimi:Sumimi是二人一体的",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "Sumimi是二人一体的",
       "rawName": "Sumimi是二人一体的",
       "owner": "",
@@ -725,7 +725,7 @@
     },
     {
       "id": "CRYCHIC:优雅的呐喊",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "优雅的呐喊",
       "rawName": "优雅的呐喊",
       "owner": "",
@@ -738,7 +738,7 @@
     },
     {
       "id": "通用:10次招募（1回限定）",
-      "band": "通用",
+      "group": "通用",
       "name": "10次招募（1回限定）",
       "rawName": "10次招募（1回限定）",
       "owner": "",
@@ -751,7 +751,7 @@
     },
     {
       "id": "PPP:Bang Dream!",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "Bang Dream!",
       "rawName": "Bang Dream!",
       "owner": "",
@@ -764,7 +764,7 @@
     },
     {
       "id": "AG:（摩卡）0.5倍速",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "0.5倍速",
       "rawName": "（摩卡）0.5倍速",
       "owner": "青叶摩卡",
@@ -775,7 +775,7 @@
     },
     {
       "id": "PP:不要背负期待",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "不要背负期待",
       "rawName": "不要背负期待",
       "owner": "",
@@ -790,7 +790,7 @@
     },
     {
       "id": "R:NFO",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "NFO",
       "rawName": "NFO",
       "owner": "",
@@ -801,7 +801,7 @@
     },
     {
       "id": "HHW:（kkr）前往笑容集结的地方！",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "前往笑容集结的地方！",
       "rawName": "（kkr）前往笑容集结的地方！",
       "owner": "弦卷心",
@@ -812,7 +812,7 @@
     },
     {
       "id": "Mor:（NNM）稍微努力了一下",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "稍微努力了一下",
       "rawName": "（NNM）稍微努力了一下",
       "owner": "广町七深",
@@ -823,7 +823,7 @@
     },
     {
       "id": "RAS:PLEASE CHOOSE",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "PLEASE CHOOSE",
       "rawName": "PLEASE CHOOSE",
       "owner": "",
@@ -836,7 +836,7 @@
     },
     {
       "id": "MyGO:羽丘的不可思议女孩",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "羽丘的不可思议女孩",
       "rawName": "羽丘的不可思议女孩",
       "owner": "",
@@ -847,7 +847,7 @@
     },
     {
       "id": "Mujica:无法将视线移开",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "无法将视线移开",
       "rawName": "无法将视线移开",
       "owner": "",
@@ -860,7 +860,7 @@
     },
     {
       "id": "Sumimi:Here the world",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "Here the world",
       "rawName": "Here the world",
       "owner": "",
@@ -873,7 +873,7 @@
     },
     {
       "id": "CRYCHIC:是我自己的问题",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "是我自己的问题",
       "rawName": "是我自己的问题",
       "owner": "",
@@ -886,7 +886,7 @@
     },
     {
       "id": "通用:该清CP了",
-      "band": "通用",
+      "group": "通用",
       "name": "该清CP了",
       "rawName": "该清CP了",
       "owner": "",
@@ -900,7 +900,7 @@
     },
     {
       "id": "PPP:STAR BEAT!",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "STAR BEAT!",
       "rawName": "STAR BEAT!",
       "owner": "",
@@ -913,7 +913,7 @@
     },
     {
       "id": "AG:无论是何种颜色的夕阳",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "无论是何种颜色的夕阳",
       "rawName": "无论是何种颜色的夕阳",
       "owner": "",
@@ -924,7 +924,7 @@
     },
     {
       "id": "PP:[衍生]共鸣",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "共鸣",
       "rawName": "[衍生]共鸣",
       "owner": "",
@@ -938,7 +938,7 @@
     },
     {
       "id": "R:live前的准备",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "live前的准备",
       "rawName": "live前的准备",
       "owner": "",
@@ -951,7 +951,7 @@
     },
     {
       "id": "HHW:黑衣人的补给",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "黑衣人的补给",
       "rawName": "黑衣人的补给",
       "owner": "",
@@ -964,7 +964,7 @@
     },
     {
       "id": "Mor:（toko）",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "",
       "rawName": "（toko）",
       "owner": "桐谷透子",
@@ -975,7 +975,7 @@
     },
     {
       "id": "RAS:练习室里的风暴",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "练习室里的风暴",
       "rawName": "练习室里的风暴",
       "owner": "",
@@ -986,7 +986,7 @@
     },
     {
       "id": "MyGO:[千早爱音]Anon Tokyo",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "Anon Tokyo",
       "rawName": "[千早爱音]Anon Tokyo",
       "owner": "千早爱音",
@@ -1000,7 +1000,7 @@
     },
     {
       "id": "Mujica:（初华）我，无畏悲伤",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "我，无畏悲伤",
       "rawName": "（初华）我，无畏悲伤",
       "owner": "三角初华",
@@ -1011,7 +1011,7 @@
     },
     {
       "id": "Sumimi:Sweet Escape",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "Sweet Escape",
       "rawName": "Sweet Escape",
       "owner": "",
@@ -1022,7 +1022,7 @@
     },
     {
       "id": "CRYCHIC:如果能一直持续下去...",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "如果能一直持续下去...",
       "rawName": "如果能一直持续下去...",
       "owner": "",
@@ -1036,7 +1036,7 @@
     },
     {
       "id": "通用:雨啊，快点来吧",
-      "band": "通用",
+      "group": "通用",
       "name": "雨啊，快点来吧",
       "rawName": "雨啊，快点来吧",
       "owner": "",
@@ -1049,7 +1049,7 @@
     },
     {
       "id": "PPP:抓到了",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "抓到了",
       "rawName": "抓到了",
       "owner": "",
@@ -1060,7 +1060,7 @@
     },
     {
       "id": "AG:回家的路上绕个道",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "回家的路上绕个道",
       "rawName": "回家的路上绕个道",
       "owner": "",
@@ -1071,7 +1071,7 @@
     },
     {
       "id": "PP:有你与我在这里共度",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "有你与我在这里共度",
       "rawName": "有你与我在这里共度",
       "owner": "",
@@ -1084,7 +1084,7 @@
     },
     {
       "id": "R:选择自己的舞台",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "选择自己的舞台",
       "rawName": "选择自己的舞台",
       "owner": "",
@@ -1097,7 +1097,7 @@
     },
     {
       "id": "HHW:运动的天赋",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "运动的天赋",
       "rawName": "运动的天赋",
       "owner": "",
@@ -1108,7 +1108,7 @@
     },
     {
       "id": "Mor:（小白）",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "",
       "rawName": "（小白）",
       "owner": "仓田真白",
@@ -1121,7 +1121,7 @@
     },
     {
       "id": "RAS:游击演出",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "游击演出",
       "rawName": "游击演出",
       "owner": "",
@@ -1136,7 +1136,7 @@
     },
     {
       "id": "MyGO:（soyo）混合的颜色",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "混合的颜色",
       "rawName": "（soyo）混合的颜色",
       "owner": "长崎素世",
@@ -1147,7 +1147,7 @@
     },
     {
       "id": "Mujica:（祥子）斩断留恋，忘却一切",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "斩断留恋，忘却一切",
       "rawName": "（祥子）斩断留恋，忘却一切",
       "owner": "丰川祥子",
@@ -1158,7 +1158,7 @@
     },
     {
       "id": "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "儿时玩伴的鼓励",
       "rawName": "(初华（Sumimi）)儿时玩伴的鼓励",
       "owner": "三角初华（Sumimi）",
@@ -1169,7 +1169,7 @@
     },
     {
       "id": "CRYCHIC:一起演奏音乐的命运共同体",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "一起演奏音乐的命运共同体",
       "rawName": "一起演奏音乐的命运共同体",
       "owner": "",
@@ -1182,7 +1182,7 @@
     },
     {
       "id": "通用:网络链接异常",
-      "band": "通用",
+      "group": "通用",
       "name": "网络链接异常",
       "rawName": "网络链接异常",
       "owner": "",
@@ -1196,7 +1196,7 @@
     },
     {
       "id": "PPP:迷宫般的仓库",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "迷宫般的仓库",
       "rawName": "迷宫般的仓库",
       "owner": "",
@@ -1207,7 +1207,7 @@
     },
     {
       "id": "AG:ONE OF US",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "ONE OF US",
       "rawName": "ONE OF US",
       "owner": "",
@@ -1218,7 +1218,7 @@
     },
     {
       "id": "PP:梦在前方，结彩当下",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "梦在前方，结彩当下",
       "rawName": "梦在前方，结彩当下",
       "owner": "",
@@ -1233,7 +1233,7 @@
     },
     {
       "id": "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "弹奏弹奏弹奏，继续弹奏",
       "rawName": "（纱夜）弹奏弹奏弹奏，继续弹奏",
       "owner": "冰川纱夜",
@@ -1246,7 +1246,7 @@
     },
     {
       "id": "HHW:Happy, Lucky, Smile, Yeah！",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "Happy, Lucky, Smile, Yeah！",
       "rawName": "Happy, Lucky, Smile, Yeah！",
       "owner": "",
@@ -1257,7 +1257,7 @@
     },
     {
       "id": "Mor:离心力，不为所动",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "离心力，不为所动",
       "rawName": "离心力，不为所动",
       "owner": "",
@@ -1270,7 +1270,7 @@
     },
     {
       "id": "RAS:UNSTOPPABLE",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "UNSTOPPABLE",
       "rawName": "UNSTOPPABLE",
       "owner": "",
@@ -1281,7 +1281,7 @@
     },
     {
       "id": "MyGO:（立希）想认真去做",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "想认真去做",
       "rawName": "（立希）想认真去做",
       "owner": "椎名立希",
@@ -1292,7 +1292,7 @@
     },
     {
       "id": "Mujica:心の雨",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "心の雨",
       "rawName": "心の雨",
       "owner": "",
@@ -1303,7 +1303,7 @@
     },
     {
       "id": "Sumimi:（真奈）歌唱大赛5连冠",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "歌唱大赛5连冠",
       "rawName": "（真奈）歌唱大赛5连冠",
       "owner": "纯田真奈",
@@ -1316,7 +1316,7 @@
     },
     {
       "id": "CRYCHIC:主唱太拼命了",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "主唱太拼命了",
       "rawName": "主唱太拼命了",
       "owner": "",
@@ -1329,7 +1329,7 @@
     },
     {
       "id": "通用:尽力后的收获",
-      "band": "通用",
+      "group": "通用",
       "name": "尽力后的收获",
       "rawName": "尽力后的收获",
       "owner": "",
@@ -1342,7 +1342,7 @@
     },
     {
       "id": "PPP:献给远方的你",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "献给远方的你",
       "rawName": "献给远方的你",
       "owner": "",
@@ -1355,7 +1355,7 @@
     },
     {
       "id": "AG:朝同一片天空迈进",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "朝同一片天空迈进",
       "rawName": "朝同一片天空迈进",
       "owner": "",
@@ -1368,7 +1368,7 @@
     },
     {
       "id": "PP:TITLE IDOL",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "TITLE IDOL",
       "rawName": "TITLE IDOL",
       "owner": "",
@@ -1381,7 +1381,7 @@
     },
     {
       "id": "R:（亚子）黑暗大魔姬亚子",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "黑暗大魔姬亚子",
       "rawName": "（亚子）黑暗大魔姬亚子",
       "owner": "宇田川亚子",
@@ -1394,7 +1394,7 @@
     },
     {
       "id": "HHW:热气球演出",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "热气球演出",
       "rawName": "热气球演出",
       "owner": "",
@@ -1405,7 +1405,7 @@
     },
     {
       "id": "Mor:高贵的微蓝",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "高贵的微蓝",
       "rawName": "高贵的微蓝",
       "owner": "",
@@ -1416,7 +1416,7 @@
     },
     {
       "id": "RAS:Repaint",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "Repaint",
       "rawName": "Repaint",
       "owner": "",
@@ -1429,7 +1429,7 @@
     },
     {
       "id": "MyGO:（乐奈）有趣的女人",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "有趣的女人",
       "rawName": "（乐奈）有趣的女人",
       "owner": "要乐奈",
@@ -1440,7 +1440,7 @@
     },
     {
       "id": "Mujica:#J11",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "",
       "rawName": "",
       "owner": "",
@@ -1451,7 +1451,7 @@
     },
     {
       "id": "Sumimi:#L11",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "",
       "rawName": "",
       "owner": "",
@@ -1462,7 +1462,7 @@
     },
     {
       "id": "CRYCHIC:初演大成功",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "初演大成功",
       "rawName": "初演大成功",
       "owner": "",
@@ -1473,7 +1473,7 @@
     },
     {
       "id": "通用:CiRCLE THANKS PARTY!",
-      "band": "通用",
+      "group": "通用",
       "name": "CiRCLE THANKS PARTY!",
       "rawName": "CiRCLE THANKS PARTY!",
       "owner": "",
@@ -1486,7 +1486,7 @@
     },
     {
       "id": "PPP:仓库里的Random Star",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "仓库里的Random Star",
       "rawName": "仓库里的Random Star",
       "owner": "",
@@ -1497,7 +1497,7 @@
     },
     {
       "id": "AG:绯红之魂",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "绯红之魂",
       "rawName": "绯红之魂",
       "owner": "",
@@ -1512,7 +1512,7 @@
     },
     {
       "id": "PP:可爱又强壮的花朵",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "可爱又强壮的花朵",
       "rawName": "可爱又强壮的花朵",
       "owner": "",
@@ -1526,7 +1526,7 @@
     },
     {
       "id": "R:（燐子）Ringing Bloom",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "Ringing Bloom",
       "rawName": "（燐子）Ringing Bloom",
       "owner": "白金燐子",
@@ -1537,7 +1537,7 @@
     },
     {
       "id": "HHW:爱心义演",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "爱心义演",
       "rawName": "爱心义演",
       "owner": "",
@@ -1548,7 +1548,7 @@
     },
     {
       "id": "Mor:再次牵起手来",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "再次牵起手来",
       "rawName": "再次牵起手来",
       "owner": "",
@@ -1563,7 +1563,7 @@
     },
     {
       "id": "RAS:（chuchu）演奏我的音乐吧",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "演奏我的音乐吧",
       "rawName": "（chuchu）演奏我的音乐吧",
       "owner": "珠手知由",
@@ -1574,7 +1574,7 @@
     },
     {
       "id": "MyGO:那天的雨",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "那天的雨",
       "rawName": "那天的雨",
       "owner": "",
@@ -1585,7 +1585,7 @@
     },
     {
       "id": "Mujica:人偶的箱庭",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "人偶的箱庭",
       "rawName": "人偶的箱庭",
       "owner": "",
@@ -1596,7 +1596,7 @@
     },
     {
       "id": "Sumimi:#L12",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "name": "",
       "rawName": "",
       "owner": "",
@@ -1610,7 +1610,7 @@
     },
     {
       "id": "CRYCHIC:（睦）从没有觉得...",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "从没有觉得...",
       "rawName": "（睦）从没有觉得...",
       "owner": "若叶睦（CRYCHIC）",
@@ -1621,7 +1621,7 @@
     },
     {
       "id": "通用:安可",
-      "band": "通用",
+      "group": "通用",
       "name": "安可",
       "rawName": "安可",
       "owner": "",
@@ -1635,7 +1635,7 @@
     },
     {
       "id": "PPP:[衍生]拍卖撤下来了",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "拍卖撤下来了",
       "rawName": "[衍生]拍卖撤下来了",
       "owner": "",
@@ -1650,7 +1650,7 @@
     },
     {
       "id": "AG:刻入天穹傲岸的烈光",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "刻入天穹傲岸的烈光",
       "rawName": "刻入天穹傲岸的烈光",
       "owner": "",
@@ -1663,7 +1663,7 @@
     },
     {
       "id": "PP:找回珍妮弗",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "找回珍妮弗",
       "rawName": "找回珍妮弗",
       "owner": "",
@@ -1677,7 +1677,7 @@
     },
     {
       "id": "R:蓝玫瑰的骄傲",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "蓝玫瑰的骄傲",
       "rawName": "蓝玫瑰的骄傲",
       "owner": "",
@@ -1688,7 +1688,7 @@
     },
     {
       "id": "HHW:（花音）Wacha Mocha 啪嗒进行曲",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "Wacha Mocha 啪嗒进行曲",
       "rawName": "（花音）Wacha Mocha 啪嗒进行曲",
       "owner": "松原花音",
@@ -1699,7 +1699,7 @@
     },
     {
       "id": "Mor:纯真振翅",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "纯真振翅",
       "rawName": "纯真振翅",
       "owner": "",
@@ -1710,7 +1710,7 @@
     },
     {
       "id": "RAS:（LOCK）追逐梦想的步伐",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "追逐梦想的步伐",
       "rawName": "（LOCK）追逐梦想的步伐",
       "owner": "朝日六花",
@@ -1721,7 +1721,7 @@
     },
     {
       "id": "MyGO:若能再次交汇",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "若能再次交汇",
       "rawName": "若能再次交汇",
       "owner": "",
@@ -1734,7 +1734,7 @@
     },
     {
       "id": "Mujica:会被骗着买水晶的人",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "会被骗着买水晶的人",
       "rawName": "会被骗着买水晶的人",
       "owner": "",
@@ -1745,7 +1745,7 @@
     },
     {
       "id": "CRYCHIC:（灯）内心的呐喊",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "内心的呐喊",
       "rawName": "（灯）内心的呐喊",
       "owner": "高松灯（CRYCHIC）",
@@ -1756,7 +1756,7 @@
     },
     {
       "id": "通用:[月岛麻里奈]今天也要加油工作喔",
-      "band": "通用",
+      "group": "通用",
       "name": "今天也要加油工作喔",
       "rawName": "[月岛麻里奈]今天也要加油工作喔",
       "owner": "月岛麻里奈",
@@ -1770,7 +1770,7 @@
     },
     {
       "id": "PPP:向着未来的路标",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "向着未来的路标",
       "rawName": "向着未来的路标",
       "owner": "",
@@ -1781,7 +1781,7 @@
     },
     {
       "id": "AG:（巴）商店街的救世主",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "商店街的救世主",
       "rawName": "（巴）商店街的救世主",
       "owner": "宇田川巴",
@@ -1794,7 +1794,7 @@
     },
     {
       "id": "PP:[衍生]魔法战队Pastel✽Ranger",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "魔法战队Pastel✽Ranger",
       "rawName": "[衍生]魔法战队Pastel✽Ranger",
       "owner": "",
@@ -1809,7 +1809,7 @@
     },
     {
       "id": "R:Sprechchor",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "Sprechchor",
       "rawName": "Sprechchor",
       "owner": "",
@@ -1820,7 +1820,7 @@
     },
     {
       "id": "HHW:（育美）",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "",
       "rawName": "（育美）",
       "owner": "北泽育美",
@@ -1831,7 +1831,7 @@
     },
     {
       "id": "Mor:秘密与青春的虹彩",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "秘密与青春的虹彩",
       "rawName": "秘密与青春的虹彩",
       "owner": "",
@@ -1844,7 +1844,7 @@
     },
     {
       "id": "RAS:（MASKING）CRUSH ON THE DRUM!!!",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "CRUSH ON THE DRUM!!!",
       "rawName": "（MASKING）CRUSH ON THE DRUM!!!",
       "owner": "佐藤益木",
@@ -1858,7 +1858,7 @@
     },
     {
       "id": "MyGO:哪怕这旅程没有终点",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "哪怕这旅程没有终点",
       "rawName": "哪怕这旅程没有终点",
       "owner": "",
@@ -1872,7 +1872,7 @@
     },
     {
       "id": "Mujica:黑色生日",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "黑色生日",
       "rawName": "黑色生日",
       "owner": "",
@@ -1883,7 +1883,7 @@
     },
     {
       "id": "CRYCHIC:（祥子）带领着大家",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "带领着大家",
       "rawName": "（祥子）带领着大家",
       "owner": "丰川祥子（CRYCHIC）",
@@ -1894,7 +1894,7 @@
     },
     {
       "id": "通用:[都筑诗船]Parking Space",
-      "band": "通用",
+      "group": "通用",
       "name": "Parking Space",
       "rawName": "[都筑诗船]Parking Space",
       "owner": "都筑诗船",
@@ -1908,7 +1908,7 @@
     },
     {
       "id": "PPP:（香澄）大家我都喜欢哦",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "大家我都喜欢哦",
       "rawName": "（香澄）大家我都喜欢哦",
       "owner": "户山香澄",
@@ -1922,7 +1922,7 @@
     },
     {
       "id": "AG:（绯玛丽）如果并非没问题",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "如果并非没问题",
       "rawName": "（绯玛丽）如果并非没问题",
       "owner": "上原绯玛丽",
@@ -1935,7 +1935,7 @@
     },
     {
       "id": "PP:练习生解密指南",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "练习生解密指南",
       "rawName": "练习生解密指南",
       "owner": "",
@@ -1949,7 +1949,7 @@
     },
     {
       "id": "R:轨迹",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "轨迹",
       "rawName": "轨迹",
       "owner": "",
@@ -1963,7 +1963,7 @@
     },
     {
       "id": "HHW:（美咲）",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "",
       "rawName": "（美咲）",
       "owner": "奥泽美咲",
@@ -1976,7 +1976,7 @@
     },
     {
       "id": "Mor:（Rui）正论恶魔",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "正论恶魔",
       "rawName": "（Rui）正论恶魔",
       "owner": "八潮瑠唯",
@@ -1987,7 +1987,7 @@
     },
     {
       "id": "RAS:（PAREO）渐渐远去的你",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "渐渐远去的你",
       "rawName": "（PAREO）渐渐远去的你",
       "owner": "鳰原令王那",
@@ -1998,7 +1998,7 @@
     },
     {
       "id": "MyGO:难以复刻的奇迹",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "难以复刻的奇迹",
       "rawName": "难以复刻的奇迹",
       "owner": "",
@@ -2012,7 +2012,7 @@
     },
     {
       "id": "Mujica:（喵梦）",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "",
       "rawName": "（喵梦）",
       "owner": "祐天寺若麦",
@@ -2023,7 +2023,7 @@
     },
     {
       "id": "CRYCHIC:（soyo）回到曾经",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "回到曾经",
       "rawName": "（soyo）回到曾经",
       "owner": "长崎素世（CRYCHIC）",
@@ -2037,7 +2037,7 @@
     },
     {
       "id": "PPP:（有咲）等等等一下",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "等等等一下",
       "rawName": "（有咲）等等等一下",
       "owner": "市谷有咲",
@@ -2051,7 +2051,7 @@
     },
     {
       "id": "AG:（鸫）微小的『能做到』的事",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "name": "微小的『能做到』的事",
       "rawName": "（鸫）微小的『能做到』的事",
       "owner": "羽泽鸫",
@@ -2064,7 +2064,7 @@
     },
     {
       "id": "PP:[丸山彩]憧憬的前方",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "憧憬的前方",
       "rawName": "[丸山彩]憧憬的前方",
       "owner": "丸山彩",
@@ -2079,7 +2079,7 @@
     },
     {
       "id": "R:必然的联系（莉莎）",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "必然的联系",
       "rawName": "必然的联系（莉莎）",
       "owner": "今井莉莎",
@@ -2092,7 +2092,7 @@
     },
     {
       "id": "HHW:梦幻的回礼",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "name": "梦幻的回礼",
       "rawName": "梦幻的回礼",
       "owner": "",
@@ -2105,7 +2105,7 @@
     },
     {
       "id": "Mor:（筑紫）迷茫的庭园",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "name": "迷茫的庭园",
       "rawName": "（筑紫）迷茫的庭园",
       "owner": "二叶筑紫",
@@ -2116,7 +2116,7 @@
     },
     {
       "id": "RAS:（和奏瑞依）寄于指尖的执念",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "name": "寄于指尖的执念",
       "rawName": "（和奏瑞依）寄于指尖的执念",
       "owner": "和奏瑞依",
@@ -2127,7 +2127,7 @@
     },
     {
       "id": "MyGO:普通与理所当然",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "name": "普通与理所当然",
       "rawName": "普通与理所当然",
       "owner": "",
@@ -2140,7 +2140,7 @@
     },
     {
       "id": "Mujica:（海铃）",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "name": "",
       "rawName": "（海铃）",
       "owner": "八幡海铃",
@@ -2151,7 +2151,7 @@
     },
     {
       "id": "CRYCHIC:（立希）即便比不上...",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "name": "即便比不上...",
       "rawName": "（立希）即便比不上...",
       "owner": "椎名立希（CRYCHIC）",
@@ -2164,7 +2164,7 @@
     },
     {
       "id": "PPP:（多惠）寻找更好的声音",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "寻找更好的声音",
       "rawName": "（多惠）寻找更好的声音",
       "owner": "花园多惠",
@@ -2175,7 +2175,7 @@
     },
     {
       "id": "PP:[大和麻弥]可能性为∞",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "可能性为∞",
       "rawName": "[大和麻弥]可能性为∞",
       "owner": "大和麻弥",
@@ -2189,7 +2189,7 @@
     },
     {
       "id": "R:[衍生] 觉悟",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "觉悟",
       "rawName": "[衍生] 觉悟",
       "owner": "",
@@ -2204,7 +2204,7 @@
     },
     {
       "id": "PPP:（沙绫）总有一天要给这片天空命名",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "总有一天要给这片天空命名",
       "rawName": "（沙绫）总有一天要给这片天空命名",
       "owner": "山吹沙绫",
@@ -2215,7 +2215,7 @@
     },
     {
       "id": "PP:[白鹭千圣]微笑的铁假面",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "微笑的铁假面",
       "rawName": "[白鹭千圣]微笑的铁假面",
       "owner": "白鹭千圣",
@@ -2229,7 +2229,7 @@
     },
     {
       "id": "PPP:（里美）我的心就像巧克力螺",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "name": "我的心就像巧克力螺",
       "rawName": "（里美）我的心就像巧克力螺",
       "owner": "牛込里美",
@@ -2242,7 +2242,7 @@
     },
     {
       "id": "PP:[冰川日菜]会发出怎样的声音呢？",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "会发出怎样的声音呢？",
       "rawName": "[冰川日菜]会发出怎样的声音呢？",
       "owner": "冰川日菜",
@@ -2255,7 +2255,7 @@
     },
     {
       "id": "PP:[若宫伊芙]属于我的武士道！",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "name": "属于我的武士道！",
       "rawName": "[若宫伊芙]属于我的武士道！",
       "owner": "若宫伊芙",
@@ -2269,7 +2269,7 @@
     },
     {
       "id": "R:[衍生] 压",
-      "band": "Roselia",
+      "group": "Roselia",
       "name": "压",
       "rawName": "[衍生] 压",
       "owner": "",
@@ -2282,11 +2282,11 @@
       "cell": ""
     }
   ],
-  "characters": [
+  "personas": [
     {
       "name": "户山香澄",
       "display": "户山香澄",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "color": "#FF5522",
       "skill": "非凡之星",
       "text": "（1）其他玩家“星之鼓动山丘”上[结算]时获得一个[火罐]（初始0，上限1）（2）运营阶段可使用1个[火罐]，立刻进入移动阶段且本回合的[主要移动]改为[传送]到任意自己拥有的格子且可选择盖房",
@@ -2303,7 +2303,7 @@
     {
       "name": "花园多惠",
       "display": "花园多惠",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "color": "#0077DD",
       "skill": "花园警察，出警！",
       "text": "（1）每次你领取[CiRCLE奖励]时投掷3d20，如果结果对应的格子不是“星空齿科”则在结果对应的格子放置一个[多惠兔子]；当你经过有[多惠兔子]的格子时[移除]该格子上的所有[多惠兔子]并获得等量的[火罐]（初始2，上限4）\n（2）在其他玩家使用角色/团技能的[主]效果或使用手牌的[手]效果时你可以使用4个[火罐]将其抵消，然后你获得500资金且被抵消的玩家获得2000资金",
@@ -2320,7 +2320,7 @@
     {
       "name": "牛込里美",
       "display": "牛込里美",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "color": "#FF55BB",
       "skill": "里美的决心",
       "text": "（1）你的回合中[经过]任意Live House颜色格子后在回合结束时获得1个[火罐]（初始1，上限3）（2）运营阶段可选择使用3个[火罐]立刻进入移动阶段，[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房",
@@ -2337,7 +2337,7 @@
     {
       "name": "山吹沙绫",
       "display": "山吹沙绫",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "color": "#FFCC11",
       "skill": "焕然一新的天空中",
       "text": "（1）其他玩家一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时可让那名玩家获得200资金且自己获得1个saaya标记和1个[火罐]（初始3，上限5）；拥有saaya标记时投掷移动骰时失去1个saaya标记，此次投掷结果减1d10（计算后小等于0则移动到下一个可购买格子）\n（2）[消耗]或[支付]资金时可使用5个[火罐]，此次资金变动减少5000（最少0）。",
@@ -2354,7 +2354,7 @@
     {
       "name": "市谷有咲",
       "display": "市谷有咲",
-      "band": "Poppin' Party",
+      "group": "Poppin' Party",
       "color": "#AA66DD",
       "skill": "盆栽爱好者",
       "text": "（1）每次有其他玩家在“流星堂”抽取事件时获得一个[火罐]（初始0，上限2）（2）回合结束时如果本回合的[主要移动][经过]“流星堂”且[移动终点]不为“流星堂”时抽取一个视为在“流星堂”抽取的事件并获得一个[火罐]。（3）[经过]“流星堂”时可使用2个[火罐]为自己的团卡添加1个[奇迹水晶]。",
@@ -2371,7 +2371,7 @@
     {
       "name": "美竹兰",
       "display": "美竹兰",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "color": "#EE0022",
       "skill": "叛逆的红挑染",
       "text": "（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）（2）投掷移动步数前可使用一个[火罐]选择本次移动向后，并且向后移动[经过]CiRCLE时不获得CiRCLE奖励。",
@@ -2388,7 +2388,7 @@
     {
       "name": "青叶摩卡",
       "display": "青叶摩卡",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "color": "#00CCAA",
       "skill": "我行我素",
       "text": "（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）（2）当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]传送到其所在格子（不触发结算且该传送本身不引发其他被动效果（如玩家重叠），该效果对每个玩家的被动技能和卡存在2次使用cd）",
@@ -2405,7 +2405,7 @@
     {
       "name": "上原绯玛丽",
       "display": "上原绯玛丽",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "color": "#FF9999",
       "skill": "大家一起迈出新的一步",
       "text": "（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）（2）移动阶段前，你可以消耗一个火罐指定你的此次移动仅在单/双数格上进行。",
@@ -2422,7 +2422,7 @@
     {
       "name": "宇田川巴",
       "display": "宇田川巴",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "color": "#BB0033",
       "skill": "豚骨酱油拉面大姐",
       "text": "（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）（2）移动阶段前，你可以使用一个[火罐]，使此次移动的起点向绝对距离“银河拉面馆”更近的方向移动10格。若你因此效果导致起点向前移动并超过了“银河拉面馆”，你补充一个火罐。（3）若你位于银河拉面馆上，你无法使用（2）效果，你可以选择停留一回合，此效果每圈限一次",
@@ -2439,7 +2439,7 @@
     {
       "name": "羽泽鸫",
       "display": "羽泽鸫",
-      "band": "Afterglow",
+      "group": "Afterglow",
       "color": "#FFEE88",
       "skill": "伟大的平凡",
       "text": "（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）（2）当你进行主要移动时，你可以失去一个[火罐]使本次移动反向，如果你这样做了，你的下回合开始时，进行一次双倍掷骰的移动，向后移动经过CiRCLE时不获得CiRCLE奖励。",
@@ -2456,7 +2456,7 @@
     {
       "name": "丸山彩",
       "display": "丸山彩",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "color": "#FF88BB",
       "skill": "With~",
       "text": "（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得丸山彩的（2）技能\n（2）自己每次需要支付资金时可选择将自己Y个正面[P✽P粉丝]变反，此次支付的分摊前资金减少Y×100（最少0）；如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正，否则将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正",
@@ -2473,7 +2473,7 @@
     {
       "name": "冰川日菜",
       "display": "冰川日菜",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "color": "#55DDEE",
       "skill": "日菜抽中的大奖",
       "text": "（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得冰川日菜的（2）技能\n（2）每回合开始时必须进行1次投掷1d4，根据最后投掷的结果在下回合开始前获得以下角色的（2）技能：结果为1是丸山彩；结果为2是白鹭千圣；结果为3是若宫伊芙；结果为4是大和麻弥。",
@@ -2490,7 +2490,7 @@
     {
       "name": "白鹭千圣",
       "display": "白鹭千圣",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "color": "#FFEEAA",
       "skill": "保持坦率的你",
       "text": "（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得白鹭千圣的（2）技能\n（2）自己每次收取资金时可选择将自己Y个正面[P✽P粉丝]变反，此次获得的分摊前数量增加Y×100；如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正，否则将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正",
@@ -2507,7 +2507,7 @@
     {
       "name": "大和麻弥",
       "display": "大和麻弥",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "color": "#99DD88",
       "skill": "朝阳照耀的片刻",
       "text": "（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得大和麻弥的（2）技能\n（2）自己抽卡时时可选择将自己Y个正面[P✽P粉丝]变反，此次抽卡改为观看卡组顶端Y+1张卡（卡组数量不足Y+1则观看全部卡组），然后选择一张牌（不公开）加入手牌（此次加手视为抽卡动作），剩余观看的牌洗回卡组；如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正，否则将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正",
@@ -2524,7 +2524,7 @@
     {
       "name": "若宫伊芙",
       "display": "若宫伊芙",
-      "band": "Pastel✽Palettes",
+      "group": "Pastel✽Palettes",
       "color": "#DDBBFF",
       "skill": "天下统一",
       "text": "（1）游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得若宫伊芙的（2）技能\n（2）当你因任意原因投掷前可选择将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4；如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正，否则将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正",
@@ -2541,7 +2541,7 @@
     {
       "name": "凑友希那",
       "display": "凑友希那",
-      "band": "Roselia",
+      "group": "Roselia",
       "color": "#881188",
       "skill": "来练习吧",
       "text": "（1）初始获得“RiNG 4”格子，从“RiNG 4”格子开始游戏，首次经过CiRCLE不获得经过奖励（2）如果移动时[经过]了RiNG，可以在[经过]的第一个RiNG停止移动（3）移动终点为任意“RiNG”时，获得一个火罐（上限1）。任何时刻当你不位于RiNG时，失去所有的火罐。当其他玩家移动[经过]您时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算。",
@@ -2558,7 +2558,7 @@
     {
       "name": "冰川纱夜",
       "display": "冰川纱夜",
-      "band": "Roselia",
+      "group": "Roselia",
       "color": "#00AABB",
       "skill": "踏上荆棘之路的觉悟",
       "text": "（1）每次[经过]CiRCLE时获得2个[火罐]，每次被别的玩家[经过]时获得1个[火罐]（初始10，上限10）（2）你可以消耗6个[火罐]将非[传送]的主要移动添加1或2格（3）第一个玩家被淘汰，经过Circle时获得的火罐加1",
@@ -2586,7 +2586,7 @@
     {
       "name": "今井莉莎",
       "display": "今井莉莎",
-      "band": "Roselia",
+      "group": "Roselia",
       "color": "#DD2200",
       "skill": "慈爱女神",
       "text": "（1）每次[经过]CiRCLE时获得1个[火罐]（初始2，上限2）（2）移动阶段前，你可以消耗一个火罐，将此次移动变为传送到距离你正向距离最近的角色所在的格子，触发结算。本次传送触发结算前，你可以额外消耗一个火罐或使与你在同一个格子上的另一个角色获得一个可超过上限的临时火罐，若你这样做，此次传送不触发任何结算。（3）你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐需要支付你600资金（被冲榜类效果被动消耗无需支付）。",
@@ -2603,7 +2603,7 @@
     {
       "name": "宇田川亚子",
       "display": "宇田川亚子",
-      "band": "Roselia",
+      "group": "Roselia",
       "color": "#DD0088",
       "skill": "对帅气的憧憬",
       "text": "（1）每次经过CiRCLE时，若选择抽卡，则可以看抽牌堆顶至多两张卡，选择其中1张加入手牌，剩余的卡放入弃牌堆或花费500资金将其背面朝上放置在自己场上。（2）经过CiRCLE领取奖励时，若自己场上存在背面朝上的卡，则本次领取奖励被替换为将自己场上背面朝上的卡拿取至手中。（3）若自己场上背面朝上放置的卡为[反击]卡，可在符合条件时将其直接打出。",
@@ -2620,7 +2620,7 @@
     {
       "name": "白金燐子",
       "display": "白金燐子",
-      "band": "Roselia",
+      "group": "Roselia",
       "color": "#BBBBBB",
       "skill": "即使1cm也要前进",
       "text": "（1）每次[经过]CiRCLE时获得三个[火罐]（初始3，上限3）（2）此技能可以正常使用或在[晕眩]状态下使用。你可以在移动掷骰前消耗X个火罐，使这回合移动掷骰的结果固定为X*6。本次移动不受异常移动效果影响。",
@@ -2637,7 +2637,7 @@
     {
       "name": "弦卷心",
       "display": "弦卷心",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "color": "#FFEE22",
       "skill": "弦卷集团",
       "text": "（1）开局时获得1000资金（2）[经过]CiRCLE时额外获得1500资金",
@@ -2654,7 +2654,7 @@
     {
       "name": "濑田薰",
       "display": "濑田薰",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "color": "#AA33CC",
       "skill": "梦幻的王子殿下",
       "text": "（1）每次[经过]或被[经过]时，若场上不存在[怪盗标记]，获得1火罐（上限7）；若场上存在[怪盗标记]，则移除场上的一个[怪盗标记]（2）主要阶段可消耗7火罐在绝对距离最近的一名玩家场上放置3个[怪盗标记]，并使你的本次移动以微笑号为起点。（3）你非传送的主要移动不会经过场上拥有[怪盗标记]的玩家所拥有的格子。",
@@ -2671,7 +2671,7 @@
     {
       "name": "北泽育美",
       "display": "北泽育美",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "color": "#FF9922",
       "skill": "全垒打！",
       "text": "（1）每个回合在北泽精肉店生成一个可乐饼。你经过格子上的可乐饼时可以将其转移到自己场上（持有上限10），其他角色经过格子上可乐饼时可以将其转移到自己场上并向你支付50*X资金，X为该角色持有的可乐饼数量。你将可乐饼转移至自己场上时可用其替换掉一个其他不位于[持续]卡上的标记。角色每拥有一个可乐饼，移动时多投掷1个1d2。\n",
@@ -2688,7 +2688,7 @@
     {
       "name": "松原花音",
       "display": "松原花音",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "color": "#44DDFF",
       "skill": "真正的迷子",
       "text": "(1) 游戏开始起点为#30弦卷豪宅 (2) 移动阶段进行两次移动掷骰并将它们的结果相减作为你的移动格数 (3) 如果三个回合内没有拿过Circle奖励，则下回合移动投掷改为1d20+1d4",
@@ -2705,7 +2705,7 @@
     {
       "name": "奥泽美咲",
       "display": "奥泽美咲",
-      "band": "Hello, Happy World!",
+      "group": "Hello, Happy World!",
       "color": "#006699",
       "skill": "另一个我",
       "text": "（1）每次经过“弦卷集团”（#29）格子后获得2火罐（初始0，上限2），若你在传送时CiRCLE位于你正向移动的移动起点和移动终点之间，则你下次经过“弦卷集团”前可将“弦卷集团”格子额外视为CiRCLE。（2）你的回合开始时，你可以消耗一个火罐，使你的移动掷骰额外获得一个1d10，且你的移动视为[传送]。（3）使用火罐进行移动掷骰后，触发结算前，你可以消耗1火罐，获得一层在你的下回合开始前移除的[除外]。",
@@ -2722,7 +2722,7 @@
     {
       "name": "仓田真白",
       "display": "仓田真白",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "color": "#6677CC",
       "skill": "向后全速前进",
       "text": "（1）[主动移动]时移动掷骰变为2d20（2）反方向移动",
@@ -2739,7 +2739,7 @@
     {
       "name": "桐谷透子",
       "display": "桐谷透子",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "color": "#EE6666",
       "skill": "天上天下，唯我独尊",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）（2）一回合一次，在你的经营阶段，你可以消耗一个火罐并指定你的一个地块，指定前后各一格范围内（不包括该格子本身）的所有其他玩家支付你X，X为此地的地租的一半/指定玩家数（向上取整百）。",
@@ -2756,7 +2756,7 @@
     {
       "name": "广町七深",
       "display": "广町七深",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "color": "#EE7744",
       "skill": "这是很普通的事吧？",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始2，上限2）（2）当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记（当场上存活玩家数量大于等于3时：每种角色标记上限1，该技能对被动技能存在3回合CD）（3）在时机合适时候，你可以使用手中的角色标记，视为使用该角色的技能（尽力补齐资源消耗，比如双[火罐]消耗技能和翻转[P✽P粉丝]）。",
@@ -2773,7 +2773,7 @@
     {
       "name": "二叶筑紫",
       "display": "二叶筑紫",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "color": "#EE7788",
       "skill": "交给班长吧",
       "text": "（1）当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，发送给对方一个X（占位）标记并记录获得因此效果获得资金的数量，若为抽卡效果则记录2200。单轮结算（比如登上武道馆的结算）中此效果最多触发一次（2）当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作。以此效果获得的金钱数量不能超过记录数字+300，超出部分由原主获得。此效果对“抽牌”动作发动时必须翻面记录数字为2200及以上的标记。（3）当场上除你之外的玩家都拥有一枚翻面后的X标记时，移除所有X标记，你获得移除标记数量*800的资金（每次发动（3）技能时单个标记的收益减200，最低单标记收益200）。",
@@ -2790,7 +2790,7 @@
     {
       "name": "八潮瑠唯",
       "display": "八潮瑠唯",
-      "band": "Morfonica",
+      "group": "Morfonica",
       "color": "#669988",
       "skill": "正论暴击",
       "text": "（1）如果你的（2）技能或角色卡被复制，当复制者使x重置为0时，对方失去该技能（2）（抵押或赎回以外）当你即将获得或失去资金（在所有其他资金量改动效果生效后并结果不等于0）时，roll1d20，若结果小于等于X，将X重置为0，此次获得资金翻倍或无需失去资金（收款或付款方同样受到影响），若结果大于X，X+1。X初始为0",
@@ -2807,7 +2807,7 @@
     {
       "name": "和奏瑞依",
       "display": "和奏瑞依",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "color": "#CC0000",
       "skill": "一次又一次竭尽全力",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）（2）进行任意掷骰后，可选择使用一个[火罐]再投一次骰子并择其一执行",
@@ -2824,7 +2824,7 @@
     {
       "name": "朝日六花",
       "display": "朝日六花",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "color": "#AAEE22",
       "skill": "瞄准目标",
       "text": "（1）你购买的第一个非“旭汤澡堂”或任意“Live House”格子获得“Live House”的颜色（2）在你有初始“Live House”格子时你拥有的“旭汤澡堂”格子获得“Live House”的颜色",
@@ -2841,7 +2841,7 @@
     {
       "name": "佐藤益木",
       "display": "佐藤益木",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "color": "#EEBB44",
       "skill": "与燃烧的红色一起驰骋",
       "text": "（1）每次[经过]“白雪学园”或“银河拉面馆”时获得1个[火罐]（初始0，上限2）（2）移动阶段前可使用X个[火罐]，本回合主要移动掷骰额外添加Xd10",
@@ -2858,7 +2858,7 @@
     {
       "name": "鳰原令王那",
       "display": "鳰原令王那",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "color": "#FF99BB",
       "skill": "梦幻可爱♪女仆",
       "text": "（1）游戏开始时如果场上有“Pastel✽Palettes”角色则额外获得1个正面[P✽P粉丝]（2）你拥有格子上的房屋总数增加时可选择失去1PAREO标记（初始1，上限3），所有非自己的玩家分摊支付你“格子的房屋造价×格子上的房屋数”四分之一的资金（所有你拥有的格子中取最高值）",
@@ -2875,7 +2875,7 @@
     {
       "name": "珠手知由",
       "display": "珠手知由",
-      "band": "RAISE A SUILEN",
+      "group": "RAISE A SUILEN",
       "color": "#00BBFF",
       "skill": "天才制作人",
       "text": "加盖房屋时半价，如果你上回合进行过房屋加盖，本回合加盖房屋变为免费",
@@ -2892,7 +2892,7 @@
     {
       "name": "高松灯",
       "display": "高松灯",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "color": "#77BBDD",
       "skill": "诗超绊",
       "text": "（1）每次[经过]任意RiNG时获得一个[火罐]（初始4，上限4）（2）当其他玩家的[移动终点]位于您前后5格内时可以选择使用4个火罐，在该玩家[触发结算]前强制将该玩家[传送]至自己所在的格子，然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的下回合结束时[触发结算]；在此技能影响下的支付价格变为原本的一半。（3）当你的[移动终点]位于其他玩家的前后五格内时可以选择使用1个火罐，在[触发结算]前将自己[传送]至那名玩家所在的格子。",
@@ -2909,7 +2909,7 @@
     {
       "name": "千早爱音",
       "display": "千早爱音",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "color": "#FF8899",
       "skill": "重新开始",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始2，上限3）（2）在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐，抽一张卡",
@@ -2926,7 +2926,7 @@
     {
       "name": "要乐奈",
       "display": "要乐奈",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "color": "#77DD77",
       "skill": "投币式停车场的猫",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始3，上限3）（2）可花费3个火罐传送至space代替本回合的移动，该次传送不可进行地契购买。在space上结算时，若space已属于其他玩家，免除付款并抽1张卡；若自己为space的拥有者，则可选择将该次结算改为在space格子上添加一个“抹茶芭菲”，每个将使其收费增加500资金，其他玩家在space触发结算时可将自己拥有的一个“抹茶芭菲”转移到该格上以免除当次付款 （3）你与其他玩家重合时，获得其800资金并使那个玩家获得一个“抹茶芭菲”；拥有“抹茶芭菲”的玩家经过任意“RiNG”时可使用一个“抹茶芭菲”获得400资金",
@@ -2943,7 +2943,7 @@
     {
       "name": "长崎素世",
       "display": "长崎素世",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "color": "#FFDD88",
       "skill": "通透的颜色",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）（2）移动掷骰后可消耗一个火罐，使自己本回合的[移动终点]对你视为对应颜色的地产商格子，持续至你的下回合开始；若以此法单次免除了至少1500资金的[支付]，则你下次经过CiRCLE时不获得火罐。",
@@ -2960,7 +2960,7 @@
     {
       "name": "椎名立希",
       "display": "椎名立希",
-      "band": "MyGO!!!!!",
+      "group": "MyGO!!!!!",
       "color": "#7777AA",
       "skill": "决定练习日的会议",
       "text": "（1）场上每有玩家获得一层[停留]时，你获得一个[火罐]（初始0，上限5）（2）运营阶段可消耗1个[火罐]为你场上的任何一张卡添加一个[奇迹水晶]，每回合限一次。",
@@ -2977,7 +2977,7 @@
     {
       "name": "三角初华",
       "display": "三角初华",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "color": "#BB9955",
       "skill": "Imprisoned XII",
       "text": "状态1：移动改为10+1d10，每当你经过CiRCLE的回合结束后，若你自从上一次经过CiRCLE后未在任何[回忆地块]（小豆岛，武道馆，旧古河庭园）触发结算则可在你的下回合开始时进入状态2。若满足前述条件，你可在你经过CiRCLE的回合结束后立刻获得一个新的回合。\n状态2：（火罐上限3）获得[不可阻挡]，并且在此状态下主动移动经过任何玩家都将向其收取200资金，每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）",
@@ -2994,7 +2994,7 @@
     {
       "name": "若叶睦",
       "display": "若叶睦",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "color": "#779977",
       "skill": "天生的演员",
       "text": "状态1：你的每6回合不打出任何手牌，在回合开始前抽1张牌。若你的回合开始时手牌数为5，可选择进入状态2。状态2：进入该状态后，你从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其覆盖于自己角色卡上并获得其初始火罐，直至退出状态2；若回合结束时你的手牌小于等于1，退出状态2。",
@@ -3011,7 +3011,7 @@
     {
       "name": "丰川祥子",
       "display": "丰川祥子",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "color": "#7799CC",
       "skill": "请把你们的人生交给我",
       "text": "状态1： 经过其他玩家时，可将其所有层数的停留，眩晕转移至自己身上（仍正常完成本次移动），若如此做，每获得一层停留，眩晕，你获得1500资金。每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐（初始0，上限3），火罐数达到上限时可在回合开始时选择进入状态2。状态2：保留至多一张手牌并将其余置入弃牌堆。每回合开始时自动打出一张抽牌堆顶端的牌。",
@@ -3028,7 +3028,7 @@
     {
       "name": "八幡海铃",
       "display": "八幡海铃",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "color": "#335566",
       "skill": "熟练的支援贝斯手",
       "text": "（1）状态1：其他玩家可以在他们的回合开始时向你支付400资金指定一个属于你的格子，使其立即对前后一格内的一名玩家进行一次半价[结算]，并获得相当于你获取数额的资金；直到这两名玩家的下回合结束，若你仍在状态1，他们不会被该效果再次收款。每两个回合没有玩家发动该技能，你在回合开始时获得1火罐（初始0，上限4），若达到上限，可在你的回合开始时选择进入状态2。（2） 状态2： 进入状态2时你可消耗X个火罐，指定其他人的X个地契，每张地契向对应玩家支付100+n*100资金（n为对应格子上的房屋数），直到状态2结束为止，你与对方均分那些地契收取的资金；每通过此法消耗4个火罐，你抽1张卡。",
@@ -3045,7 +3045,7 @@
     {
       "name": "祐天寺若麦",
       "display": "祐天寺若麦",
-      "band": "Ave Mujica",
+      "group": "Ave Mujica",
       "color": "#AA4477",
       "skill": "大主播喵梦亲",
       "text": "状态1：（1）每次其他玩家向你支付资金时，你立即获得1火罐（初始0，上限5），并使那次支付的金额提高X*100，X为你拥有的火罐数。（2）任何时刻当你的火罐数到达上限时，你立即进入状态2。\n状态2：（1）进入状态2时，你立即将场上全部正面朝上的手卡及事件卡翻为背面朝上，直到状态2结束为止，场上所有背面朝上的卡无法产生效果，且不受任何效果影响。你退出状态2后，被你翻面的卡自动翻回。",
@@ -3062,7 +3062,7 @@
     {
       "name": "纯田真奈",
       "display": "纯田真奈",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "color": "#CF9E34",
       "skill": "甜甜圈爱好者",
       "text": "（1）每次[经过]CiRCLE时获得1个[火罐]（初始1，上限2）（2）经过“购物中心”，“便利店”，“快餐店”，“羽泽咖啡厅”，“山吹面包房”时，在触发结算前可选择消耗一个火罐并向对应格子进行一次支付（可向抵押格子正常支付其原本收费，若为无主格子则为消耗对应收费资金），之后，直到你的下个回合结束，你的资金消耗减半。",
@@ -3079,7 +3079,7 @@
     {
       "name": "三角初华（Sumimi）",
       "display": "三角初华（Sumimi）",
-      "band": "Sumimi",
+      "group": "Sumimi",
       "color": "#BB9955",
       "skill": "成为偶像",
       "text": "（1）每次[经过]CiRCLE时获得1个[火罐]（初始2，上限2）（2）回合开始时可将一个火罐放置在与“主要街道”颜色相同的任一格，其他玩家经过该格且到达移动终点后向你支付X*30资金并移除那个火罐，X为对方经过该格后移动的剩余格数。",
@@ -3096,7 +3096,7 @@
     {
       "name": "高松灯（CRYCHIC）",
       "display": "高松灯（CRYCHIC）",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "color": "#77BBDD",
       "skill": "跌跌撞撞...",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）（2）你回合内的任意时刻，可消耗1火罐清除自身一层[停留]（3）当你的移动掷骰小于等于6时，立刻获得一层[停留]并在回合结束时触发结算。",
@@ -3113,7 +3113,7 @@
     {
       "name": "长崎素世（CRYCHIC）",
       "display": "长崎素世（CRYCHIC）",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "color": "#FFDD88",
       "skill": "雨中祈晴",
       "text": "当其他玩家在属于你的格子上触发结算时，你可取消那次支付，使你下回合的主要移动变为传送至触发此技能的那格。",
@@ -3130,7 +3130,7 @@
     {
       "name": "椎名立希（CRYCHIC）",
       "display": "椎名立希（CRYCHIC）",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "color": "#7777AA",
       "skill": "克服劣等感",
       "text": "每当你的移动掷骰结果严格小于你以外玩家中上一次进行的移动掷骰结果且那次移动掷骰结果不大于20，若你本回合未使用技能，你下回合可在移动前重骰一次并选择第二次的结果使用。",
@@ -3147,7 +3147,7 @@
     {
       "name": "丰川祥子（CRYCHIC）",
       "display": "丰川祥子（CRYCHIC）",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "color": "#7799CC",
       "skill": "你愿意和我组建乐队吗？",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限2）（2）其他人的主要移动结束时，[触发结算]前若在你的前后5格内，可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格。（3）你的主要移动结束时，[触发结算]前若前后五格内有别的玩家，你可消耗1火罐，选择其中一名玩家并使自己的移动终点沿最短路径向其靠近1格。（4）若你的乐队技能为“Ave Mujica”，你距离其他玩家5格以内时处于状态2，但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶。",
@@ -3164,7 +3164,7 @@
     {
       "name": "若叶睦（CRYCHIC）",
       "display": "若叶睦（CRYCHIC）",
-      "band": "CRYCHIC",
+      "group": "CRYCHIC",
       "color": "#779977",
       "skill": "精致的人偶",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）（2）开局时指定一名其他玩家，你的移动阶段开始时，可消耗1火罐，使本次的移动掷骰结果为那名玩家上一次的移动掷骰结果；那名玩家破产时，可重新指定一名玩家。（3）乐队技能为Ave Mujica时，任意时刻手牌大于等于3时进入状态2，严格小于3时进入状态1，但只有洗牌时可以为你的乐队技能卡上添加奇迹水晶。",
@@ -3181,7 +3181,7 @@
     {
       "name": "月岛麻里奈",
       "display": "月岛麻里奈",
-      "band": "CiRCLE",
+      "group": "CiRCLE",
       "color": "#7E6A69",
       "skill": "礼物还有好多好多哟",
       "text": "其他玩家经过CiRCLE时，可向你支付一次500资金，你投掷一次1d10，如果投掷结果至少为6，那名玩家获得1200资金。",
@@ -3198,7 +3198,7 @@
     {
       "name": "都筑诗船",
       "display": "都筑诗船",
-      "band": "CiRCLE",
+      "group": "CiRCLE",
       "color": "#77DD77",
       "skill": "尽力了吗",
       "text": "（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限2）（2）你的主要阶段中可消耗1火罐使你与一名其他玩家接下来的两次移动掷骰先后-1d6与+1d6，若由于此效果导致移动数为0，则视为原地进行一次结算。在此技能效果影响下触发结算时，除购买地契外支付或消耗的资金减半，若其他玩家在此技能效果影响下触发结算时加盖了房屋，你获得相当于那层房屋造价原价的资金。（3）初始获得“Space”。",
@@ -3213,7 +3213,7 @@
       "variantTag": ""
     }
   ],
-  "bands": [
+  "groups": [
     {
       "name": "Poppin' Party",
       "shortName": "PPP",

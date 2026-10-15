@@ -454,7 +454,7 @@ impl MatchHandle {
                 player: p.player.clone(),
                 bot: p.bot,
                 mentality: p.mentality,
-                character: p.character.clone(),
+                persona: p.persona.clone(),
                 rank: p.rank,
                 score: p.score,
             })
@@ -552,7 +552,7 @@ pub struct Room {
 pub struct NewMember<'a> {
     pub token: &'a str,
     pub player: &'a str,
-    pub character: &'a str,
+    pub persona: &'a str,
     pub cn_id: &'a str,
 }
 
@@ -741,7 +741,7 @@ impl Room {
         self.info.members.push(RoomMember {
             id,
             player: net::clean_name(who.player),
-            character: who.character.into(),
+            persona: who.persona.into(),
             cn_id: who.cn_id.into(),
             ready: false,
             host,

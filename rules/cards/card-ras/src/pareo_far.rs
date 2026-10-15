@@ -5,7 +5,7 @@
 //! > 获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋
 //!
 //! (cap 3). 「视为你的房屋总数增加」 is the character-skill offer (C#
-//! `SkillPareo -> Offer()`), reached through `ctx::character_skill` +
+//! `SkillPareo -> Offer()`), reached through `ctx::persona_skill` +
 //! `ctx::invoke_skill`.
 
 use alloc::vec::Vec;
@@ -26,7 +26,7 @@ pub const PAREO_FAR: CardDef =
         .tags(&[])
         .text(r#"获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋"#)
         .cell(r#"H15"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", r#"鳰原令王那"#)]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", r#"鳰原令王那"#)]));
 
 fn pareo_far(player_id: i32) -> card_sdk::Asked {
     let got = ctx::add_tok(player_id, PAREO, 2, 3)?;
@@ -42,11 +42,11 @@ fn pareo_far(player_id: i32) -> card_sdk::Asked {
     // Offer()`: reach the player's character skill and trigger its offer (the
     // 「失去1PAREO标记，所有非自己的玩家分摊支付…」 half of 鳰原令王那 (2)).
     // The skill exposes that offer as its press entry (`On::Play`), so the
-    // invoke is `ctx::invoke_skill` on the id `ctx::character_skill` names.
+    // invoke is `ctx::invoke_skill` on the id `ctx::persona_skill` names.
     // Only when that skill *is* SkillPareo -- the C#'s `is SkillPareo` check;
     // some other character skill has no such offer.
     const SKILL_PAREO: &str = "skill:鳰原令王那:梦幻可爱♪女仆";
-    if let Some(skill) = ctx::character_skill(player_id) {
+    if let Some(skill) = ctx::persona_skill(player_id) {
         if skill == SKILL_PAREO {
             ctx::invoke_skill(player_id, &skill)?;
         }

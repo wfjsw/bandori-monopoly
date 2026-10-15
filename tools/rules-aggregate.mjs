@@ -108,12 +108,12 @@ static ROSTER: card_sdk::meta::RosterSources = card_sdk::meta::RosterSources {
         card_sdk::meta::RosterList {
             kind: "character",
             ordinals: ruleset_core::roster_order::CHARACTERS,
-            rows: skill_characters::roster_table::meta_rows,
+            rows: skill_personas::roster_table::meta_rows,
         },
         card_sdk::meta::RosterList {
             kind: "band",
             ordinals: ruleset_core::roster_order::BANDS,
-            rows: skill_bands::roster_table::meta_rows,
+            rows: skill_groups::roster_table::meta_rows,
         },
     ],
 };

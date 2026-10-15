@@ -63,7 +63,7 @@ const joinable = (r: RoomInfo) => !r.playing && r.members.length < r.maxPlayers;
 /** Make sure this tab has a server session for the current profile. */
 export async function connect(): Promise<boolean> {
   const p = getProfile();
-  const home = D.character(p.homeCharacter);
+  const home = D.persona(p.homeCharacter);
   return ensureSession(p.playerName, home?.name ?? "", home ? D.artId(home) : "");
 }
 
@@ -161,7 +161,7 @@ function RoomCard({ r }: { r: RoomInfo }) {
         {r.locked && <Icon name="lock" />}
       </div>
       <div className={s.members}>
-        {r.members.slice(0, 6).map((m) => <Avatar key={m.id} c={D.character(m.character)} size={40} />)}
+        {r.members.slice(0, 6).map((m) => <Avatar key={m.id} c={D.persona(m.persona)} size={40} />)}
         {r.members.length > 6 && <span>+{r.members.length - 6}</span>}
       </div>
       <div className={s.cardFoot}>

@@ -289,8 +289,8 @@ pub fn c_sumimi_twoinone_character(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre_ch = step.pre.st.players[who].character.clone();
-    let post_ch = step.post.st.players[who].character.clone();
+    let pre_ch = step.pre.st.players[who].persona.clone();
+    let post_ch = step.post.st.players[who].persona.clone();
     let expect_ch = match pre_ch.as_str() {
         "纯田真奈" => "三角初华（Sumimi）",
         "三角初华（Sumimi）" => "纯田真奈",
@@ -314,7 +314,7 @@ pub fn c_sumimi_twoinone_fire(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let pre_ch = step.pre.st.players[who].character.clone();
+    let pre_ch = step.pre.st.players[who].persona.clone();
     // The swap targets the other Sumimi character; its 初始火罐数 is what
     // must land (真奈 1 / 初华 2).
     let expect_fire = match pre_ch.as_str() {
@@ -405,7 +405,7 @@ fn twoinone_swaps_character() {
         t.observe(&ch_clause);
         t.play(0, TWO_IN_ONE)
             .map_err(|e| format!("play rejected: {e}"))?;
-        let ch = t.p(0).character.clone();
+        let ch = t.p(0).persona.clone();
         if ch != expect {
             return Err(format!("character {start} -> {ch}, expected {expect}"));
         }
@@ -431,7 +431,7 @@ fn twoinone_opens_the_other_exclusive() {
     if r.is_err() {
         panic!(
             "after swapping to 三角初华（Sumimi） (char={}, field={:?}), their exclusive was refused: {r:?}",
-            t.p(0).character,
+            t.p(0).persona,
             t.field_ids(0)
         );
     }

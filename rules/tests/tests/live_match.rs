@@ -136,7 +136,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         );
         assert!(
             ids.iter().any(|id| id.starts_with("skill:Poppin' Party:")),
-            "band skill follows from the character's band: {ids:?}"
+            "band skill follows from the character's group: {ids:?}"
         );
     }
     // Let the bots run so a `TurnStartBefore` has fired for the human.

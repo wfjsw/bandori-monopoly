@@ -24,7 +24,7 @@ pub const FIRST_LIVE_ACCIDENT: CardDef =
 [持续]：
 [拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。"#)
         .cell(r#"D4"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn first_live_accident(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」

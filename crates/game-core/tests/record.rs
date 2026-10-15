@@ -809,7 +809,7 @@ fn origin_and_header_fields_survive() {
 fn solo_preset_characters_round_trip() {
     let d = data();
     let chars: Vec<String> = d
-        .characters
+        .personas
         .iter()
         .take(4)
         .map(|c| c.name.clone())
@@ -821,7 +821,7 @@ fn solo_preset_characters_round_trip() {
                 .map(|i| RoomMember {
                     id: i as i32 + 1,
                     player: format!("P{}", i + 1),
-                    character: chars[i % chars.len()].clone(),
+                    persona: chars[i % chars.len()].clone(),
                     bot: true,
                     mentality: if i % 2 == 0 {
                         BotMentality::Standard
@@ -868,12 +868,12 @@ fn solo_preset_characters_round_trip() {
 #[test]
 fn ruleset_mismatch_is_named_and_non_fatal() {
     let d = data();
-    let chars: Vec<String> = d.characters.iter().take(2).map(|c| c.name.clone()).collect();
+    let chars: Vec<String> = d.personas.iter().take(2).map(|c| c.name.clone()).collect();
     let members: Vec<RoomMember> = (0..2)
         .map(|i| RoomMember {
             id: i as i32 + 1,
             player: format!("P{}", i + 1),
-            character: chars[i].clone(),
+            persona: chars[i].clone(),
             bot: true,
             mentality: BotMentality::Standard,
             ..Default::default()

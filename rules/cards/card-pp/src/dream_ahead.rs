@@ -58,7 +58,7 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
 （3）[拥有者]以外的玩家在[拥有者]拥有的格子[结算]时额外[支付][拥有者]“[拥有者]拥有的[P✽P粉丝]数量”×X+MIN(X×30, 300)。
 （4）[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意[拥有者]所在格子前后3格以内的无主的[可购买格子]。"#)
         .cell(r#"D10"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).
 const SLOT_X: &str = "dream_ahead_x";

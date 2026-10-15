@@ -12,12 +12,12 @@ pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::
 
 /// 「技能中含有火罐」 -- the player's character or band skill text mentions 「火罐」.
 fn skill_mentions_fire_pot(p: i32) -> bool {
-    if let Some(skill) = ctx::character_skill(p) {
+    if let Some(skill) = ctx::persona_skill(p) {
         if ctx::card_text_mentions(&skill, "火罐") {
             return true;
         }
     }
-    if let Some(skill) = ctx::band_skill(p) {
+    if let Some(skill) = ctx::group_skill(p) {
         if ctx::card_text_mentions(&skill, "火罐") {
             return true;
         }

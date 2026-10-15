@@ -13,7 +13,7 @@ export const stateMax = (x: MatchPlayer, key: string): number => x.state?.[key]?
 
 /** Use the seat's character once chosen; pre-selection seats still have users. */
 export function characterName(player?: Pick<MatchPlayer, "character" | "player">): string {
-  return player?.character ? D.character(player.character)?.display ?? player.character : player?.player ?? "";
+  return player?.persona ? D.persona(player.persona)?.display ?? player.persona : player?.player ?? "";
 }
 
 /** In-match messages identify seats by character, tiles/cards from the data. */
@@ -25,9 +25,9 @@ export function namesOf(st?: MatchState | null): Names {
       return t ? t.name.replace(/\n/g, "") : `#${n}`;
     },
     card: (id) => cardTitle(id),
-    chara: (name) => D.character(name)?.display ?? name,
+    chara: (name) => D.persona(name)?.display ?? name,
     event: (id) => D.event(id)?.name ?? id,
-    band: (b) => D.band(b)?.name ?? b,
+    band: (b) => D.group(b)?.name ?? b,
   };
 }
 
@@ -37,6 +37,6 @@ export function turnNamesOf(st?: MatchState | null): Names {
   return { ...names, playerId: (n) => {
     const player = st?.players[n];
     const who = names.playerId(n);
-    return player?.character && player.player ? who + tr("common.paren", { x: player.player }) : who;
+    return player?.persona && player.player ? who + tr("common.paren", { x: player.player }) : who;
   } };
 }

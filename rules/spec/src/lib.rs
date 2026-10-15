@@ -90,5 +90,5 @@ pub fn tile(name: &str) -> usize {
 
 /// Every character name in the roster, in roster order.
 pub fn characters() -> Vec<String> {
-    data().characters.iter().map(|c| c.name.clone()).collect()
+    data().personas.iter().map(|c| c.name.clone()).collect()
 }

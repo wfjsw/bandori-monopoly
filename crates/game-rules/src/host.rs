@@ -2534,7 +2534,7 @@ pub fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
             G::PlayerId(v) => E::PlayerId(v),
             G::Tile(v) => E::Tile(v),
             G::Card(v) => E::Card(v),
-            G::Char(v) => E::Char(v),
+            G::Persona(v) => E::Persona(v),
             G::N(v) => E::N(v),
             G::I(v) => E::I(v),
             G::Msg(v) => E::Msg(Box::new(engine_msg(*v))),
@@ -3592,44 +3592,44 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "band_crystals",
+        "group_crystals",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::band_crystals(&mut c, player_id).map_err(HostErr::into_err)
+            hostfns::group_crystals(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_band_crystals",
+        "add_group_crystals",
         |mut c: C<W>, player_id: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_band_crystals(&mut c, player_id, n, max).map_err(HostErr::into_err)
+            hostfns::add_group_crystals(&mut c, player_id, n, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "band_skill",
+        "group_skill",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            hostfns::band_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
+            hostfns::group_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "character_skill",
+        "persona_skill",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            hostfns::character_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
+            hostfns::persona_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "band_skills",
+        "group_skills",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            hostfns::band_skills(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
+            hostfns::group_skills(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_band_skill",
+        "add_group_skill",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, extra: i32| -> Result<i32, Error> {
-            hostfns::add_band_skill(&mut c, player_id, p, n, extra).map_err(HostErr::into_err)
+            hostfns::add_group_skill(&mut c, player_id, p, n, extra).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3767,16 +3767,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "character_is",
+        "persona_is",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::character_is(&mut c, player_id, p, n).map_err(HostErr::into_err)
+            hostfns::persona_is(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "in_band",
+        "in_group",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::in_band(&mut c, player_id, p, n).map_err(HostErr::into_err)
+            hostfns::in_group(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4944,7 +4944,7 @@ impl CardWorld for NullWorld {
     }
     // named counters & bound units (user ruling 2026-10-10): the null world
     // holds none, so every read is 0 and every write is a no-op. The sugar
-    // (`crystals` / `tok` / `band_crystals`) defaults over these.
+    // (`crystals` / `tok` / `group_crystals`) defaults over these.
     fn counter(&self, _: &str) -> i32 {
         0
     }
@@ -5008,10 +5008,10 @@ impl CardWorld for NullWorld {
     fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
-    fn band_crystals(&self, _: i32) -> i32 {
+    fn group_crystals(&self, _: i32) -> i32 {
         0
     }
-    fn add_band_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_group_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
         0
     }
     fn fire(&self, _: i32) -> i32 {
@@ -5141,10 +5141,10 @@ impl CardWorld for NullWorld {
     fn turn_key(&self) -> i32 {
         0
     }
-    fn character_is(&self, _: i32, _: &str) -> i32 {
+    fn persona_is(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn in_band(&self, _: i32, _: &str) -> i32 {
+    fn in_group(&self, _: i32, _: &str) -> i32 {
         0
     }
 }

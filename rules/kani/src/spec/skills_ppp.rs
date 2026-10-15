@@ -483,8 +483,8 @@ pub fn band_02_reward_forbidden() -> bool {
 // (one owner per tile) — see body TODO(规则书). Spec pins the claim only.
 // ===========================================================================
 
-pub fn band_03a_co_owns(band: &str, hill: i32) -> bool {
-    band == "Poppin' Party" && hill == TILE_HILL
+pub fn band_03a_co_owns(group: &str, hill: i32) -> bool {
+    group == "Poppin' Party" && hill == TILE_HILL
 }
 
 // ===========================================================================

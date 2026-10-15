@@ -211,7 +211,7 @@ pub struct SeatInfo {
     pub player: String,
     pub bot: bool,
     pub mentality: BotMentality,
-    pub character: String,
+    pub persona: String,
     pub rank: i32,
     pub score: i32,
 }
@@ -223,7 +223,7 @@ impl Default for SeatInfo {
             player: String::new(),
             bot: false,
             mentality: BotMentality::Standard,
-            character: String::new(),
+            persona: String::new(),
             rank: 0,
             score: 0,
         }
@@ -1161,7 +1161,7 @@ impl RecordedMatch {
                 player: p.player.clone(),
                 bot: p.bot,
                 mentality: p.mentality,
-                character: p.character.clone(),
+                persona: p.persona.clone(),
                 rank: p.rank,
                 score: p.score,
             })

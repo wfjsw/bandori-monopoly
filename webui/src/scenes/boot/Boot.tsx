@@ -66,8 +66,8 @@ function useBootAssets(opts: {
       .then(() => {
         if (!alive) return;
         playSceneBgm("boot");
-        const home = hasProfile() ? D.character(getProfile().homeCharacter) : undefined;
-        setArt(res(`BandoriBoot/${(home && D.band(home.band)?.bootArt) || "045"}`));
+        const home = hasProfile() ? D.persona(getProfile().homeCharacter) : undefined;
+        setArt(res(`BandoriBoot/${(home && D.group(home.group)?.bootArt) || "045"}`));
         if (!hasProfile()) setStage("create");
         else if (resume) onReady();
         else setStage("tap");

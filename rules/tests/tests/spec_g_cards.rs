@@ -229,7 +229,7 @@ fn not_buyable_tile() -> usize {
 #[test]
 fn g_cards_08_starting_deck_is_ten_distinct() {
     let d = data();
-    let c = d.character("美竹兰").expect("美竹兰");
+    let c = d.persona("美竹兰").expect("美竹兰");
     let pool: Vec<String> = game_core::deck::pool(d.as_ref(), c)
         .into_iter()
         .map(|k| k.id.clone())
@@ -251,7 +251,7 @@ fn g_cards_08_starting_deck_is_ten_distinct() {
 #[test]
 fn g_cards_07_derived_cards_never_in_starting_deck() {
     let d = data();
-    let c = d.character("美竹兰").expect("美竹兰");
+    let c = d.persona("美竹兰").expect("美竹兰");
     let derived: Vec<&game_core::data::CardData> = d.cards.iter().filter(|k| k.derived).collect();
     assert!(!derived.is_empty(), "the pool has [衍生] cards to reject");
     for k in &derived {

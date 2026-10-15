@@ -106,7 +106,7 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
         .map(|p| {
             p.field
                 .iter()
-                .filter(|f| f.band_skill)
+                .filter(|f| f.group_skill)
                 .map(|f| f.crystals)
                 .sum()
         })
@@ -119,7 +119,7 @@ pub fn c_crychic_debut_turn_end(step: &Step<'_>) -> Result<(), String> {
         .map(|p| {
             p.field
                 .iter()
-                .filter(|f| f.band_skill)
+                .filter(|f| f.group_skill)
                 .map(|f| f.crystals)
                 .sum()
         })

@@ -734,10 +734,10 @@ impl CardWorld for ConfWorld {
     fn turn_key(&self) -> i32 {
         1
     }
-    fn character_is(&self, _player_id: i32, _name: &str) -> i32 {
+    fn persona_is(&self, _player_id: i32, _name: &str) -> i32 {
         0
     }
-    fn in_band(&self, _player_id: i32, _name: &str) -> i32 {
+    fn in_group(&self, _player_id: i32, _name: &str) -> i32 {
         0
     }
     fn trigger(&self) -> game_rules::Trigger {

@@ -26,7 +26,7 @@ pub const ENCORE: CardDef = CardDef::new(
         .text(r#"[手]：
 [反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次[异常移动效果]和其导致的所有效果。"#)
         .cell(r#"A13"#)
-        .fields(&[("band", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「无效此次[异常移动效果]和其导致的所有效果」

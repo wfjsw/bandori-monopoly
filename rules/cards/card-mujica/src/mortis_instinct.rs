@@ -17,7 +17,7 @@ pub const MORTIS_INSTINCT: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"此卡打出时效果为场上其他玩家打出的上一张卡（不计入效果带有放置于场上的卡）（此卡复制[反击]卡时可在符合条件时打出）"#)
         .cell(r#"J2"#)
-        .fields(&[("band", r#"Ave Mujica"#), ("owner", r#"若叶睦"#)]));
+        .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"若叶睦"#)]));
 
 fn play(player_id: i32) -> card_sdk::Asked {
     run(player_id);

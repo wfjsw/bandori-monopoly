@@ -17,7 +17,7 @@ pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"获得100资金。投掷1d6mod6并根据结果传送到行动条上对应玩家前一格并视为主要移动（选中自己则前进一格，若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家），可以选择是否触发结算。直到下个你的回合开始时，你无法被异常移动"#)
         .cell(r#"G16"#)
-        .fields(&[("band", r#"Morfonica"#), ("owner", r#"二叶筑紫"#)]));
+        .fields(&[("group", r#"Morfonica"#), ("owner", r#"二叶筑紫"#)]));
 
 /// C# `CardTsukushiGarden.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

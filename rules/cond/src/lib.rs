@@ -54,7 +54,7 @@ pub use kinds::{constants as kind_constants, mv, trig, TELEPORT_TRIGGER};
 
 /// Stable int id for a string identity (character name / band name / card id).
 /// Not the data-table index -- a name-stable hash so a condition's
-/// `character_is(p, "…")` / `band_is(p, "…")` / `trigger_card` literal survives
+/// `persona_is(p, "…")` / `group_is(p, "…")` / `trigger_card` literal survives
 /// a data reshuffle. Collisions are astronomically unlikely at 64 bits and the
 /// schema is int-only. FNV-1a 64.
 pub fn id_of(name: &str) -> i64 {

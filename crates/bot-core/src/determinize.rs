@@ -308,7 +308,7 @@ fn sample_opponent(
     // Allowed: what their deck rules allow (pool + mid-game derived), minus
     // every public sighting.
     let mut allowed: Vec<String> = Vec::new();
-    if let Some(c) = data.character(&p.character) {
+    if let Some(c) = data.persona(&p.persona) {
         for k in deck::pool(data, c) {
             allowed.push(k.id.clone());
         }

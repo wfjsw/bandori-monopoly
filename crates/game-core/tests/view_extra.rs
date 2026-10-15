@@ -177,7 +177,7 @@ fn wait_ops(m: &mut Match, me: i32) {
 fn skill_ids(m: &Match, me: i32) -> Vec<String> {
     let st = m.state();
     let seat = st.player_of(me) as usize;
-    let character = &st.players[seat].character;
+    let character = &st.players[seat].persona;
     m.data().skill_rules_of(character)
 }
 

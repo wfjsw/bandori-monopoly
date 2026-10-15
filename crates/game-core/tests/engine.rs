@@ -141,13 +141,13 @@ fn ranked_games_run_the_ban_phase() {
     assert!(st
         .players
         .iter()
-        .all(|s| !s.character.is_empty() && s.deck_ready));
-    let mut chars: Vec<&str> = st.players.iter().map(|s| s.character.as_str()).collect();
+        .all(|s| !s.persona.is_empty() && s.deck_ready));
+    let mut chars: Vec<&str> = st.players.iter().map(|s| s.persona.as_str()).collect();
     chars.sort();
     chars.dedup();
     assert_eq!(chars.len(), 5, "characters are unique");
     assert!(
-        st.players.iter().all(|s| !st.bans.contains(&s.character)),
+        st.players.iter().all(|s| !st.bans.contains(&s.persona)),
         "nobody picked a banned character"
     );
 }
@@ -157,13 +157,13 @@ fn ranked_games_run_the_ban_phase() {
 #[test]
 fn solo_preset_characters_skip_the_pick_phase() {
     let d = data();
-    let names: Vec<String> = d.characters.iter().take(3).map(|c| c.name.clone()).collect();
+    let names: Vec<String> = d.personas.iter().take(3).map(|c| c.name.clone()).collect();
     let members: Vec<RoomMember> = (1..=3)
         .map(|i| RoomMember {
             id: i,
             player: format!("P{i}"),
             bot: i != 1,
-            character: names[(i - 1) as usize].clone(),
+            persona: names[(i - 1) as usize].clone(),
             ..Default::default()
         })
         .collect();
@@ -178,7 +178,7 @@ fn solo_preset_characters_skip_the_pick_phase() {
             .iter()
             .find(|p| p.member == mem.id)
             .expect("member is seated");
-        assert_eq!(p.character, mem.character, "member {}", mem.id);
+        assert_eq!(p.persona, mem.persona, "member {}", mem.id);
     }
     // The roll still seats everyone; only the choice phases are skipped.
     let mut rolls: Vec<i32> = st.players.iter().map(|p| p.roll).collect();
@@ -205,7 +205,7 @@ fn solo_without_presets_still_picks() {
     let mut m = m;
     m.quick_start();
     assert_eq!(m.state().phase, "play");
-    assert!(m.state().players.iter().all(|p| !p.character.is_empty()));
+    assert!(m.state().players.iter().all(|p| !p.persona.is_empty()));
 }
 
 #[test]

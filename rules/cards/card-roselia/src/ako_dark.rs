@@ -25,7 +25,7 @@ pub const AKO_DARK: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"（1）[反击] 当你即将向其他玩家支付资金时可打出此卡，使自己获得一层[眩晕]。若此卡从手牌以外的地方打出，你抽一张卡。"#)
         .cell(r#"E11"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", r#"宇田川亚子"#)]));
+        .fields(&[("group", r#"Roselia"#), ("owner", r#"宇田川亚子"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[反击]: 「使自己获得一层[眩晕]」 -- C# `H.GiveStun(i, 1, i, "黑暗大魔姬亚子")`.

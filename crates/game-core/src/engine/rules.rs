@@ -711,9 +711,9 @@ pub struct ExclusiveAsk<'a> {
     pub card: &'a str,
     /// The card's `owner` character name.
     pub owner: &'a str,
-    /// `owner == actor.character`.
+    /// `owner == actor.persona`.
     pub owner_is_self: bool,
-    /// `owner == base_character(actor.character)`.
+    /// `owner == base_persona(actor.persona)`.
     pub owner_is_base: bool,
 }
 

@@ -144,7 +144,7 @@
   "boot.tip.refresh": "刷新页面也没关系：单机对局会自动存档，联机会回到原来的座位。",
   "boot.tip.timer": "回合计时先用掉每回合的基础时间，再扣奖励时间。",
   "boot.tip.vote": "联机对局想提前结束：发起投票，所有还在场的玩家同意就按得分排名。",
-  "card.kind.band": "乐队",
+  "card.kind.group": "乐队",
   "card.kind.derived": "衍生",
   "card.kind.exclusive": "专属",
   "card.kind.general": "通用",

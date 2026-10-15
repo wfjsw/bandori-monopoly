@@ -27,8 +27,8 @@ crate::host_subset!(skills_r_dispatch {
     player_pos => arm_player_pos,
     tile_named => arm_tile_named,
     tile_count => arm_tile_count,
-    in_band => arm_in_band,
-    character_is => arm_character_is,
+    in_group => arm_in_band,
+    persona_is => arm_character_is,
     raise => arm_raise,
     gate => arm_gate,
 });
@@ -80,7 +80,7 @@ fn sayo_fire_pass_iff_at(user: i32) {
     });
     let n = spec::sayo_circle_gain(someone_out);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_characters::sayo_thorns::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::sayo_thorns::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -120,7 +120,7 @@ pub fn sayo_fire_mutant_is_detected() {
             w.out[p] = false;
         }
     });
-    invoke::unwrap_done(skill_characters::sayo_thorns::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::sayo_thorns::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::sayo_circle_gain(false) + 1;
@@ -138,7 +138,7 @@ fn rinko_fire_pass_iff_at(user: i32) {
     let user = user;
     skills_r_world(user);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_characters::rinko_1cm::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::rinko_1cm::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -171,7 +171,7 @@ pub fn rinko_fire_user1_pass_iff() {
 pub fn rinko_fire_mutant_is_detected() {
     let user = 0i32;
     skills_r_world(user);
-    invoke::unwrap_done(skill_characters::rinko_1cm::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::rinko_1cm::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::rinko_circle_gain() + 1;
@@ -189,7 +189,7 @@ fn lisa_fire_pass_iff_at(user: i32) {
     let user = user;
     skills_r_world(user);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_characters::lisa_goddess::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::lisa_goddess::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -222,7 +222,7 @@ pub fn lisa_fire_user1_pass_iff() {
 pub fn lisa_fire_mutant_is_detected() {
     let user = 0i32;
     skills_r_world(user);
-    invoke::unwrap_done(skill_characters::lisa_goddess::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::lisa_goddess::on_pass_kani(user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::lisa_circle_gain() + 1;

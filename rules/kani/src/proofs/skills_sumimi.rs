@@ -116,7 +116,7 @@ fn band_02_rent_bonus_iff_at(owner: i32) {
     kani::cover!(crystals == 0, "crystals == 0 (no-op)");
 
     // DIRECT body call (ppcost).
-    invoke::unwrap_done(skill_bands::sumimi::bend_kani(owner));
+    invoke::unwrap_done(skill_groups::sumimi::bend_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -161,7 +161,7 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
     let pre_amount: i32 = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 10_000);
     band_02_world(owner, 3, pre_amount);
-    invoke::unwrap_done(skill_bands::sumimi::bend_kani(owner));
+    invoke::unwrap_done(skill_groups::sumimi::bend_kani(owner));
     let post = world::snapshot();
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
     kani::cover!(post.pay_amount != wrong, "disagreement live");
@@ -235,7 +235,7 @@ fn band_01_clear_iff_at(owner: i32) {
     crate::kassert!(admitted, "clear half must be admitted when GOT == 0");
     let pre = world::snapshot();
     // DIRECT body call (ppcost).
-    invoke::unwrap_done(skill_bands::sumimi::at_turn_end_kani(owner));
+    invoke::unwrap_done(skill_groups::sumimi::at_turn_end_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -272,7 +272,7 @@ pub fn band_01_user1_clear_iff() {
 pub fn band_01_clear_mutant_is_detected() {
     let owner = 0i32;
     band_01_world(owner, 0, 3);
-    invoke::unwrap_done(skill_bands::sumimi::at_turn_end_kani(owner));
+    invoke::unwrap_done(skill_groups::sumimi::at_turn_end_kani(owner));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     let wrong = spec::sumimi::band_crystal_clear_ok_mutant(effects, owner, crystals_key().0, 3);

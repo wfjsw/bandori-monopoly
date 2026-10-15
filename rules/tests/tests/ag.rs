@@ -479,8 +479,8 @@ fn glory_counter_is_offered_to_a_bot_seat() {
     b.generated_at = "ag".into();
     b.me.push(StrategyEntry {
         me: bot_char,
-        band: String::new(),
-        opponent_bands: Vec::new(),
+        group: String::new(),
+        opponent_groups: Vec::new(),
         deck: Vec::new(),
         params,
     });

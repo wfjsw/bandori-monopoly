@@ -290,10 +290,10 @@ impl CardWorld for TestWorld {
     fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
-    fn band_crystals(&self, _: i32) -> i32 {
+    fn group_crystals(&self, _: i32) -> i32 {
         0
     }
-    fn add_band_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_group_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
         0
     }
     fn fire(&self, _: i32) -> i32 {
@@ -465,10 +465,10 @@ impl CardWorld for TestWorld {
     fn turn_key(&self) -> i32 {
         1
     }
-    fn character_is(&self, _: i32, _: &str) -> i32 {
+    fn persona_is(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn in_band(&self, _: i32, _: &str) -> i32 {
+    fn in_group(&self, _: i32, _: &str) -> i32 {
         0
     }
     fn fixed_roll(&self) -> i32 {

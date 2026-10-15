@@ -21,7 +21,7 @@ pub const THANKS_PARTY: CardDef =
 1. X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；
 2. X等于1则[使用者]的本回合结束后获得一个额外回合。"#)
         .cell(r#"A12"#)
-        .fields(&[("band", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn thanks_party(player_id: i32) -> card_sdk::Asked {
     let why = Msg::new(key!("thanks_party_why"));

@@ -40,7 +40,7 @@ pub const EVE_BUSHIDO: CardDef = CardDef::new(
 2. [拥有者]投掷3d4；
 3. 投掷点数低的玩家[支付]投掷点数高的玩家[拥有者]所在格子的房屋数量加1×100（如果平局则双方互不支付），如果[共鸣]则[支付]金额改为“投掷点差”×50。"#)
         .cell(r#"D20"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", r#"若宫伊芙"#)]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"若宫伊芙"#)]));
 
 fn eve_bushido(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]场上」

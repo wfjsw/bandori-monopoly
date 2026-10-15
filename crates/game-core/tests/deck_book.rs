@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use game_core::data::{CharacterData, GameData};
+use game_core::data::{PersonaData, GameData};
 use game_core::deck;
 use game_core::deck_book::{self, DeckBook, DeckBookEntry, DECK_BOOK_VERSION, POLICY_STANDARD};
 use game_core::engine::{Match, StubRules};
@@ -14,7 +14,7 @@ use common::data;
 
 /// A distinct complete deck for `c`: `SIZE` pool cards starting at `skip`.
 /// `skip = 0` is what `deck::preset` lands on (the pool is filled front to back).
-fn deck_slice(d: &GameData, c: &CharacterData, skip: usize) -> Vec<String> {
+fn deck_slice(d: &GameData, c: &PersonaData, skip: usize) -> Vec<String> {
     let ids: Vec<String> = deck::pool(d, c).into_iter().map(|k| k.id.clone()).collect();
     assert!(
         ids.len() >= skip + deck::SIZE,
@@ -29,7 +29,7 @@ fn entry(me: &str, seat: Option<u32>, opponents: &[&str], bands: &[&str], cards:
         me: me.into(),
         seat,
         opponents: opponents.iter().map(|s| s.to_string()).collect(),
-        opponent_bands: bands.iter().map(|s| s.to_string()).collect(),
+        opponent_groups: bands.iter().map(|s| s.to_string()).collect(),
         cards,
     }
 }
@@ -42,10 +42,10 @@ fn book(entries: Vec<DeckBookEntry>) -> DeckBook {
     b.generated_at = "test".into();
     // Drop entries into the level their key shape says.
     for e in entries {
-        match (e.seat.is_some(), !e.opponents.is_empty(), !e.opponent_bands.is_empty()) {
+        match (e.seat.is_some(), !e.opponents.is_empty(), !e.opponent_groups.is_empty()) {
             (true, true, _) => b.exact.push(e),
-            (true, false, _) => b.seat_bands.push(e),
-            (false, false, true) => b.bands.push(e),
+            (true, false, _) => b.seat_groups.push(e),
+            (false, false, true) => b.groups.push(e),
             (false, false, false) => b.me.push(e),
             (false, true, _) => panic!("opponents without a seat belong to the exact level"),
         }
@@ -54,8 +54,8 @@ fn book(entries: Vec<DeckBookEntry>) -> DeckBook {
 }
 
 /// 戸山香澄 (Poppin' Party) at a 3-seat table.
-fn me<'a>(d: &'a GameData) -> &'a CharacterData {
-    d.character("户山香澄").unwrap()
+fn me<'a>(d: &'a GameData) -> &'a PersonaData {
+    d.persona("户山香澄").unwrap()
 }
 
 // ---------------------------------------------------------------- lookup
@@ -65,12 +65,12 @@ fn lookup_falls_back_in_order() {
     let d = data();
     let c = me(&d);
     let exact = deck_slice(&d, c, 1);
-    let seat_bands = deck_slice(&d, c, 2);
+    let seat_groups = deck_slice(&d, c, 2);
     let bands = deck_slice(&d, c, 3);
     let me_only = deck_slice(&d, c, 4);
     let b = book(vec![
         entry("户山香澄", Some(1), &["花园多惠", "牛込里美"], &[], exact.clone()),
-        entry("户山香澄", Some(1), &[], &["Poppin' Party", "Poppin' Party"], seat_bands.clone()),
+        entry("户山香澄", Some(1), &[], &["Poppin' Party", "Poppin' Party"], seat_groups.clone()),
         entry("户山香澄", None, &[], &["Poppin' Party", "Poppin' Party"], bands.clone()),
         entry("户山香澄", None, &[], &[], me_only.clone()),
     ]);
@@ -82,7 +82,7 @@ fn lookup_falls_back_in_order() {
     // 1. exact: (me, seat, opponents in seat order)
     assert_eq!(lookup(1, &["花园多惠", "牛込里美"]), Some(exact));
     // 2. same seat and band multiset, opponents swapped out of seat order.
-    assert_eq!(lookup(1, &["牛込里美", "花园多惠"]), Some(seat_bands));
+    assert_eq!(lookup(1, &["牛込里美", "花园多惠"]), Some(seat_groups));
     // 3. same band multiset, other seat.
     assert_eq!(lookup(0, &["牛込里美", "花园多惠"]), Some(bands));
     // 4. other bands entirely.
@@ -109,7 +109,7 @@ fn first_hit_within_a_level_wins() {
 fn stale_hash_and_policy_mismatch_ignore_the_book() {
     let mut d = data();
     let cards = {
-        let c = d.character("户山香澄").unwrap();
+        let c = d.persona("户山香澄").unwrap();
         deck_slice(&d, c, 1)
     };
     let opp: Vec<String> = vec!["美竹兰".to_string()];
@@ -119,7 +119,7 @@ fn stale_hash_and_policy_mismatch_ignore_the_book() {
     b.ruleset_sha256 = "some-other-ruleset".into();
     d.deck_book = b;
     {
-        let c = d.character("户山香澄").unwrap();
+        let c = d.persona("户山香澄").unwrap();
         assert_eq!(d.deck_book.lookup(&d, c, 0, &opp, "stub"), None);
         assert_eq!(
             deck_book::suggest(&d, c, 0, &opp, "stub"),
@@ -132,7 +132,7 @@ fn stale_hash_and_policy_mismatch_ignore_the_book() {
     b.policy = "chaos".into();
     d.deck_book = b;
     {
-        let c = d.character("户山香澄").unwrap();
+        let c = d.persona("户山香澄").unwrap();
         assert_eq!(d.deck_book.lookup(&d, c, 0, &opp, "stub"), None);
         assert_eq!(
             deck_book::suggest(&d, c, 0, &opp, "stub"),
@@ -145,7 +145,7 @@ fn stale_hash_and_policy_mismatch_ignore_the_book() {
 fn invalid_entries_fall_through_to_the_next_level() {
     let mut d = data();
     let (good, mut short) = {
-        let c = d.character("户山香澄").unwrap();
+        let c = d.persona("户山香澄").unwrap();
         (deck_slice(&d, c, 2), deck_slice(&d, c, 1))
     };
     short.pop(); // 9 cards: `clean` cannot make a complete deck of it
@@ -155,7 +155,7 @@ fn invalid_entries_fall_through_to_the_next_level() {
         entry("户山香澄", Some(1), &[], &["Poppin' Party"], good.clone()),
     ]);
     {
-        let c = d.character("户山香澄").unwrap();
+        let c = d.persona("户山香澄").unwrap();
         assert_eq!(d.deck_book.lookup(&d, c, 1, &opp, "stub"), Some(good));
     }
 
@@ -168,7 +168,7 @@ fn invalid_entries_fall_through_to_the_next_level() {
         vec!["no-such-card".into(); 10],
     )]);
     {
-        let c = d.character("户山香澄").unwrap();
+        let c = d.persona("户山香澄").unwrap();
         assert_eq!(d.deck_book.lookup(&d, c, 1, &opp, "stub"), None);
         assert_eq!(
             deck_book::suggest(&d, c, 1, &opp, "stub"),
@@ -204,11 +204,11 @@ fn parses_the_documented_shape() {
       "exact": [
         { "me": "户山香澄", "seat": 0, "opponents": ["美竹兰"], "cards": ["a", "b"] }
       ],
-      "seat_bands": [
-        { "me": "户山香澄", "seat": 1, "opponent_bands": ["Afterglow"], "cards": ["c"] }
+      "seat_groups": [
+        { "me": "户山香澄", "seat": 1, "opponent_groups": ["Afterglow"], "cards": ["c"] }
       ],
-      "bands": [
-        { "me": "户山香澄", "opponent_bands": ["Afterglow"], "cards": ["d"] }
+      "groups": [
+        { "me": "户山香澄", "opponent_groups": ["Afterglow"], "cards": ["d"] }
       ],
       "me": [
         { "me": "户山香澄", "cards": ["e"] }
@@ -221,8 +221,8 @@ fn parses_the_documented_shape() {
     assert_eq!(b.exact.len(), 1);
     assert_eq!(b.exact[0].seat, Some(0));
     assert_eq!(b.exact[0].opponents, vec!["美竹兰".to_string()]);
-    assert_eq!(b.seat_bands[0].seat, Some(1));
-    assert_eq!(b.bands[0].cards, vec!["d".to_string()]);
+    assert_eq!(b.seat_groups[0].seat, Some(1));
+    assert_eq!(b.groups[0].cards, vec!["d".to_string()]);
     assert_eq!(b.me[0].cards, vec!["e".to_string()]);
     assert!(b.usable("stub"));
     assert!(!b.usable("other"));
@@ -253,7 +253,7 @@ fn solo_bots(d: Arc<GameData>, seed: u64) -> Match {
             id: i as i32 + 1,
             player: format!("P{}", i + 1),
             bot: i != 0,
-            character: (*c).to_string(),
+            persona: (*c).to_string(),
             ..Default::default()
         })
         .collect();
@@ -266,7 +266,7 @@ fn bot_seats(m: &Match) -> Vec<(i32, String)> {
         .players
         .iter()
         .filter(|p| p.bot)
-        .map(|p| (p.member, p.character.clone()))
+        .map(|p| (p.member, p.persona.clone()))
         .collect()
 }
 
@@ -275,7 +275,7 @@ fn standard_bots_submit_the_book_entry_when_present() {
     let mut d = data();
     let mut per_character = Vec::new();
     for name in ["户山香澄", "花园多惠", "美竹兰"] {
-        let c = d.character(name).unwrap();
+        let c = d.persona(name).unwrap();
         let cards = deck_slice(&d, c, 1);
         assert_ne!(cards, deck::preset(&d, c), "the book deck must beat the preset");
         per_character.push((name.to_string(), cards.clone()));
@@ -303,7 +303,7 @@ fn standard_bots_keep_the_preset_without_a_book() {
     let m = solo_bots(Arc::new(d.clone()), 42);
     assert_eq!(m.state().phase, "deck");
     for (member, name) in bot_seats(&m) {
-        let c = d.character(&name).unwrap();
+        let c = d.persona(&name).unwrap();
         let mut want = deck::preset(&d, c);
         want.sort();
         assert_eq!(m.draw_of(member), want, "{name}");
@@ -314,7 +314,7 @@ fn standard_bots_keep_the_preset_without_a_book() {
 fn standard_bots_keep_the_preset_on_a_stale_book() {
     let mut d = data();
     for name in ["户山香澄", "花园多惠", "美竹兰"] {
-        let c = d.character(name).unwrap();
+        let c = d.persona(name).unwrap();
         let cards = deck_slice(&d, c, 1);
         d.deck_book.me.push(entry(name, None, &[], &[], cards));
     }
@@ -323,7 +323,7 @@ fn standard_bots_keep_the_preset_on_a_stale_book() {
     let m = solo_bots(Arc::new(d.clone()), 42);
     assert_eq!(m.state().phase, "deck");
     for (member, name) in bot_seats(&m) {
-        let c = d.character(&name).unwrap();
+        let c = d.persona(&name).unwrap();
         let mut want = deck::preset(&d, c);
         want.sort();
         assert_eq!(m.draw_of(member), want, "{name}");

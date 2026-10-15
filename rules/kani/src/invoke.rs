@@ -52,10 +52,10 @@ pub static RULESET: &[&[card_sdk::CardDef]] = &[
     card_roselia::CARDS,
     #[cfg(feature = "band-sumimi")]
     card_sumimi::CARDS,
-    #[cfg(feature = "skills-bands")]
-    skill_bands::CARDS,
-    #[cfg(feature = "skills-characters")]
-    skill_characters::CARDS,
+    #[cfg(feature = "skills-groups")]
+    skill_groups::CARDS,
+    #[cfg(feature = "skills-personas")]
+    skill_personas::CARDS,
     #[cfg(feature = "tiles")]
     rules_tiles::CARDS,
     #[cfg(feature = "tiles")]

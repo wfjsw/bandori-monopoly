@@ -83,8 +83,8 @@ pub fn grab_01_log_ok_mutant(effects: &[Effect], player: i32, passer_key: u16) -
 // C-CRYCHIC-debut-02 — 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。」
 // ---------------------------------------------------------------------------
 
-/// Only the stun is in the effect log (`add_band_crystals` is unlogged in the
-/// Kani host). The crystal is checked as `post.band_crystals == pre+1`.
+/// Only the stun is in the effect log (`add_group_crystals` is unlogged in the
+/// Kani host). The crystal is checked as `post.group_crystals == pre+1`.
 pub fn debut_02_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::GiveStun { player: p, n: 1 } if p == player)
 }

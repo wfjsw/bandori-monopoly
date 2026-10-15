@@ -10,13 +10,13 @@ use common::data;
 #[test]
 fn band_traits_and_variants_come_from_data() {
     let d = data();
-    assert_eq!(d.base_character("高松灯（CRYCHIC）"), "高松灯");
-    assert_eq!(d.base_character("三角初华（Sumimi）"), "三角初华");
-    assert_eq!(d.base_character("高松灯"), "高松灯");
-    let sumimi = d.character("三角初华（Sumimi）").unwrap();
-    let crychic = d.character("高松灯（CRYCHIC）").unwrap();
-    assert!(d.band_shares_exclusives(sumimi) && !d.band_shares_exclusives(crychic));
-    assert!(d.bands.iter().all(|b| b.name != "CRYCHIC" || !b.boot_art.is_empty()));
+    assert_eq!(d.base_persona("高松灯（CRYCHIC）"), "高松灯");
+    assert_eq!(d.base_persona("三角初华（Sumimi）"), "三角初华");
+    assert_eq!(d.base_persona("高松灯"), "高松灯");
+    let sumimi = d.persona("三角初华（Sumimi）").unwrap();
+    let crychic = d.persona("高松灯（CRYCHIC）").unwrap();
+    assert!(d.group_shares_exclusives(sumimi) && !d.group_shares_exclusives(crychic));
+    assert!(d.groups.iter().all(|b| b.name != "CRYCHIC" || !b.boot_art.is_empty()));
 }
 
 #[test]
@@ -24,8 +24,8 @@ fn game_data_counts_match_the_original() {
     let d = data();
     assert_eq!(d.tiles.len(), 60);
     assert_eq!(d.cards.len(), 184);
-    assert_eq!(d.characters.len(), 54);
-    assert_eq!(d.bands.len(), 12);
+    assert_eq!(d.personas.len(), 54);
+    assert_eq!(d.groups.len(), 12);
     assert_eq!(d.events.len(), 28);
     assert_eq!(d.match_rules.ring_multiplier, 10);
     assert!(!d.rules_text.is_empty());
@@ -51,23 +51,23 @@ fn game_data_counts_match_the_original() {
 #[test]
 fn lookups() {
     let d = data();
-    assert_eq!(d.card("AG:Y.O.L.O").unwrap().band, "Afterglow");
+    assert_eq!(d.card("AG:Y.O.L.O").unwrap().group, "Afterglow");
     assert!(d.card("nope").is_none());
-    assert_eq!(d.cards.iter().filter(|c| c.general()).count(), 14);
+    assert_eq!(d.cards.iter().filter(|c| c.is_universal()).count(), 14);
 
-    let kasumi = d.character("户山香澄").unwrap();
+    let kasumi = d.persona("户山香澄").unwrap();
     assert_eq!(kasumi.art_id(), "001");
     assert!(!d.voice_lines_for(kasumi).is_empty());
     // Characters added later carry an explicit `art` id instead of cnId.
     assert!(d
-        .characters
+        .personas
         .iter()
         .any(|c| !c.art.is_empty() && c.art_id() == c.art));
 
     assert_eq!(d.school_of("户山香澄"), "花咲川女子学院");
     assert_eq!(d.school_of("nobody"), "周边学区");
-    assert_eq!(d.band("Poppin' Party").unwrap().short_name, "PPP");
-    assert!(d.band("nope").is_none());
+    assert_eq!(d.group("Poppin' Party").unwrap().short_name, "PPP");
+    assert!(d.group("nope").is_none());
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn match_state_round_trips_with_camel_case_names() {
 #[test]
 fn every_character_has_a_complete_legal_preset() {
     let d = data();
-    for c in &d.characters {
+    for c in &d.personas {
         let p = deck::preset(&d, c);
         assert_eq!(p.len(), deck::SIZE, "{} preset", c.name);
         for id in &p {
@@ -152,7 +152,7 @@ fn every_character_has_a_complete_legal_preset() {
 #[test]
 fn deck_rules_reject_with_csharp_reasons() {
     let d = data();
-    let kasumi = d.character("户山香澄").unwrap();
+    let kasumi = d.persona("户山香澄").unwrap();
     let derived = d.cards.iter().find(|c| c.derived).unwrap();
     assert_eq!(
         deck::cant_play(&d, kasumi, derived).unwrap().key(),
@@ -162,7 +162,7 @@ fn deck_rules_reject_with_csharp_reasons() {
     let other_band = d
         .cards
         .iter()
-        .find(|c| !c.general() && !c.exclusive() && c.band != kasumi.band && !c.derived)
+        .find(|c| !c.is_universal() && !c.exclusive() && c.group != kasumi.group && !c.derived)
         .unwrap();
     assert_eq!(
         deck::cant_play(&d, kasumi, other_band).unwrap().key(),
@@ -180,7 +180,7 @@ fn deck_rules_reject_with_csharp_reasons() {
     );
 
     // Sumimi members share exclusives (the original has exactly two members).
-    let sumimi: Vec<_> = d.characters.iter().filter(|c| c.band == "Sumimi").collect();
+    let sumimi: Vec<_> = d.personas.iter().filter(|c| c.group == "Sumimi").collect();
     assert_eq!(sumimi.len(), 2);
     let (a, b) = (sumimi[0], sumimi[1]);
     let shared = d
@@ -204,7 +204,7 @@ fn deck_rules_reject_with_csharp_reasons() {
 #[test]
 fn deck_save_choose_and_clear() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("户山香澄").unwrap();
     let mut p = PlayerProfile::default();
     let preset = deck::preset(&d, c);
     let id = deck::create(&d, &mut p, c, "", &preset).unwrap();
@@ -292,10 +292,10 @@ fn profile_normalize_migrates_v1_saves() {
     assert_eq!(p.save_version, 4);
     assert_eq!((p.level, p.fire_per_game), (500, 3));
     assert_eq!(
-        p.home_character, d.match_rules.default_home_character,
+        p.home_persona, d.match_rules.default_home_persona,
         "empty home -> data default"
     );
-    assert!(d.character(&p.home_character).is_some());
+    assert!(d.persona(&p.home_persona).is_some());
     assert_eq!(p.history[0].mode, MatchMode::Ranked);
     assert_eq!(p.history[1].mode, MatchMode::Casual);
     // MatchMode is an integer on disk (`0`/`1`/`2`).
@@ -308,7 +308,7 @@ fn profile_normalize_migrates_v1_saves() {
 #[test]
 fn live2d_picks() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("户山香澄").unwrap();
     let mut p = PlayerProfile::default();
     let opts = ["001", "001b"];
     assert_eq!(p.live2d_for(c, &opts), "001");

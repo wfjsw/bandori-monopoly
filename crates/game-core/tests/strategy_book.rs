@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use game_core::data::{CharacterData, GameData};
+use game_core::data::{PersonaData, GameData};
 use game_core::engine::{Match, StubRules, BUY_RESERVE};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
@@ -22,8 +22,8 @@ use game_core::strategy::{
 };
 use game_core::MatchMode;
 
-fn me<'a>(d: &'a GameData) -> &'a CharacterData {
-    d.character("户山香澄").unwrap()
+fn me<'a>(d: &'a GameData) -> &'a PersonaData {
+    d.persona("户山香澄").unwrap()
 }
 
 /// A parameter set that only names `field`, everything else default.
@@ -33,11 +33,11 @@ fn params_with(f: impl FnOnce(&mut StrategyParams)) -> StrategyParams {
     p
 }
 
-fn entry(me: &str, band: &str, opponent_bands: &[&str], params: StrategyParams) -> StrategyEntry {
+fn entry(me: &str, group: &str, opponent_groups: &[&str], params: StrategyParams) -> StrategyEntry {
     StrategyEntry {
         me: me.into(),
-        band: band.into(),
-        opponent_bands: opponent_bands.iter().map(|s| s.to_string()).collect(),
+        group: group.into(),
+        opponent_groups: opponent_groups.iter().map(|s| s.to_string()).collect(),
         deck: Vec::new(),
         params,
     }
@@ -51,12 +51,12 @@ fn book(entries: Vec<StrategyEntry>) -> StrategyBook {
     b.generated_at = "test".into();
     b.params_version = PARAMS_VERSION;
     for e in entries {
-        if !e.me.is_empty() && !e.opponent_bands.is_empty() {
-            b.char_bands.push(e);
+        if !e.me.is_empty() && !e.opponent_groups.is_empty() {
+            b.persona_groups.push(e);
         } else if !e.me.is_empty() {
             b.me.push(e);
         } else {
-            b.band.push(e);
+            b.groups.push(e);
         }
     }
     b
@@ -149,22 +149,22 @@ fn default_params_are_the_old_formulas() {
 fn lookup_backs_off_in_order() {
     let d = data();
     let c = me(&d); // 户山香澄, Poppin' Party
-    let char_bands = params_with(|p| p.buy_reserve = 1_111);
+    let persona_groups = params_with(|p| p.buy_reserve = 1_111);
     let me_only = params_with(|p| p.buy_reserve = 2_222);
     let band = params_with(|p| p.buy_reserve = 3_333);
     let b = book(vec![
-        entry("户山香澄", "", &["Afterglow"], char_bands.clone()),
+        entry("户山香澄", "", &["Afterglow"], persona_groups.clone()),
         entry("户山香澄", "", &[], me_only.clone()),
         entry("", "Poppin' Party", &[], band.clone()),
     ]);
     let lookup = |who: &str, opponents: &[&str]| {
         let opp: Vec<String> = opponents.iter().map(|s| s.to_string()).collect();
-        let c = d.character(who).unwrap();
+        let c = d.persona(who).unwrap();
         b.lookup(&d, c, &opp, None, Some("stub"))
     };
 
     // 1. (me, opponents' bands multiset)
-    assert_eq!(lookup("户山香澄", &["美竹兰"]), Some(char_bands));
+    assert_eq!(lookup("户山香澄", &["美竹兰"]), Some(persona_groups));
     // 2. same character, other bands.
     assert_eq!(lookup("户山香澄", &["花园多惠"]), Some(me_only));
     // 3. band level: another Poppin' Party character the `me` levels do not name.
@@ -248,19 +248,19 @@ fn parses_the_documented_shape_and_merges_partial_params() {
       "policy": "standard",
       "generated_at": "2026-10-08",
       "params_version": 1,
-      "char_bands": [
+      "persona_groups": [
         {
           "me": "户山香澄",
-          "opponent_bands": ["Afterglow"],
+          "opponent_groups": ["Afterglow"],
           "params": { "buy_reserve": 5000 }
         }
       ],
       "me": [
         { "me": "户山香澄", "params": { "build_reserve": 1, "play_card_chance_milli": 250 } }
       ],
-      "band": [
+      "groups": [
         {
-          "band": "Poppin' Party",
+          "group": "Poppin' Party",
           "deck": ["a", "b"],
           "params": {
             "cards": { "卡": { "play_weight_milli": 0 } },
@@ -294,7 +294,7 @@ fn parses_the_documented_shape_and_merges_partial_params() {
 
     // A deck-tagged entry only applies to that deck. The band level names
     // Poppin' Party -- use a character the `me` levels do not.
-    let band_c = d.character("花园多惠").unwrap();
+    let band_c = d.persona("花园多惠").unwrap();
     let any: Vec<String> = vec![];
     assert!(b
         .lookup(&d, band_c, &[], Some(&any), Some("stub"))
@@ -394,7 +394,7 @@ fn a_live_parameter_change_moves_the_standard_bot() {
     book.policy = POLICY_STANDARD.into();
     book.generated_at = "test".into();
     book.params_version = PARAMS_VERSION;
-    for c in &d.characters {
+    for c in &d.personas {
         book.me.push(entry(
             &c.name,
             "",
@@ -424,7 +424,7 @@ fn for_seat_reads_the_book_from_public_state() {
     b.ruleset_sha256 = "stub".into();
     b.policy = POLICY_STANDARD.into();
     b.params_version = PARAMS_VERSION;
-    for c in &d.characters {
+    for c in &d.personas {
         b.me.push(entry(
             &c.name,
             "",

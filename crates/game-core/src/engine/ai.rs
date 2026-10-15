@@ -380,7 +380,7 @@ impl Cx<'_> {
         };
         let candidates: Vec<String> = self
             .data
-            .skill_rules_of(&self.w.st.players[i].character)
+            .skill_rules_of(&self.w.st.players[i].persona)
             .into_iter()
             .filter(|id| {
                 placed.contains(id)

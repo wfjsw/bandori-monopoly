@@ -141,11 +141,11 @@ impl CondView for SnapshotView<'_> {
     fn owner_no_hand(&self) -> i64 {
         self.cand.owner_no_hand
     }
-    fn owner_character(&self) -> i64 {
-        self.cand.owner_character
+    fn owner_persona(&self) -> i64 {
+        self.cand.owner_persona
     }
-    fn owner_band(&self) -> i64 {
-        self.cand.owner_band
+    fn owner_group(&self) -> i64 {
+        self.cand.owner_group
     }
     fn owner_tiles(&self) -> i64 {
         self.cand.owner_tiles
@@ -165,8 +165,8 @@ impl CondView for SnapshotView<'_> {
     fn tok_named(&self, name: &str) -> i64 {
         self.cand.tok_named(name)
     }
-    fn blocked(&self, band: i64) -> bool {
-        self.cand.blocked(band)
+    fn blocked(&self, group: i64) -> bool {
+        self.cand.blocked(group)
     }
     fn money(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.money).unwrap_or(0)
@@ -213,11 +213,11 @@ impl CondView for SnapshotView<'_> {
         }
         rows
     }
-    fn character(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.character).unwrap_or(0)
+    fn persona(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.persona).unwrap_or(0)
     }
-    fn band(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.band).unwrap_or(0)
+    fn group(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.group).unwrap_or(0)
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.tiles).unwrap_or(0)
@@ -313,8 +313,8 @@ impl CondView for SnapshotView<'_> {
             .map(|(k, v)| (k.clone(), *v))
             .collect()
     }
-    fn blocked_bands(&self) -> Vec<i64> {
-        self.cand.blocked_bands.clone()
+    fn blocked_groups(&self) -> Vec<i64> {
+        self.cand.blocked_groups.clone()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
         self.win.tile_ids.iter().map(|(k, v)| (k.clone(), *v)).collect()

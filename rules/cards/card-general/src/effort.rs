@@ -17,7 +17,7 @@ pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play
         .text(r#"[手]：
 立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。"#)
         .cell(r#"A11"#)
-        .fields(&[("band", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 /// C# `CardEffort.WhyNot` defers to `H.MoveWhyNot`: refuses after the main move
 /// (`这回合已经移动过了`) and while `H.State.skipMove` (`本回合不能移动`).

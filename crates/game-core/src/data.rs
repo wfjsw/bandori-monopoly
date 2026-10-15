@@ -10,8 +10,8 @@
 //! `game-core` never touches the filesystem: [`GameData::load`] takes a reader so the
 //! server (fs) and the browser (fetch) can both supply the files.
 //!
-//! **Roster (ABI v63).** `cards` / `characters` / `bands` no longer come from
-//! `data/{cards,characters,bands}.json`. They are authored beside the rule code
+//! **Roster (ABI v63).** `cards` / `characters` / `groups` no longer come from
+//! `data/{cards,characters,groups}.json`. They are authored beside the rule code
 //! and handed over as [`Roster`] (ruleset `ruleset_metadata` ->
 //! [`crate::data::Roster`]). [`DATA_FILES`] covers only the remaining tables
 //! and the data hash (`EngineStamp::data_sha256`) hashes exactly those; the
@@ -104,7 +104,7 @@ impl TileData {
 #[serde(default, rename_all = "camelCase")]
 pub struct CardData {
     pub id: String,
-    pub band: String,
+    pub group: String,
     pub name: String,
     pub raw_name: String,
     pub owner: String,
@@ -125,24 +125,24 @@ impl CardData {
         }
     }
 
-    /// Usable by every band (the data's general band, [`GENERAL_BAND`]).
-    pub fn general(&self) -> bool {
-        self.band == GENERAL_BAND
+    /// Usable by every band (the data's general band, [`GENERAL_GROUP`]).
+    pub fn is_universal(&self) -> bool {
+        self.group == GENERAL_GROUP
     }
 
-    /// Bound to one character (`owner` set).
+    /// Bound to one persona (`owner` set).
     pub fn exclusive(&self) -> bool {
         !self.owner.is_empty()
     }
 }
 
-/// One playable character of the roster (was `characters.json`).
+/// One playable persona of the roster (was `characters.json`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
-pub struct CharacterData {
+pub struct PersonaData {
     pub name: String,
     pub display: String,
-    pub band: String,
+    pub group: String,
     pub color: String,
     pub skill: String,
     pub text: String,
@@ -151,14 +151,14 @@ pub struct CharacterData {
     pub costume: String,
     pub exclusive_cards: Vec<String>,
     pub preset: Vec<String>,
-    /// The character this one is an alternate form of (`高松灯（CRYCHIC）` ->
-    /// `高松灯`); empty when it is a base character.
+    /// The persona this one is an alternate form of (`高松灯（CRYCHIC）` ->
+    /// `高松灯`); empty when it is a base persona.
     pub variant_of: String,
     /// Short label for compact displays of a variant (`c`).
     pub variant_tag: String,
 }
 
-impl CharacterData {
+impl PersonaData {
     /// Key for art and Live2D: `art` if set, else `cn_id`.
     pub fn art_id(&self) -> &str {
         if self.art.is_empty() {
@@ -169,10 +169,10 @@ impl CharacterData {
     }
 }
 
-/// One band of the roster (was `bands.json`; skill text + branding).
+/// One band of the roster (was `groups.json`; skill text + branding).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
-pub struct BandData {
+pub struct GroupData {
     pub name: String,
     pub short_name: String,
     pub color: String,
@@ -183,25 +183,25 @@ pub struct BandData {
     /// starting deck. Deck-legal only -- the in-match play gate is the
     /// band-skill card's `ExclusiveUse` entry (or the generic own/base rule).
     pub shares_exclusives: bool,
-    /// Boot-screen art id for a home character of this band; empty = default.
+    /// Boot-screen art id for a home persona of this band; empty = default.
     pub boot_art: String,
 }
 
-/// The roster half of [`GameData`] -- cards / characters / bands -- handed over
+/// The roster half of [`GameData`] -- cards / characters / groups -- handed over
 /// by the ruleset host (ABI v63 `ruleset_metadata`, converted in `game-rules`).
 /// `game-core` stays free of the card crates; this is the plain struct of
 /// vectors it already iterates in roster order (the Rust ordinal table).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Roster {
     pub cards: Vec<CardData>,
-    pub characters: Vec<CharacterData>,
-    pub bands: Vec<BandData>,
+    pub personas: Vec<PersonaData>,
+    pub groups: Vec<GroupData>,
 }
 
 impl Roster {
     /// Parse the generated test fixture (`crates/game-core/tests/fixtures/
     /// roster.json`, written by `cargo run -p rules-native --example
-    /// dump_roster -- --fixture`). One JSON object `{cards, characters, bands}`
+    /// dump_roster -- --fixture`). One JSON object `{cards, characters, groups}`
     /// in the same camelCase row shapes the roster metadata carries. Tests of
     /// crates that have no ruleset (game-core / game-rules / bot-core / server)
     /// load this instead of depending on the card crates.
@@ -211,20 +211,20 @@ impl Roster {
             #[serde(default)]
             cards: Vec<CardData>,
             #[serde(default)]
-            characters: Vec<CharacterData>,
+            personas: Vec<PersonaData>,
             #[serde(default)]
-            bands: Vec<BandData>,
+            groups: Vec<GroupData>,
         }
         let f: Fixture = serde_json::from_str(text.trim_start_matches('\u{feff}'))
             .map_err(|e| format!("roster fixture: {e}"))?;
         Ok(Roster {
             cards: f.cards,
-            characters: f.characters,
-            bands: f.bands,
+            personas: f.personas,
+            groups: f.groups,
         })
     }
 
-    /// Serialize back to the fixture document (`{cards, characters, bands}`),
+    /// Serialize back to the fixture document (`{cards, personas, groups}`),
     /// the byte-stable form `cargo run -p rules-native --example dump_roster --
     /// --fixture` writes. The rules-native gate compares this against the
     /// checked-in fixture so the two can never drift.
@@ -232,13 +232,13 @@ impl Roster {
         #[derive(serde::Serialize)]
         struct Fixture<'a> {
             cards: &'a [CardData],
-            characters: &'a [CharacterData],
-            bands: &'a [BandData],
+            personas: &'a [PersonaData],
+            groups: &'a [GroupData],
         }
         let mut s = serde_json::to_string_pretty(&Fixture {
             cards: &self.cards,
-            characters: &self.characters,
-            bands: &self.bands,
+            personas: &self.personas,
+            groups: &self.groups,
         })
         .expect("roster fixture serializes");
         s.push('\n');
@@ -257,15 +257,15 @@ pub struct EventData {
     pub cell: String,
 }
 
-/// `band` value of the cards every character may take. A roster band key (the
+/// `band` value of the cards every persona may take. A roster band key (the
 /// data set is Chinese), not display text.
-pub const GENERAL_BAND: &str = "通用";
+pub const GENERAL_GROUP: &str = "通用";
 
 /// Character → school tile-name map.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SchoolsData {
-    /// Tile name to use when a character's school is not in the data.
+    /// Tile name to use when a persona's school is not in the data.
     pub fallback: String,
     pub schools: Vec<SchoolEntry>,
 }
@@ -273,34 +273,34 @@ pub struct SchoolsData {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SchoolEntry {
-    pub character: String,
+    pub persona: String,
     pub school: String,
 }
 
-/// Home-screen line tags per character.
+/// Home-screen line tags per persona.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HomeLinesData {
-    pub characters: Vec<CharacterLines>,
+    pub personas: Vec<PersonaLines>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct CharacterLines {
+pub struct PersonaLines {
     pub name: String,
     pub tag: String,
 }
 
-/// Voice / motion lines per character.
+/// Voice / motion lines per persona.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VoiceLinesData {
-    pub characters: Vec<CharacterVoiceLines>,
+    pub personas: Vec<PersonaVoiceLines>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct CharacterVoiceLines {
+pub struct PersonaVoiceLines {
     pub id: String,
     pub name: String,
     pub lines: Vec<VoiceLine>,
@@ -326,8 +326,8 @@ pub struct MatchRulesData {
     pub ring_multiplier: i32,
     /// Names given to bot players, in order.
     pub bot_names: Vec<String>,
-    /// Home character of a new profile (a character `name`).
-    pub default_home_character: String,
+    /// Home persona of a new profile (a persona `name`).
+    pub default_home_persona: String,
 }
 
 impl Default for MatchRulesData {
@@ -339,7 +339,7 @@ impl Default for MatchRulesData {
             houses: 1.0,
             ring_multiplier: 10,
             bot_names: vec![],
-            default_home_character: String::new(),
+            default_home_persona: String::new(),
         }
     }
 }
@@ -359,10 +359,10 @@ struct EventFile {
 /// Bump when the rules book changes; drives the "NEW" badge (`rules_version`).
 pub const RULES_VERSION: i32 = 1;
 
-/// The rule id of a character or band skill (the crates under `rules/skills`).
+/// The rule id of a persona or band skill (the crates under `rules/skills`).
 ///
 /// The id **names its owner**, which is the binding: a player's two skills
-/// follow mechanically from the character they picked, and a skill can be
+/// follow mechanically from the persona they picked, and a skill can be
 /// resolved the same way a card is -- by id. The `skill:` prefix keeps it from
 /// ever colliding with a card id (`AG:即使夕阳落山`).
 pub fn skill_id(owner: &str, skill: &str) -> String {
@@ -386,8 +386,8 @@ pub fn event_rule_id(id: &str) -> String {
 pub struct GameData {
     pub tiles: Vec<TileData>,
     pub cards: Vec<CardData>,
-    pub characters: Vec<CharacterData>,
-    pub bands: Vec<BandData>,
+    pub personas: Vec<PersonaData>,
+    pub groups: Vec<GroupData>,
     pub events: Vec<EventData>,
     pub schools: SchoolsData,
     pub home_lines: HomeLinesData,
@@ -410,7 +410,7 @@ pub struct GameData {
 }
 
 /// Data files, as named in `web/data/`. The roster (`cards` / `characters` /
-/// `bands`) is **not** here: it comes from the ruleset (ABI v63
+/// `groups`) is **not** here: it comes from the ruleset (ABI v63
 /// `ruleset_metadata`) or, in tests, from the generated fixture
 /// (`Roster::from_fixture`), and is covered by the ruleset hash, not this one.
 /// `skill_simple.json` and the card display overlay stay because they are
@@ -435,18 +435,18 @@ fn parse<T: serde::de::DeserializeOwned>(file: &str, text: &str) -> Result<T, St
 }
 
 impl GameData {
-    /// The rule ids of `character`'s own skill and of its band's skill, in that
-    /// order. This is the binding: see [`skill_id`]. Empty entries (a character
+    /// The rule ids of `persona`'s own skill and of its band's skill, in that
+    /// order. This is the binding: see [`skill_id`]. Empty entries (a persona
     /// or band with no skill) are skipped, so the result is 0..=2 ids.
-    pub fn skill_rules_of(&self, character: &str) -> Vec<String> {
-        let Some(c) = self.characters.iter().find(|c| c.name == character) else {
+    pub fn skill_rules_of(&self, persona: &str) -> Vec<String> {
+        let Some(c) = self.personas.iter().find(|c| c.name == persona) else {
             return Vec::new();
         };
         let mut out = Vec::new();
         if !c.skill.is_empty() {
             out.push(skill_id(&c.name, &c.skill));
         }
-        if let Some(b) = self.bands.iter().find(|b| b.name == c.band) {
+        if let Some(b) = self.groups.iter().find(|b| b.name == c.group) {
             if !b.skill.is_empty() {
                 out.push(skill_id(&b.name, &b.skill));
             }
@@ -455,11 +455,11 @@ impl GameData {
     }
 
     /// Is `id` a **band** skill rule (`skill:<band>:<skill>` for some band in
-    /// roster bands), as against a character skill (`skill:<character>:<skill>`)?
-    /// This is what stamps `FieldCard::band_skill` at placement, and through it
+    /// roster groups), as against a persona skill (`skill:<persona>:<skill>`)?
+    /// This is what stamps `FieldCard::group_skill` at placement, and through it
     /// what 「乐队卡 / 团卡」 crystal reads and writes land on.
-    pub fn is_band_skill(&self, id: &str) -> bool {
-        self.bands
+    pub fn is_group_skill(&self, id: &str) -> bool {
+        self.groups
             .iter()
             .any(|b| !b.skill.is_empty() && skill_id(&b.name, &b.skill) == id)
     }
@@ -480,8 +480,8 @@ impl GameData {
         let mut d = GameData {
             tiles: parse::<BoardFile>("board.json", &get("board.json")?)?.tiles,
             cards: roster.cards,
-            characters: roster.characters,
-            bands: roster.bands,
+            personas: roster.personas,
+            groups: roster.groups,
             events: parse::<EventFile>("events.json", &get("events.json")?)?.events,
             schools: parse("schools.json", &get("schools.json")?)?,
             home_lines: parse("home_lines.json", &get("home_lines.json")?)?,
@@ -519,14 +519,14 @@ impl GameData {
     }
 
     /// Character by `name`, first match.
-    pub fn character(&self, name: &str) -> Option<&CharacterData> {
-        self.characters.iter().find(|c| c.name == name)
+    pub fn persona(&self, name: &str) -> Option<&PersonaData> {
+        self.personas.iter().find(|c| c.name == name)
     }
 
-    /// The base character of a variant (`variant_of`). Itself when it is not
+    /// The base persona of a variant (`variant_of`). Itself when it is not
     /// a variant.
-    pub fn base_character<'a>(&'a self, name: &'a str) -> &'a str {
-        self.character(name)
+    pub fn base_persona<'a>(&'a self, name: &'a str) -> &'a str {
+        self.persona(name)
             .map(|c| c.variant_of.as_str())
             .filter(|b| !b.is_empty())
             .unwrap_or(name)
@@ -534,13 +534,13 @@ impl GameData {
 
     /// Whether `c`'s band lets its members carry each other's exclusive cards
     /// in a starting deck (deck-building only; see [`crate::deck`]).
-    pub fn band_shares_exclusives(&self, c: &CharacterData) -> bool {
-        self.band(&c.band).is_some_and(|b| b.shares_exclusives)
+    pub fn group_shares_exclusives(&self, c: &PersonaData) -> bool {
+        self.group(&c.group).is_some_and(|b| b.shares_exclusives)
     }
 
     /// Band by `name`, first match.
-    pub fn band(&self, name: &str) -> Option<&BandData> {
-        self.bands.iter().find(|b| b.name == name)
+    pub fn group(&self, name: &str) -> Option<&GroupData> {
+        self.groups.iter().find(|b| b.name == name)
     }
 
     /// Event card by id.
@@ -548,20 +548,20 @@ impl GameData {
         self.events.iter().find(|e| e.id == id)
     }
 
-    /// School tile name for `character`, or [`SchoolsData::fallback`].
-    pub fn school_of(&self, character: &str) -> &str {
+    /// School tile name for `persona`, or [`SchoolsData::fallback`].
+    pub fn school_of(&self, persona: &str) -> &str {
         self.schools
             .schools
             .iter()
-            .find(|s| s.character == character)
+            .find(|s| s.persona == persona)
             .map(|s| s.school.as_str())
             .unwrap_or(&self.schools.fallback)
     }
 
     /// Short name on the home screen.
-    pub fn home_tag<'a>(&'a self, c: &'a CharacterData) -> &'a str {
+    pub fn home_tag<'a>(&'a self, c: &'a PersonaData) -> &'a str {
         self.home_lines
-            .characters
+            .personas
             .iter()
             .find(|x| x.name == c.name && !x.tag.is_empty())
             .map(|x| x.tag.as_str())
@@ -569,12 +569,12 @@ impl GameData {
     }
 
     /// Lines with both text and audio.
-    pub fn voice_lines_for(&self, c: &CharacterData) -> Vec<&VoiceLine> {
+    pub fn voice_lines_for(&self, c: &PersonaData) -> Vec<&VoiceLine> {
         if c.cn_id.is_empty() {
             return vec![];
         }
         self.voice_lines
-            .characters
+            .personas
             .iter()
             .find(|x| x.id == c.cn_id)
             .map(|x| {

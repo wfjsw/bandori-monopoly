@@ -557,7 +557,7 @@ fn leave_frame_only_touches_the_out_seat_and_deeds() {
             "left:P1".into(),
             "bankrupt:P1".into(),
             "assets:P1".into(),
-            "character:P1".into(),
+            "persona:P1".into(),
             "crystals:P1".into(),
             "out_count".into(),
             "mark:".into(),

@@ -28,8 +28,8 @@ card-ppp = { path = "../../rules/cards/card-ppp" }
 card-ras = { path = "../../rules/cards/card-ras" }
 card-roselia = { path = "../../rules/cards/card-roselia" }
 card-sumimi = { path = "../../rules/cards/card-sumimi" }
-skill-bands = { path = "../../rules/skills/skill-bands" }
-skill-characters = { path = "../../rules/skills/skill-characters" }
+skill-groups = { path = "../../rules/skills/skill-groups" }
+skill-personas = { path = "../../rules/skills/skill-personas" }
 rules-tiles = { path = "../../rules/tiles" }
 rules-tile-marks = { path = "../../rules/tile_marks" }
 rules-status = { path = "../../rules/status" }

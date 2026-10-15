@@ -40,7 +40,7 @@ export function res(path: string): string {
 }
 
 export function charArt(artId: string, kind: CharArtKind = "sd"): string {
-  const a = m().characters[artId];
+  const a = m().personas[artId];
   // A missing thumb falls back to the art it was made from (never the other way).
   const alt =
     kind === "thumb" ? a?.stand ?? a?.sd :
@@ -61,13 +61,13 @@ export function cardArt(id: string): string {
   // back, never to a broken image.
   if (id.startsWith("skill:")) {
     const owner = id.slice("skill:".length).split(":")[0];
-    return url(man.bands[owner]) || url(man.scene?.img?.card_back);
+    return url(man.groups[owner]) || url(man.scene?.img?.card_back);
   }
   return url(man.scene?.img?.card_back) || url(undefined);
 }
 
 export function bandLogo(band: string): string {
-  return url(m().bands[band]);
+  return url(m().groups[band]);
 }
 
 export function sceneImg(name: string): string {

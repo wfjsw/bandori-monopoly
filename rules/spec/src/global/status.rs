@@ -210,12 +210,12 @@ fn skill_ok_stunned(step: &Step<'_>, skill: &str) -> bool {
     }
     if let Some(rest) = skill.strip_prefix("skill:") {
         if let Some((owner, _)) = rest.split_once(':') {
-            if let Some(c) = step.data.character(owner) {
+            if let Some(c) = step.data.persona(owner) {
                 if text_allows_stunned_use(&c.text) {
                     return true;
                 }
             }
-            if let Some(b) = step.data.bands.iter().find(|b| b.name == owner) {
+            if let Some(b) = step.data.groups.iter().find(|b| b.name == owner) {
                 if text_allows_stunned_use(&b.text) {
                     return true;
                 }

@@ -157,7 +157,7 @@ pub struct RoomFair {
 pub struct SessionRecord {
     pub token: String,
     pub player: String,
-    pub character: String,
+    pub persona: String,
     pub cn_id: String,
     pub room: Option<(String, i32)>,
 }
@@ -167,7 +167,7 @@ impl From<&Session> for SessionRecord {
         Self {
             token: s.token.clone(),
             player: s.player.clone(),
-            character: s.character.clone(),
+            persona: s.persona.clone(),
             cn_id: s.cn_id.clone(),
             room: s.room.clone(),
         }
@@ -179,7 +179,7 @@ impl From<SessionRecord> for Session {
         Session {
             token: r.token,
             player: r.player,
-            character: r.character,
+            persona: r.persona,
             cn_id: r.cn_id,
             room: r.room,
         }

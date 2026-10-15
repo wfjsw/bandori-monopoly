@@ -1364,7 +1364,7 @@ fn exclusive_cards_require_the_named_character() {
         ("AG:（鸫）微小的『能做到』的事", "羽泽鸫"),
     ];
     for (card, owner) in cases {
-        // Wrong character: the play must be refused.
+        // Wrong persona: the play must be refused.
         let mut t = Table::vanilla(2);
         t.set_character_raw(0, "户山香澄");
         let r = t.give_play(0, card);
@@ -1372,7 +1372,7 @@ fn exclusive_cards_require_the_named_character() {
             skip_all(&mut t);
             panic!("exclusive card {card} must be refused to a foreign character");
         }
-        // Right character: the play must be accepted (body may prompt).
+        // Right persona: the play must be accepted (body may prompt).
         let mut t = Table::vanilla(2);
         t.set_character_raw(0, owner);
         let r = t.give_play(0, card);

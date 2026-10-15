@@ -160,7 +160,7 @@ fn sumimi_is_two_in_one_swaps_character() {
     t.give_play(0, "Sumimi:Sumimi是二人一体的").unwrap();
     drain(&mut t);
     // 规则书: 「将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
-    let ch = t.p(0).character.clone();
+    let ch = t.p(0).persona.clone();
     assert!(ch.contains("初华") || ch.contains("真奈"), "character swapped: {ch}");
 }
 

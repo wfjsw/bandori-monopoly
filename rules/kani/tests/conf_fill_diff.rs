@@ -64,8 +64,8 @@ struct Seat {
     no_hand: i32,
     /// `[不可阻挡]` layers.
     unstoppable: i32,
-    character: &'static str,
-    band: &'static str,
+    persona: &'static str,
+    group: &'static str,
     /// Non-zero named tokens (`tok('…')`).
     tokens: Vec<(&'static str, i32)>,
     /// Non-zero latches (`slot('…')`) — a subset of `SLOT_NAMES`.
@@ -92,8 +92,8 @@ impl Default for Seat {
             exile: 0,
             no_hand: 0,
             unstoppable: 0,
-            character: "",
-            band: "",
+            persona: "",
+            group: "",
             tokens: Vec::new(),
             slots: Vec::new(),
             gains: 0,
@@ -369,7 +369,7 @@ impl SnapSrc for Fixture {
     fn fire(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.fire).unwrap_or(0)
     }
-    fn band_crystals(&self, p: i32) -> i32 {
+    fn group_crystals(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.crystals).unwrap_or(0)
     }
     fn hand_size(&self, p: i32) -> i32 {
@@ -421,22 +421,22 @@ impl SnapSrc for Fixture {
         }
         rows.into_iter().filter(|(_, v)| *v != 0).collect()
     }
-    fn character_skill_id(&self, _p: i32) -> Option<String> {
+    fn persona_skill_id(&self, _p: i32) -> Option<String> {
         None
     }
-    fn band_skill_id(&self, _p: i32) -> Option<String> {
+    fn group_skill_id(&self, _p: i32) -> Option<String> {
         None
     }
     fn character_name(&self, p: i32) -> Option<String> {
         self.seats
             .get(p as usize)
-            .map(|s| s.character.to_string())
+            .map(|s| s.persona.to_string())
             .filter(|s| !s.is_empty())
     }
     fn band_name(&self, p: i32) -> Option<String> {
         self.seats
             .get(p as usize)
-            .map(|s| s.band.to_string())
+            .map(|s| s.group.to_string())
             .filter(|s| !s.is_empty())
     }
     fn tok(&self, p: i32, name: &str) -> i32 {
@@ -524,17 +524,17 @@ fn to_world(fx: &Fixture) -> KWorld {
     for (p, s) in fx.seats.iter().enumerate() {
         w.money[p] = s.money;
         w.fire[p] = s.fire;
-        w.band_crystals[p] = s.crystals;
+        w.group_crystals[p] = s.crystals;
         w.pos[p] = s.pos;
         w.out[p] = s.out;
         w.stay[p] = s.stay;
         // `hand_size_view` = resonance + non-slot-1 bits + `hand_n`.
         w.hand_n = s.hand.clamp(0, 255) as u8;
-        if !s.character.is_empty() {
-            w.character_id[p] = intern::intern(s.character).0;
+        if !s.persona.is_empty() {
+            w.persona_id[p] = intern::intern(s.persona).0;
         }
-        if !s.band.is_empty() {
-            w.band_id[p] = intern::intern(s.band).0;
+        if !s.group.is_empty() {
+            w.group_id[p] = intern::intern(s.group).0;
         }
         w.player_keys[p].set(intern::intern(ir_fill::KEY_STUN), s.stun);
         w.player_keys[p].set(intern::intern(ir_fill::KEY_STUN_START), s.stun_start);
@@ -962,14 +962,14 @@ fn fx_chain_pay_move() -> Fixture {
     fx
 }
 
-/// (6) No chain, Abnormal window, band_is, character_is, counter_is, not placed.
+/// (6) No chain, Abnormal window, group_is, persona_is, counter_is, not placed.
 fn fx_no_chain_abnormal() -> Fixture {
     let mut fx = Fixture::new("no_chain_abnormal", 4);
     for (i, s) in fx.seats.iter_mut().enumerate() {
         s.pos = 5 + i as i32 * 11;
     }
-    fx.seats[0].band = "Pastel✽Palettes";
-    fx.seats[0].character = "丸山彩";
+    fx.seats[0].group = "Pastel✽Palettes";
+    fx.seats[0].persona = "丸山彩";
     fx.seats[0].fire = 2;
     fx.seats[0].hand = 7;
     fx.seats[0].slots = vec![("skill.manaDonut.half", 1), ("detour_next_roll", 1)];
@@ -1175,7 +1175,7 @@ fn fixtures_flip_the_guards_they_target() {
     // No `actor == owner` clause — the fans fixture's actor is seat 1.
     let fans = "value > 0 && tok('P✽P粉丝(正)') >= 1";
     let placed = "card.placed";
-    let band = "band_is(owner, 'Pastel✽Palettes')";
+    let band = "group_is(owner, 'Pastel✽Palettes')";
 
     let f1 = fx_aya_poorest_value();
     assert!(prod_eval(aya, &f1, 0), "fixture 1: aya guard should hold");

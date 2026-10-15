@@ -32,7 +32,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。"#)
         .cell(r#"E10"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", r#"冰川纱夜"#)]));
+        .fields(&[("group", r#"Roselia"#), ("owner", r#"冰川纱夜"#)]));
 
 fn counter_only(_player_id: i32) -> Option<Msg> {
     Some(Msg::new(key!("sayo_play_timing")))
@@ -54,7 +54,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // `!skill_blocked` is the residual guard.
     // Announce the user's character skill. Running its press body again would
     // add a second paid skill offer before this card's free extension.
-    if let Some(skill) = ctx::character_skill(player_id) {
+    if let Some(skill) = ctx::persona_skill(player_id) {
         ctx::log(
             player_id,
             &Msg::new(key!("sayo_play_skill")).card("card", &skill),

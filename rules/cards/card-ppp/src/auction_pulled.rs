@@ -29,7 +29,7 @@ pub const AUCTION_PULLED: CardDef = CardDef::new(
 此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）
 [持续]：此卡拥有者火罐上限加1且不受任何其他效果影响。"#)
         .cell(r#"B13"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// `Fx.Drawn` (C# `CardAuctionPulled.Drawn`) -- pull the card out of the hand
 /// and place it on the owner's field the moment it arrives.

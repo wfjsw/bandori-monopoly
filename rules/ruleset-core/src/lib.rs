@@ -34,7 +34,7 @@ pub mod counter {
     pub const CRYSTALS: &str = "crystals";
 }
 
-/// Roster metadata types (`CharacterDef` / `BandDef`, `meta_key`) and the
+/// Roster metadata types (`PersonaDef` / `GroupDef`, `meta_key`) and the
 /// canonical data-file order tables (ABI v63, `docs/CARDS.md`).
 pub mod roster;
 /// Generated `(key -> ordinal)` tables restoring `data/*.json` order.
@@ -52,10 +52,10 @@ pub mod ctx {
     pub use card_sdk::ctx::*;
 
     pub use crate::{
-        add_band_crystals, add_band_skill, add_card_crystals, add_crystals, add_crystals_at,
-        add_fire_max, add_ring_bonus, band_crystals, band_skill, band_skills, card_crystals,
-        character_is, character_skill, crystals, crystals_at, decay, fire, fire_max, gain_fire,
-        in_band, invoke_skill, is_agent, is_buyable, is_circle, is_color, is_live_house,
+        add_group_crystals, add_group_skill, add_card_crystals, add_crystals, add_crystals_at,
+        add_fire_max, add_ring_bonus, group_crystals, group_skill, group_skills, card_crystals,
+        persona_is, persona_skill, crystals, crystals_at, decay, fire, fire_max, gain_fire,
+        in_group, invoke_skill, is_agent, is_buyable, is_circle, is_color, is_live_house,
         is_live_house_for, is_ring, is_shop, offer_build, offer_buy, offer_force_buy, pay_rent,
         ring_multiplier, set_crystals, skill_blocked, spend_fire,
     };
@@ -191,19 +191,19 @@ pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
 // ------------------------------------------------------------- band / character
 
 /// 「乐队卡 / 团卡」 [奇迹水晶] on `player_id`'s band-skill field instance.
-pub fn band_crystals(player_id: i32) -> i32 {
-    unsafe { raw::sys::band_crystals(player_id) }
+pub fn group_crystals(player_id: i32) -> i32 {
+    unsafe { raw::sys::group_crystals(player_id) }
 }
 
-pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    unsafe { raw::sys::add_band_crystals(player_id, n, max) }
+pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
+    unsafe { raw::sys::add_group_crystals(player_id, n, max) }
 }
 
 /// Rule id of `player_id`'s band skill, or `None`.
-pub fn band_skill(player_id: i32) -> Option<String> {
+pub fn group_skill(player_id: i32) -> Option<String> {
     let cap = 1024;
     let (p, scratch) = raw::out_buf(cap as usize);
-    let n = unsafe { raw::sys::band_skill(player_id, p, cap) };
+    let n = unsafe { raw::sys::group_skill(player_id, p, cap) };
     if n <= 0 || n > cap {
         return None;
     }
@@ -217,10 +217,10 @@ pub fn band_skill(player_id: i32) -> Option<String> {
 }
 
 /// Rule id of `player_id`'s character skill, or `None`.
-pub fn character_skill(player_id: i32) -> Option<String> {
+pub fn persona_skill(player_id: i32) -> Option<String> {
     let cap = 1024;
     let (p, scratch) = raw::out_buf(cap as usize);
-    let n = unsafe { raw::sys::character_skill(player_id, p, cap) };
+    let n = unsafe { raw::sys::persona_skill(player_id, p, cap) };
     if n <= 0 || n > cap {
         return None;
     }
@@ -234,10 +234,10 @@ pub fn character_skill(player_id: i32) -> Option<String> {
 }
 
 /// Band-skill attachments: `(uid, rule id, extra)` in placement order.
-pub fn band_skills(player_id: i32) -> Vec<(i32, String, i32)> {
+pub fn group_skills(player_id: i32) -> Vec<(i32, String, i32)> {
     let cap = 8192;
     let (p, scratch) = raw::out_buf(cap as usize);
-    let n = unsafe { raw::sys::band_skills(player_id, p, cap) };
+    let n = unsafe { raw::sys::group_skills(player_id, p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
@@ -246,9 +246,9 @@ pub fn band_skills(player_id: i32) -> Vec<(i32, String, i32)> {
 }
 
 /// Attach a band-skill instance to `player_id`. Returns the uid, or -1.
-pub fn add_band_skill(player_id: i32, id: &str, extra: bool) -> i32 {
+pub fn add_group_skill(player_id: i32, id: &str, extra: bool) -> i32 {
     let (p, l) = raw::s(id);
-    unsafe { raw::sys::add_band_skill(player_id, p, l, extra as i32) }
+    unsafe { raw::sys::add_group_skill(player_id, p, l, extra as i32) }
 }
 
 /// Run a skill rule's press entry for `player_id`.
@@ -259,24 +259,24 @@ pub fn invoke_skill(player_id: i32, id: &str) -> Result<card_sdk::ctx::Dest, Pro
 }
 
 /// Is `player_id` playing character `name`?
-pub fn character_is(player_id: i32, name: &str) -> bool {
+pub fn persona_is(player_id: i32, name: &str) -> bool {
     let (p, l) = raw::s(name);
-    unsafe { raw::sys::character_is(player_id, p, l) != 0 }
+    unsafe { raw::sys::persona_is(player_id, p, l) != 0 }
 }
 
 /// Is `player_id` in band `name`?
-pub fn in_band(player_id: i32, name: &str) -> bool {
+pub fn in_group(player_id: i32, name: &str) -> bool {
     let (p, l) = raw::s(name);
-    unsafe { raw::sys::in_band(player_id, p, l) != 0 }
+    unsafe { raw::sys::in_group(player_id, p, l) != 0 }
 }
 
 /// 「位于此卡所在格子上的玩家无法使用角色及乐队技能」 / one band's skills.
-pub fn skill_blocked(player_id: i32, band: &str) -> bool {
+pub fn skill_blocked(player_id: i32, group: &str) -> bool {
     if card_sdk::ctx::tok(player_id, "skillBlock") > 0 {
         return true;
     }
-    if !band.is_empty() {
-        let key = format!("skillBlock:{}", band);
+    if !group.is_empty() {
+        let key = format!("skillBlock:{}", group);
         if card_sdk::ctx::tok(player_id, &key) > 0 {
             return true;
         }

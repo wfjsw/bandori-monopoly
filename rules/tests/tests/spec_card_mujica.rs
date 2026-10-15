@@ -57,9 +57,9 @@ fn drain(t: &mut Table) {
 
 /// Table with `n` vanilla seats, `who` bound to an Ave Mujica character
 /// (skills placed raw so exclusive cards and skillState work).
-fn mujica_table(n: usize, who: usize, character: &str) -> Table {
+fn mujica_table(n: usize, who: usize, persona: &str) -> Table {
     let mut t = Table::vanilla(n);
-    t.set_character_raw(who, character);
+    t.set_character_raw(who, persona);
     t.place_raw(who, SKILL_BAND);
     t
 }

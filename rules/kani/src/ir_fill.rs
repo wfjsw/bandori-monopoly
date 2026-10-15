@@ -43,7 +43,7 @@
 //! | `owner` / `owner_id` | the candidate seat |
 //! | `owner_money` | `w.money[owner]` |
 //! | `owner_fire` | `w.fire[owner]` |
-//! | `owner_crystals` | `w.band_crystals[owner]` |
+//! | `owner_crystals` | `w.group_crystals[owner]` |
 //! | `owner_hand` | `hand_size` view (resonance + non-slot-1 bits + `hand_n`) |
 //! | `owner_pos` | `w.pos[owner]` |
 //! | `owner_out` | `w.out[owner]` as 0/1 |
@@ -51,8 +51,8 @@
 //! | `owner_stun` | `w.key_get(owner, STUN)` |
 //! | `owner_exile` | `w.key_get(owner, EXILE)` |
 //! | `owner_no_hand` | `w.key_get(owner, NO_HAND)` |
-//! | `owner_character` | `id_of(resolve(w.character_id[owner]))` (name hash, matching `fill_window`) |
-//! | `owner_band` | `id_of(resolve(w.band_id[owner]))` |
+//! | `owner_character` | `id_of(resolve(w.persona_id[owner]))` (name hash, matching `fill_window`) |
+//! | `owner_band` | `id_of(resolve(w.group_id[owner]))` |
 //! | `owner_tiles` | count of `w.tiles[*].owner == owner` |
 //! | `card_id` | argument (`id_of(card_name)`) |
 //! | `card_placed` | argument |
@@ -476,7 +476,7 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
     for p in 0..world::MAX_PLAYERS {
         c.seat[p][SeatField::Money as usize] = w.money[p] as i64;
         c.seat[p][SeatField::Fire as usize] = w.fire[p] as i64;
-        c.seat[p][SeatField::Crystals as usize] = w.band_crystals[p] as i64;
+        c.seat[p][SeatField::Crystals as usize] = w.group_crystals[p] as i64;
         c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
         c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
         c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
@@ -484,8 +484,8 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
         c.seat[p][SeatField::Stun as usize] = key_get_name(w, p as i32, KEY_STUN);
         c.seat[p][SeatField::Exile as usize] = key_get_name(w, p as i32, KEY_EXILE);
         c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
-        c.seat[p][SeatField::Character as usize] = id_of_name_id(NameId(w.character_id[p]));
-        c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.band_id[p]));
+        c.seat[p][SeatField::Character as usize] = id_of_name_id(NameId(w.persona_id[p]));
+        c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.group_id[p]));
         c.seat[p][SeatField::Tiles as usize] = owned_tiles(w, p as i32);
         // Turn trackers (World `gains_this_turn` / `targeted_count` /
         // `between_seat`). `gains_this_turn` is incremented by `Op::gain`;
@@ -887,7 +887,7 @@ pub fn fill_from_world(
     c.set_scalar(VarId::OwnerId, owner as i64);
     c.set_scalar(VarId::OwnerMoney, w.money[op] as i64);
     c.set_scalar(VarId::OwnerFire, w.fire[op] as i64);
-    c.set_scalar(VarId::OwnerCrystals, w.band_crystals[op] as i64);
+    c.set_scalar(VarId::OwnerCrystals, w.group_crystals[op] as i64);
     c.set_scalar(VarId::OwnerHand, hand_size_view(w, op));
     c.set_scalar(VarId::OwnerPos, w.pos[op] as i64);
     c.set_scalar(VarId::OwnerOut, w.out[op] as i64);
@@ -897,11 +897,11 @@ pub fn fill_from_world(
     c.set_scalar(VarId::OwnerNoHand, key_get_name(w, owner, KEY_NO_HAND));
     c.set_scalar(
         VarId::OwnerCharacter,
-        id_of_name_id(NameId(w.character_id[op])),
+        id_of_name_id(NameId(w.persona_id[op])),
     );
     c.set_scalar(
         VarId::OwnerBand,
-        id_of_name_id(NameId(w.band_id[op])),
+        id_of_name_id(NameId(w.group_id[op])),
     );
     c.set_scalar(VarId::OwnerTiles, owned_tiles(w, owner));
     c.set_scalar(VarId::CardId, card);
@@ -1298,7 +1298,7 @@ pub fn fill_for_guard(
     set_if!(VarId::OwnerId, owner as i64);
     set_if!(VarId::OwnerMoney, w.money[op] as i64);
     set_if!(VarId::OwnerFire, w.fire[op] as i64);
-    set_if!(VarId::OwnerCrystals, w.band_crystals[op] as i64);
+    set_if!(VarId::OwnerCrystals, w.group_crystals[op] as i64);
     set_if!(VarId::OwnerHand, hand_size_view(w, op));
     set_if!(VarId::OwnerPos, w.pos[op] as i64);
     set_if!(VarId::OwnerOut, w.out[op] as i64);
@@ -1308,9 +1308,9 @@ pub fn fill_for_guard(
     set_if!(VarId::OwnerNoHand, key_get_name(w, owner, KEY_NO_HAND));
     set_if!(
         VarId::OwnerCharacter,
-        id_of_name_id(NameId(w.character_id[op]))
+        id_of_name_id(NameId(w.persona_id[op]))
     );
-    set_if!(VarId::OwnerBand, id_of_name_id(NameId(w.band_id[op])));
+    set_if!(VarId::OwnerBand, id_of_name_id(NameId(w.group_id[op])));
     set_if!(VarId::OwnerTiles, owned_tiles(w, owner));
     set_if!(VarId::CardId, card);
     set_if!(VarId::CardPlaced, card_placed as i64);
@@ -1361,17 +1361,17 @@ pub fn fill_for_guard(
                     c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
                 }
                 if sf & (1 << (SeatField::Crystals as u32)) != 0 {
-                    c.seat[p][SeatField::Crystals as usize] = w.band_crystals[p] as i64;
+                    c.seat[p][SeatField::Crystals as usize] = w.group_crystals[p] as i64;
                 }
                 if sf & (1 << (SeatField::Hand as u32)) != 0 {
                     c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
                 }
                 if sf & (1 << (SeatField::Character as u32)) != 0 {
                     c.seat[p][SeatField::Character as usize] =
-                        id_of_name_id(NameId(w.character_id[p]));
+                        id_of_name_id(NameId(w.persona_id[p]));
                 }
                 if sf & (1 << (SeatField::Band as u32)) != 0 {
-                    c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.band_id[p]));
+                    c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.group_id[p]));
                 }
                 if sf & (1 << (SeatField::Gains as u32)) != 0 {
                     c.seat[p][SeatField::Gains as usize] = w.gains_this_turn[p] as i64;

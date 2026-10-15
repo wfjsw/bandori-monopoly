@@ -19,12 +19,12 @@ fn main() {
     let mut out = String::new();
     writeln!(out, "/// Generated from `data/schools.json` (`fallback`).").unwrap();
     writeln!(out, "const FALLBACK: &str = {fallback:?};").unwrap();
-    writeln!(out, "/// Generated from `data/schools.json` (`schools`): character -> school tile.").unwrap();
+    writeln!(out, "/// Generated from `data/schools.json` (`schools`): persona -> school tile.").unwrap();
     writeln!(out, "const SCHOOLS: &[(&str, &str)] = &[").unwrap();
     for r in rows {
-        let character = r["character"].as_str().expect("schools.json: `character`");
+        let persona = r["persona"].as_str().expect("schools.json: `persona`");
         let school = r["school"].as_str().expect("schools.json: `school`");
-        writeln!(out, "    ({character:?}, {school:?}),").unwrap();
+        writeln!(out, "    ({persona:?}, {school:?}),").unwrap();
     }
     writeln!(out, "];").unwrap();
 

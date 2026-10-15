@@ -312,18 +312,18 @@ extern "C-unwind" {
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_inc_slot")]
     pub fn inc_slot(player_id: i32, ptr: i32, len: i32, by: i32) -> i32;
     // pots & status
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_band_crystals")]
-    pub fn band_crystals(player_id: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_band_crystals")]
-    pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_band_skill")]
-    pub fn band_skill(player_id: i32, buf: i32, cap: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_character_skill")]
-    pub fn character_skill(player_id: i32, buf: i32, cap: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_band_skills")]
-    pub fn band_skills(player_id: i32, buf: i32, cap: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_band_skill")]
-    pub fn add_band_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_group_crystals")]
+    pub fn group_crystals(player_id: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_group_crystals")]
+    pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_group_skill")]
+    pub fn group_skill(player_id: i32, buf: i32, cap: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_persona_skill")]
+    pub fn persona_skill(player_id: i32, buf: i32, cap: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_group_skills")]
+    pub fn group_skills(player_id: i32, buf: i32, cap: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_group_skill")]
+    pub fn add_group_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_invoke_skill")]
     pub fn invoke_skill(player_id: i32, p: i32, n: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_raise_bought")]
@@ -364,10 +364,10 @@ extern "C-unwind" {
     pub fn round_no() -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_turn_key")]
     pub fn turn_key() -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_character_is")]
-    pub fn character_is(player_id: i32, ptr: i32, len: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_in_band")]
-    pub fn in_band(player_id: i32, ptr: i32, len: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_persona_is")]
+    pub fn persona_is(player_id: i32, ptr: i32, len: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_in_group")]
+    pub fn in_group(player_id: i32, ptr: i32, len: i32) -> i32;
     // prompts & trigger
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_opt_int")]
     pub fn opt_int(v: i32);

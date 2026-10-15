@@ -42,7 +42,7 @@ pub const JENNIFER: CardDef = CardDef::new(
 2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
 3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。"#)
         .cell(r#"D13"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// Stand-in for C# `Card.User` (per-card Mem): the player who played the card,
 /// stored on the owner's player while it is in play.
@@ -114,8 +114,8 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
         ctx::add_tok(player_id, "P✽P粉丝(反)", -flip, i32::MAX)?;
         ctx::add_tok(player_id, "P✽P粉丝(正)", flip, i32::MAX)?;
         let overflow = 1 - flip;
-        if overflow > 0 && ctx::in_band(player_id, "Pastel✽Palettes") {
-            ctx::add_band_crystals(player_id, overflow, 10);
+        if overflow > 0 && ctx::in_group(player_id, "Pastel✽Palettes") {
+            ctx::add_group_crystals(player_id, overflow, 10);
         }
     }
     // 规则书[持续]3: 「将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡」

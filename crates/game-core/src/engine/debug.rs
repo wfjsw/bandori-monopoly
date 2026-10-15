@@ -41,7 +41,7 @@ impl Match {
                 (-1_000_000..=1_000_000).contains(&m.value)
                     && self.world.st.players[target]
                         .state
-                        .contains_key(&m.character)
+                        .contains_key(&m.persona)
             }
             _ => false,
         };
@@ -66,7 +66,7 @@ impl Match {
                     cx.w.draw_cards(target as i32, m.value, true);
                 }
                 "state" => {
-                    cx.w.st.players[target].state_set(&m.character, m.value);
+                    cx.w.st.players[target].state_set(&m.persona, m.value);
                 }
                 _ => unreachable!(),
             }
@@ -82,7 +82,7 @@ impl Match {
                         if m.debug == "give" {
                             &m.card
                         } else {
-                            &m.character
+                            &m.persona
                         },
                     ),
             );

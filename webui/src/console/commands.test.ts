@@ -48,7 +48,7 @@ test("cheats select explicit seats and defaults, with validated card IDs", async
   assert.equal(h.sent[2].card, "c1");
   assert.equal(h.sent[2].value, 2);
   assert.equal(h.sent[3].debug, "draw");
-  assert.equal(h.sent[4].character, "fire");
+  assert.equal(h.sent[4].persona, "fire");
 });
 
 test("malformed inputs never dispatch an action", async () => {

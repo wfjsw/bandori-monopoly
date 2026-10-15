@@ -1,5 +1,5 @@
 //! The bot **strategy book** (`docs/BOT.md` §3.8): a flat, versioned parameter
-//! set per character / band, derived offline and looked up here.
+//! set per persona / band, derived offline and looked up here.
 //!
 //! Every tunable constant the standard heuristic uses lives in
 //! [`StrategyParams`], with a default equal to today's constant in
@@ -9,8 +9,8 @@
 //! seat's resolved params instead of hard-coded thresholds.
 //!
 //! * **Key = public information only**, with back-off, first hit wins
-//!   ([`StrategyBook::lookup`]): `(character, opponents' bands multiset)` →
-//!   `(character)` → `(band)` → [`StrategyParams::default`].
+//!   ([`StrategyBook::lookup`]): `(persona, opponents' groups multiset)` →
+//!   `(persona)` → `(band)` → [`StrategyParams::default`].
 //! * **Validity.** The book records the ruleset hash (the same string
 //!   [`crate::record::EngineStamp::ruleset_sha256`] carries), the policy and
 //!   [`PARAMS_VERSION`]. A mismatch at lookup ignores the whole book (once, on
@@ -31,7 +31,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{CharacterData, GameData};
+use crate::data::{PersonaData, GameData};
 use crate::state::MatchState;
 
 /// File format version (`StrategyBook::version`). Bump on any schema change; a
@@ -619,7 +619,7 @@ impl StrategyParams {
 }
 
 /// The parameters a standard seat at `seat` plays under, from public state
-/// only (own character + the other seats' characters). The running ruleset's
+/// only (own persona + the other seats' characters). The running ruleset's
 /// hash is not in hand here, so only version / policy / `params_version` gate
 /// the book -- see [`for_seat_sha`] for the hash-checked lookup.
 pub fn for_seat(data: &GameData, st: &MatchState, seat: usize) -> StrategyParams {
@@ -637,15 +637,15 @@ pub fn for_seat_sha(
     let Some(p) = st.players.get(seat) else {
         return StrategyParams::default();
     };
-    let me = p.character.as_str();
+    let me = p.persona.as_str();
     let opponents: Vec<String> = st
         .players
         .iter()
         .enumerate()
         .filter(|(i, _)| *i != seat)
-        .map(|(_, p)| p.character.clone())
+        .map(|(_, p)| p.persona.clone())
         .collect();
-    match data.character(me) {
+    match data.persona(me) {
         Some(c) => data
             .strategy_book
             .resolve(data, c, &opponents, None, ruleset_sha256),
@@ -662,18 +662,18 @@ pub fn for_seat_sha(
 ///
 /// | level | key fields |
 /// |---|---|
-/// | `char_bands` | `me`, `opponent_bands` (sorted multiset) |
+/// | `persona_groups` | `me`, `opponent_groups` (sorted multiset) |
 /// | `me` | `me` |
-/// | `band` | `band` (the character's band) |
+/// | `band` | `band` (the persona's band) |
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StrategyEntry {
-    /// Own character (`CharacterData::name`). Used by the two character levels.
+    /// Own persona (`PersonaData::name`). Used by the two persona levels.
     pub me: String,
-    /// Own band (`CharacterData::band`). Used by the band level.
-    pub band: String,
-    /// Sorted multiset of the opponents' band names (char_bands level).
-    pub opponent_bands: Vec<String>,
+    /// Own band (`PersonaData::band`). Used by the band level.
+    pub group: String,
+    /// Sorted multiset of the opponents' band names (persona_groups level).
+    pub opponent_groups: Vec<String>,
     /// The deck-book entry the parameters were tuned with (card ids). Empty =
     /// any deck. A non-empty entry whose deck differs from the seat's actual
     /// deck falls through to the next level (see [`StrategyBook::lookup`]).
@@ -696,12 +696,12 @@ pub struct StrategyBook {
     pub generated_at: String,
     /// [`PARAMS_VERSION`] the entries were tuned against.
     pub params_version: u32,
-    /// 1. `(me, sorted multiset of opponents' bands)`.
-    pub char_bands: Vec<StrategyEntry>,
+    /// 1. `(me, sorted multiset of opponents' groups)`.
+    pub persona_groups: Vec<StrategyEntry>,
     /// 2. `(me)`.
     pub me: Vec<StrategyEntry>,
     /// 3. `(band)`.
-    pub band: Vec<StrategyEntry>,
+    pub groups: Vec<StrategyEntry>,
     /// Warned once about being stale / mismatched (never serialized).
     #[serde(skip)]
     warned: Arc<AtomicBool>,
@@ -714,9 +714,9 @@ impl PartialEq for StrategyBook {
             && self.policy == other.policy
             && self.generated_at == other.generated_at
             && self.params_version == other.params_version
-            && self.char_bands == other.char_bands
+            && self.persona_groups == other.persona_groups
             && self.me == other.me
-            && self.band == other.band
+            && self.groups == other.groups
     }
 }
 
@@ -741,7 +741,7 @@ impl StrategyBook {
     /// placeholder, or a missing file) is the pre-derivation state and never
     /// warns about being stale -- there is nothing to go stale.
     pub fn is_empty(&self) -> bool {
-        self.char_bands.is_empty() && self.me.is_empty() && self.band.is_empty()
+        self.persona_groups.is_empty() && self.me.is_empty() && self.groups.is_empty()
     }
 
     /// Is the book tuned for this ruleset / policy / parameter schema? A
@@ -788,16 +788,16 @@ impl StrategyBook {
     /// level wins. An entry that names a deck only applies when the seat's
     /// actual deck matches (or is unknown).
     ///
-    /// * `me` -- own character.
+    /// * `me` -- own persona.
     /// * `opponents` -- the other seats' characters in seat order (only their
-    ///   bands are used).
+    ///   groups are used).
     /// * `deck` -- the seat's deck card ids, when the caller knows them.
     /// * `ruleset_sha256` -- the running ruleset's hash; `None` skips the hash
     ///   comparison (see [`Self::usable`]).
     pub fn lookup(
         &self,
         data: &GameData,
-        me: &CharacterData,
+        me: &PersonaData,
         opponents: &[String],
         deck: Option<&[String]>,
         ruleset_sha256: Option<&str>,
@@ -805,13 +805,13 @@ impl StrategyBook {
         if !self.usable(ruleset_sha256) {
             return None;
         }
-        let bands = opponent_bands(data, opponents);
+        let groups = opponent_groups(data, opponents);
         let hits = |e: &StrategyEntry| deck_matches(e, deck);
-        // 1. (me, sorted multiset of opponents' bands)
+        // 1. (me, sorted multiset of opponents' groups)
         if let Some(e) = self
-            .char_bands
+            .persona_groups
             .iter()
-            .find(|e| e.me == me.name && e.opponent_bands == bands && hits(e))
+            .find(|e| e.me == me.name && e.opponent_groups == groups && hits(e))
         {
             return Some(e.params.clone());
         }
@@ -820,7 +820,7 @@ impl StrategyBook {
             return Some(e.params.clone());
         }
         // 3. (band)
-        if let Some(e) = self.band.iter().find(|e| e.band == me.band && hits(e)) {
+        if let Some(e) = self.groups.iter().find(|e| e.group == me.group && hits(e)) {
             return Some(e.params.clone());
         }
         // 4. defaults
@@ -833,7 +833,7 @@ impl StrategyBook {
     pub fn resolve(
         &self,
         data: &GameData,
-        me: &CharacterData,
+        me: &PersonaData,
         opponents: &[String],
         deck: Option<&[String]>,
         ruleset_sha256: Option<&str>,
@@ -855,14 +855,14 @@ fn deck_matches(e: &StrategyEntry, deck: Option<&[String]>) -> bool {
     }
 }
 
-/// Sorted multiset of the opponents' band names (`CharacterData::band`). An
-/// unknown character contributes `""` -- deterministic, and it only ever makes
+/// Sorted multiset of the opponents' band names (`PersonaData::band`). An
+/// unknown persona contributes `""` -- deterministic, and it only ever makes
 /// a band-level key miss.
-fn opponent_bands(data: &GameData, opponents: &[String]) -> Vec<String> {
-    let mut bands: Vec<String> = opponents
+fn opponent_groups(data: &GameData, opponents: &[String]) -> Vec<String> {
+    let mut groups: Vec<String> = opponents
         .iter()
-        .map(|c| data.character(c).map(|c| c.band.clone()).unwrap_or_default())
+        .map(|c| data.persona(c).map(|c| c.group.clone()).unwrap_or_default())
         .collect();
-    bands.sort();
-    bands
+    groups.sort();
+    groups
 }

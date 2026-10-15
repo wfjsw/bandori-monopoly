@@ -111,7 +111,7 @@ pub fn compose(world: &World, data: &GameData, rules: &dyn CardRules) -> Vec<Vec
             let Ok(n) = u32::try_from(n) else {
                 continue;
             };
-            let group = if f.band_skill {
+            let group = if f.group_skill {
                 LookupGroup::Band
             } else if f.card.starts_with("skill:") {
                 LookupGroup::Character

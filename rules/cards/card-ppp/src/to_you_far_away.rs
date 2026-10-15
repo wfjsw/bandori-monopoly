@@ -19,7 +19,7 @@ pub const TO_YOU_FAR_AWAY: CardDef =
         .text(r#"[手]：
 [传送]至任意与[使用者]绝对距离最远的玩家的格子并[结算]，然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖（例：[使用者]在#11号格子，一名玩家在#1号格子则绝对距离为10）。"#)
         .cell(r#"B11"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardToYouFarAway.WhyNot`: refuses with 「没有别的玩家」 when `H.Others` is

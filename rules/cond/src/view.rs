@@ -97,8 +97,8 @@ pub trait CondView {
     fn owner_stun(&self) -> i64;
     fn owner_exile(&self) -> i64;
     fn owner_no_hand(&self) -> i64;
-    fn owner_character(&self) -> i64;
-    fn owner_band(&self) -> i64;
+    fn owner_persona(&self) -> i64;
+    fn owner_group(&self) -> i64;
     fn owner_tiles(&self) -> i64;
     /// The candidate card's id hash (`card.id`).
     fn card_id(&self) -> i64;
@@ -116,7 +116,7 @@ pub trait CondView {
     /// name)`); missing = 0.
     fn tok_named(&self, name: &str) -> i64;
     /// Is `band` blocked for this candidate (`blocked(band)`)?
-    fn blocked(&self, band: i64) -> bool;
+    fn blocked(&self, group: i64) -> bool;
 
     // -- player table (any seat) -------------------------------------------
     fn money(&self, seat: i64) -> i64;
@@ -135,12 +135,12 @@ pub trait CondView {
     /// Every `(seat, key, value)` row for the baked `state` table. The eager
     /// evaluator copies this into `_state`; missing pairs answer 0.
     fn state_table(&self) -> Vec<(i64, String, i64)>;
-    /// Character **name** hash (`character_is(p, "名")` compares this to
-    /// `id_of("名")` -- the same name `ctx::character_is` matches).
-    fn character(&self, seat: i64) -> i64;
-    /// Band **name** hash (`band_is(p, "Band")` compares this to
-    /// `id_of("Band")` -- the same name `ctx::in_band` matches).
-    fn band(&self, seat: i64) -> i64;
+    /// Character **name** hash (`persona_is(p, "名")` compares this to
+    /// `id_of("名")` -- the same name `ctx::persona_is` matches).
+    fn persona(&self, seat: i64) -> i64;
+    /// Band **name** hash (`group_is(p, "Band")` compares this to
+    /// `id_of("Band")` -- the same name `ctx::in_group` matches).
+    fn group(&self, seat: i64) -> i64;
     /// Owned-tile count.
     fn tiles(&self, seat: i64) -> i64;
     /// Seat count (for `neighbor`).
@@ -202,7 +202,7 @@ pub trait CondView {
     /// `"crystals"`) are always present when non-zero.
     fn card_counter_table(&self) -> Vec<(String, i64)>;
     /// Bands blocked for this candidate.
-    fn blocked_bands(&self) -> Vec<i64>;
+    fn blocked_groups(&self) -> Vec<i64>;
     /// Every `tile_named` spelling the host registers.
     fn tile_id_table(&self) -> Vec<(String, i64)>;
     /// Tile ids of one kind (the `is_*` family's backing list).

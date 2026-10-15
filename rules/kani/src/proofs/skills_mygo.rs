@@ -80,7 +80,7 @@ fn band_02_crystal_on_16_iff_at(user: i32) {
     let pre_c = world::with_world(|ww| ww.key_get(user, crystals_key()));
     kani::assume(pre_c >= 0 && pre_c <= 3);
 
-    invoke::unwrap_done(skill_bands::mygo::after_roll_kani(user));
+    invoke::unwrap_done(skill_groups::mygo::after_roll_kani(user));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -126,7 +126,7 @@ pub fn band_02_user1_crystal_on_16_iff() {
 pub fn band_02_mutant_is_detected() {
     after_roll_world(0);
     let user = 0i32;
-    invoke::unwrap_done(skill_bands::mygo::after_roll_kani(user));
+    invoke::unwrap_done(skill_groups::mygo::after_roll_kani(user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -152,7 +152,7 @@ fn band_04_ineffective_overcap_iff_at(user: i32) {
     kani::assume(pre_c >= 0 && pre_c <= 3);
     on_discarded_world(user, pre_c);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_bands::mygo::on_discarded_kani(user));
+    invoke::unwrap_done(skill_groups::mygo::on_discarded_kani(user));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -201,7 +201,7 @@ pub fn band_04_mutant_is_detected() {
     on_discarded_world(0, 0);
     let user = 0i32;
     let pre_c = 0; // gain must fire
-    invoke::unwrap_done(skill_bands::mygo::on_discarded_kani(user));
+    invoke::unwrap_done(skill_groups::mygo::on_discarded_kani(user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];

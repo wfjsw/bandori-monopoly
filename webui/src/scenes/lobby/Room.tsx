@@ -32,7 +32,7 @@ export function useOnline(id: string): OnlineSession | null {
   useEffect(() => {
     let alive = true;
     const p = getProfile();
-    const home = D.character(p.homeCharacter);
+    const home = D.persona(p.homeCharacter);
     void resumeOnline(id, p.playerName, home?.name ?? "", home ? D.artId(home) : "").then((r) => {
       if (!alive) return;
       if ("k" in r) {
@@ -120,7 +120,7 @@ export function Room({ id }: { id: string }) {
       </div>
       <div className={cx(s.grid, r.maxPlayers > 6 && s.dense)}>
         {r.members.map((m) => {
-          const c = D.character(m.character);
+          const c = D.persona(m.persona);
           return (
             <div key={m.id} className={cx(s.member, m.id === sess.you && s.me)}>
               <div className={s.art}>{c ? <img src={charArt(D.artId(c), "stand")} alt="" /> : <div className={s.silhouette}><Icon name={m.bot ? "smart_toy" : "person"} /></div>}</div>

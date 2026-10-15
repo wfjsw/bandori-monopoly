@@ -24,7 +24,7 @@ pub const EXIST: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"将此卡放置于自己场上，直到自己的下一回合开始，场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你，你的下回合开始时将其翻入弃牌堆，若在此期间此卡没有造成影响，抽1张卡"#)
         .cell(r#"H3"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 const ID: &str = "RAS:EXIST";
 

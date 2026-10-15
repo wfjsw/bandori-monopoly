@@ -222,18 +222,18 @@ pub trait HostOps {
     fn op_set_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_inc_slot`
     fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_band_crystals`
-    fn op_band_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_band_crystals`
-    fn op_add_band_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_band_skill`
-    fn op_band_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_character_skill`
-    fn op_character_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_band_skills`
-    fn op_band_skills(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_band_skill`
-    fn op_add_band_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_group_crystals`
+    fn op_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_add_group_crystals`
+    fn op_add_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_group_skill`
+    fn op_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_persona_skill`
+    fn op_persona_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_group_skills`
+    fn op_group_skills(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_add_group_skill`
+    fn op_add_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_invoke_skill`
     fn op_invoke_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_raise_bought`
@@ -272,10 +272,10 @@ pub trait HostOps {
     fn op_round_no(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_turn_key`
     fn op_turn_key(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_character_is`
-    fn op_character_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_in_band`
-    fn op_in_band(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_persona_is`
+    fn op_persona_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_in_group`
+    fn op_in_group(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_opt_int`
     fn op_opt_int(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_opt_str`
@@ -967,23 +967,23 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::inc_slot(self, a[0], a[1], a[2], a[3])? as i64)
     }
-    fn op_band_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::band_crystals(self, a[0])? as i64)
+    fn op_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::group_crystals(self, a[0])? as i64)
     }
-    fn op_add_band_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::add_band_crystals(self, a[0], a[1], a[2])? as i64)
+    fn op_add_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::add_group_crystals(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_band_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::band_skill(self, a[0], a[1], a[2])? as i64)
+    fn op_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::group_skill(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_character_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::character_skill(self, a[0], a[1], a[2])? as i64)
+    fn op_persona_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::persona_skill(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_band_skills(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::band_skills(self, a[0], a[1], a[2])? as i64)
+    fn op_group_skills(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::group_skills(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_add_band_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::add_band_skill(self, a[0], a[1], a[2], a[3])? as i64)
+    fn op_add_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::add_group_skill(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_invoke_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::invoke_skill(self, a[0], a[1], a[2])? as i64)
@@ -1046,11 +1046,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_turn_key(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::turn_key(self)? as i64)
     }
-    fn op_character_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::character_is(self, a[0], a[1], a[2])? as i64)
+    fn op_persona_is(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::persona_is(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_in_band(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::in_band(self, a[0], a[1], a[2])? as i64)
+    fn op_in_group(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::in_group(self, a[0], a[1], a[2])? as i64)
     }
     fn op_opt_int(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::opt_int(self, a[0])?;
@@ -2485,48 +2485,48 @@ pub unsafe extern "C-unwind" fn ruleset_inc_slot(player_id: i32, ptr: i32, len: 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_band_crystals(player_id: i32) -> i32 {
-    with_host(|h| match h.op_band_crystals([player_id, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_group_crystals(player_id: i32) -> i32 {
+    with_host(|h| match h.op_group_crystals([player_id, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    with_host(|h| match h.op_add_band_crystals([player_id, n, max, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
+    with_host(|h| match h.op_add_group_crystals([player_id, n, max, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_band_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_band_skill([player_id, buf, cap, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_group_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_group_skill([player_id, buf, cap, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_character_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_character_skill([player_id, buf, cap, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_persona_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_persona_skill([player_id, buf, cap, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_band_skills(player_id: i32, buf: i32, cap: i32) -> i32 {
-    with_host(|h| match h.op_band_skills([player_id, buf, cap, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_group_skills(player_id: i32, buf: i32, cap: i32) -> i32 {
+    with_host(|h| match h.op_group_skills([player_id, buf, cap, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_band_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32 {
-    with_host(|h| match h.op_add_band_skill([player_id, p, n, extra, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_add_group_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32 {
+    with_host(|h| match h.op_add_group_skill([player_id, p, n, extra, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -2685,16 +2685,16 @@ pub unsafe extern "C-unwind" fn ruleset_turn_key() -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_character_is(player_id: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_character_is([player_id, ptr, len, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_persona_is(player_id: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_persona_is([player_id, ptr, len, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_in_band(player_id: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_in_band([player_id, ptr, len, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_in_group(player_id: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_in_group([player_id, ptr, len, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

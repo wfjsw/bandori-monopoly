@@ -360,7 +360,7 @@ export const Hand = memo(function Hand({ m, sess, busy }: { m: Model; sess: Game
         <div className={cx(s.preview, hover && !stand && s.previewOn)}>
           {hover && !stand && (
             <>
-              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
+              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.group) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
               <div className={s.pTitle}>{cardTitle(hover.id)}</div>
               {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
               <div className={s.pText} ref={textRef}><SkillBody text={hover.text ?? hc?.text ?? ""} /></div>

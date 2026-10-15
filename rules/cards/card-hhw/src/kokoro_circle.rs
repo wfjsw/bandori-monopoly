@@ -29,7 +29,7 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款"#)
         .cell(r#"F7"#)
-        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", r#"弦卷心"#)]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", r#"弦卷心"#)]));
 
 fn cant_play(_player_id: i32) -> Option<Msg> {
     // C# `CardKokoroCircle.WhyNot`: refuses when a `CardKokoroCircle` is

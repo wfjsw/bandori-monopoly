@@ -16,7 +16,7 @@ pub const SPRECHCHOR: CardDef =
         .tags(&[])
         .text(r#"在Livehouse地块开始回合时，可打出此卡并投掷1d20，获得1000+X*120的资金，X为本次掷骰出目"#)
         .cell(r#"E14"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
+        .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// 规则书: 「在Livehouse地块开始回合时」 -- the **turn-start** square, not the
 /// one a mid-turn walk has since reached (C# `H._turnSnap[i].pos`).

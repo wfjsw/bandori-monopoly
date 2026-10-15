@@ -25,8 +25,8 @@ crate::host_subset!(skills_ag_dispatch {
     player_count => arm_player_count,
     player_out => arm_player_out,
     player_pos => arm_player_pos,
-    in_band => arm_in_band,
-    character_is => arm_character_is,
+    in_group => arm_in_band,
+    persona_is => arm_character_is,
     add_held => arm_add_held,
     count_held | count_held_name => arm_count_held,
     set_held_name => arm_set_held_name,
@@ -98,7 +98,7 @@ fn firepot_tick_world(user: i32, pre_rest: i32, pre_fire: i32) -> World {
     let player = user;
     w.trig_player = player;
     w.turn_player = player;
-    w.band_id[player as usize] = band_key();
+    w.group_id[player as usize] = band_key();
     w.key_set(player, rest_name(), pre_rest);
     w.fire[player as usize] = pre_fire;
     w.fire_max = [1, 1, 1, 1]; // 「上限1」
@@ -116,9 +116,9 @@ fn firepot_01_tick_iff_at(user: i32) {
     let player = w.trig_player;
     world::reset_world(w);
     // Entry 2 is the TurnEnd hook with residual `afterglow`
-    // (`trigger::player_id() == player_id && in_band(player_id, "Afterglow")`).
+    // (`trigger::player_id() == player_id && in_group(player_id, "Afterglow")`).
     // Both hold by construction.
-    invoke::unwrap_done(skill_characters::ran_red::tick_kani(player));
+    invoke::unwrap_done(skill_personas::ran_red::tick_kani(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -194,7 +194,7 @@ fn moca_offer_world(pre_fire: i32, src_pos: i32, used: i32) -> World {
     w.fire_max = [1, 1, 1, 1];
     w.pos[src as usize] = src_pos;
     w.pos[owner as usize] = (src_pos + 17) % 60; // not already there
-    w.band_id[owner as usize] = band_key();
+    w.group_id[owner as usize] = band_key();
     // Per-source CD key the body builds as `skill.mocaSelf.used:<src>`.
     let key = intern::intern(alloc_key(src));
     w.key_set(owner, key, used);
@@ -229,7 +229,7 @@ pub fn moca_02_teleport_iff() {
     let src = 1i32;
     world::reset_world(w);
     // Entry 2 is CardPlayed (residual `other`: actor != owner). Held by setup.
-    invoke::unwrap_done(skill_characters::moca_self::on_card_kani(owner));
+    invoke::unwrap_done(skill_personas::moca_self::on_card_kani(owner));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -280,7 +280,7 @@ pub fn moca_02_mutant_is_detected() {
     w.symbolic_answers = false;
     w.answers[0] = 0; // yes
     world::reset_world(w);
-    invoke::unwrap_done(skill_characters::moca_self::on_card_kani(owner));
+    invoke::unwrap_done(skill_personas::moca_self::on_card_kani(owner));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -311,10 +311,10 @@ pub fn ran_02_spend_fire_iff() {
     w.trig_player = player;
     w.fire[player as usize] = pre_fire;
     w.fire_max = [1, 1, 1, 1];
-    w.band_id[player as usize] = band_key();
+    w.group_id[player as usize] = band_key();
     world::reset_world(w);
     // Entry 0 is the (2) Play (`can_use` residual: not skill_blocked, fire ≥ 1).
-    invoke::unwrap_done(skill_characters::ran_red::use_skill_kani(player));
+    invoke::unwrap_done(skill_personas::ran_red::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -340,9 +340,9 @@ pub fn ran_02_mutant_is_detected() {
     w.trig_player = player;
     w.fire[player as usize] = 1;
     w.fire_max = [1, 1, 1, 1];
-    w.band_id[player as usize] = band_key();
+    w.group_id[player as usize] = band_key();
     world::reset_world(w);
-    invoke::unwrap_done(skill_characters::ran_red::use_skill_kani(player));
+    invoke::unwrap_done(skill_personas::ran_red::use_skill_kani(player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
     crate::kassert!(post_fire == 0, "card spends exactly 1");
     crate::kassert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");

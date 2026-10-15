@@ -18,7 +18,7 @@ import s from "./DeckPick.module.css";
 import { t as tr } from "../../i18n/t";
 
 function DeckPick({ sess, character, act, close }: { sess: GameSession; character: string; act: (c: Command) => Promise<boolean>; close: () => void }) {
-  const c = D.character(character)!;
+  const c = D.persona(character)!;
   const auto = useAutoplay(sess); // 托管
   const { view } = useMatchView(sess);
   const list: DeckEntry[] = hasProfile() ? parseDeckList(rules.deck_list(profileJson(), c.name)) : [];

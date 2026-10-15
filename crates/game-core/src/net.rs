@@ -61,7 +61,7 @@ pub struct NetMessage {
     /// does not depend on the profile.
     pub debug: String,
     /// `ban` / `pick`: the character id.
-    pub character: String,
+    pub persona: String,
     /// `play` / `discard`: the card id.
     pub card: String,
     /// `deck` (the deck) / `answer` (the picked options).
@@ -81,7 +81,7 @@ impl Default for NetMessage {
         Self {
             act: String::new(),
             debug: String::new(),
-            character: String::new(),
+            persona: String::new(),
             card: String::new(),
             cards: Vec::new(),
             value: 0,
@@ -164,7 +164,7 @@ impl RoomInfo {
 pub struct RoomMember {
     pub id: i32,
     pub player: String,
-    pub character: String,
+    pub persona: String,
     pub cn_id: String,
     pub ready: bool,
     pub host: bool,

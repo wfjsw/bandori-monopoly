@@ -51,14 +51,14 @@ fn win() -> WindowCtx {
         players: vec![
             PlayerSnap {
                 money: 1200,
-                character: 3,
-                band: 1,
+                persona: 3,
+                group: 1,
                 ..PlayerSnap::default()
             },
             PlayerSnap {
                 money: 400,
-                character: 4,
-                band: 2,
+                persona: 4,
+                group: 2,
                 ..PlayerSnap::default()
             },
             PlayerSnap::default(),
@@ -87,14 +87,14 @@ fn cand(owner: i64) -> CandidateCtx {
         owner_hand: 3,
         owner_pos: 7,
         owner_no_hand: 0,
-        owner_character: if owner == 0 { 3 } else { 4 },
-        owner_band: if owner == 0 { 1 } else { 2 },
+        owner_persona: if owner == 0 { 3 } else { 4 },
+        owner_group: if owner == 0 { 1 } else { 2 },
         owner_tiles: 1,
         card_id: 42,
         card_placed: false,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
         tok_names: [("水母标记".to_string(), 2)].into_iter().collect(),
-        blocked_bands: vec![2],
+        blocked_groups: vec![2],
         ..CandidateCtx::default()
     }
 }
@@ -343,7 +343,7 @@ fn state_function() {
 
 #[test]
 fn character_is_and_blocked() {
-    let cond = compile("character_is(owner, 3) && blocked(2)").unwrap();
+    let cond = compile("persona_is(owner, 3) && blocked(2)").unwrap();
     // owner 0 is character 3; band 2 is blocked on the candidate
     assert!(cond.eval(&win(), &cand(0)));
     assert!(!cond.eval(&win(), &cand(1)));
@@ -495,38 +495,38 @@ fn card_counter_lookup() {
 #[test]
 fn band_is_name_form() {
     // The name form hashes through `id_of` and compares to the view's
-    // `band(seat)` -- the same name `ctx::in_band` matches.
+    // `band(seat)` -- the same name `ctx::in_group` matches.
     let name = "Pastel✽Palettes";
     let mut w = win();
-    w.players[0].band = rules_cond::id_of(name);
-    w.players[1].band = rules_cond::id_of("Afterglow");
+    w.players[0].group = rules_cond::id_of(name);
+    w.players[1].group = rules_cond::id_of("Afterglow");
     let mut c = cand(0);
-    c.owner_band = rules_cond::id_of(name);
+    c.owner_group = rules_cond::id_of(name);
 
-    let cond = compile("band_is(owner, 'Pastel✽Palettes')").unwrap();
+    let cond = compile("group_is(owner, 'Pastel✽Palettes')").unwrap();
     assert!(cond.eval(&w, &c));
 
     let mut c1 = cand(1);
-    c1.owner_band = rules_cond::id_of("Afterglow");
+    c1.owner_group = rules_cond::id_of("Afterglow");
     assert!(!cond.eval(&w, &c1));
 
     // The int form still compares against the raw id.
     let mut w2 = win();
-    w2.players[0].band = 7;
-    assert!(compile("band_is(0, 7)").unwrap().eval(&w2, &cand(0)));
+    w2.players[0].group = 7;
+    assert!(compile("group_is(0, 7)").unwrap().eval(&w2, &cand(0)));
 }
 
 #[test]
 fn character_is_name_form() {
     let name = "三角初华（Sumimi）";
     let mut w = win();
-    w.players[0].character = rules_cond::id_of(name);
+    w.players[0].persona = rules_cond::id_of(name);
     let mut c = cand(0);
-    c.owner_character = rules_cond::id_of(name);
+    c.owner_persona = rules_cond::id_of(name);
 
-    let cond = compile("character_is(owner, '三角初华（Sumimi）')").unwrap();
+    let cond = compile("persona_is(owner, '三角初华（Sumimi）')").unwrap();
     assert!(cond.eval(&w, &c));
-    assert!(!compile("character_is(owner, '纯田真奈')").unwrap().eval(&w, &c));
+    assert!(!compile("persona_is(owner, '纯田真奈')").unwrap().eval(&w, &c));
 }
 
 #[test]
@@ -549,7 +549,7 @@ fn owner_overlay_fields() {
     let cond = compile("owner.pos == 7 && owner.out == 0 && owner.no_hand == 0").unwrap();
     assert!(cond.eval(&win(), &cand(0)));
 
-    let cond = compile("owner.character == 3 && owner.band == 1 && owner.tiles == 1").unwrap();
+    let cond = compile("owner.persona == 3 && owner.group == 1 && owner.tiles == 1").unwrap();
     assert!(cond.eval(&win(), &cand(0)));
     assert!(!cond.eval(&win(), &cand(1)));
 

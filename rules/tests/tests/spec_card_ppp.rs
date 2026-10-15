@@ -81,9 +81,9 @@ fn with_band(t: &mut Table) {
 
 /// Vanilla table with seat 0 named `character` (exclusive-card gate) but
 /// without bound skills.
-fn exclusive_table(character: &str) -> Table {
+fn exclusive_table(persona: &str) -> Table {
     let mut t = Table::vanilla(2);
-    t.set_character_raw(0, character);
+    t.set_character_raw(0, persona);
     t
 }
 
@@ -302,7 +302,7 @@ pub fn c_ppp_bang_dream_01(step: &Step<'_>) -> Result<(), String> {
         w.st
             .players
             .get(who)
-            .and_then(|p| p.field.iter().find(|f| f.band_skill))
+            .and_then(|p| p.field.iter().find(|f| f.group_skill))
             .map(|f| f.crystals)
             .unwrap_or(0)
     };
@@ -343,7 +343,7 @@ fn bang_dream_contract() {
                 "band crystals {crystals0} -> {crystals1}, expected +1;                  field={:?}",
                 t.field(0)
                     .iter()
-                    .map(|f| (f.card.clone(), f.band_skill, f.crystals))
+                    .map(|f| (f.card.clone(), f.group_skill, f.crystals))
                     .collect::<Vec<_>>()
             ));
         }
@@ -1883,7 +1883,7 @@ pub fn verify_bang_dream(
         w.st.players[who]
             .field
             .iter()
-            .find(|f| f.band_skill)
+            .find(|f| f.group_skill)
             .map(|f| f.crystals)
             .unwrap_or(0)
     };
@@ -1933,13 +1933,13 @@ fn bang_dream_verifier_rejects_mutants() {
     let v = verify_bang_wrap(dest);
 
     expect_reject("LESS crystal", &pre, &post, &events, &v, |w| {
-        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.band_skill) {
+        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
             f.crystals = pre
                 .st
                 .players[0]
                 .field
                 .iter()
-                .find(|f| f.band_skill)
+                .find(|f| f.group_skill)
                 .map(|f| f.crystals)
                 .unwrap_or(0);
         }
@@ -1951,7 +1951,7 @@ fn bang_dream_verifier_rejects_mutants() {
         w.st.players[1].money += 1;
     });
     expect_reject("WRONG crystal", &pre, &post, &events, &v, |w| {
-        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.band_skill) {
+        if let Some(f) = w.st.players[0].field.iter_mut().find(|f| f.group_skill) {
             f.crystals += 1;
         }
     });

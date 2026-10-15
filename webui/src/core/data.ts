@@ -8,23 +8,23 @@ import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
 import { bandLogo, charArt } from "./assets";
-import type { BandData, CardData, CharacterData, EventData, TileData, VoiceLine } from "./types";
+import type { GroupData, CardData, PersonaData, EventData, TileData, VoiceLine } from "./types";
 
 export interface GameData {
   tiles: TileData[];
   cards: CardData[];
-  characters: CharacterData[];
-  bands: BandData[];
+  characters: PersonaData[];
+  bands: GroupData[];
   events: EventData[];
   voiceLines: { id: string; name: string; lines: VoiceLine[] }[];
   homeLines: { name: string; tag: string }[];
   rulesText: string;
   card(id: string): CardData | undefined;
-  character(name: string): CharacterData | undefined;
-  band(name: string): BandData | undefined;
+  character(name: string): PersonaData | undefined;
+  band(name: string): GroupData | undefined;
   event(id: string): EventData | undefined;
-  artId(c: CharacterData): string;
-  homeTag(c: CharacterData): string;
+  artId(c: PersonaData): string;
+  homeTag(c: PersonaData): string;
 }
 
 export let D: GameData;
@@ -99,8 +99,8 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
 
   const roster = JSON.parse(glue.roster_json()) as {
     cards: CardData[];
-    characters: CharacterData[];
-    bands: BandData[];
+    characters: PersonaData[];
+    bands: GroupData[];
   };
   const names: string[] = JSON.parse(glue.data_files());
   const files: Record<string, string> = {};
@@ -138,18 +138,18 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   // `cards.json` / `characters.json` / `bands.json`; those stay on disk for
   // authoring tools until they retire).
   const cards = roster.cards;
-  const characters = roster.characters;
-  const bands = roster.bands;
+  const characters = roster.personas;
+  const bands = roster.groups;
   const events: EventData[] = j("events.json").events;
-  const homeLines = j("home_lines.json").characters ?? [];
+  const homeLines = j("home_lines.json").personas ?? [];
   // `skill_simple.json` is the display-only overlay: the hand-written newcomer
   // version of each skill body (`· ` bullets) rides on the character/band
   // record as `simple` (what `skillText` picks when the setting is on -- the
   // roster's `text` is the fallback), and the card `counterReason` column
   // (the [反击] prompt's "why this card may be declared") rides on each card.
   const simple = j("skill_simple.json") as SkillSimple;
-  for (const c of characters) c.simple = simple.characters.find((x) => x.name === c.name)?.text;
-  for (const b of bands) b.simple = simple.bands.find((x) => x.name === b.name)?.text;
+  for (const c of characters) c.simple = simple.personas.find((x) => x.name === c.name)?.text;
+  for (const b of bands) b.simple = simple.groups.find((x) => x.name === b.name)?.text;
   const reasonById = new Map((simple.cards ?? []).map((x) => [x.id, x.counterReason]));
   for (const c of cards) {
     const reason = reasonById.get(c.id);
@@ -162,7 +162,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     characters,
     bands,
     events,
-    voiceLines: j("voice_lines.json").characters ?? [],
+    voiceLines: j("voice_lines.json").personas ?? [],
     homeLines,
     rulesText: files["rules.txt"].replace(/^﻿/, ""),
     card: (id) => byId.get(id),
@@ -176,7 +176,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
 
 /** `band` value of the cards every character may take. A data key from the
  *  roster (the data set is Chinese), not display text. */
-export const GENERAL_BAND = "通用";
+export const GENERAL_GROUP = "通用";
 
 export function cardTitle(id: string): string {
   // A prompt can render before `load_data` has filled `D` (or during a module
@@ -207,10 +207,10 @@ export function cardTitle(id: string): string {
  *  the character's art. Undefined for anything that is not a skill id. */
 export function skillCard(id: string): { title: string; text: string; band?: string; color: string; art: string } | undefined {
   if (!id || !D || !id.startsWith("skill:")) return undefined;
-  const band = D.bands.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
+  const band = D.groups.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
   if (band) return { title: band.skill, text: skillText(band), band: band.name, color: band.color, art: bandLogo(band.name) };
-  const character = D.characters.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
-  if (character) return { title: character.skill, text: skillText(character), band: character.band, color: character.color, art: charArt(character.art, "thumb") };
+  const character = D.personas.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
+  if (character) return { title: character.skill, text: skillText(character), band: character.group, color: character.color, art: charArt(character.art, "thumb") };
   return undefined;
 }
 
@@ -240,7 +240,7 @@ export function cardColor(id: string): string {
 }
 
 function bandColorOf(c: CardData): string {
-  return D.band(c.band)?.color ?? "#ED4E76";
+  return D.group(c.group)?.color ?? "#ED4E76";
 }
 
 /** C# `SkillText.Of(c)`: the simplified skill text when the setting is on. */

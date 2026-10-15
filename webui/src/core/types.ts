@@ -14,7 +14,7 @@ export interface CardData {
    *  `text` and checked for every 反击-tagged card. Why the card is offered. */
   counterReason?: string;
 }
-export interface CharacterData {
+export interface PersonaData {
   name: string; display: string; band: string; color: string; skill: string; text: string;
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
@@ -24,7 +24,7 @@ export interface CharacterData {
   /** Short label for compact displays of a variant. */
   variantTag?: string;
 }
-export interface BandData {
+export interface GroupData {
   name: string; shortName: string; color: string; skill: string; text: string;
   /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
   simple?: string;
@@ -46,7 +46,7 @@ export interface MatchPlayer {
   mentality: BotMentality;
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
   state: Record<string, StateVar>;
-  skillCharacter: string; bands: string; tokens: Counter[];
+  skillOwner: string; bands: string; tokens: Counter[];
   skillNote: Msg; field: FieldCard[];
 }
 /**
@@ -85,7 +85,7 @@ export interface FieldCard {
    *  「手卡上限数量减1」). Serde-defaulted `{}`. */
   props?: Record<string, number>;
   /** This instance is a band skill (`skill:<band>:<skill>`); its `crystals` are the band-card pool. */
-  bandSkill?: boolean;
+  groupSkill?: boolean;
   note: Msg;
 }
 /**

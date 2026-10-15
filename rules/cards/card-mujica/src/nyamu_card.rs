@@ -32,7 +32,7 @@ pub const NYAMU_CARD: CardDef = CardDef::new(
 1. 每当此卡将从正面翻至背面时可选择失去2个火罐。
 2. 每当此卡将从背面翻至正面时此卡拥有者抽一张卡。"#)
         .cell(r#"J15"#)
-        .fields(&[("band", r#"Ave Mujica"#), ("owner", r#"祐天寺若麦"#)]));
+        .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"祐天寺若麦"#)]));
 
 /// 「每当此卡将从背面翻至正面时此卡拥有者抽一张卡」.
 fn watch_flips(player_id: i32) -> card_sdk::Asked {

@@ -1088,54 +1088,54 @@ pub fn inc_slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, by: i32) 
             Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
-// `band_crystals` / `add_band_crystals` stay on the guest surface for now
-// (`ctx::band_crystals` still imports them); they are sugar over the
-// band-skill instance's `counter::CRYSTALS` (see `ops.rs` `band_skill_uid`).
-pub fn band_crystals<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().band_crystals(player_id))
+// `group_crystals` / `add_group_crystals` stay on the guest surface for now
+// (`ctx::group_crystals` still imports them); they are sugar over the
+// band-skill instance's `counter::CRYSTALS` (see `ops.rs` `group_skill_uid`).
+pub fn group_crystals<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+    Ok(c.st().wr().group_crystals(player_id))
 }
 
-pub fn add_band_crystals<C: HostCtx>(c: &mut C, player_id: i32, n: i32, max: i32) -> Result<i32, HostErr> {
-    Ok(c.st_mut().w().add_band_crystals(player_id, n, max))
+pub fn add_group_crystals<C: HostCtx>(c: &mut C, player_id: i32, n: i32, max: i32) -> Result<i32, HostErr> {
+    Ok(c.st_mut().w().add_group_crystals(player_id, n, max))
 }
 
-pub fn band_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let s = c.st().wr().band_skill_id(player_id).unwrap_or_default();
+pub fn group_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
+            let s = c.st().wr().group_skill_id(player_id).unwrap_or_default();
             let bytes =
-                postcard::to_allocvec(&s).map_err(|e| HostErr::trap(format!("band_skill encode: {e}")))?;
+                postcard::to_allocvec(&s).map_err(|e| HostErr::trap(format!("group_skill encode: {e}")))?;
             if bytes.len() as i32 <= cap {
                 c.write_guest( buf, &bytes)?;
             }
             Ok(bytes.len() as i32)
 }
 
-pub fn character_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
+pub fn persona_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
             let s = c
                 .st()
                 .wr()
-                .character_skill_id(player_id)
+                .persona_skill_id(player_id)
                 .unwrap_or_default();
             let bytes = postcard::to_allocvec(&s)
-                .map_err(|e| HostErr::trap(format!("character_skill encode: {e}")))?;
+                .map_err(|e| HostErr::trap(format!("persona_skill encode: {e}")))?;
             if bytes.len() as i32 <= cap {
                 c.write_guest( buf, &bytes)?;
             }
             Ok(bytes.len() as i32)
 }
 
-pub fn band_skills<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
-            let list = c.st().wr().band_skills(player_id);
+pub fn group_skills<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
+            let list = c.st().wr().group_skills(player_id);
             let bytes = postcard::to_allocvec(&list)
-                .map_err(|e| HostErr::trap(format!("band_skills encode: {e}")))?;
+                .map_err(|e| HostErr::trap(format!("group_skills encode: {e}")))?;
             if bytes.len() as i32 <= cap {
                 c.write_guest( buf, &bytes)?;
             }
             Ok(bytes.len() as i32)
 }
 
-pub fn add_band_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, extra: i32) -> Result<i32, HostErr> {
+pub fn add_group_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, extra: i32) -> Result<i32, HostErr> {
             let id = guest_str(c, p, n)?;
-            Ok(c.st_mut().w().add_band_skill(player_id, &id, extra != 0))
+            Ok(c.st_mut().w().add_group_skill(player_id, &id, extra != 0))
 }
 
 pub fn invoke_skill<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
@@ -1373,14 +1373,14 @@ pub fn turn_key<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().turn_key())
 }
 
-pub fn character_is<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+pub fn persona_is<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().character_is(player_id, &name))
+            Ok(c.st().wr().persona_is(player_id, &name))
 }
 
-pub fn in_band<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
+pub fn in_group<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().in_band(player_id, &name))
+            Ok(c.st().wr().in_group(player_id, &name))
 }
 
 

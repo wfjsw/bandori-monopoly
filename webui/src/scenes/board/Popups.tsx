@@ -182,7 +182,7 @@ export function showDeedList(sess: GameSession): void {
 export function borrowedBand(x: MatchPlayer | undefined): { from: number; skill: string } | null {
   const from = x?.field?.find((f) => f.card === "PPP:Returns")?.props?.["returns.from"] ?? -1;
   if (!x || from < 0) return null;
-  const bands = x.field.filter((f) => f.bandSkill);
+  const bands = x.field.filter((f) => f.groupSkill);
   return bands.length > 1 ? { from, skill: bands[bands.length - 1].card } : null;
 }
 
@@ -190,7 +190,7 @@ export function showPlayerInfo(m: Model, i: number): void {
   const S = m.S;
   const x = S.players[i];
   const c = m.charOf(i);
-  const band = c ? D.band(c.band) : undefined;
+  const band = c ? D.group(c.group) : undefined;
   const deeds = D.tiles.map((_, k) => k).filter((k) => S.owners[k] === i);
   const lines = [
     tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: stateOf(x, "fire"), fireMax: stateMax(x, "fire") }),
@@ -205,7 +205,7 @@ export function showPlayerInfo(m: Model, i: number): void {
       <div className={s.infoTop}>
         <Avatar c={c} size={92} />
         <div>
-          <b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>
+          <b>{c?.display ?? "—"}</b><small>{c?.group ?? ""}</small>
           {/* The two skill stand-ins `bind_skills` puts on the field (the
               character's own skill and its band's) belong here, not on the
               board: name in pink, body under it. */}

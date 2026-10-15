@@ -1109,7 +1109,7 @@ fn crush_adds_xd20_for_the_discard_pile() {
 
 #[test]
 fn crush_is_exclusive_to_masking() {
-    // 规则书: "(exclusive to character: 佐藤益木)"
+    // 规则书: "(exclusive to persona: 佐藤益木)"
     let mut t = Table::vanilla(2);
     t.give(0, &["RAS:（MASKING）CRUSH ON THE DRUM!!!"]);
     let r = t.play(0, "RAS:（MASKING）CRUSH ON THE DRUM!!!");

@@ -36,7 +36,7 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
 2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
 3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。"#)
         .cell(r#"D5"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// C# `CardOverlappingVoices.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

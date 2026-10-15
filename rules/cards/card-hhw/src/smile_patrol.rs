@@ -16,7 +16,7 @@ pub const SMILE_PATROL: CardDef =
         .tags(&[])
         .text(r#"付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）"#)
         .cell(r#"F6"#)
-        .fields(&[("band", r#"Hello, Happy World!"#), ("owner", "")]));
+        .fields(&[("group", r#"Hello, Happy World!"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSmilePatrol.WhyNot`: refuses without a tile you can afford to

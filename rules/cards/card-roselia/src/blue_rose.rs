@@ -20,7 +20,7 @@ pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play("
         .tags(&[])
         .text(r#"打出此卡时，（1）若你拥有的Livehouse格子多于或等于你拥有的其他格子，获得相当于这些Livehouse格子地契价值20%的资金 。（2）若严格少于，则传送至下一个未被购买的Livehouse格子；若此时已没有未被购买的Livehouse格子，则传送至“RiNG 4”（不触发结算），均视为你的主要移动。"#)
         .cell(r#"E13"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", "")]));
+        .fields(&[("group", r#"Roselia"#), ("owner", "")]));
 
 /// The buyable Livehouse deeds (C# `H.IsLiveHouse`: `IsColor(player_id, t, 6)`, and
 /// `H.LiveHouses` also wants `IsBuyable`).

@@ -611,7 +611,7 @@ impl World {
     // -------------------------------------------------------- band crystals
 
     /// The uid of `player_id`'s **band-skill field instance** -- the bound band
-    /// skill's field card (`skill:<band>:<skill>`, [`FieldCard::band_skill`]),
+    /// skill's field card (`skill:<band>:<skill>`, [`FieldCard::group_skill`]),
     /// which is where 「乐队卡 / 团卡」 crystals live. -1 when the player has
     /// none (no band skill bound, or it has left the field).
     ///
@@ -625,17 +625,17 @@ impl World {
     /// * **swapped or removed** -- the instance goes with its crystals, so a
     ///   swap starts the new card at 0 and the old count is gone with the old
     ///   card (Returns' 「替换并移除上面的所有[奇迹水晶]」 is exactly that).
-    pub fn band_skill_uid(&self, player_id: i32) -> i32 {
+    pub fn group_skill_uid(&self, player_id: i32) -> i32 {
         self.player_id(player_id)
-            .and_then(|s| s.field.iter().find(|f| f.band_skill))
+            .and_then(|s| s.field.iter().find(|f| f.group_skill))
             .map_or(-1, |f| f.uid)
     }
 
     /// 「乐队卡 / 团卡」 crystals -- the count on the player's band-skill field
     /// instance. 0 when there is no band skill. Same pool every band skill and
     /// every card that mentions the band card's crystals reads and writes.
-    pub fn band_crystals(&self, player_id: i32) -> i32 {
-        let uid = self.band_skill_uid(player_id);
+    pub fn group_crystals(&self, player_id: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             0
         } else {
@@ -647,8 +647,8 @@ impl World {
     /// clamps, `max` = 0 is uncapped, exactly as
     /// [`Self::add_crystals_at`]). Returns the new count; 0 when the player has
     /// no band skill (writes are no-ops).
-    pub fn add_band_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
-        let uid = self.band_skill_uid(player_id);
+    pub fn add_group_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             return 0;
         }
@@ -659,8 +659,8 @@ impl World {
 
     /// Rule id of the player's bound **band skill** (`skill:<band>:<skill>`),
     /// the one 「乐队卡 / 团卡」 crystals land on. `None` when there is none.
-    pub fn band_skill_id(&self, player_id: i32) -> Option<String> {
-        let uid = self.band_skill_uid(player_id);
+    pub fn group_skill_id(&self, player_id: i32) -> Option<String> {
+        let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             return None;
         }
@@ -670,23 +670,23 @@ impl World {
     /// Rule id of the player's **character skill** (`skill:<character>:<skill>`).
     /// A character skill is a `skill:` instance that is
     /// *not* a band skill; `bind_skills` places it beside the band one.
-    pub fn character_skill_id(&self, player_id: i32) -> Option<String> {
+    pub fn persona_skill_id(&self, player_id: i32) -> Option<String> {
         let s = self.player_id(player_id)?;
         s.field
             .iter()
-            .find(|f| f.card.starts_with("skill:") && !f.band_skill)
+            .find(|f| f.card.starts_with("skill:") && !f.group_skill)
             .map(|f| f.card.clone())
     }
 
     /// Every band-skill attachment on the player's field, as
     /// `(uid, rule id, extra)` in placement order.
-    pub fn band_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
+    pub fn group_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
         let Some(s) = self.player_id(player_id) else {
             return Vec::new();
         };
         s.field
             .iter()
-            .filter(|f| f.band_skill)
+            .filter(|f| f.group_skill)
             .map(|f| (f.uid, f.card.clone(), f.extra as i32))
             .collect()
     }
@@ -694,9 +694,9 @@ impl World {
     /// Attach a band-skill instance.
     /// `extra` marks a 「拿取」ed copy: 「相同乐队技能卡的效果不可叠加」 (refused
     /// when an attachment of the same id is already there) and 「不视为那个乐队
-    /// 的角色」 (`in_band` still reads only the character). Returns the new uid,
+    /// 的角色」 (`in_group` still reads only the character). Returns the new uid,
     /// or -1 when refused.
-    pub fn add_band_skill(
+    pub fn add_group_skill(
         &mut self,
         data: &crate::data::GameData,
         player_id: i32,
@@ -704,7 +704,7 @@ impl World {
         extra: bool,
         props: std::collections::BTreeMap<String, i32>,
     ) -> i32 {
-        if !data.is_band_skill(id) {
+        if !data.is_group_skill(id) {
             return -1;
         }
         if self
@@ -1079,8 +1079,8 @@ impl World {
         let uid = self.st.next_card_uid;
         self.st.next_card_uid += 1;
         // A band skill's instance is the 「乐队卡 / 团卡」 crystal holder; see
-        // [`Self::band_skill_uid`].
-        let band_skill = data.is_band_skill(card);
+        // [`Self::group_skill_uid`].
+        let group_skill = data.is_group_skill(card);
         // 「此卡不受任何其他效果影响」 is a static [特] property, not a play-body
         // side effect -- `place_raw` and engine placement must see it too.
         let immune = props
@@ -1100,7 +1100,7 @@ impl World {
             face_down: false,
             immune,
             props,
-            band_skill,
+            group_skill,
             extra: false,
             note,
         };
@@ -1388,7 +1388,7 @@ impl World {
     ) {
         let character = self
             .player_id(player_id)
-            .map(|s| s.character.clone())
+            .map(|s| s.persona.clone())
             .unwrap_or_default();
         for id in data.skill_rules_of(&character) {
             if !self.placed_cards(player_id).contains(&id) {

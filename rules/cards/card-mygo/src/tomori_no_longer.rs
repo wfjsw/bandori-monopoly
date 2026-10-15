@@ -48,7 +48,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"（1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数 （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗，当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶] （3）此卡上的奇迹水晶耗尽后，[移除]此卡"#)
         .cell(r#"I3"#)
-        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"高松灯"#)]));
+        .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"高松灯"#)]));
 
 /// Set while (2)'s substitution is running, so [`refill`] knows the decrease
 /// is the skill-cost swap and must not be refunded.

@@ -144,7 +144,7 @@
   "boot.tip.refresh": "Refreshing is fine too: solo matches are saved, online seats are held.",
   "boot.tip.timer": "Turn time first uses each turn's base time, then the bonus time.",
   "boot.tip.vote": "In online play you can vote to end early: if everyone still in agrees, the match is ranked by score.",
-  "card.kind.band": "Band",
+  "card.kind.group": "Band",
   "card.kind.derived": "Derived",
   "card.kind.exclusive": "Exclusive",
   "card.kind.general": "General",

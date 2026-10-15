@@ -35,7 +35,7 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
 （1）[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个[奇迹水晶]。
 （2）[共鸣]交换[拥有者]的抽卡区和弃卡区。"#)
         .cell(r#"D17"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", r#"大和麻弥"#)]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", r#"大和麻弥"#)]));
 
 // TODO(规则书): [特]「观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]
 // （次效果优先于其他后续效果，比如观看卡组后将一张牌加入手牌）」 -- needs a
@@ -53,7 +53,7 @@ fn drew(player_id: i32) -> card_sdk::Asked {
     } else {
         let c = ctx::crystals();
         ctx::add_crystals(-c, 0)?;
-        ctx::add_band_crystals(player_id, 1, i32::MAX);
+        ctx::add_group_crystals(player_id, 1, i32::MAX);
         ctx::log(
             player_id,
             &Msg::new(key!("infinite_possibility_full")).player_id("who", player_id),

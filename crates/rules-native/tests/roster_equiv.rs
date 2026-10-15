@@ -55,8 +55,8 @@ fn fixture_preserves_order_and_fields() {
         "fixture roster differs from the live ruleset roster"
     );
     assert_eq!(fixture.cards.len(), 184, "full card coverage");
-    assert_eq!(fixture.characters.len(), 54, "full character coverage");
-    assert_eq!(fixture.bands.len(), 12, "full band coverage");
+    assert_eq!(fixture.personas.len(), 54, "full character coverage");
+    assert_eq!(fixture.groups.len(), 12, "full band coverage");
 }
 
 /// `GameData::load` accepts the fixture roster and the lookups land.
@@ -68,12 +68,12 @@ fn load_sees_fixture_rows() {
     let d = GameData::load(&mut read, roster).unwrap();
     // A lifted Sumimi card is visible by id and carries its band.
     let card = d.card("Sumimi:Sumimi不会解散哦").expect("fixture card");
-    assert_eq!(card.band, "Sumimi");
+    assert_eq!(card.group, "Sumimi");
     // The lifted character is visible by name.
-    let c = d.character("纯田真奈").expect("fixture character");
-    assert_eq!(c.band, "Sumimi");
+    let c = d.persona("纯田真奈").expect("fixture character");
+    assert_eq!(c.group, "Sumimi");
     // The lifted band is visible by name.
-    let b = d.band("Sumimi").expect("fixture band");
+    let b = d.group("Sumimi").expect("fixture band");
     assert!(b.shares_exclusives);
     // Non-roster files still come from the data dir (tiles exist either way).
     assert!(!d.tiles.is_empty());

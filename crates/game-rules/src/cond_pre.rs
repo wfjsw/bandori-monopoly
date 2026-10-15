@@ -216,7 +216,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         if self.owner_seat >= 0 { self.src.fire(self.owner_seat) as i64 } else { 0 }
     }
     fn owner_crystals(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.band_crystals(self.owner_seat) as i64 } else { 0 }
+        if self.owner_seat >= 0 { self.src.group_crystals(self.owner_seat) as i64 } else { 0 }
     }
     fn owner_hand(&self) -> i64 {
         if self.owner_seat >= 0 { self.src.hand_size(self.owner_seat) as i64 } else { 0 }
@@ -247,13 +247,13 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             0
         }
     }
-    fn owner_character(&self) -> i64 {
+    fn owner_persona(&self) -> i64 {
         if self.owner_seat < 0 {
             return 0;
         }
         id_of(&self.src.character_name(self.owner_seat).unwrap_or_default())
     }
-    fn owner_band(&self) -> i64 {
+    fn owner_group(&self) -> i64 {
         if self.owner_seat < 0 {
             return 0;
         }
@@ -291,10 +291,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             0
         }
     }
-    fn blocked(&self, band: i64) -> bool {
-        // Mirror of `fill_candidate`'s empty `blocked_bands`: the host fills
+    fn blocked(&self, group: i64) -> bool {
+        // Mirror of `fill_candidate`'s empty `blocked_groups`: the host fills
         // the blocked list from the skill dispatch, not the raw world.
-        let _ = band;
+        let _ = group;
         false
     }
 
@@ -306,7 +306,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.src.fire(seat as i32) as i64
     }
     fn crystals(&self, seat: i64) -> i64 {
-        self.src.band_crystals(seat as i32) as i64
+        self.src.group_crystals(seat as i32) as i64
     }
     fn hand(&self, seat: i64) -> i64 {
         self.src.hand_size(seat as i32) as i64
@@ -341,10 +341,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         }
         rows
     }
-    fn character(&self, seat: i64) -> i64 {
+    fn persona(&self, seat: i64) -> i64 {
         id_of(&self.src.character_name(seat as i32).unwrap_or_default())
     }
-    fn band(&self, seat: i64) -> i64 {
+    fn group(&self, seat: i64) -> i64 {
         id_of(&self.src.band_name(seat as i32).unwrap_or_default())
     }
     fn tiles(&self, seat: i64) -> i64 {
@@ -421,7 +421,7 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             })
             .collect()
     }
-    fn blocked_bands(&self) -> Vec<i64> {
+    fn blocked_groups(&self) -> Vec<i64> {
         Vec::new()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
@@ -663,7 +663,7 @@ pub trait SnapSrc {
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
     fn fire(&self, player_id: i32) -> i32;
-    fn band_crystals(&self, player_id: i32) -> i32;
+    fn group_crystals(&self, player_id: i32) -> i32;
     fn hand_size(&self, player_id: i32) -> i32;
     fn player_pos(&self, player_id: i32) -> i32;
     fn player_out(&self, player_id: i32) -> i32;
@@ -677,13 +677,13 @@ pub trait SnapSrc {
     /// state answers empty). Missing keys are simply absent -- `state(p, k)`
     /// answers 0 for them.
     fn state_entries(&self, player_id: i32) -> Vec<(String, i32)>;
-    fn character_skill_id(&self, player_id: i32) -> Option<String>;
-    fn band_skill_id(&self, player_id: i32) -> Option<String>;
-    /// The player's character **name** -- the spelling `ctx::character_is`
-    /// matches. `character_is(p, "名")` compares `id_of(name)` to this.
+    fn persona_skill_id(&self, player_id: i32) -> Option<String>;
+    fn group_skill_id(&self, player_id: i32) -> Option<String>;
+    /// The player's character **name** -- the spelling `ctx::persona_is`
+    /// matches. `persona_is(p, "名")` compares `id_of(name)` to this.
     fn character_name(&self, player_id: i32) -> Option<String>;
-    /// The player's band **name** -- the spelling `ctx::in_band` matches.
-    /// `band_is(p, "Band")` compares `id_of(name)` to this.
+    /// The player's band **name** -- the spelling `ctx::in_group` matches.
+    /// `group_is(p, "Band")` compares `id_of(name)` to this.
     fn band_name(&self, player_id: i32) -> Option<String>;
     /// Named token counter (`ctx::tok`); 0 when absent.
     fn tok(&self, player_id: i32, name: &str) -> i32;
@@ -790,8 +790,8 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::fire(self, player_id)
     }
     #[inline]
-    fn band_crystals(&self, player_id: i32) -> i32 {
-        CardWorld::band_crystals(self, player_id)
+    fn group_crystals(&self, player_id: i32) -> i32 {
+        CardWorld::group_crystals(self, player_id)
     }
     #[inline]
     fn hand_size(&self, player_id: i32) -> i32 {
@@ -847,12 +847,12 @@ impl<W: CardWorld> SnapSrc for W {
             .collect()
     }
     #[inline]
-    fn character_skill_id(&self, player_id: i32) -> Option<String> {
-        CardWorld::character_skill_id(self, player_id)
+    fn persona_skill_id(&self, player_id: i32) -> Option<String> {
+        CardWorld::persona_skill_id(self, player_id)
     }
     #[inline]
-    fn band_skill_id(&self, player_id: i32) -> Option<String> {
-        CardWorld::band_skill_id(self, player_id)
+    fn group_skill_id(&self, player_id: i32) -> Option<String> {
+        CardWorld::group_skill_id(self, player_id)
     }
     #[inline]
     fn character_name(&self, player_id: i32) -> Option<String> {
@@ -1252,7 +1252,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
             fire: world.fire(p) as i64,
-            crystals: world.band_crystals(p) as i64,
+            crystals: world.group_crystals(p) as i64,
             hand: world.hand_size(p) as i64,
             pos: world.player_pos(p) as i64,
             out: world.player_out(p) as i64,
@@ -1265,8 +1265,8 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
                 .into_iter()
                 .map(|(k, v)| (k, v as i64))
                 .collect(),
-            character: id_of(&world.character_name(p).unwrap_or_default()),
-            band: id_of(&world.band_name(p).unwrap_or_default()),
+            persona: id_of(&world.character_name(p).unwrap_or_default()),
+            group: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
             gains: world.gains_this_turn(p) as i64,
             targeted: world.targeted_count(p) as i64,
@@ -1389,7 +1389,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
             fire: world.fire(p) as i64,
-            crystals: world.band_crystals(p) as i64,
+            crystals: world.group_crystals(p) as i64,
             hand: world.hand_size(p) as i64,
             pos: world.player_pos(p) as i64,
             out: world.player_out(p) as i64,
@@ -1402,8 +1402,8 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
                 .into_iter()
                 .map(|(k, v)| (k, v as i64))
                 .collect(),
-            character: id_of(&world.character_name(p).unwrap_or_default()),
-            band: id_of(&world.band_name(p).unwrap_or_default()),
+            persona: id_of(&world.character_name(p).unwrap_or_default()),
+            group: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
             gains: world.gains_this_turn(p) as i64,
             targeted: world.targeted_count(p) as i64,
@@ -1551,7 +1551,7 @@ pub fn fill_candidate<S: SnapSrc>(
         owner: owner as i64,
         owner_money: world.money(p) as i64,
         owner_fire: world.fire(p) as i64,
-        owner_crystals: world.band_crystals(p) as i64,
+        owner_crystals: world.group_crystals(p) as i64,
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
         owner_out: world.player_out(p) as i64,
@@ -1559,8 +1559,8 @@ pub fn fill_candidate<S: SnapSrc>(
         owner_stun: world.stun_of(p) as i64,
         owner_exile: world.state_get(p, game_core::state::key::EXILE) as i64,
         owner_no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-        owner_character: id_of(&world.character_name(p).unwrap_or_default()),
-        owner_band: id_of(&world.band_name(p).unwrap_or_default()),
+        owner_persona: id_of(&world.character_name(p).unwrap_or_default()),
+        owner_group: id_of(&world.band_name(p).unwrap_or_default()),
         owner_tiles: world.owned_count(p) as i64,
         card_id: id_of(card),
         card_placed: placed,
@@ -1590,7 +1590,7 @@ pub fn fill_candidate<S: SnapSrc>(
                 (n, v)
             })
             .collect(),
-        blocked_bands: Vec::new(),
+        blocked_groups: Vec::new(),
     };
     fill_candidate_extras(world, owner, &mut cand, true);
     cand

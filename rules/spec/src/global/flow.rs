@@ -1060,7 +1060,7 @@ pub fn g_flow_15(step: &Step<'_>) -> Result<(), String> {
         && step.events.iter().any(|e| e.r#type == "pick");
     if pick_accepted {
         let c = match step.act {
-            StepAct::Act { msg, .. } => msg.character.clone(),
+            StepAct::Act { msg, .. } => msg.persona.clone(),
             _ => String::new(),
         };
         if !c.is_empty() && step.pre.st.bans.contains(&c) {
@@ -1111,7 +1111,7 @@ pub fn g_flow_16(step: &Step<'_>) -> Result<(), String> {
         ));
     }
     let c = match step.act {
-        StepAct::Act { msg, .. } => msg.character.clone(),
+        StepAct::Act { msg, .. } => msg.persona.clone(),
         _ => String::new(),
     };
     if c.is_empty() {
@@ -1124,7 +1124,7 @@ pub fn g_flow_16(step: &Step<'_>) -> Result<(), String> {
         .st
         .players
         .iter()
-        .filter(|p| p.character == c)
+        .filter(|p| p.persona == c)
         .count();
     if holders != 1 {
         return Err(format!(

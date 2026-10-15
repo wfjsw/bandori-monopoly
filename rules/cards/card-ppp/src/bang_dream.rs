@@ -19,7 +19,7 @@ pub const BANG_DREAM: CardDef =
         .text(r#"[手]：
 为[使用者]的团卡添加一个[奇迹水晶]，然后[传送]至任意[使用者]拥有的格子且可选择盖房。"#)
         .cell(r#"B7"#)
-        .fields(&[("band", r#"Poppin' Party"#), ("owner", "")]));
+        .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBangDream.WhyNot`: refuses with 「你还没有地」 when the player owns no tile.
@@ -31,7 +31,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn bang_dream(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「为[使用者]的团卡添加一个[奇迹水晶]」
-    ctx::add_band_crystals(player_id, 1, i32::MAX);
+    ctx::add_group_crystals(player_id, 1, i32::MAX);
     ctx::log(
         player_id,
         &Msg::new(key!("bang_dream_crystal")).player_id("who", player_id),

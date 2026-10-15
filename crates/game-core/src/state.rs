@@ -666,7 +666,7 @@ pub struct MatchPlayer {
     pub roll: i32,
     pub ban_done: bool,
     pub ban: String,
-    pub character: String,
+    pub persona: String,
     pub deck_ready: bool,
     pub money: i32,
     pub pos: i32,
@@ -679,8 +679,8 @@ pub struct MatchPlayer {
     pub left: bool,
     pub out_order: i32,
     pub skill_note: Msg,
-    pub skill_character: String,
-    pub bands: String,
+    pub skill_owner: String,
+    pub affiliations: String,
     pub tokens: Vec<Counter>,
     /// Keyed state: the counters this player carries -- status pots plus the
     /// arbitrary named slots content invents -- as `{value, min, max}` items.
@@ -712,7 +712,7 @@ impl Default for MatchPlayer {
             roll: 0,
             ban_done: false,
             ban: String::new(),
-            character: String::new(),
+            persona: String::new(),
             deck_ready: false,
             money: 0,
             pos: 0,
@@ -724,8 +724,8 @@ impl Default for MatchPlayer {
             left: false,
             out_order: 0,
             skill_note: Msg::default(),
-            skill_character: String::new(),
-            bands: String::new(),
+            skill_owner: String::new(),
+            affiliations: String::new(),
             tokens: vec![],
             state: {
                 // The two counters that start non-zero (hand limit 5, no exile
@@ -1252,15 +1252,15 @@ pub struct FieldCard {
     #[serde(default)]
     pub props: BTreeMap<String, i32>,
     /// This instance is a **band skill** (`skill:<band>:<skill>`, stamped at
-    /// placement from `GameData::is_band_skill`). 「乐队卡 / 团卡」 crystal
+    /// placement from `GameData::is_group_skill`). 「乐队卡 / 团卡」 crystal
     /// reads and writes land on this instance's [`Self::crystals`] -- see
-    /// `World::band_crystals`. A character skill is `skill:<character>:<skill>`
+    /// `World::group_crystals`. A character skill is `skill:<character>:<skill>`
     /// and is *not* flagged, even when it sits on someone else's field.
     #[serde(default)]
-    pub band_skill: bool,
+    pub group_skill: bool,
     /// A 「拿取」ed band-skill copy. 「相同乐队技能卡的效果不可叠加」 -- the
     /// hook dispatch skips an extra when a non-extra attachment of the same id
-    /// is already on the field -- and 「不视为那个乐队的角色」 (`in_band` reads
+    /// is already on the field -- and 「不视为那个乐队的角色」 (`in_group` reads
     /// only the character).
     #[serde(default)]
     pub extra: bool,
@@ -1281,7 +1281,7 @@ impl Default for FieldCard {
             face_down: false,
             immune: false,
             props: BTreeMap::new(),
-            band_skill: false,
+            group_skill: false,
             extra: false,
             note: Msg::default(),
         }

@@ -30,18 +30,18 @@ pub const MUTSUMI_NEVER: CardDef = CardDef::new(
 （2）消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗），立即执行乐队技能的（2）效果，然后弃一张卡。
 （3）此卡[移除]并向抽牌堆中加入一张“表演的本能”，将手牌与弃牌堆全部放入抽牌堆并洗切，然后抽2张卡。你本回合的移动以“CiRCLE”为起点（不触发起点地块效果）"#)
         .cell(r#"M12"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", r#"若叶睦（CRYCHIC）"#)]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"若叶睦（CRYCHIC）"#)]));
 
 fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，使用者可以选择（2）或（3）效果之一发动。」 -- C#
     // `H.AskPick` between the two effects (default the last option).
     // C# only offers (2) when a real (non-Extra) `BandCrychic` skill is attached
-    // (`H._fx[i].bands.Any(b => b is BandCrychic && !b.Extra)`); the ABI names
-    // the band attachments (`ctx::band_skills`), so (2) is offered only when a
+    // (`H._fx[i].groups.Any(b => b is BandCrychic && !b.Extra)`); the ABI names
+    // the band attachments (`ctx::group_skills`), so (2) is offered only when a
     // real (non-Extra) one is there. TODO(规则书): the C# narrows further to
     // `BandCrychic` specifically -- 「乐队技能的（2）效果」 reads as the player's
     // own band skill whatever it is, so the wider gate is taken here.
-    let has_band = ctx::band_skills(player_id)
+    let has_band = ctx::group_skills(player_id)
         .iter()
         .any(|&(_, _, extra)| extra == 0);
     let mut options: Vec<Msg> = Vec::new();
@@ -66,9 +66,9 @@ fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
 /// 规则书（2） -- spend up to 3 band crystals, run the band skill, discard a card.
 fn branch_crystals(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗）」
-    let n = ctx::band_crystals(player_id).min(3);
+    let n = ctx::group_crystals(player_id).min(3);
     if n > 0 {
-        ctx::add_band_crystals(player_id, -n, 0);
+        ctx::add_group_crystals(player_id, -n, 0);
     }
     ctx::log(
         player_id,
@@ -79,10 +79,10 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「立即执行乐队技能的（2）效果」 -- C# `BandCrychic.TransformNow()`.
     // A band skill exposes its numbered active effect as `On::Play` (the press),
     // so the invoke is `ctx::invoke_skill` on the bound band skill
-    // (`ctx::band_skill` -- C# `H._fx[i].bands`). The CRYCHIC band skill's (2)
+    // (`ctx::group_skill` -- C# `H._fx[i].groups`). The CRYCHIC band skill's (2)
     // is exactly that entry (`transform_now`), and it re-checks its own
     // 「若你的抽牌堆与弃牌堆中都没有卡」 gate before doing anything.
-    if let Some(skill) = ctx::band_skill(player_id) {
+    if let Some(skill) = ctx::group_skill(player_id) {
         ctx::invoke_skill(player_id, &skill)?;
     }
     // 规则书（2）: 「然后弃一张卡」 -- C# `H.AskCard(i, ..., H._hidden[i].hand.ToList())`.

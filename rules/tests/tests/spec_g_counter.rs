@@ -518,8 +518,8 @@ fn g_counter_06_band_filter_uses_held_band_cards() {
     // (「拿取选择角色的角色卡和对应的乐队卡」).
     let mut t = Table::new(&["丸山彩", "户山香澄"]);
     t.observe(CLAUSES);
-    assert_eq!(t.p(0).character, "丸山彩");
-    assert_eq!(t.p(1).character, "户山香澄");
+    assert_eq!(t.p(0).persona, "丸山彩");
+    assert_eq!(t.p(1).persona, "户山香澄");
 
     // 丸山彩 (1): 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」. The
     // filter is the band card the player currently holds -- P1 is not PP, so

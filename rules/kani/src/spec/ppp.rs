@@ -142,7 +142,7 @@ pub fn pipopa_effects_ok_mutant(effects: &[Effect], player: i32, popipapapipopa_
 // Condition: the user has a band-skill field instance (团卡).
 // ===========================================================================
 
-/// Exact log for the crystal leg (host models band crystals as `band_crystals`
+/// Exact log for the crystal leg (host models band crystals as `group_crystals`
 /// and/or `AddCounter` on the band-skill instance).
 pub fn bang_dream_01_crystals_after(pre: i32) -> i32 {
     pre + 1

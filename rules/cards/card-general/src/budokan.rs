@@ -18,7 +18,7 @@ pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play("
         .text(r#"[手]：
 将X设为2000÷“[使用者]以外的[存活]玩家数量”向上取整10，Y设为[存活]玩家数量减1。[指定][使用者]以外的所有玩家，被[指定]的玩家[支付][使用者]X资金。"#)
         .cell(r#"A3"#)
-        .fields(&[("band", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn budokan(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「[使用者]以外的[存活]玩家」 (`ctx::others` drops out players)

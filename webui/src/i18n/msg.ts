@@ -124,7 +124,7 @@ function fmtArg(arg: MsgArg, names: Names): string {
   if ("card" in arg) return names.card(arg.card);
   if ("char" in arg) return names.chara(arg.char);
   if ("event" in arg) return names.event(arg.event);
-  if ("band" in arg) return names.band(arg.band);
+  if ("band" in arg) return names.group(arg.group);
   if ("text" in arg) return arg.text;
   if ("n" in arg) return n0(arg.n);
   if ("i" in arg) return String(arg.i);

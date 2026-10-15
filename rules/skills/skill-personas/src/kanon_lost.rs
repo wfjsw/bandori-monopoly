@@ -1,0 +1,138 @@
+//! `skill:松原花音:真正的迷子`
+//!
+//! 规则书（skill sheet, 松原花音）:
+//! > (1) 游戏开始起点为#30弦卷豪宅
+//! > (2) 移动阶段进行两次移动掷骰并将它们的结果相减作为你的移动格数
+//! > (3) 如果三个回合内没有拿过Circle奖励，则下回合移动投掷改为1d20+1d4
+//!
+//! (1) is a starting square, which is a position write at game start.
+//!
+//! (2) 「两次移动掷骰并将它们的结果相减」 -- the face is `|a - b|`, not a sum.
+//! `RollAfter` is where the first face exists; a second roll and the difference
+//! replace it.
+//!
+//! (3) 「三个回合内没有拿过Circle奖励」 is a three-turn silence, tracked as a
+//! counter that a CiRCLE reward resets; 「下回合移动投掷改为1d20+1d4」 is the
+//! dice table being rewritten when it fires.
+
+use card_sdk::abi::HookKind;
+use ruleset_core::ctx::{self, plan, state};
+use card_sdk::{key, CardDef, Msg, On};
+
+/// Turns since the last CiRCLE reward. Cleared on the reward.
+const SILENT: &str = "skill.kanonLost.silent";
+
+pub const KANON_LOST: CardDef = CardDef::new(
+    "skill:松原花音:真正的迷子",
+    &[
+        // (1) is a starting square: the before-match-start point decides start
+        // positions.
+        On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
+        // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
+        // dice, so there are not two faces to subtract.
+        On::Hook(&[HookKind::RollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
+        On::Hook(&[HookKind::CircleAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
+        On::Hook(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
+    ],
+)
+    .silent(&[2, 3]);
+
+/// (1) 「游戏开始起点为#30弦卷豪宅」.
+fn at_start(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::tile_named("弦卷豪宅");
+    if t >= 0 {
+        ctx::teleport_to(player_id, t);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("kanon_lost_start")).tile("tile", t),
+        );
+    }
+    Ok(())
+}
+
+/// (2) 「移动阶段进行两次移动掷骰并将它们的结果相减作为你的移动格数」.
+/// Applicability is the entry's condition (a fixed face means no pair to subtract).
+fn on_roll(player_id: i32) -> card_sdk::Asked {
+    let a = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
+    let b = ctx::do_move_roll(player_id).max(0);
+    let face = (a - b).abs();
+    ctx::trigger::set_move_roll(face);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kanon_lost_sub"))
+            .i("a", a as i64)
+            .i("b", b as i64)
+            .i("n", face as i64),
+    );
+    Ok(())
+}
+
+/// (3) 「如果三个回合内没有拿过Circle奖励」 -- the reward resets the counter.
+fn on_circle(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, SILENT, 0);
+    Ok(())
+}
+
+fn at_turn_end(player_id: i32) -> card_sdk::Asked {
+    let n = state::get(player_id, SILENT) + 1;
+    state::set(player_id, SILENT, n);
+    Ok(())
+}
+
+/// (3) 「下回合移动投掷改为1d20+1d4」 -- the plan's dice table, rewritten while
+/// the silence holds.
+fn on_plan(player_id: i32) -> card_sdk::Asked {
+    
+    plan::set_base_dice(1, 20, "真正的迷子");
+    plan::add_base_dice(1, 4, "真正的迷子");
+    ctx::log(player_id, &Msg::new(key!("kanon_lost_dice")));
+    Ok(())
+}
+
+/// Roster character row for this skill's owner (ABI v63).
+pub const CHARACTER: ruleset_core::roster::PersonaDef =
+ruleset_core::roster::PersonaDef::new(r#"松原花音"#)
+    .display(r#"松原花音"#)
+    .group(r#"Hello, Happy World!"#)
+    .color(r#"#44DDFF"#)
+    .skill(r#"真正的迷子"#)
+    .text(r#"(1) 游戏开始起点为#30弦卷豪宅 (2) 移动阶段进行两次移动掷骰并将它们的结果相减作为你的移动格数 (3) 如果三个回合内没有拿过Circle奖励，则下回合移动投掷改为1d20+1d4"#)
+    .cn_id(r#"014"#)
+    .art("")
+    .costume("")
+    .exclusive_cards(&[r#"Wacha Mocha 啪嗒进行曲"#])
+    .preset(&[])
+    .variant_of("")
+    .variant_tag("");
+
+// Kani-only direct-call exports (ppcost). Production builds omit these.
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
+    on_roll(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_circle_kani(player_id: i32) -> card_sdk::Asked {
+    on_circle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan(player_id)
+}

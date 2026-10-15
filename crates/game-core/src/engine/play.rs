@@ -4122,12 +4122,12 @@ impl Cx<'_> {
         id: &str,
         card: &crate::data::CardData,
     ) -> Option<Msg> {
-        let character = &self.w.st.players[i].character;
-        let base = self.data.base_character(character);
+        let character = &self.w.st.players[i].persona;
+        let base = self.data.base_persona(character);
         let owner_is_self = card.owner == *character;
         let owner_is_base = card.owner == base;
         if !owner_is_self && !owner_is_base {
-            return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+            return Some(Msg::new("err.play_exclusive").persona("owner", card.owner.clone()));
         }
         let ask = super::ExclusiveAsk {
             card: id,
@@ -4138,7 +4138,7 @@ impl Cx<'_> {
         // Band-skill denial (`ExclusiveUse` gates), memoized under the world
         // stamp like `rules_cant_play`.
         if self.exclusive_gate_denied(i, id, &ask) {
-            return Some(Msg::new("err.play_exclusive").chara("owner", card.owner.clone()));
+            return Some(Msg::new("err.play_exclusive").persona("owner", card.owner.clone()));
         }
         None
     }

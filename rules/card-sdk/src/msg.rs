@@ -72,8 +72,8 @@ pub enum Arg {
     Tile(i32),
     /// A card id -> its title.
     Card(String),
-    /// A character (data name) -> its display name.
-    Char(String),
+    /// A persona (data name) -> its display name.
+    Persona(String),
     /// Money / price (thousands separators).
     N(i64),
     /// Count / dice value.
@@ -158,9 +158,9 @@ impl Msg {
         self.with(name, Arg::Card(id.into()))
     }
 
-    /// A character (data name) -> its display name.
-    pub fn chara(self, name: &str, character: &str) -> Self {
-        self.with(name, Arg::Char(character.into()))
+    /// A persona (data name) -> its display name.
+    pub fn chara(self, name: &str, persona: &str) -> Self {
+        self.with(name, Arg::Persona(persona.into()))
     }
 
     /// Money / price (thousands separators).
@@ -238,7 +238,7 @@ impl Msg {
         self.push(0)
     }
 
-    /// A character (data name) -> its display name. String arg, not interned.
+    /// A persona (data name) -> its display name. String arg, not interned.
     pub fn chara(self, _name: &str, _character: &str) -> Self {
         self.push(0)
     }
@@ -325,7 +325,7 @@ mod tests {
             Arg::PlayerId(_) => "playerId",
             Arg::Tile(_) => "tile",
             Arg::Card(_) => "card",
-            Arg::Char(_) => "char",
+            Arg::Persona(_) => "persona",
             Arg::N(_) => "n",
             Arg::I(_) => "i",
             Arg::Msg(_) => "msg",

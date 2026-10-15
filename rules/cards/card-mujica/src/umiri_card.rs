@@ -50,7 +50,7 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
 （2）使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。
 （3）当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。"#)
         .cell(r#"J16"#)
-        .fields(&[("band", r#"Ave Mujica"#), ("owner", r#"八幡海铃"#)]));
+        .fields(&[("group", r#"Ave Mujica"#), ("owner", r#"八幡海铃"#)]));
 
 /// C# `CardUmiriCard.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -84,11 +84,11 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。」
     // C# `CardUmiriCard.Take` copies every non-extra `BandBase` of the holder
     // onto the user as `extra: true` (stackable band skills, but "not that
-    // band's character"). `ctx::band_skills` enumerates the holder's
-    // attachments (C# `H._fx[i].bands`); `ctx::add_band_skill(.., extra)` is
-    // `H.MakeBand`. 「相同乐队技能卡的效果不可叠加」 -- `add_band_skill` refuses
+    // band's character"). `ctx::group_skills` enumerates the holder's
+    // attachments (C# `H._fx[i].groups`); `ctx::add_group_skill(.., extra)` is
+    // `H.MakeBand`. 「相同乐队技能卡的效果不可叠加」 -- `add_group_skill` refuses
     // an id already attached to the user -- and 「不视为那个乐队的角色」 --
-    // `in_band` reads only the character.
+    // `in_group` reads only the character.
     take_bands(next, player_id);
     Ok(())
 }
@@ -96,12 +96,12 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
 /// C# `CardUmiriCard.Take` -- copy every real band-skill attachment of `holder`
 /// onto `user` as an `extra` (「拿取」).
 fn take_bands(holder: i32, user: i32) {
-    for (_uid, id, extra) in ctx::band_skills(holder) {
+    for (_uid, id, extra) in ctx::group_skills(holder) {
         if extra != 0 {
             // Only real attachments are taken; an extra copy is not a second source.
             continue;
         }
-        let got = ctx::add_band_skill(user, &id, true);
+        let got = ctx::add_group_skill(user, &id, true);
         if got >= 0 {
             ctx::log(
                 user,
@@ -162,7 +162,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 「使用者拿取的所有乐队技能卡」 is every **extra** attachment on the user
     // (the 「拿取」 copies `take_bands` made); the user's own band skill is not
     // one of them and stays.
-    for (uid, id, extra) in ctx::band_skills(user) {
+    for (uid, id, extra) in ctx::group_skills(user) {
         if extra == 0 {
             continue;
         }

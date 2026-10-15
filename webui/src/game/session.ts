@@ -114,7 +114,7 @@ class Autopilot {
   private ctx(): AutopilotCtx {
     return {
       tiles: D.tiles,
-      characters: D.characters,
+      characters: D.personas,
       playedThisTurn: this.played,
       deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
       // Deck book entry for the public table, else the preset
@@ -518,9 +518,9 @@ export class SoloSession extends GameSession {
     // The solo setup screen's picks, its `""` (random) seats resolved here
     // among the free characters -- everything not explicitly picked. The
     // engine sees a character on every seat and starts past ban / pick.
-    const chars = resolveSoloCharacters([playerCharacter, ...bots.map((b) => b.character)]);
+    const chars = resolveSoloCharacters([playerCharacter, ...bots.map((b) => b.persona)]);
     const seat = (id: number, name: string, character: string, bot: boolean, mentality: BotMentality): RoomMember => {
-      const c = D.character(character);
+      const c = D.persona(character);
       return {
         id,
         player: name,
@@ -695,7 +695,7 @@ export class SoloSession extends GameSession {
   private autopilotCtx(): AutopilotCtx {
     return {
       tiles: D.tiles,
-      characters: D.characters,
+      characters: D.personas,
       playedThisTurn: 0,
       deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
       deckSuggest: (c, seat, opponents) =>
@@ -807,7 +807,7 @@ export interface SoloBot {
  */
 export function resolveSoloCharacters(want: readonly string[]): string[] {
   const taken = new Set(want.filter(Boolean));
-  const free = D.characters.map((c) => c.name).filter((n) => !taken.has(n));
+  const free = D.personas.map((c) => c.name).filter((n) => !taken.has(n));
   return want.map((w) => {
     if (w) return w;
     if (!free.length) return "";

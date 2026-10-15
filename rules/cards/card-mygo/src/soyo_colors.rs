@@ -21,7 +21,7 @@ pub const SOYO_COLORS: CardDef = CardDef::new(
         .tags(&[])
         .text(r#"将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半。"#)
         .cell(r#"I9"#)
-        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", r#"长崎素世"#)]));
+        .fields(&[("group", r#"MyGO!!!!!"#), ("owner", r#"长崎素世"#)]));
 
 /// 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时」 -- rent charged
 /// on this card's own tile. The card's tile 「获得所有颜色」, so any agent

@@ -635,7 +635,7 @@ impl Table {
 
     /// Set a player's character **without** binding its skills.
     pub fn set_character_raw(&mut self, who: usize, name: &str) {
-        self.m.world_mut().st.players[who].character = name.into();
+        self.m.world_mut().st.players[who].persona = name.into();
     }
 
     pub fn set_money(&mut self, who: usize, money: i32) {
@@ -894,7 +894,7 @@ impl Table {
             .field(who)
             .into_iter()
             .filter(|f| f.card.starts_with("skill:") && f.card.contains(needle))
-            .map(|f| (f.band_skill, f.card))
+            .map(|f| (f.group_skill, f.card))
             .collect();
         hits.sort_by_key(|(band, _)| !band);
         hits.into_iter()

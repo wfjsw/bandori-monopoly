@@ -25,7 +25,7 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1"#)
         .cell(r#"C15"#)
-        .fields(&[("band", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]));
+        .fields(&[("group", r#"Afterglow"#), ("owner", r#"上原绯玛丽"#)]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使结果+1」

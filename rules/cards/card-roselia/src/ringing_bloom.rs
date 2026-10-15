@@ -31,7 +31,7 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
 （2）你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此效果影响获得额外房屋数的格子收费减半
 （3）你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。"#)
         .cell(r#"E12"#)
-        .fields(&[("band", r#"Roselia"#), ("owner", r#"白金燐子"#)]));
+        .fields(&[("group", r#"Roselia"#), ("owner", r#"白金燐子"#)]));
 
 const ID: &str = "R:（燐子）Ringing Bloom";
 

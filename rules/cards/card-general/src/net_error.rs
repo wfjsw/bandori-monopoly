@@ -27,7 +27,7 @@ pub const NET_ERROR: CardDef = CardDef::new(
 2. 手卡的[手]效果且没有[指定]目标则抵消其所有的效果；
 3. 事件卡的效果手牌则则抵消其所有的效果。"#)
         .cell(r#"A10"#)
-        .fields(&[("band", r#"通用"#), ("owner", "")]));
+        .fields(&[("group", r#"通用"#), ("owner", "")]));
 
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「[反击]1张手卡的[手]效果或事件卡的效果生效前」

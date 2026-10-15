@@ -377,7 +377,7 @@ impl CardDef {
     ///         .text("...")
     ///         .tags(&["手"])
     ///         .cell("B2")
-    ///         .fields(&[("band", "Sumimi"), ("owner", "")]));
+    ///         .fields(&[("group", "Sumimi"), ("owner", "")]));
     /// ```
     pub const fn meta(self, meta: &'static crate::meta::CardMeta) -> Self {
         Self {

@@ -36,7 +36,7 @@ pub const RANGER: CardDef = CardDef::new(
 4. 数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；
 5.数量至少为6则抽1张卡。"#)
         .cell(r#"D14"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -81,11 +81,11 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[手]2: 「数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
     if n >= 3 {
-        ctx::add_band_crystals(player_id, 3, i32::MAX);
+        ctx::add_group_crystals(player_id, 3, i32::MAX);
     }
     // 规则书[手]3: 「数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡」
     if n >= 4 {
-        ctx::add_band_crystals(player_id, -4, i32::MAX);
+        ctx::add_group_crystals(player_id, -4, i32::MAX);
         ctx::draw(player_id, 1)?;
     }
     // 规则书[手]4: 「数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），

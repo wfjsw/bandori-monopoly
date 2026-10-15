@@ -59,7 +59,7 @@ crate::host_subset!(two_donuts_dispatch {
 /// stub (no uid/name buffer), so the `unplace_at` half of the swap is
 /// isolated (never entered) — still declared so isolation cannot drift.
 crate::host_subset!(two_in_one_dispatch {
-    character_is => arm_character_is,
+    persona_is => arm_character_is,
     field_instances => arm_field_instances,
     unplace_at | unplace_card | unplace_card_named => arm_unplace_card,
     place_card_at => arm_place_card_at,
@@ -282,7 +282,7 @@ fn hina_01_pass_circle_iff_at(user: i32) {
     kani::cover!(pre_fire >= cap, "at/over cap (global hold-cap forbids)");
 
     // DIRECT body call (ppcost).
-    invoke::unwrap_done(skill_characters::uika_idol::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::uika_idol::on_pass_kani(user));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -326,7 +326,7 @@ pub fn hina_01_mutant_is_detected() {
     let user = 0i32;
     world::with_world_mut(|w| w.fire[0] = 0);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_characters::uika_idol::on_pass_kani(user));
+    invoke::unwrap_done(skill_personas::uika_idol::on_pass_kani(user));
     let post = world::snapshot();
     let wrong = spec::sumimi::pass_circle_fire_post_mutant(
         pre.fire[user as usize],
@@ -528,13 +528,13 @@ pub fn twodonuts_01_mutant_is_detected() {
 // C-SUMIMI-twoinone-01b -- fire becomes the other character's 初始火罐数
 // `Sumimi:Sumimi是二人一体的` play body.
 // C-SUMIMI-twoinone-01 (character identity) is a known engine gap (the
-// bound skill is swapped but `player.character` stays) — the fire half is
+// bound skill is swapped but `player.persona` stays) — the fire half is
 // what this harness pins. C-SUMIMI-twoinone-02 is PROTOCOL-LEVEL.
 // Seat-symmetric (the user's own character / fire).
 // ===========================================================================
 
 /// In-place 2-seat world for the play body. Character identity is the
-/// residual the swap reads (`character_is`).
+/// residual the swap reads (`persona_is`).
 fn two_in_one_world(user: i32, is_hina: bool) {
     debug_assert!(user == 0 || user == 1);
     host::install_backend(two_in_one_dispatch);
@@ -552,7 +552,7 @@ fn two_in_one_world(user: i32, is_hina: bool) {
     world::with_world_mut(|w| {
         w.trig_player = user;
         w.out[user as usize] = false;
-        w.character_id[user as usize] = cid;
+        w.persona_id[user as usize] = cid;
     });
 }
 

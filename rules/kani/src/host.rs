@@ -520,8 +520,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // The counteract window is PROTOCOL-LEVEL (KANI.md §6) — no cancel
         // path is explored. `targeted_count` is bumped on success.
                 Op::target => arm_target(a),
-        Op::character_is => arm_character_is(a),
-        Op::in_band => arm_in_band(a),
+        Op::persona_is => arm_character_is(a),
+        Op::in_group => arm_in_band(a),
                 Op::self_uid => arm_self_uid(a),
 
         // ---- money ----
@@ -851,11 +851,11 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 Op::card_move => arm_card_move(a),
 
         // ---- band / skills ----
-        Op::band_crystals => arm_band_crystals(a),
-        Op::add_band_crystals => arm_add_band_crystals(a),
-                Op::band_skill | Op::character_skill => arm_band_skill(a),
-                Op::band_skills => arm_band_skills(a),
-                Op::add_band_skill => arm_add_band_skill(a),
+        Op::group_crystals => arm_band_crystals(a),
+        Op::add_group_crystals => arm_add_band_crystals(a),
+                Op::group_skill | Op::persona_skill => arm_band_skill(a),
+                Op::group_skills => arm_band_skills(a),
+                Op::add_group_skill => arm_add_band_skill(a),
                 Op::invoke_skill => arm_invoke_skill(a),
 
         // ---- events ----
@@ -1012,8 +1012,8 @@ pub fn arm_add_band_crystals(a: Args) -> i64 {
     let [a0, a1, ..] = a;
     world::with_world_mut(|w| {
         let p = player_idx(a0);
-        w.band_crystals[p] = (w.band_crystals[p] + a1).clamp(0, 99);
-        w.band_crystals[p] as i64
+        w.group_crystals[p] = (w.group_crystals[p] + a1).clamp(0, 99);
+        w.group_crystals[p] as i64
     })
 }
 
@@ -1241,7 +1241,7 @@ pub fn arm_ask(a: Args) -> i64 {
 
 pub fn arm_band_crystals(a: Args) -> i64 {
     let [a0, ..] = a;
-    world::with_world(|w| w.band_crystals[player_idx(a0)]) as i64
+    world::with_world(|w| w.group_crystals[player_idx(a0)]) as i64
 }
 
 pub fn arm_band_skill(a: Args) -> i64 {
@@ -1399,7 +1399,7 @@ pub fn arm_cards_in(a: Args) -> i64 {
 pub fn arm_character_is(a: Args) -> i64 {
     let [a0, a1, a2, ..] = a;
     let want = name_id(a1, a2);
-    world::with_world(|w| (w.character_id[player_idx(a0)] == want.0) as i64)
+    world::with_world(|w| (w.persona_id[player_idx(a0)] == want.0) as i64)
 }
 
 pub fn arm_count_held(a: Args) -> i64 {
@@ -1725,7 +1725,7 @@ pub fn arm_houses_of(a: Args) -> i64 {
 pub fn arm_in_band(a: Args) -> i64 {
     let [a0, a1, a2, ..] = a;
     let want = name_id(a1, a2);
-    world::with_world(|w| (w.band_id[player_idx(a0)] == want.0) as i64)
+    world::with_world(|w| (w.group_id[player_idx(a0)] == want.0) as i64)
 }
 
 pub fn arm_inc_slot(a: Args) -> i64 {

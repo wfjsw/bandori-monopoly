@@ -34,7 +34,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。（2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。"#)
         .cell(r#"G14"#)
-        .fields(&[("band", r#"Morfonica"#), ("owner", "")]));
+        .fields(&[("group", r#"Morfonica"#), ("owner", "")]));
 
 // ============ NORMALIZED GRADE ORDINALS ================================
 // Ruling 2026-10-06: grades come from BanG Dream character facts, shipped as
@@ -61,7 +61,7 @@ pub const SECRET_RAINBOW: CardDef = CardDef::new(
 // not high school; 珠手知由 is 12th grade = 12; 和奏瑞依 / 佐藤益木 are 3rd-yr
 // high school = 12; 长崎素世 is Tsukinomori 1st yr = 10.
 //
-// Keyed by the character's Chinese name (`ctx::character_is`); `cnId` is the
+// Keyed by the character's Chinese name (`ctx::persona_is`); `cnId` is the
 // id from the roster, the wiki page is the cited source.
 const GRADES: &[(&str, &str, i32)] = &[
     // (name, cnId, ordinal)
@@ -122,7 +122,7 @@ const GRADES: &[(&str, &str, i32)] = &[
 fn grade_of(player_id: i32) -> Option<i32> {
     GRADES
         .iter()
-        .find(|(name, _, _)| ctx::character_is(player_id, name))
+        .find(|(name, _, _)| ctx::persona_is(player_id, name))
         .map(|&(_, _, ord)| ord)
 }
 

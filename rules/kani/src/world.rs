@@ -625,12 +625,12 @@ pub struct World {
     pub extra_turns: [bool; MAX_PLAYERS],
     /// `ctx::n(k,v)` doubling slot. `-1` = no doubling (engine `None`).
     pub play_doubled: i32,
-    pub character_id: [u16; MAX_PLAYERS],
-    pub band_id: [u16; MAX_PLAYERS],
+    pub persona_id: [u16; MAX_PLAYERS],
+    pub group_id: [u16; MAX_PLAYERS],
     /// Generic per-player named counters (tokens, held, state).
     pub player_keys: [NameMap; MAX_PLAYERS],
     /// Band crystals / skills (kept explicit; also mirrored in player_keys).
-    pub band_crystals: [i32; MAX_PLAYERS],
+    pub group_crystals: [i32; MAX_PLAYERS],
 
     // ---- compatibility views for the pilot proofs ----
     /// `P✽P粉丝(正)` / `(反)` counts (also in `player_keys`).
@@ -771,10 +771,10 @@ impl World {
             exile_to: [-1; MAX_PLAYERS],
             extra_turns: [false; MAX_PLAYERS],
             play_doubled: -1,
-            character_id: [u16::MAX; MAX_PLAYERS],
-            band_id: [u16::MAX; MAX_PLAYERS],
+            persona_id: [u16::MAX; MAX_PLAYERS],
+            group_id: [u16::MAX; MAX_PLAYERS],
             player_keys: [NameMap::new(); MAX_PLAYERS],
-            band_crystals: [0; MAX_PLAYERS],
+            group_crystals: [0; MAX_PLAYERS],
             fans_pos: [0; MAX_PLAYERS],
             fans_neg: [0; MAX_PLAYERS],
             hand_resonance: [0; MAX_PLAYERS],

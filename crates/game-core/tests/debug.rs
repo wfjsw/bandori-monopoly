@@ -99,7 +99,7 @@ fn cheats_update_views_and_survive_save_restore() {
         vec![&card, &card]
     );
     let mut state = cheat("state", 1_000, human as i32);
-    state.character = "fire".into();
+    state.persona = "fire".into();
     m.act(1, &state).unwrap();
     let st = m.state();
     assert!(st.debug_open);

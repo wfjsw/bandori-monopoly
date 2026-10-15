@@ -8,7 +8,7 @@ use alloc::{string::String, vec::Vec};
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
-/// v7: board/hand/status query + op wave (is_buyable ... in_band, spend_fire,
+/// v7: board/hand/status query + op wave (is_buyable ... in_group, spend_fire,
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
 /// v8: `ruleset_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
 /// v9: `cant_move`, `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
@@ -112,13 +112,13 @@ use alloc::{string::String, vec::Vec};
 ///      the rest is naming.
 /// v29: two semantic breaks share this bump.
 ///      (a) **Band crystals are the band-skill field instance's crystals.**
-///      `band_crystals` / `add_band_crystals` no longer touch the keyed state
+///      `group_crystals` / `add_group_crystals` no longer touch the keyed state
 ///      `bandCrystals` (deleted, along with the old per-player store): they
 ///      are sugar over the player's band-skill field card (`skill:<band>:<skill>`,
-///      `FieldCard::band_skill`) -- the same instance `crystals` / `add_crystals`
+///      `FieldCard::group_skill`) -- the same instance `crystals` / `add_crystals`
 ///      touch from inside a band skill's own handler, so 「乐队卡 / 团卡」 crystal
 ///      text is one pool. `max` = 0 now means uncapped (it used to clamp the
-///      count to 0); `add_band_crystals` returns the new count (it used to
+///      count to 0); `add_group_crystals` returns the new count (it used to
 ///      return the delta). A player with no band skill reads 0 and every write
 ///      is a no-op; a swapped or removed band card takes its crystals with it.
 ///      (b) the match-start / per-draw raise points (see the `TriggerKind`
@@ -164,13 +164,13 @@ use alloc::{string::String, vec::Vec};
 ///      that is the player's
 ///      own press (`use_skill`), not a card running the body.
 ///      (b) the skill **attachment surface**:
-///      `band_skill(player_id)` / `character_skill(player_id)` name the bound
-///      rule id, `band_skills(player_id)` lists every band attachment as
-///      `(uid, id, extra)`, `add_band_skill(player_id, id, extra)` attaches one.
+///      `group_skill(player_id)` / `persona_skill(player_id)` name the bound
+///      rule id, `group_skills(player_id)` lists every band attachment as
+///      `(uid, id, extra)`, `add_group_skill(player_id, id, extra)` attaches one.
 ///      `extra` is 「拿取」's borrowed copy: 「相同乐队技能卡
 ///      的效果不可叠加」 (the hook dispatch skips an extra when a non-extra copy
 ///      of the same id is already attached) and 「不视为那个乐队的角色」
-///      (`in_band` still reads only the character).
+///      (`in_group` still reads only the character).
 ///      (c) `raise_bought(player_id, tile)` -- a card that hands a deed over
 ///      (tomoe_savior's 「从该玩家处收购该地契」) announces the acquisition so
 ///      the `bought` hook chain hears it.
@@ -398,7 +398,7 @@ use alloc::{string::String, vec::Vec};
 /// v63: **roster metadata export** (`docs/CARDS.md` 「Card metadata」).
 ///      `CardDef::meta` carries the card's data-set row (name / rawName /
 ///      text / tags / derived / cell + a generic `fields` map for game slots
-///      `band` / `owner`); the skill crates' `CharacterDef` / `BandDef`
+///      `band` / `owner`); the skill crates' `PersonaDef` / `GroupDef`
 ///      tables carry the character / band rows. A new guest export
 ///      `ruleset_metadata` (`export::METADATA`, `() -> i64` packed
 ///      postcard `meta::MetaDoc`) hands the whole roster to the host on

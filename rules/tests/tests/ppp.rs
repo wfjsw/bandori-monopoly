@@ -217,7 +217,7 @@ fn returns_borrow_options_carry_band_cards() {
         );
         assert!(
             card.contains("Afterglow") || card.contains("Pastel"),
-            "option {i} shows that player's own band: {card}"
+            "option {i} shows that player's own group: {card}"
         );
         seen += 1;
     }
@@ -228,7 +228,7 @@ fn returns_borrow_options_carry_band_cards() {
     let ids = t.field_ids(0);
     assert!(
         ids.iter().any(|c| c.contains("Pastel") || c.contains("与偶像一起")),
-        "answering option 1 borrows that player's band: {ids:?}"
+        "answering option 1 borrows that player's group: {ids:?}"
     );
 }
 
@@ -729,7 +729,7 @@ fn aoki_skill_spends_fire_for_crystal() {
     let band_x = t
         .field(0)
         .iter()
-        .find(|f| f.band_skill)
+        .find(|f| f.group_skill)
         .map(|f| f.crystals)
         .unwrap_or(0);
     eprintln!("fire={} crystals={}", t.fire(0), band_x);
@@ -948,7 +948,7 @@ fn ix_band_sticker_to_crystal_to_cash() {
     let band_x = t
         .field(0)
         .iter()
-        .find(|f| f.band_skill)
+        .find(|f| f.group_skill)
         .map(|f| f.crystals)
         .unwrap_or(0);
     assert_eq!(band_x, 1, "1 crystal added");

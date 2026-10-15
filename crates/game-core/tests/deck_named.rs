@@ -9,7 +9,7 @@ use common::data;
 #[test]
 fn create_duplicate_rename_delete_and_reorder() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("户山香澄").unwrap();
     let preset = deck::preset(&d, c);
     let mut p = PlayerProfile::default();
 
@@ -67,7 +67,7 @@ fn create_duplicate_rename_delete_and_reorder() {
         deck::create(&d, &mut p, c, "", &Vec::<String>::new()).is_none(),
         "at the cap"
     );
-    let other = d.character("花园多惠").unwrap();
+    let other = d.persona("花园多惠").unwrap();
     assert!(
         deck::create(&d, &mut p, other, "", &Vec::<String>::new()).is_some(),
         "the cap is per character"
@@ -77,8 +77,8 @@ fn create_duplicate_rename_delete_and_reorder() {
 #[test]
 fn old_slot_profile_migrates_to_named_decks() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
-    let other = d.character("花园多惠").unwrap();
+    let c = d.persona("户山香澄").unwrap();
+    let other = d.persona("花园多惠").unwrap();
     let preset = deck::preset(&d, c);
     let full = serde_json::to_string(&preset).unwrap();
     let a = preset[0].clone();
@@ -90,16 +90,16 @@ fn old_slot_profile_migrates_to_named_decks() {
       "saveVersion": 3,
       "playerName": "灯",
       "playerId": "123456789",
-      "homeCharacter": "户山香澄",
+      "homePersona": "户山香澄",
       "decks": [
-        {{"character": "户山香澄", "slot": 2, "cards": {full}}},
-        {{"character": "花园多惠", "slot": 1, "cards": []}},
-        {{"character": "户山香澄", "slot": 1, "cards": []}},
-        {{"character": "户山香澄", "slot": 3, "cards": ["{a}"]}}
+        {{"persona": "户山香澄", "slot": 2, "cards": {full}}},
+        {{"persona": "花园多惠", "slot": 1, "cards": []}},
+        {{"persona": "户山香澄", "slot": 1, "cards": []}},
+        {{"persona": "户山香澄", "slot": 3, "cards": ["{a}"]}}
       ],
       "deckChoices": [
-        {{"character": "户山香澄", "slot": 2}},
-        {{"character": "花园多惠", "slot": 1}}
+        {{"persona": "户山香澄", "slot": 2}},
+        {{"persona": "花园多惠", "slot": 1}}
       ]
     }}"#
     );
@@ -138,8 +138,8 @@ fn old_slot_profile_migrates_to_named_decks() {
     // the chosen deck is not offered until it is complete again.
     let stale = r#"{
       "saveVersion": 3,
-      "decks": [{"character": "户山香澄", "slot": 1, "cards": ["nope:gone"]}],
-      "deckChoices": [{"character": "户山香澄", "slot": 1}]
+      "decks": [{"persona": "户山香澄", "slot": 1, "cards": ["nope:gone"]}],
+      "deckChoices": [{"persona": "户山香澄", "slot": 1}]
     }"#;
     let p2 = PlayerProfile::from_json(&d, stale).unwrap();
     assert_eq!(deck::list(&p2, c).len(), 1);
@@ -155,7 +155,7 @@ fn old_slot_profile_migrates_to_named_decks() {
 #[test]
 fn profile_json_carries_deck_names_and_stays_compatible() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("户山香澄").unwrap();
     let mut p = PlayerProfile::default();
     let id = deck::create(&d, &mut p, c, "  双刀流  ", &deck::preset(&d, c)).unwrap();
     let json = serde_json::to_string(&p).unwrap();
@@ -168,7 +168,7 @@ fn profile_json_carries_deck_names_and_stays_compatible() {
     // The new `name` field is the only addition to SavedDeck; old slot JSON
     // (no `name`) still parses with an auto name.
     let no_name: SavedDeck =
-        serde_json::from_str(r#"{"character":"x","slot":1,"cards":["a"]}"#).unwrap();
+        serde_json::from_str(r#"{"persona":"x","slot":1,"cards":["a"]}"#).unwrap();
     assert_eq!(no_name.name, "");
     assert_eq!(sanitize_deck_name("  a  "), "a");
     assert_eq!(sanitize_deck_name("   "), "");
@@ -177,14 +177,14 @@ fn profile_json_carries_deck_names_and_stays_compatible() {
 #[test]
 fn hand_edited_deck_ids_are_repaired_on_load() {
     let d = data();
-    let c = d.character("户山香澄").unwrap();
+    let c = d.persona("户山香澄").unwrap();
     let messy = r#"{
       "saveVersion": 4,
       "decks": [
-        {"character": "户山香澄", "slot": 0, "cards": [], "name": "  "},
-        {"character": "户山香澄", "slot": 2, "cards": [], "name": "A"},
-        {"character": "户山香澄", "slot": 2, "cards": [], "name": "B"},
-        {"character": "户山香澄", "slot": -3, "cards": [], "name": "C"}
+        {"persona": "户山香澄", "slot": 0, "cards": [], "name": "  "},
+        {"persona": "户山香澄", "slot": 2, "cards": [], "name": "A"},
+        {"persona": "户山香澄", "slot": 2, "cards": [], "name": "B"},
+        {"persona": "户山香澄", "slot": -3, "cards": [], "name": "C"}
       ]
     }"#;
     let p = PlayerProfile::from_json(&d, messy).unwrap();

@@ -808,19 +808,19 @@ pub trait CardWorld: Clone + 'static {
 
     // ------------------------------------------------------- status pots
     /// The uid of `player_id`'s **band-skill field instance** (`skill:<band>:
-    /// <skill>`, `FieldCard::band_skill`), or -1 when the player has none. This
-    /// is the 「乐队卡 / 囡卡」 crystal holder -- see [`Self::band_crystals`].
-    fn band_skill_uid(&self, _player_id: i32) -> i32 {
+    /// <skill>`, `FieldCard::group_skill`), or -1 when the player has none. This
+    /// is the 「乐队卡 / 囡卡」 crystal holder -- see [`Self::group_crystals`].
+    fn group_skill_uid(&self, _player_id: i32) -> i32 {
         -1
     }
     /// 「乐队卡 / 囡卡」 crystals -- the count on the player's band-skill field
-    /// instance ([`Self::band_skill_uid`]). 0 when there is no band skill; a
+    /// instance ([`Self::group_skill_uid`]). 0 when there is no band skill; a
     /// write with no band skill is a no-op. The same pool every band skill and
     /// every card that mentions the band card's crystals reads and writes, so
-    /// `add_crystals` inside a band skill's own handler and `add_band_crystals`
+    /// `add_crystals` inside a band skill's own handler and `add_group_crystals`
     /// from a card land on one count.
-    fn band_crystals(&self, player_id: i32) -> i32 {
-        let uid = self.band_skill_uid(player_id);
+    fn group_crystals(&self, player_id: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             0
         } else {
@@ -830,8 +830,8 @@ pub trait CardWorld: Clone + 'static {
     /// Add to that instance's crystals. `max` > 0 clamps, `max` = 0 is uncapped
     /// (exactly as [`Self::add_crystals_at`]); returns the new count, or 0 when
     /// the player has no band skill.
-    fn add_band_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
-        let uid = self.band_skill_uid(player_id);
+    fn add_group_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             0
         } else {
@@ -840,12 +840,12 @@ pub trait CardWorld: Clone + 'static {
     }
     // -------------------------------------------- skill / band attachments
     // Band attachments on a placed card, and the bound band skill
-    // (the first in placement order, [`Self::band_skill_uid`]) and the character
-    // skill are named; `band_skills` lists every band attachment, including the
+    // (the first in placement order, [`Self::group_skill_uid`]) and the character
+    // skill are named; `group_skills` lists every band attachment, including the
     // 「拿取」ed `extra` copies.
     /// Rule id of the player's bound **band skill** (`skill:<band>:<skill>`).
-    fn band_skill_id(&self, player_id: i32) -> Option<String> {
-        let uid = self.band_skill_uid(player_id);
+    fn group_skill_id(&self, player_id: i32) -> Option<String> {
+        let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             None
         } else {
@@ -856,35 +856,35 @@ pub trait CardWorld: Clone + 'static {
         }
     }
     /// Rule id of the player's **character skill** (`skill:<character>:<skill>`).
-    fn character_skill_id(&self, _player_id: i32) -> Option<String> {
+    fn persona_skill_id(&self, _player_id: i32) -> Option<String> {
         None
     }
-    /// The player's character **name** -- the spelling [`Self::character_is`]
+    /// The player's character **name** -- the spelling [`Self::persona_is`]
     /// matches. Defaults to the owner component of the character skill id
     /// (`skill:<character>:<skill>`; neither name contains `:` in the shipped
     /// data); override with the direct lookup where one exists.
     fn character_name(&self, player_id: i32) -> Option<String> {
-        self.character_skill_id(player_id)
+        self.persona_skill_id(player_id)
             .and_then(|id| skill_id_owner(&id))
     }
-    /// The player's band **name** -- the spelling [`Self::in_band`] matches.
+    /// The player's band **name** -- the spelling [`Self::in_group`] matches.
     /// Defaults to the owner component of the band skill id
     /// (`skill:<band>:<skill>`); override with the direct lookup where one
     /// exists.
     fn band_name(&self, player_id: i32) -> Option<String> {
-        self.band_skill_id(player_id)
+        self.group_skill_id(player_id)
             .and_then(|id| skill_id_owner(&id))
     }
     /// Every band-skill attachment on the player's field, as
     /// `(uid, rule id, extra)` in placement order. `extra` is a 「拿取」ed copy.
-    fn band_skills(&self, _player_id: i32) -> Vec<(i32, String, i32)> {
+    fn group_skills(&self, _player_id: i32) -> Vec<(i32, String, i32)> {
         Vec::new()
     }
     /// Attach a band-skill instance to a player's field.
     /// Returns the new uid, or -1 when refused (not a band skill, player gone,
     /// or 「相同乐队技能卡的效果不可叠加」 -- an attachment of the same id is
     /// already there).
-    fn add_band_skill(&mut self, _player_id: i32, _id: &str, _extra: bool) -> i32 {
+    fn add_group_skill(&mut self, _player_id: i32, _id: &str, _extra: bool) -> i32 {
         -1
     }
     /// Fire pots held. Sugar over the keyed state.
@@ -927,9 +927,9 @@ pub trait CardWorld: Clone + 'static {
     /// `round * 100 + turn + 1` (once-per-turn latches).
     fn turn_key(&self) -> i32;
     /// Is the player's character exactly `name`?
-    fn character_is(&self, player_id: i32, name: &str) -> i32;
+    fn persona_is(&self, player_id: i32, name: &str) -> i32;
     /// Does this player's character belong to band `name`?
-    fn in_band(&self, player_id: i32, name: &str) -> i32;
+    fn in_group(&self, player_id: i32, name: &str) -> i32;
 
     // --------------------------------------------------- ring & movement
     /// The RiNG rent multiplier right now.

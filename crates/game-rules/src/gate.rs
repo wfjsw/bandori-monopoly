@@ -13,7 +13,7 @@
 //! hash in `trigger_card`, the card's `owner` character name in `name`
 //! (`counter_is('名')`), `value = 1` when that owner is the actor's base
 //! character, and `step = 1` when it is the actor's own character. Player
-//! snaps also carry `character` / `band` hashes so `band_is` / `character_is`
+//! snaps also carry `character` / `band` hashes so `group_is` / `persona_is`
 //! can name the asked seat's identity (CRYCHIC's denial).
 
 use rules_cond::{id_of, PlayerSnap, WindowCtx};
@@ -116,7 +116,7 @@ pub fn window_of_card_world<W: CardWorld>(w: &W, actor: i32) -> WindowCtx {
 
 /// The [`Gate::Exclusive`] window: status layers **plus** the questioned
 /// exclusive and each seat's `character` / `band` identity hashes (so
-/// `band_is(actor, 'CRYCHIC')` reads the character row's band -- the stable
+/// `group_is(actor, 'CRYCHIC')` reads the character row's band -- the stable
 /// spelling, not the currently attached band-skill id).
 pub fn window_of_exclusive(
     w: &World,
@@ -135,10 +135,10 @@ pub fn window_of_exclusive(
             .st
             .players
             .get(i)
-            .map(|s| s.character.clone())
+            .map(|s| s.persona.clone())
             .unwrap_or_default();
-        p.character = id_of(&ch);
-        p.band = id_of(&data.character(&ch).map(|c| c.band.clone()).unwrap_or_default());
+        p.persona = id_of(&ch);
+        p.group = id_of(&data.persona(&ch).map(|c| c.group.clone()).unwrap_or_default());
     }
     win
 }

@@ -30,7 +30,7 @@ pub const EVEN_LOST: CardDef = CardDef::new(
         .tags(&[r#"反击"#, r#"持续"#])
         .text(r#"（1）[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。（2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。"#)
         .cell(r#"I2"#)
-        .fields(&[("band", r#"MyGO!!!!!"#), ("owner", "")]));
+        .fields(&[("group", r#"MyGO!!!!!"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（1）: 「你将此卡放置在自己场上」 -- C# `H.PlaceFromPlay(c)`.

@@ -607,17 +607,17 @@ impl Match {
     ) -> Self {
         let members = &members[..members.len().min(10)];
         let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
-        // Solo with a character already on every seat (the solo setup screen's
+        // Solo with a persona already on every seat (the solo setup screen's
         // picks, its randoms resolved before the match is built) skips the
         // timed ban / pick entirely and opens the deck phase instead. Online
-        // never takes this path: there `RoomMember::character` is the lobby
+        // never takes this path: there `RoomMember::persona` is the lobby
         // avatar, not a match pick, and the pick phase must stay. An unknown
         // or duplicated pick is not a preset -- fall through to the pick phase.
         let preset = mode == MatchMode::Solo
             && !members.is_empty()
-            && members.iter().all(|m| data.character(&m.character).is_some())
+            && members.iter().all(|m| data.persona(&m.persona).is_some())
             && {
-                let mut names: Vec<&str> = members.iter().map(|m| m.character.as_str()).collect();
+                let mut names: Vec<&str> = members.iter().map(|m| m.persona.as_str()).collect();
                 names.sort_unstable();
                 names.dedup();
                 names.len() == members.len()
@@ -645,9 +645,9 @@ impl Match {
                     ai: m.bot && m.mentality != crate::state::BotMentality::Advanced,
                     mentality: m.mentality,
                     // Carries through `roll_order`, so the seat that rolls high
-                    // keeps the character its member was given.
-                    character: if preset {
-                        m.character.clone()
+                    // keeps the persona its member was given.
+                    persona: if preset {
+                        m.persona.clone()
                     } else {
                         String::new()
                     },
@@ -706,7 +706,7 @@ impl Match {
                 cx.w.st.phase = "pick".into();
                 cx.w.st.turn = 0;
                 for i in 0..cx.w.player_count() {
-                    let c = cx.w.st.players[i].character.clone();
+                    let c = cx.w.st.players[i].persona.clone();
                     cx.do_pick(i, &c);
                 }
             });
@@ -1051,11 +1051,11 @@ impl Match {
     }
 
     /// The member's hand -- private, never part of [`Match::state`].
-    /// Test seam: set a player's character (exclusive-card checks read it).
+    /// Test seam: set a player's persona (exclusive-card checks read it).
     #[doc(hidden)]
-    pub fn set_character(&mut self, member: i32, character: &str) {
+    pub fn set_character(&mut self, member: i32, persona: &str) {
         if let Some(i) = self.player_index(member) {
-            self.world.st.players[i].character = character.to_string();
+            self.world.st.players[i].persona = persona.to_string();
             self.world
                 .bind_skills(self.data.as_ref(), &*self.rules, i as i32);
         }
@@ -1288,7 +1288,7 @@ impl Match {
                 ..Default::default()
             };
             let reason = why_not_act(&cx, i, &m, busy);
-            // `skill:<owner>:<name>` -- the owner is the character or band the
+            // `skill:<owner>:<name>` -- the owner is the persona or band the
             // skill came from (granted copies keep the original owner).
             let source = id
                 .strip_prefix("skill:")
@@ -1869,7 +1869,7 @@ impl Match {
         let turn = self.world.st.turn as usize;
         if self.world.st.phase == "ban" {
             self.direct(|cx| {
-                // Standard: 50% a random character, else no ban. Chaos always
+                // Standard: 50% a random persona, else no ban. Chaos always
                 // bans something if anything is left. A human seat (time-out)
                 // never bans.
                 let chaos = cx.is_chaos(turn);
@@ -2279,7 +2279,7 @@ impl Match {
                 if phase != "ban" || self.world.st.turn != i as i32 {
                     return Err(Msg::new("err.not_your_ban"));
                 }
-                let c = m.character.clone();
+                let c = m.persona.clone();
                 if !c.is_empty() && !self.with_cx(|cx| cx.bannable(&c)) {
                     return Err(Msg::new("err.cannot_ban"));
                 }
@@ -2290,7 +2290,7 @@ impl Match {
                 if phase != "pick" || self.world.st.turn != i as i32 {
                     return Err(Msg::new("err.not_your_pick"));
                 }
-                let c = m.character.clone();
+                let c = m.persona.clone();
                 if !self.with_cx(|cx| cx.pickable(&c)) {
                     return Err(Msg::new("err.chara_taken"));
                 }
@@ -2303,7 +2303,7 @@ impl Match {
                 }
                 let ok = self
                     .data
-                    .character(&self.world.st.players[i].character)
+                    .persona(&self.world.st.players[i].persona)
                     .is_some_and(|c| crate::deck::is_complete(&self.data, c, &m.cards));
                 if !ok {
                     return Err(Msg::new("err.deck_invalid"));
@@ -2627,9 +2627,9 @@ impl Match {
         }
         self.direct(|cx| {
             for i in 0..cx.w.player_count() {
-                if cx.w.st.players[i].character.is_empty() {
+                if cx.w.st.players[i].persona.is_empty() {
                     let c = cx.random_character(true);
-                    cx.w.st.players[i].character = c;
+                    cx.w.st.players[i].persona = c;
                 }
                 let d = cx.data;
                 cx.w.bind_skills(d, cx.rules, i as i32);

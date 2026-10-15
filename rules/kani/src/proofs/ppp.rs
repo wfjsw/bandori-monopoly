@@ -58,8 +58,8 @@ crate::host_subset!(ppp_dispatch {
     set_self_tile => arm_set_self_tile,
     set_self_immune => arm_set_self_immune,
     unplace_card | unplace_at | unplace_card_named => arm_unplace,
-    add_band_crystals => arm_add_band_crystals,
-    band_crystals => arm_band_crystals,
+    add_group_crystals => arm_add_band_crystals,
+    group_crystals => arm_band_crystals,
     counter_self => arm_counter_self,
     add_counter_self => arm_add_counter_self,
     set_counter_self => arm_set_counter_self,
@@ -89,8 +89,8 @@ crate::host_subset!(ppp_dispatch {
     set_tile_prop => arm_set_tile_prop,
     set_prop_at => arm_set_prop_at,
     self_prop | prop_at | tile_prop => arm_counter_self,
-    character_is => arm_character_is,
-    in_band => arm_in_band,
+    persona_is => arm_character_is,
+    in_group => arm_in_band,
     target => arm_target,
     ask => arm_ask,
     hand_count => arm_hand_count,
@@ -415,8 +415,8 @@ pub fn signpost_02_mutant_lose_500() {
 // ===========================================================================
 // C-PPP-bang-dream-01
 // 「为[使用者]的团卡添加一个[奇迹水晶]」
-// Isolation: `band_crystals[p]` is the 团卡 (band-skill instance) crystal
-// count under the Kani host. Host `add_band_crystals` logs no typed Effect
+// Isolation: `group_crystals[p]` is the 团卡 (band-skill instance) crystal
+// count under the Kani host. Host `add_group_crystals` logs no typed Effect
 // (post-state only); the optional teleport of (02) may appear in the log and
 // is frame for this leg.
 // ===========================================================================
@@ -428,9 +428,9 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
     ppp_world(user);
     let w = world::with_world(|ww| ww.clone());
     let player = user;
-    let pre_crystals = w.band_crystals[player as usize];
+    let pre_crystals = w.group_crystals[player as usize];
     // The book's condition is 「user has a 团卡」. The model gives every
-    // player a band_crystals counter (the bound band-skill instance), so the
+    // player a group_crystals counter (the bound band-skill instance), so the
     // condition is the model's standing fact — not assumed away, just true.
     kani::cover!(pre_crystals == 0, "band crystals start at 0");
     kani::cover!(pre_crystals > 0, "band crystals already banked");
@@ -442,7 +442,7 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
 
     invoke::unwrap_done(card_ppp::bang_dream::bang_dream_kani(user));
 
-    let post_crystals = world::with_world(|ww| ww.band_crystals[player as usize]);
+    let post_crystals = world::with_world(|ww| ww.group_crystals[player as usize]);
     crate::kassert!(
         post_crystals == spec::ppp::bang_dream_01_crystals_after(pre_crystals),
         "bang-dream-01: band crystals rise by exactly 1"
@@ -478,10 +478,10 @@ pub fn bang_dream_01_mutant_plus_2() {
     ppp_world(user);
     let w = world::with_world(|ww| ww.clone());
     let player = user;
-    let pre_crystals = w.band_crystals[player as usize];
+    let pre_crystals = w.group_crystals[player as usize];
     world::reset_world(w);
     invoke::unwrap_done(card_ppp::bang_dream::bang_dream_kani(user));
-    let post_crystals = world::with_world(|ww| ww.band_crystals[player as usize]);
+    let post_crystals = world::with_world(|ww| ww.group_crystals[player as usize]);
     crate::kassert!(
         post_crystals == pre_crystals + 2,
         "mutant: card must not match the +2 spec"

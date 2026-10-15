@@ -193,7 +193,7 @@ pub const CARDS: &[(&str, i32)] = &[
     (r#"R:[衍生] 压"#, 183),
 ];
 
-pub const CHARACTERS: &[(&str, i32)] = &[
+pub const PERSONAS: &[(&str, i32)] = &[
     (r#"户山香澄"#, 0),
     (r#"花园多惠"#, 1),
     (r#"牛込里美"#, 2),
@@ -250,7 +250,7 @@ pub const CHARACTERS: &[(&str, i32)] = &[
     (r#"都筑诗船"#, 53),
 ];
 
-pub const BANDS: &[(&str, i32)] = &[
+pub const GROUPS: &[(&str, i32)] = &[
     (r#"Poppin' Party"#, 0),
     (r#"Afterglow"#, 1),
     (r#"Pastel✽Palettes"#, 2),

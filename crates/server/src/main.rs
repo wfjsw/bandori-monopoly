@@ -70,7 +70,7 @@ async fn main() {
         "loaded {} tiles, {} cards, {} characters",
         data.tiles.len(),
         data.cards.len(),
-        data.characters.len()
+        data.personas.len()
     );
     let rules: Arc<dyn CardRules> = match ruleset {
         Some(set) => Arc::new(game_rules::WasmRules::new(set, data.clone())),

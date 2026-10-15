@@ -1130,10 +1130,10 @@ impl CardWorld for Run {
         // (发送熊饼表情 「所有技能中含有火罐的玩家」).
         if let Some(rest) = card.strip_prefix("skill:") {
             if let Some((owner, _)) = rest.split_once(':') {
-                if let Some(c) = self.data.character(owner) {
+                if let Some(c) = self.data.persona(owner) {
                     return c.text.contains(needle);
                 }
-                if let Some(b) = self.data.bands.iter().find(|b| b.name == owner) {
+                if let Some(b) = self.data.groups.iter().find(|b| b.name == owner) {
                     return b.text.contains(needle);
                 }
             }
@@ -1469,40 +1469,40 @@ impl CardWorld for Run {
     }
 
     // status pots -----------------------------------------------------------
-    fn band_skill_uid(&self, player_id: i32) -> i32 {
-        self.world.band_skill_uid(player_id)
+    fn group_skill_uid(&self, player_id: i32) -> i32 {
+        self.world.group_skill_uid(player_id)
     }
-    fn band_skill_id(&self, player_id: i32) -> Option<String> {
-        self.world.band_skill_id(player_id)
+    fn group_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.group_skill_id(player_id)
     }
-    fn character_skill_id(&self, player_id: i32) -> Option<String> {
-        self.world.character_skill_id(player_id)
+    fn persona_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.persona_skill_id(player_id)
     }
     fn character_name(&self, player_id: i32) -> Option<String> {
-        // The `character_is` spelling: `MatchPlayer::character`.
+        // The `persona_is` spelling: `MatchPlayer::character`.
         self.world
             .st
             .players
             .get(player_id.max(0) as usize)
-            .map(|s| s.character.clone())
+            .map(|s| s.persona.clone())
             .filter(|c| !c.is_empty())
     }
     fn band_name(&self, player_id: i32) -> Option<String> {
-        // The `in_band` spelling: the character's band from the data table.
+        // The `in_group` spelling: the character's band from the data table.
         let s = self.world.st.players.get(player_id.max(0) as usize)?;
         self.data
-            .characters
+            .personas
             .iter()
-            .find(|c| c.name == s.character)
-            .map(|c| c.band.clone())
+            .find(|c| c.name == s.persona)
+            .map(|c| c.group.clone())
     }
-    fn band_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
-        self.world.band_skills(player_id)
+    fn group_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
+        self.world.group_skills(player_id)
     }
-    fn add_band_skill(&mut self, player_id: i32, id: &str, extra: bool) -> i32 {
+    fn add_group_skill(&mut self, player_id: i32, id: &str, extra: bool) -> i32 {
         let props = props_of(&self.props, id);
         self.world
-            .add_band_skill(&self.data, player_id, id, extra, props)
+            .add_group_skill(&self.data, player_id, id, extra, props)
     }
     fn gain_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
         let got = self.world.gain_fire(player_id, n, why.clone());
@@ -1908,23 +1908,23 @@ impl CardWorld for Run {
         // `round * 100 + turn + 1` -- once-per-turn latches.
         self.world.st.round * 100 + self.world.st.turn + 1
     }
-    fn character_is(&self, player_id: i32, name: &str) -> i32 {
+    fn persona_is(&self, player_id: i32, name: &str) -> i32 {
         self.world
             .st
             .players
             .get(player_id.max(0) as usize)
-            .is_some_and(|s| s.character == name) as i32
+            .is_some_and(|s| s.persona == name) as i32
     }
-    fn in_band(&self, player_id: i32, name: &str) -> i32 {
+    fn in_group(&self, player_id: i32, name: &str) -> i32 {
         // The character's band.
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
             return 0;
         };
         self.data
-            .characters
+            .personas
             .iter()
-            .find(|c| c.name == s.character)
-            .is_some_and(|c| c.band == name) as i32
+            .find(|c| c.name == s.persona)
+            .is_some_and(|c| c.group == name) as i32
     }
 
     // trigger ---------------------------------------------------------------
@@ -6562,8 +6562,8 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.world.fire(player_id)
     }
     #[inline]
-    fn band_crystals(&self, player_id: i32) -> i32 {
-        self.world.band_crystals(player_id)
+    fn group_crystals(&self, player_id: i32) -> i32 {
+        self.world.group_crystals(player_id)
     }
     #[inline]
     fn hand_size(&self, player_id: i32) -> i32 {
@@ -6607,12 +6607,12 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
             .unwrap_or_default()
     }
     #[inline]
-    fn character_skill_id(&self, player_id: i32) -> Option<String> {
-        self.world.character_skill_id(player_id)
+    fn persona_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.persona_skill_id(player_id)
     }
     #[inline]
-    fn band_skill_id(&self, player_id: i32) -> Option<String> {
-        self.world.band_skill_id(player_id)
+    fn group_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.group_skill_id(player_id)
     }
     #[inline]
     fn character_name(&self, player_id: i32) -> Option<String> {
@@ -6620,18 +6620,18 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
             .st
             .players
             .get(player_id.max(0) as usize)
-            .map(|s| s.character.clone())
+            .map(|s| s.persona.clone())
             .filter(|c| !c.is_empty())
     }
     #[inline]
     fn band_name(&self, player_id: i32) -> Option<String> {
-        // Same lookup `CardWorld::in_band` does: the character's band.
+        // Same lookup `CardWorld::in_group` does: the character's band.
         let s = self.world.st.players.get(player_id.max(0) as usize)?;
         self.data
-            .characters
+            .personas
             .iter()
-            .find(|c| c.name == s.character)
-            .map(|c| c.band.clone())
+            .find(|c| c.name == s.persona)
+            .map(|c| c.group.clone())
     }
     #[inline]
     fn tok(&self, player_id: i32, name: &str) -> i32 {
@@ -6878,7 +6878,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn owner_crystals(&self) -> i64 {
         let o = self.owner();
         if o >= 0 {
-            self.world.band_crystals(o as i32) as i64
+            self.world.group_crystals(o as i32) as i64
         } else {
             0
         }
@@ -6927,28 +6927,28 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn owner_character(&self) -> i64 {
+    fn owner_persona(&self) -> i64 {
         let o = self.owner();
         if o < 0 {
             return 0;
         }
-        // The character **name** (`ctx::character_is` spelling), not the
-        // skill id -- `character_is(p, "名")` hashes the name.
+        // The character **name** (`ctx::persona_is` spelling), not the
+        // skill id -- `persona_is(p, "名")` hashes the name.
         let name = self
             .world
             .st
             .players
             .get(o.max(0) as usize)
-            .map(|s| s.character.clone())
+            .map(|s| s.persona.clone())
             .unwrap_or_default();
         crate::cond_pre::id_of(&name)
     }
-    fn owner_band(&self) -> i64 {
+    fn owner_group(&self) -> i64 {
         let o = self.owner();
         if o < 0 {
             return 0;
         }
-        // The band **name** (`ctx::in_band` spelling).
+        // The band **name** (`ctx::in_group` spelling).
         let band = self
             .world
             .st
@@ -6956,10 +6956,10 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .get(o.max(0) as usize)
             .and_then(|s| {
                 self.data
-                    .characters
+                    .personas
                     .iter()
-                    .find(|c| c.name == s.character)
-                    .map(|c| c.band.clone())
+                    .find(|c| c.name == s.persona)
+                    .map(|c| c.group.clone())
             })
             .unwrap_or_default();
         crate::cond_pre::id_of(&band)
@@ -7003,7 +7003,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn blocked(&self, _band: i64) -> bool {
+    fn blocked(&self, _group: i64) -> bool {
         false
     }
     fn money(&self, seat: i64) -> i64 {
@@ -7013,7 +7013,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.world.fire(seat as i32) as i64
     }
     fn crystals(&self, seat: i64) -> i64 {
-        self.world.band_crystals(seat as i32) as i64
+        self.world.group_crystals(seat as i32) as i64
     }
     fn hand(&self, seat: i64) -> i64 {
         self.world
@@ -7054,17 +7054,17 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         }
         rows
     }
-    fn character(&self, seat: i64) -> i64 {
+    fn persona(&self, seat: i64) -> i64 {
         let name = self
             .world
             .st
             .players
             .get(seat.max(0) as usize)
-            .map(|s| s.character.clone())
+            .map(|s| s.persona.clone())
             .unwrap_or_default();
         crate::cond_pre::id_of(&name)
     }
-    fn band(&self, seat: i64) -> i64 {
+    fn group(&self, seat: i64) -> i64 {
         let band = self
             .world
             .st
@@ -7072,10 +7072,10 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .get(seat.max(0) as usize)
             .and_then(|s| {
                 self.data
-                    .characters
+                    .personas
                     .iter()
-                    .find(|c| c.name == s.character)
-                    .map(|c| c.band.clone())
+                    .find(|c| c.name == s.persona)
+                    .map(|c| c.group.clone())
             })
             .unwrap_or_default();
         crate::cond_pre::id_of(&band)
@@ -7164,7 +7164,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         }
         out
     }
-    fn blocked_bands(&self) -> Vec<i64> {
+    fn blocked_groups(&self) -> Vec<i64> {
         Vec::new()
     }
     fn tile_id_table(&self) -> Vec<(String, i64)> {
@@ -8306,11 +8306,11 @@ pub(crate) fn effect_order_key(group: LookupGroup, source: u32, decl: u32) -> (u
 
 /// The lookup group of one placed source (`LookupGroup::Band` for a band-skill
 /// instance, `Character` for a character skill, `Field` for anything else).
-/// Reads the instance's `band_skill` stamp (`GameData::is_band_skill`), which
+/// Reads the instance's `group_skill` stamp (`GameData::is_group_skill`), which
 /// is the authoritative classification.
 fn source_group(world: &game_core::engine::World, uid: i32) -> LookupGroup {
     match world.field_by_uid(uid) {
-        Some(f) if f.band_skill => LookupGroup::Band,
+        Some(f) if f.group_skill => LookupGroup::Band,
         Some(f) if f.card.starts_with("skill:") => LookupGroup::Character,
         _ => LookupGroup::Field,
     }

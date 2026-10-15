@@ -41,7 +41,7 @@ pub const GUERRILLA: CardDef = CardDef::new(
 [手]：
 [反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后：传送至任意无主可购买的格子并[结算]，且必须购买。"#)
         .cell(r#"H9"#)
-        .fields(&[("band", r#"RAISE A SUILEN"#), ("owner", "")]));
+        .fields(&[("group", r#"RAISE A SUILEN"#), ("owner", "")]));
 
 const ID: &str = "RAS:游击演出";
 

@@ -65,7 +65,7 @@ function History() {
         return (
           <div key={i} className={s.histRow}>
             <div className={cx(s.rank, r.rank === 1 && s.first)}>{r.rank}<small>/{r.players}</small></div>
-            <div className={s.who}><b>{D.character(r.character)?.display ?? r.character}</b><small>{modeLabel(r.mode)} · {r.time}</small></div>
+            <div className={s.who}><b>{D.persona(r.persona)?.display ?? r.persona}</b><small>{modeLabel(r.mode)} · {r.time}</small></div>
             <div className={s.gain}>+{n0(r.exp)} EXP{r.fireUsed > 0 && <small>{tr("history.fireUsed", { n: r.fireUsed })}</small>}</div>
             <div className={s.gain}>{r.coins ? tr("history.gainCoins", { coins: (r.coins > 0 ? "+" : "") + n0(r.coins) }) : ""}{r.stars > 0 && <small>{tr("history.starsGained", { n: r.stars })}</small>}</div>
             {/* 「回放」 -- open this match's `.bdrec` in the player. No link

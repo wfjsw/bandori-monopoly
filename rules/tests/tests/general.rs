@@ -115,7 +115,7 @@ fn tsugu_ge26_can_buy_any_unowned() {
 #[test]
 fn tsugu_buy_gate_refused_does_not_log_a_buy() {
     let mut t = Table::vanilla(2);
-    t.set_character_raw(1, "户山香澄"); // Poppin' Party -- `in_band` scan
+    t.set_character_raw(1, "户山香澄"); // Poppin' Party -- `in_group` scan
     t.place_raw(1, "skill:Poppin' Party:星之鼓动"); // the `BuyGate` lock
     t.dice(&[9, 9, 8]); // 26
     t.give_play(0, "通用:@Tsugu ycm").unwrap();

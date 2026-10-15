@@ -26,7 +26,7 @@ pub const L12: CardDef = CardDef::new(
         .tags(&[r#"手"#, r#"持续"#])
         .text(r#"[手] 从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌并将此卡置于自身场上； [持续] （1）[拥有者]手卡上限数量减1。（2）每当你消耗火罐时，为此卡添加一个[奇迹水晶] （3）当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。"#)
         .cell(r#"L12"#)
-        .fields(&[("band", r#"Sumimi"#), ("owner", "")]))// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
+        .fields(&[("group", r#"Sumimi"#), ("owner", "")]))// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
 // property (C# `Card.HandLimitDelta`), continuous while this instance sits on
 // the field.
 .props(&[(prop::HAND_LIMIT_DELTA, -1)]);
@@ -35,7 +35,7 @@ const ID: &str = "Sumimi:#L12";
 
 /// C# `CardL12.Pool` -- distinct ids in the discard then the draw pile that
 /// belong to band `Sumimi`, minus this card. The data key prefix is the band
-/// (`H.Db.Card(id)?.band == "Sumimi"`).
+/// (`H.Db.Card(id)?.group == "Sumimi"`).
 fn pool(player_id: i32) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for pile in [CardPile::Discard, CardPile::Deck] {

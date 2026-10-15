@@ -41,7 +41,7 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
 2. 如果[共鸣]则获得1500资金；
 3. 此卡放入[使用者]弃卡区。"#)
         .cell(r#"D12"#)
-        .fields(&[("band", r#"Pastel✽Palettes"#), ("owner", "")]));
+        .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- nothing to point at without
@@ -82,7 +82,7 @@ fn strong_flower(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("strong_flower_note")),
     );
     // 规则书[手]: 「并为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]」
-    ctx::add_band_crystals(player_id, 2, i32::MAX);
+    ctx::add_group_crystals(player_id, 2, i32::MAX);
     Ok(())
 }
 

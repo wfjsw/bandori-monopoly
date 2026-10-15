@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{BandData, CardData, CharacterData, GameData, Roster, DATA_FILES};
+use game_core::data::{GroupData, CardData, PersonaData, GameData, Roster, DATA_FILES};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
@@ -114,8 +114,8 @@ fn parse<T: serde::de::DeserializeOwned>(what: &str, s: &str) -> Result<T, JsErr
     serde_json::from_str(s).map_err(|e| JsError::new(&format!("{what}: {e}")))
 }
 
-fn character<'a>(d: &'a GameData, name: &str) -> Result<&'a CharacterData, JsError> {
-    d.character(name)
+fn character<'a>(d: &'a GameData, name: &str) -> Result<&'a PersonaData, JsError> {
+    d.persona(name)
         .ok_or_else(|| JsError::new(&format!("unknown character {name}")))
 }
 
@@ -193,14 +193,14 @@ pub fn roster_json() -> String {
     #[derive(Serialize)]
     struct RosterJson {
         cards: Vec<CardData>,
-        characters: Vec<CharacterData>,
-        bands: Vec<BandData>,
+        personas: Vec<PersonaData>,
+        groups: Vec<GroupData>,
     }
     let r = roster();
     json(&RosterJson {
         cards: r.cards,
-        characters: r.characters,
-        bands: r.bands,
+        personas: r.personas,
+        groups: r.groups,
     })
 }
 

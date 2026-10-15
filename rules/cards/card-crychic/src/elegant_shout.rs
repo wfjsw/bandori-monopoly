@@ -22,7 +22,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
         .tags(&[r#"反击"#])
         .text(r#"[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。"#)
         .cell(r#"M6"#)
-        .fields(&[("band", r#"CRYCHIC"#), ("owner", "")]));
+        .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」

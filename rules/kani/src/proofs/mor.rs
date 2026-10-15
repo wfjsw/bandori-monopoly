@@ -298,14 +298,14 @@ pub fn xiaobai_01_mutant_is_detected() {
 // `_iff_at(user)` covers both seats of each path.
 // ===========================================================================
 
-/// `Mor:秘密与青春的虹彩` counteract body ops. `character_is` is the residual
+/// `Mor:秘密与青春的虹彩` counteract body ops. `persona_is` is the residual
 /// grade gate (`can_counteract`); declared so a broken isolation FAILs loudly.
 crate::host_subset!(rainbow_dispatch {
     trig_value => arm_trig_value,
     trig_player => arm_trig_player,
     trig_set_pay_amount => arm_trig_set_pay_amount,
     log | effect => arm_log,
-    character_is => arm_character_is,
+    persona_is => arm_character_is,
 });
 
 /// `half == true`: user is the payer (`from == user`). Else user is the payee.

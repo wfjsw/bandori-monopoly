@@ -151,8 +151,8 @@ crate::host_subset!(umiri_dispatch {
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
     set_slot => arm_set_slot,
-    band_skills => arm_band_skills,
-    add_band_skill => arm_add_band_skill,
+    group_skills => arm_band_skills,
+    add_group_skill => arm_add_band_skill,
     log | effect => arm_log,
 });
 

@@ -108,7 +108,7 @@ crate::host_subset!(ag_dispatch {
     player_out => arm_player_out,
     others_count => arm_others_count,
     others_at => arm_others_at,
-    in_band => arm_in_band,
+    in_group => arm_in_band,
     target => arm_target,
     // marks / slots
     set_slot => arm_set_slot,

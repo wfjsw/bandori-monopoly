@@ -28,10 +28,10 @@
 //! * Kani `Op::trig_set_cancelled` sets `w.trig_cancelled`, so the
 //!   「替换奖励」 leg of C-MOR-band-02 is observable.
 //!
-//! Feature gates: band-skill harnesses need `skills-bands`; character-skill
-//! harnesses need `skills-characters` (the `*_kani` wrappers live in those
+//! Feature gates: band-skill harnesses need `skills-groups`; character-skill
+//! harnesses need `skills-personas` (the `*_kani` wrappers live in those
 //! crates). `tools/kani/run.sh` `unit_features skills_mor` should therefore be
-//! `band-morfonica,skills-bands,skills-characters`.
+//! `band-morfonica,skills-groups,skills-personas`.
 //!
 //! Bounds: every harness that calls a body uses `#[kani::unwind(32)]`.
 //! Each `unwrap_done` is followed by `kani::cover!(true, "body returned")` so
@@ -80,7 +80,7 @@ fn fill_pass_circle(owner: i32) -> rules_cond_ir::ctx::IrCtx {
 // C-MOR-band-01 / -02  `skill:Morfonica:振翅高飞的练习曲`
 // ===========================================================================
 
-#[cfg(feature = "skills-bands")]
+#[cfg(feature = "skills-groups")]
 mod band {
     use super::{effects_of, fill_mine};
     use crate::host;
@@ -184,7 +184,7 @@ mod band {
 
         let pre = world::snapshot();
         // DIRECT body call (ppcost): one body in CBMC's call graph.
-        invoke::unwrap_done(skill_bands::morfonica::after_pay_kani(user));
+        invoke::unwrap_done(skill_groups::morfonica::after_pay_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -313,7 +313,7 @@ mod band {
         let taken = world::with_world(|w| w.key_get(user, intern::intern(KEY_TAKEN)));
 
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_bands::morfonica::on_circle_kani(user));
+        invoke::unwrap_done(skill_groups::morfonica::on_circle_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -398,7 +398,7 @@ mod band {
             w.key_set(user, intern::intern(KEY_TAKEN), 0);
         });
         let taken = 0i32;
-        invoke::unwrap_done(skill_bands::morfonica::on_circle_kani(user));
+        invoke::unwrap_done(skill_groups::morfonica::on_circle_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -421,15 +421,15 @@ mod band {
     }
 }
 
-#[cfg(feature = "skills-bands")]
-pub use band::*;
+#[cfg(feature = "skills-groups")]
+pub use group::*;
 
 // ===========================================================================
 // C-MOR-touko-01 / C-MOR-nanami-01
 // 「（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」 / cap 2
 // ===========================================================================
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 mod pass_fire {
     use super::{effects_of, fill_pass_circle};
     use crate::host;
@@ -546,7 +546,7 @@ mod pass_fire {
             0,
             spec::TOUKO_01_FIRE_MAX,
             "C-MOR-touko-01",
-            skill_characters::kiritani_zenith::on_pass_kani,
+            skill_personas::kiritani_zenith::on_pass_kani,
         );
     }
 
@@ -558,7 +558,7 @@ mod pass_fire {
             1,
             spec::TOUKO_01_FIRE_MAX,
             "C-MOR-touko-01",
-            skill_characters::kiritani_zenith::on_pass_kani,
+            skill_personas::kiritani_zenith::on_pass_kani,
         );
     }
 
@@ -570,7 +570,7 @@ mod pass_fire {
             0,
             spec::NANAMI_01_FIRE_MAX,
             "C-MOR-nanami-01",
-            skill_characters::nanami_ordinary::on_pass_kani,
+            skill_personas::nanami_ordinary::on_pass_kani,
         );
     }
 
@@ -582,7 +582,7 @@ mod pass_fire {
             1,
             spec::NANAMI_01_FIRE_MAX,
             "C-MOR-nanami-01",
-            skill_characters::nanami_ordinary::on_pass_kani,
+            skill_personas::nanami_ordinary::on_pass_kani,
         );
     }
 
@@ -618,7 +618,7 @@ mod pass_fire {
             w.fire_max[user as usize] = spec::TOUKO_01_FIRE_MAX;
             w.fire[user as usize] = 0;
         });
-        invoke::unwrap_done(skill_characters::kiritani_zenith::on_pass_kani(user));
+        invoke::unwrap_done(skill_personas::kiritani_zenith::on_pass_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -632,14 +632,14 @@ mod pass_fire {
     }
 }
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 pub use pass_fire::*;
 
 // ===========================================================================
 // C-MOR-rui-crit-02  `skill:八潮瑠唯:正论暴击` (2)
 // ===========================================================================
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 mod yuri_crit {
     use super::effects_of;
     use crate::host;
@@ -711,7 +711,7 @@ mod yuri_crit {
         let amount = world::with_world(|w| w.pay_amount);
         let x = world::with_world(|w| w.key_get(user, intern::intern(KEY_YURI_X)));
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_characters::yuri_crit::on_pay_kani(user));
+        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -787,7 +787,7 @@ mod yuri_crit {
         let key = intern::intern(KEY_YURI_X);
         let pre_x = world::with_world(|w| w.key_get(user, key));
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_characters::yuri_crit::on_pay_kani(user));
+        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -817,7 +817,7 @@ mod yuri_crit {
             w.pay_amount = 100;
             w.trig_target = user;
         });
-        invoke::unwrap_done(skill_characters::yuri_crit::on_pay_kani(user));
+        invoke::unwrap_done(skill_personas::yuri_crit::on_pay_kani(user));
         kani::cover!(true, "body returned");
         let x_after = world::with_world(|ww| ww.key_get(user, key));
         // Post X is 0 (book hit, inclusive at n == 1) or 2 (miss).
@@ -846,14 +846,14 @@ mod yuri_crit {
     }
 }
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 pub use yuri_crit::*;
 
 // ===========================================================================
 // C-MOR-tsukushi-01  `skill:二叶筑紫:交给班长吧` (1)
 // ===========================================================================
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 mod tsukushi_on_gain {
     use super::effects_of;
     use crate::host;
@@ -919,7 +919,7 @@ mod tsukushi_on_gain {
         }
 
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_characters::tsugushi_monitor::on_gain_kani(owner));
+        invoke::unwrap_done(skill_personas::tsugushi_monitor::on_gain_kani(owner));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -977,7 +977,7 @@ mod tsukushi_on_gain {
             w.out[1] = false;
         });
         let amount = world::with_world(|w| w.pay_amount);
-        invoke::unwrap_done(skill_characters::tsugushi_monitor::on_gain_kani(owner));
+        invoke::unwrap_done(skill_personas::tsugushi_monitor::on_gain_kani(owner));
         kani::cover!(true, "body returned");
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
@@ -999,14 +999,14 @@ mod tsukushi_on_gain {
     }
 }
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 pub use tsukushi_on_gain::*;
 
 // ===========================================================================
 // C-MOR-tsukushi-03  `skill:二叶筑紫:交给班长吧` (3)
 // ===========================================================================
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 mod tsukushi_cash {
     use super::effects_of;
     use crate::host;
@@ -1115,7 +1115,7 @@ mod tsukushi_cash {
         let want_rate_after = spec::tsukushi_03_rate_after(pre_rate);
 
         let pre = world::snapshot();
-        invoke::unwrap_done(skill_characters::tsugushi_monitor::cash_kani(user));
+        invoke::unwrap_done(skill_personas::tsugushi_monitor::cash_kani(user));
         kani::cover!(true, "body returned");
 
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1186,7 +1186,7 @@ mod tsukushi_cash {
             w.key_set(user, rk, 200); // at floor: book stays 200, mutant → 0
         });
         let pre_rate = 200;
-        invoke::unwrap_done(skill_characters::tsugushi_monitor::cash_kani(user));
+        invoke::unwrap_done(skill_personas::tsugushi_monitor::cash_kani(user));
         kani::cover!(true, "body returned");
         let post_rate = world::with_world(|ww| ww.key_get(user, rk));
         let book = spec::tsukushi_03_rate_after(pre_rate);
@@ -1198,7 +1198,7 @@ mod tsukushi_cash {
     }
 }
 
-#[cfg(feature = "skills-characters")]
+#[cfg(feature = "skills-personas")]
 pub use tsukushi_cash::*;
 
 // ===========================================================================

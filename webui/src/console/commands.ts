@@ -100,7 +100,7 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
         phase: st?.phase, round: st?.round, turn: st?.turn, step: st?.step,
         seq: st?.seq, busy: st?.busy, prompt: st?.prompt.id, cheated: st?.debugOpen };
     }
-    case "players": arity(0); return view().state.players.map((p, seat) => ({ seat, name: p.player, character: p.character, money: p.money, pos: p.pos, hand: p.hand, out: p.bankrupt || p.left }));
+    case "players": arity(0); return view().state.players.map((p, seat) => ({ seat, name: p.player, character: p.persona, money: p.money, pos: p.pos, hand: p.hand, out: p.bankrupt || p.left }));
     case "hand": arity(0); return view().hand.map((id, index) => ({ index, id, name: ctx.cards().find((c) => c.id === id)?.name }));
     case "inspect": {
       arity(0, 2);
@@ -116,7 +116,7 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
     case "cards": {
       arity(0, 1);
       const query = (args[0] ?? "").toLowerCase();
-      const all = ctx.cards().filter((c) => `${c.id} ${c.name} ${c.band}`.toLowerCase().includes(query));
+      const all = ctx.cards().filter((c) => `${c.id} ${c.name} ${c.group}`.toLowerCase().includes(query));
       return { total: all.length, cards: all.slice(0, 100).map(({ id, name }) => ({ id, name })) };
     }
     case "tiles": arity(0); return ctx.tiles().map(({ index, name, kind }) => ({ index, name, kind }));

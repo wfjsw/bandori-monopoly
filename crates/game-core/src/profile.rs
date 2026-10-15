@@ -8,7 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{CharacterData, GameData};
+use crate::data::{PersonaData, GameData};
 use crate::progression::{
     self, MatchReward, FIRE_DAILY_MAX, FIRE_MAX_PER_GAME, MAX_LEVEL, STARS_PER_GAME,
 };
@@ -46,21 +46,21 @@ pub struct PlayerProfile {
     pub fire_per_game: i32,
     pub coins: i32,
     pub stars: i32,
-    pub home_character: String,
+    pub home_persona: String,
     pub games: i32,
     pub solo_games: i32,
     pub casual_games: i32,
     pub ranked_games: i32,
     pub ranked_wins: i32,
-    pub seen_characters: Vec<String>,
+    pub seen_personas: Vec<String>,
     pub seen_cards: Vec<String>,
     pub seen_rules_version: i32,
     pub history: Vec<MatchRecord>,
     pub unread_result: bool,
-    pub character_stats: Vec<CharacterStat>,
+    pub persona_stats: Vec<PersonaStat>,
     pub decks: Vec<SavedDeck>,
     pub deck_choices: Vec<DeckChoice>,
-    /// `"<character name>=<live2d model id>"` for non-default Live2D variants.
+    /// `"<persona name>=<live2d model id>"` for non-default Live2D variants.
     pub live2d_picks: Vec<String>,
 }
 
@@ -79,18 +79,18 @@ impl Default for PlayerProfile {
             fire_per_game: 1,
             coins: 0,
             stars: 0,
-            home_character: String::new(),
+            home_persona: String::new(),
             games: 0,
             solo_games: 0,
             casual_games: 0,
             ranked_games: 0,
             ranked_wins: 0,
-            seen_characters: vec![],
+            seen_personas: vec![],
             seen_cards: vec![],
             seen_rules_version: 0,
             history: vec![],
             unread_result: false,
-            character_stats: vec![],
+            persona_stats: vec![],
             decks: vec![],
             deck_choices: vec![],
             live2d_picks: vec![],
@@ -107,7 +107,7 @@ pub struct MatchRecord {
     pub ranked: bool,
     pub rank: i32,
     pub players: i32,
-    pub character: String,
+    pub persona: String,
     pub exp: i32,
     pub fire_used: i32,
     pub coins: i32,
@@ -121,18 +121,18 @@ pub struct MatchRecord {
     pub replay_id: String,
 }
 
-/// Per-character gallery counters.
+/// Per-persona gallery counters.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct CharacterStat {
+pub struct PersonaStat {
     pub name: String,
     pub uses: i32,
     pub firsts: i32,
 }
 
-/// One named deck of one character.
+/// One named deck of one persona.
 ///
-/// `slot` is the stable deck id within the character (it used to be the fixed
+/// `slot` is the stable deck id within the persona (it used to be the fixed
 /// 1..=3 slot index; profiles from that era keep their numbers as ids). It is
 /// what [`DeckChoice`] remembers. Display order is the order of
 /// [`PlayerProfile::decks`] itself, so reordering swaps entries without
@@ -144,17 +144,17 @@ pub struct CharacterStat {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SavedDeck {
-    pub character: String,
+    pub persona: String,
     pub slot: i32,
     pub name: String,
     pub cards: Vec<String>,
 }
 
-/// Which saved deck a character last picked.
+/// Which saved deck a persona last picked.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DeckChoice {
-    pub character: String,
+    pub persona: String,
     pub slot: i32,
 }
 
@@ -185,12 +185,12 @@ impl PlayerProfile {
     }
 
     /// Repair and migrate a loaded profile. A missing
-    /// or unknown home character falls back to the data's default.
+    /// or unknown home persona falls back to the data's default.
     pub fn normalize(&mut self, data: &GameData) {
         self.level = self.level.clamp(0, MAX_LEVEL);
         self.fire_per_game = self.fire_per_game.clamp(0, FIRE_MAX_PER_GAME);
-        if data.character(&self.home_character).is_none() {
-            self.home_character = data.match_rules.default_home_character.clone();
+        if data.persona(&self.home_persona).is_none() {
+            self.home_persona = data.match_rules.default_home_persona.clone();
         }
         if self.save_version < 2 {
             // v1 only had the `ranked` flag.
@@ -207,26 +207,26 @@ impl PlayerProfile {
             self.save_version = 3;
         }
         if self.save_version < 4 {
-            // v3 and earlier saved three fixed slots per character and no deck
+            // v3 and earlier saved three fixed slots per persona and no deck
             // names. The slot numbers become the stable deck ids; `name` stays
             // empty ("auto", displayed as 「卡组 n」/"Deck n" from the id), so
-            // slot n reads exactly as it used to. Sort per character by slot so
+            // slot n reads exactly as it used to. Sort per persona by slot so
             // the old 1,2,3 order is the display order.
             self.decks
-                .sort_by(|a, b| (&a.character, a.slot).cmp(&(&b.character, b.slot)));
+                .sort_by(|a, b| (&a.persona, a.slot).cmp(&(&b.persona, b.slot)));
             self.save_version = 4;
         }
         self.repair_decks();
     }
 
-    /// Unique positive deck ids per character and sanitized names, on every
+    /// Unique positive deck ids per persona and sanitized names, on every
     /// load (hand-edited JSON included).
     fn repair_decks(&mut self) {
         use std::collections::{BTreeSet, HashMap};
         let mut used: HashMap<String, BTreeSet<i32>> = HashMap::new();
         for d in &mut self.decks {
             d.name = sanitize_deck_name(&d.name);
-            let set = used.entry(d.character.clone()).or_default();
+            let set = used.entry(d.persona.clone()).or_default();
             if d.slot > 0 && set.insert(d.slot) {
                 continue;
             }
@@ -268,11 +268,11 @@ impl PlayerProfile {
         self.fire_per_game = count.clamp(0, FIRE_MAX_PER_GAME);
     }
 
-    pub fn set_home_character(&mut self, name: &str) -> bool {
-        if name.is_empty() || self.home_character == name {
+    pub fn set_home_persona(&mut self, name: &str) -> bool {
+        if name.is_empty() || self.home_persona == name {
             return false;
         }
-        self.home_character = name.into();
+        self.home_persona = name.into();
         true
     }
 
@@ -307,7 +307,7 @@ impl PlayerProfile {
         mode: MatchMode,
         rank: i32,
         players: i32,
-        character: &str,
+        persona: &str,
         now: &str,
         replay_id: &str,
     ) -> MatchReward {
@@ -346,24 +346,24 @@ impl PlayerProfile {
             MatchMode::Casual => self.casual_games += 1,
             MatchMode::Solo => self.solo_games += 1,
         }
-        if !character.is_empty() {
+        if !persona.is_empty() {
             let i = match self
-                .character_stats
+                .persona_stats
                 .iter()
-                .position(|s| s.name == character)
+                .position(|s| s.name == persona)
             {
                 Some(i) => i,
                 None => {
-                    self.character_stats.push(CharacterStat {
-                        name: character.into(),
+                    self.persona_stats.push(PersonaStat {
+                        name: persona.into(),
                         ..Default::default()
                     });
-                    self.character_stats.len() - 1
+                    self.persona_stats.len() - 1
                 }
             };
-            self.character_stats[i].uses += 1;
+            self.persona_stats[i].uses += 1;
             if rank == 1 {
-                self.character_stats[i].firsts += 1;
+                self.persona_stats[i].firsts += 1;
             }
         }
         self.history.insert(
@@ -374,7 +374,7 @@ impl PlayerProfile {
                 ranked,
                 rank,
                 players,
-                character: character.into(),
+                persona: persona.into(),
                 exp: r.exp,
                 fire_used: r.fire_used,
                 coins: r.coins,
@@ -388,16 +388,16 @@ impl PlayerProfile {
         r
     }
 
-    pub fn stat_of(&self, character: &str) -> Option<&CharacterStat> {
-        self.character_stats.iter().find(|s| s.name == character)
+    pub fn stat_of(&self, persona: &str) -> Option<&PersonaStat> {
+        self.persona_stats.iter().find(|s| s.name == persona)
     }
 
     pub fn has_new(&self, data: &GameData, what: Seen) -> bool {
         match what {
             Seen::Gallery => data
-                .characters
+                .personas
                 .iter()
-                .any(|c| !self.seen_characters.contains(&c.name)),
+                .any(|c| !self.seen_personas.contains(&c.name)),
             Seen::Deck => data.cards.iter().any(|c| !self.seen_cards.contains(&c.id)),
             Seen::Rules => data.rules_version > self.seen_rules_version,
             Seen::History => self.unread_result,
@@ -410,13 +410,13 @@ impl PlayerProfile {
             .any(|s| self.has_new(data, s))
     }
 
-    pub fn is_new_character(&self, name: &str) -> bool {
-        !self.seen_characters.iter().any(|n| n == name)
+    pub fn is_new_persona(&self, name: &str) -> bool {
+        !self.seen_personas.iter().any(|n| n == name)
     }
 
-    pub fn mark_character_seen(&mut self, name: &str) -> bool {
-        if self.is_new_character(name) {
-            self.seen_characters.push(name.into());
+    pub fn mark_persona_seen(&mut self, name: &str) -> bool {
+        if self.is_new_persona(name) {
+            self.seen_personas.push(name.into());
             true
         } else {
             false
@@ -426,9 +426,9 @@ impl PlayerProfile {
     pub fn mark_seen(&mut self, data: &GameData, what: Seen) {
         match what {
             Seen::Gallery => {
-                for c in &data.characters {
-                    if !self.seen_characters.contains(&c.name) {
-                        self.seen_characters.push(c.name.clone());
+                for c in &data.personas {
+                    if !self.seen_personas.contains(&c.name) {
+                        self.seen_personas.push(c.name.clone());
                     }
                 }
             }
@@ -445,16 +445,16 @@ impl PlayerProfile {
     }
 
     fn mark_all_seen(&mut self, data: &GameData) {
-        self.seen_characters.clear();
+        self.seen_personas.clear();
         self.seen_cards.clear();
         self.mark_seen(data, Seen::Gallery);
         self.mark_seen(data, Seen::Deck);
         self.seen_rules_version = data.rules_version;
     }
 
-    /// Chosen Live2D variant, or the character's own.
-    /// `options`: ids valid for this character (the portrait's options for `art_id`).
-    pub fn live2d_for<'a>(&'a self, c: &'a CharacterData, options: &[&str]) -> &'a str {
+    /// Chosen Live2D variant, or the persona's own.
+    /// `options`: ids valid for this persona (the portrait's options for `art_id`).
+    pub fn live2d_for<'a>(&'a self, c: &'a PersonaData, options: &[&str]) -> &'a str {
         let prefix = format!("{}=", c.name);
         match self
             .live2d_picks
@@ -467,7 +467,7 @@ impl PlayerProfile {
     }
 
     /// Store a Live2D pick. Returns whether the profile changed.
-    pub fn set_live2d(&mut self, c: &CharacterData, id: &str, options: &[&str]) -> bool {
+    pub fn set_live2d(&mut self, c: &PersonaData, id: &str, options: &[&str]) -> bool {
         if self.live2d_for(c, options) == id {
             return false;
         }

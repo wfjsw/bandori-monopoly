@@ -91,8 +91,8 @@ fn book_declaring(who: &str, card: &str, propensity_milli: i32) -> StrategyBook 
     b.generated_at = "chain_bot".into();
     b.me.push(StrategyEntry {
         me: who.into(),
-        band: String::new(),
-        opponent_bands: Vec::new(),
+        group: String::new(),
+        opponent_groups: Vec::new(),
         deck: Vec::new(),
         params,
     });

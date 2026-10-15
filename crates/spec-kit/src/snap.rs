@@ -42,7 +42,7 @@ pub fn snapshot(w: &World) -> Snap {
         m.insert(format!("bankrupt:P{i}"), p.bankrupt.to_string());
         m.insert(format!("left:P{i}"), p.left.to_string());
         m.insert(format!("assets:P{i}"), p.assets.to_string());
-        m.insert(format!("character:P{i}"), p.character.clone());
+        m.insert(format!("persona:P{i}"), p.persona.clone());
         m.insert(format!("hand_n:P{i}"), p.hand.to_string());
         m.insert(format!("draw_n:P{i}"), p.draw.to_string());
         m.insert(format!("discard_pub:P{i}"), p.discard.join("|"));
@@ -61,7 +61,7 @@ pub fn snapshot(w: &World) -> Snap {
                 format!("field:P{i}:{f}"),
                 format!(
                     "{}|uid={}|tile={}|crystals={}|immune={}|down={}|band={}",
-                    c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down, c.band_skill
+                    c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down, c.group_skill
                 ),
             );
             m.insert(format!("crystals:P{i}:{}", c.card), c.crystals.to_string());
