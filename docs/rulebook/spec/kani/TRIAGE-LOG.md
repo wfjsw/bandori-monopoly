@@ -1348,3 +1348,23 @@ Re-times landed (one CBMC at a time, `tools/kani/run.sh`, `/home/monopoly/kani-t
 | `skills_pp::band_idol_04_tick_iff` + user1 | FAILED 357/330 s | same `outside_subset` | **C/B** | same (`set_self_prop` from `set_prop(NO_REWARD)`) |
 
 `band_idol_02_overflow_formula`, `hina_lottery_02_borrow_map`, `maya_dawn_02_watch_formula`, `eve_unify_02_extra_dice_formula` are SUCCESSFUL (pure-formula class).
+
+### batch-2 re-time results (in progress)
+
+| id | after |
+|---|---|
+| `pp::guide_04_turn_end_crystal_iff` | **SUCCESSFUL** (`pre<=3` isolated the cash-in) |
+| `mor::courage_01_pay_iff_blocked_host` | **SUCCESSFUL** (pay-vs-agent arm split) |
+| `mor::courage_01_pay_user1_iff_blocked_host` | **SUCCESSFUL** |
+| `skills_pp::band_idol_02_body_never_overflows` | **SUCCESSFUL** (1/1 cover; `placed_cards` in subset) |
+| `skills_pp::band_idol_04_tick_iff` | **SUCCESSFUL** (2/2 covers; `set_self_prop` in subset) |
+| `skills_pp::band_idol_04_tick_user1_iff` | **SUCCESSFUL** |
+| `skills_pp::aya_with_01_five_fans_iff` + user1 | queued (guard_needs fix) |
+| `pp::dream_ahead_01_crystal_per_draw_iff` | queued |
+| `mor::toko_swap_*` | queued (unwind 64) |
+
+### ppp central rows (new)
+
+| id | before | failing assertion | class | action |
+|---|---|---|---|---|
+| `ppp::pipopa_01_iff` + user1 | FAILED 354 s | `log must be exactly GainMoney(1000), PlaceCard(…, Field)` | **C** | `arm_place_card` leaked `w.dest` (the running card's fate) into `PlaceCard.dest`. pipopa does `set_dest(Banished)` for 「此卡[移除]」 then `place_card` a Popipapapipopa — effect recorded dest=3 not 2. Fixed: PlaceCard.dest is always Field (2) |
