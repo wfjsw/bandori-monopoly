@@ -36,8 +36,8 @@ pub const MOCA_SELF: CardDef = CardDef::new(
         // 每个玩家的被动技能和卡存在2次使用cd」 -- the offer exists only for
         // another seat, under the per-source CD, with a pot to spend. Fire is
         // CEL; the dynamic CD key is residual.
-        On::Hook(&[HookKind::CardPlayed], "fire(owner) >= 1", Some(other_and_cooled), on_card),
-        On::Hook(&[HookKind::SkillUsed], "fire(owner) >= 1", Some(other_and_cooled), on_skill),
+        On::Hook(&[HookKind::CardPlayed], "charge(owner) >= 1", Some(other_and_cooled), on_card),
+        On::Hook(&[HookKind::SkillUsed], "charge(owner) >= 1", Some(other_and_cooled), on_skill),
     ],
 ).silent(&[0]);
 
@@ -84,7 +84,7 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2） 「你可以消耗一个[火罐]传送到其所在格子」.
-/// Applicability is `fire(owner) >= 1` + `other_and_cooled`.
+/// Applicability is `charge(owner) >= 1` + `other_and_cooled`.
 fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
     // 「该效果对每个玩家的被动技能和卡存在2次使用cd」
     let key = used_key(src);

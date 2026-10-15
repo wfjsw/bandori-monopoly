@@ -55,7 +55,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
         On::Hook(
             &[HookKind::SkillUsed],
-            "actor != owner && trigger_card != 0 && fire(owner) >= 1",
+            "actor != owner && trigger_card != 0 && charge(owner) >= 1",
             Some(on_skill_applies),
             on_skill,
         ),
@@ -66,7 +66,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
 
 /// Residual guard for [`on_skill`]: the CD and the 「每种角色标记上限1」 cap.
 /// Pure reads -- the same instant as the body (`run_hook` runs both on one
-/// store). `actor != owner && trigger_card != 0 && fire(owner) >= 1` is the
+/// store). `actor != owner && trigger_card != 0 && charge(owner) >= 1` is the
 /// condition.
 fn on_skill_applies(player_id: i32) -> bool {
     let Some(id) = ctx::trigger::cards().into_iter().next() else {
@@ -102,7 +102,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记」.
-/// `actor != owner && trigger_card != 0 && fire(owner) >= 1` plus
+/// `actor != owner && trigger_card != 0 && charge(owner) >= 1` plus
 /// [`on_skill_applies`] decide applicability; the body is the offer.
 fn on_skill(player_id: i32) -> card_sdk::Asked {
     let Some(id) = ctx::trigger::cards().into_iter().next() else {

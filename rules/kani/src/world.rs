@@ -248,7 +248,7 @@ impl BuySnap {
 
 /// `RollSource` guest codes (`hostfns::trig_roll_source` / `rules.rs`).
 pub const ROLL_UNATTRIBUTED: i32 = 0;
-pub const ROLL_FIRE: i32 = 1;
+pub const ROLL_CHARGE: i32 = 1;
 pub const ROLL_CARD: i32 = 2;
 pub const ROLL_SKILL: i32 = 3;
 
@@ -613,8 +613,8 @@ pub struct World {
     pub money: [i32; MAX_PLAYERS],
     pub out: [bool; MAX_PLAYERS],
     pub pos: [i32; MAX_PLAYERS],
-    pub fire: [i32; MAX_PLAYERS],
-    pub fire_max: [i32; MAX_PLAYERS],
+    pub charge: [i32; MAX_PLAYERS],
+    pub charge_max: [i32; MAX_PLAYERS],
     pub stay: [i32; MAX_PLAYERS],
     /// [眩晕] layers (`key::STUN`) — distinct from [`Self::stay`].
     pub stun: [i32; MAX_PLAYERS],
@@ -630,7 +630,7 @@ pub struct World {
     /// Generic per-player named counters (tokens, held, state).
     pub player_keys: [NameMap; MAX_PLAYERS],
     /// Band crystals / skills (kept explicit; also mirrored in player_keys).
-    pub group_crystals: [i32; MAX_PLAYERS],
+    pub group_pool: [i32; MAX_PLAYERS],
 
     // ---- compatibility views for the pilot proofs ----
     /// `P✽P粉丝(正)` / `(反)` counts (also in `player_keys`).
@@ -763,8 +763,8 @@ impl World {
             money: [0; MAX_PLAYERS],
             out: [false; MAX_PLAYERS],
             pos: [0; MAX_PLAYERS],
-            fire: [0; MAX_PLAYERS],
-            fire_max: [3; MAX_PLAYERS],
+            charge: [0; MAX_PLAYERS],
+            charge_max: [3; MAX_PLAYERS],
             stay: [0; MAX_PLAYERS],
             stun: [0; MAX_PLAYERS],
             exile: [0; MAX_PLAYERS],
@@ -774,7 +774,7 @@ impl World {
             persona_id: [u16::MAX; MAX_PLAYERS],
             group_id: [u16::MAX; MAX_PLAYERS],
             player_keys: [NameMap::new(); MAX_PLAYERS],
-            group_crystals: [0; MAX_PLAYERS],
+            group_pool: [0; MAX_PLAYERS],
             fans_pos: [0; MAX_PLAYERS],
             fans_neg: [0; MAX_PLAYERS],
             hand_resonance: [0; MAX_PLAYERS],
@@ -1181,7 +1181,7 @@ pub struct Snapshot {
     pub money: [i32; MAX_PLAYERS],
     pub out: [bool; MAX_PLAYERS],
     pub pos: [i32; MAX_PLAYERS],
-    pub fire: [i32; MAX_PLAYERS],
+    pub charge: [i32; MAX_PLAYERS],
     pub stay: [i32; MAX_PLAYERS],
     pub stun: [i32; MAX_PLAYERS],
     pub exile: [i32; MAX_PLAYERS],
@@ -1203,7 +1203,7 @@ pub fn snapshot() -> Snapshot {
             money: w.money,
             out: w.out,
             pos: w.pos,
-            fire: w.fire,
+            charge: w.charge,
             stay: w.stay,
             stun: w.stun,
             exile: w.exile,

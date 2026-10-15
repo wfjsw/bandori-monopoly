@@ -8,7 +8,7 @@ use alloc::{string::String, vec::Vec};
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
-/// v7: board/hand/status query + op wave (is_buyable ... in_group, spend_fire,
+/// v7: board/hand/status query + op wave (is_buyable ... in_group, spend_charge,
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
 /// v8: `ruleset_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
 /// v9: `cant_move`, `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
@@ -51,7 +51,7 @@ use alloc::{string::String, vec::Vec};
 /// v20: turn plan + scheduling -- `schedule_turn_end` (a card asks for a
 ///      `turnEnd` call at this turn's end or at the end of a player's next turn),
 ///      `set_no_money_loss`, `set_fixed_roll` / `fixed_roll`, `set_next_steps`,
-///      `turn_main_steps`, `add_fire_max`, `card_replayable`.
+///      `turn_main_steps`, `add_charge_max`, `card_replayable`.
 ///      `play_card` now returns the inner card's `Dest`, and the inner card runs
 ///      as itself (its own id and `Dest`, no longer the outer card's).
 /// v21: `CardDef` standardized like triggers -- `id` + a table of `On` entry
@@ -93,7 +93,7 @@ use alloc::{string::String, vec::Vec};
 ///      (Walk | Teleport), and what it resolves is a separate category,
 ///      `Settle` (ROUTE = the tiles it passes resolve [经过]; DEST = the landing
 ///      resolves [结算]). A teleport-walk becomes a Teleport whose destination
-///      is computed from the roll; no-Resolve clears DEST. FIRE_ROLL
+///      is computed from the roll; no-Resolve clears DEST. CHARGE_ROLL
 ///      is card-owned state now (`plan::set_tag` / `trigger::move_tag`), not an
 ///      engine flag. `ctx::card_move` / `ctx::agent_landing` run a move or an
 ///      agent landing from inside a card; the plan gained `set_kind` / `set_tag`
@@ -150,7 +150,7 @@ use alloc::{string::String, vec::Vec};
 /// v33: `roll_ask` (a card-/skill-driven roll that raises the `Roll` chain
 ///      link -- the 「掷骰结算前」 [反击] window -- with the roller, the face and
 ///      a `t.Roll.Source` code) and `trig_roll_source` /
-///      [`roll_source`]`::{NONE,FIRE,CARD,SKILL}`. `ctx::roll` is unchanged
+///      [`roll_source`]`::{NONE,CHARGE,CARD,SKILL}`. `ctx::roll` is unchanged
 ///      (no window); a roll that [反击]s must answer goes through
 ///      `ctx::roll_ask` / `ctx::do_move_roll_ask`.
 /// v34: `prop::RENT_HOUSES` (virtual rent-house-count, 「房屋数视为…」 -- gone
@@ -452,7 +452,7 @@ use alloc::{string::String, vec::Vec};
 ///      import, no SAVE_VERSION change.
 /// v57: **closeout integration** -- one monotonic bump covering every addition
 ///      the five closeout batches made on top of v56:
-///      `TriggerKind::FirePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
+///      `TriggerKind::ChargePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
 ///      substitution + flip-effect hook; `ctx::raise` is prompt-aware);
 ///      `join_redirect_target` / `set_join_used` (真奈 join retarget, CH-05);
 ///      and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
@@ -619,7 +619,7 @@ pub mod state_key {
     pub const EXILE_MAIN: &str = "exileMain";
     /// Fire pots held. Its `max` is the mandated cap, written by the character
     /// skill -- and that is the one number to show.
-    pub const FIRE: &str = "fire";
+    pub const CHARGE: &str = "charge";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
     /// Turn key of a live 「无法从手牌中使用[反击]」 lock (骰子已经掷下). When it
@@ -794,7 +794,7 @@ pub mod prop {
     /// Nonzero alternatives with the same group are exclusive per seat/timing.
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
     /// Fire-pot cost shown on a field counteraction's source-choice label.
-    pub const COUNTERACT_FIRE_COST: &str = "counteractFireCost";
+    pub const COUNTERACT_CHARGE_COST: &str = "counteractChargeCost";
     /// Continuous 「手卡上限数量减1」 while the card
     /// sits on the field. Stamped onto the field instance at placement and
     /// gone with the card. `-1` cuts the owner's hand limit; a positive value
@@ -948,7 +948,7 @@ pub mod roll_source {
     /// Unattributed (the engine's own move roll, or a roll with no named source).
     pub const NONE: i32 = 0;
     /// A [火罐]-funded roll (「使用火罐进行掷骰」).
-    pub const FIRE: i32 = 1;
+    pub const CHARGE: i32 = 1;
     /// A hand/field card's own roll (`ctx::roll_ask` from a card body).
     pub const CARD: i32 = 2;
     /// A skill press's roll (`ctx::roll_ask` from a skill body).
@@ -1469,12 +1469,12 @@ pub enum TriggerKind {
     /// replacement draw, and the after points ([`Self::Drawn`] / [`Self::Drew`])
     /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
     DrewBefore = 77,
-    /// v56: **before** one fire spend commits (`ctx::spend_fire`). `t.value` is
+    /// v56: **before** one fire spend commits (`ctx::spend_charge`). `t.value` is
     /// the requested amount. A hook that substitutes the cost (「以代替此次技能
     /// 的火罐消耗」) cancels the trigger and performs its own payment; the engine
     /// then treats the spend as satisfied and does not touch the fire pots.
     /// Hook-only. (78 was `CpChanged`; v50 folded it into [`Self::CounterChanged`].)
-    FirePaying = 78,
+    ChargePaying = 78,
     /// v56: a face-down counter is being flipped face-up (「将X个反面…变正」).
     /// `t.value` is the effect's **intended** X (the number the clause names),
     /// raised *before* the counters move so a listener still sees the pre-flip
@@ -1675,7 +1675,7 @@ impl TriggerKind {
             74 => Self::SkillUsed,
             76 => Self::CounterChanged,
             77 => Self::DrewBefore,
-            78 => Self::FirePaying,
+            78 => Self::ChargePaying,
             94 => Self::FlipEffect,
 
             79 => Self::BuyGate,
@@ -1784,7 +1784,7 @@ impl TriggerKind {
             Self::SkillUsed => "skillUsed",
             Self::CounterChanged => "counterChanged",
             Self::DrewBefore => "drewBefore",
-            Self::FirePaying => "firePaying",
+            Self::ChargePaying => "chargePaying",
             Self::FlipEffect => "flipEffect",
 
             Self::BuyGate => "buyGate",
@@ -1891,7 +1891,7 @@ impl TriggerKind {
             "skillUsed" => Self::SkillUsed,
             "counterChanged" | "crystalsChanged" | "cpChanged" => Self::CounterChanged,
             "drewBefore" => Self::DrewBefore,
-            "firePaying" => Self::FirePaying,
+            "chargePaying" => Self::ChargePaying,
             "flipEffect" => Self::FlipEffect,
 
             "buyGate" => Self::BuyGate,
@@ -2355,9 +2355,9 @@ declare_kinds! {
         /// See [`TriggerKind::DrewBefore`] -- the per-draw *replacement* point
         /// (「此次加手视为抽卡动作」). Hook-only.
         DrewBefore = 77,
-        /// See [`TriggerKind::FirePaying`] -- before one fire spend commits;
+        /// See [`TriggerKind::ChargePaying`] -- before one fire spend commits;
         /// cancel to substitute the cost. Hook-only.
-        FirePaying = 78,
+        ChargePaying = 78,
         /// See [`TriggerKind::FlipEffect`] -- a face-down counter is being
         /// flipped face-up. Hook-only.
         FlipEffect = 94,

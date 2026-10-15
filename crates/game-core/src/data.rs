@@ -323,7 +323,9 @@ pub struct MatchRulesData {
     pub money: f32,
     pub property: f32,
     pub houses: f32,
-    pub ring_multiplier: i32,
+    /// Generic named rule parameters (the ruleset reads them by name).
+    /// The shipped ruleset uses `rentUnitMult` as the dice-rent unit multiplier.
+    pub rule_params: std::collections::BTreeMap<String, i32>,
     /// Names given to bot players, in order.
     pub bot_names: Vec<String>,
     /// Home persona of a new profile (a persona `name`).
@@ -332,12 +334,14 @@ pub struct MatchRulesData {
 
 impl Default for MatchRulesData {
     fn default() -> Self {
+        let mut rule_params = std::collections::BTreeMap::new();
+        rule_params.insert("rentUnitMult".to_string(), 10);
         Self {
             note: String::new(),
             money: 1.0,
             property: 1.0,
             houses: 1.0,
-            ring_multiplier: 10,
+            rule_params,
             bot_names: vec![],
             default_home_persona: String::new(),
         }

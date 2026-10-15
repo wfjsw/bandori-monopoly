@@ -17,10 +17,10 @@ crate::host_subset!(skills_ag_dispatch {
     gain | gain_typed | gain_fixed => arm_gain,
     money => arm_money,
     pay => arm_pay,
-    gain_fire => arm_gain_fire,
+    gain_charge => arm_gain_charge,
     fire => arm_fire,
-    fire_max => arm_fire_max,
-    spend_fire => arm_spend_fire,
+    charge_max => arm_charge_max,
+    spend_charge => arm_spend_charge,
     teleport_to => arm_teleport_to,
     player_count => arm_player_count,
     player_out => arm_player_out,
@@ -100,8 +100,8 @@ fn firepot_tick_world(user: i32, pre_rest: i32, pre_fire: i32) -> World {
     w.turn_player = player;
     w.group_id[player as usize] = band_key();
     w.key_set(player, rest_name(), pre_rest);
-    w.fire[player as usize] = pre_fire;
-    w.fire_max = [1, 1, 1, 1]; // 「上限1」
+    w.charge[player as usize] = pre_fire;
+    w.charge_max = [1, 1, 1, 1]; // 「上限1」
     w
 }
 
@@ -123,7 +123,7 @@ fn firepot_01_tick_iff_at(user: i32) {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     let post_rest = world::with_world(|ww| rest_of(ww, player));
-    let post_fire = world::with_world(|ww| ww.fire[player as usize]);
+    let post_fire = world::with_world(|ww| ww.charge[player as usize]);
 
     let grants = spec::skills_ag::firepot_01_grants(pre_rest);
     kani::cover!(grants, "third idle turn grants a pot");
@@ -133,7 +133,7 @@ fn firepot_01_tick_iff_at(user: i32) {
             spec::skills_ag::firepot_01_grant_log_ok(effects, player),
             "C-AG-firepot-01: granting tick is exactly GainFire(1)"
         );
-        // Host `gain_fire` is saturating_add with no fire_max clamp (the cap
+        // Host `gain_charge` is saturating_add with no charge_max clamp (the cap
         // is declared by `fire_pot` but not enforced under Kani). Pin the
         // body's +1; the cap is recorded as a host gap in the unit table.
         crate::kassert!(
@@ -190,8 +190,8 @@ fn moca_offer_world(pre_fire: i32, src_pos: i32, used: i32) -> World {
     let owner = 0i32;
     let src = 1i32;
     w.trig_player = src; // the actor who played a card / used a skill
-    w.fire[owner as usize] = pre_fire;
-    w.fire_max = [1, 1, 1, 1];
+    w.charge[owner as usize] = pre_fire;
+    w.charge_max = [1, 1, 1, 1];
     w.pos[src as usize] = src_pos;
     w.pos[owner as usize] = (src_pos + 17) % 60; // not already there
     w.group_id[owner as usize] = band_key();
@@ -257,7 +257,7 @@ pub fn moca_02_teleport_iff() {
             "C-AG-moca-02: exactly Teleport(owner → src tile)"
         );
         crate::kassert!(
-            spec::skills_ag::moca_02_post_ok(post.pos[owner as usize], post.fire[owner as usize], src_pos, pre_fire),
+            spec::skills_ag::moca_02_post_ok(post.pos[owner as usize], post.charge[owner as usize], src_pos, pre_fire),
             "C-AG-moca-02: on the actor's tile with fire −1"
         );
     } else {
@@ -265,7 +265,7 @@ pub fn moca_02_teleport_iff() {
             spec::skills_ag::moca_02_noop_log_ok(effects),
             "C-AG-moca-02: declined offer is a no-op"
         );
-        crate::kassert!(post.fire[owner as usize] == pre_fire, "decline leaves fire");
+        crate::kassert!(post.charge[owner as usize] == pre_fire, "decline leaves fire");
         let _ = src;
     }
 }
@@ -301,7 +301,7 @@ pub fn moca_02_mutant_is_detected() {
 /// C-AG-ran-02: the fire-spend half (plan reverse / NO_REWARD are stubs).
 #[kani::proof]
 #[kani::unwind(80)]
-pub fn ran_02_spend_fire_iff() {
+pub fn ran_02_spend_charge_iff() {
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 1 && pre_fire <= 1);
     skills_ag_world();
@@ -309,19 +309,19 @@ pub fn ran_02_spend_fire_iff() {
     w.n_players = 2;
     let player = 0i32;
     w.trig_player = player;
-    w.fire[player as usize] = pre_fire;
-    w.fire_max = [1, 1, 1, 1];
+    w.charge[player as usize] = pre_fire;
+    w.charge_max = [1, 1, 1, 1];
     w.group_id[player as usize] = band_key();
     world::reset_world(w);
     // Entry 0 is the (2) Play (`can_use` residual: not skill_blocked, fire ≥ 1).
     invoke::unwrap_done(skill_personas::ran_red::use_skill_kani(player));
-    let post_fire = world::with_world(|ww| ww.fire[player as usize]);
+    let post_fire = world::with_world(|ww| ww.charge[player as usize]);
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
     crate::kassert!(
         spec::skills_ag::ran_02_spend_log_empty(effects),
-        "C-AG-ran-02: fire spend is not an Effect (spend_fire mutates fire only)"
+        "C-AG-ran-02: fire spend is not an Effect (spend_charge mutates fire only)"
     );
     crate::kassert!(
         spec::skills_ag::ran_02_fire_ok(post_fire, pre_fire),
@@ -338,12 +338,12 @@ pub fn ran_02_mutant_is_detected() {
     w.n_players = 2;
     let player = 0i32;
     w.trig_player = player;
-    w.fire[player as usize] = 1;
-    w.fire_max = [1, 1, 1, 1];
+    w.charge[player as usize] = 1;
+    w.charge_max = [1, 1, 1, 1];
     w.group_id[player as usize] = band_key();
     world::reset_world(w);
     invoke::unwrap_done(skill_personas::ran_red::use_skill_kani(player));
-    let post_fire = world::with_world(|ww| ww.fire[player as usize]);
+    let post_fire = world::with_world(|ww| ww.charge[player as usize]);
     crate::kassert!(post_fire == 0, "card spends exactly 1");
     crate::kassert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");
 }

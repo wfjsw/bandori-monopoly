@@ -27,11 +27,11 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // `counter::CRYSTALS`.
         On::Hook(&[HookKind::CounterChanged], "", Some(sweep_guard), sweep),
         // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
-        // `FirePaying` pre-spend substitution. The offer exists only for a
+        // `ChargePaying` pre-spend substitution. The offer exists only for a
         // positive spend with a crystal to trade; accepting cancels the fire
         // spend and burns one crystal instead.
         On::Hook(
-            &[HookKind::FirePaying],
+            &[HookKind::ChargePaying],
             "actor == owner && card.counter('crystals') >= 1 && value > 0",
             None,
             cover,
@@ -55,7 +55,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
 const SLOT_COVERING: &str = "tomori_no_longer.covering";
 
 /// （2）'s substitution. Applicability is the entry's condition (`value > 0`).
-/// Cancelling the `FirePaying` link is the substitution: the fire pots never
+/// Cancelling the `ChargePaying` link is the substitution: the fire pots never
 /// move, and one crystal is removed instead.
 fn cover(player_id: i32) -> card_sdk::Asked {
     let spent = ctx::trigger::value();

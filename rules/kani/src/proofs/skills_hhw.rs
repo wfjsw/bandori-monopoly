@@ -16,10 +16,10 @@ crate::host_subset!(skills_hhw_dispatch {
     gain | gain_typed | gain_fixed => arm_gain,
     money => arm_money,
     pay | pay_to | pay_total => arm_pay,
-    gain_fire => arm_gain_fire,
+    gain_charge => arm_gain_charge,
     fire => arm_fire,
-    fire_max => arm_fire_max,
-    spend_fire => arm_spend_fire,
+    charge_max => arm_charge_max,
+    spend_charge => arm_spend_charge,
     teleport_to => arm_teleport_to,
     player_count => arm_player_count,
     player_out => arm_player_out,
@@ -68,7 +68,7 @@ fn symbolic_pass_world(owner: i32, tile: i32) -> World {
     for p in 0..MAX_PLAYERS {
         w.out[p] = false;
         w.money[p] = 5000;
-        w.fire[p] = 0;
+        w.charge[p] = 0;
         w.pos[p] = 0;
     }
     w.trig_player = owner;
@@ -126,7 +126,7 @@ pub fn kokoro_01_opening_1000_iff() {
         "C-HHW-kokoro-01: money rises by exactly 1000"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
     crate::kassert!(post.discard == pre.discard, "frame: discard");
 }
@@ -230,7 +230,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
         "C-HHW-kokoro-02: money rises by exactly 1500 extra"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 /// No-op: passing a non-CiRCLE tile must not fire the extra.
@@ -302,8 +302,8 @@ pub fn misaki_skill_01_pass_fire_iff() {
     skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, TSUZUMI_GROUP);
     // Pre fire is symbolic in 0..=cap so the clamp is exercised.
-    w.fire[owner as usize] = kani::any();
-    kani::assume(w.fire[owner as usize] >= 0 && w.fire[owner as usize] <= 2);
+    w.charge[owner as usize] = kani::any();
+    kani::assume(w.charge[owner as usize] >= 0 && w.charge[owner as usize] <= 2);
 
     let gid = crate::guard_id!("actor == owner && tile.id == tile_named('弦卷集团')");
     let ov = TriggerOverlay::default();
@@ -314,7 +314,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
         return;
     }
 
-    let pre_fire = w.fire[owner as usize];
+    let pre_fire = w.charge[owner as usize];
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -332,7 +332,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
     );
     let expected = spec::skills_hhw::misaki_skill_01_gain(pre_fire);
     crate::kassert!(
-        post.fire[owner as usize] == expected,
+        post.charge[owner as usize] == expected,
         "C-HHW-misaki-skill-01: fire rises by +2, capped at 2"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
@@ -360,13 +360,13 @@ pub fn misaki_skill_01_mutant_is_detected() {
     let owner: i32 = 0;
     skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, TSUZUMI_GROUP);
-    w.fire[owner as usize] = 0;
+    w.charge[owner as usize] = 0;
     let pre_fire = 0;
     world::reset_world(w);
     invoke::unwrap_done(skill_personas::misaki_other::on_pass_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        post.fire[owner as usize] != spec::skills_hhw::misaki_skill_01_gain_mutant(pre_fire),
+        post.charge[owner as usize] != spec::skills_hhw::misaki_skill_01_gain_mutant(pre_fire),
         "mutant +1 must disagree with the card's +2"
     );
 }
@@ -384,12 +384,12 @@ pub fn kaoru_01_pot_arm_iff() {
     let owner: i32 = 0;
     skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
-    w.fire[owner as usize] = kani::any();
-    kani::assume(w.fire[owner as usize] >= 0 && w.fire[owner as usize] <= 7);
+    w.charge[owner as usize] = kani::any();
+    kani::assume(w.charge[owner as usize] >= 0 && w.charge[owner as usize] <= 7);
     // Isolation: no 怪盗标记 on the field, so the pot arm is the book's.
     // (The mark write is a separate arm; FINDINGS documents that the live
     // counter the card plants is not seen by this check.)
-    let pre_fire = w.fire[owner as usize];
+    let pre_fire = w.charge[owner as usize];
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -408,14 +408,14 @@ pub fn kaoru_01_pot_arm_iff() {
     if spec::skills_hhw::kaoru_01_pot_log_ok(effects, owner) {
         let expected = spec::skills_hhw::kaoru_01_pot_gain(pre_fire);
         crate::kassert!(
-            post.fire[owner as usize] == expected,
+            post.charge[owner as usize] == expected,
             "C-HHW-kaoru-01: pot arm gains +1 capped at 7"
         );
     } else {
         // FINDINGS: the body may take the mark arm (or both) when its
         // existence check disagrees with the book. Pin the weaker book fact:
         // it must never gain more than +1 fire on one step.
-        let delta = post.fire[owner as usize] - pre_fire;
+        let delta = post.charge[owner as usize] - pre_fire;
         crate::kassert!(delta <= 1, "C-HHW-kaoru-01: at most +1 火罐 per step");
     }
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
@@ -428,7 +428,7 @@ pub fn kaoru_01_mutant_is_detected() {
     let owner: i32 = 0;
     skills_hhw_world(owner);
     let mut w = symbolic_pass_world(owner, -1);
-    w.fire[owner as usize] = 0;
+    w.charge[owner as usize] = 0;
     world::reset_world(w);
     invoke::unwrap_done(skill_personas::kaoru_prince::on_pass_kani(owner));
     let post = world::snapshot();
@@ -439,7 +439,7 @@ pub fn kaoru_01_mutant_is_detected() {
         !spec::skills_hhw::kaoru_01_pot_log_ok_mutant(effects, owner),
         "mutant both-arms must not match a single pot grant"
     );
-    crate::kassert!(post.fire[owner as usize] <= 1, "still at most +1");
+    crate::kassert!(post.charge[owner as usize] <= 1, "still at most +1");
 }
 
 // ===========================================================================

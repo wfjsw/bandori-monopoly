@@ -99,7 +99,7 @@ pub enum TileQuoteKind {
 /// One tile's "what to expect" number, from a viewer's seat.
 /// Parallel to the board's tiles in [`MatchView`] (`tileQuotes[i]`).
 /// `value` is the figure; `max` is the upper bound of a dice range (RiNG
-/// rent is `rings × ring_multiplier × 1d20`, so `value` is the minimum).
+/// rent is `rings × rent_unit_mult × 1d20`, so `value` is the minimum).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TileQuote {
@@ -353,14 +353,25 @@ pub enum Tick {
     TurnEnd,
 }
 
+/// Generic flags on a [`StateVar`]: how the engine treats the key, without
+/// naming the key in match arms.
+pub mod state_flag {
+    /// Status-like counter: writes floor at 0 (「清除」).
+    pub const NEVER_NEGATIVE: u8 = 1;
+    /// Engine-owned key (turn rules / status gates), not a card's scratch.
+    pub const ENGINE_OWNED: u8 = 2;
+}
+
 /// One keyed state item: `value`, the bounds a consumer may enforce, and when
 /// it wears off.
 ///
 /// The engine holds these and enforces **nothing** -- it is storage, no more. A
-/// character skill that mandates a fire-pot (火罐) cap writes `max`, and whoever
+/// ruleset skill that mandates a resource cap writes `max`, and whoever
 /// moves `value` is free to honour the bounds or ignore them: enforcement
 /// belongs to the consumer, not to the holder. `min`/`max` default to 0: a
-/// declared cap of 0 means "none yet" / uncapped.
+/// declared cap of 0 means "none yet" / uncapped. [`Self::flags`] carries the
+/// generic declarations ([`state_flag`]) so special-casing never needs the key
+/// name.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StateVar {
@@ -373,6 +384,8 @@ pub struct StateVar {
     pub max: i32,
     /// When this wears off, if it is a timed counter. See [`Tick`].
     pub expires: Option<Tick>,
+    /// Generic [`state_flag`] bits (serde-defaulted).
+    pub flags: u8,
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the
@@ -401,10 +414,11 @@ pub mod key {
     /// (MyGO:无路矢). The expiry tick reads and consumes it:
     /// `TurnCtx::main_moved` is set so the player cannot also roll.
     pub const EXILE_MAIN: &str = "exileMain";
-    /// Fire pots (火罐) held. Its `max` is the mandated cap, written by the
-    /// character skill -- and that is the one number to show: there is no
+    /// A capped spendable resource held by the player (ruleset-defined; the
+    /// shipped ruleset uses it for spendable pots). Its `max` is the mandated cap, written
+    /// by the owning skill -- and that is the one number to show: there is no
     /// separate "effective cap" beside it.
-    pub const FIRE: &str = "fire";
+    pub const CHARGE: &str = "charge";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
     /// Turn key of a live 「无法从手牌中使用[反击]」 lock (骰子已经掷下). Mirrors
@@ -439,13 +453,11 @@ pub mod key {
     /// enforces), as opposed to a card's own scratch / latch key? Only the
     /// latter may be carried across a pause from a card's world copy -- a
     /// stale copy of a status gate must not clobber the live one.
+    ///
+    /// Driven by [`state_flag::ENGINE_OWNED`] on the item when present; new
+    /// items take [`super::default_flags`].
     pub fn is_engine_owned(key: &str) -> bool {
-        matches!(
-            key,
-            STAY | STUN | STUN_START | EXILE | EXILE_TO | FIRE | NO_HAND | UNSTOPPABLE
-                | HAND_LIMIT | START_HAND | SKILL_STATE | BUILT | BOUGHT | REDEEMED | MORTGAGED
-                | NO_BUILD
-        )
+        super::default_flags(key) & super::state_flag::ENGINE_OWNED != 0
             // `skill.*` is skill scratch -- a hook writes it and the hook's own
             // `swap_world` commits it; it must not be pulled back off a stale
             // body copy at a pause.
@@ -475,7 +487,7 @@ pub mod prop {
     /// Opt-in field counteraction / shared-choice metadata (ABI v47).
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
-    pub const COUNTERACT_FIRE_COST: &str = "counteractFireCost";
+    pub const COUNTERACT_CHARGE_COST: &str = "counteractChargeCost";
     /// 「有[指定]目标」: `1` = this play names recipients (the play's other
     /// living players). Mirrors `card_sdk::abi::prop::DESIGNATES`.
     pub const DESIGNATES: &str = "designates";
@@ -569,13 +581,26 @@ pub mod prop {
 /// that attaches a rule to a tile places it here (`place_card_on(BOARD_OWNER, tile, …)`).
 pub const BOARD_OWNER: i32 = -1;
 
-/// Is `key` one of the engine's status counters, whose value cannot go
-/// negative (「清除」 floors at 0)?
-fn is_status_key(key: &str) -> bool {
-    matches!(
-        key,
-        key::STAY | key::STUN | key::STUN_START | key::EXILE | key::FIRE
-    )
+/// Default [`state_flag`] bits for a new key. Only generic engine-mechanism
+/// names appear here (status layers, the capped resource, turn latches) --
+/// game vocabulary never does. Ruleset-invented keys start unflagged.
+fn default_flags(key: &str) -> u8 {
+    use state_flag::{ENGINE_OWNED, NEVER_NEGATIVE};
+    match key {
+        key::STAY | key::STUN | key::STUN_START | key::EXILE | key::CHARGE => {
+            NEVER_NEGATIVE | ENGINE_OWNED
+        }
+        key::EXILE_TO | key::EXILE_MAIN | key::NO_HAND | key::UNSTOPPABLE | key::HAND_LIMIT
+        | key::START_HAND | key::SKILL_STATE | key::BUILT | key::BOUGHT | key::REDEEMED
+        | key::MORTGAGED | key::NO_BUILD => ENGINE_OWNED,
+        _ => 0,
+    }
+}
+
+/// Is this state item a status counter, whose value cannot go negative
+/// (「清除」 floors at 0)? Reads the item's [`state_flag::NEVER_NEGATIVE`].
+fn is_status_var(v: &StateVar) -> bool {
+    v.flags & state_flag::NEVER_NEGATIVE != 0
 }
 
 /// The tick the rulebook names for a timed status counter (规则书:
@@ -692,7 +717,7 @@ pub struct MatchPlayer {
     /// client reads this map by name and TS types are structural, so renaming
     /// a key breaks the board render silently rather than at compile time. The
     /// names the client actually reads today are `stay`, `stun`, `stunStart`,
-    /// `exile`, `exileTo`, `fire`, and `handLimit`. Treat those as frozen;
+    /// `exile`, `exileTo`, `charge`, and `handLimit`. Treat those as frozen;
     /// invent new ones freely.
     pub state: BTreeMap<String, StateVar>,
     pub field: Vec<FieldCard>,
@@ -790,10 +815,10 @@ impl MatchPlayer {
     /// Write `value`, clamped to the item's declared bounds.
     ///
     /// The engine holds the bounds and enforces them on write: a status counter
-    /// (stay / stun / exile / fire) never goes negative (「清除」 floors at 0),
-    /// and a declared `max > 0` is a real cap (fire pots 「上限M」). `max == 0`
+    /// (stay / stun / exile / charge) never goes negative (「清除」 floors at 0),
+    /// and a declared `max > 0` is a real cap (「上限M」). `max == 0`
     /// still means "uncapped". A consumer that wants a different policy (e.g.
-    /// `gain_fire`'s partial gain + log) does its own arithmetic first.
+    /// `gain_charge`'s partial gain + log) does its own arithmetic first.
     ///
     /// A **fresh** stay / stun / stunStart item also picks up the rulebook's
     /// wear-off tick (see [`default_expiry`]): 「每回合结束时移除一层」 is a
@@ -804,12 +829,15 @@ impl MatchPlayer {
     /// non-ticking [晕眩] -- but a non-default tick the writer asked for stays.
     pub fn state_set(&mut self, key: &str, value: i32) -> i32 {
         let e = self.state.entry(key.to_string()).or_default();
+        if e.flags == 0 {
+            e.flags = default_flags(key);
+        }
         if e.expires.is_none() {
             e.expires = default_expiry(key);
         }
         let mut v = value;
         // Status counters cannot go negative -- clearing floors at 0.
-        if is_status_key(key) {
+        if is_status_var(e) {
             v = v.max(0);
         }
         // A declared cap is honoured (`max > 0`; `max == 0` is uncapped).
@@ -883,15 +911,15 @@ impl MatchPlayer {
         self.state_get(key::EXILE_TO)
     }
 
-    /// Fire pots (火罐) held.
-    pub fn fire(&self) -> i32 {
-        self.state_get(key::FIRE)
+    /// Capped spendable resource held.
+    pub fn charge(&self) -> i32 {
+        self.state_get(key::CHARGE)
     }
 
-    /// The mandated fire-pot cap -- the `max` of the `fire` item, written by a
+    /// The mandated resource cap -- the `max` of the `charge` item, written by a
     /// character skill. Not something the engine imposes.
-    pub fn fire_max(&self) -> i32 {
-        self.state_max(key::FIRE)
+    pub fn charge_max(&self) -> i32 {
+        self.state_max(key::CHARGE)
     }
 
     pub fn no_hand(&self) -> i32 {
@@ -1129,7 +1157,7 @@ pub struct MatchEvent {
     pub uid: i32,
     /// Should the client show the card **flash** (and the field-slot pulse)
     /// for this activation? `false` when every produced effect is
-    /// owner-self-only (own fire, counters, latches, hand-limit, bank money
+    /// owner-self-only (own charge, counters, latches, hand-limit, bank money
     /// on self) -- the log entry (header + outcome lines) still appears; only
     /// the animation goes. `true` when anything reached another player, the
     /// board (cards, marks, houses, deeds, tile props), or movement. v54.
@@ -1225,20 +1253,9 @@ pub struct FieldCard {
     pub owner: i32,
     pub user: i32,
     pub tile: i32,
-    /// Named on-card counter [`counter::CRYSTALS`] (奇迹水晶). The generic
-    /// counter API (`ctx::counter` / `add_counter`) is the only writer; this
-    /// field is that name's storage on the instance. Serde-stable.
-    pub crystals: i32,
-    /// Named on-card counter [`counter::CP`] -- 「自己[场上]N个[CP点]」, the CP
-    /// points **attached to this card** (user ruling 2026-10-07). Distinct from
-    /// the [CP点] **tile marks** bound to the standing `mark:cp` instance
-    /// (see [`TileMark`]). Dies with this instance. Serde-defaulted so pre-CP
-    /// saves load. Generic name: [`counter::CP`].
-    #[serde(default)]
-    pub cp: i32,
-    /// Extra named on-card counters beyond [`counter::CP`] /
-    /// [`counter::CRYSTALS`]. The two known names stay as fields so current
-    /// saves load unchanged; anything else lives here (serde-defaulted).
+    /// Named on-card counters of this instance. The generic counter API
+    /// (`ctx::counter` / `add_counter`) is the only writer. Names are
+    /// ruleset-defined strings; the engine treats them as opaque keys.
     #[serde(default)]
     pub counters: BTreeMap<String, i32>,
     pub face_down: bool,
@@ -1254,7 +1271,7 @@ pub struct FieldCard {
     /// This instance is a **band skill** (`skill:<band>:<skill>`, stamped at
     /// placement from `GameData::is_group_skill`). 「乐队卡 / 团卡」 crystal
     /// reads and writes land on this instance's [`Self::crystals`] -- see
-    /// `World::group_crystals`. A character skill is `skill:<character>:<skill>`
+    /// `World::group_pool`. A character skill is `skill:<character>:<skill>`
     /// and is *not* flagged, even when it sits on someone else's field.
     #[serde(default)]
     pub group_skill: bool,
@@ -1275,8 +1292,6 @@ impl Default for FieldCard {
             owner: -1,
             user: -1,
             tile: -1,
-            crystals: 0,
-            cp: 0,
             counters: BTreeMap::new(),
             face_down: false,
             immune: false,
@@ -1288,16 +1303,8 @@ impl Default for FieldCard {
     }
 }
 
-/// Named counters on a field-card instance (the generic counter API's names).
-/// Mirrors `card_sdk::abi::counter` (the two crates cannot share a definition;
-/// keep them in step). Storage: [`FieldCard::cp`] / [`FieldCard::crystals`] /
-/// [`FieldCard::counters`].
-pub mod counter {
-    /// On-card [CP点] (「自己[场上]N个[CP点]」).
-    pub const CP: &str = "cp";
-    /// 奇迹水晶.
-    pub const CRYSTALS: &str = "crystals";
-}
+/// Named counters on a field-card instance live in [`FieldCard::counters`]
+/// under ruleset-defined name strings. The engine holds no well-known names.
 
 /// Tile-mark **categories** -- what sort of thing a [`TileMark`] is. A category
 /// is the mark's identity for the board, as against `TileMark::kind` (the i18n
@@ -1312,9 +1319,6 @@ pub mod mark_category {
     /// A player/generic mark (the default): 兔子 / 奇迹水晶 / PAREO / 抹茶巴菲 …
     /// Placed by a seat, coloured by that seat in the view.
     pub const PLAYER: &str = "";
-    /// [CP点] -- 「放置于路面上的指示物」. Neutral: `owner` is always
-    /// [`super::BOARD_OWNER`], never a seat.
-    pub const CP: &str = "cp";
     /// A [指定] of tiles by a field card / skill while it is in play. Owned by
     /// the designating instance; dies with it. `owner` is the designating
     /// seat (label colour). Mirrors `card_sdk::abi::mark::DESIGNATE_CATEGORY`.
@@ -1324,9 +1328,6 @@ pub mod mark_category {
 /// Well-known tile-mark kinds (the i18n key / stable id on `TileMark::kind`).
 /// Mirrors `card_sdk::abi::mark`.
 pub mod mark_kind {
-    /// The [CP点] mark's stable kind. Its display label comes from the
-    /// category (「CP点」), not from this string.
-    pub const CP: &str = "mark:cp";
     /// The designation mark's stable kind. Display comes from
     /// [`TileMark::card`] (the designating card id). Mirrors
     /// `card_sdk::abi::mark::DESIGNATE_KIND`.
@@ -1408,11 +1409,6 @@ impl Default for TileMark {
 }
 
 impl TileMark {
-    /// Is this a [CP点]? CP marks are a category of their own, not a `kind`
-    /// string among the player marks.
-    pub fn is_cp(&self) -> bool {
-        self.category == mark_category::CP
-    }
 }
 
 /// Named units held by a player. Under the bound-counter model

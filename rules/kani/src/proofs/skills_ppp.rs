@@ -10,10 +10,10 @@
 //! - `n_players ∈ 2..=4`, seats 0..n alive unless stated.
 //!
 //! Host notes that shape the frames (not book facts):
-//! - `Op::spend_fire` is unlogged — fire spends are asserted via post-state;
+//! - `Op::spend_charge` is unlogged — fire spends are asserted via post-state;
 //! - `Op::remove_marks_f` is a stub — megumi-01b mark-removal is
 //!   BLOCKED-HOST and not asserted;
-//! - `gain_fire` under Kani does not honour `fire_max` — the cap half of the
+//! - `gain_charge` under Kani does not honour `charge_max` — the cap half of the
 //!   「上限N」 parenthetical is host-side; harnesses assume room under the cap
 //!   when the clause grants +1.
 //!
@@ -32,10 +32,10 @@ crate::host_subset!(skills_ppp_dispatch {
     gain | gain_typed | gain_fixed => arm_gain,
     money => arm_money,
     pay | pay_to | pay_total | pay_leg => arm_pay,
-    gain_fire => arm_gain_fire,
+    gain_charge => arm_gain_charge,
     fire => arm_fire,
-    fire_max => arm_fire_max,
-    spend_fire => arm_spend_fire,
+    charge_max => arm_charge_max,
+    spend_charge => arm_spend_charge,
     draw => arm_draw,
     add_to_hand => arm_add_to_hand,
     add_to_deck | add_to_deck_at => arm_add_to_deck_at,
@@ -54,8 +54,8 @@ crate::host_subset!(skills_ppp_dispatch {
     add_held => arm_add_held,
     count_held | count_held_name => arm_count_held,
     set_held_name => arm_set_held_name,
-    add_group_crystals => arm_add_band_crystals,
-    group_crystals => arm_band_crystals,
+    add_group_pool => arm_add_band_crystals,
+    group_pool => arm_band_crystals,
     counter_self => arm_counter_self,
     add_counter_self => arm_add_counter_self,
     ask => arm_ask,
@@ -163,11 +163,11 @@ fn kasumi_01_world() -> (World, i32, i32) {
     let w = install_world(|w| {
         w.n_players = 2;
         w.out = [false; MAX_PLAYERS];
-        w.fire = [0; MAX_PLAYERS];
+        w.charge = [0; MAX_PLAYERS];
         // cap 1 declared by the skill; room for a legal +1.
-        w.fire_max = [1; MAX_PLAYERS];
-        w.fire[owner as usize] = kani::any();
-        kani::assume(w.fire[owner as usize] >= 0 && w.fire[owner as usize] < 1);
+        w.charge_max = [1; MAX_PLAYERS];
+        w.charge[owner as usize] = kani::any();
+        kani::assume(w.charge[owner as usize] >= 0 && w.charge[owner as usize] < 1);
         w.trig_player = settler;
         w.trig_tile = spec::TILE_HILL;
     });
@@ -180,7 +180,7 @@ fn kasumi_01_world() -> (World, i32, i32) {
 #[kani::unwind(24)]
 pub fn kasumi_skill_01_iff() {
     let (w, owner, settler) = kasumi_01_world();
-    let pre_fire = w.fire[owner as usize];
+    let pre_fire = w.charge[owner as usize];
     let applies = spec::kasumi_01_applies(owner, settler, w.trig_tile);
     kani::cover!(applies, "other settles on hill");
     kani::cover!(!applies, "residual rejects");
@@ -201,7 +201,7 @@ pub fn kasumi_skill_01_iff() {
 
     let expected = spec::kasumi_01_fire_after(pre_fire);
     crate::kassert!(
-        post.fire[owner as usize] == expected,
+        post.charge[owner as usize] == expected,
         "C-PPP-kasumi-skill-01: fire must rise by 1 under cap 1"
     );
     crate::kassert!(
@@ -223,7 +223,7 @@ pub fn kasumi_skill_01_noop_own_settle() {
     skills_ppp_world(owner);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[owner as usize] = 0;
+        w.charge[owner as usize] = 0;
         w.trig_player = owner;
         w.trig_tile = spec::TILE_HILL;
     });
@@ -260,10 +260,10 @@ fn kasumi_02_world() -> (World, i32) {
     skills_ppp_world(owner);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[owner as usize] = kani::any();
-        kani::assume(w.fire[owner as usize] >= 1 && w.fire[owner as usize] <= 5);
+        w.charge[owner as usize] = kani::any();
+        kani::assume(w.charge[owner as usize] >= 1 && w.charge[owner as usize] <= 5);
         // can_use reads keyed state `fire`; keep it in lockstep with the pot.
-        w.player_keys[owner as usize].set(crate::intern::intern("fire"), w.fire[owner as usize]);
+        w.player_keys[owner as usize].set(crate::intern::intern("charge"), w.charge[owner as usize]);
         // owns ≥1 tile
         w.tiles[3].owner = owner;
         w.trig_player = owner;
@@ -275,9 +275,9 @@ fn kasumi_02_world() -> (World, i32) {
 /// PROTOCOL-LEVEL (move plan + offers stubs).
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn kasumi_skill_02_spend_fire_iff() {
+pub fn kasumi_skill_02_spend_charge_iff() {
     let (w, owner) = kasumi_02_world();
-    let pre_fire = w.fire[owner as usize];
+    let pre_fire = w.charge[owner as usize];
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -287,7 +287,7 @@ pub fn kasumi_skill_02_spend_fire_iff() {
     invoke::unwrap_done(skill_personas::extraordinary_star::use_skill_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        spec::kasumi_02_fire_ok(pre_fire, post.fire[owner as usize]),
+        spec::kasumi_02_fire_ok(pre_fire, post.charge[owner as usize]),
         "C-PPP-kasumi-skill-02: must spend exactly 1 fire"
     );
     crate::kassert!(
@@ -303,18 +303,18 @@ pub fn kasumi_skill_02_noop_no_fire() {
     let owner: i32 = 0;
     skills_ppp_world(owner);
     let w = install_world(|w| {
-        w.fire[owner as usize] = 0;
-        w.player_keys[owner as usize].set(crate::intern::intern("fire"), 0);
+        w.charge[owner as usize] = 0;
+        w.player_keys[owner as usize].set(crate::intern::intern("charge"), 0);
         w.trig_player = owner;
     });
     world::reset_world(w);
-    // Gate: `state::get(FIRE) < 1` refuses. Invoking the body still spends
-    // only if the pot has 1 — both stay 0, so post.fire is unchanged.
+    // Gate: `state::get(CHARGE) < 1` refuses. Invoking the body still spends
+    // only if the pot has 1 — both stay 0, so post.charge is unchanged.
     let pre_fire = 0;
     invoke::unwrap_done(skill_personas::extraordinary_star::use_skill_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        post.fire[owner as usize] == pre_fire,
+        post.charge[owner as usize] == pre_fire,
         "C-PPP-kasumi-skill-02: no fire, no spend"
     );
 }
@@ -325,13 +325,13 @@ pub fn kasumi_skill_02_noop_no_fire() {
 #[kani::should_panic]
 pub fn kasumi_skill_02_mutant_no_spend() {
     let (w, owner) = kasumi_02_world();
-    let pre_fire = w.fire[owner as usize];
+    let pre_fire = w.charge[owner as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
     invoke::unwrap_done(skill_personas::extraordinary_star::use_skill_kani(owner));
     let post = world::snapshot();
     crate::kassert!(
-        post.fire[owner as usize] == pre_fire,
+        post.charge[owner as usize] == pre_fire,
         "mutant: card must not match a no-spend spec"
     );
 }
@@ -384,7 +384,7 @@ pub fn megumi_skill_01a_rabbit_iff() {
             "C-PPP-megumi-skill-01a: empty log when landing is 星空齿科"
         );
     }
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
@@ -431,9 +431,9 @@ pub fn megumi_skill_01b_fire_iff() {
     kani::assume((1..=3).contains(&rabbits));
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = kani::any();
-        kani::assume(w.fire[me as usize] >= 2 && w.fire[me as usize] < 4);
-        w.fire_max = [4; MAX_PLAYERS];
+        w.charge[me as usize] = kani::any();
+        kani::assume(w.charge[me as usize] >= 2 && w.charge[me as usize] < 4);
+        w.charge_max = [4; MAX_PLAYERS];
         w.trig_player = me;
         w.trig_tile = 10;
         // Seed rabbit marks on the passed tile.
@@ -450,7 +450,7 @@ pub fn megumi_skill_01b_fire_iff() {
         }
         w.marks_n = rabbits as u8;
     });
-    let pre_fire = w.fire[me as usize];
+    let pre_fire = w.charge[me as usize];
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -461,9 +461,9 @@ pub fn megumi_skill_01b_fire_iff() {
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
 
-    // Host `gain_fire` is uncapped under Kani; the body asks for `rabbits`.
+    // Host `gain_charge` is uncapped under Kani; the body asks for `rabbits`.
     // Assert the requested gain equals the rabbit count (the book's 「等量」)
-    // via the effect log, and post.fire == pre + rabbits when room remains.
+    // via the effect log, and post.charge == pre + rabbits when room remains.
     let gain = if log_n == 1 {
         if let Effect::GainFire { n, .. } = effects[0] {
             n
@@ -481,7 +481,7 @@ pub fn megumi_skill_01b_fire_iff() {
     );
     let expected = pre_fire + rabbits;
     crate::kassert!(
-        post.fire[me as usize] == expected,
+        post.charge[me as usize] == expected,
         "C-PPP-megumi-skill-01b: fire rises by the rabbit count"
     );
     crate::kassert!(
@@ -530,8 +530,8 @@ pub fn megumi_skill_02_leaf_iff() {
     let other: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = kani::any();
-        kani::assume(w.fire[me as usize] >= 4 && w.fire[me as usize] <= 8);
+        w.charge[me as usize] = kani::any();
+        kani::assume(w.charge[me as usize] >= 4 && w.charge[me as usize] <= 8);
         w.money[me as usize] = kani::any();
         w.money[other as usize] = kani::any();
         kani::assume(w.money[me as usize] >= 0 && w.money[me as usize] <= 5_000);
@@ -539,7 +539,7 @@ pub fn megumi_skill_02_leaf_iff() {
         w.trig_player = other;
         w.field_n = 1; // is_placed
     });
-    let pre_fire = w.fire[me as usize];
+    let pre_fire = w.charge[me as usize];
     let pre_money = [w.money[me as usize], w.money[other as usize]];
     let pre = {
         world::reset_world(w);
@@ -548,7 +548,7 @@ pub fn megumi_skill_02_leaf_iff() {
     invoke::unwrap_done(skill_personas::tae_police::negate_kani(me));
     let post = world::snapshot();
     crate::kassert!(
-        post.fire[me as usize] == spec::megumi_02_fire_after(pre_fire),
+        post.charge[me as usize] == spec::megumi_02_fire_after(pre_fire),
         "C-PPP-megumi-skill-02: spend 4 fire"
     );
     crate::kassert!(
@@ -571,7 +571,7 @@ pub fn megumi_skill_02_mutant_money_swap() {
     let other: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = 4;
+        w.charge[me as usize] = 4;
         w.money[me as usize] = 0;
         w.money[other as usize] = 0;
         w.trig_player = other;
@@ -620,14 +620,14 @@ pub fn rimi_skill_01_turn_end_iff() {
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = kani::any();
-        kani::assume(w.fire[me as usize] >= 1 && w.fire[me as usize] < 3);
-        w.fire_max = [3; MAX_PLAYERS];
+        w.charge[me as usize] = kani::any();
+        kani::assume(w.charge[me as usize] >= 1 && w.charge[me as usize] < 3);
+        w.charge_max = [3; MAX_PLAYERS];
         w.turn_player = me;
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_RIMI_PASSED), 1);
     });
-    let pre_fire = w.fire[me as usize];
+    let pre_fire = w.charge[me as usize];
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -646,7 +646,7 @@ pub fn rimi_skill_01_turn_end_iff() {
         "C-PPP-rimi-skill-01: turn-end +1 fire (cap 3)"
     );
     crate::kassert!(
-        post.fire[me as usize] == spec::rimi_01_fire_after(pre_fire),
+        post.charge[me as usize] == spec::rimi_01_fire_after(pre_fire),
         "C-PPP-rimi-skill-01: fire after payout"
     );
     crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame others' fire");
@@ -660,7 +660,7 @@ pub fn rimi_skill_01_noop_no_latch() {
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = 1;
+        w.charge[me as usize] = 1;
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_RIMI_PASSED), 0);
     });
@@ -680,8 +680,8 @@ pub fn rimi_skill_01_mutant_plus_two() {
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = 1;
-        w.fire_max = [3; MAX_PLAYERS];
+        w.charge[me as usize] = 1;
+        w.charge_max = [3; MAX_PLAYERS];
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_RIMI_PASSED), 1);
     });
@@ -690,7 +690,7 @@ pub fn rimi_skill_01_mutant_plus_two() {
     invoke::unwrap_done(skill_personas::rimi_resolve::at_turn_end_kani(me));
     let post = world::snapshot();
     crate::kassert!(
-        post.fire[me as usize] == pre_fire + 2,
+        post.charge[me as usize] == pre_fire + 2,
         "mutant: card must not match +2 fire"
     );
 }
@@ -719,24 +719,24 @@ pub fn rimi_skill_02_abs_dist_spec() {
 /// Leaf: spend 3 fire when the skill press runs (PROTOCOL for the teleport).
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn rimi_skill_02_spend_fire_iff() {
+pub fn rimi_skill_02_spend_charge_iff() {
     let me: i32 = 0;
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = kani::any();
-        kani::assume(w.fire[me as usize] >= 3 && w.fire[me as usize] <= 8);
-        w.player_keys[me as usize].set(crate::intern::intern("fire"), w.fire[me as usize]);
+        w.charge[me as usize] = kani::any();
+        kani::assume(w.charge[me as usize] >= 3 && w.charge[me as usize] <= 8);
+        w.player_keys[me as usize].set(crate::intern::intern("charge"), w.charge[me as usize]);
         w.trig_player = me;
         w.pos[me as usize] = 30;
     });
-    let pre_fire = w.fire[me as usize];
+    let pre_fire = w.charge[me as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
     invoke::unwrap_done(skill_personas::rimi_resolve::use_skill_kani(me));
     let post = world::snapshot();
     crate::kassert!(
-        post.fire[me as usize] == spec::rimi_02_fire_after(pre_fire),
+        post.charge[me as usize] == spec::rimi_02_fire_after(pre_fire),
         "C-PPP-rimi-skill-02: must spend exactly 3 fire"
     );
 }
@@ -807,8 +807,8 @@ fn saaya_01a_world(accept: bool) -> (World, i32, i32) {
         w.pay_amount = w.trig_value;
         w.money[payer as usize] = kani::any();
         kani::assume(w.money[payer as usize] >= 0 && w.money[payer as usize] <= 5_000);
-        w.fire[me as usize] = 3;
-        w.fire_max = [5; MAX_PLAYERS];
+        w.charge[me as usize] = 3;
+        w.charge_max = [5; MAX_PLAYERS];
         // no saaya mark
         w.player_keys[me as usize].set(crate::intern::intern(spec::TOK_SAAYA), 0);
         w.symbolic_answers = true;
@@ -911,16 +911,16 @@ pub fn saaya_skill_02_shave_iff() {
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = kani::any();
-        kani::assume(w.fire[me as usize] >= 5 && w.fire[me as usize] <= 10);
-        w.player_keys[me as usize].set(crate::intern::intern("fire"), w.fire[me as usize]);
+        w.charge[me as usize] = kani::any();
+        kani::assume(w.charge[me as usize] >= 5 && w.charge[me as usize] <= 10);
+        w.player_keys[me as usize].set(crate::intern::intern("charge"), w.charge[me as usize]);
         w.trig_player = me;
         w.trig_value = kani::any();
         kani::assume(w.trig_value > 0 && w.trig_value <= 20_000);
         w.pay_amount = w.trig_value;
         w.symbolic_answers = true;
     });
-    let pre_fire = w.fire[me as usize];
+    let pre_fire = w.charge[me as usize];
     let pre_amount = w.pay_amount;
     let pre = {
         world::reset_world(w);
@@ -931,7 +931,7 @@ pub fn saaya_skill_02_shave_iff() {
     let (logbuf, log_n) = take_log();
 
     let expected = spec::saaya_02_amount(pre_amount);
-    let took = post.pay_amount == expected && post.fire[me as usize] == pre_fire - 5;
+    let took = post.pay_amount == expected && post.charge[me as usize] == pre_fire - 5;
     kani::cover!(took, "optional taken");
     kani::cover!(!took, "optional declined");
     if took {
@@ -940,7 +940,7 @@ pub fn saaya_skill_02_shave_iff() {
             "C-PPP-saaya-skill-02: log exactly SetPayAmount(max(pre-5000,0))"
         );
         crate::kassert!(
-            post.fire[me as usize] == spec::saaya_02_fire_after(pre_fire),
+            post.charge[me as usize] == spec::saaya_02_fire_after(pre_fire),
             "C-PPP-saaya-skill-02: spend 5 fire"
         );
     } else {
@@ -949,7 +949,7 @@ pub fn saaya_skill_02_shave_iff() {
             "C-PPP-saaya-skill-02: declined ⇒ empty log"
         );
         crate::kassert!(
-            post.pay_amount == pre_amount && post.fire[me as usize] == pre_fire,
+            post.pay_amount == pre_amount && post.charge[me as usize] == pre_fire,
             "C-PPP-saaya-skill-02: declined ⇒ untouched"
         );
     }
@@ -985,13 +985,13 @@ pub fn aoki_skill_01_iff() {
     let other: i32 = 1;
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = kani::any();
-        kani::assume(w.fire[me as usize] >= 0 && w.fire[me as usize] < 2);
-        w.fire_max = [2; MAX_PLAYERS];
+        w.charge[me as usize] = kani::any();
+        kani::assume(w.charge[me as usize] >= 0 && w.charge[me as usize] < 2);
+        w.charge_max = [2; MAX_PLAYERS];
         w.trig_player = other;
         w.trig_tile = spec::TILE_RYUSEIDO;
     });
-    let pre_fire = w.fire[me as usize];
+    let pre_fire = w.charge[me as usize];
     let applies = spec::aoki_01_applies(other, me, spec::TILE_RYUSEIDO);
     kani::cover!(applies, "other draws at 流星堂");
     crate::kassert!(applies);
@@ -1008,7 +1008,7 @@ pub fn aoki_skill_01_iff() {
         "C-PPP-aoki-skill-01: +1 fire (cap 2)"
     );
     crate::kassert!(
-        post.fire[me as usize] == spec::aoki_01_fire_after(pre_fire),
+        post.charge[me as usize] == spec::aoki_01_fire_after(pre_fire),
         "C-PPP-aoki-skill-01: fire after"
     );
     crate::kassert!(spec::frame_others_fire(&pre, &post, me), "frame");
@@ -1034,8 +1034,8 @@ pub fn aoki_skill_01_mutant_plus_two() {
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = 0;
-        w.fire_max = [2; MAX_PLAYERS];
+        w.charge[me as usize] = 0;
+        w.charge_max = [2; MAX_PLAYERS];
         w.trig_player = 1;
         w.trig_tile = spec::TILE_RYUSEIDO;
     });
@@ -1043,7 +1043,7 @@ pub fn aoki_skill_01_mutant_plus_two() {
     invoke::unwrap_done(skill_personas::arisa_bonsai::on_event_kani(me));
     let post = world::snapshot();
     crate::kassert!(
-        post.fire[me as usize] == 2,
+        post.charge[me as usize] == 2,
         "mutant: card must not match +2 fire"
     );
 }
@@ -1063,8 +1063,8 @@ pub fn aoki_skill_02_turn_end_iff() {
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = 0;
-        w.fire_max = [2; MAX_PLAYERS];
+        w.charge[me as usize] = 0;
+        w.charge_max = [2; MAX_PLAYERS];
         w.pos[me as usize] = kani::any();
         kani::assume(w.pos[me as usize] >= 0 && w.pos[me as usize] < 60 && w.pos[me as usize] != spec::TILE_RYUSEIDO);
         w.trig_player = me;
@@ -1088,7 +1088,7 @@ pub fn aoki_skill_02_turn_end_iff() {
         spec::aoki_02_log_ok(effects_of(&logbuf, log_n), me),
         "C-PPP-aoki-skill-02: draw 1 + fire +1"
     );
-    crate::kassert!(post.fire[me as usize] == 1, "fire +1");
+    crate::kassert!(post.charge[me as usize] == 1, "fire +1");
 }
 
 /// NO-OP: standing on 流星堂 at turn end.
@@ -1122,8 +1122,8 @@ pub fn aoki_skill_02_mutant_no_draw() {
     skills_ppp_world(me);
     let w = install_world(|w| {
         w.n_players = 2;
-        w.fire[me as usize] = 0;
-        w.fire_max = [2; MAX_PLAYERS];
+        w.charge[me as usize] = 0;
+        w.charge_max = [2; MAX_PLAYERS];
         w.pos[me as usize] = 10;
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_ARISA_PASSED), 1);

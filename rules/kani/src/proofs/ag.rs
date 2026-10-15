@@ -119,8 +119,8 @@ crate::host_subset!(ag_dispatch {
     roll | roll_ask => arm_roll,
     // fire (colors-04 fill)
     fire => arm_fire,
-    fire_max => arm_fire_max,
-    gain_fire => arm_gain_fire,
+    charge_max => arm_charge_max,
+    gain_charge => arm_gain_charge,
 });
 
 /// Install the sparse 2-seat world + the ag host subset **in place**.
@@ -197,7 +197,7 @@ fn half_speed_01_place_iff_at(user: i32) {
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 /// C-AG-half-speed-01 iff at seat 0 (`n_players = 2`).
@@ -539,8 +539,8 @@ fn colors_01_02_03_04_play_iff_at(user: i32) {
     let player = user;
     world::with_world_mut(|w| {
         w.money = [0; MAX_PLAYERS];
-        w.fire_max = [1, 1, 1, 1];
-        w.fire = [0, 0, 0, 0];
+        w.charge_max = [1, 1, 1, 1];
+        w.charge = [0, 0, 0, 0];
         // Empty discard so branches 2 / 5 take the no-discard path (their
         // pick-heavy halves are covered by colors_06 with a frozen pile).
         w.discard = [false; 8];
@@ -568,7 +568,7 @@ fn colors_01_02_03_04_play_iff_at(user: i32) {
     kani::cover!(is_gain_1500, "roll 1: +1500");
     kani::cover!(is_draw_1, "roll 3: draw 1");
     kani::cover!(is_gain_2000, "roll 4 money: +2000");
-    kani::cover!(is_fire_fill, "roll 4 fire: refill");
+    kani::cover!(is_fire_fill, "roll 4 charge: refill");
     kani::cover!(is_empty, "roll 2/5 empty discard (or 4 with no fire skill)");
     let _ = is_multi;
 
@@ -636,7 +636,7 @@ pub fn colors_06_pick_to_hand() {
     let player = user;
     world::with_world_mut(|w| {
         w.money = [0; MAX_PLAYERS];
-        w.fire_max = [1, 1, 1, 1];
+        w.charge_max = [1, 1, 1, 1];
         w.discard = [false; 8];
         w.discard[2] = true;
         w.discard[3] = true;

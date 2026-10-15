@@ -53,7 +53,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::FIRE) < 1 {
+    if state::get(player_id, state_key::CHARGE) < 1 {
         return Some(Msg::new(key!("lisa_goddess_no_fire")));
     }
     None
@@ -92,7 +92,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「本次传送触发结算前，你可以额外消耗一个火罐或使与你在同一个格子上的另一个
     // 角色获得一个可超过上限的临时火罐，若你这样做，此次传送不触发任何结算」 --
     // offered here, before the move runs.
-    if state::get(player_id, state_key::FIRE) < 1 {
+    if state::get(player_id, state_key::CHARGE) < 1 {
         return Ok(());
     }
     let here: alloc::vec::Vec<i32> = (0..ctx::player_count())

@@ -51,7 +51,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::FIRE) < 1 {
+    if state::get(player_id, state_key::CHARGE) < 1 {
         return Some(Msg::new(key!("sato_red_no_fire")));
     }
     None
@@ -59,7 +59,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「本回合主要移动掷骰额外添加Xd10」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let have = state::get(player_id, state_key::FIRE);
+    let have = state::get(player_id, state_key::CHARGE);
     if have < 1 {
         return Ok(());
     }

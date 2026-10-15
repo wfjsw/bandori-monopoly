@@ -60,11 +60,11 @@ pub fn snapshot(w: &World) -> Snap {
             m.insert(
                 format!("field:P{i}:{f}"),
                 format!(
-                    "{}|uid={}|tile={}|crystals={}|immune={}|down={}|band={}",
-                    c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down, c.group_skill
+                    "{}|uid={}|tile={}|pool={}|immune={}|down={}|band={}",
+                    c.card, c.uid, c.tile, c.counters.values().sum::<i32>(), c.immune, c.face_down, c.group_skill
                 ),
             );
-            m.insert(format!("crystals:P{i}:{}", c.card), c.crystals.to_string());
+            m.insert(format!("pool:P{i}:{}", c.card), c.counters.values().sum::<i32>().to_string());
             for (k, v) in &c.props {
                 m.insert(format!("fprop:P{i}:{}:{k}", c.card), v.to_string());
             }
@@ -131,8 +131,8 @@ pub fn snapshot(w: &World) -> Snap {
         m.insert(
             format!("bfield:{i}"),
             format!(
-                "{}|uid={}|tile={}|crystals={}|immune={}|down={}",
-                c.card, c.uid, c.tile, c.crystals, c.immune, c.face_down
+                "{}|uid={}|tile={}|pool={}|immune={}|down={}",
+                c.card, c.uid, c.tile, c.counters.values().sum::<i32>(), c.immune, c.face_down
             ),
         );
         for (k, v) in &c.props {
@@ -172,7 +172,7 @@ pub fn snapshot(w: &World) -> Snap {
     );
 
     m.insert("extra_turns".into(), format!("{:?}", w.extra_turns));
-    m.insert("ring_bonus".into(), w.ring_bonus.to_string());
+    m.insert("rule_param_bonus".into(), format!("{:?}", w.rule_param_bonus));
     m.insert("out_count".into(), w.out_count.to_string());
     m.insert("targeted".into(), format!("{:?}", w.targeted));
     m.insert(

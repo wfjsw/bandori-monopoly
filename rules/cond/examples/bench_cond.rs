@@ -74,7 +74,7 @@ fn candidate(owner: i64) -> CandidateCtx {
     CandidateCtx {
         owner,
         owner_money: 500 + owner * 100,
-        owner_fire: 2,
+        owner_charge: 2,
         owner_persona: owner,
         owner_group: owner % 2,
         card_id: 42,

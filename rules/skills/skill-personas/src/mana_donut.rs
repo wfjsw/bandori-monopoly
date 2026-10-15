@@ -30,7 +30,7 @@ const HALF: &str = "skill.manaDonut.half";
 /// The condition is "the body will do something": either the CiRCLE gain, or
 /// the shop offer (which needs a 火罐 to spend).
 const PASS_PRE: &str = "actor == owner && (tile.id == tile_named('CiRCLE') || \
-     (fire(owner) >= 1 && (tile.id == tile_named('购物中心') || \
+     (charge(owner) >= 1 && (tile.id == tile_named('购物中心') || \
        tile.id == tile_named('便利店') || tile.id == tile_named('快餐店') || \
        tile.id == tile_named('羽泽咖啡厅') || tile.id == tile_named('山吹面包房'))))";
 
@@ -67,7 +67,7 @@ pub const MANA_DONUT: CardDef = CardDef::new(
 /// unset (a mid-game placement of the skill). `state::max` is not in the CEL
 /// schema, so this is the residual.
 fn cap_unset(player_id: i32) -> bool {
-    state::max(player_id, state_key::FIRE) == 0
+    state::max(player_id, state_key::CHARGE) == 0
 }
 
 /// 「初始1，上限2」.
@@ -86,7 +86,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // （2）「经过"购物中心"，…时，在触发结算前可选择消耗一个火罐并向对应格子
-    // 进行一次支付」. The fire check is the condition (`fire(owner) >= 1`);
+    // 进行一次支付」. The fire check is the condition (`charge(owner) >= 1`);
     // everything after the offer is resolution-time content.
     let price = ctx::rent_of(t).max(ctx::buy_price(t));
     if !ctx::ask_yes(

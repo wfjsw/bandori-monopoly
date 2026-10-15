@@ -104,7 +104,7 @@ pub fn moca_02_log_ok_mutant(effects: &[Effect], owner: i32, to_tile: i32) -> bo
 // ===========================================================================
 
 pub fn ran_02_spend_log_empty(effects: &[Effect]) -> bool {
-    // `spend_fire` mutates `World::fire` and does not push an Effect.
+    // `spend_charge` mutates `World::fire` and does not push an Effect.
     effects.is_empty()
 }
 

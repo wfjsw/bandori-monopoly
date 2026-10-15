@@ -230,7 +230,7 @@ pub fn duobang_01_02_two_player_iff() {
         _ => crate::kassert!(false, "E-duobang: only PayTo effects are legal"),
     }
     crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions unchanged");
-    crate::kassert!(arr4_eq(post.fire, pre.fire), "frame: fire unchanged");
+    crate::kassert!(arr4_eq(post.charge, pre.charge), "frame: fire unchanged");
     crate::kassert!(arr4b_eq(post.hand, pre.hand), "frame: hand unchanged");
 }
 
@@ -820,7 +820,7 @@ pub fn ex_quest_01_rolls_and_files() {
     );
     crate::kassert!(arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(arr4_eq(post.pos, pre.pos), "frame: positions");
-    crate::kassert!(arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(arr4_eq(post.charge, pre.charge), "frame: fire");
     // Cosmetic skin (E-ex-quest-02) cannot test — no match-state seam.
 }
 
@@ -909,7 +909,7 @@ pub fn never_ends_01_teleport_and_exile() {
 // 「所有人失去所有[火罐]并且投掷Xd20，X为失去的指示物数量加一，点数最高的人
 // 获得2000资金或抽一张卡，点数第二的人获得1500资金…」
 // OPEN-chart-rush-or / OPEN-chart-rush-tie.
-// `spend_fire` does not log an effect; post.fire is the evidence.
+// `spend_charge` does not log an effect; post.charge is the evidence.
 // `ask_yes` with no registered options is always "yes" under symbolic
 // answers — concrete `answers` are used to explore both OR legs.
 // ===========================================================================
@@ -917,11 +917,11 @@ pub fn never_ends_01_teleport_and_exile() {
 fn chart_rush_world(fire0: i32, fire1: i32, answer0: i32) -> World {
     let mut w = base_world();
     w.n_players = 2;
-    w.fire[0] = fire0;
-    w.fire[1] = fire1;
-    w.fire[2] = 0;
-    w.fire[3] = 0;
-    w.fire_max = [3, 3, 3, 3];
+    w.charge[0] = fire0;
+    w.charge[1] = fire1;
+    w.charge[2] = 0;
+    w.charge[3] = 0;
+    w.charge_max = [3, 3, 3, 3];
     w.symbolic_answers = false;
     w.answers = [answer0, answer0, answer0, answer0, 0, 0, 0, 0];
     w.next_answer = 0;
@@ -933,10 +933,10 @@ fn chart_rush_world(fire0: i32, fire1: i32, answer0: i32) -> World {
 #[kani::unwind(24)]
 pub fn chart_rush_01_spends_fire() {
     let mut w = chart_rush_world(0, 0, 0);
-    w.fire[0] = kani::any();
-    kani::assume(w.fire[0] >= 0 && w.fire[0] <= 3);
-    w.fire[1] = kani::any();
-    kani::assume(w.fire[1] >= 0 && w.fire[1] <= 3);
+    w.charge[0] = kani::any();
+    kani::assume(w.charge[0] >= 0 && w.charge[0] <= 3);
+    w.charge[1] = kani::any();
+    kani::assume(w.charge[1] >= 0 && w.charge[1] <= 3);
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -944,10 +944,10 @@ pub fn chart_rush_01_spends_fire() {
     invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:冲榜"), 0));
     let post = world::snapshot();
 
-    kani::cover!(pre.fire[0] == 0 && pre.fire[1] == 0, "no pots");
-    kani::cover!(pre.fire[0] > 0 || pre.fire[1] > 0, "some pots spent");
+    kani::cover!(pre.charge[0] == 0 && pre.charge[1] == 0, "no pots");
+    kani::cover!(pre.charge[0] > 0 || pre.charge[1] > 0, "some pots spent");
     crate::kassert!(
-        spec::events::chart_rush_fire_spent(&post.fire, 2),
+        spec::events::chart_rush_fire_spent(&post.charge, 2),
         "E-chart-rush-01: all fire pots spent"
     );
     // Dice (Xd20) leave no state; prizes may move money.
@@ -1295,7 +1295,7 @@ pub fn bangdream_chan_01_activation_keeps() {
     assert_activation_keep(crate::card_id!("event:元祖！邦多利酱"));
 }
 
-/// Expiry tick cannot fire: `prop(TURNS)` stays 0 (set_prop stub), so
+/// Expiry tick cannot charge: `prop(TURNS)` stays 0 (set_prop stub), so
 /// `n = 1` and `n >= 2` is false. Assert the no-op — the book's third-turn
 /// filing is PROTOCOL-LEVEL (set_self_prop).
 #[kani::proof]
@@ -2039,7 +2039,7 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
 // E-school-time-01/02      PROVEN (exile leg); dest = school / 周边学区 (17)
 // E-tears-01/02            PROVEN
 // E-kizuna-01              PROVEN (X=0, dest=face%60; OPEN-kizuna-song)
-// E-chart-rush-01          PROVEN (fire spent; spend_fire has no log)
+// E-chart-rush-01          PROVEN (fire spent; spend_charge has no log)
 // E-chart-rush-02          PROVEN (purses + OR legs; OPEN-chart-rush-or/tie)
 // E-fix-note-01            PROTOCOL-LEVEL (set_build_discount stub) + keep PROVEN
 // E-fix-note-02            OPEN-fix-note-count + PROTOCOL-LEVEL

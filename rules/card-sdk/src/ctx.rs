@@ -1419,8 +1419,8 @@ pub fn add_tok(player_id: i32, name: &str, by: i32, max: i32) -> Result<i32, Pro
 ///
 /// Which keys mean what, and what their caps are, belongs to whoever uses them:
 /// a character skill that mandates a fire-pot cap writes [`Self::max`] on
-/// [`state_key::FIRE`], and the card that gains pots is free to honour it (the
-/// `fire` / `gain_fire` helpers do) or ignore it. There is no engine-side
+/// [`state_key::CHARGE`], and the card that gains pots is free to honour it (the
+/// `fire` / `gain_charge` helpers do) or ignore it. There is no engine-side
 /// `match key`, and a raw [`Self::set`] / [`Self::add`] is never clamped.
 pub mod state {
     use super::{s, sys};

@@ -504,7 +504,7 @@ fn m10_rinko_while_stunned() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 12, "moves exactly 12");
-    assert_eq!(t.fire(0), 0, "fire spent");
+    assert_eq!(t.charge(0), 0, "fire spent");
 }
 
 // =====================================================================
@@ -585,7 +585,7 @@ fn m12a_yukina_forced_stop() {
         }
     }
     assert_eq!(t.pos(1), 36, "P1 stops at 36");
-    assert_eq!(t.fire(0), 0, "fire spent");
+    assert_eq!(t.charge(0), 0, "fire spent");
 }
 
 // 规则书: 同上 + 安可. RULING: whether P0's fire is spent.
@@ -616,7 +616,7 @@ fn m12b_yukina_stop_countered() {
     eprintln!(
         "m12b record (RULING: fire spent?): pos1 = {} (want 37), fire0 = {}",
         t.pos(1),
-        t.fire(0)
+        t.charge(0)
     );
     assert_eq!(t.pos(1), 37, "P1 continues to its rolled destination 32+5");
 }
@@ -948,14 +948,14 @@ fn m21_tomoe_shifts_start() {
     // 49 is closer forward, so the start shifts 10 forward to 55.
     eprintln!(
         "m21 record: fire = {} (spent and refunded), pos = {} (start 55)",
-        t.fire(0),
+        t.charge(0),
         t.pos(0)
     );
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 56, "the move starts from 55 + 1");
-    assert_eq!(t.fire(0), 1, "the fire is spent and refunded");
+    assert_eq!(t.charge(0), 1, "the fire is spent and refunded");
 }
 
 // =====================================================================
@@ -1141,8 +1141,8 @@ fn m26_two_donuts() {
     eprintln!(
         "m26 record: P0 pos = {}, fire0 = {}, fire1 = {}",
         t.pos(0),
-        t.fire(0),
-        t.fire(1)
+        t.charge(0),
+        t.charge(1)
     );
 }
 

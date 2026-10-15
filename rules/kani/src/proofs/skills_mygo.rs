@@ -41,7 +41,7 @@ fn after_roll_world(user: i32) {
         for p in 0..MAX_PLAYERS {
             w.out[p] = p >= 2;
             w.stay[p] = 0;
-            w.fire[p] = 0;
+            w.charge[p] = 0;
         }
         w.trig_player = user;
     });
@@ -55,7 +55,7 @@ fn on_discarded_world(user: i32, pre_c: i32) {
         for p in 0..MAX_PLAYERS {
             w.out[p] = p >= 2;
             w.stay[p] = 0;
-            w.fire[p] = 0;
+            w.charge[p] = 0;
         }
         w.trig_player = user;
         w.key_set(user, key, pre_c);

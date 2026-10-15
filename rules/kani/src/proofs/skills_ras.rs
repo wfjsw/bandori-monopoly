@@ -6,7 +6,7 @@
 //! **ppcost pattern.** Concrete user seats. Direct body call via the
 //! cfg(kani) `NAME_kani` wrapper. Per-harness host-op subset.
 //!
-//! Isolation: fire-pot pass gains assume `fire + 1 <= fire_max` so the
+//! Isolation: fire-pot pass gains assume `fire + 1 <= charge_max` so the
 //! (unmodeled) cap does not bind. The printed cap itself is BLOCKED-HOST.
 
 use crate::host;
@@ -16,10 +16,10 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 
 // ---------------------------------------------------------------------------
 // Host-op subset: both `on_pass` bodies are one-liners into
-// `rules_status::fire::gain` → `gain_fire`.
+// `rules_status::charge::gain` → `gain_charge`.
 // ---------------------------------------------------------------------------
 crate::host_subset!(fire_pass_dispatch {
-    gain_fire => arm_gain_fire,
+    gain_charge => arm_gain_charge,
     log | effect => arm_log,
 });
 
@@ -31,11 +31,11 @@ fn fire_world(user: i32) {
         w.n_players = 2;
         for p in 0..MAX_PLAYERS {
             w.out[p] = false;
-            w.fire[p] = kani::any();
-            kani::assume(w.fire[p] >= 0 && w.fire[p] <= 2);
+            w.charge[p] = kani::any();
+            kani::assume(w.charge[p] >= 0 && w.charge[p] <= 2);
             // default model cap; skill declare_cap is BLOCKED-HOST
-            w.fire_max[p] = 3;
-            kani::assume(w.fire[p] + 1 <= w.fire_max[p]);
+            w.charge_max[p] = 3;
+            kani::assume(w.charge[p] + 1 <= w.charge_max[p]);
         }
         w.trig_player = user;
     });
@@ -62,7 +62,7 @@ macro_rules! fire_pass_leaf_iff_at {
             "leaf is exactly one +1 GainFire"
         );
         crate::kassert!(
-            post.fire[user as usize] == pre.fire[user as usize] + spec::fire_pass_gain(),
+            post.charge[user as usize] == pre.charge[user as usize] + spec::fire_pass_gain(),
             "fire is pre+1"
         );
         crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money unchanged");

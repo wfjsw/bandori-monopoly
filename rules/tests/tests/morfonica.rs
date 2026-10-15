@@ -1167,7 +1167,7 @@ fn toko_fire_pot_cap_is_one() {
     t.dice(&[3]); // passes CiRCLE
     t.roll(0).unwrap();
     decline_all(&mut t);
-    assert_eq!(t.fire(0), 1, "capped at 1");
+    assert_eq!(t.charge(0), 1, "capped at 1");
 }
 
 #[test]
@@ -1189,7 +1189,7 @@ fn toko_skill2_splits_half_the_rent_over_the_neighbours() {
     assert_eq!(t.money(0), 10_000 + 200);
     assert_eq!(t.money(1), 10_000 - 100);
     assert_eq!(t.money(2), 10_000 - 100);
-    assert_eq!(t.fire(0), 0, "the fire pot was spent");
+    assert_eq!(t.charge(0), 0, "the fire pot was spent");
 }
 
 #[test]
@@ -1220,7 +1220,7 @@ fn nana_fire_pot_cap_is_two() {
     t.dice(&[3]); // passes CiRCLE
     t.roll(0).unwrap();
     decline_all(&mut t);
-    assert_eq!(t.fire(0), 2, "gains one, capped at 2");
+    assert_eq!(t.charge(0), 2, "gains one, capped at 2");
 }
 
 #[test]

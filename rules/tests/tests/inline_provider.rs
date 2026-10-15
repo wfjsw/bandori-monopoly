@@ -243,7 +243,7 @@ fn equivalence(seed: u64, n: usize, rules: Arc<dyn CardRules>) -> (usize, usize)
         inl_run.ticks,
         base_run.swallow_cards
     );
-    // No body may swallow a prompt any more (the `decay` / `gain_fire` /
+    // No body may swallow a prompt any more (the `decay` / `gain_charge` /
     // `add_crystals` pauses are traps now, so a discarded `Result` tears the
     // stack instead of keeping going).
     assert_eq!(

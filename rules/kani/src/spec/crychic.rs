@@ -5,8 +5,8 @@
 //!
 //! Classification notes (see `docs/rulebook/spec/kani/crychic.md`):
 //! * PROTOCOL-LEVEL / OPEN clauses carry a `// CLASS:` line and no body.
-//! * Host dual-store: `give_stay`/`spend_fire` write `World::stay`/`fire`,
-//!   while `state::{get,set,add}` on `state_key::{STAY,FIRE}` write
+//! * Host dual-store: `give_stay`/`spend_charge` write `World::stay`/`fire`,
+//!   while `state::{get,set,add}` on `state_key::{STAY,CHARGE}` write
 //!   `player_keys`. Specs name the store the *body* uses; the book's word is
 //!   the same.
 
@@ -83,8 +83,8 @@ pub fn grab_01_log_ok_mutant(effects: &[Effect], player: i32, passer_key: u16) -
 // C-CRYCHIC-debut-02 — 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。」
 // ---------------------------------------------------------------------------
 
-/// Only the stun is in the effect log (`add_group_crystals` is unlogged in the
-/// Kani host). The crystal is checked as `post.group_crystals == pre+1`.
+/// Only the stun is in the effect log (`add_group_pool` is unlogged in the
+/// Kani host). The crystal is checked as `post.group_pool == pre+1`.
 pub fn debut_02_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::GiveStun { player: p, n: 1 } if p == player)
 }

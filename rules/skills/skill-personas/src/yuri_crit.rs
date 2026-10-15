@@ -42,7 +42,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「X初始为0」 -- restated so a fresh match starts from zero.
 fn declare(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 0);
+    state::set_bounds(player_id, state_key::CHARGE, 0, 0);
     state::set(player_id, X, 0);
     Ok(())
 }

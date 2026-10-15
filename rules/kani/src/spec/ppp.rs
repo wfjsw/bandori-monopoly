@@ -142,7 +142,7 @@ pub fn pipopa_effects_ok_mutant(effects: &[Effect], player: i32, popipapapipopa_
 // Condition: the user has a band-skill field instance (团卡).
 // ===========================================================================
 
-/// Exact log for the crystal leg (host models band crystals as `group_crystals`
+/// Exact log for the crystal leg (host models band crystals as `group_pool`
 /// and/or `AddCounter` on the band-skill instance).
 pub fn bang_dream_01_crystals_after(pre: i32) -> i32 {
     pre + 1
@@ -416,10 +416,10 @@ pub fn auction_off_01_effects_ok_mutant(effects: &[Effect], player: i32, this_sl
 // C-PPP-auction-off-c1
 // 「此卡拥有者火罐上限加1」
 // Effect: max(火罐) = baseline + 1 while the card is present.
-// (Host models the continuous +1 as a one-shot `add_fire_max` at placement.)
+// (Host models the continuous +1 as a one-shot `add_charge_max` at placement.)
 // ===========================================================================
 
-pub fn auction_off_c1_fire_max_after(pre: i32) -> i32 {
+pub fn auction_off_c1_charge_max_after(pre: i32) -> i32 {
     pre + 1
 }
 

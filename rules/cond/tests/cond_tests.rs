@@ -82,8 +82,8 @@ fn cand(owner: i64) -> CandidateCtx {
     CandidateCtx {
         owner,
         owner_money: if owner == 0 { 1200 } else { 400 },
-        owner_fire: 2,
-        owner_crystals: 1,
+        owner_charge: 2,
+        owner_group_pool: 1,
         owner_hand: 3,
         owner_pos: 7,
         owner_no_hand: 0,
@@ -542,7 +542,7 @@ fn card_fields() {
 #[test]
 fn owner_overlay_fields() {
     // Every `owner.*` dotted name binds through the candidate overlay.
-    let cond = compile("owner.money >= 500 && owner.fire == 2 && owner.hand == 3").unwrap();
+    let cond = compile("owner.money >= 500 && owner.charge == 2 && owner.hand == 3").unwrap();
     assert!(cond.eval(&win(), &cand(0)));
     assert!(!cond.eval(&win(), &cand(1)));
 

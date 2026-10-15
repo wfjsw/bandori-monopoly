@@ -170,7 +170,7 @@ impl World {
     pub fn set_more_steps(&mut self, n: i32) {
         self.turn.plan.more_steps = n;
     }
-    /// Card-owned per-move state (fire-roll counters etc.).
+    /// Card-owned per-move state (resource-roll counters etc.).
     pub fn set_tag(&mut self, key: &str, value: i32) {
         self.turn.plan.set_tag(key, value);
     }
@@ -381,10 +381,10 @@ impl World {
     // ------------------------------------------------------ keyed state map
 
     /// Per-player keyed state as `{value, min, max, expires}` items (status
-    /// counters, fire pots, free-form slots). The engine holds these and
+    /// counters, spendable resources, free-form slots). The engine holds these and
     /// enforces nothing -- see [`crate::state::StateVar`]. There is no
     /// `match key` here and there must never be: which keys mean what, and
-    /// what their caps are, belongs to whoever uses them. The `stun_of` / `fire`
+    /// what their caps are, belongs to whoever uses them. The `stun_of` / `charge`
     /// / ... accessors below are readers and verbs over this, not the other way
     /// round.
 
@@ -631,28 +631,54 @@ impl World {
             .map_or(-1, |f| f.uid)
     }
 
-    /// 「乐队卡 / 团卡」 crystals -- the count on the player's band-skill field
-    /// instance. 0 when there is no band skill. Same pool every band skill and
-    /// every card that mentions the band card's crystals reads and writes.
-    pub fn group_crystals(&self, player_id: i32) -> i32 {
+    /// A named pool on the player's group-skill field instance. 0 when there
+    /// is no group skill. Same pool every group skill and every card that
+    /// names that pool reads and writes.
+    pub fn group_pool(&self, player_id: i32, name: &str) -> i32 {
         let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             0
         } else {
-            self.crystals_at(uid)
+            self.counter_at(uid, name)
         }
+    }
+
+    /// Sum of every named counter on the group-skill instance.
+    pub fn group_pool_total(&self, player_id: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
+        if uid < 0 {
+            0
+        } else {
+            self.counter_names_at(uid)
+                .into_iter()
+                .map(|n| self.counter_at(uid, &n))
+                .sum()
+        }
+    }
+
+    /// Non-zero named counters on the instance at `uid`.
+    pub fn counter_names_at(&self, uid: i32) -> Vec<String> {
+        self.field_by_uid(uid)
+            .map(|f| {
+                f.counters
+                    .iter()
+                    .filter(|(_, v)| **v != 0)
+                    .map(|(k, _)| k.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// A consumer of the passed cap, not the engine deciding one (`max` > 0
     /// clamps, `max` = 0 is uncapped, exactly as
-    /// [`Self::add_crystals_at`]). Returns the new count; 0 when the player has
+    /// [`Self::add_pool_at`]). Returns the new count; 0 when the player has
     /// no band skill (writes are no-ops).
-    pub fn add_group_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
+    pub fn add_group_pool(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
         let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             return 0;
         }
-        self.add_crystals_at(uid, n, max)
+        self.add_counter_at(uid, name, n, max)
     }
 
     // ---------------------------------------------- skill / band attachments
@@ -725,57 +751,57 @@ impl World {
         uid
     }
 
-    // ------------------------------------------------------------- fire pots
+    // ---------------------------------------------------------- charge resource
 
-    /// Fire pots held.
-    pub fn fire(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, key::FIRE)
+    /// Spendable resource held.
+    pub fn charge(&self, player_id: i32) -> i32 {
+        self.state_get(player_id, key::CHARGE)
     }
 
-    /// The mandated fire-pot cap -- the `max` of the `fire` item,
+    /// The mandated resource cap -- the `max` of the `charge` item,
     /// which a character skill writes. The engine never imposes it.
-    pub fn fire_max(&self, player_id: i32) -> i32 {
-        self.state_max(player_id, key::FIRE)
+    pub fn charge_max(&self, player_id: i32) -> i32 {
+        self.state_max(player_id, key::CHARGE)
     }
 
-    /// Move the fire-pot *cap* up or down. A consumer of the cap, so it is
+    /// Move the resource *cap* up or down. A consumer of the cap, so it is
     /// the one that pulls the value back under the new ceiling;
     /// [`Self::state_add`] would not.
-    pub fn add_fire_max(&mut self, player_id: i32, n: i32) -> i32 {
-        let cap = self.fire_max(player_id).saturating_add(n).max(0);
-        self.state_set_bounds(player_id, key::FIRE, 0, cap);
-        let have = self.fire(player_id).min(cap);
-        self.state_set(player_id, key::FIRE, have);
+    pub fn add_charge_max(&mut self, player_id: i32, n: i32) -> i32 {
+        let cap = self.charge_max(player_id).saturating_add(n).max(0);
+        self.state_set_bounds(player_id, key::CHARGE, 0, cap);
+        let have = self.charge(player_id).min(cap);
+        self.state_set(player_id, key::CHARGE, have);
         cap
     }
 
     /// Gained `n` (at most up to the mandated cap) and logged it; 0 if nothing.
-    /// This is a consumer choosing to honour [`Self::fire_max`].
-    pub fn gain_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
+    /// This is a consumer choosing to honour [`Self::charge_max`].
+    pub fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
         };
         if n <= 0 || s.out() {
             return 0;
         }
-        let cap = s.fire_max();
+        let cap = s.charge_max();
         if cap <= 0 {
             return 0;
         }
-        let got = n.clamp(0, (cap - s.fire()).max(0));
+        let got = n.clamp(0, (cap - s.charge()).max(0));
         if got <= 0 {
             return 0;
         }
-        s.state_add(key::FIRE, got);
-        let (fire, name) = (s.fire(), s.player.clone());
+        s.state_add(key::CHARGE, got);
+        let (charge, name) = (s.charge(), s.player.clone());
         self.log(
-            "fire",
+            "charge",
             player_id,
-            Msg::new("log.gain_fire")
+            Msg::new("log.gain_charge")
                 .text("who", name)
                 .i("n", got)
                 .msg("why", why)
-                .i("fire", fire)
+                .i("charge", charge)
                 .i("max", cap),
         );
         got
@@ -1094,8 +1120,6 @@ impl World {
             owner: player_id,
             user: player_id,
             tile,
-            crystals: 0,
-            cp: 0,
             counters: BTreeMap::new(),
             face_down: false,
             immune,
@@ -1222,10 +1246,9 @@ impl World {
             .collect()
     }
 
-    /// Miracle crystals on the instance at `uid`.
-    /// Sugar over [`Self::counter_at`] with [`crate::state::counter::CRYSTALS`].
-    pub fn crystals_at(&self, uid: i32) -> i32 {
-        self.counter_at(uid, crate::state::counter::CRYSTALS)
+    /// On-card named counter on the instance at `uid` (generic).
+    pub fn pool_at(&self, uid: i32, name: &str) -> i32 {
+        self.counter_at(uid, name)
     }
 
     /// One declared property of the instance at `uid` (`FieldCard::props`,
@@ -1290,13 +1313,13 @@ impl World {
     /// when the instance is an event's board-owner rule (`docs/EVENTS.md`):
     /// `ActiveEvent::counter` is the public view of the instance's crystals,
     /// and the raw row is what clients (and tests) read.
-    pub fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
-        self.add_counter_at(uid, crate::state::counter::CRYSTALS, n, max)
+    pub fn add_pool_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
+        self.add_counter_at(uid, name, n, max)
     }
 
     /// Set the instance at `uid`'s crystals; returns the new count.
-    pub fn set_crystals_at(&mut self, uid: i32, n: i32) -> i32 {
-        self.set_counter_at(uid, crate::state::counter::CRYSTALS, n)
+    pub fn set_pool_at(&mut self, uid: i32, name: &str, n: i32) -> i32 {
+        self.set_counter_at(uid, name, n)
     }
 
     /// Where the instance at `uid` sits, or -1 for "with its owner" / gone.
@@ -1675,35 +1698,22 @@ impl World {
         true
     }
 
-    /// Miracle crystals on a placed card. Sugar over
-    /// [`Self::card_counter`] with [`crate::state::counter::CRYSTALS`].
-    pub fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
-        self.card_counter(player_id, card, crate::state::counter::CRYSTALS)
-    }
-
-    /// Add miracle crystals on a placed card. Sugar over [`Self::add_card_counter`].
-    pub fn add_card_crystals(&mut self, player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-        self.add_card_counter(player_id, card, crate::state::counter::CRYSTALS, n, max)
-    }
-
-    pub fn set_card_crystals(&mut self, player_id: i32, card: &str, n: i32) {
-        self.add_card_crystals(player_id, card, n - self.card_crystals(player_id, card), 0);
+    /// Set a named on-card counter of a placed card.
+    pub fn set_card_counter(&mut self, player_id: i32, card: &str, name: &str, n: i32) {
+        let have = self.card_counter(player_id, card, name);
+        self.add_card_counter(player_id, card, name, n - have, 0);
     }
 
     /// On-card named counter of a placed card, looked up by card id (first
-    /// field copy wins). Generic form of [`Self::card_crystals`].
+    /// field copy wins). Generic form of [`Self::card_pool`].
     pub fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
         self.player_id(player_id)
             .and_then(|s| s.field.iter().find(|f| f.card == card))
-            .map_or(0, |f| match name {
-                crate::state::counter::CRYSTALS => f.crystals,
-                crate::state::counter::CP => f.cp,
-                other => f.counters.get(other).copied().unwrap_or(0),
-            })
+            .map_or(0, |f| f.counters.get(name).copied().unwrap_or(0))
     }
 
     /// Adjust the on-card named counter of a placed card. Generic form of
-    /// [`Self::add_card_crystals`].
+    /// [`Self::add_card_counter`].
     pub fn add_card_counter(
         &mut self,
         player_id: i32,
@@ -1878,11 +1888,7 @@ impl World {
         let Some(f) = self.field_by_uid(uid) else {
             return 0;
         };
-        match name {
-            crate::state::counter::CRYSTALS => f.crystals,
-            crate::state::counter::CP => f.cp,
-            other => f.counters.get(other).copied().unwrap_or(0),
-        }
+        f.counters.get(name).copied().unwrap_or(0)
     }
 
     /// Adjust the on-card count of `name` on the instance at `uid` by `n`,
@@ -1891,11 +1897,7 @@ impl World {
         let Some(f) = self.field_by_uid_mut(uid) else {
             return 0;
         };
-        let slot = match name {
-            crate::state::counter::CRYSTALS => &mut f.crystals,
-            crate::state::counter::CP => &mut f.cp,
-            other => f.counters.entry(other.to_string()).or_insert(0),
-        };
+        let slot = f.counters.entry(name.to_string()).or_insert(0);
         *slot = (*slot + n).max(0);
         if max > 0 {
             *slot = (*slot).min(max);
@@ -1903,7 +1905,7 @@ impl World {
         let now = *slot;
         // Event instances mirror their crystal count into the public
         // `ActiveEvent::counter` row (`docs/EVENTS.md`).
-        if name == crate::state::counter::CRYSTALS {
+        {
             let card = f.card.clone();
             let tile = f.tile;
             if tile < 0 && card.starts_with("event:") {
@@ -2058,12 +2060,12 @@ impl World {
     // on it. The on-card [CP点] of 该清CP了 is that card's own
     // [`crate::state::counter::CP`] counter and dies with it.
 
-    /// The uid of the standing `mark:cp` instance on the board owner, or -1
-    /// when the ruleset has no such rule (`StubRules`).
-    pub fn mark_cp_uid(&self) -> i32 {
+    /// The uid of the standing mark-owner rule instance (`rule_id`) on the
+    /// board owner, or -1 when the ruleset has no such rule (`StubRules`).
+    pub fn mark_owner_uid(&self, rule_id: &str) -> i32 {
         self.mark_rule_instances()
             .into_iter()
-            .find(|(_, c)| c == "mark:cp")
+            .find(|(_, c)| c == rule_id)
             .map(|(uid, _)| uid)
             .unwrap_or(-1)
     }
@@ -2187,14 +2189,31 @@ impl World {
         }
     }
 
-    /// The RiNG rent multiplier in force.
-    pub fn ring_multiplier(&self, data: &GameData) -> i32 {
-        (data.match_rules.ring_multiplier + self.ring_bonus).max(1)
+    /// A generic named rule parameter in force: the match-rules base plus any
+    /// card-applied bonus ([`Self::add_rule_param_bonus`]).
+    pub fn rule_param(&self, data: &GameData, name: &str) -> i32 {
+        let base = data.match_rules.rule_params.get(name).copied().unwrap_or(0);
+        let bonus = self.rule_param_bonus.get(name).copied().unwrap_or(0);
+        base + bonus
     }
 
-    pub fn add_ring_bonus(&mut self, n: i32) -> i32 {
-        self.ring_bonus += n;
-        self.ring_bonus
+    /// Add `n` to the named rule parameter's bonus; returns the new bonus.
+    pub fn add_rule_param_bonus(&mut self, name: &str, n: i32) -> i32 {
+        let e = self
+            .rule_param_bonus
+            .entry(name.to_string())
+            .or_insert(0);
+        *e += n;
+        *e
+    }
+
+    /// Dice-rent unit multiplier (`rentUnitMult`): at least 1.
+    pub fn rent_unit_mult(&self, data: &GameData) -> i32 {
+        self.rule_param(data, "rentUnitMult").max(1)
+    }
+
+    pub fn add_rent_unit_bonus(&mut self, n: i32) -> i32 {
+        self.add_rule_param_bonus("rentUnitMult", n)
     }
 
     /// Move a player to a tile without settling (a bare [传送]).

@@ -55,7 +55,7 @@ fn roll_needs_mark(player_id: i32) -> bool {
 
 /// （2）'s applicability: a non-zero money change and the 5-pot price.
 fn pay_cut_applies(player_id: i32) -> bool {
-    ctx::trigger::value() > 0 && state::get(player_id, state_key::FIRE) >= 5
+    ctx::trigger::value() > 0 && state::get(player_id, state_key::CHARGE) >= 5
 }
 
 /// 「初始3，上限5」.

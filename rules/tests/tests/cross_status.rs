@@ -247,20 +247,20 @@ fn s07_riki_counts_stays() {
     eprintln!("s07 picks = {picks:?}");
     eprintln!(
         "s07 record: P0 fire = {} (want 2, one per layer), stays = {}, {}",
-        t.fire(0),
+        t.charge(0),
         t.state(1, "stay"),
         t.state(2, "stay")
     );
     eprintln!(
         "s07 record: fire = {} (want one per layer granted), stays = {}, {}",
-        t.fire(0),
+        t.charge(0),
         t.state(1, "stay"),
         t.state(2, "stay")
     );
     // 「场上每有玩家获得一层[停留]时，你获得一个[火罐]」 — one fire per layer.
     let total_stay: i32 = [0usize, 1, 2, 3].iter().map(|w| t.state(*w, "stay")).sum();
     assert!(total_stay > 0, "the stays were granted: picks={picks:?}");
-    assert_eq!(t.fire(0), total_stay, "one fire per 停留 layer granted");
+    assert_eq!(t.charge(0), total_stay, "one fire per 停留 layer granted");
 }
 
 // =====================================================================
@@ -298,7 +298,7 @@ fn s08_sakiko_absorbs_statuses() {
         t.state(1, "stay"),
         t.state(0, "stay"),
         t.money(0),
-        t.fire(0)
+        t.charge(0)
     );
     assert_eq!(t.state(1, "stay"), 0, "P1 = 0");
     assert_eq!(t.state(0, "stay"), 2, "P0 = 2");
@@ -365,9 +365,9 @@ fn s10_numa_raises_payments() {
     eprintln!(
         "s10 record (RULING: X before or after the gain): P1 = {} (R = {r}, +200 or +300), fire = {}",
         t.money(1),
-        t.fire(1)
+        t.charge(1)
     );
-    assert_eq!(t.fire(1), 3, "P1 gains 1 fire");
+    assert_eq!(t.charge(1), 3, "P1 gains 1 fire");
     let paid = 10_000 - t.money(0);
     assert!(
         paid == r + 200 || paid == r + 300,

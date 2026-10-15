@@ -1228,8 +1228,8 @@ fn firepot_starts_at_one_with_cap_one() {
     forall(3, 0xA6_00C0, |_rng, _i| {
         for name in ["美竹兰", "青叶摩卡", "上原绯玛丽", "宇田川巴", "羽泽鸫"] {
             let t = Table::new(&[name, "户山香澄"]);
-            let fire = t.fire(0);
-            let cap = t.state_var(0, "fire").max;
+            let fire = t.charge(0);
+            let cap = t.state_var(0, "charge").max;
             if fire != 1 {
                 return Err(format!(
                     "C-AG-firepot-01: {name} 初始1, fire {fire}"
@@ -1279,10 +1279,10 @@ fn ran_skill_moves_backward() {
                 expected
             ));
         }
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-AG-ran-02: the move spent one [火罐], fire {}",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -1341,8 +1341,8 @@ fn moca_skill_teleports_to_the_actor() {
                 t.pos(0)
             ));
         }
-        if t.fire(0) != 0 {
-            return Err(format!("C-AG-moca-02: fire {}, expected 0", t.fire(0)));
+        if t.charge(0) != 0 {
+            return Err(format!("C-AG-moca-02: fire {}, expected 0", t.charge(0)));
         }
         Ok(())
     })

@@ -54,7 +54,7 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 7);
+    state::set_bounds(player_id, state_key::CHARGE, 0, 7);
     Ok(())
 }
 
@@ -96,7 +96,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::FIRE) < 7 {
+    if state::get(player_id, state_key::CHARGE) < 7 {
         return Some(Msg::new(key!("kaoru_prince_no_fire")));
     }
     None

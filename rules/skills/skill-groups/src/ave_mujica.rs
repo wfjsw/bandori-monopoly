@@ -78,11 +78,11 @@ fn on_state(player_id: i32) {
         return;
     }
     // 「若你的技能拥有火罐，进入状态2时将火罐补充至上限」
-    let cap = state::max(player_id, state_key::FIRE);
+    let cap = state::max(player_id, state_key::CHARGE);
     if cap <= 0 {
         return;
     }
-    state::set(player_id, state_key::FIRE, cap);
+    state::set(player_id, state_key::CHARGE, cap);
     ctx::log(player_id, &Msg::new(key!("ave_mujica_refill")));
 }
 
@@ -148,19 +148,19 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「每回合结束时失去1火罐」 -- only when the character skill grants pots.
-    let cap = state::max(player_id, state_key::FIRE);
+    let cap = state::max(player_id, state_key::CHARGE);
     if cap <= 0 {
         return Ok(());
     }
-    let have = state::get(player_id, state_key::FIRE);
+    let have = state::get(player_id, state_key::CHARGE);
     if have > 0 {
         rules_status::fire::spend(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
     }
     // 「回合结束后若火罐为0则退出状态2；退出状态2时，失去所有剩余火罐」
-    if state::get(player_id, state_key::FIRE) == 0 {
+    if state::get(player_id, state_key::CHARGE) == 0 {
         state::set(player_id, state_key::SKILL_STATE, 1);
         state::set(player_id, IN_TWO, 0);
-        let left = state::get(player_id, state_key::FIRE);
+        let left = state::get(player_id, state_key::CHARGE);
         if left > 0 {
             rules_status::fire::spend(player_id, left, &Msg::new(key!("ave_mujica_exit")))?;
         }

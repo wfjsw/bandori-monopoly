@@ -552,12 +552,12 @@ pub trait CardWorld: Clone + 'static {
     fn card_text_mentions(&self, _card: &str, _needle: &str) -> bool {
         false
     }
-    /// [奇迹水晶] on a named placed card.
-    fn card_crystals(&self, _player_id: i32, _card: &str) -> i32 {
+    /// A named on-card pool on a placed card (generic; ruleset names the key).
+    fn card_pool(&self, _player_id: i32, _card: &str, _name: &str) -> i32 {
         0
     }
-    /// Add [奇迹水晶] on a named placed card; `max` caps (0 = uncapped).
-    fn add_card_crystals(&mut self, _player_id: i32, _card: &str, _n: i32, _max: i32) -> i32 {
+    /// Add to a named on-card pool on a placed card; `max` caps (0 = uncapped).
+    fn add_card_pool(&mut self, _player_id: i32, _card: &str, _name: &str, _n: i32, _max: i32) -> i32 {
         0
     }
     /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
@@ -565,16 +565,16 @@ pub trait CardWorld: Clone + 'static {
     fn field_instances(&self, _player_id: i32) -> Vec<(i32, String)> {
         Vec::new()
     }
-    /// Standing board-owned pseudo cards (`mark:cp` and kin), as `(uid, id)`.
+    /// Standing board-owned pseudo cards (mark owners and kin), as `(uid, id)`.
     fn mark_rule_instances(&self) -> Vec<(i32, String)> {
         Vec::new()
     }
-    /// The instance at `uid`, wherever it sits.
-    fn crystals_at(&self, uid: i32) -> i32 {
-        self.counter_at(uid, game_core::state::counter::CRYSTALS)
+    /// The named counter on the instance at `uid`.
+    fn pool_at(&self, uid: i32, name: &str) -> i32 {
+        self.counter_at(uid, name)
     }
-    fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
-        self.add_counter_at(uid, game_core::state::counter::CRYSTALS, n, max)
+    fn add_pool_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
+        self.add_counter_at(uid, name, n, max)
     }
     /// One declared property of the instance at `uid` (`FieldCard::props`,
     /// `card_sdk::abi::prop` keys). Default `0`.
@@ -621,16 +621,16 @@ pub trait CardWorld: Clone + 'static {
     fn set_immune_at(&mut self, _uid: i32, _on: bool) -> bool {
         false
     }
-    /// Miracle crystals on the *running card instance*. Sugar over
-    /// [`Self::counter`] with `game_core::state::counter::CRYSTALS`.
-    fn crystals(&self) -> i32 {
-        self.counter(game_core::state::counter::CRYSTALS)
+    /// A named counter on the *running card instance*. Sugar over
+    /// [`Self::counter`]; the ruleset names the key.
+    fn self_pool(&self, name: &str) -> i32 {
+        self.counter(name)
     }
-    fn set_crystals(&mut self, n: i32) -> i32 {
-        self.set_counter(game_core::state::counter::CRYSTALS, n)
+    fn set_self_pool(&mut self, name: &str, n: i32) -> i32 {
+        self.set_counter(name, n)
     }
-    fn add_crystals(&mut self, n: i32, max: i32) -> i32 {
-        self.add_counter(game_core::state::counter::CRYSTALS, n, max)
+    fn add_self_pool(&mut self, name: &str, n: i32, max: i32) -> i32 {
+        self.add_counter(name, n, max)
     }
 
     /// One declared **property** of the running rule instance
@@ -809,33 +809,48 @@ pub trait CardWorld: Clone + 'static {
     // ------------------------------------------------------- status pots
     /// The uid of `player_id`'s **band-skill field instance** (`skill:<band>:
     /// <skill>`, `FieldCard::group_skill`), or -1 when the player has none. This
-    /// is the 「乐队卡 / 囡卡」 crystal holder -- see [`Self::group_crystals`].
+    /// is the 「乐队卡 / 囡卡」 crystal holder -- see [`Self::group_pool`].
     fn group_skill_uid(&self, _player_id: i32) -> i32 {
         -1
     }
-    /// 「乐队卡 / 囡卡」 crystals -- the count on the player's band-skill field
-    /// instance ([`Self::group_skill_uid`]). 0 when there is no band skill; a
-    /// write with no band skill is a no-op. The same pool every band skill and
-    /// every card that mentions the band card's crystals reads and writes, so
-    /// `add_crystals` inside a band skill's own handler and `add_group_crystals`
-    /// from a card land on one count.
-    fn group_crystals(&self, player_id: i32) -> i32 {
+    /// A named pool on the player's group-skill field instance
+    /// ([`Self::group_skill_uid`]). 0 when there is no group skill; a write
+    /// with no group skill is a no-op. The same pool every group skill and
+    /// every card that names that pool reads and writes.
+    fn group_pool(&self, player_id: i32, name: &str) -> i32 {
         let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             0
         } else {
-            self.crystals_at(uid)
+            self.pool_at(uid, name)
         }
     }
-    /// Add to that instance's crystals. `max` > 0 clamps, `max` = 0 is uncapped
-    /// (exactly as [`Self::add_crystals_at`]); returns the new count, or 0 when
-    /// the player has no band skill.
-    fn add_group_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
+    /// Sum of every named counter on the group-skill instance (the generic
+    /// "group pool" total when the ruleset uses one counter).
+    fn group_pool_total(&self, player_id: i32) -> i32 {
         let uid = self.group_skill_uid(player_id);
         if uid < 0 {
             0
         } else {
-            self.add_crystals_at(uid, n, max)
+            self.counter_names_at(uid)
+                .into_iter()
+                .map(|n| self.pool_at(uid, &n))
+                .sum()
+        }
+    }
+    /// Non-zero named counters on the instance at `uid`.
+    fn counter_names_at(&self, _uid: i32) -> Vec<String> {
+        Vec::new()
+    }
+    /// Add to that instance's named pool. `max` > 0 clamps, `max` = 0 is
+    /// uncapped (exactly as [`Self::add_pool_at`]); returns the new count, or 0
+    /// when the player has no group skill.
+    fn add_group_pool(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+        let uid = self.group_skill_uid(player_id);
+        if uid < 0 {
+            0
+        } else {
+            self.add_pool_at(uid, name, n, max)
         }
     }
     // -------------------------------------------- skill / band attachments
@@ -888,15 +903,15 @@ pub trait CardWorld: Clone + 'static {
         -1
     }
     /// Fire pots held. Sugar over the keyed state.
-    fn fire(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::FIRE)
+    fn charge(&self, player_id: i32) -> i32 {
+        self.state_get(player_id, game_core::state::key::CHARGE)
     }
     /// The mandated fire-pot cap -- the `max` of the `fire` item, which a
     /// character skill writes. The engine does not impose it.
-    fn fire_max(&self, player_id: i32) -> i32 {
-        self.state_max(player_id, game_core::state::key::FIRE)
+    fn charge_max(&self, player_id: i32) -> i32 {
+        self.state_max(player_id, game_core::state::key::CHARGE)
     }
-    fn gain_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
+    fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
     fn give_stay(&mut self, player_id: i32, n: i32);
     fn give_stun(&mut self, player_id: i32, n: i32);
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32);
@@ -907,7 +922,7 @@ pub trait CardWorld: Clone + 'static {
     /// turn, 2 = already moved, 3 = cannot move this turn.
     fn cant_move(&self, player_id: i32) -> i32;
     /// Spend `n` [火罐]; 1 when the player had enough (logged).
-    fn spend_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
+    fn spend_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
     /// `[停留]` layers. Sugar over the keyed state.
     fn stay_of(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::STAY)
@@ -933,9 +948,9 @@ pub trait CardWorld: Clone + 'static {
 
     // --------------------------------------------------- ring & movement
     /// The RiNG rent multiplier right now.
-    fn ring_multiplier(&self) -> i32;
+    fn rent_unit_mult(&self) -> i32;
     /// Nudge the RiNG multiplier; returns the new value.
-    fn add_ring_bonus(&mut self, n: i32) -> i32;
+    fn add_rent_unit_bonus(&mut self, n: i32) -> i32;
     /// Move a player without settling (`resolve: false`).
     fn teleport_to(&mut self, player_id: i32, tile: i32);
 
@@ -1000,7 +1015,7 @@ pub trait CardWorld: Clone + 'static {
         0
     }
     /// Adjust `player_id`'s [火罐] cap; returns the new cap.
-    fn add_fire_max(&mut self, _player: i32, _n: i32) -> i32 {
+    fn add_charge_max(&mut self, _player: i32, _n: i32) -> i32 {
         0
     }
     /// Make `id` the running card for a nested `play_card`: a **fresh** instance

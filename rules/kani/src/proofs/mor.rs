@@ -133,7 +133,7 @@ fn rui_demon_01_iff_at(user: i32) {
     );
     // Frame: no positions / fire / stay / piles from the money legs.
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
     crate::kassert!(post.discard == pre.discard, "frame: discard");
@@ -255,7 +255,7 @@ fn xiaobai_01_iff_at(user: i32) {
     // Frame: the counteruser's money is untouched by this body.
     crate::kassert!(post.money[user as usize] == pre.money[user as usize], "frame: counteruser money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 #[kani::proof]
@@ -652,7 +652,7 @@ pub fn courage_03_empty_when_no_agent_misfire() {
             "C-MOR-courage-03: frame money unchanged on the empty branch"
         );
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     }
 }
 
@@ -946,7 +946,7 @@ fn starry_01_place_iff_at(user: i32) {
         "C-MOR-starry-01: user pays 1000·X (floored at 0)"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 #[kani::proof]

@@ -168,10 +168,10 @@ pub trait HostOps {
     fn op_send_to_dest(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_transfer_to_dest`
     fn op_transfer_to_dest(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_ring_multiplier`
-    fn op_ring_multiplier(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_ring_bonus`
-    fn op_add_ring_bonus(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_rent_unit_mult`
+    fn op_rent_unit_mult(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_add_rent_unit_bonus`
+    fn op_add_rent_unit_bonus(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_teleport_to`
     fn op_teleport_to(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_unplace_card`
@@ -222,10 +222,10 @@ pub trait HostOps {
     fn op_set_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_inc_slot`
     fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_group_crystals`
-    fn op_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_group_crystals`
-    fn op_add_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_group_pool`
+    fn op_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_add_group_pool`
+    fn op_add_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_group_skill`
     fn op_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_persona_skill`
@@ -240,12 +240,12 @@ pub trait HostOps {
     fn op_raise_bought(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_raise`
     fn op_raise(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_fire`
-    fn op_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_fire_max`
-    fn op_fire_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_gain_fire`
-    fn op_gain_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_charge`
+    fn op_charge(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_charge_max`
+    fn op_charge_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_gain_charge`
+    fn op_gain_charge(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_give_stay`
     fn op_give_stay(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_give_stun`
@@ -258,8 +258,8 @@ pub trait HostOps {
     fn op_can_pay(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_cant_move`
     fn op_cant_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_spend_fire`
-    fn op_spend_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_spend_charge`
+    fn op_spend_charge(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_stay_of`
     fn op_stay_of(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_stun_of`
@@ -480,8 +480,8 @@ pub trait HostOps {
     fn op_set_next_steps(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_turn_main_steps`
     fn op_turn_main_steps(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `ruleset_add_fire_max`
-    fn op_add_fire_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_add_charge_max`
+    fn op_add_charge_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_build`
     fn op_card_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_can_build`
@@ -881,11 +881,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_transfer_to_dest(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::transfer_to_dest(self, a[0], a[1])? as i64)
     }
-    fn op_ring_multiplier(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::ring_multiplier(self)? as i64)
+    fn op_rent_unit_mult(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::rent_unit_mult(self)? as i64)
     }
-    fn op_add_ring_bonus(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::add_ring_bonus(self, a[0])? as i64)
+    fn op_add_rent_unit_bonus(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::add_rent_unit_bonus(self, a[0])? as i64)
     }
     fn op_teleport_to(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::teleport_to(self, a[0], a[1])?;
@@ -967,11 +967,11 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_inc_slot(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::inc_slot(self, a[0], a[1], a[2], a[3])? as i64)
     }
-    fn op_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::group_crystals(self, a[0])? as i64)
+    fn op_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::group_pool(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_add_group_crystals(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::add_group_crystals(self, a[0], a[1], a[2])? as i64)
+    fn op_add_group_pool(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::add_group_pool(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
     fn op_group_skill(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::group_skill(self, a[0], a[1], a[2])? as i64)
@@ -994,14 +994,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_raise(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::raise(self, a[0], a[1], a[2])? as i64)
     }
-    fn op_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::fire(self, a[0])? as i64)
+    fn op_charge(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::charge(self, a[0])? as i64)
     }
-    fn op_fire_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::fire_max(self, a[0])? as i64)
+    fn op_charge_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::charge_max(self, a[0])? as i64)
     }
-    fn op_gain_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::gain_fire(self, a[0], a[1], a[2], a[3])? as i64)
+    fn op_gain_charge(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::gain_charge(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_give_stay(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::give_stay(self, a[0], a[1])?;
@@ -1025,8 +1025,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_cant_move(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::cant_move(self, a[0])? as i64)
     }
-    fn op_spend_fire(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::spend_fire(self, a[0], a[1], a[2], a[3])? as i64)
+    fn op_spend_charge(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::spend_charge(self, a[0], a[1], a[2], a[3])? as i64)
     }
     fn op_stay_of(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::stay_of(self, a[0])? as i64)
@@ -1405,8 +1405,8 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_turn_main_steps(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::turn_main_steps(self)? as i64)
     }
-    fn op_add_fire_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::add_fire_max(self, a[0], a[1])? as i64)
+    fn op_add_charge_max(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::add_charge_max(self, a[0], a[1])? as i64)
     }
     fn op_card_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_build(self, a[0], a[1])? as i64)
@@ -2251,16 +2251,16 @@ pub unsafe extern "C-unwind" fn ruleset_transfer_to_dest(to: i32, dest: i32) -> 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_ring_multiplier() -> i32 {
-    with_host(|h| match h.op_ring_multiplier([0, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_rent_unit_mult() -> i32 {
+    with_host(|h| match h.op_rent_unit_mult([0, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_ring_bonus(n: i32) -> i32 {
-    with_host(|h| match h.op_add_ring_bonus([n, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_add_rent_unit_bonus(n: i32) -> i32 {
+    with_host(|h| match h.op_add_rent_unit_bonus([n, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -2485,16 +2485,16 @@ pub unsafe extern "C-unwind" fn ruleset_inc_slot(player_id: i32, ptr: i32, len: 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_group_crystals(player_id: i32) -> i32 {
-    with_host(|h| match h.op_group_crystals([player_id, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_group_pool(player_id: i32, np: i32, nl: i32) -> i32 {
+    with_host(|h| match h.op_group_pool([player_id, np, nl, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    with_host(|h| match h.op_add_group_crystals([player_id, n, max, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
+    with_host(|h| match h.op_add_group_pool([player_id, np, nl, n, max, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -2557,24 +2557,24 @@ pub unsafe extern "C-unwind" fn ruleset_raise(player_id: i32, kind: i32, value: 
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_fire(player_id: i32) -> i32 {
-    with_host(|h| match h.op_fire([player_id, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_charge(player_id: i32) -> i32 {
+    with_host(|h| match h.op_charge([player_id, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_fire_max(player_id: i32) -> i32 {
-    with_host(|h| match h.op_fire_max([player_id, 0, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_charge_max(player_id: i32) -> i32 {
+    with_host(|h| match h.op_charge_max([player_id, 0, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_gain_fire(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_gain_fire([player_id, n, ptr, len, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_gain_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_gain_charge([player_id, n, ptr, len, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -2629,8 +2629,8 @@ pub unsafe extern "C-unwind" fn ruleset_cant_move(player_id: i32) -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_spend_fire(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_spend_fire([player_id, n, ptr, len, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_spend_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32 {
+    with_host(|h| match h.op_spend_charge([player_id, n, ptr, len, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
@@ -3519,8 +3519,8 @@ pub unsafe extern "C-unwind" fn ruleset_turn_main_steps() -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn ruleset_add_fire_max(player_id: i32, n: i32) -> i32 {
-    with_host(|h| match h.op_add_fire_max([player_id, n, 0, 0, 0, 0]) {
+pub unsafe extern "C-unwind" fn ruleset_add_charge_max(player_id: i32, n: i32) -> i32 {
+    with_host(|h| match h.op_add_charge_max([player_id, n, 0, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

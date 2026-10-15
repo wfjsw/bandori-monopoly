@@ -19,7 +19,7 @@ use card_sdk::kani_host::{Args, Op};
 
 use crate::board;
 use crate::host;
-use crate::world::{self, BuySnap, MoveSnap, World, ROLL_CARD, ROLL_FIRE, ROLL_SKILL};
+use crate::world::{self, BuySnap, MoveSnap, World, ROLL_CARD, ROLL_CHARGE, ROLL_SKILL};
 
 fn install_empty() {
     host::install();
@@ -219,7 +219,7 @@ pub fn trig_roll_source_reads() {
     world::with_world_mut(|w| w.trig_roll_source = src);
     let got = call(Op::trig_roll_source, [0; 6]);
     crate::kassert!(got == src as i64);
-    kani::cover!(src == ROLL_FIRE, "fire pot");
+    kani::cover!(src == ROLL_CHARGE, "fire pot");
     kani::cover!(src == ROLL_CARD, "card");
     kani::cover!(src == ROLL_SKILL, "skill");
 }

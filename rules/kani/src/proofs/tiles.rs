@@ -108,7 +108,7 @@ pub fn edogawa_settle_draw_one_iff() {
     // Frame: money / pos / fire / stay untouched (draw is the only write).
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
 }
 
@@ -181,7 +181,7 @@ pub fn circle_settle_draw_one_iff() {
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
 }
 
@@ -258,7 +258,7 @@ pub fn event_settle_draw_one_iff() {
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
 }
 

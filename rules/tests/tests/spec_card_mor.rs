@@ -2272,10 +2272,10 @@ fn touko_fire_cap_and_neighbour_skill() {
         t.dice(&[3]);
         t.roll(0).unwrap();
         decline_all(&mut t);
-        if t.fire(0) != 1 {
+        if t.charge(0) != 1 {
             return Err(format!(
                 "C-MOR-touko-01: fire {}, expected 1 (gained one on [经过] CiRCLE)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
 
@@ -2314,10 +2314,10 @@ fn touko_fire_cap_and_neighbour_skill() {
                 ));
             }
         }
-        if t.fire(0) != 0 {
+        if t.charge(0) != 0 {
             return Err(format!(
                 "C-MOR-touko-02: fire {}, expected 0 (spent)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())
@@ -2340,10 +2340,10 @@ fn nanami_fire_cap_is_two() {
         t.observe(CLAUSES);
         t.roll(0).unwrap();
         decline_all(&mut t);
-        if t.fire(0) != 2 {
+        if t.charge(0) != 2 {
             return Err(format!(
                 "C-MOR-nanami-01: fire {}, expected 2 (gained one, capped)",
-                t.fire(0)
+                t.charge(0)
             ));
         }
         Ok(())

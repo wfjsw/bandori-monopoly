@@ -104,7 +104,7 @@ pub fn pass_circle_fire_post_mutant(pre_fire: i32, cap: i32) -> i32 {
 // 「…并在移动后获得一个火罐。」
 // ===========================================================================
 
-/// After-move fire: +1 pot, fire-pot path only (C-SUMIMI-childhood-frame).
+/// After-move charge: +1 pot, fire-pot path only (C-SUMIMI-childhood-frame).
 /// Same global hold-cap reading as [`pass_circle_fire_ok`].
 pub fn childhood_fire_ok(effects: &[Effect], player: i32, pre_fire: i32, cap: i32) -> bool {
     pass_circle_fire_ok(effects, player, pre_fire, cap)

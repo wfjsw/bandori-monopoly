@@ -166,7 +166,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         "character skill stays bound: {ids:?}"
     );
     // 「初始0，上限1」 -- the skill card is what assigns fire.max.
-    let fire = st.players[1].state.get("fire").copied().unwrap_or_default();
+    let fire = st.players[1].state.get("charge").copied().unwrap_or_default();
     assert_eq!(fire.max, 1, "the skill assigned the cap: {fire:?}");
 }
 

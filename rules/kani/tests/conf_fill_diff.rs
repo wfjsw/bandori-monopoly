@@ -51,7 +51,7 @@ use rules_kani::world::{self as kworld, World as KWorld};
 #[derive(Clone, Debug)]
 struct Seat {
     money: i32,
-    fire: i32,
+    charge: i32,
     crystals: i32,
     hand: i32,
     pos: i32,
@@ -81,7 +81,7 @@ impl Default for Seat {
     fn default() -> Self {
         Self {
             money: 1500,
-            fire: 0,
+            charge: 0,
             crystals: 0,
             hand: 3,
             pos: 0,
@@ -366,10 +366,10 @@ impl SnapSrc for Fixture {
     fn money(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.money).unwrap_or(0)
     }
-    fn fire(&self, p: i32) -> i32 {
-        self.seats.get(p as usize).map(|s| s.fire).unwrap_or(0)
+    fn charge(&self, p: i32) -> i32 {
+        self.seats.get(p as usize).map(|s| s.charge).unwrap_or(0)
     }
-    fn group_crystals(&self, p: i32) -> i32 {
+    fn group_pool(&self, p: i32) -> i32 {
         self.seats.get(p as usize).map(|s| s.crystals).unwrap_or(0)
     }
     fn hand_size(&self, p: i32) -> i32 {
@@ -523,8 +523,8 @@ fn to_world(fx: &Fixture) -> KWorld {
     w.n_players = fx.n_players;
     for (p, s) in fx.seats.iter().enumerate() {
         w.money[p] = s.money;
-        w.fire[p] = s.fire;
-        w.group_crystals[p] = s.crystals;
+        w.charge[p] = s.charge;
+        w.group_pool[p] = s.crystals;
         w.pos[p] = s.pos;
         w.out[p] = s.out;
         w.stay[p] = s.stay;
@@ -970,7 +970,7 @@ fn fx_no_chain_abnormal() -> Fixture {
     }
     fx.seats[0].group = "Pastel✽Palettes";
     fx.seats[0].persona = "丸山彩";
-    fx.seats[0].fire = 2;
+    fx.seats[0].charge = 2;
     fx.seats[0].hand = 7;
     fx.seats[0].slots = vec![("skill.manaDonut.half", 1), ("detour_next_roll", 1)];
     fx.trig = Trig {

@@ -657,13 +657,13 @@ fn bear_cookie_replenishes_fire_pots_for_a_price() {
         _ => drain(&mut t),
     }
     assert!(
-        t.fire(0) >= 1 || t.money(0) < 10_000,
+        t.charge(0) >= 1 || t.money(0) < 10_000,
         "either the pot came back or the offer is missing: fire={} money={} keys={:?}",
-        t.fire(0),
+        t.charge(0),
         t.money(0),
         t.recent_keys(16)
     );
-    if t.fire(0) >= 1 {
+    if t.charge(0) >= 1 {
         assert_eq!(t.money(0), 10_000 - 1_000, "X=1 costs 1000");
     }
 }
@@ -1340,9 +1340,9 @@ fn chart_rush_loses_fire_and_ranks_the_rolls() {
     // P0 highest, P2 second, P1 third. (No fourth player.)
     draw_event_card(&mut t, 0, "冲榜", &[10, 10, 10, 5, 5, 20]);
     take_chart_rush_first_prize(&mut t);
-    assert_eq!(t.fire(0), 0, "all [火罐] lost");
-    assert_eq!(t.fire(1), 0);
-    assert_eq!(t.fire(2), 0);
+    assert_eq!(t.charge(0), 0, "all [火罐] lost");
+    assert_eq!(t.charge(1), 0);
+    assert_eq!(t.charge(2), 0);
     assert_eq!(t.money(0), 10_000 + 2_000, "1st: 2000 (or a card -- see below)");
     assert_eq!(t.money(2), 10_000 + 1_500, "2nd: 1500");
     assert_eq!(t.money(1), 10_000 + 1_000, "3rd: 1000");

@@ -30,7 +30,7 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         // CEL; split from (2) so the other-mover arm is not gated on it.
         On::Hook(
             &[HookKind::SettleBefore],
-            "actor == owner && move.main && tile.id >= 0 && fire(owner) >= 1",
+            "actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1",
             Some(within5),
             before_settle_self,
         ),
@@ -75,7 +75,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// a 「不触发结算」 move has no such window and so never reaches here. The
 /// within-5 geometry is the residual guard (`within5`).
 /// （3） 「你可消耗1火罐，选择其中一名玩家并使自己的移动终点沿最短路径向其靠近1格」.
-/// Applicability is `fire(owner) >= 1` + `within5`.
+/// Applicability is `charge(owner) >= 1` + `within5`.
 fn before_settle_self(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
     if !ctx::ask_yes(

@@ -320,7 +320,7 @@ impl Cx<'_> {
     ///    (default 2; effects may lower it, minimum 0) are decided here.
     /// 2. the opening deal and mulligan, reading that hand size.
     /// 3. **after match start** (`deckAtGameStart`), after the deal: initial
-    ///    tokens/resources (fire pots 「初始N」, P✽P fans) are created here.
+    ///    tokens/resources (spendable pots 「初始N」, P✽P fans) are created here.
     ///
     /// Each point is dispatched to **every effect source** -- field cards
     /// including skills (per player, in field order) and the card ids in that
@@ -1930,7 +1930,7 @@ impl Cx<'_> {
         self.roll(player_id as i32, count.max(0), sides.max(1), None)
     }
 
-    /// A card-driven reroll (「使用火罐进行掷骰」): sum the
+    /// A card-driven reroll (resource-powered dice): sum the
     /// move plan's `base` + `dice` tables, honouring `TurnCtx::extreme`. The
     /// caller raises the `Roll` chain link on the face.
     pub fn card_do_move_roll(&mut self, _player_id: usize) -> i32 {
@@ -3673,7 +3673,7 @@ impl Cx<'_> {
             key::STUN_START,
             key::EXILE,
             key::NO_HAND,
-            key::FIRE,
+            key::CHARGE,
             key::UNSTOPPABLE,
         ] {
             s.state_set(k, 0);
@@ -3689,7 +3689,7 @@ impl Cx<'_> {
         //
         // Markers (user ruling 2026-10-07, reversing the previous batch's
         // keep-tokens deviation): bankruptcy clears **everything the player
-        // holds** -- 火罐 / 奇迹水晶 / P✽P粉丝 / tokens / statuses -- plus every
+        // holds** -- spendable resources / named counters / tokens / statuses -- plus every
         // marker **owned by one of their rules** wherever that copy sits
         // (another player's counter, a tile). Neutral board marks ([CP点],
         // `owner == -1`) are not player-held and stay. `pp::
@@ -3750,7 +3750,7 @@ impl Cx<'_> {
                 p.tokens.retain(|t| t.name != name);
             }
             self.w.st.marks.retain(|m| {
-                m.is_cp() || m.owner == crate::state::BOARD_OWNER || m.kind != name
+                m.owner == crate::state::BOARD_OWNER || m.kind != name
             });
         }
     }

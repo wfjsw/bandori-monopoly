@@ -27,7 +27,7 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
         // scan is residual (`is_color` / `tile_named`).
         On::Hook(
             &[HookKind::TurnStartBefore],
-            "actor == owner && fire(owner) >= 1",
+            "actor == owner && charge(owner) >= 1",
             Some(has_street_color_tile),
             at_turn_start,
         ),
@@ -83,7 +83,7 @@ fn has_street_color_tile(player_id: i32) -> bool {
 /// （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 -- the
 /// offer is the turn-start moment; the mark is placed then and pays out later.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    // `fire(owner) >= 1` + `has_street_color_tile` are the gate.
+    // `charge(owner) >= 1` + `has_street_color_tile` are the gate.
     let pool = street_color_tiles(player_id);
     if !ctx::ask_yes(
         player_id,

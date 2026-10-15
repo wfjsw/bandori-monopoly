@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::{PersonaData, GameData};
 use crate::progression::{
-    self, MatchReward, FIRE_DAILY_MAX, FIRE_MAX_PER_GAME, MAX_LEVEL, STARS_PER_GAME,
+    self, MatchReward, CHARGE_DAILY_MAX, CHARGE_MAX_PER_GAME, MAX_LEVEL, STARS_PER_GAME,
 };
 use crate::MatchMode;
 
@@ -41,9 +41,9 @@ pub struct PlayerProfile {
     pub level: i32,
     pub exp: i32,
     pub total_exp: i64,
-    pub fire: i32,
-    pub fire_date: String,
-    pub fire_per_game: i32,
+    pub charge: i32,
+    pub charge_date: String,
+    pub charge_per_game: i32,
     pub coins: i32,
     pub stars: i32,
     pub home_persona: String,
@@ -74,9 +74,9 @@ impl Default for PlayerProfile {
             level: 0,
             exp: 0,
             total_exp: 0,
-            fire: 0,
-            fire_date: String::new(),
-            fire_per_game: 1,
+            charge: 0,
+            charge_date: String::new(),
+            charge_per_game: 1,
             coins: 0,
             stars: 0,
             home_persona: String::new(),
@@ -109,7 +109,7 @@ pub struct MatchRecord {
     pub players: i32,
     pub persona: String,
     pub exp: i32,
-    pub fire_used: i32,
+    pub charge_used: i32,
     pub coins: i32,
     pub stars: i32,
     pub level_after: i32,
@@ -176,7 +176,7 @@ impl PlayerProfile {
             player_name: name.into(),
             player_id: player_id.into(),
             created_at: now.into(),
-            fire_date: today.into(),
+            charge_date: today.into(),
             ..Self::default()
         };
         p.mark_all_seen(data);
@@ -188,7 +188,7 @@ impl PlayerProfile {
     /// or unknown home persona falls back to the data's default.
     pub fn normalize(&mut self, data: &GameData) {
         self.level = self.level.clamp(0, MAX_LEVEL);
-        self.fire_per_game = self.fire_per_game.clamp(0, FIRE_MAX_PER_GAME);
+        self.charge_per_game = self.charge_per_game.clamp(0, CHARGE_MAX_PER_GAME);
         if data.persona(&self.home_persona).is_none() {
             self.home_persona = data.match_rules.default_home_persona.clone();
         }
@@ -256,16 +256,16 @@ impl PlayerProfile {
 
     /// Refill fire once per day. Returns whether it refilled.
     pub fn refresh_daily(&mut self, today: &str) -> bool {
-        if self.fire_date == today {
+        if self.charge_date == today {
             return false;
         }
-        self.fire = FIRE_DAILY_MAX;
-        self.fire_date = today.into();
+        self.charge = CHARGE_DAILY_MAX;
+        self.charge_date = today.into();
         true
     }
 
-    pub fn set_fire_per_game(&mut self, count: i32) {
-        self.fire_per_game = count.clamp(0, FIRE_MAX_PER_GAME);
+    pub fn set_charge_per_game(&mut self, count: i32) {
+        self.charge_per_game = count.clamp(0, CHARGE_MAX_PER_GAME);
     }
 
     pub fn set_home_persona(&mut self, name: &str) -> bool {
@@ -321,10 +321,10 @@ impl PlayerProfile {
         r.level_before = self.level;
         r.progress_before = self.level_progress();
         r.base_exp = progression::base_exp(ranked, rank, players);
-        r.fire_used = self.fire_per_game.min(self.fire);
-        r.multiplier = progression::exp_multiplier(r.fire_used);
+        r.charge_used = self.charge_per_game.min(self.charge);
+        r.multiplier = progression::exp_multiplier(r.charge_used);
         r.exp = r.base_exp * r.multiplier;
-        self.fire -= r.fire_used;
+        self.charge -= r.charge_used;
         self.add_exp(r.exp);
         r.level_after = self.level;
         r.progress_after = self.level_progress();
@@ -376,7 +376,7 @@ impl PlayerProfile {
                 players,
                 persona: persona.into(),
                 exp: r.exp,
-                fire_used: r.fire_used,
+                charge_used: r.charge_used,
                 coins: r.coins,
                 stars: r.stars,
                 level_after: self.level,

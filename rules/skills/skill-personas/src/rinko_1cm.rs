@@ -48,7 +48,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::FIRE) < 1 {
+    if state::get(player_id, state_key::CHARGE) < 1 {
         return Some(Msg::new(key!("rinko_1cm_no_fire")));
     }
     // TODO(规则书)[judgement]: 「此技能可以正常使用或在[晕眩]状态下使用」 --
@@ -60,7 +60,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「使这回合移动掷骰的结果固定为X*6。本次移动不受异常移动效果影响」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    let have = state::get(player_id, state_key::FIRE);
+    let have = state::get(player_id, state_key::CHARGE);
     if have < 1 {
         return Ok(());
     }

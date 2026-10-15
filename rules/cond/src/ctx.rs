@@ -28,14 +28,14 @@ pub struct ChainLink {
 }
 
 /// Snapshot of one seat's stats, indexed by seat id. Used by the `money(p)` /
-/// `fire(p)` / `persona_is(p, …)` family so a condition can talk about a
+/// `charge(p)` / `persona_is(p, …)` family so a condition can talk about a
 /// seat that is not the candidate's owner.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PlayerSnap {
     pub money: i64,
-    pub fire: i64,
-    pub crystals: i64,
+    pub charge: i64,
+    pub group_pool: i64,
     pub hand: i64,
     pub pos: i64,
     /// 1 = out of the game.
@@ -194,8 +194,8 @@ pub struct CandidateCtx {
     /// `owner.money` binds without a lookup. The host fills both from one
     /// source; they must agree.
     pub owner_money: i64,
-    pub owner_fire: i64,
-    pub owner_crystals: i64,
+    pub owner_charge: i64,
+    pub owner_group_pool: i64,
     pub owner_hand: i64,
     pub owner_pos: i64,
     pub owner_out: i64,

@@ -10,7 +10,7 @@
 //!
 //! The parenthetical 「初始0，上限1」 is this skill's to state, and it is the
 //! whole reason the keyed state carries bounds: it writes `fire`'s `max` and
-//! every card reads it back with `state::max(player_id, state_key::FIRE)`. The
+//! every card reads it back with `state::max(player_id, state_key::CHARGE)`. The
 //! engine holds the number and enforces nothing -- see `game_core::state::StateVar`.
 //!
 //! The cap is restated at the top of every turn rather than bound once when the
@@ -75,7 +75,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::FIRE) < 1 {
+    if state::get(player_id, state_key::CHARGE) < 1 {
         return Some(Msg::new(key!("extraordinary_star.no_fire")));
     }
     None

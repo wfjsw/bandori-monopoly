@@ -192,7 +192,7 @@ fn g09_fixed_roll_plus_starlit_reroll() {
         t.dump_prompt()
     );
     drain(&mut t);
-    assert_eq!(t.fire(0), 0, "3 fire spent");
+    assert_eq!(t.charge(0), 0, "3 fire spent");
     assert_eq!(t.pos(0), 18, "the move is the fixed 18");
 }
 

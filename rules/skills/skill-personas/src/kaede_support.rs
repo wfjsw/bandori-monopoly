@@ -191,9 +191,9 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST, n);
     if n >= 2 {
         state::set(player_id, REST, 0);
-        rules_status::fire::gain(player_id, 1, &Msg::new(key!("kaede_support_gain_fire")))?;
+        rules_status::fire::gain(player_id, 1, &Msg::new(key!("kaede_support_gain_charge")))?;
     }
-    if state::get(player_id, state_key::FIRE) < state::max(player_id, state_key::FIRE) {
+    if state::get(player_id, state_key::CHARGE) < state::max(player_id, state_key::CHARGE) {
         return Ok(());
     }
     if ctx::ask_yes(
@@ -219,7 +219,7 @@ fn can_enter_two(player_id: i32) -> Option<Msg> {
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("kaede_support_not_two")));
     }
-    if state::get(player_id, state_key::FIRE) < 1 {
+    if state::get(player_id, state_key::CHARGE) < 1 {
         return Some(Msg::new(key!("kaede_support_no_fire")));
     }
     None
@@ -233,7 +233,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("kaede_support_title")),
         &Msg::new(key!("kaede_support_how_many")),
         1,
-        state::get(player_id, state_key::FIRE),
+        state::get(player_id, state_key::CHARGE),
     )?;
     if x <= 0 {
         return Ok(());

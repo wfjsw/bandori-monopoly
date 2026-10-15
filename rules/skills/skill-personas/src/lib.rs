@@ -8,8 +8,8 @@
 //! The rule text lives in the roster character row (`skill` is the name, `text` /
 //! `simple` the wording); what is here is the behavior. A skill that mandates a
 //! fire-pot cap is the whole reason the keyed state carries bounds -- it writes
-//! `state::set_bounds(player_id, state_key::FIRE, 0, 1)` and every card reads it
-//! back with `state::max(player_id, state_key::FIRE)`. The engine holds the
+//! `state::set_bounds(player_id, state_key::CHARGE, 0, 1)` and every card reads it
+//! back with `state::max(player_id, state_key::CHARGE)`. The engine holds the
 //! number and enforces nothing; see `game_core::state::StateVar`.
 //!
 //! # Hooks: use the two that exist
@@ -59,16 +59,16 @@ use card_sdk::CardDef;
 /// 「初始N」 is created), e.g.
 /// `On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap)`.
 ///
-/// The cap is written **only when unset** (0), so a later `add_fire_max`
+/// The cap is written **only when unset** (0), so a later `add_charge_max`
 /// (「火罐上限加1」, e.g. `PPP:[衍生]拍卖撤下来了`) survives the per-turn
 /// re-hook. A character swap (`Sumimi:两个都想要`) writes the new bounds
 /// explicitly and is unaffected.
 pub fn fire_pot(player_id: i32, initial: i32, cap: i32) {
-    if state::max(player_id, state_key::FIRE) == 0 {
-        state::set_bounds(player_id, state_key::FIRE, 0, cap);
+    if state::max(player_id, state_key::CHARGE) == 0 {
+        state::set_bounds(player_id, state_key::CHARGE, 0, cap);
     }
     if ctx::trigger::kind() == TriggerKind::DeckAtGameStart {
-        state::set(player_id, state_key::FIRE, initial);
+        state::set(player_id, state_key::CHARGE, initial);
     }
 }
 

@@ -1488,11 +1488,11 @@ fn chart_rush_empties_fire_pots_and_rolls() {
         t.set_draw(0, &["通用:GREAT"]);
         // Draw 冲榜 directly (it is derived -- not in the starting deck).
         draw_event_quiet(&mut t, 0, "冲榜", &[]);
-        if t.fire(0) != 0 || t.fire(1) != 0 {
+        if t.charge(0) != 0 || t.charge(1) != 0 {
             return Err(format!(
                 "E-chart-rush-01: fire pots left ({},{})",
-                t.fire(0),
-                t.fire(1)
+                t.charge(0),
+                t.charge(1)
             ));
         }
         // One-shot derived: filed away.

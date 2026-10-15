@@ -192,7 +192,7 @@ macro_rules! kassert {
 ///     gain | gain_typed | gain_fixed => arm_gain,
 ///     count_held | count_held_name => arm_count_held,
 ///     add_held => arm_add_held,
-///     add_group_crystals => arm_add_band_crystals,
+///     add_group_pool => arm_add_band_crystals,
 ///     player_count => arm_player_count,
 ///     hand_count => arm_hand_count,
 /// });

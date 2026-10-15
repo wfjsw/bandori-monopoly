@@ -88,8 +88,8 @@ pub trait CondView {
     /// Owner overlay (`owner.money` etc.). Same numbers as `money(owner())`
     /// in a well-filled snapshot; the overlay is the per-probe answer.
     fn owner_money(&self) -> i64;
-    fn owner_fire(&self) -> i64;
-    fn owner_crystals(&self) -> i64;
+    fn owner_charge(&self) -> i64;
+    fn owner_group_pool(&self, name: &str) -> i64;
     fn owner_hand(&self) -> i64;
     fn owner_pos(&self) -> i64;
     fn owner_out(&self) -> i64;
@@ -120,8 +120,8 @@ pub trait CondView {
 
     // -- player table (any seat) -------------------------------------------
     fn money(&self, seat: i64) -> i64;
-    fn fire(&self, seat: i64) -> i64;
-    fn crystals(&self, seat: i64) -> i64;
+    fn charge(&self, seat: i64) -> i64;
+    fn group_pool(&self, seat: i64, name: &str) -> i64;
     fn hand(&self, seat: i64) -> i64;
     fn pos(&self, seat: i64) -> i64;
     fn out(&self, seat: i64) -> i64;

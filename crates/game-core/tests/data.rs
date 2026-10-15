@@ -27,7 +27,7 @@ fn game_data_counts_match_the_original() {
     assert_eq!(d.personas.len(), 54);
     assert_eq!(d.groups.len(), 12);
     assert_eq!(d.events.len(), 28);
-    assert_eq!(d.match_rules.ring_multiplier, 10);
+    assert_eq!(d.match_rules.rule_params.get("rentUnitMult"), Some(&10));
     assert!(!d.rules_text.is_empty());
 
     assert_eq!(d.tiles.iter().filter(|t| t.is_buyable()).count(), 45);
@@ -251,15 +251,15 @@ fn profile_create_and_apply_match() {
     assert!(!p.has_any_new(&d), "a new profile has seen everything");
     assert!(p.refresh_daily("2026-10-05"));
     assert!(!p.refresh_daily("2026-10-05"));
-    assert_eq!(p.fire, 5);
+    assert_eq!(p.charge, 5);
 
-    p.set_fire_per_game(3);
+    p.set_charge_per_game(3);
     let r = p.apply_match(MatchMode::Ranked, 1, 6, "户山香澄", "2026-10-05 20:00", "r1a2b3");
     assert_eq!(
-        (r.base_exp, r.fire_used, r.multiplier, r.exp),
+        (r.base_exp, r.charge_used, r.multiplier, r.exp),
         (200, 3, 4, 800)
     );
-    assert_eq!(p.fire, 2);
+    assert_eq!(p.charge, 2);
     // 800 EXP from level 0: 100 + 115 + 130 + 145 + 160 = 650 -> level 5, 150 left.
     assert_eq!((p.level, p.exp, p.total_exp), (5, 150, 800));
     assert_eq!((r.coins, p.coins, p.ranked_wins, p.stars), (500, 500, 1, 1));
@@ -285,12 +285,12 @@ fn profile_create_and_apply_match() {
 
 #[test]
 fn profile_normalize_migrates_v1_saves() {
-    let v1 = r#"{"saveVersion":1,"level":900,"firePerGame":9,"homeCharacter":"",
+    let v1 = r#"{"saveVersion":1,"level":900,"chargePerGame":9,"homeCharacter":"",
                  "history":[{"ranked":true,"rank":1},{"ranked":false,"rank":2}]}"#;
     let d = data();
     let p = PlayerProfile::from_json(&d, v1).unwrap();
     assert_eq!(p.save_version, 4);
-    assert_eq!((p.level, p.fire_per_game), (500, 3));
+    assert_eq!((p.level, p.charge_per_game), (500, 3));
     assert_eq!(
         p.home_persona, d.match_rules.default_home_persona,
         "empty home -> data default"

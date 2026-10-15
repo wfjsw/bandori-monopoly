@@ -117,7 +117,7 @@ pub struct SkillParams {
     /// Press only with at least this many fires in hand / on the field
     /// (`0` = no threshold). Meaning is the tuner's; the heuristic only
     /// enforces the numeric floor.
-    pub min_fires: i32,
+    pub min_charge: i32,
     /// Press only with at least this many crystals (`0` = none).
     pub min_crystals: i32,
     /// Markers to keep unspent (`0` = none).
@@ -130,7 +130,7 @@ impl Default for SkillParams {
     fn default() -> Self {
         Self {
             play_weight_milli: 0,
-            min_fires: 0,
+            min_charge: 0,
             min_crystals: 0,
             keep_markers: 0,
             min_round: 0,

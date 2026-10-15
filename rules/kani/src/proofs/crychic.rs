@@ -82,13 +82,13 @@ crate::host_subset!(debut_play_dispatch {
 /// `CRYCHIC:初演大成功` at_end leaf — stun + one band crystal.
 crate::host_subset!(debut_at_end_dispatch {
     give_stun => arm_give_stun,
-    add_group_crystals => arm_add_band_crystals,
+    add_group_pool => arm_add_band_crystals,
 });
 
 /// `CRYCHIC:如果能一直持续下去...` play — cash out band crystals, place as [持续].
 crate::host_subset!(forever_play_dispatch {
-    group_crystals => arm_band_crystals,
-    add_group_crystals => arm_add_band_crystals,
+    group_pool => arm_band_crystals,
+    add_group_pool => arm_add_band_crystals,
     gain | gain_typed | gain_fixed => arm_gain,
     set_dest => arm_set_dest,
     place_card_at => arm_place_card_at,
@@ -116,7 +116,7 @@ fn effects_of(buf: &mut [Effect; world::MAX_LOG]) -> usize {
 }
 
 fn band_crystals_of(p: i32) -> i32 {
-    world::with_world(|w| w.group_crystals[p as usize])
+    world::with_world(|w| w.group_pool[p as usize])
 }
 
 fn key_get(p: i32, key: intern::NameId) -> i32 {
@@ -171,7 +171,7 @@ fn soyoreturn_02_iff_at(user: i32) {
     // frame
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
     crate::kassert!(post.stay == pre.stay, "frame: stay");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand bitset");
     crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
     for q in 0..MAX_PLAYERS {
@@ -411,7 +411,7 @@ fn debut_02_iff_at(user: i32) {
     let x: i32 = kani::any();
     kani::assume(x >= 0 && x <= 9);
     sparse2(debut_at_end_dispatch, user, |w| {
-        w.group_crystals[user as usize] = x;
+        w.group_pool[user as usize] = x;
     });
 
     let pre_crystals = band_crystals_of(user);
@@ -461,7 +461,7 @@ pub fn debut_02_user1_turn_end_iff() {
 #[kani::unwind(32)]
 pub fn debut_02_mutant_is_detected() {
     sparse2(debut_at_end_dispatch, 0, |w| {
-        w.group_crystals[0] = 0;
+        w.group_pool[0] = 0;
     });
     let user = 0i32;
     invoke::unwrap_done(card_crychic::debut_success::at_end_kani(user));
@@ -486,7 +486,7 @@ fn ifonly_01_iff_at(user: i32) {
     let x: i32 = kani::any();
     kani::assume(x >= 0 && x <= 9);
     sparse2(forever_play_dispatch, user, |w| {
-        w.group_crystals[user as usize] = x;
+        w.group_pool[user as usize] = x;
     });
 
     let pre = world::snapshot();
@@ -541,7 +541,7 @@ pub fn ifonly_01_user1_cashout_iff() {
 #[kani::unwind(32)]
 pub fn ifonly_01_mutant_is_detected() {
     sparse2(forever_play_dispatch, 0, |w| {
-        w.group_crystals[0] = 2;
+        w.group_pool[0] = 2;
     });
     let user = 0i32;
     invoke::unwrap_done(card_crychic::forever::forever_kani(user));

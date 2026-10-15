@@ -352,7 +352,7 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     if p.starts_with("state:P") {
         let key = p.rsplit(':').next().unwrap_or("");
         return Some(match key {
-            "fire" => "fire",
+            "fire" => "charge",
             "stay" => "status.stay",
             "stun" | "stunStart" => "status.stun",
             "exile" | "exileTo" => "status.exile",

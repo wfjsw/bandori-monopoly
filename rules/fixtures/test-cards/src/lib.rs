@@ -556,7 +556,7 @@ fn marker_spend(player_id: i32) -> card_sdk::Asked {
 /// Tags every move plan `fireRoll` at `rollPlan`, so a plain `roll` looks like
 /// a 「使用火罐进行移动掷骰」. HHW:（美咲）'s `can_counteract` keys on
 /// `move_tag("fireRoll")` and never reads the pot -- the 0-fire regression.
-const FIRE_ROLL: CardDef = CardDef::new(
+const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
         On::Play("", None, fire_roll_play),
@@ -1381,7 +1381,7 @@ fn flash_inner(player_id: i32) -> card_sdk::Asked {
 card_sdk::ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
-    PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
+    PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, CHARGE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
     ROLL_THEN_PAY, DECK_ONCE, CLOCK_HOOK, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,

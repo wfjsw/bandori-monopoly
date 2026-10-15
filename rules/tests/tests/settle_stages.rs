@@ -56,17 +56,17 @@ fn m1_no_settle_move_still_grants_the_move_after_fire() {
     t.play(0, "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励").unwrap();
     drain(&mut t);
     // The pot is granted at 「移动后」, not at play time -- snapshot here.
-    let before = t.fire(0);
+    let before = t.charge(0);
     // The main move is 「移动60格子并不触发结算」 (向着未来的路标): a
     // completed move that does not settle.
     t.give(0, &["PPP:向着未来的路标"]);
     t.play(0, "PPP:向着未来的路标").unwrap();
     drain(&mut t);
     assert!(
-        t.fire(0) >= before + 1,
+        t.charge(0) >= before + 1,
         "「并在移动后获得一个火罐」 fires on a 「不触发结算」 move: fire={} -> {} keys={:?}",
         before,
-        t.fire(0),
+        t.charge(0),
         t.recent_keys(20)
     );
     assert!(
@@ -170,7 +170,7 @@ fn m4_a_pass_by_not_an_overlap_triggers_kaoru() {
     // put P0 on the path and end P1 past them.
     t.set_pos(0, 10);
     t.set_pos(1, 7);
-    let before = t.fire(0);
+    let before = t.charge(0);
     t.dice(&[5]); // 7 -> 8,9,10,11,12: passes 10 mid-route, ends on 12
     t.roll(1).unwrap();
     drain(&mut t);
@@ -181,10 +181,10 @@ fn m4_a_pass_by_not_an_overlap_triggers_kaoru() {
         t.pos(1)
     );
     assert!(
-        t.fire(0) > before,
+        t.charge(0) > before,
         "「被[经过]」 grants the pot on a mid-route pass: fire={} -> {} keys={:?}",
         before,
-        t.fire(0),
+        t.charge(0),
         t.recent_keys(20)
     );
 }
@@ -226,7 +226,7 @@ fn m4_kokoro_force_stop_stops_a_passer() {
         "「令该玩家强制停下」 stops them on P0's tile: pos={}",
         t.pos(1)
     );
-    assert_eq!(t.fire(0), 0, "the pot was spent");
+    assert_eq!(t.charge(0), 0, "the pot was spent");
 }
 
 // =====================================================================

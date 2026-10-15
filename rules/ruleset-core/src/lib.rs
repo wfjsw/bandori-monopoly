@@ -43,7 +43,7 @@ pub mod roster_order;
 /// State-map keys that name this ruleset's pots / statuses.
 pub mod state_key {
     /// Fire pots held.
-    pub const FIRE: &str = "fire";
+    pub const CHARGE: &str = "charge";
 }
 
 /// Generic `card_sdk::ctx` plus this ruleset's sugar. Replace
@@ -53,11 +53,12 @@ pub mod ctx {
 
     pub use crate::{
         add_group_crystals, add_group_skill, add_card_crystals, add_crystals, add_crystals_at,
-        add_fire_max, add_ring_bonus, group_crystals, group_skill, group_skills, card_crystals,
-        persona_is, persona_skill, crystals, crystals_at, decay, fire, fire_max, gain_fire,
-        in_group, invoke_skill, is_agent, is_buyable, is_circle, is_color, is_live_house,
-        is_live_house_for, is_ring, is_shop, offer_build, offer_buy, offer_force_buy, pay_rent,
-        ring_multiplier, set_crystals, skill_blocked, spend_fire,
+        add_charge_max, add_rent_unit_bonus, add_ring_bonus, group_crystals, group_skill,
+        group_skills, card_crystals, persona_is, persona_skill, crystals, crystals_at, decay,
+        charge, charge_max, gain_charge, in_group, invoke_skill, is_agent, is_buyable, is_circle,
+        is_color, is_live_house, is_live_house_for, is_ring, is_shop, offer_build, offer_buy,
+        offer_force_buy, pay_rent, rent_unit_mult, ring_multiplier, set_crystals, skill_blocked,
+        spend_charge,
     };
 }
 
@@ -109,37 +110,37 @@ pub fn is_color(player_id: i32, tile: i32, group: i32) -> bool {
 
 /// Miracle crystals on **this card instance**.
 pub fn crystals() -> i32 {
-    counter(crate::counter::CRYSTALS)
+    counter("crystals")
 }
 
 /// Set this card instance's crystals; returns the new count.
 pub fn set_crystals(n: i32) -> i32 {
-    set_counter(crate::counter::CRYSTALS, n)
+    set_counter("crystals", n)
 }
 
 /// Adjust this card instance's crystals by `n`, clamped at 0 and at `max`.
 pub fn add_crystals(n: i32, max: i32) -> Result<i32, Prompt> {
-    add_counter(crate::counter::CRYSTALS, n, max)
+    add_counter("crystals", n, max)
 }
 
 /// [奇迹水晶] on a named placed card.
 pub fn card_crystals(player_id: i32, card: &str) -> i32 {
-    card_sdk::ctx::card_counter(player_id, card, crate::counter::CRYSTALS)
+    card_sdk::ctx::card_counter(player_id, card, "crystals")
 }
 
 /// Adjust [奇迹水晶] on a named placed card; `max` caps (0 = uncapped).
 pub fn add_card_crystals(player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-    add_card_counter(player_id, card, crate::counter::CRYSTALS, n, max)
+    add_card_counter(player_id, card, "crystals", n, max)
 }
 
 /// [奇迹水晶] on the instance at `uid`.
 pub fn crystals_at(uid: i32) -> i32 {
-    counter_at(uid, crate::counter::CRYSTALS)
+    counter_at(uid, "crystals")
 }
 
 /// Adjust [奇迹水晶] on the instance at `uid`; `max` caps (0 = uncapped).
 pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
-    add_counter_at(uid, crate::counter::CRYSTALS, n, max)
+    add_counter_at(uid, "crystals", n, max)
 }
 
 /// Burn one of this card's crystals (the decay tick). Returns the count left.
@@ -149,18 +150,18 @@ pub fn decay() -> Result<i32, Prompt> {
 
 // ------------------------------------------------------------- 火罐
 
-pub fn fire(player_id: i32) -> i32 {
-    unsafe { raw::sys::fire(player_id) }
+pub fn charge(player_id: i32) -> i32 {
+    unsafe { raw::sys::charge(player_id) }
 }
 
-pub fn fire_max(player_id: i32) -> i32 {
-    unsafe { raw::sys::fire_max(player_id) }
+pub fn charge_max(player_id: i32) -> i32 {
+    unsafe { raw::sys::charge_max(player_id) }
 }
 
 /// Gain fire pots, capped by the player's own cap.
-pub fn gain_fire(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
+pub fn gain_charge(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
     let (p, l) = raw::mj(why);
-    raw::asked(unsafe { raw::sys::gain_fire(player_id, n, p, l) })
+    raw::asked(unsafe { raw::sys::gain_charge(player_id, n, p, l) })
 }
 
 /// Spend `n` [火罐]; false when the player has fewer. Logs the spend.
@@ -169,34 +170,50 @@ pub fn gain_fire(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
 /// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
 /// counteraction cancelled the link).
 ///
-/// 「以代替此次技能的火罐消耗」 -- `FirePaying` runs before the pots move.
+/// 「以代替此次技能的火罐消耗」 -- `ChargePaying` runs before the pots move.
 /// A hook that substitutes the cost cancels the link and performs its own
 /// payment; the spend is then treated as satisfied.
-pub fn spend_fire(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+pub fn spend_charge(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     if n <= 0 {
         return Ok(true);
     }
-    if !card_sdk::ctx::raise(player_id, card_sdk::abi::TriggerKind::FirePaying, n)? {
+    if !card_sdk::ctx::raise(player_id, card_sdk::abi::TriggerKind::ChargePaying, n)? {
         return Ok(true);
     }
     let (p, l) = raw::mj(why);
-    raw::asked(unsafe { raw::sys::spend_fire(player_id, n, p, l) }).map(|v| v != 0)
+    raw::asked(unsafe { raw::sys::spend_charge(player_id, n, p, l) }).map(|v| v != 0)
 }
 
 /// Raise (or lower) `player_id`'s [火罐] cap; returns the new cap.
-pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
-    unsafe { raw::sys::add_fire_max(player_id, n) }
+pub fn add_charge_max(player_id: i32, n: i32) -> i32 {
+    unsafe { raw::sys::add_charge_max(player_id, n) }
 }
 
 // ------------------------------------------------------------- band / character
 
 /// 「乐队卡 / 团卡」 [奇迹水晶] on `player_id`'s band-skill field instance.
+/// Game sugar: the group-skill pool (ruleset counter name).
 pub fn group_crystals(player_id: i32) -> i32 {
-    unsafe { raw::sys::group_crystals(player_id) }
+    group_pool(player_id, "crystals")
+}
+
+/// A named pool on the player's group-skill instance.
+pub fn group_pool(player_id: i32, name: &str) -> i32 {
+    unsafe {
+        let b = name.as_bytes();
+        raw::sys::group_pool(player_id, b.as_ptr() as i32, b.len() as i32)
+    }
 }
 
 pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    unsafe { raw::sys::add_group_crystals(player_id, n, max) }
+    add_group_pool(player_id, "crystals", n, max)
+}
+
+pub fn add_group_pool(player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+    unsafe {
+        let b = name.as_bytes();
+        raw::sys::add_group_pool(player_id, b.as_ptr() as i32, b.len() as i32, n, max)
+    }
 }
 
 /// Rule id of `player_id`'s band skill, or `None`.
@@ -289,13 +306,23 @@ pub fn skill_blocked(player_id: i32, group: &str) -> bool {
 // ------------------------------------------------------------- RiNG / rent / buy
 
 /// The RiNG rent multiplier.
-pub fn ring_multiplier() -> i32 {
-    unsafe { raw::sys::ring_multiplier() }
+pub fn rent_unit_mult() -> i32 {
+    unsafe { raw::sys::rent_unit_mult() }
 }
 
 /// Add `n` to the RiNG rent multiplier; returns the new multiplier.
+pub fn add_rent_unit_bonus(n: i32) -> i32 {
+    unsafe { raw::sys::add_rent_unit_bonus(n) }
+}
+
+/// Game sugar for [`rent_unit_mult`] (the RiNG dice-rent convention).
+pub fn ring_multiplier() -> i32 {
+    rent_unit_mult()
+}
+
+/// Game sugar for [`add_rent_unit_bonus`].
 pub fn add_ring_bonus(n: i32) -> i32 {
-    unsafe { raw::sys::add_ring_bonus(n) }
+    add_rent_unit_bonus(n)
 }
 
 /// Pay `tile`'s rent (`half` = 「租金减半」).
@@ -328,7 +355,7 @@ pub fn offer_build(player_id: i32, tile: i32) -> Result<(), Prompt> {
 /// crystals counter changed. Cards add their own residual (value vs 0, …).
 pub fn crystals_changed_of(card_id: &str) -> bool {
     card_sdk::ctx::trigger::card_is(card_id)
-        && card_sdk::ctx::trigger::name() == crate::counter::CRYSTALS
+        && card_sdk::ctx::trigger::name() == "crystals"
 }
 
 /// Always-true guard (the x4 `always` copy).

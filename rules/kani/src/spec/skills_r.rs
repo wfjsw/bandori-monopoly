@@ -27,13 +27,13 @@ pub fn sayo_passed_gain() -> i32 {
     1
 }
 
-/// Cap the sheet pins (host `fire_max`; Kani `gain_fire` does not clamp).
+/// Cap the sheet pins (host `charge_max`; Kani `gain_charge` does not clamp).
 pub fn sayo_fire_cap() -> i32 {
     10
 }
 
 /// Exactly one `GainFire` of `n`.
-pub fn sayo_gain_fire_log_ok(effects: &[Effect], player: i32, n: i32) -> bool {
+pub fn sayo_gain_charge_log_ok(effects: &[Effect], player: i32, n: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainFire { player: p, n: m } if p == player && m == n)
 }
@@ -51,7 +51,7 @@ pub fn rinko_fire_cap() -> i32 {
     3
 }
 
-pub fn rinko_gain_fire_log_ok(effects: &[Effect], player: i32) -> bool {
+pub fn rinko_gain_charge_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainFire { player: p, n } if p == player && n == rinko_circle_gain())
 }
@@ -69,7 +69,7 @@ pub fn lisa_fire_cap() -> i32 {
     2
 }
 
-pub fn lisa_gain_fire_log_ok(effects: &[Effect], player: i32) -> bool {
+pub fn lisa_gain_charge_log_ok(effects: &[Effect], player: i32) -> bool {
     effects.len() == 1
         && matches!(effects[0], Effect::GainFire { player: p, n } if p == player && n == lisa_circle_gain())
 }

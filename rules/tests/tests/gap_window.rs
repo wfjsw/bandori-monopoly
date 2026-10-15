@@ -245,7 +245,7 @@ fn g21_summer_camp_immune_to_the_rains_zone() {
     // P1's (this scenario has no [经过], so the absorb clause never runs). The
     // old `fire == 0` assertion was wrong on that point (test fix 2026-10-13).
     assert_eq!(t.state(2, "stay"), 1, "P2 is in the zone: {}", t.state(2, "stay"));
-    assert_eq!(t.fire(2), 1, "P2 gains 1 fire from its own stay");
+    assert_eq!(t.charge(2), 1, "P2 gains 1 fire from its own stay");
 }
 
 // =====================================================================

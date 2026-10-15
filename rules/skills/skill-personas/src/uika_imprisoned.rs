@@ -96,7 +96,7 @@ fn state2_or_clean(player_id: i32) -> bool {
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
         // 「（火罐上限3）」
-        state::set_bounds(player_id, state_key::FIRE, 0, 3);
+        state::set_bounds(player_id, state_key::CHARGE, 0, 3);
         // 「获得[不可阻挡]」
         state::set(player_id, state_key::UNSTOPPABLE, 1);
         return Ok(());

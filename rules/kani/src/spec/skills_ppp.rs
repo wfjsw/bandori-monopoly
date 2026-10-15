@@ -99,7 +99,7 @@ pub fn kasumi_02_fire_after(pre_fire: i32) -> i32 {
     (pre_fire - 1).max(0)
 }
 
-/// The spend itself is unlogged under the Kani host (`Op::spend_fire`);
+/// The spend itself is unlogged under the Kani host (`Op::spend_charge`);
 /// post-state is the frame for the pot.
 pub fn kasumi_02_fire_ok(pre_fire: i32, post_fire: i32) -> bool {
     post_fire == kasumi_02_fire_after(pre_fire)
@@ -554,7 +554,7 @@ pub fn frame_others_money(pre: &Snapshot, post: &Snapshot, me: i32) -> bool {
 pub fn frame_others_fire(pre: &Snapshot, post: &Snapshot, me: i32) -> bool {
     let mut p = 0;
     while p < MAX_PLAYERS {
-        if p as i32 != me && pre.fire[p] != post.fire[p] {
+        if p as i32 != me && pre.charge[p] != post.charge[p] {
             return false;
         }
         p += 1;

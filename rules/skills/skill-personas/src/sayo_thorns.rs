@@ -47,7 +47,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
         // the residual is the any-band `skill_blocked`.
         On::Counteract(
             &[ChainKind::MoveBefore],
-            "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6",
+            "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6",
             Some(can_offer),
             offer,
         ),
@@ -56,7 +56,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
 .props(&[
     (prop::COUNTERACT_FROM_FIELD, 1),
     (prop::COUNTERACT_GROUP, 1),
-    (prop::COUNTERACT_FIRE_COST, 6),
+    (prop::COUNTERACT_CHARGE_COST, 6),
 ])
 .silent(&[1]);
 
@@ -107,7 +107,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 
 /// Residual guard for （2）'s offer -- `skill_blocked` (any-band) stays here
 /// (not yet in the condition vocabulary). `move.main && move.kind == Walk &&
-/// slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6` is the pre.
+/// slot('skill.sayoThorns.used') != turn_key && charge(owner) >= 6` is the pre.
 fn can_offer(player_id: i32) -> bool {
     !ctx::skill_blocked(player_id, "")
 }

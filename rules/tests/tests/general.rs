@@ -1129,19 +1129,19 @@ fn tsugu_skill_gains_fire_on_pass() {
     let mut t = Table::new(&["都筑诗船", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
-    assert_eq!(t.state_var(0, "fire").max, 2, "上限2");
+    assert_eq!(t.state_var(0, "charge").max, 2, "上限2");
     t.set_pos(0, 55);
     t.dice(&[6]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.fire(0), 1, "events {:?}", t.recent_keys(6));
+    assert_eq!(t.charge(0), 1, "events {:?}", t.recent_keys(6));
 }
 
 // 规则书: 「（初始1，上限2）」
 #[test]
 fn tsugu_skill_starts_with_one_fire() {
     let mut t = Table::new(&["都筑诗船", "户山香澄"]);
-    assert_eq!(t.fire(0), 1, "初始1");
+    assert_eq!(t.charge(0), 1, "初始1");
 }
 
 // 规则书: 「你的主要阶段中可消耗1火罐使你与一名其他玩家接下来的两次移动掷骰先后-1d6与+1d6」
@@ -1156,7 +1156,7 @@ fn tsugu_skill_spends_fire_and_pairs() {
     // Pick the partner.
     t.answer(0, 0).unwrap();
     // 规则书: 「消耗1火罐」
-    assert_eq!(t.fire(0), 0);
+    assert_eq!(t.charge(0), 0);
     assert_eq!(t.state(0, "skill.tukushiTry.left"), 2, "two rolls armed");
 }
 

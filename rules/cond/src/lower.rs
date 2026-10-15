@@ -395,7 +395,7 @@ pub fn all_fn_ids() -> &'static [(&'static str, FnId)] {
         ("tile_attr", TileAttr),
         ("tile_in", TileIn),
         ("money", Money),
-        ("fire", Fire),
+        ("charge", Fire),
         ("crystals", Crystals),
         ("hand", Hand),
         ("pos", Pos),

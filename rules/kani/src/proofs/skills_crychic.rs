@@ -17,7 +17,7 @@
 //! Host notes:
 //! * `Op::log` is narration only (not an effect-log entry).
 //! * `Op::state_set` is host-faithful now (value in `a4`, logged as `n`).
-//! * `state_add` / `spend_fire` / `add_group_crystals` are unlogged.
+//! * `state_add` / `spend_charge` / `add_group_pool` are unlogged.
 //! * instance crystals ride `field_crystals(last_uid)` (not the player-key map).
 //!
 //! Feature gates: band-skill harnesses need `skills-groups` (the module's
@@ -89,11 +89,11 @@ mod tomori_spend {
     use crate::spec::skills_crychic as spec;
     use crate::world::{self, Effect};
 
-    /// Unmodified `use_skill` reaches: raise (FirePaying window), spend_fire,
+    /// Unmodified `use_skill` reaches: raise (ChargePaying window), spend_charge,
     /// state_add(STAY, -1), log.
     crate::host_subset!(tomori_spend_dispatch {
         raise => arm_raise,
-        spend_fire => arm_spend_fire,
+        spend_charge => arm_spend_charge,
         state_add | inc_slot => arm_state_add,
         log | effect => arm_log,
     });
@@ -102,13 +102,13 @@ mod tomori_spend {
     /// symbolic so both the spend-yes and spend-no early-out are reachable.
     fn tomoriskill_02_iff_at(user: i32) {
         debug_assert!(user == 0 || user == 1);
-        let fire: i32 = kani::any();
+        let charge: i32 = kani::any();
         kani::assume(fire >= 0 && fire <= 3);
         let stay: i32 = kani::any();
         kani::assume(stay >= 1 && stay <= 3);
         let stay_key = intern::intern("stay");
         sparse2(tomori_spend_dispatch, user, |w| {
-            w.fire[user as usize] = fire;
+            w.charge[user as usize] = fire;
             // The body's `state::add(STAY, -1)` writes the keyed store.
             w.key_set(user, stay_key, stay);
         });
@@ -130,7 +130,7 @@ mod tomori_spend {
 
         if fire >= 1 {
             crate::kassert!(
-                post.fire[user as usize] == fire - 1,
+                post.charge[user as usize] == fire - 1,
                 "C-CRYCHIC-tomoriskill-02: fire -1"
             );
             crate::kassert!(
@@ -140,7 +140,7 @@ mod tomori_spend {
         } else {
             // Early-out: neither store moves.
             crate::kassert!(
-                post.fire[user as usize] == fire,
+                post.charge[user as usize] == fire,
                 "C-CRYCHIC-tomoriskill-02: fire unchanged when spend is refused"
             );
             crate::kassert!(
@@ -172,7 +172,7 @@ mod tomori_spend {
     pub fn tomoriskill_02_mutant_is_detected() {
         let stay_key = intern::intern("stay");
         sparse2(tomori_spend_dispatch, 0, |w| {
-            w.fire[0] = 1;
+            w.charge[0] = 1;
             w.key_set(0, stay_key, 1);
         });
         let user = 0i32;

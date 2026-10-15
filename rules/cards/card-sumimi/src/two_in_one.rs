@@ -65,8 +65,8 @@ fn swap(player_id: i32) {
         ctx::unplace_at(uid);
     }
     ctx::place_card(player_id, to.1, &Msg::new(key!("two_in_one_note")));
-    ruleset_core::ctx::state::set_bounds(player_id, card_sdk::abi::state_key::FIRE, 0, to.3);
-    ruleset_core::ctx::state::set(player_id, card_sdk::abi::state_key::FIRE, to.2);
+    ruleset_core::ctx::state::set_bounds(player_id, card_sdk::abi::state_key::CHARGE, 0, to.3);
+    ruleset_core::ctx::state::set(player_id, card_sdk::abi::state_key::CHARGE, to.2);
     ctx::log(
         player_id,
         &Msg::new(key!("two_in_one_swap"))

@@ -190,10 +190,10 @@ extern "C-unwind" {
     pub fn send_to_dest(dest: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_transfer_to_dest")]
     pub fn transfer_to_dest(to: i32, dest: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_ring_multiplier")]
-    pub fn ring_multiplier() -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_ring_bonus")]
-    pub fn add_ring_bonus(n: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_rent_unit_mult")]
+    pub fn rent_unit_mult() -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_rent_unit_bonus")]
+    pub fn add_rent_unit_bonus(n: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_teleport_to")]
     pub fn teleport_to(player_id: i32, tile: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_unplace_card")]
@@ -312,10 +312,10 @@ extern "C-unwind" {
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_inc_slot")]
     pub fn inc_slot(player_id: i32, ptr: i32, len: i32, by: i32) -> i32;
     // pots & status
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_group_crystals")]
-    pub fn group_crystals(player_id: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_group_crystals")]
-    pub fn add_group_crystals(player_id: i32, n: i32, max: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_group_pool")]
+    pub fn group_pool(player_id: i32, np: i32, nl: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_group_pool")]
+    pub fn add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_group_skill")]
     pub fn group_skill(player_id: i32, buf: i32, cap: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_persona_skill")]
@@ -331,12 +331,12 @@ extern "C-unwind" {
     // v50: guest-raised trigger points (e.g. `circleAffected` from tile:circle).
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_raise")]
     pub fn raise(player_id: i32, kind: i32, value: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_fire")]
-    pub fn fire(player_id: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_fire_max")]
-    pub fn fire_max(player_id: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_gain_fire")]
-    pub fn gain_fire(player_id: i32, n: i32, ptr: i32, len: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_charge")]
+    pub fn charge(player_id: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_charge_max")]
+    pub fn charge_max(player_id: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_gain_charge")]
+    pub fn gain_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_give_stay")]
     pub fn give_stay(player_id: i32, n: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_give_stun")]
@@ -349,8 +349,8 @@ extern "C-unwind" {
     pub fn can_pay(player_id: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_cant_move")]
     pub fn cant_move(player_id: i32) -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_spend_fire")]
-    pub fn spend_fire(player_id: i32, n: i32, ptr: i32, len: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_spend_charge")]
+    pub fn spend_charge(player_id: i32, n: i32, ptr: i32, len: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_stay_of")]
     pub fn stay_of(player_id: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_stun_of")]
@@ -587,8 +587,8 @@ extern "C-unwind" {
     pub fn set_next_steps(player_id: i32, n: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_turn_main_steps")]
     pub fn turn_main_steps() -> i32;
-    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_fire_max")]
-    pub fn add_fire_max(player_id: i32, n: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_add_charge_max")]
+    pub fn add_charge_max(player_id: i32, n: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_card_build")]
     pub fn card_build(player_id: i32, tile: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_set_can_build")]

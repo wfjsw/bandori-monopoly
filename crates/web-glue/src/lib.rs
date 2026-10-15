@@ -539,9 +539,9 @@ pub fn profile_refresh_daily(profile_json: &str, today: &str) -> Result<String, 
 }
 
 #[wasm_bindgen]
-pub fn profile_set_fire_per_game(profile_json: &str, count: i32) -> Result<String, JsError> {
+pub fn profile_set_charge_per_game(profile_json: &str, count: i32) -> Result<String, JsError> {
     let mut p: PlayerProfile = parse("profile", profile_json)?;
-    p.set_fire_per_game(count);
+    p.set_charge_per_game(count);
     Ok(json(&p))
 }
 

@@ -33,7 +33,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         if !skill_mentions_fire_pot(p) {
             continue;
         }
-        // 「不能超过上限」 -- `gain_fire` already caps at the player's own max.
+        // 「不能超过上限」 -- `gain_charge` already caps at the player's own max.
         let room = (rules_status::fire::max(p) - rules_status::fire::get(p)).max(0);
         let afford = (ctx::money_of(p) / 1000).max(0);
         let cap = room.min(afford);

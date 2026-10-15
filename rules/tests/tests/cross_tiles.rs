@@ -853,12 +853,12 @@ fn t19_saaya_names_the_sky() {
     pass(&mut t, 0);
     eprintln!(
         "t19 record: fire = {}, field = {:?}, tiles = {:?} (3d20 = 5+5+5 -> tile #15 = index 14)",
-        t.fire(0),
+        t.charge(0),
         t.field_ids(0),
         t.field(0).iter().map(|f| (f.card.clone(), f.tile)).collect::<Vec<_>>()
     );
     // (2): 「[经过]此卡后在回合结束后获得1个[火罐]」.
-    assert_eq!(t.fire(0), 1, "+1 fire at turn end after passing the card");
+    assert_eq!(t.charge(0), 1, "+1 fire at turn end after passing the card");
     // (2): 「然后投掷3d20将此卡放置在投掷结果的格子上」 → 5+5+5 = 15 → tile #15.
     let field = t.field(0);
     let f = field
@@ -1244,7 +1244,7 @@ fn t28_hanae_rabbits() {
     eprintln!(
         "t28 record: marks = {:?}, fire = {} (cap 4), took_reward = {took_reward}",
         t.marks(),
-        t.fire(0)
+        t.charge(0)
     );
     // The reward path must actually run, or the exclusion below is vacuous.
     assert!(took_reward, "the CiRCLE reward must be offered and taken");

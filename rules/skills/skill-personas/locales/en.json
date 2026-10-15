@@ -79,7 +79,7 @@
   "kaede_support_drew": "Spent 4 fire pots: drew {{n}}",
   "kaede_support_enter": "Fire pots are full. Enter state 2?",
   "kaede_support_gain": "Support settled: collected the rent",
-  "kaede_support_gain_fire": "Two quiet turns: +1 fire pot",
+  "kaede_support_gain_charge": "Two quiet turns: +1 fire pot",
   "kaede_support_how_many": "Spend how many fire pots (one deed each)?",
   "kaede_support_no_fire": "You need a fire pot.",
   "kaede_support_not_two": "Only usable in state 2.",

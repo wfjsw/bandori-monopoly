@@ -648,7 +648,7 @@ impl<'a> Cx<'a> {
         self.w.recent.replace_msg(id, msg)
     }
 
-    /// Set `value` on already-posted events (a `"dice"` face, a `"fire"` spend).
+    /// Set `value` on already-posted events (a `"dice"` face, a `"charge"` spend).
     pub fn replace_event_values(&mut self, pairs: &[(i32, i32)]) {
         for &(id, value) in pairs {
             self.w.recent.set_value(id, value);

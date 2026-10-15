@@ -1175,7 +1175,7 @@ fn rio_skill_gains_fire_on_circle_pass() {
     t.dice(&[2]); // path 0,1 passes CiRCLE
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 1);
+    assert_eq!(t.charge(0), 1);
     // Cap: passing again cannot exceed 1.
     t.begin_turn(1);
     drain(&mut t);
@@ -1185,7 +1185,7 @@ fn rio_skill_gains_fire_on_circle_pass() {
     t.dice(&[2]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 1, "「上限1」");
+    assert_eq!(t.charge(0), 1, "「上限1」");
 }
 
 #[test]
@@ -1209,7 +1209,7 @@ fn rio_skill_rerolls_with_a_fire_pot() {
     t.answer(0, 1).unwrap(); // keep the new face (10)
     drain(&mut t);
     assert_eq!(t.pos(0), 10);
-    assert_eq!(t.fire(0), 0, "the fire pot is spent");
+    assert_eq!(t.charge(0), 0, "the fire pot is spent");
 }
 
 #[test]
@@ -1290,7 +1290,7 @@ fn masking_skill_gains_fire_on_named_tiles() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), SHIRAYUKI);
-    assert_eq!(t.fire(0), 1, "landed on 白雪学园");
+    assert_eq!(t.charge(0), 1, "landed on 白雪学园");
     t.begin_turn(1);
     drain(&mut t);
     t.begin_turn(0);
@@ -1300,7 +1300,7 @@ fn masking_skill_gains_fire_on_named_tiles() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), GINGA);
-    assert_eq!(t.fire(0), 2, "landed on 银河拉面馆");
+    assert_eq!(t.charge(0), 2, "landed on 银河拉面馆");
 }
 
 #[test]
@@ -1316,7 +1316,7 @@ fn masking_skill_gains_fire_when_merely_passing() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 19);
-    assert_eq!(t.fire(0), 1, "「每次[经过]“白雪学园”」");
+    assert_eq!(t.charge(0), 1, "「每次[经过]“白雪学园”」");
 }
 
 #[test]
@@ -1346,7 +1346,7 @@ fn masking_skill_adds_xd10_from_fire_pots() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 3, "1 + 1 + 1");
-    assert_eq!(t.fire(0), 0, "two pots spent");
+    assert_eq!(t.charge(0), 0, "two pots spent");
 }
 
 // ===========================================================================
@@ -1703,7 +1703,7 @@ fn layer_keep_press_replaces_the_move_roll_with_a_kept_die() {
     t.answer_one(0).unwrap();
     drain(&mut t);
     // 「消耗一个火罐」 and 「删去该骰点」
-    assert_eq!(t.fire(0), 0, "one fire pot spent");
+    assert_eq!(t.charge(0), 0, "one fire pot spent");
     assert_eq!(t.state(0, "layer_keep_count"), 0, "the die was deleted");
     // 「替代当回合的移动掷骰」 -- the next move roll is the kept face (7).
     t.dice(&[1]); // loaded face is overridden by the fixed roll

@@ -1088,15 +1088,23 @@ pub fn inc_slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, by: i32) 
             Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
-// `group_crystals` / `add_group_crystals` stay on the guest surface for now
-// (`ctx::group_crystals` still imports them); they are sugar over the
-// band-skill instance's `counter::CRYSTALS` (see `ops.rs` `group_skill_uid`).
-pub fn group_crystals<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().group_crystals(player_id))
+// `group_pool` / `add_group_pool` stay on the guest surface: a named pool on
+// the group-skill field instance (see `ops.rs` `group_skill_uid`).
+pub fn group_pool<C: HostCtx>(c: &mut C, player_id: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().group_pool(player_id, &name))
 }
 
-pub fn add_group_crystals<C: HostCtx>(c: &mut C, player_id: i32, n: i32, max: i32) -> Result<i32, HostErr> {
-    Ok(c.st_mut().w().add_group_crystals(player_id, n, max))
+pub fn add_group_pool<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut().w().add_group_pool(player_id, &name, n, max))
 }
 
 pub fn group_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
@@ -1221,25 +1229,25 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
             }
 }
 
-pub fn fire<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+pub fn charge<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().fire(player_id)
+        c.st().wr().charge(player_id)
     })
 }
 
-pub fn fire_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+pub fn charge_max<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().fire_max(player_id)
+        c.st().wr().charge_max(player_id)
     })
 }
 
-pub fn gain_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+pub fn gain_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
             // Marker window: `markerGain` opens before the fire moves.
             //
-            // The pause is a **trap**, not the sentinel: `ctx::gain_fire`
+            // The pause is a **trap**, not the sentinel: `ctx::gain_charge`
             // returns `Result<i32, Prompt>` and a great many bodies discard
-            // that result (`ctx::gain_fire(...);`). With the sentinel the body
+            // that result (`ctx::gain_charge(...);`). With the sentinel the body
             // would catch the `Err(Prompt)` and keep going, which the replay
             // model's `finish` boundary check traps ("card published a prompt
             // and kept going" -- the card goes out) while the inline answer
@@ -1251,7 +1259,7 @@ pub fn gain_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) 
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "fire".into(),
+                        name: "charge".into(),
                         delta: n,
                     },
                     crate::inline::Pause::Trap,
@@ -1260,7 +1268,7 @@ pub fn gain_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) 
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().gain_fire(player_id, n, why))
+            Ok(c.st_mut().w().gain_charge(player_id, n, why))
 }
 
 pub fn give_stay<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<(), HostErr> {
@@ -1320,7 +1328,7 @@ pub fn cant_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> 
     })
 }
 
-pub fn spend_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
+pub fn spend_charge<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32) -> Result<i32, HostErr> {
             let why = guest_msg(c, p, l)?;
             // Marker window (user ruling 2026-10-07): `markerSpend` opens
             // **before** the fire moves. A cancelled link spends nothing.
@@ -1329,7 +1337,7 @@ pub fn spend_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32)
                     c,
                     crate::HostRequest::Marker {
                         player_id,
-                        name: "fire".into(),
+                        name: "charge".into(),
                         delta: -n,
                     },
                     crate::inline::Pause::Sentinel,
@@ -1340,7 +1348,7 @@ pub fn spend_fire<C: HostCtx>(c: &mut C, player_id: i32, n: i32, p: i32, l: i32)
                     return Ok(ok);
                 }
             }
-            Ok(c.st_mut().w().spend_fire(player_id, n, why))
+            Ok(c.st_mut().w().spend_charge(player_id, n, why))
 }
 
 pub fn stay_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
@@ -1523,15 +1531,15 @@ pub fn transfer_to_dest<C: HostCtx>(c: &mut C, to: i32, dest: i32) -> Result<i32
         Ok(c.st_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
 }
 
-pub fn ring_multiplier<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+pub fn rent_unit_mult<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok({
-        c.st().wr().ring_multiplier()
+        c.st().wr().rent_unit_mult()
     })
 }
 
-pub fn add_ring_bonus<C: HostCtx>(c: &mut C, n: i32) -> Result<i32, HostErr> {
+pub fn add_rent_unit_bonus<C: HostCtx>(c: &mut C, n: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st_mut().w().add_ring_bonus(n)
+        c.st_mut().w().add_rent_unit_bonus(n)
     })
 }
 
@@ -2305,9 +2313,9 @@ pub fn turn_main_steps<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     })
 }
 
-pub fn add_fire_max<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
+pub fn add_charge_max<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
     Ok({
-        c.st_mut().w().add_fire_max(player_id, n)
+        c.st_mut().w().add_charge_max(player_id, n)
     })
 }
 

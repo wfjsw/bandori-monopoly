@@ -11,9 +11,9 @@ use crate::world::Effect;
 // 「（1）每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」 -- 和奏瑞依
 // 「（1）每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]（初始0，上限2）」 -- 佐藤益木
 //
-// The bodies call `ctx::gain_fire(player, 1, …)`. The printed cap is enforced
-// by the engine (`game-core::engine::ops::gain_fire` clamps to `fire_max`).
-// Under Kani `Op::gain_fire` does not clamp and `state_set` ignores the
+// The bodies call `ctx::gain_charge(player, 1, …)`. The printed cap is enforced
+// by the engine (`game-core::engine::ops::gain_charge` clamps to `charge_max`).
+// Under Kani `Op::gain_charge` does not clamp and `state_set` ignores the
 // MIN/MAX field columns `fire_pot` writes — see the unit table
 // (BLOCKED-HOST). Spec here is the **request**: +1 [火罐].
 // ===========================================================================

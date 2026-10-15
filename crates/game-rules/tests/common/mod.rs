@@ -623,7 +623,7 @@ impl Table {
             }
             p.state_set(key::EXILE_TO, -1);
             // Start-time resources: the value, not the cap.
-            p.state_set(key::FIRE, 0);
+            p.state_set(key::CHARGE, 0);
             p.tokens
                 .retain(|t| !t.name.starts_with("P✽P粉丝"));
         }
@@ -637,7 +637,7 @@ impl Table {
         w.st.embers = vec![0; n];
         w.st.marks.clear();
         w.scheduled.clear();
-        w.ring_bonus = 0;
+        w.rent_unit_bonus = 0;
         self
     }
 
@@ -700,9 +700,9 @@ impl Table {
     /// Fire pots: `value` held, `max` cap.
     pub fn set_fire(&mut self, who: usize, value: i32, max: i32) {
         let p = &mut self.m.world_mut().st.players[who];
-        p.state_set(key::FIRE, value);
-        let min = p.state_min(key::FIRE);
-        p.state_set_bounds(key::FIRE, min, max);
+        p.state_set(key::CHARGE, value);
+        let min = p.state_min(key::CHARGE);
+        p.state_set_bounds(key::CHARGE, min, max);
     }
 
     /// Load dice: the next dice rolled anywhere (engine or card) show these
@@ -923,8 +923,8 @@ impl Table {
         self.m.world().st.players[who].state_var(key)
     }
 
-    pub fn fire(&self, who: usize) -> i32 {
-        self.state(who, key::FIRE)
+    pub fn charge(&self, who: usize) -> i32 {
+        self.state(who, key::CHARGE)
     }
 
     pub fn token(&self, who: usize, name: &str) -> i32 {

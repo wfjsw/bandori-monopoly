@@ -289,7 +289,7 @@ fn kkr_pay_10000_iff_at(user: i32) {
         "C-HHW-kkr-01: money falls by exactly 10000"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     crate::kassert!(world::arr8b_eq(post.hand, pre.hand), "frame: hand");
 }
 
@@ -557,7 +557,7 @@ fn believe_cost_800_iff_at(user: i32) {
         "C-HHW-believe-02: money falls by exactly 800"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 /// C-HHW-believe-02 iff at seat 0 (`n_players = 2`).
@@ -669,7 +669,7 @@ fn backstage_pays_1000_per_discard_iff_at(user: i32) {
         "C-HHW-backstage-02: money rises by exactly 1000 per flip"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
 }
 
 /// C-HHW-backstage-02 iff at seat 0 (`n_players = 2`).

@@ -2,7 +2,7 @@
 //!
 //! score = money * w.money + property * w.property + houses * w.houses
 //! (property = land prices, mortgaged at half; houses = build costs).
-//! The RiNG rent multiplier is a separate mechanic ([`MatchRulesData::ring_multiplier`]).
+//! The RiNG rent multiplier is a separate mechanic ([`MatchRulesData::rent_unit_mult`]).
 
 use serde::{Deserialize, Serialize};
 

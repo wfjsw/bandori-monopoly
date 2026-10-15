@@ -194,7 +194,7 @@ pub struct Run {
     reshuffle_log: Vec<i32>,
     /// Fire spent during the run, raised as `fireSpent` once the run commits
     /// (same shape as `paid_log`).
-    fire_spent_log: Vec<(i32, i32)>,
+    charge_spent_log: Vec<(i32, i32)>,
     /// Houses added during the run, raised as `houseAdded` once it commits.
     house_log: Vec<(i32, i32, i32)>,
     /// Named-counter writes this run made, `(owner, card, name, change)` -- the
@@ -510,7 +510,7 @@ impl Run {
         }
         let mk = match key {
             card_sdk::abi::state_key::HAND_LIMIT => "log.outcome.hand_limit",
-            // FIRE count changes narrate through `gain_fire` / `fire_spent`;
+            // FIRE count changes narrate through `gain_charge` / `fire_spent`;
             // a raw `state::set` on the key is the declare-cap initial write
             // and stays silent.
             card_sdk::abi::state_key::STAY
@@ -557,7 +557,7 @@ impl Run {
     }
 
     /// Record a crystal write on the instance at `uid` so the commit point can
-    /// raise `crystalsChanged` (the same shape as `fire_spent_log` /
+    /// raise `crystalsChanged` (the same shape as `charge_spent_log` /
     /// `house_log`). `was` and `now` bracket the write; only the delta rides
     /// the trigger, so a write that lands on the same count still raises --
     /// a card placed with no crystals has to hear about its own count. A write
@@ -1063,11 +1063,11 @@ impl CardWorld for Run {
     fn transfer_to_dest(&mut self, to: i32, dest: i32) -> Option<i32> {
         self.move_now(Some(to), dest)
     }
-    fn ring_multiplier(&self) -> i32 {
-        self.world.ring_multiplier(&self.data)
+    fn rent_unit_mult(&self) -> i32 {
+        self.world.rent_unit_mult(&self.data)
     }
-    fn add_ring_bonus(&mut self, n: i32) -> i32 {
-        self.world.add_ring_bonus(n)
+    fn add_rent_unit_bonus(&mut self, n: i32) -> i32 {
+        self.world.add_rent_unit_bonus(n)
     }
     fn teleport_to(&mut self, player_id: i32, tile: i32) {
         self.world.teleport_to(player_id, tile);
@@ -1174,8 +1174,8 @@ impl CardWorld for Run {
     fn counter(&self, name: &str) -> i32 {
         self.world.counter_at(self.current_uid, name)
     }
-    fn crystals(&self) -> i32 {
-        self.world.crystals_at(self.current_uid)
+    fn self_pool(&self, name: &str) -> i32 {
+        self.world.pool_at(self.current_uid, name)
     }
     fn self_prop(&self, key: &str) -> i32 {
         self.world.prop_at(self.current_uid, key)
@@ -1229,8 +1229,8 @@ impl CardWorld for Run {
     fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
         self.world.field_instances(player_id)
     }
-    fn crystals_at(&self, uid: i32) -> i32 {
-        self.world.crystals_at(uid)
+    fn pool_at(&self, uid: i32, name: &str) -> i32 {
+        self.world.pool_at(uid, name)
     }
     fn self_uid(&self) -> i32 {
         self.current_uid
@@ -1504,19 +1504,19 @@ impl CardWorld for Run {
         self.world
             .add_group_skill(&self.data, player_id, id, extra, props)
     }
-    fn gain_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
-        let got = self.world.gain_fire(player_id, n, why.clone());
+    fn gain_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
+        let got = self.world.gain_charge(player_id, n, why.clone());
         if got != 0 {
             let s = self.world.st.players.get(player_id.max(0) as usize);
-            let cap = s.map(|p| p.fire_max()).unwrap_or(0);
-            let fire = s.map(|p| p.fire()).unwrap_or(0);
-            let msg = Msg::new("log.gain_fire")
+            let cap = s.map(|p| p.charge_max()).unwrap_or(0);
+            let fire = s.map(|p| p.charge()).unwrap_or(0);
+            let msg = Msg::new("log.gain_charge")
                 .player_id("who", player_id)
                 .i("n", got as i64)
                 .msg("why", why)
-                .i("fire", fire as i64)
+                .i("charge", fire as i64)
                 .i("max", cap as i64);
-            self.post_log_value("fire", player_id, msg, "", got);
+            self.post_log_value("charge", player_id, msg, "", got);
         }
         got
     }
@@ -1876,7 +1876,7 @@ impl CardWorld for Run {
         }
         0
     }
-    fn spend_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
+    fn spend_charge(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
         // Spend pots first; logs the spend with its reason (the caller's
         // message is the log line, like `gain`/`pay`).
         if n <= 0 {
@@ -1887,15 +1887,15 @@ impl CardWorld for Run {
         };
         // A consumer of the pots: all-or-nothing, and it logs the spend. It does
         // not consult any cap -- spending is not the capped direction.
-        if s.fire() < n {
+        if s.charge() < n {
             return 0;
         }
-        s.state_add(game_core::state::key::FIRE, -n);
-        self.post_log_value("fire", player_id, why.clone(), "", -n);
+        s.state_add(game_core::state::key::CHARGE, -n);
+        self.post_log_value("charge", player_id, why.clone(), "", -n);
         if self.live.is_none() {
-            self.world.log("fire", player_id, why).value = -n;
+            self.world.log("charge", player_id, why).value = -n;
         }
-        self.fire_spent_log.push((player_id, n));
+        self.charge_spent_log.push((player_id, n));
         1
     }
     fn turn_player(&self) -> i32 {
@@ -2042,8 +2042,8 @@ impl CardWorld for Run {
     fn turn_main_steps(&self) -> i32 {
         self.world.turn.main_steps
     }
-    fn add_fire_max(&mut self, player_id: i32, n: i32) -> i32 {
-        self.world.add_fire_max(player_id, n)
+    fn add_charge_max(&mut self, player_id: i32, n: i32) -> i32 {
+        self.world.add_charge_max(player_id, n)
     }
     fn enter_card(&mut self, id: &str) -> (String, i32, Option<i32>, i32) {
         let card = std::mem::replace(&mut self.current_card, id.to_string());
@@ -2753,7 +2753,7 @@ impl<M: CardModules> RulesBridge<M> {
                 discard_log: vec![],
                 draw_log: vec![],
                 reshuffle_log: vec![],
-                fire_spent_log: vec![],
+                charge_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 exile_log: vec![],
@@ -2954,7 +2954,7 @@ impl<M: CardModules> RulesBridge<M> {
                         discard_log: vec![],
                         draw_log: vec![],
                         reshuffle_log: vec![],
-                        fire_spent_log: vec![],
+                        charge_spent_log: vec![],
                         house_log: vec![],
                         counter_log: vec![],
                         exile_log: vec![],
@@ -3840,7 +3840,7 @@ impl<M: CardModules> RulesBridge<M> {
             Some("house")
         } else if !after.exile_log.is_empty() {
             Some("exile")
-        } else if !after.fire_spent_log.is_empty() {
+        } else if !after.charge_spent_log.is_empty() {
             Some("fire-spend")
         } else if after.logged > 0 {
             Some("log line")
@@ -3950,7 +3950,7 @@ impl<M: CardModules> RulesBridge<M> {
                     && after.reshuffle_log.is_empty()
                     && after.house_log.is_empty()
                     && after.exile_log.is_empty()
-                    && after.fire_spent_log.is_empty();
+                    && after.charge_spent_log.is_empty();
                 if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
                     cx.drop_events(&[header]);
                     after.world.recent = cx.world().recent.clone();
@@ -4047,7 +4047,7 @@ impl<M: CardModules> RulesBridge<M> {
                     t.cards = vec![id];
                 })?;
             }
-            for (player_id, n) in after.fire_spent_log {
+            for (player_id, n) in after.charge_spent_log {
                 self.raise_core(cx, "fireSpent", player_id, |t| t.value = n)?;
             }
             for (player_id, tile, nth) in after.house_log {
@@ -4110,7 +4110,7 @@ impl<M: CardModules> RulesBridge<M> {
     /// `DeckAtGameStart` reaches the draw pile and the hand (after the mulligan).
     fn counteract_orig(&self, cx: &mut Cx, t: &mut CoreTrigger) -> Flow<()> {
         // Nothing in the set declares an entry at this kind, so no hook, no
-        // gate and no [反击] can fire: skip building the bridge trigger at all.
+        // gate and no [反击] can charge: skip building the bridge trigger at all.
         // This is most raises even with cards in play, and every raise for a
         // kind nobody listens to. Nothing could have rewritten `t`, so the
         // write-back below is a no-op and is safe to skip with it.
@@ -5607,7 +5607,7 @@ impl<M: CardModules> RulesBridge<M> {
             discard_log: vec![],
             draw_log: vec![],
             reshuffle_log: vec![],
-            fire_spent_log: vec![],
+            charge_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
@@ -5831,7 +5831,7 @@ impl<M: CardModules> RulesBridge<M> {
                 discard_log: vec![],
                 draw_log: vec![],
                 reshuffle_log: vec![],
-                fire_spent_log: vec![],
+                charge_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
                 exile_log: vec![],
@@ -6003,7 +6003,7 @@ impl<M: CardModules> RulesBridge<M> {
                 if *uid >= 0 {
                     let cost = self.ruleset.cards()[*idx as usize]
                         .props
-                        .get(card_sdk::abi::prop::COUNTERACT_FIRE_COST)
+                        .get(card_sdk::abi::prop::COUNTERACT_CHARGE_COST)
                         .copied()
                         .unwrap_or(0);
                     Msg::new("ask.counteract.skill")
@@ -6558,12 +6558,21 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.world.player_money(player_id)
     }
     #[inline]
-    fn fire(&self, player_id: i32) -> i32 {
-        self.world.fire(player_id)
+    fn charge(&self, player_id: i32) -> i32 {
+        self.world.charge(player_id)
     }
     #[inline]
-    fn group_crystals(&self, player_id: i32) -> i32 {
-        self.world.group_crystals(player_id)
+    fn group_pool(&self, player_id: i32, name: &str) -> i32 {
+        self.world.group_pool(player_id, name)
+    }
+    fn group_pool_total(&self, player_id: i32) -> i32 {
+        self.world.group_pool_total(player_id)
+    }
+    fn counter_names_at(&self, uid: i32) -> Vec<String> {
+        self.world
+            .field_by_uid(uid)
+            .map(|f| f.counters.keys().cloned().collect())
+            .unwrap_or_default()
     }
     #[inline]
     fn hand_size(&self, player_id: i32) -> i32 {
@@ -6646,8 +6655,8 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.world.owned_tiles(player_id).len() as i32
     }
     #[inline]
-    fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
-        self.world.card_crystals(player_id, card)
+    fn card_pool(&self, player_id: i32, card: &str, name: &str) -> i32 {
+        self.world.card_counter(player_id, card, name)
     }
     #[inline]
     fn tile_owner(&self, tile: i32) -> i32 {
@@ -6871,14 +6880,14 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn owner_fire(&self) -> i64 {
+    fn owner_charge(&self) -> i64 {
         let o = self.owner();
-        if o >= 0 { self.world.fire(o as i32) as i64 } else { 0 }
+        if o >= 0 { self.world.charge(o as i32) as i64 } else { 0 }
     }
-    fn owner_crystals(&self) -> i64 {
+    fn owner_group_pool(&self, name: &str) -> i64 {
         let o = self.owner();
         if o >= 0 {
-            self.world.group_crystals(o as i32) as i64
+            self.world.group_pool(o as i32, name) as i64
         } else {
             0
         }
@@ -7009,11 +7018,11 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn money(&self, seat: i64) -> i64 {
         self.world.player_money(seat as i32) as i64
     }
-    fn fire(&self, seat: i64) -> i64 {
-        self.world.fire(seat as i32) as i64
+    fn charge(&self, seat: i64) -> i64 {
+        self.world.charge(seat as i32) as i64
     }
-    fn crystals(&self, seat: i64) -> i64 {
-        self.world.group_crystals(seat as i32) as i64
+    fn group_pool(&self, seat: i64, name: &str) -> i64 {
+        self.world.group_pool(seat as i32, name) as i64
     }
     fn hand(&self, seat: i64) -> i64 {
         self.world
@@ -7804,7 +7813,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             discard_log: vec![],
             draw_log: vec![],
             reshuffle_log: vec![],
-            fire_spent_log: vec![],
+            charge_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
@@ -7894,7 +7903,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             discard_log: vec![],
             draw_log: vec![],
             reshuffle_log: vec![],
-            fire_spent_log: vec![],
+            charge_spent_log: vec![],
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
@@ -8349,7 +8358,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::DeckAtGameStart
             | TriggerKind::Drew
             | TriggerKind::DrewBefore
-            | TriggerKind::FirePaying
+            | TriggerKind::ChargePaying
             | TriggerKind::FlipEffect
             | TriggerKind::Reshuffled
             | TriggerKind::Bought

@@ -67,7 +67,7 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
     // 「你立即获得1火罐」 first, so X counts it.
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
     // 「使那次支付的金额提高X*100，X为你拥有的火罐数」
-    let x = state::get(player_id, state_key::FIRE);
+    let x = state::get(player_id, state_key::CHARGE);
     let amount = ctx::trigger::value();
     ctx::trigger::set_pay_amount(amount + x * 100);
     ctx::log(
@@ -75,7 +75,7 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("mumei_bump")).i("n", (x * 100) as i64),
     );
     // （2）「任何时刻当你的火罐数到达上限时，你立即进入状态2」
-    if x >= state::max(player_id, state_key::FIRE) {
+    if x >= state::max(player_id, state_key::CHARGE) {
         enter_two(player_id);
     }
     Ok(())
@@ -84,7 +84,7 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
 /// Residual guard for [`at_turn_end`]: the pot is at its cap. `state::max` is
 /// not in the CEL schema (docs/GUARDS.md §4.2), so the compare stays here.
 fn fire_at_cap(player_id: i32) -> bool {
-    state::get(player_id, state_key::FIRE) >= state::max(player_id, state_key::FIRE)
+    state::get(player_id, state_key::CHARGE) >= state::max(player_id, state_key::CHARGE)
 }
 
 /// The turn-end tick also catches a pot that filled outside a payment.

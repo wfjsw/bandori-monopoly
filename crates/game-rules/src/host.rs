@@ -436,7 +436,7 @@ pub enum HostRequest {
     Marker {
         player_id: i32,
         /// Marker name (「火罐」/「奇迹水晶」/「P✽P粉丝」/…). `fire` is the
-        /// 火罐 pot shorthand (`key::FIRE`).
+        /// 火罐 pot shorthand (`key::CHARGE`).
         name: String,
         /// Signed delta. Negative = spend (raises `markerSpend`), positive =
         /// gain (raises `markerGain`).
@@ -3592,16 +3592,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "group_crystals",
-        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::group_crystals(&mut c, player_id).map_err(HostErr::into_err)
+        "group_pool",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::group_pool(&mut c, player_id, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_group_crystals",
-        |mut c: C<W>, player_id: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_group_crystals(&mut c, player_id, n, max).map_err(HostErr::into_err)
+        "add_group_pool",
+        |mut c: C<W>, player_id: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_group_pool(&mut c, player_id, np, nl, n, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3655,23 +3655,23 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "fire",
+        "charge",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::fire(&mut c, player_id).map_err(HostErr::into_err)
+            hostfns::charge(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "fire_max",
+        "charge_max",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            hostfns::fire_max(&mut c, player_id).map_err(HostErr::into_err)
+            hostfns::charge_max(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "gain_fire",
+        "gain_charge",
         |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            hostfns::gain_fire(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
+            hostfns::gain_charge(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3718,9 +3718,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "spend_fire",
+        "spend_charge",
         |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            hostfns::spend_fire(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
+            hostfns::spend_charge(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3914,16 +3914,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "ring_multiplier",
+        "rent_unit_mult",
         |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::ring_multiplier(&mut c).map_err(HostErr::into_err)
+            hostfns::rent_unit_mult(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_ring_bonus",
+        "add_rent_unit_bonus",
         |mut c: C<W>, n: i32| -> Result<i32, Error> {
-            hostfns::add_ring_bonus(&mut c, n).map_err(HostErr::into_err)
+            hostfns::add_rent_unit_bonus(&mut c, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4530,9 +4530,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "add_fire_max",
+        "add_charge_max",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-            hostfns::add_fire_max(&mut c, player_id, n).map_err(HostErr::into_err)
+            hostfns::add_charge_max(&mut c, player_id, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4944,7 +4944,7 @@ impl CardWorld for NullWorld {
     }
     // named counters & bound units (user ruling 2026-10-10): the null world
     // holds none, so every read is 0 and every write is a no-op. The sugar
-    // (`crystals` / `tok` / `group_crystals`) defaults over these.
+    // (`crystals` / `tok` / `group_pool`) defaults over these.
     fn counter(&self, _: &str) -> i32 {
         0
     }
@@ -5008,19 +5008,19 @@ impl CardWorld for NullWorld {
     fn inc_slot(&mut self, _: i32, _: &str, _: i32) -> i32 {
         0
     }
-    fn group_crystals(&self, _: i32) -> i32 {
+    fn group_pool(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn add_group_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_group_pool(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn fire(&self, _: i32) -> i32 {
+    fn charge(&self, _: i32) -> i32 {
         0
     }
-    fn fire_max(&self, _: i32) -> i32 {
+    fn charge_max(&self, _: i32) -> i32 {
         0
     }
-    fn gain_fire(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
+    fn gain_charge(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
         0
     }
     fn give_stay(&mut self, _: i32, _: i32) {}
@@ -5035,10 +5035,10 @@ impl CardWorld for NullWorld {
     fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
         None
     }
-    fn ring_multiplier(&self) -> i32 {
+    fn rent_unit_mult(&self) -> i32 {
         10
     }
-    fn add_ring_bonus(&mut self, _: i32) -> i32 {
+    fn add_rent_unit_bonus(&mut self, _: i32) -> i32 {
         0
     }
     fn teleport_to(&mut self, _: i32, _: i32) {}
@@ -5120,7 +5120,7 @@ impl CardWorld for NullWorld {
     fn cant_move(&self, _: i32) -> i32 {
         1
     }
-    fn spend_fire(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
+    fn spend_charge(&mut self, _: i32, _: i32, _: crate::Msg) -> i32 {
         0
     }
     fn stay_of(&self, _: i32) -> i32 {

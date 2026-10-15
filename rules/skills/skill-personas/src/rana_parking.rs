@@ -89,7 +89,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::FIRE) < 3 {
+    if state::get(player_id, state_key::CHARGE) < 3 {
         return Some(Msg::new(key!("rana_parking_no_fire")));
     }
     None

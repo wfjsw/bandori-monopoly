@@ -296,13 +296,13 @@ impl CardWorld for TestWorld {
     fn add_group_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
         0
     }
-    fn fire(&self, _: i32) -> i32 {
+    fn charge(&self, _: i32) -> i32 {
         0
     }
-    fn fire_max(&self, _: i32) -> i32 {
+    fn charge_max(&self, _: i32) -> i32 {
         0
     }
-    fn gain_fire(&mut self, _: i32, _: i32, _: Msg) -> i32 {
+    fn gain_charge(&mut self, _: i32, _: i32, _: Msg) -> i32 {
         0
     }
     fn give_stay(&mut self, _: i32, _: i32) {}
@@ -447,7 +447,7 @@ impl CardWorld for TestWorld {
     fn cant_move(&self, _: i32) -> i32 {
         0
     }
-    fn spend_fire(&mut self, _: i32, _: i32, _: Msg) -> i32 {
+    fn spend_charge(&mut self, _: i32, _: i32, _: Msg) -> i32 {
         0
     }
     fn stay_of(&self, _: i32) -> i32 {

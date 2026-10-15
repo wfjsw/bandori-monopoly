@@ -41,7 +41,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
         On::Hook(
             &[HookKind::PassTile],
-            "actor != owner && tile.id == owner.pos && fire(owner) >= 1 && move.remaining > 0",
+            "actor != owner && tile.id == owner.pos && charge(owner) >= 1 && move.remaining > 0",
             None,
             on_passed,
         ),
@@ -55,7 +55,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
             on_move_end,
         ),
         // （3）「获得一个火罐（上限1）」 -- the cap has to hold from match start,
-        // or `gain_fire` (cap 0 = no pots) drops the grant on the floor.
+        // or `gain_charge` (cap 0 = no pots) drops the grant on the floor.
         On::Hook(
             &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
             "",
@@ -73,7 +73,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「当其他玩家移动[经过]您时」 -- another player's step onto **my** tile.
-/// `actor != owner && tile.id == owner.pos && fire(owner) >= 1 &&
+/// `actor != owner && tile.id == owner.pos && charge(owner) >= 1 &&
 /// move.remaining > 0` is the pre.
 
 /// （1）「初始获得"RiNG 4"格子，从"RiNG 4"格子开始游戏，首次经过CiRCLE不获得
@@ -125,7 +125,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     }
     // （3） 「任何时刻当你不位于RiNG时，失去所有的火罐」.
     if !is_ring(t) {
-        let have = state::get(player_id, state_key::FIRE);
+        let have = state::get(player_id, state_key::CHARGE);
         if have > 0 {
             rules_status::fire::spend(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
         }
@@ -143,7 +143,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// used to sit on `passPlayer`, where `move_remaining()` is always 0 and the
 /// force-stop could never fire (§4 M4's latent bug).
 fn on_passed(player_id: i32) -> card_sdk::Asked {
-    // `fire(owner) >= 1 && move.remaining > 0` is the pre.
+    // `charge(owner) >= 1 && move.remaining > 0` is the pre.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("kokoro_practice_force_title")),

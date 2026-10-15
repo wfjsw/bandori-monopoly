@@ -58,8 +58,8 @@ crate::host_subset!(ppp_dispatch {
     set_self_tile => arm_set_self_tile,
     set_self_immune => arm_set_self_immune,
     unplace_card | unplace_at | unplace_card_named => arm_unplace,
-    add_group_crystals => arm_add_band_crystals,
-    group_crystals => arm_band_crystals,
+    add_group_pool => arm_add_band_crystals,
+    group_pool => arm_band_crystals,
     counter_self => arm_counter_self,
     add_counter_self => arm_add_counter_self,
     set_counter_self => arm_set_counter_self,
@@ -415,8 +415,8 @@ pub fn signpost_02_mutant_lose_500() {
 // ===========================================================================
 // C-PPP-bang-dream-01
 // 「为[使用者]的团卡添加一个[奇迹水晶]」
-// Isolation: `group_crystals[p]` is the 团卡 (band-skill instance) crystal
-// count under the Kani host. Host `add_group_crystals` logs no typed Effect
+// Isolation: `group_pool[p]` is the 团卡 (band-skill instance) crystal
+// count under the Kani host. Host `add_group_pool` logs no typed Effect
 // (post-state only); the optional teleport of (02) may appear in the log and
 // is frame for this leg.
 // ===========================================================================
@@ -428,9 +428,9 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
     ppp_world(user);
     let w = world::with_world(|ww| ww.clone());
     let player = user;
-    let pre_crystals = w.group_crystals[player as usize];
+    let pre_crystals = w.group_pool[player as usize];
     // The book's condition is 「user has a 团卡」. The model gives every
-    // player a group_crystals counter (the bound band-skill instance), so the
+    // player a group_pool counter (the bound band-skill instance), so the
     // condition is the model's standing fact — not assumed away, just true.
     kani::cover!(pre_crystals == 0, "band crystals start at 0");
     kani::cover!(pre_crystals > 0, "band crystals already banked");
@@ -442,7 +442,7 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
 
     invoke::unwrap_done(card_ppp::bang_dream::bang_dream_kani(user));
 
-    let post_crystals = world::with_world(|ww| ww.group_crystals[player as usize]);
+    let post_crystals = world::with_world(|ww| ww.group_pool[player as usize]);
     crate::kassert!(
         post_crystals == spec::ppp::bang_dream_01_crystals_after(pre_crystals),
         "bang-dream-01: band crystals rise by exactly 1"
@@ -451,7 +451,7 @@ fn bang_dream_01_crystal_iff_at(user: i32) {
     // The (02) teleport leg may move `pos`; that is not this clause's effect.
     let post = world::snapshot();
     crate::kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-01: money is frame");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-01: fire is frame");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "bang-dream-01: fire is frame");
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
@@ -478,10 +478,10 @@ pub fn bang_dream_01_mutant_plus_2() {
     ppp_world(user);
     let w = world::with_world(|ww| ww.clone());
     let player = user;
-    let pre_crystals = w.group_crystals[player as usize];
+    let pre_crystals = w.group_pool[player as usize];
     world::reset_world(w);
     invoke::unwrap_done(card_ppp::bang_dream::bang_dream_kani(user));
-    let post_crystals = world::with_world(|ww| ww.group_crystals[player as usize]);
+    let post_crystals = world::with_world(|ww| ww.group_pool[player as usize]);
     crate::kassert!(
         post_crystals == pre_crystals + 2,
         "mutant: card must not match the +2 spec"
@@ -560,7 +560,7 @@ fn bang_dream_02_teleport_owned_iff_at(user: i32) {
         }
     }
     crate::kassert!(world::arr4_eq(post.money, pre.money), "bang-dream-02: money is frame");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "bang-dream-02: fire is frame");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "bang-dream-02: fire is frame");
 }
 /// C-… iff at seat 0 (`n_players = 2`).
 #[kani::proof]
@@ -895,7 +895,7 @@ pub fn auction_off_01_blocked_noop() {
     w.hand_n = 1;
     w.hand_pile[0] = crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0;
     let pre_field_n = w.field_n;
-    let pre_fire_max = w.fire_max[player as usize];
+    let pre_charge_max = w.charge_max[player as usize];
 
     let pre = {
         world::reset_world(w);
@@ -913,10 +913,10 @@ pub fn auction_off_01_blocked_noop() {
     );
     let _ = logbuf;
     let post_field_n = world::with_world(|ww| ww.field_n);
-    let post_fire_max = world::with_world(|ww| ww.fire_max[player as usize]);
+    let post_charge_max = world::with_world(|ww| ww.charge_max[player as usize]);
     crate::kassert!(
-        post_field_n == pre_field_n && post_fire_max == pre_fire_max,
-        "auction-off-01 (blocked): field / fire_max untouched"
+        post_field_n == pre_field_n && post_charge_max == pre_charge_max,
+        "auction-off-01 (blocked): field / charge_max untouched"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "auction-off-01 (blocked): money frame");
 }

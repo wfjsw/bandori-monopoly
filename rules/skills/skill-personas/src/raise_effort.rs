@@ -27,7 +27,7 @@ pub const RAISE_EFFORT: CardDef = CardDef::new(
         // schema (docs/GUARDS.md §4.2c): residual guard.
         On::Hook(
             &[HookKind::RollAfter],
-            "actor == owner && fire(owner) >= 1",
+            "actor == owner && charge(owner) >= 1",
             Some(roll_unfixed),
             on_roll,
         ),
@@ -48,7 +48,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Residual guard for （2） -- `fixed_roll` stays here (not yet in the condition
-/// vocabulary). `fire(owner) >= 1` is the pre.
+/// vocabulary). `charge(owner) >= 1` is the pre.
 fn roll_unfixed(_player_id: i32) -> bool {
     ctx::fixed_roll().is_none()
 }
@@ -67,9 +67,9 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so `roll_ask` with
-    // `roll_source::FIRE` raises the `Roll` chain link and 寄于指尖的执念
+    // `roll_source::CHARGE` raises the `Roll` chain link and 寄于指尖的执念
     // 「[反击] 当你使用火罐进行掷骰时」 rings on it.
-    let again = ctx::do_move_roll_ask(player_id, roll_source::FIRE).max(0);
+    let again = ctx::do_move_roll_ask(player_id, roll_source::CHARGE).max(0);
     // 「择其一执行」 -- keep whichever the player names.
     let keep = ctx::ask_pick(
         player_id,

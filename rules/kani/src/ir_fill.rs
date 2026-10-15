@@ -42,8 +42,8 @@
 //! | `effect_count` | `ov.chain_n` (default 0) |
 //! | `owner` / `owner_id` | the candidate seat |
 //! | `owner_money` | `w.money[owner]` |
-//! | `owner_fire` | `w.fire[owner]` |
-//! | `owner_crystals` | `w.group_crystals[owner]` |
+//! | `owner_fire` | `w.charge[owner]` |
+//! | `owner_crystals` | `w.group_pool[owner]` |
 //! | `owner_hand` | `hand_size` view (resonance + non-slot-1 bits + `hand_n`) |
 //! | `owner_pos` | `w.pos[owner]` |
 //! | `owner_out` | `w.out[owner]` as 0/1 |
@@ -475,8 +475,8 @@ fn id_of_name_id(id: NameId) -> i64 {
 fn fill_seat(c: &mut IrCtx, w: &World) {
     for p in 0..world::MAX_PLAYERS {
         c.seat[p][SeatField::Money as usize] = w.money[p] as i64;
-        c.seat[p][SeatField::Fire as usize] = w.fire[p] as i64;
-        c.seat[p][SeatField::Crystals as usize] = w.group_crystals[p] as i64;
+        c.seat[p][SeatField::Fire as usize] = w.charge[p] as i64;
+        c.seat[p][SeatField::Crystals as usize] = w.group_pool[p] as i64;
         c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);
         c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
         c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
@@ -886,8 +886,8 @@ pub fn fill_from_world(
     c.set_scalar(VarId::Owner, owner as i64);
     c.set_scalar(VarId::OwnerId, owner as i64);
     c.set_scalar(VarId::OwnerMoney, w.money[op] as i64);
-    c.set_scalar(VarId::OwnerFire, w.fire[op] as i64);
-    c.set_scalar(VarId::OwnerCrystals, w.group_crystals[op] as i64);
+    c.set_scalar(VarId::OwnerFire, w.charge[op] as i64);
+    c.set_scalar(VarId::OwnerCrystals, w.group_pool[op] as i64);
     c.set_scalar(VarId::OwnerHand, hand_size_view(w, op));
     c.set_scalar(VarId::OwnerPos, w.pos[op] as i64);
     c.set_scalar(VarId::OwnerOut, w.out[op] as i64);
@@ -969,7 +969,7 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     c.set_scalar(VarId::TurnKey, w.turn_key as i64);
     let op = if owner >= 0 { owner as usize } else { 0 };
     c.set_scalar(VarId::OwnerMoney, w.money[op] as i64);
-    c.set_scalar(VarId::OwnerFire, w.fire[op] as i64);
+    c.set_scalar(VarId::OwnerFire, w.charge[op] as i64);
     c.set_scalar(VarId::OwnerOut, w.out[op] as i64);
     c.set_scalar(VarId::OwnerStay, w.stay[op] as i64);
     c.set_scalar(VarId::OwnerPos, w.pos[op] as i64);
@@ -1297,8 +1297,8 @@ pub fn fill_for_guard(
     set_if!(VarId::Owner, owner as i64);
     set_if!(VarId::OwnerId, owner as i64);
     set_if!(VarId::OwnerMoney, w.money[op] as i64);
-    set_if!(VarId::OwnerFire, w.fire[op] as i64);
-    set_if!(VarId::OwnerCrystals, w.group_crystals[op] as i64);
+    set_if!(VarId::OwnerFire, w.charge[op] as i64);
+    set_if!(VarId::OwnerCrystals, w.group_pool[op] as i64);
     set_if!(VarId::OwnerHand, hand_size_view(w, op));
     set_if!(VarId::OwnerPos, w.pos[op] as i64);
     set_if!(VarId::OwnerOut, w.out[op] as i64);
@@ -1343,7 +1343,7 @@ pub fn fill_for_guard(
                     c.seat[p][SeatField::Out as usize] = w.out[p] as i64;
                 }
                 if sf & (1 << (SeatField::Fire as u32)) != 0 {
-                    c.seat[p][SeatField::Fire as usize] = w.fire[p] as i64;
+                    c.seat[p][SeatField::Fire as usize] = w.charge[p] as i64;
                 }
                 if sf & (1 << (SeatField::Pos as u32)) != 0 {
                     c.seat[p][SeatField::Pos as usize] = w.pos[p] as i64;
@@ -1361,7 +1361,7 @@ pub fn fill_for_guard(
                     c.seat[p][SeatField::NoHand as usize] = key_get_name(w, p as i32, KEY_NO_HAND);
                 }
                 if sf & (1 << (SeatField::Crystals as u32)) != 0 {
-                    c.seat[p][SeatField::Crystals as usize] = w.group_crystals[p] as i64;
+                    c.seat[p][SeatField::Crystals as usize] = w.group_pool[p] as i64;
                 }
                 if sf & (1 << (SeatField::Hand as u32)) != 0 {
                     c.seat[p][SeatField::Hand as usize] = hand_size_view(w, p);

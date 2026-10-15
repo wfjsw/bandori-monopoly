@@ -35,7 +35,7 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
         // only on a free roll.
         On::Hook(
             &[HookKind::RollAfter],
-            "actor == owner && fire(owner) >= 1 && plan.fixed_roll == null",
+            "actor == owner && charge(owner) >= 1 && plan.fixed_roll == null",
             None,
             offer,
         ),

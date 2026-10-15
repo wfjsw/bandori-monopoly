@@ -79,7 +79,7 @@
   "kaede_support_drew": "消耗4火罐：抽了{{n}}张卡",
   "kaede_support_enter": "火罐已达上限。进入状态2？",
   "kaede_support_gain": "支援结算：获得收取的资金",
-  "kaede_support_gain_fire": "两回合无人发动：获得1火罐",
+  "kaede_support_gain_charge": "两回合无人发动：获得1火罐",
   "kaede_support_how_many": "消耗几个火罐（每张地契一个）？",
   "kaede_support_no_fire": "你没有火罐。",
   "kaede_support_not_two": "只能在状态2使用。",

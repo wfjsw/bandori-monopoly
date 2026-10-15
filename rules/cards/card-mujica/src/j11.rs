@@ -44,7 +44,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardJ11.Fire` / `CardJ11.Ask`'s body -- discard the card to [stun] its
 /// owner and every player within 1 tile.
-fn fire(player_id: i32) {
+fn charge(player_id: i32) {
     ctx::set_dest(ctx::Dest::Graveyard);
     rules_status::stun::add(player_id, 1);
     let here = ctx::player_pos(player_id);
@@ -90,7 +90,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             )? {
                 return Ok(());
             }
-            fire(player_id);
+            charge(player_id);
             trigger::set_pay_amount(0);
         }
         // C# `CardJ11.Targeted` (MatchHost.cs:5903-5910): another player's card
@@ -109,7 +109,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             )? {
                 return Ok(());
             }
-            fire(player_id);
+            charge(player_id);
         }
         _ => {}
     }

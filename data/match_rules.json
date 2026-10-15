@@ -3,7 +3,9 @@
   "money": 1.0,
   "property": 1.0,
   "houses": 1.0,
-  "ringMultiplier": 10,
+  "ruleParams": {
+    "rentUnitMult": 10
+  },
   "botNames": [
     "星星收集者",
     "夕阳红茶",

@@ -6,9 +6,9 @@ use crate::MatchMode;
 
 pub const MAX_LEVEL: i32 = 500;
 /// Fire refilled each day.
-pub const FIRE_DAILY_MAX: i32 = 5;
+pub const CHARGE_DAILY_MAX: i32 = 5;
 /// Fire a player may spend on one match (each multiplies EXP).
-pub const FIRE_MAX_PER_GAME: i32 = 3;
+pub const CHARGE_MAX_PER_GAME: i32 = 3;
 pub const STARS_PER_GAME: i32 = 1;
 
 const TOP_COINS: [i32; 3] = [500, 300, 100];
@@ -33,8 +33,8 @@ pub fn base_exp(ranked: bool, rank: i32, players: i32) -> i32 {
     }
 }
 
-pub fn exp_multiplier(fire_used: i32) -> i32 {
-    1 + fire_used.max(0)
+pub fn exp_multiplier(charge_used: i32) -> i32 {
+    1 + charge_used.max(0)
 }
 
 /// Ranked coin change. Top three gain 500/300/100; otherwise the last three lose
@@ -61,7 +61,7 @@ pub struct MatchReward {
     pub rank: i32,
     pub players: i32,
     pub base_exp: i32,
-    pub fire_used: i32,
+    pub charge_used: i32,
     pub multiplier: i32,
     pub exp: i32,
     pub level_before: i32,

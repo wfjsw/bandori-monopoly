@@ -475,7 +475,7 @@ fn yukina_skill_3_gains_a_fire_pot_on_a_ring() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), r2);
-    assert_eq!(t.fire(0), 1, "1 fire pot, cap 1");
+    assert_eq!(t.charge(0), 1, "1 fire pot, cap 1");
 }
 
 #[test]
@@ -491,7 +491,7 @@ fn yukina_skill_3_loses_fire_pots_off_a_ring() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), blue);
-    assert_eq!(t.fire(0), 0, "fire pots dropped off a Ring");
+    assert_eq!(t.charge(0), 0, "fire pots dropped off a Ring");
 }
 
 #[test]
@@ -505,7 +505,7 @@ fn rinko_skill_1_gains_three_fire_pots_passing_circle() {
     t.dice(&[3]); // pass CiRCLE
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 3, "gained 3, cap 3");
+    assert_eq!(t.charge(0), 3, "gained 3, cap 3");
 }
 
 #[test]
@@ -533,7 +533,7 @@ fn rinko_skill_2_fixes_the_move_roll_to_x_times_six() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 12, "2 * 6 = 12, events {:?}", t.recent_keys(10));
-    assert_eq!(t.fire(0), 0, "2 pots spent");
+    assert_eq!(t.charge(0), 0, "2 pots spent");
 }
 
 #[test]
@@ -573,7 +573,7 @@ fn sayo_skill_1_gains_fire_pots_passing_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 2);
+    assert_eq!(t.charge(0), 2);
 }
 
 #[test]
@@ -587,7 +587,7 @@ fn lisa_skill_1_gains_a_fire_pot_passing_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 1);
+    assert_eq!(t.charge(0), 1);
 }
 
 #[test]

@@ -114,11 +114,11 @@ impl CondView for SnapshotView<'_> {
     fn owner_money(&self) -> i64 {
         self.cand.owner_money
     }
-    fn owner_fire(&self) -> i64 {
-        self.cand.owner_fire
+    fn owner_charge(&self) -> i64 {
+        self.cand.owner_charge
     }
-    fn owner_crystals(&self) -> i64 {
-        self.cand.owner_crystals
+    fn owner_group_pool(&self, _name: &str) -> i64 {
+        self.cand.owner_group_pool
     }
     fn owner_hand(&self) -> i64 {
         self.cand.owner_hand
@@ -171,11 +171,11 @@ impl CondView for SnapshotView<'_> {
     fn money(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.money).unwrap_or(0)
     }
-    fn fire(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.fire).unwrap_or(0)
+    fn charge(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.charge).unwrap_or(0)
     }
-    fn crystals(&self, seat: i64) -> i64 {
-        self.win.player(seat).map(|p| p.crystals).unwrap_or(0)
+    fn group_pool(&self, seat: i64, _name: &str) -> i64 {
+        self.win.player(seat).map(|p| p.group_pool).unwrap_or(0)
     }
     fn hand(&self, seat: i64) -> i64 {
         self.win.player(seat).map(|p| p.hand).unwrap_or(0)

@@ -34,7 +34,7 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
         On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", None, on_pass),
         On::Hook(
             &[HookKind::TurnStartBefore],
-            "actor == owner && fire(owner) >= 1",
+            "actor == owner && charge(owner) >= 1",
             None,
             at_turn_start,
         ),
@@ -58,7 +58,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// （2）「你的回合开始时，你可以消耗一个火罐，使你的移动掷骰额外获得一个1d10，
 /// 且你的移动视为[传送]」.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    // `fire(owner) >= 1` is the pre (「你可以消耗一个火罐」).
+    // `charge(owner) >= 1` is the pre (「你可以消耗一个火罐」).
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("misaki_other_title")),
@@ -80,7 +80,7 @@ fn can_use_exile(player_id: i32) -> Option<Msg> {
     if ruleset_core::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if state::get(player_id, state_key::FIRE) < 1 {
+    if state::get(player_id, state_key::CHARGE) < 1 {
         return Some(Msg::new(key!("misaki_other_no_fire")));
     }
     None

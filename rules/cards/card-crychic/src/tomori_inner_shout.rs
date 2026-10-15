@@ -24,7 +24,7 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
         On::Hook(
             &[card_sdk::abi::HookKind::SettleBefore],
-            "actor != owner && move.main && card.placed && fire(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
+            "actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
             None,
             pull,
         ),
@@ -110,7 +110,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
 
 /// （3）: when another player's main-move endpoint is within 5 of this card's
 /// tile and the owner has 1 fire, pull them onto the card's tile with no settle.
-/// （3）: applicability is the entry's condition (`fire(owner) >= 1 &&`
+/// （3）: applicability is the entry's condition (`charge(owner) >= 1 &&`
 /// `dist(pos(actor), card.tile) <= 5`); the ask is the 「可」 opt-in. Spend
 /// after accept is a cost, not an applicability check.
 fn pull(player_id: i32) -> card_sdk::Asked {

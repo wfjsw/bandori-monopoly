@@ -195,8 +195,8 @@ fn exile_return_counts_as_main_move() {
 fn fire_gain_is_partial_under_the_cap() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 1, 2);
-    let got = t.m.world_mut().gain_fire(0, 5, game_core::msg::Msg::new("test"));
-    let have = t.fire(0);
+    let got = t.m.world_mut().gain_charge(0, 5, game_core::msg::Msg::new("test"));
+    let have = t.charge(0);
     assert!(have <= 2, "capped at 2, have {have} (gain reported {got})");
     assert_eq!(have, 2, "partial gain fills to the cap");
 }
@@ -206,8 +206,8 @@ fn fire_gain_is_partial_under_the_cap() {
 fn fire_cap_drop_pulls_value_down() {
     let mut t = Table::vanilla(2);
     t.set_fire(0, 5, 5);
-    t.m.world_mut().add_fire_max(0, -3);
-    assert!(t.fire(0) <= 2, "value pulled under the new cap of 2");
+    t.m.world_mut().add_charge_max(0, -3);
+    assert!(t.charge(0) <= 2, "value pulled under the new cap of 2");
 }
 
 // =====================================================================

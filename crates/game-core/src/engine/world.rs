@@ -607,8 +607,10 @@ pub struct World {
     pub next_turn_pending: bool,
     /// Deeds of players who left, waiting to be auctioned.
     pub leftovers: VecDeque<Vec<usize>>,
-    /// Added to the RiNG rent multiplier by cards.
-    pub ring_bonus: i32,
+    /// Per-name bonuses added to [`crate::data::MatchRulesData::rule_params`]
+    /// by cards (generic named rule parameters).
+    #[serde(default)]
+    pub rule_param_bonus: std::collections::BTreeMap<String, i32>,
     pub ask_seq: i32,
     pub signals: Vec<Signal>,
     /// Turn-end callbacks waiting for their turn end.
@@ -721,7 +723,7 @@ impl World {
             event_removed: vec![],
             next_turn_pending: false,
             leftovers: VecDeque::new(),
-            ring_bonus: 0,
+            rule_param_bonus: Default::default(),
             ask_seq: 0,
             signals: vec![],
             scheduled: vec![],
@@ -952,12 +954,12 @@ impl World {
         st.event_discard = self.event_discard.clone();
         st.event_removed = self.event_removed.clone();
         // Active events ride their rule instance (`docs/EVENTS.md`): the view's
-        // counters mirror the instance's crystals / props so the client shows
-        // what the body is counting without a second store.
+        // counters mirror the instance's named counters / props so the client
+        // shows what the body is counting without a second store.
         for e in st.event_active.iter_mut() {
             let rid = crate::data::event_rule_id(&e.id);
             if let Some(f) = st.board_field.iter().find(|f| f.card == rid && f.tile < 0) {
-                e.counter = f.crystals;
+                e.counter = f.counters.values().sum();
                 e.counter2 = f.props.get("count2").copied().unwrap_or(0);
                 e.note = f.note.clone();
                 e.face_down = f.face_down;

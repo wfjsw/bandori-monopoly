@@ -56,7 +56,7 @@ fn card_uses_final_override_and_shows_landings_before_walking() {
     t.counteract(0, CARD).unwrap();
     assert_eq!(t.pos(0), 10);
     assert_eq!(t.m.world().turn.main_steps, 9);
-    assert_eq!(t.fire(0), 0);
+    assert_eq!(t.charge(0), 0);
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn either_extension_applies_after_card_payment_without_a_third_prompt() {
         t.counteract(0, CARD).unwrap();
         assert_eq!(t.pos(0), 6 + extra as usize);
         assert_eq!(t.m.world().turn.main_steps, 5 + extra);
-        assert_eq!(t.fire(0), 0);
+        assert_eq!(t.charge(0), 0);
         assert!(t.prompt().is_none(), "{}", t.dump_prompt());
     }
 }
@@ -84,10 +84,10 @@ fn card_and_six_pots_are_alternatives_after_the_distance_choice() {
     assert_eq!(t.option(SKILL), Some(1));
     assert!(t.option(CARD).is_some());
     assert!(t.option(SKILL).is_some());
-    assert_eq!(t.fire(0), 10);
+    assert_eq!(t.charge(0), 10);
     t.counteract(0, CARD).unwrap();
     assert_eq!(t.pos(0), 8);
-    assert_eq!(t.fire(0), 10);
+    assert_eq!(t.charge(0), 10);
     assert!(t.prompt().is_none(), "no subsequent paid offer");
     assert!(!t.hand(0).iter().any(|c| c == CARD));
 }
@@ -100,7 +100,7 @@ fn choosing_six_pots_keeps_the_card_and_the_skill_in_place() {
     distance(&mut t, 2);
     t.counteract(0, SKILL).unwrap();
     assert_eq!(t.pos(0), 8);
-    assert_eq!(t.fire(0), 4);
+    assert_eq!(t.charge(0), 4);
     assert_eq!(t.hand(0), vec![CARD]);
     assert!(t.on_field(0, SKILL));
     assert!(t.prompt().is_none());
@@ -130,14 +130,14 @@ fn back_reopens_distance_without_spending_then_allows_a_different_choice() {
             "ask.counteract.move_extension"
         );
         assert_eq!(t.hand(0), vec![CARD]);
-        assert_eq!(t.fire(0), 10);
+        assert_eq!(t.charge(0), 10);
         assert_eq!(t.pos(0), 1);
         assert_eq!(t.state(0, "skill.sayoThorns.used"), 0);
         distance(&mut t, 1);
     }
     t.counteract(0, SKILL).unwrap();
     assert_eq!(t.pos(0), 7, "the latest +1 wins, earlier +2 is not applied");
-    assert_eq!(t.fire(0), 4);
+    assert_eq!(t.charge(0), 4);
     assert_eq!(t.hand(0), vec![CARD]);
 }
 
@@ -151,7 +151,7 @@ fn back_then_pass_keeps_both_sources_and_original_distance() {
     t.decline();
     assert_eq!(t.pos(0), 6);
     assert_eq!(t.hand(0), vec![CARD]);
-    assert_eq!(t.fire(0), 10);
+    assert_eq!(t.charge(0), 10);
     assert!(t.prompt().is_none());
 }
 
@@ -177,7 +177,7 @@ fn hand_play_restrictions_do_not_suppress_the_paid_skill() {
     distance(&mut t, 1);
     assert!(t.option(CARD).is_none());
     t.counteract(0, SKILL).unwrap();
-    assert_eq!(t.fire(0), 4);
+    assert_eq!(t.charge(0), 4);
     assert_eq!(t.pos(0), 7);
     assert_eq!(t.hand(0), vec![CARD]);
 }
@@ -194,7 +194,7 @@ fn insufficient_pots_offer_only_the_card_and_back() {
     t.decline();
     t.decline();
     assert_eq!(t.pos(0), 6);
-    assert_eq!(t.fire(0), 5);
+    assert_eq!(t.charge(0), 5);
     assert_eq!(t.hand(0), vec![CARD]);
 }
 
@@ -208,7 +208,7 @@ fn duplicate_cards_cannot_be_declared_in_the_same_shared_window() {
     t.counteract(0, CARD).unwrap();
     assert_eq!(t.pos(0), 8);
     assert_eq!(t.hand(0), vec![CARD]);
-    assert_eq!(t.fire(0), 10);
+    assert_eq!(t.charge(0), 10);
     assert!(t.prompt().is_none());
 }
 
@@ -226,7 +226,7 @@ fn card_consumes_the_shared_once_per_turn_use_and_next_turn_resets_it() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     assert!(t.prompt().is_none());
-    assert_eq!(t.fire(0), 10);
+    assert_eq!(t.charge(0), 10);
     assert_eq!(t.hand(0), vec![CARD]);
     t.begin_turn(0);
     t.set_pos(0, 1);
@@ -243,7 +243,7 @@ fn declining_the_initial_window_keeps_both_sources() {
     roll(&mut t);
     t.decline();
     assert_eq!(t.pos(0), 6);
-    assert_eq!(t.fire(0), 10);
+    assert_eq!(t.charge(0), 10);
     assert_eq!(t.hand(0), vec![CARD]);
     assert!(t.prompt().is_none());
 }
@@ -259,7 +259,7 @@ fn card_payment_preserves_its_counteraction_response_window() {
     assert!(t.counteract_offered("TEST:deny"));
     t.counteract(1, "TEST:deny").unwrap();
     assert_eq!(t.pos(0), 6);
-    assert_eq!(t.fire(0), 10);
+    assert_eq!(t.charge(0), 10);
     assert!(t.prompt().is_none());
     assert!(t.on_field(0, SKILL));
 }

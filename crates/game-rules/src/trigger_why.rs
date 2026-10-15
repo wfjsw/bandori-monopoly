@@ -244,11 +244,10 @@ pub fn counteract_reason(answered_card: &str, answered: &Trigger) -> Msg {
 /// nested `log.counter.other` so the wire spelling is still quoted -- never a
 /// raw `Text` arg (those are for player-entered names only).
 pub fn counter_name(name: &str) -> Msg {
-    match name {
-        "crystals" | card_sdk::abi::counter::CRYSTALS => Msg::new("log.counter.crystals"),
-        "cp" | card_sdk::abi::counter::CP => Msg::new("log.counter.cp"),
-        other => Msg::new("log.counter.other").text("name", other),
+    if name.is_empty() {
+        return Msg::new("log.counter.other").text("name", name);
     }
+    Msg::new(format!("log.counter.{name}"))
 }
 
 /// A trigger-kind wire name, for the generic why fallback. Never raw.
@@ -261,7 +260,7 @@ fn kind_name(kind: &str) -> Msg {
 pub fn state_key_name(key: &str) -> Msg {
     match key {
         card_sdk::abi::state_key::HAND_LIMIT => Msg::new("log.state.hand_limit"),
-        card_sdk::abi::state_key::FIRE => Msg::new("log.state.fire"),
+        card_sdk::abi::state_key::CHARGE => Msg::new("log.state.charge"),
         card_sdk::abi::state_key::STAY => Msg::new("log.state.stay"),
         card_sdk::abi::state_key::STUN | card_sdk::abi::state_key::STUN_START => {
             Msg::new("log.state.stun")

@@ -17,13 +17,13 @@
 //! Isolation (stated here and `kani::assume`d where relevant):
 //! * no other skill / card hooks fire in the window (single-body call);
 //! * piles stay empty except where a draw is the clause effect;
-//! * fire_max is pinned per clause (「上限」 figure from the quote);
+//! * charge_max is pinned per clause (「上限」 figure from the quote);
 //! * `n_players = 2`, money `0..=10_000`, both seats living unless stated.
 //!
 //! Host notes:
 //! * `Op::trig_value` reads `w.pay_amount` (not `w.trig_value`) — both are
 //!   written so the body and the guard IR agree.
-//! * Kani `Op::gain_fire` honours `fire_max` (`got = n.clamp(0, cap - fire)`),
+//! * Kani `Op::gain_charge` honours `charge_max` (`got = n.clamp(0, cap - fire)`),
 //!   so the at-cap leg matches the book (empty log, unchanged fire).
 //! * Kani `Op::trig_set_cancelled` sets `w.trig_cancelled`, so the
 //!   「替换奖励」 leg of C-MOR-band-02 is observable.
@@ -210,7 +210,7 @@ mod band {
         let post = world::snapshot();
         crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
         crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
     }
 
@@ -343,7 +343,7 @@ mod band {
 
         let post = world::snapshot();
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
         crate::kassert!(post.pay_amount == pre.pay_amount, "frame: pay_amount");
     }
 
@@ -437,16 +437,16 @@ mod pass_fire {
     use crate::spec::skills_mor as spec;
     use crate::world::{self, Effect};
 
-    /// Unmodified `on_pass` (touko / nanami) reaches: gain_fire.
-    /// Shared: both bodies are the same one-liner (`fire::gain(p, 1, …)`).
-    crate::host_subset!(pass_gain_fire_dispatch {
-        gain_fire => arm_gain_fire,
+    /// Unmodified `on_pass` (touko / nanami) reaches: gain_charge.
+    /// Shared: both bodies are the same one-liner (`charge::gain(p, 1, …)`).
+    crate::host_subset!(pass_gain_charge_dispatch {
+        gain_charge => arm_gain_charge,
         log | effect => arm_log,
     });
 
     /// In-place world for a Pass-CiRCLE fire gain. Concrete user seat.
     fn pass_world(user: i32) {
-        host::install_backend(pass_gain_fire_dispatch);
+        host::install_backend(pass_gain_charge_dispatch);
         crate::harness::sparse_play_world(crate::harness::SparsePlay {
             used_seats: 2,
             n_players: 2,
@@ -471,10 +471,10 @@ mod pass_fire {
 
     /// Shared Pass-gain IFF for touko (cap 1) and nanami (cap 2) at a concrete
     /// user seat. Below-cap the book and the Kani host agree (`GainFire{1}`);
-    /// at-cap the host now honours `fire_max`, so the book no-op is asserted.
+    /// at-cap the host now honours `charge_max`, so the book no-op is asserted.
     fn pass_gain_iff_at(
         user: i32,
-        fire_max_pin: i32,
+        charge_max_pin: i32,
         label: &str,
         body: fn(i32) -> card_sdk::Asked,
     ) {
@@ -482,7 +482,7 @@ mod pass_fire {
         pass_world(user);
         world::with_world_mut(|w| {
             // Pin the seat's fire-pot cap to the quote's 「上限」.
-            w.fire_max[user as usize] = fire_max_pin;
+            w.charge_max[user as usize] = charge_max_pin;
         });
 
         let gid = crate::guard_id!("actor == owner && is_circle(tile.id)");
@@ -503,11 +503,11 @@ mod pass_fire {
         let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
         let log_n = effects_of(&mut ebuf);
         let effects = &ebuf[..log_n];
-        let pre_fire = pre.fire[user as usize];
+        let pre_fire = pre.charge[user as usize];
         let post = world::snapshot();
-        let post_fire = post.fire[user as usize];
+        let post_fire = post.charge[user as usize];
 
-        let below = pre_fire < fire_max_pin;
+        let below = pre_fire < charge_max_pin;
         kani::cover!(below, "below cap (gain applies)");
         kani::cover!(!below, "at cap (book: no-op)");
 
@@ -522,7 +522,7 @@ mod pass_fire {
             );
         } else {
             // Book: empty log + unchanged fire. The Kani host honours
-            // `fire_max`, so this path is now assertable.
+            // `charge_max`, so this path is now assertable.
             crate::kassert!(
                 log_n == 0,
                 "{label}: at cap the gain is refused (empty log)"
@@ -615,8 +615,8 @@ mod pass_fire {
         pass_world(0);
         let user = 0i32;
         world::with_world_mut(|w| {
-            w.fire_max[user as usize] = spec::TOUKO_01_FIRE_MAX;
-            w.fire[user as usize] = 0;
+            w.charge_max[user as usize] = spec::TOUKO_01_FIRE_MAX;
+            w.charge[user as usize] = 0;
         });
         invoke::unwrap_done(skill_personas::kiritani_zenith::on_pass_kani(user));
         kani::cover!(true, "body returned");
@@ -755,7 +755,7 @@ mod yuri_crit {
         let post = world::snapshot();
         crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money at rewrite time");
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     }
 
     /// C-MOR-rui-crit-02 iff at seat 0 (`n_players = 2`).
@@ -948,7 +948,7 @@ mod tsukushi_on_gain {
 
         let post = world::snapshot();
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
     }
 
     /// C-MOR-tsukushi-01 iff at owner seat 0 (`n_players = 2`).
@@ -1143,7 +1143,7 @@ mod tsukushi_cash {
             crate::kassert!(u == 0 && d == 0, "X marks removed");
         }
         crate::kassert!(world::arr4_eq(post.pos, pre.pos), "frame: pos");
-        crate::kassert!(world::arr4_eq(post.fire, pre.fire), "frame: fire");
+        crate::kassert!(world::arr4_eq(post.charge, pre.charge), "frame: fire");
         let _ = log_n;
     }
 

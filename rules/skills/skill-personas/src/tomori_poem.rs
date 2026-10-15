@@ -72,7 +72,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// The fire balance is **not** a gate: 不再迷茫 (2) 「可移除此卡上的一个
 /// [奇迹水晶]以代替此次技能的火罐消耗」 lets a crystal stand in for the pots,
 /// so a 0-fire owner with a crystal can still press. [`before_settle`]'s
-/// `spend_fire` is what actually collects the cost (fire or the substitution).
+/// `spend_charge` is what actually collects the cost (fire or the substitution).
 fn before_settle_applies(player_id: i32) -> bool {
     let landing = ctx::trigger::tile();
     if landing < 0 {

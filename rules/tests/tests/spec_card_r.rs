@@ -1578,7 +1578,7 @@ fn yukina_fire_on_ring() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 1, "1 火罐, cap 1");
+    assert_eq!(t.charge(0), 1, "1 火罐, cap 1");
 }
 
 /// C-R-来练习吧-05 -- drop all 火罐 off a RiNG.
@@ -1593,7 +1593,7 @@ fn yukina_fire_drop_off_ring() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 0, "火罐 dropped off a RiNG");
+    assert_eq!(t.charge(0), 0, "火罐 dropped off a RiNG");
 }
 
 /// C-R-来练习吧-06 -- spend 1 火罐 to force-stop a passer.
@@ -1635,7 +1635,7 @@ fn sayo_fire_on_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 2, "+2 on a CiRCLE pass");
+    assert_eq!(t.charge(0), 2, "+2 on a CiRCLE pass");
 }
 
 /// C-R-慈爱女神-01 -- CiRCLE pass +1 (cap 2).
@@ -1649,7 +1649,7 @@ fn lisa_fire_on_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 1, "+1 on a CiRCLE pass");
+    assert_eq!(t.charge(0), 1, "+1 on a CiRCLE pass");
 }
 
 /// C-R-慈爱女神-02 -- spend 1 to teleport to the nearest character ahead.
@@ -1684,7 +1684,7 @@ fn rinko_fire_on_circle() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.fire(0), 3, "+3 on a CiRCLE pass");
+    assert_eq!(t.charge(0), 3, "+3 on a CiRCLE pass");
 }
 
 /// C-R-即使1cm也要前进-02 -- spend X 火罐 to fix the roll at X*6.
@@ -1709,7 +1709,7 @@ fn rinko_fix_roll_to_x_times_six() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 12, "2 * 6 = 12");
-    assert_eq!(t.fire(0), 0, "2 火罐 spent");
+    assert_eq!(t.charge(0), 0, "2 火罐 spent");
 }
 
 // ================================================================ band skill

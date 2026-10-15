@@ -212,11 +212,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn owner_money(&self) -> i64 {
         if self.owner_seat >= 0 { self.src.money(self.owner_seat) as i64 } else { 0 }
     }
-    fn owner_fire(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.fire(self.owner_seat) as i64 } else { 0 }
+    fn owner_charge(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.charge(self.owner_seat) as i64 } else { 0 }
     }
-    fn owner_crystals(&self) -> i64 {
-        if self.owner_seat >= 0 { self.src.group_crystals(self.owner_seat) as i64 } else { 0 }
+    fn owner_group_pool(&self, name: &str) -> i64 {
+        if self.owner_seat >= 0 { self.src.group_pool(self.owner_seat, name) as i64 } else { 0 }
     }
     fn owner_hand(&self) -> i64 {
         if self.owner_seat >= 0 { self.src.hand_size(self.owner_seat) as i64 } else { 0 }
@@ -302,11 +302,11 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn money(&self, seat: i64) -> i64 {
         self.src.money(seat as i32) as i64
     }
-    fn fire(&self, seat: i64) -> i64 {
-        self.src.fire(seat as i32) as i64
+    fn charge(&self, seat: i64) -> i64 {
+        self.src.charge(seat as i32) as i64
     }
-    fn crystals(&self, seat: i64) -> i64 {
-        self.src.group_crystals(seat as i32) as i64
+    fn group_pool(&self, seat: i64, name: &str) -> i64 {
+        self.src.group_pool(seat as i32, name) as i64
     }
     fn hand(&self, seat: i64) -> i64 {
         self.src.hand_size(seat as i32) as i64
@@ -662,8 +662,15 @@ pub trait SnapSrc {
     }
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
-    fn fire(&self, player_id: i32) -> i32;
-    fn group_crystals(&self, player_id: i32) -> i32;
+    fn charge(&self, player_id: i32) -> i32;
+    fn group_pool(&self, player_id: i32, name: &str) -> i32;
+    fn group_pool_total(&self, player_id: i32) -> i32 {
+        let _ = player_id;
+        0
+    }
+    fn counter_names_at(&self, _uid: i32) -> Vec<String> {
+        Vec::new()
+    }
     fn hand_size(&self, player_id: i32) -> i32;
     fn player_pos(&self, player_id: i32) -> i32;
     fn player_out(&self, player_id: i32) -> i32;
@@ -690,7 +697,7 @@ pub trait SnapSrc {
     /// Non-zero named token counters (`ctx::tok_names`); `tok('name')` missing = 0.
     fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String>;
     fn owned_count(&self, player_id: i32) -> i32;
-    fn card_crystals(&self, player_id: i32, card: &str) -> i32;
+    fn card_pool(&self, player_id: i32, card: &str, name: &str) -> i32;
     /// Named counter `name` on the instance of `card` at `player_id`
     /// (`"cp"` / `"crystals"` / any `FieldCard::counters` key). Missing = 0.
     fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
@@ -703,10 +710,7 @@ pub trait SnapSrc {
     /// overrides this.
     fn card_counter_names(&self, player_id: i32, card: &str) -> Vec<String> {
         let _ = (player_id, card);
-        vec![
-            game_core::state::counter::CP.to_string(),
-            game_core::state::counter::CRYSTALS.to_string(),
-        ]
+        Vec::new()
     }
     fn tile_owner(&self, tile: i32) -> i32;
     fn houses_of(&self, tile: i32) -> i32;
@@ -786,12 +790,15 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::money(self, player_id)
     }
     #[inline]
-    fn fire(&self, player_id: i32) -> i32 {
-        CardWorld::fire(self, player_id)
+    fn charge(&self, player_id: i32) -> i32 {
+        CardWorld::charge(self, player_id)
     }
     #[inline]
-    fn group_crystals(&self, player_id: i32) -> i32 {
-        CardWorld::group_crystals(self, player_id)
+    fn group_pool(&self, player_id: i32, name: &str) -> i32 {
+        CardWorld::group_pool(self, player_id, name)
+    }
+    fn group_pool_total(&self, player_id: i32) -> i32 {
+        CardWorld::group_pool_total(self, player_id)
     }
     #[inline]
     fn hand_size(&self, player_id: i32) -> i32 {
@@ -829,7 +836,7 @@ impl<W: CardWorld> SnapSrc for W {
             game_core::state::key::EXILE,
             game_core::state::key::EXILE_TO,
             game_core::state::key::EXILE_MAIN,
-            game_core::state::key::FIRE,
+            game_core::state::key::CHARGE,
             game_core::state::key::NO_HAND,
             game_core::state::key::UNSTOPPABLE,
             game_core::state::key::HAND_LIMIT,
@@ -875,8 +882,8 @@ impl<W: CardWorld> SnapSrc for W {
         CardWorld::owned_count(self, player_id)
     }
     #[inline]
-    fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
-        CardWorld::card_crystals(self, player_id, card)
+    fn card_pool(&self, player_id: i32, card: &str, name: &str) -> i32 {
+        CardWorld::card_pool(self, player_id, card, name)
     }
     #[inline]
     fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
@@ -921,7 +928,7 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn card_tile(&self, player_id: i32, card: &str) -> i32 {
         // First field instance of this card id, same name-based lookup as
-        // `card_crystals`. `tile_at` answers `-2` when the uid is gone.
+        // `card_pool`. `tile_at` answers `-2` when the uid is gone.
         CardWorld::field_instances(self, player_id)
             .into_iter()
             .find(|(_, id)| id == card)
@@ -1251,8 +1258,8 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
-            fire: world.fire(p) as i64,
-            crystals: world.group_crystals(p) as i64,
+            charge: world.charge(p) as i64,
+            group_pool: world.group_pool_total(p) as i64,
             hand: world.hand_size(p) as i64,
             pos: world.player_pos(p) as i64,
             out: world.player_out(p) as i64,
@@ -1388,8 +1395,8 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
-            fire: world.fire(p) as i64,
-            crystals: world.group_crystals(p) as i64,
+            charge: world.charge(p) as i64,
+            group_pool: world.group_pool_total(p) as i64,
             hand: world.hand_size(p) as i64,
             pos: world.player_pos(p) as i64,
             out: world.player_out(p) as i64,
@@ -1550,8 +1557,8 @@ pub fn fill_candidate<S: SnapSrc>(
     let mut cand = CandidateCtx {
         owner: owner as i64,
         owner_money: world.money(p) as i64,
-        owner_fire: world.fire(p) as i64,
-        owner_crystals: world.group_crystals(p) as i64,
+        owner_charge: world.charge(p) as i64,
+        owner_group_pool: world.group_pool(p, "crystals") as i64,
         owner_hand: world.hand_size(p) as i64,
         owner_pos: world.player_pos(p) as i64,
         owner_out: world.player_out(p) as i64,
@@ -1628,7 +1635,7 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.tsugumiPlain.owed",
     // Standard player-state keys used by skill body-top checks.
     "skillState",
-    "fire",
+    "charge",
     "skill.aveMujica.inTwo",
     "skill.ras.taken",
     "skill.roselia.first",
@@ -1645,8 +1652,8 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.sakikoLife.state",
     "skill.uikaImprisoned.state",
     "skill.kokoroPractice.waived",
-    "skill.misakiOther.fire",
-    "skill.uikaIdol.fire",
+    "skill.misakiOther.charge",
+    "skill.uikaIdol.charge",
     "skill.takiCrychic.armed",
     // `soyo_crychic` teleport one-shot flag (`state::set(player_id, ARMED, 1)`).
     "skill.soyoCrychic.armed",

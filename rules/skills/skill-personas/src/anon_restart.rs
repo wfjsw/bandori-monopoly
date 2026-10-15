@@ -25,7 +25,7 @@ pub const ANON_RESTART: CardDef = CardDef::new(
         // pots to spend. Kind is a residual (`AbKind` match); fire is CEL.
         On::Hook(
             &[HookKind::Abnormal],
-            "actor == owner && fire(owner) >= 2",
+            "actor == owner && charge(owner) >= 2",
             Some(stay_or_teleport),
             on_abnormal,
         ),
@@ -55,7 +55,7 @@ fn stay_or_teleport(_player_id: i32) -> bool {
 }
 
 /// （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐，抽一张卡」.
-/// Applicability is `fire(owner) >= 2` + `stay_or_teleport`; spend after
+/// Applicability is `charge(owner) >= 2` + `stay_or_teleport`; spend after
 /// accept is a cost, not an applicability check.
 fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(

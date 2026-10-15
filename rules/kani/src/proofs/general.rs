@@ -16,7 +16,7 @@
 //! * `play_doubled` stub returns 0, so `ctx::n(k, v)` doubles only when
 //!   `k == 0`. Clauses that tag their printed number with `k == 0` are
 //!   BLOCKED-HOST; the ones below tag `k == 1` or use bare literals.
-//! * No stacked hooks fire: we invoke a single body in isolation.
+//! * No stacked hooks charge: we invoke a single body in isolation.
 
 use crate::host;
 use crate::invoke;
@@ -88,7 +88,7 @@ pub fn recruit_01_iff() {
         "C-GEN-recruit-01: frame other money"
     );
     crate::kassert!(world::arr4_eq(post.pos, pre.pos), "C-GEN-recruit-01: frame pos");
-    crate::kassert!(world::arr4_eq(post.fire, pre.fire), "C-GEN-recruit-01: frame fire");
+    crate::kassert!(world::arr4_eq(post.charge, pre.charge), "C-GEN-recruit-01: frame fire");
     crate::kassert!(post.stay == pre.stay, "C-GEN-recruit-01: frame stay");
 }
 
