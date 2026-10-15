@@ -276,3 +276,9 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn discard_down_to_five_kani(player_id: i32) -> card_sdk::Asked {
     discard_down_to_five(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
+}

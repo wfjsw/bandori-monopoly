@@ -592,6 +592,8 @@ async fn silent_players_are_handed_to_the_ai_and_come_back() {
     let mut sse_a = a.stream(&id, None).await;
     let joined = b.ok(&format!("/api/rooms/{id}/join"), json!({})).await;
     let b_member = joined["you"].as_i64().unwrap();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
     let _keep_b = b.stream(&id, None).await; // B present while the match starts
     a.fair_nonce(&id).await;
     b.fair_nonce(&id).await;
@@ -1670,6 +1672,8 @@ async fn the_commit_is_published_when_the_room_is_created() {
     assert_eq!(commit.len(), 64, "{made}");
     a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
     // The commitment is already up before any nonce can exist...
     a.fair_nonce(&id).await;
     // ...and the start reuses it.
@@ -1690,6 +1694,8 @@ async fn nonces_of_non_participants_are_dropped_and_the_start_never_waits() {
     let made = a.ok("/api/rooms", json!({})).await;
     let id = made["room"]["id"].as_str().unwrap().to_string();
     b.ok(&format!("/api/rooms/{id}/join"), json!({})).await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
     a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
     a.fair_nonce(&id).await;
@@ -1754,6 +1760,8 @@ async fn a_finished_match_rolls_a_fresh_commit_and_takes_nonces_again() {
     let made = a.ok("/api/rooms", json!({})).await;
     let id = made["room"]["id"].as_str().unwrap().to_string();
     let commit1 = made["room"]["fair"]["commit"].as_str().unwrap().to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
     a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
     a.fair_nonce(&id).await;

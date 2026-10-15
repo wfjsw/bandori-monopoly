@@ -239,6 +239,12 @@ pub fn bend_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn after_bend_kani(player_id: i32) -> card_sdk::Asked {
+    after_bend(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_end(player_id)
 }
