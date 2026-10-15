@@ -11,6 +11,9 @@
 /* Two lines beside the avatar: character … money, then status /
    hand / fire / graveyard. Each line is one row high, so a 54-70px panel
    holds both without spilling. */
+.players::-webkit-scrollbar { width: 5px; }
+.players::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.3); border-radius: 3px; }
+.players { scrollbar-width: thin; overscroll-behavior: contain; }
 .panel { position: relative; flex: none; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 4px; row-gap: 3px; overflow: hidden; box-sizing: border-box; background: var(--panel); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .panel img { -webkit-user-drag: none; pointer-events: none; }
 .turn { border-color: var(--pink); background: #fff7f9; }
@@ -32,7 +35,7 @@
 .who { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
 /* The character name stays on one line and truncates when space is tight. */
 .who b { flex: 0 1 auto; min-width: 0; font-size: 16px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nick { flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nick { flex: 0 1 auto; margin-right: auto; min-width: 0; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .compact .nick { font-size: 12px; }
 .money { display: flex; align-items: center; gap: 5px; justify-content: flex-end; }
 .money img { width: 22px; }
