@@ -2049,16 +2049,13 @@ impl World {
         took
     }
 
-    // ------------------------------------------------------- [tile marks] marks
-    // Under the bound-counter model (user ruling 2026-10-10) the tile [tile marks]
-    // are units of the **standing the tile-mark owner pseudo card**'s counter
-    // ([`crate::state::counter::CP`] / [`crate::state::mark_kind::CP`]), bound
-    // to tiles. the tile-mark owner lives on the neutral board owner and is never
+    // ---------------------------------------------------------- tile marks
+    // Under the bound-counter model (user ruling 2026-10-10) tile marks are
+    // units of the **standing mark-owner pseudo card**'s named counter, bound
+    // to tiles. The mark owner lives on the neutral board owner and is never
     // destroyed, so its units outlive any placer. Provenance (`TileMark::src`)
-    // is the placing card instance -- 通用:the mark-emptying card (1) 「此卡在格子上添加的
-    // [tile marks]及其产物」 and the landing hook's 「自己field1个[tile marks]」 spend key
-    // on it. The on-card [tile marks] of the mark-emptying card is that card's own
-    // [`crate::state::counter::CP`] counter and dies with it.
+    // is the placing card instance; on-card marks of that card are its own
+    // named counter and die with it.
 
     /// The uid of the standing mark-owner rule instance (`rule_id`) on the
     /// board owner, or -1 when the ruleset has no such rule (`StubRules`).

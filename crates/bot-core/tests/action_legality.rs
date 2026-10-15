@@ -284,7 +284,7 @@ fn a_deed_rich_broke_bot_does_not_mortgage_to_buy_land() {
     m.quick_start();
     let tile = some_property(&data);
     // P owns every other property outright (mortgageable). `purchase_funds`
-    // sums `price / 2` over unmortgaged non-ring deeds, so give enough to
+    // sums `price / 2` over unmortgaged deeds, so give enough to
     // cover the target's price from mortgage value alone.
     {
         let w = m.world_mut();
