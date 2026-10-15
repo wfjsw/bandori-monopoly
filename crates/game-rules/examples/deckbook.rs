@@ -385,7 +385,7 @@ fn sample_opponents(names: &[String], me: &str, seed: u64, n: usize) -> Vec<Stri
 
 /// Opponents constrained to one persona per group in `groups` (a seat_groups /
 /// groups key), deterministic in the seed.
-fn sample_opponents_by_bands(
+fn sample_opponents_by_groups(
     data: &GameData,
     me: &str,
     groups: &[String],
@@ -604,7 +604,7 @@ fn play_one_seed(
     let opps = match task.level {
         Level::Me => sample_opponents(&names, &task.me, seed, cfg.players - 1),
         Level::SeatGroups | Level::Groups => {
-            sample_opponents_by_bands(data, &task.me, &task.opponent_groups, seed)
+            sample_opponents_by_groups(data, &task.me, &task.opponent_groups, seed)
         }
         Level::Exact => {
             if task.opponents.len() != cfg.players - 1 {

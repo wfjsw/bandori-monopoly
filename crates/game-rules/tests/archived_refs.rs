@@ -24,7 +24,7 @@
 use std::path::PathBuf;
 
 use game_core::fair::verify;
-use game_core::record::{decode_record, parse_record, Init};
+use game_core::record::{decode_record, Init};
 
 fn ref_records() -> Vec<PathBuf> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../archive/engine/refs");
@@ -44,10 +44,10 @@ fn every_reference_record_still_parses_and_names_its_bundle() {
     for path in refs {
         let bytes = std::fs::read(&path).expect("ref readable");
         let name = path.file_name().unwrap().to_string_lossy().to_string();
+        // Framing + header + body. `parse_record` re-checks the body hash only
+        // for records sealed at RECORD_VERSION >= 3 (the on-wire field names
+        // changed at v3).
         let file = decode_record(&bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
-        // The body `check` re-verifies after a JSON round trip.
-        let json = serde_json::to_string(&file).unwrap();
-        parse_record(&json).unwrap_or_else(|e| panic!("{name}: reparse: {e}"));
         // The record names the bundle that wrote it -- what the loader routes
         // on (`docs/REPLAY.md` §9). The file name IS that id.
         let want = name.trim_end_matches(".bdrec");

@@ -974,3 +974,15 @@ pub fn native_rules(data: Arc<game_core::data::GameData>) -> NativeRules {
 // `MAX_NESTING` is used by hostfns via the nested call path; re-export so
 // tests can assert the same bound.
 pub use game_rules::MAX_NESTING as MAX_PLAY_NESTING;
+
+#[cfg(test)]
+mod intern_tests {
+    #[test]
+    fn first_slot_round_trips_eight_byte_name() {
+        let _f = card_sdk::native::enter();
+        let (h, n) = card_sdk::native::intern(b"counter1");
+        assert_ne!(h, 0, "handle 0 is the length-only probe");
+        assert_eq!(n, 8);
+        assert_eq!(card_sdk::native::read(h, 8), b"counter1");
+    }
+}

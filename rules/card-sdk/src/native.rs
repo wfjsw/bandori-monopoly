@@ -232,9 +232,12 @@ pub fn intern(bytes: &[u8]) -> (i32, i32) {
     ensure_frame();
     with_stack(|stack| {
         let mut stack = stack.borrow_mut();
-        let frame = stack.last_mut().expect("native frame");
+        // Stable arena: intern into the bottom frame so handles survive nested
+        // `enter`/`exit` (a per-frame index went stale and `read` padded NULs).
+        let frame = &mut stack[0];
         frame.push(bytes.to_vec());
-        ((frame.len() - 1) as i32, bytes.len() as i32)
+        // 1-based handle: 0 stays the wasm-style null / length-only probe.
+        (frame.len() as i32, bytes.len() as i32)
     })
 }
 
@@ -260,9 +263,10 @@ pub fn reserve(len: usize) -> (i32, i32) {
     ensure_frame();
     with_stack(|stack| {
         let mut stack = stack.borrow_mut();
-        let frame = stack.last_mut().expect("native frame");
+        let frame = &mut stack[0];
         frame.push(std::vec![0u8; len]);
-        ((frame.len() - 1) as i32, len as i32)
+        // 1-based handle (see `intern`).
+        (frame.len() as i32, len as i32)
     })
 }
 
@@ -347,12 +351,16 @@ pub fn read(handle: i32, len: usize) -> Vec<u8> {
     use std::vec::Vec;
     with_stack(|stack| {
         let stack = stack.borrow();
-        let frame = match stack.last() {
+        // Handles are indices into the bottom (stable) frame; fall back to the
+        // top frame for buffers reserved by `reserve` in the current call.
+        let frame = stack.first().or_else(|| stack.last());
+        let frame = match frame {
             Some(f) => f,
             None => return std::vec![0u8; len],
         };
+        let idx = (handle - 1).max(0) as usize;
         let mut out = frame
-            .get(handle as usize)
+            .get(idx)
             .map(|v| v[..len.min(v.len())].to_vec())
             .unwrap_or_default();
         // Pad to `len` so callers can slice `[..n]` without panicking when the
@@ -407,11 +415,12 @@ pub fn write(handle: i32, bytes: &[u8]) {
 pub fn write(handle: i32, bytes: &[u8]) {
     with_stack(|stack| {
         let mut stack = stack.borrow_mut();
-        let frame = match stack.last_mut() {
+        let frame = match stack.first_mut() {
             Some(f) => f,
             None => return,
         };
-        if let Some(v) = frame.get_mut(handle as usize) {
+        let idx = (handle - 1).max(0) as usize;
+        if let Some(v) = frame.get_mut(idx) {
             let n = bytes.len().min(v.len());
             v[..n].copy_from_slice(&bytes[..n]);
         }
@@ -433,7 +442,7 @@ pub fn clear() {
     ensure_frame();
     with_stack(|stack| {
         let mut stack = stack.borrow_mut();
-        if let Some(frame) = stack.last_mut() {
+        if let Some(frame) = stack.first_mut() {
             frame.clear();
         }
     });
@@ -443,4 +452,28 @@ pub fn clear() {
 #[cfg(not(kani))]
 fn with_stack<R>(f: impl FnOnce(&std::cell::RefCell<std::vec::Vec<std::vec::Vec<std::vec::Vec<u8>>>>) -> R) -> R {
     arena::ARENA.with(f)
+}
+
+#[cfg(all(test, not(kani)))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_reserve_round_trips_crystals() {
+        let _f = enter();
+        let (h, n) = reserve(8);
+        assert_ne!(h, 0, "handle 0 is reserved for the length-only probe");
+        assert_eq!(n, 8);
+        write(h, b"crystals");
+        assert_eq!(read(h, 8), b"crystals");
+    }
+
+    #[test]
+    fn intern_round_trips_on_the_first_slot() {
+        let _f = enter();
+        let (h, n) = intern(b"crystals");
+        assert_ne!(h, 0);
+        assert_eq!(n, 8);
+        assert_eq!(read(h, 8), b"crystals");
+    }
 }

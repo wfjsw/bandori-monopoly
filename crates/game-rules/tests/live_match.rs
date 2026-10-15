@@ -116,7 +116,7 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
 #[test]
 fn a_card_whose_named_counters_run_out_leaves_the_field() {
     // TEST:named counter places itself with one named counter and spends it in the same
-    // effect. The no-named-counter discard check is its `crystalsChanged` (wire
+    // effect. The no-named-counter discard check is its `counterChanged` (wire
     // handler, not a re-check at the spend site.
     // `TEST:named-counter` / `named-counter-empty` / `named-counter-none` are rules/ fixture ids
     // (rules/fixtures/test-cards) -- kept to match the fixture definitions.

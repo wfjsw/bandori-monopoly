@@ -689,7 +689,7 @@ pub trait SnapSrc {
     fn owned_count(&self, player_id: i32) -> i32;
     fn card_pool(&self, player_id: i32, card: &str, name: &str) -> i32;
     /// Named counter `name` on the instance of `card` at `player_id`
-    /// (ruleset counter keys such as `"crystals"`, or any
+    /// (ruleset counter keys, or any
     /// `FieldCard::counters` key). Missing = 0.
     fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
         let _ = (player_id, card, name);

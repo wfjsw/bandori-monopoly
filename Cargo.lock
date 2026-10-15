@@ -913,6 +913,7 @@ dependencies = [
  "game-core",
  "postcard",
  "rules-cond",
+ "ruleset-core",
  "serde",
  "serde_json",
  "sha2",

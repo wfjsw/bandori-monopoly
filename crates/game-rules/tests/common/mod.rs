@@ -862,7 +862,7 @@ impl Table {
     pub fn set_counters(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.counters.insert("bonus".into(), n);
+            f.counters.insert(ruleset_core::counter::CRYSTALS.into(), n);
         }
     }
 
@@ -871,7 +871,7 @@ impl Table {
     /// ruling 2026-10-07: the mark points attached to the card). This is the number the
     /// view's field-card counter badge shows.
     pub fn marks_on_card(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("points").copied().unwrap_or(0))
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get(ruleset_core::counter::CP).copied().unwrap_or(0))
     }
 
     /// Put `n` on-card [tile marks] on `who`'s first field copy of `card` (test seam,
@@ -881,7 +881,7 @@ impl Table {
     pub fn set_marks_on_card(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.counters.insert("points".into(), n);
+            f.counters.insert(ruleset_core::counter::CP.into(), n);
         }
     }
 

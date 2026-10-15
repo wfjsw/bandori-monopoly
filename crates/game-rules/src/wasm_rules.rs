@@ -557,7 +557,7 @@ impl Run {
     }
 
     /// Record a named counter write on the instance at `uid` so the commit point can
-    /// raise `crystalsChanged` (wire event name; the same shape as
+    /// raise `counterChanged` (wire event name; the same shape as
     /// `charge_spent_log` / `house_log`). `was` and `now` bracket the write;
     /// only the delta rides the trigger, so a write that lands on the same
     /// count still raises -- a card placed with no named counters has to hear
@@ -4067,7 +4067,7 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = nth;
                 })?;
             }
-            // `crystalsChanged` (wire event name) -- 「when this card no longer
+            // `counterChanged` (wire event name) -- 「when this card no longer
             // has its named counter」 (AG:绯红之魂
             // (3) and kin) live here rather than at each spend site, so a
             // count emptied by *any* path still leaves the field.
@@ -7136,7 +7136,7 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .collect()
     }
     fn card_counter_table(&self) -> Vec<(String, i64)> {
-        // The two on-card ruleset counter keys (`"cp"` / `"crystals"`) plus any
+        // On-card ruleset counter keys plus any
         // card-declared named counter on the candidate instance.
         let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {
             return Vec::new();
@@ -8547,10 +8547,9 @@ mod tests {
             "73",
             "74",
             "75",
-            // v29: named counter writes
-            "crystalsChanged",
-            // v36: [tile marks] writes
-            "cpChanged",
+            // v50: named counter writes
+            "counterChanged",
+            "78",
             // v42: the command-wide pre-split payment stage + terminals
             "payTotalAdd",
             "payTotalMul",
