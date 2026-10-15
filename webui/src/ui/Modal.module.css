@@ -315,3 +315,11 @@
    the stage instead; the body scrolls inside what is left. */
 :global(:root[data-compact]) .sheet { top: 6px; align-items: flex-end; }
 :global(:root[data-compact]) .sheetWin { max-height: 100%; }
+
+/* A centred modal never outgrows the screen: on a short stage (the phone's 540px
+   canvas) a tall window -- a long card detail -- used to hang off the edge with
+   its close button out of reach. Cap both axes to the stage; the body scrolls. */
+.back > .window {
+  max-width: 96%;
+  max-height: min(840px, 96%);
+}
