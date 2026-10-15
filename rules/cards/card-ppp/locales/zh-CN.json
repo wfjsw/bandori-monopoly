@@ -46,7 +46,7 @@
   "returns_note": "Returns",
   "returns_placed": "{{who}} 把「Returns」从卡组放到了自己的场地上",
   "returns_sticker": "通用卡生效：获得1个星星贴纸",
-  "returns_title": "再来一次",
+  "returns_title": "Returns",
   "returns_which_band": "复制哪名玩家的团卡？",
   "rimi_choco_ask": "这回合的主要移动改为移动到哪一格？（前后 4 格以内，期间 [不可阻挡]）",
   "rimi_choco_moved": "{{who}} 的主要移动改为走到 {{tile}}（{{n}} 格，我的心就像巧克力螺）",

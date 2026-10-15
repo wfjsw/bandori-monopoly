@@ -242,6 +242,14 @@ pub fn counter_name(name: &str) -> Msg {
 
 /// A trigger-kind wire name, for the generic why fallback. Never raw.
 fn kind_name(kind: &str) -> Msg {
+    // Kinds that reach the generic fallback have a display name; the verbatim
+    // wire spelling is only for a kind nobody has named yet.
+    if matches!(
+        kind,
+        "rollPlan" | "playGate" | "flipEffect" | "26" | "73" | "74" | "75" | "78"
+    ) {
+        return Msg::new(format!("log.kind.{kind}"));
+    }
     Msg::new("log.kind.wire").text("name", kind)
 }
 
