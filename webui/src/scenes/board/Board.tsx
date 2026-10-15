@@ -236,7 +236,7 @@ export function Board({ sess }: { sess: GameSession }) {
               </div>
             )}
             {anim.chain?.shown && (
-              <div className={cx(s.chain, anim.chain.resolving && s.chainResolving)} style={{ width: cardW * 2.3 }}>
+              <div className={cx(s.chain, anim.chain.resolving && s.chainResolving)} style={{ width: cardW * 3.2 }}>
                 {anim.chain.links.filter((l) => !anim.chain!.done.includes(l.seq) || l.seq === anim.chain!.active).map((l) => {
                   const ch = anim.chain!;
                   const done = ch.done.includes(l.seq);
