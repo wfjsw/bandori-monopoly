@@ -638,7 +638,7 @@ export class Animator {
 
   /** The closed chain settles newest-first: a Resolve banner, then each link
    *  lifts out of the stack in turn, down to link 1. */
-  private async chainResolve(e: MatchEvent, fast: boolean): Promise<void> {
+  private async chainResolve(e: MatchEvent): Promise<void> {
     const quiet = this.noFlash();
     const ch = this.chain;
     if (e.value === 0) {
@@ -787,7 +787,7 @@ export class Animator {
         await this.cardFlash(e, fast);
         break;
       case "chain": await this.chainLink(e, fast); break;
-      case "resolve": await this.chainResolve(e, fast); break;
+      case "resolve": await this.chainResolve(e); break;
       case "flash":
         // Proactive "look here" cue (`ctx::flash_card` / `flash_tile`): the
         // named card's face, or a tile banner when there is no card. Parent-
