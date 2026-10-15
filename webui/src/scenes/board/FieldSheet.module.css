@@ -169,6 +169,7 @@
   cursor: pointer;
   text-align: left;
 }
+.event.picked { box-shadow: 0 0 0 4px var(--pink), var(--card-shadow); }
 .eventArt {
   flex: 1;
   min-height: 0;
