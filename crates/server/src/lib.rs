@@ -52,6 +52,62 @@ pub use state::Server;
 /// Match ticks per second.
 pub const TICK_HZ: u64 = 20;
 
+/// Forward room change notes from the store to the local SSE pumps.
+///
+/// Every process runs one of these. The store's pub/sub is best-effort -- a
+/// missed message only delays a pump until its own re-poll -- so this task is
+/// an optimisation for latency, never a correctness path.
+pub fn spawn_noticer(server: Arc<Server>) {
+    let rx = match server.store.subscribe(crate::store::NOTE_CHANNEL) {
+        Ok(rx) => rx,
+        Err(e) => {
+            eprintln!("note subscribe failed ({e}); SSE will rely on re-poll");
+            return;
+        }
+    };
+    // One std thread bridges the sync receiver onto the async runtime.
+    let (tx, mut notes) = tokio::sync::mpsc::unbounded_channel();
+    std::thread::Builder::new()
+        .name("note-bridge".into())
+        .spawn(move || {
+            while let Ok(msg) = rx.recv() {
+                if tx.send(msg).is_err() {
+                    return;
+                }
+            }
+        })
+        .expect("note bridge thread");
+    tokio::spawn(async move {
+        while let Some(msg) = notes.recv().await {
+            let v: serde_json::Value = match serde_json::from_str(&msg.payload) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let Some(room_id) = v.get("room").and_then(|r| r.as_str()) else {
+                continue;
+            };
+            // Only rooms this process is already serving have pumps listening.
+            let Some(room) = server.rooms.lock().unwrap().get(room_id).cloned() else {
+                continue;
+            };
+            match v.get("kind").and_then(|k| k.as_str()) {
+                Some("dissolved") => {
+                    let reason = v
+                        .get("reason")
+                        .cloned()
+                        .and_then(|r| serde_json::from_value(r).ok())
+                        .unwrap_or_else(|| game_core::msg::Msg::new("room.dissolved_empty"));
+                    let _ = room.lock().unwrap().tx.send(room::Note::Dissolved(reason));
+                    server.forget_room(room_id);
+                }
+                _ => {
+                    let _ = room.lock().unwrap().tx.send(room::Note::Changed);
+                }
+            }
+        }
+    });
+}
+
 pub fn router(
     server: Arc<Server>,
     data_dir: Option<PathBuf>,
@@ -116,38 +172,41 @@ async fn spa_index(State(index): State<PathBuf>, uri: Uri) -> Response {
     }
 }
 
-/// Advance every room by one tick quantum and apply presence time-outs.
-/// Advance every room. The match clock is a worker round-trip, so each room is
-/// checked out of its lock first and the round-trip runs with nothing held --
-/// then the rooms are fanned out over `spawn_blocking` and run in parallel.
+/// Advance the rooms this process holds the **tick lease** for.
 ///
-/// `dt` is the game time this call advances and `k` how many whole quanta of
-/// `header.step` that is (see [`spawn_ticker`]); the record logs `k`, so a
-/// replay recomputes the identical f32.
-pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
-    let rooms: Vec<(String, Arc<std::sync::Mutex<room::Room>>)> = server
-        .rooms
-        .lock()
-        .unwrap()
-        .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
+/// The match clock is a worker round-trip, so each room is checked out of its
+/// lock first and the round-trip runs with nothing held -- then the rooms are
+/// fanned out over `spawn_blocking` and run in parallel. Presence reaping and
+/// bot probes ride along, because they are the lease holder's job too.
+///
+/// Each entry is `(room, dt, k)`: `dt` is the game time this call advances and
+/// `k` how many whole quanta of `header.step` that is (see [`spawn_ticker`]);
+/// the record logs `k`, so a replay recomputes the identical f32.
+pub async fn tick_all(server: &Arc<Server>, jobs_in: &[(String, f32, u8)]) {
     let timeout = server.presence_timeout;
     let mut cleared: Vec<String> = vec![];
     let mut dead = vec![];
-    let mut jobs = Vec::with_capacity(rooms.len());
-    for (id, room) in rooms {
+    let mut jobs = Vec::with_capacity(jobs_in.len());
+    for (id, dt, k) in jobs_in {
+        let (id, dt, k) = (id.clone(), *dt, *k);
         let server = server.clone();
         jobs.push(tokio::task::spawn_blocking(move || {
-            // 1. presence and check-out -- the room lock is held only here.
+            // 1. presence and check-out under the **room lock** (the tick
+            // lease keeps two processes from both ticking; the room lock keeps
+            // a player action from clobbering the roster write).
             let (m, playing, dropped, removed) = {
-                let mut r = room.lock().unwrap();
-                let m = r.match_handle();
-                let playing = r.info.playing;
-                let (dropped, removed) = r.tick_presence(timeout);
-                (m, playing, dropped, removed)
+                let out = server.with_room(&id, |r| {
+                    let m = r.match_handle();
+                    let playing = r.info.playing;
+                    let (dropped, removed) = r.tick_presence(timeout);
+                    Ok((m, playing, dropped, removed))
+                });
+                match out {
+                    Ok(v) => v,
+                    Err(_) => return (id, vec![], false, vec![], None),
+                }
             };
-            // 2. the round-trips, with no lock held.
+            // 2. the round-trips, with no room lock held.
             let mut changed = false;
             let mut ended = false;
             // Advanced seats the bot service should be asked about (claimed,
@@ -169,26 +228,30 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
                     drive = claim_advanced(&server, &id);
                 }
             }
-            // 3. bookkeeping -- short lock again.
-            let mut r = room.lock().unwrap();
-            if ended {
-                r.info.playing = false;
-                changed = true;
-                server.bot_drive.lock().unwrap().forget_room(&id);
-            }
-            // A finished match rolls the next commit-reveal slot right here,
-            // in the same breath as `playing = false` (`docs/FAIRNESS.md`):
-            // the new commitment is published before anybody can post a nonce
-            // for it, and the clients re-submit without waiting on anything.
-            if r.fair_needs_roll() {
-                if let Err(e) = r.roll_fair() {
-                    eprintln!("room {id} fair slot roll failed: {e}");
+            // 3. bookkeeping, again under the room lock.
+            let mut gone = false;
+            let _ = server.with_room(&id, |r| {
+                if ended {
+                    r.info.playing = false;
+                    changed = true;
+                    server.bot_drive.lock().unwrap().forget_room(&id);
                 }
-            }
-            if changed {
-                r.notify();
-            }
-            (id, removed, r.dissolved.is_some(), drive, m)
+                // A finished match rolls the next commit-reveal slot right
+                // here, in the same breath as `playing = false`
+                // (`docs/FAIRNESS.md`): the new commitment is published before
+                // anybody can post a nonce for it.
+                if r.fair_needs_roll() {
+                    if let Err(e) = r.roll_fair() {
+                        eprintln!("room {id} fair slot roll failed: {e}");
+                    }
+                }
+                if changed {
+                    r.notify();
+                }
+                gone = r.dissolved.is_some();
+                Ok(())
+            });
+            (id, removed, gone, drive, m)
         }));
     }
     for job in jobs {
@@ -213,9 +276,8 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
         server.set_room(&token, None);
     }
     if !dead.is_empty() {
-        let mut rooms = server.rooms.lock().unwrap();
         for id in dead {
-            rooms.remove(&id);
+            server.forget_room(&id);
         }
     }
 }
@@ -224,33 +286,103 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
 /// `TICK_HZ` that is one interval, so `k` is 1 unless the loop stalled.
 pub const TICK_QUANTUM: f32 = 0.05;
 
+/// How long a room's tick lease lives without a renewal. The loop renews every
+/// `1/TICK_HZ`, so this is many missed beats -- but short enough that a dead
+/// process's rooms start ticking elsewhere within a few seconds.
+pub const TICK_LEASE_TTL_MS: u64 = 3_000;
+
+/// Per-room clock bookkeeping of **this** process while it holds the lease.
+/// Not game state: a new holder starts at `last = now, acc = 0` so a lease
+/// handover never bursts the engine with catch-up ticks.
+struct RoomTick {
+    last: Instant,
+    acc: f32,
+    leased: bool,
+}
+
 /// Drive every room's match on a fixed-step accumulator (`docs/REPLAY.md` §1).
+///
+/// Each instance runs this loop, but only ticks the rooms whose **tick lease**
+/// (`tick:{room}`, renewed every beat) it holds -- so two servers sharing one
+/// store advance each match exactly once per quantum, and a third can take
+/// over the moment a holder dies (the lease is a TTL key).
 ///
 /// `k = floor(acc / TICK_QUANTUM).min(10)` whole quanta are owed to the engine;
 /// `k == 0` skips the round-trip entirely. Each quantum is
 /// `TICK_QUANTUM * time_scale` of game time, so the record's `step` is that
 /// same number and a replay feeds the engine the identical `tick(dt)` f32s.
 /// The `min(10)` bound is what keeps one long stall from making a single
-/// enormous step.
+/// enormous step. The accumulator is **per room**, reset when the lease is
+/// newly acquired.
 pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
+    spawn_noticer(server.clone());
     tokio::spawn(async move {
         let mut iv = tokio::time::interval(Duration::from_millis(1000 / TICK_HZ));
         iv.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        let mut last = Instant::now();
-        let mut acc = 0.0f32;
+        let mut ticks: std::collections::HashMap<String, RoomTick> = std::collections::HashMap::new();
         loop {
             iv.tick().await;
-            let now = Instant::now();
-            let dt = (now - last).as_secs_f32().min(0.5);
-            last = now;
-            acc += dt;
-            let k = (acc / TICK_QUANTUM).floor().clamp(0.0, 10.0) as u8;
-            if k == 0 {
-                continue;
+            // The lobby list is the store's, not this process's cache.
+            let room_ids: Vec<String> = match server.store.room_all() {
+                Ok(recs) => recs.into_iter().map(|r| r.info.id).collect(),
+                Err(e) => {
+                    eprintln!("ticker: room list failed: {e}");
+                    continue;
+                }
+            };
+            ticks.retain(|id, _| room_ids.contains(id));
+            let mut due: Vec<(String, f32, u8)> = Vec::new();
+            for id in &room_ids {
+                let st = ticks.entry(id.clone()).or_insert_with(|| RoomTick {
+                    last: Instant::now(),
+                    acc: 0.0,
+                    leased: false,
+                });
+                let key = format!("tick:{id}");
+                if st.leased {
+                    if !server
+                        .store
+                        .lock_renew(&key, &server.instance, TICK_LEASE_TTL_MS)
+                        .unwrap_or(false)
+                    {
+                        // Lost it (or it expired under us): stand down and
+                        // start clean if we get it back.
+                        *st = RoomTick {
+                            last: Instant::now(),
+                            acc: 0.0,
+                            leased: false,
+                        };
+                    }
+                } else if server
+                    .store
+                    .lock_acquire(&key, &server.instance, TICK_LEASE_TTL_MS)
+                    .unwrap_or(false)
+                {
+                    // Fresh lease: no catch-up burst.
+                    *st = RoomTick {
+                        last: Instant::now(),
+                        acc: 0.0,
+                        leased: true,
+                    };
+                }
+                if !st.leased {
+                    continue;
+                }
+                let now = Instant::now();
+                let dt = (now - st.last).as_secs_f32().min(0.5);
+                st.last = now;
+                st.acc += dt;
+                let k = (st.acc / TICK_QUANTUM).floor().clamp(0.0, 10.0) as u8;
+                if k == 0 {
+                    continue;
+                }
+                st.acc -= k as f32 * TICK_QUANTUM;
+                let step = TICK_QUANTUM * server.time_scale;
+                due.push((id.clone(), k as f32 * step, k));
             }
-            acc -= k as f32 * TICK_QUANTUM;
-            let step = TICK_QUANTUM * server.time_scale;
-            tick_all(&server, k as f32 * step, k).await;
+            if !due.is_empty() {
+                tick_all(&server, &due).await;
+            }
         }
     })
 }
@@ -258,8 +390,9 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
 // ------------------------------------------------------- advanced bots (B5)
 
 /// Members of `room` that the bot service drives: bot seats tagged
-/// [`BotMentality::Advanced`]. Claims each one whose probe time is due, so a
-/// seat is only ever asked about once (`docs/BOT.md` B5).
+/// [`BotMentality::Advanced`]. Claims each one whose probe time is due via the
+/// store, so a seat is only ever asked about once even across processes
+/// (`docs/BOT.md` B5).
 fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
     if server.bots.is_none() {
         return Vec::new();
@@ -276,14 +409,9 @@ fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
             .map(|m| m.id)
             .collect()
     };
-    if members.is_empty() {
-        return Vec::new();
-    }
-    let now = Instant::now();
-    let mut drive = server.bot_drive.lock().unwrap();
     members
         .into_iter()
-        .filter(|&m| drive.claim(room_id, m, now))
+        .filter(|&m| botsvc::claim_seat(server.store.as_ref(), &server.instance, room_id, m))
         .collect()
 }
 
@@ -299,11 +427,13 @@ fn spawn_probe(
 ) {
     tokio::spawn(async move {
         let acted = probe_one(&server, &bots, &room_id, member, &m).await;
-        server
-            .bot_drive
-            .lock()
-            .unwrap()
-            .release(&room_id, member, acted);
+        botsvc::release_seat(
+            server.store.as_ref(),
+            &server.instance,
+            &room_id,
+            member,
+            acted,
+        );
     });
 }
 
@@ -499,7 +629,9 @@ fn spawn_ponder(
 
 /// A stable search-side seed. Mixes the public decision identity with a
 /// counter so two identical decisions in one match still get different
-/// samples; never derived from the match's RNG.
+/// samples; never derived from the match's RNG. The counter is process-local
+/// (two servers may hand out the same seed for the same decision) -- that is
+/// fine: it only biases bot search samples, never game state.
 fn decision_seed(room: &str, member: i32, seq: i32, prompt_id: i32) -> u64 {
     use std::hash::{Hash, Hasher};
     use std::sync::atomic::{AtomicU64, Ordering};

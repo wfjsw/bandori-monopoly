@@ -116,14 +116,18 @@ pub async fn stream(
     let (room, member) = member_room(&s, &sess, &id)?;
     let (match_id, last_event) = parse_last_event_id(&headers, uri.query());
     let keepalive = s.sse_keepalive;
+    // One presence key per live stream, named by this process + connection, so
+    // two servers' streams of the same member do not collide and a dead
+    // process's keys expire on their own.
+    let stream_key = format!("{}:{}", s.instance, crate::state::random_hex(4));
     let (rx, back) = {
         let mut r = room.lock().unwrap();
-        let back = r.stream_opened(member);
+        let back = r.stream_opened(member, &stream_key);
         (r.tx.subscribe(), back)
     };
     // Every (re)connect asks the engine to hand the seat back, not only when
-    // presence says the member was away: presence is in-memory, so a seat put
-    // on 托管 before a restart (or by a path presence never saw) would
+    // presence says the member was away: presence is in another process's
+    // stream too (or was dropped by a restart), so a seat put on 托管 would
     // otherwise stay on the AI. The engine ignores it for a seat not on AI.
     // Room lock dropped: `member_back` is a worker round-trip.
     let handle = room.lock().unwrap().match_handle();
@@ -139,6 +143,7 @@ pub async fn stream(
     tokio::spawn(pump(
         room,
         member,
+        stream_key,
         rx,
         tx,
         Cursor {
@@ -157,6 +162,7 @@ pub async fn stream(
 async fn pump(
     room: Arc<Mutex<Room>>,
     member: i32,
+    stream_key: String,
     mut rx: broadcast::Receiver<Note>,
     tx: mpsc::Sender<Event>,
     mut cur: Cursor,
@@ -171,11 +177,29 @@ async fn pump(
         loop {
             // Check the match out and drop the room lock first: `frames` does
             // two worker round-trips and must hold neither the room lock nor a
-            // runtime thread.
-            let (info, m, dissolved) = {
-                let r = room.lock().unwrap();
-                (r.info.clone(), r.match_handle(), r.dissolved.clone())
+            // runtime thread. Also refresh this stream's presence key and
+            // re-read the room from the store -- correctness must not depend
+            // on pub/sub delivery (a missed note is recovered here).
+            let (info, m, dissolved, gone_room) = {
+                let mut r = room.lock().unwrap();
+                if r.reload().is_err() {
+                    // The room vanished from the store (dissolved elsewhere).
+                    (r.info.clone(), None, r.dissolved.clone(), true)
+                } else {
+                    r.stream_opened(member, &stream_key); // refresh only
+                    (r.info.clone(), r.match_handle(), r.dissolved.clone(), false)
+                }
             };
+            if gone_room && dissolved.is_none() {
+                let _ = tx
+                    .send(
+                        Event::default()
+                            .event("dissolve")
+                            .data(serde_json::json!({ "reason": "room.dissolved_empty" }).to_string()),
+                    )
+                    .await;
+                break;
+            }
             let moved = std::mem::take(&mut cur);
             let (batch, back) = match tokio::task::spawn_blocking(move || {
                 let mut c = moved;
@@ -214,17 +238,20 @@ async fn pump(
             let retry = cur.retry;
             tokio::select! {
                 _ = tx.closed() => break,
-                _ = tokio::time::sleep(std::time::Duration::from_secs(1)), if retry => {}
+                // Re-poll at least every couple of seconds: a change note is
+                // an optimisation, never the only path to a fresh frame.
+                _ = tokio::time::sleep(std::time::Duration::from_secs(2)), if !retry => {}
+                _ = tokio::time::sleep(std::time::Duration::from_millis(500)), if retry => {}
                 note = rx.recv() => match note {
                     Ok(Note::Changed) | Err(broadcast::error::RecvError::Lagged(_)) => {
                         // Coalesce a burst of changes into one batch.
                         while rx.try_recv().is_ok() {}
                     }
                     Ok(Note::Dissolved(_)) => {}
-                    Err(broadcast::error::RecvError::Closed) => break,
+                    Err(broadcast::error::RecvError::Closed) => {}
                 },
             }
         }
     }
-    room.lock().unwrap().stream_closed(member);
+    room.lock().unwrap().stream_closed(member, &stream_key);
 }

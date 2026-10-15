@@ -7,12 +7,13 @@
 //! Beside the blob lives the **record log** (`docs/REPLAY.md` §4): every input
 //! the match took, with a checkpoint at each turn boundary. It is appended
 //! after a successful store put and sealed into a [`StoredRecord`] when the
-//! match ends, so a restart mid-match loses at most the buffered tick run (and
-//! flags the record `gaps`).
+//! match ends. The open tick run and the counters are in the store too
+//! ([`store::RecMeta`]), so a process that dies mid-match (or a second server
+//! that takes over) continues the same log; `gaps` is set only when something
+//! was actually lost.
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use game_core::msg::Msg;
 use game_core::net::{self, NetMessage, RoomInfo, RoomMember};
@@ -27,11 +28,9 @@ use game_core::MatchMode;
 use serde_json::Value;
 use tokio::sync::broadcast;
 
-use std::sync::Mutex;
-
 use crate::error::{ApiError, ApiResult};
 use crate::pool::{Out, Pool};
-use crate::store::{CrossState, LogEntry, RecordHead, RoomFair, RoomRecord, StoredRecord};
+use crate::store::{self, CrossState, LogEntry, RecordHead, RoomFair, RoomRecord, StoredRecord};
 
 /// A room's commit-reveal slot (`docs/FAIRNESS.md`): the openings of the
 /// **next** match this room will deal, drawn at room creation and redrawn
@@ -109,43 +108,32 @@ impl FairState {
 }
 
 /// Bookkeeping for one match's record log. Lives beside the blob rather than
-/// inside it: the blob is the engine's, this is the driver's.
-#[derive(Debug, Default)]
-struct RecState {
-    /// The open tick run, buffered in memory (one `Input::Ticks`).
-    buf: Option<(u8, u32)>,
-    /// Inputs the log holds, counting the buffered run as one.
-    inputs: u32,
-    /// Tick calls recorded -- the sum of every `Ticks.n`.
-    ticks: u64,
-    /// `at` of the last checkpoint, so a run closes at a turn boundary.
-    last_ckpt_at: u32,
-    /// Buffered ticks were lost (a restart mid-match). The record is then
-    /// unverifiable: see `RecordHeader::gaps`.
-    gaps: bool,
-    /// Members seated when the match started -- the record's participants.
-    members: Vec<i32>,
-    /// Sealed; stop appending.
-    done: bool,
-}
+/// inside it: the blob is the engine's, this is the driver's -- and it is in
+/// the [`CrossState`] too ([`crate::store::RecMeta`]), so a match that changes
+/// hands mid-run loses nothing. Every read and write happens under the match
+/// lock (see [`MatchHandle::run`]).
+///
+/// The open tick run (`buf`) is part of that record: consecutive ticks with
+/// the same `k` run-length merge into one `Input::Ticks`, exactly as
+/// `RecordedMatch` does, and the run survives a crash because it is persisted
+/// rather than buffered in a process.
 
-/// A running match: its blob, plus the order its operations apply in.
+/// A running match: just the room id. The blob and its record log live in the
+/// [`CrossState`]; this handle only sequences operations on them.
 ///
-/// The **room** lock is never held across a worker round-trip -- callers clone
-/// this handle out of the room and drop that lock first (see `state.rs`:
-/// critical sections are short). `gate` is what keeps two operations on one
-/// match from racing on the blob; it is held for exactly one round-trip, which
-/// the pool bounds with its deadline.
+/// **Every operation takes the cross-process match lock** (`match:{room}`,
+/// [`crate::store::with_lock`]) around get-blob -> worker -> put-blob -> log
+/// append, so two servers -- or two requests on one -- cannot interleave on
+/// the same match. A lock failure is an error and never proceeds unlocked.
+/// The lock is held for exactly one round-trip, which the pool bounds with its
+/// deadline.
 ///
-/// **The blob is not held here** -- it lives in the [`CrossState`], so a
-/// non-Dummy store means no match state in this process: any worker serves any
-/// request, and a restart keeps every live match.
+/// **No match state is held here** -- any worker serves any request, and a
+/// restart (or a second process) keeps every live match.
 pub struct MatchHandle {
     id: String,
     store: Arc<dyn CrossState>,
-    gate: Mutex<()>,
     engine: Arc<Pool>,
-    rec: Mutex<RecState>,
 }
 
 impl MatchHandle {
@@ -159,60 +147,77 @@ impl MatchHandle {
         head: RecordHead,
         members: Vec<i32>,
     ) -> Result<Self, String> {
-        store.match_put(&id, &blob).map_err(|e| e.to_string())?;
-        // A stale log from a match that never sealed must not mix with this one.
-        let _ = store.record_log_del(&id);
-        let _ = store.record_log_append(&id, &LogEntry::Head(head).to_line());
-        Ok(Self {
-            id,
-            store,
-            gate: Mutex::new(()),
-            engine,
-            rec: Mutex::new(RecState {
-                members,
-                ..RecState::default()
-            }),
-        })
+        let key = match_key(&id);
+        store::with_lock(
+            store.as_ref(),
+            &key,
+            &lock_owner(),
+            store::LOCK_TTL_MS,
+            store::LOCK_DEADLINE,
+            || {
+                store.match_put(&id, &blob).map_err(|e| e.to_string())?;
+                // A stale log / meta from a match that never sealed must not
+                // mix with this one.
+                let _ = store.record_log_del(&id);
+                let _ = store.rec_meta_del(&id);
+                let _ = store.record_log_append(&id, &LogEntry::Head(head).to_line());
+                store
+                    .rec_meta_put(
+                        &id,
+                        &crate::store::RecMeta {
+                            members,
+                            ..crate::store::RecMeta::default()
+                        },
+                    )
+                    .map_err(|e| e.to_string())?;
+                Ok(())
+            },
+        )?;
+        Ok(Self { id, store, engine })
     }
 
-    /// A match already in progress, picked up after a restart. The in-memory
-    /// tick buffer went with the process, so anything still unflushed is gone:
-    /// that is what `gaps` marks.
+    /// A match already in progress, picked up by another process (or after a
+    /// restart). Bookkeeping comes from the store's [`crate::store::RecMeta`];
+    /// only if that is missing (a match started before the meta existed) are
+    /// the counters rebuilt from the log -- and the `dirty` flag of an
+    /// operation that never finished becomes `gaps`.
     pub fn restore(
         id: String,
         store: Arc<dyn CrossState>,
         engine: Arc<Pool>,
         blob: String,
     ) -> Result<Self, String> {
-        store.match_put(&id, &blob).map_err(|e| e.to_string())?;
-        let lines = store.record_log_get(&id).map_err(|e| e.to_string())?;
-        let mut st = RecState::default();
-        for line in &lines {
-            match LogEntry::parse_line(line) {
-                Some(LogEntry::Head(h)) => {
-                    st.members = match &h.init {
-                        Init::Seed(s) => s.members.iter().map(|m| m.id).collect(),
-                        Init::Snapshot { .. } => vec![],
-                    };
+        // The blob is already the source of truth; writing it back is a no-op
+        // kept out on purpose. `blob` is accepted so call sites that just read
+        // one can pass it through.
+        let _ = blob;
+        Self::attach(id, store, engine)
+    }
+
+    /// [`Self::restore`] without a blob in hand: look it up in the store.
+    pub fn attach(id: String, store: Arc<dyn CrossState>, engine: Arc<Pool>) -> Result<Self, String> {
+        let h = Self { id, store, engine };
+        h.snapshot()?;
+        // Promote a leftover `dirty` from a crashed operation to `gaps`, under
+        // the match lock so it cannot race a live writer.
+        let key = match_key(&h.id);
+        store::with_lock(
+            h.store.as_ref(),
+            &key,
+            &lock_owner(),
+            store::LOCK_TTL_MS,
+            store::LOCK_DEADLINE,
+            || {
+                let mut meta = h.load_meta()?;
+                if meta.dirty {
+                    meta.gaps = true;
+                    meta.dirty = false;
+                    h.save_meta(&meta)?;
                 }
-                Some(LogEntry::Input(i)) => {
-                    st.inputs += 1;
-                    if let Input::Ticks { n, .. } = i {
-                        st.ticks += n as u64;
-                    }
-                }
-                Some(LogEntry::Checkpoint(c)) => st.last_ckpt_at = c.at,
-                None => {}
-            }
-        }
-        st.gaps = !lines.is_empty();
-        Ok(Self {
-            id,
-            store,
-            gate: Mutex::new(()),
-            engine,
-            rec: Mutex::new(st),
-        })
+                Ok(())
+            },
+        )?;
+        Ok(h)
     }
 
     /// The blob, straight from the store.
@@ -223,8 +228,48 @@ impl MatchHandle {
             .ok_or_else(|| "no match".to_string())
     }
 
+    fn load_meta(&self) -> Result<crate::store::RecMeta, String> {
+        match self.store.rec_meta_get(&self.id).map_err(|e| e.to_string())? {
+            Some(m) => Ok(m),
+            None => {
+                // Pre-meta match: rebuild the counters from the log, the same
+                // way a restore used to. `members` come from the head.
+                let lines = self.store.record_log_get(&self.id).map_err(|e| e.to_string())?;
+                let mut st = crate::store::RecMeta::default();
+                for line in &lines {
+                    match LogEntry::parse_line(line) {
+                        Some(LogEntry::Head(h)) => {
+                            st.members = match &h.init {
+                                Init::Seed(s) => s.members.iter().map(|m| m.id).collect(),
+                                Init::Snapshot { .. } => vec![],
+                            };
+                        }
+                        Some(LogEntry::Input(i)) => {
+                            st.inputs += 1;
+                            if let Input::Ticks { n, .. } = i {
+                                st.ticks += n as u64;
+                            }
+                        }
+                        Some(LogEntry::Checkpoint(c)) => st.last_ckpt_at = c.at,
+                        None => {}
+                    }
+                }
+                // No meta means we cannot know whether the old in-memory tick
+                // buffer was lost -- be honest and mark it.
+                st.gaps = !lines.is_empty();
+                Ok(st)
+            }
+        }
+    }
+
+    fn save_meta(&self, meta: &crate::store::RecMeta) -> Result<(), String> {
+        self.store
+            .rec_meta_put(&self.id, meta)
+            .map_err(|e| e.to_string())
+    }
+
     /// One **recorded** operation. `f` gets the current blob and returns the
-    /// new one; the gate is held for the whole call. Only a successful
+    /// new one; the match lock is held for the whole call. Only a successful
     /// round-trip **and** a successful store put reaches the log -- a failure
     /// leaves no trace, because there is no matching engine state to replay
     /// it against.
@@ -233,26 +278,55 @@ impl MatchHandle {
         log: impl FnOnce(&Out<T>) -> Input,
         f: impl FnOnce(&str, &Pool) -> Result<Out<T>, String>,
     ) -> Result<T, String> {
-        let _order = self.gate.lock().unwrap();
-        let before = self.snapshot()?;
-        let out = f(&before, &self.engine)?;
-        self.store
-            .match_put(&self.id, &out.state)
-            .map_err(|e| e.to_string())?;
-        self.note(log(&out), &out);
-        let ended = out.ended;
-        drop(_order);
-        if ended {
-            self.finalize();
-        }
-        Ok(out.value)
+        let key = match_key(&self.id);
+        store::with_lock(
+            self.store.as_ref(),
+            &key,
+            &lock_owner(),
+            store::LOCK_TTL_MS,
+            store::LOCK_DEADLINE,
+            || {
+                let mut meta = self.load_meta()?;
+                if meta.done {
+                    return Err("match already sealed".to_string());
+                }
+                // A previous holder died mid-op: its log line may be missing.
+                if meta.dirty {
+                    meta.gaps = true;
+                }
+                meta.dirty = true;
+                self.save_meta(&meta)?;
+                let before = self.snapshot()?;
+                let out = f(&before, &self.engine)?;
+                self.store
+                    .match_put(&self.id, &out.state)
+                    .map_err(|e| e.to_string())?;
+                self.note(&mut meta, log(&out), &out);
+                meta.dirty = false;
+                self.save_meta(&meta)?;
+                if out.ended {
+                    self.seal(&mut meta)?;
+                }
+                Ok(out.value)
+            },
+        )
     }
 
-    /// One read-only operation: nothing is appended to the log.
+    /// One read-only operation: nothing is appended to the log. Still under
+    /// the match lock, so it cannot interleave with a write.
     fn peek<T>(&self, f: impl FnOnce(&str, &Pool) -> Result<T, String>) -> Result<T, String> {
-        let _order = self.gate.lock().unwrap();
-        let before = self.snapshot()?;
-        f(&before, &self.engine)
+        let key = match_key(&self.id);
+        store::with_lock(
+            self.store.as_ref(),
+            &key,
+            &lock_owner(),
+            store::LOCK_TTL_MS,
+            store::LOCK_DEADLINE,
+            || {
+                let before = self.snapshot()?;
+                f(&before, &self.engine)
+            },
+        )
     }
 
     /// `(error message if the command was rejected)`. The blob moves on either
@@ -327,8 +401,7 @@ impl MatchHandle {
     /// `RecordedMatch`: consecutive ticks with the same `k` run-length merge
     /// into one `Ticks` input, and a turn boundary closes the run so the
     /// checkpoint sits between two inputs.
-    fn note<T>(&self, input: Input, out: &Out<T>) {
-        let mut rec = self.rec.lock().unwrap();
+    fn note<T>(&self, rec: &mut crate::store::RecMeta, input: Input, out: &Out<T>) {
         if rec.done {
             return;
         }
@@ -339,19 +412,20 @@ impl MatchHandle {
                 match rec.buf {
                     Some((k2, n)) if k2 == *k && !closed => rec.buf = Some((k2, n + 1)),
                     _ => {
-                        Self::flush_buf(&self.store, &self.id, &mut rec);
+                        self.flush_buf(rec);
                         rec.buf = Some((*k, 1));
                         rec.inputs += 1;
                     }
                 }
-                // Bound how much a crash can lose.
+                // Bound how much a crash can lose (the buf itself is in the
+                // store now; this bounds how stale a flushed run can look).
                 if rec.ticks % 100 == 0 {
-                    Self::flush_buf(&self.store, &self.id, &mut rec);
+                    self.flush_buf(rec);
                 }
             }
             other => {
                 // The tick run comes first, so the log stays ordered.
-                Self::flush_buf(&self.store, &self.id, &mut rec);
+                self.flush_buf(rec);
                 let line = LogEntry::Input(other.clone()).to_line();
                 if self.store.record_log_append(&self.id, &line).is_err() {
                     rec.gaps = true;
@@ -361,7 +435,7 @@ impl MatchHandle {
             }
         }
         if let Some(ckpt) = &out.checkpoint {
-            Self::flush_buf(&self.store, &self.id, &mut rec);
+            self.flush_buf(rec);
             let entry = crate::store::Checkpoint {
                 at: rec.inputs,
                 tick: rec.ticks,
@@ -378,45 +452,71 @@ impl MatchHandle {
         }
     }
 
-    fn flush_buf(store: &Arc<dyn CrossState>, id: &str, rec: &mut RecState) {
+    fn flush_buf(&self, rec: &mut crate::store::RecMeta) {
         if let Some((k, n)) = rec.buf.take() {
             let line = LogEntry::Input(Input::Ticks { k, n }).to_line();
-            if store.record_log_append(id, &line).is_err() {
+            if self.store.record_log_append(&self.id, &line).is_err() {
                 rec.gaps = true;
             }
         }
     }
 
     /// Seal the record: seats from the final view, `final_hash` from the blob
-    /// the server kept. Idempotent -- the first call wins. The log is cleared
-    /// afterwards so the next match in this room starts clean.
+    /// the server kept. Idempotent -- the first caller under the match lock
+    /// wins, and `RecMeta::done` is what every other instance sees. The log is
+    /// cleared afterwards so the next match in this room starts clean; the
+    /// `done` meta stays until [`Self::start`] replaces it.
     pub fn finalize(&self) {
-        let (lines, members, ticks, gaps) = {
-            let mut rec = self.rec.lock().unwrap();
-            if rec.done {
-                return;
-            }
-            rec.done = true;
-            Self::flush_buf(&self.store, &self.id, &mut rec);
-            let ticks = rec.ticks;
-            let gaps = rec.gaps;
-            let members = rec.members.clone();
-            let lines = self.store.record_log_get(&self.id).unwrap_or_default();
-            (lines, members, ticks, gaps)
-        };
-        if let Err(e) = self.seal(&lines, &members, ticks, gaps) {
+        let key = match_key(&self.id);
+        let r = store::with_lock(
+            self.store.as_ref(),
+            &key,
+            &lock_owner(),
+            store::LOCK_TTL_MS,
+            store::LOCK_DEADLINE,
+            || {
+                let mut meta = self.load_meta()?;
+                if meta.done {
+                    return Ok(());
+                }
+                if meta.dirty {
+                    meta.gaps = true;
+                    meta.dirty = false;
+                }
+                self.seal(&mut meta)
+            },
+        );
+        if let Err(e) = r {
             eprintln!("room {}: record seal failed: {e}", self.id);
         }
-        let _ = self.store.record_log_del(&self.id);
     }
 
-    fn seal(
+    /// Under the match lock: flush the open run, write the sealed record, and
+    /// mark the meta `done`. Idempotent across instances.
+    fn seal(&self, meta: &mut crate::store::RecMeta) -> Result<(), String> {
+        self.flush_buf(meta);
+        meta.dirty = false;
+        meta.done = true;
+        self.save_meta(meta)?;
+        let lines = self.store.record_log_get(&self.id).map_err(|e| e.to_string())?;
+        let members = meta.members.clone();
+        let ticks = meta.ticks;
+        let gaps = meta.gaps;
+        let sealed = self.build_record(&lines, &members, ticks, gaps)?;
+        self.store
+            .record_put(&self.id, &sealed)
+            .map_err(|e| e.to_string())?;
+        let _ = self.store.record_log_del(&self.id);
+        Ok(())
+    }
+
+    fn build_record(
         &self,
         lines: &[String],
         members: &[i32],
         ticks: u64,
         gaps: bool,
-    ) -> Result<(), String> {
+    ) -> Result<StoredRecord, String> {
         let mut head: Option<RecordHead> = None;
         let mut inputs = Vec::new();
         let mut checkpoints = Vec::new();
@@ -492,14 +592,22 @@ impl MatchHandle {
         };
         // Sealed compressed: `record:{room}:last` holds the zstd-framed
         // `.bdrec` the endpoint serves as-is (`docs/SERVER.md` "Match records").
-        let rec = StoredRecord {
+        Ok(StoredRecord {
             record: game_core::record::encode_record_zst(&file),
             members: members.to_vec(),
-        };
-        self.store
-            .record_put(&self.id, &rec)
-            .map_err(|e| e.to_string())
+        })
     }
+}
+
+/// The cross-process lock key for one match's operations.
+fn match_key(id: &str) -> String {
+    format!("match:{id}")
+}
+
+/// A fresh owner token for one lock acquisition. Unique per call, so a
+/// crashed holder can never be confused with a later one.
+fn lock_owner() -> String {
+    crate::state::random_hex(8)
 }
 
 /// What stream tasks are told.
@@ -509,40 +617,37 @@ pub enum Note {
     Dissolved(Msg),
 }
 
-#[derive(Debug, Clone)]
-struct Presence {
-    streams: u32,
-    /// When the last stream closed (or the member joined).
-    since: Instant,
-    /// The AI has taken over the player.
-    away: bool,
-}
-
 pub struct Room {
-    // DEV PHASE: `info` / `password` / `tokens` / `next_member` are held here
-    // rather than in the [`CrossState`]. The match blob and the sessions are
-    // already on the store; the roster is the remaining process-local durable
-    // data. When a real database lands (see `store`), these move behind the
-    // trait as a fourth bucket and `Room` keeps only the genuinely
-    // per-connection parts -- `presence` and `tx`.
+    // A read-through cache of the store's [`RoomRecord`]: `info` / `password` /
+    // `tokens` / `next_member` / `fair` are re-read at the start of every
+    // operation under the room lock ([`crate::state::Server::with_room`]) and
+    // written back on change. What is *only* here is the genuinely
+    // per-connection half -- the broadcast channel (`tx`). Presence is in the
+    // store's TTL keys (one per live SSE stream), so a stream on another
+    // process counts just the same.
     pub info: RoomInfo,
     password: String,
     /// Human member id -> session token.
     pub tokens: HashMap<i32, String>,
     next_member: i32,
-    /// The running match. The engine is in a worker process; this holds only
-    /// the `Match::save` blob and the order its operations apply in.
+    /// The running match. Stateless handle over the store's blob (any process
+    /// may hold one; the match lock sequences operations).
     pub game: Option<Arc<MatchHandle>>,
     pub engine: Arc<Pool>,
     pub store: Arc<dyn CrossState>,
     pub tx: broadcast::Sender<Note>,
-    presence: HashMap<i32, Presence>,
     pub dissolved: Option<Msg>,
     /// Does this server have a `bot-service` to drive Advanced bots
     /// (`docs/BOT.md` B5)? When false, [`Room::start`] rewrites those seats to
     /// Standard before the match is built, so they play as ordinary engine
-    /// bots instead of waiting on answers nobody will send.
+    /// bots instead of waiting on answers nobody will send. Per-process: a
+    /// deployment's processes should agree.
     pub bot_search: bool,
+    /// How long a member may have no live stream before they count as away
+    /// ([`crate::state::PRESENCE_TIMEOUT`], overridable in tests). Mirrors the
+    /// server's knob so the presence TTLs this room sets are the same number
+    /// the reaper uses.
+    pub presence_timeout: std::time::Duration,
     /// The commit-reveal slot (`docs/FAIRNESS.md`): drawn at room creation and
     /// redrawn after every match. `None` only until the first [`Room::roll_fair`]
     /// (or when a stored room carries none and the re-roll has not run yet).
@@ -595,9 +700,9 @@ impl Room {
             engine,
             store,
             tx,
-            presence: HashMap::new(),
             dissolved: None,
             bot_search: false,
+            presence_timeout: crate::state::PRESENCE_TIMEOUT,
             fair: None,
         }
     }
@@ -622,53 +727,77 @@ impl Room {
     }
 
     /// Rebuild a room the store already knows about -- what a restart does for
-    /// every [`RoomRecord`]. The match blob is picked up separately by
-    /// [`MatchHandle`]; presence starts at zero streams, so everyone is briefly
-    /// `away` until their SSE reconnects (well inside the presence timeout).
+    /// every [`RoomRecord`], and what [`crate::state::Server::room`] does the
+    /// first time this process touches a room. The match blob is picked up
+    /// separately by [`MatchHandle`]; presence starts at zero streams, so
+    /// everyone is briefly `away` until their SSE reconnects (well inside the
+    /// presence timeout).
     ///
     /// The commit-reveal slot rides the record (`docs/FAIRNESS.md`): same
     /// commitment, same already-collected nonces, so a restart is invisible to
     /// the fairness scheme. A record from before the slot was persisted falls
     /// back to a fresh one on [`Room::restore_game`].
     pub fn from_record(rec: RoomRecord, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Self {
-        let tokens: HashMap<i32, String> = rec.tokens.into_iter().collect();
-        let presence = tokens
-            .keys()
-            .map(|&m| {
-                (
-                    m,
-                    Presence {
-                        streams: 0,
-                        since: Instant::now(),
-                        // A seat dropped before the restart is still on the
-                        // AI; without this the reconnect would not look like
-                        // a return and `member_back` would never run.
-                        away: rec.info.members.iter().any(|x| x.id == m && x.away),
-                    },
-                )
-            })
-            .collect();
+        let tokens: HashMap<i32, String> = rec.tokens.clone().into_iter().collect();
         let (tx, _) = broadcast::channel(64);
-        let fair = rec.fair.as_ref().and_then(FairState::from_record);
-        let mut info = rec.info;
-        if let Some(f) = &fair {
-            info.fair = Some(FairPublic {
-                commit: f.commit.clone(),
-            });
-        }
-        Self {
-            info,
-            password: rec.password,
+        let mut this = Self {
+            info: rec.info.clone(),
+            password: rec.password.clone(),
             tokens,
             next_member: rec.next_member,
             game: None,
             engine,
             store,
             tx,
-            presence,
             dissolved: None,
             bot_search: false,
-            fair,
+            presence_timeout: crate::state::PRESENCE_TIMEOUT,
+            fair: None,
+        };
+        this.apply_record(&rec);
+        this
+    }
+
+    /// Refresh the durable half from the store's current [`RoomRecord`].
+    /// Called at the start of every operation under the room lock, so this
+    /// process never mutates a stale copy (another server may have joined,
+    /// started, or consumed the fair slot in between).
+    pub fn reload(&mut self) -> Result<(), String> {
+        let rec = self
+            .store
+            .room_get(&self.info.id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "room gone".to_string())?;
+        self.apply_record(&rec);
+        Ok(())
+    }
+
+    /// Fold a [`RoomRecord`] into this cache. The commit-reveal slot rides the
+    /// record: same commitment, same already-collected nonces. Also picks up
+    /// a match another instance started (the handle is stateless over the
+    /// store's blob).
+    fn apply_record(&mut self, rec: &RoomRecord) {
+        self.info = rec.info.clone();
+        self.password = rec.password.clone();
+        self.tokens = rec.tokens.iter().map(|(k, v)| (*k, v.clone())).collect();
+        self.next_member = rec.next_member;
+        self.fair = rec.fair.as_ref().and_then(FairState::from_record);
+        if let Some(f) = &self.fair {
+            self.info.fair = Some(FairPublic {
+                commit: f.commit.clone(),
+            });
+        }
+        if self.game.is_none() {
+            if let Ok(Some(_)) = self.store.match_get(&self.info.id) {
+                match MatchHandle::attach(
+                    self.info.id.clone(),
+                    self.store.clone(),
+                    self.engine.clone(),
+                ) {
+                    Ok(m) => self.game = Some(Arc::new(m)),
+                    Err(e) => eprintln!("room {} match attach failed: {e}", self.info.id),
+                }
+            }
         }
     }
 
@@ -702,8 +831,15 @@ impl Room {
         }
     }
 
+    /// Tell every local SSE pump, and every *other* process's, that this room
+    /// changed. The store publish is best-effort and lossy by design: pumps
+    /// also re-poll the store, so a dropped note is latency, never correctness.
     pub fn notify(&self) {
         let _ = self.tx.send(Note::Changed);
+        let _ = self.store.publish(
+            crate::store::NOTE_CHANNEL,
+            &serde_json::json!({ "room": self.info.id, "kind": "changed" }).to_string(),
+        );
     }
 
     pub fn member_of(&self, token: &str) -> Option<i32> {
@@ -754,14 +890,9 @@ impl Room {
         });
         self.tokens.insert(id, who.token.into());
         self.persist();
-        self.presence.insert(
-            id,
-            Presence {
-                streams: 0,
-                since: Instant::now(),
-                away: false,
-            },
-        );
+        // Presence: an `idle` key covers "joined but no stream yet"; a live
+        // SSE stream adds its own. Either keeps the member present.
+        self.presence_touch(id, "idle", self.presence_timeout);
         self.notify();
         Ok(id)
     }
@@ -771,7 +902,7 @@ impl Room {
     /// this. Returns the token that left.
     pub fn leave(&mut self, member: i32) -> Option<String> {
         let token = self.tokens.remove(&member);
-        self.presence.remove(&member);
+        let _ = self.store.presence_clear(&self.info.id, member);
         // A leaver's nonce goes with them (`docs/FAIRNESS.md`): only the
         // members who actually sit down for the match contribute.
         if let Some(f) = self.fair.as_mut() {
@@ -806,7 +937,13 @@ impl Room {
             let _ = self.store.room_del(&self.info.id);
             let _ = self.store.match_del(&self.info.id);
             let _ = self.store.record_log_del(&self.info.id);
-            let _ = self.tx.send(Note::Dissolved(reason));
+            let _ = self.store.rec_meta_del(&self.info.id);
+            let _ = self.tx.send(Note::Dissolved(reason.clone()));
+            let _ = self.store.publish(
+                crate::store::NOTE_CHANNEL,
+                &serde_json::json!({ "room": self.info.id, "kind": "dissolved", "reason": reason })
+                    .to_string(),
+            );
         }
     }
 
@@ -1133,53 +1270,86 @@ impl Room {
 
     // ---------------------------------------------------------------- presence
 
-    /// Note a stream opening. Returns true when the member had been marked
-    /// away and is back -- the caller then runs `member_back` on the handle
-    /// (with the room lock dropped).
-    pub fn stream_opened(&mut self, member: i32) -> bool {
-        let Some(p) = self.presence.get_mut(&member) else {
-            return false;
-        };
-        p.streams += 1;
+    /// Refresh one presence key of `member` (a live stream id, or `"idle"` for
+    /// the join / post-stream grace period). The TTL is what makes a stream a
+    /// dead process stopped refreshing vanish on its own.
+    fn presence_touch(&self, member: i32, stream: &str, ttl: std::time::Duration) {
+        let _ = self.store.presence_set(
+            &self.info.id,
+            member,
+            stream,
+            ttl.as_millis().max(1) as u64,
+        );
+    }
+
+    /// Note a stream opening. `stream` is this connection's presence key (the
+    /// SSE pump refreshes it on its keep-alive). Returns true when the member
+    /// had been marked away and is back -- the caller then runs `member_back`
+    /// on the handle (with the room lock dropped).
+    pub fn stream_opened(&mut self, member: i32, stream: &str) -> bool {
+        self.presence_touch(member, stream, self.sse_presence_ttl());
+        // The idle key is a backstop only; a live stream is the real presence.
+        // Refreshing it costs nothing and keeps the count honest if the stream
+        // key races its TTL.
+        self.presence_touch(member, "idle", self.presence_timeout);
         let mut back = false;
-        if p.away {
-            p.away = false;
-            if let Some(m) = self.info.members.iter_mut().find(|m| m.id == member) {
+        if let Some(m) = self.info.members.iter_mut().find(|m| m.id == member) {
+            if m.away {
                 m.away = false;
+                back = true;
             }
-            back = true;
+        }
+        if back {
             self.persist();
             self.notify();
         }
         back
     }
 
-    pub fn stream_closed(&mut self, member: i32) {
-        if let Some(p) = self.presence.get_mut(&member) {
-            p.streams = p.streams.saturating_sub(1);
-            if p.streams == 0 {
-                p.since = Instant::now();
-            }
-        }
+    /// That stream closed. The `idle` key takes over for `presence_timeout`,
+    /// so a member whose last stream just dropped is not reaped instantly.
+    pub fn stream_closed(&mut self, member: i32, stream: &str) {
+        let _ = self.store.presence_del(&self.info.id, member, stream);
+        self.presence_touch(member, "idle", self.presence_timeout);
+    }
+
+    /// How long one SSE stream's key lives without a refresh. The pump
+    /// refreshes it every loop (~2 s); this bound is what drops a stream a
+    /// dead process stopped refreshing. Deliberately **not** the presence
+    /// timeout -- that is the `idle` key's job (the away timer).
+    fn sse_presence_ttl(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(60)
     }
 
     /// Apply presence time-outs. Returns the members dropped mid-match (the
     /// caller runs `member_left` on the handle and clears them) and, outside a
     /// match, the tokens removed from the room.
+    ///
+    /// A member is stale when **no** presence key of theirs is alive -- no
+    /// live stream on any process, and the post-drop grace has expired. The
+    /// timeout is baked into the keys' TTLs ([`Self::presence_touch`]); the
+    /// argument here is the reaper's own view of it and must agree.
     pub fn tick_presence(&mut self, timeout: std::time::Duration) -> (Vec<i32>, Vec<String>) {
+        let _ = timeout; // the TTLs set at stream_opened/join carry it
         let mut dropped = vec![];
         let mut removed = vec![];
         let stale: Vec<i32> = self
-            .presence
+            .info
+            .members
             .iter()
-            .filter(|(_, p)| p.streams == 0 && !p.away && p.since.elapsed() >= timeout)
-            .map(|(&m, _)| m)
+            .filter(|m| {
+                !m.away
+                    && !m.bot
+                    && self
+                        .store
+                        .presence_count(&self.info.id, m.id)
+                        .unwrap_or(1)
+                        == 0
+            })
+            .map(|m| m.id)
             .collect();
         for m in stale {
             if self.info.playing {
-                if let Some(p) = self.presence.get_mut(&m) {
-                    p.away = true;
-                }
                 if let Some(x) = self.info.members.iter_mut().find(|x| x.id == m) {
                     x.away = true;
                 }
@@ -1190,7 +1360,7 @@ impl Room {
         }
         if !dropped.is_empty() {
             // `away` rides the room record so a restart still knows who is on
-            // the AI (see [`Room::from_record`]).
+            // the AI (and so another instance's SSE sees the change).
             self.persist();
         }
         (dropped, removed)
