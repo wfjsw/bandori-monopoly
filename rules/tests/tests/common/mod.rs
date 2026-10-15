@@ -623,7 +623,7 @@ impl Table {
         w.st.embers = vec![0; n];
         w.st.marks.clear();
         w.scheduled.clear();
-        w.ring_bonus = 0;
+        w.rule_param_bonus.clear();
         self
     }
 
@@ -766,7 +766,7 @@ impl Table {
             .board_field
             .iter()
             .find(|f| f.card == format!("event:{id}"))
-            .map(|f| f.crystals)
+            .map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
     // ------------------------------------------------------------ observe
@@ -839,7 +839,7 @@ impl Table {
 
     /// Crystals on `who`'s first field copy of `card` (None if not placed).
     pub fn crystals(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.crystals)
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("crystals").copied().unwrap_or(0))
     }
 
     /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
@@ -848,7 +848,7 @@ impl Table {
     pub fn set_crystals(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.crystals = n;
+            f.counters.insert("crystals".into(), n);
         }
     }
 
@@ -857,7 +857,7 @@ impl Table {
     /// 2026-10-07: the CP points attached to the card). This is the number the
     /// view's field-card counter badge shows.
     pub fn cp_on_card(&self, who: usize, card: &str) -> Option<i32> {
-        self.field(who).iter().find(|f| f.card == card).map(|f| f.cp)
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.counters.get("cp").copied().unwrap_or(0))
     }
 
     /// Put `n` on-card [CP点] on `who`'s first field copy of `card` (test seam,
@@ -867,7 +867,7 @@ impl Table {
     pub fn set_cp_on_card(&mut self, who: usize, card: &str, n: i32) {
         let w = self.m.world_mut();
         if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
-            f.cp = n;
+            f.counters.insert("cp".into(), n);
         }
     }
 
