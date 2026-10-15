@@ -529,7 +529,7 @@ fn t12_student_council_check() {
     while let Some(p) = t.prompt() {
         if p.kind == "tile" {
             t.answer_tile(0, t1).unwrap();
-        } else if let Some(k) = t.option("yes") {
+        } else if let Some(k) = t.option("ask.yes") {
             t.answer(0, k).unwrap();
         } else {
             t.decline();
@@ -798,7 +798,7 @@ fn t18_rana_interesting_woman() {
     loop {
         let Some(_) = t.prompt() else { break };
         // Prefer the force-stop branch so (4)/(5) are exercised.
-        let k = t.option("停").or_else(|| t.option("芭菲")).or_else(|| t.option("yes"));
+        let k = t.option("停").or_else(|| t.option("芭菲")).or_else(|| t.option("ask.yes"));
         if let Some(k) = k {
             t.answer(1, k).unwrap();
         } else {
@@ -1174,13 +1174,13 @@ fn t27_ikumi_marks() {
     let mut saw_offer = false;
     loop {
         let Some(_) = t.prompt() else { break };
-        if t.option("yes").is_some() || t.option("停").is_some() || t.option("2000").is_some() {
+        if t.option("ask.yes").is_some() || t.option("停").is_some() || t.option("2000").is_some() {
             saw_offer = true;
         }
         eprintln!("t27 prompt: {}", t.dump_prompt());
         // Take the force-stop (ask.yes).
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("停"))
             .or_else(|| t.option("2000"));
         if let Some(k) = k {
@@ -1281,7 +1281,7 @@ fn t29_croquettes() {
     loop {
         let Some(_) = t.prompt() else { break };
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("可乐饼"))
             .or_else(|| t.option("转移"));
         if let Some(k) = k {

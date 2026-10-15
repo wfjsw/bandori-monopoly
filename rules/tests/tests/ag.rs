@@ -663,7 +663,7 @@ fn moca_skill_teleports_to_the_actor() {
             eprintln!("moca prompt: {}", t.dump_prompt());
         }
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("传送"))
             .or_else(|| t.option("火罐"));
         if let Some(k) = k {

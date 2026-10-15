@@ -125,7 +125,12 @@ fn land_on_property(t: &mut Table, target: usize) {
     t.set_pos(0, target - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.prompt().is_none());
+    // G-SETTLE-06/07: the settle of a deed is the optional buy/build prompt.
+    // Decline it so the end-step button flow under test still runs.
+    while let Some(p) = t.prompt() {
+        let _ = p;
+        t.decline();
+    }
     assert_eq!(t.step(), 4);
 }
 

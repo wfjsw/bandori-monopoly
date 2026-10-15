@@ -118,6 +118,9 @@ fn settle_on(t: &mut Table, who: usize, tile: usize) {
     t.set_pos(who, (tile + 59) % 60);
     t.dice(&[1]);
     t.roll(who).unwrap();
+    // G-SETTLE-06/07: the settle of a deed is the optional buy/build prompt.
+    // Decline it so a later `t.build()` / `t.buy()` still sees the end-step button.
+    drain(t);
 }
 
 /// Property tiles of a board `group` (the colour of a 地契).

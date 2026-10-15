@@ -816,7 +816,7 @@ fn saaya_skill_offers_on_big_spend() {
             eprintln!("saaya prompt: {}", t.dump_prompt());
         }
         let k = t
-            .option("yes")
+            .option("ask.yes")
             .or_else(|| t.option("200"))
             .or_else(|| t.option("获得"));
         if let Some(k) = k {
