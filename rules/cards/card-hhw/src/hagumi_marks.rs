@@ -205,3 +205,9 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn counteract2_kani(player_id: i32) -> card_sdk::Asked {
     counteract2(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
+    hook(player_id)
+}

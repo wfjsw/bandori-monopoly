@@ -76,3 +76,9 @@ fn go(player_id: i32) -> card_sdk::Asked {
 pub fn go_kani(player_id: i32) -> card_sdk::Asked {
     go(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}

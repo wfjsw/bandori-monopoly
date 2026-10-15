@@ -206,3 +206,9 @@ pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
 pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_end(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn before_settle_kani(player_id: i32) -> card_sdk::Asked {
+    before_settle(player_id)
+}

@@ -211,3 +211,21 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn pass_player_kani(player_id: i32) -> card_sdk::Asked {
     pass_player(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn roll_plan_kani(player_id: i32) -> card_sdk::Asked {
+    roll_plan(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
+    on_crystals_changed(player_id)
+}

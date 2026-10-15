@@ -218,3 +218,27 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_pass_player_kani(player_id: i32) -> card_sdk::Asked {
     on_pass_player(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_settle_kani(player_id: i32) -> card_sdk::Asked {
+    on_settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn before_settle_kani(player_id: i32) -> card_sdk::Asked {
+    before_settle(player_id)
+}

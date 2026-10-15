@@ -113,3 +113,9 @@ fn run(player_id: i32) -> card_sdk::Asked {
 pub fn play_kani(player_id: i32) -> card_sdk::Asked {
     play(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}

@@ -354,6 +354,31 @@ fn gen_body_dispatch() {
 /// Parse every `On::*` constructor in a card source and return the body fn
 /// name (last argument) in declaration order. Matches
 /// `tools/kani/add_kani_wrappers.py` so `NAME_kani` exists for each.
+/// Strip `//` line comments and `/* */` block comments so `On::` in doc
+/// comments is not mistaken for a constructor.
+fn strip_rust_comments(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    let bytes = src.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+        } else if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
 fn parse_on_bodies(
     crate_name: &str,
     rules_dir: &PathBuf,
@@ -363,7 +388,9 @@ fn parse_on_bodies(
     let lib = crate_dir(rules_dir, crate_name)
         .join("src")
         .join(format!("{module}.rs"));
-    let src = fs::read_to_string(&lib).unwrap_or_else(|e| panic!("read {lib:?}: {e}"));
+    let raw = fs::read_to_string(&lib).unwrap_or_else(|e| panic!("read {lib:?}: {e}"));
+    let src = strip_rust_comments(&raw);
+    let src = src.as_str();
     let mut bodies = Vec::new();
     let mut search_from = 0;
     while let Some(rel) = src[search_from..].find("On::") {

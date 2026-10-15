@@ -341,3 +341,15 @@ pub fn on_crystals_changed_kani(player_id: i32) -> card_sdk::Asked {
 pub fn move_after_kani(player_id: i32) -> card_sdk::Asked {
     move_after(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn settle_body_kani(player_id: i32) -> card_sdk::Asked {
+    settle_body(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}

@@ -229,3 +229,9 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
     tick(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_skill_kani(player_id: i32) -> card_sdk::Asked {
+    on_skill(player_id)
+}

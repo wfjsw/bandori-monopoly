@@ -197,3 +197,9 @@ pub fn drew_kani(player_id: i32) -> card_sdk::Asked {
 pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
     turn_start(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
+    counteract(player_id)
+}

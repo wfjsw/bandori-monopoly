@@ -209,3 +209,15 @@ fn next_of(holder: i32) -> i32 {
 pub fn umiri_card_kani(player_id: i32) -> card_sdk::Asked {
     umiri_card(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
+    turn_end(player_id)
+}

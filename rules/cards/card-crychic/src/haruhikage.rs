@@ -259,3 +259,9 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_drawn_kani(player_id: i32) -> card_sdk::Asked {
+    on_drawn(player_id)
+}

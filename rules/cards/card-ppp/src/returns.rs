@@ -451,3 +451,9 @@ pub fn on_played_kani(player_id: i32) -> card_sdk::Asked {
 pub fn choose_band_kani(player_id: i32) -> card_sdk::Asked {
     choose_band(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn deck_at_game_start_kani(player_id: i32) -> card_sdk::Asked {
+    deck_at_game_start(player_id)
+}

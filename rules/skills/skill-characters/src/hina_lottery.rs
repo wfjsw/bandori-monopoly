@@ -119,3 +119,9 @@ ruleset_core::roster::CharacterDef::new(r#"冰川日菜"#)
 pub fn roll_kani(player_id: i32) -> card_sdk::Asked {
     roll(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
+    at_start(player_id)
+}

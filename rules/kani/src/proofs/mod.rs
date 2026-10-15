@@ -39,13 +39,13 @@ pub mod general;
 pub mod events;
 #[cfg(all(feature = "band-pp", feature = "skills-characters"))]
 pub mod skills_pp;
-#[cfg(feature = "band-ppp")]
+#[cfg(all(feature = "band-ppp", feature = "skills-characters"))]
 pub mod skills_ppp;
-#[cfg(feature = "band-roselia")]
+#[cfg(all(feature = "band-roselia", feature = "skills-characters"))]
 pub mod skills_r;
-#[cfg(feature = "band-ag")]
+#[cfg(all(feature = "band-ag", feature = "skills-characters"))]
 pub mod skills_ag;
-#[cfg(feature = "band-hhw")]
+#[cfg(all(feature = "band-hhw", feature = "skills-characters"))]
 pub mod skills_hhw;
 #[cfg(all(feature = "band-morfonica", feature = "skills-bands"))]
 pub mod skills_mor;

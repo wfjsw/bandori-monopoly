@@ -161,3 +161,9 @@ fn redirect(player_id: i32) -> card_sdk::Asked {
 pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
     no_road(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn redirect_kani(player_id: i32) -> card_sdk::Asked {
+    redirect(player_id)
+}

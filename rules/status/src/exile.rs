@@ -152,3 +152,9 @@ pub fn on_exile_landed_kani(player_id: i32) -> card_sdk::Asked {
 pub fn on_exile_granted_kani(player_id: i32) -> card_sdk::Asked {
     on_exile_granted(player_id)
 }
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn refuse_kani(owner: i32) -> card_sdk::Asked {
+    refuse(owner)
+}
