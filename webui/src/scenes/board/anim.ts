@@ -70,8 +70,8 @@ type Item = { ev: MatchEvent } | { mark: StageMark };
 /** How long the new-turn announcement stays on screen. */
 const TURN_MS = 1500;
 /** Chain overlay pacing: a link joining, a link settling. */
-const CHAIN_LINK_MS = 700;
-const CHAIN_RESOLVE_MS = 900;
+const CHAIN_LINK_MS = 900;
+const CHAIN_RESOLVE_MS = 1100;
 
 /** The log label key of an engine stage number. */
 function stageKey(step: number): string {
@@ -126,6 +126,9 @@ export class Animator {
     active: number;
     done: number[];
   } | null = null;
+  /** The big "CHAIN" / "RESOLVE" title (letters stagger in, Master Duel style). */
+  chainTitle: { text: string; id: number } | null = null;
+  private chainTitleTimer = 0;
   hop: { playerId: number; id: number } | null = null;
   /** The walk under way: the tiles still ahead (the last is the landing).
    *  The board lights them so the destination and path read before and
@@ -194,6 +197,7 @@ export class Animator {
   dispose(): void {
     this.disposed = true;
     clearTimeout(this.bannerTimer);
+    clearTimeout(this.chainTitleTimer);
     clearTimeout(this.turnTimer);
     clearTimeout(this.flashTimer);
     clearTimeout(this.pulseTimer);
@@ -306,6 +310,16 @@ export class Animator {
       }];
       this.bump();
     }
+  }
+
+  private showChainTitle(text: string): void {
+    this.chainTitle = { text, id: ++this.seq };
+    clearTimeout(this.chainTitleTimer);
+    this.chainTitleTimer = setTimeout(() => {
+      this.chainTitle = null;
+      this.bump();
+    }, 1100 / Math.max(1, this.speed));
+    this.bump();
   }
 
   private showBanner(title: string, body = ""): void {
@@ -610,8 +624,8 @@ export class Animator {
     if (seq >= 2) {
       if (!this.chain.shown && !quiet) {
         if (!fast) sfx("prompt");
-        this.showBanner(tr("anim.chain"));
-        await this.nap(900);
+        this.showChainTitle(tr("anim.chain"));
+        await this.nap(1100);
       }
       this.chain.shown = true;
       if (!quiet) sfx("place");
@@ -630,8 +644,8 @@ export class Animator {
       ch.resolving = true;
       if (!quiet) {
         sfx("prompt");
-        this.showBanner(tr("anim.resolve"));
-        await this.nap(900);
+        this.showChainTitle(tr("anim.resolve"));
+        await this.nap(1100);
       }
       this.bump();
       return;

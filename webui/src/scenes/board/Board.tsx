@@ -235,21 +235,33 @@ export function Board({ sess }: { sess: GameSession }) {
             )}
             {anim.chain?.shown && (
               <div className={cx(s.chain, anim.chain.resolving && s.chainResolving)}>
-                {[...anim.chain.links].reverse().map((l, k, all) => (
-                  <div
-                    key={l.seq}
-                    className={cx(
-                      s.chainLink,
-                      l.fresh > 0 && !anim.chain!.resolving && s.chainIn,
-                      anim.chain!.active === l.seq && !anim.chain!.done.includes(l.seq) && s.chainActive,
-                      anim.chain!.done.includes(l.seq) && s.chainDone,
-                    )}
-                    style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)" }}
-                  >
-                    <span className={s.chainNo}>{l.seq}</span>
-                    <CardFace id={l.card} size="mini" width={84} />
-                    {k < all.length - 1 && <i className={s.chainBar} />}
-                  </div>
+                {anim.chain.links.map((l, k) => {
+                  const ch = anim.chain!;
+                  const done = ch.done.includes(l.seq);
+                  return (
+                    <div
+                      key={l.seq}
+                      className={cx(
+                        s.chainLink,
+                        k % 2 ? s.chainOdd : s.chainEven,
+                        !ch.resolving && k === ch.links.length - 1 && s.chainIn,
+                        ch.active === l.seq && !done && s.chainActive,
+                        done && s.chainDone,
+                      )}
+                      style={{ ["--owner" as string]: l.owner >= 0 ? m.colorOf(l.owner) : "var(--pink)" }}
+                    >
+                      <CardFace id={l.card} size="big" width={170} />
+                      <span className={s.chainNo}>{l.seq}</span>
+                      {k > 0 && <i className={s.chainBar} />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {anim.chainTitle && (
+              <div key={anim.chainTitle.id} className={s.chainTitle}>
+                {[...anim.chainTitle.text].map((ch, k) => (
+                  <span key={k} style={{ animationDelay: `${k * 70}ms` }}>{ch}</span>
                 ))}
               </div>
             )}
