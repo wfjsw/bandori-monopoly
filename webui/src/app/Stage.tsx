@@ -4,7 +4,7 @@
 // gets a wider stage and the edge-anchored panels (see the scenes' `right:`)
 // slide out to the sides instead of leaving a letterbox.
 
-import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { sceneImg } from "../core/assets";
 import { useEventListener } from "../hooks/dom";
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
@@ -64,13 +64,24 @@ function useStage(tall: boolean): { scale: number; w: number; h: number; compact
   // Size against the *visual* viewport where there is one: on a phone the
   // layout viewport (innerWidth / innerHeight) and what is on screen differ
   // while the address bar or keyboard is showing.
+  // While a text field is focused the on-screen keyboard shrinks the visual
+  // viewport; rescaling the stage to the sliver left would shrink everything,
+  // so hold the height from before the keyboard came up (width unchanged).
+  const open = useRef<{ vw: number; vh: number } | null>(null);
   const measure = () => {
     const vv = window.visualViewport;
-    return { vw: vv?.width ?? window.innerWidth, vh: vv?.height ?? window.innerHeight };
+    const cur = { vw: vv?.width ?? window.innerWidth, vh: vv?.height ?? window.innerHeight };
+    const a = document.activeElement;
+    const editing = a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement;
+    const prev = open.current;
+    if (editing && prev && Math.abs(prev.vw - cur.vw) < 1 && cur.vh < prev.vh) return prev;
+    open.current = cur;
+    return cur;
   };
   const [win, set] = useState(measure);
   useEventListener(window, "resize", () => set(measure()));
   useEventListener(() => window.visualViewport, "resize", () => set(measure()));
+  useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
   // Landscape phones: keep the stage out from under the notch / home bar.
   const inset = useSafeInsets();
   const vw = win.vw - inset.left - inset.right;
