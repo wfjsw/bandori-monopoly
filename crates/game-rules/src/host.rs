@@ -2473,6 +2473,21 @@ fn inspect(
             read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
         meta = crate::roster::decode_metadata(&bytes).map_err(load)?;
     }
+    // Tile-class table (ABI v70) -- optional; empty means only the generic
+    // `class*` props answer `tile_in`.
+    if has_func(&inst, &mut store, export::CLASS_DEFS) {
+        set_fuel(&mut store, METADATA_FUEL).map_err(load)?;
+        let packed = inst
+            .get_typed_func::<(), i64>(&mut store, export::CLASS_DEFS)
+            .and_then(|f| f.call(&mut store, ()))
+            .map_err(|e| load(format!("{}: {e}", export::CLASS_DEFS)))?;
+        let (ptr, len) = abi::unpack(packed);
+        let bytes =
+            read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+        let defs: Vec<crate::tile_class::ClassDef> =
+            postcard::from_bytes(&bytes).unwrap_or_default();
+        crate::tile_class::set_class_defs(defs);
+    }
     Ok((module, cards, meta))
 }
 

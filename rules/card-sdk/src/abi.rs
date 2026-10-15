@@ -620,6 +620,11 @@ pub mod export {
     /// [`crate::meta::MetaDoc`] (ABI v63). Built only when called; absent on
     /// pre-v63 modules (the host then reports empty roster metadata).
     pub const METADATA: &str = "ruleset_metadata";
+    /// `() -> i64` packed postcard of the ruleset's tile-class table
+    /// (`Vec<(String, bool, Vec<i32>)>`: name, requires_buyable, groups).
+    /// Absent on older modules (the host then has an empty class table and
+    /// only the generic `class*` props answer `tile_in`).
+    pub const CLASS_DEFS: &str = "ruleset_class_defs";
 }
 
 /// The keys the engine's own game flow reads back (its turn rules and the

@@ -1433,15 +1433,15 @@ fn fill_tile_generic<S: SnapSrc>(
     // Classes: the ruleset vocabulary plus `color:<g>` for groups present on
     // the board. `player = -1` plus each live seat.
     let classes = class_names();
-    if world.tile_class_rows(tile, classes, tile_classes) {
+    if world.tile_class_rows(tile, &classes, tile_classes) {
         return;
     }
     let players: Vec<i32> = std::iter::once(-1)
         .chain(0..world.player_count())
         .collect();
     for &p in &players {
-        for c in classes {
-            if world.tile_in(p, tile, c) {
+        for c in &classes {
+            if world.tile_in(p, tile, c.as_str()) {
                 tile_classes.push((p as i64, tile as i64, c.clone()));
             }
         }
@@ -1449,19 +1449,13 @@ fn fill_tile_generic<S: SnapSrc>(
 }
 
 /// The class vocabulary `tile_in` is probed over (built once).
-fn class_names() -> &'static [String] {
-    static NAMES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
-    NAMES.get_or_init(|| {
-        // Ruleset class-name bindings, kept verbatim.
-        let mut classes: Vec<String> = ["buyable", "shop", "livehouse"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        for g in -2..=32 {
-            classes.push(format!("color:{g}"));
-        }
-        classes
-    })
+fn class_names() -> Vec<String> {
+    // Ruleset-registered class names, plus the generic colour classes.
+    let mut classes: Vec<String> = crate::tile_class::class_names();
+    for g in -2..=32 {
+        classes.push(format!("color:{g}"));
+    }
+    classes
 }
 
 /// Every board name -> id, so `tile_named('the game车站')` / `tile_named('the start square')`

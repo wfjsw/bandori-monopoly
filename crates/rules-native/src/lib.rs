@@ -23,6 +23,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
 use card_sdk::abi::{export, ManifestOn, ManifestTileText, OnKind, ABI_VERSION};
+use game_rules::tile_class;
 use card_sdk::On;
 use game_rules::{
     Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome,
@@ -83,6 +84,7 @@ impl NativeIndex {
 
 impl NativeRulesHandle {
     pub fn new() -> Self {
+        tile_class::set_class_defs(ruleset_core::kind::class_defs());
         let mut cards = Vec::new();
         let mut pre: Vec<Vec<Option<game_rules::CompiledPre>>> = Vec::new();
         let mut by_id = HashMap::new();

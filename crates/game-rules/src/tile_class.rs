@@ -1,17 +1,48 @@
-//! THE ruleset's class registration for `tile_in` (ABI v56).
+//! Generic class registration for `tile_in` (ABI v56).
 //!
-//! Generic class-membership props (`class:<class>` / `classFor:<p>:<class>`)
-//! are checked **first** by the caller -- they are the per-player override
-//! mechanism, not more hard-coded host logic. What lives here is the static
-//! class definition table that replaces the old per-predicate readers
-//! (`is_buyable` / `is_shop` / venue / colour helpers).
+//! Class-membership props (`class:<class>` / `classFor:<p>:<class>`) are
+//! checked **first** by the caller -- they are the per-player override
+//! mechanism, not more hard-coded host logic. The static class *definitions*
+//! are a ruleset-supplied table ([`set_class_defs`]); the engine keeps no
+//! class names or colour-group numbers of its own.
 //!
 //! Kind checks are **not** classes -- they are `tile_is` / `TileData.kind`.
 
 use game_core::data::TileData;
 use game_core::state::prop;
+use std::sync::RwLock;
 
-/// `tile_is` -- data `TileKind` by wire spelling (`TileKind::as_str`).
+/// `(name, requires_buyable, matching colour groups)`.
+pub type ClassDef = (String, bool, Vec<i32>);
+
+static CLASS_DEFS: RwLock<Vec<ClassDef>> = RwLock::new(Vec::new());
+
+/// Seed the class table from the ruleset (at load). The engine never names a
+/// class; empty means only the generic `class*` props answer.
+pub fn set_class_defs(defs: Vec<ClassDef>) {
+    *CLASS_DEFS.write().unwrap() = defs;
+}
+
+/// Registered class names (ruleset data).
+pub fn class_names() -> Vec<String> {
+    CLASS_DEFS
+        .read()
+        .unwrap()
+        .iter()
+        .map(|(n, _, _)| n.clone())
+        .collect()
+}
+
+fn class_def(class: &str) -> Option<ClassDef> {
+    CLASS_DEFS
+        .read()
+        .unwrap()
+        .iter()
+        .find(|(n, _, _)| n == class)
+        .cloned()
+}
+
+/// `tile_is` -- data tile kind by wire spelling (ruleset binding).
 /// Unknown tile -> false. No class vocabulary here (use [`class_matches`]).
 pub fn kind_is(data: Option<&TileData>, kind: &str) -> bool {
     data.is_some_and(|t| t.kind.as_str() == kind)
@@ -63,15 +94,10 @@ pub fn tile_in(
 }
 
 /// The ruleset class definitions (static half of `tile_in`, after the generic
-/// `class*` props). Class-name strings are ruleset bindings. Matching today's
-/// hard-coded predicates exactly:
-///
-/// * `"buyable"` -> `TileData::is_buyable()`
-/// * `"shop"` -> buyable && group == 10
-/// * `"livehouse"` (ruleset venue-class binding) -> buyable && group == 6, or
-///   for one player buyable && colour 6
-/// * `"color:<g>"` -> own group / `ALL_COLORS` / `anyColor` / `colorFor:<p>`
-/// * unknown -> false
+/// `class*` props). Matching is table-driven: a class is true when the tile is
+/// buyable (if the definition requires it) and its colour group is one of the
+/// definition's groups (or the player counts the tile as that group via
+/// `anyColor` / `colorFor`).
 pub fn class_matches(
     data: Option<&TileData>,
     player_id: i32,
@@ -81,30 +107,26 @@ pub fn class_matches(
     let Some(t) = data else {
         return false;
     };
-    match class {
-        "buyable" => t.is_buyable(),
-        "shop" => t.is_buyable() && t.group == 10,
-        "livehouse" => {
-            // Ruleset venue-class binding.
-            if player_id < 0 {
-                t.is_buyable() && t.group == 6
-            } else {
-                t.is_buyable() && is_color(player_id, t, 6, &prop)
-            }
+    if let Some((_, buyable, groups)) = class_def(class) {
+        if buyable && !t.is_buyable() {
+            return false;
         }
-        _ => {
-            let Some(g) = class.strip_prefix("color:") else {
-                return false;
-            };
-            match g.parse::<i32>() {
-                Ok(g) => is_color(player_id, t, g, &prop),
-                Err(_) => false,
-            }
+        if groups.is_empty() {
+            return true;
         }
+        return groups.iter().any(|&g| is_color(player_id, t, g, &prop));
+    }
+    // Generic colour class: `color:<g>`.
+    let Some(g) = class.strip_prefix("color:") else {
+        return false;
+    };
+    match g.parse::<i32>() {
+        Ok(g) => is_color(player_id, t, g, &prop),
+        Err(_) => false,
     }
 }
 
-/// Old `is_color` logic (`docs/PURCHASE.md`): the tile's own `group`,
+/// Colour-set membership (`docs/PURCHASE.md`): the tile's own `group`,
 /// `prop::ALL_COLORS`, `prop::ANY_COLOR` (「该格获得所有颜色」), or this
 /// player's `colorFor:<p>` naming `group` / `ALL_COLORS`.
 ///
@@ -174,21 +196,19 @@ pub fn class_rows_plain(
     };
     for p in std::iter::once(-1).chain(0..player_count) {
         for c in classes {
-            let hit = match c.as_str() {
-                "buyable" => t.is_buyable(),
-                "shop" => t.is_buyable() && t.group == 10,
-                "livehouse" => {
-                    // Ruleset venue-class binding.
-                    if p < 0 {
-                        t.is_buyable() && t.group == 6
-                    } else {
-                        t.is_buyable() && is_color_lazy(p, t, 6, false, || 0)
-                    }
+            let hit = if let Some((_, buyable, groups)) = class_def(c) {
+                if buyable && !t.is_buyable() {
+                    false
+                } else if groups.is_empty() {
+                    true
+                } else {
+                    groups.iter().any(|&g| is_color_lazy(p, t, g, false, || 0))
                 }
-                other => match other.strip_prefix("color:").and_then(|g| g.parse::<i32>().ok()) {
+            } else {
+                match c.strip_prefix("color:").and_then(|g| g.parse::<i32>().ok()) {
                     Some(g) => is_color_lazy(p, t, g, false, || 0),
                     None => false,
-                },
+                }
             };
             if hit {
                 out.push((p as i64, tile, c.clone()));

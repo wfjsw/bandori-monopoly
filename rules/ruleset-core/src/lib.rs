@@ -366,3 +366,19 @@ pub fn crystals_changed_of(card_id: &str) -> bool {
 pub fn always(_player_id: i32) -> bool {
     true
 }
+
+/// Tile-class table packed for the host (ABI v70).
+pub fn encode_class_defs() -> i64 {
+    let defs = kind::class_defs();
+    let bytes = postcard::to_allocvec(&defs).unwrap_or_default();
+    let len = bytes.len() as u64;
+    let ptr = alloc::boxed::Box::leak(bytes.into_boxed_slice()).as_mut_ptr() as u64;
+    ((ptr << 32) | len) as i64
+}
+
+/// Guest export: the engine's `tile_in` class table.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn ruleset_class_defs() -> i64 {
+    encode_class_defs()
+}

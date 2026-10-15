@@ -8,6 +8,10 @@
 //! Call sites read `ruleset_core::kind::PassRewardAffected` (etc.). The values
 //! share `TriggerKind`'s id space (`HookKind` / `ChainKind` are aliases).
 
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
+
 use card_sdk::abi::TriggerKind;
 
 // ------------------------------------------------------- raise-point ids
@@ -43,7 +47,7 @@ pub const DEED: &str = "ring";
 /// 地产商 wire kind.
 pub const AGENT: &str = "agent";
 
-/// Tile-class wire names (`tile_in` classes).
+/// Tile-class wire names (`tile_in` classes) and their definitions.
 pub mod class {
     /// Deed / buyable class.
     pub const BUYABLE: &str = "buyable";
@@ -51,4 +55,18 @@ pub mod class {
     pub const SHOP: &str = "shop";
     /// Venue class.
     pub const VENUE: &str = "livehouse";
+    /// Colour group of the 「商店街」 deeds.
+    pub const SHOP_GROUP: i32 = 10;
+    /// Colour group of the venue deeds.
+    pub const VENUE_GROUP: i32 = 6;
+}
+
+/// Class definitions the engine's `tile_in` table is seeded with at boot:
+/// `(name, requires_buyable, matching colour groups)`.
+pub fn class_defs() -> Vec<(String, bool, Vec<i32>)> {
+    vec![
+        (class::BUYABLE.into(), true, vec![]),
+        (class::SHOP.into(), true, vec![class::SHOP_GROUP]),
+        (class::VENUE.into(), true, vec![class::VENUE_GROUP]),
+    ]
 }
