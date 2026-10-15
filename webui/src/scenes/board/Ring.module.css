@@ -269,9 +269,9 @@
   pointer-events: auto;
   cursor: help;
 }
-/* The 10px floor outgrows the small mobile cells and overflows the tab. */
+/* The 10px floor outgrows the shrunken mobile tile name; scale with it instead. */
 @media (max-width: 600px) {
-  .markDesignate { font-size: max(7px, calc(var(--u, 12px) * 0.8)); }
+  .markDesignate { font-size: calc(var(--u, 12px) * 0.75); }
 }
 /* Light seat colours flip the ink dark; the white halo keeps either case
    legible on a busy face. */
