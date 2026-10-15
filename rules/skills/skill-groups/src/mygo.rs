@@ -62,12 +62,16 @@ fn after_roll(player_id: i32) -> card_sdk::Asked {
 /// （3）「每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的
 /// [奇迹水晶]（最多超出2个）」.
 fn on_discarded(player_id: i32) -> card_sdk::Asked {
+    // 「上限1」 + 「最多超出2个」 -- held total never exceeds 3. Each ineffective
+    // discard adds one uncapped crystal while under that ceiling. The `OVER`
+    // counter records how many over-cap grants have landed (audit / display).
     let have = ctx::crystals();
-    let room = 1 + state::get(player_id, OVER).min(2);
-    if have >= room {
+    let max = 1 + 2;
+    if have >= max {
         return Ok(());
     }
-    state::set(player_id, OVER, state::get(player_id, OVER) + 1);
+    // `OVER` = how far above the base cap of 1 the post-add count sits.
+    state::set(player_id, OVER, have.min(2));
     ctx::add_crystals(1, i32::MAX)?;
     Ok(())
 }

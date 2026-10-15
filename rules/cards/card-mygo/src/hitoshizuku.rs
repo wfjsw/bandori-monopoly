@@ -75,34 +75,29 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // last layer goes and no [除外] holds the move either, the same as the C#'s
     // `H.State.skipMove = false`).
     //
-    // Ruling 2026-10-06: 「每清除一种效果」 is per effect type, counted
-    // separately for each affected player. 2 types cleared from A and 1 from B
-    // counts 3. Every player pays 1000 × count; the user gains 1000 extra per
-    // own type (「每种效果使用者额外获得1000资金」).
+    // Ruling 2026-10-06 / C-MYGO-hitoshizuku-02: 「每清除一种效果」 is per
+    // effect type **on that player**. A player with stay+stun pays 2000; a
+    // player with stay only pays 1000. Not a flat 1000 × (types cleared
+    // table-wide).
     //
     // The money moves through the pipeline (`transfer` / `gain` -> payAdd /
     // payMul / payChoose / payAt -> the `pay` [反击] window), so 「[支付]时可以
     // 打出」 windows open on each leg. The status clears above reach the live
     // world for the routine's duration (`Cx::overlay_guest_state`), so a payer
     // we just un-stunned is not blocked by `can_pay`.
-    let count: i32 = cleared.iter().map(|&(_, n)| n).sum();
-    if count > 0 {
-        let each = 1000 * count;
-        // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」 --
-        // every seat pays, the user included (a self-pay nets 0).
-        for j in 0..ctx::player_count() {
-            if ctx::player_out(j) {
-                continue;
-            }
-            if j == player_id {
-                // Self-pay nets nothing; keep the log so the count is visible.
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("hitoshizuku_pay")).player_id("who", j),
-                );
-            } else {
-                ctx::transfer(j, player_id, each, &Msg::new(key!("hitoshizuku_pay")))?;
-            }
+    //
+    // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」 --
+    // every affected seat pays for its own cleared kinds, the user included
+    // (a self-pay nets 0; the extra-gain clause below pays the user instead).
+    for &(j, n) in &cleared {
+        if j == player_id {
+            // Self-pay nets nothing; keep the log so the count is visible.
+            ctx::log(
+                player_id,
+                &Msg::new(key!("hitoshizuku_pay")).player_id("who", j),
+            );
+        } else {
+            ctx::transfer(j, player_id, 1000 * n, &Msg::new(key!("hitoshizuku_pay")))?;
         }
     }
     // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
