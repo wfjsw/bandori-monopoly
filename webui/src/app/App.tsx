@@ -38,6 +38,14 @@ function scene(r: Route): ReactNode {
   }
 }
 
+// No page zoom: iOS Safari ignores `user-scalable=no`, so cancel its pinch
+// gestures and multi-touch moves here (the board's own map pinch uses pointer
+// events on a `touch-action: none` element and is unaffected).
+for (const g of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(g, (e) => e.preventDefault(), { passive: false });
+}
+document.addEventListener("touchmove", (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
 // TapFeedback: unlock audio on the first gesture, a tap sound on buttons.
 document.addEventListener("pointerdown", () => unlockAudio(), { capture: true });
 document.addEventListener("click", (e) => {
