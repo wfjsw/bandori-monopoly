@@ -73,9 +73,10 @@ mulligans only rearrange it.
 * **Trigger:** a hand play (`type == "play"` / `kind == play`) of a card that
   is **not** tagged [持续], settled to rest. 「手卡」 is the hand-card **zone**
   (as in 「抽取2张手卡」), not the [手] timing tag.
-* **Condition:** the card was played from hand. Skip when the card's own text
-  [移除]s it or returns it to hand (card effects override -- 特别注意 3), and
-  skip when a prompt is still open.
+* **Condition:** the card was played from hand. Skip event cards (`event:*` --
+  事件卡, not 手卡; their discard is `event_discard`). Skip when the card's own
+  text [移除]s it, returns it to hand, or places itself (「将此卡…」 -- card
+  effects override -- 特别注意 3), and skip when a prompt is still open.
 * **Effect:** the card is in the player's discard in `post`, not in hand and
   not on the field.
 * **Frame:** n/a (read of that card's zone).

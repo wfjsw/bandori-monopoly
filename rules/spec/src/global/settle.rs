@@ -649,12 +649,15 @@ pub fn g_settle_08(step: &Step<'_>) -> Result<(), String> {
 /// * **Trigger:** a `rent` event on a buyable tile owned by someone else.
 /// * **Condition:** the tile was not mortgaged in `pre`; the window has no
 ///   card activation (「支付减半」 etc. are L6); the tile is not a RiNG
-///   (OPEN-RING-RENT: no marked table); not an agent half-charge window.
+///   (OPEN-RING-RENT: no marked table); not an agent half-charge window --
+///   neither the all-owned sweep (`log.agent_all_owned`) nor the choose-one
+///   else-branch kind=2 commit (`log.agent_offer_commit`).
 /// * **Effect:** the payer pays the owner exactly `rent[h]` where `h` is the
 ///   standing house count (「现等级」).
 /// * **Frame:** only the two money balances move (the ledger -- G-MONEY-01).
 /// * **Rulings & OPEN:** OPEN-RING-RENT (RiNG has no marked rent table). A
-///   half-rate agent charge is [`G_SETTLE_13`], not this clause.
+///   half-rate agent charge is [`G_SETTLE_13`] / the agent else-branch, not
+///   this clause. A further L6 「支付减半」 may also reshape the charge.
 /// * **Executable:** [`g_settle_10`].
 const G_SETTLE_10: Clause = Clause::new(
     "G-SETTLE-10",
@@ -677,12 +680,16 @@ pub fn g_settle_10(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let t = t as usize;
-        // Skip the agent half-charge windows (they run under G-SETTLE-13).
-        if step
-            .events
-            .iter()
-            .any(|x| key_of(x) == "log.agent_all_owned")
-        {
+        // Skip the agent half-charge windows (they run under G-SETTLE-13 /
+        // the agent else-branch). Both the all-owned sweep
+        // (`log.agent_all_owned`) and the choose-one kind=2 commit
+        // (`log.agent_offer_commit`) are 「半价收费」, not the marked full rent.
+        // A further L6 「支付减半」 may scale the half again -- still not this
+        // clause's full-rent figure.
+        if step.events.iter().any(|x| {
+            let k = key_of(x);
+            k == "log.agent_all_owned" || k == "log.agent_offer_commit"
+        }) {
             continue;
         }
         if step.pre.st.mortgaged.get(t).copied().unwrap_or(false) {
@@ -972,6 +979,17 @@ pub fn g_settle_13(step: &Step<'_>) -> Result<(), String> {
 /// log: still check every half-noted rent against the ceil-10 formula.
 fn g_settle_13_half_note_only(step: &Step<'_>) -> Result<(), String> {
     if has_card_activation(step) {
+        return Ok(());
+    }
+    // The choose-one else-branch (`log.agent_offer_commit`, kind=2) is also a
+    // half-charge, but it is **not** the all-owned sweep this clause names.
+    // Its amount may additionally carry an L6 「支付减半」 scale on top of the
+    // agent half -- leave it to the money / agent clauses.
+    if step
+        .events
+        .iter()
+        .any(|x| key_of(x) == "log.agent_offer_commit")
+    {
         return Ok(());
     }
     for e in step.events {
@@ -1389,7 +1407,10 @@ pub fn verify_rent_amount(
             continue;
         }
         let t = e.to as usize;
-        if events.iter().any(|x| event_key_str(x) == "log.agent_all_owned") {
+        if events.iter().any(|x| {
+            let k = event_key_str(x);
+            k == "log.agent_all_owned" || k == "log.agent_offer_commit"
+        }) {
             continue;
         }
         if pre.st.mortgaged.get(t).copied().unwrap_or(false) {
