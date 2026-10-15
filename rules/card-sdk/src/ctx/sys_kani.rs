@@ -527,12 +527,12 @@ pub fn inc_slot(player_id: i32, ptr: i32, len: i32, by: i32) -> i32 {
     kani_host::call_i32(Op::inc_slot, [player_id, ptr, len, by, 0, 0])
 }
 
-pub fn group_pool(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::group_pool, [player_id, 0, 0, 0, 0, 0])
+pub fn group_pool(player_id: i32, np: i32, nl: i32) -> i32 {
+    kani_host::call_i32(Op::group_pool, [player_id, np, nl, 0, 0, 0])
 }
 
-pub fn add_group_pool(player_id: i32, n: i32, max: i32) -> i32 {
-    kani_host::call_i32(Op::add_group_pool, [player_id, n, max, 0, 0, 0])
+pub fn add_group_pool(player_id: i32, np: i32, nl: i32, n: i32, max: i32) -> i32 {
+    kani_host::call_i32(Op::add_group_pool, [player_id, np, nl, n, max, 0])
 }
 
 pub fn group_skill(player_id: i32, buf: i32, cap: i32) -> i32 {
@@ -564,7 +564,7 @@ pub fn raise(player_id: i32, kind: i32, value: i32) -> i32 {
 }
 
 pub fn charge(player_id: i32) -> i32 {
-    kani_host::call_i32(Op::fire, [player_id, 0, 0, 0, 0, 0])
+    kani_host::call_i32(Op::charge, [player_id, 0, 0, 0, 0, 0])
 }
 
 pub fn charge_max(player_id: i32) -> i32 {

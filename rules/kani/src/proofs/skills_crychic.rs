@@ -11,7 +11,7 @@
 //! not part of the frame.
 //!
 //! Isolation (module-level):
-//! * no other skill / card hooks fire in the window (single-body call);
+//! * no other skill / card hooks charge in the window (single-body call);
 //! * `n_players = 2`, money `0..=10_000`, both seats living unless stated.
 //!
 //! Host notes:
@@ -77,7 +77,7 @@ fn sparse2(
 }
 
 // ===========================================================================
-// C-CRYCHIC-tomoriskill-02 — spend 1 fire, clear 1 stay
+// C-CRYCHIC-tomoriskill-02 — spend 1 charge, clear 1 stay
 // `skill:高松灯（CRYCHIC）:跌跌撞撞...` use_skill. Seat-symmetric.
 // ===========================================================================
 
@@ -103,12 +103,12 @@ mod tomori_spend {
     fn tomoriskill_02_iff_at(user: i32) {
         debug_assert!(user == 0 || user == 1);
         let charge: i32 = kani::any();
-        kani::assume(fire >= 0 && fire <= 3);
+        kani::assume(charge >= 0 && charge <= 3);
         let stay: i32 = kani::any();
         kani::assume(stay >= 1 && stay <= 3);
         let stay_key = intern::intern("stay");
         sparse2(tomori_spend_dispatch, user, |w| {
-            w.charge[user as usize] = fire;
+            w.charge[user as usize] = charge;
             // The body's `state::add(STAY, -1)` writes the keyed store.
             w.key_set(user, stay_key, stay);
         });
@@ -125,13 +125,13 @@ mod tomori_spend {
             spec::tomoriskill_02_log_ok(effects),
             "C-CRYCHIC-tomoriskill-02: both spends are unlogged — log must stay empty"
         );
-        kani::cover!(fire >= 1, "fire available (spend lands)");
-        kani::cover!(fire == 0, "fire empty (spend no-op, early-out)");
+        kani::cover!(charge >= 1, "charge available (spend lands)");
+        kani::cover!(charge == 0, "charge empty (spend no-op, early-out)");
 
-        if fire >= 1 {
+        if charge >= 1 {
             crate::kassert!(
-                post.charge[user as usize] == fire - 1,
-                "C-CRYCHIC-tomoriskill-02: fire -1"
+                post.charge[user as usize] == charge - 1,
+                "C-CRYCHIC-tomoriskill-02: charge -1"
             );
             crate::kassert!(
                 key_get(user, stay_key) == stay - 1,
@@ -140,8 +140,8 @@ mod tomori_spend {
         } else {
             // Early-out: neither store moves.
             crate::kassert!(
-                post.charge[user as usize] == fire,
-                "C-CRYCHIC-tomoriskill-02: fire unchanged when spend is refused"
+                post.charge[user as usize] == charge,
+                "C-CRYCHIC-tomoriskill-02: charge unchanged when spend is refused"
             );
             crate::kassert!(
                 key_get(user, stay_key) == stay,

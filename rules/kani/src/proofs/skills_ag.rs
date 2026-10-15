@@ -18,7 +18,7 @@ crate::host_subset!(skills_ag_dispatch {
     money => arm_money,
     pay => arm_pay,
     gain_charge => arm_gain_charge,
-    fire => arm_fire,
+    charge => arm_fire,
     charge_max => arm_charge_max,
     spend_charge => arm_spend_charge,
     teleport_to => arm_teleport_to,

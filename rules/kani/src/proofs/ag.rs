@@ -118,7 +118,7 @@ crate::host_subset!(ag_dispatch {
     // dice
     roll | roll_ask => arm_roll,
     // fire (colors-04 fill)
-    fire => arm_fire,
+    charge => arm_fire,
     charge_max => arm_charge_max,
     gain_charge => arm_gain_charge,
 });
