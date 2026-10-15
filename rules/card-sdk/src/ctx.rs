@@ -1148,7 +1148,8 @@ pub fn bump_mark(tile: i32, filter: &crate::abi::MarkFilter, delta: i32) -> i32 
     unsafe { sys::bump_mark_f(tile, fp, fl, delta) }
 }
 
-/// Drop every matching mark on `tile`; returns rows removed.
+/// Drop every matching mark on `tile` (`-1` = every tile, one log line);
+/// returns rows removed.
 pub fn remove_marks(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
     let (fp, fl) = mf(filter);
     unsafe { sys::remove_marks_f(tile, fp, fl) }

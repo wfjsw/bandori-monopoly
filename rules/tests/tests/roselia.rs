@@ -400,6 +400,7 @@ fn derived_resolve_removes_itself_and_pays_on_removal() {
     let mut t = vanilla2();
     t.give_play(0, "R:[衍生] 觉悟").unwrap();
     drain(&mut t);
+    assert!(!t.recent_keys(10).iter().any(|k| k.is_empty()), "no empty 效果适用 header");
     assert_eq!(t.money(0), 11_000, "events: {:?}", t.recent_keys(8));
     assert!(!t.hand(0).contains(&"R:[衍生] 觉悟".to_string()));
     assert!(!t.discard(0).contains(&"R:[衍生] 觉悟".to_string()), "[移除]ed");

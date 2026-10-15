@@ -22,7 +22,13 @@ void main() {
 `;
 
 const FRAGMENT_SRC = `
+// Phones default to fp16 for mediump: UVs into a 2048px atlas then snap to
+// ~2px steps (smeared, jagged textures). Ask for highp wherever it exists.
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
 precision mediump float;
+#endif
 varying vec2 v_uv;
 uniform sampler2D u_tex;
 uniform float u_opacity;
@@ -182,7 +188,9 @@ export class Live2DRenderer {
         await nextFrame();
         if (token !== this.uploadToken || this.disposed) return false;
         const rows = Math.min(TEXTURE_BAND_ROWS, h - y);
-        const band = typeof createImageBitmap === "function" ? await createImageBitmap(src, 0, y, w, rows) : null;
+        // WebKit (iOS Safari) mangles the alpha of cropped ImageBitmaps (gray
+        // patches under multiply layers); it takes the whole-image path below.
+        const band = typeof createImageBitmap === "function" && !IS_WEBKIT ? await createImageBitmap(src, 0, y, w, rows) : null;
         if (token !== this.uploadToken || this.disposed) {
           band?.close();
           return false;
@@ -417,6 +425,10 @@ export class Live2DRenderer {
     this.gl.deleteProgram(this.program);
   }
 }
+const IS_WEBKIT =
+  typeof navigator !== "undefined" &&
+  (/iP(hone|ad|od)/.test(navigator.userAgent) || (/Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Android/.test(navigator.userAgent)));
+
 /** Rows per frame of a progressive texture upload. */
 const TEXTURE_BAND_ROWS = 128;
 

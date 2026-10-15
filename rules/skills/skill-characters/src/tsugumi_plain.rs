@@ -50,13 +50,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     // The owed move's 「不获得CiRCLE奖励」 clause ends with the turn (the
     // reward step consumes the prop if the move did pass CiRCLE).
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 0);
-    let n = state::get(player_id, REST_TURNS) + 1;
-    state::set(player_id, REST_TURNS, n);
-    if n >= 3 {
-        state::set(player_id, REST_TURNS, 0);
-        rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
-    }
-    Ok(())
+    super::ran_red::rest_tick(player_id)
 }
 
 /// 「当你进行主要移动时」 -- the (2) press is offered while the move is being

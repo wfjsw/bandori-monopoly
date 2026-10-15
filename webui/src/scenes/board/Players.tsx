@@ -21,6 +21,7 @@ import s from "./Players.module.css";
 import { borrowedBand, byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
 import { setHoverSeat } from "./hoverSeat";
+import { holdPeek } from "../../hooks/hold";
 import { clockSync, displayRemainingMs } from "../../game/clockSync";
 
 /** A player's status chips: [停留] / [眩晕] / [除外] / 托管 (the engine's takeover). */
@@ -144,7 +145,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
         // seat number keeps its own badge.
         const clock = i === S.turn ? t : null;
         return (
-          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)} onMouseEnter={() => setHoverSeat(i)} onMouseLeave={() => setHoverSeat(-1)}>
+          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)} {...holdPeek(() => setHoverSeat(i), () => setHoverSeat(-1))}>
             <span className={s.n}>{i + 1}</span>
             <div className={s.av}>
               <Avatar c={c} size={height < 58 ? 40 : 54} />
@@ -172,10 +173,10 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
                 return bb && <span className={s.status} title={tr("board.borrowedTip", { skill: cardTitle(bb.skill), who })}>{tr("board.borrowed", { who })}</span>;
               })()}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire} onMouseEnter={() => setFirePeek(i)} onMouseLeave={() => setFirePeek(null)}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
+              <span className={s.fire} {...holdPeek(() => setFirePeek(i), () => setFirePeek(null))}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
-              <span className={s.grave} title={tr("board.graveyardPile")} onMouseEnter={() => setPeek(i)} onMouseLeave={() => setPeek(null)} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>
+              <span className={s.grave} title={tr("board.graveyardPile")} {...holdPeek(() => setPeek(i), () => setPeek(null))} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>
                 <img src={sceneImg("card_back")} alt="" /><b>{x.discard.length}</b>
               </span>
             </div>
