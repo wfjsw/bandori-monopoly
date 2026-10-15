@@ -773,7 +773,9 @@ impl Room {
     }
 
     /// Fold a [`RoomRecord`] into this cache. The commit-reveal slot rides the
-    /// record: same commitment, same already-collected nonces.
+    /// record: same commitment, same already-collected nonces. Also picks up
+    /// a match another instance started (the handle is stateless over the
+    /// store's blob).
     fn apply_record(&mut self, rec: &RoomRecord) {
         self.info = rec.info.clone();
         self.password = rec.password.clone();
@@ -784,6 +786,18 @@ impl Room {
             self.info.fair = Some(FairPublic {
                 commit: f.commit.clone(),
             });
+        }
+        if self.game.is_none() {
+            if let Ok(Some(_)) = self.store.match_get(&self.info.id) {
+                match MatchHandle::attach(
+                    self.info.id.clone(),
+                    self.store.clone(),
+                    self.engine.clone(),
+                ) {
+                    Ok(m) => self.game = Some(Arc::new(m)),
+                    Err(e) => eprintln!("room {} match attach failed: {e}", self.info.id),
+                }
+            }
         }
     }
 

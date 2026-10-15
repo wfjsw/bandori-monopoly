@@ -625,7 +625,9 @@ fn spawn_ponder(
 
 /// A stable search-side seed. Mixes the public decision identity with a
 /// counter so two identical decisions in one match still get different
-/// samples; never derived from the match's RNG.
+/// samples; never derived from the match's RNG. The counter is process-local
+/// (two servers may hand out the same seed for the same decision) -- that is
+/// fine: it only biases bot search samples, never game state.
 fn decision_seed(room: &str, member: i32, seq: i32, prompt_id: i32) -> u64 {
     use std::hash::{Hash, Hasher};
     use std::sync::atomic::{AtomicU64, Ordering};

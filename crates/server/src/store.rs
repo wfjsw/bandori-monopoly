@@ -32,6 +32,10 @@
 //! in the process -- they are performance only, and a missed note is recovered
 //! by re-polling the store.
 //!
+//! Deliberately **not** here: the per-connection SSE cursor and the room's
+//! local broadcast fan-out. Those are properties of a live process, not of the
+//! state it is holding.
+//!
 //! The trait is **sync**. Both stores are used from blocking closures
 //! (`spawn_blocking`) as well as from async handlers, so a sync surface serves
 //! both; a Redis call is a round-trip, so async callers should not make it on a
