@@ -804,12 +804,14 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), player_id)
 }
 
-/// `PP:[丸山彩]憧憬的前方` -- `On::Action(PayAdd)`.
+/// `PP:[丸山彩]憧憬的前方` -- `On::Action(Effect)` (was PayAdd; the interactive
+/// resonance shave moved to the payment declaration so `set_pay_amount` still
+/// lands -- see the card's Pattern E comment).
 #[cfg(feature = "band-pp")]
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
     hook_kind_only_idx(
         crate::card_id!("PP:[丸山彩]憧憬的前方"),
-        card_sdk::abi::HookKind::PayAdd,
+        card_sdk::abi::HookKind::Effect,
         player_id,
     )
 }
