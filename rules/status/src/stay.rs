@@ -140,6 +140,6 @@ pub fn on_stay_landed_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(owner: i32) -> card_sdk::Asked {
-    refuse(owner)
+pub fn refuse_kani(owner: i32, v: i32) -> bool {
+    refuse(owner, v)
 }

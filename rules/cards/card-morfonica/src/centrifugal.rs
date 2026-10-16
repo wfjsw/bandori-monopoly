@@ -83,8 +83,8 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn immune_all_kani(player_id: i32) -> card_sdk::Asked {
-    immune_all(player_id)
+pub fn immune_all_kani(player_id: i32, v: i32) -> bool {
+    immune_all(player_id, v)
 }
 
 #[cfg(kani)]

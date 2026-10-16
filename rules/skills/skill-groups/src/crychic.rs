@@ -275,8 +275,8 @@ pub fn force_card_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(player_id: i32) -> card_sdk::Asked {
-    refuse(player_id)
+pub fn refuse_kani(player_id: i32, v: i32) -> bool {
+    refuse(player_id, v)
 }
 
 #[cfg(kani)]

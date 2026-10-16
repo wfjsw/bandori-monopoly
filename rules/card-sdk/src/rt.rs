@@ -385,6 +385,9 @@ fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue
             "filter",
         );
     }
+    if changed(v.allowed, input.allowed) && v.allowed == 0 {
+        ctx::trigger::set_cancelled();
+    }
     // `tag` is card-named (`plan::set_tag("key", v)` -- the key is the creating
     // card's own tag name, not a generic field). Bodies that need a named tag
     // call `plan::set_tag` themselves; this write-back deliberately does not

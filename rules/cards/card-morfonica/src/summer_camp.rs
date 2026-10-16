@@ -104,6 +104,6 @@ pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn untargetable_kani(player_id: i32) -> card_sdk::Asked {
-    untargetable(player_id)
+pub fn untargetable_kani(player_id: i32, v: i32) -> bool {
+    untargetable(player_id, v)
 }

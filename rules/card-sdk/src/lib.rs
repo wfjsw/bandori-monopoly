@@ -761,6 +761,16 @@ mod tests {
             TriggerKind::TurnBonusTime,
             TriggerKind::TurnBaseTime,
             TriggerKind::RollValue,
+            TriggerKind::BuyGate,
+            TriggerKind::AbnormalGuard,
+            TriggerKind::ActGate,
+            TriggerKind::PayGate,
+            TriggerKind::MoveGate,
+            TriggerKind::ExclusiveUse,
+            TriggerKind::PlayGate,
+            TriggerKind::ImmuneAll,
+            TriggerKind::Untargetable,
+            TriggerKind::Redirect,
         ] {
             assert!(k.is_filter(), "expected filter kind {:?}", k.as_str());
         }
@@ -773,8 +783,6 @@ mod tests {
             TriggerKind::SettleBody,
             TriggerKind::CounterChanged,
             TriggerKind::DrewBefore,
-            TriggerKind::BuyGate,
-            TriggerKind::AbnormalGuard,
             TriggerKind(78), // ChargePaying -- prompts, stays Action
         ] {
             assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());

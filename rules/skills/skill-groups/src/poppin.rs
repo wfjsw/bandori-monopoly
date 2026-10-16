@@ -358,6 +358,6 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 /// cfg(kani) direct-call wrapper (ppcost body-id pattern).
 #[cfg(kani)]
-pub fn lock_hill_kani(player_id: i32) -> card_sdk::Asked {
-    lock_hill(player_id)
+pub fn lock_hill_kani(player_id: i32, v: i32) -> bool {
+    lock_hill(player_id, v)
 }
