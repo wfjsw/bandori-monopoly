@@ -287,6 +287,9 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
         };
         for kind in [
             "Play",
+            "Action",
+            "Filter",
+            // "Hook" is the pre-v73 name; kept so a stale source still inventories.
             "Hook",
             "Counteract",
             "Gate",

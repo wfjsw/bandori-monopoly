@@ -284,7 +284,8 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 
 /// First entry of card `idx` whose kind matches `kind` / `hook_name`.
 ///
-/// `kind` is one of `"Play"`, `"Counteract"`, `"Hook"`, `"Gate"`, `"AtEnd"`,
+/// `kind` is one of `"Play"`, `"Counteract"`, `"Hook"` / `"Action"` /
+/// `"Filter"`, `"Gate"`, `"AtEnd"`,
 /// `"RollPlan"`, `"Settle"`, `"Message"`. For `Hook`, `hook_name` may filter
 /// by `HookKind` short name (`"PayAdd"`); `""` matches the first hook.
 ///
