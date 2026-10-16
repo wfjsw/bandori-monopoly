@@ -545,7 +545,13 @@ use alloc::{string::String, vec::Vec};
 ///      `TriggerKind::RollValue = 102` is raised immediately before `RollAfter`
 ///      for roll reshaping (RollAfter stays a pure Action event). SAVE_VERSION
 ///      unchanged.
-pub const ABI_VERSION: i32 = 74;
+/// v75: **RollPlan / AtEnd fold**. `On::RollPlan` is
+///      `On::FilterValue(&[TriggerKind::RollPlan], …)`; `On::AtEnd` is
+///      `On::Action(&[TriggerKind::AtEnd], …)` (one-shot via the existing
+///      `schedule_turn_end` list). `OnKind::RollPlan = 5` / `OnKind::AtEnd = 4`
+///      are retired -- never reuse those wire ids. New kind
+///      `TriggerKind::AtEnd = 103` (wire `atEnd`). SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 75;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1767,6 +1773,12 @@ impl TriggerKind {
     /// rewrites `t.value`. Filter-only.
     pub const RollValue: Self = Self(102);
 
+    /// v75: **scheduled turn-end callback**. Raised only for the card/uid a
+    /// `ctx::at_turn_end` / `ctx::at_next_turn_end` schedule entry names, at
+    /// that turn's end (one-shot). Replaces `On::AtEnd`: the registered entry
+    /// is `On::Action(&[AtEnd], pre, guard, body)`. Non-filter.
+    pub const AtEnd: Self = Self(103);
+
     /// The wire value, shared with every kind view.
     pub const fn as_i32(self) -> i32 {
         self.0
@@ -1915,6 +1927,7 @@ impl TriggerKind {
             100 => "turnBaseTime",
             101 => "playGate",
             102 => "rollValue",
+            103 => "atEnd",
             26 => "26",  // ruleset-declared custom id
             73 => "73",  // ruleset-declared custom id
             74 => "74",  // ruleset-declared custom id
@@ -2028,6 +2041,7 @@ impl TriggerKind {
             "turnBaseTime" => Self(100),
             "playGate" => Self(101),
             "rollValue" => Self(102),
+            "atEnd" => Self(103),
             _ => Self::None,
         }
     }
@@ -2218,20 +2232,15 @@ pub enum OnKind {
     /// does not modify the triggering value. Kinds must be non-filter
     /// (`TriggerKind::is_filter() == false`).
     Action = 3,
-    /// `On::AtEnd(pre, guard, body)` -- what `ctx::at_turn_end` /
-    /// `ctx::at_next_turn_end` schedules: `body` runs once at that turn end,
-    /// when the entry's condition / residual guard admit (v49).
-    AtEnd = 4,
-    /// `On::RollPlan(pre, guard, body)` -- this card has a movement routine.
-    /// The host calls it on the main-move [`TriggerKind::RollPlan`] pass, before
-    /// the dice, so `body` can shape `turn.plan`. Condition / residual guard (v49)
-    /// decide whether the routine applies to the move being planned.
-    RollPlan = 5,
+    // 4 was `AtEnd`, folded into `Action(&[TriggerKind::AtEnd], …)` in v75.
+    // Wire id 4 is retired -- never reuse.
+    // 5 was `RollPlan`, folded into `FilterValue(&[TriggerKind::RollPlan], …)`
+    // in v75. Wire id 5 is retired -- never reuse.
     /// `On::Gate(kinds, pre, guard, body)` -- a question at those [`GateKind`]s.
     /// `body` answers with `set_cancelled` / `set_target` / `set_reason`; the
     /// host asks every placed card at declaration or at resolution, per the
     /// kind. Since v49 it carries the same condition / residual guard as
-    /// [`Self::Hook`]: a rejecting entry does not answer (and so never flashes).
+    /// [`Self::Action`]: a rejecting entry does not answer (and so never flashes).
     Gate = 6,
     /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(pre, guard,
     /// body)`. Tile rules (`tile:*`) are one per board tile kind and this is what
@@ -2289,6 +2298,11 @@ pub struct FilterValue {
     pub stop_at: i32,
     pub settle_tile: i32,
     pub teleport_to: i32,
+    /// RollPlan: clear the dice table first (`UNCHANGED` / 0 / 1).
+    pub clear_dice: i32,
+    /// RollPlan: `plan::set_tag("key", value)` -- the key is the creating
+    /// card's own tag name (see the body); `UNCHANGED` keeps the plan's.
+    pub tag: i32,
 }
 
 impl FilterValue {
@@ -2302,8 +2316,7 @@ impl OnKind {
             0 => Self::Play,
             2 => Self::Counteract,
             3 => Self::Action,
-            4 => Self::AtEnd,
-            5 => Self::RollPlan,
+            // 4 / 5 retired (AtEnd / RollPlan) -- see the enum docs.
             6 => Self::Gate,
             7 => Self::Settle,
             8 => Self::Message,

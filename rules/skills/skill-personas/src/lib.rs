@@ -47,7 +47,7 @@
 
 extern crate alloc;
 
-use card_sdk::abi::{state_key, TriggerKind};
+use card_sdk::abi::{state_key, TriggerKind, HookKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::CardDef;
 

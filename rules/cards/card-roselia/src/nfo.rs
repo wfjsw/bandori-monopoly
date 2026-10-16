@@ -37,7 +37,7 @@ pub const NFO: CardDef = CardDef::new(
             pay_shave,
         ),
         On::Action(&[HookKind::PayAfter], "actor == owner && card.placed", None, pay_unplace),
-        On::AtEnd("", None, at_end),
+        On::Action(&[HookKind::AtEnd], "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)

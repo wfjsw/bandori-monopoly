@@ -8,7 +8,7 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{prop, ChainKind};
+use card_sdk::abi::{prop, ChainKind, HookKind};
 use card_sdk::ctx::plan;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -23,8 +23,8 @@ pub const DETOUR: CardDef = CardDef::new(
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
-        On::RollPlan("slot('detour_next_roll') != 0", None, next_roll),
-        On::AtEnd("", None, clear_no_reward),
+        On::FilterValue(&[HookKind::RollPlan], "slot('detour_next_roll') != 0", None, next_roll),
+        On::Action(&[HookKind::AtEnd], "", None, clear_no_reward),
     ],
 )
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
@@ -137,10 +137,12 @@ const NEXT_ROLL: &str = "detour_next_roll";
 /// plan is being built, so this is where the override belongs. `set_base_dice`
 /// replaces the table; 1d6 is the clause's. The `NEXT_ROLL == 0` early-out is
 /// the entry's condition (`slot('detour_next_roll') != 0`).
-fn next_roll(player_id: i32) -> card_sdk::Asked {
+fn next_roll(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    // TODO(规则书): `state::set` is a side effect kept in this Filter body
+    // (the slot clears the one-shot 「下一次投掷」 latch). Split to an Action
+    // if a post-RollPlan event is needed.
     ctx::state::set(player_id, NEXT_ROLL, 0);
-    plan::set_base_dice(1, 6, "detour");
-    Ok(())
+    card_sdk::abi::FilterValue { base_count: 1, base_sides: 6, ..v }
 }
 
 /// 「向后移动经过CiRCLE时不获得CiRCLE奖励」 -- the veto is `prop::NO_REWARD` on
@@ -183,8 +185,8 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn next_roll_kani(player_id: i32) -> card_sdk::Asked {
-    next_roll(player_id)
+pub fn next_roll_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    next_roll(player_id, v)
 }
 
 #[cfg(kani)]

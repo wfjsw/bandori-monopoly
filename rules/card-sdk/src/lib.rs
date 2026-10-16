@@ -558,21 +558,6 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
-    /// This card has a movement routine ([移动] shaping). Same shape as
-    /// [`On::Action`]; the condition sees the move being planned (docs/GUARDS.md
-    /// §4.2c).
-    RollPlan(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
-    /// What `ctx::at_turn_end` schedules: run once at that turn end. Same shape
-    /// as [`On::Action`]; the condition sees the owner and the turn fields.
-    AtEnd(
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
     /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
     /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
     /// `CardDef` per tile kind and this is their body; the engine keeps
@@ -623,8 +608,6 @@ impl On {
             On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
             On::FilterValue(k, _, g, r) => On::FilterValue(k, pre, g, r),
             On::Gate(k, _, g, r) => On::Gate(k, pre, g, r),
-            On::RollPlan(_, g, r) => On::RollPlan(pre, g, r),
-            On::AtEnd(_, g, r) => On::AtEnd(pre, g, r),
             On::Settle(_, g, r) => On::Settle(pre, g, r),
             On::Message(n, _, g, r) => On::Message(n, pre, g, r),
         }
@@ -640,8 +623,6 @@ impl On {
             On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
             On::FilterValue(k, pre, _, r) => On::FilterValue(k, pre, None, r),
             On::Gate(k, pre, _, r) => On::Gate(k, pre, None, r),
-            On::RollPlan(pre, _, r) => On::RollPlan(pre, None, r),
-            On::AtEnd(pre, _, r) => On::AtEnd(pre, None, r),
             On::Settle(pre, _, r) => On::Settle(pre, None, r),
             On::Message(n, pre, _, r) => On::Message(n, pre, None, r),
             other => other,
@@ -659,8 +640,6 @@ impl On {
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
             | On::Gate(_, _, g, _)
-            | On::RollPlan(_, g, _)
-            | On::AtEnd(_, g, _)
             | On::Settle(_, g, _)
             | On::Message(_, _, g, _) => *g,
             _ => None,
@@ -678,8 +657,6 @@ impl On {
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
             | On::Gate(_, _, g, _)
-            | On::RollPlan(_, g, _)
-            | On::AtEnd(_, g, _)
             | On::Settle(_, g, _)
             | On::Message(_, _, g, _) => g.is_some(),
         }
@@ -696,8 +673,6 @@ impl On {
             | On::FilterFlag(_, pre, _, _)
             | On::FilterValue(_, pre, _, _)
             | On::Gate(_, pre, _, _)
-            | On::RollPlan(pre, _, _)
-            | On::AtEnd(pre, _, _)
             | On::Settle(pre, _, _)
             | On::Message(_, pre, _, _) => *pre,
         }
@@ -712,8 +687,6 @@ impl On {
             On::FilterFlag(..) => abi::OnKind::Filter,
             On::FilterValue(..) => abi::OnKind::Filter,
             On::Gate(..) => abi::OnKind::Gate,
-            On::AtEnd(..) => abi::OnKind::AtEnd,
-            On::RollPlan(..) => abi::OnKind::RollPlan,
             On::Settle(..) => abi::OnKind::Settle,
             On::Message(..) => abi::OnKind::Message,
         }

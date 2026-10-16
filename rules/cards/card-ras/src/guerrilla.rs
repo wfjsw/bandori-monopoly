@@ -29,7 +29,7 @@ pub const GUERRILLA: CardDef = CardDef::new(
         // clause of that 「如果」 holds. Derived scans, residual. The arm-latch
         // clear is the same entry's bookkeeping (the engine dispatches one
         // `AtEnd` body per entry), so the gate lives in the body.
-        On::AtEnd("", None, at_end),
+        On::Action(&[HookKind::AtEnd], "", None, at_end),
     ],
 )
 .silent(&[1]).meta(&card_sdk::meta::CardMeta::new()

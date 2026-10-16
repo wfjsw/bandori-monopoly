@@ -16,12 +16,13 @@
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
         On::Play("", Some(cant_play), overlapping_voices),
-        On::AtEnd("", None, at_end),
+        On::Action(&[HookKind::AtEnd], "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"重叠的声音"#)

@@ -12,6 +12,7 @@
 //! whose flip face-down may cost 2 fire, flip face-up draws 1.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 const ID: &str = "Mujica:（喵梦）";
 /// `card_face_down` as of the last check, so a flip is a change.

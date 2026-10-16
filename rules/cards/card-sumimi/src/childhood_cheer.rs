@@ -30,7 +30,7 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         // The body-top `!is_placed` early-out is the condition now: a card the
         // move already landed (or that otherwise left the field) has nothing
         // left to discard, so the callback must not run (or flash) for it.
-        On::AtEnd("card.placed", None, at_end),
+        On::Action(&[HookKind::AtEnd], "card.placed", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"儿时玩伴的鼓励"#)

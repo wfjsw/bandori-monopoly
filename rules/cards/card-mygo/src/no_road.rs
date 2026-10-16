@@ -7,6 +7,7 @@
 //! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",

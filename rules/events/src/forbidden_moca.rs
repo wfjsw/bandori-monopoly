@@ -19,7 +19,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         // deleted (a no-op prefetch); the `value` param is the face being
         // halved (effect), not applicability.
         On::Filter(&[HookKind::RollValue], "", None, halve),
-        On::AtEnd("", None, expire),
+        On::Action(&[HookKind::AtEnd], "", None, expire),
     ],
 );
 

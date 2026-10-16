@@ -8,6 +8,7 @@
 //! rent charged there under a foreign agent is halved again.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",

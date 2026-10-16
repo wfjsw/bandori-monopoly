@@ -13,6 +13,7 @@
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 use crate::want_human::SLOT_X;
 

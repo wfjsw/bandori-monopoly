@@ -188,8 +188,6 @@ pub fn on(
         | (On::FilterFlag(_, _, guard, _), export::OP_GUARD)
         | (On::FilterValue(_, _, guard, _), export::OP_GUARD)
         | (On::Gate(_, _, guard, _), export::OP_GUARD)
-        | (On::RollPlan(_, guard, _), export::OP_GUARD)
-        | (On::AtEnd(_, guard, _), export::OP_GUARD)
         | (On::Settle(_, guard, _), export::OP_GUARD)
         | (On::Message(_, _, guard, _), export::OP_GUARD) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
@@ -252,9 +250,7 @@ pub fn on(
         | (On::Play(_, _, run), _)
         | (On::Action(_, _, _, run), _)
         | (On::Gate(_, _, _, run), _)
-        | (On::AtEnd(_, _, run), _)
         | (On::Settle(_, _, run), _)
-        | (On::RollPlan(_, _, run), _)
         | (On::Message(_, _, _, run), _) => match run(player_id) {
             Ok(()) => 0,
             // Asked: the host reads the published question and re-runs us with
@@ -288,6 +284,8 @@ fn read_filter_value() -> crate::abi::FilterValue {
         stop_at: ctx::plan::stop_at(),
         settle_tile: FilterValue::UNCHANGED,
         teleport_to: FilterValue::UNCHANGED,
+        clear_dice: FilterValue::UNCHANGED,
+        tag: FilterValue::UNCHANGED,
     }
 }
 
@@ -359,6 +357,11 @@ fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue
     if changed(v.teleport_to, input.teleport_to) {
         ctx::plan::set_teleport_to(v.teleport_to);
     }
+    if changed(v.clear_dice, input.clear_dice) && v.clear_dice != 0 {
+        ctx::plan::clear_dice();
+    }
+    // `tag` is card-specific (`plan::set_tag("name", v)`); bodies that need a
+    // named tag call `plan::set_tag` themselves (not refuse_if_filter'd).
 }
 
 /// Generate the guest exports for a card table.

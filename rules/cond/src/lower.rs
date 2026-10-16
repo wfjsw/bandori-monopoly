@@ -289,10 +289,13 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
             "Play",
             "Action",
             "Filter",
+            "FilterFlag",
+            "FilterValue",
             // "Hook" is the pre-v73 name; kept so a stale source still inventories.
             "Hook",
             "Counteract",
             "Gate",
+            // "RollPlan" / "AtEnd" are the pre-v75 names.
             "RollPlan",
             "AtEnd",
             "Settle",

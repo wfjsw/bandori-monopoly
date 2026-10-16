@@ -28,7 +28,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // (impure: it rolls a die). Not a Filter for that reason; timing stays
         // identical on `RollAfter`.
         On::Action(&[HookKind::RollAfter], "", None, sub_die),
-        On::AtEnd("", None, phase_end),
+        On::Action(&[HookKind::AtEnd], "", None, phase_end),
     ],
 );
 

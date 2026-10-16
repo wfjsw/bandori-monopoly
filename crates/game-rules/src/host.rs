@@ -164,8 +164,10 @@ impl CardInfo {
         self.hook_entries(trigger).first().copied()
     }
 
+    /// Scheduled turn-end callback (`ctx::at_turn_end`): an `On::Action` at
+    /// [`crate::TriggerKind::AtEnd`].
     pub fn has_at_end(&self) -> bool {
-        self.entry(OnKind::AtEnd, None).is_some()
+        self.hook_entry(crate::TriggerKind::AtEnd).is_some()
     }
 }
 
@@ -1181,8 +1183,10 @@ impl Ruleset {
             // have admitted an `Effect` entry on a `card` raise; resolve it too.
             Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
-            Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
-            Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
+            // v75: AtEnd / RollPlan are ordinary kind-keyed entries
+            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[RollPlan])`).
+            Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
+            Call::RollPlan { .. } => info.hook_entry(crate::TriggerKind::RollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),
         };
         let Some(entry) = entry else {

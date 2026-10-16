@@ -4324,24 +4324,6 @@ impl<M: CardModules> RulesBridge<M> {
                                 &mut trigger,
                             )?;
                         }
-                        // `RollPlan` runs on every live Fx before the dice --
-                        // `On::RollPlan` shapes the move.
-                        if kind == TriggerKind::RollPlan
-                            && self.ruleset.cards()[idx as usize]
-                                .entry(card_sdk::abi::OnKind::RollPlan, None)
-                                .is_some()
-                        {
-                            self.drive(
-                                cx,
-                                Call::RollPlan {
-                                    card: idx,
-                                    player_id: player_id as i32,
-                                },
-                                &id,
-                                uid,
-                                &mut trigger,
-                            )?;
-                        }
                     }
                 }
                 // Board-owned rule instances (`docs/TILES.md`, `docs/EVENTS.md`)
@@ -4543,20 +4525,6 @@ impl<M: CardModules> RulesBridge<M> {
                         call: Call::Hook {
                             card: idx,
                             kind,
-                            player_id: player_id as i32,
-                        },
-                        card_id: id.clone(),
-                        uid,
-                    });
-                }
-                if kind == TriggerKind::RollPlan
-                    && self.ruleset.cards()[idx as usize]
-                        .entry(card_sdk::abi::OnKind::RollPlan, None)
-                        .is_some()
-                {
-                    jobs.push(HookJob {
-                        call: Call::RollPlan {
-                            card: idx,
                             player_id: player_id as i32,
                         },
                         card_id: id.clone(),
@@ -8510,6 +8478,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::PayAfter
             | TriggerKind::RollAfter
             | TriggerKind::RollValue
+            | TriggerKind::AtEnd
             | TriggerKind::CardPlayed
             | TriggerKind::Targeted
             | TriggerKind::PayChoose

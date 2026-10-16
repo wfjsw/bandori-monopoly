@@ -705,7 +705,7 @@ const PRE_ROLLPLAN: CardDef = CardDef::new(
     "TEST:preRollPlan",
     &[
         On::Play("", None, pre_rollplan_place),
-        On::RollPlan("false", None, pre_rollplan_body),
+        On::FilterValue(&[HookKind::RollPlan], "false", None, pre_rollplan_body),
     ],
 );
 
@@ -715,10 +715,10 @@ fn pre_rollplan_place(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn pre_rollplan_body(player_id: i32) -> card_sdk::Asked {
+fn pre_rollplan_body(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     ctx::plan::set_tag("preRollPlan", 1);
     ctx::log(player_id, &Msg::new(key!("pre_rollplan_ran")));
-    Ok(())
+    v
 }
 
 /// `On::AtEnd` with a rejecting condition: the scheduled turn-end callback
@@ -727,7 +727,7 @@ const PRE_ATEMD: CardDef = CardDef::new(
     "TEST:preAtEnd",
     &[
         On::Play("", None, pre_at_end_place),
-        On::AtEnd("false", None, pre_at_end_body),
+        On::Action(&[HookKind::AtEnd], "false", None, pre_at_end_body),
     ],
 );
 

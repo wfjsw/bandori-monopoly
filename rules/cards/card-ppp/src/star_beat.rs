@@ -8,7 +8,7 @@
 //!
 //! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{MoveKind, HookKind};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const STAR_BEAT: CardDef = CardDef::new(

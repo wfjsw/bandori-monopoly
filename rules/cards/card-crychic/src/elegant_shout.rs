@@ -6,7 +6,7 @@
 //!
 //! on an out-of-turn draw, draw 1 at the end of your next turn.
 
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{ChainKind, HookKind};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -14,7 +14,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
         On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract),
-        On::AtEnd("", None, at_end),
+        On::Action(&[HookKind::AtEnd], "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"优雅的呐喊"#)

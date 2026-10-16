@@ -25,7 +25,7 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Action(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
-        On::AtEnd("owner.pos >= 0", None, settle_now),
+        On::Action(&[HookKind::AtEnd], "owner.pos >= 0", None, settle_now),
     ],
 )
     .silent(&[1]);

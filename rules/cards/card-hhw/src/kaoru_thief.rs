@@ -38,7 +38,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
         // fixed roll yet.
-        On::RollPlan(
+        On::FilterValue(&[HookKind::RollPlan], 
             "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null",
             None,
             roll_plan,
@@ -178,26 +178,28 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// fixed roll yet), the dice become 1d2 (direction) + 1d10 (distance).
 /// Applicability is the entry's condition; `mover` is
 /// the plan's `turn_player` (C# `m.Seat`).
-fn roll_plan(player_id: i32) -> card_sdk::Asked {
+fn roll_plan(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    // TODO(规则书): `ctx::roll` is a dice roll kept in this Filter body (the
+    // 1d2 direction pick). A pure Filter cannot roll; split to an Action that
+    // pre-rolls into a slot if replay determinism requires it.
     let mover = ctx::turn_player();
     // 规则书: 「投掷1d2（前后）」 -- C# `H.Roll(m.Seat, 1, 2, ...)` sets
     // `m.Reverse = num == 2`.
     let dir = ctx::roll(mover, 1, 2);
-    // 规则书: 「（前后）」 -- C# `m.Reverse = num == 2` (`set_reverse` is
-    // `Plan.Reverse`).
-    ctx::plan::set_reverse(dir == 2);
-    // 规则书: 「和1d10（距离）」 -- C# `m.Base.Clear(); m.Base.Add((1, 10, ...))`
-    // plus `m.Dice.Clear()`: the face is *exactly* 1d10, so another card's
-    // extra dice come off too.
-    ctx::plan::clear_dice();
-    ctx::plan::set_base_dice(1, 10, "（怪盗hello happy）");
     ctx::log(
         mover,
         &Msg::new(key!("kaoru_thief_rollplan"))
             .player_id("who", mover)
             .i("dir", dir as i64),
     );
-    Ok(())
+    // 规则书: 「和1d10（距离）」 -- the face is *exactly* 1d10 (clear extra dice).
+    card_sdk::abi::FilterValue {
+        reverse: if dir == 2 { 1 } else { 0 },
+        clear_dice: 1,
+        base_count: 1,
+        base_sides: 10,
+        ..v
+    }
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -223,8 +225,8 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_plan_kani(player_id: i32) -> card_sdk::Asked {
-    roll_plan(player_id)
+pub fn roll_plan_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    roll_plan(player_id, v)
 }
 
 #[cfg(kani)]
