@@ -1,0 +1,13 @@
+[package]
+name = "personas"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Persona (character) roster rows -- PersonaDef metadata, one file per persona."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../card-sdk", features = ["guest"] }
+ruleset-core = { path = "../ruleset-core" }

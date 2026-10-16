@@ -1,5 +1,9 @@
-//! Roster rows (`PersonaDef`), one file per persona, kept apart from the skill rules.
-//! Collected in [`crate::roster_table`].
+//! Roster rows (`PersonaDef`), one file per persona -- metadata only, kept apart
+//! from the skill rules in `skills/skill-personas`. Collected in [`roster_table`].
+
+#![cfg_attr(target_arch = "wasm32", no_std)]
+
+extern crate alloc;
 
 pub mod akao_cool;
 pub mod anon_restart;
@@ -55,3 +59,4 @@ pub mod tukushi_try;
 pub mod uika_idol;
 pub mod uika_imprisoned;
 pub mod yuri_crit;
+pub mod roster_table;

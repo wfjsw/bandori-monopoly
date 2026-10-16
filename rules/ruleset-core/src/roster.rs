@@ -5,7 +5,7 @@
 //! shared card-row shape plus a generic `fields` map, and this module names the
 //! keys this game puts in that map (`meta_key`). The typed
 //! [`PersonaDef`] / [`GroupDef`] tables live with their skill rules
-//! (`rules/skills/skill-personas`, `rules/skills/skill-groups`); the shared
+//! (`rules/personas`, `rules/skills/skill-groups`); the shared
 //! ordinal tables that restore data-file order live in [`roster_order`].
 
 use alloc::string::String;
@@ -53,7 +53,7 @@ pub mod meta_key {
 }
 
 /// One playable character from `the roster`, beside its skill rule
-/// (`rules/skills/skill-personas`). Byte-exact text: use raw string literals.
+/// (`rules/personas`). Byte-exact text: use raw string literals.
 #[derive(Clone, Copy)]
 pub struct PersonaDef {
     pub name: &'static str,
