@@ -98,6 +98,7 @@ crate::host_subset!(ag_dispatch {
     trig_value => arm_trig_value,
     trig_target => arm_trig_target,
     trig_set_pay_amount => arm_trig_set_pay_amount,
+    trig_tile => arm_trig_tile,
     // board
     tile_price => arm_tile_price,
     tile_in => arm_tile_in,
