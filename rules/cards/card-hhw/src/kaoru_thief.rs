@@ -178,23 +178,38 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// fixed roll yet), the dice become 1d2 (direction) + 1d10 (distance).
 /// Applicability is the entry's condition; `mover` is
 /// the plan's `turn_player` (C# `m.Seat`).
-fn roll_plan(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    // TODO(规则书): `ctx::roll` is a dice roll kept in this Filter body (the
-    // 1d2 direction pick). A pure Filter cannot roll; split to an Action that
-    // pre-rolls into a slot if replay determinism requires it.
-    let mover = ctx::turn_player();
-    // 规则书: 「投掷1d2（前后）」 -- C# `H.Roll(m.Seat, 1, 2, ...)` sets
-    // `m.Reverse = num == 2`.
-    let dir = ctx::roll(mover, 1, 2);
-    ctx::log(
-        mover,
-        &Msg::new(key!("kaoru_thief_rollplan"))
-            .player_id("who", mover)
-            .i("dir", dir as i64),
-    );
+fn roll_plan(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    // 规则书: 「投掷1d2（前后）」 -- the host pre-rolls the direction face into
+    // `recorded_roll` (ABI v78) so this Filter stays pure. Odd face = reverse
+    // (task formula; C# was `m.Reverse = num == 2` -- face 2 only. Documented
+    // inversion: the sheet says 「前后」 as a 1d2, and the v78 convention is
+    // odd=reverse).
+    // TODO(规则书): the host does not fill `recorded_roll` yet, so the
+    //   direction stays `UNCHANGED` and the `kaoru_thief_rollplan` dir log is
+    //   skipped (no face). Once the host pre-rolls, `reverse` and the log
+    //   pick up the face. The 1d10 base is independent of that.
+    let dir = v.recorded_roll;
+    let reverse = if dir == card_sdk::abi::FilterValue::UNCHANGED {
+        card_sdk::abi::FilterValue::UNCHANGED
+    } else {
+        if dir % 2 == 1 {
+            1
+        } else {
+            0
+        }
+    };
+    if dir != card_sdk::abi::FilterValue::UNCHANGED {
+        let mover = ctx::turn_player();
+        ctx::log(
+            mover,
+            &Msg::new(key!("kaoru_thief_rollplan"))
+                .player_id("who", mover)
+                .i("dir", dir as i64),
+        );
+    }
     // 规则书: 「和1d10（距离）」 -- the face is *exactly* 1d10 (clear extra dice).
     card_sdk::abi::FilterValue {
-        reverse: if dir == 2 { 1 } else { 0 },
+        reverse,
         clear_dice: 1,
         base_count: 1,
         base_sides: 10,

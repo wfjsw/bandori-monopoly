@@ -4842,6 +4842,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "set_tag_id",
+        |mut c: C<W>, key_id: i32, v: i32| -> Result<(), Error> {
+            hostfns::set_tag_id(&mut c, key_id, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(m, "recorded_roll", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::recorded_roll(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
         "set_min_roll",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_min_roll(&mut c, v).map_err(HostErr::into_err)

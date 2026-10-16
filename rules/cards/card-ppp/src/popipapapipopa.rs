@@ -32,11 +32,11 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶」 -- a payment
         // the owner owes, with a crystal to spend.
         //
-        // ABI v74 Pattern E: `ask_number` + crystal spend + `set_pay_amount`
-        // cannot live in a Filter, and there is no non-interactive cancel. The
-        // offer rides `HookKind::Effect` (payment declaration; `t.value` folds).
+        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position:
+        // the interactive crystal spend sits immediately before the pure
+        // `PayChoose` filter stage.
         On::Action(
-            &[HookKind::Effect],
+            &[HookKind::PayChooseAsk],
             "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,

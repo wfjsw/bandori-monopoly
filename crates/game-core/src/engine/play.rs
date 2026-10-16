@@ -772,6 +772,16 @@ impl Cx<'_> {
                     if !plan.signed {
                         plan.roll = plan.roll.max(plan.min_roll);
                     }
+                    // A `rollAfter` / `moveRoll` body may have cleared resolve
+                    // on the turn plan (`plan::set_resolve(false)`, e.g.
+                    // 不要背负期待's 「如果为0则此次移动不[结算]」). The plan is
+                    // never reset between moves, so only pull the *clear*
+                    // direction; `walk_inner`'s `fold_plan_delta` sees writes
+                    // from `moveBefore` onward and the step loop syncs mid-walk,
+                    // but a 0-step walk takes neither path.
+                    if !self.w.turn.plan.resolve {
+                        plan.resolve = false;
+                    }
                 }
             }
             if plan.teleport_to < 0 && !plan.cancelled && !self.out(i) {
@@ -1263,6 +1273,16 @@ impl Cx<'_> {
                 // pushes the roll down still respects the floor.
                 if !m.signed {
                     m.roll = m.roll.max(m.min_roll);
+                }
+                // A `rollAfter` / `moveRoll` body may have cleared resolve on
+                // the turn plan (`plan::set_resolve(false)`, e.g. 不要背负期待's
+                // 「如果为0则此次移动不[结算]」). Only pull the clear direction --
+                // the plan is sticky and a stale `true` must not revive a move
+                // the immobile clamp (below) is about to pin. `walk_inner`
+                // folds `moveBefore` writes and the step loop syncs mid-walk;
+                // a 0-step walk takes neither path.
+                if !self.w.turn.plan.resolve {
+                    m.resolve = false;
                 }
                 // G-STATUS-02 [无法移动] (glossary 10 / items 11-13):
                 // 「main move的[move end]视为当前所在格子且不settle」. The roll
@@ -3100,6 +3120,31 @@ impl Cx<'_> {
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
         for kind in ["payAdd", "payMul", "payChoose", "payAt"] {
+            // v78: interactive pre-stage. A prompt that used to live inside the
+            // PayChoose Filter rides `payChooseAsk` (an Action) so the prompt is
+            // at the rulebook position and the pure Filter still applies here.
+            // The ask's `set_pay_amount` / `set_pay_target` fold here just like
+            // any other stage's rewrite.
+            if kind == "payChoose" {
+                let ask = raise!(
+                    self,
+                    "payChooseAsk",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = amount,
+                    by_card = p.by_card,
+                    @p TriggerPay::new(rent),
+                    tile = p.tile.map_or(-1, |t| t as i32)
+                )?;
+                if ask.value != amount {
+                    modified = true;
+                }
+                amount = ask.value;
+                if ask.target >= 0 {
+                    to = Some(ask.target as usize);
+                }
+            }
             let before = amount;
             let t = raise!(
                 self,
@@ -3382,6 +3427,26 @@ impl Cx<'_> {
     ) -> Flow<Option<i32>> {
         let mut amount = total;
         for kind in ["payTotalAdd", "payTotalMul", "payTotalCancel"] {
+            // v78: interactive pre-stage (see the payChooseAsk note above).
+            // The ask's `set_pay_amount` / `set_pay_target` fold here just like
+            // any other stage's rewrite.
+            if kind == "payTotalAdd" {
+                let ask = raise!(
+                    self,
+                    "payTotalAddAsk",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = amount,
+                    by_card = by_card,
+                    @p TriggerPay::new(rent),
+                    tile = tile.map_or(-1, |t| t as i32)
+                )?;
+                amount = ask.value;
+                if ask.target >= 0 {
+                    *to = Some(ask.target as usize);
+                }
+            }
             let t = raise!(
                 self,
                 kind,

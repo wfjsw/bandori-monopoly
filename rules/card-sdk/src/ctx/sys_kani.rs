@@ -971,6 +971,14 @@ pub fn set_tag(kp: i32, kl: i32, v: i32) {
     kani_host::call_unit(Op::set_tag, [kp, kl, v, 0, 0, 0]);
 }
 
+pub fn set_tag_id(key_id: i32, v: i32) {
+    kani_host::call_unit(Op::set_tag_id, [key_id, v, 0, 0, 0, 0]);
+}
+
+pub fn recorded_roll() -> i32 {
+    kani_host::call_i32(Op::recorded_roll, [0, 0, 0, 0, 0, 0])
+}
+
 pub fn set_settle_as_agent(on: i32) {
     kani_host::call_unit(Op::set_settle_as_agent, [on, 0, 0, 0, 0, 0]);
 }

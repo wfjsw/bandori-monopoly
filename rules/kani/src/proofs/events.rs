@@ -1094,7 +1094,7 @@ pub fn marina_box_02_decline_is_noop() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Hook", "PassTile", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Action", "PassTile", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1141,7 +1141,7 @@ pub fn marina_box_02_mutant_always_pays() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Hook", "PassTile", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Action", "PassTile", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);

@@ -174,6 +174,7 @@ pub mod raw {
 /// 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」) goes through
 /// [`roll_ask`] instead, which raises the `Roll` chain link.
 pub fn roll(player_id: i32, count: i32, sides: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::roll");
     unsafe { sys::roll(player_id, count, sides) }
 }
 
@@ -1019,6 +1020,7 @@ pub fn prop(key: &str) -> i32 {
 /// （soyo） sets `prop::GROUP`, and so on. `docs/TILES.md`.
 #[cfg_attr(kani, inline(always))]
 pub fn set_prop(key: &str, value: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::set_prop");
     let (p, l) = s(key);
     unsafe { sys::set_self_prop(p, l, value) }
 }
@@ -1077,6 +1079,7 @@ pub fn counter(name: &str) -> i32 {
 /// (the marker window can pause).
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter(name: &str, n: i32, max: i32) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::add_counter");
     let (p, l) = s(name);
     asked(unsafe { sys::add_counter_self(p, l, n, max) })
 }
@@ -1102,6 +1105,7 @@ pub fn counter_at(uid: i32, name: &str) -> i32 {
 /// spending the placer's on-card CP).
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter_at(uid: i32, name: &str, n: i32, max: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::add_counter_at");
     let (p, l) = s(name);
     unsafe { sys::add_counter_at(uid, p, l, n, max) }
 }
@@ -1491,6 +1495,7 @@ pub mod state {
 
     /// Write the value raw. Not clamped to `min`/`max`.
     pub fn set(player_id: i32, key: &str, value: i32) -> i32 {
+        crate::pure::refuse_if_filter("state::set");
         set_field(player_id, key, VALUE, value)
     }
 
@@ -2159,8 +2164,21 @@ pub mod plan {
     /// the card that arms one tags the move (`set_tag("fireRoll", 1)`) and
     /// readers ask [`trigger::move_tag`].
     pub fn set_tag(key: &str, value: i32) {
+        crate::pure::refuse_if_filter("plan::set_tag");
         let (p, l) = s(key);
         unsafe { sys::set_tag(p, l, value) }
+    }
+
+    /// `set_tag` with the key as an intern id (v78). Used by the FilterValue
+    /// write-back so a pure body can name a tag without a `&str` on the wire.
+    pub fn set_tag_id(key_id: i32, value: i32) {
+        unsafe { sys::set_tag_id(key_id, value) }
+    }
+
+    /// Host-supplied recorded roll (v78), or `FilterValue::UNCHANGED` when the
+    /// host did not pre-roll one for this raise.
+    pub fn recorded_roll() -> i32 {
+        unsafe { sys::recorded_roll() }
     }
 
     /// Passing CiRCLE pays nothing on this walk.

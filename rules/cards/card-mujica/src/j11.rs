@@ -18,22 +18,18 @@ pub const J11: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
-        // reactions, not [反击]s. `CardJ11.PayChoose` is a value modifier and
-        // rides its own FilterFlag entry (mixed kinds split, ABI v73).
-        //
-        // PayChoose split (ABI v74, Pattern E): the C# `p.cancel = true when
-        // Me.Stunned` cancel is a non-interactive FilterFlag; the `ask_yes` +
-        // discard + stun offer cannot prompt from a Filter, so it moves to
-        // `HookKind::Effect` (the payment declaration -- `t.value` is applied
-        // there, unlike PayAfter which runs after the money has moved). Shared
-        // body `counteract` matches on `trigger::kind()`; the Effect arm is the
-        // old PayChoose arm (`ask_yes` → `charge` → `set_pay_amount(0)`).
+        // reactions, not [反击]s.
         On::Action(
-            &[HookKind::TurnEnd, HookKind::Targeted, HookKind::Effect],
+            &[HookKind::TurnEnd, HookKind::Targeted],
             "card.placed",
             None,
             counteract,
         ),
+        // C# `CardJ11.PayChoose` interactive arm: `ask_yes` → `charge` →
+        // `set_pay_amount(0)`. Rides `PayChooseAsk` (v78), restoring the
+        // rulebook PayChoose position (its own entry; the TurnEnd/Targeted
+        // dispatcher is separate). The pure stun cancel stays on FilterFlag.
+        On::Action(&[HookKind::PayChooseAsk], "card.placed", None, pay_choose_ask),
         On::FilterFlag(&[HookKind::PayChoose], "card.placed", None, pay_choose_cancel),
         On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
@@ -75,9 +71,8 @@ fn charge(player_id: i32) {
     );
 }
 
-/// Field hooks: `DecayCard.TurnEnd` (the crystal tick), `CardJ11.PayChoose`,
-/// and `CardJ11.Targeted`. Runs through the Fx hook dispatch, so these are
-/// field effects, not [反击]s.
+/// Field hooks: `DecayCard.TurnEnd` (the crystal tick) and `CardJ11.Targeted`.
+/// Runs through the Fx hook dispatch, so these are field effects, not [反击]s.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // `DecayCard.TurnEnd` (C# MatchHost.cs:1874-1897) -- burn one miracle
@@ -90,25 +85,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             // C# `AddCrystals(-1, ...)`; the `if (Crystals <= 0) Unplace(discard)`
             // half is [`on_crystals_changed`] (`Empty` is a no-op for `CardJ11`).
             ctx::decay()?;
-        }
-        // C# `CardJ11.PayChoose` (MatchHost.cs:5895-5901): about to pay money
-        // -> may discard; the stun then cancels the payment (C# `p.cancel =
-        // true` when `Me.Stunned`). Moved from PayChoose to Effect (ABI v74
-        // Pattern E): the FilterFlag half cannot prompt, and Effect is the
-        // last non-filter stage whose `t.value` the engine folds.
-        TriggerKind::Effect => {
-            if trigger::player_id() != player_id || trigger::value() <= 0 {
-                return Ok(());
-            }
-            if !ctx::ask_yes(
-                player_id,
-                &Msg::new(key!("j11_title")),
-                &Msg::new(key!("j11_ask_pay")).n("money", trigger::value() as i64),
-            )? {
-                return Ok(());
-            }
-            charge(player_id);
-            trigger::set_pay_amount(0);
         }
         // C# `CardJ11.Targeted` (MatchHost.cs:5903-5910): another player's card
         // targets the owner -> may discard. `t.Target != Seat || t.ByCard ==
@@ -130,6 +106,27 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         _ => {}
     }
+    Ok(())
+}
+
+/// C# `CardJ11.PayChoose` (MatchHost.cs:5895-5901): about to pay money -> may
+/// discard; the stun then cancels the payment (C# `p.cancel = true` when
+/// `Me.Stunned`). Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose
+/// position: the interactive `ask_yes` → `charge` → `set_pay_amount(0)` sits
+/// immediately before the pure `PayChoose` filter stage.
+fn pay_choose_ask(player_id: i32) -> card_sdk::Asked {
+    if trigger::player_id() != player_id || trigger::value() <= 0 {
+        return Ok(());
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("j11_title")),
+        &Msg::new(key!("j11_ask_pay")).n("money", trigger::value() as i64),
+    )? {
+        return Ok(());
+    }
+    charge(player_id);
+    trigger::set_pay_amount(0);
     Ok(())
 }
 
@@ -189,6 +186,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
     counteract(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_choose_ask_kani(player_id: i32) -> card_sdk::Asked {
+    pay_choose_ask(player_id)
 }
 
 #[cfg(kani)]

@@ -55,6 +55,18 @@ fn together_here(player_id: i32) -> card_sdk::Asked {
                 .i("n", flip as i64),
         );
     }
+    // v78: post-flip event so side effects that used to ride the FlipEffect
+    // Filter (pastel's overflow crystals) have a non-filter home.
+    //
+    // The payload is the **overflow** `X - pre` (0 when X does not exceed the
+    // pre-flip face-down count), not X itself: a nested raise's world snapshot
+    // does not see a same-body `set_tok` stash, so pastel band (2) cannot
+    // recover the pre-count after the counters move. Together-here is the
+    // flip site and already has both figures.
+    let over = (x - down).max(0);
+    if x > 0 {
+        ctx::raise(player_id, TriggerKind::FlipAfter, over)?;
+    }
     Ok(())
 }
 

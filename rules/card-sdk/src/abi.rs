@@ -565,7 +565,15 @@ use alloc::{string::String, vec::Vec};
 ///      `TriggerKind::is_filter()`. `OnKind::Gate = 6` is retired -- never
 ///      reuse. CEL-only status gates keep their native `admits_pre` /
 ///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
-/// v78: **buy / build bodies** -- `OnKind::Buy` (12) / `OnKind::Build` (13)
+/// v78: **purity + interactive pre-stages**. New kinds `FlipAfter = 104`
+///      (post-flip Action), `PayChooseAsk = 105` / `PayTotalAddAsk = 106`
+///      (interactive Action pre-stages raised immediately before the pure
+///      `PayChoose` / `PayTotalAdd` filter stages, restoring the rulebook
+///      prompt position). FilterValue gains an interned `tag_key` / `reason`
+///      id and a host-supplied `recorded_roll` so dice-rolling Filter bodies
+///      become pure. `card_sdk::pure::refuse_if_filter` covers every mutating
+///      ctx call. SAVE_VERSION unchanged.
+/// v79: **buy / build bodies** -- `OnKind::Buy` (12) / `OnKind::Build` (13)
 ///      (`On::Buy` / `On::Build`, same pre/guard/body shape as
 ///      `On::Mortgage` / `On::Redeem`). The body owns the order of steps,
 ///      eligibility and the quote, and calls generic mechanism primitives
@@ -576,7 +584,7 @@ use alloc::{string::String, vec::Vec};
 ///      `buildBefore` / `houseAdded` / `buildAfter` stay Actions. Force-buy
 ///      money remains a direct transfer outside effects (规则书 其他规则 6).
 ///      Ids 12/13, not 4/5/6 (retired) or 11 (`Filter`). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 78;
+pub const ABI_VERSION: i32 = 79;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1804,6 +1812,24 @@ impl TriggerKind {
     /// is `On::Action(&[AtEnd], pre, guard, body)`. Non-filter.
     pub const AtEnd: Self = Self(103);
 
+    /// v78: **post-flip event**. Raised after `FlipEffect`'s counters have
+    /// moved. `On::Action(&[FlipAfter])` is where a side effect that used to
+    /// ride the FlipEffect Filter (e.g. pastel's overflow crystals) lives.
+    /// Non-filter.
+    pub const FlipAfter: Self = Self(104);
+
+    /// v78: **interactive pay-choose pre-stage**. Raised at the rulebook
+    /// `PayChoose` position (支付阶段, immediately before the pure `PayChoose`
+    /// filter stage). `On::Action(&[PayChooseAsk])` may prompt; the pure
+    /// `On::Filter`/`On::FilterFlag` at `PayChoose` then applies. Non-filter.
+    pub const PayChooseAsk: Self = Self(105);
+
+    /// v78: **interactive pay-total-add pre-stage**. Raised at the rulebook
+    /// `PayTotalAdd` position (分摊前资金增减, immediately before the pure
+    /// `PayTotalAdd` filter stage). `On::Action(&[PayTotalAddAsk])` may prompt.
+    /// Non-filter.
+    pub const PayTotalAddAsk: Self = Self(106);
+
     /// The wire value, shared with every kind view.
     pub const fn as_i32(self) -> i32 {
         self.0
@@ -1964,6 +1990,9 @@ impl TriggerKind {
             101 => "playGate",
             102 => "rollValue",
             103 => "atEnd",
+            104 => "flipAfter",
+            105 => "payChooseAsk",
+            106 => "payTotalAddAsk",
             26 => "26",  // ruleset-declared custom id
             73 => "73",  // ruleset-declared custom id
             74 => "74",  // ruleset-declared custom id
@@ -2078,6 +2107,9 @@ impl TriggerKind {
             "playGate" => Self(101),
             "rollValue" => Self(102),
             "atEnd" => Self(103),
+            "flipAfter" => Self(104),
+            "payChooseAsk" => Self(105),
+            "payTotalAddAsk" => Self(106),
             _ => Self::None,
         }
     }
@@ -2369,6 +2401,15 @@ pub struct FilterValue {
     /// Gate: denial reason message key (intern id, 0 = none). The host maps
     /// the id back to the key for the UI.
     pub reason: i32,
+    /// Host-supplied recorded roll (v78). The host pre-rolls dice into the
+    /// recorded RNG stream and exposes the face here, so a Filter body that
+    /// would have called `ctx::roll` (kaoru_thief's 1d2 direction, heat_head's
+    /// 1d6 cut) stays pure and replay-deterministic. `UNCHANGED` = no
+    /// recorded roll for this raise.
+    pub recorded_roll: i32,
+    /// `plan::set_tag` key as an intern id (v78; 0 = none). Write-back calls
+    /// `plan::set_tag_id(key, tag)`.
+    pub tag_key: i32,
 }
 
 impl FilterValue {

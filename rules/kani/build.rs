@@ -36,7 +36,7 @@ const ARRAY_OPS: &[&str] = &[
     "play_card", "card_move", "card_replayable", "set_roller", "set_steps", "set_reverse", "set_signed", "set_stop_at",
     "set_parity", "set_resolve", "set_settle_tile", "set_pay_factor", "set_rent_factor", "set_no_buy", "set_no_build", "set_build_anywhere",
     "set_kind", "set_teleport_to", "set_start", "set_base_dice", "add_base_dice", "add_extra_dice", "move_stopped", "set_min_roll",
-    "set_extra_steps", "set_more_steps", "set_tag", "set_settle_as_agent", "plan_add_follower", "move_stop_at", "move_parity", "move_resolve",
+    "set_extra_steps", "set_more_steps", "set_tag", "set_tag_id", "recorded_roll", "set_settle_as_agent", "plan_add_follower", "move_stop_at", "move_parity", "move_resolve",
     "move_steps", "move_remaining", "move_total", "move_dir", "abnormal_count", "target", "targeted_count", "gains_this_turn",
     "placed_tile", "play_doubled", "set_play_doubled", "schedule_turn_end", "set_no_money_loss", "set_fixed_roll", "fixed_roll", "set_next_steps",
     "turn_main_steps", "add_charge_max", "card_build", "set_can_build", "clear_dice", "can_build_on", "card_buy", "buy_quotes",

@@ -25,8 +25,19 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // read on a BOARD_OWNER event instance).
         On::FilterValue(&[HookKind::RollPlan], "", None, add_die),
         // TODO(规则书): `sub_die` reshapes the roll value from an Action
-        // (impure: it rolls a die). Not a Filter for that reason; timing stays
-        // identical on `RollAfter`.
+        // (impure: it rolls a die). Converting to
+        // `On::Filter(&[HookKind::RollValue], ..., sub_die)` with
+        // `out = (value - recorded_roll.min(value)).max(0)` is blocked until
+        // the host fills `recorded_roll` for RollValue raises (it never does
+        // today). Intended pure shape (commented out):
+        //   On::Filter(&[HookKind::RollValue], "", None, sub_die_filter),
+        //   fn sub_die_filter(_p: i32, v: i32) -> i32 {
+        //       if ctx::crystals() != PHASE_DOWN { return v; }
+        //       let cut = v.recorded_roll; // host-supplied 1d6
+        //       if cut == FilterValue::UNCHANGED || v <= 0 { return v; }
+        //       (v - cut.min(v)).max(0)
+        //   }
+        // Timing stays identical on `RollAfter` until then.
         On::Action(&[HookKind::RollAfter], "", None, sub_die),
         On::Action(&[HookKind::AtEnd], "", None, phase_end),
     ],
@@ -63,7 +74,8 @@ fn add_die(_player_id: i32, mut v: FilterValue) -> FilterValue {
 /// sheet says 减少1d6 (a d6 less), not 少投1d6; if the intent is dropping a die
 /// from a pool that has one, this body is short.
 /// TODO(规则书): value reshape on an Action (impure: rolls dice). Kept as
-/// `On::Action(RollAfter)` writing `set_move_roll` -- a Filter cannot roll.
+/// `On::Action(RollAfter)` writing `set_move_roll` -- see the entry comment
+/// for the blocked `RollValue` Filter shape.
 fn sub_die(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() != PHASE_DOWN {
         return Ok(());

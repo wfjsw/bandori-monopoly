@@ -2565,6 +2565,21 @@ pub fn set_tag<C: HostCtx>(c: &mut C, kp: i32, kl: i32, v: i32) -> Result<(), Ho
             Ok(())
 }
 
+/// v78: `set_tag` with the key as an intern id. The host stores the id as the
+/// tag key's decimal spelling (the guest's `write_filter_value` resolves the
+/// id to a known name via a small table and calls the string form instead;
+/// this import exists for the wire and for tests).
+pub fn set_tag_id<C: HostCtx>(c: &mut C, key_id: i32, v: i32) -> Result<(), HostErr> {
+    c.st_mut().w().set_tag(&key_id.to_string(), v);
+    Ok(())
+}
+
+/// v78: host-supplied recorded roll (`i32::MIN` when none). The host fills
+/// this before a Filter raise that would have rolled dice.
+pub fn recorded_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().wr().recorded_roll())
+}
+
 pub fn set_min_roll<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
         c.st_mut().w().set_min_roll(v);
     Ok(())

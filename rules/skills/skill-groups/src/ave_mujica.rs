@@ -34,6 +34,9 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_halve), halve),
         On::Action(&[HookKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
+        // Latch the declared figure for the PayAfter one-sided fixup. `Effect`
+        // is the payment declaration (pre-PayAdd); see `latch_orig`.
+        On::Action(&[HookKind::Effect], "slot('skillState') == 2 && card.placed", None, latch_orig),
         On::Filter(&[HookKind::PayMul], "slot('skillState') == 2 && card.placed", None, bend),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PayMul rewrites one shared
         // figure, so the counterpart's side is restored here.
@@ -92,8 +95,33 @@ fn on_state(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("ave_mujica_refill")));
 }
 
+/// Latch the declared (pre-PayAdd) payment figure for [`after_bend`]. Rides
+/// `HookKind::Effect` (the payment declaration) so the PayMul Filter below
+/// stays pure.
+/// TODO(规则书): this stores the *declared* amount, not the PayMul input the
+///   old in-Filter latch saw. Whenever a PayAdd also rewrote the figure,
+///   `after_bend`'s clawback is against the declared figure instead of the
+///   PayMul input. Kept as the pure-split shape; tests do not combine
+///   ave_mujica bend with a PayAdd modifier.
+fn latch_orig(player_id: i32) -> card_sdk::Asked {
+    let value = ctx::trigger::value();
+    if value <= 0 {
+        return Ok(());
+    }
+    // 「只对自己结算，对应的其他玩家收支不变」 -- only the side that is this
+    // player moves.
+    let from = ctx::trigger::player_id();
+    let to = ctx::trigger::target();
+    let mine = from == player_id || to == player_id;
+    if !mine {
+        return Ok(());
+    }
+    state::set(player_id, ORIG, value);
+    Ok(())
+}
+
 /// 「你在状态2时从[收取]与[支付]的资金改为1.5倍（只对自己结算）」 -- the figure
-/// seen from this player's side.
+/// seen from this player's side. Pure (ABI v78 Filter).
 fn bend(player_id: i32, value: i32) -> i32 {
     if value <= 0 {
         return value;
@@ -108,15 +136,7 @@ fn bend(player_id: i32, value: i32) -> i32 {
     }
     // Live sheet 1.5倍 (rulebook-doc 「翻倍」 is superseded). Integer fold
     // rounds the .5 up, matching OPEN-取整's exact transform.
-    let bent = (value * 3 + 1) / 2;
-    // Latch the pre-bend figure for the PayAfter one-sided fixup. This is a
-    // keyed-state write (`state::set`), not a `refuse_if_filter`'d ctx effect.
-    // TODO(规则书): splitting the latch onto `On::Action(Effect)` would store
-    //   the *declared* (pre-PayAdd) amount instead of the PayMul input this
-    //   body sees, changing `after_bend`'s clawback whenever a PayAdd also
-    //   rewrote the figure. Kept in-body so the stored figure stays exact.
-    state::set(player_id, ORIG, value);
-    bent
+    (value * 3 + 1) / 2
 }
 
 /// The counterpart's figure stays the printed amount (`PayMul` rewrites one
@@ -233,6 +253,12 @@ pub fn halve_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
     at_turn_start(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn latch_orig_kani(player_id: i32) -> card_sdk::Asked {
+    latch_orig(player_id)
 }
 
 #[cfg(kani)]

@@ -128,13 +128,32 @@ written back.
 
 ### Purity
 
-Filter bodies may not prompt and may not call mutating `ctx` effects
-(`gain` / `draw` / `place_card` / `set_dest` / `set_slot` / `inc_slot`).
-`card_sdk::pure::refuse_if_filter` debug-asserts those. They **may** `ctx::log`
-(the why-line of the effect-applied log-why rule). A fused hook (value rewrite
-+ gain/place/…) is split into a Filter half and an `On::Action` half on the
-appropriate event (e.g. `PayAfter`); shared data rides the trigger payload or
-a slot written by the Action.
+Filter bodies may not prompt and may not call mutating `ctx` effects.
+`card_sdk::pure::refuse_if_filter` debug-asserts (and tests enforce) every
+mutating call: `gain` / `draw` / `place_card` / `set_dest` / `set_slot` /
+`inc_slot` / `roll` / `set_prop` / `state::set` / `plan::set_tag` /
+`add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
+log-why rule). A fused hook (value rewrite + gain/place/…) is split into a
+Filter half and an `On::Action` half on the appropriate event (e.g. `PayAfter`).
+
+A Filter body that would have rolled dice reads `FilterValue.recorded_roll`
+(v78: the host pre-rolls into the recorded RNG stream so replay stays
+deterministic). A named plan tag rides `FilterValue.tag_key` (intern id) +
+`tag`.
+
+### Interactive pre-stages (v78)
+
+A prompt cannot live in a Filter. Where the rulebook puts a 「可」 offer at a
+modifier stage, the prompt rides an `On::Action` at a **pre-stage** kind raised
+immediately before the pure filter stage:
+
+| pre-stage (Action) | pure stage (Filter*) | rulebook position |
+|---|---|---|
+| `PayChooseAsk` (105) | `PayChoose` | 支付阶段, before the choose filter |
+| `PayTotalAddAsk` (106) | `PayTotalAdd` | 分摊前资金增减, before the total-add filter |
+| `FlipAfter` (104) | (post-`FlipEffect`) | after the flip counters move |
+
+`ChargePaying` stays a plain Action (its 「可」 opt-in is the whole window).
 
 ### Filter kinds
 
@@ -172,10 +191,12 @@ A kind list that mixes the two must be **split into two entries**.
 The host raises the pipeline stages in rulebook order and folds each stage's
 return before the next raise, within a stage in placement order:
 
-* pay: `effect` declaration → `payTotalAdd` → `payTotalMul` → `payTotalCancel`
-  → `payAdd` → `payMul` → `payChoose` → `payAt` → `pay` settlement
+* pay: `effect` declaration → `payTotalAddAsk` (Action) → `payTotalAdd` →
+  `payTotalMul` → `payTotalCancel` → `payAdd` → `payMul` →
+  `payChooseAsk` (Action) → `payChoose` → `payAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
 * roll: `RollPlan` → dice → `RollValue` → `RollAfter` → `MoveRoll`
+* flip: `FlipEffect` (Filter) → counters move → `FlipAfter` (Action)
 
 Money rounds **up to a multiple of 10 once**, after every add/mul modifier
 has rewritten the running figure (user ruling 2026-10-15). An amount no

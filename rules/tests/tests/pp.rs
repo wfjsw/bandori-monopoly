@@ -303,10 +303,9 @@ fn expect_non_turn_start_roll_minus_2() {
     assert_eq!(t.pos(0), 3, "move roll 5-2=3");
 }
 
-/// 规则书: 「如果为0则此次移动不[结算]」 -- current behaviour (Phase 2/3C):
-/// a face that shaves to 0 keeps the player put. Starting *beside* a foreign
-/// rent tile and shaving to 0 pays nothing (the move never reaches the tile).
-/// Pins the TODO(规则书) on `no_expectation::no_resolve`.
+/// 规则书: 「如果为0则此次移动不[结算]」 -- a face that shaves to 0 keeps the
+/// player put. Starting *beside* a foreign rent tile and shaving to 0 pays
+/// nothing (the move never reaches the tile).
 #[test]
 fn expect_face_zero_shave_does_not_settle() {
     let mut t = Table::vanilla(2);
@@ -324,13 +323,12 @@ fn expect_face_zero_shave_does_not_settle() {
     assert_eq!(t.money(0), money0, "face-0 move does not [结算]");
 }
 
-/// Pins the 0-step [结算] gap (TODO(规则书) on `no_expectation::no_resolve`):
-/// standing *on* a foreign rent tile and shaving to 0 still settles that tile
-/// (the walk's `plan.resolve` fold does not run for a 0-step move). Multi-step
-/// moves honour `resolve = false`. Keep this green until the engine folds
-/// `plan.resolve` for 0-step moves too.
+/// 规则书: 「如果为0则此次移动不[结算]」 -- standing *on* a foreign rent tile
+/// and shaving to 0 must NOT settle that tile. The engine pulls `plan.resolve`
+/// before the walk so a 0-step move honours the clear (the mid-step sync only
+/// runs when at least one step is taken).
 #[test]
-fn expect_face_zero_on_rent_tile_still_settles_for_now() {
+fn expect_face_zero_on_rent_tile_does_not_settle() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "PP:不要背负期待").unwrap();
     drain(&mut t);
@@ -343,11 +341,10 @@ fn expect_face_zero_on_rent_tile_still_settles_for_now() {
     t.roll(0).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 7, "0-length move stays put");
-    // 640 rent + 2×100 from this card's PayAdd stack.
     assert_eq!(
         t.money(0),
-        money0 - 840,
-        "0-step move on a rent tile still [结算]s today (gap)"
+        money0,
+        "face-0 suppresses [结算]; the rent tile underfoot is not settled"
     );
 }
 

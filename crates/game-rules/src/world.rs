@@ -1174,6 +1174,10 @@ pub trait CardWorld: Clone + 'static {
     fn set_more_steps(&mut self, _v: i32) {}
     /// Card-owned per-move state (charge-roll counters etc.).
     fn set_tag(&mut self, _key: &str, _v: i32) {}
+    /// v78: host-supplied recorded roll for a Filter body (`i32::MIN` = none).
+    fn recorded_roll(&self) -> i32 {
+        i32::MIN
+    }
     fn move_tag(&self, _key: &str) -> i32 {
         0
     }

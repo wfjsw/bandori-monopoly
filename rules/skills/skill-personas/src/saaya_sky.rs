@@ -30,11 +30,9 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         On::Action(&[HookKind::RollAfter], card_sdk::pre::MINE, Some(roll_needs_mark), on_roll),
         // （2）'s 「可使用5个[火罐]」 -- the amount and the pot are the
         // applicability; spending the pot is the cost, kept in the body.
-        // Interactive (ask_yes + fire spend + amount rewrite) so it cannot be a
-        // pure Filter. `On::Action(Effect)` is the payment-declaration stage
-        // whose `t.value` the engine folds (`set_pay_amount` lands). TODO(规则书):
-        // the cut now lands at effect rather than the old PayChoose stage.
-        On::Action(&[HookKind::Effect], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
+        // Interactive (ask_yes + fire spend + amount rewrite). Rides
+        // `PayChooseAsk` (v78), restoring the rulebook PayChoose position.
+        On::Action(&[HookKind::PayChooseAsk], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
     ],
 )
     .silent(&[0]);

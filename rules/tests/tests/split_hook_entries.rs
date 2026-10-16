@@ -46,17 +46,20 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s[4].0, kind("Action"));
     assert_eq!(s[4].1, vec![62], "Reshuffled");
 
-    // j11 (ABI v74): Play / Action(TurnEnd, Targeted, Effect) /
-    //   FilterFlag(PayChoose) / Action(CounterChanged)
+    // j11 (ABI v78): Play / Action(TurnEnd, Targeted) /
+    //   Action(PayChooseAsk) / FilterFlag(PayChoose) / Action(CounterChanged)
+    //   -- the old combined Effect arm moved to the interactive pre-stage.
     let s = shape("Mujica:#J11");
-    assert_eq!(s.len(), 4, "j11 entries: {s:?}");
+    assert_eq!(s.len(), 5, "j11 entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Action"));
-    assert_eq!(s[1].1, vec![45, 51, 72], "TurnEnd, Targeted, Effect");
-    assert_eq!(s[2].0, kind("Filter"));
-    assert_eq!(s[2].1, vec![52], "PayChoose");
-    assert_eq!(s[3].0, kind("Action"));
-    assert_eq!(s[3].1, vec![76], "CounterChanged");
+    assert_eq!(s[1].1, vec![45, 51], "TurnEnd, Targeted");
+    assert_eq!(s[2].0, kind("Action"));
+    assert_eq!(s[2].1, vec![105], "PayChooseAsk");
+    assert_eq!(s[3].0, kind("Filter"));
+    assert_eq!(s[3].1, vec![52], "PayChoose");
+    assert_eq!(s[4].0, kind("Action"));
+    assert_eq!(s[4].1, vec![76], "CounterChanged");
 
     // fever: Play / Filter(PayAdd) / Action(TurnStart)
     let s = shape("通用:[衍生]FEVER!");

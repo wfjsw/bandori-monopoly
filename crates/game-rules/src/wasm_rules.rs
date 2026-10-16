@@ -2172,6 +2172,9 @@ impl CardWorld for Run {
     fn set_tag(&mut self, key: &str, v: i32) {
         self.world.set_tag(key, v);
     }
+    fn recorded_roll(&self) -> i32 {
+        self.world.recorded_roll
+    }
     fn move_tag(&self, key: &str) -> i32 {
         self.world.move_tag(key)
     }
@@ -2707,6 +2710,21 @@ impl<M: CardModules> RulesBridge<M> {
         // A hook cannot re-trigger on its own money movement.
         if uid >= 0 && is_money_hook_kind(trigger.kind) && cx.reentrant_hooks.contains(&uid) {
             return Ok(0);
+        }
+        // v78: pre-roll a recorded die into the world so a RollPlan /
+        // RollValue Filter body can read `FilterValue.recorded_roll` instead
+        // of calling `roll` (pure + replay-deterministic: the same RNG stream).
+        if matches!(
+            trigger.kind,
+            TriggerKind::RollPlan | TriggerKind::RollValue
+        ) {
+            // Peek the next face from a *clone* of the stream so the main
+            // dice stream is unchanged (existing tests / records keep their
+            // faces) while `recorded_roll` is still deterministic per raise.
+            let mut w = cx.world_copy();
+            let mut peek = w.rng.clone();
+            w.recorded_roll = peek.d(6) as i32;
+            cx.swap_world(w);
         }
         self.drive_inner(cx, call, card_id, uid, trigger, true)
     }
@@ -8859,6 +8877,9 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::RollAfter
             | TriggerKind::RollValue
             | TriggerKind::AtEnd
+            | TriggerKind::FlipAfter
+            | TriggerKind::PayChooseAsk
+            | TriggerKind::PayTotalAddAsk
             | TriggerKind::CardPlayed
             | TriggerKind::Targeted
             | TriggerKind::PayChoose

@@ -28,22 +28,16 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
             at_start,
         ),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
-        // so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the per-share
+        // so this rides `payTotalAddAsk` (PIPELINE-AUDIT Q2), not the per-share
         // `payChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
         // money, so the hook's `target` (the payee) is the skill owner. A print
         // (game -> player) carries `target = me`, `player_id = -1`.
         //
-        // ABI v74 Pattern E: Y is prompted (`ask_number`) and coupled to
-        // fan-flip side effects, so there is no pure amount figure. The whole
-        // body rides `HookKind::Effect` (the payment declaration -- `t.value`
-        // the engine still folds) with `set_pay_amount` as the documented
-        // interactive rewrite. PayAfter is too late to cancel.
-        // TODO(规则书): Effect runs *before* `payTotalAdd` (and per leg on a
-        //   split), so the cut lands earlier than the old PayTotalAdd stage and
-        //   applies to each leg rather than to the pre-split total. Identical
-        //   single-pair behaviour; split-pay compose order diverges.
+        // Rides `PayTotalAddAsk` (v78), restoring the rulebook PayTotalAdd
+        // position: the interactive `ask_number` + `set_pay_amount` sits
+        // immediately before the pure `PayTotalAdd` filter stage (pre-split).
         On::Action(
-            &[HookKind::Effect],
+            &[HookKind::PayTotalAddAsk],
             "target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1",
             Some(mine),
             on_gain,
@@ -77,8 +71,8 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「自己每次收取资金时可选择将自己Y个正面[P✽P粉丝]变反，此次获得的分摊前
 /// 数量增加Y×100」 -- the gain is `to == me` and the figure is the amount.
-/// Rides `On::Action(Effect)` (ABI v74 Pattern E): the prompt picks Y, which
-/// drives both the amount rewrite (`set_pay_amount`) and the fan flips.
+/// Rides `PayTotalAddAsk` (v78): the prompt picks Y, which drives both the
+/// amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     let up = ctx::tok(player_id, FANS_UP);
