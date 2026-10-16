@@ -423,9 +423,8 @@ fn s08_build_costs_the_house_and_respects_the_cap() {
         100_000 - 3 * house_cost(land),
         "three houses at the build cost"
     );
-    // Cap reached: the fourth build is refused.
+    // Cap reached: the fourth build is refused (no settle build offer).
     settle_on(&mut t, 0, land);
-    drain(&mut t);
     assert!(t.build(0).is_err() || t.houses(land) == 3, "购物中心 caps at 3");
     assert_eq!(t.houses(land), 3);
 }
