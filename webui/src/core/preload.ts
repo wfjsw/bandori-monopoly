@@ -3,6 +3,7 @@
 // popping in piece by piece under the lifting fader.
 
 import type { Route } from "../app/router";
+import { backdropUrl } from "../app/backdrops";
 import { sceneImg } from "./assets";
 
 type Name = Route["name"];
@@ -50,7 +51,7 @@ export function preloadRoute(r: Route | Name): Promise<void> {
   const name = typeof r === "string" ? r : r.name;
   let p = pending.get(name);
   if (!p) {
-    const urls = [BACKDROP[name], ...(IMAGES[name] ?? [])].map(sceneImg);
+    const urls = [backdropUrl(BACKDROP[name]), ...(IMAGES[name] ?? []).map(sceneImg)];
     p = Promise.all([...urls.map(preloadImage), CHUNKS[name]?.().catch(() => undefined)]).then(() => undefined);
     pending.set(name, p);
   }

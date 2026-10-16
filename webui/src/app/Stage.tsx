@@ -5,7 +5,7 @@
 // slide out to the sides instead of leaving a letterbox.
 
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { sceneImg } from "../core/assets";
+import { backdropUrl } from "./backdrops";
 import { useEventListener } from "../hooks/dom";
 import { clearForced, isForced, setStageRotated, subscribeForced, usePortraitPhone } from "./rotation";
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
@@ -170,9 +170,9 @@ export function useCompactValue(): boolean {
 }
 
 /**
- * Two stacked backdrop plates that swap by `opacity`: each plate is blurred
- * once when its image is set, and the cross-fade is a pure compositor effect
- * (transitioning `background-image` re-rasterised the blurred layer).
+ * Two stacked backdrop plates that swap by `opacity`. The images arrive
+ * pre-blurred (see `backdrops.ts`), so the cross-fade is a pure compositor
+ * effect with no filter to re-rasterise.
  */
 function Backdrop({ src }: { src: string }) {
   const [plates, setPlates] = useState<{ a: string; b: string; front: "a" | "b" }>({ a: src, b: "", front: "a" });
@@ -200,7 +200,7 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
     compactListeners.forEach((cb) => cb());
   }, [compact]);
   const bg = useBackdropValue();
-  const src = bg ? sceneImg(bg) : "";
+  const src = bg ? backdropUrl(bg) : "";
   return (
     <>
       <Backdrop src={src} />

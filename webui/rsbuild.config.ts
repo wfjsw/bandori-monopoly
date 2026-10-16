@@ -1,12 +1,13 @@
 import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
+import { pluginBlurQuery } from "./plugins/pluginBlurQuery";
 
 // `npm run dev` proxies the API, the SSE streams and the game data to the Rust
 // server (port 8080; `BM_API` overrides the target, e.g. a branch's own server
 // on :8090). `npm run build` writes dist/, which the server can serve.
 const api = process.env.BM_API ?? "http://127.0.0.1:8080";
 export default defineConfig({
-  plugins: [pluginReact()],
+  plugins: [pluginReact(), pluginBlurQuery()],
   source: { entry: { index: "./src/index.tsx" } },
   html: { template: "./index.html", title: "BanG Dream 大富翁" },
   server: {

@@ -1,4 +1,4 @@
-.backdrop { position: fixed; inset: -40px; background: #f6e7ec center / cover no-repeat; filter: blur(14px) saturate(1.05); transform: scale(1.04); opacity: 0; transition: opacity 0.3s; will-change: opacity; }
+.backdrop { position: fixed; inset: 0; background: #f6e7ec center / cover no-repeat; opacity: 0; transition: opacity 0.3s; will-change: opacity; }
 .backdrop.front { opacity: 1; }
 .backdrop::after { content: ""; position: absolute; inset: 0; background: rgba(246, 242, 243, 0.3); }
 .stage { position: fixed; left: 50%; top: 50%; transform-origin: 50% 50%; }
