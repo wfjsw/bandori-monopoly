@@ -305,7 +305,7 @@ fn gen_body_dispatch() {
                     std::fs::read_to_string(&p).unwrap_or_default()
                 };
                 s.push_str("    match entry_index {\n");
-                for (ei, body) in bodies.iter().enumerate() {
+                for (ei, (variant, body)) in bodies.iter().enumerate() {
                     // Self-healing: if `NAME_kani` is missing (a new On:: body
                     // without its wrapper), fall back to calling the plain body
                     // directly. The wrapper is an optimisation (direct call),
@@ -317,7 +317,21 @@ fn gen_body_dispatch() {
                     } else {
                         format!("{crate_name}::{module}::{body}")
                     };
-                    let _ = writeln!(s, "        {ei} => {target}(player),");
+                    // v74 Filter bodies are `fn(i32, …) -> …`, not `-> Asked`.
+                    // This trampoline is the Asked-shaped entry dispatch; a
+                    // Filter entry is reached via `filter_kind_only_idx` (which
+                    // calls the body with a value). Here we invoke it with the
+                    // trigger value and discard the result so entry indices
+                    // stay aligned with the manifest.
+                    let call = match variant.as_str() {
+                        "Filter" => format!("{{ let _ = {target}(player, 0); Ok(()) }}"),
+                        "FilterFlag" => format!("{{ let _ = {target}(player, 0); Ok(()) }}"),
+                        "FilterValue" => format!(
+                            "{{ let _ = {target}(player, card_sdk::abi::FilterValue::default()); Ok(()) }}"
+                        ),
+                        _ => format!("{target}(player)"),
+                    };
+                    let _ = writeln!(s, "        {ei} => {call},");
                 }
                 let _ = writeln!(s, "        _ => fail_entry_oob({idx}, entry_index),");
                 s.push_str("    }\n");
@@ -394,12 +408,15 @@ fn strip_rust_comments(src: &str) -> String {
     out
 }
 
+/// `(variant, body_fn)` for each `On::*` constructor in declaration order.
+/// `variant` is `Play` / `Action` / `Filter` / `FilterFlag` / `FilterValue` /
+/// … -- Filter* bodies are `fn(i32, …)` and the trampoline wraps them.
 fn parse_on_bodies(
     crate_name: &str,
     rules_dir: &PathBuf,
     module: &str,
     konst: &str,
-) -> Vec<String> {
+) -> Vec<(String, String)> {
     let lib = crate_dir(rules_dir, crate_name)
         .join("src")
         .join(format!("{module}.rs"));
@@ -417,7 +434,7 @@ fn parse_on_bodies(
         {
             name_end += 1;
         }
-        let _ = &src[after..name_end]; // variant name
+        let variant = src[after..name_end].to_string();
         // skip whitespace to '('
         let mut p = name_end;
         while p < src.len() && src.as_bytes()[p].is_ascii_whitespace() {
@@ -470,7 +487,7 @@ fn parse_on_bodies(
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
                 && last.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
             {
-                bodies.push(last.to_string());
+                bodies.push((variant.clone(), last.to_string()));
             }
         }
         search_from = j + 1;
