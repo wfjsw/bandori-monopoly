@@ -759,7 +759,5 @@
   "card.placed": "Placed",
   "card.tile": "Tile",
   "history.chargeUsed": "Charge used",
-  "results.chargeUsed": "Charge used",
-  "rotate.hint": "Turn your phone sideways to play",
-  "rotate.why": "The board needs a landscape screen"
+  "results.chargeUsed": "Charge used"
 }

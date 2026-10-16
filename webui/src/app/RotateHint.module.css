@@ -1,7 +1,0 @@
-/* A phone held upright: the stage is a landscape canvas, so ask for a turn
-   rather than scaling it to a third of the screen. Over everything. */
-.hint { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; background: var(--backdrop); color: var(--pink-deep); text-align: center; font-size: 18px; font-weight: 700; line-height: 1.5; }
-.phone { width: 56px; height: 96px; border: 5px solid var(--pink); border-radius: 12px; animation: turn 2.4s ease-in-out infinite; }
-.hint small { display: block; color: var(--sub); font-size: 13px; font-weight: 500; }
-@keyframes turn { 0%, 20% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
-@media (prefers-reduced-motion: reduce) { .phone { animation: none; transform: rotate(-90deg); } }

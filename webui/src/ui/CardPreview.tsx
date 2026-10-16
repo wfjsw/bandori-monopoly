@@ -15,6 +15,7 @@ import type { PersonaData } from "../core/types";
 import { Avatar } from "./Character";
 import { SkillBody } from "./SkillBody";
 import s from "./CardPreview.module.css";
+import { localRect } from "../app/rotation";
 
 const TAG_SHORT: Record<string, string> = { "手牌": "card.tag.hand", "手": "card.tag.hand", "反击": "card.tag.counter", "持续": "card.tag.cont" };
 
@@ -178,15 +179,13 @@ export function InspectPreviewHost(): ReactElement | null {
  * to the card's left when the stage's right edge would cut it off.
  */
 function stagePlace(stage: HTMLElement, el: HTMLElement): { left: number; top: number } {
-  const sr = stage.getBoundingClientRect();
-  const er = el.getBoundingClientRect();
-  const scale = sr.width / (stage.offsetWidth || 1);
-  const x = (er.left - sr.left) / scale;
-  const y = (er.top - sr.top) / scale;
-  const w = (er.width / scale) || 96;
+  const er = localRect(stage, el);
+  const x = er.left;
+  const y = er.top;
+  const w = er.width || 96;
   const gap = 14;
   const previewW = 260;
-  const stageW = stage.offsetWidth || sr.width / scale;
+  const stageW = stage.offsetWidth;
   const flip = x + w + gap + previewW > stageW;
   return { left: flip ? x - gap - previewW : x + w + gap, top: Math.max(0, y) };
 }
