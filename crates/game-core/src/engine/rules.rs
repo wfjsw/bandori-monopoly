@@ -416,10 +416,7 @@ impl Trigger {
             from: m.from,
             remaining: m.remaining,
             total: m.total,
-            // Carry the face so `move_roll` / `between` see it at the
-            // MoveRoll counteraction window (the pre-roll sentinel -1 is
-            // filtered to `null` downstream).
-            roll: Some(m.roll),
+            roll: None,
         });
         self.main = m.main;
         self

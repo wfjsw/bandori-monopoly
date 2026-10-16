@@ -44,7 +44,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
 // placement (`FieldCard.immune`). 规则书[持续]（1）: 「手卡上限数量减1」 -- the
 // `handLimitDelta` property (C# `Card.HandLimitDelta`), continuous while this
 // instance sits on the field.
-.props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::IMMUNE, 1)]).silent(&[4]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::IMMUNE, 1)]).silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不要背负期待"#)
         .raw_name(r#"不要背负期待"#)
         .tags(&[r#"手"#, r#"持续"#, r#"特"#])

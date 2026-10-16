@@ -308,7 +308,7 @@
   "log.gain": "{{who}} gained {{amount}}{{src}}",
   "log.immune_all": "{{who}} is unaffected by other players' effects",
   "log.kind.wire": "{{name}}",
-  "log.kind.rollPlan": "Roll plan",
+  "log.kind.diceRollPlan": "Roll plan",
   "log.kind.playGate": "Play gate",
   "log.kind.flipEffect": "Flip effect",
   "log.kind.26": "Pass reward",

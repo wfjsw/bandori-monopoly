@@ -308,7 +308,7 @@
   "log.gain": "{{who}} 获得 {{amount}}{{src}}",
   "log.immune_all": "{{who}} 现在不受别人的效果影响",
   "log.kind.wire": "{{name}}",
-  "log.kind.rollPlan": "掷骰计划",
+  "log.kind.diceRollPlan": "掷骰计划",
   "log.kind.playGate": "出牌限制",
   "log.kind.flipEffect": "翻面效果",
   "log.kind.26": "经过奖励",

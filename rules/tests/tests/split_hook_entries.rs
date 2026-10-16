@@ -32,19 +32,18 @@ fn split_cards_declare_filter_and_action_halves() {
         }
     };
 
-    // no_expectation (ABI v74): Play / Filter(DiceRollValue) / Action(DiceRollAfter)
-    //   / Filter(PayAdd) / Action(Reshuffled)
+    // no_expectation (ABI v79): Play / FilterValue(DiceRollValue) /
+    //   Filter(PayAdd) / Action(Reshuffled). The roll shave + 0-step
+    //   no-settle clamp are one FilterValue (option C).
     let s = shape("PP:不要背负期待");
-    assert_eq!(s.len(), 5, "no_expectation entries: {s:?}");
+    assert_eq!(s.len(), 4, "no_expectation entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Filter"));
     assert_eq!(s[1].1, vec![102], "DiceRollValue");
-    assert_eq!(s[2].0, kind("Action"));
-    assert_eq!(s[2].1, vec![49], "DiceRollAfter");
-    assert_eq!(s[3].0, kind("Filter"));
-    assert_eq!(s[3].1, vec![55], "PayAdd");
-    assert_eq!(s[4].0, kind("Action"));
-    assert_eq!(s[4].1, vec![62], "Reshuffled");
+    assert_eq!(s[2].0, kind("Filter"));
+    assert_eq!(s[2].1, vec![55], "PayAdd");
+    assert_eq!(s[3].0, kind("Action"));
+    assert_eq!(s[3].1, vec![62], "Reshuffled");
 
     // j11 (ABI v78): Play / Action(TurnEnd, Targeted) /
     //   Action(PayChooseAsk) / FilterFlag(PayChoose) / Action(CounterChanged)
@@ -82,24 +81,19 @@ fn no_expectation_silent_index_follows_the_split() {
         .expect("no_expectation loaded");
     let info = &r.ruleset().cards()[idx as usize];
     assert_eq!(
-        info.on[4].presentation,
-        card_sdk::abi::Presentation::Silent,
-        "entry 4 (Reshuffled) must stay silent after the split"
-    );
-    assert_eq!(
         info.on[1].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 1 (Filter DiceRollValue) announces"
+        "entry 1 (FilterValue DiceRollValue) announces"
     );
     assert_eq!(
         info.on[2].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 2 (Action DiceRollAfter) announces"
+        "entry 2 (Filter PayAdd) announces"
     );
     assert_eq!(
         info.on[3].presentation,
-        card_sdk::abi::Presentation::Visible,
-        "entry 3 (Filter PayAdd) announces"
+        card_sdk::abi::Presentation::Silent,
+        "entry 3 (Reshuffled) must stay silent after the merge"
     );
 }
 
