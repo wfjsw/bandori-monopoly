@@ -931,7 +931,7 @@ impl Cx<'_> {
             return Ok(false);
         }
         let kind = purchase::BuyKind::from_i32(kind).unwrap_or(purchase::BuyKind::Card);
-        self.buy(player_id, tile, kind)
+        self.deed_buy(player_id, tile, kind, 1)
     }
 
     /// A card handed a deed over outside the buy routine (tomoe_savior's
@@ -1102,7 +1102,7 @@ impl Cx<'_> {
             self.w.log("text", player_id as i32, why);
             return Ok(false);
         }
-        self.build(player_id, tile)
+        self.deed_build(player_id, tile)
     }
 
     /// Prompt to build on one of `tiles`, then build there.
@@ -1149,7 +1149,7 @@ impl Cx<'_> {
         let Some(&t) = usize::try_from(pick).ok().and_then(|p| options.get(p)) else {
             return Ok(false);
         };
-        self.build(player_id, t)
+        self.deed_build(player_id, t)
     }
 
     /// Mortgage one of the player's deeds, forced by a
@@ -2371,7 +2371,7 @@ impl Cx<'_> {
             && self.w.st.owners[t] < 0
             && !self.out(i)
         {
-            self.buy(i, t, purchase::BuyKind::Land)?;
+            self.deed_buy(i, t, purchase::BuyKind::Land, 0)?;
         }
         Ok(())
     }
@@ -2410,7 +2410,7 @@ impl Cx<'_> {
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
         if self.ask(ask)?.of(i) == 0 && self.why_not_build_on(i, t).is_none() {
-            self.build(i, t)?;
+            self.deed_build(i, t)?;
         }
         Ok(())
     }
@@ -2527,7 +2527,7 @@ impl Cx<'_> {
     /// `true` when the deed actually changed hands (HOST-06: every refusal
     /// path -- `BuyGate` / `buyBefore` cancel, already owned, unpaid quote,
     /// unpaid money -- is `false`).
-    pub(crate) fn buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind) -> Flow<bool> {
+    pub fn buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind) -> Flow<bool> {
         // `BuyGate` -- may this player buy this tile at all? Every kind, Force
         // included (Poppin's hill lock covers 「不可被抵押双倍支付购买」).
         let gate = raise!(
@@ -2633,7 +2633,7 @@ impl Cx<'_> {
         Ok(true)
     }
 
-    pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
+    pub fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
         // `buildBefore` -- before any guard or payment, so it is a real pre-hook.
         // A hook that claims it with `set_cancelled` vetoes the build outright
         // (卡池BUG 「不可在造价1500及以上的格子上加盖房屋」).
@@ -2869,6 +2869,19 @@ impl Cx<'_> {
     /// Route a redeem through the tile rule's `On::Redeem` body.
     pub fn deed_redeem(&mut self, i: usize, t: usize) -> Flow<bool> {
         self.rules().deed_redeem(self, i, t)
+    }
+
+    /// Route a buy through the tile rule's `On::Buy` body
+    /// (`CardRules::deed_buy`). `reason`: 0 = settle offer, 1 = card-driven,
+    /// 2 = agent, 3 = acquire / auction.
+    pub fn deed_buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind, reason: i32) -> Flow<bool> {
+        self.rules().deed_buy(self, i, t, kind, reason)
+    }
+
+    /// Route a build through the tile rule's `On::Build` body
+    /// (`CardRules::deed_build`).
+    pub fn deed_build(&mut self, i: usize, t: usize) -> Flow<bool> {
+        self.rules().deed_build(self, i, t)
     }
 
     /// Mortgage one of the player's deeds.

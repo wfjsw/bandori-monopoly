@@ -25,13 +25,15 @@
 //! (`Cx::offer_mortgage_funds`'s `exclude`), not by a flag here.
 
 use ruleset_core::ctx;
-use card_sdk::abi::prop;
+use card_sdk::abi::{prop, TriggerKind};
 use card_sdk::{CardDef, Msg, On};
 
 pub const PROPERTY: CardDef = CardDef::new(
     "tile:property",
     &[
         On::Settle("", None, settle),
+        On::Buy("", None, buy),
+        On::Build("", None, build),
         On::Mortgage("", None, mortgage),
         On::Redeem("", None, redeem),
     ],
@@ -74,6 +76,135 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
         let _ = ctx::prop(prop::BUILD_MAX);
         ctx::offer_build(player_id, at)?;
     }
+    Ok(())
+}
+
+/// 规则书 「无主的[可购买格子]的[结算]是：可选择[消耗]购买格子地契和建造已有
+/// 房子的资金总价，获得格子地契和拥有权」 -- the perform half of a buy.
+///
+/// The body owns eligibility, the quote and the order of steps. Each step is a
+/// generic mechanism primitive: `ctx::raise` (filter fold for `BuyGate` /
+/// `BuyAssign`, action chain for `buyBefore` / `bought` / `buyAfter`),
+/// `ctx::pay_buy` (the money pipeline -- payAdd/payMul/payTotal, allow_mortgage
+/// funding prompts), `ctx::assign_deed`, `ctx::log`.
+///
+/// `trigger::value()` is the reason (0 = settle offer, 1 = card-driven,
+/// 2 = agent, 3 = acquire / auction); `trigger::buy_kind()` is the BuyKind.
+/// Force-buy money stays a direct transfer outside effects (规则书 其他规则 6)
+/// and does not enter this body.
+pub(crate) fn buy(player_id: i32) -> card_sdk::Asked {
+    let at = ctx::self_tile().unwrap_or(-1);
+    if at < 0 {
+        return Ok(());
+    }
+    // Re-run-safe eligibility: someone else owns it. (The engine dispatch
+    // already refuses an already-owned tile once; this check survives the
+    // replay model's body re-runs after `assign_deed` because we are then the
+    // owner and the sequence continues on the answer log.)
+    let owner = ctx::tile_owner(at);
+    if owner >= 0 && owner != player_id {
+        return Ok(());
+    }
+    let kind = card_sdk::ctx::trigger::buy_kind();
+    let reason = card_sdk::ctx::trigger::value();
+    let _ = reason;
+    // `BuyGate` (FilterFlag): may this player buy this tile at all? The
+    // quote below also runs it in pure preview; this is the real raise.
+    let base = ctx::buy_price(at);
+    if !ctx::raise(player_id, TriggerKind::BuyGate, base)? {
+        return Ok(());
+    }
+    // `buyBefore` -- a real pre-hook (runs even on the no-op path).
+    if !ctx::raise(player_id, TriggerKind::BuyBefore, base)? {
+        return Ok(());
+    }
+    // The hook-aware quote (`BuyAdd` → `BuyMul` → `BuySet`), so quote ==
+    // charge (`docs/PURCHASE.md`).
+    let quotes = ctx::buy_quotes(player_id, kind, &[at]);
+    let (price, eligible) = quotes.first().copied().unwrap_or((-1, false));
+    if !eligible || price < 0 {
+        return Ok(());
+    }
+    let price = price.max(0);
+    // Pay through the money pipeline. Land / Agent arm the optional
+    // mortgage-funding prompt; the pipeline can suspend (Halt) and resume.
+    if price > 0 {
+        let paid = ctx::pay_buy(player_id, at, price, kind)?;
+        if paid < 0 {
+            return Ok(());
+        }
+    }
+    // `BuyAssign` (FilterValue): rewrite owner / houses / mortgaged before
+    // the one ownership write (`docs/PURCHASE.md`).
+    let houses = ctx::houses_of(at);
+    card_sdk::ctx::trigger::set_deal_owner(player_id);
+    card_sdk::ctx::trigger::set_deal_houses(houses);
+    card_sdk::ctx::trigger::set_deal_mortgaged(false);
+    if !ctx::raise(player_id, TriggerKind::BuyAssign, price)? {
+        return Ok(());
+    }
+    let deal_owner = card_sdk::ctx::trigger::deal_owner();
+    let deal_houses = card_sdk::ctx::trigger::deal_houses();
+    let deal_mortgaged = card_sdk::ctx::trigger::deal_mortgaged();
+    ctx::assign_deed(player_id, at, deal_owner, deal_houses, deal_mortgaged);
+    let mut text = Msg::new("log.buy")
+        .player_id("who", player_id)
+        .tile("tile", at)
+        .n("price", price as i64);
+    if houses > 0 {
+        text = text.msg("extra", &Msg::new("log.part.incl_houses").i("h", houses as i64));
+    }
+    ctx::log(player_id, &text);
+    // `bought` (Fx) -- the owner is set. `buyAfter` -- the deed has changed hands.
+    ctx::raise(player_id, TriggerKind::Bought, price)?;
+    ctx::raise(player_id, TriggerKind::BuyAfter, price)?;
+    Ok(())
+}
+
+/// 规则书 「玩家拥有的[可购买格子]的[结算]是：…可选择[消耗]格子地契所标注的
+/// 房屋建筑费进行升级建造」 -- the perform half of a build.
+pub(crate) fn build(player_id: i32) -> card_sdk::Asked {
+    let at = ctx::self_tile().unwrap_or(-1);
+    if at < 0 {
+        return Ok(());
+    }
+    // Re-run-safe: not ours, or already mortgaged (「如果格子地契已抵押则无效果」).
+    if ctx::tile_owner(at) != player_id || ctx::mortgaged_of(at) {
+        return Ok(());
+    }
+    // `buildBefore` -- a real pre-hook.
+    if !ctx::raise(player_id, TriggerKind::BuildBefore, 0)? {
+        return Ok(());
+    }
+    // The build cost (`buildMax` / `rent.len() - 1` is the level cap).
+    // `pay_build` applies `build_cost_pct` / `build_discount` on the engine
+    // side and answers the amount actually paid (-1 = refused).
+    let cost = ctx::build_cost(at).max(0);
+    let mut spent = 0i32;
+    if cost > 0 {
+        let paid = ctx::pay_build(player_id, at, cost)?;
+        if paid < 0 {
+            return Ok(());
+        }
+        spent = paid;
+    }
+    // One house. `ctx::add_house` writes the count (its commit also raises
+    // `houseAdded` for guest-driven adds; we raise it here so the order is
+    // log → houseAdded → buildAfter, matching the engine's `build`).
+    let h = ctx::add_house(at, 1);
+    if h <= 0 {
+        return Ok(());
+    }
+    let text = Msg::new("log.build")
+        .player_id("who", player_id)
+        .tile("tile", at)
+        .i("nth", h as i64)
+        .n("cost", spent as i64);
+    ctx::log(player_id, &text);
+    // `houseAdded` (75) -- 「你拥有格子上的房屋总数增加时」.
+    ctx::raise(player_id, TriggerKind::from_i32(75), h)?;
+    // `buildAfter` -- only after the house actually commits.
+    ctx::raise(player_id, TriggerKind::BuildAfter, 0)?;
     Ok(())
 }
 
@@ -144,6 +275,18 @@ pub(crate) fn redeem(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn settle_kani(player_id: i32) -> card_sdk::Asked {
     settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn buy_kani(player_id: i32) -> card_sdk::Asked {
+    buy(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn build_kani(player_id: i32) -> card_sdk::Asked {
+    build(player_id)
 }
 
 #[cfg(kani)]

@@ -2559,6 +2559,11 @@ impl<M: CardModules> RulesBridge<M> {
         {
             return -1;
         }
+        if matches!(call, Call::Buy { .. } | Call::Build { .. })
+            && card_id.starts_with("tile:")
+        {
+            return -1;
+        }
         // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
         // and no 「效果适用」 header. `QuietWhenEmpty` still announces here;
         // the header is retracted at commit if the body produced nothing.
@@ -3607,16 +3612,149 @@ impl<M: CardModules> RulesBridge<M> {
         // the start-square tile rule and kin. The kind is the wire name
         // (`TriggerKind::as_str`); the link settles unless a counteraction
         // cancelled it.
+        //
+        // v78: filter kinds (`TriggerKind::is_filter`) fold the filter chain
+        // instead of opening a counteraction window. A `FilterValue` kind
+        // (BuyAssign) carries the deal in `deal_*` and answers the packed
+        // rewritten deal (`hostfns::pack_deal`).
         HostRequest::Raise {
             player_id,
             kind,
             value,
+            tile,
+            deal_owner,
+            deal_houses,
+            deal_mortgaged,
         } => {
-            let kind = card_sdk::abi::TriggerKind::from_i32(kind).as_str();
+            let tk = card_sdk::abi::TriggerKind::from_i32(kind);
+            let kind = tk.as_str();
+            let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
             let t = self.raise_core(cx, kind, player_id, |t| {
                 t.value = value;
+                t.tile = tile;
+                if is_deal {
+                    let mut b = game_core::engine::rules::TriggerBuy::new(
+                        game_core::engine::purchase::BuyKind::Land,
+                        -1,
+                        value,
+                    );
+                    if deal_owner != i32::MIN {
+                        b = b.deal(deal_owner, deal_houses, deal_mortgaged != 0);
+                    }
+                    t.buy = Some(b);
+                }
             })?;
-            return Ok((!t.is_cancelled()) as i32);
+            let cancelled = t.is_cancelled();
+            if is_deal {
+                let (o, h, m) = match t.buy {
+                    Some(b) => (
+                        b.deal_owner.unwrap_or(deal_owner),
+                        b.deal_houses,
+                        b.deal_mortgaged,
+                    ),
+                    None => (deal_owner, deal_houses, deal_mortgaged != 0),
+                };
+                return Ok(crate::hostfns::pack_deal(cancelled, o, h, m));
+            }
+            return Ok((!cancelled) as i32);
+        }
+        // Pay the buy price through the money pipeline (`Cx::money` with
+        // `PayKind::Buy`). `kind` is the [`card_sdk::abi::BuyKind`] wire value.
+        HostRequest::PayBuy {
+            player_id,
+            tile,
+            amount,
+            kind,
+        } => {
+            let buy_kind = game_core::engine::purchase::BuyKind::from_i32(kind)
+                .unwrap_or(game_core::engine::purchase::BuyKind::Card);
+            let mut p = game_core::engine::Pay::new(amount, game_core::engine::PayKind::Buy);
+            p.from = Some(player_id.max(0) as usize);
+            p.typ = Some(game_core::engine::PayEvent::Lose);
+            p.tile = Some(tile.max(0) as usize);
+            p.source = "src.buy";
+            p.allow_mortgage = matches!(
+                buy_kind,
+                game_core::engine::purchase::BuyKind::Land
+                    | game_core::engine::purchase::BuyKind::Agent
+            );
+            p.text = Some(
+                crate::Msg::new("log.paid_for")
+                    .player_id("who", player_id)
+                    .tile("tile", tile),
+            );
+            let paid = cx.money(p)?;
+            return Ok(if paid.paid { paid.loss } else { -1 });
+        }
+        // Pay the build cost through the money pipeline (`PayKind::Build`).
+        // The engine applies the same `build_cost_pct` / `build_discount`
+        // figures `Cx::build` does, so the body's `build_cost` base and the
+        // charge agree.
+        HostRequest::PayBuild {
+            player_id,
+            tile,
+            amount,
+        } => {
+            let mut cost = amount.max(0);
+            let pct = cx.state().step; // placeholder -- read turn pct below
+            let _ = pct;
+            {
+                let w = cx.world_copy();
+                let pct = w.turn.build_cost_pct.clamp(0, 100);
+                if pct != 100 {
+                    cost = cost * pct / 100;
+                }
+                let cut = w.turn.build_discount.min(cost);
+                if cut > 0 {
+                    cost -= cut;
+                }
+            }
+            // One layer pops whether or not the build commits.
+            {
+                let mut w = cx.world_copy();
+                if w.turn.build_discount_layers > 0 {
+                    w.turn.build_discount_layers -= 1;
+                    if w.turn.build_discount_layers == 0 {
+                        w.turn.build_discount = 0;
+                    }
+                }
+                cx.swap_world(w);
+            }
+            if cost <= 0 {
+                return Ok(0);
+            }
+            let mut p = game_core::engine::Pay::new(cost, game_core::engine::PayKind::Build);
+            p.from = Some(player_id.max(0) as usize);
+            p.typ = Some(game_core::engine::PayEvent::Lose);
+            p.tile = Some(tile.max(0) as usize);
+            p.source = "src.build";
+            p.allow_mortgage = true;
+            p.text = Some(
+                crate::Msg::new("log.paid_for_house")
+                    .player_id("who", player_id)
+                    .tile("tile", tile),
+            );
+            let paid = cx.money(p)?;
+            return Ok(if paid.paid { paid.loss } else { -1 });
+        }
+        // Write the deed after a buy (`purchase::assign_deed`).
+        HostRequest::AssignDeed {
+            player_id: _,
+            tile,
+            owner,
+            houses,
+            mortgaged,
+        } => {
+            let mut w = cx.world_copy();
+            game_core::engine::purchase::assign_deed(
+                &mut w,
+                tile.max(0) as usize,
+                owner,
+                houses,
+                mortgaged != 0,
+            );
+            cx.swap_world(w);
+            return Ok(1);
         }
         // Which option the player's AI would take among agent-offer tiles.
         HostRequest::AiAgentChoice { player_id, tiles } => {
@@ -8048,6 +8186,117 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         Ok(before && !after)
     }
 
+    /// [`game_core::engine::CardRules::deed_buy`] -- run the tile rule's
+    /// `On::Buy` body. Falls back to the engine's standing buy for a tile with
+    /// no rule instance (StubRules).
+    fn deed_buy(
+        &self,
+        cx: &mut Cx,
+        player_id: usize,
+        tile: usize,
+        kind: game_core::engine::purchase::BuyKind,
+        reason: i32,
+    ) -> Flow<bool> {
+        let instances = cx.world().tile_rule_instances(tile as i32);
+        if instances.is_empty() {
+            return cx.buy(player_id, tile, kind);
+        }
+        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        let before = owner;
+        let mut trigger = Trigger {
+            kind: TriggerKind::None,
+            player_id: player_id as i32,
+            target: owner,
+            tile: tile as i32,
+            value: reason,
+            step: cx.state().step,
+            ..Trigger::default()
+        };
+        trigger.buy = Some(crate::world::TriggerBuy {
+            kind: card_sdk::abi::BuyKind::from_i32(kind.as_i32())
+                .unwrap_or(card_sdk::abi::BuyKind::Land),
+            seller: game_core::engine::rules::Payee::from_i32(-1),
+            price: 0,
+            deal_owner: Some(player_id as i32),
+            deal_houses: cx.state().houses.get(tile).copied().unwrap_or(0),
+            deal_mortgaged: false,
+        });
+        for (uid, id) in instances {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            self.drive(
+                cx,
+                Call::Buy {
+                    card: idx,
+                    player_id: player_id as i32,
+                    tile: tile as i32,
+                    kind: kind.as_i32(),
+                    reason,
+                },
+                &id,
+                uid,
+                &mut trigger,
+            )?;
+            if trigger.is_cancelled() {
+                break;
+            }
+        }
+        let after = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        Ok(before != after && after == player_id as i32)
+    }
+
+    /// [`game_core::engine::CardRules::deed_build`] -- run the tile rule's
+    /// `On::Build` body. Falls back to the engine's standing build.
+    fn deed_build(&self, cx: &mut Cx, player_id: usize, tile: usize) -> Flow<bool> {
+        let instances = cx.world().tile_rule_instances(tile as i32);
+        if instances.is_empty() {
+            return cx.build(player_id, tile);
+        }
+        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        let before = cx
+            .state()
+            .houses
+            .get(tile)
+            .copied()
+            .unwrap_or(0);
+        let mut trigger = Trigger {
+            kind: TriggerKind::None,
+            player_id: player_id as i32,
+            target: owner,
+            tile: tile as i32,
+            step: cx.state().step,
+            ..Trigger::default()
+        };
+        for (uid, id) in instances {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            self.drive(
+                cx,
+                Call::Build {
+                    card: idx,
+                    player_id: player_id as i32,
+                    tile: tile as i32,
+                    reason: 0,
+                },
+                &id,
+                uid,
+                &mut trigger,
+            )?;
+            if trigger.is_cancelled() {
+                break;
+            }
+        }
+        let after = cx
+            .state()
+            .houses
+            .get(tile)
+            .copied()
+            .unwrap_or(0);
+        Ok(after > before)
+    }
+
     fn cant_play(&self, cx: &Cx, player_id: usize, card: &str) -> Option<Msg> {
         // A pure query ("why can this not be played?"): a guard that prompts,
         // or a module that fails, never blocks play. Fix B -- the probe shares
@@ -8693,6 +8942,13 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::TurnBaseTime
             | TriggerKind::Redirect
             | TriggerKind::CounterChanged
+            // v78: the buy filter stages are pure folds -- no counteraction
+            // window (`TriggerKind::is_filter`).
+            | TriggerKind::BuyGate
+            | TriggerKind::BuyAdd
+            | TriggerKind::BuyMul
+            | TriggerKind::BuySet
+            | TriggerKind::BuyAssign
     )
 }
 

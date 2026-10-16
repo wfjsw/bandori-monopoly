@@ -294,6 +294,10 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
             "Counteract",
             "Gate",
             "Settle",
+            "Mortgage",
+            "Redeem",
+            "Buy",
+            "Build",
             "Message",
         ] {
             let pat = format!("On::{kind}(");

@@ -65,7 +65,7 @@ is never dispatched.
 ## Action vs Filter (do_action / apply_filters) — final architecture
 
 The entry surface is the WordPress `do_action` / `apply_filters` split. The
-final `On` set (ABI v77):
+final `On` set (ABI v80):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
@@ -75,15 +75,18 @@ final `On` set (ABI v77):
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
 | `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
 | `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
+| `On::Buy(pre, guard, body)` | `fn(i32) -> Asked` | a deed's buy / perform body (v80) | yes (`ctx::pay_buy`, `ctx::assign_deed`, `ctx::raise`, `ctx::log`) |
+| `On::Build(pre, guard, body)` | `fn(i32) -> Asked` | a deed's build / perform body (v80) | yes (`ctx::pay_build`, `ctx::raise`, `ctx::log`) |
 | `On::Action(kinds, pre, guard, body)` | `fn(i32) -> Asked` | **event reaction** | yes (`ctx::gain`, log, place, …) |
 | `On::Filter(kinds, pre, guard, body)` | `fn(i32, value: i32) -> i32` | **integer value transform** | no (pure) |
 | `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / allow decision** | no (pure) |
 | `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **struct rewrite** (deal / plan / payee / gate) | no (pure) |
 
-`On::Mortgage` / `On::Redeem` stay their own variants (like `On::Settle`): a
-deed body owns eligibility + the 50%/60% amounts and calls
-`ctx::apply_mortgage` / `ctx::apply_redeem`, so it is not a pure value
-transform. Wire ids 9 / 10 (master's v73).
+`On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` stay their own
+variants (like `On::Settle`): a deed body owns eligibility + the amounts and
+calls `ctx::apply_mortgage` / `ctx::apply_redeem` / `ctx::pay_buy` /
+`ctx::pay_build` / `ctx::assign_deed`, so it is not a pure value transform.
+Wire ids 9 / 10 (master's v73) and 12 / 13 (v80).
 
 ### Retired wire ids (never reuse)
 
@@ -924,7 +927,7 @@ cannot ship with a raw key showing to players.
   **automatically**, in placement order per player, with no player declaration.
   They use their own `TriggerKind`s (`turnEnd`, `drewBefore`, `drew`,
   `passTile`, `payAfter`,
-  `rollAfter`, `cardPlayed`, `targeted`, `payChoose`) so a card can tell a field
+  `diceRollAfter`, `cardPlayed`, `targeted`, `payChoose`) so a card can tell a field
   effect from a hand counteraction by its kind alone -- `match trigger::kind()` is the
   dispatch. Every hook kind is raised except `targeted` (it waits on the
   targeting pipeline). `drawn` runs on the card just drawn (named on

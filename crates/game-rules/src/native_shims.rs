@@ -518,6 +518,12 @@ pub trait HostOps {
     fn op_apply_mortgage(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_apply_redeem`
     fn op_apply_redeem(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_pay_buy`
+    fn op_pay_buy(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_pay_build`
+    fn op_pay_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_assign_deed`
+    fn op_assign_deed(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_text_mentions`
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_prop`
@@ -1476,6 +1482,15 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_apply_redeem(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::apply_redeem(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_pay_buy(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::pay_buy(self, a[0], a[1], a[2], a[3])? as i64)
+    }
+    fn op_pay_build(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::pay_build(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_assign_deed(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::assign_deed(self, a[0], a[1], a[2], a[3], a[4])? as i64)
     }
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_text_mentions(self, a[0], a[1], a[2], a[3])? as i64)
@@ -3698,6 +3713,41 @@ pub unsafe extern "C-unwind" fn ruleset_apply_mortgage(
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
     with_host(|h| match h.op_apply_redeem([player_id, tile, amount, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_pay_buy(
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+    kind: i32,
+) -> i32 {
+    with_host(|h| match h.op_pay_buy([player_id, tile, amount, kind, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_pay_build(player_id: i32, tile: i32, amount: i32) -> i32 {
+    with_host(|h| match h.op_pay_build([player_id, tile, amount, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_assign_deed(
+    player_id: i32,
+    tile: i32,
+    owner: i32,
+    houses: i32,
+    mortgaged: i32,
+) -> i32 {
+    with_host(|h| match h.op_assign_deed([player_id, tile, owner, houses, mortgaged, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

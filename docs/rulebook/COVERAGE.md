@@ -1716,8 +1716,8 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | 6 | 经营/出牌阶段后 | **miss** | none |
 | 7 | 主要移动阶段前 (停留 skips; one move) | **diff** | `skip_move` + `main_moved`, both checked early (no trigger) |
 | 8 | 掷骰前 | **ok** | `roll` (`value = -1`) |
-| 9 | 掷骰时 | **diff** | `rollPlan` + an un-raised table roll |
-| 10 | 掷骰后 | **ok** | `rollAfter` + `moveRoll` |
+| 9 | 掷骰时 | **diff** | `diceRollPlan` + an un-raised table roll |
+| 10 | 掷骰后 | **ok** | `diceRollAfter` + `moveRoll` |
 | 11 | 移动前 | **miss** | none |
 | 12 | 移动时/[经过] | **ok** | `passBefore`/`passTile`/`pass` per step; a teleport fires at the end **including onto its own tile** (`B41`; `rulebook::t06b`). TODO(规则书): whether a 0-step move also fires [经过] -- `E14` names only [重叠] there (`t06c`) |
 | 13 | 移动后/[重叠] | **ok** | `passPlayer` at the end of a walk (`E13`, `t06`), on a teleport's target (`B41`, `t06b`) and on a 0-step move (`E14`, `t06c`) |

@@ -3015,6 +3015,27 @@ pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
     unsafe { sys::apply_redeem(player_id, tile, amount) }
 }
 
+/// Pay the buy price through the money pipeline (`PayKind::Buy`). `kind` is
+/// the [`crate::abi::BuyKind`] wire value; Land / Agent allow the optional
+/// mortgage-funding arm. Answers the amount actually paid (0 = refused).
+/// May prompt (raise-funds / optional funding) and pause the run.
+pub fn pay_buy(player_id: i32, tile: i32, amount: i32, kind: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::pay_buy(player_id, tile, amount, kind) })
+}
+
+/// Pay the build cost through the money pipeline (`PayKind::Build`).
+/// Answers the amount actually paid (0 = refused). May prompt and pause.
+pub fn pay_build(player_id: i32, tile: i32, amount: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::pay_build(player_id, tile, amount) })
+}
+
+/// Write the deed after a buy (`purchase::assign_deed`). Mechanism only --
+/// the tile body already decided owner / houses / mortgaged (e.g. from a
+/// `BuyAssign` filter fold).
+pub fn assign_deed(player_id: i32, tile: i32, owner: i32, houses: i32, mortgaged: bool) -> i32 {
+    unsafe { sys::assign_deed(player_id, tile, owner, houses, mortgaged as i32) }
+}
+
 /// Does this card's rule text mention `needle`? 「所有效果包含[奇迹水晶]的卡」
 /// is this query.
 #[cfg_attr(kani, inline(always))]

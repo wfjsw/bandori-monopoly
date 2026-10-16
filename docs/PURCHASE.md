@@ -13,6 +13,18 @@ settle offers exactly one of buy XOR build depending on owner, so
 「购买与建造二选一」 (基础[结算] item 8) is structural. Mortgage / redeem
 live in `rules/tiles/src/deed.rs` + `On::Mortgage` / `On::Redeem` (ABI v73).
 
+**2026-10-16 (later): the perform sequence lives in `On::Buy` / `On::Build`**
+(ABI v80). The tile body owns eligibility, the quote and the order of steps,
+calling generic mechanism primitives: `ctx::raise` (filter fold for `BuyGate`
+FilterFlag / `BuyAssign` FilterValue, action chain for `buyBefore` / `bought` /
+`buyAfter` / `buildBefore` / `houseAdded` / `buildAfter`), `ctx::pay_buy` /
+`ctx::pay_build` through `Cx::money` (so payAdd/payMul/payTotal and
+allow_mortgage funding prompts behave identically), `ctx::assign_deed`
+(`purchase::assign_deed`) and `ctx::log`. All acquisitions route through
+`CardRules::deed_buy` / `deed_build`; `StubRules` keeps the engine's standing
+`Cx::buy` / `Cx::build` as the default. Force-buy money remains a direct
+transfer outside effects (规则书 其他规则 6).
+
 What follows is the **historical** 2026-10-07 design record (P0–P5). Where it
 describes the END-step re-offer, `st.buy_price` previews or `land_acted`, that
 is superseded by the 2026-10-16 note above.
