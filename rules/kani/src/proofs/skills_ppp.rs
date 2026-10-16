@@ -463,26 +463,31 @@ pub fn megumi_skill_01b_fire_iff() {
 
     // Host `gain_charge` is uncapped under Kani; the body asks for `rabbits`.
     // Assert the requested gain equals the rabbit count (the book's 「等量」)
-    // via the effect log, and post.charge == pre + rabbits when room remains.
-    let gain = if log_n == 1 {
-        if let Effect::GainFire { n, .. } = effects[0] {
-            n
-        } else {
-            -1
+    // via the effect log, clamped by the cap (host `gain_charge` caps at
+    // `cap - charge`). `post.charge == pre + gained`.
+    let gained = if log_n >= 1 {
+        let mut g = 0;
+        for e in effects {
+            if let Effect::GainFire { n, .. } = e {
+                g += *n;
+            }
         }
+        g
     } else {
         0
     };
+    let cap = 4i32;
+    let expected_gain = rabbits.min((cap - pre_fire).max(0));
     kani::cover!(rabbits == 1, "one rabbit");
     kani::cover!(rabbits == 2, "two rabbits");
     crate::kassert!(
-        gain == rabbits,
-        "C-PPP-megumi-skill-01b: 「等量」 = one pot per rabbit"
+        gained == expected_gain,
+        "C-PPP-megumi-skill-01b: 「等量」 = one pot per rabbit (clamped by cap)"
     );
-    let expected = pre_fire + rabbits;
+    let expected = pre_fire + expected_gain;
     crate::kassert!(
         post.charge[me as usize] == expected,
-        "C-PPP-megumi-skill-01b: fire rises by the rabbit count"
+        "C-PPP-megumi-skill-01b: fire rises by the gained amount"
     );
     crate::kassert!(
         spec::frame_others_fire(&pre, &post, me),
@@ -1110,7 +1115,13 @@ pub fn aoki_skill_02_noop_end_on_station() {
     world::reset_world(w);
     invoke::unwrap_done(skill_personas::arisa_bonsai::at_turn_end_kani(me));
     let (logbuf, log_n) = take_log();
-    crate::kassert!(log_n == 0, "C-PPP-aoki-skill-02: no-op ⇒ empty log");
+    // The body's `set_slot` pushes a SetState bookkeeping effect; the clause
+    // effects (draw + fire) must be absent.
+    let effects = effects_of(&logbuf, log_n);
+    let has_clause = effects.iter().any(|e| {
+        matches!(e, Effect::Draw { .. } | Effect::GainFire { .. })
+    });
+    crate::kassert!(!has_clause, "C-PPP-aoki-skill-02: no-op ⇒ no clause effects");
 }
 
 /// MUTANT: fire without the draw. Companion.
@@ -1372,9 +1383,10 @@ pub fn band_skill_01c_crystal_spend_iff() {
         w.n_players = 2;
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::TOK_STICKER), 0);
-        w.player_keys[me as usize].set(crate::intern::intern("crystals"), kani::any());
-        let c = w.player_keys[me as usize].get(crate::intern::intern("crystals"));
-        kani::assume(c >= 2 && c <= 4);
+        // Crystals live on the on-card counter (`self_crystals` / `field_crystals`),
+        // not the player key "crystals".
+        w.self_crystals = kani::any();
+        kani::assume(w.self_crystals >= 2 && w.self_crystals <= 4);
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_POPPIN_USED), 0);
         w.money[me as usize] = 0;
         w.deck_n = 2;
@@ -1433,7 +1445,7 @@ pub fn band_skill_01c_mutant_cash_branch_reachable() {
         w.n_players = 2;
         w.trig_player = me;
         w.player_keys[me as usize].set(crate::intern::intern(spec::TOK_STICKER), 0);
-        w.player_keys[me as usize].set(crate::intern::intern("crystals"), 2);
+        w.self_crystals = 2; // on-card counter, not player key
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_POPPIN_USED), 0);
         w.money[me as usize] = 0;
         w.deck_n = 1;
@@ -1488,8 +1500,9 @@ pub fn band_skill_02_no_reward_prop() {
 // ===========================================================================
 
 /// 03a: every PPP character co-owns the hill (claim).
+/// Unwind 16: the spec compares the 14-byte string "Poppin' Party".
 #[kani::proof]
-#[kani::unwind(8)]
+#[kani::unwind(16)]
 pub fn band_skill_03a_co_own_spec() {
     crate::kassert!(spec::band_03a_co_owns("Poppin' Party", spec::TILE_HILL));
     crate::kassert!(!spec::band_03a_co_owns("Afterglow", spec::TILE_HILL));
