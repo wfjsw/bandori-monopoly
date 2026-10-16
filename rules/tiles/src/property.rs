@@ -130,7 +130,7 @@ pub(crate) fn buy(player_id: i32) -> card_sdk::Asked {
     // mortgage-funding prompt; the pipeline can suspend (Halt) and resume.
     if price > 0 {
         let paid = ctx::pay_buy(player_id, at, price, kind)?;
-        if paid <= 0 {
+        if paid < 0 {
             return Ok(());
         }
     }
@@ -177,12 +177,16 @@ pub(crate) fn build(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // The build cost (`buildMax` / `rent.len() - 1` is the level cap).
+    // `pay_build` applies `build_cost_pct` / `build_discount` on the engine
+    // side and answers the amount actually paid (-1 = refused).
     let cost = ctx::build_cost(at).max(0);
+    let mut spent = 0i32;
     if cost > 0 {
         let paid = ctx::pay_build(player_id, at, cost)?;
-        if paid <= 0 {
+        if paid < 0 {
             return Ok(());
         }
+        spent = paid;
     }
     // One house. `ctx::add_house` writes the count (its commit also raises
     // `houseAdded` for guest-driven adds; we raise it here so the order is
@@ -195,7 +199,7 @@ pub(crate) fn build(player_id: i32) -> card_sdk::Asked {
         .player_id("who", player_id)
         .tile("tile", at)
         .i("nth", h as i64)
-        .n("cost", cost as i64);
+        .n("cost", spent as i64);
     ctx::log(player_id, &text);
     // `houseAdded` (75) -- 「你拥有格子上的房屋总数增加时」.
     ctx::raise(player_id, TriggerKind::from_i32(75), h)?;

@@ -3684,15 +3684,46 @@ impl<M: CardModules> RulesBridge<M> {
                     .tile("tile", tile),
             );
             let paid = cx.money(p)?;
-            return Ok(paid.loss);
+            return Ok(if paid.paid { paid.loss } else { -1 });
         }
         // Pay the build cost through the money pipeline (`PayKind::Build`).
+        // The engine applies the same `build_cost_pct` / `build_discount`
+        // figures `Cx::build` does, so the body's `build_cost` base and the
+        // charge agree.
         HostRequest::PayBuild {
             player_id,
             tile,
             amount,
         } => {
-            let mut p = game_core::engine::Pay::new(amount, game_core::engine::PayKind::Build);
+            let mut cost = amount.max(0);
+            let pct = cx.state().step; // placeholder -- read turn pct below
+            let _ = pct;
+            {
+                let w = cx.world_copy();
+                let pct = w.turn.build_cost_pct.clamp(0, 100);
+                if pct != 100 {
+                    cost = cost * pct / 100;
+                }
+                let cut = w.turn.build_discount.min(cost);
+                if cut > 0 {
+                    cost -= cut;
+                }
+            }
+            // One layer pops whether or not the build commits.
+            {
+                let mut w = cx.world_copy();
+                if w.turn.build_discount_layers > 0 {
+                    w.turn.build_discount_layers -= 1;
+                    if w.turn.build_discount_layers == 0 {
+                        w.turn.build_discount = 0;
+                    }
+                }
+                cx.swap_world(w);
+            }
+            if cost <= 0 {
+                return Ok(0);
+            }
+            let mut p = game_core::engine::Pay::new(cost, game_core::engine::PayKind::Build);
             p.from = Some(player_id.max(0) as usize);
             p.typ = Some(game_core::engine::PayEvent::Lose);
             p.tile = Some(tile.max(0) as usize);
@@ -3704,7 +3735,7 @@ impl<M: CardModules> RulesBridge<M> {
                     .tile("tile", tile),
             );
             let paid = cx.money(p)?;
-            return Ok(paid.loss);
+            return Ok(if paid.paid { paid.loss } else { -1 });
         }
         // Write the deed after a buy (`purchase::assign_deed`).
         HostRequest::AssignDeed {
