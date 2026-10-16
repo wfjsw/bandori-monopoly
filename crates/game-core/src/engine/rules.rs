@@ -688,6 +688,27 @@ pub trait CardRules: Send + Sync {
             })
             .collect()
     }
+
+    /// The mortgage payout for this deed (规则书 基础规则 5: 「抵押后[获得]地契
+    /// 购买价格50%的资金」). The land price only -- standing houses are not
+    /// part of the figure.
+    ///
+    /// The authority is `rules/tiles/src/deed.rs`; the default here is the
+    /// same plain rulebook formula ([`super::play::purchase::mortgage_value`])
+    /// that `StubRules` and the sim run. `WasmRules` overrides it so a ruleset
+    /// can retune the figure.
+    fn deed_mortgage_value(&self, data: &crate::data::GameData, tile: i32) -> i32 {
+        super::play::purchase::mortgage_value(data, tile.max(0) as usize)
+    }
+
+    /// The redeem charge for this deed (规则书 基础规则 6: 「赎回后[消耗]地契
+    /// 购买价格60%的资金」). Ties-even at the half.
+    ///
+    /// The authority is `rules/tiles/src/deed.rs`; the default is
+    /// [`super::play::purchase::redeem_cost`].
+    fn deed_redeem_cost(&self, data: &crate::data::GameData, tile: i32) -> i32 {
+        super::play::purchase::redeem_cost(data, tile.max(0) as usize)
+    }
 }
 
 /// Which status gate a [`CardRules::gate_open`] question is about.

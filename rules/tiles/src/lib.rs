@@ -29,6 +29,9 @@ extern crate alloc;
 
 pub mod agent;
 use agent::AGENT;
+/// Deed economics (mortgage / redeem amounts) -- the authority the engine
+/// charges and credits. See [`deed`].
+pub mod deed;
 pub mod circle;
 use circle::CIRCLE;
 pub mod edogawa;

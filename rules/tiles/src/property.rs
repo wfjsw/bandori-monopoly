@@ -16,10 +16,13 @@
 //! body. Each step is an engine primitive -- `ctx::offer_buy` / `offer_build` /
 //! `pay_rent` / `offer_force_buy` -- so the body is citations and calls.
 //!
-//! TODO(规则书): 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得」 is a
-//! mortgage-pipeline clause the engine enforces in `mortgage`, not here.
 //! TODO(规则书): 「每块地有标注的等级上限」 is `buildMax` (`TileData.rent.len() - 1`,
 //! 0 for RiNG).
+//!
+//! Mortgage / redeem amounts and the deed-economics clauses live in
+//! [`crate::deed`] (规则书 基础规则 5–6). 「升级所[消耗]的资金不可通过[抵押]正在
+//! 升级的格子地契获得」 is enforced by the pay pipeline's optional-funding arm
+//! (`Cx::offer_mortgage_funds`'s `exclude`), not by a flag here.
 
 use ruleset_core::ctx;
 use card_sdk::abi::prop;

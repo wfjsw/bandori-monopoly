@@ -8132,6 +8132,35 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             })
             .collect()
     }
+
+    /// The mortgage payout. The tile rule's deed economics
+    /// (`rules/tiles/src/deed.rs`, mirrored in `ruleset-core`) is the
+    /// authority; this is the same plain rulebook formula the default uses
+    /// (「抵押后[获得]地契购买价格50%的资金」).
+    fn deed_mortgage_value(&self, data: &GameData, tile: i32) -> i32 {
+        let price = data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.price)
+            .unwrap_or(0);
+        // Keep in lockstep with `rules/tiles/src/deed.rs` /
+        // `ruleset_core::mortgage_value`.
+        price / 2
+    }
+
+    /// The redeem charge. Same split as [`Self::deed_mortgage_value`]
+    /// (「赎回后[消耗]地契购买价格60%的资金」).
+    fn deed_redeem_cost(&self, data: &GameData, tile: i32) -> i32 {
+        let price = data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.price)
+            .unwrap_or(0);
+        // Keep in lockstep with `rules/tiles/src/deed.rs` /
+        // `ruleset_core::redeem_cost`.
+        (price * 3 + 2) / 5
+    }
+
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
         let Some(idx) = self.ruleset.card(card) else {
             cx.log(
