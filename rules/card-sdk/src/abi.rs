@@ -520,6 +520,13 @@ use alloc::{string::String, vec::Vec};
 ///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
 ///      No new import; host semantics of `set_pay_amount` composition change.
 ///      SAVE_VERSION unchanged (no save field).
+/// v73: **deed bodies** -- `OnKind::Mortgage` (9) / `OnKind::Redeem` (10)
+///      (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
+///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
+///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
+///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
+///      direct money move (hooks + logging stay in that mechanism).
+///
 /// v72: **persona write** -- new host import `set_persona(player_id, name)`
 ///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
 ///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the

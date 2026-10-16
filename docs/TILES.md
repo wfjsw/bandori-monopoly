@@ -316,12 +316,17 @@ props (`price`, `house`, `buildMax`, `noBuild`) and the quote pipeline
 (`docs/PURCHASE.md`); the perform (hooks, money pipeline, deed assignment)
 stays in the engine primitives `Cx::buy` / `Cx::build`.
 
-Mortgage / redeem amounts live in `rules/tiles/src/deed.rs` (规则书 基础规则
-5–6: 50% / 60% of the land price); the engine asks
-`CardRules::deed_mortgage_value` / `deed_redeem_cost`. Mortgage / redeem /
+Mortgage / redeem live in `rules/tiles/src/deed.rs` + the tile rule's
+`On::Mortgage` / `On::Redeem` bodies (ABI v73). The body owns eligibility
+(规则书 基础规则 5–6: the 运营阶段 / funding-short gate, ownership,
+`NO_MORTGAGE`) and the 50% / 60% amounts; `ctx::apply_mortgage` /
+`ctx::apply_redeem` are the mechanism (hook raises, flag write, direct
+money move -- 「不受任何效果影响」). Net `mortgage`/`redeem`,
+`card_mortgage`, raise-funds and optional funding all route through
+`CardRules::deed_mortgage` / `deed_redeem`. Mortgage / redeem /
 forced purchase money moves stay outside all effects unless a rule says
-otherwise (rulebook: 「抵押，赎回，和强制购买的资金变动不受任何效果影响」),
-which is why `offer_force_buy` remains a primitive that moves money directly.
+otherwise, which is why `offer_force_buy` remains a primitive that moves
+money directly.
 
 ## Tile text
 
