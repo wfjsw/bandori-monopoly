@@ -21,12 +21,14 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // isolated paths — if isolation breaks the proof FAILS loudly).
 // ---------------------------------------------------------------------------
 
-/// `skill:Sumimi:人气偶像组合` `bend` (PayMul) — crystal read + pay rewrite.
+/// `skill:Sumimi:人气偶像组合` `bend` (PayMul) — crystal read + pay fold.
+/// ABI v75 pure Filter: the body RETURNS `value + n*100` (no
+/// `trig_set_pay_amount`); it still reads `trigger::player_id` /
+/// `trigger::target` for 「向其他人收费」.
 crate::host_subset!(sumimi_bend_dispatch {
     counter_self => arm_counter_self,
     trig_target => arm_trig_target,
-    trig_value => arm_trig_value,
-    trig_set_pay_amount => arm_trig_set_pay_amount,
+    trig_player => arm_trig_player,
 });
 
 /// `skill:Sumimi:人气偶像组合` `at_turn_end` (TurnEndBefore) — latch + crystal
@@ -82,6 +84,11 @@ fn crystals_key() -> intern::NameId {
 
 /// In-place 2-seat world for the PayMul rewrite. Crystals live on the
 /// running instance (`self_crystals`).
+///
+/// 「向其他人收费」: the owner is the **payee** of another seat's payment
+/// (`trig_target == owner`, `trig_player` is the other seat). A self-pay
+/// (`trig_player == owner`) is the no-bonus half of the body and is not
+/// this world.
 fn band_02_world(owner: i32, crystals: i32, pre_amount: i32) {
     debug_assert!(owner == 0 || owner == 1);
     host::install_backend(sumimi_bend_dispatch);
@@ -91,7 +98,7 @@ fn band_02_world(owner: i32, crystals: i32, pre_amount: i32) {
         ..Default::default()
     });
     world::with_world_mut(|w| {
-        w.trig_player = owner;
+        w.trig_player = 1 - owner;
         w.trig_target = owner;
         w.trig_value = pre_amount;
         w.pay_amount = pre_amount;
