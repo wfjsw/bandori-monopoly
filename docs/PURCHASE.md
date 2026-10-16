@@ -11,7 +11,11 @@ with `err.buy_build_at_settle`); `st.buy_price` / `build_cost` /
 `can_buy_here` / `can_build_here` and the `land_acted` flag are removed. A
 settle offers exactly one of buy XOR build depending on owner, so
 「购买与建造二选一」 (基础[结算] item 8) is structural. Mortgage / redeem
-amounts live in `rules/tiles/src/deed.rs`.
+live in `rules/tiles/src/deed.rs` + `On::Mortgage` / `On::Redeem` (ABI v73).
+
+What follows is the **historical** 2026-10-07 design record (P0–P5). Where it
+describes the END-step re-offer, `st.buy_price` previews or `land_acted`, that
+is superseded by the 2026-10-16 note above.
 
 * The hook-aware `WasmRules::buy_quote` is wired: it runs `BuyGate` /
   `BuyAdd` → `BuyMul` → `BuySet` in **pure guard mode** against a world copy

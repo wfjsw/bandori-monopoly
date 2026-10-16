@@ -164,9 +164,9 @@ pub struct MoveCtx {
     /// one flag, not two.
     pub can_build: bool,
     /// Whether this move may build away from the landing
-    /// (`ctx::plan::set_build_anywhere`, HOST-08). `false` keeps the
-    /// landing-only rule; `true` lifts `why_not_build`'s "only where the move
-    /// settled" check.
+    /// (`ctx::plan::set_build_anywhere`, HOST-08). Was: lifts the END-step
+    /// build's "only where the move settled" check. The END-step build is
+    /// gone (settle-only buy/build); kept for plan/record shape.
     pub build_anywhere: bool,
     /// A queued second walk, in steps (the follow-up walk once the first
     /// settles).

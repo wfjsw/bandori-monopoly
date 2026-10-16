@@ -27,7 +27,7 @@ pub struct MovePlan {
     /// `MoveCtx` is gone by then.
     pub can_build: bool,
     /// Whether this move may build away from the landing
-    /// (`MoveCtx::build_anywhere`, HOST-08). Lifts `why_not_build`'s
+    /// (`MoveCtx::build_anywhere`, HOST-08). Was: lifts `why_not_build`'s
     /// landing-only check. Skipped when `false` so saves (and ckpt_equiv
     /// turn hashes) stay byte-identical to the pre-HOST-08 shape.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

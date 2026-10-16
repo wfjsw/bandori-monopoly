@@ -130,7 +130,7 @@ async fn a_refused_service_answer_falls_back_without_reasking() {
                 if cmd == h {
                     Ok(None)
                 } else {
-                    Ok(Some(Msg::new("err.buy_poor")))
+                    Ok(Some(Msg::new("err.buy_build_at_settle")))
                 }
             }
         }

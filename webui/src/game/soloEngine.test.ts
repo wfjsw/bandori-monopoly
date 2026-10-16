@@ -130,7 +130,7 @@ test("act resolves with the engine Msg and sees the post-act pushes first", asyn
   });
   engine.onPush = (p) => order.push(p.push);
   await engine.boot();
-  const got = await engine.act(1, { act: "buy", value: 1 });
+  const got = await engine.act(1, { act: "answer", prompt: 1, value: 0 });
   assert.deepEqual(got, err);
   assert.deepEqual(order, ["sync", "save"], "pushes land before the reply resolves");
 });

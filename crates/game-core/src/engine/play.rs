@@ -2388,12 +2388,6 @@ impl Cx<'_> {
 
     // =============================================================== property
 
-    /// Land price plus houses already standing on it.
-    /// [`purchase::quote_native`] is the single source.
-    pub(crate) fn buy_price(&self, t: usize) -> i32 {
-        purchase::quote_native(self.data, &self.w.st, t).max(0)
-    }
-
     pub(crate) fn build_cost(&self, t: usize) -> i32 {
         purchase::build_cost(self.data, t)
     }
@@ -2467,21 +2461,6 @@ impl Cx<'_> {
             got += self.mortgage_value(t);
         }
         out
-    }
-
-    /// Why building on this tile is refused, or `None`.
-    /// `ctx::offer_build` / `card_build` / `card_offer_build` all share it.
-    pub(crate) fn why_not_build(&self, i: usize, t: usize) -> Option<Msg> {
-        let st = &self.w.st;
-        if !self.data.tiles.get(t).is_some_and(|x| x.is_buyable()) || st.owners[t] != i as i32 {
-            return Some(Msg::new("err.build_not_on_own"));
-        }
-        // The move said this landing cannot be built on (`can_build = false`,
-        // or `plan::set_no_build` which folds into it -- HOST-08).
-        if !st.plan.can_build {
-            return Some(Msg::new("err.build_denied"));
-        }
-        self.why_not_build_on(i, t)
     }
 
     /// The rule lives on [`super::ops`] so a card asking

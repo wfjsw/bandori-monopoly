@@ -371,7 +371,10 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
     bisect showed that letting the search pass on a legal buy costs ~5 wins
     on StubRules (`net_worth` is buy-neutral at the instant, so the tie goes
     to the bias, which leans Decline below `BUY_RESERVE`). See §5 C1.
-  * **Legality gate (2026-10-08).** Buy / Build / roll / end ride the engine's
+  * **Legality gate (2026-10-08).** *Superseded 2026-10-16: buy/build are
+    settle-prompt answers only (`Action::Offer` → `act:"answer"`); the END
+    Buy/Build menu and `can_buy_here` / `can_build_here` /
+    `st.buy_price` / `st.build_cost` are gone. Roll / end gates stand.* Buy / Build / roll / end ride the engine's
     own `why_not_act` predicates, computed into the view as
     `MatchState::can_buy_here` / `can_build_here` / `can_roll_here` /
     `can_end_here` (buyable shape + the plan's no-buy flag + the quote's
@@ -1565,6 +1568,10 @@ opens there). The real-ruleset trajectory only changes where a seat holds a
 `PassTile`/`PassPlayer` counter.
 
 ### Bots do not mortgage to buy land (2026-10-08)
+
+*Superseded 2026-10-16: the END Buy act is gone. The settle Ask is an
+explicit yes/no (`ai_wants_buy`), so the bot is never forced into a
+mortgage-to-buy at END.*
 
 User ruling "avoid mortgage to buy land". PR #4 made `can_buy_here` /
 `can_build_here` use `World::purchase_funds` (cash + mortgageable deeds), so a
