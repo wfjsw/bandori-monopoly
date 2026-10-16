@@ -197,7 +197,7 @@ export function buyReserveAt(p: StrategyParams, round: number): number {
 /** `StrategyParams::wants_buy_tile` (no set-completion / ratio extras here). */
 export function wantsBuyP(p: StrategyParams, money: number, price: number, round = 0): boolean {
   // Bots do not mortgage to buy land (user ruling 2026-10-08): require **cash
-  // alone** to cover the price. `can_buy_here` is funded by cash +
+  // alone** to cover the price. The settle offer is funded by cash +
   // mortgageable deeds -- legality for humans is unchanged; the autopilot
   // declines instead of auto-mortgaging.
   return money >= price && money - price >= buyReserveAt(p, round);

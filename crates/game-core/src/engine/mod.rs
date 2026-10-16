@@ -766,8 +766,7 @@ impl Match {
         if st.phase == "play" && st.turn >= 0 {
             // Buy / build are settle-time offers only (`tile:property` /
             // `tile:ring` → `ctx::offer_buy` / `ctx::offer_build`). There is
-            // no END-step purchase surface -- no `st.buy_price` /
-            // `st.build_cost` / `can_buy_here` / `can_build_here` previews.
+            // no END-step purchase surface and no purchase previews.
             let ti = st.turn as usize;
             st.can_roll_here = false;
             st.can_end_here = false;

@@ -664,7 +664,7 @@ pub trait CardRules: Send + Sync {
     /// charged for each tile in `q.tiles`, and may they buy it at all?
     ///
     /// Takes the world by reference rather than a [`Cx`] so the view's
-    /// `st.buy_price` preview can ask without cloning the world. The default is
+    /// A quote can be asked without cloning the world. The default is
     /// the plain rulebook formula -- [`super::play::purchase::quote_native`] --
     /// which is what `StubRules` and the sim run. `WasmRules` overrides it to
     /// run the `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` hooks in pure guard
