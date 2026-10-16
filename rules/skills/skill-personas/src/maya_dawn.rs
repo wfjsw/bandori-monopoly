@@ -28,14 +28,14 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
         // （2） replaces the draw, so it runs at the per-card **before** point.
-        On::Hook(
+        On::Action(
             &[HookKind::DrewBefore],
             "actor == owner && tok('P✽P粉丝(正)') >= 1",
             None,

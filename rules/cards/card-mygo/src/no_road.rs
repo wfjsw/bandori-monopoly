@@ -15,7 +15,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // the exile lasts, only for this player's own tile rent, and only with a
         // live partner. The clause is residual (live exile count + the pay
         // shape); `card.placed` is the `pre`.
-        On::Hook(
+        On::Filter(
             &[card_sdk::abi::HookKind::PayAdd],
             "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
             Some(redirect_applies),

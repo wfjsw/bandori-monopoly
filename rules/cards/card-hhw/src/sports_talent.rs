@@ -16,10 +16,10 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         // 规则书: 「每回合结束时失去一个」 -- the owner's own turn end.
-        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed", None, at_turn_end),
+        On::Action(&[HookKind::TurnEnd], "actor == owner && card.placed", None, at_turn_end),
         // 规则书: 「每次掷骰获得一次资金」 -- the owner's own main-move dice
         // (`m.Seat == Seat && m.Main`). The free-roll check is residual.
-        On::Hook(
+        On::Action(
             &[HookKind::RollAfter],
             "actor == owner && card.placed && move.main",
             Some(roll_after_applies),
@@ -30,7 +30,7 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         // move, with no fixed face yet. `plan.fixed_roll` carries the "no fixed
         // face" half now.
         On::RollPlan("card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"运动的天赋"#)

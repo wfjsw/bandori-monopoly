@@ -29,12 +29,12 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Hook(&[HookKind::TurnEnd], "", None, spawn),
+        On::Action(&[HookKind::TurnEnd], "", None, spawn),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
-        On::Hook(&[HookKind::Pass], "", Some(on_pass_has_croquette), on_pass),
-        On::Hook(&[HookKind::RollPlan], "", None, on_plan),
+        On::Action(&[HookKind::Pass], "", Some(on_pass_has_croquette), on_pass),
+        On::Filter(&[HookKind::RollPlan], "", None, on_plan),
     ],
 );
 

@@ -46,7 +46,7 @@ pub const RETURNS: CardDef = CardDef::new(
         // states the actor; the residual guard names the 通用 card. The body
         // used to re-check the actor and the prefix and return early -- a flash
         // per non-通用 play by the owner.
-        On::Hook(
+        On::Action(
             &[card_sdk::abi::HookKind::CardPlayed],
             card_sdk::pre::MINE,
             Some(on_played_is_general),
@@ -55,7 +55,7 @@ pub const RETURNS: CardDef = CardDef::new(
         // [持续]（2）「每回合开始时选择一个其他存活玩家的团卡」 -- the offer
         // exists only while Returns is placed and some other survivor has a
         // band card to borrow. Derived scans (pool + `is_placed`), residual.
-        On::Hook(
+        On::Action(
             &[card_sdk::abi::HookKind::TurnStartBefore],
             card_sdk::pre::MINE,
             Some(choose_band_applies),
@@ -64,8 +64,8 @@ pub const RETURNS: CardDef = CardDef::new(
         // [特]（1）「如果此卡被加入初始卡组则卡组卡数添加8」 -- the +8 is
         // unconditional on the rulebook, but the pick prompt only exists when
         // the pool can feed eight draws. Empty pool = no offer, no flash.
-        On::Hook(&[HookKind::DeckBeforeGame], "", Some(deck_pool_ready), deck_before_game),
-        On::Hook(
+        On::Action(&[HookKind::DeckBeforeGame], "", Some(deck_pool_ready), deck_before_game),
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "trigger_card == card.id",
             None,

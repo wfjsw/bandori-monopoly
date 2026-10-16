@@ -36,7 +36,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000，可选择…」 -- the
         // offer exists only at that asset threshold. `assets_of` is a derived
         // list (money + land + houses), residual (docs/GUARDS.md §4.2).
-        On::Hook(
+        On::Action(
             &[HookKind::Drawn],
             "trigger_card == card.id",
             Some(assets_ready),

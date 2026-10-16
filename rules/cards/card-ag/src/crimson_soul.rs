@@ -34,14 +34,14 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // 1个[奇迹水晶]」 -- the offer is to *remove a crystal*, so it exists
         // only with a crystal on the card and a positive amount to cut.
         // Fully expressible (actor / placed / value / card.counter) -- G4.
-        On::Hook(
+        On::Filter(
             &[HookKind::PayChoose],
             "actor == owner && card.placed && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,
         ),
-        On::Hook(&[ruleset_core::kind::SkillUsed], "", Some(skill_used_guard), skill_used),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[ruleset_core::kind::SkillUsed], "", Some(skill_used_guard), skill_used),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )
 .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])

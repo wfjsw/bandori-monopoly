@@ -28,11 +28,11 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Hook(&[HookKind::RollAfter], "", Some(paired), on_roll),
-        On::Hook(&[HookKind::PayChoose], "", Some(paired), on_pay),
-        On::Hook(&[ruleset_core::kind::HouseAdded], "", Some(partner), on_built),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::RollAfter], "", Some(paired), on_roll),
+        On::Filter(&[HookKind::PayChoose], "", Some(paired), on_pay),
+        On::Action(&[ruleset_core::kind::HouseAdded], "", Some(partner), on_built),
     ],
 );
 

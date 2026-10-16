@@ -4,7 +4,7 @@
 //! > 其他玩家经过CiRCLE时，可向你支付一次500资金，你投掷一次1d10，
 //! > 如果投掷结果至少为6，那名玩家获得1200资金。
 //!
-//! A field event, so one [`On::Hook`] at `Pass`. The wording splits three ways
+//! A field event, so one [`On::Action`] at `Pass`. The wording splits three ways
 //! and the order matters:
 //!
 //! - 「其他玩家经过CiRCLE时」 -- another player's pass, onto a CiRCLE tile.
@@ -23,7 +23,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MARINA_GIFTS: CardDef = CardDef::new(
     "skill:月岛麻里奈:礼物还有好多好多哟",
     // 「其他玩家经过CiRCLE时」 -- another player's pass onto CiRCLE.
-    &[On::Hook(
+    &[On::Action(
         &[HookKind::Pass],
         "actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")",
         None,

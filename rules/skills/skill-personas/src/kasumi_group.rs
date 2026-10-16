@@ -4,7 +4,7 @@
 //! > （1）开局时获得1000资金
 //! > （2）[经过]CiRCLE时额外获得1500资金
 //!
-//! （2） is a field event -- [`On::Hook`] at `Pass`, this player's own landing on
+//! （2） is a field event -- [`On::Action`] at `Pass`, this player's own landing on
 //! a CiRCLE tile. 「额外」 means on top of the CiRCLE reward the tile already
 //! pays, so it is a plain gain and not a replacement.
 //!
@@ -25,8 +25,8 @@ const DONE: &str = "skill.kasumiGroup.start";
 pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", None, at_start),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", None, at_start),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
     ],
 );
 

@@ -24,14 +24,14 @@ const QUIET: &str = "skill.mutsumiActor.quiet";
 pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
     "skill:若叶睦:天生的演员",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore],
             "actor == owner && slot('skillState') != 2",
             None,
             at_turn_start,
         ),
-        On::Hook(&[HookKind::CardPlayed], card_sdk::pre::MINE, None, on_play),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Action(&[HookKind::CardPlayed], card_sdk::pre::MINE, None, on_play),
+        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .silent(&[1]);

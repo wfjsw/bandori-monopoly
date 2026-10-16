@@ -19,7 +19,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(
+        On::Action(
             &[HookKind::TurnEnd],
             "actor == owner && card.placed",
             None,
@@ -28,7 +28,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下」 -- the
         // offer is about the *marked* player. The mark-match is a dynamic-key
         // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
-        On::Hook(
+        On::Action(
             &[HookKind::PassPlayer],
             "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key",
             Some(marked_here),
@@ -43,7 +43,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
             None,
             roll_plan,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::CounterChanged],
             "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0",
             Some(crystals_changed_guard),

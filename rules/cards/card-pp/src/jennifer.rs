@@ -23,7 +23,7 @@ pub const JENNIFER: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), jennifer),
         // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')",
             None,

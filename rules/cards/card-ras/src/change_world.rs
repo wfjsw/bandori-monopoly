@@ -18,7 +18,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
         // 规则书: 「期间每经过一个不属于你的livehouse格子」 -- the owner's main
         // walk this turn, over a buyable Live House the owner does not hold.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner",
             None,
@@ -27,13 +27,13 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         // 「此地块的下一次收费」 -- the rent on *this* card's tile, with a
         // house count `n` to scale by. Tile match + houses are derived scans
         // (self_tile / houses_of), residual (docs/GUARDS.md §4.2).
-        On::Hook(
+        On::Filter(
             &[HookKind::PayAdd],
             "card.placed && pay_is_rent && target == owner",
             Some(on_card_tile_with_houses),
             pay_choose,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::PayAfter],
             "card.placed && pay_is_rent && target == owner",
             Some(on_card_tile_with_houses),

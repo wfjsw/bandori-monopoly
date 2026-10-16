@@ -22,15 +22,15 @@ const MARK: &str = "saaya标记";
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         // （1）'s 「一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时」 is the
         // hook's applicability, not its effect (the ask is the effect).
-        On::Hook(&[HookKind::PayAfter], "", Some(pay_after_applies), on_pay_after),
+        On::Action(&[HookKind::PayAfter], "", Some(pay_after_applies), on_pay_after),
         // （1）'s 「拥有saaya标记时」 -- the mark is the applicability.
-        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, Some(roll_needs_mark), on_roll),
+        On::Action(&[HookKind::RollAfter], card_sdk::pre::MINE, Some(roll_needs_mark), on_roll),
         // （2）'s 「可使用5个[火罐]」 -- the amount and the pot are the
         // applicability; spending the pot is the cost, kept in the body.
-        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
+        On::Filter(&[HookKind::PayChoose], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
     ],
 )
     .silent(&[0]);

@@ -18,7 +18,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
         // deleted (a no-op prefetch); the `move_roll` read in the body is the
         // face being halved (effect), not applicability.
-        On::Hook(&[HookKind::RollAfter], "", None, halve),
+        On::Action(&[HookKind::RollAfter], "", None, halve),
         On::AtEnd("", None, expire),
     ],
 );

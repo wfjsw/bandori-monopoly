@@ -24,19 +24,19 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport",
             None,
             pass_tile,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::PayAfter],
             "card.placed && pay_is_rent && target == owner",
             None,
             pay_after,
         ),
-        On::Hook(&[HookKind::SettleAfter], "card.placed", None, settle_after),
+        On::Action(&[HookKind::SettleAfter], "card.placed", None, settle_after),
     ],
 ).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"学生会的检查"#)

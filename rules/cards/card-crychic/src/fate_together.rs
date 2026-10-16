@@ -18,7 +18,7 @@ pub const FATE_TOGETHER: CardDef = CardDef::new(
     "CRYCHIC:一起演奏音乐的命运共同体",
     &[
         On::Play("", None, fate_together),
-        On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], "", Some(counteract_guard), counteract),
+        On::Action(&[HookKind::PayAfter, HookKind::TurnStart], "", Some(counteract_guard), counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一起演奏音乐的命运共同体"#)

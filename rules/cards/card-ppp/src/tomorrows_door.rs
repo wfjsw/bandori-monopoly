@@ -21,7 +21,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
         On::Play("", None, play),
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "card.placed && actor == owner",
             Some(pass_tile_guard),
@@ -29,7 +29,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         ),
         // (3)'s surcharge joins the rent payment at `payAdd` (before `payMul`),
         // so a 「支付减半」 scaler sees the shaped total.
-        On::Hook(
+        On::Filter(
             &[HookKind::PayAdd],
             "card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner",
             Some(pay_add_guard),
@@ -39,7 +39,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // -- an entry in the settle's effect list, for the shapes no rent
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
         // that replaces the body skips this entry.
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBody],
             "card.placed && actor != owner && tile.id >= 0",
             Some(settle_body_guard),

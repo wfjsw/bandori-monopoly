@@ -27,7 +27,7 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
         // 规则书（1）: 「你经过育美标记时可在那格强制停下」 -- the offer exists
         // only when one of this player's 育美标记 sits on the tile. Mark count
         // is a derived scan, residual (docs/GUARDS.md §4.2).
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor == owner && card.placed && move.kind != Teleport && tile.id >= 0",
             Some(has_mark_here),

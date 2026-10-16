@@ -17,8 +17,8 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).
-        On::Hook(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
-        On::Hook(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
+        On::Filter(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
+        On::Filter(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 6000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷宫般的仓库"#)

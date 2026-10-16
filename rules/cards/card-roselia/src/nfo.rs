@@ -17,9 +17,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const NFO: CardDef = CardDef::new(
     "R:NFO",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::PayChoose], "", Some(gain_guard), gain_bump),
+        On::Filter(&[card_sdk::abi::HookKind::PayChoose], "", Some(gain_guard), gain_bump),
         On::Play("", None, play),
-        On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, counteract),
+        On::Filter(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, counteract),
         On::AtEnd("", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()

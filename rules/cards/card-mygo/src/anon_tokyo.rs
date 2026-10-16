@@ -23,7 +23,7 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
         On::Play("", Some(cant_play), anon_tokyo),
-        On::Hook(&[HookKind::PayAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
+        On::Filter(&[HookKind::PayAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)

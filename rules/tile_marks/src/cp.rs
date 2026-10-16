@@ -35,7 +35,7 @@
 //!   [CP点]的格子」, so a tile carries one [CP点] mark whose `count` is how many
 //!   [CP点] sit there (in practice 1).
 //! * **Landing** -- 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己
-//!   [场上]1个[CP点]，[获得]800资金」, the `On::Hook` below. It spends **both**
+//!   [场上]1个[CP点]，[获得]800资金」, the `On::Action` below. It spends **both**
 //!   kinds: the tile's mark and one on-card [CP点] of the card the mark is
 //!   attached to (`TileMark.src`).
 //! * **Removal** -- 「移除格子上的个[CP点]」, `ctx::bump_mark(..., -1)` (one per
@@ -88,7 +88,7 @@ pub const MARK_CP: CardDef = CardDef::new(
     "mark:cp",
     &[
         On::Message(&["place"], "", Some(place_ok), on_place),
-        On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
+        On::Action(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
     ],
 )
     .board_role("mark");

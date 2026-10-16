@@ -23,13 +23,13 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::RollAfter],
             "actor == owner && tok('P✽P粉丝(正)') >= 1",
             Some(roll_ok),

@@ -18,8 +18,8 @@ pub const POOL_BUG: CardDef = CardDef::new(
     "event:卡池BUG",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::Event], "", Some(always), on_event),
-        On::Hook(&[HookKind::BuildBefore], "", Some(always), before_build),
+        On::Action(&[HookKind::Event], "", Some(always), on_event),
+        On::Action(&[HookKind::BuildBefore], "", Some(always), before_build),
     ],
 );
 

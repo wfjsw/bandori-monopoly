@@ -21,7 +21,7 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
     "PPP:（有咲）等等等一下",
     &[
         On::Play("", None, arisa_wait),
-        On::Hook(&[HookKind::EventAfter], "", Some(event_after_guard), event_after),
+        On::Action(&[HookKind::EventAfter], "", Some(event_after_guard), event_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"等等等一下"#)

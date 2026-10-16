@@ -16,7 +16,7 @@ pub const HANEOKA: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), haneoka),
         // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-        On::Hook(&[HookKind::PayChoose], "actor == owner && card.placed && value > 0", None, pay_choose),
+        On::Filter(&[HookKind::PayChoose], "actor == owner && card.placed && value > 0", None, pay_choose),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"羽丘的不可思议女孩"#)

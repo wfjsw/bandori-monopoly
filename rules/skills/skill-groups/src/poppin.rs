@@ -25,12 +25,12 @@ const USED: &str = "skill.poppin.used";
 pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
         // returned still flashed -- one per step of every walk.
-        On::Hook(
+        On::Action(
             &[HookKind::Pass],
             "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
             None,
@@ -39,7 +39,7 @@ pub const POPPIN: CardDef = CardDef::new(
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
-        On::Hook(&[HookKind::SettleBefore], "", Some(before_settle_applies), before_settle),
+        On::Action(&[HookKind::SettleBefore], "", Some(before_settle_applies), before_settle),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（1） chains two independent 「随后可使用…」 actions
         // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather

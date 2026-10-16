@@ -26,7 +26,7 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, pay_at),
+        On::Filter(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, pay_at),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次牵起手来"#)

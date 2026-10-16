@@ -19,8 +19,8 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
     "PPP:（沙绫）总有一天要给这片天空命名",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed", None, pass_tile),
-        On::Hook(&[HookKind::TurnEndAfter], "card.placed && slot('saaya_sky_passed') != 0", None, turn_end_after),
+        On::Action(&[HookKind::PassTile], "actor == owner && card.placed", None, pass_tile),
+        On::Action(&[HookKind::TurnEndAfter], "card.placed && slot('saaya_sky_passed') != 0", None, turn_end_after),
     ],
 ).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"总有一天要给这片天空命名"#)

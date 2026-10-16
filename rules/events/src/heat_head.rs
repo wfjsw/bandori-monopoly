@@ -23,8 +23,8 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
         // read on a BOARD_OWNER event instance).
-        On::Hook(&[HookKind::RollPlan], "", None, add_die),
-        On::Hook(&[HookKind::RollAfter], "", None, sub_die),
+        On::Filter(&[HookKind::RollPlan], "", None, add_die),
+        On::Action(&[HookKind::RollAfter], "", None, sub_die),
         On::AtEnd("", None, phase_end),
     ],
 );

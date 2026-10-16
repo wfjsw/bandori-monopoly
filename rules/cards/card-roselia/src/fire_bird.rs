@@ -20,9 +20,9 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
         On::Play("", None, play),
-        On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Hook(&[HookKind::PayMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
+        On::Filter(&[HookKind::PayMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Fire bird"#)

@@ -17,10 +17,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Hook(&[HookKind::RollAfter], "actor == owner && move.main && card.placed", None, roll_after),
-        On::Hook(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
-        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
+        On::Action(&[HookKind::RollAfter], "actor == owner && move.main && card.placed", None, roll_after),
+        On::Filter(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
+        On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)

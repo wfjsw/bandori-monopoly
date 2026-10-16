@@ -16,7 +16,7 @@ pub const EXIST: CardDef = CardDef::new(
         // The body-top `target == owner` early-out is the condition now (C#
         // `return target != Seat`): already aimed at us, nothing to retarget.
         On::Gate(&[GateKind::Redirect], "target != owner", None, redirect),
-        On::Hook(&[HookKind::TurnStart], "", Some(turn_start_guard), turn_start),
+        On::Action(&[HookKind::TurnStart], "", Some(turn_start_guard), turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"EXIST"#)

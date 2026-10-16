@@ -35,7 +35,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // "弦卷集团"格子交换位置」 share one `SettleBody` entry: the host runs
         // only the first hook of a kind per card, so the two body-replaces
         // cannot be separate entries.
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBody],
             "tile.id >= 0",
             Some(settle_body_guard),
@@ -47,7 +47,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // and after (2)'s `settleAfter` move -- the settle that *moves* the
         // card onto the endpoint sees the card still on 弦卷集团 here and does
         // not discard it.
-        On::Hook(&[HookKind::TileResolved], "card.placed", Some(resolve_guard), on_resolved),
+        On::Action(&[HookKind::TileResolved], "card.placed", Some(resolve_guard), on_resolved),
         // 规则书（2）: 「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上」
         // -- the offer exists only while this card sits on 弦卷集团 and the
         // settle is a real move's endpoint. `move.kind != Teleport` keeps the
@@ -55,7 +55,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
         // onto the card's own tile) from offering 「移动终点」 = 弦卷集团 and
         // clearing crystals while the card is still there (which would trip
         // the zero-crystal discard).
-        On::Hook(
+        On::Action(
             &[HookKind::SettleAfter],
             "actor == owner && card.placed && card.tile == tile_named('弦卷集团') && tile.id >= 0 && move.kind != Teleport",
             None,
@@ -67,8 +67,8 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
-        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
+        On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"笑容大游行"#)

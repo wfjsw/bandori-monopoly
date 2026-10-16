@@ -26,11 +26,11 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
         // exists only at the pot cap. 状态2's auto-play still has to run
         // whenever state is 2, so the residual is the disjunction.
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore],
             card_sdk::pre::MINE,
             Some(state2_or_fire_capped),
@@ -39,7 +39,7 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor == owner && move.main && slot('skillState') != 2",
             None,
@@ -50,7 +50,7 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
         // raised. The guard keeps 状态1 and this player as the *recipient*
         // (`trigger::target()`), not the causer.
-        On::Hook(&[HookKind::Abnormal], "target == owner", Some(im_hit), on_abnormal),
+        On::Action(&[HookKind::Abnormal], "target == owner", Some(im_hit), on_abnormal),
     ],
 )
     .silent(&[0]);

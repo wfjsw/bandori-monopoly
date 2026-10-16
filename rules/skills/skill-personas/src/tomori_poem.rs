@@ -27,19 +27,19 @@ const DUE: &str = "skill.tomoriPoem.due";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
         // （2）/（3） applicability: someone else's landing within five tiles of
         // this player. The pot-cost split and the fire balance stay residual
         // (dynamic). `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBefore],
             "tile.id >= 0 && actor != owner",
             Some(before_settle_applies),
             before_settle,
         ),
-        On::Hook(&[HookKind::PayMul], "", Some(half), on_pay),
-        On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
+        On::Filter(&[HookKind::PayMul], "", Some(half), on_pay),
+        On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
 )
     .silent(&[0]);

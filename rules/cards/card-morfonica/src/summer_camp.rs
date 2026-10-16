@@ -29,7 +29,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
             None,
             untargetable,
         ),
-        On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
+        On::Action(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"夏日合宿"#)

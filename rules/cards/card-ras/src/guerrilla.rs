@@ -22,7 +22,7 @@ pub const GUERRILLA: CardDef = CardDef::new(
         // arms the turn-end check for *this* turn (C# `OnDiscarded`). The
         // counteract body also arms (the card lands in the discard after that
         // counteraction resolves).
-        On::Hook(&[HookKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
+        On::Action(&[HookKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
         // 规则书[特]: 「此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家
         // 支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在
         // 可购买的此类格子，则可选择…」 -- the offer exists only when every

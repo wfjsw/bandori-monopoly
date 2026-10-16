@@ -33,12 +33,12 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
         On::Play("", Some(can_halve), halve),
-        On::Hook(&[HookKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
-        On::Hook(&[HookKind::PayMul], "slot('skillState') == 2 && card.placed", None, bend),
+        On::Action(&[HookKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
+        On::Filter(&[HookKind::PayMul], "slot('skillState') == 2 && card.placed", None, bend),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PayMul rewrites one shared
         // figure, so the counterpart's side is restored here.
-        On::Hook(&[HookKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
-        On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
+        On::Action(&[HookKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
+        On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
     ],
 );
 

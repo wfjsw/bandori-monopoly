@@ -27,14 +27,14 @@ const FLIPPED: &str = "skill.mumei.flipped";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Filter(
             &[HookKind::PayAdd],
             "target == owner && actor != owner && slot('skillState') != 2",
             None,
             on_pay_add,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::TurnEnd],
             "actor == owner && slot('skillState') != 2",
             Some(fire_at_cap),
@@ -44,7 +44,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         // with a non-empty flip list. Both are player-state reads (`skillState`
         // and the `skill.mumei.flipped` count), so the entry does not activate
         // (and so does not flash) when there is nothing to sweep.
-        On::Hook(
+        On::Action(
             &[HookKind::TurnEnd],
             "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0",
             None,
@@ -111,7 +111,7 @@ fn enter_two(player_id: i32) {
     }
     state::set(player_id, FLIPPED, n);
     // 「场上所有背面朝上的卡无法产生效果」 -- the host's placed-card walk now
-    // skips a card with `face_down` set (`wasm_rules`), so its `On::Hook` /
+    // skips a card with `face_down` set (`wasm_rules`), so its `On::Action` /
     // `On::Gate` entries stop answering on their own. The 「不受任何效果影响」
     // half is the `set_card_immune` claim above.
 }

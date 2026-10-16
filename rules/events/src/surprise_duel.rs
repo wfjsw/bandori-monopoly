@@ -23,8 +23,8 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
-        On::Hook(&[HookKind::RollPlan], "", Some(on_plan_others), on_plan),
-        On::Hook(&[HookKind::TurnStartBefore], "", None, on_turn_start),
+        On::Filter(&[HookKind::RollPlan], "", Some(on_plan_others), on_plan),
+        On::Action(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
 

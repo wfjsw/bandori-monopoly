@@ -28,7 +28,7 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const AYA_WITH: CardDef = CardDef::new(
     "skill:丸山彩:With~",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
@@ -38,7 +38,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
         // (「分摊前」), so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the
         // per-share `payChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
         // it divides, not 500 off each share.
-        On::Hook(
+        On::Filter(
             &[HookKind::PayTotalAdd],
             "value > 0 && tok('P✽P粉丝(正)') >= 1",
             Some(mine),

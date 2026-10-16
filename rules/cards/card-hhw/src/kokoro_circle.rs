@@ -21,7 +21,7 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
         // card that replaces the body skips this entry. `docs/TILES.md` names
         // the long-term home as a collect rule instance on CiRCLE; the
         // `settleBody` hook is the same list entry for now.
-        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
+        On::Action(&[HookKind::SettleBody], "", None, settle_body),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 10000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"前往笑容集结的地方！"#)

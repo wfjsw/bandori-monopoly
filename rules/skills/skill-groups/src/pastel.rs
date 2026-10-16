@@ -23,15 +23,15 @@ const FAN: &str = "P✽P粉丝(反)";
 pub const PASTEL: CardDef = CardDef::new(
     "skill:Pastel✽Palettes:与偶像一起",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         // （2）「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的
         // 反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 --
         // a passive hook on the flip effect, not a press. `FlipEffect` is raised
         // with the clause's X before the counters move, so `tok(FAN)` is still
         // the pre-flip count. 「可为此卡添加」 is the book's permissive may
         // (there is no cost or downside), so the overflow is applied here.
-        On::Hook(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
+        On::Filter(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
     ],
 );
 

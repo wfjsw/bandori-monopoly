@@ -17,7 +17,7 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
         On::Play("", None, want_human),
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd],
             "actor == owner && card.placed",
             None,

@@ -28,9 +28,9 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Hook(&[HookKind::RollAfter], "", Some(other), latch),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::RollAfter], "", Some(other), latch),
     ],
 )
     .silent(&[3]);

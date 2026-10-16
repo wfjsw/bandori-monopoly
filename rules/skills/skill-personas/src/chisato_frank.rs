@@ -21,7 +21,7 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const CHISATO_FRANK: CardDef = CardDef::new(
     "skill:白鹭千圣:保持坦率的你",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
@@ -32,7 +32,7 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
         // `payChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
         // money, so the hook's `target` (the payee) is the skill owner. A print
         // (game -> player) carries `target = me`, `player_id = -1`.
-        On::Hook(
+        On::Filter(
             &[HookKind::PayTotalAdd],
             "target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1",
             Some(mine),

@@ -20,12 +20,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RAISE_EFFORT: CardDef = CardDef::new(
     "skill:和奏瑞依:一次又一次竭尽全力",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）「进行任意掷骰后，可选择使用一个[火罐]再投一次」 -- only with a
         // pot to spend. `fixed_roll` is derived plan state outside the CEL
         // schema (docs/GUARDS.md §4.2c): residual guard.
-        On::Hook(
+        On::Action(
             &[HookKind::RollAfter],
             "actor == owner && charge(owner) >= 1",
             Some(roll_unfixed),

@@ -13,7 +13,7 @@ pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
         On::Play("", None, l11),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') <= 0", None, sweep),
+        On::Action(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') <= 0", None, sweep),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

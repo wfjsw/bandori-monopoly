@@ -36,7 +36,7 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // 规则书: 「本回合中向其他玩家支付时你的付款减半」 -- only payments to
         // other players, only on the armed turn (`charity.turn`). The turn-key
         // latch is an instance prop (residual).
-        On::Hook(
+        On::Filter(
             &[HookKind::PayMul],
             "card.placed && actor == owner && target >= 0 && target != owner && value > 0",
             Some(pay_applies),
@@ -45,14 +45,14 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
         // -- a dice (main) walk step onto a tile that counts as yours, first
         // time this turn. `mine` / the first-pass marker are residual.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0",
             Some(pass_applies),
             pass_tile,
         ),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
-        On::Hook(&[HookKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
+        On::Action(&[HookKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"爱心义演"#)

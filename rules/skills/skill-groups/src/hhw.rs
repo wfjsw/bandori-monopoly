@@ -26,16 +26,16 @@ pub const HHW: CardDef = CardDef::new(
     &[
         // （1）「向他人的格子付款时」 -- another player, a rent. The
         // recorded-player / crystals scans stay residual (dynamic keys).
-        On::Hook(
+        On::Filter(
             &[HookKind::PayChoose],
             "actor == owner && target >= 0 && target != owner && pay_is_rent",
             None,
             on_pay_choose,
         ),
         // （2） a recorded player's rent collection, with a crystal to spend.
-        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, Some(after_pay_applies), after_pay),
+        On::Action(&[HookKind::PayAfter], card_sdk::pre::MINE, Some(after_pay_applies), after_pay),
         // （3） a recorded amount to spend down.
-        On::Hook(&[HookKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
+        On::Action(&[HookKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
     ],
 );
 

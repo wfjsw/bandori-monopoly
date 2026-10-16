@@ -25,7 +25,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         // stage on the buy price, riding a `ctx::linger` instance for the turn
         // (`docs/PURCHASE.md`). The engine floors the stage at 0. The tile is
         // the hook's applicability (the residual guard).
-        On::Hook(&[HookKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
+        On::Filter(&[HookKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"@Tsugu ycm"#)

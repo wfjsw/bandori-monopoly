@@ -25,7 +25,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
         On::Play("", None, aya_longing),
-        On::Hook(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
+        On::Filter(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)

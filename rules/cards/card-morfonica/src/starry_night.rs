@@ -25,8 +25,8 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
         On::Play("", None, starry_night),
-        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], "card.placed && card.counter('crystals') > 0", None, hook),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::RollAfter, HookKind::PassTile], "card.placed && card.counter('crystals') > 0", None, hook),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"蝴蝶飞舞的星月夜"#)

@@ -21,7 +21,7 @@ pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
         On::Play("", None, nyamu_card),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed", None, watch_flips),
+        On::Action(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed", None, watch_flips),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

@@ -21,8 +21,11 @@ pub const FEVER: CardDef = CardDef::new(
     "通用:[衍生]FEVER!",
     &[
         On::Play("", None, fever),
-        // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
-        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], "card.placed", None, counteract),
+        // C# `CardFever.PayAdd` (value modifier) / `CardFever.TurnStart` (event
+        // reaction) -- field hooks, not [反击]. Mixed kinds split (ABI v73);
+        // shared body `counteract` matches on `trigger::kind()`.
+        On::Filter(&[HookKind::PayAdd], "card.placed", None, counteract),
+        On::Action(&[HookKind::TurnStart], "card.placed", None, counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"FEVER!"#)

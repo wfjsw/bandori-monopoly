@@ -17,10 +17,18 @@ pub const J11: CardDef = CardDef::new(
     "Mujica:#J11",
     &[
         On::Play("", None, play),
-        // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.PayChoose` +
-        // `CardJ11.Targeted` -- all field hooks, not [反击]s.
-        On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted], "card.placed", None, counteract),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
+        // reactions, not [反击]s. `CardJ11.PayChoose` is a value modifier and
+        // rides its own Filter entry (mixed kinds split, ABI v73). Shared body
+        // `counteract` matches on `trigger::kind()`.
+        On::Action(
+            &[HookKind::TurnEnd, HookKind::Targeted],
+            "card.placed",
+            None,
+            counteract,
+        ),
+        On::Filter(&[HookKind::PayChoose], "card.placed", None, counteract),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name("")

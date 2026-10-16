@@ -39,25 +39,25 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         // 状态1's offer: another player's turn start, not in 状态2, and the
         // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
         // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore],
             "actor != owner && slot('skillState') != 2",
             Some(offer_support_open),
             offer_support,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore],
             "actor == owner && slot('skillState') != 2",
             None,
             at_turn_start,
         ),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
         On::Play("", Some(can_enter_two), enter_two),
-        On::Hook(
+        On::Filter(
             &[HookKind::PayMul],
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
             Some(split_rent_applies),

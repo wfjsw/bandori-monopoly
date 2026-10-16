@@ -35,7 +35,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // (`actor != owner`, not `MINE` -- the old `mine` guard was inverted
         // against the body and the rulebook), a tile we own, and a positive
         // amount. The opt-in ask stays in the body (a player choice).
-        On::Hook(
+        On::Filter(
             &[HookKind::PayChoose],
             "actor != owner && tile.owner == owner && value > 0",
             None,
@@ -45,7 +45,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // the armed one-shot (`actor == owner` on `RollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
         // so the condition alone decides and no residual guard remains.
-        On::Hook(
+        On::Filter(
             &[HookKind::RollPlan],
             "actor == owner && slot('skill.soyoCrychic.armed') != 0",
             None,
