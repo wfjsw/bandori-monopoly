@@ -44,18 +44,28 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 /// C# `H.MoneyHasDigit(seat, '5')` -- the decimal form of |money| contains 5.
 fn money_has_digit5(player_id: i32) -> bool {
-    // Bounded digit scan: u32 has at most 10 decimal digits (unwind 10).
     let mut x = ctx::money_of(player_id).unsigned_abs();
     if x == 0 {
         return false;
     }
+    // Kani-only: a u32 has at most 10 decimal digits, so cap the scan to give
+    // CBMC a loop bound. Production keeps the plain `while x > 0`.
+    #[cfg(kani)]
     let mut i = 0u32;
+    #[cfg(kani)]
     while i < 10 && x > 0 {
         if x % 10 == 5 {
             return true;
         }
         x /= 10;
         i += 1;
+    }
+    #[cfg(not(kani))]
+    while x > 0 {
+        if x % 10 == 5 {
+            return true;
+        }
+        x /= 10;
     }
     false
 }
