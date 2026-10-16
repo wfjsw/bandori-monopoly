@@ -507,12 +507,10 @@ impl Cx<'_> {
         let quote = self.buy_quote_for(i, pos, super::purchase::BuyKind::Land);
         let cash_covers_buy = quote.eligible && cash >= quote.price.max(0);
         if bot && self.can_buy_here(i) && cash_covers_buy && self.ai_wants_buy(i, pos) {
-            self.w.st.bought = true;
             self.buy(i, pos, super::purchase::BuyKind::Land)?;
             self.wait(1.2);
         } else if bot && self.can_build_here(i) && self.ai_wants_build(i, pos) {
-            self.w.st.built = true;
-            self.build(i, pos)?;
+            self.build_landed(i, pos)?;
             self.wait(1.2);
         } else if self.over_hand(i) {
             let hand_len = self.w.hidden[i].hand.len();

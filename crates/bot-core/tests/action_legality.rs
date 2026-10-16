@@ -216,8 +216,7 @@ fn a_real_match_computes_the_gate_and_the_bot_passes_when_poor() {
         w.st.turn = me as i32;
         w.st.step = stage::END;
         w.st.landed = tile as i32;
-        w.st.bought = false;
-        w.st.built = false;
+        w.st.land_acted = false;
         w.st.busy = false;
         w.st.owners = vec![-1; data.tiles.len()];
         w.st.owners[tile] = -1;
@@ -294,8 +293,7 @@ fn a_deed_rich_broke_bot_does_not_mortgage_to_buy_land() {
         w.st.turn = me as i32;
         w.st.step = stage::END;
         w.st.landed = tile as i32;
-        w.st.bought = false;
-        w.st.built = false;
+        w.st.land_acted = false;
         w.st.busy = false;
         w.st.owners = vec![-1; data.tiles.len()];
         w.st.houses = vec![0; data.tiles.len()];

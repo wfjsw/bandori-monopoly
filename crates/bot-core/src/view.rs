@@ -251,8 +251,7 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
         s.roller = me;
         s.busy = false;
         s.landed = -1;
-        s.bought = false;
-        s.built = false;
+        s.land_acted = false;
         s.skip_move = false;
         s.prompt = MatchPrompt::default();
         s.plan = MovePlan::default();
