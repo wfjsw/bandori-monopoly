@@ -905,9 +905,9 @@ fn auction_off_01_at(user: i32, match_id: bool) {
     // Drawn trigger kind (46) and the trigger card identity.
     w.trig_kind = 46; // TriggerKind::Drawn
     w.trig_card = if match_id {
-        crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0
+        crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0 as i32
     } else {
-        crate::intern::intern("PP:其他卡").0 // a different card
+        crate::intern::intern("PP:其他卡").0 as i32 // a different card
     };
     let pre_field_n = w.field_n;
     let pre_charge_max = w.charge_max[player as usize];
