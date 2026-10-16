@@ -465,8 +465,7 @@ impl Cx<'_> {
         let st = &mut self.w.st;
         st.turn = next;
         st.step = stage::START;
-        st.bought = false;
-        st.built = false;
+        st.land_acted = false;
         st.skip_move = false;
         st.landed = -1;
         st.roller = next;
@@ -2463,7 +2462,7 @@ impl Cx<'_> {
         let pos = st.players[i].pos;
         st.step == stage::END
             && st.turn == i as i32
-            && !st.bought
+            && !st.land_acted
             && st.landed == pos
             && self
                 .data
@@ -2507,8 +2506,7 @@ impl Cx<'_> {
         let pos = st.players[i].pos as usize;
         st.step == stage::END
             && st.turn == i as i32
-            && !st.built
-            && !st.bought
+            && !st.land_acted
             && st.landed == pos as i32
             && self.why_not_build(i, pos).is_none()
             && self.w.purchase_funds(self.data, i, Some(pos)) >= self.build_cost(pos)
@@ -2526,7 +2524,7 @@ impl Cx<'_> {
             && st.turn == i as i32
             && self.playing()
             && st.step == stage::END
-            && (st.landed != t as i32 || st.bought)
+            && (st.landed != t as i32 || st.land_acted)
         {
             return Some(Msg::new("err.build_only_settling"));
         }
@@ -2672,6 +2670,12 @@ impl Cx<'_> {
         let e = self.w.log("buy", i as i32, text);
         e.value = 0;
         e.to = t as i32;
+        // 规则书: a build is the settle of land already owned. Land acquired
+        // by any route on the tile the turn player stopped on (the settle's own
+        // offer, a card, 收购) uses up that settle, so no build follows it.
+        if self.w.st.turn == i as i32 && self.w.st.landed == t as i32 {
+            self.w.st.land_acted = true;
+        }
         // `bought` (Fx) -- the owner is set.
         raise!(self, "bought", i, tile = t as i32)?;
         // `buyAfter` -- the deed has changed hands.
@@ -2682,6 +2686,16 @@ impl Cx<'_> {
     /// Pay the tile's build cost and raise one house.
     /// `true` when a house was added (HOST-06: `buildBefore` cancel, unpaid
     /// cost, not-owned and max-houses refunds are `false`).
+    /// The settle's own build (「升级建造」): a normal action on the landed
+    /// land, so a success uses up the turn's one action on it.
+    pub(crate) fn build_landed(&mut self, i: usize, t: usize) -> Flow<bool> {
+        let built = self.build(i, t)?;
+        if built {
+            self.w.st.land_acted = true;
+        }
+        Ok(built)
+    }
+
     pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
         // `buildBefore` -- before any guard or payment, so it is a real pre-hook.
         // A hook that claims it with `set_cancelled` vetoes the build outright
@@ -2819,7 +2833,7 @@ impl Cx<'_> {
         if self.buyable_here(i) {
             return true;
         }
-        !self.w.st.built && !self.w.st.bought && self.why_not_build(i, pos as usize).is_none()
+        !self.w.st.land_acted && self.why_not_build(i, pos as usize).is_none()
     }
 
     /// Why this deed cannot be redeemed, or `None` when it can.

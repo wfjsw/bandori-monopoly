@@ -186,8 +186,13 @@ pub struct MatchState {
     /// machine seats never hold.
     #[serde(default)]
     pub clock_paused: bool,
-    pub bought: bool,
-    pub built: bool,
+    /// 规则书 基础[结算]: one turn performs only one normal action (buy or
+    /// build) on a land and its buildings. Set once that action has been
+    /// done (an acquisition of the landed tile by any route, or the settle's
+    /// build); reset when the turn changes. Replaces the old `bought` /
+    /// `built` pair (`bought` still reads into it).
+    #[serde(default, alias = "bought")]
+    pub land_acted: bool,
     /// Next uid to hand out for a card instance. **Global** across the match, not
     /// per player: every card in the game has one id, so an instance is addressed
     /// by `uid` alone and one player may hold several copies of the same card in
@@ -265,8 +270,7 @@ impl Default for MatchState {
             base_time: 0.0,
             bonus_time: 0.0,
             clock_paused: false,
-            bought: false,
-            built: false,
+            land_acted: false,
             next_card_uid: 1,
             players: vec![],
             board_field: vec![],

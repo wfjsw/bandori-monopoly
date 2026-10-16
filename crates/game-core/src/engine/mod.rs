@@ -787,7 +787,7 @@ impl Match {
                 .unwrap_or(false)
                 && self.world.gate_open(&*self.rules, Gate::Pay, ti);
             if st.step == stage::END
-                && !st.bought
+                && !st.land_acted
                 && pos >= 0
                 && st.landed == pos
                 && st.owners.get(pos as usize).copied().unwrap_or(-1) < 0
@@ -818,7 +818,7 @@ impl Match {
                     && can_pay
                     && self.world.purchase_funds(&self.data, ti, None) >= st.buy_price.max(0);
             }
-            if st.step == stage::END && !st.built && !st.bought && pos >= 0 && st.landed == pos {
+            if st.step == stage::END && !st.land_acted && pos >= 0 && st.landed == pos {
                 // Only preview a build cost when a build is actually possible
                 // (owned, not mortgaged, under the cap).
                 let t = pos as usize;
@@ -2733,12 +2733,10 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
                     cx.main_move(turn, i)
                 }
                 "buy" => {
-                    cx.w.st.bought = true;
                     cx.buy(i, pos, purchase::BuyKind::Land).map(|_| ())
                 }
                 "build" => {
-                    cx.w.st.built = true;
-                    cx.build(i, pos).map(|_| ())
+                    cx.build_landed(i, pos).map(|_| ())
                 }
                 "mortgage" => cx.mortgage(i, m.value as usize, None).map(|_| ()),
 
@@ -2843,7 +2841,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if let Some(e) = moved_off("err.moved_off_build") {
                 return Some(e);
             }
-            if st.built {
+            if st.land_acted {
                 return Some(Msg::new("err.built_already"));
             }
             if let Some(e) = cx.why_not_build(i, pos as usize) {

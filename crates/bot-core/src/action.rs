@@ -411,7 +411,7 @@ pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool 
         && st.step == stage::END
         && st.turn == seat as i32
         && !st.busy
-        && !st.bought
+        && !st.land_acted
         && st.landed == i as i32
         && st.players.get(seat).map(|p| p.pos) == Some(i as i32)
         && st.owners.get(i).copied().unwrap_or(-1) < 0
@@ -433,8 +433,7 @@ pub fn can_build(data: &GameData, st: &MatchState, seat: usize, i: usize) -> boo
         && st.step == stage::END
         && st.turn == seat as i32
         && !st.busy
-        && !st.bought
-        && !st.built
+        && !st.land_acted
         && st.landed == i as i32
         && st.players.get(seat).map(|p| p.pos) == Some(i as i32)
         && st.owners.get(i).copied().unwrap_or(-1) == seat as i32
