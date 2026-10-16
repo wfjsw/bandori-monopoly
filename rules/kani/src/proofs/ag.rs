@@ -327,8 +327,9 @@ fn half_speed_04_pay_mul_iff_at(user: i32) {
     });
     plant_field(user, CARD_MOCA_HALF, 1, 0);
     // Entry 3 is PayMul (`actor == owner && card.placed && value > 0`).
-    invoke::unwrap_done(card_ag::moca_half::pay_mul_kani(user));
-    let post_amount = world::with_world(|ww| ww.pay_amount);
+    // ABI v75 pure Filter: the body RETURNS the folded amount; the host folds
+    // it into the running figure. Stage moved out of `set_pay_amount`.
+    let folded = card_ag::moca_half::pay_mul_kani(user, pre_amount);
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
@@ -339,21 +340,21 @@ fn half_speed_04_pay_mul_iff_at(user: i32) {
     kani::cover!(pre_amount < 20, "small amount (half < 10)");
     kani::cover!(pre_amount == 25, "25 → fold 13 → final 20");
     crate::kassert!(
-        post_amount == fold,
-        "C-AG-half-speed-04: body writes the exact fold (no CeilTo)"
+        folded == fold,
+        "C-AG-half-speed-04: body returns the exact fold (no CeilTo)"
     );
     crate::kassert!(
-        spec::ag::round10(post_amount) == final_amt,
+        spec::ag::round10(folded) == final_amt,
         "C-AG-half-speed-04: final = round10(fold of add/mul)"
     );
     crate::kassert!(
-        spec::ag::half_speed_04_log_ok(effects, fold),
-        "C-AG-half-speed-04: log exactly the rewrite"
+        spec::ag::half_speed_04_log_ok(effects),
+        "C-AG-half-speed-04: pure Filter emits no effects (host folds the return)"
     );
     // Determined half for even multiples of 10: plain /2.
     if pre_amount % 20 == 0 {
         crate::kassert!(
-            post_amount == spec::ag::half_speed_04_amount_even(pre_amount),
+            folded == spec::ag::half_speed_04_amount_even(pre_amount),
             "C-AG-half-speed-04: even 10-multiple halves exactly"
         );
     }
@@ -385,10 +386,9 @@ pub fn half_speed_04_mutant_is_detected() {
         w.pay_amount = amount;
     });
     plant_field(user, CARD_MOCA_HALF, 1, 0);
-    invoke::unwrap_done(card_ag::moca_half::pay_mul_kani(user));
-    let post_amount = world::with_world(|ww| ww.pay_amount);
+    let folded = card_ag::moca_half::pay_mul_kani(user, amount);
     crate::kassert!(
-        post_amount != spec::ag::half_speed_04_amount_mutant(amount),
+        folded != spec::ag::half_speed_04_amount_mutant(amount),
         "mutant (+1) must not match the card"
     );
 }

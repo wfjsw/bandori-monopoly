@@ -115,23 +115,24 @@ fn band_02_rent_bonus_iff_at(owner: i32) {
     kani::cover!(crystals > 0, "crystals > 0 (bonus applies)");
     kani::cover!(crystals == 0, "crystals == 0 (no-op)");
 
-    // DIRECT body call (ppcost).
-    invoke::unwrap_done(skill_groups::sumimi::bend_kani(owner));
+    // DIRECT body call (ppcost). ABI v75 pure Filter: the body RETURNS the
+    // folded amount; the host folds it into the running figure.
+    let folded = skill_groups::sumimi::bend_kani(owner, pre_amount);
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
     let expected = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
     crate::kassert!(
-        spec::sumimi::band_rent_bonus_log_ok(effects, crystals, expected),
-        "C-SUMIMI-band-02: exactly one SetPayAmount to pre + crystals*100 (or empty at 0)"
+        spec::sumimi::band_rent_bonus_log_ok(effects),
+        "C-SUMIMI-band-02: pure Filter emits no effects (host folds the return)"
     );
     crate::kassert!(
-        post.pay_amount == expected || crystals <= 0,
-        "C-SUMIMI-band-02: post pay_amount must be pre + crystals*100"
+        folded == expected,
+        "C-SUMIMI-band-02: return must be pre + crystals*100"
     );
     if crystals <= 0 {
-        crate::kassert!(post.pay_amount == pre_amount, "no crystals: amount untouched");
+        crate::kassert!(folded == pre_amount, "no crystals: amount untouched");
     }
     // Frame: money of every seat untouched at rewrite time.
     for p in 0..MAX_PLAYERS {
@@ -161,12 +162,11 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
     let pre_amount: i32 = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 10_000);
     band_02_world(owner, 3, pre_amount);
-    invoke::unwrap_done(skill_groups::sumimi::bend_kani(owner));
-    let post = world::snapshot();
+    let folded = skill_groups::sumimi::bend_kani(owner, pre_amount);
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
-    kani::cover!(post.pay_amount != wrong, "disagreement live");
+    kani::cover!(folded != wrong, "disagreement live");
     crate::kassert!(
-        post.pay_amount != wrong,
+        folded != wrong,
         "mutant: bonus is +100 per crystal, not +100 total"
     );
 }

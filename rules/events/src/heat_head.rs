@@ -122,7 +122,7 @@ pub fn add_die_kani(player_id: i32, v: FilterValue) -> FilterValue {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn sub_die_kani(player_id: i32, v: FilterValue) -> FilterValue {
+pub fn sub_die_filter_kani(player_id: i32, v: FilterValue) -> FilterValue {
     sub_die_filter(player_id, v)
 }
 

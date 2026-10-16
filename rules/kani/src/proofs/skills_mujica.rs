@@ -218,25 +218,27 @@ fn bend_world(user: i32) -> i32 {
     amount
 }
 
-/// Hook body: `bend` rewrites `pay_amount` to 1.5x when the user is a side.
+/// Hook body: `bend` RETURNS the 1.5x fold when the user is a side.
 /// Entry 2 = On::Filter(PayMul) `bend`. Direct body call.
 fn band_bend_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     let pre_amount = bend_world(user);
     let pre = world::snapshot();
-    invoke::unwrap_done(skill_groups::ave_mujica::bend_kani(user));
+    // ABI v75 pure Filter: the body RETURNS the folded amount; the host folds
+    // it into the running figure. Stage moved out of `set_pay_amount`.
+    let folded = skill_groups::ave_mujica::bend_kani(user, pre_amount);
     let post = world::snapshot();
 
     kani::cover!(pre_amount == 300, "300 → 450");
     kani::cover!(pre_amount % 2 == 1, "odd amount");
     kani::cover!(pre_amount == 25, "25 → fold 38 → final 40");
-    // Body writes the integer fold (no CeilTo). User ruling 2026-10-15:
+    // Body returns the integer fold (no CeilTo). User ruling 2026-10-15:
     // `final = round10(fold of add/mul)` once at settle.
     if pre_amount > 0 {
         let fold = (pre_amount * 3 + 1) / 2;
         crate::kassert!(
-            post.pay_amount == fold,
-            "C-MUJICA-团技能-01: PayMul rewrites the amount to the 1.5x fold"
+            folded == fold,
+            "C-MUJICA-团技能-01: PayMul returns the amount as the 1.5x fold"
         );
         let final_amt = if fold <= 0 {
             fold
@@ -275,11 +277,10 @@ pub fn band_state2_user1_bend_hook_rewrites_amount() {
 pub fn band_state2_bend_mutant_is_detected() {
     let user = 0i32;
     let pre_amount = bend_world(user);
-    invoke::unwrap_done(skill_groups::ave_mujica::bend_kani(user));
-    let post = world::snapshot();
+    let folded = skill_groups::ave_mujica::bend_kani(user, pre_amount);
     if pre_amount > 0 && pre_amount != (pre_amount * 3 + 1) / 2 {
         crate::kassert!(
-            post.pay_amount != pre_amount,
+            folded != pre_amount,
             "mutant: amount must change"
         );
     }

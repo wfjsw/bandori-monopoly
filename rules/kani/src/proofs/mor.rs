@@ -1755,14 +1755,19 @@ fn again_02_world(user: i32, pay_amount: i32) {
     });
 }
 
-/// IFF: SetPayAmount(0) and dest = Graveyard. Exactly one effect.
+/// IFF: cancel half returns 0, discard half sets dest = Graveyard.
 fn again_02_cancel_iff_at(user: i32) {
     let pay_amount: i32 = kani::any();
     kani::assume(pay_amount >= 1 && pay_amount <= 5_000);
     again_02_world(user, pay_amount);
     let pre = world::snapshot();
-    invoke::unwrap_done(card_morfonica::hold_hands_again::pay_at_kani(user));
+    // ABI v75 pure Filter (PayAt): 「取消此次资金变动」 -- the body RETURNS 0
+    // and the host folds that into the running amount. Stage moved out of
+    // `set_pay_amount` / `set_dest` (the old combined Action wrote both).
+    let cancelled = card_morfonica::hold_hands_again::pay_at_kani(user, pay_amount);
     kani::cover!(true, "body returned");
+    // Action half (PayAfter): 「并将此卡放置到弃卡区」.
+    invoke::unwrap_done(card_morfonica::hold_hands_again::pay_after_kani(user));
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1770,16 +1775,16 @@ fn again_02_cancel_iff_at(user: i32) {
 
     crate::kassert!(
         spec::again_02_effects_ok(effects),
-        "C-MOR-again-02: exactly SetPayAmount(0)"
+        "C-MOR-again-02: pure Filter emits no effects (host folds the return)"
+    );
+    crate::kassert!(
+        spec::again_02_cancel_ok(cancelled),
+        "C-MOR-again-02: the money change is cancelled (Filter returns 0)"
     );
     let dest = world::with_world(|w| w.dest);
     crate::kassert!(
         dest == 0,
         "C-MOR-again-02: card is sent to the discard (dest = Graveyard)"
-    );
-    crate::kassert!(
-        post.pay_amount == 0,
-        "C-MOR-again-02: the money change is cancelled"
     );
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money (cancel only)");
 }
@@ -1802,12 +1807,9 @@ pub fn again_02_cancel_user1_iff() {
 pub fn again_02_mutant_is_detected() {
     let user = 0i32;
     again_02_world(user, 100);
-    invoke::unwrap_done(card_morfonica::hold_hands_again::pay_at_kani(user));
+    let cancelled = card_morfonica::hold_hands_again::pay_at_kani(user, 100);
     kani::cover!(true, "body returned");
-    let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
-    let log_n = effects_of(&mut ebuf);
-    let effects = &ebuf[..log_n];
-    let mutant = spec::again_02_effects_ok_mutant(effects);
+    let mutant = spec::again_02_cancel_ok_mutant(cancelled);
     kani::cover!(!mutant, "mutant disagrees");
     crate::kassert!(!mutant, "mutant: cancel must go to 0, not 1");
 }
