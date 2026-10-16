@@ -7,6 +7,7 @@ import { backdropUrl } from "../app/backdrops";
 import { cardArt, charArt, sceneImg } from "./assets";
 import { D, rules } from "./data";
 import { getProfile } from "./store";
+import { loadLive2D, loadLive2DAnim } from "../live2d/load";
 
 type Name = Route["name"];
 
@@ -61,6 +62,17 @@ function deckCardIds(): string[] {
   }
 }
 
+/** Fetch + decode the home character's Live2D model (cached by `live2d/load.ts`). */
+function warmLive2D(): Promise<unknown> {
+  try {
+    const home = D.persona(getProfile().homePersona) ?? D.personas[0];
+    if (!home) return Promise.resolve();
+    return Promise.all([loadLive2D(D.artId(home)), loadLive2DAnim(D.artId(home))]).catch(() => undefined);
+  } catch {
+    return Promise.resolve();
+  }
+}
+
 /** Per-route art that depends on the profile; the first screenful is awaited, the rest is fire-and-forget. */
 function dynamicImages(name: Name): Promise<unknown> {
   if (name !== "deck") return Promise.resolve();
@@ -89,7 +101,10 @@ export function preloadRoute(r: Route | Name): Promise<void> {
   let p = pending.get(name);
   if (!p) {
     const urls = [backdropUrl(BACKDROP[name]), ...(IMAGES[name] ?? []).map(sceneImg)];
-    p = Promise.all([...urls.map(preloadImage), dynamicImages(name), CHUNKS[name]?.().catch(() => undefined)]).then(() => undefined);
+    // The menu stands the home character on a Live2D model; its fetch + texture
+    // decode is the biggest piece of a first visit, so warm it with the rest.
+    const live2d = name === "menu" ? warmLive2D() : Promise.resolve();
+    p = Promise.all([...urls.map(preloadImage), dynamicImages(name), live2d, CHUNKS[name]?.().catch(() => undefined)]).then(() => undefined);
     pending.set(name, p);
   }
   return p;

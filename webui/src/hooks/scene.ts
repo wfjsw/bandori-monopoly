@@ -11,6 +11,39 @@ export interface Crossfade<K> {
   fading: boolean;
 }
 
+// Is a scene transition in flight? Expensive work that would jank the fade
+// (Live2D's GL setup in particular) waits for this to go idle.
+let idle = true;
+const idleListeners = new Set<() => void>();
+
+function setIdle(v: boolean): void {
+  if (idle === v) return;
+  idle = v;
+  idleListeners.forEach((cb) => cb());
+}
+
+/** True when no scene cross-fade is running. */
+export function isTransitionIdle(): boolean {
+  return idle;
+}
+
+/** Resolves once no cross-fade is running, or after `maxWaitMs` regardless. */
+export function whenTransitionIdle(maxWaitMs = 600): Promise<void> {
+  if (idle) return Promise.resolve();
+  return new Promise((res) => {
+    const done = () => {
+      clearTimeout(timer);
+      idleListeners.delete(listener);
+      res();
+    };
+    const listener = () => {
+      if (idle) done();
+    };
+    const timer = setTimeout(done, maxWaitMs);
+    idleListeners.add(listener);
+  });
+}
+
 /**
  * Cross-fade between successive `key`s. The outgoing scene stays under the
  * fader for `outMs`, then `onSwap` runs and `shown` flips to the new key; the
@@ -50,6 +83,11 @@ export function useCrossfade<K>(
   // key object of the same scene must not cancel the in-flight fade.
   const pending = useRef<K | null>(null);
   const timers = useRef<{ swap: number; lift: number }>({ swap: 0, lift: 0 });
+
+  // Publish "a transition is running" for `whenTransitionIdle`.
+  useEffect(() => {
+    setIdle(!fading);
+  }, [fading]);
 
   useEffect(() => {
     if (key === null) return;
