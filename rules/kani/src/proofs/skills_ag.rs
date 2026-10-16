@@ -46,6 +46,7 @@ crate::host_subset!(skills_ag_dispatch {
     trig_target => arm_trig_target,
     count_marks_f => arm_count_marks_f,
     place_mark => arm_place_mark,
+    set_reverse | set_steps | set_resolve => arm_protocol_stub,
 });
 
 /// Install sparse 2-seat world + subset. Callers keep concrete seats.

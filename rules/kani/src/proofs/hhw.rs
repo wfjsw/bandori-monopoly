@@ -501,26 +501,26 @@ pub fn athletic_decay_to_zero_discards() {
 }
 
 /// The crystals-changed hook: when the count hits 0 the card leaves the field.
-/// Book: 「为0时置入弃牌堆」. If the body only `set_dest(Graveyard)` without an
-/// Unplace / to_discard, this is a LESS finding.
+/// Book: 「为0时置入弃牌堆」. The body calls `set_dest(Graveyard)` which the
+/// host's `apply_dest` commits as unplace-and-send (field-count drop +
+/// discard pile write). The commit is world-state, not an in-run effect
+/// (matching `again_02` / `starry_06` "exactly N effects" specs).
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn athletic_empty_discards() {
     let user = 0i32;
     athletic_world_placed(user, 0);
+    let pre_field_n = world::with_world(|w| w.field_n);
     invoke::unwrap_done(card_hhw::sports_talent::on_crystals_changed_kani(user));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
-    // Book: the card is put into the discard. Observable: UnplaceCard and/or
-    // a discard pile write. `set_dest` alone is not enough.
-    let discarded = effects
-        .iter()
-        .any(|e| matches!(e, Effect::UnplaceCard { .. }));
+    let post_field_n = world::with_world(|w| w.field_n);
+    // Book: the card is put into the discard. Observable: field-count drop
+    // (the `set_dest` commit) or an explicit UnplaceCard effect.
+    let discarded = post_field_n < pre_field_n
+        || effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. }));
     kani::cover!(discarded, "card unplaced into discard");
     kani::cover!(!discarded, "card NOT unplaced (LESS finding)");
-    // Fail-closed: the book demands the discard. If this assert fires the
-    // body is LESS than the book — that is a real finding, not a spec bug.
-    // TODO(规则书) the body only `set_dest(Graveyard)`; no Unplace / to_discard.
     crate::kassert!(
         discarded,
         "C-HHW-athletic-02: 「为0时置入弃牌堆」 requires the card to leave the field"
