@@ -297,12 +297,27 @@ fn gen_body_dispatch() {
                 let _ = writeln!(s, "    let _ = (entry_index, player);");
                 let _ = writeln!(s, "    fail_entry_oob({idx}, entry_index)");
             } else {
+                // Read the module source once to check for `NAME_kani` wrappers.
+                let mod_src = {
+                    let p = crate_dir(&rules_dir, crate_name)
+                        .join("src")
+                        .join(format!("{module}.rs"));
+                    std::fs::read_to_string(&p).unwrap_or_default()
+                };
                 s.push_str("    match entry_index {\n");
                 for (ei, body) in bodies.iter().enumerate() {
-                    let _ = writeln!(
-                        s,
-                        "        {ei} => {crate_name}::{module}::{body}_kani(player),"
-                    );
+                    // Self-healing: if `NAME_kani` is missing (a new On:: body
+                    // without its wrapper), fall back to calling the plain body
+                    // directly. The wrapper is an optimisation (direct call),
+                    // not a semantic requirement — the plain body has the same
+                    // signature. `wrapper_check` test still flags the gap.
+                    let wrapper = format!("{body}_kani");
+                    let target = if mod_src.contains(&format!("pub fn {wrapper}(")) {
+                        format!("{crate_name}::{module}::{wrapper}")
+                    } else {
+                        format!("{crate_name}::{module}::{body}")
+                    };
+                    let _ = writeln!(s, "        {ei} => {target}(player),");
                 }
                 let _ = writeln!(s, "        _ => fail_entry_oob({idx}, entry_index),");
                 s.push_str("    }\n");
