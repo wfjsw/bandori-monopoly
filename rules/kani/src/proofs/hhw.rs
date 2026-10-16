@@ -397,7 +397,7 @@ pub fn kkr_mutant_is_detected() {
 // ===========================================================================
 // C-HHW-athletic-01 -- 「将此卡放置于自己场上并放置3个奇迹水晶」
 // C-HHW-athletic-02 -- 「每回合结束时失去一个，为0时置入弃牌堆。」
-// Entry: `HHW:运动的天赋` / `On::Play` + `On::Hook(TurnEnd)` + crystals-changed
+// Entry: `HHW:运动的天赋` / `On::Play` + `On::Action(TurnEnd)` + crystals-changed
 // ===========================================================================
 
 /// Shared play body at a concrete seat. `user` ∈ {0, 1}.

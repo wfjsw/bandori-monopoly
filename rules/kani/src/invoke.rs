@@ -160,7 +160,8 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
         On::Play(_, _, f)
         | On::Counteract(_, _, _, f)
-        | On::Hook(_, _, _, f)
+        | On::Action(_, _, _, f)
+        | On::Filter(_, _, _, f)
         | On::Gate(_, _, _, f)
         | On::RollPlan(_, _, f)
         | On::AtEnd(_, _, f)
@@ -296,7 +297,7 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
         let hit = match (ktag, on) {
             (KindTag::Play, On::Play(..)) => true,
             (KindTag::Counteract, On::Counteract(..)) => true,
-            (KindTag::Hook, On::Hook(kinds, ..)) => {
+            (KindTag::Hook, On::Action(kinds, ..) | On::Filter(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
             (KindTag::Gate, On::Gate(..)) => true,
@@ -408,6 +409,8 @@ fn kind_tag(kind: &str) -> KindTag {
     const PLAY: (u8, u64, u64) = tag_key_const("Play");
     const COUNTERACT: (u8, u64, u64) = tag_key_const("Counteract");
     const HOOK: (u8, u64, u64) = tag_key_const("Hook");
+    const ACTION: (u8, u64, u64) = tag_key_const("Action");
+    const FILTER: (u8, u64, u64) = tag_key_const("Filter");
     const GATE: (u8, u64, u64) = tag_key_const("Gate");
     const AT_END: (u8, u64, u64) = tag_key_const("AtEnd");
     const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
@@ -416,7 +419,7 @@ fn kind_tag(kind: &str) -> KindTag {
     match tag_key(kind) {
         PLAY => KindTag::Play,
         COUNTERACT => KindTag::Counteract,
-        HOOK => KindTag::Hook,
+        HOOK | ACTION | FILTER => KindTag::Hook,
         GATE => KindTag::Gate,
         AT_END => KindTag::AtEnd,
         ROLL_PLAN => KindTag::RollPlan,
@@ -431,20 +434,20 @@ pub fn counteract_idx(idx: usize, player: i32) -> Asked {
     hook_idx(idx, "Counteract", "", player)
 }
 
-/// First `On::Hook` of card `idx`, optionally filtered by hook-kind name.
+/// First `On::Action` of card `idx`, optionally filtered by hook-kind name.
 #[inline(always)]
 pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
     hook_idx(idx, "Hook", hook_name, player)
 }
 
-/// First `On::Hook` of card `idx` matching `want`. **Integer-only** — no
+/// First `On::Action` of card `idx` matching `want`. **Integer-only** — no
 /// `&str` tags, so CBMC never lowers the dispatch to `memcmp` (the shave
 /// profile's remaining 10 memcmps were `match name { "PayAdd" => … }`).
 #[inline(always)]
 pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if let On::Hook(kinds, _, _, _) = on {
+        if let On::Action(kinds, _, _, _) | On::Filter(kinds, _, _, _) = on {
             // Zero-loop kind match (`iter().any` over a short slice unrolls
             // to the global bound under CBMC).
             let mut hit = false;
@@ -536,7 +539,7 @@ pub fn counteract(id: &str, player: i32) -> Asked {
     hook(id, "Counteract", "", player)
 }
 
-/// First `On::Hook` of `id`, optionally filtered by hook-kind name.
+/// First `On::Action` of `id`, optionally filtered by hook-kind name.
 pub fn hook_only(id: &str, hook_name: &str, player: i32) -> Asked {
     hook(id, "Hook", hook_name, player)
 }
@@ -735,7 +738,7 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), player_id)
 }
 
-/// `PP:[丸山彩]憧憬的前方` -- `On::Hook(PayAdd)`.
+/// `PP:[丸山彩]憧憬的前方` -- `On::Action(PayAdd)`.
 #[cfg(feature = "band-pp")]
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
     hook_kind_only_idx(

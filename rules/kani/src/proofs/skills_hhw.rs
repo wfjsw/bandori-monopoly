@@ -85,7 +85,7 @@ fn effects_of() -> ([Effect; 24], usize) {
 
 // ===========================================================================
 // C-HHW-kokoro-01 -- 「（1）开局时获得1000资金」
-// Entry: `skill:弦卷心:弦卷集团` / `On::Hook(TurnStartBefore)`
+// Entry: `skill:弦卷心:弦卷集团` / `On::Action(TurnStartBefore)`
 // Guard (single-source): `slot('skill.kasumiGroup.start') == 0`
 // ===========================================================================
 
@@ -189,7 +189,7 @@ pub fn kokoro_01_noop_when_latch_set() {
 
 // ===========================================================================
 // C-HHW-kokoro-02 -- 「（2）[经过]CiRCLE时额外获得1500资金」
-// Entry: `On::Hook(Pass)`; guard `actor == owner && is_start(tile.id)`
+// Entry: `On::Action(Pass)`; guard `actor == owner && is_start(tile.id)`
 // ===========================================================================
 
 /// Board: CiRCLE is 序号 #1 → 0-based index 0.
@@ -288,7 +288,7 @@ pub fn kokoro_02_mutant_is_detected() {
 
 // ===========================================================================
 // C-HHW-misaki-skill-01 -- 「每次经过"弦卷集团"（#29）格子后获得2火罐（初始0，上限2）」
-// Entry: `skill:奥泽美咲:另一个我` / `On::Hook(Pass)`
+// Entry: `skill:奥泽美咲:另一个我` / `On::Action(Pass)`
 // Guard: `actor == owner && tile.id == tile_named('弦卷集团')`
 // ===========================================================================
 
@@ -374,8 +374,8 @@ pub fn misaki_skill_01_mutant_is_detected() {
 // ===========================================================================
 // C-HHW-kaoru-01 -- 「每次[经过]或被[经过]时，若场上不存在[怪盗标记]，获得1火罐
 // （上限7）；若场上存在[怪盗标记]，则移除场上的一个[怪盗标记]」
-// Entry: `skill:濑田薰:梦幻的王子殿下` / `On::Hook(Pass)` (MINE) and
-// `On::Hook(PassTile)` (passed-by). The pot arm is the cheap half.
+// Entry: `skill:濑田薰:梦幻的王子殿下` / `On::Action(Pass)` (MINE) and
+// `On::Action(PassTile)` (passed-by). The pot arm is the cheap half.
 // ===========================================================================
 
 #[kani::proof]
@@ -394,7 +394,7 @@ pub fn kaoru_01_pot_arm_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    // `On::Hook(Pass)` with `card_sdk::pre::MINE`.
+    // `On::Action(Pass)` with `card_sdk::pre::MINE`.
     invoke::unwrap_done(skill_personas::kaoru_prince::on_pass_kani(owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
@@ -445,7 +445,7 @@ pub fn kaoru_01_mutant_is_detected() {
 // ===========================================================================
 // C-HHW-band-01 -- 「向他人的格子付款时可选择支付双倍价格，若如此做，记录该玩家
 // 并使此卡获得一个奇迹水晶。」
-// Entry: `skill:Hello, Happy World!:传播笑容` / `On::Hook(PayChoose)` (MINE)
+// Entry: `skill:Hello, Happy World!:传播笑容` / `On::Filter(PayChoose)` (MINE)
 // ===========================================================================
 
 #[kani::proof]

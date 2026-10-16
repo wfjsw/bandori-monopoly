@@ -848,7 +848,7 @@ pub fn first_accident_01_place_deck_draw_iff() {
 // C-PP-maya-inf-02 formula (host-independent piece) + body hook.
 // 「（1）[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡添加1个[奇迹水晶]，
 //  否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个[奇迹水晶]。」
-// The hook is `On::Hook(Drew)`. We invoke it directly with a placed card.
+// The hook is `On::Action(Drew)`. We invoke it directly with a placed card.
 // ===========================================================================
 
 #[kani::proof]
@@ -941,7 +941,7 @@ pub fn shine_again_01_formula() {
 // ===========================================================================
 // C-PP-eve-bushido-04
 // 「（1）[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）。」
-// Body: `On::Hook(Drew)` with guard `is_placed && trigger.player == player`.
+// Body: `On::Action(Drew)` with guard `is_placed && trigger.player == player`.
 // Isolation: card placed; trigger value > 0; no [共鸣].
 // NOTE: the Kani host's `add_counter_self` currently ignores the `max`
 // argument, so the cap-3 clamp is not modelled. The +1 increment is proved
@@ -1013,7 +1013,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
 // ===========================================================================
 // C-PP-guide-04
 // 「（2）回合结束时添加1个[奇迹水晶]。」
-// Body: `On::Hook(TurnEnd)` with guard `is_placed`.
+// Body: `On::Action(TurnEnd)` with guard `is_placed`.
 // ===========================================================================
 
 #[kani::proof]
@@ -1052,7 +1052,7 @@ pub fn guide_04_turn_end_crystal_iff() {
 // C-PP-dream-ahead-01
 // 「（1）[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每获得一个超出上限的
 //  [奇迹水晶]就为此卡的X加1（X初始0）。」
-// Body: `On::Hook(Drew)` guard `actor == owner && card.placed`.
+// Body: `On::Action(Drew)` guard `actor == owner && card.placed`.
 // Isolation: pre < 5 so the cap / overflow leg is not entered (overflow X
 // is a named counter the host models as a key; cap clamp is BLOCKED-HOST).
 // ===========================================================================

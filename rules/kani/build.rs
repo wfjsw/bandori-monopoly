@@ -459,7 +459,7 @@ fn parse_on_bodies(
             }
         }
         parts.push(inner[cur..].trim());
-        // Trailing comma in `On::Hook(…, body,)` leaves an empty last part —
+        // Trailing comma in `On::Action(…, body,)` leaves an empty last part —
         // take the last **non-empty** ident instead (class B: aya_with's
         // `at_start,` / `on_pay,` trailing commas made the dispatch emit
         // `fail_entry_oob` for every entry).

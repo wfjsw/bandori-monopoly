@@ -369,7 +369,7 @@ impl TriggerOverlay {
 // -------------------------------------------------------------------------
 
 pub mod src {
-    /// PP:[丸山彩]憧憬的前方 `On::Hook(PayAdd)`.
+    /// PP:[丸山彩]憧憬的前方 `On::Filter(PayAdd)`.
     pub const AYA_PAY_ADD: &str = "actor == owner && value > 0";
     /// A function-carrying guard (`is_start`).
     pub const IS_CIRCLE: &str = ruleset_core::guards::OWN_START;

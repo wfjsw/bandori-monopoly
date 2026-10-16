@@ -219,7 +219,7 @@ fn bend_world(user: i32) -> i32 {
 }
 
 /// Hook body: `bend` rewrites `pay_amount` to 1.5x when the user is a side.
-/// Entry 2 = On::Hook(PayMul) `bend`. Direct body call.
+/// Entry 2 = On::Filter(PayMul) `bend`. Direct body call.
 fn band_bend_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     let pre_amount = bend_world(user);

@@ -73,7 +73,7 @@ fn crystals_key() -> intern::NameId {
 // ===========================================================================
 // C-SUMIMI-band-02 -- rent bonus +100 per crystal
 // 「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。」
-// Entry: `On::Hook(PayMul)` on `skill:Sumimi:人气偶像组合`.
+// Entry: `On::Filter(PayMul)` on `skill:Sumimi:人气偶像组合`.
 // Convention: `crystals()` is the running instance's counter (host: keyed on
 // `trig_player`); the body admits when `trigger.target == owner` (money
 // flowing to this player — 「向其他人收费」).
