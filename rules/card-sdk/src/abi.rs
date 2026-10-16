@@ -536,7 +536,16 @@ use alloc::{string::String, vec::Vec};
 ///      non-filter kinds; the check runs at ruleset build (`On::check_kind_variant`).
 ///      Phase 1 keeps the old `fn(i32) -> Asked` body shape and the same host
 ///      dispatch path -- behaviour is identical to v72. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 73;
+/// v74: **pure Filter bodies**. `On::Filter` becomes
+///      `fn(player_id, value) -> i32`; `On::FilterFlag` is
+///      `fn(player_id, value) -> bool` (false = cancel/substitute);
+///      `On::FilterValue` is `fn(player_id, FilterValue) -> FilterValue` for
+///      BuyAssign / RollPlan. Bodies may not prompt or emit mutating ctx
+///      effects; the host folds the return. New filter kind
+///      `TriggerKind::RollValue = 102` is raised immediately before `RollAfter`
+///      for roll reshaping (RollAfter stays a pure Action event). SAVE_VERSION
+///      unchanged.
+pub const ABI_VERSION: i32 = 74;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1751,6 +1760,13 @@ impl TriggerKind {
     /// cancelling the rest of the turn. CEL-only, like [`Self::ActGate`].
     pub const PlayGate: Self = Self(101);
 
+    /// v74: **roll-value modifier** -- raised immediately before
+    /// [`Self::RollAfter`] with the same payload, for reshaping the face
+    /// (`fn(player_id, value) -> i32`). `RollAfter` stays a pure Action event
+    /// (dice already landed; a listener may log / latch / spend) and no longer
+    /// rewrites `t.value`. Filter-only.
+    pub const RollValue: Self = Self(102);
+
     /// The wire value, shared with every kind view.
     pub const fn as_i32(self) -> i32 {
         self.0
@@ -1786,6 +1802,7 @@ impl TriggerKind {
                 | Self::FlipEffect
                 | Self::TurnBonusTime
                 | Self::TurnBaseTime
+                | Self::RollValue
         )
     }
 
@@ -1896,6 +1913,7 @@ impl TriggerKind {
             99 => "turnBonusTime",
             100 => "turnBaseTime",
             101 => "playGate",
+            102 => "rollValue",
             26 => "26",  // ruleset-declared custom id
             73 => "73",  // ruleset-declared custom id
             74 => "74",  // ruleset-declared custom id
@@ -2008,6 +2026,7 @@ impl TriggerKind {
             "turnBonusTime" => Self(99),
             "turnBaseTime" => Self(100),
             "playGate" => Self(101),
+            "rollValue" => Self(102),
             _ => Self::None,
         }
     }
@@ -2226,12 +2245,54 @@ pub enum OnKind {
     /// `ctx::message` and returns a reply value. Does **not** flash the card
     /// (internal plumbing); the handler may log.
     Message = 8,
-    /// v73: `On::Filter(kinds, cond, guard, body)` -- a **value modifier** at
-    /// those modifier [`HookKind`]s (`TriggerKind::is_filter()`). Same shape
-    /// as [`Self::Action`] in Phase 1; Phase 2 tightens the body to a pure
-    /// value transform. The host dispatches Filter entries through the same
-    /// path as Action entries. Kinds must be filter kinds.
+    /// v73: `On::Filter` / `On::FilterFlag` / `On::FilterValue` -- a **value
+    /// modifier** at those modifier [`HookKind`]s (`TriggerKind::is_filter()`).
+    /// v74: the three shapes share this wire id (the host distinguishes by the
+    /// guest's return convention). Kinds must be filter kinds.
     Filter = 9,
+}
+
+/// Small typed payload for [`crate::On::FilterValue`] (BuyAssign / RollPlan).
+/// Unchanged fields keep their sentinel (`UNCHANGED`); the host applies only
+/// the fields the body rewrote. Pure: the body copies, tweaks, returns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FilterValue {
+    /// The integer being filtered (amount / price / roll / seconds / flip count).
+    pub value: i32,
+    /// BuyAssign: new owner (`UNCHANGED` / `-1` = bank / `>=0` = seat).
+    pub deal_owner: i32,
+    /// BuyAssign: house count (`UNCHANGED` keeps the deal's).
+    pub deal_houses: i32,
+    /// BuyAssign: mortgaged flag (`UNCHANGED` / 0 / 1).
+    pub deal_mortgaged: i32,
+    /// RollPlan: who rolls (`UNCHANGED` / `-1` = the mover / `>=0` = stand-in).
+    pub roller: i32,
+    /// RollPlan: base dice count / sides (sides 0 = a flat `count`).
+    pub base_count: i32,
+    pub base_sides: i32,
+    /// RollPlan: extra dice count / sides.
+    pub extra_count: i32,
+    pub extra_sides: i32,
+    /// RollPlan: step override (`UNCHANGED` keeps the roll; else exact count).
+    pub steps: i32,
+    /// RollPlan: walk direction (`UNCHANGED` / 0 = forward / 1 = reverse).
+    pub reverse: i32,
+    /// RollPlan: whether the move settles (`UNCHANGED` / 0 / 1).
+    pub resolve: i32,
+    /// RollPlan: unsigned-roll floor.
+    pub min_roll: i32,
+    /// RollPlan: pay / rent factor in milli (`UNCHANGED` / 0 = ×0 / 1000 = ×1).
+    pub pay_factor: i32,
+    pub rent_factor: i32,
+    /// RollPlan: stop-at / settle-tile / teleport-to tile (`UNCHANGED`).
+    pub stop_at: i32,
+    pub settle_tile: i32,
+    pub teleport_to: i32,
+}
+
+impl FilterValue {
+    /// Sentinel: leave the host's current field alone.
+    pub const UNCHANGED: i32 = i32::MIN;
 }
 
 impl OnKind {

@@ -161,12 +161,16 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
         On::Play(_, _, f)
         | On::Counteract(_, _, _, f)
         | On::Action(_, _, _, f)
-        | On::Filter(_, _, _, f)
         | On::Gate(_, _, _, f)
         | On::RollPlan(_, _, f)
         | On::AtEnd(_, _, f)
         | On::Settle(_, _, f)
         | On::Message(_, _, _, f) => *f,
+        // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
+        // through `filter_*_idx` / direct trampolines instead.
+        On::Filter(..) | On::FilterFlag(..) | On::FilterValue(..) => {
+            fail_no_kind("Filter (use filter_idx)")
+        }
     }
 }
 
@@ -298,7 +302,7 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
         let hit = match (ktag, on) {
             (KindTag::Play, On::Play(..)) => true,
             (KindTag::Counteract, On::Counteract(..)) => true,
-            (KindTag::Hook, On::Action(kinds, ..) | On::Filter(kinds, ..)) => {
+            (KindTag::Hook, On::Action(kinds, ..) | On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
             (KindTag::Gate, On::Gate(..)) => true,
@@ -448,7 +452,7 @@ pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
 pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if let On::Action(kinds, _, _, _) | On::Filter(kinds, _, _, _) = on {
+        if let On::Action(kinds, _, _, _) = on {
             // Zero-loop kind match (`iter().any` over a short slice unrolls
             // to the global bound under CBMC).
             let mut hit = false;
@@ -478,6 +482,67 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32
         }
     }
     fail_no_kind("Hook")
+}
+
+/// First `On::Filter` of card `idx` matching `want`; returns the transformed
+/// value (v74 pure body). **Integer-only** kind match.
+#[inline(always)]
+pub fn filter_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::HookKind,
+    player: i32,
+    value: i32,
+) -> i32 {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::Filter(kinds, _, _, run) = on {
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == want {
+                    hit = true;
+                }
+            }
+            if hit {
+                return run(player, value);
+            }
+        }
+    }
+    fail_no_kind("Filter")
+}
+
+/// First `On::FilterFlag` of card `idx` matching `want` (true = keep).
+#[inline(always)]
+pub fn filter_flag_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::HookKind,
+    player: i32,
+    value: i32,
+) -> bool {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::FilterFlag(kinds, _, _, run) = on {
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == want {
+                    hit = true;
+                }
+            }
+            if hit {
+                return run(player, value);
+            }
+        }
+    }
+    fail_no_kind("FilterFlag")
 }
 
 /// Skill entry: alias of [`play_idx`].

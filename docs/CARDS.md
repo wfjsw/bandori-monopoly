@@ -62,43 +62,82 @@ is never dispatched.
 * names are arguments, not text: `Msg::new(key!("x")).player_id("who", s).tile("tile", t)`
   -- the client resolves them to display names.
 
-## Action vs Filter (ABI v73)
+## Action vs Filter (ABI v73/v74)
 
 `On::Hook` is gone (no alias). Field hooks split the way WordPress splits
 `do_action` / `apply_filters`:
 
-| variant | role | may emit effects? | may rewrite the triggering value? |
+| variant | body signature | role | may emit effects? |
 |---|---|---|---|
-| `On::Action(kinds, pre, guard, body)` | **event reaction** | yes (`ctx::gain`, log, place, …) | no |
-| `On::Filter(kinds, pre, guard, body)` | **value modifier** at a modifier-pipeline stage | not in Phase 2 (pure transform) | yes (`set_pay_amount` / `set_price` / `set_move_roll` / deal rewrite / …) |
+| `On::Action(kinds, pre, guard, body)` | `fn(i32) -> Asked` | **event reaction** | yes (`ctx::gain`, log, place, …) |
+| `On::Filter(kinds, pre, guard, body)` | `fn(i32, value: i32) -> i32` | **integer value transform** | no (pure) |
+| `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / substitute decision** | no (pure) |
+| `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **deal / move-plan rewrite** | no (pure) |
+
+### Why three Filter shapes (the minimal clean set)
+
+Integer pipelines (pay amount, buy price, turn-clock seconds, flip count,
+roll face) are `fn(player_id, value) -> i32` -- one number in, one number out.
+Cancel stages (`PayTotalCancel`, `ChargePaying` substitute) are booleans:
+`false` drops the stage. `PayChoose` may either rewrite the amount
+(`On::Filter`) or decline (`On::FilterFlag`); a card that does both is
+**split into two entries**.
+
+`BuyAssign` and `RollPlan` do not carry a single integer -- they rewrite a
+small record (deal owner/houses/mortgaged; roller/dice/steps/…). Those use
+`On::FilterValue` and a `FilterValue` struct (`rules/card-sdk/src/abi.rs`).
+Fields the body leaves as `FilterValue::UNCHANGED` (`i32::MIN`) are not
+written back.
+
+### Purity
+
+Filter bodies may not prompt and may not call mutating `ctx` effects
+(`gain` / `draw` / `place_card` / `set_dest` / `set_slot` / `inc_slot`).
+`card_sdk::pure::refuse_if_filter` debug-asserts those. They **may** `ctx::log`
+(the why-line of the effect-applied log-why rule). A fused hook (value rewrite
++ gain/place/…) is split into a Filter half and an `On::Action` half on the
+appropriate event (e.g. `PayAfter`); shared data rides the trigger payload or
+a slot written by the Action.
+
+### Filter kinds
 
 `TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
-source of truth** for which kinds are filter kinds. Today (17 kinds):
+source of truth**. Today (18 kinds):
 
 * payment amount stages -- `PayChoose`, `PayAdd`, `PayMul`, `PayAt`,
   `PayTotalAdd`, `PayTotalMul`, `PayTotalCancel`
 * buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
-* roll / plan shaping -- `RollPlan`, `MoveRoll`
+* roll / plan shaping -- `RollPlan`, `MoveRoll`, `RollValue` (v74)
 * flip count -- `FlipEffect`
 * charge-cost substitute -- `ChargePaying` (ruleset-core kind 78)
 
-Everything else that used to be `On::Hook` is `On::Action` (turn/pass/draw/
-settle/buy/build/counter/… event points, including the custom ruleset-core
-kinds `PassRewardAffected` / `FireSpent` / `SkillUsed` / `HouseAdded`).
+`RollValue` (id 102) is raised **immediately before** `RollAfter` with the
+same payload: the pure roll-reshape stage. `RollAfter` stays an Action event
+(dice already landed) and no longer rewrites the face.
 
-**Kind/variant agreement is a ruleset-build error:** a `On::Filter` may only
-list filter kinds and a `On::Action` only non-filter kinds
+Everything else is `On::Action` (turn/pass/draw/settle/buy/build/counter/…
+event points, including the custom ruleset-core kinds `PassRewardAffected` /
+`FireSpent` / `SkillUsed` / `HouseAdded`).
+
+**Kind/variant agreement is a ruleset-build error:** a Filter* may only list
+filter kinds and a `On::Action` only non-filter kinds
 (`On::check_kind_variant`, enforced in `rt::manifest` and the host loader).
-A kind list that mixes the two must be **split into two entries** (same body
-is fine -- it can `match trigger::kind()`); three shipped cards were split
-that way in v73 (`PP:不要背负期待`, `Mujica:#J11`, `通用:[衍生]FEVER!`).
+A kind list that mixes the two must be **split into two entries**.
 
-Phase 1 keeps the old `fn(i32) -> Asked` body shape and the same host dispatch
-path, so behaviour is identical to ABI v72. Phase 2 will tighten Filter bodies
-to a pure value transform and split fused hooks (e.g.
-`skill-personas/kaede_support.rs` `split_rent`: `set_pay_amount` + `ctx::gain`
-→ Filter + Action on `PayAfter`).
+### Host application order
+
+The host raises the pipeline stages in rulebook order and folds each stage's
+return before the next raise, within a stage in placement order:
+
+* pay: `effect` declaration → `payTotalAdd` → `payTotalMul` → `payTotalCancel`
+  → `payAdd` → `payMul` → `payChoose` → `payAt` → `pay` settlement
+* buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
+* roll: `RollPlan` → dice → `RollValue` → `RollAfter` → `MoveRoll`
+
+Money rounds **up to a multiple of 10 once**, after every add/mul modifier
+has rewritten the running figure (user ruling 2026-10-15). An amount no
+modifier touched stays exactly as the base formula produced it.
 
 **Deferred (not filter today).** The pure decision gates `AbnormalGuard`,
 `ImmuneAll`, `Untargetable`, `Redirect`, `BuyGate` fold `set_cancelled` /

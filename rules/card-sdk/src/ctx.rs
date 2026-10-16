@@ -505,6 +505,7 @@ pub fn money_of(player_id: i32) -> i32 {
 /// the amount that actually moved (0 = cancelled).
 #[cfg_attr(kani, inline(always))]
 pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::gain");
     let (p, l) = mj(src);
     asked(unsafe { sys::gain(player_id, amount, p, l) })
 }
@@ -670,6 +671,7 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 /// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
 /// does; the body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::draw");
     #[cfg(kani)]
     {
         // Zero-loop (card-pool draws are 1..=3; a `for _ in 0..n` unrolls to
@@ -907,6 +909,7 @@ pub fn shuffle_into_deck(player_id: i32, hand: bool, discard: bool) -> i32 {
 /// This card stays in play at the player.
 #[cfg_attr(kani, inline(always))]
 pub fn place_card(player_id: i32, card: &str, note: &Msg) -> i32 {
+    crate::pure::refuse_if_filter("ctx::place_card");
     place_card_at(player_id, card, note)
 }
 
@@ -924,6 +927,7 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
 /// Where this card goes afterwards (see [`Dest`]). For a
 /// play it is the hand card's fate; for a field effect, the instance's.
 pub fn set_dest(dest: Dest) {
+    crate::pure::refuse_if_filter("ctx::set_dest");
     unsafe { sys::set_dest(dest as i32) }
 }
 
@@ -1498,6 +1502,7 @@ pub mod state {
 
     /// Declare the bounds a consumer may enforce. Stored, not applied.
     pub fn set_bounds(player_id: i32, key: &str, min: i32, max: i32) {
+        crate::pure::refuse_if_filter("plan::set_bounds");
         set_field(player_id, key, MIN, min);
         set_field(player_id, key, MAX, max);
     }
@@ -1525,6 +1530,7 @@ pub fn slot(player_id: i32, key: &str) -> i32 {
 
 #[cfg_attr(kani, inline(always))]
 pub fn set_slot(player_id: i32, key: &str, value: i32) {
+    crate::pure::refuse_if_filter("ctx::set_slot");
     let (p, l) = s(key);
     unsafe { sys::set_slot(player_id, p, l, value) }
 }
@@ -1540,6 +1546,7 @@ pub fn set_persona(player_id: i32, name: &str) {
 
 #[cfg_attr(kani, inline(always))]
 pub fn inc_slot(player_id: i32, key: &str, by: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::inc_slot");
     let (p, l) = s(key);
     unsafe { sys::inc_slot(player_id, p, l, by) }
 }

@@ -759,8 +759,12 @@ impl Cx<'_> {
                         Some(n) => n,
                         None => self.roll_tables(&plan),
                     };
-                    let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
+                    let t = raise!(self, "rollValue", i, @m plan, value = plan.roll)?;
                     plan.roll = t.value.max(0);
+                    let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
+                    if t.value != plan.roll {
+                        plan.roll = t.value.max(0);
+                    }
                     let t = raise!(self, "moveRoll", i, @m plan, value = plan.roll)?;
                     plan.roll = t.value.max(0);
                     if let Some(steps) = self.w.hidden[i].next_steps.take() {
@@ -1233,11 +1237,19 @@ impl Cx<'_> {
                     Some(n) => n,
                     None => self.roll_tables(&m),
                 };
-                // `rollAfter` (Fx) runs on the fresh roll, *before* the moveRoll
-                // counteraction window; a field card may rewrite it (`set_move_roll`),
-                // which is how a stored boost lands.
-                let t = raise!(self, "rollAfter", i, @m m, value = m.roll)?;
+                // `rollValue` (v74) is the pure roll-reshape stage; `rollAfter`
+                // is the Action event on the landed face. A field card rewrites
+                // the face at `rollValue` (`fn(player_id, value) -> i32`), which
+                // is how a stored boost lands; `rollAfter` listeners only react.
+                let t = raise!(self, "rollValue", i, @m m, value = m.roll)?;
                 m.roll = t.value.max(0);
+                let t = raise!(self, "rollAfter", i, @m m, value = m.roll)?;
+                // v74: `rollAfter` no longer rewrites the face (it is an Action);
+                // keep the readback so a counteraction on the same window still
+                // lands, but a pure Action body leaves `t.value` untouched.
+                if t.value != m.roll {
+                    m.roll = t.value.max(0);
+                }
                 let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
                 // A counteraction may have rerolled the dice: the face the walk uses is
                 // the one left on the trigger.

@@ -185,6 +185,8 @@ pub fn on(
         (On::Counteract(_, _, guard, _), export::OP_GUARD)
         | (On::Action(_, _, guard, _), export::OP_GUARD)
         | (On::Filter(_, _, guard, _), export::OP_GUARD)
+        | (On::FilterFlag(_, _, guard, _), export::OP_GUARD)
+        | (On::FilterValue(_, _, guard, _), export::OP_GUARD)
         | (On::Gate(_, _, guard, _), export::OP_GUARD)
         | (On::RollPlan(_, guard, _), export::OP_GUARD)
         | (On::AtEnd(_, guard, _), export::OP_GUARD)
@@ -210,10 +212,45 @@ pub fn on(
             },
             None => 0,
         },
+        // v74: pure Filter bodies. The host reads `trigger::value()` in,
+        // we return the transformed figure (or 0/1 for a flag), and the
+        // wrapper writes it back through the existing `set_*` imports so the
+        // raise site's `t.value` / `b.price` readback is unchanged.
+        (On::Filter(_, _, _, run), _) => {
+            let v_in = crate::ctx::trigger::value();
+            let v_out = {
+                let _p = crate::pure::enter();
+                run(player_id, v_in)
+            };
+            if v_out != v_in {
+                crate::ctx::trigger::set_pay_amount(v_out);
+                crate::ctx::trigger::set_price(v_out);
+                crate::ctx::trigger::set_move_roll(v_out);
+            }
+            0
+        }
+        (On::FilterFlag(_, _, _, run), _) => {
+            let keep = {
+                let _p = crate::pure::enter();
+                run(player_id, crate::ctx::trigger::value())
+            };
+            if !keep {
+                crate::ctx::trigger::set_cancelled();
+            }
+            0
+        }
+        (On::FilterValue(_, _, _, run), _) => {
+            let input = read_filter_value();
+            let out = {
+                let _p = crate::pure::enter();
+                run(player_id, input)
+            };
+            write_filter_value(out);
+            0
+        }
         (On::Counteract(_, _, _, run), _)
         | (On::Play(_, _, run), _)
         | (On::Action(_, _, _, run), _)
-        | (On::Filter(_, _, _, run), _)
         | (On::Gate(_, _, _, run), _)
         | (On::AtEnd(_, _, run), _)
         | (On::Settle(_, _, run), _)
@@ -224,6 +261,95 @@ pub fn on(
             // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.
             Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
         },
+    }
+}
+
+/// Snapshot the fields a [`crate::abi::FilterValue`] body may rewrite.
+/// Fields with no cheap getter start as `UNCHANGED`.
+fn read_filter_value() -> crate::abi::FilterValue {
+    use crate::abi::FilterValue;
+    use crate::ctx;
+    FilterValue {
+        value: ctx::trigger::value(),
+        deal_owner: ctx::trigger::deal_owner(),
+        deal_houses: ctx::trigger::deal_houses(),
+        deal_mortgaged: if ctx::trigger::deal_mortgaged() { 1 } else { 0 },
+        roller: FilterValue::UNCHANGED,
+        base_count: FilterValue::UNCHANGED,
+        base_sides: FilterValue::UNCHANGED,
+        extra_count: FilterValue::UNCHANGED,
+        extra_sides: FilterValue::UNCHANGED,
+        steps: ctx::plan::steps(),
+        reverse: FilterValue::UNCHANGED,
+        resolve: if ctx::plan::resolve() { 1 } else { 0 },
+        min_roll: FilterValue::UNCHANGED,
+        pay_factor: FilterValue::UNCHANGED,
+        rent_factor: FilterValue::UNCHANGED,
+        stop_at: ctx::plan::stop_at(),
+        settle_tile: FilterValue::UNCHANGED,
+        teleport_to: FilterValue::UNCHANGED,
+    }
+}
+
+/// Apply a [`crate::abi::FilterValue`] the body returned. Only fields the
+/// body left non-`UNCHANGED` are written.
+fn write_filter_value(v: crate::abi::FilterValue) {
+    use crate::abi::FilterValue;
+    use crate::ctx;
+    const U: i32 = FilterValue::UNCHANGED;
+    if v.value != U {
+        ctx::trigger::set_pay_amount(v.value);
+        ctx::trigger::set_price(v.value);
+        ctx::trigger::set_move_roll(v.value);
+    }
+    if v.deal_owner != U {
+        ctx::trigger::set_deal_owner(v.deal_owner);
+    }
+    if v.deal_houses != U {
+        ctx::trigger::set_deal_houses(v.deal_houses);
+    }
+    if v.deal_mortgaged != U {
+        ctx::trigger::set_deal_mortgaged(v.deal_mortgaged != 0);
+    }
+    if v.roller != U {
+        ctx::plan::set_roller(v.roller);
+    }
+    if v.base_count != U || v.base_sides != U {
+        // set_base_dice takes both; fill the other from the snapshot's current
+        // value when the body left it unchanged (0 sides = flat count).
+        let (c, s) = (v.base_count, v.base_sides);
+        ctx::plan::set_base_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
+    }
+    if v.extra_count != U || v.extra_sides != U {
+        let (c, s) = (v.extra_count, v.extra_sides);
+        ctx::plan::add_extra_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
+    }
+    if v.steps != U {
+        ctx::plan::set_steps(v.steps);
+    }
+    if v.reverse != U {
+        ctx::plan::set_reverse(v.reverse != 0);
+    }
+    if v.resolve != U {
+        ctx::plan::set_resolve(v.resolve != 0);
+    }
+    if v.min_roll != U {
+        ctx::plan::set_min_roll(v.min_roll);
+    }
+    if v.pay_factor != U {
+        ctx::plan::set_pay_factor(v.pay_factor);
+    }
+    if v.rent_factor != U {
+        ctx::plan::set_rent_factor(v.rent_factor);
+    }
+    if v.stop_at != U {
+        ctx::plan::set_stop_at(v.stop_at);
+    }
+    if v.settle_tile != U {
+        ctx::plan::set_settle_tile(v.settle_tile);
+    }
+    if v.teleport_to != U {
+        ctx::plan::set_teleport_to(v.teleport_to);
     }
 }
 

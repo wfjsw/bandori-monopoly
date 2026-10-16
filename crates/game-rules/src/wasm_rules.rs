@@ -6295,7 +6295,7 @@ impl<M: CardModules> RulesBridge<M> {
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
         trigger_kind(t.kind),
-        TriggerKind::MoveRoll | TriggerKind::Roll | TriggerKind::RollAfter
+        TriggerKind::MoveRoll | TriggerKind::Roll | TriggerKind::RollAfter | TriggerKind::RollValue
     );
     // Only a move trigger carries a roll; `paid`/`settle` carry value as an
     // amount, which must not read as a phantom move. `RollAfter` is the
@@ -8509,6 +8509,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::Drawn
             | TriggerKind::PayAfter
             | TriggerKind::RollAfter
+            | TriggerKind::RollValue
             | TriggerKind::CardPlayed
             | TriggerKind::Targeted
             | TriggerKind::PayChoose
@@ -8694,6 +8695,7 @@ mod tests {
             "passTile",
             "payAfter",
             "rollAfter",
+            "rollValue",
             "cardPlayed",
             "targeted",
             "payChoose",

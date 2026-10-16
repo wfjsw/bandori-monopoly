@@ -73,6 +73,7 @@ pub type Asked = Result<(), Prompt>;
 
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
 pub mod ctx;
+pub mod pure;
 
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
 #[doc(hidden)]
@@ -511,15 +512,41 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
-    /// A **value modifier** at these modifier hook kinds (pay/buy/turn-clock/
-    /// roll-plan/flip stages). Same shape as [`On::Action`] for now; Phase 2
-    /// tightens the body to a pure value transform. Kinds must be filter
-    /// kinds ([`abi::TriggerKind::is_filter`] == true).
+    /// **Integer value transform** (ABI v74). Body is
+    /// `fn(player_id, value) -> i32` -- pure: no prompts, no `ctx::gain`,
+    /// no plan/deal writes. The host folds the return into the running figure
+    /// (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds).
+    /// Kinds must be filter kinds ([`abi::TriggerKind::is_filter`] == true)
+    /// whose payload is an integer: PayAdd / PayMul / PayAt / PayTotalAdd /
+    /// PayTotalMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
+    /// FlipEffect / RollValue.
     Filter(
         &'static [abi::HookKind],
         &'static str,
         Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
+        fn(player_id: i32, value: i32) -> i32,
+    ),
+    /// **Boolean decision** (ABI v74). Body is `fn(player_id, value) -> bool`
+    /// -- pure. `false` cancels / substitutes the pipeline stage.
+    /// Kinds: PayTotalCancel (false = drop the command), ChargePaying
+    /// (false = substitute the fire-pot cost), PayChoose (false = cancel the
+    /// payment). A PayChoose that *also* rewrites the amount is split into
+    /// [`On::Filter`] (amount) plus this variant (cancel).
+    FilterFlag(
+        &'static [abi::HookKind],
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32, value: i32) -> bool,
+    ),
+    /// **Typed struct rewrite** (ABI v74). Body is
+    /// `fn(player_id, v: FilterValue) -> FilterValue` -- pure.
+    /// Kinds: BuyAssign (deal owner/houses/mortgaged) and RollPlan
+    /// (move-plan shaping). See [`abi::FilterValue`].
+    FilterValue(
+        &'static [abi::HookKind],
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32, v: abi::FilterValue) -> abi::FilterValue,
     ),
     /// A question posed to this placed card at declaration or at resolution.
     /// Same shape as [`On::Action`]: the condition / residual guard decide
@@ -593,6 +620,8 @@ impl On {
             On::Counteract(k, _, g, r) => On::Counteract(k, pre, g, r),
             On::Action(k, _, g, r) => On::Action(k, pre, g, r),
             On::Filter(k, _, g, r) => On::Filter(k, pre, g, r),
+            On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
+            On::FilterValue(k, _, g, r) => On::FilterValue(k, pre, g, r),
             On::Gate(k, _, g, r) => On::Gate(k, pre, g, r),
             On::RollPlan(_, g, r) => On::RollPlan(pre, g, r),
             On::AtEnd(_, g, r) => On::AtEnd(pre, g, r),
@@ -608,6 +637,8 @@ impl On {
             On::Counteract(k, pre, _, r) => On::Counteract(k, pre, None, r),
             On::Action(k, pre, _, r) => On::Action(k, pre, None, r),
             On::Filter(k, pre, _, r) => On::Filter(k, pre, None, r),
+            On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
+            On::FilterValue(k, pre, _, r) => On::FilterValue(k, pre, None, r),
             On::Gate(k, pre, _, r) => On::Gate(k, pre, None, r),
             On::RollPlan(pre, _, r) => On::RollPlan(pre, None, r),
             On::AtEnd(pre, _, r) => On::AtEnd(pre, None, r),
@@ -625,6 +656,8 @@ impl On {
             On::Counteract(_, _, g, _)
             | On::Action(_, _, g, _)
             | On::Filter(_, _, g, _)
+            | On::FilterFlag(_, _, g, _)
+            | On::FilterValue(_, _, g, _)
             | On::Gate(_, _, g, _)
             | On::RollPlan(_, g, _)
             | On::AtEnd(_, g, _)
@@ -642,6 +675,8 @@ impl On {
             On::Counteract(_, _, g, _)
             | On::Action(_, _, g, _)
             | On::Filter(_, _, g, _)
+            | On::FilterFlag(_, _, g, _)
+            | On::FilterValue(_, _, g, _)
             | On::Gate(_, _, g, _)
             | On::RollPlan(_, g, _)
             | On::AtEnd(_, g, _)
@@ -658,6 +693,8 @@ impl On {
             | On::Counteract(_, pre, _, _)
             | On::Action(_, pre, _, _)
             | On::Filter(_, pre, _, _)
+            | On::FilterFlag(_, pre, _, _)
+            | On::FilterValue(_, pre, _, _)
             | On::Gate(_, pre, _, _)
             | On::RollPlan(pre, _, _)
             | On::AtEnd(pre, _, _)
@@ -672,6 +709,8 @@ impl On {
             On::Counteract(..) => abi::OnKind::Counteract,
             On::Action(..) => abi::OnKind::Action,
             On::Filter(..) => abi::OnKind::Filter,
+            On::FilterFlag(..) => abi::OnKind::Filter,
+            On::FilterValue(..) => abi::OnKind::Filter,
             On::Gate(..) => abi::OnKind::Gate,
             On::AtEnd(..) => abi::OnKind::AtEnd,
             On::RollPlan(..) => abi::OnKind::RollPlan,
@@ -685,9 +724,15 @@ impl On {
     /// mismatched kind code, or `Ok(())`. Enforced at ruleset build; see also
     /// the unit tests in [`abi::TriggerKind::is_filter`].
     pub fn check_kind_variant(&self) -> Result<(), i32> {
-        let want_filter = matches!(self, On::Filter(..));
+        let want_filter = matches!(
+            self,
+            On::Filter(..) | On::FilterFlag(..) | On::FilterValue(..)
+        );
         match self {
-            On::Action(kinds, ..) | On::Filter(kinds, ..) => {
+            On::Action(kinds, ..)
+            | On::Filter(kinds, ..)
+            | On::FilterFlag(kinds, ..)
+            | On::FilterValue(kinds, ..) => {
                 for k in *kinds {
                     let code = k.as_i32();
                     if abi::TriggerKind::from_i32(code).is_filter() != want_filter {
@@ -708,6 +753,8 @@ impl On {
             On::Counteract(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             On::Action(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             On::Filter(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::FilterFlag(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::FilterValue(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             On::Gate(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             // Message names travel as the manifest's `triggers` string list
             // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
@@ -734,6 +781,9 @@ mod tests {
     fn body(_: i32) -> Asked {
         Ok(())
     }
+    fn fbody(_p: i32, v: i32) -> i32 {
+        v
+    }
 
     #[test]
     fn is_filter_set_matches_docs() {
@@ -755,6 +805,7 @@ mod tests {
             TriggerKind::FlipEffect,
             TriggerKind::TurnBonusTime,
             TriggerKind::TurnBaseTime,
+            TriggerKind::RollValue,
         ] {
             assert!(k.is_filter(), "expected filter kind {:?}", k.as_str());
         }
@@ -776,11 +827,11 @@ mod tests {
 
     #[test]
     fn kind_variant_agreement() {
-        let filter_ok = On::Filter(&[TriggerKind::PayAdd], "", None, body);
+        let filter_ok = On::Filter(&[TriggerKind::PayAdd], "", None, fbody);
         assert!(filter_ok.check_kind_variant().is_ok());
         let action_ok = On::Action(&[TriggerKind::TurnEnd], "", None, body);
         assert!(action_ok.check_kind_variant().is_ok());
-        let filter_bad = On::Filter(&[TriggerKind::TurnEnd], "", None, body);
+        let filter_bad = On::Filter(&[TriggerKind::TurnEnd], "", None, fbody);
         assert_eq!(
             filter_bad.check_kind_variant(),
             Err(TriggerKind::TurnEnd.as_i32())
