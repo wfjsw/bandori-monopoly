@@ -82,7 +82,7 @@ Tile bodies (`rules/tiles/src/*`, `On::Settle`): `tile:property` / `tile:ring`
 = the property default (purchase / build / rent / force-buy);
 `tile:agent` = the agent sweep; `tile:circle` / `tile:edogawa` = the landing
 draw; `tile:event` = draw + event. `tile:circle` also has a **Pass entry**
-(`On::Hook(&[HookKind::PassTile])`) for the [经过] CiRCLE reward — that one is
+(`On::Action(&[HookKind::PassTile])`) for the [经过] CiRCLE reward — that one is
 a 经过 effect and correctly outside the settle.
 
 ## 3. Inventory — every rule on a settle-adjacent kind

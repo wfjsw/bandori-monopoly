@@ -111,7 +111,7 @@ for symmetry (its TurnStart/TurnEnd 2→1→0 dance lives in `play.rs` today).
 | bind once to | `BOARD_OWNER` (`-1`), `tile = -1` | same |
 | bind path | `game_core::data::mark_rule_ids` -> `bind_tiles` | sibling `status_rule_ids`, same path |
 | owns | tile [CP点] units of its named counter | the status layers on players |
-| talks via | `On::Message`, `On::Hook` | `On::Hook` (+ `On::Message` for grants) |
+| talks via | `On::Message`, `On::Action` | `On::Action` (+ `On::Message` for grants) |
 | cards never special-case it | yes | yes |
 
 Memory rulings enforced here:
@@ -192,7 +192,7 @@ rules/status/
   src/no_hand.rs
 ```
 
-Each host is a `CardDef` (`card_sdk::CardDef`) with `On::Hook` /
+Each host is a `CardDef` (`card_sdk::CardDef`) with `On::Action` /
 `On::Message` entries quoting its passage. Bound once via a new
 `game_core::data::status_rule_ids()` (sibling of `mark_rule_ids`), appended
 to the same `bind_tiles` loop that places `mark:*` (idempotent, `tile = -1`,

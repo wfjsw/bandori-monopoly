@@ -48,7 +48,7 @@ is **AST-derived IR**.
 Write the CEL string exactly as today:
 
 ```rust
-On::Hook(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
+On::Filter(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
 ```
 
 Then, to prove it under Kani:
@@ -299,7 +299,7 @@ them): `move.*`, `plan_fixed_roll`, `trigger_card`, `counter_name`,
 
 | guard | card / shape | evidence |
 |---|---|---|
-| `"actor == owner && value > 0"` | PP:[丸山彩]憧憬的前方 `On::Hook(PayAdd)` | in the generated table; `money_shave.rs` evaluates it under symbolic context (no `assume`); `wrong_guard.rs` shows `value >= 0` fails the iff |
+| `"actor == owner && value > 0"` | PP:[丸山彩]憧憬的前方 `On::Filter(PayAdd)` | in the generated table; `money_shave.rs` evaluates it under symbolic context (no `assume`); `wrong_guard.rs` shows `value >= 0` fails the iff |
 | `"actor == owner && is_circle(tile.id)"` | function (`is_circle`) | in the generated table; `pilot_guards.rs` truth table |
 | `"actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"` | chain/kind | in the generated table; `pilot_guards.rs` truth table |
 

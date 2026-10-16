@@ -228,7 +228,7 @@ the attributes above) or write `#[kani::proof]` directly like the pilots.
 > 「（1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时
 > 将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。」
 
-**Card:** `PP:[丸山彩]憧憬的前方` — `On::Hook(PayAdd)` (unmodified).
+**Card:** `PP:[丸山彩]憧憬的前方` — `On::Filter(PayAdd)` (unmodified).
 **Host pre** (`value > 0`) is the **single-source guard** `"actor == owner && value > 0"`.
 Under Kani it is evaluated via the lowered IR (`guard_id!` + `guard!`) —
 **never** `assume`d. **Isolation:** no `PP:[衍生]共鸣` in hand so clause (2)’s

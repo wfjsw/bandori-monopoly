@@ -51,7 +51,7 @@ per-card probes.
 | family | decls | distinct fns | entry | where |
 |---|---|---|---|---|
 | counteract guards | 51 | 50 (`can_counteract`×48, `can_counteract2`, `can_counter_fire`, `can_negate`) | `On::Counteract` | cards + `tae_police.rs:87` |
-| hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Hook` | cards, skills, events, tiles |
+| hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Action` | cards, skills, events, tiles |
 | play gates | 97 of 201 `On::Play` (`None`×104) | `cant_play`×62 + `can_use`×19 + 16 one-offs | `On::Play(Some(..))` | cards |
 | skill usability | (in play gates) | `can_use` family ×35 | `On::Play` | skills/ |
 | gates / settle / rollplan | no guard fn (body only) | — | `On::Gate`/`Settle`/`RollPlan` | tiles, cards |
@@ -274,7 +274,7 @@ table. Adding a name never edits their bodies.
 ### 4.2c Window variables per entry kind (ABI v49)
 
 `On::Gate` / `On::AtEnd` / `On::RollPlan` / `On::Settle` carry the same
-`pre` + residual-guard pair as `On::Hook` (v49), so their conditions see the
+`pre` + residual-guard pair as `On::Action` (v49), so their conditions see the
 §4.2 schema. The window is built with `fill_window` from the **trigger / context
 the entry is dispatched on**; the candidate is `owner` = the entry's
 `player_id`. What is meaningful per kind (the rest of the schema still binds,
@@ -288,7 +288,7 @@ reading its default / sentinel):
 | `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.main` | `actor`, `target`, `tile.*`, `move.main`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
 | `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
 
-A `CounterChanged` hook (`On::Hook(&[HookKind::CounterChanged], …)`, wire
+A `CounterChanged` hook (`On::Action(&[HookKind::CounterChanged], …)`, wire
 names `counterChanged`|`crystalsChanged`|`cpChanged`) sees: `actor` = the
 owner of the instance whose counter changed (board-owned instances read
 `-1`), `target` = `-1` (not seat-scoped -- the counter lives on a card, not
@@ -681,9 +681,9 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 
 ### 9.1 What landed
 
-**G0 — surface.** `On::Counteract` / `On::Hook` / `On::Play` (the guarded
+**G0 — surface.** `On::Counteract` / `On::Action` / `On::Play` (the guarded
 entries) carry a `pre: &'static str` condition immediately before the residual
-guard (`On::Counteract(kinds, pre, guard, body)`, `On::Hook(kinds, pre, guard,
+guard (`On::Counteract(kinds, pre, guard, body)`, `On::Action(kinds, pre, guard,
 body)`, `On::Play(pre, gate, body)`); `""` = none. `On::pre(..)` is
 the const builder and `card_sdk::pre::MINE` (`actor == owner`) the sugar.
 `ManifestOn` gains `pre: Option<String>` (the CEL source) and `ABI_VERSION`

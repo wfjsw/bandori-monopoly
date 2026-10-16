@@ -10,7 +10,7 @@ The same authoring shape covers the other rule categories: board tiles
 (`rules/tiles`, [TILES.md](TILES.md)), tile marks (`rules/tile_marks`, `mark:*`
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
-the same `On::` table -- `On::Play` for what happens on draw, `On::Hook` for
+the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
 what runs while it is active, `On::AtEnd` for expiry.
 
 ## How a card runs
@@ -34,7 +34,7 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     On::Play("", None, press),
     // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
     // On::Counteract(&[ChainKind::Pay], "", guard, counteract),  // [反击]: kinds + condition + guard + effect
-    // On::Hook(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
+    // On::Action(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
     // On::AtEnd(at_end),                             // scheduled turn-end body
     // On::RollPlan(roll_plan),                       // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
@@ -46,9 +46,10 @@ fn press(player_id: i32) {
 
 Every handler is a `fn(player_id: i32)` (the player the card is placed at for hooks);
 `On::Counteract` carries its [反击] trigger kinds + the condition + a pure `bool`
-guard + the effect, `On::Hook` the field-hook kinds (`passTile`, `payAdd`,
-`drawn`, `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) in the same
-shape. An empty kind list is never dispatched.
+guard + the effect, `On::Action` the event-hook kinds (`passTile`, `drawn`,
+`turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) and `On::Filter` the
+modifier stages (`payAdd`, `buySet`, ...) in the same shape. An empty kind list
+is never dispatched.
 
 * `id` is the **data** card id from the roster (Chinese; an identifier,
   not display text).
@@ -61,9 +62,54 @@ shape. An empty kind list is never dispatched.
 * names are arguments, not text: `Msg::new(key!("x")).player_id("who", s).tile("tile", t)`
   -- the client resolves them to display names.
 
+## Action vs Filter (ABI v73)
+
+`On::Hook` is gone (no alias). Field hooks split the way WordPress splits
+`do_action` / `apply_filters`:
+
+| variant | role | may emit effects? | may rewrite the triggering value? |
+|---|---|---|---|
+| `On::Action(kinds, pre, guard, body)` | **event reaction** | yes (`ctx::gain`, log, place, …) | no |
+| `On::Filter(kinds, pre, guard, body)` | **value modifier** at a modifier-pipeline stage | not in Phase 2 (pure transform) | yes (`set_pay_amount` / `set_price` / `set_move_roll` / deal rewrite / …) |
+
+`TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
+source of truth** for which kinds are filter kinds. Today (17 kinds):
+
+* payment amount stages -- `PayChoose`, `PayAdd`, `PayMul`, `PayAt`,
+  `PayTotalAdd`, `PayTotalMul`, `PayTotalCancel`
+* buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
+* turn clock -- `TurnBonusTime`, `TurnBaseTime`
+* roll / plan shaping -- `RollPlan`, `MoveRoll`
+* flip count -- `FlipEffect`
+* charge-cost substitute -- `ChargePaying` (ruleset-core kind 78)
+
+Everything else that used to be `On::Hook` is `On::Action` (turn/pass/draw/
+settle/buy/build/counter/… event points, including the custom ruleset-core
+kinds `PassRewardAffected` / `FireSpent` / `SkillUsed` / `HouseAdded`).
+
+**Kind/variant agreement is a ruleset-build error:** a `On::Filter` may only
+list filter kinds and a `On::Action` only non-filter kinds
+(`On::check_kind_variant`, enforced in `rt::manifest` and the host loader).
+A kind list that mixes the two must be **split into two entries** (same body
+is fine -- it can `match trigger::kind()`); three shipped cards were split
+that way in v73 (`PP:不要背负期待`, `Mujica:#J11`, `通用:[衍生]FEVER!`).
+
+Phase 1 keeps the old `fn(i32) -> Asked` body shape and the same host dispatch
+path, so behaviour is identical to ABI v72. Phase 2 will tighten Filter bodies
+to a pure value transform and split fused hooks (e.g.
+`skill-personas/kaede_support.rs` `split_rent`: `set_pay_amount` + `ctx::gain`
+→ Filter + Action on `PayAfter`).
+
+**Deferred (not filter today).** The pure decision gates `AbnormalGuard`,
+`ImmuneAll`, `Untargetable`, `Redirect`, `BuyGate` fold `set_cancelled` /
+`set_target` and are closer to cancel-flags than to value modifiers. They
+stay on `On::Action` (or `On::Gate` for `BuyGate`) for now; moving them into
+`is_filter()` is a one-line change to that function plus a kind-list update.
+`On::Gate` itself is unchanged.
+
 ## Authoring a condition (`pre`, ABI v45)
 
-A guarded entry (`On::Counteract`, `On::Hook`, `On::Play` gates) carries a
+A guarded entry (`On::Counteract`, `On::Action`, `On::Play` gates) carries a
 **condition** string immediately before the residual guard -- category →
 condition → guard → body, the three-layer model of
 docs/[GUARDS.md](GUARDS.md) §4.3. `""` = no condition. The condition is a CEL
@@ -79,7 +125,7 @@ On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null",
                can_counteract, counteract),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Hook(&[HookKind::TurnEnd], pre::MINE, guard, decay),
+On::Action(&[HookKind::TurnEnd], pre::MINE, guard, decay),
 
 // or the const builder
 On::Play("", Some(cant_play), play).pre("owner.money >= 1500"),
@@ -114,9 +160,9 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
                  "", None, declare_cap),                               // 1: bookkeeping
-        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
+        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
     ],
 )
 .silent(&[1]);
@@ -162,7 +208,7 @@ pulse) shows:
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
     On::Play("", None, use_skill),                  // 0: Auto
-    On::Hook(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    On::Action(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
 ]).flash(&[(1, Flash::Always)]);
 ```
 
@@ -513,7 +559,7 @@ that storage and add the mark as the displayed record.
 
 `ctx::send(Target, name, &Message)` is the generic cross-card channel.
 `On::Message(names, pre, guard, body)` is the answering entry -- same
-condition / residual guard / body layering as `On::Hook`. The handler reads
+condition / residual guard / body layering as `On::Action`. The handler reads
 the sender and payload from `ctx::message::*` and returns a reply value via
 `ctx::message::reply(v)`; the sender's `ctx::send` returns it (0 when no
 receiver admitted the message). Handling a message does not flash the card.
@@ -542,7 +588,7 @@ The shape:
 ```rust
 // 通用:该清CP了
 On::Play("", Some(cant_play), clear_cp),
-On::Hook(&[HookKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Action(&[HookKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -559,14 +605,14 @@ fn cp_empty_guard(player_id: i32) -> bool {
 **After** -- 该清CP了 `ctx::send`s a message to `Target::Board("mark:cp")`
 asking it to place CP units; `mark:cp`'s `On::Message` handler runs
 `ctx::place_mark`. The landing hook spends the placer's on-card CP via
-`ctx::add_counter_at`. The graveyard rule is an `On::Hook` on
+`ctx::add_counter_at`. The graveyard rule is an `On::Action` on
 `HookKind::CounterChanged` filtering `counter_is('cp')` /
 `card.counter('cp') == 0`:
 
 ```rust
 // 通用:该清CP了
 On::Play("", Some(cant_play), clear_cp),
-On::Hook(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Action(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -600,7 +646,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
 
 // rules/tile_marks/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
-On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
+On::Action(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();
@@ -783,7 +829,7 @@ cannot ship with a raw key showing to players.
   side store. Edge cases: a player with no band skill reads 0 and every write
   is a no-op; several band cards (PPP:Returns) target the first in placement
   order; a swapped or removed band card takes its crystals with it. The
-  empty-out clause (「此卡上不再拥有[奇迹水晶]时」) is an `On::Hook` on
+  empty-out clause (「此卡上不再拥有[奇迹水晶]时」) is an `On::Action` on
   `HookKind::CounterChanged` filtering `counter_is('crystals')`, not a check
   at each spend site.
 * A counteraction can reshape the trigger it answered: `set_move_roll` rewrites a

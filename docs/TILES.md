@@ -149,7 +149,7 @@ tilemark) and points on the card (mandated by the card rule)」):
 |---|---|---|
 | placement | 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 | 该清CP了 `ctx::send`s a message to `Target::Board("mark:cp")`; this owner's `On::Message` runs `ctx::place_mark(tile, mark::CP_KIND, mark::CP_CATEGORY, -1, src, 1, …)` -- the *where* is the placer's gate |
 | stacking | 「添加1个[CP点]」 onto a 「没有[CP点]的格子」 | one mark object per tile, `count` is the [CP点] there |
-| landing | 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | `On::Hook(SettleBody)` on this instance -- spends **both** kinds |
+| landing | 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | `On::Action(SettleBody)` on this instance -- spends **both** kinds |
 | removal | 「移除格子上的个[CP点]」 | `ctx::bump_mark` / `remove_marks` over `MarkFilter::any().category("cp")` (a tile-mark write) |
 | on-card seed | 「并在自己[场上]添加6个[CP点]」 | the card rule's `ctx::add_counter(counter::CP, 6, 0)` -- not this owner |
 | on-card spend | 「自己[场上]1个[CP点]」 | `ctx::add_counter_at(src, counter::CP, -1, 0)`, `src` = the mark's `TileMark.src` |
@@ -187,7 +187,7 @@ per-player `Tok(Seat, "CP点")` and gated the clause on `m.Seat == Seat`; the
 2026-10-07 ruling replaces the counter with the card's own count and this
 reading drops the gate. The landing hook lives on `mark:cp`. The 该清CP了
 graveyard rule is the on-card count hitting 0
-(`On::Hook(&[HookKind::CounterChanged], …)` filtering `counter_is('cp')`),
+(`On::Action(&[HookKind::CounterChanged], …)` filtering `counter_is('cp')`),
 not the tile marks running out.
 
 ### The bodies stay thin
@@ -558,7 +558,7 @@ report it.
 |---|---|---|---|
 | 1 | `tile:edogawa` | one `settle_draw` | **done** -- smallest body; proves bind + dispatch |
 | 2 | `tile:event` | `settle_draw` + `settle_event` | **done** -- added the `ctx::draw_event` primitive |
-| 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Hook(&[HookKind::PassTile])` -> `circle::settle_reward`, the body itself). The walk's `circle_reward` is the **built-in fallback** when no instance is bound |
+| 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Action(&[HookKind::PassTile])` -> `circle::settle_reward`, the body itself). The walk's `circle_reward` is the **built-in fallback** when no instance is bound |
 | 4 | `tile:agent` | the 「若…则…否则…」 branch | **done** -- the body is the branch (同色 set / all-owned half-rent / one buy-build offer). `Play::agent_landing` is the **built-in fallback** |
 | 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `payMul` stage (step 9) |
 | 6 | `tile:property` | the four-way branch | **done** -- `land_at`'s `match` is now the **built-in fallback** (`land_at_built_in`) for `StubRules` and unbound kinds, not the only path |
@@ -577,7 +577,7 @@ board owner, and the engine's `land_at` is now the **built-in fallback** rather
 than the only path. Phase 3 landed the following (2026-10-06):
 
 * **The [经过] CiRCLE reward** is `tile:circle`'s **Pass entry** --
-  `On::Hook(&[HookKind::PassTile])` running `circle::settle_reward` (the body
+  `On::Action(&[HookKind::PassTile])` running `circle::settle_reward` (the body
   itself: suppression, the choice, the `passRewardAffected (kind 26)` window, the payout).
   `event:协助CiRCLE重建` re-homes the same function onto 「CiRCLE咖啡厅」.
   The hook dispatch visits `board_field` (tile-filtered, and only for kinds a

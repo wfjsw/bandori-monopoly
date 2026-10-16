@@ -227,7 +227,7 @@ Engine ops (`crates/game-core/src/engine/ops.rs`): `counter_at` /
 `On::Message` + `ctx::send(Target, name, &Message)` is the generic cross-card
 channel: a nested run against the receiver (a uid, a card id on a seat, or a
 standing board-owned pseudo card like `mark:cp`), same condition / residual
-guard / body layering as `On::Hook`. `Trigger.name` carries the message name;
+guard / body layering as `On::Action`. `Trigger.name` carries the message name;
 `ctx::message::*` reads the payload and sets the reply. The 该清CP了 →
 `mark:cp` placement is the worked example (`docs/CARDS.md` → 「Cross-card
 messages」).

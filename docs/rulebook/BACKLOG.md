@@ -84,7 +84,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
     ```
   - no depth guard on nested settles (`MAX_SETTLE_REDIRECTS` = 8 only caps *redirects inside one* settlement, `play.rs:41/1641`; `MAX_COUNTERACT_DEPTH` = 16 only caps one counteract *tree*, `wasm_rules.rs:53/3149`; `MAX_MONEY_DEPTH` = 32 only caps the money pipeline, `play.rs:27/3048`)
   - guest callers of `ctx::card_settle_at` from hook bodies (any of these can re-enter `settle_at`):
-    `rules/cards/card-hhw/src/smile_parade.rs:122` (`On::Hook(SettleBody, settle_instead)` — direct self-nest: the body cancels the tile settle and `card_settle_at`s at 「弦卷集团」),
+    `rules/cards/card-hhw/src/smile_parade.rs:122` (`On::Action(SettleBody, settle_instead)` — direct self-nest: the body cancels the tile settle and `card_settle_at`s at 「弦卷集团」),
     `card-ras/src/{studio_storm,guerrilla}.rs`, `card-mygo/src/{taki_serious,rinne_rain}.rs`,
     `card-morfonica/src/noble_blue.rs`, `skills/skill-characters/src/{kaede_support,tomori_crychic,tukushi_try,tomori_poem}.rs`
   - related: `crates/bot-core/src/ismcts.rs:823-830` already documents "a rollout's trigger chain can nest deeply" and spawns 32 MiB stacks for that reason
@@ -827,7 +827,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   - `rules/skills/skill-characters/src/kaoru_prince.rs` — Pass half is already `pre::MINE`; 被[经过] is a filtered `PassTile`
   - live pins: `hhw.rs` `kaoru_skill_1_own_walk_gains_one_pot_per_step` / `kaoru_skill_1_another_players_walk_gives_nothing` / `kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step`
 - **rulebook**: 「每次[经过]或被[经过]时」 — `Pass` half is "I pass" (`actor == owner`).
-- **fixed already**: `On::Hook(&[HookKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half. Nothing to un-ignore.
+- **fixed already**: `On::Action(&[HookKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half. Nothing to un-ignore.
 
 ## TILE-01 — Anon Tokyo link arrangements (Fire bird / Repaint / ONE OF US / linked rent)
 - **status**: **fixed** (this batch, 2026-10-13, `closeout-4-tiles`) —
