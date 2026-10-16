@@ -102,7 +102,7 @@ a slot written by the Action.
 ### Filter kinds
 
 `TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
-source of truth**. Today (18 kinds):
+source of truth**. Today (17 kinds):
 
 * payment amount stages -- `PayChoose`, `PayAdd`, `PayMul`, `PayAt`,
   `PayTotalAdd`, `PayTotalMul`, `PayTotalCancel`
@@ -110,11 +110,13 @@ source of truth**. Today (18 kinds):
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
 * roll / plan shaping -- `RollPlan`, `MoveRoll`, `RollValue` (v74)
 * flip count -- `FlipEffect`
-* charge-cost substitute -- `ChargePaying` (ruleset-core kind 78)
 
 `RollValue` (id 102) is raised **immediately before** `RollAfter` with the
 same payload: the pure roll-reshape stage. `RollAfter` stays an Action event
 (dice already landed) and no longer rewrites the face.
+
+`ChargePaying` (ruleset-core kind 78) is **not** a filter kind: its 「可」
+opt-in prompts and Filter bodies cannot. It stays on `On::Action`.
 
 Everything else is `On::Action` (turn/pass/draw/settle/buy/build/counter/…
 event points, including the custom ruleset-core kinds `PassRewardAffected` /
@@ -141,10 +143,10 @@ modifier touched stays exactly as the base formula produced it.
 
 **Deferred (not filter today).** The pure decision gates `AbnormalGuard`,
 `ImmuneAll`, `Untargetable`, `Redirect`, `BuyGate` fold `set_cancelled` /
-`set_target` and are closer to cancel-flags than to value modifiers. They
-stay on `On::Action` (or `On::Gate` for `BuyGate`) for now; moving them into
-`is_filter()` is a one-line change to that function plus a kind-list update.
-`On::Gate` itself is unchanged.
+`set_target` and are closer to cancel-flags than to value modifiers, and
+`ChargePaying` prompts. They stay on `On::Action` (or `On::Gate` for
+`BuyGate`) for now; moving a kind into `is_filter()` is a one-line change to
+that function plus a kind-list update. `On::Gate` itself is unchanged.
 
 ## Authoring a condition (`pre`, ABI v45)
 

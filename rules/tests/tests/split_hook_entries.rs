@@ -181,12 +181,12 @@ fn j11_action_half_decays_on_turn_end() {
 }
 
 /// Custom ruleset-core kind ids stay Action (non-filter) so `On::Action` may
-/// list them; `ChargePaying` is the only custom filter kind.
+/// list them. `ChargePaying` is NOT a filter (its 「可」 opt-in prompts).
 #[test]
 fn custom_kind_filter_classification() {
     assert!(!rk::PassRewardAffected.is_filter());
     assert!(!rk::FireSpent.is_filter());
     assert!(!rk::SkillUsed.is_filter());
     assert!(!rk::HouseAdded.is_filter());
-    assert!(rk::ChargePaying.is_filter());
+    assert!(!rk::ChargePaying.is_filter());
 }

@@ -794,7 +794,6 @@ mod tests {
             TriggerKind::PayMul,
             TriggerKind::PayAt,
             TriggerKind::RollPlan,
-            TriggerKind(78), // ChargePaying
             TriggerKind::BuyAdd,
             TriggerKind::BuyMul,
             TriggerKind::BuySet,
@@ -820,6 +819,7 @@ mod tests {
             TriggerKind::DrewBefore,
             TriggerKind::BuyGate,
             TriggerKind::AbnormalGuard,
+            TriggerKind(78), // ChargePaying -- prompts, stays Action
         ] {
             assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
         }

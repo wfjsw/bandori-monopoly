@@ -1790,8 +1790,9 @@ impl TriggerKind {
                 | Self::PayMul
                 | Self::PayAt
                 | Self::RollPlan
-                // ChargePaying (78) -- cost substitute; id lives in ruleset-core.
-                | Self(78)
+                // ChargePaying (78) is NOT a filter: its 「可」 opt-in prompts,
+                // and Filter bodies cannot. It stays on On::Action (deferred
+                // with the decision gates -- see docs/CARDS.md).
                 | Self::BuyAdd
                 | Self::BuyMul
                 | Self::BuySet
