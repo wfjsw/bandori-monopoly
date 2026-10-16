@@ -2750,8 +2750,8 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
         // still accepts these acts (replay / old clients) and rejects them
         // with a clear reason.
         "buy" | "build" => Some(Msg::new("err.buy_build_at_settle")),
-        "mortgage" => cx.why_not_mortgage(i, m.value, busy),
-        "redeem" => cx.why_not_redeem(i, m.value, busy),
+        "mortgage" => cx.rules().why_not_deed_mortgage(cx, i, m.value, busy),
+        "redeem" => cx.rules().why_not_deed_redeem(cx, i, m.value, busy),
         "play" => cx.cant_play(i, &m.card, busy),
         "discard" => {
             if !cx.playing() || !cx.over_hand(i) {

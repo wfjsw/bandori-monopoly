@@ -709,6 +709,32 @@ pub trait CardRules: Send + Sync {
     fn deed_redeem_cost(&self, data: &crate::data::GameData, tile: i32) -> i32 {
         super::play::purchase::redeem_cost(data, tile.max(0) as usize)
     }
+
+    /// Why `player` may not mortgage `tile` right now, or `None`.
+    /// Routed through the rules crate so the tile rule can retune the gate
+    /// (规则书 基础规则 5: 「运营阶段及需[支付]或[消耗]资金且资金不足时可以
+    /// 选择抵押拥有的地契」). The default is the engine's standing gate.
+    fn why_not_deed_mortgage(
+        &self,
+        cx: &super::Cx,
+        player: usize,
+        tile: i32,
+        asking: bool,
+    ) -> Option<crate::msg::Msg> {
+        cx.why_not_mortgage(player, tile, asking)
+    }
+
+    /// Why `player` may not redeem `tile` right now, or `None`
+    /// (规则书 基础规则 6: 「运营阶段可赎回拥有的地契」).
+    fn why_not_deed_redeem(
+        &self,
+        cx: &super::Cx,
+        player: usize,
+        tile: i32,
+        asking: bool,
+    ) -> Option<crate::msg::Msg> {
+        cx.why_not_redeem(player, tile, asking)
+    }
 }
 
 /// Which status gate a [`CardRules::gate_open`] question is about.
