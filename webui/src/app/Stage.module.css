@@ -1,5 +1,7 @@
-.backdrop { position: fixed; inset: -40px; background: #f6e7ec center / cover no-repeat; filter: blur(14px) saturate(1.05); transform: scale(1.04); transition: background-image 0.3s; }
+.backdrop { position: fixed; inset: -40px; background: #f6e7ec center / cover no-repeat; filter: blur(14px) saturate(1.05); transform: scale(1.04); opacity: 0; transition: opacity 0.3s; will-change: opacity; }
+.backdrop.front { opacity: 1; }
 .backdrop::after { content: ""; position: absolute; inset: 0; background: rgba(246, 242, 243, 0.3); }
 .stage { position: fixed; left: 50%; top: 50%; transform-origin: 50% 50%; }
-.fader { position: absolute; inset: -2000px; background: var(--surface); opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: var(--z-fader); }
+.fader { position: absolute; inset: -400px; will-change: opacity; background: var(--surface); opacity: 0; pointer-events: none; transition: opacity 0.14s; z-index: var(--z-fader); }
 .on { opacity: 1; pointer-events: all; }
+.backdrop:not(.front) { transition-delay: 0.3s; }

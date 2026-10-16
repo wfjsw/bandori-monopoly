@@ -33,10 +33,13 @@ export function useCrossfade<K>(
     initial?: K | null;
     eq?: (a: K, b: K) => boolean;
     onSwap?: (key: K) => void;
+    /** Awaited after the fade-out, before the swap (preloading); the fader stays up meanwhile. */
+    prepare?: (key: K) => Promise<unknown>;
   } = {},
 ): Crossfade<K> {
   const { outMs = 180, inMs = 0 } = opts;
   const onSwap = useLatestRef(opts.onSwap);
+  const prepare = useLatestRef(opts.prepare);
   const eq = useLatestRef(opts.eq ?? ((a: K, b: K) => a === b));
   const [shown, setShown] = useState<K | null>(() => opts.initial ?? null);
   const [fading, setFading] = useState(false);
@@ -68,14 +71,20 @@ export function useCrossfade<K>(
     window.clearTimeout(timers.current.lift);
     pending.current = key;
     setFading(true);
+    // The preload starts now and overlaps the fade-out; the swap waits for both.
+    const ready = Promise.resolve(prepare.current?.(key)).catch(() => undefined);
     timers.current.swap = window.setTimeout(() => {
-      onSwap.current?.(key);
-      setShown(key);
-      pending.current = null;
-      if (inMs <= 0) setFading(false);
-      else timers.current.lift = window.setTimeout(() => setFading(false), inMs);
+      void ready.then(() => {
+        // A newer key took over while we waited: this swap is stale.
+        if (pending.current !== key) return;
+        onSwap.current?.(key);
+        setShown(key);
+        pending.current = null;
+        if (inMs <= 0) setFading(false);
+        else timers.current.lift = window.setTimeout(() => setFading(false), inMs);
+      });
     }, cur === null ? 0 : outMs);
-  }, [key, outMs, inMs, onSwap, eq, shownRef]);
+  }, [key, outMs, inMs, onSwap, prepare, eq, shownRef]);
 
   // Unmount: stop the timers so a lift cannot fire into a dead tree.
   useEffect(() => () => {

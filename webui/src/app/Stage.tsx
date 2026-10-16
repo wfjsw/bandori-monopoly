@@ -169,6 +169,26 @@ export function useCompactValue(): boolean {
   );
 }
 
+/**
+ * Two stacked backdrop plates that swap by `opacity`: each plate is blurred
+ * once when its image is set, and the cross-fade is a pure compositor effect
+ * (transitioning `background-image` re-rasterised the blurred layer).
+ */
+function Backdrop({ src }: { src: string }) {
+  const [plates, setPlates] = useState<{ a: string; b: string; front: "a" | "b" }>({ a: src, b: "", front: "a" });
+  useEffect(() => {
+    setPlates((p) => {
+      if (p[p.front] === src) return p;
+      const back = p.front === "a" ? "b" : "a";
+      return { ...p, [back]: src, front: back };
+    });
+  }, [src]);
+  const plate = (k: "a" | "b") => (
+    <div className={plates.front === k ? `${s.backdrop} ${s.front}` : s.backdrop} style={{ backgroundImage: plates[k] ? `url("${plates[k]}")` : undefined }} />
+  );
+  return <>{plate("a")}{plate("b")}</>;
+}
+
 export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
   const tall = useStageFillValue();
   const { scale, w, h, compact, shift, rotated } = useStage(tall);
@@ -183,7 +203,7 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
   const src = bg ? sceneImg(bg) : "";
   return (
     <>
-      <div className={s.backdrop} style={{ backgroundImage: src ? `url("${src}")` : undefined }} />
+      <Backdrop src={src} />
       <div
         className={s.stage}
         data-stage
