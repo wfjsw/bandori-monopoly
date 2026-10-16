@@ -2671,11 +2671,10 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
                     );
                     Ok(())
                 }
-                "mortgage" => cx.mortgage(i, m.value as usize, None).map(|_| ()),
+                "mortgage" => cx.deed_mortgage(i, m.value as usize, 0).map(|_| ()),
 
                 "redeem" => {
-                    cx.redeem(i, m.value as usize);
-                    Ok(())
+                    cx.deed_redeem(i, m.value as usize).map(|_| ())
                 }
                 "play" => cx.play_from_hand(i, &m.card),
                 "skill" => cx.use_skill(i, &m.card),

@@ -165,6 +165,8 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
         | On::RollPlan(_, _, f)
         | On::AtEnd(_, _, f)
         | On::Settle(_, _, f)
+        | On::Mortgage(_, _, f)
+        | On::Redeem(_, _, f)
         | On::Message(_, _, _, f) => *f,
     }
 }
@@ -303,6 +305,8 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::AtEnd, On::AtEnd(..)) => true,
             (KindTag::RollPlan, On::RollPlan(..)) => true,
             (KindTag::Settle, On::Settle(..)) => true,
+            (KindTag::Mortgage, On::Mortgage(..)) => true,
+            (KindTag::Redeem, On::Redeem(..)) => true,
             (KindTag::Message, On::Message(..)) => true,
             _ => false,
         };
@@ -324,6 +328,8 @@ enum KindTag {
     RollPlan,
     Settle,
     Message,
+    Mortgage,
+    Redeem,
     Other,
 }
 
@@ -413,6 +419,8 @@ fn kind_tag(kind: &str) -> KindTag {
     const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
     const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
     const MESSAGE: (u8, u64, u64) = tag_key_const("Message");
+    const MORTGAGE: (u8, u64, u64) = tag_key_const("Mortgage");
+    const REDEEM: (u8, u64, u64) = tag_key_const("Redeem");
     match tag_key(kind) {
         PLAY => KindTag::Play,
         COUNTERACT => KindTag::Counteract,
@@ -422,6 +430,8 @@ fn kind_tag(kind: &str) -> KindTag {
         ROLL_PLAN => KindTag::RollPlan,
         SETTLE => KindTag::Settle,
         MESSAGE => KindTag::Message,
+        MORTGAGE => KindTag::Mortgage,
+        REDEEM => KindTag::Redeem,
         _ => KindTag::Other,
     }
 }

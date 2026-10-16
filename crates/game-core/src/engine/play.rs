@@ -1147,7 +1147,7 @@ impl Cx<'_> {
             self.w.log("text", player_id as i32, why);
             return Ok(false);
         }
-        self.mortgage(player_id, tile, None)
+        self.deed_mortgage(player_id, tile, 0)
     }
 
     /// The turn's main roll-and-move.
@@ -2720,7 +2720,7 @@ impl Cx<'_> {
     }
 
     /// Why this deed cannot be mortgaged, or `None` when it can.
-    pub(crate) fn why_not_mortgage(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
+    pub fn why_not_mortgage(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
         let st = &self.w.st;
         if !self.playing() {
             return Some(Msg::new("err.not_playing"));
@@ -2756,7 +2756,7 @@ impl Cx<'_> {
     }
 
     /// Why this deed cannot be redeemed, or `None` when it can.
-    pub(crate) fn why_not_redeem(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
+    pub fn why_not_redeem(&self, i: usize, t: i32, asking: bool) -> Option<Msg> {
         let st = &self.w.st;
         if !self.playing() {
             return Some(Msg::new("err.not_playing"));
@@ -2784,13 +2784,61 @@ impl Cx<'_> {
     }
 
     /// Mortgage a deed and credit its value to the owner.
-    fn do_mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) {
+    /// Mechanism only -- the tile rule's `On::Mortgage` body owns eligibility
+    /// and the amount (`ctx::apply_mortgage`). Raises the mortgage hooks so
+    /// 「当你抵押…时」 listeners (and their counteractions) still fire.
+    pub fn apply_mortgage(&mut self, i: usize, t: usize, amount: i32) -> Flow<i32> {
+        if t >= self.w.st.mortgaged.len() || self.w.st.mortgaged[t] {
+            return Ok(0);
+        }
+        if self.w.st.owners.get(t).copied().unwrap_or(-1) != i as i32 {
+            return Ok(0);
+        }
+        let v = amount.max(0);
+        // `mortgageBefore` -- a real pre-hook (a counteraction can block).
+        let before = raise!(self, "mortgageBefore", i, tile = t as i32)?;
+        if before.is_cancelled() {
+            return Ok(0);
+        }
+        self.do_mortgage(i, t, v, None);
+        raise!(self, "mortgage", i, tile = t as i32)?;
+        Ok(v)
+    }
+
+    /// Lift a mortgage and charge `amount` directly. Mechanism only.
+    pub fn apply_redeem(&mut self, i: usize, t: usize, amount: i32) -> i32 {
+        if t >= self.w.st.mortgaged.len() || !self.w.st.mortgaged[t] {
+            return 0;
+        }
+        if self.w.st.owners.get(t).copied().unwrap_or(-1) != i as i32 {
+            return 0;
+        }
+        let cost = amount.max(0);
+        self.w.st.mortgaged[t] = false;
+        self.w.st.players[i].money -= cost;
+        // 「本回合进行过赎回操作」 -- same record, same timing.
+        {
+            let s = &mut self.w.st.players[i];
+            s.state_set(key::REDEEMED, 1);
+            s.state_set_expires(key::REDEEMED, Some(Tick::TurnEnd));
+        }
+        let text = Msg::new("log.redeem")
+            .player_id("who", i)
+            .n("cost", cost)
+            .tile("tile", t);
+        let e = self.w.log("redeem", i as i32, text);
+        e.value = cost;
+        e.to = t as i32;
+        cost
+    }
+
+    /// Mortgage a deed and credit `v` to the owner (raw mechanism).
+    fn do_mortgage(&mut self, i: usize, t: usize, v: i32, why: Option<Msg>) {
         // 「本回合进行过抵押操作」 -- a record the card gates ask about. Timed to
         // the turn end so it does not leak.
         let s = &mut self.w.st.players[i];
         s.state_set(key::MORTGAGED, 1);
         s.state_set_expires(key::MORTGAGED, Some(Tick::TurnEnd));
-        let v = self.mortgage_value(t);
         self.w.st.mortgaged[t] = true;
         self.w.st.players[i].money += v;
         let text = Msg::new("log.mortgage")
@@ -2803,9 +2851,21 @@ impl Cx<'_> {
         e.to = t as i32;
     }
 
+    /// Route a mortgage through the tile rule's `On::Mortgage` body
+    /// (`CardRules::deed_mortgage`). `reason`: 0 = player act, 1 = raise-funds,
+    /// 2 = optional funding prompt.
+    pub fn deed_mortgage(&mut self, i: usize, t: usize, reason: i32) -> Flow<bool> {
+        self.rules().deed_mortgage(self, i, t, reason)
+    }
+
+    /// Route a redeem through the tile rule's `On::Redeem` body.
+    pub fn deed_redeem(&mut self, i: usize, t: usize) -> Flow<bool> {
+        self.rules().deed_redeem(self, i, t)
+    }
+
     /// Mortgage one of the player's deeds.
     /// `true` when the deed actually went onto mortgage (HOST-06).
-    pub(crate) fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<bool> {
+    pub fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<bool> {
         // `mortgageBefore` -- runs before any guard, so it is a real pre-hook
         // (a counteraction can block the mortgage). The post half below only runs
         // when the mortgage actually applied.
@@ -2814,7 +2874,8 @@ impl Cx<'_> {
             return Ok(false);
         }
         if self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
-            self.do_mortgage(i, t, why);
+            let v = self.mortgage_value(t);
+            self.do_mortgage(i, t, v, why);
             raise!(self, "mortgage", i, tile = t as i32)?;
             return Ok(true);
         }
@@ -2822,23 +2883,9 @@ impl Cx<'_> {
     }
 
     /// Pay the redeem cost and lift the mortgage.
-    pub(crate) fn redeem(&mut self, i: usize, t: usize) {
-        // 「本回合进行过赎回操作」 -- same record, same timing.
-        {
-            let s = &mut self.w.st.players[i];
-            s.state_set(key::REDEEMED, 1);
-            s.state_set_expires(key::REDEEMED, Some(Tick::TurnEnd));
-        }
+    pub fn redeem(&mut self, i: usize, t: usize) {
         let cost = self.redeem_cost(t);
-        self.w.st.mortgaged[t] = false;
-        self.w.st.players[i].money -= cost;
-        let text = Msg::new("log.redeem")
-            .player_id("who", i)
-            .n("cost", cost)
-            .tile("tile", t);
-        let e = self.w.log("redeem", i as i32, text);
-        e.value = cost;
-        e.to = t as i32;
+        self.apply_redeem(i, t, cost);
     }
 
     // =============================================================== money
@@ -3481,7 +3528,7 @@ impl Cx<'_> {
         for id in &reply.a.picked {
             if let Ok(t) = id.parse::<usize>() {
                 if deeds.contains(&t) && self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
-                    self.mortgage(i, t, Some(Msg::new("src.raise_funds")))?;
+                    self.deed_mortgage(i, t, 2)?;
                 }
             }
         }
@@ -3521,7 +3568,7 @@ impl Cx<'_> {
                     && self.w.st.owners[t] == i as i32
                     && !self.w.st.mortgaged[t]
                 {
-                    self.mortgage(i, t, Some(Msg::new("src.raise_funds")))?;
+                    self.deed_mortgage(i, t, 1)?;
                 }
             }
         }
@@ -3535,7 +3582,9 @@ impl Cx<'_> {
             let Some(&t) = self.mortgage_order(self.mortgageable(i), &p).first() else {
                 break;
             };
-            self.do_mortgage(i, t, Some(Msg::new("src.raise_funds")));
+            let v = self.mortgage_value(t);
+            self.deed_mortgage(i, t, 1)?;
+            let _ = v;
         }
         self.wait(0.6);
         if self.w.st.players[i].money < amount && !self.out(i) {

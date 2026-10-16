@@ -26,12 +26,11 @@
 //! 资金变动效果影响，收款方无论处于何种状态都可正常收款」) -- `offer_force_buy`
 //! moves it directly, outside the money pipeline.
 //!
-//! TODO(规则书): the eligibility half (「运营阶段及需[支付]或[消耗]资金且资金
-//! 不足时」 / 「运营阶段可赎回」) is still the engine's
-//! `CardRules::why_not_deed_mortgage` / `why_not_deed_redeem` default, not a
-//! guest body -- there is no `On::Mortgage` / `On::Redeem` entry kind yet, so a
-//! net mortgage/redeem cannot run a tile-rule body to decide. The amounts and
-//! the upgrade-exclusion are the tile rule's.
+//! The `On::Mortgage` / `On::Redeem` bodies in [`super::property`] own
+//! eligibility (including the phase/turn gate) and the amount, and call
+//! `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write + direct
+//! money move. The upgrade-funding exclusion stays in the pay pipeline's
+//! `offer_mortgage_funds` `exclude`.
 
 /// 规则书: 「抵押后[获得]地契购买价格50%的资金」.
 /// The land price only -- standing houses are not part of the mortgage payout.

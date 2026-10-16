@@ -455,14 +455,14 @@ impl Cx<'_> {
                         return Ok(());
                     }
                     if let Some(t) = self.ai_redeem_choice(i) {
-                        self.redeem(i, t);
+                        let _ = self.deed_redeem(i, t);
                         self.wait(1.2);
                         return Ok(());
                     }
                 } else {
                     let p = self.strategy_of(i);
                     if let Some(t) = self.ai_redeem_choice(i) {
-                        self.redeem(i, t);
+                        let _ = self.deed_redeem(i, t);
                         self.wait(1.2);
                         return Ok(());
                     }

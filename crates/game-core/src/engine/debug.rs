@@ -74,9 +74,10 @@ impl Match {
                 "state" => {
                     cx.w.st.players[target].state_set(&m.persona, m.value);
                 }
-                // The same perform primitives the tile rule calls -- the
-                // decision/order lives in `rules/tiles`; these are the
-                // mechanism arms. No prompt, no phase/turn gate.
+                // The same mechanism primitives the tile rule's
+                // `On::Mortgage` / `On::Redeem` bodies call -- eligibility and
+                // amounts live in `rules/tiles`; these bypass only the prompt
+                // and the phase/turn gate (cheats already do).
                 "buy" => {
                     let _ = cx.buy(target, m.value as usize, super::purchase::BuyKind::Land);
                 }
@@ -84,10 +85,14 @@ impl Match {
                     let _ = cx.build(target, m.value as usize);
                 }
                 "mortgage" => {
-                    let _ = cx.mortgage(target, m.value as usize, None);
+                    let t = m.value as usize;
+                    let v = cx.mortgage_value(t);
+                    let _ = cx.apply_mortgage(target, t, v);
                 }
                 "redeem" => {
-                    cx.redeem(target, m.value as usize);
+                    let t = m.value as usize;
+                    let v = cx.redeem_cost(t);
+                    let _ = cx.apply_redeem(target, t, v);
                 }
                 _ => unreachable!(),
             }

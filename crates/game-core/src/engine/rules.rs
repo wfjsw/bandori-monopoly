@@ -735,6 +735,30 @@ pub trait CardRules: Send + Sync {
     ) -> Option<crate::msg::Msg> {
         cx.why_not_redeem(player, tile, asking)
     }
+
+    /// Run the tile rule's mortgage body (`On::Mortgage`) for `tile`.
+    /// `reason`: 0 = player act, 1 = raise-funds, 2 = optional funding prompt.
+    /// `true` when the deed went onto mortgage. The default is the engine's
+    /// standing `Cx::mortgage` (StubRules).
+    fn deed_mortgage(
+        &self,
+        cx: &mut super::Cx,
+        player: usize,
+        tile: usize,
+        _reason: i32,
+    ) -> super::Flow<bool> {
+        cx.mortgage(player, tile, None)
+    }
+
+    /// Run the tile rule's redeem body (`On::Redeem`) for `tile`.
+    /// The default is the engine's standing `Cx::redeem`.
+    fn deed_redeem(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
+        if cx.why_not_redeem(player, tile as i32, false).is_some() {
+            return Ok(false);
+        }
+        cx.redeem(player, tile);
+        Ok(true)
+    }
 }
 
 /// Which status gate a [`CardRules::gate_open`] question is about.

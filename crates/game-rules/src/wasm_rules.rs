@@ -2549,7 +2549,11 @@ impl<M: CardModules> RulesBridge<M> {
         trigger: &Trigger,
         entry: i32,
     ) -> i32 {
-        if matches!(call, Call::Settle { .. }) && card_id.starts_with("tile:") {
+        if matches!(
+            call,
+            Call::Settle { .. } | Call::Mortgage { .. } | Call::Redeem { .. }
+        ) && card_id.starts_with("tile:")
+        {
             return -1;
         }
         // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
@@ -3504,6 +3508,22 @@ impl<M: CardModules> RulesBridge<M> {
         HostRequest::Mortgage { player_id, tile } => {
             let did = cx.card_mortgage(player_id.max(0) as usize, tile.max(0) as usize)?;
             return Ok(did as i32);
+        }
+        HostRequest::ApplyMortgage {
+            player_id,
+            tile,
+            amount,
+        } => {
+            let got = cx.apply_mortgage(player_id.max(0) as usize, tile.max(0) as usize, amount)?;
+            return Ok(got);
+        }
+        HostRequest::ApplyRedeem {
+            player_id,
+            tile,
+            amount,
+        } => {
+            let got = cx.apply_redeem(player_id.max(0) as usize, tile.max(0) as usize, amount);
+            return Ok(got);
         }
         HostRequest::DrawEvent { player_id } => {
             cx.card_draw_event(player_id.max(0) as usize)?;
@@ -7927,6 +7947,119 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             }
         }
         Ok(())
+    }
+
+    /// [`game_core::engine::CardRules::deed_mortgage`] -- run the tile rule's
+    /// `On::Mortgage` body. Falls back to the engine's standing mortgage for a
+    /// tile with no rule instance (StubRules).
+    fn deed_mortgage(
+        &self,
+        cx: &mut Cx,
+        player_id: usize,
+        tile: usize,
+        reason: i32,
+    ) -> Flow<bool> {
+        let instances = cx.world().tile_rule_instances(tile as i32);
+        if instances.is_empty() {
+            return cx.mortgage(player_id, tile, None);
+        }
+        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        let before = cx
+            .state()
+            .mortgaged
+            .get(tile)
+            .copied()
+            .unwrap_or(false);
+        let mut trigger = Trigger {
+            kind: TriggerKind::None,
+            player_id: player_id as i32,
+            target: owner,
+            tile: tile as i32,
+            value: reason,
+            step: cx.state().step,
+            ..Trigger::default()
+        };
+        for (uid, id) in instances {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            self.drive(
+                cx,
+                Call::Mortgage {
+                    card: idx,
+                    player_id: player_id as i32,
+                    tile: tile as i32,
+                    reason,
+                },
+                &id,
+                uid,
+                &mut trigger,
+            )?;
+            if trigger.is_cancelled() {
+                break;
+            }
+        }
+        let after = cx
+            .state()
+            .mortgaged
+            .get(tile)
+            .copied()
+            .unwrap_or(false);
+        Ok(!before && after)
+    }
+
+    /// [`game_core::engine::CardRules::deed_redeem`] -- run the tile rule's
+    /// `On::Redeem` body. Falls back to the engine's standing redeem.
+    fn deed_redeem(&self, cx: &mut Cx, player_id: usize, tile: usize) -> Flow<bool> {
+        let instances = cx.world().tile_rule_instances(tile as i32);
+        if instances.is_empty() {
+            if cx.why_not_redeem(player_id, tile as i32, false).is_some() {
+                return Ok(false);
+            }
+            cx.redeem(player_id, tile);
+            return Ok(true);
+        }
+        let owner = cx.state().owners.get(tile).copied().unwrap_or(-1);
+        let before = cx
+            .state()
+            .mortgaged
+            .get(tile)
+            .copied()
+            .unwrap_or(true);
+        let mut trigger = Trigger {
+            kind: TriggerKind::None,
+            player_id: player_id as i32,
+            target: owner,
+            tile: tile as i32,
+            step: cx.state().step,
+            ..Trigger::default()
+        };
+        for (uid, id) in instances {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            self.drive(
+                cx,
+                Call::Redeem {
+                    card: idx,
+                    player_id: player_id as i32,
+                    tile: tile as i32,
+                },
+                &id,
+                uid,
+                &mut trigger,
+            )?;
+            if trigger.is_cancelled() {
+                break;
+            }
+        }
+        let after = cx
+            .state()
+            .mortgaged
+            .get(tile)
+            .copied()
+            .unwrap_or(true);
+        Ok(before && !after)
     }
 
     fn cant_play(&self, cx: &Cx, player_id: usize, card: &str) -> Option<Msg> {

@@ -525,7 +525,7 @@ use alloc::{string::String, vec::Vec};
 ///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
 ///      exclusive gate and `persona_is` see the new identity; skills are
 ///      swapped separately. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 72;
+pub const ABI_VERSION: i32 = 73;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -2179,6 +2179,14 @@ pub enum OnKind {
     /// `ctx::message` and returns a reply value. Does **not** flash the card
     /// (internal plumbing); the handler may log.
     Message = 8,
+    /// v73: a rule's **mortgage body** (`On::Mortgage(pre, guard, body)`) --
+    /// what runs when the deed this rule instance governs is [抵押]d. The body
+    /// owns eligibility (规则书 基础规则 5) and the payout; the engine keeps the
+    /// flag write + direct money move (`ctx::apply_mortgage`).
+    Mortgage = 9,
+    /// v73: a rule's **redeem body** (`On::Redeem(pre, guard, body)`) --
+    /// 规则书 基础规则 6. Same split as [`Self::Mortgage`].
+    Redeem = 10,
 }
 
 impl OnKind {
@@ -2192,6 +2200,8 @@ impl OnKind {
             6 => Self::Gate,
             7 => Self::Settle,
             8 => Self::Message,
+            9 => Self::Mortgage,
+            10 => Self::Redeem,
             _ => return None,
         })
     }
