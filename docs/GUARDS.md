@@ -273,7 +273,7 @@ table. Adding a name never edits their bodies.
 
 ### 4.2c Window variables per entry kind (ABI v49)
 
-`On::Gate` / `On::AtEnd` / `On::RollPlan` / `On::Settle` carry the same
+`On::Gate` / `On::Action(&[AtEnd])` / `On::FilterValue(&[RollPlan])` / `On::Settle` carry the same
 `pre` + residual-guard pair as `On::Action` (v49), so their conditions see the
 §4.2 schema. The window is built with `fill_window` from the **trigger / context
 the entry is dispatched on**; the candidate is `owner` = the entry's
@@ -315,8 +315,8 @@ residual wasm guard -- exactly the G3 split.
   declaration sites. Sugar consts `pre::MINE` (`actor == owner`) replaces the
   118 `mine` guards outright; the 19 `always` guards are deleted. The condition
   sits beside the (now residual) guard fn, and each clause lives in exactly one
-  of the two. **v49** extends the pair to `On::Gate` / `On::AtEnd` /
-  `On::RollPlan` / `On::Settle` too (§4.2c): no entry kind is unguarded any
+  of the two. **v49** extends the pair to `On::Gate` / `On::Action(&[AtEnd])` /
+  `On::FilterValue(&[RollPlan])` / `On::Settle` too (§4.2c): no entry kind is unguarded any
   more, and an entry whose condition rejects runs no body (and so emits no
   `card` flash).
 * Load time: `RulesetBuilder::build` parses + compiles every `pre` once
@@ -331,7 +331,7 @@ residual wasm guard -- exactly the G3 split.
 2. `run_hook` (host.rs) / `drive_inner` guard step: before
    `self.store(...)`; window context per trigger, owner = card's player.
    Since v49 this covers `On::Gate` entries too (they share `hook_entries`).
-3. `run` (host.rs) for `On::AtEnd` / `On::RollPlan` / `On::Settle` (v49):
+3. `run` (host.rs) for `On::Action(&[AtEnd])` / `On::FilterValue(&[RollPlan])` / `On::Settle` (v49):
    the same category → condition → guard → body, before `on_body` / `OP_RUN`,
    so a rejecting entry never flashes.
 4. `cant_play` (host.rs:648-671, wasm_rules.rs:3099-3136) and the skill gates

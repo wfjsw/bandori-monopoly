@@ -119,6 +119,12 @@ fn roll_shave(player_id: i32, value: i32) -> i32 {
 ///   `<= 0` (early return before the shave). RollAfter only sees the landed
 ///   face, so a face that was 0 before the shave now also suppresses [结算] --
 ///   which is what 「如果为0则此次移动不[结算]」 actually says.
+/// TODO(规则书): `plan::set_resolve(false)` writes `TurnCtx::plan`, and the
+///   walk folds that into the move only via `fold_plan_delta` (compared against
+///   a snapshot taken at `walk()` entry, *after* this Action) or the mid-step
+///   sync. A **0-step** move takes neither path, so a face that shaves to 0
+///   while already standing on a foreign rent tile still settles that tile.
+///   Multi-step moves are fine (the step loop syncs `plan.resolve`).
 fn no_resolve(player_id: i32) -> card_sdk::Asked {
     if trigger::player_id() != player_id {
         return Ok(());

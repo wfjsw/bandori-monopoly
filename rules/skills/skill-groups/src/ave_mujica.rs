@@ -109,6 +109,12 @@ fn bend(player_id: i32, value: i32) -> i32 {
     // Live sheet 1.5倍 (rulebook-doc 「翻倍」 is superseded). Integer fold
     // rounds the .5 up, matching OPEN-取整's exact transform.
     let bent = (value * 3 + 1) / 2;
+    // Latch the pre-bend figure for the PayAfter one-sided fixup. This is a
+    // keyed-state write (`state::set`), not a `refuse_if_filter`'d ctx effect.
+    // TODO(规则书): splitting the latch onto `On::Action(Effect)` would store
+    //   the *declared* (pre-PayAdd) amount instead of the PayMul input this
+    //   body sees, changing `after_bend`'s clawback whenever a PayAdd also
+    //   rewrote the figure. Kept in-body so the stored figure stays exact.
     state::set(player_id, ORIG, value);
     bent
 }

@@ -580,8 +580,10 @@ fn fire_roll_play(player_id: i32) -> card_sdk::Asked {
 }
 
 fn fire_roll_plan(_player_id: i32, v: FilterValue) -> FilterValue {
-    // `set_tag` has no FilterValue field. Kept here so timing stays identical;
-    // not `refuse_if_filter`'d.
+    // `plan::set_tag` is card-named (the key is this card's own tag, not a
+    // generic field), so it stays in-body rather than riding `FilterValue.tag`
+    // (whose write-back has no key). Not `refuse_if_filter`'d; documented
+    // exception for named tags only.
     ctx::plan::set_tag("fireRoll", 1);
     v
 }
@@ -716,6 +718,8 @@ fn pre_rollplan_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn pre_rollplan_body(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    // Named-tag write (see `fire_roll_plan`): the observation channel for
+    // "the body ran", not a generic FilterValue field.
     ctx::plan::set_tag("preRollPlan", 1);
     ctx::log(player_id, &Msg::new(key!("pre_rollplan_ran")));
     v

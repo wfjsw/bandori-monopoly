@@ -54,12 +54,19 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「当你进行主要移动时」 -- the (2) press is offered while the move is being
-/// planned.
+/// planned. The dice shape is a pure return; the one-shot latch clear and the
+/// CiRCLE-veto arming are keyed-state / prop writes (not `refuse_if_filter`'d).
 fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
     // 「进行一次双倍掷骰的移动，向后移动经过CiRCLE时不获得CiRCLE奖励」 --
     // the owed move's own shape. The CiRCLE veto is `prop::NO_REWARD` on this
     // instance (`docs/TILES.md`); `tick` disarms it at the turn end, when the
     // move is over.
+    // TODO(规则书): `state::set` / `set_prop` / `at_turn_end` are mutations
+    //   kept in this Filter body (one-shot consume + arm the CiRCLE veto +
+    //   schedule its disarm). `RollPlan` is filter-only, so there is no Action
+    //   half at the same point; `RollAfter` would arm the veto one step later
+    //   (after the face exists, before the walk) and is the nearest split if
+    //   one is wanted.
     state::set(player_id, OWED, 0);
     v.base_count = 2;
     v.base_sides = 20;

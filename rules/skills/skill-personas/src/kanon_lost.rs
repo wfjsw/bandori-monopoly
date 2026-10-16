@@ -16,7 +16,7 @@
 //! dice table being rewritten when it fires.
 
 use card_sdk::abi::{FilterValue, HookKind};
-use ruleset_core::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Turns since the last CiRCLE reward. Cleared on the reward.
@@ -81,14 +81,13 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 }
 
 /// (3) 「下回合移动投掷改为1d20+1d4」 -- the plan's dice table, rewritten while
-/// the silence holds.
+/// the silence holds. Pure: the base pair is `base_count`/`base_sides` and the
+/// extra d4 rides `add_base_count`/`add_base_sides` (the wrapper appends it).
 fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
     v.base_count = 1;
     v.base_sides = 20;
-    // `add_base_dice` has no FilterValue field (only `set_base_dice` maps to
-    // `base_count`/`base_sides`, and the host *replaces* the base pair). Kept
-    // here so timing stays identical; not `refuse_if_filter`'d.
-    plan::add_base_dice(1, 4, "真正的迷子");
+    v.add_base_count = 1;
+    v.add_base_sides = 4;
     ctx::log(player_id, &Msg::new(key!("kanon_lost_dice")));
     v
 }

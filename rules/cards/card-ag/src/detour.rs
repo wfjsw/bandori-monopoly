@@ -138,9 +138,9 @@ const NEXT_ROLL: &str = "detour_next_roll";
 /// replaces the table; 1d6 is the clause's. The `NEXT_ROLL == 0` early-out is
 /// the entry's condition (`slot('detour_next_roll') != 0`).
 fn next_roll(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    // TODO(规则书): `state::set` is a side effect kept in this Filter body
-    // (the slot clears the one-shot 「下一次投掷」 latch). Split to an Action
-    // if a post-RollPlan event is needed.
+    // One-shot latch clear. `state::set` is a keyed-state write (not a
+    // `refuse_if_filter`'d ctx effect); there is no FilterValue "consume slot"
+    // field and no post-RollPlan Action kind (RollPlan is filter-only).
     ctx::state::set(player_id, NEXT_ROLL, 0);
     card_sdk::abi::FilterValue { base_count: 1, base_sides: 6, ..v }
 }

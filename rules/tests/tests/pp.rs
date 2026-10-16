@@ -303,6 +303,54 @@ fn expect_non_turn_start_roll_minus_2() {
     assert_eq!(t.pos(0), 3, "move roll 5-2=3");
 }
 
+/// 规则书: 「如果为0则此次移动不[结算]」 -- current behaviour (Phase 2/3C):
+/// a face that shaves to 0 keeps the player put. Starting *beside* a foreign
+/// rent tile and shaving to 0 pays nothing (the move never reaches the tile).
+/// Pins the TODO(规则书) on `no_expectation::no_resolve`.
+#[test]
+fn expect_face_zero_shave_does_not_settle() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "PP:不要背负期待").unwrap();
+    drain(&mut t);
+    t.own(1, &[7]);
+    t.set_houses(7, 1); // rent 640 -- only charged on [结算]
+    t.begin_turn(0);
+    t.set_pos(0, 6); // beside the foreign rent tile
+    let money0 = t.money(0);
+    t.dice(&[2]); // shaves to 0
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 6, "0-length move stays put");
+    assert_eq!(t.money(0), money0, "face-0 move does not [结算]");
+}
+
+/// Pins the 0-step [结算] gap (TODO(规则书) on `no_expectation::no_resolve`):
+/// standing *on* a foreign rent tile and shaving to 0 still settles that tile
+/// (the walk's `plan.resolve` fold does not run for a 0-step move). Multi-step
+/// moves honour `resolve = false`. Keep this green until the engine folds
+/// `plan.resolve` for 0-step moves too.
+#[test]
+fn expect_face_zero_on_rent_tile_still_settles_for_now() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "PP:不要背负期待").unwrap();
+    drain(&mut t);
+    t.own(1, &[7]);
+    t.set_houses(7, 1); // rent 640
+    t.begin_turn(0);
+    t.set_pos(0, 7); // standing on the foreign rent tile
+    let money0 = t.money(0);
+    t.dice(&[2]); // shaves to 0
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 7, "0-length move stays put");
+    // 640 rent + 2×100 from this card's PayAdd stack.
+    assert_eq!(
+        t.money(0),
+        money0 - 840,
+        "0-step move on a rent tile still [结算]s today (gap)"
+    );
+}
+
 /// 规则书: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」(生效2次)
 #[test]
 fn expect_pay_plus_100() {

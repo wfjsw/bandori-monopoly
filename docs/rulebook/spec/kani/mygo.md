@@ -42,7 +42,7 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 | ID | book quote (short) | classification | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
 | `C-MYGO-rinpuu-01` | 「使自己获得一层[停留]」 | **PROVEN** | `rinpuu_01_give_stay_iff`, `rinpuu_01_mutant_is_detected`, `rinpuu_01_mutant_two_layers` | iff SUCCESSFUL 403s (2/2 covers); `rinpuu_01_mutant_two_layers` SUCCESSFUL (panic as expected) | — | — |
-| `C-MYGO-rinpuu-02` | 「并在回合结束时额外进行一次[触发结算]」 | **PROTOCOL-LEVEL** | — | — | extra settle is engine scheduling (`On::AtEnd` + `card_settle_at` protocol stub) | OPEN-触发结算 |
+| `C-MYGO-rinpuu-02` | 「并在回合结束时额外进行一次[触发结算]」 | **PROTOCOL-LEVEL** | — | — | extra settle is engine scheduling (`On::Action(&[AtEnd])` + `card_settle_at` protocol stub) | OPEN-触发结算 |
 | `C-MYGO-journey-01` | 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」 | **PROVEN** | `journey_01_place_four_crystals_iff`, `journey_01_mutant_is_detected` | mutant companion SUCCESSFUL; iff verdict pending | — | — |
 | `C-MYGO-journey-02` | 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶」 | **BLOCKED-HOST** | — | — | `turn_main_steps` is a protocol stub returning 0; the `>6` drain never runs under Kani. Missing: real `turn_main_steps` / main-move step count | — |
 | `C-MYGO-journey-03` | 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 | **PROTOCOL-LEVEL** | — | — | CounterChanged → set_dest(Graveyard) is a zone move; the emptying write itself is engine-side | — |

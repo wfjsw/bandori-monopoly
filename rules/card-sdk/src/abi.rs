@@ -2303,6 +2303,13 @@ pub struct FilterValue {
     /// RollPlan: `plan::set_tag("key", value)` -- the key is the creating
     /// card's own tag name (see the body); `UNCHANGED` keeps the plan's.
     pub tag: i32,
+    /// Pay pipeline: new payee (`UNCHANGED` / `-1` = bank / `>=0` = seat).
+    pub payee: i32,
+    /// RollPlan: move kind (`UNCHANGED` / 0 = walk / 1 = teleport).
+    pub move_kind: i32,
+    /// RollPlan: append this many base dice (`UNCHANGED` / count, sides).
+    pub add_base_count: i32,
+    pub add_base_sides: i32,
 }
 
 impl FilterValue {

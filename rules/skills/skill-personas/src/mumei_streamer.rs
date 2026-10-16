@@ -23,16 +23,38 @@ use card_sdk::{key, CardDef, Msg, On};
 
 /// Cards this skill flipped, so it can flip them back on exit.
 const FLIPPED: &str = "skill.mumei.flipped";
+/// Post-gain pot count latched at the payment declaration, so the pure
+/// `PayAdd` filter sees the post-gain X even when the gain just filled the pot
+/// (and so entered 状态2 before the filter's own condition is read).
+const BUMP_X: &str = "skill.mumei.bumpX";
 
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
         On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Filter(
-            &[HookKind::PayAdd],
+        // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
+        // mutating, so they ride `HookKind::Effect` (the payment declaration,
+        // before `PayAdd`). The post-gain X is latched for the pure filter.
+        On::Action(
+            &[HookKind::Effect],
             "target == owner && actor != owner && slot('skillState') != 2",
             None,
+            on_pay_declare,
+        ),
+        // 状态1（1）「并使那次支付的金额提高X*100」 -- pure amount reshape.
+        On::Filter(
+            &[HookKind::PayAdd],
+            "target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0",
+            None,
             on_pay_add,
+        ),
+        // Drop the one-shot latch once the payment is done (split legs all see
+        // the same X).
+        On::Action(
+            &[HookKind::PayAfter],
+            "actor == owner && slot('skill.mumei.bumpX') >= 0",
+            None,
+            clear_bump,
         ),
         On::Action(
             &[HookKind::TurnEnd],
@@ -52,7 +74,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[0]);
+    .silent(&[0, 3]);
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -60,26 +82,43 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 状态1（1）「每次其他玩家向你支付资金时，你立即获得1火罐…并使那次支付的金额
-/// 提高X*100」. `target == owner && actor != owner && slot('skillState') != 2`
-/// is the pre.
-fn on_pay_add(player_id: i32, value: i32) -> i32 {
+/// 状态1（1）「每次其他玩家向你支付资金时，你立即获得1火罐」 and （2）'s
+/// cap transition. Mutating halves of the clause, riding the payment
+/// declaration (`HookKind::Effect`) so the `PayAdd` filter below sees the
+/// post-gain X.
+fn on_pay_declare(player_id: i32) -> card_sdk::Asked {
     // 「你立即获得1火罐」 first, so X counts it.
-    // (`fire::gain` is a keyed-state write, not a `refuse_if_filter`'d ctx
-    //  effect; the `Result` never actually prompts.)
-    let _ = rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")));
-    // 「使那次支付的金额提高X*100，X为你拥有的火罐数」
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
     let x = state::get(player_id, state_key::CHARGE);
-    let out = value + x * 100;
-    ctx::log(
-        player_id,
-        &Msg::new(key!("mumei_bump")).i("n", (x * 100) as i64),
-    );
+    // Latch the post-gain X. The latch is what the pure `PayAdd` filter reads;
+    // it also lets that filter fire for this very payment when the gain just
+    // filled the pot and （2） entered 状态2 before `PayAdd` is dispatched.
+    state::set(player_id, BUMP_X, x);
     // （2）「任何时刻当你的火罐数到达上限时，你立即进入状态2」
     if x >= state::max(player_id, state_key::CHARGE) {
         enter_two(player_id);
     }
+    Ok(())
+}
+
+/// 状态1（1）「并使那次支付的金额提高X*100，X为你拥有的火罐数」 -- pure amount
+/// reshape off the latched post-gain X. The log is allowed (not a mutation).
+fn on_pay_add(player_id: i32, value: i32) -> i32 {
+    let x = state::get(player_id, BUMP_X).max(0);
+    let out = value + x * 100;
+    if x > 0 {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("mumei_bump")).i("n", (x * 100) as i64),
+        );
+    }
     out
+}
+
+/// Drop the one-shot [`BUMP_X`] latch once the payment has settled.
+fn clear_bump(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, BUMP_X, -1);
+    Ok(())
 }
 
 /// Residual guard for [`at_turn_end`]: the pot is at its cap. `state::max` is
@@ -150,8 +189,20 @@ pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
+pub fn on_pay_declare_kani(player_id: i32) -> card_sdk::Asked {
+    on_pay_declare(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
 pub fn on_pay_add_kani(player_id: i32, value: i32) -> i32 {
     on_pay_add(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_bump_kani(player_id: i32) -> card_sdk::Asked {
+    clear_bump(player_id)
 }
 
 #[cfg(kani)]

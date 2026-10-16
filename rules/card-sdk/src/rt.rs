@@ -286,6 +286,10 @@ fn read_filter_value() -> crate::abi::FilterValue {
         teleport_to: FilterValue::UNCHANGED,
         clear_dice: FilterValue::UNCHANGED,
         tag: FilterValue::UNCHANGED,
+        payee: ctx::trigger::target(),
+        move_kind: FilterValue::UNCHANGED,
+        add_base_count: FilterValue::UNCHANGED,
+        add_base_sides: FilterValue::UNCHANGED,
     }
 }
 
@@ -360,8 +364,31 @@ fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue
     if changed(v.clear_dice, input.clear_dice) && v.clear_dice != 0 {
         ctx::plan::clear_dice();
     }
-    // `tag` is card-specific (`plan::set_tag("name", v)`); bodies that need a
-    // named tag call `plan::set_tag` themselves (not refuse_if_filter'd).
+    if changed(v.payee, input.payee) {
+        ctx::trigger::set_pay_target(v.payee);
+    }
+    if changed(v.move_kind, input.move_kind) {
+        let k = if v.move_kind == 1 {
+            crate::abi::MoveKind::Teleport
+        } else {
+            crate::abi::MoveKind::Walk
+        };
+        ctx::plan::set_kind(k);
+    }
+    if changed(v.add_base_count, input.add_base_count)
+        || changed(v.add_base_sides, input.add_base_sides)
+    {
+        let (c, s) = (v.add_base_count, v.add_base_sides);
+        ctx::plan::add_base_dice(
+            if c == U { 0 } else { c },
+            if s == U { 0 } else { s },
+            "filter",
+        );
+    }
+    // `tag` is card-named (`plan::set_tag("key", v)` -- the key is the creating
+    // card's own tag name, not a generic field). Bodies that need a named tag
+    // call `plan::set_tag` themselves; this write-back deliberately does not
+    // apply `tag` (there is no key on the wire). Documented exception.
 }
 
 /// Generate the guest exports for a card table.

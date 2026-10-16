@@ -148,7 +148,7 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 
 - Specs are pure predicates in `spec/events.rs`, quoted from `events.md` / `data/events.json` only.
 - Bodies are invoked unmodified via `invoke::event_play` / `invoke::hook`.
-- Activation (`On::Play`) and expiry tick (`On::AtEnd` / turn-start hooks) are proven **separately** where the model allows; the link between them (`schedule_turn_end`) is a protocol stub.
+- Activation (`On::Play`) and expiry tick (`On::Action(&[AtEnd])` / turn-start hooks) are proven **separately** where the model allows; the link between them (`schedule_turn_end`) is a protocol stub.
 - Mutants use reachable-disagreement companions (`*_mutant_is_detected`) unless `#[kani::should_panic]` is reliable.
 - Isolation assumes (ample money, empty piles, frozen seat counts) are in the harness module docs and `kani::assume`d.
 ## Failures (batch 3d root-cause)

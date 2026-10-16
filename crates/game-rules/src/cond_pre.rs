@@ -1614,6 +1614,9 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.sayoThorns.used",
     // `mumei_streamer` flip count (`state::set(player_id, FLIPPED, n)`).
     "skill.mumei.flipped",
+    // `mumei_streamer` post-gain pot X latched at the payment declaration for
+    // the pure `PayAdd` filter (`state::set(player_id, BUMP_X, x)`).
+    "skill.mumei.bumpX",
     // `hina_lottery` borrowed-skill index (`state::set(player_id, BORROWED, k)`).
     "skill.hinaLottery.borrowed",
     // `arisa_bonsai` passed-station latch (`ctx::set_slot(player_id, …, 1)`).

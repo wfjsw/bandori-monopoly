@@ -471,8 +471,8 @@ impl CardDef {
 /// mix the two; a mixed declaration is split into one Action and one Filter
 /// entry (kind/variant agreement is enforced at ruleset build).
 ///
-/// Guarded entries (`Play` gate / `Counteract` / `Action` / `Filter` / `Gate` /
-/// `AtEnd` / `RollPlan` / `Settle`) carry a **condition** string (`pre`)
+/// Guarded entries (`Play` gate / `Counteract` / `Action` / `Filter*` / `Gate` /
+/// `Settle`) carry a **condition** string (`pre`)
 /// immediately before the residual guard -- category → condition → guard → body
 /// (docs/GUARDS.md §4.3, the three-layer model). `""` = no condition. Sugar:
 /// [`pre::MINE`] (`actor == owner`); or attach one with [`On::pre`]. The
@@ -833,5 +833,8 @@ mod tests {
         assert_eq!(abi::OnKind::from_i32(3), Some(abi::OnKind::Action));
         assert_eq!(abi::OnKind::from_i32(9), Some(abi::OnKind::Filter));
         assert_eq!(abi::OnKind::from_i32(1), None);
+        // v75 retired AtEnd = 4 / RollPlan = 5 -- never reuse.
+        assert_eq!(abi::OnKind::from_i32(4), None);
+        assert_eq!(abi::OnKind::from_i32(5), None);
     }
 }

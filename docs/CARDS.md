@@ -11,7 +11,7 @@ The same authoring shape covers the other rule categories: board tiles
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
 the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
-what runs while it is active, `On::AtEnd` for expiry.
+what runs while it is active, `On::Action(&[HookKind::AtEnd])` for expiry.
 
 ## How a card runs
 
@@ -35,8 +35,8 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
     // On::Counteract(&[ChainKind::Pay], "", guard, counteract),  // [反击]: kinds + condition + guard + effect
     // On::Action(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
-    // On::AtEnd(at_end),                             // scheduled turn-end body
-    // On::RollPlan(roll_plan),                       // shapes the main move
+    // On::Action(&[HookKind::AtEnd], "", None, at_end),        // scheduled turn-end body
+    // On::FilterValue(&[HookKind::RollPlan], "", None, roll_plan), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
 fn press(player_id: i32) {
@@ -140,6 +140,15 @@ return before the next raise, within a stage in placement order:
 Money rounds **up to a multiple of 10 once**, after every add/mul modifier
 has rewritten the running figure (user ruling 2026-10-15). An amount no
 modifier touched stays exactly as the base formula produced it.
+
+### v75: RollPlan / AtEnd fold
+
+`On::RollPlan` is `On::FilterValue(&[HookKind::RollPlan], …)` (the plan is a
+`FilterValue`). `On::AtEnd` is `On::Action(&[HookKind::AtEnd], …)`: the
+one-shot-ness lives in the existing `schedule_turn_end` list
+(`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire ids
+`OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never be
+reused.
 
 **Deferred (not filter today).** The pure decision gates `AbnormalGuard`,
 `ImmuneAll`, `Untargetable`, `Redirect`, `BuyGate` fold `set_cancelled` /

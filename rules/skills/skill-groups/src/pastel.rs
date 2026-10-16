@@ -34,10 +34,16 @@ pub const PASTEL: CardDef = CardDef::new(
         //
         // ABI v74: `FlipEffect` is an integer Filter kind. The body does NOT
         // rewrite the flip value -- it adds crystals based on it (a side
-        // effect). `add_crystals` is not `refuse_if_filter`'d; kept here as a
-        // documented side effect at a filter kind because there is no adjacent
-        // non-filter flip event (`FlipAfter` does not exist). The return is the
-        // unchanged `value`.
+        // effect).
+        // TODO(规则书): `add_crystals` is the overflow grant 「可为此卡添加等量
+        //   溢出的[奇迹水晶]」 and is a mutation kept in this Filter body. There
+        //   is no post-flip event (`FlipAfter` does not exist; `CounterChanged`
+        //   fires on *instance* counters, not the player `P✽P粉丝(反)` token
+        //   this clause watches), and the overflow figure is `X - tok(FAN)`
+        //   taken *before* the counters move -- so no Action half can recompute
+        //   it after the flip without stashing X. Kept in-body to keep the
+        //   observable grant identical; `add_crystals` is not
+        //   `refuse_if_filter`'d.
         On::Filter(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
     ],
 );
@@ -88,7 +94,10 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]
 /// （最多10个）」 -- the overflow is `X - owned`, taken while `tok(FAN)` is
 /// still the pre-flip count. Returns `value` unchanged (the flip count is not
-/// rewritten); `add_crystals` is the documented side effect at this filter kind.
+/// rewritten).
+/// TODO(规则书): `add_crystals` is the overflow grant and stays in-body -- see
+///   the entry comment. `add_crystals` may prompt on the marker window; the
+///   `Result` is discarded so the filter signature holds.
 fn on_flip(player_id: i32, value: i32) -> i32 {
     let x = value;
     let have = ctx::tok(player_id, FAN);
@@ -96,9 +105,6 @@ fn on_flip(player_id: i32, value: i32) -> i32 {
     if over <= 0 {
         return value;
     }
-    // Side effect at a filter kind (not `refuse_if_filter`'d). No FlipAfter
-    // exists to carry this instead. `add_crystals` may prompt on the marker
-    // window; the `Result` is discarded so the pure-filter signature holds.
     let _ = ctx::add_crystals(over, 10);
     ctx::log(
         player_id,

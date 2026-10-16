@@ -185,9 +185,9 @@ pub enum Call {
         kind: crate::TriggerKind,
         player_id: i32,
     },
-    /// `On::AtEnd` -- the scheduled turn-end callback.
+    /// Scheduled turn-end callback (`On::Action(&[AtEnd])`).
     AtEnd { card: i32, player_id: i32 },
-    /// `On::RollPlan` -- the card's movement routine, called while the walk
+    /// Movement routine (`On::FilterValue(&[RollPlan])`), called while the walk
     /// is being planned.
     RollPlan { card: i32, player_id: i32 },
     /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the

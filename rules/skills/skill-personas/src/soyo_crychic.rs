@@ -17,7 +17,7 @@
 //! the residual guard is gone.
 
 use card_sdk::abi::{FilterValue, HookKind};
-use ruleset_core::ctx::{self, plan, state};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The teleport is armed (0/1). Presence only -- the tile to teleport to rides
@@ -89,12 +89,14 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 
 /// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan. The latch
 /// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`).
+/// Pure: the teleport rides `FilterValue.move_kind` / `teleport_to` / `resolve`.
+/// The one-shot latch clear is a keyed-state write (`state::set`) -- not a
+/// `refuse_if_filter`'d ctx effect, and there is no FilterValue "consume slot"
+/// field.
 fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
     let t = state::get(player_id, TILE);
     state::set(player_id, ARMED, 0);
-    // `set_kind` has no FilterValue field. Kept here so timing stays identical;
-    // not `refuse_if_filter`'d.
-    plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+    v.move_kind = 1; // teleport
     v.teleport_to = t;
     v.resolve = 1;
     ctx::log(
