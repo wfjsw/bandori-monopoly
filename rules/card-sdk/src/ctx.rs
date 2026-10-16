@@ -1999,31 +1999,19 @@ pub fn ask_number(
     let max = max.max(min);
     #[cfg(kani)]
     {
-        // Fixed 4-slot options (card-pool ranges are small).
-        let mut options: [Msg; 4] = [Msg::new("ask.intOption"); 4];
+        // Fixed 16-slot options. Covers the widest card range seen so far
+        // (`fire_bird`'s 1..=10). A wider range is a loud FAIL (coverage limit).
+        const CAP: usize = 16;
+        let mut options: [Msg; CAP] = [Msg::new("ask.intOption"); CAP];
         let mut n = 0usize;
-        macro_rules! push {
-            ($v:expr) => {
-                if n < 4 {
-                    options[n] = Msg::new("ask.intOption").i("n", ($v) as i64);
-                    n += 1;
-                }
-            };
+        let mut v = min;
+        while v <= max && n < CAP {
+            options[n] = Msg::new("ask.intOption").i("n", v as i64);
+            n += 1;
+            v += 1;
         }
-        if min <= max {
-            push!(min);
-            if min + 1 <= max {
-                push!(min + 1);
-                if min + 2 <= max {
-                    push!(min + 2);
-                    if min + 3 <= max {
-                        push!(min + 3);
-                        if min + 4 <= max {
-                            kani::assert(false, "ask_number: range wider than 4 under Kani");
-                        }
-                    }
-                }
-            }
+        if v <= max {
+            kani::assert(false, "ask_number: range wider than 16 under Kani");
         }
         if n == 0 {
             return Ok(min);
