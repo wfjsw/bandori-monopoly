@@ -36,7 +36,7 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     // On::Counteract(&[ChainKind::Pay], "", guard, counteract),  // [反击]: kinds + condition + guard + effect
     // On::Action(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
     // On::Action(&[HookKind::AtEnd], "", None, at_end),        // scheduled turn-end body
-    // On::FilterValue(&[HookKind::RollPlan], "", None, roll_plan), // shapes the main move
+    // On::FilterValue(&[HookKind::DiceRollPlan], "", None, roll_plan), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
 fn press(player_id: i32) {
@@ -90,7 +90,7 @@ transform. Wire ids 9 / 10 (master's v73).
 | id | was | folded into | ABI |
 |---|---|---|---|
 | 4 | `OnKind::AtEnd` | `On::Action(&[TriggerKind::AtEnd])` | v76 |
-| 5 | `OnKind::RollPlan` | `On::FilterValue(&[TriggerKind::RollPlan])` | v76 |
+| 5 | `OnKind::RollPlan` | `On::FilterValue(&[TriggerKind::DiceRollPlan])` | v76 |
 | 6 | `OnKind::Gate` | `On::FilterFlag` / `On::FilterValue` at the gate kinds | v77 |
 
 `On::Hook` (the pre-v74 name) is gone; `OnKind::Hook = 3` was renamed
@@ -120,7 +120,7 @@ Cancel stages (`PayTotalCancel`, `ChargePaying` substitute) are booleans:
 (`On::Filter`) or decline (`On::FilterFlag`); a card that does both is
 **split into two entries**.
 
-`BuyAssign` and `RollPlan` do not carry a single integer -- they rewrite a
+`BuyAssign` and `DiceRollPlan` do not carry a single integer -- they rewrite a
 small record (deal owner/houses/mortgaged; roller/dice/steps/…). Those use
 `On::FilterValue` and a `FilterValue` struct (`rules/card-sdk/src/abi.rs`).
 Fields the body leaves as `FilterValue::UNCHANGED` (`i32::MIN`) are not
@@ -164,14 +164,14 @@ source of truth**. Today (27 kinds):
   `PayTotalAdd`, `PayTotalMul`, `PayTotalCancel`
 * buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
-* roll / plan shaping -- `RollPlan`, `MoveRoll`, `RollValue` (v74)
+* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue`, `DiceRollValue` (v74)
 * flip count -- `FlipEffect`
 * decision gates (v76) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
   `PlayGate`, `BuyGate`, `AbnormalGuard`, `ImmuneAll`, `Untargetable`,
   `Redirect`
 
-`RollValue` (id 102) is raised **immediately before** `RollAfter` with the
-same payload: the pure roll-reshape stage. `RollAfter` stays an Action event
+`DiceRollValue` (id 102) is raised **immediately before** `DiceRollAfter` with the
+same payload: the pure roll-reshape stage. `DiceRollAfter` stays an Action event
 (dice already landed) and no longer rewrites the face.
 
 `ChargePaying` (ruleset-core kind 78) is **not** a filter kind: its 「可」
@@ -195,16 +195,16 @@ return before the next raise, within a stage in placement order:
   `payTotalMul` → `payTotalCancel` → `payAdd` → `payMul` →
   `payChooseAsk` (Action) → `payChoose` → `payAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
-* roll: `RollPlan` → dice → `RollValue` → `RollAfter` → `MoveRoll`
+* roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `DiceRollValue`
 * flip: `FlipEffect` (Filter) → counters move → `FlipAfter` (Action)
 
 Money rounds **up to a multiple of 10 once**, after every add/mul modifier
 has rewritten the running figure (user ruling 2026-10-15). An amount no
 modifier touched stays exactly as the base formula produced it.
 
-### v75: RollPlan / AtEnd fold
+### v75: DiceRollPlan / AtEnd fold
 
-`On::RollPlan` is `On::FilterValue(&[HookKind::RollPlan], …)` (the plan is a
+`On::RollPlan` is `On::FilterValue(&[HookKind::DiceRollPlan], …)` (the plan is a
 `FilterValue`). `On::AtEnd` is `On::Action(&[HookKind::AtEnd], …)`: the
 one-shot-ness lives in the existing `schedule_turn_end` list
 (`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire ids
@@ -233,7 +233,7 @@ instantiated.
 use card_sdk::{pre, On};
 
 // condition (`pre: &'static str`) before the guard
-On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null",
+On::Counteract(&[ChainKind::DiceRollValue], "actor == owner && move.roll != null",
                can_counteract, counteract),
 
 // sugar: `pre::MINE` = `actor == owner`
@@ -829,7 +829,7 @@ original names where the pairing is already implied (`settleBefore` →
 | `drewBefore` / `drawn` + `drew` | the per-draw points, **one raise per single card** (an N-card draw is N iterations, each payload naming one card). `drewBefore` is the *replacement* point: `t.card` is the deck's top, and a hook that replaces the draw calls `trigger::set_cancelled()` and performs its own look/pick -- whatever it adds to the hand is the replacement draw (「此次加手视为抽卡动作」) and the after points fire for it. After the card is in hand: `drawn` runs on the **drawn card itself** (C# `AfterDraw`), `drew` on the **field cards** (crystal-per-draw effects). Opening hands raise **none** of the three -- 「抽卡」 means a draw during play, and 朝同一片天空迈进's 「（开局时抽到此卡洗回）」 is a `deckAtGameStart` clause for exactly that reason. |
 
 `roll` carries `value = -1` as a "no roll yet" sentinel so roll-counteracting cards
-(which match `Roll | MoveRoll`) stay dormant before the dice are cast.
+(which match `Roll | DiceRollValue`) stay dormant before the dice are cast.
 
 ## Every line cites the rule book
 
@@ -968,10 +968,10 @@ cannot ship with a raw key showing to players.
   the v35 wave -- 2 of them `TODO(ABI)`, and those two are only the convention
   notes in `skill-bands` / `skill-characters`'s `lib.rs`; the card pool's
   `TODO(ABI)` list is empty). What is **landed** since the first cut: the `On::` handler
-  form (Play / CantPlay / Counteract / Hook / AtEnd / RollPlan), the field-hook kinds
+  form (Play / CantPlay / Counteract / Hook / AtEnd / DiceRollPlan), the field-hook kinds
   (`PassTile`, `PayAdd/PayMul/PayChoose/PayAt/PayAfter`, `SettleAfter` /
   `SettleBody` -- `SettleBody` replaced `SettleInstead` --,
-  `TurnStart`/`TurnEnd(+Before/After)`, `Drew/Drawn`, `RollAfter`, `Reshuffled`,
+  `TurnStart`/`TurnEnd(+Before/After)`, `Drew/Drawn`, `DiceRollAfter`, `Reshuffled`,
   `Bought`, `Discarded`, `DeckBeforeGame`/`DeckAtGameStart`, `BeforeOut`,
   `Teleported`), per-card `Crystals`, pile enumeration/take
   (`cards_in`/`take_card`/`card_replayable`), the turn-end scheduler

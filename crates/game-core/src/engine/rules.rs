@@ -416,7 +416,10 @@ impl Trigger {
             from: m.from,
             remaining: m.remaining,
             total: m.total,
-            roll: None,
+            // Carry the face so `move_roll` / `between` see it at the
+            // MoveRoll counteraction window (the pre-roll sentinel -1 is
+            // filtered to `null` downstream).
+            roll: Some(m.roll),
         });
         self.main = m.main;
         self
@@ -438,9 +441,9 @@ impl Trigger {
 ///
 /// ```ignore
 /// raise!(self, "passBefore", i, @m m, tile = next)?;
-/// raise!(self, "roll", i, value = -1)?;
+/// raise!(self, "diceRollBefore", i, value = -1)?;
 /// raise!(self, "card", i, card = Some(id.to_string()))?;
-/// let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?; // keep `t` to read back
+/// let t = raise!(self, "diceRollValue", i, @m m, value = m.roll)?; // keep `t` to read back
 /// ```
 macro_rules! raise {
     ($cx:expr, $kind:expr, $player_id:expr $(, $($rest:tt)*)?) => {{

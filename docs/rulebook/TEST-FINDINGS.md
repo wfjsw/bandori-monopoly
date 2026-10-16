@@ -989,7 +989,7 @@ prompts     {"auction": 255, "choice": 6414, "mortgage": 1068, "tile": 3922}
 event kinds {"bankrupt": 96, "build": 4669, "buy": 2899, "draw": 2320,
               "event": 1187, "forcebuy": 392, "lose": 7313, "mortgage": 2245,
               "move": 5347, "overlap": 1517, "pass": 5909, "play": 2709,
-              "redeem": 1517, "rent": 19567, "roll": 34398, "text": 55654,
+              "redeem": 1517, "rent": 19567, "diceRollBefore": 34398, "text": 55654,
               "turn": 34437}
 details     {"agent half rent": 4218, "auction won": 255, "circle money": 5909,
               "force buy": 392}
@@ -1321,8 +1321,8 @@ Six ignored DISCREPANCY tests un-ignored and green. Root causes split
 * **D, `m03_eve_then_yolo` (MOVE-10):** Eve's (2) is an `ask_number` 0..=up
   choice (options are `ask.intOption`); the old matcher looked for 「若宫伊芙」
   /「粉丝」 in the options and declined. Drive is `answer(0, 2)` (Y = 2), same
-  as the green twins `g10` / `g32`. Additive timing Eve `RollAfter` → Y.O.L.O
-  `MoveRoll` was already correct (4 + 2d4 + 1d4 = 8).
+  as the green twins `g10` / `g32`. Additive timing Eve `DiceRollAfter` → Y.O.L.O
+  `DiceRollValue` was already correct (4 + 2d4 + 1d4 = 8).
 * **D, `m22_mygo_band_move1` (MOVE-03):** 「于移动掷骰前选择移动1格以替代
   移动掷骰」 is a skill press *before* the roll (`t.skill`), not a window
   inside `t.roll`. The multi-activation half was already merged into one

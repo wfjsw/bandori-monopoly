@@ -7,7 +7,7 @@
 //! One clause, two halves: the pay is voided, and the next main move is a
 //! teleport back to that tile. 「取消那次支付」 is the pay chain's own cancel
 //! (`set_pay_amount(0)`); 「下回合的主要移动变为传送至…」 is an armed one-shot
-//! the next `RollPlan` consumes -- the same shape as detour's 「下一次的移动掷骰
+//! the next `DiceRollPlan` consumes -- the same shape as detour's 「下一次的移动掷骰
 //! 变更为1d6」.
 //!
 //! The latch is a presence flag plus a tile memory (the detour / soyo_clear
@@ -46,17 +46,17 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
             on_pay,
         ),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
-        // the armed one-shot (`actor == owner` on `RollPlan`). The latch is a
+        // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
         // so the condition alone decides and no residual guard remains.
         On::FilterValue(
-            &[HookKind::RollPlan],
+            &[HookKind::DiceRollPlan],
             "actor == owner && slot('skill.soyoCrychic.armed') != 0",
             None,
             on_plan,
         ),
         // One-shot latch clear once the rewritten move has been taken. This is
-        // a teleport plan, so `RollAfter` never fires (no dice) -- `MoveAfter`
+        // a teleport plan, so `DiceRollAfter` never fires (no dice) -- `MoveAfter`
         // is the next event for both teleports and walks.
         On::Action(
             &[HookKind::MoveAfter],
@@ -97,7 +97,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 /// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`).
 /// Pure: the teleport rides `FilterValue.move_kind` / `teleport_to` / `resolve`.
 /// The one-shot latch clear is [`on_plan_after`] on `MoveAfter` (teleports
-/// skip `RollAfter`).
+/// skip `DiceRollAfter`).
 fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
     let t = state::get(player_id, TILE);
     v.move_kind = 1; // teleport

@@ -186,9 +186,9 @@ pub enum Call {
     },
     /// Scheduled turn-end callback (`On::Action(&[AtEnd])`).
     AtEnd { card: i32, player_id: i32 },
-    /// Movement routine (`On::FilterValue(&[RollPlan])`), called while the walk
+    /// Movement routine (`On::FilterValue(&[DiceRollPlan])`), called while the walk
     /// is being planned.
-    RollPlan { card: i32, player_id: i32 },
+    DiceRollPlan { card: i32, player_id: i32 },
     /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the
     /// tile the rule instance governs. `player_id` is the player settling.
     Settle { card: i32, player_id: i32 },
@@ -214,7 +214,7 @@ impl Call {
             | Call::Counteract { player_id, .. }
             | Call::Hook { player_id, .. }
             | Call::AtEnd { player_id, .. }
-            | Call::RollPlan { player_id, .. }
+            | Call::DiceRollPlan { player_id, .. }
             | Call::Settle { player_id, .. }
             | Call::Mortgage { player_id, .. }
             | Call::Redeem { player_id, .. } => player_id,
@@ -227,7 +227,7 @@ impl Call {
             | Call::Counteract { card, .. }
             | Call::Hook { card, .. }
             | Call::AtEnd { card, .. }
-            | Call::RollPlan { card, .. }
+            | Call::DiceRollPlan { card, .. }
             | Call::Settle { card, .. }
             | Call::Mortgage { card, .. }
             | Call::Redeem { card, .. } => card,
@@ -1192,7 +1192,7 @@ impl Ruleset {
     /// will write into. The activation announcement (the client's card flash)
     /// goes there, so a drive with no entry, a guard reject or a probe is silent.
     ///
-    /// `AtEnd` / `RollPlan` / `Settle` entries carry their admission here
+    /// `AtEnd` / `DiceRollPlan` / `Settle` entries carry their admission here
     /// (category → condition → guard → body, docs/GUARDS.md §4.3): a rejecting
     /// entry runs no body and so never flashes. `Play` / `Counteract` keep their
     /// own separate admission (the play gate / `can_counteract` at offer time).
@@ -1212,10 +1212,10 @@ impl Ruleset {
             // have admitted an `Effect` entry on a `card` raise; resolve it too.
             Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
-            // v75: AtEnd / RollPlan are ordinary kind-keyed entries
-            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[RollPlan])`).
+            // v75: AtEnd / DiceRollPlan are ordinary kind-keyed entries
+            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])`).
             Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
-            Call::RollPlan { .. } => info.hook_entry(crate::TriggerKind::RollPlan),
+            Call::DiceRollPlan { .. } => info.hook_entry(crate::TriggerKind::DiceRollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),
             Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
             Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
@@ -1223,12 +1223,12 @@ impl Ruleset {
         let Some(entry) = entry else {
             return Ok(Outcome::Done(world.clone()));
         };
-        // v49: AtEnd / RollPlan / Settle answer "does this entry apply?" here.
+        // v49: AtEnd / DiceRollPlan / Settle answer "does this entry apply?" here.
         // (`Play`'s gate and `Counteract`'s `can_counteract` are their own
         // admission and are not re-checked at body time.)
         if matches!(
             call,
-            Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
+            Call::AtEnd { .. } | Call::DiceRollPlan { .. } | Call::Settle { .. }
                 | Call::Mortgage { .. } | Call::Redeem { .. }
         ) {
             let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
@@ -1256,7 +1256,7 @@ impl Ruleset {
     /// does `entry` admit against `world` / `player_id`? A rejecting condition
     /// skips the wasm guard entirely (`admits_pre`); a residual guard runs on a
     /// throwaway copy. Used by [`Self::run_hook`] (Hook + Gate) and [`Self::run`]
-    /// (AtEnd / RollPlan / Settle).
+    /// (AtEnd / DiceRollPlan / Settle).
     fn entry_admitted<W: CardWorld>(
         &self,
         world: &W,

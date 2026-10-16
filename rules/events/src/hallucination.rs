@@ -22,7 +22,7 @@ pub const HALLUCINATION: CardDef = CardDef::new(
         On::Play("", None, play),
         // 「任何玩家进行投掷前」 -- every plan, so the category filter is the
         // whole applicability. `always` deleted (a no-op prefetch).
-        On::FilterValue(&[HookKind::RollPlan], "", None, on_plan),
+        On::FilterValue(&[HookKind::DiceRollPlan], "", None, on_plan),
         On::Action(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );

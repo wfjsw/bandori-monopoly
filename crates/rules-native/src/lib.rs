@@ -538,7 +538,7 @@ fn entry_of(info: &CardInfo, call: &Call, trigger_kind: TriggerKind) -> Option<i
         Call::Counteract { .. } => info.entry(OnKind::Counteract, Some(trigger_kind)),
         Call::Hook { kind, .. } => info.hook_entry(*kind),
         Call::AtEnd { .. } => info.hook_entry(card_sdk::abi::TriggerKind::AtEnd),
-        Call::RollPlan { .. } => info.hook_entry(card_sdk::abi::TriggerKind::RollPlan),
+        Call::DiceRollPlan { .. } => info.hook_entry(card_sdk::abi::TriggerKind::DiceRollPlan),
         Call::Settle { .. } => info.entry(OnKind::Settle, None),
         Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
         Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
@@ -718,13 +718,13 @@ impl CardModules for NativeModules {
         let Some(entry) = entry_of(info, &call, world.trigger().kind) else {
             return Ok(Outcome::Done(world.clone()));
         };
-        // v49: AtEnd / RollPlan / Settle answer "does this entry apply?" here
+        // v49: AtEnd / DiceRollPlan / Settle answer "does this entry apply?" here
         // (mirrors `Ruleset::run`). A rejecting entry runs no body and so never
         // flashes.
         if matches!(
             call,
             Call::AtEnd { .. }
-            | Call::RollPlan { .. }
+            | Call::DiceRollPlan { .. }
             | Call::Settle { .. }
             | Call::Mortgage { .. }
             | Call::Redeem { .. }

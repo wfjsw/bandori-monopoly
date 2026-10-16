@@ -23,7 +23,7 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
-        On::FilterValue(&[HookKind::RollPlan], "", Some(on_plan_others), on_plan),
+        On::FilterValue(&[HookKind::DiceRollPlan], "", Some(on_plan_others), on_plan),
         On::Action(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
@@ -55,7 +55,7 @@ fn on_plan_others(_player_id: i32) -> bool {
 }
 
 /// 规则书: 「所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动
-/// （如果距离一样则向正常方向移动）」 -- at `RollPlan`, a non-drawer mover whose
+/// （如果距离一样则向正常方向移动）」 -- at `DiceRollPlan`, a non-drawer mover whose
 /// reverse path is strictly closer to the drawer's seat walks backwards; a tie
 /// keeps the normal direction. Only the direction is rewritten, not the length.
 /// Applicability is [`on_plan_others`].

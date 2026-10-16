@@ -519,7 +519,7 @@ pub enum On {
     /// Kinds must be filter kinds ([`abi::TriggerKind::is_filter`] == true)
     /// whose payload is an integer: PayAdd / PayMul / PayAt / PayTotalAdd /
     /// PayTotalMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
-    /// FlipEffect / RollValue.
+    /// FlipEffect / DiceRollValue.
     Filter(
         &'static [abi::HookKind],
         &'static str,
@@ -540,7 +540,7 @@ pub enum On {
     ),
     /// **Typed struct rewrite** (ABI v74). Body is
     /// `fn(player_id, v: FilterValue) -> FilterValue` -- pure.
-    /// Kinds: BuyAssign (deal owner/houses/mortgaged) and RollPlan
+    /// Kinds: BuyAssign (deal owner/houses/mortgaged) and DiceRollPlan
     /// (move-plan shaping). See [`abi::FilterValue`].
     FilterValue(
         &'static [abi::HookKind],
@@ -777,12 +777,12 @@ mod tests {
     #[test]
     fn is_filter_set_matches_docs() {
         for k in [
-            TriggerKind::MoveRoll,
+            TriggerKind::DiceRollValue,
             TriggerKind::PayChoose,
             TriggerKind::PayAdd,
             TriggerKind::PayMul,
             TriggerKind::PayAt,
-            TriggerKind::RollPlan,
+            TriggerKind::DiceRollPlan,
             TriggerKind::BuyAdd,
             TriggerKind::BuyMul,
             TriggerKind::BuySet,
@@ -793,7 +793,7 @@ mod tests {
             TriggerKind::FlipEffect,
             TriggerKind::TurnBonusTime,
             TriggerKind::TurnBaseTime,
-            TriggerKind::RollValue,
+            TriggerKind::DiceRollValue,
             TriggerKind::BuyGate,
             TriggerKind::AbnormalGuard,
             TriggerKind::ActGate,
@@ -812,7 +812,7 @@ mod tests {
             TriggerKind::TurnEnd,
             TriggerKind::Pass,
             TriggerKind::PayAfter,
-            TriggerKind::RollAfter,
+            TriggerKind::DiceRollAfter,
             TriggerKind::SettleBody,
             TriggerKind::CounterChanged,
             TriggerKind::DrewBefore,
@@ -861,7 +861,7 @@ mod tests {
         assert_eq!(abi::OnKind::from_i32(10), Some(abi::OnKind::Redeem));
         assert_eq!(abi::OnKind::from_i32(11), Some(abi::OnKind::Filter));
         assert_eq!(abi::OnKind::from_i32(1), None);
-        // Retired AtEnd = 4 / RollPlan = 5 / Gate = 6 -- never reuse.
+        // Retired AtEnd = 4 / DiceRollPlan = 5 / Gate = 6 -- never reuse.
         assert_eq!(abi::OnKind::from_i32(4), None);
         assert_eq!(abi::OnKind::from_i32(5), None);
         assert_eq!(abi::OnKind::from_i32(6), None);

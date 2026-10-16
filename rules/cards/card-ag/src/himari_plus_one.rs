@@ -11,10 +11,10 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     "AG:（绯玛丽）如果并非没问题",
-    // G4: kind (Roll|MoveRoll) is the category; `mine` + the roll threshold
+    // G4: kind (Roll|DiceRollValue) is the category; `mine` + the roll threshold
     // are the condition. Residual guard deleted.
     &[On::Counteract(
-        &[ChainKind::Roll, ChainKind::MoveRoll],
+        &[ChainKind::DiceRollBefore, ChainKind::MoveRoll],
         "actor == owner && move.roll != null && move.roll < 6",
         None,
         counteract,

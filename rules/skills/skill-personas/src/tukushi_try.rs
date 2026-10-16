@@ -30,7 +30,7 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
         On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[HookKind::RollAfter], "", Some(paired), on_roll),
+        On::Action(&[HookKind::DiceRollAfter], "", Some(paired), on_roll),
         On::Filter(&[HookKind::PayChoose], "", Some(paired), on_pay),
         On::Action(&[ruleset_core::kind::HouseAdded], "", Some(partner), on_built),
     ],

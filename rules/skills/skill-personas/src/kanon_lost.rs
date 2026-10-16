@@ -8,7 +8,7 @@
 //! (1) is a starting square, which is a position write at game start.
 //!
 //! (2) 「两次移动掷骰并将它们的结果相减」 -- the face is `|a - b|`, not a sum.
-//! `RollAfter` is where the first face exists; a second roll and the difference
+//! `DiceRollAfter` is where the first face exists; a second roll and the difference
 //! replace it.
 //!
 //! (3) 「三个回合内没有拿过Circle奖励」 is a three-turn silence, tracked as a
@@ -30,10 +30,10 @@ pub const KANON_LOST: CardDef = CardDef::new(
         On::Action(&[HookKind::DeckBeforeGame], "", None, at_start),
         // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
         // dice, so there are not two faces to subtract.
-        On::Action(&[HookKind::RollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
+        On::Action(&[HookKind::DiceRollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
         On::Action(&[ruleset_core::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
         On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
-        On::FilterValue(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
+        On::FilterValue(&[HookKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
     ],
 )
     .silent(&[2, 3]);

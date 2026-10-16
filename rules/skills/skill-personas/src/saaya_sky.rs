@@ -27,7 +27,7 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         // hook's applicability, not its effect (the ask is the effect).
         On::Action(&[HookKind::PayAfter], "", Some(pay_after_applies), on_pay_after),
         // （1）'s 「拥有saaya标记时」 -- the mark is the applicability.
-        On::Action(&[HookKind::RollAfter], card_sdk::pre::MINE, Some(roll_needs_mark), on_roll),
+        On::Action(&[HookKind::DiceRollAfter], card_sdk::pre::MINE, Some(roll_needs_mark), on_roll),
         // （2）'s 「可使用5个[火罐]」 -- the amount and the pot are the
         // applicability; spending the pot is the cost, kept in the body.
         // Interactive (ask_yes + fire spend + amount rewrite). Rides

@@ -23,22 +23,10 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
         // read on a BOARD_OWNER event instance).
-        On::FilterValue(&[HookKind::RollPlan], "", None, add_die),
-        // TODO(规则书): `sub_die` reshapes the roll value from an Action
-        // (impure: it rolls a die). Converting to
-        // `On::Filter(&[HookKind::RollValue], ..., sub_die)` with
-        // `out = (value - recorded_roll.min(value)).max(0)` is blocked until
-        // the host fills `recorded_roll` for RollValue raises (it never does
-        // today). Intended pure shape (commented out):
-        //   On::Filter(&[HookKind::RollValue], "", None, sub_die_filter),
-        //   fn sub_die_filter(_p: i32, v: i32) -> i32 {
-        //       if ctx::crystals() != PHASE_DOWN { return v; }
-        //       let cut = v.recorded_roll; // host-supplied 1d6
-        //       if cut == FilterValue::UNCHANGED || v <= 0 { return v; }
-        //       (v - cut.min(v)).max(0)
-        //   }
-        // Timing stays identical on `RollAfter` until then.
-        On::Action(&[HookKind::RollAfter], "", None, sub_die),
+        On::FilterValue(&[HookKind::DiceRollPlan], "", None, add_die),
+        // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
+        // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
+        On::FilterValue(&[HookKind::DiceRollValue], "", None, sub_die_filter),
         On::Action(&[HookKind::AtEnd], "", None, phase_end),
     ],
 );
@@ -58,7 +46,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「所有玩家的移动掷骰增加1d6」 -- the dice pool gains a d6 while
-/// phase 1 is up. Pure plan-dice reshape on `RollPlan`.
+/// phase 1 is up. Pure plan-dice reshape on `DiceRollPlan`.
 fn add_die(_player_id: i32, mut v: FilterValue) -> FilterValue {
     if ctx::crystals() == PHASE_UP {
         v.extra_count = 1;
@@ -74,19 +62,26 @@ fn add_die(_player_id: i32, mut v: FilterValue) -> FilterValue {
 /// sheet says 减少1d6 (a d6 less), not 少投1d6; if the intent is dropping a die
 /// from a pool that has one, this body is short.
 /// TODO(规则书): value reshape on an Action (impure: rolls dice). Kept as
-/// `On::Action(RollAfter)` writing `set_move_roll` -- see the entry comment
-/// for the blocked `RollValue` Filter shape.
-fn sub_die(player_id: i32) -> card_sdk::Asked {
+/// `On::Action(DiceRollAfter)` writing `set_move_roll` -- see the entry comment
+/// for the blocked `DiceRollValue` Filter shape.
+fn sub_die_filter(_player_id: i32, v: FilterValue) -> FilterValue {
     if ctx::crystals() != PHASE_DOWN {
-        return Ok(());
+        return v;
     }
-    let face = trigger::move_roll().unwrap_or_else(|| trigger::value());
+    let face = v.value;
     if face <= 0 {
-        return Ok(());
+        return v;
     }
-    let cut = roll(player_id, 1, 6).min(face);
-    trigger::set_move_roll(face - cut);
-    Ok(())
+    let cut = v.recorded_roll;
+    if cut == FilterValue::UNCHANGED {
+        // Host did not pre-roll; leave the face unchanged.
+        return v;
+    }
+    let cut = cut.min(face).max(0);
+    FilterValue {
+        value: face - cut,
+        ..v
+    }
 }
 
 /// 规则书: 「抽到的玩家的下回合结束前…增加1d6，此后抽到的玩家的下回合结束前…
@@ -127,8 +122,8 @@ pub fn add_die_kani(player_id: i32, v: FilterValue) -> FilterValue {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn sub_die_kani(player_id: i32) -> card_sdk::Asked {
-    sub_die(player_id)
+pub fn sub_die_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    sub_die_filter(player_id, v)
 }
 
 #[cfg(kani)]

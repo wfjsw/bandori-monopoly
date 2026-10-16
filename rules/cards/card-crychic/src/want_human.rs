@@ -18,7 +18,7 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
     &[
         On::Play("", None, want_human),
         On::Action(
-            &[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd],
+            &[HookKind::TurnStart, HookKind::DiceRollAfter, HookKind::TurnEnd],
             "actor == owner && card.placed",
             None,
             counteract,
@@ -77,14 +77,14 @@ const SLOT_BOOST: &str = "want_human_boost";
 /// "boost not consumed this turn".
 const SLOT_AB_BEFORE: &str = "want_human_ab_before";
 
-/// `Fx.RollAfter` / `Fx.TurnStart` (C# `CardWantHuman.RollAfter` / `TurnStart`).
+/// `Fx.DiceRollAfter` / `Fx.TurnStart` (C# `CardWantHuman.DiceRollAfter` / `TurnStart`).
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
 /// `actor == owner && card.placed` is the pre; the arms branch on kind.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）(sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，
         // 为此卡添加一个奇迹水晶。」 (was 「小于X」).
-        TriggerKind::RollAfter => {
+        TriggerKind::DiceRollAfter => {
             let roll = trigger::value();
             let x = ctx::slot(player_id, SLOT_X);
             if x > 0 && roll <= x {

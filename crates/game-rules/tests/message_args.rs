@@ -176,7 +176,7 @@ fn chain_kinds_and_counters_have_locale_text() {
             }
         }
         // Kinds with no dedicated `log.why.*` phrase, named in the fallback.
-        for k in ["rollPlan", "playGate", "flipEffect", "26", "73", "74", "75", "78"] {
+        for k in ["diceRollPlan", "playGate", "flipEffect", "26", "73", "74", "75", "78"] {
             if game.get(format!("log.kind.{k}")).is_none() {
                 missing.push(format!("{loc}: log.kind.{k}"));
             }

@@ -15,7 +15,7 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{prop, HookKind};
+use card_sdk::abi::{prop, FilterValue, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,11 +24,13 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
     &[
         On::Play("", None, no_expectation),
         // ABI v74 Filter/Action split of the old shared `hook` body:
-        // RollValue is the pure face shave; RollAfter only records the
+        // DiceRollValue is the pure face shave; DiceRollAfter only records the
         // 「如果为0则此次移动不[结算]」 no-resolve side effect; PayAdd is the
         // pure payment bend.
-        On::Filter(&[HookKind::RollValue], "card.placed", None, roll_shave),
-        On::Action(&[HookKind::RollAfter], "card.placed", None, no_resolve),
+        // v79: the shave + the 「为0则不[结算]」 clamp are one pure
+        // FilterValue at DiceRollValue (option C -- the text is a result
+        // modifier, not a 「掷骰后」 listener).
+        On::FilterValue(&[HookKind::DiceRollValue], "card.placed", None, roll_shave),
         On::Filter(&[HookKind::PayAdd], "card.placed", None, pay_add),
         On::Action(
             &[HookKind::Reshuffled],
@@ -92,44 +94,34 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
-/// `CardNoExpectation.RollAfter` (`m.Roll = max(0, m.Roll - 2)`). Pure Filter
-/// (ABI v74): returns the shaved face; the host folds it via `set_move_roll`.
-/// `card.placed` is the pre; only the owner's rolls are shaved.
-fn roll_shave(player_id: i32, value: i32) -> i32 {
+/// `CardNoExpectation` (1): 「投掷结果减少2（…如果为0则此次移动不[结算]）」.
+/// Pure FilterValue at DiceRollValue (v79): shaves the face by 2 and, when the
+/// result is 0, clears `resolve` so the walk does not settle. `card.placed`
+/// is the pre; only the owner's rolls are shaved.
+fn roll_shave(player_id: i32, v: FilterValue) -> FilterValue {
     if trigger::player_id() != player_id {
-        return value;
+        return v;
     }
-    let roll = trigger::move_roll().unwrap_or(value);
+    let roll = v.value;
     if roll <= 0 {
-        return value;
+        return v;
     }
     let cut = (roll - 2).max(0);
     ctx::log(
         player_id,
         &Msg::new(key!("no_expectation_roll")).i("n", cut as i64),
     );
-    cut
-}
-
-/// 规则书[持续]（1）: 「如果为0则此次移动不[结算]」 -- C# `m.Resolve = false`.
-/// Action half of the roll shave (log order: the Filter's `no_expectation_roll`
-/// first, then this line). Fires on the post-shave face.
-///
-/// Face-0 suppresses settle whether the 0 came from the shave or was already
-/// 0 -- the clause keys on 「为0」, not on the shave having done work.
-fn no_resolve(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id {
-        return Ok(());
+    let mut out = FilterValue { value: cut, ..v };
+    if cut == 0 {
+        // 「如果为0则此次移动不[结算]」 -- also when the face was already 0
+        // (the clause keys on 「为0」, not on the shave having done work).
+        out.resolve = 0;
+        ctx::log(
+            player_id,
+            &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
+        );
     }
-    if trigger::value() > 0 {
-        return Ok(());
-    }
-    ctx::plan::set_resolve(false);
-    ctx::log(
-        player_id,
-        &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
-    );
-    Ok(())
+    out
 }
 
 /// 规则书[持续]（2）: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
@@ -175,15 +167,13 @@ pub fn no_expectation_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_shave_kani(player_id: i32, value: i32) -> i32 {
-    roll_shave(player_id, value)
+pub fn roll_shave_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    roll_shave(player_id, v)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn no_resolve_kani(player_id: i32) -> card_sdk::Asked {
-    no_resolve(player_id)
-}
+
 
 #[cfg(kani)]
 #[inline(always)]

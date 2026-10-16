@@ -18,7 +18,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
         // deleted (a no-op prefetch); the `value` param is the face being
         // halved (effect), not applicability.
-        On::Filter(&[HookKind::RollValue], "", None, halve),
+        On::Filter(&[HookKind::DiceRollValue], "", None, halve),
         On::Action(&[HookKind::AtEnd], "", None, expire),
     ],
 );
@@ -37,8 +37,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「场上所有移动掷骰/2」 -- every move roll while the event is up is
-/// halved (integer division, floor). `RollValue` is the face filter raised
-/// immediately before `RollAfter` (`docs/CARDS.md`); the return is the new
+/// halved (integer division, floor). `DiceRollValue` is the face filter raised
+/// immediately before `DiceRollAfter` (`docs/CARDS.md`); the return is the new
 /// figure and the host folds it via `set_move_roll`.
 fn halve(_player_id: i32, value: i32) -> i32 {
     if value <= 0 {

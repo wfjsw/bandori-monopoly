@@ -2577,7 +2577,7 @@ impl<M: CardModules> RulesBridge<M> {
                     card_trigger::PLAY
                 }
             }
-            // `On::Action` / `RollPlan` / `AtEnd` (and a card's settle body):
+            // `On::Action` / `DiceRollPlan` / `AtEnd` (and a card's settle body):
             // a placed card's effect firing on someone else's turn.
             _ => card_trigger::HOOK,
         };
@@ -2706,12 +2706,12 @@ impl<M: CardModules> RulesBridge<M> {
         if uid >= 0 && is_money_hook_kind(trigger.kind) && cx.reentrant_hooks.contains(&uid) {
             return Ok(0);
         }
-        // v78: pre-roll a recorded die into the world so a RollPlan /
-        // RollValue Filter body can read `FilterValue.recorded_roll` instead
+        // v78: pre-roll a recorded die into the world so a DiceRollPlan /
+        // DiceRollValue Filter body can read `FilterValue.recorded_roll` instead
         // of calling `roll` (pure + replay-deterministic: the same RNG stream).
         if matches!(
             trigger.kind,
-            TriggerKind::RollPlan | TriggerKind::RollValue
+            TriggerKind::DiceRollPlan | TriggerKind::DiceRollValue
         ) {
             // Peek the next face from a *clone* of the stream so the main
             // dice stream is unchanged (existing tests / records keep their
@@ -3585,7 +3585,7 @@ impl<M: CardModules> RulesBridge<M> {
             } else {
                 cx.card_roll(player_id.max(0) as usize, count, sides)
             };
-            let t = self.raise_core(cx, "roll", player_id, |t| {
+            let t = self.raise_core(cx, "diceRollBefore", player_id, |t| {
                 t.value = face;
                 t.roll_source = game_core::engine::rules::RollSource::from_i32(source);
             })?;
@@ -3868,7 +3868,7 @@ impl<M: CardModules> RulesBridge<M> {
                 continue;
             }
             match e.r#type.as_str() {
-                "move" | "roll" | "teleport" => return true,
+                "move" | "diceRollBefore" | "teleport" => return true,
                 "build" | "mortgage" | "redeem" | "buy" | "overlap" => return true,
                 "pay" | "rent" | "gain" | "lose" => {
                     // Money legs: the two sides ride the Msg args (`who` /
@@ -6301,10 +6301,10 @@ impl<M: CardModules> RulesBridge<M> {
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
         trigger_kind(t.kind),
-        TriggerKind::MoveRoll | TriggerKind::Roll | TriggerKind::RollAfter | TriggerKind::RollValue
+        TriggerKind::MoveRoll | TriggerKind::DiceRollBefore | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue
     );
     // Only a move trigger carries a roll; `paid`/`settle` carry value as an
-    // amount, which must not read as a phantom move. `RollAfter` is the
+    // amount, which must not read as a phantom move. `DiceRollAfter` is the
     // post-roll hook and does carry the face (「若移动掷骰出目为16及以上」).
     // A card-driven `roll` raise has no move payload (`mv: None`); its face
     // stays on `value` and the writeback reads it from there.
@@ -7584,7 +7584,7 @@ fn describe_trigger(t: &Trigger) -> Msg {
     let mut m = match t.kind {
         // A play (L1) or a declared counter -- both are `card` links.
         TriggerKind::Card if !card.is_empty() => Msg::new("ask.counteract.detail.play"),
-        TriggerKind::MoveBefore | TriggerKind::MoveAfter | TriggerKind::Roll | TriggerKind::MoveRoll => {
+        TriggerKind::MoveBefore | TriggerKind::MoveAfter | TriggerKind::DiceRollBefore | TriggerKind::MoveRoll => {
             Msg::new("ask.counteract.detail.move")
         }
         // The counteraction key for a payment / a targeted effect is `effect`
@@ -8656,8 +8656,8 @@ fn is_hook_only(kind: &str) -> bool {
         TriggerKind::TurnEnd
             | TriggerKind::Drawn
             | TriggerKind::PayAfter
-            | TriggerKind::RollAfter
-            | TriggerKind::RollValue
+            | TriggerKind::DiceRollAfter
+            | TriggerKind::DiceRollValue
             | TriggerKind::AtEnd
             | TriggerKind::FlipAfter
             | TriggerKind::PayChooseAsk
@@ -8681,7 +8681,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::Bought
             | TriggerKind::BeforeOut
             | TriggerKind::Teleported
-            | TriggerKind::RollPlan
+            | TriggerKind::DiceRollPlan
             | TriggerKind::AbnormalGuard
             | TriggerKind::ImmuneAll
             | TriggerKind::Untargetable
@@ -8816,12 +8816,12 @@ mod tests {
             "bankrupt",
             "card",
             "event",
-            "moveRoll",
+            "diceRollValue",
             // reserved-but-declared kinds (engine does not raise all of these
             // yet, but `can_counteract` guards match on them so they must map)
             "passPlayer",
             "pay",
-            "roll",
+            "diceRollBefore",
             "counteracted",
             // v10 pre/post halves + new action hooks
             "turnStartBefore",
@@ -8846,8 +8846,8 @@ mod tests {
             "drawn",
             "passTile",
             "payAfter",
-            "rollAfter",
-            "rollValue",
+            "diceRollAfter",
+            "diceRollValue",
             "cardPlayed",
             "targeted",
             "payChoose",
@@ -8867,7 +8867,7 @@ mod tests {
             "settleBody",
             "beforeOut",
             "teleported",
-            "rollPlan",
+            "diceRollPlan",
             "abnormalGuard",
             "immuneAll",
             "untargetable",

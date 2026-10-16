@@ -62,7 +62,7 @@ crate::host_subset!(kkr_dispatch {
 });
 
 /// `HHW:运动的天赋` entries the harnesses call: `play`, `at_turn_end`,
-/// `on_crystals_changed`. The RollAfter / RollPlan bodies and the
+/// `on_crystals_changed`. The DiceRollAfter / DiceRollPlan bodies and the
 /// crystals-changed guard are separate entries (not called here).
 /// `ctx::decay` → `add_counter_self`; `ctx::set_crystals` → `set_counter_self`.
 crate::host_subset!(athletic_dispatch {

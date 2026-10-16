@@ -73,7 +73,7 @@ fn sparse2(
 // C-MUJICA-初华技能-01
 // 「状态1：移动改为10+1d10」
 // Pure arithmetic: the move length is 10 + d10, range 11..=20.
-// The RollPlan hook body (`on_plan`) rewrites the plan dice; the host's
+// The DiceRollPlan hook body (`on_plan`) rewrites the plan dice; the host's
 // `plan::set_base_dice` / `add_extra_dice` are structure-only stubs, so the
 // walk itself is PROTOCOL-LEVEL. The arithmetic is the text's determinate part.
 // Pure-formula harness — no body call.

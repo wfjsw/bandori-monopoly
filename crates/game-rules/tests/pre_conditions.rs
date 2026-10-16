@@ -123,7 +123,7 @@ fn pre_hook_does_not_fire() {
     assert!(guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1);
 }
 
-// ------------------------------------------------ v49: Gate / AtEnd / RollPlan / Settle --
+// ------------------------------------------------ v49: Gate / AtEnd / DiceRollPlan / Settle --
 // docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
 // pair as `On::Action`, and the host evaluates category → condition → guard →
 // body. A rejecting entry runs no body and so emits no `card` flash --
@@ -167,8 +167,8 @@ fn pre_rollplan_does_not_shape_the_move() {
     let r = fixtures();
     let card = r.card("TEST:preRollPlan").expect("fixture present");
     let mut w = effect_window(0, 0);
-    w.trigger.kind = TriggerKind::RollPlan;
-    let call = Call::RollPlan {
+    w.trigger.kind = TriggerKind::DiceRollPlan;
+    let call = Call::DiceRollPlan {
         card,
         player_id: 0,
     };
@@ -179,7 +179,7 @@ fn pre_rollplan_does_not_shape_the_move() {
         matches!(out, Outcome::Done(_)),
         "a rejecting routine must not pause"
     );
-    assert!(!flashed, "a rejecting RollPlan must not flash");
+    assert!(!flashed, "a rejecting DiceRollPlan must not flash");
     assert!(
         guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1,
         "the condition was evaluated and rejected"

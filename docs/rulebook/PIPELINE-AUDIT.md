@@ -521,7 +521,7 @@ already has is the key's own order.
 with and without the `buy_hook_instances` sort --
 `{"bankrupt": 96, "build": 4669, "buy": 2899, "draw": 2320, "event": 1187,
 "forcebuy": 392, "lose": 7313, "mortgage": 2245, "move": 5347, "overlap": 1517,
-"pass": 5909, "play": 2709, "redeem": 1517, "rent": 19567, "roll": 34398,
+"pass": 5909, "play": 2709, "redeem": 1517, "rent": 19567, "diceRollBefore": 34398,
 "text": 55654, "turn": 34437}`. Today's behaviour is unchanged.
 
 Note one place the key records a deviation rather than moving anything:

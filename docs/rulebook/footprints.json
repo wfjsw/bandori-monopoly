@@ -35,7 +35,7 @@
    "roll.result"
   ],
   "triggers": [
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "AG:刻入天穹傲岸的烈光": {
@@ -86,8 +86,8 @@
   ],
   "triggers": [
    "Play",
-   "Counteract:MoveRoll",
-   "RollPlan"
+   "Counteract:DiceRollValue",
+   "DiceRollPlan"
   ]
  },
  "AG:宣战布告": {
@@ -182,7 +182,7 @@
    "roll.result"
   ],
   "triggers": [
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "AG:（鸫）微小的『能做到』的事": {
@@ -422,7 +422,7 @@
    "roll.history"
   ],
   "triggers": [
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "HHW:Happy, Lucky, Smile, Yeah！": {
@@ -543,7 +543,7 @@
   "triggers": [
    "Play",
    "Hook",
-   "RollPlan",
+   "DiceRollPlan",
    "AtEnd"
   ]
  },
@@ -585,7 +585,7 @@
    "settle"
   ],
   "triggers": [
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "HHW:（育美）": {
@@ -632,7 +632,7 @@
   "triggers": [
    "Play",
    "Hook",
-   "RollPlan"
+   "DiceRollPlan"
   ]
  },
  "Mor:你的光芒将照亮前路": {
@@ -715,7 +715,7 @@
  "Mor:纯真振翅": {
   "writes": [
    "path.position",
-   "roll"
+   "diceRollBefore"
   ],
   "reads": [
    "path.direction"
@@ -1143,14 +1143,14 @@
  },
  "MyGO:若能再次交汇": {
   "writes": [
-   "roll",
+   "diceRollBefore",
    "path.position"
   ],
   "reads": [
    "path.pass.player"
   ],
   "triggers": [
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "MyGO:轮符雨": {
@@ -2028,7 +2028,7 @@
    "counteract"
   ],
   "triggers": [
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "RAS:Change the world": {
@@ -2096,10 +2096,10 @@
   ],
   "reads": [
    "path.pass",
-   "roll"
+   "diceRollBefore"
   ],
   "triggers": [
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "RAS:UNSTOPPABLE": {
@@ -2287,7 +2287,7 @@
    "fire"
   ],
   "reads": [
-   "roll"
+   "diceRollBefore"
   ],
   "triggers": [
    "Play",
@@ -2333,11 +2333,11 @@
    "fire"
   ],
   "reads": [
-   "roll"
+   "diceRollBefore"
   ],
   "triggers": [
    "Play",
-   "Counteract:MoveRoll"
+   "Counteract:DiceRollValue"
   ]
  },
  "Sumimi:Sweet Escape": {
@@ -2653,7 +2653,7 @@
   "triggers": [
    "Play",
    "Hook",
-   "MoveRoll"
+   "DiceRollValue"
   ]
  },
  "skill:丰川祥子:请把你们的人生交给我": {
@@ -2748,7 +2748,7 @@
    "path.move"
   ],
   "triggers": [
-   "RollPlan"
+   "DiceRollPlan"
   ]
  },
  "skill:佐藤益木:与燃烧的红色一起驰骋": {
@@ -2786,7 +2786,7 @@
  "skill:八潮瑠唯:正论暴击": {
   "writes": [
    "money",
-   "roll"
+   "diceRollBefore"
   ],
   "reads": [
    "money"
@@ -2951,7 +2951,7 @@
   "triggers": [
    "Play",
    "Hook",
-   "MoveRoll"
+   "DiceRollValue"
   ]
  },
  "skill:山吹沙绫:焕然一新的天空中": {
@@ -3241,7 +3241,7 @@
   "triggers": [
    "Play",
    "Hook",
-   "MoveRoll"
+   "DiceRollValue"
   ]
  },
  "skill:花园多惠:花园警察，出警！": {
@@ -3347,7 +3347,7 @@
    "Play",
    "Hook",
    "Pass",
-   "MoveRoll"
+   "DiceRollValue"
   ]
  },
  "skill:长崎素世:通透的颜色": {
@@ -3357,7 +3357,7 @@
    "money"
   ],
   "reads": [
-   "roll",
+   "diceRollBefore",
    "path.pass",
    "settle"
   ],

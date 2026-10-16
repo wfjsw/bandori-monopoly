@@ -47,7 +47,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         ),
         // 状态1 「移动改为10+1d10」 -- only while this player is in 状态1.
         On::FilterValue(
-            &[HookKind::RollPlan],
+            &[HookKind::DiceRollPlan],
             "actor == owner && slot('skillState') != 2",
             None,
             on_plan,

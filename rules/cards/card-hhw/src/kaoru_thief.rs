@@ -5,7 +5,7 @@
 //! >  将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。
 //!
 //! Place this card in play and put a thief mark on one other player. The
-//! crystal decay, the RollPlan dice (1d2 direction + 1d10 distance) and the
+//! crystal decay, the DiceRollPlan dice (1d2 direction + 1d10 distance) and the
 //! optional force-stop are in; the `H.AbnormalGate` wrapper around the stop
 //! stays a narrow TODO.
 
@@ -38,7 +38,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
         // fixed roll yet.
-        On::FilterValue(&[HookKind::RollPlan], 
+        On::FilterValue(&[HookKind::DiceRollPlan], 
             "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null",
             None,
             roll_plan,
@@ -173,7 +173,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）
-/// 和1d10（距离）进行结算」 -- C# `CardKaoruThief.RollPlan`: when anyone but the
+/// 和1d10（距离）进行结算」 -- C# `CardKaoruThief.DiceRollPlan`: when anyone but the
 /// owner starts a main move standing on the card's tile (and the plan has no
 /// fixed roll yet), the dice become 1d2 (direction) + 1d10 (distance).
 /// Applicability is the entry's condition; `mover` is

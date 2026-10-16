@@ -53,7 +53,7 @@ test("cheats select explicit seats and defaults, with validated card IDs", async
 
 test("malformed inputs never dispatch an action", async () => {
   const h = harness();
-  for (const line of ["money 1.5", "money -1", "money 100000001", "tp 40", "tp 1 -1", "draw 0", "draw 101", 'give "Card One"', "money 1 0 extra", "act []", 'act {"act":"roll","value":null}', 'act {"act":"roll","cards":[3]}', "act {bad}", "unknown"]) {
+  for (const line of ["money 1.5", "money -1", "money 100000001", "tp 40", "tp 1 -1", "draw 0", "draw 101", 'give "Card One"', "money 1 0 extra", "act []", 'act {"act":"diceRollBefore","value":null}', 'act {"act":"diceRollBefore","cards":[3]}', "act {bad}", "unknown"]) {
     await assert.rejects(h.run(line));
   }
   assert.equal(h.sent.length, 0);
@@ -63,11 +63,11 @@ test("online cheats dispatch in debug builds; ordinary online actions work", asy
   const h = harness("online");
   await h.run("money 1");
   await h.run('act {"act":"debug","debug":"money","value":1}');
-  await h.run('act {"act":"roll"}');
+  await h.run('act {"act":"diceRollBefore"}');
   assert.deepEqual(h.sent, [
     { act: "debug", debug: "money", value: 1, target: 0 },
     { act: "debug", debug: "money", value: 1 },
-    { act: "roll" },
+    { act: "diceRollBefore" },
   ]);
 });
 
@@ -150,12 +150,12 @@ test("missing, extra and out-of-range cheat arguments never dispatch", async () 
 
 test("raw actions validate every protocol field before dispatching", async () => {
   const h = harness();
-  const invalid: unknown[] = [null, [], "roll", 1, {}, { act: "" }, { act: 1 }];
+  const invalid: unknown[] = [null, [], "diceRollBefore", 1, {}, { act: "" }, { act: 1 }];
   for (const field of ["value", "target", "prompt"]) {
-    for (const value of [null, "1", 0.5, -2_147_483_649, 2_147_483_648]) invalid.push({ act: "roll", [field]: value });
+    for (const value of [null, "1", 0.5, -2_147_483_649, 2_147_483_648]) invalid.push({ act: "diceRollBefore", [field]: value });
   }
   for (const field of ["persona", "card", "debug"]) {
-    for (const value of [null, 1, []]) invalid.push({ act: "roll", [field]: value });
+    for (const value of [null, 1, []]) invalid.push({ act: "diceRollBefore", [field]: value });
   }
   for (const cards of [null, "c1", [1], ["c1", null]]) invalid.push({ act: "deck", cards });
   await assert.rejects(h.run("act"), /console.invalidJson/);
@@ -234,7 +234,7 @@ test("local commands work without a match and missing views fail clearly", async
 test("read-only solo sessions reject all writes while autopilot modes can be changed", async () => {
   const h = harness();
   h.sess.readOnly = true;
-  for (const line of ["money 1", "tp 1", "give c1", "draw 1", "state charge 1", 'act {"act":"roll"}', "auto off"]) {
+  for (const line of ["money 1", "tp 1", "give c1", "draw 1", "state charge 1", 'act {"act":"diceRollBefore"}', "auto off"]) {
     await assert.rejects(h.run(line), /console.readOnly/, line);
   }
   assert.deepEqual(h.sent, []);
@@ -242,13 +242,13 @@ test("read-only solo sessions reject all writes while autopilot modes can be cha
   for (const mode of ["bot", "chaos", "advanced"]) {
     assert.equal(await h.run(`auto ${mode}`), "console.ok");
     assert.equal(h.sess.autoMode, mode);
-    await assert.rejects(h.run('act {"act":"roll"}'), /console.autoActive/);
+    await assert.rejects(h.run('act {"act":"diceRollBefore"}'), /console.autoActive/);
   }
   await assert.rejects(h.run("auto unknown"), /console.usage/);
   assert.equal(h.sess.autoMode, "advanced");
   await h.run("auto off");
-  await h.run('act {"act":"roll"}');
-  assert.deepEqual(h.sent, [{ act: "roll" }]);
+  await h.run('act {"act":"diceRollBefore"}');
+  assert.deepEqual(h.sent, [{ act: "diceRollBefore" }]);
 });
 
 test("command errors use translations and propagate formatted engine errors", async () => {
@@ -265,7 +265,7 @@ test("command errors use translations and propagate formatted engine errors", as
   h.sess.act = async () => refusal;
   await assert.rejects(h.run("draw 2"), /Cannot cheat during a prompt/);
   h.sess.act = async () => { throw new Error("connection lost"); };
-  await assert.rejects(h.run('act {"act":"roll"}'), /connection lost/);
+  await assert.rejects(h.run('act {"act":"diceRollBefore"}'), /connection lost/);
 });
 
 test("an engine built without cheats refuses the cheat commands and says so in help", async () => {
@@ -277,7 +277,7 @@ test("an engine built without cheats refuses the cheat commands and says so in h
     }
     assert.deepEqual(h.sent, []);
     assert.match(String(await h.run("help")), /console\.cheatsDisabled/);
-    await h.run('act {"act":"roll"}');
-    assert.deepEqual(h.sent, [{ act: "roll" }]);
+    await h.run('act {"act":"diceRollBefore"}');
+    assert.deepEqual(h.sent, [{ act: "diceRollBefore" }]);
   }
 });

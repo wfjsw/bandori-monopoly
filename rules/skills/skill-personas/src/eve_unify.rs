@@ -10,7 +10,7 @@
 //! （1）'s grant is the skill rule placed on the grantee's field (see
 //! [`super::aya_with`]).
 //!
-//! （2） 「因任意原因投掷前」 is every roll, not just the move dice -- `RollAfter`
+//! （2） 「因任意原因投掷前」 is every roll, not just the move dice -- `DiceRollAfter`
 //! is the moment the face exists, and 「为此次投掷结果增加Yd4」 adds Yd4 to it.
 
 use card_sdk::abi::HookKind;
@@ -30,7 +30,7 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
             at_start,
         ),
         On::Action(
-            &[HookKind::RollAfter],
+            &[HookKind::DiceRollAfter],
             "actor == owner && tok('P✽P粉丝(正)') >= 1",
             Some(roll_ok),
             on_roll,

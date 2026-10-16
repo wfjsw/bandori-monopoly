@@ -34,7 +34,7 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
         // （2）「移动掷骰后可消耗一个火罐」 -- only with a pot to spend, and
         // only on a free roll.
         On::Action(
-            &[HookKind::RollAfter],
+            &[HookKind::DiceRollAfter],
             "actor == owner && charge(owner) >= 1 && plan.fixed_roll == null",
             None,
             offer,

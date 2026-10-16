@@ -45,7 +45,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::PassPlayer => Msg::new("log.why.pass_player")
             .player_id("who", who)
             .player_id("target", target),
-        TriggerKind::Roll | TriggerKind::MoveRoll | TriggerKind::RollAfter | TriggerKind::RollValue => {
+        TriggerKind::DiceRollBefore | TriggerKind::MoveRoll | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue => {
             Msg::new("log.why.roll")
                 .player_id("who", who)
                 .i("value", value)
@@ -250,7 +250,7 @@ fn kind_name(kind: &str) -> Msg {
     // wire spelling is only for a kind nobody has named yet.
     if matches!(
         kind,
-        "rollPlan" | "playGate" | "flipEffect" | "26" | "73" | "74" | "75" | "78"
+        "diceRollPlan" | "playGate" | "flipEffect" | "26" | "73" | "74" | "75" | "78"
     ) {
         return Msg::new(format!("log.kind.{kind}"));
     }

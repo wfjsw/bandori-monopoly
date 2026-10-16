@@ -1200,7 +1200,7 @@ pub use tsukushi_cash::*;
 
 // ===========================================================================
 // Documented-only / blocked clauses (no harness — see spec/skills_mor.rs):
-//   C-MOR-mashiro-01 / -02   PROTOCOL-LEVEL (RollPlan plan-field stubs)
+//   C-MOR-mashiro-01 / -02   PROTOCOL-LEVEL (DiceRollPlan plan-field stubs)
 //   C-MOR-touko-02           BLOCKED-HOST: `rent_of`
 //   C-MOR-nanami-02 / -03    PROTOCOL-LEVEL / documented-only
 //   C-MOR-rui-crit-01        OPEN-复制 / documented-only

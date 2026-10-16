@@ -8,7 +8,7 @@
 //! state: it writes `fire`'s bounds the way every pot skill does.
 //!
 //! （2） 「进行任意掷骰后」 is any roll at all, not just the move dice --
-//! `RollAfter` fires for the move's face, and a card's own `ctx::roll` goes
+//! `DiceRollAfter` fires for the move's face, and a card's own `ctx::roll` goes
 //! through the same host call, so both land here. 「择其一执行」 means the new
 //! face replaces or is discarded at the player's choice; the choice is the
 //! whole point of spending the pot.
@@ -26,7 +26,7 @@ pub const RAISE_EFFORT: CardDef = CardDef::new(
         // pot to spend. `fixed_roll` is derived plan state outside the CEL
         // schema (docs/GUARDS.md §4.2c): residual guard.
         On::Action(
-            &[HookKind::RollAfter],
+            &[HookKind::DiceRollAfter],
             "actor == owner && charge(owner) >= 1",
             Some(roll_unfixed),
             on_roll,

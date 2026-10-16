@@ -144,7 +144,7 @@ pub struct MatchState {
     pub landed: i32,
     /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
-    /// Would `act {act:"roll"}` be accepted
+    /// Would `act {act:"diceRollBefore"}` be accepted
     /// (`why_not_act`'s roll branch: the live `skip_move` latch, the
     /// `main_moved` flag, and the roller).
     pub can_roll_here: bool,

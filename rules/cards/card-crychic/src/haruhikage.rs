@@ -26,7 +26,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             ],
             // Per-kind applicability as a disjunction. The SettleBefore arm
             // carries the within-5 scan (丰川祥子 needs a player to step toward).
-            "(kind == MoveRoll && actor == owner && move.roll != null) \
+            "(kind == DiceRollValue && actor == owner && move.roll != null) \
              || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
                  && target == owner && tile.id >= 0 && value > 0)",
@@ -164,7 +164,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        TriggerKind::MoveRoll => reroll_skill(player_id),
+        TriggerKind::DiceRollValue => reroll_skill(player_id),
         TriggerKind::SettleBefore => step_toward_skill(player_id)?,
         // 规则书（2）[反击]: the payment window is the `effect` chain whose link
         // declares a `Pay` (`TriggerKind::Effect` -- `Pay` itself is the post-chain
@@ -179,7 +179,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 
 /// 椎名立希（CRYCHIC）的技能 -- one reroll of the move dice.
 fn reroll_skill(player_id: i32) {
-    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "moveRoll" branch:
+    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "diceRollValue" branch:
     // `int num = Math.Max(0, H.DoMoveRoll(move)); move.Roll = num;`.
     // C# rerolls with `H.DoMoveRoll`, which sums the move's whole dice table.
     let x = ctx::do_move_roll(player_id);

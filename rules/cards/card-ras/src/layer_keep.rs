@@ -20,12 +20,12 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         // that spends a 火罐 on a kept die. The gate admits whenever either
         // branch is available.
         On::Play("", Some(cant_play), play),
-        On::Action(&[HookKind::RollAfter], "actor == owner && card.placed", None, roll_after),
+        On::Action(&[HookKind::DiceRollAfter], "actor == owner && card.placed", None, roll_after),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::CHARGE` (「使用火罐进行掷骰」).
         On::Counteract(
-            &[ChainKind::Roll],
+            &[ChainKind::DiceRollBefore],
             "actor == owner && roll_source == 1",
             None,
             counter_fire,
@@ -78,7 +78,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
     // itself just stays in play (C# `H.PlaceFromPlay(c)`); the unchosen die is
-    // written by the `RollAfter` hook below.
+    // written by the `DiceRollAfter` hook below.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
     ctx::log(
@@ -88,7 +88,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardLayerKeep.RollAfter` -- after a fire-pot roll, keep the unchosen die.
+/// C# `CardLayerKeep.DiceRollAfter` -- after a fire-pot roll, keep the unchosen die.
 /// `actor == owner && card.placed` is the pre.
 /// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
 /// source is `roll_source::CHARGE` (the fire-pot reroll).
@@ -96,7 +96,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
 /// is played from hand; its `play` body places it on the field. The unchosen
 /// die is written by the fire-pot reroll path to the `layerUnused` slot and
-/// picked up by the `RollAfter` hook.
+/// picked up by the `DiceRollAfter` hook.
 fn counter_fire(player_id: i32) -> card_sdk::Asked {
     ctx::log(
         player_id,

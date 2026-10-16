@@ -32,15 +32,15 @@ fn split_cards_declare_filter_and_action_halves() {
         }
     };
 
-    // no_expectation (ABI v74): Play / Filter(RollValue) / Action(RollAfter)
+    // no_expectation (ABI v74): Play / Filter(DiceRollValue) / Action(DiceRollAfter)
     //   / Filter(PayAdd) / Action(Reshuffled)
     let s = shape("PP:不要背负期待");
     assert_eq!(s.len(), 5, "no_expectation entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Filter"));
-    assert_eq!(s[1].1, vec![102], "RollValue");
+    assert_eq!(s[1].1, vec![102], "DiceRollValue");
     assert_eq!(s[2].0, kind("Action"));
-    assert_eq!(s[2].1, vec![49], "RollAfter");
+    assert_eq!(s[2].1, vec![49], "DiceRollAfter");
     assert_eq!(s[3].0, kind("Filter"));
     assert_eq!(s[3].1, vec![55], "PayAdd");
     assert_eq!(s[4].0, kind("Action"));
@@ -89,12 +89,12 @@ fn no_expectation_silent_index_follows_the_split() {
     assert_eq!(
         info.on[1].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 1 (Filter RollValue) announces"
+        "entry 1 (Filter DiceRollValue) announces"
     );
     assert_eq!(
         info.on[2].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 2 (Action RollAfter) announces"
+        "entry 2 (Action DiceRollAfter) announces"
     );
     assert_eq!(
         info.on[3].presentation,
@@ -131,7 +131,7 @@ fn fever_filter_half_pay_add_still_boosts() {
     assert_eq!(paid, 60 + x, "Filter half applied exactly once (rent 60 + X {x}, n {n})");
 }
 
-/// no_expectation both halves: the roll shave (Filter RollValue) and PayAdd
+/// no_expectation both halves: the roll shave (Filter DiceRollValue) and PayAdd
 /// bend (Filter) still land. Outcome matches master
 /// `no_expect_roll_minus_2` + the pay-arm of the old shared `hook`.
 #[test]
@@ -144,12 +144,12 @@ fn no_expectation_both_halves_fire() {
     t.begin_turn(0);
     let face = 6;
     t.dice(&[face]);
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     while t.prompt().is_some() {
         let _ = t.answer(0, 0);
     }
-    // Action half (RollAfter): face - 2.
-    assert_eq!(t.pos(0), (face - 2) as usize, "RollAfter half shaves by 2");
+    // Action half (DiceRollAfter): face - 2.
+    assert_eq!(t.pos(0), (face - 2) as usize, "DiceRollAfter half shaves by 2");
 }
 
 /// j11 both halves: TurnEnd decay (Action) burns a crystal. Sequence matches
@@ -161,7 +161,7 @@ fn j11_action_half_decays_on_turn_end() {
     t.give_play(0, "Mujica:#J11").expect("place j11");
     assert_eq!(t.crystals(0, "Mujica:#J11"), Some(2), "placed with 2");
     t.dice(&[3]);
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     while t.prompt().is_some() {
         t.decline();
     }

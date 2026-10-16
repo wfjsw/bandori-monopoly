@@ -20,7 +20,7 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         // 规则书: 「每次掷骰获得一次资金」 -- the owner's own main-move dice
         // (`m.Seat == Seat && m.Main`). The free-roll check is residual.
         On::Action(
-            &[HookKind::RollAfter],
+            &[HookKind::DiceRollAfter],
             "actor == owner && card.placed && move.main",
             Some(roll_after_applies),
             on_roll_after,
@@ -29,7 +29,7 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         // `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's own main
         // move, with no fixed face yet. `plan.fixed_roll` carries the "no fixed
         // face" half now.
-        On::FilterValue(&[HookKind::RollPlan], "card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
+        On::FilterValue(&[HookKind::DiceRollPlan], "card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
         On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -77,7 +77,7 @@ fn roll_after_applies(_player_id: i32) -> bool {
 }
 
 /// 规则书: 「此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100」
-/// -- C# `CardSportsTalent.RollAfter` -> `Reward`. `actor == owner &&
+/// -- C# `CardSportsTalent.DiceRollAfter` -> `Reward`. `actor == owner &&
 /// card.placed && move.main` is the pre; [`roll_after_applies`] is the residual.
 fn on_roll_after(player_id: i32) -> card_sdk::Asked {
     reward(player_id)?;
@@ -105,7 +105,7 @@ fn reward(player_id: i32) -> card_sdk::Asked {
 /// `MoveCtx.MinRoll` clamps the final face up to 10 after the counteractions
 /// (`if (!m.Signed) m.Roll = max(m.MinRoll, m.Roll)`); `set_min_roll` is that
 /// plan field, shaped here before the dice (`On::RollPlan`). Same gate as the
-/// C# `RollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`) -- the
+/// C# `DiceRollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`) -- the
 /// entry's condition.
 fn roll_plan(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     card_sdk::abi::FilterValue { min_roll: 10, ..v }
@@ -113,7 +113,7 @@ fn roll_plan(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::F
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- reroll with
 /// `H.DoMoveRoll` until the face is at least 10 (at most 10 attempts, bailing
-/// out when the player is out). Called from the `RollAfter` branch of [`counteract`].
+/// out when the player is out). Called from the `DiceRollAfter` branch of [`counteract`].
 fn reroll_to_ten(player_id: i32) {
     let mut x = trigger::move_roll().unwrap_or(trigger::value());
     for _ in 0..10 {

@@ -392,7 +392,7 @@ fn a_negated_play_emits_exactly_one_negated() {
     assert_eq!(aimer[0].kind, "play");
 }
 
-// ------------------------------------------------ v49: Gate / AtEnd / RollPlan --
+// ------------------------------------------------ v49: Gate / AtEnd / DiceRollPlan --
 // docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
 // pair as `On::Action` (ABI v49). A rejecting entry runs no body and so emits
 // no `card` flash -- exactly like `hook_whose_cel_pre_rejects_stays_silent`
@@ -460,13 +460,13 @@ fn rollplan_whose_cel_pre_rejects_stays_silent() {
     let ran = activations_since(&t, mark, "TEST:preRollPlan");
     assert!(
         ran.is_empty(),
-        "a rejecting RollPlan condition must not flash: {:?} / {}",
+        "a rejecting DiceRollPlan condition must not flash: {:?} / {}",
         ran,
         t.recent_keys(20).join(", ")
     );
     assert!(
         !t.recent_keys(40).iter().any(|k| k.contains("pre_rollplan_ran")),
-        "a rejecting RollPlan body must not run: {}",
+        "a rejecting DiceRollPlan body must not run: {}",
         t.recent_keys(20).join(", ")
     );
 }

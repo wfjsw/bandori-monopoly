@@ -30,7 +30,7 @@ pub const TAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:椎名立希（CRYCHIC）:克服劣等感",
     &[
         On::Action(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.takiCrychic.armed') == 0", None, at_turn_start),
-        On::Action(&[HookKind::RollAfter], "", None, on_roll),
+        On::Action(&[HookKind::DiceRollAfter], "", None, on_roll),
         On::Action(&[ruleset_core::kind::SkillUsed], card_sdk::pre::MINE, None, on_skill_used),
     ],
 )

@@ -13,10 +13,10 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const YOLO: CardDef = CardDef::new(
     "AG:Y.O.L.O",
-    // G4: kind (Roll|MoveRoll) is the category; `mine` + the settled-roll
+    // G4: kind (Roll|DiceRollValue) is the category; `mine` + the settled-roll
     // clause are the condition. Residual guard deleted.
     &[On::Counteract(
-        &[ChainKind::Roll, ChainKind::MoveRoll],
+        &[ChainKind::DiceRollBefore, ChainKind::MoveRoll],
         "actor == owner && (move.roll != null || value >= 0)",
         None,
         counteract,

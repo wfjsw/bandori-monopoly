@@ -20,7 +20,8 @@
 /// Trigger / chain / hook kind values (shared wire numbering).
 #[allow(non_upper_case_globals)]
 pub mod trig {
-    pub const Roll: i64 = 1;
+    pub const DiceRollBefore: i64 = 1;
+    pub const DiceRollValue: i64 = 102;
     pub const MoveRoll: i64 = 2;
     pub const TurnStart: i64 = 3;
     pub const Pass: i64 = 4;
@@ -93,8 +94,9 @@ pub const TELEPORT_TRIGGER: i64 = trig::Teleport;
 /// context variables, and the table the eval scope binds.
 pub fn constants() -> &'static [(&'static str, i64)] {
     &[
-        ("Roll", trig::Roll),
+        ("DiceRollBefore", trig::DiceRollBefore),
         ("MoveRoll", trig::MoveRoll),
+        ("DiceRollValue", trig::DiceRollValue),
         ("TurnStart", trig::TurnStart),
         ("Pass", trig::Pass),
         ("PassPlayer", trig::PassPlayer),

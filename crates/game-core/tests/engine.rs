@@ -110,7 +110,7 @@ fn bot_games_play_to_the_end_and_rank_everyone() {
         // Something actually happened.
         let all = m.events_since(0);
         let kinds = |k: &str| all.iter().filter(|e| e.r#type == k).count();
-        assert!(kinds("roll") > 0 && kinds("turn") > 0, "seed {seed}");
+        assert!(kinds("diceRollBefore") > 0 && kinds("turn") > 0, "seed {seed}");
         // Survivors are ranked by score.
         let mut alive: Vec<_> = st.players.iter().filter(|s| !s.out()).collect();
         alive.sort_by_key(|s| s.rank);
@@ -319,7 +319,7 @@ fn a_human_plays_a_turn_with_commands() {
     assert!(m
         .events_since(0)
         .iter()
-        .any(|e| e.r#type == "roll" && e.player_id == me));
+        .any(|e| e.r#type == "diceRollBefore" && e.player_id == me));
 
     // Buy/build are settle-time offers only -- a net `act buy` is rejected.
     let pos = st.players[me as usize].pos as usize;

@@ -18,7 +18,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Filter(&[HookKind::RollValue], "actor == owner && move.main && card.placed", None, roll_half),
+        On::Filter(&[HookKind::DiceRollValue], "actor == owner && move.main && card.placed", None, roll_half),
         On::Filter(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
         On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
@@ -75,8 +75,8 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书(2): 「此卡在场时，你的移动掷骰的最终结算/2（向上取整）」 -- C#
-/// `CardMocaHalf.RollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
-/// main-move roll. ABI v74: a pure `RollValue` filter (placement order among
+/// `CardMocaHalf.DiceRollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
+/// main-move roll. ABI v74: a pure `DiceRollValue` filter (placement order among
 /// roll reshapes is preserved).
 fn roll_half(player_id: i32, value: i32) -> i32 {
     let roll = value.max(0);

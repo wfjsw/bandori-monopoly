@@ -614,8 +614,8 @@ pub struct World {
     #[serde(default)]
     pub rule_param_bonus: std::collections::BTreeMap<String, i32>,
     /// v78: host-supplied recorded roll for a Filter body. `i32::MIN` = none.
-    /// The host pre-rolls into the recorded RNG stream before a RollPlan /
-    /// RollValue Filter raise so the body can read it without calling `roll`.
+    /// The host pre-rolls into the recorded RNG stream before a DiceRollPlan /
+    /// DiceRollValue Filter raise so the body can read it without calling `roll`.
     #[serde(default = "no_recorded_roll")]
     pub recorded_roll: i32,
     pub ask_seq: i32,
@@ -847,7 +847,7 @@ impl World {
                 continue;
             }
             let ek = if seg.pending_first && seg.main {
-                "roll"
+                "diceRollBefore"
             } else {
                 "move"
             };
@@ -875,7 +875,7 @@ impl World {
             e.ahead = ahead;
             // Same pacing the old per-publish `Cx::wait` applied (1.5s for the
             // head `roll`, 0.3s for a continuation, plus 0.15s/step).
-            let pace = if ek == "roll" { 1.5 } else { 0.3 };
+            let pace = if ek == "diceRollBefore" { 1.5 } else { 0.3 };
             self.walk_flush.delay += pace + value.unsigned_abs() as f32 * 0.15;
         }
         self.walk_flush.flushing = false;

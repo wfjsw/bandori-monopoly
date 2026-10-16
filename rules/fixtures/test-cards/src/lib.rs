@@ -569,7 +569,7 @@ const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
         On::Play("", None, fire_roll_play),
-        On::FilterValue(&[HookKind::RollPlan], "", None, fire_roll_plan),
+        On::FilterValue(&[HookKind::DiceRollPlan], "", None, fire_roll_plan),
     ],
 );
 
@@ -706,7 +706,7 @@ const PRE_ROLLPLAN: CardDef = CardDef::new(
     "TEST:preRollPlan",
     &[
         On::Play("", None, pre_rollplan_place),
-        On::FilterValue(&[HookKind::RollPlan], "false", None, pre_rollplan_body),
+        On::FilterValue(&[HookKind::DiceRollPlan], "false", None, pre_rollplan_body),
     ],
 );
 

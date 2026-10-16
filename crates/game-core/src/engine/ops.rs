@@ -17,7 +17,7 @@ use crate::engine::world::Extreme;
 impl World {
     // ------------------------------------------- move shaping
 
-    // These shape the movement being planned (set from a card's RollPlan
+    // These shape the movement being planned (set from a card's DiceRollPlan
     // routine). They read/write `TurnCtx::plan`, which is the live routine
     // state; the broadcast summary is `MatchState::plan` (`MoveCtx::to_plan`).
 

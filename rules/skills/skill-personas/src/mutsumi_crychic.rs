@@ -21,7 +21,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 /// The named other player, or -1.
 const OTHER: &str = "skill.mutsumiCrychic.other";
-/// Their last move face, latched at their `RollAfter`.
+/// Their last move face, latched at their `DiceRollAfter`.
 const THEIRS: &str = "skill.mutsumiCrychic.theirs";
 
 pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
@@ -30,7 +30,7 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
         On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[HookKind::RollAfter], "", Some(other), latch),
+        On::Action(&[HookKind::DiceRollAfter], "", Some(other), latch),
     ],
 )
     .silent(&[3]);

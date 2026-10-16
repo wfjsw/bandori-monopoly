@@ -834,7 +834,7 @@ fn sumimi_skills_fire_on_circle_pass() {
         t.set_pos(0, (circle + 58) % 60);
         let before = t.charge(0);
         t.dice(&[3]);
-        t.roll(0).expect("roll");
+        t.roll(0).expect("diceRollBefore");
         drain(&mut t);
         if t.charge(0) != before + 1 {
             panic!(
@@ -859,7 +859,7 @@ fn mana_shop_pay_spends_pot_and_halves_spending() {
     let shop = tile("购物中心");
     t.set_pos(0, shop - 1);
     t.dice(&[1]);
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     // The skill asks yes/no; take yes.
     let mut offered = false;
     while let Some(p) = t.prompt() {

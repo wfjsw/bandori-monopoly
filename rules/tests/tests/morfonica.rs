@@ -246,7 +246,7 @@ fn starry_circle_pass_removes_crystal_and_pays_1000() {
     t.set_pos(0, 58);
     t.dice(&[3]); // 58 -> 59 -> 0(CiRCLE) -> 1
     t.roll(0).unwrap();
-    // The card's own RollAfter offer (「可以放弃第一次的结果重骰一次」) pauses
+    // The card's own DiceRollAfter offer (「可以放弃第一次的结果重骰一次」) pauses
     // the walk before it starts; decline it so the walk runs on the original 3.
     t.decline();
     assert_eq!(t.crystals(0, "Mor:蝴蝶飞舞的星月夜"), Some(2), "one removed");

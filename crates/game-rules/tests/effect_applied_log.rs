@@ -149,7 +149,7 @@ fn guard_reject_emits_nothing() {
 #[test]
 fn every_listened_trigger_kind_has_a_real_why() {
     use game_rules::{trigger_reason, Trigger, TriggerKind};
-    // Kinds the shipped rules declare (Hook / Gate / Counteract / RollPlan /
+    // Kinds the shipped rules declare (Hook / Gate / Counteract / DiceRollPlan /
     // AtEnd). A kind missing from `trigger_reason`'s dedicated arms falls
     // through to `log.why.generic`; this test pins the ones that matter.
     let kinds = [
@@ -171,9 +171,9 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::PayTotalAdd,
         TriggerKind::PayTotalMul,
         TriggerKind::PayTotalCancel,
-        TriggerKind::Roll,
+        TriggerKind::DiceRollBefore,
         TriggerKind::MoveRoll,
-        TriggerKind::RollAfter,
+        TriggerKind::DiceRollAfter,
         TriggerKind::TurnStart,
         TriggerKind::TurnStartBefore,
         TriggerKind::TurnEnd,

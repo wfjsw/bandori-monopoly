@@ -31,9 +31,9 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
         On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),
         // Pure plan reshape; the one-shot latch / CiRCLE-veto arming ride
-        // RollAfter (the next event after the plan, before the walk).
-        On::FilterValue(&[HookKind::RollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
-        On::Action(&[HookKind::RollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan_after),
+        // DiceRollAfter (the next event after the plan, before the walk).
+        On::FilterValue(&[HookKind::DiceRollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
+        On::Action(&[HookKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan_after),
     ],
 )
     .silent(&[1]);
@@ -95,7 +95,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, 0);
     plan::set_reverse(true);
     // 「你的下回合开始时，进行一次双倍掷骰的移动」 -- armed for the next
-    // `RollPlan` of this player's own turn.
+    // `DiceRollPlan` of this player's own turn.
     state::set(player_id, OWED, 1);
     ctx::log(player_id, &Msg::new(key!("tsugumi_plain_reverse")));
     Ok(())

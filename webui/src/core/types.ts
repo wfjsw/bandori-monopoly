@@ -173,7 +173,7 @@ export interface MatchState {
   roller: number; busy: boolean; skipMove: boolean; landed: number;
   /** ThinkTime room setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited. */
   thinkTime: number;
-  /** Would `act {act:"roll"}` be accepted now (`why_not_act`'s roll branch). */
+  /** Would `act {act:"diceRollBefore"}` be accepted now (`why_not_act`'s roll branch). */
   canRollHere: boolean;
   /** Would `act {act:"end"}` be accepted now (`why_not_act`'s end branch). */
   canEndHere: boolean;

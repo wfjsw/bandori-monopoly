@@ -34,7 +34,7 @@ pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
         On::Action(&[HookKind::Pass], "", Some(on_pass_has_croquette), on_pass),
-        On::FilterValue(&[HookKind::RollPlan], "", None, on_plan),
+        On::FilterValue(&[HookKind::DiceRollPlan], "", None, on_plan),
     ],
 );
 

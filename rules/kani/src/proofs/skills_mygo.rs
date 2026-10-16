@@ -16,7 +16,7 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // Host-op subsets (body-reachable ops).
 // ---------------------------------------------------------------------------
 
-/// `after_roll` (RollAfter) — add_crystals(1,1) + log.
+/// `after_roll` (DiceRollAfter) — add_crystals(1,1) + log.
 crate::host_subset!(mygo_after_roll_dispatch {
     add_counter_self => arm_add_counter_self,
     add_card_counter => arm_add_card_counter,
@@ -69,7 +69,7 @@ fn crystals_key() -> crate::intern::NameId {
 // ===========================================================================
 // C-MYGO-band-02
 // 「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。」
-// Hook entry index 1 (`On::Action(RollAfter)`). Seat-symmetric (「为此卡」).
+// Hook entry index 1 (`On::Action(DiceRollAfter)`). Seat-symmetric (「为此卡」).
 // ===========================================================================
 
 /// Shared iff at a **concrete** user seat.

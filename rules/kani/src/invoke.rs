@@ -289,7 +289,7 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 ///
 /// `kind` is one of `"Play"`, `"Counteract"`, `"Action"` /
 /// `"Filter"`, `"Gate"`, `"AtEnd"`,
-/// `"RollPlan"`, `"Settle"`, `"Message"`. For `Action`/`Filter`, `hook_name` may filter
+/// `"DiceRollPlan"`, `"Settle"`, `"Message"`. For `Action`/`Filter`, `hook_name` may filter
 /// by `HookKind` short name (`"PayAdd"`); `""` matches the first hook.
 ///
 /// `kind` / `hook_name` are short ASCII tags (not card ids). Parsed to
@@ -313,7 +313,7 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::AtEnd, On::Action(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
-            (KindTag::RollPlan, On::FilterValue(kinds, ..)) => {
+            (KindTag::DiceRollPlan, On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
             (KindTag::Settle, On::Settle(..)) => true,
@@ -338,7 +338,7 @@ enum KindTag {
     Filter,
     Gate,
     AtEnd,
-    RollPlan,
+    DiceRollPlan,
     Settle,
     Message,
     Mortgage,
@@ -430,7 +430,7 @@ fn kind_tag(kind: &str) -> KindTag {
     const FILTER: (u8, u64, u64) = tag_key_const("Filter");
     const GATE: (u8, u64, u64) = tag_key_const("Gate");
     const AT_END: (u8, u64, u64) = tag_key_const("AtEnd");
-    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
+    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("DiceRollPlan");
     const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
     const MESSAGE: (u8, u64, u64) = tag_key_const("Message");
     const MORTGAGE: (u8, u64, u64) = tag_key_const("Mortgage");
@@ -442,7 +442,7 @@ fn kind_tag(kind: &str) -> KindTag {
         FILTER => KindTag::Filter,
         GATE => KindTag::Gate,
         AT_END => KindTag::AtEnd,
-        ROLL_PLAN => KindTag::RollPlan,
+        ROLL_PLAN => KindTag::DiceRollPlan,
         SETTLE => KindTag::Settle,
         MESSAGE => KindTag::Message,
         MORTGAGE => KindTag::Mortgage,
@@ -695,8 +695,8 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     const TURN_END_BEFORE: (u8, u64, u64) = tag_key_const("TurnEndBefore");
     const TURN_END_AFTER: (u8, u64, u64) = tag_key_const("TurnEndAfter");
     const ROLL: (u8, u64, u64) = tag_key_const("Roll");
-    const ROLL_AFTER: (u8, u64, u64) = tag_key_const("RollAfter");
-    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
+    const ROLL_AFTER: (u8, u64, u64) = tag_key_const("DiceRollAfter");
+    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("DiceRollPlan");
     const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
     const SETTLE_BODY: (u8, u64, u64) = tag_key_const("SettleBody");
     const SETTLE_AFTER: (u8, u64, u64) = tag_key_const("SettleAfter");
@@ -730,9 +730,9 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
         TURN_START => Some(H::TurnStart),
         TURN_END_BEFORE => Some(H::TurnEndBefore),
         TURN_END_AFTER => Some(H::TurnEndAfter),
-        ROLL => Some(H::Roll),
-        ROLL_AFTER => Some(H::RollAfter),
-        ROLL_PLAN => Some(H::RollPlan),
+        ROLL => Some(H::DiceRollBefore),
+        ROLL_AFTER => Some(H::DiceRollAfter),
+        ROLL_PLAN => Some(H::DiceRollPlan),
         SETTLE => Some(H::Settle),
         SETTLE_BODY => Some(H::SettleBody),
         SETTLE_AFTER => Some(H::SettleAfter),
@@ -772,9 +772,9 @@ fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
         H::TurnStart => "TurnStart",
         H::TurnEndBefore => "TurnEndBefore",
         H::TurnEndAfter => "TurnEndAfter",
-        H::Roll => "Roll",
-        H::RollAfter => "RollAfter",
-        H::RollPlan => "RollPlan",
+        H::DiceRollBefore => "Roll",
+        H::DiceRollAfter => "DiceRollAfter",
+        H::DiceRollPlan => "DiceRollPlan",
         H::Settle => "Settle",
         H::SettleBody => "SettleBody",
         H::SettleAfter => "SettleAfter",

@@ -17,16 +17,16 @@ pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
         On::Play("", Some(cant_play), play),
-        // G4: kind (MoveRoll) is the category; `mine` + move fields are the
+        // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
         On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null && move.kind != Teleport", None, counteract),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
-        On::FilterValue(&[HookKind::RollPlan], "slot('detour_next_roll') != 0", None, next_roll),
+        On::FilterValue(&[HookKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, next_roll),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
-        // plan just built (RollAfter is the next event after RollPlan).
-        On::Action(&[HookKind::RollAfter], "slot('detour_next_roll') != 0", None, consume_next_roll),
+        // plan just built (DiceRollAfter is the next event after DiceRollPlan).
+        On::Action(&[HookKind::DiceRollAfter], "slot('detour_next_roll') != 0", None, consume_next_roll),
         On::Action(&[HookKind::AtEnd], "", None, clear_no_reward),
     ],
 )
@@ -123,7 +123,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_reverse(true);
     arm_no_reward(player_id);
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- armed here, consumed by the
-    // `RollPlan` hook below when the next plan is being built. One-shot: the hook
+    // `DiceRollPlan` hook below when the next plan is being built. One-shot: the hook
     // clears it so it does not rewrite the roll after that.
     ctx::state::set(player_id, NEXT_ROLL, 1);
     ctx::log(
@@ -136,10 +136,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// Armed when the counteraction fired; the next plan is the one it rewrites.
 const NEXT_ROLL: &str = "detour_next_roll";
 
-/// 规则书(2): 「下一次的移动掷骰变更为1d6」 -- `RollPlan` is the moment the dice
+/// 规则书(2): 「下一次的移动掷骰变更为1d6」 -- `DiceRollPlan` is the moment the dice
 /// plan is being built, so this is where the override belongs. Pure: only the
 /// dice reshape. The one-shot latch is consumed by [`consume_next_roll`] on
-/// `RollAfter`.
+/// `DiceRollAfter`.
 fn next_roll(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     card_sdk::abi::FilterValue { base_count: 1, base_sides: 6, ..v }
 }

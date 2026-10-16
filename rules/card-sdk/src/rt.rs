@@ -343,7 +343,7 @@ fn reason_key_name(key: i32) -> Option<&'static str> {
 /// body left non-`UNCHANGED` **and** actually changed from the input snapshot
 /// are written -- the snapshot pre-fills cheap getters so a body can read
 /// them, and a straight copy must not write them back (that would zero a
-/// RollPlan face whose `value` snapshot was 0).
+/// DiceRollPlan face whose `value` snapshot was 0).
 fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue) {
     use crate::abi::FilterValue;
     use crate::ctx;

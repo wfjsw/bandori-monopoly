@@ -743,7 +743,7 @@ impl Cx<'_> {
             if plan.steps < 0 {
                 // No fixed step count: roll it now, with the same raise points.
                 self.w.turn.plan = plan.clone();
-                raise!(self, "rollPlan", i, @m plan)?;
+                raise!(self, "diceRollPlan", i, @m plan)?;
                 plan = self.w.turn.plan.clone();
                 // A `rollPlan` body may have rewritten this move as a teleport
                 // (same branch `main_move` takes for the turn's main move).
@@ -758,9 +758,12 @@ impl Cx<'_> {
                         Some(n) => n,
                         None => self.roll_tables(&plan),
                     };
-                    let t = raise!(self, "rollValue", i, @m plan, value = plan.roll)?;
+                    // v79: DiceRollValue is the pure roll-reshape stage;
+                    // DiceRollAfter is the Action event; MoveRoll is the
+                    // [反击] reroll window (unchanged).
+                    let t = raise!(self, "diceRollValue", i, @m plan, value = plan.roll)?;
                     plan.roll = t.value.max(0);
-                    let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
+                    let t = raise!(self, "diceRollAfter", i, @m plan, value = plan.roll)?;
                     if t.value != plan.roll {
                         plan.roll = t.value.max(0);
                     }
@@ -1199,7 +1202,7 @@ impl Cx<'_> {
             // sentinel meaning "no roll yet": the bridge would otherwise
             // derive `move_roll` from `value` and let roll-counteracting cards
             // (which match `Roll | MoveRoll`) run before any dice exist.
-            raise!(self, "roll", i, @m m, value = -1)?;
+            raise!(self, "diceRollBefore", i, @m m, value = -1)?;
             if self.out(i) || !self.playing() {
                 self.w.st.step = stage::END;
                 return Ok(());
@@ -1207,14 +1210,14 @@ impl Cx<'_> {
         }
         if !self.out(i) {
             // `rollPlan` -- every placed card's `On::RollPlan` shapes the move
-            // before the dice (RollPlan -> roll -> RollAfter -> the moveRoll
+            // before the dice (DiceRollPlan -> roll -> DiceRollAfter -> the moveRoll
             // counteraction window).
             //
             // The card bodies shape `TurnCtx::plan` (that is what the `World`
             // plan ops write), so the walk has to take the move back afterwards.
             // Seed first so a body that only reads sees the fresh move.
             self.w.turn.plan = m.clone();
-            raise!(self, "rollPlan", i, @m m)?;
+            raise!(self, "diceRollPlan", i, @m m)?;
             m = self.w.turn.plan.clone();
             if self.out(i) || !self.playing() {
                 self.w.st.step = stage::END;
@@ -1232,7 +1235,7 @@ impl Cx<'_> {
                 // 传送」, ras 「下一次主要移动可变为传送至…」) -- rewrote this
                 // move as a teleport: the destination is the plan's, and no dice
                 // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
-                // …那格」 writes it from a `RollPlan` hook.
+                // …那格」 writes it from a `DiceRollPlan` hook.
                 let to = m.teleport_to as usize;
                 let resolve = m.resolve;
                 let why = m.why.clone();
@@ -1246,22 +1249,16 @@ impl Cx<'_> {
                     Some(n) => n,
                     None => self.roll_tables(&m),
                 };
-                // `rollValue` (v74) is the pure roll-reshape stage; `rollAfter`
-                // is the Action event on the landed face. A field card rewrites
-                // the face at `rollValue` (`fn(player_id, value) -> i32`), which
-                // is how a stored boost lands; `rollAfter` listeners only react.
-                let t = raise!(self, "rollValue", i, @m m, value = m.roll)?;
+                // v79: DiceRollValue is the pure roll-reshape stage;
+                // DiceRollAfter is the Action event; MoveRoll is the
+                // [反击] reroll window (unchanged).
+                let t = raise!(self, "diceRollValue", i, @m m, value = m.roll)?;
                 m.roll = t.value.max(0);
-                let t = raise!(self, "rollAfter", i, @m m, value = m.roll)?;
-                // v74: `rollAfter` no longer rewrites the face (it is an Action);
-                // keep the readback so a counteraction on the same window still
-                // lands, but a pure Action body leaves `t.value` untouched.
+                let t = raise!(self, "diceRollAfter", i, @m m, value = m.roll)?;
                 if t.value != m.roll {
                     m.roll = t.value.max(0);
                 }
                 let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
-                // A counteraction may have rerolled the dice: the face the walk uses is
-                // the one left on the trigger.
                 m.roll = t.value.max(0);
                 // A stored step count (`next_steps`) overrides the roll for this
                 // one main move.
@@ -1306,7 +1303,7 @@ impl Cx<'_> {
                 self.walk(&mut m)?;
             }
             // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
-            // `RollAfter` floor, saki_crychic's `SettleBefore` nudge): this
+            // `DiceRollAfter` floor, saki_crychic's `SettleBefore` nudge): this
             // move is over and the write must not shape the next one.
             self.w.turn.plan.teleport_to = -1;
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
@@ -1469,7 +1466,7 @@ impl Cx<'_> {
                 .opt("nores", (!resolve).then(|| Msg::new("log.part.no_resolve")))
                 .opt("still", still.then(|| Msg::new("log.part.no_move")))
         };
-        let kind = if m.main { "roll" } else { "move" };
+        let kind = if m.main { "diceRollBefore" } else { "move" };
         let pos = self.w.st.players[i].pos;
         if steps <= 0 {
             let e = self.w.log(kind, i as i32, head(true));

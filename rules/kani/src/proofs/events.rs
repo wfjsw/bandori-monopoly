@@ -1190,7 +1190,7 @@ fn assert_activation_keep(idx: usize) {
 
 // ---- E-hallucination-01 — 幻觉来了 -----------------------------------------
 // 「将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。」
-// On:: 0=Play, 1=Hook(RollPlan), 2=Hook(TurnStartBefore).
+// On:: 0=Play, 1=Hook(DiceRollPlan), 2=Hook(TurnStartBefore).
 // Roll substitution is E-hallucination-02 (follow-up / OPEN-hallucination-effects).
 
 #[kani::proof]
@@ -1349,7 +1349,7 @@ pub fn surprise_duel_02_expiry_blocked_by_set_prop() {
 // ---- E-heat-head-01 / 02 / 03 — 超燃甩头 -----------------------------------
 // 「将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，
 // 此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。」
-// On:: 0=Play, 1=Hook(RollPlan), 2=Hook(RollAfter), 3=AtEnd.
+// On:: 0=Play, 1=Hook(DiceRollPlan), 2=Hook(DiceRollAfter), 3=AtEnd.
 // Phase crystals via set_crystals → counter_self (modeled on trig_player).
 // Dice modifiers are PROTOCOL stubs; `sub_die` reads `trigger::move_roll`
 // (UNMODELED) — BLOCKED-HOST(trig_move_roll). Scheduling is PROTOCOL.

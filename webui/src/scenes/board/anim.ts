@@ -566,7 +566,7 @@ export class Animator {
           at = (((at + dir) % n) + n) % n;
           out.push(at);
         }
-      } else if (["move", "roll", "teleport", "turn"].includes(q.type) && (q.playerId === playerId || q.type === "turn")) {
+      } else if (["move", "diceRollBefore", "teleport", "turn"].includes(q.type) && (q.playerId === playerId || q.type === "turn")) {
         break;
       }
     }
@@ -714,7 +714,7 @@ export class Animator {
         if (!fast) sfx(playerId === v!.playerId ? "my_turn" : "turn");
         await wait(300);
         break;
-      case "roll": {
+      case "diceRollBefore": {
         if (!ok) break;
         // The main move roll is where 移动 begins. The engine usually passes
         // through MOVE inside one call, so no state shows it -- the roll does.
