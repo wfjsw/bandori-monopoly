@@ -287,9 +287,9 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 
 /// First entry of card `idx` whose kind matches `kind` / `hook_name`.
 ///
-/// `kind` is one of `"Play"`, `"Counteract"`, `"Hook"` / `"Action"` /
+/// `kind` is one of `"Play"`, `"Counteract"`, `"Action"` /
 /// `"Filter"`, `"Gate"`, `"AtEnd"`,
-/// `"RollPlan"`, `"Settle"`, `"Message"`. For `Hook`, `hook_name` may filter
+/// `"RollPlan"`, `"Settle"`, `"Message"`. For `Action`/`Filter`, `hook_name` may filter
 /// by `HookKind` short name (`"PayAdd"`); `""` matches the first hook.
 ///
 /// `kind` / `hook_name` are short ASCII tags (not card ids). Parsed to
@@ -301,7 +301,10 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
         let hit = match (ktag, on) {
             (KindTag::Play, On::Play(..)) => true,
             (KindTag::Counteract, On::Counteract(..)) => true,
-            (KindTag::Hook, On::Action(kinds, ..) | On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
+            (KindTag::Action, On::Action(kinds, ..)) => {
+                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+            }
+            (KindTag::Filter, On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
             (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
@@ -331,7 +334,8 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
 enum KindTag {
     Play,
     Counteract,
-    Hook,
+    Action,
+    Filter,
     Gate,
     AtEnd,
     RollPlan,
@@ -422,7 +426,6 @@ const fn tag_key_const(s: &str) -> (u8, u64, u64) {
 fn kind_tag(kind: &str) -> KindTag {
     const PLAY: (u8, u64, u64) = tag_key_const("Play");
     const COUNTERACT: (u8, u64, u64) = tag_key_const("Counteract");
-    const HOOK: (u8, u64, u64) = tag_key_const("Hook");
     const ACTION: (u8, u64, u64) = tag_key_const("Action");
     const FILTER: (u8, u64, u64) = tag_key_const("Filter");
     const GATE: (u8, u64, u64) = tag_key_const("Gate");
@@ -435,7 +438,8 @@ fn kind_tag(kind: &str) -> KindTag {
     match tag_key(kind) {
         PLAY => KindTag::Play,
         COUNTERACT => KindTag::Counteract,
-        HOOK | ACTION | FILTER => KindTag::Hook,
+        ACTION => KindTag::Action,
+        FILTER => KindTag::Filter,
         GATE => KindTag::Gate,
         AT_END => KindTag::AtEnd,
         ROLL_PLAN => KindTag::RollPlan,
@@ -455,7 +459,7 @@ pub fn counteract_idx(idx: usize, player: i32) -> Asked {
 /// First `On::Action` of card `idx`, optionally filtered by hook-kind name.
 #[inline(always)]
 pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
-    hook_idx(idx, "Hook", hook_name, player)
+    hook_idx(idx, "Action", hook_name, player)
 }
 
 /// First `On::Action` of card `idx` matching `want`. **Integer-only** — no
@@ -494,7 +498,7 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32
             }
         }
     }
-    fail_no_kind("Hook")
+    fail_no_kind("Action")
 }
 
 /// First `On::Filter` of card `idx` matching `want`; returns the transformed
@@ -620,7 +624,7 @@ pub fn counteract(id: &str, player: i32) -> Asked {
 
 /// First `On::Action` of `id`, optionally filtered by hook-kind name.
 pub fn hook_only(id: &str, hook_name: &str, player: i32) -> Asked {
-    hook(id, "Hook", hook_name, player)
+    hook(id, "Action", hook_name, player)
 }
 
 /// Skill entry: alias of [`play`].
