@@ -144,26 +144,6 @@ pub struct MatchState {
     pub landed: i32,
     /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
-    /// A preview of the price to buy where the turn stands
-    /// (`-1` = nothing buyable now); the buy-price quote is the computation
-    /// behind it.
-    pub buy_price: i32,
-    /// The same preview for building (`-1` = cannot build).
-    pub build_cost: i32,
-    /// Would `act {act:"buy"}` be accepted at the turn's
-    /// position right now? The engine's own gate (`why_not_act`'s buy branch =
-    /// `buyable_here` + the quoted funds check): buyable shape, the plan's
-    /// no-buy flag, the quote's `eligible` gate, and cash plus mortgageable
-    /// deeds. Together with
-    /// [`Self::buy_price`] this is the view's why-not information for a buy --
-    /// the bot action abstraction gates Buy on it instead of re-implementing
-    /// the check. `false` when nothing is buyable, and when the engine would
-    /// refuse (`err.cannot_buy` / `err.buy_poor`).
-    pub can_buy_here: bool,
-    /// The same for `act {act:"build"}`
-    /// (`why_not_build` + the funds half of `why_not_act`'s build branch).
-    /// `false` when the engine would refuse (`err.build_*` / `err.poor`).
-    pub can_build_here: bool,
     /// Would `act {act:"roll"}` be accepted
     /// (`why_not_act`'s roll branch: the live `skip_move` latch, the
     /// `main_moved` flag, and the roller).
@@ -186,13 +166,6 @@ pub struct MatchState {
     /// machine seats never hold.
     #[serde(default)]
     pub clock_paused: bool,
-    /// 规则书 基础[结算]: one turn performs only one normal action (buy or
-    /// build) on a land and its buildings. Set once that action has been
-    /// done (an acquisition of the landed tile by any route, or the settle's
-    /// build); reset when the turn changes. Replaces the old `bought` /
-    /// `built` pair (`bought` still reads into it).
-    #[serde(default, alias = "bought")]
-    pub land_acted: bool,
     /// Next uid to hand out for a card instance. **Global** across the match, not
     /// per player: every card in the game has one id, so an instance is addressed
     /// by `uid` alone and one player may hold several copies of the same card in
@@ -259,10 +232,6 @@ impl Default for MatchState {
             skip_move: false,
             landed: -1,
             think_time: 0,
-            buy_price: -1,
-            build_cost: -1,
-            can_buy_here: false,
-            can_build_here: false,
             can_roll_here: false,
             can_end_here: false,
             plan: MovePlan::default(),
@@ -270,7 +239,6 @@ impl Default for MatchState {
             base_time: 0.0,
             bonus_time: 0.0,
             clock_paused: false,
-            land_acted: false,
             next_card_uid: 1,
             players: vec![],
             board_field: vec![],

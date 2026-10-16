@@ -465,7 +465,6 @@ impl Cx<'_> {
         let st = &mut self.w.st;
         st.turn = next;
         st.step = stage::START;
-        st.land_acted = false;
         st.skip_move = false;
         st.landed = -1;
         st.roller = next;
@@ -2024,15 +2023,15 @@ impl Cx<'_> {
         self.offer_force_buy(i, t)
     }
 
-    /// The `ctx::offer_buy` primitive: 「可选择spend…获得格子地契和拥有权」 on a
-    /// non-main landing. (A main landing only *logs* -- the buy is the end
-    /// step's offer, rulebook 「main move和所需settle完成后进入结束阶段」.)
+    /// The `ctx::offer_buy` primitive: 「可选择spend…获得格子地契和拥有权」.
+    /// Called from the tile settle body (`tile:property` / `tile:ring`) -- the
+    /// ONE place that offers a normal land buy.
     pub fn card_offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         self.offer_buy(i, t)
     }
 
     /// The `ctx::offer_build` primitive: 「可选择spend格子地契所标注的房屋建筑费
-    /// 进行升级建造」 on a non-main landing on one's own land.
+    /// 进行升级建造」 on one's own land. Called from the tile settle body.
     pub fn card_offer_build_one(&mut self, i: usize, t: usize) -> Flow<()> {
         self.offer_build(i, t)
     }
@@ -2295,12 +2294,13 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// Offer a buy when a non-main move lands on unowned land.
+    /// Offer a buy of unowned land. The tile settle body calls this -- it is
+    /// the ONE offer site for a normal land buy (规则书 「无主的[可购买格子]的
+    /// [结算]是：可选择[消耗]…获得格子地契和拥有权」).
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
-        // Never prompt for an offer `buy` would refuse: the turn's one action
-        // on the landed land is spent, the plan bars a buy, or a `BuyGate`
-        // hook vetoes it.
-        if self.land_action_spent(i, t) || self.w.turn.plan.no_buy {
+        // Never prompt for an offer `buy` would refuse: the plan bars a buy,
+        // or a `BuyGate` hook vetoes it.
+        if self.w.turn.plan.no_buy {
             return Ok(());
         }
         let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
@@ -2347,11 +2347,10 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// Offer a build when a non-main move lands on own land.
+    /// Offer a build on own land. The tile settle body calls this -- it is
+    /// the ONE offer site for a normal build (规则书 「玩家拥有的[可购买格子]的
+    /// [结算]是：…可选择[消耗]…进行升级建造」).
     fn offer_build(&mut self, i: usize, t: usize) -> Flow<()> {
-        if self.land_action_spent(i, t) {
-            return Ok(());
-        }
         if self.why_not_build_on(i, t).is_some()
             || self.w.purchase_funds(self.data, i, Some(t)) < self.build_cost(t)
         {
@@ -2381,20 +2380,10 @@ impl Cx<'_> {
         )
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
-        if self.ask(ask)?.of(i) == 0
-            && self.why_not_build_on(i, t).is_none()
-            && !self.land_action_spent(i, t)
-        {
-            self.build_landed(i, t)?;
+        if self.ask(ask)?.of(i) == 0 && self.why_not_build_on(i, t).is_none() {
+            self.build(i, t)?;
         }
         Ok(())
-    }
-
-    /// The turn's one normal action on the landed land is already used and
-    /// `t` is that land (`land_acted`).
-    fn land_action_spent(&self, i: usize, t: usize) -> bool {
-        let st = &self.w.st;
-        st.land_acted && st.turn == i as i32 && st.landed == t as i32
     }
 
     // =============================================================== property
@@ -2409,13 +2398,18 @@ impl Cx<'_> {
         purchase::build_cost(self.data, t)
     }
 
+    /// The mortgage payout. The tile rule's deed economics
+    /// (`rules/tiles/src/deed.rs`, via [`CardRules::deed_mortgage_value`]) is
+    /// the authority; [`purchase::mortgage_value`] is the StubRules default.
     pub(crate) fn mortgage_value(&self, t: usize) -> i32 {
-        purchase::mortgage_value(self.data, t)
+        self.rules().deed_mortgage_value(self.data, t as i32)
     }
 
-    /// 60% of the land price. [`purchase::redeem_cost`] is the single source.
+    /// The redeem charge. The tile rule's deed economics
+    /// (`rules/tiles/src/deed.rs`, via [`CardRules::deed_redeem_cost`]) is
+    /// the authority; [`purchase::redeem_cost`] is the StubRules default.
     pub(crate) fn redeem_cost(&self, t: usize) -> i32 {
-        purchase::redeem_cost(self.data, t)
+        self.rules().deed_redeem_cost(self.data, t as i32)
     }
 
     /// Deeds a player could mortgage (not the flat deed, not already mortgaged).
@@ -2475,78 +2469,12 @@ impl Cx<'_> {
         out
     }
 
-    /// The shape of "a buy is on the table here": the turn / step / position /
-    /// ownership preconditions, before any gate or price.
-    fn buyable_shape(&self, i: usize) -> bool {
-        let st = &self.w.st;
-        let pos = st.players[i].pos;
-        st.step == stage::END
-            && st.turn == i as i32
-            && !st.land_acted
-            && st.landed == pos
-            && self
-                .data
-                .tiles
-                .get(pos as usize)
-                .is_some_and(|t| t.is_buyable())
-            && st.owners[pos as usize] < 0
-            && self.can_pay(i)
-    }
-
-    /// Whether a buy is still on offer after a main move onto unowned land.
-    pub(crate) fn buyable_here(&self, i: usize) -> bool {
-        if !self.buyable_shape(i) {
-            return false;
-        }
-        let pos = self.w.st.players[i].pos;
-        // rana_parking's 「该次传送不可进行地契购买」 (`docs/PURCHASE.md`) -- the
-        // plan's no-buy flag bars the ordinary Land offer.
-        if self.w.turn.plan.no_buy {
-            return false;
-        }
-        // The rules crate's gate (`docs/PURCHASE.md`): a `BuyGate` hook that
-        // refuses makes the tile unbuyable here, not merely unaffordable.
-        self.buy_quote_for(i, pos as usize, purchase::BuyKind::Land)
-            .eligible
-    }
-
-    pub(crate) fn can_buy_here(&self, i: usize) -> bool {
-        // One quote answers both halves: the gate (`eligible`) and the price.
-        if !self.buyable_shape(i) {
-            return false;
-        }
-        let t = self.w.st.players[i].pos as usize;
-        let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
-        quote.eligible && quote.price >= 0
-            && self.w.purchase_funds(self.data, i, None) >= quote.price.max(0)
-    }
-
-    pub(crate) fn can_build_here(&self, i: usize) -> bool {
-        let st = &self.w.st;
-        let pos = st.players[i].pos as usize;
-        st.step == stage::END
-            && st.turn == i as i32
-            && !st.land_acted
-            && st.landed == pos as i32
-            && self.why_not_build(i, pos).is_none()
-            && self.w.purchase_funds(self.data, i, Some(pos)) >= self.build_cost(pos)
-    }
-
-    /// Why building as part of resolving the main move is refused, or `None`.
+    /// Why building on this tile is refused, or `None`.
+    /// `ctx::offer_build` / `card_build` / `card_offer_build` all share it.
     pub(crate) fn why_not_build(&self, i: usize, t: usize) -> Option<Msg> {
         let st = &self.w.st;
         if !self.data.tiles.get(t).is_some_and(|x| x.is_buyable()) || st.owners[t] != i as i32 {
             return Some(Msg::new("err.build_not_on_own"));
-        }
-        // Landing-only unless the move opened builds past it
-        // (`plan::set_build_anywhere`, HOST-08).
-        if !st.plan.build_anywhere
-            && st.turn == i as i32
-            && self.playing()
-            && st.step == stage::END
-            && (st.landed != t as i32 || st.land_acted)
-        {
-            return Some(Msg::new("err.build_only_settling"));
         }
         // The move said this landing cannot be built on (`can_build = false`,
         // or `plan::set_no_build` which folds into it -- HOST-08).
@@ -2690,30 +2618,11 @@ impl Cx<'_> {
         let e = self.w.log("buy", i as i32, text);
         e.value = 0;
         e.to = t as i32;
-        // 规则书: a build is the settle of land already owned. Land acquired
-        // by any route on the tile the turn player stopped on (the settle's own
-        // offer, a card, 收购) uses up that settle, so no build follows it.
-        if self.w.st.turn == i as i32 && self.w.st.landed == t as i32 {
-            self.w.st.land_acted = true;
-        }
         // `bought` (Fx) -- the owner is set.
         raise!(self, "bought", i, tile = t as i32)?;
         // `buyAfter` -- the deed has changed hands.
         raise!(self, "buyAfter", i, tile = t as i32)?;
         Ok(true)
-    }
-
-    /// Pay the tile's build cost and raise one house.
-    /// `true` when a house was added (HOST-06: `buildBefore` cancel, unpaid
-    /// cost, not-owned and max-houses refunds are `false`).
-    /// The settle's own build (「升级建造」): a normal action on the landed
-    /// land, so a success uses up the turn's one action on it.
-    pub(crate) fn build_landed(&mut self, i: usize, t: usize) -> Flow<bool> {
-        let built = self.build(i, t)?;
-        if built && self.w.st.turn == i as i32 && self.w.st.landed == t as i32 {
-            self.w.st.land_acted = true;
-        }
-        Ok(built)
     }
 
     pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
@@ -2838,22 +2747,12 @@ impl Cx<'_> {
         if st.step == stage::MOVE {
             return Some(Msg::new("err.mortgage_moving"));
         }
-        if st.step == stage::END && !self.pending_purchase(i) {
+        if st.step == stage::END {
+            // The settle (which owns the optional buy / build) has already
+            // run; there is no END-step purchase left to fund.
             return Some(Msg::new("err.mortgage_after_roll"));
         }
         None
-    }
-
-    /// Standing where a buy or build is still possible.
-    fn pending_purchase(&self, i: usize) -> bool {
-        let pos = self.w.st.players[i].pos;
-        if self.w.st.landed != pos {
-            return false;
-        }
-        if self.buyable_here(i) {
-            return true;
-        }
-        !self.w.st.land_acted && self.why_not_build(i, pos as usize).is_none()
     }
 
     /// Why this deed cannot be redeemed, or `None` when it can.
