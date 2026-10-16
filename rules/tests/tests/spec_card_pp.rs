@@ -994,10 +994,20 @@ fn dream_ahead_no_build_and_hand_limit() {
         );
     }
     t.own(0, &[1]);
-    t.set_pos(0, 1);
+    // Land on the owned tile so the settle would offer a build if not for the card.
+    t.set_pos(0, 0);
     t.begin_turn(0);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    // G-SETTLE-06/07: the only build path is the settle's optional build.
     if t.build(0).is_ok() {
-        panic!("C-PP-dream-ahead-02: build must be refused");
+        panic!("C-PP-dream-ahead-02: build must be refused: {}", t.dump_prompt());
+    }
+    if t.houses(1) != 0 {
+        panic!(
+            "C-PP-dream-ahead-02: a house went up despite the veto (houses {})",
+            t.houses(1)
+        );
     }
 }
 
