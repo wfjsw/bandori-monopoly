@@ -7,6 +7,7 @@
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { sceneImg } from "../core/assets";
 import { useEventListener } from "../hooks/dom";
+import { clearForced, isForced, setStageRotated, subscribeForced, usePortraitPhone } from "./rotation";
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
 import s from "./Stage.module.css";
 
@@ -60,7 +61,7 @@ function useSafeInsets(): { left: number; right: number } {
   return v;
 }
 
-function useStage(tall: boolean): { scale: number; w: number; h: number; compact: boolean; shift: number } {
+function useStage(tall: boolean): { scale: number; w: number; h: number; compact: boolean; shift: number; rotated: boolean } {
   // Size against the *visual* viewport where there is one: on a phone the
   // layout viewport (innerWidth / innerHeight) and what is on screen differ
   // while the address bar or keyboard is showing.
@@ -89,13 +90,21 @@ function useStage(tall: boolean): { scale: number; w: number; h: number; compact
   useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
   // Landscape phones: keep the stage out from under the notch / home bar.
   const inset = useSafeInsets();
-  const vw = win.vw - inset.left - inset.right;
-  const vh = win.vh;
+  // A phone held upright, once the user asked for it: lay the stage out on the swapped (landscape) window
+  // and turn it a quarter clockwise. The insets are then the wrong axes; skip them.
+  const forced = useSyncExternalStore(subscribeForced, isForced);
+  const portrait = usePortraitPhone();
+  useEffect(() => {
+    if (!portrait) clearForced();
+  }, [portrait]);
+  const rotated = forced && portrait;
+  const vw = rotated ? win.vh : win.vw - inset.left - inset.right;
+  const vh = rotated ? win.vw : win.vh;
   // The compact (phone) canvas is the board's alone: the other scenes are
   // laid out for the 1600 x 900 design and keep scaling it.
   const compact = tall && isCompactWindow(vw, vh, window.matchMedia("(pointer: coarse)").matches, forcedCompact());
   const scale = compact ? Math.min(vw / COMPACT_MIN_W, vh / COMPACT_H) : Math.min(vw / STAGE_W, vh / STAGE_H);
-  const box = { scale, w: vw / scale, h: vh / scale, compact, shift: (inset.left - inset.right) / 2 };
+  const box = { scale, w: vw / scale, h: vh / scale, compact, shift: rotated ? 0 : (inset.left - inset.right) / 2, rotated };
   // A scrolled document desyncs touches from the fixed stage (the mobile
   // touch fix); snap back to the origin wherever the scroll came from.
   const unscroll = () => {
@@ -162,7 +171,8 @@ export function useCompactValue(): boolean {
 
 export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
   const tall = useStageFillValue();
-  const { scale, w, h, compact, shift } = useStage(tall);
+  const { scale, w, h, compact, shift, rotated } = useStage(tall);
+  setStageRotated(rotated);
   useEffect(() => {
     document.documentElement.toggleAttribute("data-compact", compact);
     if (compactNow === compact) return;
@@ -177,7 +187,7 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
       <div
         className={s.stage}
         data-stage
-        style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(calc(-50% + ${shift}px), -50%) scale(${scale})` }}
+        style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(calc(-50% + ${shift}px), -50%)${rotated ? " rotate(90deg)" : ""} scale(${scale})` }}
       >
         {children}
         <div className={fading ? `${s.fader} ${s.on}` : s.fader} />

@@ -2,19 +2,13 @@
 
 import { useSyncExternalStore } from "react";
 import { t as tr } from "../i18n/t";
+import { forceLandscape, isForced, subscribeForced, usePortraitPhone } from "./rotation";
 import s from "./RotateHint.module.css";
 
-const query = "(orientation: portrait) and (pointer: coarse) and (max-width: 600px)";
-
-function subscribe(cb: () => void): () => void {
-  const mq = window.matchMedia(query);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-}
-
 export function RotateHint() {
-  const portrait = useSyncExternalStore(subscribe, () => window.matchMedia(query).matches);
-  if (!portrait) return null;
+  const portrait = usePortraitPhone();
+  const forced = useSyncExternalStore(subscribeForced, isForced);
+  if (!portrait || forced) return null;
   return (
     <div className={s.hint} role="alert">
       <div className={s.phone} />
@@ -22,6 +16,9 @@ export function RotateHint() {
         {tr("rotate.hint")}
         <small>{tr("rotate.why")}</small>
       </div>
+      <button type="button" className={s.force} onClick={forceLandscape}>
+        {tr("rotate.force")}
+      </button>
     </div>
   );
 }

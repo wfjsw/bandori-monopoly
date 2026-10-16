@@ -199,7 +199,9 @@ fn band_01_world(owner: i32, got: i32, crystals: i32) {
     set_self_crystals(crystals);
 }
 
-/// Shared iff body at a **concrete** owner seat (clear half).
+/// Shared iff body at a **concrete** owner seat. Both halves of （1）:
+/// 规则书「这回合从别人那里拿到过钱：回合结束时团卡 +1 奇迹水晶；没拿到就清空
+/// 团卡上的水晶。」 — GOT set ⇒ add 1 crystal; GOT clear ⇒ remove all crystals.
 fn band_01_clear_iff_at(owner: i32) {
     debug_assert!(owner == 0 || owner == 1);
     let got: i32 = kani::any();
@@ -208,31 +210,24 @@ fn band_01_clear_iff_at(owner: i32) {
     kani::assume(crystals >= 0 && crystals <= 8);
     band_01_world(owner, got, crystals);
 
-    let gid = crate::guard_id!("actor == owner && slot('skill.sumimi.got') == 0");
+    // Source guard is `pre::MINE` ("actor == owner") — both halves live in
+    // the body. The old `slot('skill.sumimi.got') == 0` guard only ever
+    // admitted the clear branch (FINDINGS C-SUMIMI-band-01).
+    let gid = crate::guard_id!("actor == owner");
     let ov = ir_fill::TriggerOverlay::default();
     let admitted = world::with_world(|w| {
         let ctx = ir_fill::fill_for_guard(w, gid, owner, 0, true, -1, &ov);
         crate::guard!(gid, &ctx)
     });
-    let crystals = self_crystals();
-    let got = world::with_world(|ww| ww.key_get(owner, intern::intern("skill.sumimi.got")));
+    let pre_crystals = self_crystals();
 
-    kani::cover!(admitted && crystals > 0, "clear half with crystals");
-    kani::cover!(admitted && crystals == 0, "clear half with no crystals");
-    kani::cover!(!admitted, "guard rejects (GOT set — book's add half)");
+    kani::cover!(got == 1, "add half (GOT set)");
+    kani::cover!(got == 0, "clear half (GOT clear)");
+    kani::cover!(got == 0 && pre_crystals > 0, "clear half with crystals");
+    kani::cover!(got == 0 && pre_crystals == 0, "clear half with no crystals");
 
-    // C-SUMIMI-band-01 book: GOT set ⇒ add 1 crystal. The entry guard admits
-    // only GOT == 0, so the add half can never run. This assert is the
-    // plain FAILING proof of that LESS.
-    if got != 0 {
-        crate::kassert!(
-            admitted,
-            "C-SUMIMI-band-01 add half: book demands a turn-end add when money was gained; the entry guard never admits"
-        );
-        return;
-    }
+    crate::kassert!(admitted, "guard admits when actor == owner");
 
-    crate::kassert!(admitted, "clear half must be admitted when GOT == 0");
     let pre = world::snapshot();
     // DIRECT body call (ppcost).
     invoke::unwrap_done(skill_groups::sumimi::at_turn_end_kani(owner));
@@ -240,15 +235,25 @@ fn band_01_clear_iff_at(owner: i32) {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    crate::kassert!(
-        spec::sumimi::band_crystal_clear_ok(effects, owner, crystals_key().0, crystals),
-        "C-SUMIMI-band-01 clear: remove every crystal when the latch is clear"
-    );
-    // Frame: money / pos / fire untouched by the crystal clear.
+    if got != 0 {
+        // Book: 「回合结束时团卡 +1 奇迹水晶」 — add half.
+        let post_crystals = self_crystals();
+        crate::kassert!(
+            post_crystals == pre_crystals + 1,
+            "C-SUMIMI-band-01 add half: +1 crystal when GOT is set"
+        );
+    } else {
+        // Book: 「没拿到就清空团卡上的水晶」 — clear half.
+        crate::kassert!(
+            spec::sumimi::band_crystal_clear_ok(effects, owner, crystals_key().0, pre_crystals),
+            "C-SUMIMI-band-01 clear: remove every crystal when the latch is clear"
+        );
+    }
+    // Frame: money / pos / charge untouched by either half.
     for p in 0..MAX_PLAYERS {
         crate::kassert!(post.money[p] == pre.money[p], "frame: money");
         crate::kassert!(post.pos[p] == pre.pos[p], "frame: pos");
-        crate::kassert!(post.charge[p] == pre.charge[p], "frame: fire");
+        crate::kassert!(post.charge[p] == pre.charge[p], "frame: charge");
     }
 }
 
