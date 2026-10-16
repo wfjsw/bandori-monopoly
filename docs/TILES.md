@@ -313,8 +313,15 @@ structural -- the `land_acted` flag is gone.
 
 The tile rule decides *whether they are allowed and the price* through its
 props (`price`, `house`, `buildMax`, `noBuild`) and the quote pipeline
-(`docs/PURCHASE.md`); the perform (hooks, money pipeline, deed assignment)
-stays in the engine primitives `Cx::buy` / `Cx::build`.
+(`docs/PURCHASE.md`). The **perform** sequence (hooks, money pipeline,
+deed assignment, log) lives in the tile rule's `On::Buy` / `On::Build`
+bodies (ABI v78), which call generic mechanism primitives: `ctx::raise`
+(filter fold for `BuyGate` / `BuyAssign`, action chain for the rest),
+`ctx::pay_buy` / `ctx::pay_build` (the money pipeline), `ctx::assign_deed`,
+`ctx::log`. All acquisitions route through `CardRules::deed_buy` /
+`deed_build`; `StubRules` keeps the engine's standing `Cx::buy` / `Cx::build`
+as the default. Force-buy money remains a direct transfer outside effects
+(规则书 其他规则 6) and does not enter `On::Buy`.
 
 Mortgage / redeem live in `rules/tiles/src/deed.rs` + the tile rule's
 `On::Mortgage` / `On::Redeem` bodies (ABI v73). The body owns eligibility
@@ -536,7 +543,7 @@ instantiation per tile body, the same cost a field hook already pays.
 
 ## ABI and SAVE_VERSION
 
-Checked: `card_sdk::abi::ABI_VERSION = 40`,
+Checked: `card_sdk::abi::ABI_VERSION = 78`,
 `game_core::engine::mod::SAVE_VERSION = 4` (the match save),
 `game_core::profile::SAVE_VERSION = 3` (the player profile -- untouched here).
 
@@ -546,6 +553,7 @@ Checked: `card_sdk::abi::ABI_VERSION = 40`,
 | **SAVE_VERSION → 3** | Phase 2 first step | `World::board_field` (tile rule instances) is part of the world; a v2 save has none and would restore a match with unbound tiles |
 | **ABI → 32** | Phase 3 (engine-fix batch) | `tile_prop` / `set_tile_prop` (write a rule instance's props by tile), `settle_circle_reward`, `ChainKind::SettleBody` (shares `TriggerKind::SettleBody`'s wire value), board-owned instances hearing field hooks. The `MoveCtx` plan is not part of the save, so SAVE_VERSION stays at 3. |
 | **ABI → 50** | agent/circle body migration (2026-10-10) | the tile bodies run the branch themselves. Added: `ask_tiles` (labels + prices + AI hint), `ai_agent_choice`, `raise` (guest-raised `passRewardAffected (kind 26)`), `gain_typed` (bank print with `typ` + `Pay::text`), `prop_at` / `set_prop_at`, `exile_of`, `trigger::move_from`. **Removed**: `agent_landing` / `settle_circle_reward` and their `HostRequest`s -- the engine keeps `Play::agent_landing` / `Play::circle_reward` as the `StubRules` built-in only. SAVE_VERSION unchanged. |
+| **ABI → 78** | buy/build in tile rules (2026-10-16) | `OnKind::Buy` (12) / `OnKind::Build` (13): the tile body owns the perform sequence. Added: `ctx::pay_buy` / `ctx::pay_build` / `ctx::assign_deed`; `ctx::raise` dispatches on `TriggerKind::is_filter()` (BuyAssign deal packed in the answer log). `CardRules::deed_buy` / `deed_build`. Force-buy money stays a direct transfer. SAVE_VERSION unchanged. |
 
 ## Migration
 
