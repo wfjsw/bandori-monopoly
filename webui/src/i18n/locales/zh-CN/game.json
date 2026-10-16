@@ -81,6 +81,7 @@
   "err.build_not_own": "只有自己的地才能盖房",
   "err.build_only_settling": "只有停在自己的地上结算时才能盖房",
   "err.built_already": "这次结算已经盖过房屋了（每次结算只能加盖一栋）",
+  "err.buy_build_at_settle": "购买与建造在结算时选择，不能在结束阶段进行",
   "err.busy": "正在结算，稍等一下",
   "err.buy_poor": "现金和可抵押的地契不足以支付购买价格",
   "err.cannot_ban": "这名角色不能禁用",

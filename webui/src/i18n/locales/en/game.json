@@ -81,6 +81,7 @@
   "err.build_not_own": "This is not your land",
   "err.build_only_settling": "You can only build while settling on your own land",
   "err.built_already": "You already built on this settle (one house per settle)",
+  "err.buy_build_at_settle": "Buying and building happen during the settle prompt, not at end of turn",
   "err.busy": "Settling right now -- hold on",
   "err.buy_poor": "Cash and mortgageable deeds are insufficient for this purchase",
   "err.cannot_ban": "This character cannot be banned",

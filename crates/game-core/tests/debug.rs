@@ -202,6 +202,35 @@ fn cheats_replay_to_the_identical_world_and_event_stream() {
     assert_eq!(replay.events(), rm.inner().events_since(0));
 }
 
+/// Deed cheats (`buy` / `build` / `mortgage` / `redeem`) invoke the same
+/// perform primitives the tile rule calls (`Cx::buy` / `build` / `mortgage` /
+/// `redeem`), bypassing only the prompt and the phase/turn gates.
+#[cfg(debug_assertions)]
+#[test]
+fn deed_cheats_use_the_tile_rule_primitives() {
+    let mut m = ready_game(MatchMode::Solo);
+    let me = m.state().player_of(1) as usize;
+    m.act(1, &cheat("money", 50_000, -1)).unwrap();
+    // Pick a buyable tile and force-buy it for the human seat.
+    let tile = (0..data().tiles.len())
+        .find(|&t| data().tiles[t].is_buyable())
+        .expect("a buyable tile");
+    m.act(1, &cheat("buy", tile as i32, me as i32)).unwrap();
+    assert_eq!(
+        m.state().owners[tile], me as i32,
+        "the buy cheat committed the deed"
+    );
+    // Build one house on it.
+    m.act(1, &cheat("build", tile as i32, me as i32)).unwrap();
+    assert_eq!(m.state().houses[tile], 1, "the build cheat raised a house");
+    // Mortgage and redeem it (the same deed-economics primitives).
+    m.act(1, &cheat("mortgage", tile as i32, me as i32)).unwrap();
+    assert!(m.state().mortgaged[tile], "the mortgage cheat flipped the flag");
+    m.act(1, &cheat("redeem", tile as i32, me as i32)).unwrap();
+    assert!(!m.state().mortgaged[tile], "the redeem cheat cleared the flag");
+    assert!(m.state().debug_open);
+}
+
 /// Release builds compile `engine/debug.rs` out entirely: a `debug` act is
 /// refused like any unknown command in every mode, and the world is untouched.
 /// (`cargo test --release -p game-core --test debug` runs this one.)
