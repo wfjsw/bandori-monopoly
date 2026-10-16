@@ -111,6 +111,7 @@ crate::host_subset!(ppp_dispatch {
     | turn_main_steps | turn_rolls | turn_snap | turn_start_pos
     | targeted_count => arm_protocol_stub,
     card_move => arm_card_move,
+    trig_card_is | trig_cards => arm_stub_zero,
 });
 
 /// Install the sparse 2-seat world + the ppp host subset **in place**.

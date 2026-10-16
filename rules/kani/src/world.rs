@@ -509,12 +509,18 @@ impl NameMap {
     /// not the hot `get`/`set`. `f` sees at most `MAX_KEYS` live keys in
     /// practice (the engine budget); extra slots are model headroom.
     pub fn for_each(&self, mut f: impl FnMut(NameId, i32)) {
-        let mut i = 0usize;
-        while i < crate::intern::SLOTS {
-            if ((self.present >> i) & 1) == 1 {
-                f(NameId(i as u16), self.vals[i]);
+        // 8×8 chunk walk over the 64 intern slots (unwind bound 8, not 64).
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < crate::intern::SLOTS && ((self.present >> i) & 1) == 1 {
+                    f(NameId(i as u16), self.vals[i]);
+                }
+                k += 1;
             }
-            i += 1;
+            outer += 1;
         }
         let mut e = 0usize;
         while e < MAX_EXTRA {
