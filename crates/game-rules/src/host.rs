@@ -146,13 +146,15 @@ impl CardInfo {
     }
 
     /// The field-card entries that answer `trigger`, whether declared as a
-    /// settlement hook (`On::Hook`) or as a gate (`On::Gate`). Both run
-    /// automatically on a placed card and neither opens a counteraction window; they
-    /// are separate declarations only so the type can say which is a question.
+    /// settlement hook (`On::Action` / `On::Filter`) or as a gate (`On::Gate`).
+    /// All run automatically on a placed card and none opens a counteraction
+    /// window; they are separate declarations only so the type can say which
+    /// is a question and which is a value modifier.
     /// **All** of them run, in declaration order -- each carries its own
     /// condition / guard and at most one body entry per entry per raise.
     pub fn hook_entries(&self, trigger: crate::TriggerKind) -> Vec<i32> {
-        let mut v = self.entries(OnKind::Hook, Some(trigger));
+        let mut v = self.entries(OnKind::Action, Some(trigger));
+        v.extend(self.entries(OnKind::Filter, Some(trigger)));
         v.extend(self.entries(OnKind::Gate, Some(trigger)));
         v
     }
@@ -175,7 +177,7 @@ pub enum Call {
     Play { card: i32, player_id: i32 },
     /// `On::Counteract` -- the counteraction effect, for the world's current trigger kind.
     Counteract { card: i32, player_id: i32 },
-    /// `On::Hook` -- the field-card hook for `kind`.
+    /// `On::Action` -- the field-card hook for `kind`.
     Hook {
         card: i32,
         kind: crate::TriggerKind,
@@ -710,14 +712,31 @@ impl RulesetBuilder {
         for c in &self.cards {
             let mut cm = 0u128;
             let mut hm = 0u128;
-            for o in &c.on {
+            for (ei, o) in c.on.iter().enumerate() {
                 let ok = OnKind::from_i32(o.kind);
+                // ABI v73: kind/variant agreement -- a Filter may only list
+                // filter kinds and an Action only non-filter kinds.
+                if matches!(ok, Some(OnKind::Action) | Some(OnKind::Filter)) {
+                    let want_filter = ok == Some(OnKind::Filter);
+                    for &k in &o.triggers {
+                        if crate::TriggerKind::from_i32(k).is_filter() != want_filter {
+                            return Err(RuleError::Load(format!(
+                                "{} entry {ei}: {} lists trigger {k} which is filter={} (see TriggerKind::is_filter)",
+                                c.id,
+                                if want_filter { "On::Filter" } else { "On::Action" },
+                                crate::TriggerKind::from_i32(k).is_filter(),
+                            )));
+                        }
+                    }
+                }
                 for &k in &o.triggers {
                     if (0..128).contains(&k) {
                         declared |= 1u128 << k;
                         match ok {
                             Some(OnKind::Counteract) => cm |= 1u128 << k,
-                            Some(OnKind::Hook) | Some(OnKind::Gate) => hm |= 1u128 << k,
+                            Some(OnKind::Action) | Some(OnKind::Filter) | Some(OnKind::Gate) => {
+                                hm |= 1u128 << k
+                            }
                             _ => {}
                         }
                     }
@@ -1257,7 +1276,7 @@ impl Ruleset {
     /// the outcome; the drive's multi-pass loop re-runs this whole sequence
     /// with the new answers.
     ///
-    /// `On::Gate` entries share this path with `On::Hook` (v49): a gate whose
+    /// `On::Gate` entries share this path with `On::Action` (v49): a gate whose
     /// condition rejects does not answer at all.
     pub fn run_hook<W: CardWorld>(
         &self,
@@ -1288,7 +1307,7 @@ impl Ruleset {
         let mut announced = false;
         let mut ran_any = false;
         for entry in entries {
-            // v49: `On::Hook` and `On::Gate` both carry the condition /
+            // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
             // flashes).
             if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {

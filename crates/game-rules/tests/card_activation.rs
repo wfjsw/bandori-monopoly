@@ -394,7 +394,7 @@ fn a_negated_play_emits_exactly_one_negated() {
 
 // ------------------------------------------------ v49: Gate / AtEnd / RollPlan --
 // docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
-// pair as `On::Hook` (ABI v49). A rejecting entry runs no body and so emits
+// pair as `On::Action` (ABI v49). A rejecting entry runs no body and so emits
 // no `card` flash -- exactly like `hook_whose_cel_pre_rejects_stays_silent`
 // above. (`On::Settle` is a tile rule's body and is covered at the host layer
 // in `pre_conditions.rs`.)

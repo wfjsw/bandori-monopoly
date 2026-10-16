@@ -793,7 +793,7 @@ impl CardModules for NativeModules {
             answers.to_vec(),
             0,
         ));
-        // v49: `On::Hook` and `On::Gate` both carry the condition /
+        // v49: `On::Action` and `On::Gate` both carry the condition /
         // residual-guard pair; a rejecting entry is skipped (and so never
         // flashes).
         {

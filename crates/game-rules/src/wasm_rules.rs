@@ -2570,7 +2570,7 @@ impl<M: CardModules> RulesBridge<M> {
                     card_trigger::PLAY
                 }
             }
-            // `On::Hook` / `RollPlan` / `AtEnd` (and a card's settle body):
+            // `On::Action` / `RollPlan` / `AtEnd` (and a card's settle body):
             // a placed card's effect firing on someone else's turn.
             _ => card_trigger::HOOK,
         };

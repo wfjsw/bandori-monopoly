@@ -125,7 +125,7 @@ fn pre_hook_does_not_fire() {
 
 // ------------------------------------------------ v49: Gate / AtEnd / RollPlan / Settle --
 // docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
-// pair as `On::Hook`, and the host evaluates category → condition → guard →
+// pair as `On::Action`, and the host evaluates category → condition → guard →
 // body. A rejecting entry runs no body and so emits no `card` flash --
 // `on_body` is exactly that flash (host.rs `run` / `run_hook`).
 

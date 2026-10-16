@@ -1400,7 +1400,7 @@ impl World {
     }
 
     /// Place the player's skill rules on their field. This is the binding:
-    /// see [`crate::data::GameData::skill_rules_of`]. Once placed, `On::Hook`
+    /// see [`crate::data::GameData::skill_rules_of`]. Once placed, `On::Action`
     /// reaches them like any other field card and named counter counters work on
     /// them. Idempotent -- calling it twice does not double-place.
     pub fn bind_skills(
@@ -1530,7 +1530,7 @@ impl World {
     /// the event in [`crate::state::MatchState::event_active`] (`docs/EVENTS.md`).
     ///
     /// Called from `draw_event` when the event's rule exists in the ruleset, so
-    /// the body's `On::Play` and any `On::Hook` it declares run against a live
+    /// the body's `On::Play` and any `On::Action` it declares run against a live
     /// instance (props, named counters, `unplace_self` = expire). Idempotent per
     /// event id: a second activation of the same event keeps the first
     /// instance. Returns the instance uid, or -1 when there is no rule
