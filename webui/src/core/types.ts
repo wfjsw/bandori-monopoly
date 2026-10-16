@@ -173,14 +173,6 @@ export interface MatchState {
   roller: number; busy: boolean; skipMove: boolean; landed: number;
   /** ThinkTime room setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited. */
   thinkTime: number;
-  /** Preview of the price to buy where the turn stands; -1 = nothing buyable. */
-  buyPrice: number;
-  /** The same preview for building; -1 = cannot build. */
-  buildCost: number;
-  /** Would `act {act:"buy"}` be accepted now (`why_not_act`'s buy branch). */
-  canBuyHere: boolean;
-  /** Would `act {act:"build"}` be accepted now (`why_not_act`'s build branch). */
-  canBuildHere: boolean;
   /** Would `act {act:"roll"}` be accepted now (`why_not_act`'s roll branch). */
   canRollHere: boolean;
   /** Would `act {act:"end"}` be accepted now (`why_not_act`'s end branch). */
@@ -190,7 +182,7 @@ export interface MatchState {
   timeLeft: number; baseTime: number; bonusTime: number;
   /** True while the acting seat's clock is held for an anim ack. */
   clockPaused?: boolean;
-  landActed: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
+  players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
   /** Per-tile deed-text speakers, in body-precedence order (optional: absent

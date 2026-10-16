@@ -19,7 +19,7 @@ import { AutoBanner } from "../../ui/AutoToggle";
 import { CardFace } from "../../ui/Card";
 import { TopBar } from "../../ui/TopBar";
 import { useBoardSession, type Animator } from "./anim";
-import { act, buyable, canBuildOn, modeName, model, type Model } from "./model";
+import { act, modeName, model, type Model } from "./model";
 import { Log, Players } from "./Players";
 import { openDeed, showLeave } from "./Popups";
 import { openPrompt, waitingOn } from "./Prompt";
@@ -50,7 +50,6 @@ function useMatchDriver(opts: {
 }): void {
   const { sess, m, anim, auto, exit } = opts;
   const promptFor = useRef(0);
-  const autoDeed = useRef(-1);
   const autoEnd = useRef(-1);
   const resultsShown = useRef(false);
   // Once per state version, when the Animator queue has drained: tell the
@@ -72,7 +71,6 @@ function useMatchDriver(opts: {
     // An extra turn may keep the same round and player. Re-arm when the
     // engine leaves settlement, before waiting for its animation to finish.
     if (S.step !== 4) {
-      autoDeed.current = -1;
       autoEnd.current = -1;
     }
     if (anim.animating) return;
@@ -81,14 +79,8 @@ function useMatchDriver(opts: {
       sfx("prompt");
       openPrompt(sess, S.prompt);
     }
-    if (!auto && m.myTurn && S.step === 4 && !S.busy && !m.asking && S.landed >= 0) {
-      const key = S.round * 100 + S.turn;
-      if (autoDeed.current !== key && !isModalOpen() && (buyable(m, S.landed) || canBuildOn(m, S.landed))) {
-        autoDeed.current = key;
-        openDeed(sess, S.landed);
-        return;
-      }
-    }
+    // Buy / build are the settle Prompt (`ask.buy` / `ask.build`) only; the
+    // deed popup stays tile-click inspection (mortgage / redeem). No auto-open.
     const key = S.round * 100 + S.turn;
     if (autoEnd.current !== key && shouldFinishTurn(m, {
       auto, animating: anim.animating, readOnly: sess.readOnly,
