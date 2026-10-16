@@ -111,7 +111,8 @@ crate::host_subset!(ppp_dispatch {
     | turn_main_steps | turn_rolls | turn_snap | turn_start_pos
     | targeted_count => arm_protocol_stub,
     card_move => arm_card_move,
-    trig_card_is | trig_cards => arm_stub_zero,
+    trig_card_is => arm_trig_card_is,
+    trig_cards => arm_trig_cards,
 });
 
 /// Install the sparse 2-seat world + the ppp host subset **in place**.
@@ -884,24 +885,30 @@ pub fn door_01_sequence_const() {
 // C-PPP-auction-off-01 / c1
 // 「此卡加入手牌时将此卡放置在自身场上」
 // 「此卡拥有者火罐上限加1」
-// BLOCKED-HOST: the Drawn body gates on `trigger::card_is(ID)`, and the Kani
-// host arm `Op::trig_card_is` is a hard `0` (never identifies the drawn card).
-// The positive path is unreachable; the no-op path (identity check fails ⇒
-// body is a no-op) is what the model can show.
+// The Drawn body gates on `trigger::card_is(ID)`. The host `arm_trig_card_is`
+// reads `World::trig_card` (the trigger card's name id). Both branches:
+//   - trig_card == ID → place card + charge_max +1 (unblocked)
+//   - trig_card != ID → no-op (blocked)
 // ===========================================================================
 
-#[kani::proof]
-#[kani::unwind(24)]
-pub fn auction_off_01_blocked_noop() {
-    let user = 0i32;
+/// Shared body at a concrete seat. `match_id` selects the branch.
+fn auction_off_01_at(user: i32, match_id: bool) {
+    let user = user;
     ppp_world(user);
     let w = world::with_world(|ww| ww.clone());
     let player = user;
-    // Hand holds the auction card so `take_from_hand` would succeed if the
-    // identity gate admitted.
     let mut w = w;
+    // Hand holds the auction card so `take_from_hand` succeeds on the
+    // unblocked path.
     w.hand_n = 1;
     w.hand_pile[0] = crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0;
+    // Drawn trigger kind (46) and the trigger card identity.
+    w.trig_kind = 46; // TriggerKind::Drawn
+    w.trig_card = if match_id {
+        crate::intern::intern(spec::ppp::CARD_AUCTION_OFF).0
+    } else {
+        crate::intern::intern("PP:其他卡").0 // a different card
+    };
     let pre_field_n = w.field_n;
     let pre_charge_max = w.charge_max[player as usize];
 
@@ -910,23 +917,51 @@ pub fn auction_off_01_blocked_noop() {
         world::snapshot()
     };
 
-    // Host `trig_card_is` is a hard 0, so the Drawn body must early-return.
     invoke::unwrap_done(card_ppp::auction_pulled::hook_kani(user));
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
-    crate::kassert!(
-        log_n == 0,
-        "auction-off-01 (blocked): identity gate fails ⇒ no effects"
-    );
-    let _ = logbuf;
     let post_field_n = world::with_world(|ww| ww.field_n);
     let post_charge_max = world::with_world(|ww| ww.charge_max[player as usize]);
-    crate::kassert!(
-        post_field_n == pre_field_n && post_charge_max == pre_charge_max,
-        "auction-off-01 (blocked): field / charge_max untouched"
-    );
-    crate::kassert!(world::arr4_eq(post.money, pre.money), "auction-off-01 (blocked): money frame");
+
+    if match_id {
+        kani::cover!(true, "unblocked: identity matches");
+        // Book: 「此卡加入手牌时将此卡放置在自身场上」+「火罐上限加1」
+        crate::kassert!(
+            post_field_n == pre_field_n + 1,
+            "auction-off-01 (unblocked): card placed on field"
+        );
+        crate::kassert!(
+            post_charge_max == pre_charge_max + 1,
+            "auction-off-01 (unblocked): charge_max +1"
+        );
+    } else {
+        kani::cover!(true, "blocked: identity gate fails");
+        crate::kassert!(
+            log_n == 0,
+            "auction-off-01 (blocked): identity gate fails ⇒ no effects"
+        );
+        crate::kassert!(
+            post_field_n == pre_field_n && post_charge_max == pre_charge_max,
+            "auction-off-01 (blocked): field / charge_max untouched"
+        );
+        crate::kassert!(world::arr4_eq(post.money, pre.money), "auction-off-01 (blocked): money frame");
+    }
+    let _ = (logbuf, post);
+}
+
+/// Blocked: trig_card != ID ⇒ no-op.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn auction_off_01_blocked_noop() {
+    auction_off_01_at(0, false);
+}
+
+/// Unblocked: trig_card == ID ⇒ place card + charge_max +1.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn auction_off_01_unblocked_grants() {
+    auction_off_01_at(0, true);
 }
 
 // ===========================================================================
