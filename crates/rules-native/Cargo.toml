@@ -30,6 +30,7 @@ card-roselia = { path = "../../rules/cards/card-roselia" }
 card-sumimi = { path = "../../rules/cards/card-sumimi" }
 skill-groups = { path = "../../rules/skills/skill-groups" }
 skill-personas = { path = "../../rules/skills/skill-personas" }
+personas = { path = "../../rules/personas" }
 rules-tiles = { path = "../../rules/tiles" }
 rules-tile-marks = { path = "../../rules/tile_marks" }
 rules-status = { path = "../../rules/status" }

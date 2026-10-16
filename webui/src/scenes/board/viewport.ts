@@ -24,6 +24,7 @@ import {
 } from "react";
 import { useEventListener } from "../../hooks/dom.ts";
 import { useResizeObserver } from "../../hooks/measure.ts";
+import { localDelta, localPoint } from "../../app/rotation";
 
 /** Smallest board window (stage px) the map is ever laid out at. */
 export const MIN_BOARD = 240;
@@ -180,9 +181,7 @@ export function panBy(v: Viewport, dx: number, dy: number, b: MapBox): Viewport 
  *  offset size) and the stage scales that to the screen, so the net factor is
  *  `client width / offset width` on both axes. */
 function toLocal(el: HTMLElement, clientX: number, clientY: number): Point {
-  const r = el.getBoundingClientRect();
-  const k = r.width / (el.offsetWidth || 1) || 1;
-  return { x: (clientX - r.left) / k, y: (clientY - r.top) / k };
+  return localPoint(el, clientX, clientY);
 }
 
 interface Gesture {
@@ -354,8 +353,8 @@ export function useBoardViewport(): ViewportApi {
       }
     }
     if (g.dragging) {
-      const k = el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1;
-      setV((curV) => panBy(curV, dx / k, dy / k, b));
+      const d = localDelta(el, dx, dy);
+      setV((curV) => panBy(curV, d.x, d.y, b));
     }
   }, []);
 

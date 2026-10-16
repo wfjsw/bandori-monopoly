@@ -759,5 +759,6 @@
   "history.chargeUsed": "Charge used",
   "results.chargeUsed": "Charge used",
   "rotate.hint": "Turn your phone sideways to play",
-  "rotate.why": "The board needs a landscape screen"
+  "rotate.why": "The board needs a landscape screen",
+  "rotate.force": "Rotate the screen for me"
 }

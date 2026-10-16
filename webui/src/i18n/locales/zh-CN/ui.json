@@ -759,5 +759,6 @@
   "history.chargeUsed": "消耗充能",
   "results.chargeUsed": "消耗充能",
   "rotate.hint": "请将手机横过来玩",
-  "rotate.why": "棋盘需要横屏才能完整显示"
+  "rotate.why": "棋盘需要横屏才能完整显示",
+  "rotate.force": "直接旋转画面"
 }

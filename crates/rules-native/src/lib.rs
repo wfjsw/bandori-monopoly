@@ -243,7 +243,7 @@ pub fn roster_metadata() -> card_sdk::meta::MetaDoc {
             card_sdk::meta::RosterList {
                 kind: "persona",
                 ordinals: ruleset_core::roster_order::PERSONAS,
-                rows: skill_personas::roster_table::meta_rows,
+                rows: personas::roster_table::meta_rows,
             },
             card_sdk::meta::RosterList {
                 kind: "group",
