@@ -1351,7 +1351,7 @@ Six ignored DISCREPANCY tests un-ignored and green. Root causes split
 * **A + D, `m09_ras_band_first_abnormal_only` (MOVE-12):** RAS band (1)'s
   drop of the second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late
   to cancel) with pre `actor == owner` (the causer). Moved to
-  `On::Gate(&[GateKind::AbnormalGuard])` with pre `target == owner` (the
+  `On::FilterFlag(&[GateKind::AbnormalGuard])` with pre `target == owner` (the
   recipient). Same saki_move drive fix as MOVE-11.
 
 **Pre-existing (not this batch):** `inter_yolo_pushes_haneoka_over_20` fails

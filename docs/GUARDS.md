@@ -54,7 +54,7 @@ per-card probes.
 | hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Action` | cards, skills, events, tiles |
 | play gates | 97 of 201 `On::Play` (`None`×104) | `cant_play`×62 + `can_use`×19 + 16 one-offs | `On::Play(Some(..))` | cards |
 | skill usability | (in play gates) | `can_use` family ×35 | `On::Play` | skills/ |
-| gates / settle / rollplan | no guard fn (body only) | — | `On::Gate`/`Settle`/`RollPlan` | tiles, cards |
+| gates / settle / rollplan | no guard fn (body only) | — | `On::FilterFlag`/`Settle`/`RollPlan` | tiles, cards |
 
 ### 2.1 Recurring patterns (50 counteract bodies; hot path)
 
@@ -273,7 +273,7 @@ table. Adding a name never edits their bodies.
 
 ### 4.2c Window variables per entry kind (ABI v49)
 
-`On::Gate` / `On::Action(&[AtEnd])` / `On::FilterValue(&[RollPlan])` / `On::Settle` carry the same
+`On::FilterFlag` / `On::Action(&[AtEnd])` / `On::FilterValue(&[RollPlan])` / `On::Settle` carry the same
 `pre` + residual-guard pair as `On::Action` (v49), so their conditions see the
 §4.2 schema. The window is built with `fill_window` from the **trigger / context
 the entry is dispatched on**; the candidate is `owner` = the entry's
@@ -315,7 +315,7 @@ residual wasm guard -- exactly the G3 split.
   declaration sites. Sugar consts `pre::MINE` (`actor == owner`) replaces the
   118 `mine` guards outright; the 19 `always` guards are deleted. The condition
   sits beside the (now residual) guard fn, and each clause lives in exactly one
-  of the two. **v49** extends the pair to `On::Gate` / `On::Action(&[AtEnd])` /
+  of the two. **v49** extends the pair to `On::FilterFlag` / `On::Action(&[AtEnd])` /
   `On::FilterValue(&[RollPlan])` / `On::Settle` too (§4.2c): no entry kind is unguarded any
   more, and an entry whose condition rejects runs no body (and so emits no
   `card` flash).
@@ -330,7 +330,7 @@ residual wasm guard -- exactly the G3 split.
    per `top` trigger; evaluate per (card, seat). This is the 48 900-call path.
 2. `run_hook` (host.rs) / `drive_inner` guard step: before
    `self.store(...)`; window context per trigger, owner = card's player.
-   Since v49 this covers `On::Gate` entries too (they share `hook_entries`).
+   Since v49 this covers `On::FilterFlag` entries too (they share `hook_entries`).
 3. `run` (host.rs) for `On::Action(&[AtEnd])` / `On::FilterValue(&[RollPlan])` / `On::Settle` (v49):
    the same category → condition → guard → body, before `on_body` / `OP_RUN`,
    so a rejecting entry never flashes.
@@ -1056,7 +1056,7 @@ carry **no** residual guard (the load refuses one): the condition is the answer.
 ## Exclusive-use gate (ABI 60)
 
 A band skill may further restrict **which exclusive cards its members play**.
-The question is the CEL-only `On::Gate` kind
+The question is the CEL-only `On::FilterFlag` kind
 `TriggerKind::ExclusiveUse` / `GateKind::ExclusiveUse` (wire name
 `exclusiveUse`), asked of the ruleset whenever an exclusive card is about to be
 played from hand. Same CEL-only rule as the status gates: the condition is the
@@ -1084,7 +1084,7 @@ further deny.
 ### Band-skill denial (the card)
 
 CRYCHIC's 「variants may not use the base character's exclusives」 is an
-`On::Gate` entry on `skill:CRYCHIC:美好的往日幻影`
+`On::FilterFlag` entry on `skill:CRYCHIC:美好的往日幻影`
 (`rules/skills/skill-bands/src/crychic.rs`):
 
 ```

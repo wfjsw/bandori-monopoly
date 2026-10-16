@@ -507,11 +507,11 @@ Landed on `status-hosts-v2` (rebased over the closeout batches, ABI 57):
 
 ---
 
-## 9. Gates are CEL-only `On::Gate` entries (ABI 58+)
+## 9. Gates are CEL-only `On::FilterFlag` entries (ABI 58+)
 
 The act / pay / move gates are no longer `MatchPlayer::status_gates()` read at
 policy sites. Each `status:*` host declares the gates it holds as **CEL-only**
-`On::Gate` entries (`TriggerKind::{ActGate, PayGate, MoveGate}`):
+`On::FilterFlag` entries (`TriggerKind::{ActGate, PayGate, MoveGate}`):
 
 | host | gates | condition |
 |---|---|---|

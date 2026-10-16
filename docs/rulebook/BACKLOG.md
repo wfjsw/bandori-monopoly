@@ -453,7 +453,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   not one card's `cant_play`). The engine's play path consults the played
   card's own gate only. Capability: **`cantPlayHand`** (a `GateKind` /
   standing veto consulted on every hand play, the shape
-  `On::Gate(&[GateKind::CantPlayHand], …)`). Not implemented here. The s05
+  `On::FilterFlag(&[GateKind::CantPlayHand], …)`). Not implemented here. The s05
   `t.play(1, FILL)` line is a record, not an assertion.
 
 ## SETTLE-03 — 丰川祥子 (1) does not absorb stays when passing another player
@@ -1067,7 +1067,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the drop of the
   second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late to cancel)
   with pre `actor == owner` (the causer, not the recipient). Moved to
-  `On::Gate(&[GateKind::AbnormalGuard])` with pre `target == owner`, so the
+  `On::FilterFlag(&[GateKind::AbnormalGuard])` with pre `target == owner`, so the
   declaration gate refuses the second [异常移动效果] of the turn. The test
   drive also had a **D** bug (same saki_move matcher as MOVE-11) that left
   `err.play_phase` because the force-move never landed. Un-ignored and green.

@@ -62,17 +62,46 @@ is never dispatched.
 * names are arguments, not text: `Msg::new(key!("x")).player_id("who", s).tile("tile", t)`
   -- the client resolves them to display names.
 
-## Action vs Filter (ABI v73/v74)
+## Action vs Filter (do_action / apply_filters) — final architecture
 
-`On::Hook` is gone (no alias). Field hooks split the way WordPress splits
-`do_action` / `apply_filters`:
+The entry surface is the WordPress `do_action` / `apply_filters` split. The
+final `On` set (ABI v76):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
+| `On::Play(pre, gate, body)` | `fn(i32) -> Asked` | play from hand | yes |
+| `On::Counteract(kinds, pre, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links | yes |
+| `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
+| `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
 | `On::Action(kinds, pre, guard, body)` | `fn(i32) -> Asked` | **event reaction** | yes (`ctx::gain`, log, place, …) |
 | `On::Filter(kinds, pre, guard, body)` | `fn(i32, value: i32) -> i32` | **integer value transform** | no (pure) |
-| `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / substitute decision** | no (pure) |
-| `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **deal / move-plan rewrite** | no (pure) |
+| `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / allow decision** | no (pure) |
+| `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **struct rewrite** (deal / plan / payee / gate) | no (pure) |
+
+### Retired wire ids (never reuse)
+
+| id | was | folded into | ABI |
+|---|---|---|---|
+| 4 | `OnKind::AtEnd` | `On::Action(&[TriggerKind::AtEnd])` | v75 |
+| 5 | `OnKind::RollPlan` | `On::FilterValue(&[TriggerKind::RollPlan])` | v75 |
+| 6 | `OnKind::(retired 6)` | `On::FilterFlag` / `On::FilterValue` at the gate kinds | v76 |
+
+`On::Hook` (the pre-v73 name) is gone; `OnKind::Hook = 3` was renamed
+`OnKind::Action` and keeps id 3.
+
+### On::Settle is kept (not folded into SettleBody)
+
+`On::Settle` is the tile rule's **base settle body** (what runs when that tile
+is [结算]d). `HookKind::SettleBody` is a field hook that may **cancel / replace**
+that body (`set_cancelled`). They are two roles in one chain link:
+
+1. raise `SettleBody` -- a placed card may claim the body (`set_cancelled` = "do
+   my thing instead");
+2. if not cancelled, run the tile rule's `On::Settle`.
+
+Folding would make the tile body just another `Action(SettleBody)` and lose the
+"one base body, optional replacement" shape (and the `[反击]`-able
+`ChainKind::SettleBody` link). **Decision: keep `On::Settle`.**
 
 ### Why three Filter shapes (the minimal clean set)
 
@@ -102,7 +131,7 @@ a slot written by the Action.
 ### Filter kinds
 
 `TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
-source of truth**. Today (17 kinds):
+source of truth**. Today (27 kinds):
 
 * payment amount stages -- `PayChoose`, `PayAdd`, `PayMul`, `PayAt`,
   `PayTotalAdd`, `PayTotalMul`, `PayTotalCancel`
@@ -110,6 +139,9 @@ source of truth**. Today (17 kinds):
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
 * roll / plan shaping -- `RollPlan`, `MoveRoll`, `RollValue` (v74)
 * flip count -- `FlipEffect`
+* decision gates (v76) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
+  `PlayGate`, `BuyGate`, `AbnormalGuard`, `ImmuneAll`, `Untargetable`,
+  `Redirect`
 
 `RollValue` (id 102) is raised **immediately before** `RollAfter` with the
 same payload: the pure roll-reshape stage. `RollAfter` stays an Action event
@@ -150,12 +182,13 @@ one-shot-ness lives in the existing `schedule_turn_end` list
 `OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never be
 reused.
 
-**Deferred (not filter today).** The pure decision gates `AbnormalGuard`,
-`ImmuneAll`, `Untargetable`, `Redirect`, `BuyGate` fold `set_cancelled` /
-`set_target` and are closer to cancel-flags than to value modifiers, and
-`ChargePaying` prompts. They stay on `On::Action` (or `On::Gate` for
-`BuyGate`) for now; moving a kind into `is_filter()` is a one-line change to
-that function plus a kind-list update. `On::Gate` itself is unchanged.
+**ChargePaying stays Action.** Its 「可」 opt-in prompts and Filter bodies
+cannot. Everything else that used to be a gate is a Filter.
+
+**CEL-only status gates** (`ActGate` / `PayGate` / `MoveGate` /
+`ExclusiveUse` / `PlayGate`) keep their native path: the condition is the
+whole answer, evaluated by `gate_open` / `admits_pre` with no wasm. The
+`On::FilterFlag` body only runs if the hook path asks.
 
 ## Authoring a condition (`pre`, ABI v45)
 
@@ -758,7 +791,7 @@ original names where the pairing is already implied (`settleBefore` →
 | `card` / `cardAfter` | playing a card from hand -- before its `play` body / after its `Dest` handling |
 | `event` / `eventAfter` | drawing an event -- before it resolves / after it is filed away |
 | `buyBefore` / `buyAfter` | buying a deed -- before any guard (fires even on a no-op attempt) / after the deed changes hands |
-| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::Gate`, runs for **every** `BuyKind` -- Force included) refuses a buy with `set_cancelled` + `set_reason`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
+| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::FilterFlag`, runs for **every** `BuyKind` -- Force included) refuses a buy with `set_cancelled` + `set_reason`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
 | `buildBefore` / `buildAfter` | building a house -- before payment / after the house commits (not on the refund path) |
 | `discardBefore` / `discardAfter` | discarding from hand -- before the card leaves / after it is in the pile |
 | `endTurnBefore` / `endTurnAfter` | ending a turn -- the player's command / any turn end, including stun & exile auto-skips |
