@@ -33,7 +33,13 @@ pub const ROSELIA: CardDef = CardDef::new(
             Some(on_bought_applies),
             on_bought,
         ),
-        On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", Some(at_turn_start_applies), at_turn_start),
+        On::Hook(
+            &[HookKind::Bought],
+            "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0",
+            Some(on_live_bought_applies),
+            on_live_bought,
+        ),
+        On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
     ],
 )
     .silent(&[1]);
@@ -62,43 +68,53 @@ fn on_bought_applies(player_id: i32) -> bool {
     ctx::tile_group(ctx::trigger::tile()) != LIVE
 }
 
+/// The one-shot marker stores the half-priced tile (`tile + 1`, so 0 stays
+/// "not yet taken") and recolours it right away.
 fn on_bought(player_id: i32) -> card_sdk::Asked {
-    state::set(player_id, DONE, 1);
+    let t = ctx::trigger::tile();
+    state::set(player_id, DONE, t + 1);
+    sync_colour(player_id);
     Ok(())
 }
 
-/// Residual guard for [`at_turn_start`]: still no initial Live House and the
-/// recolour has not already been claimed. Derived scans (docs/GUARDS.md §4.2).
-fn at_turn_start_applies(player_id: i32) -> bool {
-    if ctx::owned_tiles(player_id)
-        .into_iter()
-        .any(|t| ctx::tile_group(t) == LIVE)
-    {
-        return false;
-    }
-    // The recoloured tile is the one this skill half-priced; find it by the
-    // extra-colour claim the same way the colour cards do.
-    for t in ctx::owned_tiles(player_id) {
-        if ctx::is_live_house_for(player_id, t) {
-            return false;
-        }
-    }
-    true
+/// Residual guard for [`on_live_bought`]: the bought tile is an initial
+/// (own-group) Live House.
+fn on_live_bought_applies(_player_id: i32) -> bool {
+    ctx::tile_group(ctx::trigger::tile()) == LIVE
+}
+
+/// （1）「在你拥有任意初始Live House格子前」 -- ends the moment the player
+/// obtains one.
+fn on_live_bought(player_id: i32) -> card_sdk::Asked {
+    sync_colour(player_id);
+    Ok(())
+}
+
+/// Turn-start sweep: also catches Live Houses obtained other than by buying.
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
+    sync_colour(player_id);
+    Ok(())
 }
 
 /// （1）「在你拥有任意初始Live House格子前，那个格子对你视为Live House」 --
-/// restated each turn while [`at_turn_start_applies`] holds.
-fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    if let Some(t) = ctx::owned_tiles(player_id).into_iter().next() {
-        // 「那个格子对你视为Live House」 -- the `colorFor:<player_id>` tile prop
-        // on the tile's board instance.
-        ctx::set_tile_prop(
-            t,
-            &alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id),
-            LIVE,
-        );
+/// the `colorFor:<player_id>` tile prop on the half-priced tile's board
+/// instance: set while the player owns no initial Live House, cleared once
+/// they do.
+fn sync_colour(player_id: i32) {
+    let marker = state::get(player_id, DONE);
+    if marker == 0 {
+        return;
     }
-    Ok(())
+    let t = marker - 1;
+    let owns_live = ctx::owned_tiles(player_id)
+        .into_iter()
+        .any(|o| ctx::tile_group(o) == LIVE);
+    let key = alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id);
+    if owns_live {
+        ctx::set_tile_prop(t, &key, -1);
+    } else if ctx::owned_tiles(player_id).contains(&t) {
+        ctx::set_tile_prop(t, &key, LIVE);
+    }
 }
 
 /// Roster band row for this band skill (ABI v63).

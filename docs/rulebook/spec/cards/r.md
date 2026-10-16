@@ -1154,7 +1154,13 @@ prefix dropped).
 * **Trigger:** while the player owns no Livehouse tile yet.
 * **Condition:** the clause-01 tile is owned.
 * **Effect:** that tile counts as a Livehouse for that player (until a real
-  Livehouse is owned).
+  Livehouse is owned). Once the player owns a real (own-group) Livehouse the
+  tile stops counting; if they later own none again it counts again.
+* **Implementation:** the `skill.roselia.first` slot stores the half-priced
+  tile (`tile + 1`; 0 = not taken). The `colorFor:<p>` prop on that tile is set
+  to Livehouse when it is bought, cleared (`-1`) when a real Livehouse is
+  bought (Bought hook), and re-synced at each turn start (catches non-buy
+  acquisitions and losses).
 * **Frame:** the Livehouse count the skill's own clauses and other
   Livehouse-gated effects read.
 * **Rulings & OPEN:** 「初始Live House格子」 is a real (RiNG) tile; the
@@ -1164,6 +1170,7 @@ prefix dropped).
 * **Executable:** not tested -- a positive assertion needs an effect that
   keys off 「Livehouse」 counts for that player; `R:蓝玫瑰的骄傲` (1) is the
   planned probe and is not written. OPEN-BAND-PRETEND.
+  The end condition (real Livehouse owned) is implemented but equally untested.
 
 ### C-R-对音乐的纯粹-03 -- any Livehouse purchase is half price
 
