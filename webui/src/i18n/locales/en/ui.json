@@ -109,6 +109,7 @@
   "anim.chainKind.redirect": "Redirected",
   "anim.chainKind.reshuffled": "Reshuffled",
   "anim.chainKind.rollAfter": "After roll",
+  "anim.chainKind.rollValue": "Roll result",
   "anim.chainKind.rollPlan": "Roll plan",
   "anim.chainKind.settleAfter": "After settle",
   "anim.chainKind.settleBody": "Settle body",

@@ -109,6 +109,7 @@
   "anim.chainKind.redirect": "改变目标",
   "anim.chainKind.reshuffled": "洗牌",
   "anim.chainKind.rollAfter": "掷骰后",
+  "anim.chainKind.rollValue": "掷骰结果",
   "anim.chainKind.rollPlan": "掷骰计划",
   "anim.chainKind.settleAfter": "结算后",
   "anim.chainKind.settleBody": "结算效果",
