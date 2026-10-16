@@ -364,9 +364,6 @@ fn s06_unowned_buy_price_includes_the_houses() {
     t.set_money(0, 10_000);
     settle_on(&mut t, 0, land);
     // G-SETTLE-06/07: the settle of an unowned buyable IS the optional buy.
-    // Decline that prompt, then buy through the end-step button so the price
-    // (deed + houses) is still what the button quotes.
-    drain(&mut t);
     t.buy(0).unwrap();
     drain(&mut t);
     assert_eq!(t.owner(land), Some(0), "deed and ownership gained");
@@ -391,7 +388,6 @@ fn s07_own_mortgaged_tile_settles_to_nothing() {
         "no build prompt on a mortgaged deed: {}",
         t.dump_prompt()
     );
-    assert_eq!(t.st().build_cost, -1, "nothing buildable");
     assert_eq!(t.houses(land), 0, "no house was built");
     assert_eq!(t.money(0), 10_000, "nothing was spent");
 }
@@ -412,14 +408,12 @@ fn s08_build_costs_the_house_and_respects_the_cap() {
         "RiNG takes no house: {}",
         t.dump_prompt()
     );
-    assert_eq!(t.st().build_cost, -1, "RiNG cannot be built on");
     assert_eq!(t.houses(ring), 0);
     // 购物中心: up to 3 houses, each at the house cost.
     for n in 1..=3 {
         settle_on(&mut t, 0, land);
-        // G-SETTLE-06/07: decline the settle-time build prompt, then build
-        // through the end-step button.
-        drain(&mut t);
+        // G-SETTLE-06/07: the settle of an own un-mortgaged buyable IS the
+        // optional build.
         t.build(0).unwrap();
         drain(&mut t);
         assert_eq!(t.houses(land), n, "house {n} up");
@@ -429,16 +423,16 @@ fn s08_build_costs_the_house_and_respects_the_cap() {
         100_000 - 3 * house_cost(land),
         "three houses at the build cost"
     );
-    // Cap reached: the fourth build is refused.
+    // Cap reached: the fourth build is refused (no settle build offer).
     settle_on(&mut t, 0, land);
-    drain(&mut t);
     assert!(t.build(0).is_err() || t.houses(land) == 3, "购物中心 caps at 3");
     assert_eq!(t.houses(land), 3);
 }
 
 // 规则书 基础[结算] 5.1: 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得」.
-// Emergent in the engine: a mortgaged deed refuses the build outright, so the
-// deed being upgraded can never fund its own upgrade.
+// The pay pipeline's optional-funding arm excludes the deed being upgraded
+// (`Cx::offer_mortgage_funds`'s `exclude`), and a mortgaged deed refuses the
+// build outright (「如果格子地契已抵押则无效果」).
 #[test]
 fn s09_upgrade_cannot_be_funded_by_mortgaging_that_deed() {
     let mut t = Table::vanilla(2);
@@ -446,9 +440,12 @@ fn s09_upgrade_cannot_be_funded_by_mortgaging_that_deed() {
     t.own(0, &[land]);
     t.set_money(0, 100); // far below the 2000 build cost
     settle_on(&mut t, 0, land);
-    assert!(t.build(0).is_err(), "no build at 100 money");
-    t.mortgage(0, land).unwrap();
-    assert!(t.mortgaged(land));
+    // The settle does not offer a build the player cannot fund (and the deed
+    // being upgraded cannot fund its own construction).
+    assert!(t.build(0).is_err(), "no build offer at 100 money");
+    assert_eq!(t.houses(land), 0, "the upgrade never happened");
+    // A mortgaged deed settles to nothing (「如果格子地契已抵押则无效果」).
+    t.set_mortgaged(land, true);
     settle_on(&mut t, 0, land);
     assert!(t.build(0).is_err(), "a mortgaged deed refuses the build");
     assert_eq!(t.houses(land), 0, "the upgrade never happened");

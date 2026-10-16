@@ -379,12 +379,27 @@ impl Table {
         self.act(who, NetMessage::act("end"))
     }
 
+    /// Accept the settle's optional buy (the only buy path).
     pub fn buy(&mut self, who: usize) -> Result<(), String> {
-        self.act(who, NetMessage::act("buy"))
+        let _ = who;
+        let p = self.prompt().ok_or_else(|| "no buy prompt open".to_string())?;
+        if !format!("{:?}", p.title).contains("buy") && !format!("{:?}", p.title).contains("ask.buy")
+        {
+            return Err(format!("open prompt is not a buy: {}", self.dump_prompt()));
+        }
+        self.answer_one(0)
     }
 
+    /// Accept the settle's optional build (the only build path).
     pub fn build(&mut self, who: usize) -> Result<(), String> {
-        self.act(who, NetMessage::act("build"))
+        let _ = who;
+        let p = self.prompt().ok_or_else(|| "no build prompt open".to_string())?;
+        if !format!("{:?}", p.title).contains("build")
+            && !format!("{:?}", p.title).contains("ask.build")
+        {
+            return Err(format!("open prompt is not a build: {}", self.dump_prompt()));
+        }
+        self.answer_one(0)
     }
 
     pub fn mortgage(&mut self, who: usize, tile: usize) -> Result<(), String> {

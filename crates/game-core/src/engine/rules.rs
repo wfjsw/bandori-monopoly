@@ -664,7 +664,7 @@ pub trait CardRules: Send + Sync {
     /// charged for each tile in `q.tiles`, and may they buy it at all?
     ///
     /// Takes the world by reference rather than a [`Cx`] so the view's
-    /// `st.buy_price` preview can ask without cloning the world. The default is
+    /// A quote can be asked without cloning the world. The default is
     /// the plain rulebook formula -- [`super::play::purchase::quote_native`] --
     /// which is what `StubRules` and the sim run. `WasmRules` overrides it to
     /// run the `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` hooks in pure guard
@@ -687,6 +687,77 @@ pub trait CardRules: Send + Sync {
                 }
             })
             .collect()
+    }
+
+    /// The mortgage payout for this deed (规则书 基础规则 5: 「抵押后[获得]地契
+    /// 购买价格50%的资金」). The land price only -- standing houses are not
+    /// part of the figure.
+    ///
+    /// The authority is `rules/tiles/src/deed.rs`; the default here is the
+    /// same plain rulebook formula ([`super::play::purchase::mortgage_value`])
+    /// that `StubRules` and the sim run. `WasmRules` overrides it so a ruleset
+    /// can retune the figure.
+    fn deed_mortgage_value(&self, data: &crate::data::GameData, tile: i32) -> i32 {
+        super::play::purchase::mortgage_value(data, tile.max(0) as usize)
+    }
+
+    /// The redeem charge for this deed (规则书 基础规则 6: 「赎回后[消耗]地契
+    /// 购买价格60%的资金」). Ties-even at the half.
+    ///
+    /// The authority is `rules/tiles/src/deed.rs`; the default is
+    /// [`super::play::purchase::redeem_cost`].
+    fn deed_redeem_cost(&self, data: &crate::data::GameData, tile: i32) -> i32 {
+        super::play::purchase::redeem_cost(data, tile.max(0) as usize)
+    }
+
+    /// Why `player` may not mortgage `tile` right now, or `None`.
+    /// Routed through the rules crate so the tile rule can retune the gate
+    /// (规则书 基础规则 5: 「运营阶段及需[支付]或[消耗]资金且资金不足时可以
+    /// 选择抵押拥有的地契」). The default is the engine's standing gate.
+    fn why_not_deed_mortgage(
+        &self,
+        cx: &super::Cx,
+        player: usize,
+        tile: i32,
+        asking: bool,
+    ) -> Option<crate::msg::Msg> {
+        cx.why_not_mortgage(player, tile, asking)
+    }
+
+    /// Why `player` may not redeem `tile` right now, or `None`
+    /// (规则书 基础规则 6: 「运营阶段可赎回拥有的地契」).
+    fn why_not_deed_redeem(
+        &self,
+        cx: &super::Cx,
+        player: usize,
+        tile: i32,
+        asking: bool,
+    ) -> Option<crate::msg::Msg> {
+        cx.why_not_redeem(player, tile, asking)
+    }
+
+    /// Run the tile rule's mortgage body (`On::Mortgage`) for `tile`.
+    /// `reason`: 0 = player act, 1 = raise-funds, 2 = optional funding prompt.
+    /// `true` when the deed went onto mortgage. The default is the engine's
+    /// standing `Cx::mortgage` (StubRules).
+    fn deed_mortgage(
+        &self,
+        cx: &mut super::Cx,
+        player: usize,
+        tile: usize,
+        _reason: i32,
+    ) -> super::Flow<bool> {
+        cx.mortgage(player, tile, None)
+    }
+
+    /// Run the tile rule's redeem body (`On::Redeem`) for `tile`.
+    /// The default is the engine's standing `Cx::redeem`.
+    fn deed_redeem(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
+        if cx.why_not_redeem(player, tile as i32, false).is_some() {
+            return Ok(false);
+        }
+        cx.redeem(player, tile);
+        Ok(true)
     }
 }
 

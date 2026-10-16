@@ -428,9 +428,14 @@ fn dream_ahead_no_build() {
     let mut t = Table::vanilla(2);
     t.place_raw(0, "PP:梦在前方，结彩当下");
     t.own(0, &[1]);
-    t.set_pos(0, 1);
+    // Land on the owned tile so the settle would offer a build if not for the card.
+    t.set_pos(0, 0);
     t.begin_turn(0);
-    assert!(t.build(0).is_err(), "cannot build");
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    // G-SETTLE-06/07: the only build path is the settle's optional build.
+    assert!(t.build(0).is_err(), "cannot build: {}", t.dump_prompt());
+    assert_eq!(t.houses(1), 0, "no house went up");
 }
 
 /// 规则书: 「（1）[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5）」

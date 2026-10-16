@@ -2006,31 +2006,19 @@ pub fn ask_number(
     let max = max.max(min);
     #[cfg(kani)]
     {
-        // Fixed 4-slot options (card-pool ranges are small).
-        let mut options: [Msg; 4] = [Msg::new("ask.intOption"); 4];
+        // Fixed 16-slot options. Covers the widest card range seen so far
+        // (`fire_bird`'s 1..=10). A wider range is a loud FAIL (coverage limit).
+        const CAP: usize = 16;
+        let mut options: [Msg; CAP] = [Msg::new("ask.intOption"); CAP];
         let mut n = 0usize;
-        macro_rules! push {
-            ($v:expr) => {
-                if n < 4 {
-                    options[n] = Msg::new("ask.intOption").i("n", ($v) as i64);
-                    n += 1;
-                }
-            };
+        let mut v = min;
+        while v <= max && n < CAP {
+            options[n] = Msg::new("ask.intOption").i("n", v as i64);
+            n += 1;
+            v += 1;
         }
-        if min <= max {
-            push!(min);
-            if min + 1 <= max {
-                push!(min + 1);
-                if min + 2 <= max {
-                    push!(min + 2);
-                    if min + 3 <= max {
-                        push!(min + 3);
-                        if min + 4 <= max {
-                            kani::assert(false, "ask_number: range wider than 4 under Kani");
-                        }
-                    }
-                }
-            }
+        if v <= max {
+            kani::assert(false, "ask_number: range wider than 16 under Kani");
         }
         if n == 0 {
             return Ok(min);
@@ -2991,6 +2979,22 @@ pub fn card_immune(player_id: i32, card: &str) -> bool {
 #[cfg_attr(kani, inline(always))]
 pub fn card_mortgage(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_mortgage(player_id, tile) != 0 }
+}
+
+/// Mechanism half of a mortgage the tile rule already approved: flip the
+/// mortgage flag and credit `amount` directly (not through the money
+/// pipeline -- 规则书 基础规则 6). Returns the amount actually credited
+/// (`0` when the deed was already mortgaged / not owned).
+#[cfg_attr(kani, inline(always))]
+pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
+    unsafe { sys::apply_mortgage(player_id, tile, amount) }
+}
+
+/// Mechanism half of a redeem the tile rule already approved: clear the
+/// mortgage flag and charge `amount` directly. Returns the amount charged.
+#[cfg_attr(kani, inline(always))]
+pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
+    unsafe { sys::apply_redeem(player_id, tile, amount) }
 }
 
 /// Does this card's rule text mention `needle`? 「所有效果包含[奇迹水晶]的卡」

@@ -192,6 +192,17 @@ pub enum Call {
     /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the
     /// tile the rule instance governs. `player_id` is the player settling.
     Settle { card: i32, player_id: i32 },
+    /// `On::Mortgage` -- the rule's mortgage body (规则书 基础规则 5). `tile`
+    /// is the deed; `reason` is why (0 = player act, 1 = raise-funds,
+    /// 2 = optional funding prompt).
+    Mortgage {
+        card: i32,
+        player_id: i32,
+        tile: i32,
+        reason: i32,
+    },
+    /// `On::Redeem` -- the rule's redeem body (规则书 基础规则 6).
+    Redeem { card: i32, player_id: i32, tile: i32 },
 }
 
 impl Call {
@@ -204,7 +215,9 @@ impl Call {
             | Call::Hook { player_id, .. }
             | Call::AtEnd { player_id, .. }
             | Call::RollPlan { player_id, .. }
-            | Call::Settle { player_id, .. } => player_id,
+            | Call::Settle { player_id, .. }
+            | Call::Mortgage { player_id, .. }
+            | Call::Redeem { player_id, .. } => player_id,
         }
     }
 
@@ -215,7 +228,9 @@ impl Call {
             | Call::Hook { card, .. }
             | Call::AtEnd { card, .. }
             | Call::RollPlan { card, .. }
-            | Call::Settle { card, .. } => card,
+            | Call::Settle { card, .. }
+            | Call::Mortgage { card, .. }
+            | Call::Redeem { card, .. } => card,
         }
     }
 }
@@ -345,6 +360,21 @@ pub enum HostRequest {
     OfferBuild { player_id: i32, tiles: Vec<i32> },
     /// Mortgage one of the player's deeds.
     Mortgage { player_id: i32, tile: i32 },
+    /// Apply a mortgage the tile rule already approved: flip the mortgage
+    /// flag and move `amount` money directly (规则书 基础规则 6: mortgage money
+    /// is not affected by effects). Answers the amount actually credited.
+    ApplyMortgage {
+        player_id: i32,
+        tile: i32,
+        amount: i32,
+    },
+    /// Lift a mortgage the tile rule already approved: clear the flag and
+    /// charge `amount` directly. Answers the amount actually charged.
+    ApplyRedeem {
+        player_id: i32,
+        tile: i32,
+        amount: i32,
+    },
     /// Draw `n` cards. The engine runs the draw itself -- one card at
     /// a time, raising the per-draw points (`drewBefore` / `drawn` / `drew`) on
     /// each, so a `drewBefore` hook may replace a card of it -- and answers with
@@ -1187,6 +1217,8 @@ impl Ruleset {
             Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
             Call::RollPlan { .. } => info.hook_entry(crate::TriggerKind::RollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),
+            Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
+            Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
         };
         let Some(entry) = entry else {
             return Ok(Outcome::Done(world.clone()));
@@ -1197,6 +1229,7 @@ impl Ruleset {
         if matches!(
             call,
             Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
+                | Call::Mortgage { .. } | Call::Redeem { .. }
         ) {
             let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
             let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
@@ -4123,6 +4156,20 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "card_mortgage",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
             hostfns::card_mortgage(&mut c, player_id, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "apply_mortgage",
+        |mut c: C<W>, player_id: i32, tile: i32, amount: i32| -> Result<i32, Error> {
+            hostfns::apply_mortgage(&mut c, player_id, tile, amount).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "apply_redeem",
+        |mut c: C<W>, player_id: i32, tile: i32, amount: i32| -> Result<i32, Error> {
+            hostfns::apply_redeem(&mut c, player_id, tile, amount).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

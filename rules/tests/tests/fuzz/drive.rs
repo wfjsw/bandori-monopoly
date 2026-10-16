@@ -90,7 +90,9 @@ pub fn drive(
             if t.st().phase != "play" {
                 break;
             }
-            if t.prompt().is_some() {
+            // Leave the settle's optional buy/build open for acts 3/4 (the only
+            // buy/build path). Drain everything else first.
+            if t.prompt().is_some() && !open_is_buy_build(t) {
                 drain_prompts(t, &mut ans_rng, &mut tr, &mut replay)?;
                 continue;
             }
@@ -332,6 +334,14 @@ fn apply_answer(t: &mut Table, who: usize, rec: &AnswerRec) -> Result<(), String
         .map_err(|e| format!("answer {:?}: {}", rec, e.key()))?;
     t.settle();
     Ok(())
+}
+
+/// True when the open prompt is the settle's optional buy/build (the only
+/// buy/build path). Matches [`Table::buy`] / [`Table::build`].
+fn open_is_buy_build(t: &Table) -> bool {
+    let Some(p) = t.prompt() else { return false };
+    let title = format!("{:?}", p.title);
+    title.contains("buy") || title.contains("build")
 }
 
 /// Try one random game action for the current player (or a card play from any

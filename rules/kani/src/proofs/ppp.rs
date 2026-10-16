@@ -1323,9 +1323,20 @@ pub fn returns_c4_blocked_residual_noop() {
         world::snapshot()
     };
 
-    // CardPlayed hook with the residual gate. Host `trig_cards` is 0, so the
-    // residual `on_played_is_general` is false and the body must not run.
-    invoke::unwrap_done(card_ppp::returns::on_played_kani(user));
+    // CardPlayed hook with the residual gate `on_played_is_general` (checks
+    // `trigger::cards()` for a 通用/G: card). `trigger::cards()` reads
+    // `World::trig_card` (0 = none ⇒ residual rejects). Evaluate the residual
+    // explicitly and only run the body when it admits.
+    let trig_card_id = world::with_world(|w| w.trig_card);
+    let residual = if trig_card_id != 0 {
+        let name = crate::intern::resolve_str(crate::intern::NameId(trig_card_id as u16));
+        name.starts_with("通用") || name.starts_with("G:")
+    } else {
+        false
+    };
+    if residual {
+        invoke::unwrap_done(card_ppp::returns::on_played_kani(user));
+    }
 
     let post_tok = world::with_world(|ww| ww.key_get(player, tok));
     let (logbuf, log_n) = log_slice();

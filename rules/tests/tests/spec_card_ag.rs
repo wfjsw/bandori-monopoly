@@ -1146,7 +1146,6 @@ fn band_free_house_on_cheap_buy() {
         t.set_pos(0, FUJIMI - 1);
         t.dice(&[1]);
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
-        skip_all(&mut t);
         let pre = t.snapshot_world();
         t.buy(0).map_err(|e| format!("buy rejected: {e}"))?;
         skip_all(&mut t);
@@ -1199,7 +1198,6 @@ fn band_free_house_on_shop_street_buy() {
         t.set_pos(0, YAMABUKI - 1);
         t.dice(&[1]);
         t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
-        skip_all(&mut t);
         t.buy(0).map_err(|e| format!("buy rejected: {e}"))?;
         skip_all(&mut t);
         if t.owner(YAMABUKI) != Some(0) {

@@ -1797,6 +1797,40 @@ pub fn card_mortgage<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result
             }
 }
 
+/// Mechanism half of a mortgage the tile rule already approved.
+pub fn apply_mortgage<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::ApplyMortgage {
+            player_id,
+            tile,
+            amount,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
+}
+
+/// Mechanism half of a redeem the tile rule already approved.
+pub fn apply_redeem<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::ApplyRedeem {
+            player_id,
+            tile,
+            amount,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
+}
+
 pub fn placed_tile<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let id = guest_str(c, p, n)?;
             Ok(c.st().wr().placed_tile(player_id, &id))

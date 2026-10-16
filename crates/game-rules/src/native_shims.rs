@@ -510,6 +510,10 @@ pub trait HostOps {
     fn op_card_immune(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_mortgage`
     fn op_card_mortgage(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_apply_mortgage`
+    fn op_apply_mortgage(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_apply_redeem`
+    fn op_apply_redeem(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_text_mentions`
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_card_prop`
@@ -1454,6 +1458,12 @@ impl<C: crate::host::HostCtx> HostOps for C {
     }
     fn op_card_mortgage(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_mortgage(self, a[0], a[1])? as i64)
+    }
+    fn op_apply_mortgage(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::apply_mortgage(self, a[0], a[1], a[2])? as i64)
+    }
+    fn op_apply_redeem(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        Ok(crate::hostfns::apply_redeem(self, a[0], a[1], a[2])? as i64)
     }
     fn op_card_text_mentions(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::card_text_mentions(self, a[0], a[1], a[2], a[3])? as i64)
@@ -3640,6 +3650,26 @@ pub unsafe extern "C-unwind" fn ruleset_card_immune(player_id: i32, cptr: i32, c
 #[no_mangle]
 pub unsafe extern "C-unwind" fn ruleset_card_mortgage(player_id: i32, tile: i32) -> i32 {
     with_host(|h| match h.op_card_mortgage([player_id, tile, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_apply_mortgage(
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+) -> i32 {
+    with_host(|h| match h.op_apply_mortgage([player_id, tile, amount, 0, 0, 0]) {
+        Ok(v) => v as i32,
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
+    with_host(|h| match h.op_apply_redeem([player_id, tile, amount, 0, 0, 0]) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

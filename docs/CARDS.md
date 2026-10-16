@@ -65,7 +65,7 @@ is never dispatched.
 ## Action vs Filter (do_action / apply_filters) — final architecture
 
 The entry surface is the WordPress `do_action` / `apply_filters` split. The
-final `On` set (ABI v76):
+final `On` set (ABI v77):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
@@ -73,21 +73,29 @@ final `On` set (ABI v76):
 | `On::Counteract(kinds, pre, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links | yes |
 | `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
 | `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
+| `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
+| `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
 | `On::Action(kinds, pre, guard, body)` | `fn(i32) -> Asked` | **event reaction** | yes (`ctx::gain`, log, place, …) |
 | `On::Filter(kinds, pre, guard, body)` | `fn(i32, value: i32) -> i32` | **integer value transform** | no (pure) |
 | `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / allow decision** | no (pure) |
 | `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **struct rewrite** (deal / plan / payee / gate) | no (pure) |
 
+`On::Mortgage` / `On::Redeem` stay their own variants (like `On::Settle`): a
+deed body owns eligibility + the 50%/60% amounts and calls
+`ctx::apply_mortgage` / `ctx::apply_redeem`, so it is not a pure value
+transform. Wire ids 9 / 10 (master's v73).
+
 ### Retired wire ids (never reuse)
 
 | id | was | folded into | ABI |
 |---|---|---|---|
-| 4 | `OnKind::AtEnd` | `On::Action(&[TriggerKind::AtEnd])` | v75 |
-| 5 | `OnKind::RollPlan` | `On::FilterValue(&[TriggerKind::RollPlan])` | v75 |
-| 6 | `OnKind::(retired 6)` | `On::FilterFlag` / `On::FilterValue` at the gate kinds | v76 |
+| 4 | `OnKind::AtEnd` | `On::Action(&[TriggerKind::AtEnd])` | v76 |
+| 5 | `OnKind::RollPlan` | `On::FilterValue(&[TriggerKind::RollPlan])` | v76 |
+| 6 | `OnKind::Gate` | `On::FilterFlag` / `On::FilterValue` at the gate kinds | v77 |
 
-`On::Hook` (the pre-v73 name) is gone; `OnKind::Hook = 3` was renamed
-`OnKind::Action` and keeps id 3.
+`On::Hook` (the pre-v74 name) is gone; `OnKind::Hook = 3` was renamed
+`OnKind::Action` and keeps id 3. `OnKind::Filter = 11` (not 9 -- 9/10 are the
+v73 deed kinds).
 
 ### On::Settle is kept (not folded into SettleBody)
 

@@ -1521,7 +1521,6 @@ fn chuchu_skill_half_contract() {
         t.set_pos(0, ASTRONOMY - 1);
         t.dice(&[1]);
         t.roll(0).unwrap();
-        drain(&mut t);
         t.build(0).map_err(|e| format!("build: {e}"))?;
         drain(&mut t);
         if t.houses(ASTRONOMY) != 1 {
@@ -1557,7 +1556,6 @@ fn chuchu_skill_free_contract() {
     t.set_pos(0, ASTRONOMY - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    drain(&mut t);
     t.build(0).unwrap();
     drain(&mut t);
     let after_first = t.money(0);
@@ -1573,7 +1571,6 @@ fn chuchu_skill_free_contract() {
     t.set_pos(0, ASTRONOMY - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    drain(&mut t);
     assert_eq!(t.pos(0), ASTRONOMY, "landed on the owned tile");
     t.build(0).unwrap();
     drain(&mut t);
@@ -1619,7 +1616,6 @@ fn chuchu_skill_half_on_a_later_turn() {
     t.set_pos(0, ASTRONOMY - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    drain(&mut t);
     let before = t.money(0);
     t.build(0).unwrap();
     drain(&mut t);
@@ -1644,7 +1640,14 @@ fn rokka_first_deed_contract() {
     t.set_money(0, 20_000);
     t.dice(&[2]);
     t.roll(0).unwrap();
-    drain(&mut t);
+    // Corner pass-reward (if any) is not the buy -- answer it first.
+    while let Some(p) = t.prompt() {
+        if format!("{:?}", p.title).contains("buy") {
+            break;
+        }
+        let _ = p;
+        t.decline();
+    }
     t.buy(0).unwrap();
     drain(&mut t);
     assert_eq!(t.owner(SHOPPING), Some(0));

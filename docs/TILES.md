@@ -302,18 +302,31 @@ Effect}` draws for [反击].
 
 ### What stays an engine primitive
 
-Buying and building stay **player actions in the end step**, not part of the
-settle body. The tile rule declares *whether they are allowed and the price*
-through its props (`price`, `house`, `buildMax`, `noBuild`, `buyDiscount`,
-`freeBuy`, `razeOnBuy`); `buyable_here` / `can_build_here` / `why_not_build_on`
-read those props instead of `TileData` + `TurnCtx` flags. The settle body calls
-`settle_buy` / `settle_build` to *offer* them at landing (the rulebook's
-「可选择」); the end step offers them again after a main move.
+Buying and building are **settle-time offers only** -- the tile rule's
+`ctx::offer_buy` / `ctx::offer_build` is the ONE place that offers, checks and
+performs them (规则书 「无主的[可购买格子]的[结算]是：可选择[消耗]…」 / 「玩家
+拥有的[可购买格子]的[结算]是：…可选择[消耗]…进行升级建造」). There is no
+END-step buy/build act: net `buy`/`build` are rejected with
+`err.buy_build_at_settle`. A settle offers exactly one of buy XOR build
+depending on the owner, so 规则书 基础[结算] item 8 (「购买与建造二选一」) is
+structural -- the `land_acted` flag is gone.
 
-Mortgage / redeem / forced purchase money moves stay outside all effects
-unless a rule says otherwise (rulebook: 「抵押，赎回，和强制购买的资金变动不
-受任何效果影响」), which is why `offer_force_buy` remains a primitive that
-moves money directly.
+The tile rule decides *whether they are allowed and the price* through its
+props (`price`, `house`, `buildMax`, `noBuild`) and the quote pipeline
+(`docs/PURCHASE.md`); the perform (hooks, money pipeline, deed assignment)
+stays in the engine primitives `Cx::buy` / `Cx::build`.
+
+Mortgage / redeem live in `rules/tiles/src/deed.rs` + the tile rule's
+`On::Mortgage` / `On::Redeem` bodies (ABI v73). The body owns eligibility
+(规则书 基础规则 5–6: the 运营阶段 / funding-short gate, ownership,
+`NO_MORTGAGE`) and the 50% / 60% amounts; `ctx::apply_mortgage` /
+`ctx::apply_redeem` are the mechanism (hook raises, flag write, direct
+money move -- 「不受任何效果影响」). Net `mortgage`/`redeem`,
+`card_mortgage`, raise-funds and optional funding all route through
+`CardRules::deed_mortgage` / `deed_redeem`. Mortgage / redeem /
+forced purchase money moves stay outside all effects unless a rule says
+otherwise, which is why `offer_force_buy` remains a primitive that moves
+money directly.
 
 ## Tile text
 
@@ -469,12 +482,13 @@ Routed through the purchase surface (`docs/PURCHASE.md`, `engine/play/purchase.r
   when a hooking instance exists, and the commit re-quotes so quote == charge.
 * **deal?** `assign_deed` (owner / houses / mortgage in one write);
   `BuyAssign` hooks rewrite before commit.
-* **preview?** `st.buy_price` / `st.build_cost` at END, `MatchPrompt.price` /
-  `prices[]` on the prompts.
+* **preview?** `MatchPrompt.price` / `prices[]` on the settle prompts
+  (`ask.buy` / `ask.build` / `ask.agent.*`). There is no END-step
+  `st.buy_price` / `st.build_cost` preview.
 
-The rulebook's 「可选择」 offers stay prompts in `settle_buy` / `settle_build`;
-the end step re-offers after a main move. 「非写明可选择的效果在可发动时必须
-发动」 does not apply here -- these clauses say 可选择.
+The rulebook's 「可选择」 offers are the settle prompts themselves
+(`ctx::offer_buy` / `ctx::offer_build` from the tile rule). 「非写明可选择的
+效果在可发动时必须发动」 does not apply here -- these clauses say 可选择.
 
 ## Perf
 

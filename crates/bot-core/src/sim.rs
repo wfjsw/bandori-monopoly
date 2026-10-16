@@ -434,11 +434,11 @@ pub fn ai_answer_to_action(st: &MatchState, a: &AiAnswer, seat: usize) -> Option
 
 /// The heuristic command at the current decision, as a public `act` message.
 /// Prompts use the engine's `aiAnswer`; the turn surface uses the `ai_step`
-/// order (buy at 结束, else end; roll at 运营).
+/// order (end at 结束; roll at 运营). Buy / build ride settle `aiAnswer`.
 ///
 /// View-only: the bot service's fallback path works from the frame it was
 /// sent, with no [`Match`] to re-ask (`docs/BOT.md` §1).
-pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
+pub fn heuristic_message_view(_data: &GameData, view: &SeatView) -> NetMessage {
     let st = &view.state;
     let player_id = view.player_id;
     if st.prompt.id > 0 && st.prompt.waiting(player_id) {
@@ -486,37 +486,8 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
         return NetMessage::act("roll");
     }
     if st.step == stage::END {
-        let t = st.landed;
-        if t >= 0 {
-            let t = t as usize;
-            let money = st.players.get(me).map(|p| p.money).unwrap_or(0);
-            // The seat's `StrategyParams` (`docs/BOT.md` §3.8): the rollout
-            // policy is the same heuristic the engine plays, not a copy of its
-            // constants.
-            let params = game_core::strategy::for_seat(data, st, me);
-            let group = data.tiles.get(t).map(|x| x.group).unwrap_or(0);
-            let houses = st.houses.get(t).copied().unwrap_or(0);
-            if action::buyable(data, st, me, t)
-                && params.wants_buy_tile(money, st.buy_price.max(0), group, st.round, false)
-            {
-                return NetMessage {
-                    act: "buy".into(),
-                    value: t as i32,
-                    ..Default::default()
-                };
-            }
-            if action::can_build(data, st, me, t)
-                && params.wants_build_tile(money, st.build_cost.max(0), group, houses)
-            {
-                return NetMessage {
-                    act: "build".into(),
-                    value: t as i32,
-                    ..Default::default()
-                };
-            }
-        }
-        // Over-hand is handled above; `ai_step`'s order is buy / build /
-        // discard / end and the search branches on buy / build.
+        // Buy / build happen only at a settle Ask (prompt path above). The END
+        // turn surface is end; over-hand discard is handled above.
         return NetMessage::act("end");
     }
     NetMessage::act("end")
@@ -528,7 +499,7 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
 /// already-fresh `st`, the hand size / first card, and `aiAnswer` when a prompt
 /// is open) -- no `SeatView`, no `view_extra` JSON, no `draw_of` sort.
 pub fn heuristic_message_with(
-    data: &GameData,
+    _data: &GameData,
     fork: &Match,
     member: i32,
     st: &MatchState,
@@ -578,32 +549,7 @@ pub fn heuristic_message_with(
         return NetMessage::act("roll");
     }
     if st.step == stage::END {
-        let t = st.landed;
-        if t >= 0 {
-            let t = t as usize;
-            let money = st.players.get(me).map(|p| p.money).unwrap_or(0);
-            let params = game_core::strategy::for_seat(data, st, me);
-            let group = data.tiles.get(t).map(|x| x.group).unwrap_or(0);
-            let houses = st.houses.get(t).copied().unwrap_or(0);
-            if action::buyable(data, st, me, t)
-                && params.wants_buy_tile(money, st.buy_price.max(0), group, st.round, false)
-            {
-                return NetMessage {
-                    act: "buy".into(),
-                    value: t as i32,
-                    ..Default::default()
-                };
-            }
-            if action::can_build(data, st, me, t)
-                && params.wants_build_tile(money, st.build_cost.max(0), group, houses)
-            {
-                return NetMessage {
-                    act: "build".into(),
-                    value: t as i32,
-                    ..Default::default()
-                };
-            }
-        }
+        // Buy / build happen only at a settle Ask (prompt path above).
         return NetMessage::act("end");
     }
     NetMessage::act("end")

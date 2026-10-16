@@ -27,7 +27,7 @@ fn split_cards_declare_filter_and_action_halves() {
         match name {
             "Play" => 0,
             "Action" => 3,
-            "Filter" => 9,
+            "Filter" => 11,
             other => panic!("bad kind {other}"),
         }
     };

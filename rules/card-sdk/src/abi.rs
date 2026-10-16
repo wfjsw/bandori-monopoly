@@ -520,43 +520,52 @@ use alloc::{string::String, vec::Vec};
 ///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
 ///      No new import; host semantics of `set_pay_amount` composition change.
 ///      SAVE_VERSION unchanged (no save field).
+/// v73: **deed bodies** -- `OnKind::Mortgage` (9) / `OnKind::Redeem` (10)
+///      (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
+///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
+///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
+///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
+///      direct money move (hooks + logging stay in that mechanism).
+///
 /// v72: **persona write** -- new host import `set_persona(player_id, name)`
 ///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
 ///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
 ///      exclusive gate and `persona_is` see the new identity; skills are
 ///      swapped separately. SAVE_VERSION unchanged.
-/// v73: **Action / Filter split** (WordPress `do_action` / `apply_filters`).
+/// v73: **deed bodies** -- `OnKind::Mortgage` (9) / `OnKind::Redeem` (10)
+///      (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
+///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
+///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
+///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
+///      direct money move (hooks + logging stay in that mechanism).
+/// v74: **Action / Filter split** (WordPress `do_action` / `apply_filters`).
 ///      `On::Hook` is removed (no alias). `OnKind::Hook = 3` is renamed
 ///      `OnKind::Action` and **keeps id 3** (old compiled modules stay
-///      loadable). New `OnKind::Filter = 9` carries the modifier-pipeline /
-///      value-shaping kinds (`TriggerKind::is_filter`: PayAdd / PayMul /
-///      PayChoose / PayAt / PayTotal* / BuyAdd / BuyMul / BuySet / BuyAssign /
-///      ChargePaying / FlipEffect / RollPlan / MoveRoll / TurnBaseTime /
-///      TurnBonusTime). A Filter may only list filter kinds and an Action only
-///      non-filter kinds; the check runs at ruleset build (`On::check_kind_variant`).
-///      Phase 1 keeps the old `fn(i32) -> Asked` body shape and the same host
-///      dispatch path -- behaviour is identical to v72. SAVE_VERSION unchanged.
-/// v74: **pure Filter bodies**. `On::Filter` becomes
+///      loadable). New `OnKind::Filter = 11` (11, not 9 -- 9/10 are the v73
+///      deed kinds) carries the modifier-pipeline / value-shaping kinds
+///      (`TriggerKind::is_filter`). A Filter may only list filter kinds and an
+///      Action only non-filter kinds; the check runs at ruleset build
+///      (`On::check_kind_variant`). SAVE_VERSION unchanged.
+/// v75: **pure Filter bodies**. `On::Filter` becomes
 ///      `fn(player_id, value) -> i32`; `On::FilterFlag` is
 ///      `fn(player_id, value) -> bool` (false = cancel/substitute);
-///      `On::FilterValue` is `fn(player_id, FilterValue) -> FilterValue` for
-///      BuyAssign / RollPlan. Bodies may not prompt or emit mutating ctx
-///      effects; the host folds the return. New filter kind
-///      `TriggerKind::RollValue = 102` is raised immediately before `RollAfter`
-///      for roll reshaping (RollAfter stays a pure Action event). SAVE_VERSION
-///      unchanged.
-/// v75: **RollPlan / AtEnd fold**. `On::RollPlan` is
+///      `On::FilterValue` is `fn(player_id, FilterValue) -> FilterValue`.
+///      Bodies may not prompt or emit mutating ctx effects; the host folds the
+///      return. New filter kind `TriggerKind::RollValue = 102` is raised
+///      immediately before `RollAfter` for roll reshaping (RollAfter stays a
+///      pure Action event). SAVE_VERSION unchanged.
+/// v76: **RollPlan / AtEnd fold**. `On::RollPlan` is
 ///      `On::FilterValue(&[TriggerKind::RollPlan], …)`; `On::AtEnd` is
 ///      `On::Action(&[TriggerKind::AtEnd], …)` (one-shot via the existing
 ///      `schedule_turn_end` list). `OnKind::RollPlan = 5` / `OnKind::AtEnd = 4`
 ///      are retired -- never reuse those wire ids. New kind
 ///      `TriggerKind::AtEnd = 103` (wire `atEnd`). SAVE_VERSION unchanged.
-/// v76: **Gate fold**. `On::Gate` is `On::FilterFlag` (yes/no: true = allowed)
+/// v77: **Gate fold**. `On::Gate` is `On::FilterFlag` (yes/no: true = allowed)
 ///      or `On::FilterValue` (target / reason). All gate kinds join
 ///      `TriggerKind::is_filter()`. `OnKind::Gate = 6` is retired -- never
 ///      reuse. CEL-only status gates keep their native `admits_pre` /
 ///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 76;
+pub const ABI_VERSION: i32 = 77;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -2267,11 +2276,20 @@ pub enum OnKind {
     /// `ctx::message` and returns a reply value. Does **not** flash the card
     /// (internal plumbing); the handler may log.
     Message = 8,
-    /// v73: `On::Filter` / `On::FilterFlag` / `On::FilterValue` -- a **value
+    /// v73: a rule's **mortgage body** (`On::Mortgage(pre, guard, body)`) --
+    /// what runs when the deed this rule instance governs is [抵押]d. The body
+    /// owns eligibility (规则书 基础规则 5) and the payout; the engine keeps the
+    /// flag write + direct money move (`ctx::apply_mortgage`).
+    Mortgage = 9,
+    /// v73: a rule's **redeem body** (`On::Redeem(pre, guard, body)`) --
+    /// 规则书 基础规则 6. Same split as [`Self::Mortgage`].
+    Redeem = 10,
+    /// v74: `On::Filter` / `On::FilterFlag` / `On::FilterValue` -- a **value
     /// modifier** at those modifier [`HookKind`]s (`TriggerKind::is_filter()`).
-    /// v74: the three shapes share this wire id (the host distinguishes by the
-    /// guest's return convention). Kinds must be filter kinds.
-    Filter = 9,
+    /// v75: the three shapes share this wire id (the host distinguishes by the
+    /// guest's return convention). Kinds must be filter kinds. Id 11, not 9
+    /// (9/10 are the v73 deed kinds).
+    Filter = 11,
 }
 
 /// Small typed payload for [`crate::On::FilterValue`] (BuyAssign / RollPlan).
@@ -2345,7 +2363,9 @@ impl OnKind {
             // 4 / 5 / 6 retired (AtEnd / RollPlan / Gate) -- see the enum docs.
             7 => Self::Settle,
             8 => Self::Message,
-            9 => Self::Filter,
+            9 => Self::Mortgage,
+            10 => Self::Redeem,
+            11 => Self::Filter,
             _ => return None,
         })
     }

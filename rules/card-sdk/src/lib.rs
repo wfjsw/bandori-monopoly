@@ -560,6 +560,27 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
+    /// The rule's **mortgage body** -- what runs when the deed this rule
+    /// instance governs is [抵押]d (net `mortgage`, pay-pipeline raise-funds /
+    /// optional funding, or a card-driven mortgage). Same shape as
+    /// [`On::Settle`]. The body owns eligibility (规则书 基础规则 5: 「运营阶段
+    /// 及需[支付]或[消耗]资金且资金不足时可以选择抵押拥有的地契」) and the
+    /// payout amount; the engine keeps only the flag write + direct money move
+    /// via [`crate::ctx::apply_mortgage`].
+    Mortgage(
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
+    /// The rule's **redeem body** -- what runs when the deed is [赎回]d
+    /// (规则书 基础规则 6: 「运营阶段可赎回拥有的地契」). Same shape as
+    /// [`On::Mortgage`]; the engine keeps only the flag clear + direct money
+    /// move via [`crate::ctx::apply_redeem`].
+    Redeem(
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
     /// A **cross-card message** this card answers (`ctx::send`). First field
     /// is the list of message names it answers (empty is never dispatched).
     /// Same condition / residual guard / body shape as [`On::Action`]. The
@@ -598,6 +619,8 @@ impl On {
             On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
             On::FilterValue(k, _, g, r) => On::FilterValue(k, pre, g, r),
             On::Settle(_, g, r) => On::Settle(pre, g, r),
+            On::Mortgage(_, g, r) => On::Mortgage(pre, g, r),
+            On::Redeem(_, g, r) => On::Redeem(pre, g, r),
             On::Message(n, _, g, r) => On::Message(n, pre, g, r),
         }
     }
@@ -612,6 +635,8 @@ impl On {
             On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
             On::FilterValue(k, pre, _, r) => On::FilterValue(k, pre, None, r),
             On::Settle(pre, _, r) => On::Settle(pre, None, r),
+            On::Mortgage(pre, _, r) => On::Mortgage(pre, None, r),
+            On::Redeem(pre, _, r) => On::Redeem(pre, None, r),
             On::Message(n, pre, _, r) => On::Message(n, pre, None, r),
             other => other,
         }
@@ -628,6 +653,8 @@ impl On {
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
             | On::Settle(_, g, _)
+            | On::Mortgage(_, g, _)
+            | On::Redeem(_, g, _)
             | On::Message(_, _, g, _) => *g,
             _ => None,
         }
@@ -644,6 +671,8 @@ impl On {
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
             | On::Settle(_, g, _)
+            | On::Mortgage(_, g, _)
+            | On::Redeem(_, g, _)
             | On::Message(_, _, g, _) => g.is_some(),
         }
     }
@@ -659,6 +688,8 @@ impl On {
             | On::FilterFlag(_, pre, _, _)
             | On::FilterValue(_, pre, _, _)
             | On::Settle(pre, _, _)
+            | On::Mortgage(pre, _, _)
+            | On::Redeem(pre, _, _)
             | On::Message(_, pre, _, _) => *pre,
         }
     }
@@ -672,6 +703,8 @@ impl On {
             On::FilterFlag(..) => abi::OnKind::Filter,
             On::FilterValue(..) => abi::OnKind::Filter,
             On::Settle(..) => abi::OnKind::Settle,
+            On::Mortgage(..) => abi::OnKind::Mortgage,
+            On::Redeem(..) => abi::OnKind::Redeem,
             On::Message(..) => abi::OnKind::Message,
         }
     }
@@ -820,12 +853,17 @@ mod tests {
     #[test]
     fn on_kind_ids() {
         assert_eq!(abi::OnKind::Action as i32, 3);
-        assert_eq!(abi::OnKind::Filter as i32, 9);
+        assert_eq!(abi::OnKind::Filter as i32, 11);
+        assert_eq!(abi::OnKind::Mortgage as i32, 9);
+        assert_eq!(abi::OnKind::Redeem as i32, 10);
         assert_eq!(abi::OnKind::from_i32(3), Some(abi::OnKind::Action));
-        assert_eq!(abi::OnKind::from_i32(9), Some(abi::OnKind::Filter));
+        assert_eq!(abi::OnKind::from_i32(9), Some(abi::OnKind::Mortgage));
+        assert_eq!(abi::OnKind::from_i32(10), Some(abi::OnKind::Redeem));
+        assert_eq!(abi::OnKind::from_i32(11), Some(abi::OnKind::Filter));
         assert_eq!(abi::OnKind::from_i32(1), None);
-        // v75 retired AtEnd = 4 / RollPlan = 5 -- never reuse.
+        // Retired AtEnd = 4 / RollPlan = 5 / Gate = 6 -- never reuse.
         assert_eq!(abi::OnKind::from_i32(4), None);
         assert_eq!(abi::OnKind::from_i32(5), None);
+        assert_eq!(abi::OnKind::from_i32(6), None);
     }
 }

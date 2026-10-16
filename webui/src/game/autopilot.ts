@@ -197,7 +197,7 @@ export function buyReserveAt(p: StrategyParams, round: number): number {
 /** `StrategyParams::wants_buy_tile` (no set-completion / ratio extras here). */
 export function wantsBuyP(p: StrategyParams, money: number, price: number, round = 0): boolean {
   // Bots do not mortgage to buy land (user ruling 2026-10-08): require **cash
-  // alone** to cover the price. `can_buy_here` is funded by cash +
+  // alone** to cover the price. The settle offer is funded by cash +
   // mortgageable deeds -- legality for humans is unchanged; the autopilot
   // declines instead of auto-mortgaging.
   return money >= price && money - price >= buyReserveAt(p, round);
@@ -232,10 +232,9 @@ export const wantsBuy = (money: number, price: number) => money - price >= BUY_R
 export const wantsBuild = (money: number, cost: number) => money - cost >= BUILD_RESERVE;
 export const wantsRedeem = (money: number, cost: number) => money - cost >= REDEEM_RESERVE;
 
-/** `BuyPrice` -- the quoted price. Prefers the engine's `S.buyPrice` preview
- * when it covers this tile; falls back to the formula (land + houses). */
+/** `BuyPrice` -- the quoted price: land + standing houses. Prompt sites prefer
+ * `MatchPrompt.price` when the ask carries one (settle / force-buy / auction). */
 export const buyPrice = (S: MatchState, tiles: TileData[], t: number) => {
-  if (S.buyPrice >= 0 && S.landed === t && S.owners[t] < 0) return S.buyPrice;
   return tiles[t].price + (S.houses[t] ?? 0) * tiles[t].house;
 };
 /** `BuildCost` -- one more house. */
@@ -247,44 +246,6 @@ export const redeemCost = (tiles: TileData[], t: number) => Math.round(tiles[t].
 
 /** The player's hand limit (`core/hand.ts`; `null` = no limit). */
 export { handLimit } from "../core/hand.ts";
-
-/** `BuyableHere` -- after a main move onto unowned land, in 结束. */
-export function buyableHere(S: MatchState, tiles: TileData[], me: number, i: number): boolean {
-  const t = tiles[i];
-  return (
-    !!t &&
-    (t.kind === "property" || t.kind === "ring") &&
-    S.phase === "play" &&
-    S.step === 4 &&
-    S.turn === me &&
-    !S.busy &&
-    !S.bought &&
-    S.landed === i &&
-    S.players[me]?.pos === i &&
-    S.owners[i] < 0
-  );
-}
-
-/** `CanBuildHere` -- one more house where the turn stands. */
-export function canBuildHere(S: MatchState, tiles: TileData[], me: number, i: number): boolean {
-  const t = tiles[i];
-  return (
-    !!t &&
-    S.phase === "play" &&
-    S.step === 4 &&
-    S.turn === me &&
-    !S.busy &&
-    !S.bought &&
-    !S.built &&
-    S.landed === i &&
-    S.players[me]?.pos === i &&
-    S.owners[i] === me &&
-    t.kind === "property" &&
-    t.rent.length > 1 &&
-    !S.mortgaged[i] &&
-    (S.houses[i] ?? 0) < t.rent.length - 1
-  );
-}
 
 // ---------------------------------------------------------------- context
 
@@ -593,7 +554,7 @@ function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Comman
 function auctionWorth(view: MatchView, ctx: AutopilotCtx, params: StrategyParams): number {
   const p = view.state.prompt;
   const me = view.playerId;
-  const base = buyPrice(view.state, ctx.tiles, p.tile);
+  const base = p.tile >= 0 ? buyPrice(view.state, ctx.tiles, p.tile) : Math.max(0, p.price);
   const lo = params.auction_worth_lo_milli / 1000;
   const span = params.auction_worth_span_milli / 1000;
   const v = Math.trunc((base * (lo + ctx.random() * span)) / 100) * 100;
@@ -734,7 +695,6 @@ export const policies: Record<PolicyName, Policy> = {
     turn(view, ctx) {
       const S = view.state;
       const me = view.playerId;
-      const mine = S.players[me];
       const myTurn = S.turn === me;
       const out: Command[] = [];
       const params = botParams(view, ctx);
@@ -758,13 +718,8 @@ export const policies: Record<PolicyName, Policy> = {
         return out;
       }
       if (S.step !== 4 || !myTurn) return out; // 开始 lifts itself; 移动 is running
-      const t = S.landed;
-      if (t >= 0 && buyableHere(S, ctx.tiles, me, t) && wantsBuyP(params, mine.money, buyPrice(S, ctx.tiles, t), S.round)) {
-        out.push({ act: "buy", value: t });
-      }
-      if (t >= 0 && canBuildHere(S, ctx.tiles, me, t) && wantsBuildP(params, mine.money, buildCost(ctx.tiles, t))) {
-        out.push({ act: "build", value: t });
-      }
+      // Buy / build ride settle Asks (`offerKind` → `act:"answer"`), never END
+      // acts. At 结束 the only turn command is end.
       out.push({ act: "end" });
       return out;
     },
@@ -803,7 +758,6 @@ export const policies: Record<PolicyName, Policy> = {
     turn(view, ctx) {
       const S = view.state;
       const me = view.playerId;
-      const mine = S.players[me];
       const myTurn = S.turn === me;
       const out: Command[] = [];
       if (S.step === 2) {
@@ -825,15 +779,8 @@ export const policies: Record<PolicyName, Policy> = {
         return out;
       }
       if (S.step !== 4 || !myTurn) return out;
-      // Buy / build whenever the reserve survives, then end only when nothing
-      // is left.
-      const t = S.landed;
-      if (t >= 0 && buyableHere(S, ctx.tiles, me, t) && mine.money - buyPrice(S, ctx.tiles, t) >= CHAOS_RESERVE) {
-        out.push({ act: "buy", value: t });
-      }
-      if (t >= 0 && canBuildHere(S, ctx.tiles, me, t) && mine.money - buildCost(ctx.tiles, t) >= CHAOS_RESERVE) {
-        out.push({ act: "build", value: t });
-      }
+      // Buy / build ride settle Asks (`offerKind` → `act:"answer"`), never END
+      // acts. At 结束 the only turn command is end.
       out.push({ act: "end" });
       return out;
     },

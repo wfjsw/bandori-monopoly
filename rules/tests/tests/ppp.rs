@@ -236,12 +236,8 @@ fn returns_borrow_options_carry_band_cards() {
 // PPP band (4) (the roster): 「不能通过[主要移动]的[结算]盖房」.
 // 规则书 基础[结算] 5.1 (bold): 「玩家拥有的[可购买格子]的[结算]是：如果格子
 // 地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 — the
-// upgrade IS the settle's 「可选择」, so (4) vetoes that choice and Returns
-// lifts the veto. The engine surfaces the 「可选择」 as the end-step `build`
-// command (rulebook::s06: 「The buy is the end step's offer
-// (「[主要移动]和所需[结算]完成后进入结束阶段」)」), which is outside
-// 「[主要移动]的[结算]」 -- so (4) has nothing to gate and the neutralisation
-// is unobservable.
+// upgrade IS the settle's 「可选择」 (ask.build), so (4) vetoes that choice and
+// Returns lifts the veto.
 #[test]
 fn returns_neutralises_ppp_band_skill_4() {
     // With Returns on the field (its [特] (2)), band (4) is neutralised, so the
@@ -257,7 +253,6 @@ fn returns_neutralises_ppp_band_skill_4() {
     t.set_pos(0, HILL - 2);
     t.dice(&[2]); // land on own HILL
     t.roll(0).unwrap();
-    skip_all(&mut t);
     t.build(0).unwrap();
     skip_all(&mut t);
     assert_eq!(
@@ -283,7 +278,6 @@ fn returns_neutralises_ppp_band_skill_4() {
     u.set_pos(0, HILL - 2);
     u.dice(&[2]); // land on own HILL
     u.roll(0).unwrap();
-    skip_all(&mut u);
     let blocked = u.build(0);
     skip_all(&mut u);
     assert!(

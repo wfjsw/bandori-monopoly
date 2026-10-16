@@ -137,13 +137,14 @@ pub fn mortgage_value(data: &GameData, t: usize) -> i32 {
     data.tiles.get(t).map(|tile| tile.price / 2).unwrap_or(0)
 }
 
-/// The deed's redeem price: 60% of the land price, ties even
-/// (`DoRedeem`'s charge). **Single source** for `Cx::redeem_cost` and the
-/// tile quotes -- the caption can never disagree with the charge.
+/// The deed's redeem price: 60% of the land price (`DoRedeem`'s charge).
+/// Integer form of `round_ties_even(price * 0.6)` -- the product of an integer
+/// price and 0.6 never lands on `.5`. **Single source** for the StubRules
+/// default; the authority is `rules/tiles/src/deed.rs`.
 pub fn redeem_cost(data: &GameData, t: usize) -> i32 {
     data.tiles
         .get(t)
-        .map(|tile| (tile.price as f64 * 0.6).round_ties_even() as i32)
+        .map(|tile| (tile.price * 3 + 2) / 5)
         .unwrap_or(0)
 }
 

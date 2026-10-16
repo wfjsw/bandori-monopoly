@@ -305,6 +305,22 @@ pub fn skill_blocked(player_id: i32, group: &str) -> bool {
 
 // ------------------------------------------------------------- RiNG / rent / buy
 
+/// 规则书 基础规则 5: 「抵押后[获得]地契购买价格50%的资金」.
+/// Land price only. The authority is `rules/tiles/src/deed.rs`.
+#[inline]
+pub fn mortgage_value(land_price: i32) -> i32 {
+    land_price / 2
+}
+
+/// 规则书 基础规则 6: 「赎回后[消耗]地契购买价格60%的资金」.
+/// Integer form of `round_ties_even(price * 0.6)` (the product of an integer
+/// price and 0.6 never lands on `.5`, so this matches). The authority is
+/// `rules/tiles/src/deed.rs`.
+#[inline]
+pub fn redeem_cost(land_price: i32) -> i32 {
+    (land_price * 3 + 2) / 5
+}
+
 /// The RiNG rent multiplier.
 pub fn rent_unit_mult() -> i32 {
     unsafe { raw::sys::rent_unit_mult() }

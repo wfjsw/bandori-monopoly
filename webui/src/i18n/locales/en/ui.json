@@ -356,8 +356,6 @@
   "deckPick.presetCustom": "From the design sheet",
   "deckPick.short": " · {{n}} short",
   "deckPick.title": "3. Pick a deck",
-  "deed.buildN": "Build #{{n}}  {{cost}}",
-  "deed.buy": "Buy  {{n}}{{poor}}",
   "deed.cafe": "Draw + Event",
   "deed.dealer": "Dealer",
   "deed.draw": "Draw",
@@ -746,7 +744,7 @@
   "console.invalidJson": "act requires a valid command JSON, e.g. act {\"act\":\"roll\"}.",
   "console.cardNotFound": "No unique card for {{card}}. Search with cards and use its ID.",
   "console.unknown": "Unknown command: {{command}}. Enter help for commands.",
-  "console.help": "Inspect and debug\n  help                         Show help\n  clear                        Clear logs\n  status                       Session, phase, turn, prompt, cheat flag\n  players                      Seat numbers, money, positions\n  hand                         Your hand card IDs\n  inspect [state|prompt|profile|engine]\n  inspect player [seat]        Player and state counters\n  cards [query]                Find card IDs / names / groups; first 100 results\n  tiles                        Tile numbers\n  auto off|bot|chaos|advanced   Change your autopilot\n  act {\"act\":\"roll\"}            Send command JSON (normal game rules apply)\n\nCheats (debug builds only; play phase, no pending prompt)\n  money <amount> [seat]        Set money, 0–100000000\n  tp <tile> [seat]             Teleport without passing / landing effects\n  give <card ID or name> [count] [seat]\n  draw <count> [seat]          Draw from the deck\n  state <key> <value> [seat]   Set an existing counter, honoring its cap;\n                               inspect player lists the keys\n  Examples: money 50000 / tp 10 / draw 2 / state charge 5\n\nSeats start at 0; omitted seat means yourself. Quote names with spaces.\nCount is 1–100. Cheats are saved and recorded, and set the cheated flag.\nThe game keeps running. ↑↓ history, Tab completes command names.",
+  "console.help": "Inspect and debug\n  help                         Show help\n  clear                        Clear logs\n  status                       Session, phase, turn, prompt, cheat flag\n  players                      Seat numbers, money, positions\n  hand                         Your hand card IDs\n  inspect [state|prompt|profile|engine]\n  inspect player [seat]        Player and state counters\n  cards [query]                Find card IDs / names / groups; first 100 results\n  tiles                        Tile numbers\n  auto off|bot|chaos|advanced   Change your autopilot\n  act {\"act\":\"roll\"}            Send command JSON (normal game rules apply)\n\nCheats (debug builds only; play phase, no pending prompt)\n  money <amount> [seat]        Set money, 0–100000000\n  tp <tile> [seat]             Teleport without passing / landing effects\n  give <card ID or name> [count] [seat]\n  draw <count> [seat]          Draw from the deck\n  state <key> <value> [seat]   Set an existing counter, honoring its cap;\n                               inspect player lists the keys\n  buy <tile> [seat]            Buy a deed (tile-rule primitive)\n  build <tile> [seat]          Build one house on a deed\n  mortgage <tile> [seat]       Mortgage a deed\n  redeem <tile> [seat]         Redeem a mortgaged deed\n  Examples: money 50000 / tp 10 / draw 2 / state charge 5\n\nSeats start at 0; omitted seat means yourself. Quote names with spaces.\nCount is 1–100. Cheats are saved and recorded, and set the cheated flag.\nThe game keeps running. ↑↓ history, Tab completes command names.",
   "board.skipMovement": "Skip movement",
   "board.continueTurn": "Continue",
   "board.logStage": "Phase: {{stage}}",
@@ -763,5 +761,6 @@
   "history.chargeUsed": "Charge used",
   "results.chargeUsed": "Charge used",
   "rotate.hint": "Turn your phone sideways to play",
-  "rotate.why": "The board needs a landscape screen"
+  "rotate.why": "The board needs a landscape screen",
+  "rotate.force": "Rotate the screen for me"
 }

@@ -23,6 +23,12 @@ fn skip_all(t: &mut Table) {
     }
 }
 
+/// Accept the settle's optional buy (the only buy path), then skip anything else.
+fn accept_buy(t: &mut Table) {
+    t.buy(0).unwrap();
+    skip_all(t);
+}
+
 // =====================================================================
 // AG:宣战布告
 // =====================================================================
@@ -799,10 +805,8 @@ fn band_free_house_on_cheap_buy() {
     t.set_pos(0, FUJIMI - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    skip_all(&mut t);
-    // Landing on an unowned deed: buy through the action.
-    t.buy(0).unwrap();
-    skip_all(&mut t);
+    // Landing on an unowned deed: the settle IS the optional buy.
+    accept_buy(&mut t);
     // 规则书: 「自动免费在上面加盖一栋房子」
     assert_eq!(t.owner(FUJIMI), Some(0), "events {:?}", t.recent_keys(8));
     assert_eq!(t.houses(FUJIMI), 1, "free house");
@@ -817,9 +821,7 @@ fn band_free_house_on_shop_street_buy() {
     t.set_pos(0, YAMABUKI - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    skip_all(&mut t);
-    t.buy(0).unwrap();
-    skip_all(&mut t);
+    accept_buy(&mut t);
     assert_eq!(t.owner(YAMABUKI), Some(0), "events {:?}", t.recent_keys(8));
     assert_eq!(t.houses(YAMABUKI), 1);
 }
@@ -839,9 +841,7 @@ fn band_free_house_skipped_when_build_refused() {
     t.set_pos(0, FUJIMI - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    skip_all(&mut t);
-    t.buy(0).unwrap();
-    skip_all(&mut t);
+    accept_buy(&mut t);
     assert_eq!(t.owner(FUJIMI), Some(0), "the buy itself still lands");
     assert_eq!(t.houses(FUJIMI), 0, "no free house when the build is refused");
     let keys = t.recent_keys(16);
@@ -914,9 +914,7 @@ fn ix_band_house_then_sunset_demolish() {
     t.set_pos(0, FUJIMI - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    skip_all(&mut t);
-    t.buy(0).unwrap();
-    skip_all(&mut t);
+    accept_buy(&mut t);
     assert_eq!(t.houses(FUJIMI), 1, "free house");
     // Next turn: demolish it with sunset (needs 4 housed tiles).
     t.begin_turn(0);
