@@ -11,8 +11,8 @@
 //! 变正」 is the flip effect that consumes them. （3） is the plan's
 //! no-circle-reward flag on the walk that passes a CiRCLE.
 
-use card_sdk::abi::{state_key, HookKind, TriggerKind};
-use ruleset_core::ctx::{self, state, trigger};
+use card_sdk::abi::HookKind;
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
@@ -31,6 +31,13 @@ pub const PASTEL: CardDef = CardDef::new(
         // with the clause's X before the counters move, so `tok(FAN)` is still
         // the pre-flip count. 「可为此卡添加」 is the book's permissive may
         // (there is no cost or downside), so the overflow is applied here.
+        //
+        // ABI v74: `FlipEffect` is an integer Filter kind. The body does NOT
+        // rewrite the flip value -- it adds crystals based on it (a side
+        // effect). `add_crystals` is not `refuse_if_filter`'d; kept here as a
+        // documented side effect at a filter kind because there is no adjacent
+        // non-filter flip event (`FlipAfter` does not exist). The return is the
+        // unchanged `value`.
         On::Filter(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
     ],
 );
@@ -80,20 +87,24 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]
 /// （最多10个）」 -- the overflow is `X - owned`, taken while `tok(FAN)` is
-/// still the pre-flip count.
-fn on_flip(player_id: i32) -> card_sdk::Asked {
-    let x = trigger::value();
+/// still the pre-flip count. Returns `value` unchanged (the flip count is not
+/// rewritten); `add_crystals` is the documented side effect at this filter kind.
+fn on_flip(player_id: i32, value: i32) -> i32 {
+    let x = value;
     let have = ctx::tok(player_id, FAN);
     let over = (x - have).max(0);
     if over <= 0 {
-        return Ok(());
+        return value;
     }
-    ctx::add_crystals(over, 10)?;
+    // Side effect at a filter kind (not `refuse_if_filter`'d). No FlipAfter
+    // exists to carry this instead. `add_crystals` may prompt on the marker
+    // window; the `Result` is discarded so the pure-filter signature holds.
+    let _ = ctx::add_crystals(over, 10);
     ctx::log(
         player_id,
         &Msg::new(key!("pastel_over")).i("n", over as i64),
     );
-    Ok(())
+    value
 }
 
 /// Roster band row for this band skill (ABI v63).
@@ -123,6 +134,6 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_flip_kani(player_id: i32) -> card_sdk::Asked {
-    on_flip(player_id)
+pub fn on_flip_kani(player_id: i32, value: i32) -> i32 {
+    on_flip(player_id, value)
 }

@@ -25,7 +25,16 @@ pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
         On::Play("", None, aya_longing),
-        On::Filter(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
+        // ABI v74 Pattern E: the body is interactive (共鸣 prompts + a second
+        // amount rewrite) so it cannot be a pure Filter. It rides
+        // `HookKind::Effect` -- the payment declaration, whose `t.value` the
+        // engine still folds (PayAfter is too late). Both shaves stay in one
+        // body so the X-then-1500 order is unchanged.
+        // TODO(规则书): the shaves land at Effect (before PayAdd/PayMul) rather
+        //   than at the old PayAdd stage, so a sibling PayAdd modifier now sees
+        //   the already-shaved figure. Same result when no other add/mul
+        //   modifier touches the payment.
+        On::Action(&[HookKind::Effect], "actor == owner && value > 0", None, pay_add),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)

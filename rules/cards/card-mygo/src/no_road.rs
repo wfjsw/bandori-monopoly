@@ -139,14 +139,16 @@ fn redirect_applies(player_id: i32) -> bool {
 /// 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
 /// `NoRoadFx.RedirectReceiver`. Applicability is the `pre` +
 /// [`redirect_applies`]; this side only reroutes the pay target.
-fn redirect(player_id: i32) -> card_sdk::Asked {
+fn redirect(player_id: i32, value: i32) -> i32 {
     let who = ctx::slot(player_id, "noRoad.who");
+    // `set_pay_target` is a trigger-side payee rewrite (no FilterValue field
+    // for it) kept in the Filter body.
     ctx::trigger::set_pay_target(who);
     ctx::log(
         player_id,
         &Msg::new(key!("no_road_redirect")).player_id("who", who),
     );
-    Ok(())
+    value
 }
 
 // `exileMain` is honoured by the engine now (2026-10-06): `game-core`'s exile
@@ -164,6 +166,6 @@ pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn redirect_kani(player_id: i32) -> card_sdk::Asked {
-    redirect(player_id)
+pub fn redirect_kani(player_id: i32, value: i32) -> i32 {
+    redirect(player_id, value)
 }

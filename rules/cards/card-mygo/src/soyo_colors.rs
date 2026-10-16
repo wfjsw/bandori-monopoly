@@ -48,17 +48,16 @@ fn on_rent(player_id: i32) -> bool {
 }
 
 /// 「收费在地产商的减半收费基础上额外减半」.
-fn half_again(player_id: i32) -> card_sdk::Asked {
-    let v = ctx::trigger::value();
-    if v <= 0 {
-        return Ok(());
+fn half_again(player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
-    ctx::trigger::set_pay_amount((v + 1) / 2);
+    let out = (value + 1) / 2;
     ctx::log(
         player_id,
-        &Msg::new(key!("soyo_colors_half")).i("n", v as i64),
+        &Msg::new(key!("soyo_colors_half")).i("n", value as i64),
     );
-    Ok(())
+    out
 }
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -118,6 +117,6 @@ pub fn soyo_colors_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn half_again_kani(player_id: i32) -> card_sdk::Asked {
-    half_again(player_id)
+pub fn half_again_kani(player_id: i32, value: i32) -> i32 {
+    half_again(player_id, value)
 }

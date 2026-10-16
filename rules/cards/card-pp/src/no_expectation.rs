@@ -15,7 +15,7 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{prop, HookKind, TriggerKind};
+use card_sdk::abi::{prop, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,10 +23,13 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
     &[
         On::Play("", None, no_expectation),
-        // Mixed kinds split (ABI v73): RollAfter is an event reaction, PayAdd a
-        // value modifier. Shared body `hook` matches on `trigger::kind()`.
-        On::Action(&[HookKind::RollAfter], "card.placed", None, hook),
-        On::Filter(&[HookKind::PayAdd], "card.placed", None, hook),
+        // ABI v74 Filter/Action split of the old shared `hook` body:
+        // RollValue is the pure face shave; RollAfter only records the
+        // 「如果为0则此次移动不[结算]」 no-resolve side effect; PayAdd is the
+        // pure payment bend.
+        On::Filter(&[HookKind::RollValue], "card.placed", None, roll_shave),
+        On::Action(&[HookKind::RollAfter], "card.placed", None, no_resolve),
+        On::Filter(&[HookKind::PayAdd], "card.placed", None, pay_add),
         On::Action(
             &[HookKind::Reshuffled],
             "actor == owner && card.placed",
@@ -39,7 +42,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
 // placement (`FieldCard.immune`). 规则书[持续]（1）: 「手卡上限数量减1」 -- the
 // `handLimitDelta` property (C# `Card.HandLimitDelta`), continuous while this
 // instance sits on the field.
-.props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::IMMUNE, 1)]).silent(&[3]).meta(&card_sdk::meta::CardMeta::new()
+.props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::IMMUNE, 1)]).silent(&[4]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不要背负期待"#)
         .raw_name(r#"不要背负期待"#)
         .tags(&[r#"手"#, r#"持续"#, r#"特"#])
@@ -88,65 +91,72 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardNoExpectation.RollAfter` / `PayAdd` -- both [持续] halves that the
-/// hook surface can express. `card.placed` is the pre; the arms keep their
-/// kind-specific relations.
-fn hook(player_id: i32) -> card_sdk::Asked {
-    match trigger::kind() {
-        // 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
-        // `CardNoExpectation.RollAfter` (`m.Roll = max(0, m.Roll - 2)`).
-        // On a `rollAfter` trigger the roll is `value()`; `set_move_roll` is the
-        // write-back the engine lands on `m.Roll`.
-        TriggerKind::RollAfter => {
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
-            let roll = trigger::move_roll().unwrap_or(trigger::value());
-            if roll <= 0 {
-                return Ok(());
-            }
-            let cut = (roll - 2).max(0);
-            trigger::set_move_roll(cut);
-            ctx::log(
-                player_id,
-                &Msg::new(key!("no_expectation_roll")).i("n", cut as i64),
-            );
-            // 规则书[持续]（1）: 「如果为0则此次移动不[结算]」 -- C# `m.Resolve = false`.
-            if cut == 0 {
-                ctx::plan::set_resolve(false);
-                ctx::log(
-                    player_id,
-                    &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
-                );
-            }
-            // The hand-limit half still needs Fx.HandLimitDelta (C#
-            // `Card.HandLimitDelta` returning -1).
-        }
-        // 规则书[持续]（2）: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
-        // -- C# `CardNoExpectation.PayAdd`, once per stack.
-        TriggerKind::PayAdd => {
-            let n = stacks(player_id);
-            if n <= 0 {
-                return Ok(());
-            }
-            let from = trigger::player_id();
-            let to = trigger::target();
-            let amount = trigger::value();
-            if amount <= 0 {
-                return Ok(());
-            }
-            let bump = 100 * n;
-            if from == player_id && to >= 0 && to != player_id {
-                // paying someone else: amount up
-                trigger::set_pay_amount(amount + bump);
-            } else if to == player_id && from >= 0 && from != player_id {
-                // being paid by someone else: amount down
-                trigger::set_pay_amount((amount - bump).max(0));
-            }
-        }
-        _ => {}
+/// 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
+/// `CardNoExpectation.RollAfter` (`m.Roll = max(0, m.Roll - 2)`). Pure Filter
+/// (ABI v74): returns the shaved face; the host folds it via `set_move_roll`.
+/// `card.placed` is the pre; only the owner's rolls are shaved.
+fn roll_shave(player_id: i32, value: i32) -> i32 {
+    if trigger::player_id() != player_id {
+        return value;
     }
+    let roll = trigger::move_roll().unwrap_or(value);
+    if roll <= 0 {
+        return value;
+    }
+    let cut = (roll - 2).max(0);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("no_expectation_roll")).i("n", cut as i64),
+    );
+    cut
+}
+
+/// 规则书[持续]（1）: 「如果为0则此次移动不[结算]」 -- C# `m.Resolve = false`.
+/// Action half of the roll shave (log order: the Filter's `no_expectation_roll`
+/// first, then this line). Fires on the post-shave face.
+///
+/// TODO(规则书): the old body skipped this when the *original* face was already
+///   `<= 0` (early return before the shave). RollAfter only sees the landed
+///   face, so a face that was 0 before the shave now also suppresses [结算] --
+///   which is what 「如果为0则此次移动不[结算]」 actually says.
+fn no_resolve(player_id: i32) -> card_sdk::Asked {
+    if trigger::player_id() != player_id {
+        return Ok(());
+    }
+    if trigger::value() > 0 {
+        return Ok(());
+    }
+    ctx::plan::set_resolve(false);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("no_expectation_no_resolve")).player_id("who", player_id),
+    );
     Ok(())
+}
+
+/// 规则书[持续]（2）: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
+/// -- C# `CardNoExpectation.PayAdd`, once per stack. Pure Filter (ABI v74):
+/// returns the bent figure.
+fn pay_add(player_id: i32, value: i32) -> i32 {
+    let n = stacks(player_id);
+    if n <= 0 {
+        return value;
+    }
+    let from = trigger::player_id();
+    let to = trigger::target();
+    if value <= 0 {
+        return value;
+    }
+    let bump = 100 * n;
+    if from == player_id && to >= 0 && to != player_id {
+        // paying someone else: amount up
+        value + bump
+    } else if to == player_id && from >= 0 && from != player_id {
+        // being paid by someone else: amount down
+        (value - bump).max(0)
+    } else {
+        value
+    }
 }
 
 /// C# `CardNoExpectation.Reshuffled` -- each time the owner's discard pile is
@@ -167,8 +177,20 @@ pub fn no_expectation_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn hook_kani(player_id: i32) -> card_sdk::Asked {
-    hook(player_id)
+pub fn roll_shave_kani(player_id: i32, value: i32) -> i32 {
+    roll_shave(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn no_resolve_kani(player_id: i32) -> card_sdk::Asked {
+    no_resolve(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
+    pay_add(player_id, value)
 }
 
 #[cfg(kani)]

@@ -146,13 +146,11 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「在此技能影响下的支付价格变为原本的一半」.
-fn on_pay(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
+fn on_pay(_player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
-    trigger::set_pay_amount((amount + 1) / 2);
-    Ok(())
+    (value + 1) / 2
 }
 
 /// 「并在自己的下回合结束时[触发结算]」 -- the owed settle.
@@ -181,8 +179,8 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
-    on_pay(player_id)
+pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
+    on_pay(player_id, value)
 }
 
 #[cfg(kani)]

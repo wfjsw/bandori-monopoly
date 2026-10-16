@@ -3,8 +3,8 @@
 //! 事件文本（data/events.json, id `意外的对邦`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌。所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动（如果距离一样则向正常方向移动）。
 
-use card_sdk::abi::HookKind;
-use ruleset_core::ctx::{self, plan, trigger};
+use card_sdk::abi::{FilterValue, HookKind};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{expire, keep};
@@ -23,7 +23,7 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
         // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
         // (a no-op prefetch); the drawer relation is the residual guard (the
         // instance prop is outside the CEL schema).
-        On::Filter(&[HookKind::RollPlan], "", Some(on_plan_others), on_plan),
+        On::FilterValue(&[HookKind::RollPlan], "", Some(on_plan_others), on_plan),
         On::Action(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
@@ -59,27 +59,27 @@ fn on_plan_others(_player_id: i32) -> bool {
 /// reverse path is strictly closer to the drawer's seat walks backwards; a tie
 /// keeps the normal direction. Only the direction is rewritten, not the length.
 /// Applicability is [`on_plan_others`].
-fn on_plan(_player_id: i32) -> card_sdk::Asked {
+fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
     let mover = ctx::turn_player();
     let drawer = ctx::prop(DRAWER);
     let here = ctx::player_pos(mover);
     let there = ctx::player_pos(drawer);
     let n = ctx::tile_count();
     if here < 0 || there < 0 || n <= 0 {
-        return Ok(());
+        return v;
     }
     // Forward steps from `here` to `there`; the wrap-around the other way is
     // `n - f`. `f == 0` (same tile) leaves the normal direction alone.
     let f = ctx::tile_forward(here, there);
     let b = n - f;
     if f > 0 && b < f {
-        plan::set_reverse(true);
+        v.reverse = 1;
         ctx::log(
             mover,
             &Msg::new("log.event.surprise_duel_dir").player_id("who", mover),
         );
     }
-    Ok(())
+    v
 }
 
 /// 规则书: 「抽到的玩家的下2回合开始时放入事件弃牌」 -- count the drawer's own
@@ -105,8 +105,8 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
 }
 
 #[cfg(kani)]

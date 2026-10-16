@@ -63,13 +63,14 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// 状态1（1）「每次其他玩家向你支付资金时，你立即获得1火罐…并使那次支付的金额
 /// 提高X*100」. `target == owner && actor != owner && slot('skillState') != 2`
 /// is the pre.
-fn on_pay_add(player_id: i32) -> card_sdk::Asked {
+fn on_pay_add(player_id: i32, value: i32) -> i32 {
     // 「你立即获得1火罐」 first, so X counts it.
-    rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
+    // (`fire::gain` is a keyed-state write, not a `refuse_if_filter`'d ctx
+    //  effect; the `Result` never actually prompts.)
+    let _ = rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")));
     // 「使那次支付的金额提高X*100，X为你拥有的火罐数」
     let x = state::get(player_id, state_key::CHARGE);
-    let amount = ctx::trigger::value();
-    ctx::trigger::set_pay_amount(amount + x * 100);
+    let out = value + x * 100;
     ctx::log(
         player_id,
         &Msg::new(key!("mumei_bump")).i("n", (x * 100) as i64),
@@ -78,7 +79,7 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
     if x >= state::max(player_id, state_key::CHARGE) {
         enter_two(player_id);
     }
-    Ok(())
+    out
 }
 
 /// Residual guard for [`at_turn_end`]: the pot is at its cap. `state::max` is
@@ -149,8 +150,8 @@ pub fn declare_cap_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pay_add_kani(player_id: i32) -> card_sdk::Asked {
-    on_pay_add(player_id)
+pub fn on_pay_add_kani(player_id: i32, value: i32) -> i32 {
+    on_pay_add(player_id, value)
 }
 
 #[cfg(kani)]

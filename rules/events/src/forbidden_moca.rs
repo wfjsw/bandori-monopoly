@@ -4,7 +4,7 @@
 //! > 直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！
 
 use card_sdk::abi::HookKind;
-use ruleset_core::ctx::{self, trigger};
+use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{expire_removed, keep};
@@ -16,9 +16,9 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
-        // deleted (a no-op prefetch); the `move_roll` read in the body is the
-        // face being halved (effect), not applicability.
-        On::Action(&[HookKind::RollAfter], "", None, halve),
+        // deleted (a no-op prefetch); the `value` param is the face being
+        // halved (effect), not applicability.
+        On::Filter(&[HookKind::RollValue], "", None, halve),
         On::AtEnd("", None, expire),
     ],
 );
@@ -37,15 +37,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「场上所有移动掷骰/2」 -- every move roll while the event is up is
-/// halved (integer division, floor). Runs at `rollAfter`, the point at which
-/// the face is known and a rewrite reaches the engine (`docs/CARDS.md`).
-fn halve(_player_id: i32) -> card_sdk::Asked {
-    let face = trigger::move_roll().unwrap_or_else(|| trigger::value());
-    if face <= 0 {
-        return Ok(());
+/// halved (integer division, floor). `RollValue` is the face filter raised
+/// immediately before `RollAfter` (`docs/CARDS.md`); the return is the new
+/// figure and the host folds it via `set_move_roll`.
+fn halve(_player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        value
+    } else {
+        value / 2
     }
-    trigger::set_move_roll(face / 2);
-    Ok(())
 }
 
 /// 规则书: 「在你的下个回合结束时永久移除此事件！」
@@ -63,8 +63,8 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn halve_kani(player_id: i32) -> card_sdk::Asked {
-    halve(player_id)
+pub fn halve_kani(player_id: i32, value: i32) -> i32 {
+    halve(player_id, value)
 }
 
 #[cfg(kani)]

@@ -38,8 +38,18 @@ pub const AYA_WITH: CardDef = CardDef::new(
         // (「分摊前」), so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the
         // per-share `payChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
         // it divides, not 500 off each share.
-        On::Filter(
-            &[HookKind::PayTotalAdd],
+        //
+        // ABI v74 Pattern E: Y is prompted (`ask_number`) and coupled to
+        // fan-flip side effects, so there is no pure amount figure. The whole
+        // body rides `HookKind::Effect` (the payment declaration -- `t.value`
+        // the engine still folds) with `set_pay_amount` as the documented
+        // interactive rewrite. PayAfter is too late to cancel.
+        // TODO(规则书): Effect runs *before* `payTotalAdd` (and per leg on a
+        //   split), so the cut lands earlier than the old PayTotalAdd stage and
+        //   applies to each leg rather than to the pre-split total. Identical
+        //   single-pair behaviour; split-pay compose order diverges.
+        On::Action(
+            &[HookKind::Effect],
             "value > 0 && tok('P✽P粉丝(正)') >= 1",
             Some(mine),
             on_pay,
@@ -80,6 +90,8 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「自己每次需要支付资金时可选择将自己Y个正面[P✽P粉丝]变反，此次支付的
 /// 分摊前资金减少Y×100（最少0）」.
+/// Rides `On::Action(Effect)` (ABI v74 Pattern E): the prompt picks Y, which
+/// drives both the amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     // 「不可使用」 -- same gate as `mine`, repeated in the body.
     if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {

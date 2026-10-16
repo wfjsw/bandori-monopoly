@@ -3,8 +3,8 @@
 //! 事件文本（data/events.json, id `超燃甩头`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。
 
-use card_sdk::abi::HookKind;
-use ruleset_core::ctx::{self, plan, trigger};
+use card_sdk::abi::{FilterValue, HookKind};
+use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{expire, keep, roll};
@@ -23,7 +23,10 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
         // read on a BOARD_OWNER event instance).
-        On::Filter(&[HookKind::RollPlan], "", None, add_die),
+        On::FilterValue(&[HookKind::RollPlan], "", None, add_die),
+        // TODO(规则书): `sub_die` reshapes the roll value from an Action
+        // (impure: it rolls a die). Not a Filter for that reason; timing stays
+        // identical on `RollAfter`.
         On::Action(&[HookKind::RollAfter], "", None, sub_die),
         On::AtEnd("", None, phase_end),
     ],
@@ -44,12 +47,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「所有玩家的移动掷骰增加1d6」 -- the dice pool gains a d6 while
-/// phase 1 is up.
-fn add_die(_player_id: i32) -> card_sdk::Asked {
+/// phase 1 is up. Pure plan-dice reshape on `RollPlan`.
+fn add_die(_player_id: i32, mut v: FilterValue) -> FilterValue {
     if ctx::crystals() == PHASE_UP {
-        plan::add_extra_dice(1, 6, ID);
+        v.extra_count = 1;
+        v.extra_sides = 6;
     }
-    Ok(())
+    v
 }
 
 /// 规则书: 「此后…所有玩家的移动掷骰减少1d6」 -- phase 2 subtracts a d6 from
@@ -58,6 +62,8 @@ fn add_die(_player_id: i32) -> card_sdk::Asked {
 /// `add_extra_dice(-1, 6)` term -- the dice pool has no negative-die op. The
 /// sheet says 减少1d6 (a d6 less), not 少投1d6; if the intent is dropping a die
 /// from a pool that has one, this body is short.
+/// TODO(规则书): value reshape on an Action (impure: rolls dice). Kept as
+/// `On::Action(RollAfter)` writing `set_move_roll` -- a Filter cannot roll.
 fn sub_die(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() != PHASE_DOWN {
         return Ok(());
@@ -103,8 +109,8 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn add_die_kani(player_id: i32) -> card_sdk::Asked {
-    add_die(player_id)
+pub fn add_die_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    add_die(player_id, v)
 }
 
 #[cfg(kani)]

@@ -9,7 +9,7 @@
 //! while the condition holds. 「初始Live House格子」 is a tile whose own group is
 //! the Live House one -- not one this skill recoloured.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::HookKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{CardDef, On};
 
@@ -57,9 +57,8 @@ fn half_price_applies(player_id: i32) -> bool {
 
 /// （2）「购买任何Live House格子的地契时购买价格减半」, and （1）'s one-shot.
 /// Applicability is [`half_price_applies`]; this side only halves.
-fn half_price(player_id: i32) -> card_sdk::Asked {
-    ctx::trigger::set_price(ctx::trigger::price() / 2);
-    Ok(())
+fn half_price(player_id: i32, value: i32) -> i32 {
+    value / 2
 }
 
 /// Residual guard for [`on_bought`]: the tile is a real non-Live-House buy
@@ -130,8 +129,8 @@ ruleset_core::roster::GroupDef::new(r#"Roselia"#)
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn half_price_kani(player_id: i32) -> card_sdk::Asked {
-    half_price(player_id)
+pub fn half_price_kani(player_id: i32, value: i32) -> i32 {
+    half_price(player_id, value)
 }
 
 #[cfg(kani)]

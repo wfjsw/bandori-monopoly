@@ -16,7 +16,12 @@ pub const HANEOKA: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), haneoka),
         // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-        On::Filter(&[HookKind::PayChoose], "actor == owner && card.placed && value > 0", None, pay_choose),
+        //
+        // ABI v74 Pattern E: `ask_yes` + `set_dest` + `set_pay_amount(0)` cannot
+        // live in a Filter, and there is no non-interactive cancel (omit
+        // FilterFlag). The offer rides `HookKind::Effect`, whose `t.value` the
+        // engine still folds -- PayAfter is too late to cancel.
+        On::Action(&[HookKind::Effect], "actor == owner && card.placed && value > 0", None, pay_choose),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"羽丘的不可思议女孩"#)

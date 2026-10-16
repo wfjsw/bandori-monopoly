@@ -154,23 +154,22 @@ fn on_card_tile_with_houses(_player_id: i32) -> bool {
 /// C# `CardChangeWorld.PayAdd` -- when rent on the card's tile is paid to the
 /// card's owner, the rent grows by `50 * (Crystals + 1) * houses[Tile]`.
 /// Applicability is `on_card_tile_with_houses`.
-fn pay_choose(player_id: i32) -> card_sdk::Asked {
+fn pay_choose(player_id: i32, value: i32) -> i32 {
     let tile = ctx::self_tile().unwrap_or(-1);
     let houses = ctx::houses_of(tile);
     // 规则书: 「此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数」
     // -- C# `Bonus() = 50 * (Crystals + 1) * houses[Tile]`, added to `p.amount`.
     let bonus = 50 * (ctx::crystals() + 1) * houses;
     if bonus <= 0 {
-        return Ok(());
+        return value;
     }
-    trigger::set_pay_amount(trigger::value() + bonus);
     ctx::log(
         player_id,
         &Msg::new(key!("change_world_bonus"))
             .player_id("who", player_id)
             .i("n", bonus as i64),
     );
-    Ok(())
+    value + bonus
 }
 
 /// C# `CardChangeWorld.PayAfter` -- the pay that carried the bonus discards the
@@ -202,8 +201,8 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_choose_kani(player_id: i32) -> card_sdk::Asked {
-    pay_choose(player_id)
+pub fn pay_choose_kani(player_id: i32, value: i32) -> i32 {
+    pay_choose(player_id, value)
 }
 
 #[cfg(kani)]

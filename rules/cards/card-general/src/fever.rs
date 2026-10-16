@@ -11,7 +11,7 @@
 //! > （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。
 //!
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,9 +23,10 @@ pub const FEVER: CardDef = CardDef::new(
         On::Play("", None, fever),
         // C# `CardFever.PayAdd` (value modifier) / `CardFever.TurnStart` (event
         // reaction) -- field hooks, not [反击]. Mixed kinds split (ABI v73);
-        // shared body `counteract` matches on `trigger::kind()`.
-        On::Filter(&[HookKind::PayAdd], "card.placed", None, counteract),
-        On::Action(&[HookKind::TurnStart], "card.placed", None, counteract),
+        // bodies split to match the variant (Filter = pure integer, Action =
+        // event reaction).
+        On::Filter(&[HookKind::PayAdd], "card.placed", None, pay_add),
+        On::Action(&[HookKind::TurnStart], "card.placed", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"FEVER!"#)
@@ -62,38 +63,33 @@ fn x_of(player_id: i32) -> i32 {
     ctx::n(0, 600) - 200 * n
 }
 
-fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `card.placed` is the pre. The arms keep their kind-specific relations
-    // (PayAdd wants `target == owner`, TurnStart wants `actor == owner`).
-    match trigger::kind() {
-        // 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
-        // [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PayAdd`
-        // (`p.to == Player && p.amount > 0` -> `p.amount = Math.Max(0, p.amount + x)`).
-        // `t.target` is the payee (a gain is the bank paying the owner) and
-        // `t.value` the pending amount, rewritten with `set_pay_amount`.
-        TriggerKind::PayAdd => {
-            if trigger::target() != player_id || trigger::value() <= 0 {
-                return Ok(());
-            }
-            let x = x_of(player_id);
-            let amount = trigger::value();
-            trigger::set_pay_amount((amount + x).max(0));
-            // C# `p.Note("FEVER! " + ((x >= 0) ? "+" : "") + x)`.
-            ctx::log(player_id, &Msg::new(key!("fever_pay")).i("x", x as i64));
-        }
-        // 规则书（2）[持续]: 「[拥有者]回合开始时将此卡放入[使用者]弃卡区」
-        TriggerKind::TurnStart => {
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
-            ctx::set_dest(ctx::Dest::Graveyard);
-            ctx::log(
-                player_id,
-                &Msg::new(key!("fever_unplaced")).player_id("who", player_id),
-            );
-        }
-        _ => {}
+/// 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
+/// [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PayAdd`
+/// (`p.to == Player && p.amount > 0` -> `p.amount = Math.Max(0, p.amount + x)`).
+/// `t.target` is the payee (a gain is the bank paying the owner) and `value` the
+/// pending amount. Early-returns that skipped the log still return `value`
+/// unchanged without logging.
+fn pay_add(player_id: i32, value: i32) -> i32 {
+    if trigger::target() != player_id || value <= 0 {
+        return value;
     }
+    let x = x_of(player_id);
+    let out = (value + x).max(0);
+    // C# `p.Note("FEVER! " + ((x >= 0) ? "+" : "") + x)`.
+    ctx::log(player_id, &Msg::new(key!("fever_pay")).i("x", x as i64));
+    out
+}
+
+/// 规则书（2）[持续]: 「[拥有者]回合开始时将此卡放入[使用者]弃卡区」
+fn turn_start(player_id: i32) -> card_sdk::Asked {
+    if trigger::player_id() != player_id {
+        return Ok(());
+    }
+    ctx::set_dest(ctx::Dest::Graveyard);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("fever_unplaced")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -106,6 +102,12 @@ pub fn fever_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
+pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
+    pay_add(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn turn_start_kani(player_id: i32) -> card_sdk::Asked {
+    turn_start(player_id)
 }

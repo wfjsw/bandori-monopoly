@@ -174,34 +174,33 @@ fn link_guard(player_id: i32) -> bool {
 /// -- C# `AnonLinkFx.PayAdd`: `p.IsRent && p.to == Seat && p.amount > 0`, then per
 /// link add `RentOf(linked) / 2` when `p.tile` is either end and the other end is
 /// owned by Player.
-fn link_rent(player_id: i32) -> card_sdk::Asked {
+fn link_rent(player_id: i32, value: i32) -> i32 {
     let tile = trigger::tile();
     if tile < 0 {
-        return Ok(());
+        return value;
     }
     // The settled tile is one end of a link; the partner is the other end.
     let key_name = alloc::format!("{LINK}{tile}");
     let other = ctx::slot(player_id, &key_name);
     if other < 0 {
-        return Ok(());
+        return value;
     }
     // C# `the other end is owned by Player`.
     if ctx::tile_owner(other) != player_id {
-        return Ok(());
+        return value;
     }
     // 「被连接的其他格子收费的一半」 -- half of the linked tile's rent.
     let bonus = ctx::rent_of(other) / 2;
     if bonus <= 0 {
-        return Ok(());
+        return value;
     }
-    trigger::set_pay_amount(trigger::value() + bonus);
     ctx::log(
         player_id,
         &Msg::new(key!("anon_tokyo_link_rent"))
             .tile("tile", other)
             .i("n", bonus as i64),
     );
-    Ok(())
+    value + bonus
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -213,6 +212,6 @@ pub fn anon_tokyo_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn link_rent_kani(player_id: i32) -> card_sdk::Asked {
-    link_rent(player_id)
+pub fn link_rent_kani(player_id: i32, value: i32) -> i32 {
+    link_rent(player_id, value)
 }

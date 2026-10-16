@@ -140,17 +140,15 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「在此技能效果影响下触发结算时，除购买地契外支付或消耗的资金减半」.
-fn on_pay(player_id: i32) -> card_sdk::Asked {
-    let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
+fn on_pay(player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
     // 「除购买地契外」 -- a buy is not bent.
-    if ctx::trigger::value() > 0 && ctx::slot(player_id, "skill.tukushiTry.isBuy") != 0 {
-        return Ok(());
+    if ctx::slot(player_id, "skill.tukushiTry.isBuy") != 0 {
+        return value;
     }
-    ctx::trigger::set_pay_amount((amount + 1) / 2);
-    Ok(())
+    (value + 1) / 2
 }
 
 /// （2）「若其他玩家在此技能效果影响下触发结算时加盖了房屋，你获得相当于那层房屋
@@ -195,8 +193,8 @@ pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
-    on_pay(player_id)
+pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
+    on_pay(player_id, value)
 }
 
 #[cfg(kani)]

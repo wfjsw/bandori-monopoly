@@ -2,7 +2,7 @@
 
 //! Test-only cards for the host's cross-module tests.
 
-use card_sdk::abi::{ChainKind, GateKind, HookKind};
+use card_sdk::abi::{ChainKind, FilterValue, GateKind, HookKind};
 use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -379,17 +379,13 @@ fn total_cut_yes(_player_id: i32) -> bool {
     ctx::is_placed()
 }
 
-fn total_cut(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    trigger::set_pay_amount((amount - 500).max(0));
+fn total_cut(player_id: i32, value: i32) -> i32 {
+    let out = (value - 500).max(0);
     ctx::log(
         player_id,
-        &Msg::new(key!("total_cut_done")).i("from", amount as i64).i(
-            "to",
-            trigger::value() as i64,
-        ),
+        &Msg::new(key!("total_cut_done")).i("from", value as i64).i("to", out as i64),
     );
-    Ok(())
+    out
 }
 
 /// `PIPELINE-AUDIT` B3 -- a `bankruptBefore` probe that tries to move money
@@ -447,14 +443,13 @@ fn pay_add_any_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn pay_add_any(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    trigger::set_pay_amount(amount + 100);
+fn pay_add_any(player_id: i32, value: i32) -> i32 {
+    let out = value + 100;
     ctx::log(
         player_id,
-        &Msg::new(key!("pay_add_any_done")).i("n", amount as i64),
+        &Msg::new(key!("pay_add_any_done")).i("n", value as i64),
     );
-    Ok(())
+    out
 }
 
 /// A 「不[触发结算]」 **teleport move** (`SETTLE-STAGES.md` §6 M6a / ruling R2):
@@ -492,18 +487,18 @@ const PAY_OVERCUT: CardDef = CardDef::new(
     &[On::Filter(&[HookKind::PayAdd], "", Some(total_cut_yes), pay_overcut)],
 );
 
-fn pay_overcut(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    if amount == 1000 {
-        trigger::set_pay_amount(-500);
+fn pay_overcut(player_id: i32, value: i32) -> i32 {
+    if value == 1000 {
         ctx::log(
             player_id,
             &Msg::new(key!("pay_overcut_done"))
-                .i("from", amount as i64)
+                .i("from", value as i64)
                 .i("to", -500),
         );
+        -500
+    } else {
+        value
     }
-    Ok(())
 }
 
 /// Q3 two-sided: the user pays the next player 1000.
@@ -574,7 +569,7 @@ const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
         On::Play("", None, fire_roll_play),
-        On::Filter(&[HookKind::RollPlan], "", None, fire_roll_plan),
+        On::FilterValue(&[HookKind::RollPlan], "", None, fire_roll_plan),
     ],
 );
 
@@ -584,9 +579,11 @@ fn fire_roll_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn fire_roll_plan(_player_id: i32) -> card_sdk::Asked {
+fn fire_roll_plan(_player_id: i32, v: FilterValue) -> FilterValue {
+    // `set_tag` has no FilterValue field. Kept here so timing stays identical;
+    // not `refuse_if_filter`'d.
     ctx::plan::set_tag("fireRoll", 1);
-    Ok(())
+    v
 }
 
 // --------------------------------------------------------------- conditions
@@ -670,9 +667,9 @@ fn pre_hook_guard(_player_id: i32) -> bool {
     true
 }
 
-fn pre_hook_body(player_id: i32) -> card_sdk::Asked {
+fn pre_hook_body(player_id: i32, value: i32) -> i32 {
     ctx::log(player_id, &Msg::new(key!("pre_hook_ran")));
-    Ok(())
+    value
 }
 
 // v49 (docs/GUARDS.md §4.2c): `On::Gate` / `On::AtEnd` / `On::RollPlan` /
@@ -1023,14 +1020,12 @@ fn clock_hook_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn clock_bonus(_player_id: i32) -> card_sdk::Asked {
-    trigger::set_pay_amount(trigger::value() + 7);
-    Ok(())
+fn clock_bonus(_player_id: i32, value: i32) -> i32 {
+    value + 7
 }
 
-fn clock_base(_player_id: i32) -> card_sdk::Asked {
-    trigger::set_pay_amount(trigger::value() * 2);
-    Ok(())
+fn clock_base(_player_id: i32, value: i32) -> i32 {
+    value * 2
 }
 
 /// Reads money, pays (host effect changes money), reads money again.

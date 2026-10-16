@@ -32,23 +32,27 @@ fn split_cards_declare_filter_and_action_halves() {
         }
     };
 
-    // no_expectation: Play / Action(RollAfter) / Filter(PayAdd) / Action(Reshuffled)
+    // no_expectation (ABI v74): Play / Filter(RollValue) / Action(RollAfter)
+    //   / Filter(PayAdd) / Action(Reshuffled)
     let s = shape("PP:不要背负期待");
-    assert_eq!(s.len(), 4, "no_expectation entries: {s:?}");
+    assert_eq!(s.len(), 5, "no_expectation entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
-    assert_eq!(s[1].0, kind("Action"));
-    assert_eq!(s[1].1, vec![49], "RollAfter");
-    assert_eq!(s[2].0, kind("Filter"));
-    assert_eq!(s[2].1, vec![55], "PayAdd");
-    assert_eq!(s[3].0, kind("Action"));
-    assert_eq!(s[3].1, vec![62], "Reshuffled");
+    assert_eq!(s[1].0, kind("Filter"));
+    assert_eq!(s[1].1, vec![102], "RollValue");
+    assert_eq!(s[2].0, kind("Action"));
+    assert_eq!(s[2].1, vec![49], "RollAfter");
+    assert_eq!(s[3].0, kind("Filter"));
+    assert_eq!(s[3].1, vec![55], "PayAdd");
+    assert_eq!(s[4].0, kind("Action"));
+    assert_eq!(s[4].1, vec![62], "Reshuffled");
 
-    // j11: Play / Action(TurnEnd, Targeted) / Filter(PayChoose) / Action(CounterChanged)
+    // j11 (ABI v74): Play / Action(TurnEnd, Targeted, Effect) /
+    //   FilterFlag(PayChoose) / Action(CounterChanged)
     let s = shape("Mujica:#J11");
     assert_eq!(s.len(), 4, "j11 entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Action"));
-    assert_eq!(s[1].1, vec![45, 51], "TurnEnd, Targeted");
+    assert_eq!(s[1].1, vec![45, 51, 72], "TurnEnd, Targeted, Effect");
     assert_eq!(s[2].0, kind("Filter"));
     assert_eq!(s[2].1, vec![52], "PayChoose");
     assert_eq!(s[3].0, kind("Action"));
@@ -65,7 +69,7 @@ fn split_cards_declare_filter_and_action_halves() {
 }
 
 /// The shifted `.silent` index on no_expectation still points at the
-/// Reshuffled bookkeeping entry (now index 3, was 2).
+/// Reshuffled bookkeeping entry (now index 4 after the v74 Filter/Action split).
 #[test]
 fn no_expectation_silent_index_follows_the_split() {
     let r = rules();
@@ -75,19 +79,24 @@ fn no_expectation_silent_index_follows_the_split() {
         .expect("no_expectation loaded");
     let info = &r.ruleset().cards()[idx as usize];
     assert_eq!(
-        info.on[3].presentation,
+        info.on[4].presentation,
         card_sdk::abi::Presentation::Silent,
-        "entry 3 (Reshuffled) must stay silent after the split"
+        "entry 4 (Reshuffled) must stay silent after the split"
     );
     assert_eq!(
         info.on[1].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 1 (RollAfter) announces"
+        "entry 1 (Filter RollValue) announces"
     );
     assert_eq!(
         info.on[2].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 2 (PayAdd) announces"
+        "entry 2 (Action RollAfter) announces"
+    );
+    assert_eq!(
+        info.on[3].presentation,
+        card_sdk::abi::Presentation::Visible,
+        "entry 3 (Filter PayAdd) announces"
     );
 }
 
@@ -119,9 +128,9 @@ fn fever_filter_half_pay_add_still_boosts() {
     assert_eq!(paid, 60 + x, "Filter half applied exactly once (rent 60 + X {x}, n {n})");
 }
 
-/// no_expectation both halves: RollAfter shaves the face (Action) and PayAdd
-/// bends a later payment (Filter). Outcome matches master
-/// `no_expect_roll_minus_2` + the pay-arm of `hook`.
+/// no_expectation both halves: the roll shave (Filter RollValue) and PayAdd
+/// bend (Filter) still land. Outcome matches master
+/// `no_expect_roll_minus_2` + the pay-arm of the old shared `hook`.
 #[test]
 fn no_expectation_both_halves_fire() {
     let mut t = Table::vanilla(2);

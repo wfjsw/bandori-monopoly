@@ -52,6 +52,10 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         On::Action(&[HookKind::Pass], PASS_PRE, None, on_pass),
         // 「你的资金消耗减半」 -- only the owner's own pays, and only while
         // the window is armed. `value > 0` is the amount floor.
+        //
+        // ABI v74 Pattern A: pure integer transform `(value + 1) / 2` (the old
+        // `set_pay_amount((amount + 1) / 2)`). No prompt, no side effects -- the
+        // `pay(` hit in the catalog is `ctx::pay` in [`on_pass`], not here.
         On::Filter(
             &[HookKind::PayChoose],
             "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
@@ -120,10 +124,9 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「你的资金消耗减半」. `value > 0` is the pre.
-fn on_pay(_player_id: i32) -> card_sdk::Asked {
-    let amount = ctx::trigger::value();
-    ctx::trigger::set_pay_amount((amount + 1) / 2);
-    Ok(())
+/// Pure Filter body (ABI v74 Pattern A): the ceil-half figure is the return.
+fn on_pay(_player_id: i32, value: i32) -> i32 {
+    (value + 1) / 2
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -141,6 +144,6 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
-    on_pay(player_id)
+pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
+    on_pay(player_id, value)
 }

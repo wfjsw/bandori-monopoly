@@ -92,29 +92,26 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PayMul` pass (after
-/// `PayAdd`, before `PayChoose`) rewrites the amount via
-/// `ctx::trigger::set_pay_amount`.
+/// `PayAdd`, before `PayChoose`) rewrites the amount via the Filter fold.
 ///
 /// User ruling 2026-10-15 (OPEN-取整 family): a 减半 modifier transforms the
 /// running amount exactly and must NOT CeilTo in its own body; the engine
 /// rounds up to a multiple of 10 once after all add/mul modifiers. Integer
 /// fold rounds the .5 up (`(amount + 1) / 2`) so a sole modifier still settles
 /// at `round10(exact)` (25 → 12.5 → 20).
-fn pay_mul(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
+fn pay_mul(player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
-    let half = ((amount as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
-    trigger::set_pay_amount(half);
+    let half = ((value as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_pay"))
             .player_id("who", player_id)
-            .n("from", amount as i64)
+            .n("from", value as i64)
             .n("to", half as i64),
     );
-    Ok(())
+    half
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -138,8 +135,8 @@ pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_mul_kani(player_id: i32) -> card_sdk::Asked {
-    pay_mul(player_id)
+pub fn pay_mul_kani(player_id: i32, value: i32) -> i32 {
+    pay_mul(player_id, value)
 }
 
 #[cfg(kani)]

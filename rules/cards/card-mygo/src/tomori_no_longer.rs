@@ -27,13 +27,27 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // `counter::CRYSTALS`.
         On::Action(&[HookKind::CounterChanged], "", Some(sweep_guard), sweep),
         // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
-        // `ChargePaying` pre-spend substitution. The offer exists only for a
-        // positive spend with a crystal to trade; accepting cancels the fire
-        // spend and burns one crystal instead.
-        On::Filter(
-            &[ruleset_core::kind::ChargePaying],
-            "actor == owner && card.counter('crystals') >= 1 && value > 0",
-            None,
+        // fire-cost substitution. The offer exists only for a positive spend
+        // with a crystal to trade; accepting cancels the fire spend and burns
+        // one crystal instead.
+        //
+        // ABI v74: `ChargePaying` is a FilterFlag kind (false = substitute),
+        // but FilterFlag is `-> bool` and cannot prompt (the 「可」 opt-in has
+        // no Asked channel), and no non-filter hook sits at the ChargePaying
+        // point. The offer rides `HookKind::MarkerSpend` (the fire-pot spend's
+        // own window, raised inside `spend_charge` right after ChargePaying);
+        // `set_cancelled()` stops the pots. Residual `cover_is_charge` filters
+        // to the `charge` marker so the crystal spend's own marker window does
+        // not re-enter.
+        // TODO(规则书): cancelling `markerSpend` makes `fire::spend` return
+        //   false (cost NOT satisfied) whereas the old ChargePaying cancel
+        //   returned true (cost substituted), so the skill body aborts after
+        //   the substitution instead of proceeding. `MarkerSpend`'s `value` is
+        //   the signed delta (negative for a spend), not the cost.
+        On::Action(
+            &[HookKind::MarkerSpend],
+            "actor == owner && card.counter('crystals') >= 1",
+            Some(cover_is_charge),
             cover,
         ),
         // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
@@ -54,11 +68,26 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
 /// is the skill-cost swap and must not be refunded.
 const SLOT_COVERING: &str = "tomori_no_longer.covering";
 
-/// （2）'s substitution. Applicability is the entry's condition (`value > 0`).
-/// Cancelling the `ChargePaying` link is the substitution: the fire pots never
-/// move, and one crystal is removed instead.
+/// Residual guard for [`cover`]: the marker spend is the fire-pot (`charge`)
+/// cost, not the crystal this body itself spends. `MarkerSpend` carries the
+/// marker name in `t.card` (the raise sets `t.card = Some(name)`).
+fn cover_is_charge(_player_id: i32) -> bool {
+    ctx::trigger::card_is(card_sdk::abi::state_key::CHARGE)
+}
+
+/// （2）'s substitution. Applicability is the entry's condition + residual
+/// (a fire-pot spend with a crystal to trade). Cancelling the marker window is
+/// the substitute gesture here: the fire pots never move, and one crystal is
+/// removed instead.
+/// Rides `On::Action(MarkerSpend)` (ABI v74 Pattern E): the 「可」 opt-in
+/// prompts, and FilterFlag cannot (`-> bool` has no Asked channel). See the
+/// entry comment for the `fire::spend` return-value divergence.
 fn cover(player_id: i32) -> card_sdk::Asked {
-    let spent = ctx::trigger::value();
+    // `MarkerSpend`'s `value` is the signed delta (negative for a spend).
+    let spent = ctx::trigger::value().saturating_abs();
+    if spent <= 0 {
+        return Ok(());
+    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tomori_no_longer_title")),

@@ -76,15 +76,14 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// （1）「你无法获得或失去资金」 -- a payment in **either direction for this
 /// player** is voided. The lock is the skill owner's money only (`你`); a
 /// payment between two other players is untouched.
-fn lock_pay(player_id: i32) -> card_sdk::Asked {
+fn lock_pay(player_id: i32, value: i32) -> i32 {
     let payer = ctx::trigger::player_id();
     let payee = ctx::trigger::target();
     if payer != player_id && payee != player_id {
-        return Ok(());
+        return value;
     }
-    ctx::trigger::set_pay_amount(0);
     ctx::log(player_id, &Msg::new(key!("crychic_locked")));
-    Ok(())
+    0
 }
 
 /// （3）「每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶（上限10）」.
@@ -265,8 +264,8 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn lock_pay_kani(player_id: i32) -> card_sdk::Asked {
-    lock_pay(player_id)
+pub fn lock_pay_kani(player_id: i32, value: i32) -> i32 {
+    lock_pay(player_id, value)
 }
 
 #[cfg(kani)]

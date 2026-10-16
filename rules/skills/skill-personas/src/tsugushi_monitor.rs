@@ -37,8 +37,15 @@ pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_cash), cash),
         On::Action(&[HookKind::TurnStartBefore], "", None, declare),
-        On::Filter(&[HookKind::PayChoose], "", Some(mine), on_gain),
-        On::Filter(&[HookKind::PayChoose], "", Some(other), on_theirs),
+        // （1）/（2） interactive redirects. ABI v74 Pattern E: `ask_yes` +
+        // `ask_pick` + `set_pay_amount(0)` + tok/state/`gain` writes cannot live
+        // in a Filter, and there is no non-interactive cancel (omit FilterFlag).
+        // The offers ride `HookKind::Effect` (the payment declaration -- `t.value`
+        // the engine still folds). PayAfter is too late to cancel. Effect fires
+        // per `money()` call (per leg on a split), matching the old PayChoose
+        // per-leg timing.
+        On::Action(&[HookKind::Effect], "", Some(mine), on_gain),
+        On::Action(&[HookKind::Effect], "", Some(other), on_theirs),
     ],
 ).silent(&[1]);
 
@@ -82,6 +89,9 @@ fn declare(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，
 /// 发送给对方一个X（占位）标记并记录…数量」.
+/// Rides `On::Action(Effect)` (ABI v74 Pattern E): the prompts and the
+/// `set_pay_amount(0)` redirect are the documented interactive rewrite on a
+/// non-filter payment hook.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
@@ -132,6 +142,9 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作」.
+/// Rides `On::Action(Effect)` (ABI v74 Pattern E): the prompt and the
+/// `set_pay_amount(0)` + split gains are the documented interactive rewrite on
+/// a non-filter payment hook.
 fn on_theirs(player_id: i32) -> card_sdk::Asked {
     // 「当有角色获得金钱」 -- the gainer is the payee (`target`), not `player_id`
     // (which is the payer, -1 on a print). Applicability is `other`.

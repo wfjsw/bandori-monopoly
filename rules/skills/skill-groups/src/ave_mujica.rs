@@ -94,10 +94,9 @@ fn on_state(player_id: i32) {
 
 /// 「你在状态2时从[收取]与[支付]的资金改为1.5倍（只对自己结算）」 -- the figure
 /// seen from this player's side.
-fn bend(player_id: i32) -> card_sdk::Asked {
-    let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
+fn bend(player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
     // 「只对自己结算，对应的其他玩家收支不变」 -- only the side that is this
     // player moves.
@@ -105,14 +104,13 @@ fn bend(player_id: i32) -> card_sdk::Asked {
     let to = ctx::trigger::target();
     let mine = from == player_id || to == player_id;
     if !mine {
-        return Ok(());
+        return value;
     }
     // Live sheet 1.5倍 (rulebook-doc 「翻倍」 is superseded). Integer fold
     // rounds the .5 up, matching OPEN-取整's exact transform.
-    let bent = (amount * 3 + 1) / 2;
-    state::set(player_id, ORIG, amount);
-    ctx::trigger::set_pay_amount(bent);
-    Ok(())
+    let bent = (value * 3 + 1) / 2;
+    state::set(player_id, ORIG, value);
+    bent
 }
 
 /// The counterpart's figure stays the printed amount (`PayMul` rewrites one
@@ -233,8 +231,8 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn bend_kani(player_id: i32) -> card_sdk::Asked {
-    bend(player_id)
+pub fn bend_kani(player_id: i32, value: i32) -> i32 {
+    bend(player_id, value)
 }
 
 #[cfg(kani)]

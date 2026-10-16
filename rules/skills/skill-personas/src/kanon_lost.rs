@@ -15,7 +15,7 @@
 //! counter that a CiRCLE reward resets; 「下回合移动投掷改为1d20+1d4」 is the
 //! dice table being rewritten when it fires.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{FilterValue, HookKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -33,7 +33,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         On::Action(&[HookKind::RollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
         On::Action(&[ruleset_core::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
         On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
-        On::Filter(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
+        On::FilterValue(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
     ],
 )
     .silent(&[2, 3]);
@@ -82,12 +82,15 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 
 /// (3) 「下回合移动投掷改为1d20+1d4」 -- the plan's dice table, rewritten while
 /// the silence holds.
-fn on_plan(player_id: i32) -> card_sdk::Asked {
-    
-    plan::set_base_dice(1, 20, "真正的迷子");
+fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
+    v.base_count = 1;
+    v.base_sides = 20;
+    // `add_base_dice` has no FilterValue field (only `set_base_dice` maps to
+    // `base_count`/`base_sides`, and the host *replaces* the base pair). Kept
+    // here so timing stays identical; not `refuse_if_filter`'d.
     plan::add_base_dice(1, 4, "真正的迷子");
     ctx::log(player_id, &Msg::new(key!("kanon_lost_dice")));
-    Ok(())
+    v
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -117,6 +120,6 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
 }

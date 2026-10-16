@@ -168,11 +168,9 @@ fn tax_due() -> i32 {
     houses * 100
 }
 
-fn pay_add(player_id: i32) -> card_sdk::Asked {
+fn pay_add(player_id: i32, value: i32) -> i32 {
     let due = tax_due();
     let payer = trigger::player_id();
-    let amount = trigger::value();
-    trigger::set_pay_amount(amount + due);
     ctx::log(
         player_id,
         &Msg::new(key!("tomorrows_door_tax"))
@@ -180,7 +178,7 @@ fn pay_add(player_id: i32) -> card_sdk::Asked {
             .player_id("target", payer)
             .n("money", due as i64),
     );
-    Ok(())
+    value + due
 }
 
 /// `Fx.SettleBody` -- the non-rent side of (3): a settle on 梦开始的地方 (or on
@@ -248,8 +246,8 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_add_kani(player_id: i32) -> card_sdk::Asked {
-    pay_add(player_id)
+pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
+    pay_add(player_id, value)
 }
 
 #[cfg(kani)]

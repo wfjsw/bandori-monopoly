@@ -18,8 +18,8 @@
 //! reads. 「主动移动经过任何玩家都将向其收取200资金」 is `PassPlayer`, and
 //! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
 
-use card_sdk::abi::{state_key, HookKind};
-use ruleset_core::ctx::{self, plan, state};
+use card_sdk::abi::{state_key, FilterValue, HookKind};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「回忆地块」 -- the three the clause names.
@@ -46,7 +46,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
             at_turn_start,
         ),
         // 状态1 「移动改为10+1d10」 -- only while this player is in 状态1.
-        On::Filter(
+        On::FilterValue(
             &[HookKind::RollPlan],
             "actor == owner && slot('skillState') != 2",
             None,
@@ -116,13 +116,15 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态1: 「移动改为10+1d10」.
-fn on_plan(player_id: i32) -> card_sdk::Asked {
+fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
     // 规则书: 「移动改为10+1d10」 -- the d20 becomes a d10 and a flat 10 rides
     // along; the summed roll is the walk's length (`set_steps` would pin the
     // walk to 10 and drop the die).
-    plan::set_base_dice(1, 10, "Imprisoned XII");
-    plan::add_extra_dice(10, 0, "Imprisoned XII");
-    Ok(())
+    v.base_count = 1;
+    v.base_sides = 10;
+    v.extra_count = 10;
+    v.extra_sides = 0;
+    v
 }
 
 /// 「每当你经过CiRCLE的回合结束后…」 -- the pass clears the memory latch.
@@ -210,8 +212,8 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
 }
 
 #[cfg(kani)]

@@ -19,15 +19,22 @@ pub const J11: CardDef = CardDef::new(
         On::Play("", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.Targeted` -- event
         // reactions, not [反击]s. `CardJ11.PayChoose` is a value modifier and
-        // rides its own Filter entry (mixed kinds split, ABI v73). Shared body
-        // `counteract` matches on `trigger::kind()`.
+        // rides its own FilterFlag entry (mixed kinds split, ABI v73).
+        //
+        // PayChoose split (ABI v74, Pattern E): the C# `p.cancel = true when
+        // Me.Stunned` cancel is a non-interactive FilterFlag; the `ask_yes` +
+        // discard + stun offer cannot prompt from a Filter, so it moves to
+        // `HookKind::Effect` (the payment declaration -- `t.value` is applied
+        // there, unlike PayAfter which runs after the money has moved). Shared
+        // body `counteract` matches on `trigger::kind()`; the Effect arm is the
+        // old PayChoose arm (`ask_yes` → `charge` → `set_pay_amount(0)`).
         On::Action(
-            &[HookKind::TurnEnd, HookKind::Targeted],
+            &[HookKind::TurnEnd, HookKind::Targeted, HookKind::Effect],
             "card.placed",
             None,
             counteract,
         ),
-        On::Filter(&[HookKind::PayChoose], "card.placed", None, counteract),
+        On::FilterFlag(&[HookKind::PayChoose], "card.placed", None, pay_choose_cancel),
         On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -86,8 +93,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         }
         // C# `CardJ11.PayChoose` (MatchHost.cs:5895-5901): about to pay money
         // -> may discard; the stun then cancels the payment (C# `p.cancel =
-        // true` when `Me.Stunned`).
-        TriggerKind::PayChoose => {
+        // true` when `Me.Stunned`). Moved from PayChoose to Effect (ABI v74
+        // Pattern E): the FilterFlag half cannot prompt, and Effect is the
+        // last non-filter stage whose `t.value` the engine folds.
+        TriggerKind::Effect => {
             if trigger::player_id() != player_id || trigger::value() <= 0 {
                 return Ok(());
             }
@@ -122,6 +131,24 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         _ => {}
     }
     Ok(())
+}
+
+/// PayChoose cancel half (ABI v74 FilterFlag). C# `p.cancel = true when
+/// Me.Stunned` -- an already-stunned owner's payment is cancelled outright.
+/// Pure: no prompt (the interactive offer lives on the Effect arm of
+/// [`counteract`]).
+///
+/// Note: the engine's `payChoose` stage currently folds only `t.value` /
+/// `t.target` and ignores `set_cancelled()` (unlike the `effect` and `pay`
+/// windows). The live cancel for the accept path is still the Effect arm's
+/// `set_pay_amount(0)`; this flag is the non-interactive stun condition and
+/// becomes live as soon as the stage honours negation. Pre-existing stun is
+/// already refused earlier by `can_pay`.
+fn pay_choose_cancel(player_id: i32, value: i32) -> bool {
+    if trigger::player_id() != player_id || value <= 0 {
+        return true;
+    }
+    rules_status::stun::get(player_id) <= 0
 }
 
 /// The card decays out -- C# `if (Crystals <= 0) Unplace(discard)`.

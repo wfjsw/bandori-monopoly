@@ -57,11 +57,26 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         ),
         On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
         On::Play("", Some(can_enter_two), enter_two),
+        // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
+        // Filter/Action split). The PayMul Filter reshapes the owner's take; the
+        // Effect Action pays the other half out. Effect (not PayAfter) so the
+        // gain's `trigger::value()` is still the declared figure -- PayAfter's
+        // value is the settled amount and cannot re-derive `amount/2` for odd.
+        // TODO(规则书): the gain half reads the declared amount at Effect, so a
+        //   PayAdd modifier that runs after this declaration would not be split
+        //   (the reshape half sees the PayMul-stage figure). Same figure when no
+        //   other add/mul modifier touches the rent.
         On::Filter(
             &[HookKind::PayMul],
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
             Some(split_rent_applies),
             split_rent,
+        ),
+        On::Action(
+            &[HookKind::Effect],
+            "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
+            Some(split_rent_applies),
+            split_rent_gain,
         ),
     ],
 )
@@ -78,16 +93,28 @@ fn split_rent_applies(player_id: i32) -> bool {
 /// 「你与对方均分那些地契收取的资金」 -- half to the deed's owner, half here.
 /// `slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0` is
 /// the pre and [`split_rent_applies`] the residual.
-fn split_rent(player_id: i32) -> card_sdk::Asked {
+///
+/// Filter half: reshape the owner's take to `amount - amount/2` (exact old
+/// `set_pay_amount(amount - half)`). `value < 2` early-returns unchanged
+/// (`half <= 0` in the old body).
+fn split_rent(_player_id: i32, value: i32) -> i32 {
+    if value < 2 {
+        return value;
+    }
+    value - value / 2
+}
+
+/// Action half of the split: `ctx::gain(player_id, half, ...)`. Reads the
+/// **declared** amount at `TriggerKind::Effect` (the figure the old body saw
+/// at PayMul when no other add/mul modifier touched the rent) and gains
+/// `amount / 2`.
+fn split_rent_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     let half = amount / 2;
     if half <= 0 {
         // `value > 0` admits 1, whose half is 0 -- nothing to split.
         return Ok(());
     }
-    // 「均分」 -- the payer's outlay is unchanged; the owner's take is halved and
-    // the other half lands here.
-    ctx::trigger::set_pay_amount(amount - half);
     ctx::gain(
         player_id,
         half,
@@ -350,8 +377,14 @@ pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn split_rent_kani(player_id: i32) -> card_sdk::Asked {
-    split_rent(player_id)
+pub fn split_rent_kani(player_id: i32, value: i32) -> i32 {
+    split_rent(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn split_rent_gain_kani(player_id: i32) -> card_sdk::Asked {
+    split_rent_gain(player_id)
 }
 
 #[cfg(kani)]

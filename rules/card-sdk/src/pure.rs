@@ -7,7 +7,7 @@
 //! set. Kani has no TLS (see [`crate::native`]), so the check is host-side
 //! there.
 
-#[cfg(not(kani))]
+#[cfg(all(not(kani), not(target_arch = "wasm32")))]
 mod imp {
     std::thread_local! {
         static IN_FILTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -28,6 +28,34 @@ mod imp {
     impl Drop for Guard {
         fn drop(&mut self) {
             IN_FILTER.with(|f| f.set(false));
+        }
+    }
+}
+
+/// wasm32 guest: `no_std`, single-threaded per instance -- a plain atomic
+/// stands in for TLS. The module is re-instantiated for every run, so the
+/// flag cannot leak across runs.
+#[cfg(all(not(kani), target_arch = "wasm32"))]
+mod imp {
+    use core::sync::atomic::{AtomicBool, Ordering};
+
+    static IN_FILTER: AtomicBool = AtomicBool::new(false);
+
+    /// Enter a Filter body. Returns a guard that leaves on drop.
+    pub fn enter() -> Guard {
+        IN_FILTER.store(true, Ordering::SeqCst);
+        Guard
+    }
+
+    /// Are we inside a Filter body?
+    pub fn in_filter() -> bool {
+        IN_FILTER.load(Ordering::SeqCst)
+    }
+
+    pub struct Guard;
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            IN_FILTER.store(false, Ordering::SeqCst);
         }
     }
 }

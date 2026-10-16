@@ -18,7 +18,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -33,8 +33,13 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // 未记录且[拥有者]拥有同色地契的颜色」 -- the offer exists only while
         // short on cash and with an unrecorded owned colour to name. The money
         // shortfall is CEL; the colour scan is residual.
-        On::Filter(
-            &[HookKind::PayChoose],
+        //
+        // ABI v74 Pattern E: `ask_pick` + slot/tok writes + `gain_raw` cannot
+        // live in a Filter, and there is no non-interactive cancel, so the whole
+        // offer rides `HookKind::Effect` (the payment declaration). The pre's
+        // `money(owner) < value` still gates on the declared figure.
+        On::Action(
+            &[HookKind::Effect],
             "actor == owner && card.placed && value > 0 && money(owner) < value",
             Some(has_unrecorded_color),
             pay_choose,

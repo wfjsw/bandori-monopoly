@@ -245,7 +245,7 @@ pub fn on(
                 let _p = crate::pure::enter();
                 run(player_id, input)
             };
-            write_filter_value(out);
+            write_filter_value(input, out);
             0
         }
         (On::Counteract(_, _, _, run), _)
@@ -292,63 +292,71 @@ fn read_filter_value() -> crate::abi::FilterValue {
 }
 
 /// Apply a [`crate::abi::FilterValue`] the body returned. Only fields the
-/// body left non-`UNCHANGED` are written.
-fn write_filter_value(v: crate::abi::FilterValue) {
+/// body left non-`UNCHANGED` **and** actually changed from the input snapshot
+/// are written -- the snapshot pre-fills cheap getters so a body can read
+/// them, and a straight copy must not write them back (that would zero a
+/// RollPlan face whose `value` snapshot was 0).
+fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue) {
     use crate::abi::FilterValue;
     use crate::ctx;
     const U: i32 = FilterValue::UNCHANGED;
-    if v.value != U {
+    let changed = |got: i32, was: i32| got != U && got != was;
+    if changed(v.value, input.value) {
         ctx::trigger::set_pay_amount(v.value);
         ctx::trigger::set_price(v.value);
         ctx::trigger::set_move_roll(v.value);
     }
-    if v.deal_owner != U {
+    if changed(v.deal_owner, input.deal_owner) {
         ctx::trigger::set_deal_owner(v.deal_owner);
     }
-    if v.deal_houses != U {
+    if changed(v.deal_houses, input.deal_houses) {
         ctx::trigger::set_deal_houses(v.deal_houses);
     }
-    if v.deal_mortgaged != U {
+    if changed(v.deal_mortgaged, input.deal_mortgaged) {
         ctx::trigger::set_deal_mortgaged(v.deal_mortgaged != 0);
     }
-    if v.roller != U {
+    if changed(v.roller, input.roller) {
         ctx::plan::set_roller(v.roller);
     }
     if v.base_count != U || v.base_sides != U {
-        // set_base_dice takes both; fill the other from the snapshot's current
-        // value when the body left it unchanged (0 sides = flat count).
-        let (c, s) = (v.base_count, v.base_sides);
-        ctx::plan::set_base_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
+        if v.base_count != input.base_count || v.base_sides != input.base_sides {
+            // set_base_dice takes both; fill the other from the snapshot's current
+            // value when the body left it unchanged (0 sides = flat count).
+            let (c, s) = (v.base_count, v.base_sides);
+            ctx::plan::set_base_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
+        }
     }
     if v.extra_count != U || v.extra_sides != U {
-        let (c, s) = (v.extra_count, v.extra_sides);
-        ctx::plan::add_extra_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
+        if v.extra_count != input.extra_count || v.extra_sides != input.extra_sides {
+            let (c, s) = (v.extra_count, v.extra_sides);
+            ctx::plan::add_extra_dice(if c == U { 0 } else { c }, if s == U { 0 } else { s }, "filter");
+        }
     }
-    if v.steps != U {
+    if changed(v.steps, input.steps) {
         ctx::plan::set_steps(v.steps);
     }
-    if v.reverse != U {
+    if changed(v.reverse, input.reverse) {
         ctx::plan::set_reverse(v.reverse != 0);
     }
-    if v.resolve != U {
+    if changed(v.resolve, input.resolve) {
         ctx::plan::set_resolve(v.resolve != 0);
     }
-    if v.min_roll != U {
+    if changed(v.min_roll, input.min_roll) {
         ctx::plan::set_min_roll(v.min_roll);
     }
-    if v.pay_factor != U {
+    if changed(v.pay_factor, input.pay_factor) {
         ctx::plan::set_pay_factor(v.pay_factor);
     }
-    if v.rent_factor != U {
+    if changed(v.rent_factor, input.rent_factor) {
         ctx::plan::set_rent_factor(v.rent_factor);
     }
-    if v.stop_at != U {
+    if changed(v.stop_at, input.stop_at) {
         ctx::plan::set_stop_at(v.stop_at);
     }
-    if v.settle_tile != U {
+    if changed(v.settle_tile, input.settle_tile) {
         ctx::plan::set_settle_tile(v.settle_tile);
     }
-    if v.teleport_to != U {
+    if changed(v.teleport_to, input.teleport_to) {
         ctx::plan::set_teleport_to(v.teleport_to);
     }
 }
