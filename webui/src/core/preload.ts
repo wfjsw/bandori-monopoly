@@ -4,7 +4,9 @@
 
 import type { Route } from "../app/router";
 import { backdropUrl } from "../app/backdrops";
-import { sceneImg } from "./assets";
+import { cardArt, charArt, sceneImg } from "./assets";
+import { D, rules } from "./data";
+import { getProfile } from "./store";
 
 type Name = Route["name"];
 
@@ -44,6 +46,41 @@ export function preloadImage(url: string): Promise<void> {
   return p;
 }
 
+/** Cards in view on first paint: awaited. The rest of the pool streams in behind them. */
+const FIRST_SCREEN = 14;
+
+/** The card art the deck builder opens on: the home character's pool, as `Deck` computes it. */
+function deckCardIds(): string[] {
+  try {
+    const home = D.persona(getProfile().homePersona) ?? D.personas[0];
+    const ids: string[] = JSON.parse(rules.deck_pool(home.name));
+    const derived = D.cards.filter((c) => c.derived && (c.owner === home.name || c.group === home.group)).map((c) => c.id);
+    return [...ids, ...derived.filter((id) => !ids.includes(id))];
+  } catch {
+    return [];
+  }
+}
+
+/** Per-route art that depends on the profile; the first screenful is awaited, the rest is fire-and-forget. */
+function dynamicImages(name: Name): Promise<unknown> {
+  if (name !== "deck") return Promise.resolve();
+  const urls = deckCardIds().map(cardArt);
+  void Promise.all(urls.slice(FIRST_SCREEN).map(preloadImage));
+  // The character picker (every roster thumb) and the picked character's plates sit above the fold too.
+  let roster: string[] = [];
+  try {
+    const home = D.persona(getProfile().homePersona) ?? D.personas[0];
+    roster = [
+      ...D.personas.map((c) => charArt(D.artId(c), "thumb")),
+      charArt(D.artId(home), "sdThumb"),
+      charArt(D.artId(home), "namePlate"),
+    ];
+  } catch {
+    /* no roster yet: nothing to warm */
+  }
+  return Promise.all([...roster, ...urls.slice(0, FIRST_SCREEN)].map(preloadImage));
+}
+
 const pending = new Map<Name, Promise<void>>();
 
 /** Warm everything a route needs. Cached per route kind; safe to call often. */
@@ -52,7 +89,7 @@ export function preloadRoute(r: Route | Name): Promise<void> {
   let p = pending.get(name);
   if (!p) {
     const urls = [backdropUrl(BACKDROP[name]), ...(IMAGES[name] ?? []).map(sceneImg)];
-    p = Promise.all([...urls.map(preloadImage), CHUNKS[name]?.().catch(() => undefined)]).then(() => undefined);
+    p = Promise.all([...urls.map(preloadImage), dynamicImages(name), CHUNKS[name]?.().catch(() => undefined)]).then(() => undefined);
     pending.set(name, p);
   }
   return p;

@@ -87,7 +87,7 @@ export const CardFace = memo(function CardFace({ id, size = "mini", width, on, f
       onBlur={onBlur}
       title={title}
     >
-      <div className={s.art}><img src={cardArt(id)} alt="" loading="lazy" draggable={false} /></div>
+      <div className={s.art}><img src={cardArt(id)} alt="" loading="lazy" decoding="async" draggable={false} /></div>
       <div className={s.line} style={{ background: cardColor(id) }} />
       <div className={s.title}>{cardTitle(id)}</div>
       {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
