@@ -258,7 +258,7 @@ export function buyableHere(S: MatchState, tiles: TileData[], me: number, i: num
     S.step === 4 &&
     S.turn === me &&
     !S.busy &&
-    !S.bought &&
+    !S.landActed &&
     S.landed === i &&
     S.players[me]?.pos === i &&
     S.owners[i] < 0
@@ -274,8 +274,7 @@ export function canBuildHere(S: MatchState, tiles: TileData[], me: number, i: nu
     S.step === 4 &&
     S.turn === me &&
     !S.busy &&
-    !S.bought &&
-    !S.built &&
+    !S.landActed &&
     S.landed === i &&
     S.players[me]?.pos === i &&
     S.owners[i] === me &&
