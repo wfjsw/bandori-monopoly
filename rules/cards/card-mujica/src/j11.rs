@@ -148,6 +148,13 @@ fn pay_choose_cancel(player_id: i32, value: i32) -> bool {
     rules_status::stun::get(player_id) <= 0
 }
 
+// Kani-only direct-call export (ppcost). Production builds omit this.
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_choose_cancel_kani(player_id: i32, value: i32) -> bool {
+    pay_choose_cancel(player_id, value)
+}
+
 /// The card decays out -- C# `if (Crystals <= 0) Unplace(discard)`.
 ///
 /// TODO(规则书): `Mujica:#J11` has no rulebook entry at all, so this follows the
