@@ -545,6 +545,12 @@ extern "C-unwind" {
     pub fn set_more_steps(n: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_set_tag")]
     pub fn set_tag(kp: i32, kl: i32, v: i32);
+    /// v78: `set_tag` with the key as an intern id.
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_set_tag_id")]
+    pub fn set_tag_id(key_id: i32, v: i32);
+    /// v78: host-supplied recorded roll, or `i32::MIN` when none.
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_recorded_roll")]
+    pub fn recorded_roll() -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_set_settle_as_agent")]
     pub fn set_settle_as_agent(on: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_plan_add_follower")]

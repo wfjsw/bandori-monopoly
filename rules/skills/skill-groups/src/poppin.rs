@@ -56,7 +56,8 @@ pub const POPPIN: CardDef = CardDef::new(
         // (`tile.id == tile_named('星之鼓动山丘')` -- an unknown name reads -1 and so
         // never matches a real buy tile); 「只有全部…破产后」 is the residual
         // guard, a derived scan outside the CEL schema (docs/GUARDS.md §4.2c).
-        On::FilterFlag(
+        // FilterValue (not FilterFlag) so the denial reason rides `reason`.
+        On::FilterValue(
             &[GateKind::BuyGate],
             "tile.id == tile_named('星之鼓动山丘')",
             Some(lock_hill_applies),
@@ -66,16 +67,21 @@ pub const POPPIN: CardDef = CardDef::new(
 )
     .silent(&[0]);
 
+/// Denial reason intern id 1 = `poppin_locked` (see rt.rs REASON_POPPIN_LOCKED).
+const REASON_POPPIN_LOCKED: i32 = 1;
+
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].
-fn lock_hill(player_id: i32, _v: i32) -> bool {
+/// Pure: deny via `allowed: 0`; the reason id rides `FilterValue.reason`.
+fn lock_hill(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     // 「只有全部Poppin' Party角色破产后才可被正常购买」 -- someone is still
-    // standing, so the lock holds. TODO(规则书): set_reason is a side channel
-    // kept here (the deny reason key); FilterValue.reason would need an
-    // interned key id on the wire.
-    ctx::trigger::set_reason(key!("poppin_locked"));
+    // standing, so the lock holds.
     ctx::log(player_id, &Msg::new(key!("poppin_locked")));
-    false // deny
+    card_sdk::abi::FilterValue {
+        allowed: 0,
+        reason: REASON_POPPIN_LOCKED,
+        ..v
+    }
 }
 
 /// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- the lock is in play
@@ -358,6 +364,6 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 /// cfg(kani) direct-call wrapper (ppcost body-id pattern).
 #[cfg(kani)]
-pub fn lock_hill_kani(player_id: i32, v: i32) -> bool {
+pub fn lock_hill_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     lock_hill(player_id, v)
 }

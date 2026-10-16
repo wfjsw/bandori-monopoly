@@ -613,6 +613,11 @@ pub struct World {
     /// by cards (generic named rule parameters).
     #[serde(default)]
     pub rule_param_bonus: std::collections::BTreeMap<String, i32>,
+    /// v78: host-supplied recorded roll for a Filter body. `i32::MIN` = none.
+    /// The host pre-rolls into the recorded RNG stream before a RollPlan /
+    /// RollValue Filter raise so the body can read it without calling `roll`.
+    #[serde(default = "no_recorded_roll")]
+    pub recorded_roll: i32,
     pub ask_seq: i32,
     pub signals: Vec<Signal>,
     /// Turn-end callbacks waiting for their turn end.
@@ -706,6 +711,8 @@ impl PartialEq for SharedFlash {
     }
 }
 
+fn no_recorded_roll() -> i32 { i32::MIN }
+
 impl World {
     /// Assemble a world around an already-built [`Rng`]: which stream the
     /// match runs on is the caller's choice (`Match::new` legacy xoshiro vs
@@ -726,6 +733,7 @@ impl World {
             next_turn_pending: false,
             leftovers: VecDeque::new(),
             rule_param_bonus: Default::default(),
+            recorded_roll: i32::MIN,
             ask_seq: 0,
             signals: vec![],
             scheduled: vec![],

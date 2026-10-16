@@ -100,6 +100,9 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::TurnEndBefore
         | TriggerKind::TurnEndAfter
         | TriggerKind::AtEnd
+        | TriggerKind::FlipAfter
+        | TriggerKind::PayChooseAsk
+        | TriggerKind::PayTotalAddAsk
         | TriggerKind::EndTurnBefore
         | TriggerKind::EndTurnAfter => Msg::new("log.why.turn_end").player_id("who", who),
         TriggerKind::DeckBeforeGame => Msg::new("log.why.deck_before").player_id("who", who),

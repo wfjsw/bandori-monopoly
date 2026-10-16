@@ -580,12 +580,13 @@ fn fire_roll_play(player_id: i32) -> card_sdk::Asked {
 }
 
 fn fire_roll_plan(_player_id: i32, v: FilterValue) -> FilterValue {
-    // `plan::set_tag` is card-named (the key is this card's own tag, not a
-    // generic field), so it stays in-body rather than riding `FilterValue.tag`
-    // (whose write-back has no key). Not `refuse_if_filter`'d; documented
-    // exception for named tags only.
-    ctx::plan::set_tag("fireRoll", 1);
-    v
+    // tag_key 1 = "fireRoll" (see rt.rs TAG_FIRE_ROLL). Pure FilterValue write
+    // instead of the old in-body `plan::set_tag` (refuse_if_filter'd).
+    FilterValue {
+        tag_key: 1,
+        tag: 1,
+        ..v
+    }
 }
 
 // --------------------------------------------------------------- conditions
@@ -716,11 +717,15 @@ fn pre_rollplan_place(player_id: i32) -> card_sdk::Asked {
 }
 
 fn pre_rollplan_body(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    // Named-tag write (see `fire_roll_plan`): the observation channel for
-    // "the body ran", not a generic FilterValue field.
-    ctx::plan::set_tag("preRollPlan", 1);
+    // tag_key 2 = "preRollPlan" (see rt.rs TAG_PRE_ROLLPLAN). Pure FilterValue
+    // write instead of the old in-body `plan::set_tag`. The log is allowed
+    // (not a mutation).
     ctx::log(player_id, &Msg::new(key!("pre_rollplan_ran")));
-    v
+    card_sdk::abi::FilterValue {
+        tag_key: 2,
+        tag: 1,
+        ..v
+    }
 }
 
 /// `On::AtEnd` with a rejecting condition: the scheduled turn-end callback

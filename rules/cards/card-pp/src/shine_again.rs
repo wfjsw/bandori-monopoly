@@ -34,12 +34,10 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // short on cash and with an unrecorded owned colour to name. The money
         // shortfall is CEL; the colour scan is residual.
         //
-        // ABI v74 Pattern E: `ask_pick` + slot/tok writes + `gain_raw` cannot
-        // live in a Filter, and there is no non-interactive cancel, so the whole
-        // offer rides `HookKind::Effect` (the payment declaration). The pre's
-        // `money(owner) < value` still gates on the declared figure.
+        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position.
+        // The pre's `money(owner) < value` still gates on the figure in flight.
         On::Action(
-            &[HookKind::Effect],
+            &[HookKind::PayChooseAsk],
             "actor == owner && card.placed && value > 0 && money(owner) < value",
             Some(has_unrecorded_color),
             pay_choose,

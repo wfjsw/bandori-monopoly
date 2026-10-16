@@ -36,13 +36,11 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // against the body and the rulebook), a tile we own, and a positive
         // amount. The opt-in ask stays in the body (a player choice).
         //
-        // ABI v74 Pattern E: `ask_yes` + `set_pay_amount(0)` + state writes
-        // cannot live in a Filter, and there is no non-interactive cancel (omit
-        // FilterFlag). The offer rides `HookKind::Effect` (the payment
-        // declaration -- `t.value` the engine still folds). PayAfter is too late
-        // to cancel.
+        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position:
+        // the interactive cancel (`ask_yes` + `set_pay_amount(0)` + state writes)
+        // sits immediately before the pure `PayChoose` filter stage.
         On::Action(
-            &[HookKind::Effect],
+            &[HookKind::PayChooseAsk],
             "actor != owner && tile.owner == owner && value > 0",
             None,
             on_pay,
@@ -57,15 +55,23 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
             None,
             on_plan,
         ),
+        // One-shot latch clear once the rewritten move has been taken. This is
+        // a teleport plan, so `RollAfter` never fires (no dice) -- `MoveAfter`
+        // is the next event for both teleports and walks.
+        On::Action(
+            &[HookKind::MoveAfter],
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+            None,
+            on_plan_after,
+        ),
     ],
 );
 
 /// 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」.
 /// Applicability is the entry's condition (`actor != owner && tile.owner ==
 /// owner && value > 0`); the ask is the 「可」 opt-in.
-/// Rides `On::Action(Effect)` (ABI v74 Pattern E): the prompt and the
-/// `set_pay_amount(0)` cancel are the documented interactive cancel on a
-/// non-filter payment hook.
+/// Rides `PayChooseAsk` (v78): the prompt and the `set_pay_amount(0)` cancel
+/// sit at the rulebook PayChoose position.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if !ctx::ask_yes(
@@ -90,12 +96,10 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 /// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan. The latch
 /// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`).
 /// Pure: the teleport rides `FilterValue.move_kind` / `teleport_to` / `resolve`.
-/// The one-shot latch clear is a keyed-state write (`state::set`) -- not a
-/// `refuse_if_filter`'d ctx effect, and there is no FilterValue "consume slot"
-/// field.
+/// The one-shot latch clear is [`on_plan_after`] on `MoveAfter` (teleports
+/// skip `RollAfter`).
 fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
     let t = state::get(player_id, TILE);
-    state::set(player_id, ARMED, 0);
     v.move_kind = 1; // teleport
     v.teleport_to = t;
     v.resolve = 1;
@@ -104,6 +108,12 @@ fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
         &Msg::new(key!("soyo_crychic_moved")).tile("tile", t),
     );
     v
+}
+
+/// Drop the one-shot [`ARMED`] latch once the teleport move has been taken.
+fn on_plan_after(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, ARMED, 0);
+    Ok(())
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -117,4 +127,10 @@ pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
     on_plan(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_after_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan_after(player_id)
 }

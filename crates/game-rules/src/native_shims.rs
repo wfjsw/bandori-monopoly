@@ -438,6 +438,10 @@ pub trait HostOps {
     fn op_set_more_steps(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_tag`
     fn op_set_tag(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_set_tag_id`
+    fn op_set_tag_id(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
+    /// `ruleset_recorded_roll`
+    fn op_recorded_roll(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_set_settle_as_agent`
     fn op_set_settle_as_agent(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `ruleset_plan_add_follower`
@@ -1341,6 +1345,14 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_set_tag(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_tag(self, a[0], a[1], a[2])?;
         Ok(0)
+    }
+    fn op_set_tag_id(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
+        crate::hostfns::set_tag_id(self, a[0], a[1])?;
+        Ok(0)
+    }
+    fn op_recorded_roll(&mut self, _a: [i32; 6]) -> Result<i64, HostErr> {
+        let v = crate::hostfns::recorded_roll(self)?;
+        Ok(v as i64)
     }
     fn op_set_settle_as_agent(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         crate::hostfns::set_settle_as_agent(self, a[0])?;
@@ -3360,6 +3372,22 @@ pub unsafe extern "C-unwind" fn ruleset_set_more_steps(n: i32) {
 pub unsafe extern "C-unwind" fn ruleset_set_tag(kp: i32, kl: i32, v: i32) {
     with_host(|h| match h.op_set_tag([kp, kl, v, 0, 0, 0]) {
         Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_set_tag_id(key_id: i32, v: i32) {
+    with_host(|h| match h.op_set_tag_id([key_id, v, 0, 0, 0, 0]) {
+        Ok(_) => {},
+        Err(e) => abort_host(e),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C-unwind" fn ruleset_recorded_roll() -> i32 {
+    with_host(|h| match h.op_recorded_roll([0, 0, 0, 0, 0, 0]) {
+        Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })
 }

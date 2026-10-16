@@ -35,12 +35,11 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // only with a crystal on the card and a positive amount to cut.
         // Fully expressible (actor / placed / value / card.counter) -- G4.
         //
-        // ABI v74 Pattern E: the -1000 rewrite is interactive (it lands only
-        // when the owner accepts) so it cannot be a pure Filter amount half,
-        // and there is no non-interactive cancel. The whole body rides
-        // `HookKind::Effect` (payment declaration; `t.value` is folded there).
+        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position:
+        // the interactive -1000 rewrite sits immediately before the pure
+        // `PayChoose` filter stage.
         On::Action(
-            &[HookKind::Effect],
+            &[HookKind::PayChooseAsk],
             "actor == owner && card.placed && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,

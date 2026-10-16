@@ -28,23 +28,19 @@ pub const PASTEL: CardDef = CardDef::new(
         // （2）「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的
         // 反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 --
         // a passive hook on the flip effect, not a press. `FlipEffect` is raised
-        // with the clause's X before the counters move, so `tok(FAN)` is still
-        // the pre-flip count. 「可为此卡添加」 is the book's permissive may
-        // (there is no cost or downside), so the overflow is applied here.
+        // with the clause's X before the counters move; `FlipAfter` is raised
+        // after. 「可为此卡添加」 is the book's permissive may (there is no
+        // cost or downside), so the overflow is applied.
         //
-        // ABI v74: `FlipEffect` is an integer Filter kind. The body does NOT
-        // rewrite the flip value -- it adds crystals based on it (a side
-        // effect).
-        // TODO(规则书): `add_crystals` is the overflow grant 「可为此卡添加等量
-        //   溢出的[奇迹水晶]」 and is a mutation kept in this Filter body. There
-        //   is no post-flip event (`FlipAfter` does not exist; `CounterChanged`
-        //   fires on *instance* counters, not the player `P✽P粉丝(反)` token
-        //   this clause watches), and the overflow figure is `X - tok(FAN)`
-        //   taken *before* the counters move -- so no Action half can recompute
-        //   it after the flip without stashing X. Kept in-body to keep the
-        //   observable grant identical; `add_crystals` is not
-        //   `refuse_if_filter`'d.
+        // Split (ABI v78): the FlipEffect Filter is pure (observes/returns the
+        // flip value). The overflow grant lives on FlipAfter (an Action) where
+        // `add_crystals` is legal. The overflow figure is `X - tok(FAN)` taken
+        // *before* the counters move; the flip site (`PP:有你与我在这里共度`)
+        // computes it and passes it as the `FlipAfter` payload (a nested
+        // raise's world snapshot cannot see a same-body stash). See
+        // TODO(规则书) on `on_flip_after`.
         On::Filter(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
+        On::Action(&[HookKind::FlipAfter], "actor == owner", None, on_flip_after),
     ],
 );
 
@@ -91,26 +87,33 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// （2） Filter half -- observe the flip, rewrite nothing. Pure.
+fn on_flip(_player_id: i32, value: i32) -> i32 {
+    value
+}
+
 /// （2）「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]
 /// （最多10个）」 -- the overflow is `X - owned`, taken while `tok(FAN)` is
-/// still the pre-flip count. Returns `value` unchanged (the flip count is not
-/// rewritten).
-/// TODO(规则书): `add_crystals` is the overflow grant and stays in-body -- see
-///   the entry comment. `add_crystals` may prompt on the marker window; the
-///   `Result` is discarded so the filter signature holds.
-fn on_flip(player_id: i32, value: i32) -> i32 {
-    let x = value;
-    let have = ctx::tok(player_id, FAN);
-    let over = (x - have).max(0);
+/// still the pre-flip count. The flip site (`PP:有你与我在这里共度`) computes
+/// that figure itself and raises `FlipAfter` with it as the payload (a nested
+/// raise's world snapshot cannot see a same-body stash of the pre-count).
+/// TODO(规则书): only `PP:有你与我在这里共度` raises `FlipAfter` today.
+///   Other 「将X个反面[P✽P粉丝]变正」 sites (same_dream, jennifer, …) do not
+///   raise `FlipEffect`/`FlipAfter` at all, so this clause does not see them.
+///   When they do, each flip site must pass its own overflow as the
+///   `FlipAfter` payload the same way.
+fn on_flip_after(player_id: i32) -> card_sdk::Asked {
+    // Payload = the overflow `X - pre` (see the flip site).
+    let over = ctx::trigger::value();
     if over <= 0 {
-        return value;
+        return Ok(());
     }
     let _ = ctx::add_crystals(over, 10);
     ctx::log(
         player_id,
         &Msg::new(key!("pastel_over")).i("n", over as i64),
     );
-    value
+    Ok(())
 }
 
 /// Roster band row for this band skill (ABI v63).
@@ -142,4 +145,10 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_flip_kani(player_id: i32, value: i32) -> i32 {
     on_flip(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_flip_after_kani(player_id: i32) -> card_sdk::Asked {
+    on_flip_after(player_id)
 }

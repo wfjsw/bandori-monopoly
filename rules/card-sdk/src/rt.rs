@@ -294,6 +294,48 @@ fn read_filter_value() -> crate::abi::FilterValue {
         add_base_sides: FilterValue::UNCHANGED,
         allowed: FilterValue::UNCHANGED,
         reason: 0,
+        recorded_roll: crate::ctx::plan::recorded_roll(),
+        tag_key: 0,
+    }
+}
+
+/// Stable intern ids for [`crate::abi::FilterValue::tag_key`] (v78).
+///
+/// The host's `set_tag_id` stores the id's decimal spelling as the tag key,
+/// which would break `move.tag('fireRoll')`. Write-back therefore resolves
+/// these known ids here and calls the string form of `plan::set_tag`.
+/// Mapping (hardcoded so the id is stable across intern arenas):
+///
+/// | id | tag key |
+/// |----|---------|
+/// | 1  | `fireRoll` |
+/// | 2  | `preRollPlan` |
+///
+/// Unknown ids fall through to `set_tag_id` for forward compatibility.
+const TAG_FIRE_ROLL: i32 = 1;
+const TAG_PRE_ROLLPLAN: i32 = 2;
+
+fn tag_key_name(key: i32) -> Option<&'static str> {
+    match key {
+        TAG_FIRE_ROLL => Some("fireRoll"),
+        TAG_PRE_ROLLPLAN => Some("preRollPlan"),
+        _ => None,
+    }
+}
+
+/// Stable intern ids for [`crate::abi::FilterValue::reason`] (v78).
+/// Mapping (hardcoded so the id is stable across intern arenas):
+///
+/// | id | message key |
+/// |----|-------------|
+/// | 1  | `poppin_locked` |
+const REASON_POPPIN_LOCKED: i32 = 1;
+
+fn reason_key_name(key: i32) -> Option<&'static str> {
+    match key {
+        // Same string `key!("poppin_locked")` expands to in skill-groups.
+        REASON_POPPIN_LOCKED => Some("cards:skill-groups.poppin_locked"),
+        _ => None,
     }
 }
 
@@ -392,10 +434,21 @@ fn write_filter_value(input: crate::abi::FilterValue, v: crate::abi::FilterValue
     if changed(v.allowed, input.allowed) && v.allowed == 0 {
         ctx::trigger::set_cancelled();
     }
-    // `tag` is card-named (`plan::set_tag("key", v)` -- the key is the creating
-    // card's own tag name, not a generic field). Bodies that need a named tag
-    // call `plan::set_tag` themselves; this write-back deliberately does not
-    // apply `tag` (there is no key on the wire). Documented exception.
+    if v.tag_key != 0 && changed(v.tag, input.tag) {
+        match tag_key_name(v.tag_key) {
+            // Known keys: the string form so `move.tag('fireRoll')` matches.
+            Some(name) => ctx::plan::set_tag(name, v.tag),
+            None => ctx::plan::set_tag_id(v.tag_key, v.tag),
+        }
+    }
+    // Gate denial reason (v78). Intern id -> message key; `set_reason` is the
+    // host import the UI reads. Unknown ids are dropped (the log still carries
+    // the card's own key).
+    if changed(v.reason, input.reason) && v.reason != 0 {
+        if let Some(name) = reason_key_name(v.reason) {
+            ctx::trigger::set_reason(name);
+        }
+    }
 }
 
 /// Generate the guest exports for a card table.

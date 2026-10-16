@@ -27,15 +27,11 @@ pub const HHW: CardDef = CardDef::new(
         // （1）「向他人的格子付款时」 -- another player, a rent. The
         // recorded-player / crystals scans stay residual (dynamic keys).
         //
-        // ABI v74 Pattern E: `ask_yes` + `set_pay_amount` + state/crystal writes
-        // cannot live in a Filter, and there is no non-interactive cancel (omit
-        // FilterFlag). The offer rides `HookKind::Effect` (the payment
-        // declaration -- `t.value` the engine still folds). PayAfter is too late
-        // to cancel. Effect runs before the payTotal*/pay* modifier stages, so
-        // the double lands earlier than the old PayChoose stage (compose-order
-        // caveat with other modifiers).
+        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position:
+        // the interactive `ask_yes` + `set_pay_amount` + state/crystal writes sit
+        // immediately before the pure `PayChoose` filter stage.
         On::Action(
-            &[HookKind::Effect],
+            &[HookKind::PayChooseAsk],
             "actor == owner && target >= 0 && target != owner && pay_is_rent",
             None,
             on_pay_choose,
@@ -69,9 +65,8 @@ fn has_saved(player_id: i32) -> bool {
 
 /// （1）「向他人的格子付款时可选择支付双倍价格」.
 /// Applicability is the entry's condition; the ask is the 「可」 opt-in.
-/// Rides `On::Action(Effect)` (ABI v74 Pattern E): the prompt and the
-/// `set_pay_amount` rewrite are the documented interactive amount reshape on a
-/// non-filter payment hook.
+/// Rides `PayChooseAsk` (v78): the prompt and the `set_pay_amount` rewrite sit
+/// at the rulebook PayChoose position.
 fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
     let to = ctx::trigger::target();
     if !ctx::ask_yes(

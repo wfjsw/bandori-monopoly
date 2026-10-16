@@ -24,6 +24,9 @@ pub const DETOUR: CardDef = CardDef::new(
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
         On::FilterValue(&[HookKind::RollPlan], "slot('detour_next_roll') != 0", None, next_roll),
+        // One-shot consume of the armed next-roll rewrite, on the roll that the
+        // plan just built (RollAfter is the next event after RollPlan).
+        On::Action(&[HookKind::RollAfter], "slot('detour_next_roll') != 0", None, consume_next_roll),
         On::Action(&[HookKind::AtEnd], "", None, clear_no_reward),
     ],
 )
@@ -134,15 +137,17 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 const NEXT_ROLL: &str = "detour_next_roll";
 
 /// 规则书(2): 「下一次的移动掷骰变更为1d6」 -- `RollPlan` is the moment the dice
-/// plan is being built, so this is where the override belongs. `set_base_dice`
-/// replaces the table; 1d6 is the clause's. The `NEXT_ROLL == 0` early-out is
-/// the entry's condition (`slot('detour_next_roll') != 0`).
-fn next_roll(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
-    // One-shot latch clear. `state::set` is a keyed-state write (not a
-    // `refuse_if_filter`'d ctx effect); there is no FilterValue "consume slot"
-    // field and no post-RollPlan Action kind (RollPlan is filter-only).
-    ctx::state::set(player_id, NEXT_ROLL, 0);
+/// plan is being built, so this is where the override belongs. Pure: only the
+/// dice reshape. The one-shot latch is consumed by [`consume_next_roll`] on
+/// `RollAfter`.
+fn next_roll(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     card_sdk::abi::FilterValue { base_count: 1, base_sides: 6, ..v }
+}
+
+/// Drop the one-shot [`NEXT_ROLL`] latch once the rewritten roll has landed.
+fn consume_next_roll(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, NEXT_ROLL, 0);
+    Ok(())
 }
 
 /// 「向后移动经过CiRCLE时不获得CiRCLE奖励」 -- the veto is `prop::NO_REWARD` on
@@ -187,6 +192,12 @@ pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn next_roll_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     next_roll(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn consume_next_roll_kani(player_id: i32) -> card_sdk::Asked {
+    consume_next_roll(player_id)
 }
 
 #[cfg(kani)]

@@ -235,6 +235,32 @@ fn m04b_minus_two_clamped_to_zero() {
     assert_eq!(t.money(0), 10_000, "no rent paid");
 }
 
+// 规则书: 不要背负期待 [持续]（1）: 「如果为0则此次移动不[结算]」 -- a face
+// that shaves to 0 while already standing on a foreign rent tile must not
+// settle that tile (the 0-step walk takes neither `fold_plan_delta` nor the
+// mid-step sync, so the engine has to pull `plan.resolve` before the walk).
+#[test]
+fn m04c_zero_step_walk_does_not_settle_the_tile_underfoot() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "PP:不要背负期待");
+    let blue = tile("江户川公园");
+    t.set_owner(blue, Some(1));
+    // Standing on P1's rent tile. The shave cuts the face 1 -> 0, so the
+    // walk is 0 steps and 「不[结算]」 -- no rent either way.
+    t.set_pos(0, blue);
+    let rent = data().tiles[blue].rent[0];
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), blue, "0-step walk stays put");
+    assert_eq!(
+        t.money(0),
+        10_000,
+        "face-0 suppresses settle; rent would have been {rent}"
+    );
+    assert_eq!(t.money(1), 10_000, "owner receives nothing");
+}
+
 // =====================================================================
 // M5. Repaint plus （摩卡）0.5倍速
 // =====================================================================

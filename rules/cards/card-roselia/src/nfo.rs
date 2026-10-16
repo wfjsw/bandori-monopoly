@@ -28,8 +28,12 @@ pub const NFO: CardDef = CardDef::new(
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
         // PayAfter (always raised, so a shave-to-0 still uses the card up).
         // TODO(规则书): a payment cancelled *before* PayAt (effect window /
-        //   payTotalCancel) still uses the card up on PayAfter -- the old body
-        //   unplaced only when the PayAt stage actually ran.
+        //   payTotalCancel) never reaches the shave, so the card should stay;
+        //   the book ties 「置入弃牌堆」 to 「减免1000」 and the old C# body
+        //   unplaced only when `PayAt` ran. PayAfter fires for cancelled /
+        //   zeroed payments too and carries no "PayAt ran" bit, and a Filter
+        //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
+        //   unplace cannot tell cancelled-before-PayAt from shave-to-0.
         On::Filter(
             &[HookKind::PayAt],
             "actor == owner && card.placed && value > 0",
