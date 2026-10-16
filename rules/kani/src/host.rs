@@ -971,8 +971,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_effect_kind | Op::trig_effect_target | Op::trig_effect_from
         | Op::trig_effect_tile | Op::trig_effect_value => 0,
         Op::declare_effect => 0,
-        Op::trig_card_is => 0,
-        Op::trig_cards => 0,
+        Op::trig_card_is => arm_trig_card_is(a),
+        Op::trig_cards => arm_trig_cards(a),
 
         // ---- move plan / settle (structure only; engine scheduling is
         //      PROTOCOL-LEVEL and out of Kani scope) ----
@@ -2851,6 +2851,31 @@ pub fn arm_trig_name(a: Args) -> i64 {
 pub fn arm_trig_player(a: Args) -> i64 {
     let _ = a;
     world::with_world(|w| w.trig_player) as i64
+}
+
+/// `trigger::card_is(id)` — is the trigger about that card? Reads
+/// `World::trig_card` (the trigger card's name id, 0 = none).
+pub fn arm_trig_card_is(a: Args) -> i64 {
+    let [a0, a1, ..] = a;
+    let want = name_id(a0, a1);
+    world::with_world(|w| (w.trig_card == want.0 as i32 && w.trig_card != 0) as i64)
+}
+
+/// `trigger::cards(buf, cap)` — the trigger card's name id as a 1-element
+/// list. The guest decodes it as a name-id pair.
+pub fn arm_trig_cards(a: Args) -> i64 {
+    let [buf, cap, ..] = a;
+    let id = world::with_world(|w| w.trig_card);
+    if buf == 0 {
+        return if id != 0 { 1 } else { 0 };
+    }
+    if cap < 1 {
+        return -1;
+    }
+    // 1-element list: just the name id as i32.
+    let bytes = (id as i32).to_le_bytes();
+    card_sdk::native::write(buf, &bytes);
+    1
 }
 
 pub fn arm_trig_set_cancelled(a: Args) -> i64 {
