@@ -30,12 +30,17 @@ pub const RAS: CardDef = CardDef::new(
         // second+ hit belongs on `AbnormalGuard` (the declaration gate that can
         // refuse the effect); the `Abnormal` outcome hook is too late to cancel.
         // 「受到的」 is `target == owner` (the recipient), not `actor == owner`.
+        // Pure decision (ABI v74): the one-shot latch is written by
+        // [`mark_taken`] when the allowed effect actually lands.
         On::FilterFlag(
             &[card_sdk::abi::GateKind::AbnormalGuard],
             "target == owner",
             None,
             on_abnormal,
         ),
+        // One-shot latch for （1）: `Abnormal` reports what actually landed
+        // (受到的), self-applied included. Paired with the pure gate above.
+        On::Action(&[HookKind::Abnormal], "target == owner", None, mark_taken),
         On::Action(&[HookKind::Settle], card_sdk::pre::MINE, None, on_settle),
         // （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
         // The remembered-tile scan is a derived read (docs/GUARDS.md §4.2).
@@ -47,7 +52,7 @@ pub const RAS: CardDef = CardDef::new(
         ),
     ],
 )
-    .silent(&[0, 2]);
+    .silent(&[0, 2, 3]);
 
 /// Turn-start bookkeeping: always clear the per-turn latch; drop a stale
 /// landing memory when the player has moved off it.
@@ -111,16 +116,22 @@ fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「每回合可选择只获得第一次受到的[异常移动效果]」 -- once one has landed
-/// this turn, the rest are dropped.
+/// （1）「每回合可选择只获得第一次受到的[异常移动效果]」 -- pure gate decision.
+/// Allow the first hit of the turn, drop the rest. The one-shot latch is
+/// written by [`mark_taken`] on the `Abnormal` landing (Filter bodies must be
+/// pure; `state::set` is refuse_if_filter'd).
+/// TODO(规则书): 「可选择」 -- the claim is automatic (no decline window for
+///   the first hit). Same discrepancy as `m09_ras_band_first_abnormal_only`.
 fn on_abnormal(player_id: i32, _v: i32) -> bool {
-    if state::get(player_id, TAKEN) == 0 {
-        // One-shot latch. TODO(规则书): state::set is a keyed-state write kept
-        // in this FilterFlag body (not refuse_if_filter'd).
-        state::set(player_id, TAKEN, 1);
-        return true; // allow
-    }
-    false // deny
+    state::get(player_id, TAKEN) == 0
+}
+
+/// One-shot latch for （1）: the allowed abnormal actually landed (「受到的」).
+/// Rides `Abnormal` (what got through the gate and settled), not the gate
+/// itself -- a pure FilterFlag cannot write.
+fn mark_taken(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, TAKEN, 1);
+    Ok(())
 }
 
 /// （2）「因该技能以外的效果在livehouse格子[触发结算]时」.
@@ -173,4 +184,10 @@ pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn on_abnormal_kani(player_id: i32, v: i32) -> bool {
     on_abnormal(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn mark_taken_kani(player_id: i32) -> card_sdk::Asked {
+    mark_taken(player_id)
 }
