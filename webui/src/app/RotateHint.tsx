@@ -2,18 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 import { t as tr } from "../i18n/t";
-import { ROTATE_QUERY as query, forceLandscape, isForced, subscribeForced } from "./rotation";
+import { forceLandscape, isForced, subscribeForced, usePortraitPhone } from "./rotation";
 import s from "./RotateHint.module.css";
 
-
-function subscribe(cb: () => void): () => void {
-  const mq = window.matchMedia(query);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-}
-
 export function RotateHint() {
-  const portrait = useSyncExternalStore(subscribe, () => window.matchMedia(query).matches);
+  const portrait = usePortraitPhone();
   const forced = useSyncExternalStore(subscribeForced, isForced);
   if (!portrait || forced) return null;
   return (

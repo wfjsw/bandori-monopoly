@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 // A portrait phone shows the stage turned a quarter clockwise (see Stage.tsx),
 // so what a user sees as "up" is the design's "left". Every place that maps a
 // screen box / pointer move back into design pixels goes through here.
@@ -14,6 +16,25 @@ const forcedListeners = new Set<() => void>();
 export function forceLandscape(): void {
   forced = true;
   forcedListeners.forEach((cb) => cb());
+}
+
+/** The user turned the phone to landscape: the choice lapses (portrait again shows the cover). */
+export function clearForced(): void {
+  if (!forced) return;
+  forced = false;
+  forcedListeners.forEach((cb) => cb());
+}
+
+/** Is this a portrait phone right now? Re-renders when the phone is turned. */
+export function usePortraitPhone(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(ROTATE_QUERY);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(ROTATE_QUERY).matches,
+  );
 }
 
 export function subscribeForced(cb: () => void): () => void {
