@@ -40,7 +40,7 @@ const GUARD: CardDef = CardDef::new(
     "TEST:guard",
     &[
         On::Play("", None, guard_play),
-        On::Gate(&[GateKind::AbnormalGuard], "", None, guard),
+        On::FilterFlag(&[GateKind::AbnormalGuard], "", None, guard),
     ],
 );
 
@@ -54,7 +54,7 @@ const SHIELD: CardDef = CardDef::new(
     "TEST:shield",
     &[
         On::Play("", None, shield_play),
-        On::Gate(&[GateKind::ImmuneAll], "", None, shield),
+        On::FilterFlag(&[GateKind::ImmuneAll], "", None, shield),
     ],
 );
 
@@ -113,12 +113,12 @@ fn shield_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn shield(player_id: i32) -> card_sdk::Asked {
+fn shield(player_id: i32, _v: i32) -> bool {
     if trigger::player_id() == player_id && !trigger::cancelled() {
-        trigger::set_cancelled();
         ctx::log(player_id, &Msg::new(key!("shield_held")));
+        return false; // deny
     }
-    Ok(())
+    true
 }
 
 /// Shapes a 3-step walk via the plan ops and runs it immediately with
@@ -280,12 +280,12 @@ fn guard_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn guard(player_id: i32) -> card_sdk::Asked {
+fn guard(player_id: i32, _v: i32) -> bool {
     if trigger::target() == player_id && !trigger::cancelled() {
-        trigger::set_cancelled();
         ctx::log(player_id, &Msg::new(key!("guard_blocked")));
+        return false; // deny
     }
-    Ok(())
+    true
 }
 
 fn relay(player_id: i32) -> card_sdk::Asked {
@@ -685,7 +685,7 @@ const PRE_GATE: CardDef = CardDef::new(
     "TEST:preGate",
     &[
         On::Play("", None, pre_gate_place),
-        On::Gate(&[GateKind::ImmuneAll], "false", None, pre_gate_body),
+        On::FilterFlag(&[GateKind::ImmuneAll], "false", None, pre_gate_body),
     ],
 );
 
@@ -695,10 +695,8 @@ fn pre_gate_place(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn pre_gate_body(player_id: i32) -> card_sdk::Asked {
-    trigger::set_cancelled();
-    ctx::log(player_id, &Msg::new(key!("pre_gate_ran")));
-    Ok(())
+fn pre_gate_body(player_id: i32, _v: i32) -> bool {
+    false // deny
 }
 
 /// `On::RollPlan` with a rejecting condition: the move being planned must not

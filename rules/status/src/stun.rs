@@ -38,7 +38,7 @@ pub const STATUS_STUN: CardDef = CardDef::new(
         // rules.txt 49: 「处于该状态时[无法移动]，无法使用[主动]技能和手卡的[手]
         // 效果，无法收付款」 -- three gates, **CEL-only**. `stunned` counts the
         // pending `stunStart` layer too (it already holds the gate).
-        On::Gate(
+        On::FilterFlag(
             &[GateKind::ActGate, GateKind::PayGate, GateKind::MoveGate],
             STUNNED,
             None,
@@ -51,9 +51,8 @@ pub const STATUS_STUN: CardDef = CardDef::new(
 /// The condition under which [晕眩] closes the act, pay and move gates.
 pub const STUNNED: &str = "state(actor,'stun') + state(actor,'stunStart') > 0";
 
-fn refuse(_owner: i32) -> card_sdk::Asked {
-    trigger::set_cancelled();
-    Ok(())
+fn refuse(_owner: i32, _v: i32) -> bool {
+    false // deny
 }
 
 fn stun_landed(_owner: i32) -> bool {

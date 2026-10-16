@@ -30,7 +30,7 @@ pub const RAS: CardDef = CardDef::new(
         // second+ hit belongs on `AbnormalGuard` (the declaration gate that can
         // refuse the effect); the `Abnormal` outcome hook is too late to cancel.
         // 「受到的」 is `target == owner` (the recipient), not `actor == owner`.
-        On::Gate(
+        On::FilterFlag(
             &[card_sdk::abi::GateKind::AbnormalGuard],
             "target == owner",
             None,
@@ -113,13 +113,14 @@ fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每回合可选择只获得第一次受到的[异常移动效果]」 -- once one has landed
 /// this turn, the rest are dropped.
-fn on_abnormal(player_id: i32) -> card_sdk::Asked {
+fn on_abnormal(player_id: i32, _v: i32) -> bool {
     if state::get(player_id, TAKEN) == 0 {
+        // One-shot latch. TODO(规则书): state::set is a keyed-state write kept
+        // in this FilterFlag body (not refuse_if_filter'd).
         state::set(player_id, TAKEN, 1);
-        return Ok(());
+        return true; // allow
     }
-    ctx::trigger::set_cancelled();
-    Ok(())
+    false // deny
 }
 
 /// （2）「因该技能以外的效果在livehouse格子[触发结算]时」.
@@ -170,6 +171,6 @@ pub fn at_turn_start_offer_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_abnormal_kani(player_id: i32) -> card_sdk::Asked {
-    on_abnormal(player_id)
+pub fn on_abnormal_kani(player_id: i32, v: i32) -> bool {
+    on_abnormal(player_id, v)
 }

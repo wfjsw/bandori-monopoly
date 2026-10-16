@@ -5,7 +5,7 @@
 //! > 将此卡放置于自己场上，直到自己的下一回合开始，场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你，你的下回合开始时将其翻入弃牌堆，若在此期间此卡没有造成影响，抽1张卡
 //!
 
-use card_sdk::abi::{GateKind, HookKind};
+use card_sdk::abi::FilterValue; use card_sdk::abi::{GateKind, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -15,7 +15,7 @@ pub const EXIST: CardDef = CardDef::new(
         On::Play("", None, exist),
         // The body-top `target == owner` early-out is the condition now (C#
         // `return target != Seat`): already aimed at us, nothing to retarget.
-        On::Gate(&[GateKind::Redirect], "target != owner", None, redirect),
+        On::FilterValue(&[GateKind::Redirect], "target != owner", None, redirect),
         On::Action(&[HookKind::TurnStart], "", Some(turn_start_guard), turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -51,23 +51,20 @@ fn exist(player_id: i32) -> card_sdk::Asked {
 /// `redirect` at single-target `ctx::target` calls and applies the answer only
 /// when it differs from both the intended target and the actor (C# `H.Target`'s
 /// `card.Seat != p && card.Seat != c.Seat`).
-fn redirect(player_id: i32) -> card_sdk::Asked {
+fn redirect(player_id: i32, v: FilterValue) -> FilterValue {
     // 规则书: 「场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你」
     // -- already aimed at us is the entry's condition (`target != owner`).
-    trigger::set_target(player_id);
-    // C# calls `Used()` only when the redirect actually lands (`card.Seat != p
-    // && card.Seat != c.Seat`) -- never when the play is our own.
+    // C# calls `Used()` only when the redirect actually lands.
     if trigger::player_id() != player_id {
-        // TODO(规则书)[judgement]: 「造成影响」 is taken to mean *the effect resolved* -- a
-        //   the clause under-specifies -- see the note above it
-        // judgement call, not something the text settles. This is written at
-        // **declaration** (the redirect re-names the recipient before the chain
-        // opens), so a later counter that negates the effect still leaves the
-        // flag set and the draw unearned. Moving it to settlement (a `target`
-        // hook) would mean "nothing landed on me", which is the other reading.
+        // TODO(规则书)[judgement]: 「造成影响」 is taken to mean *the effect resolved*.
+        //   TODO(规则书): set_prop is a keyed-state write kept in this FilterValue
+        //   body (not refuse_if_filter'd).
         ctx::set_prop(PROP_USED, 1);
     }
-    Ok(())
+    FilterValue {
+        payee: player_id,
+        ..v
+    }
 }
 
 /// C# `CardExist.TurnStart` -> `End()` -- flip the card into the discard at the
@@ -104,8 +101,8 @@ pub fn exist_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn redirect_kani(player_id: i32) -> card_sdk::Asked {
-    redirect(player_id)
+pub fn redirect_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    redirect(player_id, v)
 }
 
 #[cfg(kani)]

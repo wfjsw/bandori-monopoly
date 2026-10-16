@@ -56,7 +56,7 @@ pub const POPPIN: CardDef = CardDef::new(
         // (`tile.id == tile_named('星之鼓动山丘')` -- an unknown name reads -1 and so
         // never matches a real buy tile); 「只有全部…破产后」 is the residual
         // guard, a derived scan outside the CEL schema (docs/GUARDS.md §4.2c).
-        On::Gate(
+        On::FilterFlag(
             &[GateKind::BuyGate],
             "tile.id == tile_named('星之鼓动山丘')",
             Some(lock_hill_applies),
@@ -68,13 +68,14 @@ pub const POPPIN: CardDef = CardDef::new(
 
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].
-fn lock_hill(player_id: i32) -> card_sdk::Asked {
+fn lock_hill(player_id: i32, _v: i32) -> bool {
     // 「只有全部Poppin' Party角色破产后才可被正常购买」 -- someone is still
-    // standing, so the lock holds.
-    ctx::trigger::set_cancelled();
+    // standing, so the lock holds. TODO(规则书): set_reason is a side channel
+    // kept here (the deny reason key); FilterValue.reason would need an
+    // interned key id on the wire.
     ctx::trigger::set_reason(key!("poppin_locked"));
     ctx::log(player_id, &Msg::new(key!("poppin_locked")));
-    Ok(())
+    false // deny
 }
 
 /// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- the lock is in play

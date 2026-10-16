@@ -548,16 +548,6 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32, v: abi::FilterValue) -> abi::FilterValue,
     ),
-    /// A question posed to this placed card at declaration or at resolution.
-    /// Same shape as [`On::Action`]: the condition / residual guard decide
-    /// whether the entry answers at all; a rejecting entry runs no body (and so
-    /// never flashes).
-    Gate(
-        &'static [abi::GateKind],
-        &'static str,
-        Option<fn(player_id: i32) -> bool>,
-        fn(player_id: i32) -> Asked,
-    ),
     /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
     /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
     /// `CardDef` per tile kind and this is their body; the engine keeps
@@ -607,7 +597,6 @@ impl On {
             On::Filter(k, _, g, r) => On::Filter(k, pre, g, r),
             On::FilterFlag(k, _, g, r) => On::FilterFlag(k, pre, g, r),
             On::FilterValue(k, _, g, r) => On::FilterValue(k, pre, g, r),
-            On::Gate(k, _, g, r) => On::Gate(k, pre, g, r),
             On::Settle(_, g, r) => On::Settle(pre, g, r),
             On::Message(n, _, g, r) => On::Message(n, pre, g, r),
         }
@@ -622,7 +611,6 @@ impl On {
             On::Filter(k, pre, _, r) => On::Filter(k, pre, None, r),
             On::FilterFlag(k, pre, _, r) => On::FilterFlag(k, pre, None, r),
             On::FilterValue(k, pre, _, r) => On::FilterValue(k, pre, None, r),
-            On::Gate(k, pre, _, r) => On::Gate(k, pre, None, r),
             On::Settle(pre, _, r) => On::Settle(pre, None, r),
             On::Message(n, pre, _, r) => On::Message(n, pre, None, r),
             other => other,
@@ -639,7 +627,6 @@ impl On {
             | On::Filter(_, _, g, _)
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
-            | On::Gate(_, _, g, _)
             | On::Settle(_, g, _)
             | On::Message(_, _, g, _) => *g,
             _ => None,
@@ -656,7 +643,6 @@ impl On {
             | On::Filter(_, _, g, _)
             | On::FilterFlag(_, _, g, _)
             | On::FilterValue(_, _, g, _)
-            | On::Gate(_, _, g, _)
             | On::Settle(_, g, _)
             | On::Message(_, _, g, _) => g.is_some(),
         }
@@ -672,7 +658,6 @@ impl On {
             | On::Filter(_, pre, _, _)
             | On::FilterFlag(_, pre, _, _)
             | On::FilterValue(_, pre, _, _)
-            | On::Gate(_, pre, _, _)
             | On::Settle(pre, _, _)
             | On::Message(_, pre, _, _) => *pre,
         }
@@ -686,7 +671,6 @@ impl On {
             On::Filter(..) => abi::OnKind::Filter,
             On::FilterFlag(..) => abi::OnKind::Filter,
             On::FilterValue(..) => abi::OnKind::Filter,
-            On::Gate(..) => abi::OnKind::Gate,
             On::Settle(..) => abi::OnKind::Settle,
             On::Message(..) => abi::OnKind::Message,
         }
@@ -728,7 +712,6 @@ impl On {
             On::Filter(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             On::FilterFlag(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             On::FilterValue(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::Gate(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             // Message names travel as the manifest's `triggers` string list
             // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
             // The names ride a separate manifest field; see `rt.rs`.

@@ -48,7 +48,7 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // (`Gate::Move` at turn start, the view's `can_roll_here`). Holding
         // another status (`unstoppable`) is why the vocabulary exposes
         // per-seat status functions.
-        On::Gate(&[GateKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
+        On::FilterFlag(&[GateKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
     ],
 )
     .board_role("status");
@@ -59,9 +59,8 @@ pub const STAY_HOLDS_MOVE: &str = "state(actor,'stay') > 0 && state(actor,'unsto
 
 /// The answer of a closed gate (only run if a gate is ever raised; pure reads
 /// use the condition alone).
-fn refuse(_owner: i32) -> card_sdk::Asked {
-    trigger::set_cancelled();
-    Ok(())
+fn refuse(_owner: i32, _v: i32) -> bool {
+    false // deny
 }
 
 /// 规则书: the hook fires for an [停留] abnormal landing on anyone.

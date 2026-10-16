@@ -187,7 +187,6 @@ pub fn on(
         | (On::Filter(_, _, guard, _), export::OP_GUARD)
         | (On::FilterFlag(_, _, guard, _), export::OP_GUARD)
         | (On::FilterValue(_, _, guard, _), export::OP_GUARD)
-        | (On::Gate(_, _, guard, _), export::OP_GUARD)
         | (On::Settle(_, guard, _), export::OP_GUARD)
         | (On::Message(_, _, guard, _), export::OP_GUARD) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
@@ -249,7 +248,6 @@ pub fn on(
         (On::Counteract(_, _, _, run), _)
         | (On::Play(_, _, run), _)
         | (On::Action(_, _, _, run), _)
-        | (On::Gate(_, _, _, run), _)
         | (On::Settle(_, _, run), _)
         | (On::Message(_, _, _, run), _) => match run(player_id) {
             Ok(()) => 0,
@@ -290,6 +288,8 @@ fn read_filter_value() -> crate::abi::FilterValue {
         move_kind: FilterValue::UNCHANGED,
         add_base_count: FilterValue::UNCHANGED,
         add_base_sides: FilterValue::UNCHANGED,
+        allowed: FilterValue::UNCHANGED,
+        reason: 0,
     }
 }
 

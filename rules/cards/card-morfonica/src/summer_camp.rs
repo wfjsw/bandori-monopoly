@@ -23,7 +23,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         // seat, and only against another player's card (C#
         // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
         // the targeting is not card-caused, so `by >= 0` is "there is a card".
-        On::Gate(
+        On::FilterFlag(
             &[GateKind::Untargetable],
             "actor == owner && by >= 0 && by != owner",
             None,
@@ -59,11 +59,8 @@ fn summer_camp(player_id: i32) -> card_sdk::Asked {
 /// owner's own effects may target them. Counts negations for the draw gate.
 /// Applicability is the entry's condition (`actor == owner && by >= 0 &&
 /// by != owner` -- C# `if (seat != Seat || by == Seat) return false;`).
-fn untargetable(player_id: i32) -> card_sdk::Asked {
-    // C# `Mem["blocked"] = Blocked + 1; return true;`.
-    ctx::inc_slot(player_id, SLOT_BLOCKED, 1);
-    trigger::set_cancelled();
-    Ok(())
+fn untargetable(player_id: i32, _v: i32) -> bool {
+    false // deny
 }
 
 /// `Fx.TurnStart` (C# `CardSummerCamp.TurnStart` -> `End`): the effect ends at

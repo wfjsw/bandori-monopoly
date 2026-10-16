@@ -551,7 +551,12 @@ use alloc::{string::String, vec::Vec};
 ///      `schedule_turn_end` list). `OnKind::RollPlan = 5` / `OnKind::AtEnd = 4`
 ///      are retired -- never reuse those wire ids. New kind
 ///      `TriggerKind::AtEnd = 103` (wire `atEnd`). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 75;
+/// v76: **Gate fold**. `On::Gate` is `On::FilterFlag` (yes/no: true = allowed)
+///      or `On::FilterValue` (target / reason). All gate kinds join
+///      `TriggerKind::is_filter()`. `OnKind::Gate = 6` is retired -- never
+///      reuse. CEL-only status gates keep their native `admits_pre` /
+///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 76;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1816,6 +1821,17 @@ impl TriggerKind {
                 | Self::TurnBonusTime
                 | Self::TurnBaseTime
                 | Self::RollValue
+                // Decision gates (v76): pure yes/no or target/reason folds.
+                | Self::AbnormalGuard
+                | Self::ImmuneAll
+                | Self::Untargetable
+                | Self::Redirect
+                | Self::BuyGate
+                | Self::ActGate
+                | Self::PayGate
+                | Self::MoveGate
+                | Self::ExclusiveUse
+                | Self::PlayGate
         )
     }
 
@@ -2236,12 +2252,8 @@ pub enum OnKind {
     // Wire id 4 is retired -- never reuse.
     // 5 was `RollPlan`, folded into `FilterValue(&[TriggerKind::RollPlan], …)`
     // in v75. Wire id 5 is retired -- never reuse.
-    /// `On::Gate(kinds, pre, guard, body)` -- a question at those [`GateKind`]s.
-    /// `body` answers with `set_cancelled` / `set_target` / `set_reason`; the
-    /// host asks every placed card at declaration or at resolution, per the
-    /// kind. Since v49 it carries the same condition / residual guard as
-    /// [`Self::Action`]: a rejecting entry does not answer (and so never flashes).
-    Gate = 6,
+    // 6 was `Gate`, folded into `FilterFlag` / `FilterValue` at the gate kinds
+    // in v76. Wire id 6 is retired -- never reuse.
     /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(pre, guard,
     /// body)`. Tile rules (`tile:*`) are one per board tile kind and this is what
     /// runs when that tile is [结算]d, inside the settle chain (a
@@ -2310,6 +2322,13 @@ pub struct FilterValue {
     /// RollPlan: append this many base dice (`UNCHANGED` / count, sides).
     pub add_base_count: i32,
     pub add_base_sides: i32,
+    /// Gate: allow? (`UNCHANGED` / 0 = deny / 1 = allow). Prefer
+    /// [`crate::On::FilterFlag`] for a bare yes/no; this field is for a gate
+    /// that also rewrites `payee` / carries a reason.
+    pub allowed: i32,
+    /// Gate: denial reason message key (intern id, 0 = none). The host maps
+    /// the id back to the key for the UI.
+    pub reason: i32,
 }
 
 impl FilterValue {
@@ -2323,8 +2342,7 @@ impl OnKind {
             0 => Self::Play,
             2 => Self::Counteract,
             3 => Self::Action,
-            // 4 / 5 retired (AtEnd / RollPlan) -- see the enum docs.
-            6 => Self::Gate,
+            // 4 / 5 / 6 retired (AtEnd / RollPlan / Gate) -- see the enum docs.
             7 => Self::Settle,
             8 => Self::Message,
             9 => Self::Filter,

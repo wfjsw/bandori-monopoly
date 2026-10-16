@@ -161,7 +161,6 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
         On::Play(_, _, f)
         | On::Counteract(_, _, _, f)
         | On::Action(_, _, _, f)
-        | On::Gate(_, _, _, f)
         | On::Settle(_, _, f)
         | On::Message(_, _, _, f) => *f,
         // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
@@ -303,7 +302,9 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::Hook, On::Action(kinds, ..) | On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
-            (KindTag::Gate, On::Gate(..)) => true,
+            (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
+                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+            }
             (KindTag::AtEnd, On::Action(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }

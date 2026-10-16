@@ -36,13 +36,13 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
         // seat's hand size.
-        On::Gate(&[GateKind::PlayGate], "hand(actor) >= 6", None, refuse),
+        On::FilterFlag(&[GateKind::PlayGate], "hand(actor) >= 6", None, refuse),
         // 「CRYCHIC variants may not use base character's exclusives」 -- a
         // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
         // is the generic own/base rule; this entry closes the base case for
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
-        On::Gate(&[GateKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
+        On::FilterFlag(&[GateKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
         On::Play("", Some(can_transform), transform_now),
     ],
 )
@@ -56,9 +56,8 @@ pub const EXCLUSIVE_USE_DENIED: &str =
 
 /// The answer of a closed exclusive-use gate (only run if a gate is ever
 /// raised; pure reads use the condition alone).
-fn refuse(_owner: i32) -> card_sdk::Asked {
-    ctx::trigger::set_cancelled();
-    Ok(())
+fn refuse(_owner: i32, _v: i32) -> bool {
+    false // deny
 }
 
 /// （1）「任何时刻拥有手牌数大于等于6时」.

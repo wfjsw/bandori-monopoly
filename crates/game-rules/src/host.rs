@@ -155,7 +155,6 @@ impl CardInfo {
     pub fn hook_entries(&self, trigger: crate::TriggerKind) -> Vec<i32> {
         let mut v = self.entries(OnKind::Action, Some(trigger));
         v.extend(self.entries(OnKind::Filter, Some(trigger)));
-        v.extend(self.entries(OnKind::Gate, Some(trigger)));
         v
     }
 
@@ -589,7 +588,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     let mut out = Vec::new();
     for (ci, c) in cards.iter().enumerate() {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
+            if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_i32()) {
                 out.push((ci as i32, ei as i32));
             }
         }
@@ -603,7 +602,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
 pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
     for c in cards {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind != OnKind::Gate as i32 {
+            if o.kind != OnKind::Filter as i32 {
                 continue;
             }
             if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k.as_i32() == t)) {
@@ -736,7 +735,7 @@ impl RulesetBuilder {
                         declared |= 1u128 << k;
                         match ok {
                             Some(OnKind::Counteract) => cm |= 1u128 << k,
-                            Some(OnKind::Action) | Some(OnKind::Filter) | Some(OnKind::Gate) => {
+                            Some(OnKind::Action) | Some(OnKind::Filter) => {
                                 hm |= 1u128 << k
                             }
                             _ => {}
@@ -2110,7 +2109,7 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let mut i = 0;
         while let Some(c) = self.card(i) {
             for (ei, o) in c.on.iter().enumerate() {
-                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
+                if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_i32()) {
                     entries.push((i, ei as i32));
                 }
             }
@@ -5213,7 +5212,7 @@ mod gate_tests {
 
     fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
         ManifestOn {
-            kind: OnKind::Gate as i32,
+            kind: OnKind::Filter as i32,
             triggers: vec![crate::TriggerKind::PayGate.as_i32() as i32],
             pre: pre.map(str::to_string),
             has_guard,

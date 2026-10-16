@@ -47,7 +47,7 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // TODO(规则书): 「不能被[指定]」 and the on-board clause are still
         // engine-side (`MatchPlayer::status_gates`), pending Untargetable /
         // on-board gate kinds.
-        On::Gate(
+        On::FilterFlag(
             &[GateKind::ActGate, GateKind::PayGate, GateKind::MoveGate],
             EXILED,
             None,
@@ -60,9 +60,8 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
 /// The condition under which [除外] closes the act, pay and move gates.
 pub const EXILED: &str = "state(actor,'exile') > 0";
 
-fn refuse(_owner: i32) -> card_sdk::Asked {
-    trigger::set_cancelled();
-    Ok(())
+fn refuse(_owner: i32, _v: i32) -> bool {
+    false // deny
 }
 
 fn exile_landed(_owner: i32) -> bool {
