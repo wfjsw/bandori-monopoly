@@ -7,7 +7,7 @@
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { sceneImg } from "../core/assets";
 import { useEventListener } from "../hooks/dom";
-import { ROTATE_QUERY, setStageRotated } from "./rotation";
+import { ROTATE_QUERY, isForced, setStageRotated, subscribeForced } from "./rotation";
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
 import s from "./Stage.module.css";
 
@@ -90,9 +90,10 @@ function useStage(tall: boolean): { scale: number; w: number; h: number; compact
   useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
   // Landscape phones: keep the stage out from under the notch / home bar.
   const inset = useSafeInsets();
-  // A phone held upright: lay the stage out on the swapped (landscape) window
+  // A phone held upright, once the user asked for it: lay the stage out on the swapped (landscape) window
   // and turn it a quarter clockwise. The insets are then the wrong axes; skip them.
-  const rotated = window.matchMedia(ROTATE_QUERY).matches;
+  const forced = useSyncExternalStore(subscribeForced, isForced);
+  const rotated = forced && window.matchMedia(ROTATE_QUERY).matches;
   const vw = rotated ? win.vh : win.vw - inset.left - inset.right;
   const vh = rotated ? win.vw : win.vh;
   // The compact (phone) canvas is the board's alone: the other scenes are

@@ -7,6 +7,24 @@ export const ROTATE_QUERY = "(orientation: portrait) and (pointer: coarse) and (
 
 let rotated = false;
 
+// Opt-in: the user taps the button on the rotate cover (RotateHint).
+let forced = false;
+const forcedListeners = new Set<() => void>();
+
+export function forceLandscape(): void {
+  forced = true;
+  forcedListeners.forEach((cb) => cb());
+}
+
+export function subscribeForced(cb: () => void): () => void {
+  forcedListeners.add(cb);
+  return () => forcedListeners.delete(cb);
+}
+
+export function isForced(): boolean {
+  return forced;
+}
+
 /** Set by `Stage` each render. */
 export function setStageRotated(on: boolean): void {
   rotated = on;
