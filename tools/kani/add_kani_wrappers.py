@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Append cfg(kani) pub wrappers for every On::* body fn in card sources.
+"""Append cfg(kani) pub wrappers for every Asked-shaped On::* body fn in card sources.
+
+`On::Filter` / `On::FilterFlag` / `On::FilterValue` bodies have non-Asked
+signatures (pure folds) and need hand-written wrappers -- see
+`pay_choose_cancel_kani` on j11. Retired `On::Hook` / `On::Gate` /
+`On::RollPlan` / `On::AtEnd` are gone (no aliases).
 
 The wrapper is a pub `NAME_kani` that direct-calls the (possibly private)
 body, so rules-kani trampolines can invoke it without a `code*` IF-chain.
@@ -14,7 +19,7 @@ import sys
 from pathlib import Path
 
 ON_RE = re.compile(
-    r"On::(Play|Counteract|Hook|Gate|RollPlan|AtEnd|Settle|Message|Mortgage|Redeem)\s*\(",
+    r"On::(Play|Counteract|Action|Settle|Message|Mortgage|Redeem|Buy|Build)\s*\(",
 )
 
 WRAPPER_HEAD = "\n// Kani-only direct-call exports (ppcost). Production builds omit these.\n"
