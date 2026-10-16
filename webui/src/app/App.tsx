@@ -19,6 +19,7 @@ import { InspectPreviewHost } from "../ui/CardPreview";
 import { ToastHost } from "../ui/Toast";
 import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
+import { RotateHint } from "./RotateHint";
 import { Console } from "../console/Console";
 
 const BACKDROP: Record<Route["name"], string> = { menu: "bg_common", lobby: "bg_live", room: "bg_live", play: "bg_band", gallery: "bg_band", deck: "bg_band", replay: "bg_common", replayView: "bg_common" };
@@ -91,6 +92,7 @@ export function App() {
         <InspectPreviewHost />
         <ToastHost />
       </Stage>
+      <RotateHint />
       <Console />
     </>
   );
