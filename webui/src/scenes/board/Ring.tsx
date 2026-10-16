@@ -16,6 +16,7 @@ import s from "./Ring.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg, type Msg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
+import { localRect } from "../../app/rotation";
 
 /** The TTS board (mod 3506424344, object 53c41e / Lua `pathXY`): 60 tiles on a
  *  12 x 10 grid of cells, `boardIndex 0` = CiRCLE at the bottom right,
@@ -440,10 +441,8 @@ export function Ring({ m, anim, pickable, walk, onTile, roll }: RingProps) {
   const showTip = useCallback((e: React.MouseEvent, title: string, lines: string[]) => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    const r = wrap.getBoundingClientRect();
-    const k = r.width / (wrap.offsetWidth || 1) || 1;
-    const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setTip({ x: (b.left + b.width / 2 - r.left) / k, y: (b.top - r.top) / k, title, lines: lines.filter(Boolean) });
+    const b = localRect(wrap, e.currentTarget as HTMLElement);
+    setTip({ x: b.left + b.width / 2, y: b.top, title, lines: lines.filter(Boolean) });
   }, [wrapRef]);
   const hideTip = useCallback(() => setTip(null), []);
   // The tip is content-sized (`width: max-content`, max 220px) and the wrap
