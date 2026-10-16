@@ -2297,7 +2297,16 @@ impl Cx<'_> {
 
     /// Offer a buy when a non-main move lands on unowned land.
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
+        // Never prompt for an offer `buy` would refuse: the turn's one action
+        // on the landed land is spent, the plan bars a buy, or a `BuyGate`
+        // hook vetoes it.
+        if self.land_action_spent(i, t) || self.w.turn.plan.no_buy {
+            return Ok(());
+        }
         let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
+        if !quote.eligible || quote.price < 0 {
+            return Ok(());
+        }
         let price = quote.price.max(0);
         if !self.can_pay(i) || self.w.purchase_funds(self.data, i, None) < price {
             self.w.log(
@@ -2340,6 +2349,9 @@ impl Cx<'_> {
 
     /// Offer a build when a non-main move lands on own land.
     fn offer_build(&mut self, i: usize, t: usize) -> Flow<()> {
+        if self.land_action_spent(i, t) {
+            return Ok(());
+        }
         if self.why_not_build_on(i, t).is_some()
             || self.w.purchase_funds(self.data, i, Some(t)) < self.build_cost(t)
         {
@@ -2371,10 +2383,18 @@ impl Cx<'_> {
         .with_tile(t);
         if self.ask(ask)?.of(i) == 0
             && self.why_not_build_on(i, t).is_none()
+            && !self.land_action_spent(i, t)
         {
-            self.build(i, t)?;
+            self.build_landed(i, t)?;
         }
         Ok(())
+    }
+
+    /// The turn's one normal action on the landed land is already used and
+    /// `t` is that land (`land_acted`).
+    fn land_action_spent(&self, i: usize, t: usize) -> bool {
+        let st = &self.w.st;
+        st.land_acted && st.turn == i as i32 && st.landed == t as i32
     }
 
     // =============================================================== property
@@ -2690,7 +2710,7 @@ impl Cx<'_> {
     /// land, so a success uses up the turn's one action on it.
     pub(crate) fn build_landed(&mut self, i: usize, t: usize) -> Flow<bool> {
         let built = self.build(i, t)?;
-        if built {
+        if built && self.w.st.turn == i as i32 && self.w.st.landed == t as i32 {
             self.w.st.land_acted = true;
         }
         Ok(built)

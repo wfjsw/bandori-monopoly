@@ -190,7 +190,7 @@ export interface MatchState {
   timeLeft: number; baseTime: number; bonusTime: number;
   /** True while the acting seat's clock is held for an anim ack. */
   clockPaused?: boolean;
-  bought: boolean; built: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
+  landActed: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
   mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
   /** Per-tile deed-text speakers, in body-precedence order (optional: absent
