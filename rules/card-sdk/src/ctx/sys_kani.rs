@@ -1123,6 +1123,24 @@ pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
     kani_host::call_i32(Op::apply_redeem, [player_id, tile, amount, 0, 0, 0])
 }
 
+pub fn pay_buy(player_id: i32, tile: i32, amount: i32, kind: i32) -> i32 {
+    kani_host::call_i32(Op::pay_buy, [player_id, tile, amount, kind, 0, 0])
+}
+
+pub fn pay_build(player_id: i32, tile: i32, amount: i32) -> i32 {
+    kani_host::call_i32(Op::pay_build, [player_id, tile, amount, 0, 0, 0])
+}
+
+pub fn assign_deed(
+    player_id: i32,
+    tile: i32,
+    owner: i32,
+    houses: i32,
+    mortgaged: i32,
+) -> i32 {
+    kani_host::call_i32(Op::assign_deed, [player_id, tile, owner, houses, mortgaged, 0])
+}
+
 pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
     kani_host::call_i32(Op::card_text_mentions, [cp, cl, np, nl, 0, 0])
 }

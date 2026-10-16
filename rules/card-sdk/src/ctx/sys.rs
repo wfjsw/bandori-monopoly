@@ -624,6 +624,18 @@ extern "C-unwind" {
     pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_apply_redeem")]
     pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_pay_buy")]
+    pub fn pay_buy(player_id: i32, tile: i32, amount: i32, kind: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_pay_build")]
+    pub fn pay_build(player_id: i32, tile: i32, amount: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_assign_deed")]
+    pub fn assign_deed(
+        player_id: i32,
+        tile: i32,
+        owner: i32,
+        houses: i32,
+        mortgaged: i32,
+    ) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_card_text_mentions")]
     pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_card_prop")]

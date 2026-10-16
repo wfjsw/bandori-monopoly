@@ -203,6 +203,23 @@ pub enum Call {
     },
     /// `On::Redeem` -- the rule's redeem body (规则书 基础规则 6).
     Redeem { card: i32, player_id: i32, tile: i32 },
+    /// `On::Buy` -- the rule's buy body (v78). `kind` is the
+    /// [`card_sdk::abi::BuyKind`] wire value; `reason` is the source
+    /// (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction).
+    Buy {
+        card: i32,
+        player_id: i32,
+        tile: i32,
+        kind: i32,
+        reason: i32,
+    },
+    /// `On::Build` -- the rule's build body (v78).
+    Build {
+        card: i32,
+        player_id: i32,
+        tile: i32,
+        reason: i32,
+    },
 }
 
 impl Call {
@@ -218,6 +235,8 @@ impl Call {
             | Call::Settle { player_id, .. }
             | Call::Mortgage { player_id, .. }
             | Call::Redeem { player_id, .. } => player_id,
+            Call::Buy { player_id, .. } => player_id,
+            Call::Build { player_id, .. } => player_id,
         }
     }
 
@@ -231,6 +250,8 @@ impl Call {
             | Call::Settle { card, .. }
             | Call::Mortgage { card, .. }
             | Call::Redeem { card, .. } => card,
+            Call::Buy { card, .. } => card,
+            Call::Build { card, .. } => card,
         }
     }
 }
@@ -375,6 +396,32 @@ pub enum HostRequest {
         tile: i32,
         amount: i32,
     },
+    /// Pay the buy price through the money pipeline (`Cx::money` with
+    /// `PayKind::Buy`). `kind` is the [`card_sdk::abi::BuyKind`] wire value;
+    /// `allow_mortgage` is the Land/Agent funding arm. Answers the amount
+    /// actually paid (0 = refused / cancelled).
+    PayBuy {
+        player_id: i32,
+        tile: i32,
+        amount: i32,
+        kind: i32,
+    },
+    /// Pay the build cost through the money pipeline (`PayKind::Build`).
+    /// Answers the amount actually paid (0 = refused / cancelled).
+    PayBuild {
+        player_id: i32,
+        tile: i32,
+        amount: i32,
+    },
+    /// Write the deed after a buy (`purchase::assign_deed`). Mechanism only --
+    /// the tile rule already decided owner / houses / mortgaged.
+    AssignDeed {
+        player_id: i32,
+        tile: i32,
+        owner: i32,
+        houses: i32,
+        mortgaged: i32,
+    },
     /// Draw `n` cards. The engine runs the draw itself -- one card at
     /// a time, raising the per-draw points (`drewBefore` / `drawn` / `drew`) on
     /// each, so a `drewBefore` hook may replace a card of it -- and answers with
@@ -427,10 +474,23 @@ pub enum HostRequest {
     /// wire name, e.g. `PassReward` → `"the pass-reward trigger"`); `value` is the
     /// trigger's `value`. Answers 1 when the link settled, 0 when a
     /// counteraction cancelled it.
+    ///
+    /// v78: when `kind` is a filter (`TriggerKind::is_filter`), the host folds
+    /// the filter chain instead of opening a counteraction window. A
+    /// `FilterValue` kind (BuyAssign) carries the default deal in and answers
+    /// the packed rewritten deal (see `hostfns::pack_deal` / `unpack_deal`):
+    /// bit 0 = cancelled, bits 1-4 = houses, bit 5 = mortgaged, bits 6-31 =
+    /// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
     Raise {
         player_id: i32,
         kind: i32,
         value: i32,
+        /// BuyAssign filter deal (in): owner after (`i32::MIN` = unset).
+        deal_owner: i32,
+        /// BuyAssign filter deal (in): houses after.
+        deal_houses: i32,
+        /// BuyAssign filter deal (in): mortgaged after (0/1).
+        deal_mortgaged: i32,
     },
     /// Which option `player_id`'s AI would take among `tiles` on an agent offer
     /// (`ctx::ai_agent_choice`). Answers the index; `tiles.len()` = skip.
@@ -1219,6 +1279,8 @@ impl Ruleset {
             Call::Settle { .. } => info.entry(OnKind::Settle, None),
             Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
             Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
+            Call::Buy { .. } => info.entry(OnKind::Buy, None),
+            Call::Build { .. } => info.entry(OnKind::Build, None),
         };
         let Some(entry) = entry else {
             return Ok(Outcome::Done(world.clone()));
@@ -1230,6 +1292,7 @@ impl Ruleset {
             call,
             Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
                 | Call::Mortgage { .. } | Call::Redeem { .. }
+                | Call::Buy { .. } | Call::Build { .. }
         ) {
             let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
             let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
@@ -4170,6 +4233,34 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "apply_redeem",
         |mut c: C<W>, player_id: i32, tile: i32, amount: i32| -> Result<i32, Error> {
             hostfns::apply_redeem(&mut c, player_id, tile, amount).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "pay_buy",
+        |mut c: C<W>, player_id: i32, tile: i32, amount: i32, kind: i32| -> Result<i32, Error> {
+            hostfns::pay_buy(&mut c, player_id, tile, amount, kind).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "pay_build",
+        |mut c: C<W>, player_id: i32, tile: i32, amount: i32| -> Result<i32, Error> {
+            hostfns::pay_build(&mut c, player_id, tile, amount).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "assign_deed",
+        |mut c: C<W>,
+         player_id: i32,
+         tile: i32,
+         owner: i32,
+         houses: i32,
+         mortgaged: i32|
+         -> Result<i32, Error> {
+            hostfns::assign_deed(&mut c, player_id, tile, owner, houses, mortgaged)
+                .map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(

@@ -542,6 +542,8 @@ fn entry_of(info: &CardInfo, call: &Call, trigger_kind: TriggerKind) -> Option<i
         Call::Settle { .. } => info.entry(OnKind::Settle, None),
         Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
         Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
+        Call::Buy { .. } => info.entry(OnKind::Buy, None),
+        Call::Build { .. } => info.entry(OnKind::Build, None),
     }
 }
 
@@ -728,6 +730,8 @@ impl CardModules for NativeModules {
             | Call::Settle { .. }
             | Call::Mortgage { .. }
             | Call::Redeem { .. }
+            | Call::Buy { .. }
+            | Call::Build { .. }
         ) {
             let scope =
                 game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));

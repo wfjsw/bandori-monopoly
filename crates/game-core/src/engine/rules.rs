@@ -759,6 +759,28 @@ pub trait CardRules: Send + Sync {
         cx.redeem(player, tile);
         Ok(true)
     }
+
+    /// Run the tile rule's buy body (`On::Buy`) for `tile`.
+    /// `kind` is the buy kind; `reason` is the source (0 = settle offer,
+    /// 1 = card-driven, 2 = agent, 3 = acquire / auction). `true` when the
+    /// deed changed hands. The default is the engine's standing `Cx::buy`
+    /// (StubRules).
+    fn deed_buy(
+        &self,
+        cx: &mut super::Cx,
+        player: usize,
+        tile: usize,
+        kind: super::play::purchase::BuyKind,
+        _reason: i32,
+    ) -> super::Flow<bool> {
+        cx.buy(player, tile, kind)
+    }
+
+    /// Run the tile rule's build body (`On::Build`) for `tile`.
+    /// The default is the engine's standing `Cx::build` (StubRules).
+    fn deed_build(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
+        cx.build(player, tile)
+    }
 }
 
 /// Which status gate a [`CardRules::gate_open`] question is about.

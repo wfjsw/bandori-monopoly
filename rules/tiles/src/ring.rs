@@ -30,6 +30,8 @@ pub const RING: CardDef = CardDef::new(
     "tile:ring",
     &[
         On::Settle("", None, settle),
+        On::Buy("", None, buy),
+        On::Build("", None, build),
         On::Mortgage("", None, mortgage),
         On::Redeem("", None, redeem),
     ],
@@ -44,6 +46,16 @@ pub const RING: CardDef = CardDef::new(
 /// folded in as `buildMax = 0`. Dice rent is `prop::RENT_DICE_MULT` (see above).
 fn settle(player_id: i32) -> card_sdk::Asked {
     super::property::settle(player_id)
+}
+
+/// Same buy body as `tile:property`.
+fn buy(player_id: i32) -> card_sdk::Asked {
+    super::property::buy(player_id)
+}
+
+/// Same build body as `tile:property` (RiNG's `buildMax = 0` refuses it).
+fn build(player_id: i32) -> card_sdk::Asked {
+    super::property::build(player_id)
 }
 
 /// Same mortgage body as `tile:property`. RiNG carries `NO_MORTGAGE`, so the
@@ -61,6 +73,18 @@ fn redeem(player_id: i32) -> card_sdk::Asked {
 #[inline(always)]
 pub fn settle_kani(player_id: i32) -> card_sdk::Asked {
     settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn buy_kani(player_id: i32) -> card_sdk::Asked {
+    buy(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn build_kani(player_id: i32) -> card_sdk::Asked {
+    build(player_id)
 }
 
 #[cfg(kani)]

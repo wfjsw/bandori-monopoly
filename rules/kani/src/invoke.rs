@@ -164,6 +164,8 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
         | On::Settle(_, _, f)
         | On::Mortgage(_, _, f)
         | On::Redeem(_, _, f)
+        | On::Buy(_, _, f)
+        | On::Build(_, _, f)
         | On::Message(_, _, _, f) => *f,
         // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
         // through `filter_*_idx` / direct trampolines instead.
@@ -316,6 +318,8 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::Settle, On::Settle(..)) => true,
             (KindTag::Mortgage, On::Mortgage(..)) => true,
             (KindTag::Redeem, On::Redeem(..)) => true,
+            (KindTag::Buy, On::Buy(..)) => true,
+            (KindTag::Build, On::Build(..)) => true,
             (KindTag::Message, On::Message(..)) => true,
             _ => false,
         };
@@ -339,6 +343,8 @@ enum KindTag {
     Message,
     Mortgage,
     Redeem,
+    Buy,
+    Build,
     Other,
 }
 
@@ -432,6 +438,8 @@ fn kind_tag(kind: &str) -> KindTag {
     const MESSAGE: (u8, u64, u64) = tag_key_const("Message");
     const MORTGAGE: (u8, u64, u64) = tag_key_const("Mortgage");
     const REDEEM: (u8, u64, u64) = tag_key_const("Redeem");
+    const BUY: (u8, u64, u64) = tag_key_const("Buy");
+    const BUILD: (u8, u64, u64) = tag_key_const("Build");
     match tag_key(kind) {
         PLAY => KindTag::Play,
         COUNTERACT => KindTag::Counteract,
@@ -443,6 +451,8 @@ fn kind_tag(kind: &str) -> KindTag {
         MESSAGE => KindTag::Message,
         MORTGAGE => KindTag::Mortgage,
         REDEEM => KindTag::Redeem,
+        BUY => KindTag::Buy,
+        BUILD => KindTag::Build,
         _ => KindTag::Other,
     }
 }

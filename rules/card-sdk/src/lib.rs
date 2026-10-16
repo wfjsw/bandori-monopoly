@@ -581,6 +581,27 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
+    /// The rule's **buy body** -- what runs when the deed this rule instance
+    /// governs is bought (settle offer, card-driven `ctx::buy`, agent branch,
+    /// acquire / auction / card kinds). Same shape as [`On::Mortgage`]. The
+    /// body owns eligibility, the quote, and the order of steps (hooks, pay,
+    /// deed write, log); the engine keeps the money pipeline and deed write as
+    /// `ctx` primitives (`ctx::pay_buy`, `ctx::assign_deed`). Force-buy money
+    /// remains a direct transfer outside effects (规则书 其他规则 6).
+    Buy(
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
+    /// The rule's **build body** -- what runs when a house is built on the deed
+    /// this rule instance governs (规则书 「可选择[消耗]…进行升级建造」). Same
+    /// shape as [`On::Buy`]; the engine keeps the money pipeline and house
+    /// write as `ctx` primitives (`ctx::pay_build`, `ctx::add_house`).
+    Build(
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
     /// A **cross-card message** this card answers (`ctx::send`). First field
     /// is the list of message names it answers (empty is never dispatched).
     /// Same condition / residual guard / body shape as [`On::Action`]. The
@@ -621,6 +642,8 @@ impl On {
             On::Settle(_, g, r) => On::Settle(pre, g, r),
             On::Mortgage(_, g, r) => On::Mortgage(pre, g, r),
             On::Redeem(_, g, r) => On::Redeem(pre, g, r),
+            On::Buy(_, g, r) => On::Buy(pre, g, r),
+            On::Build(_, g, r) => On::Build(pre, g, r),
             On::Message(n, _, g, r) => On::Message(n, pre, g, r),
         }
     }
@@ -637,6 +660,8 @@ impl On {
             On::Settle(pre, _, r) => On::Settle(pre, None, r),
             On::Mortgage(pre, _, r) => On::Mortgage(pre, None, r),
             On::Redeem(pre, _, r) => On::Redeem(pre, None, r),
+            On::Buy(pre, _, r) => On::Buy(pre, None, r),
+            On::Build(pre, _, r) => On::Build(pre, None, r),
             On::Message(n, pre, _, r) => On::Message(n, pre, None, r),
             other => other,
         }
@@ -656,6 +681,8 @@ impl On {
             | On::Mortgage(_, g, _)
             | On::Redeem(_, g, _)
             | On::Message(_, _, g, _) => *g,
+            On::Buy(_, g, _)
+            | On::Build(_, g, _) => *g,
             _ => None,
         }
     }
@@ -674,6 +701,8 @@ impl On {
             | On::Mortgage(_, g, _)
             | On::Redeem(_, g, _)
             | On::Message(_, _, g, _) => g.is_some(),
+            On::Buy(_, g, _)
+            | On::Build(_, g, _) => g.is_some(),
         }
     }
 
@@ -691,6 +720,8 @@ impl On {
             | On::Mortgage(pre, _, _)
             | On::Redeem(pre, _, _)
             | On::Message(_, pre, _, _) => *pre,
+            On::Buy(pre, _, _)
+            | On::Build(pre, _, _) => *pre,
         }
     }
 
@@ -705,6 +736,8 @@ impl On {
             On::Settle(..) => abi::OnKind::Settle,
             On::Mortgage(..) => abi::OnKind::Mortgage,
             On::Redeem(..) => abi::OnKind::Redeem,
+            On::Buy(..) => abi::OnKind::Buy,
+            On::Build(..) => abi::OnKind::Build,
             On::Message(..) => abi::OnKind::Message,
         }
     }
@@ -856,10 +889,14 @@ mod tests {
         assert_eq!(abi::OnKind::Filter as i32, 11);
         assert_eq!(abi::OnKind::Mortgage as i32, 9);
         assert_eq!(abi::OnKind::Redeem as i32, 10);
+        assert_eq!(abi::OnKind::Buy as i32, 12);
+        assert_eq!(abi::OnKind::Build as i32, 13);
         assert_eq!(abi::OnKind::from_i32(3), Some(abi::OnKind::Action));
         assert_eq!(abi::OnKind::from_i32(9), Some(abi::OnKind::Mortgage));
         assert_eq!(abi::OnKind::from_i32(10), Some(abi::OnKind::Redeem));
         assert_eq!(abi::OnKind::from_i32(11), Some(abi::OnKind::Filter));
+        assert_eq!(abi::OnKind::from_i32(12), Some(abi::OnKind::Buy));
+        assert_eq!(abi::OnKind::from_i32(13), Some(abi::OnKind::Build));
         assert_eq!(abi::OnKind::from_i32(1), None);
         // Retired AtEnd = 4 / RollPlan = 5 / Gate = 6 -- never reuse.
         assert_eq!(abi::OnKind::from_i32(4), None);

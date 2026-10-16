@@ -190,6 +190,8 @@ pub fn on(
         | (On::Settle(_, guard, _), export::OP_GUARD)
         | (On::Mortgage(_, guard, _), export::OP_GUARD)
         | (On::Redeem(_, guard, _), export::OP_GUARD)
+        | (On::Buy(_, guard, _), export::OP_GUARD)
+        | (On::Build(_, guard, _), export::OP_GUARD)
         | (On::Message(_, _, guard, _), export::OP_GUARD) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
             // normally skips this call (`has_guard == false`). If it does ask,
@@ -253,6 +255,8 @@ pub fn on(
         | (On::Settle(_, _, run), _)
         | (On::Mortgage(_, _, run), _)
         | (On::Redeem(_, _, run), _)
+        | (On::Buy(_, _, run), _)
+        | (On::Build(_, _, run), _)
         | (On::Message(_, _, _, run), _) => match run(player_id) {
             Ok(()) => 0,
             // Asked: the host reads the published question and re-runs us with

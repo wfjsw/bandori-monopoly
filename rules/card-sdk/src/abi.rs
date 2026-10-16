@@ -565,7 +565,18 @@ use alloc::{string::String, vec::Vec};
 ///      `TriggerKind::is_filter()`. `OnKind::Gate = 6` is retired -- never
 ///      reuse. CEL-only status gates keep their native `admits_pre` /
 ///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 77;
+/// v78: **buy / build bodies** -- `OnKind::Buy` (12) / `OnKind::Build` (13)
+///      (`On::Buy` / `On::Build`, same pre/guard/body shape as
+///      `On::Mortgage` / `On::Redeem`). The body owns the order of steps,
+///      eligibility and the quote, and calls generic mechanism primitives
+///      (`ctx::raise` dispatching on `TriggerKind::is_filter`, `ctx::pay_buy` /
+///      `ctx::pay_build` through the money pipeline, `ctx::assign_deed`,
+///      `ctx::log`). `buyGate` is a `FilterFlag`, `buyAssign` a `FilterValue`
+///      (deal owner/houses/mortgaged); `buyBefore` / `bought` / `buyAfter` /
+///      `buildBefore` / `houseAdded` / `buildAfter` stay Actions. Force-buy
+///      money remains a direct transfer outside effects (规则书 其他规则 6).
+///      Ids 12/13, not 4/5/6 (retired) or 11 (`Filter`). SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 78;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -2290,6 +2301,17 @@ pub enum OnKind {
     /// guest's return convention). Kinds must be filter kinds. Id 11, not 9
     /// (9/10 are the v73 deed kinds).
     Filter = 11,
+    /// v78: a rule's **buy body** (`On::Buy(pre, guard, body)`) -- what runs
+    /// when the deed this rule instance governs is bought (settle offer,
+    /// card-driven `ctx::buy`, agent branch, acquire / auction / card kinds).
+    /// The body owns eligibility, the quote, and the order of steps; the
+    /// engine keeps the money pipeline and deed write as `ctx` primitives.
+    /// Force-buy stays a direct transfer outside effects (规则书 其他规则 6).
+    Buy = 12,
+    /// v78: a rule's **build body** (`On::Build(pre, guard, body)`) -- what
+    /// runs when a house is built on the deed this rule instance governs.
+    /// Same split as [`Self::Buy`].
+    Build = 13,
 }
 
 /// Small typed payload for [`crate::On::FilterValue`] (BuyAssign / RollPlan).
@@ -2366,6 +2388,8 @@ impl OnKind {
             9 => Self::Mortgage,
             10 => Self::Redeem,
             11 => Self::Filter,
+            12 => Self::Buy,
+            13 => Self::Build,
             _ => return None,
         })
     }
