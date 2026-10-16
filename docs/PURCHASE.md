@@ -3,6 +3,16 @@
 Status: **P0–P5 implemented, including the P5 deferred work** (2026-10-07).
 ABI 39 → 40 (surface) → 41 (removals). SAVE_VERSION 3 → 4.
 
+**2026-10-16: the settle is the only buy/build path.** The tile rule
+(`rules/tiles/src/property.rs` / `ring.rs`) offers buy / build / force-buy /
+pay-rent via `ctx::offer_buy` / `offer_build` / `offer_force_buy` / `pay_rent`.
+The END-step `act buy` / `act build` re-offer is gone (net acts are rejected
+with `err.buy_build_at_settle`); `st.buy_price` / `build_cost` /
+`can_buy_here` / `can_build_here` and the `land_acted` flag are removed. A
+settle offers exactly one of buy XOR build depending on owner, so
+「购买与建造二选一」 (基础[结算] item 8) is structural. Mortgage / redeem
+amounts live in `rules/tiles/src/deed.rs`.
+
 * The hook-aware `WasmRules::buy_quote` is wired: it runs `BuyGate` /
   `BuyAdd` → `BuyMul` → `BuySet` in **pure guard mode** against a world copy
   (the `cant_play` shape — no mutation, no prompt) only when a hooking instance
