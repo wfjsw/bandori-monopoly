@@ -198,7 +198,7 @@ return before the next raise, within a stage in placement order:
   `payTotalMul` → `payTotalCancel` → `payAdd` → `payMul` →
   `payChooseAsk` (Action) → `payChoose` → `payAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
-* roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `DiceRollValue`
+* roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window)
 * flip: `FlipEffect` (Filter) → counters move → `FlipAfter` (Action)
 
 Money rounds **up to a multiple of 10 once**, after every add/mul modifier
@@ -806,12 +806,12 @@ Every point the engine raises is a pair: a `*Before` half that fires before the
 thing happens (so a counteraction can block or rewrite it) and a `*After` half that
 fires after it commits. A few legacy kinds from the original port kept their
 original names where the pairing is already implied (`settleBefore` →
-`settle` → `settleAfter`, `pay` → `paid`, `roll` → `moveRoll`).
+`settle` → `settleAfter`, `pay` → `paid`, `diceRollBefore` → `diceRollResult`).
 
 | pair | when |
 |---|---|
 | `turnStartBefore` / `turnStart` | a turn begins -- before / after the exile & stun status ticks |
-| `roll` / `moveRoll` | the main roll -- before the d20 is cast / after it, before walking (a counteraction may reroll via `set_move_roll`) |
+| `diceRollBefore` / `diceRollResult` | the main roll -- before the d20 is cast / after it (after `diceRollAfter`, 行动阶段 10 「移动掷骰后」), before walking. `diceRollResult` is a [反击] counteraction window; a counteraction may reroll via `set_move_roll` |
 | `passBefore` / `pass` / `passTile` | each tile stepped over (CiRCLE and the destination) -- before / after the player arrives. `passTile` is the [经过] step (行动阶段 12); a 「被[经过]」 clause reads the tile being entered. `passPlayer` is the end-tile [重叠] only |
 | `moveBefore` / `moveAfter` | the move head / tail (ABI v43, `SETTLE-STAGES.md` §7). `moveBefore` fires once the plan is fixed and before the first step / the teleport -- counteractions that cancel or alter the move go here. `moveAfter` is 「移动后」/「主要移动结束时」/「[移动终点]」: after `passPlayer`, before `settleBefore`, for every completed move including a 「不触发结算」 one |
 | `settleBefore` / `settle` / `settleBody` / `settleAfter` | landing -- before resolving the tile / before its effect / the settle's effect list (a field card may replace it with 「将本次结算改为…」) / after it fully resolves |
@@ -831,8 +831,8 @@ original names where the pairing is already implied (`settleBefore` →
 | `deckBeforeGame` / `deckAtGameStart` | the two match-start points. `deckBeforeGame` = **before match start**, before the opening hands are drawn: start positions and the authoritative initial hand size (`ctx::inc_start_hand`, default 2, minimum 0) are decided here. `deckAtGameStart` = **after match start**, after the opening deal and mulligan: initial tokens/resources (fire pots 「初始N」, P✽P fans). Both dispatch to **every effect source** of the player they are raised for -- field cards including skills (per player, in field order) and the card ids in that player's piles/hands -- each source running its own hook with `t.card` naming it. There is no separate "match started" point; nothing in the pool wants "after positions are set, before the deal". |
 | `drewBefore` / `drawn` + `drew` | the per-draw points, **one raise per single card** (an N-card draw is N iterations, each payload naming one card). `drewBefore` is the *replacement* point: `t.card` is the deck's top, and a hook that replaces the draw calls `trigger::set_cancelled()` and performs its own look/pick -- whatever it adds to the hand is the replacement draw (「此次加手视为抽卡动作」) and the after points fire for it. After the card is in hand: `drawn` runs on the **drawn card itself** (C# `AfterDraw`), `drew` on the **field cards** (crystal-per-draw effects). Opening hands raise **none** of the three -- 「抽卡」 means a draw during play, and 朝同一片天空迈进's 「（开局时抽到此卡洗回）」 is a `deckAtGameStart` clause for exactly that reason. |
 
-`roll` carries `value = -1` as a "no roll yet" sentinel so roll-counteracting cards
-(which match `Roll | DiceRollValue`) stay dormant before the dice are cast.
+`diceRollBefore` carries `value = -1` as a "no roll yet" sentinel so roll-counteracting cards
+(which match `DiceRollBefore | DiceRollResult`) stay dormant before the dice are cast.
 
 ## Every line cites the rule book
 

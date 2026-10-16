@@ -302,7 +302,7 @@ fn m05_repaint_plus_half_speed() {
 // =====================================================================
 
 // 规则书: 若能再次交汇: 「持续进行移动掷骰直至[经过]下一名玩家（最多…超过原本移动终点的20格以后）」.
-// Faces are queued before `t.roll`: the moveRoll [反击] window is a pending
+// Faces are queued before `t.roll`: the diceRollResult [反击] window is a pending
 // routine, and `world_mut` (what `Table::dice` uses) is illegal under one.
 // The routine also replays from its start-time snapshot, so mid-window loads
 // would not reach the re-roll anyway.
@@ -538,7 +538,7 @@ fn m10_rinko_while_stunned() {
 // =====================================================================
 
 // 规则书: 同上 + Y.O.L.O. RULING: whether 「固定为X*6」 overrides later additions.
-// Drive: press (X prompt) → `t.roll` (fixed face) → Y.O.L.O [反击] on moveRoll.
+// Drive: press (X prompt) → `t.roll` (fixed face) → Y.O.L.O [反击] on diceRollResult.
 #[test]
 fn m11_rinko_plus_yolo() {
     let mut t = Table::new(&["白金燐子", "花园多惠"]);
@@ -564,7 +564,7 @@ fn m11_rinko_plus_yolo() {
             }
         }
     }
-    // The main move: the face is the fixed 12; Y.O.L.O may still add on moveRoll.
+    // The main move: the face is the fixed 12; Y.O.L.O may still add on diceRollResult.
     t.roll(0).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };

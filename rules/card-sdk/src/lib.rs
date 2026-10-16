@@ -629,7 +629,7 @@ impl On {
     /// builder so a declaration can stay a one-liner:
     ///
     /// ```ignore
-    /// On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract).pre(pre::MINE)
+    /// On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract).pre(pre::MINE)
     /// ```
     pub const fn pre(self, pre: &'static str) -> Self {
         match self {
@@ -846,6 +846,7 @@ mod tests {
             TriggerKind::Pass,
             TriggerKind::PayAfter,
             TriggerKind::DiceRollAfter,
+            TriggerKind::DiceRollResult, // [反击] window, not a filter
             TriggerKind::SettleBody,
             TriggerKind::CounterChanged,
             TriggerKind::DrewBefore,

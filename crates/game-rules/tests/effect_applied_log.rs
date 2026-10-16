@@ -172,7 +172,7 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::PayTotalMul,
         TriggerKind::PayTotalCancel,
         TriggerKind::DiceRollBefore,
-        TriggerKind::MoveRoll,
+        TriggerKind::DiceRollResult,
         TriggerKind::DiceRollAfter,
         TriggerKind::TurnStart,
         TriggerKind::TurnStartBefore,

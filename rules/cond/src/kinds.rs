@@ -22,7 +22,7 @@
 pub mod trig {
     pub const DiceRollBefore: i64 = 1;
     pub const DiceRollValue: i64 = 102;
-    pub const MoveRoll: i64 = 2;
+    pub const DiceRollResult: i64 = 2;
     pub const TurnStart: i64 = 3;
     pub const Pass: i64 = 4;
     pub const PassPlayer: i64 = 5;
@@ -95,7 +95,7 @@ pub const TELEPORT_TRIGGER: i64 = trig::Teleport;
 pub fn constants() -> &'static [(&'static str, i64)] {
     &[
         ("DiceRollBefore", trig::DiceRollBefore),
-        ("MoveRoll", trig::MoveRoll),
+        ("DiceRollResult", trig::DiceRollResult),
         ("DiceRollValue", trig::DiceRollValue),
         ("TurnStart", trig::TurnStart),
         ("Pass", trig::Pass),

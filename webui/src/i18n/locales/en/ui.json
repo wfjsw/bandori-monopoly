@@ -17,7 +17,7 @@
   "anim.chainSrc.card": "Card",
   "anim.chainSrc.skill": "Skill",
   "anim.chainKind.diceRollBefore": "Dice roll",
-  "anim.chainKind.moveRoll": "Move roll",
+  "anim.chainKind.diceRollResult": "Move roll",
   "anim.chainKind.turnStart": "Turn start",
   "anim.chainKind.pass": "Pass",
   "anim.chainKind.passPlayer": "Pass player",

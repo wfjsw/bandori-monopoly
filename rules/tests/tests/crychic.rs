@@ -202,7 +202,7 @@ fn haruhikage_counteracts_a_rent_payment() {
     assert_eq!(t.money(0), 10_000, "the payee received nothing");
 }
 
-/// 规则书（2）: the MoveRoll branch is 椎名立希（CRYCHIC）'s reroll -- still offered
+/// 规则书（2）: the DiceRollResult branch is 椎名立希（CRYCHIC）'s reroll -- still offered
 /// and playable on the owner's own move roll.
 #[test]
 fn haruhikage_counteracts_a_move_roll() {
@@ -220,7 +220,7 @@ fn haruhikage_counteracts_a_move_roll() {
 }
 
 /// 规则书（2）: the SettleBefore branch is 丰川祥子（CRYCHIC）'s step-toward --
-/// still offered when a player to step toward is within 5. The MoveRoll window
+/// still offered when a player to step toward is within 5. The DiceRollResult window
 /// opens first on the same roll; decline it so the settle window is the one
 /// being tested.
 #[test]
@@ -233,7 +233,7 @@ fn haruhikage_counteracts_settle_before() {
     t.set_pos(1, 3); // within 5
     t.dice(&[1]);
     t.roll(0).unwrap();
-    // Two [反击] windows on this roll: moveRoll first, then settleBefore.
+    // Two [反击] windows on this roll: diceRollResult first, then settleBefore.
     let mut saw_move_roll = false;
     let mut saw_settle = false;
     while let Some(_) = t.prompt() {
@@ -251,7 +251,7 @@ fn haruhikage_counteracts_settle_before() {
             t.decline();
         }
     }
-    assert!(saw_move_roll, "the moveRoll window came up first: {:?}", t.recent_keys(20));
+    assert!(saw_move_roll, "the diceRollResult window came up first: {:?}", t.recent_keys(20));
     assert!(saw_settle, "the settleBefore window came up: {:?}", t.recent_keys(20));
     assert_eq!(t.pos(0), 2, "stepped one tile toward P1: keys={:?}", t.recent_keys(15));
 }

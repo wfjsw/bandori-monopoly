@@ -45,7 +45,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::PassPlayer => Msg::new("log.why.pass_player")
             .player_id("who", who)
             .player_id("target", target),
-        TriggerKind::DiceRollBefore | TriggerKind::MoveRoll | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue => {
+        TriggerKind::DiceRollBefore | TriggerKind::DiceRollResult | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue => {
             Msg::new("log.why.roll")
                 .player_id("who", who)
                 .i("value", value)

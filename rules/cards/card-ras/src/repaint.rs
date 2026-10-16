@@ -12,7 +12,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
     &[On::Counteract(
-        &[ChainKind::MoveRoll],
+        &[ChainKind::DiceRollResult],
         "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0",
         None,
         counteract,
@@ -29,7 +29,7 @@ pub const REPAINT: CardDef = CardDef::new(
 ///
 /// 规则书: 「X为对方原本预计路径上你拥有的格子数」
 ///
-/// The moveRoll trigger only fires from the engine's `MainMove`, which always
+/// The diceRollResult trigger only fires from the engine's `MainMove`, which always
 /// walks forward (`Move.dir = 1`), so the planned path is `1..=roll` steps ahead
 /// of the mover's pre-move tile (C# `m.Dir * i`).
 fn on_path(me: i32, them: i32, roll: i32) -> i32 {

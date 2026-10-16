@@ -759,7 +759,7 @@ impl Cx<'_> {
                         None => self.roll_tables(&plan),
                     };
                     // v79: DiceRollValue is the pure roll-reshape stage;
-                    // DiceRollAfter is the Action event; MoveRoll is the
+                    // DiceRollAfter is the Action event; DiceRollResult is the
                     // [反击] reroll window (unchanged).
                     let t = raise!(self, "diceRollValue", i, @m plan, value = plan.roll)?;
                     plan.roll = t.value.max(0);
@@ -767,7 +767,7 @@ impl Cx<'_> {
                     if t.value != plan.roll {
                         plan.roll = t.value.max(0);
                     }
-                    let t = raise!(self, "moveRoll", i, @m plan, value = plan.roll)?;
+                    let t = raise!(self, "diceRollResult", i, @m plan, value = plan.roll)?;
                     plan.roll = t.value.max(0);
                     if let Some(steps) = self.w.hidden[i].next_steps.take() {
                         plan.roll = steps.max(0);
@@ -775,7 +775,7 @@ impl Cx<'_> {
                     if !plan.signed {
                         plan.roll = plan.roll.max(plan.min_roll);
                     }
-                    // A `rollAfter` / `moveRoll` body may have cleared resolve
+                    // A `rollAfter` / `diceRollResult` body may have cleared resolve
                     // on the turn plan (`plan::set_resolve(false)`, e.g.
                     // 不要背负期待's 「如果为0则此次移动不[结算]」). The plan is
                     // never reset between moves, so only pull the *clear*
@@ -861,7 +861,7 @@ impl Cx<'_> {
     }
 
     /// Sum the move's dice tables into one face, without the
-    /// `rollAfter` / `moveRoll` raise points. A card that re-rolls an in-flight
+    /// `rollAfter` / `diceRollResult` raise points. A card that re-rolls an in-flight
     /// move (「放弃第一次的结果重骰一次」) is usually *inside* one of those hooks,
     /// so re-raising them would recurse; the plain table roll is what it wants.
     pub fn do_move_roll(&mut self, plan: &Move) -> i32 {
@@ -1201,7 +1201,7 @@ impl Cx<'_> {
             // `roll` (pre) -- before the d20 is cast. `value = -1` is the
             // sentinel meaning "no roll yet": the bridge would otherwise
             // derive `move_roll` from `value` and let roll-counteracting cards
-            // (which match `Roll | MoveRoll`) run before any dice exist.
+            // (which match `DiceRollBefore | DiceRollResult`) run before any dice exist.
             raise!(self, "diceRollBefore", i, @m m, value = -1)?;
             if self.out(i) || !self.playing() {
                 self.w.st.step = stage::END;
@@ -1210,7 +1210,7 @@ impl Cx<'_> {
         }
         if !self.out(i) {
             // `rollPlan` -- every placed card's `On::RollPlan` shapes the move
-            // before the dice (DiceRollPlan -> roll -> DiceRollAfter -> the moveRoll
+            // before the dice (DiceRollPlan -> roll -> DiceRollAfter -> the diceRollResult
             // counteraction window).
             //
             // The card bodies shape `TurnCtx::plan` (that is what the `World`
@@ -1250,7 +1250,7 @@ impl Cx<'_> {
                     None => self.roll_tables(&m),
                 };
                 // v79: DiceRollValue is the pure roll-reshape stage;
-                // DiceRollAfter is the Action event; MoveRoll is the
+                // DiceRollAfter is the Action event; DiceRollResult is the
                 // [反击] reroll window (unchanged).
                 let t = raise!(self, "diceRollValue", i, @m m, value = m.roll)?;
                 m.roll = t.value.max(0);
@@ -1258,7 +1258,7 @@ impl Cx<'_> {
                 if t.value != m.roll {
                     m.roll = t.value.max(0);
                 }
-                let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
+                let t = raise!(self, "diceRollResult", i, @m m, value = m.roll)?;
                 m.roll = t.value.max(0);
                 // A stored step count (`next_steps`) overrides the roll for this
                 // one main move.
@@ -1271,7 +1271,7 @@ impl Cx<'_> {
                 if !m.signed {
                     m.roll = m.roll.max(m.min_roll);
                 }
-                // A `rollAfter` / `moveRoll` body may have cleared resolve on
+                // A `rollAfter` / `diceRollResult` body may have cleared resolve on
                 // the turn plan (`plan::set_resolve(false)`, e.g. 不要背负期待's
                 // 「如果为0则此次移动不[结算]」). Only pull the clear direction --
                 // the plan is sticky and a stale `true` must not revive a move
@@ -1312,7 +1312,7 @@ impl Cx<'_> {
             // after the mover has settled, in the order the card added them.
             // The replay carries the same plan -- steps / kind / destination /
             // `pay_factor` -- so 「触发结算时进行的支付价格减半」 reaches them too.
-            // No `roll` / `rollPlan` / `rollAfter` / `moveRoll`: the result is
+            // No `roll` / `rollPlan` / `rollAfter` / `diceRollResult`: the result is
             // already resolved, this is the same move re-executed.
             let followers = std::mem::take(&mut m.followers);
             for &f in &followers {
@@ -1420,7 +1420,7 @@ impl Cx<'_> {
         // the walk pulls the write in below.
         //
         // The plan (`turn.plan`) is the authoritative move *shape* -- cards
-        // write it both before the walk (a `moveRoll` counteraction's
+        // write it both before the walk (a `diceRollResult` counteraction's
         // `set_pay_factor`) and inside this window. Fold the window's writes
         // into the running move; do **not** copy `m` over the plan, which would
         // wipe the earlier ones (`scale_settle_payment` reads the plan's
@@ -4532,7 +4532,7 @@ impl Cx<'_> {
     }
 
     /// Build-and-raise a [`Trigger`], returning it as [`Self::counteract`] left it so
-    /// a counteraction's rewrite of a field (e.g. `moveRoll`'s reroll) can be read
+    /// a counteraction's rewrite of a field (e.g. `diceRollResult`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
     fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
         self.counteract(&mut t)?;

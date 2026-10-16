@@ -21,12 +21,12 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         On::Counteract(
             &[
                 ChainKind::Effect,
-                ChainKind::MoveRoll,
+                ChainKind::DiceRollResult,
                 ChainKind::SettleBefore,
             ],
             // Per-kind applicability as a disjunction. The SettleBefore arm
             // carries the within-5 scan (丰川祥子 needs a player to step toward).
-            "(kind == MoveRoll && actor == owner && move.roll != null) \
+            "(kind == DiceRollResult && actor == owner && move.roll != null) \
              || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
                  && target == owner && tile.id >= 0 && value > 0)",
@@ -164,7 +164,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        TriggerKind::MoveRoll => reroll_skill(player_id),
+        TriggerKind::DiceRollResult => reroll_skill(player_id),
         TriggerKind::SettleBefore => step_toward_skill(player_id)?,
         // 规则书（2）[反击]: the payment window is the `effect` chain whose link
         // declares a `Pay` (`TriggerKind::Effect` -- `Pay` itself is the post-chain

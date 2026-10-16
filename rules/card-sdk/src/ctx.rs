@@ -2509,7 +2509,7 @@ pub mod trigger {
 
     /// `t.Move` -- how the move that caused this trigger got there:
     /// `None` when the move did not cause it. Present on
-    /// `moveRoll` / `pass` / `settleBefore` / `settle` / `settleAfter` raised
+    /// `diceRollResult` / `pass` / `settleBefore` / `settle` / `settleAfter` raised
     /// while a player is moving. A walk enters every tile it steps on; a teleport
     /// enters only its destination.
     pub fn move_kind() -> Option<MoveKind> {
@@ -2586,7 +2586,7 @@ pub mod trigger {
         (v >= 0).then_some(v)
     }
 
-    /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from, as a
+    /// `t.Roll.Source` -- where a `diceRollBefore` / `diceRollResult` face came from, as a
     /// [`crate::abi::roll_source`] code (`0` = unattributed, `1` = a fire pot,
     /// `2` = a card, `3` = a skill). 「当你使用火罐进行掷骰时」 reads this.
     /// [`crate::abi::roll_source::NONE`] on every non-roll trigger.
@@ -2848,7 +2848,7 @@ pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
 }
 
 /// Sum the planned move's dice tables into one face. The
-/// `rollAfter` / `moveRoll` hooks are **not** raised: a re-roll is usually being
+/// `rollAfter` / `diceRollResult` hooks are **not** raised: a re-roll is usually being
 /// requested from inside one of them, and re-raising would recurse.
 pub fn do_move_roll(player_id: i32) -> i32 {
     unsafe { sys::do_move_roll(player_id) }

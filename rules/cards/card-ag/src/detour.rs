@@ -19,7 +19,7 @@ pub const DETOUR: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
         // G4: kind (DiceRollValue) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
-        On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null && move.kind != Teleport", None, counteract),
+        On::Counteract(&[ChainKind::DiceRollResult], "actor == owner && move.roll != null && move.kind != Teleport", None, counteract),
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
@@ -114,7 +114,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the counteraction path only reverses
     // the in-flight move and drops the CiRCLE reward (C#
     // `move.Reverse = !move.Reverse; move.NoCircleReward = true` on the
-    // trigger's in-flight move). `moveRoll` runs before `walk`, so the plan is
+    // trigger's in-flight move). `diceRollResult` runs before `walk`, so the plan is
     // still live and `ctx::plan::*` is the write.
     // TODO(规则书)[judgement]: which 「afterglow」 plan the counter is. The C# logs
     //   this one 「羽泽鸫式」 while implementing 美竹兰's reverse; 羽泽鸫's （2） also

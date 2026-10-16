@@ -596,7 +596,21 @@ use alloc::{string::String, vec::Vec};
 ///      Ids 12/13, not 4/5/6 (retired) or 11 (`Filter`). Renumbered once past
 ///      the v79 DiceRoll* rename (the buy/build branch also claimed v79).
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 80;
+/// v81: **`MoveRoll` kind renamed to `DiceRollResult`** (numeric id 2 unchanged).
+///      Completes the v79 `DiceRoll*` family: `MoveRoll(2) -> DiceRollResult`
+///      so every roll kind shares the `DiceRoll*` prefix
+///      (`DiceRollBefore(1)` / `DiceRollResult(2)` / `DiceRollPlan(67)` /
+///      `DiceRollAfter(49)` / `DiceRollValue(102)`). Wire name changes too
+///      (`moveRoll` -> `diceRollResult`) -- that string rides logs, the CEL
+///      kind vocabulary (`kind == DiceRollResult`), and `anim.chainKind.*`
+///      locales, so this is a version bump. Hard rename: no aliases (old
+///      records replay on archived engines). Still a [反击] ChainKind
+///      (counteraction window), NOT an Action/Filter kind and still absent
+///      from `TriggerKind::is_filter()`. The host/ctx API names
+///      `set_move_roll` / `do_move_roll` / `trigger::move_roll` / CEL
+///      `move_roll` are **not** kind names and are unchanged.
+///      SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 81;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1068,8 +1082,8 @@ pub mod prop {
     pub const COLOR_FOR_PREFIX: &str = "colorFor:";
 }
 
-/// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from. Read by
-/// 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `roll` / `moveRoll`
+/// `t.Roll.Source` -- where a `diceRollBefore` / `diceRollResult` face came from. Read by
+/// 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `diceRollBefore` / `diceRollResult`
 /// trigger carries one; every other trigger reads [`roll_source::NONE`].
 pub mod roll_source {
     /// Unattributed (the engine's own move roll, or a roll with no named source).
@@ -1339,14 +1353,18 @@ impl TriggerKind {
 
     /// The main move's pre-roll point (行动阶段 8 「移动掷骰前」) -- raised before
     /// the d20 is cast, with `value = -1` as a "no roll yet" sentinel so a
-    /// counter matching [`Self::DiceRollBefore`] / [`Self::MoveRoll`] stays dormant before
+    /// counter matching [`Self::DiceRollBefore`] / [`Self::DiceRollResult`] stays dormant before
     /// the dice exist. Payload: `@m` the move.
     pub const DiceRollBefore: Self = Self(1);
 
-    /// The move roll resolved (行动阶段 9–10 「移动掷骰时/后」) -- after the dice,
-    /// before the walk. `value` is the face; a counteraction may reroll it with
-    /// `set_move_roll` (`t.value` is read back). Payload: `@m` the move.
-    pub const MoveRoll: Self = Self(2);
+    /// ChainKind (counteraction window) · after the dice landed and after [`Self::DiceRollAfter`] (行动阶段 10 「移动掷骰后」), before the walk · payload `@m` the move, `value` = the face · may prompt and reroll via `set_move_roll`
+    ///
+    /// [反击] counteraction window for the main move roll. NOT an Action/Filter
+    /// kind -- never listed in [`Self::is_filter`]. A counteraction may reroll
+    /// the face with `set_move_roll` (`t.value` is read back). Sibling kinds:
+    /// [`Self::DiceRollBefore`] (1), [`Self::DiceRollPlan`] (67),
+    /// [`Self::DiceRollAfter`] (49), [`Self::DiceRollValue`] (102 filter).
+    pub const DiceRollResult: Self = Self(2);
 
     /// A turn begins (行动阶段 2 「回合开始时」) -- after the exile/stun status
     /// ticks, so a hook sees the turn as it opens. `turnStartBefore` is the
@@ -1741,7 +1759,7 @@ impl TriggerKind {
     /// not -- once the move's plan is fixed and before the first step / the
     /// teleport. This is where a counteraction cancels or alters the move
     /// (`SETTLE-STAGES.md` §7 「移动前」). The roll-specific `rollPlan` /
-    /// `moveRoll` and the teleport-specific `teleport` stay inside a main move's
+    /// `diceRollResult` and the teleport-specific `teleport` stay inside a main move's
     /// own head; this is the generic move point.
     /// For a walk, `value` is the resolved base distance and `move_total` /
     /// `move_remaining` include existing extra steps, before any are walked.
@@ -1904,7 +1922,7 @@ impl TriggerKind {
         match self.0 {
             0 => "",
             1 => "diceRollBefore",
-            2 => "moveRoll",
+            2 => "diceRollResult",
             3 => "turnStart",
             4 => "pass",
             5 => "passPlayer",
@@ -2021,7 +2039,7 @@ impl TriggerKind {
         }
         match s {
             "diceRollBefore" => Self(1),
-            "moveRoll" => Self(2),
+            "diceRollResult" => Self(2),
             "turnStart" => Self(3),
             "pass" => Self(4),
             "passPlayer" => Self(5),

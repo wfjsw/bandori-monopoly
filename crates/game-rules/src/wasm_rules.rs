@@ -6439,7 +6439,7 @@ impl<M: CardModules> RulesBridge<M> {
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
         trigger_kind(t.kind),
-        TriggerKind::MoveRoll | TriggerKind::DiceRollBefore | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue
+        TriggerKind::DiceRollResult | TriggerKind::DiceRollBefore | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue
     );
     // Only a move trigger carries a roll; `paid`/`settle` carry value as an
     // amount, which must not read as a phantom move. `DiceRollAfter` is the
@@ -7722,7 +7722,7 @@ fn describe_trigger(t: &Trigger) -> Msg {
     let mut m = match t.kind {
         // A play (L1) or a declared counter -- both are `card` links.
         TriggerKind::Card if !card.is_empty() => Msg::new("ask.counteract.detail.play"),
-        TriggerKind::MoveBefore | TriggerKind::MoveAfter | TriggerKind::DiceRollBefore | TriggerKind::MoveRoll => {
+        TriggerKind::MoveBefore | TriggerKind::MoveAfter | TriggerKind::DiceRollBefore | TriggerKind::DiceRollResult => {
             Msg::new("ask.counteract.detail.move")
         }
         // The counteraction key for a payment / a targeted effect is `effect`

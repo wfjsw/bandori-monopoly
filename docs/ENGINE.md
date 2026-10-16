@@ -299,7 +299,7 @@ Every move -- walk or teleport, main or card-driven, settling or not -- runs
 the same tail. The plan (`turn.plan`) is the authoritative move *shape*; the
 running `MoveCtx` carries the engine's run fields. `moveBefore` folds only the
 window's plan writes into the run (`fold_plan_delta`), never the other way
-round (a blanket copy would wipe a `moveRoll` counteraction's `pay_factor`).
+round (a blanket copy would wipe a `diceRollResult` counteraction's `pay_factor`).
 
 ```
 moveBefore         「移动前」  plan fixed, nothing walked. Counteractions that

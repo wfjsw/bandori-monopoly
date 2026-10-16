@@ -192,7 +192,7 @@ impl TriggerPay {
     }
 }
 
-/// Where a `roll` / `moveRoll` face came from (「when you roll using charge pots」).
+/// Where a `diceRollBefore` / `diceRollResult` face came from (「when you roll using charge pots」).
 /// Mirrors `card_sdk::abi::roll_source`'s codes; the guest ABI still sees the
 /// `i32`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -309,7 +309,7 @@ pub struct Trigger {
     /// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on
     /// every other kind.
     pub buy: Option<TriggerBuy>,
-    /// Where a `roll` / `moveRoll` face came from. [`RollSource::Unattributed`]
+    /// Where a `diceRollBefore` / `diceRollResult` face came from. [`RollSource::Unattributed`]
     /// on every non-roll trigger.
     pub roll_source: RollSource,
     /// How a counter invalidated this link. The effect body is skipped when this
@@ -434,7 +434,7 @@ impl Trigger {
 /// any `field = value` overrides.
 ///
 /// The result is the trigger as `raise` left it, so a counteraction that rewrites a
-/// field (e.g. `moveRoll`'s reroll) can read it back:
+/// field (e.g. `diceRollResult`'s reroll) can read it back:
 ///
 /// ```ignore
 /// raise!(self, "passBefore", i, @m m, tile = next)?;

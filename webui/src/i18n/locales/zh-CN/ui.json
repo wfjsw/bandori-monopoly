@@ -17,7 +17,7 @@
   "anim.chainSrc.card": "卡牌",
   "anim.chainSrc.skill": "技能",
   "anim.chainKind.diceRollBefore": "掷骰",
-  "anim.chainKind.moveRoll": "移动掷骰",
+  "anim.chainKind.diceRollResult": "移动掷骰",
   "anim.chainKind.turnStart": "回合开始",
   "anim.chainKind.pass": "经过",
   "anim.chainKind.passPlayer": "经过玩家",

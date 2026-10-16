@@ -1224,7 +1224,7 @@ or A/B items that need a wider surface than this batch:
   (`q4_soak`, `q4_print_coverage_section`).
 * **MOVE-04 (2026-10-10, test-harness sequencing):** `m06_reunion_20_tile_cap`
   / `m06b_reunion_stops_on_passing` un-ignored. The `world_mut` panic was
-  `Table::dice` after `t.roll` (the `moveRoll` [反击] window is a pending
+  `Table::dice` after `t.roll` (the `diceRollResult` [反击] window is a pending
   routine). Faces must be queued before `t.roll` — routines replay from their
   start-time snapshot. Card / `do_move_roll` / `set_move_roll` unchanged.
 * **MOVE-02 (2026-10-10, test drive shape):** `m10_rinko_while_stunned` /

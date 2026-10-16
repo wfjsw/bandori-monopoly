@@ -542,7 +542,7 @@ macro_rules! ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::DiceRollResult], "", Some(can_counteract), counteract)]);
 /// card_sdk::ruleset_card!(CARD);
 /// ```
 #[macro_export]

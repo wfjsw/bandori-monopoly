@@ -25,7 +25,7 @@ fn loads_and_validates() {
         "official cards ship in family modules"
     );
     assert!(
-        r.cards()[yolo as usize].counteracts_to(TriggerKind::MoveRoll)
+        r.cards()[yolo as usize].counteracts_to(TriggerKind::DiceRollResult)
             && !r.cards()[yolo as usize].has_play()
     );
     assert!(r.cards()[hagumi as usize].has_play());
@@ -142,7 +142,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
     );
 
     world.trigger = Trigger {
-        kind: TriggerKind::MoveRoll,
+        kind: TriggerKind::DiceRollResult,
         // 「**你的**掷骰结算前」 -- the user's own roll (sheet revision).
         player_id: 0,
         mv: Some(game_rules::TriggerMove {

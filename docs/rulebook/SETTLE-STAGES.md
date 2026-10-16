@@ -332,7 +332,7 @@ teleport.
 moveBefore         **NEW**       「移动前」 -- the move is planned (kind, start,
                                  steps / destination known), nothing walked yet.
                                  Counteractions that cancel or alter the move go
-                                 here (diceRollPlan / moveRoll stay the roll-specific
+                                 here (diceRollPlan / diceRollResult stay the roll-specific
                                  points inside a main move's roll).
 
 -- movement tail (every completed move: walk or teleport, settle or not) --

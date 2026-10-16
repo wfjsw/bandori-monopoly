@@ -55,7 +55,7 @@ pub struct Trigger {
     pub pay: Option<TriggerPay>,
     /// The purchase a buy trigger is about (`docs/PURCHASE.md`).
     pub buy: Option<TriggerBuy>,
-    /// Where a `roll` / `moveRoll` face came from.
+    /// Where a `diceRollBefore` / `diceRollResult` face came from.
     pub roll_source: game_core::engine::rules::RollSource,
     /// How a counter invalidated this link -- see [`game_core::engine::rules::Negation`].
     pub negation: game_core::engine::rules::Negation,
