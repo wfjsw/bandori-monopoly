@@ -180,6 +180,7 @@ pub mod sakiko_life;
 use sakiko_life::SAKIKO_LIFE;
 pub mod taki_crychic;
 use taki_crychic::TAKI_CRYCHIC;
+pub mod persona;
 pub mod roster_table;
 
 // The 规则书 text for these is a Google Sheet (see `skill-rulebook-sheets` in
