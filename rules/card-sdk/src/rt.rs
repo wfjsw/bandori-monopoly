@@ -9,7 +9,27 @@ use crate::{CardDef, On};
 
 /// The card manifest, `postcard`-encoded (ABI v5 -- the guest hand-writes no
 /// JSON at all: messages and manifests both travel as serde bytes).
+///
+/// ABI v73: kind/variant agreement is enforced here at ruleset build --
+/// a `On::Filter` may only list filter kinds and a `On::Action` only
+/// non-filter kinds ([`crate::On::check_kind_variant`]).
 pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
+    for band in bands {
+        for c in band.iter() {
+            for (ei, o) in c.on.iter().enumerate() {
+                if let Err(code) = o.check_kind_variant() {
+                    panic!(
+                        "ruleset build: {} entry {ei} kind {code} does not match {} (see TriggerKind::is_filter)",
+                        c.id,
+                        match o.kind() {
+                            crate::abi::OnKind::Filter => "On::Filter",
+                            _ => "On::Action",
+                        }
+                    );
+                }
+            }
+        }
+    }
     let entries: Vec<ManifestEntry> = bands
         .iter()
         .flat_map(|band| band.iter())
@@ -163,7 +183,8 @@ pub fn on(
     };
     match (*o, op) {
         (On::Counteract(_, _, guard, _), export::OP_GUARD)
-        | (On::Hook(_, _, guard, _), export::OP_GUARD)
+        | (On::Action(_, _, guard, _), export::OP_GUARD)
+        | (On::Filter(_, _, guard, _), export::OP_GUARD)
         | (On::Gate(_, _, guard, _), export::OP_GUARD)
         | (On::RollPlan(_, guard, _), export::OP_GUARD)
         | (On::AtEnd(_, guard, _), export::OP_GUARD)
@@ -191,7 +212,8 @@ pub fn on(
         },
         (On::Counteract(_, _, _, run), _)
         | (On::Play(_, _, run), _)
-        | (On::Hook(_, _, _, run), _)
+        | (On::Action(_, _, _, run), _)
+        | (On::Filter(_, _, _, run), _)
         | (On::Gate(_, _, _, run), _)
         | (On::AtEnd(_, _, run), _)
         | (On::Settle(_, _, run), _)

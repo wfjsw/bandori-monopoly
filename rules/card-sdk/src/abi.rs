@@ -525,7 +525,18 @@ use alloc::{string::String, vec::Vec};
 ///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
 ///      exclusive gate and `persona_is` see the new identity; skills are
 ///      swapped separately. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 72;
+/// v73: **Action / Filter split** (WordPress `do_action` / `apply_filters`).
+///      `On::Hook` is removed (no alias). `OnKind::Hook = 3` is renamed
+///      `OnKind::Action` and **keeps id 3** (old compiled modules stay
+///      loadable). New `OnKind::Filter = 9` carries the modifier-pipeline /
+///      value-shaping kinds (`TriggerKind::is_filter`: PayAdd / PayMul /
+///      PayChoose / PayAt / PayTotal* / BuyAdd / BuyMul / BuySet / BuyAssign /
+///      ChargePaying / FlipEffect / RollPlan / MoveRoll / TurnBaseTime /
+///      TurnBonusTime). A Filter may only list filter kinds and an Action only
+///      non-filter kinds; the check runs at ruleset build (`On::check_kind_variant`).
+///      Phase 1 keeps the old `fn(i32) -> Asked` body shape and the same host
+///      dispatch path -- behaviour is identical to v72. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 73;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1745,6 +1756,39 @@ impl TriggerKind {
         self.0
     }
 
+    /// Is this a **filter** kind (ABI v73)? Filter kinds are modifier-pipeline
+    /// / value-shaping stages whose result the host folds back (pay amount,
+    /// buy price, turn clock, roll plan, flip count, charge-cost substitute).
+    /// `On::Filter` may only list these; `On::Action` only non-filter kinds.
+    ///
+    /// Single source of truth -- everything else (ruleset-build validation,
+    /// host, docs) reads this. Deferred (not filter today): the pure decision
+    /// gates `AbnormalGuard` / `ImmuneAll` / `Untargetable` / `Redirect` /
+    /// `BuyGate` (see docs/CARDS.md).
+    pub const fn is_filter(self) -> bool {
+        matches!(
+            self,
+            Self::MoveRoll
+                | Self::PayChoose
+                | Self::PayAdd
+                | Self::PayMul
+                | Self::PayAt
+                | Self::RollPlan
+                // ChargePaying (78) -- cost substitute; id lives in ruleset-core.
+                | Self(78)
+                | Self::BuyAdd
+                | Self::BuyMul
+                | Self::BuySet
+                | Self::BuyAssign
+                | Self::PayTotalAdd
+                | Self::PayTotalMul
+                | Self::PayTotalCancel
+                | Self::FlipEffect
+                | Self::TurnBonusTime
+                | Self::TurnBaseTime
+        )
+    }
+
     /// Any code is a valid opaque id.
     pub const fn from_i32(v: i32) -> Self {
         Self(v)
@@ -2146,11 +2190,14 @@ pub enum OnKind {
     /// is offered in the hand window; `body` resolves against the answered link.
     /// Called at the counteraction offer, then again at LIFO resolution.
     Counteract = 2,
-    /// `On::Hook(kinds, cond, guard, body)` -- a field-card (`Fx`) hook at those
-    /// [`HookKind`]s. Same `cond`/`guard`/`body` shape as [`Self::Counteract`].
-    /// The host calls it **automatically** for every placed card (placement
-    /// order per player) whenever one of the kinds is raised -- no window.
-    Hook = 3,
+    /// `On::Action(kinds, cond, guard, body)` -- an **event reaction** at those
+    /// [`HookKind`]s (v73 rename of `On::Hook`; wire id 3 unchanged). Same
+    /// `cond`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
+    /// **automatically** for every placed card (placement order per player)
+    /// whenever one of the kinds is raised -- no window. May emit effects;
+    /// does not modify the triggering value. Kinds must be non-filter
+    /// (`TriggerKind::is_filter() == false`).
+    Action = 3,
     /// `On::AtEnd(pre, guard, body)` -- what `ctx::at_turn_end` /
     /// `ctx::at_next_turn_end` schedules: `body` runs once at that turn end,
     /// when the entry's condition / residual guard admit (v49).
@@ -2175,10 +2222,16 @@ pub enum OnKind {
     /// v50: `On::Message(names, pre, guard, body)` -- this card answers a
     /// cross-card message (`ctx::send`). `names` are the message names it
     /// answers; the same category → condition → residual guard → body layering
-    /// as [`Self::Hook`]. The handler reads the sender and payload from
+    /// as [`Self::Action`]. The handler reads the sender and payload from
     /// `ctx::message` and returns a reply value. Does **not** flash the card
     /// (internal plumbing); the handler may log.
     Message = 8,
+    /// v73: `On::Filter(kinds, cond, guard, body)` -- a **value modifier** at
+    /// those modifier [`HookKind`]s (`TriggerKind::is_filter()`). Same shape
+    /// as [`Self::Action`] in Phase 1; Phase 2 tightens the body to a pure
+    /// value transform. The host dispatches Filter entries through the same
+    /// path as Action entries. Kinds must be filter kinds.
+    Filter = 9,
 }
 
 impl OnKind {
@@ -2186,12 +2239,13 @@ impl OnKind {
         Some(match v {
             0 => Self::Play,
             2 => Self::Counteract,
-            3 => Self::Hook,
+            3 => Self::Action,
             4 => Self::AtEnd,
             5 => Self::RollPlan,
             6 => Self::Gate,
             7 => Self::Settle,
             8 => Self::Message,
+            9 => Self::Filter,
             _ => return None,
         })
     }

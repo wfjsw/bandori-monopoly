@@ -86,7 +86,7 @@ pub mod rt;
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
 ///     On::Play("", None, play),
-///     On::Hook(&[HookKind::TurnEnd], pre::MINE, guard, tick),
+///     On::Action(&[HookKind::TurnEnd], pre::MINE, guard, tick),
 ///     On::Gate(&[GateKind::ImmuneAll], pre::MINE, None, immune),
 /// ]);
 /// ```
@@ -230,7 +230,7 @@ impl CardDef {
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
     ///     On::Play("", None, use_skill),                                     // 0: flashes
-    ///     On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+    ///     On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
     ///              "", None, declare_cap),                                   // 1: bookkeeping
     /// ]).silent(&[1]);
     /// ```
@@ -282,7 +282,7 @@ impl CardDef {
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
     ///     On::Play("", None, use_skill),                 // 0: Auto
-    ///     On::Hook(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    ///     On::Action(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
     /// ]).flash(&[(1, Flash::Always)]);
     /// ```
     pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
@@ -339,7 +339,7 @@ impl CardDef {
     /// use card_sdk::abi::text_slot;
     /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
     ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Hook(&[HookKind::PassTile], "", Some(pass_pays), on_pass),      // 1
+    ///     On::Action(&[HookKind::PassTile], "", Some(pass_pays), on_pass),      // 1
     /// ]).texts(&[
     ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
     ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
@@ -462,9 +462,17 @@ impl CardDef {
 /// declared at a [`abi::ChainKind`], a field hook at a [`abi::HookKind`], a gate
 /// at a [`abi::GateKind`]. An empty list is never dispatched.
 ///
-/// Guarded entries (`Play` gate / `Counteract` / `Hook` / `Gate` / `AtEnd` /
-/// `RollPlan` / `Settle`) carry a **condition** string (`pre`) immediately
-/// before the residual guard -- category → condition → guard → body
+/// WordPress `do_action` / `apply_filters` split (ABI v73):
+/// [`On::Action`] is an **event reaction** -- it may emit effects (`ctx::gain`,
+/// log, place, …) and does not modify the triggering value. [`On::Filter`] is
+/// a **value modifier** at a modifier hook kind ([`abi::TriggerKind::is_filter`]:
+/// `PayAdd` / `PayMul` / `BuySet` / `TurnBaseTime` / …). A kind list may not
+/// mix the two; a mixed declaration is split into one Action and one Filter
+/// entry (kind/variant agreement is enforced at ruleset build).
+///
+/// Guarded entries (`Play` gate / `Counteract` / `Action` / `Filter` / `Gate` /
+/// `AtEnd` / `RollPlan` / `Settle`) carry a **condition** string (`pre`)
+/// immediately before the residual guard -- category → condition → guard → body
 /// (docs/GUARDS.md §4.3, the three-layer model). `""` = no condition. Sugar:
 /// [`pre::MINE`] (`actor == owner`); or attach one with [`On::pre`]. The
 /// condition is compiled once at ruleset build (host) and evaluated natively
@@ -493,16 +501,28 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
-    /// A field-card (`Fx`) hook at these settlement points: runs automatically
-    /// while the card is in play. Same shape as [`On::Counteract`].
-    Hook(
+    /// An **event reaction** at these field-hook kinds: runs automatically
+    /// while the card is in play. Same shape as [`On::Counteract`]. May emit
+    /// effects; does not modify the triggering value. Kinds must be
+    /// non-filter ([`abi::TriggerKind::is_filter`] == false).
+    Action(
+        &'static [abi::HookKind],
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
+    /// A **value modifier** at these modifier hook kinds (pay/buy/turn-clock/
+    /// roll-plan/flip stages). Same shape as [`On::Action`] for now; Phase 2
+    /// tightens the body to a pure value transform. Kinds must be filter
+    /// kinds ([`abi::TriggerKind::is_filter`] == true).
+    Filter(
         &'static [abi::HookKind],
         &'static str,
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
     /// A question posed to this placed card at declaration or at resolution.
-    /// Same shape as [`On::Hook`]: the condition / residual guard decide
+    /// Same shape as [`On::Action`]: the condition / residual guard decide
     /// whether the entry answers at all; a rejecting entry runs no body (and so
     /// never flashes).
     Gate(
@@ -512,7 +532,7 @@ pub enum On {
         fn(player_id: i32) -> Asked,
     ),
     /// This card has a movement routine ([移动] shaping). Same shape as
-    /// [`On::Hook`]; the condition sees the move being planned (docs/GUARDS.md
+    /// [`On::Action`]; the condition sees the move being planned (docs/GUARDS.md
     /// §4.2c).
     RollPlan(
         &'static str,
@@ -520,7 +540,7 @@ pub enum On {
         fn(player_id: i32) -> Asked,
     ),
     /// What `ctx::at_turn_end` schedules: run once at that turn end. Same shape
-    /// as [`On::Hook`]; the condition sees the owner and the turn fields.
+    /// as [`On::Action`]; the condition sees the owner and the turn fields.
     AtEnd(
         &'static str,
         Option<fn(player_id: i32) -> bool>,
@@ -532,7 +552,7 @@ pub enum On {
     /// rent / buy / build / draw-event as `ctx` primitives so it stays thin.
     /// Runs inside the settle chain: a counteraction to the settle link, or a
     /// field hook that replaces the body, shapes whether and how it runs. Same
-    /// shape as [`On::Hook`]; the condition sees the settling tile / actor.
+    /// shape as [`On::Action`]; the condition sees the settling tile / actor.
     Settle(
         &'static str,
         Option<fn(player_id: i32) -> bool>,
@@ -540,7 +560,7 @@ pub enum On {
     ),
     /// A **cross-card message** this card answers (`ctx::send`). First field
     /// is the list of message names it answers (empty is never dispatched).
-    /// Same condition / residual guard / body shape as [`On::Hook`]. The
+    /// Same condition / residual guard / body shape as [`On::Action`]. The
     /// handler reads the sender and payload from [`ctx::message`] and returns
     /// a reply value via `ctx::message::reply`. Handling a message does not
     /// flash the card (internal plumbing).
@@ -571,7 +591,8 @@ impl On {
         match self {
             On::Play(_, g, r) => On::Play(pre, g, r),
             On::Counteract(k, _, g, r) => On::Counteract(k, pre, g, r),
-            On::Hook(k, _, g, r) => On::Hook(k, pre, g, r),
+            On::Action(k, _, g, r) => On::Action(k, pre, g, r),
+            On::Filter(k, _, g, r) => On::Filter(k, pre, g, r),
             On::Gate(k, _, g, r) => On::Gate(k, pre, g, r),
             On::RollPlan(_, g, r) => On::RollPlan(pre, g, r),
             On::AtEnd(_, g, r) => On::AtEnd(pre, g, r),
@@ -585,7 +606,8 @@ impl On {
     pub const fn no_guard(self) -> Self {
         match self {
             On::Counteract(k, pre, _, r) => On::Counteract(k, pre, None, r),
-            On::Hook(k, pre, _, r) => On::Hook(k, pre, None, r),
+            On::Action(k, pre, _, r) => On::Action(k, pre, None, r),
+            On::Filter(k, pre, _, r) => On::Filter(k, pre, None, r),
             On::Gate(k, pre, _, r) => On::Gate(k, pre, None, r),
             On::RollPlan(pre, _, r) => On::RollPlan(pre, None, r),
             On::AtEnd(pre, _, r) => On::AtEnd(pre, None, r),
@@ -601,7 +623,8 @@ impl On {
     pub const fn guard(&self) -> Option<fn(i32) -> bool> {
         match self {
             On::Counteract(_, _, g, _)
-            | On::Hook(_, _, g, _)
+            | On::Action(_, _, g, _)
+            | On::Filter(_, _, g, _)
             | On::Gate(_, _, g, _)
             | On::RollPlan(_, g, _)
             | On::AtEnd(_, g, _)
@@ -617,7 +640,8 @@ impl On {
         match self {
             On::Play(_, g, _) => g.is_some(),
             On::Counteract(_, _, g, _)
-            | On::Hook(_, _, g, _)
+            | On::Action(_, _, g, _)
+            | On::Filter(_, _, g, _)
             | On::Gate(_, _, g, _)
             | On::RollPlan(_, g, _)
             | On::AtEnd(_, g, _)
@@ -632,7 +656,8 @@ impl On {
         match self {
             On::Play(pre, _, _)
             | On::Counteract(_, pre, _, _)
-            | On::Hook(_, pre, _, _)
+            | On::Action(_, pre, _, _)
+            | On::Filter(_, pre, _, _)
             | On::Gate(_, pre, _, _)
             | On::RollPlan(pre, _, _)
             | On::AtEnd(pre, _, _)
@@ -645,12 +670,33 @@ impl On {
         match self {
             On::Play(..) => abi::OnKind::Play,
             On::Counteract(..) => abi::OnKind::Counteract,
-            On::Hook(..) => abi::OnKind::Hook,
+            On::Action(..) => abi::OnKind::Action,
+            On::Filter(..) => abi::OnKind::Filter,
             On::Gate(..) => abi::OnKind::Gate,
             On::AtEnd(..) => abi::OnKind::AtEnd,
             On::RollPlan(..) => abi::OnKind::RollPlan,
             On::Settle(..) => abi::OnKind::Settle,
             On::Message(..) => abi::OnKind::Message,
+        }
+    }
+
+    /// Kind/variant agreement (ABI v73): a [`On::Filter`] may only list filter
+    /// kinds and an [`On::Action`] only non-filter kinds. Returns the first
+    /// mismatched kind code, or `Ok(())`. Enforced at ruleset build; see also
+    /// the unit tests in [`abi::TriggerKind::is_filter`].
+    pub fn check_kind_variant(&self) -> Result<(), i32> {
+        let want_filter = matches!(self, On::Filter(..));
+        match self {
+            On::Action(kinds, ..) | On::Filter(kinds, ..) => {
+                for k in *kinds {
+                    let code = k.as_i32();
+                    if abi::TriggerKind::from_i32(code).is_filter() != want_filter {
+                        return Err(code);
+                    }
+                }
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 
@@ -660,7 +706,8 @@ impl On {
     pub fn triggers(&self) -> Vec<i32> {
         match self {
             On::Counteract(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
-            On::Hook(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::Action(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
+            On::Filter(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             On::Gate(k, ..) => k.iter().map(|x| x.as_i32()).collect(),
             // Message names travel as the manifest's `triggers` string list
             // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
@@ -676,5 +723,91 @@ impl On {
             On::Message(names, ..) => names.to_vec(),
             _ => Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::abi::TriggerKind;
+
+    fn body(_: i32) -> Asked {
+        Ok(())
+    }
+
+    #[test]
+    fn is_filter_set_matches_docs() {
+        for k in [
+            TriggerKind::MoveRoll,
+            TriggerKind::PayChoose,
+            TriggerKind::PayAdd,
+            TriggerKind::PayMul,
+            TriggerKind::PayAt,
+            TriggerKind::RollPlan,
+            TriggerKind(78), // ChargePaying
+            TriggerKind::BuyAdd,
+            TriggerKind::BuyMul,
+            TriggerKind::BuySet,
+            TriggerKind::BuyAssign,
+            TriggerKind::PayTotalAdd,
+            TriggerKind::PayTotalMul,
+            TriggerKind::PayTotalCancel,
+            TriggerKind::FlipEffect,
+            TriggerKind::TurnBonusTime,
+            TriggerKind::TurnBaseTime,
+        ] {
+            assert!(k.is_filter(), "expected filter kind {:?}", k.as_str());
+        }
+        for k in [
+            TriggerKind::TurnStart,
+            TriggerKind::TurnEnd,
+            TriggerKind::Pass,
+            TriggerKind::PayAfter,
+            TriggerKind::RollAfter,
+            TriggerKind::SettleBody,
+            TriggerKind::CounterChanged,
+            TriggerKind::DrewBefore,
+            TriggerKind::BuyGate,
+            TriggerKind::AbnormalGuard,
+        ] {
+            assert!(!k.is_filter(), "expected action kind {:?}", k.as_str());
+        }
+    }
+
+    #[test]
+    fn kind_variant_agreement() {
+        let filter_ok = On::Filter(&[TriggerKind::PayAdd], "", None, body);
+        assert!(filter_ok.check_kind_variant().is_ok());
+        let action_ok = On::Action(&[TriggerKind::TurnEnd], "", None, body);
+        assert!(action_ok.check_kind_variant().is_ok());
+        let filter_bad = On::Filter(&[TriggerKind::TurnEnd], "", None, body);
+        assert_eq!(
+            filter_bad.check_kind_variant(),
+            Err(TriggerKind::TurnEnd.as_i32())
+        );
+        let action_bad = On::Action(&[TriggerKind::PayAdd], "", None, body);
+        assert_eq!(
+            action_bad.check_kind_variant(),
+            Err(TriggerKind::PayAdd.as_i32())
+        );
+        let mixed = On::Action(
+            &[TriggerKind::TurnEnd, TriggerKind::PayAdd],
+            "",
+            None,
+            body,
+        );
+        assert_eq!(
+            mixed.check_kind_variant(),
+            Err(TriggerKind::PayAdd.as_i32())
+        );
+    }
+
+    #[test]
+    fn on_kind_ids() {
+        assert_eq!(abi::OnKind::Action as i32, 3);
+        assert_eq!(abi::OnKind::Filter as i32, 9);
+        assert_eq!(abi::OnKind::from_i32(3), Some(abi::OnKind::Action));
+        assert_eq!(abi::OnKind::from_i32(9), Some(abi::OnKind::Filter));
+        assert_eq!(abi::OnKind::from_i32(1), None);
     }
 }
