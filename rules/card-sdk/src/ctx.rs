@@ -309,6 +309,21 @@ pub fn owned_at(player_id: i32, index: i32) -> i32 {
 }
 
 /// The player's deeds as tile indices.
+#[cfg(kani)]
+pub fn owned_tiles(player_id: i32) -> Vec<i32> {
+    // Bounded loop instead of a symbolic-length Range fold (the `collect`
+    // → `extend_trusted` path is an unwinding cliff at 32). Same result.
+    let n = owned_count(player_id).max(0).min(8) as usize;
+    let mut v = Vec::new();
+    let mut i = 0usize;
+    while i < n {
+        v.push(owned_at(player_id, i as i32));
+        i += 1;
+    }
+    v
+}
+
+#[cfg(not(kani))]
 pub fn owned_tiles(player_id: i32) -> Vec<i32> {
     (0..owned_count(player_id))
         .map(|i| owned_at(player_id, i))

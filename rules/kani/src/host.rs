@@ -2138,8 +2138,31 @@ pub fn arm_place_mark(a: Args) -> i64 {
 }
 
 pub fn arm_placed_cards(a: Args) -> i64 {
-    let _ = a;
-    world::with_world(|w| w.field_n as i32) as i64
+    let [a0, buf, cap, ..] = a;
+    // Postcard-encode `Vec<String>` of the player's field card names,
+    // matching `hostfns::placed_cards`. The guest `ctx::placed_cards`
+    // decodes with `postcard::from_bytes`.
+    let names: Vec<String> = world::with_world(|w| {
+        let mut v = Vec::new();
+        let mut i = 0usize;
+        while i < w.field_n as usize {
+            if w.field[i].player == a0 {
+                let name = intern::resolve_str(intern::NameId(w.field[i].card));
+                v.push(name.to_string());
+            }
+            i += 1;
+        }
+        v
+    });
+    let bytes = postcard::to_allocvec(&names).unwrap_or_default();
+    if buf == 0 {
+        return bytes.len() as i64;
+    }
+    if (bytes.len() as i32) > cap {
+        return -1;
+    }
+    card_sdk::native::write(buf, &bytes);
+    bytes.len() as i64
 }
 
 pub fn arm_player_count(a: Args) -> i64 {
