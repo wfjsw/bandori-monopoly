@@ -16,15 +16,22 @@ use crate::world::{Effect, Snapshot};
 /// 「获得3个奇迹水晶」 is the placement's crystal charge (post-state; the host's
 /// `set_counter_self` writes the counter without a log entry).
 pub fn half_speed_01_log_ok(effects: &[Effect], player: i32, this_card: u8) -> bool {
-    effects.len() == 1
-        && matches!(
-            effects[0],
+    // The body also stamps `set_crystals(3)` which pushes `AddCounter`
+    // bookkeeping — ignore it.
+    let mut place = 0;
+    let mut other = 0;
+    for e in effects {
+        match e {
             Effect::PlaceCard {
                 player: p,
                 dest: 2,
-                card
-            } if p == player && card == this_card
-        )
+                card,
+            } if *p == player && *card == this_card => place += 1,
+            Effect::AddCounter { .. } => {}
+            _ => other += 1,
+        }
+    }
+    other == 0 && place == 1
 }
 
 /// Post: the card sits on the field with exactly 3 [奇迹水晶].

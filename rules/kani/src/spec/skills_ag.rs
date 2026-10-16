@@ -39,15 +39,17 @@ pub fn firepot_01_grant_log_ok(effects: &[Effect], owner: i32) -> bool {
         )
 }
 
-/// A non-granting tick produces no effects (set_prop is a host stub and the
-/// state write is not an Effect).
+/// A non-granting tick produces no clause effects. The body clears the rest
+/// counter via `state::set` which pushes `SetState` bookkeeping — ignore it.
 pub fn firepot_01_idle_log_ok(effects: &[Effect]) -> bool {
-    effects.is_empty()
+    effects
+        .iter()
+        .all(|e| matches!(e, Effect::SetState { .. }))
 }
 
-/// MUTANT: grant at rest==1 (every other turn).
+/// MUTANT: grants at rest 0 (the card does not — every-other-turn is wrong).
 pub fn firepot_01_grants_mutant(pre_rest: i32) -> bool {
-    pre_rest + 1 >= 2
+    pre_rest + 1 >= 1
 }
 
 // ===========================================================================

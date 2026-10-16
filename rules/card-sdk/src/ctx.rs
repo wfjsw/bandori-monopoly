@@ -1834,27 +1834,19 @@ pub fn ask_tiles(
 pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Result<usize, Prompt> {
     #[cfg(kani)]
     {
-        // Zero-loop option list: fixed 4-slot branch tree. A `for o in options`
-        // unrolls to the global bound when `options.len()` is not folded (the
-        // prompt profile's `ctx::ask_card` 31).
-        if let Some(o) = options.get(0) {
-            let (p, l) = mj(o);
-            unsafe { sys::opt_str(p, l) }
+        // Bounded option list (16 slots). Covers the widest card range seen
+        // so far. A wider list is a loud FAIL (coverage limit).
+        const CAP: usize = 16;
+        let mut i = 0usize;
+        while i < CAP {
+            if let Some(o) = options.get(i) {
+                let (p, l) = mj(o);
+                unsafe { sys::opt_str(p, l) }
+            }
+            i += 1;
         }
-        if let Some(o) = options.get(1) {
-            let (p, l) = mj(o);
-            unsafe { sys::opt_str(p, l) }
-        }
-        if let Some(o) = options.get(2) {
-            let (p, l) = mj(o);
-            unsafe { sys::opt_str(p, l) }
-        }
-        if let Some(o) = options.get(3) {
-            let (p, l) = mj(o);
-            unsafe { sys::opt_str(p, l) }
-        }
-        if options.len() > 4 {
-            kani::assert(false, "ask_pick: more than 4 options under Kani");
+        if options.len() > CAP {
+            kani::assert(false, "ask_pick: more than 16 options under Kani");
         }
         let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
         return Ok((i.max(0) as usize).min(options.len().saturating_sub(1)));
