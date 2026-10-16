@@ -208,7 +208,10 @@ fn band_01_clear_iff_at(owner: i32) {
     kani::assume(crystals >= 0 && crystals <= 8);
     band_01_world(owner, got, crystals);
 
-    let gid = crate::guard_id!("actor == owner && slot('skill.sumimi.got') == 0");
+    // The source guard is `pre::MINE` ("actor == owner") — both halves of
+    // （1） live in the body now. The old `slot('skill.sumimi.got') == 0`
+    // guard only ever admitted the clear branch (FINDINGS C-SUMIMI-band-01).
+    let gid = crate::guard_id!("actor == owner");
     let ov = ir_fill::TriggerOverlay::default();
     let admitted = world::with_world(|w| {
         let ctx = ir_fill::fill_for_guard(w, gid, owner, 0, true, -1, &ov);
