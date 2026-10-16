@@ -18,7 +18,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Action(&[HookKind::RollAfter], "actor == owner && move.main && card.placed", None, roll_after),
+        On::Filter(&[HookKind::RollValue], "actor == owner && move.main && card.placed", None, roll_half),
         On::Filter(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
         On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
@@ -76,19 +76,18 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书(2): 「此卡在场时，你的移动掷骰的最终结算/2（向上取整）」 -- C#
 /// `CardMocaHalf.RollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
-/// main-move roll.
-fn roll_after(player_id: i32) -> card_sdk::Asked {
-    let roll = trigger::value().max(0);
+/// main-move roll. ABI v74: a pure `RollValue` filter (placement order among
+/// roll reshapes is preserved).
+fn roll_half(player_id: i32, value: i32) -> i32 {
+    let roll = value.max(0);
     let halved = (roll + 1) / 2;
-    trigger::set_move_roll(halved);
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_roll"))
-            .player_id("who", player_id)
             .i("from", roll as i64)
             .i("to", halved as i64),
     );
-    Ok(())
+    halved
 }
 
 /// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PayMul` pass (after
@@ -129,8 +128,8 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
-    roll_after(player_id)
+pub fn roll_half_kani(player_id: i32, value: i32) -> i32 {
+    roll_half(player_id, value)
 }
 
 #[cfg(kani)]

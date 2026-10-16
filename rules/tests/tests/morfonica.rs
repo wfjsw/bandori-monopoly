@@ -1102,7 +1102,8 @@ fn tsukushi_gains_100_and_teleports_to_the_tile_before_a_player() {
     let p = t.expect_prompt();
     // the settle is optional; the teleport target is already chosen
     assert_eq!(p.options.len(), 2, "yes/no settle: {}", t.dump_prompt());
-    t.decline(); // 「可以选择是否触发结算」 — decline
+    t.answer_one(1).unwrap(); // 「可以选择是否触发结算」 — no settle
+    decline_all(&mut t);
     assert_eq!(t.money(0), 10_000 + 100);
     assert_eq!(t.pos(0), 21, "one ahead of p1 (20)");
 }
@@ -1138,8 +1139,10 @@ fn tsukushi_settle_is_optional() {
     let p = t.expect_prompt();
     assert_eq!(p.options.len(), 2);
     t.answer_one(1).unwrap(); // no settle
+    decline_all(&mut t);
     assert_eq!(t.money(0), 10_000 + 100, "no rent paid");
     assert_eq!(t.money(1), 10_000);
+    assert_eq!(t.pos(0), 21, "teleported one ahead of p1");
 }
 
 #[test]
