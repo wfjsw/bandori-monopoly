@@ -2986,6 +2986,22 @@ pub fn card_mortgage(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_mortgage(player_id, tile) != 0 }
 }
 
+/// Mechanism half of a mortgage the tile rule already approved: flip the
+/// mortgage flag and credit `amount` directly (not through the money
+/// pipeline -- 规则书 基础规则 6). Returns the amount actually credited
+/// (`0` when the deed was already mortgaged / not owned).
+#[cfg_attr(kani, inline(always))]
+pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
+    unsafe { sys::apply_mortgage(player_id, tile, amount) }
+}
+
+/// Mechanism half of a redeem the tile rule already approved: clear the
+/// mortgage flag and charge `amount` directly. Returns the amount charged.
+#[cfg_attr(kani, inline(always))]
+pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
+    unsafe { sys::apply_redeem(player_id, tile, amount) }
+}
+
 /// Does this card's rule text mention `needle`? 「所有效果包含[奇迹水晶]的卡」
 /// is this query.
 #[cfg_attr(kani, inline(always))]

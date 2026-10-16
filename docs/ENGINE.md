@@ -367,8 +367,8 @@ the generic mechanics (`purchase.rs`):
   `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks in **pure guard mode**
   against a world copy -- the `cant_play` shape, so a quote never mutates the
   match and never prompts -- but only when a hooking instance exists. The
-  commit re-quotes, so quote == charge. It takes the world by reference, so the
-  view's `st.buy_price` preview asks without cloning.
+  commit re-quotes, so quote == charge. It takes the world by reference, so
+  a quote can be asked without cloning.
 * **Gate.** `BuyGate` runs for every `BuyKind` (Land / Agent / Card / Force /
   Acquire / Auction); a `set_cancelled` refuses the buy. `buyBefore` cancel is
   also honoured. rana_parking's 「该次传送不可进行地契购买」 is a **native** gate
@@ -377,12 +377,11 @@ the generic mechanics (`purchase.rs`):
   `BuyAssign` hooks rewrite the deal before commit, on every kind (land,
   agent, card, force, acquire, auction). Force-buy keeps the mortgage
   (「获得的地契仍为抵押状态」).
-* **Preview.** `st.buy_price` / `st.build_cost` are written from the quote at
-  the END step, `-1` otherwise. `MatchPrompt.price` / `prices[]` carry the
-  quoted prices on buy / force_buy / agent prompts. The gates (`buyable_here`,
-  `why_not_act "buy"`) and the AI (`ai_wants_buy` / `ai_agent_choice`) read the
-  same quote, so a player who can afford only the discounted price is no longer
-  refused.
+* **Preview.** `MatchPrompt.price` / `prices[]` carry the quoted prices on
+  buy / force_buy / agent prompts (the settle prompts `ask.buy` / `ask.build`).
+  There is no END-step `st.buy_price` / `st.build_cost` preview. The AI
+  (`ai_wants_buy` / `ai_agent_choice`) reads the same quote, so a player who
+  can afford only the discounted price is no longer refused.
 * **`linger`.** A hand card binds a turn-scoped instance in `TurnCtx.lingering`
   (cleared at turn start, carried by `adopt_turn_policy`). It is the hand-card
   home for 「本回合」 effects: the def's own `BuyAdd` / `BuyMul` / `BuySet` /

@@ -764,86 +764,12 @@ impl Match {
             st.prompt = Default::default();
         }
         if st.phase == "play" && st.turn >= 0 {
-            // `st.buy_price` / `st.build_cost` view previews (`docs/PURCHASE.md`):
-            // the quoted price at the player's position when a buy/build is on
-            // the table, `-1` otherwise. `st.can_buy_here` / `st.can_build_here`
-            // are the matching act-legality flags (`why_not_act`), so a client
-            // -- or the bot's action abstraction -- never offers a command the
-            // engine would refuse (`err.buy_poor` / `err.cannot_buy` / `err.poor`).
+            // Buy / build are settle-time offers only (`tile:property` /
+            // `tile:ring` → `ctx::offer_buy` / `ctx::offer_build`). There is
+            // no END-step purchase surface and no purchase previews.
             let ti = st.turn as usize;
-            let pos = st.players.get(ti).map(|p| p.pos).unwrap_or(-1);
-            st.buy_price = -1;
-            st.build_cost = -1;
-            st.can_buy_here = false;
-            st.can_build_here = false;
             st.can_roll_here = false;
             st.can_end_here = false;
-            // `Cx::can_pay` (the status hosts' pay gate), without building a Cx
-            // (which would clone the world -- this runs inside rollouts).
-            let can_pay = st
-                .players
-                .get(ti)
-                .map(|p| !p.out())
-                .unwrap_or(false)
-                && self.world.gate_open(&*self.rules, Gate::Pay, ti);
-            if st.step == stage::END
-                && !st.land_acted
-                && pos >= 0
-                && st.landed == pos
-                && st.owners.get(pos as usize).copied().unwrap_or(-1) < 0
-            {
-                // The **quoted** price (`docs/PURCHASE.md`) -- the rules crate's
-                // `buy_quote`, so a hook-aware discount shows in the view -- and
-                // `-1` when the gate refuses the buy outright.
-                let q = purchase::quote_for(
-                    self.rules.as_ref(),
-                    &self.world,
-                    &self.data,
-                    ti,
-                    purchase::BuyKind::Land,
-                    &[(pos as usize, -1)],
-                );
-                st.buy_price = q.first().filter(|q| q.eligible).map_or(-1, |q| q.price);
-                // `why_not_act`'s buy branch: `buyable_here` (shape + the
-                // plan's no-buy flag + `eligible`) plus the quoted funds check.
-                // The shape / `eligible` halves are what `buy_price >= 0`
-                // already answered above.
-                st.can_buy_here = st.buy_price >= 0
-                    && self
-                        .data
-                        .tiles
-                        .get(pos as usize)
-                        .is_some_and(|t| t.is_buyable())
-                    && !self.world.turn.plan.no_buy
-                    && can_pay
-                    && self.world.purchase_funds(&self.data, ti, None) >= st.buy_price.max(0);
-            }
-            if st.step == stage::END && !st.land_acted && pos >= 0 && st.landed == pos {
-                // Only preview a build cost when a build is actually possible
-                // (owned, not mortgaged, under the cap).
-                let t = pos as usize;
-                if st.owners.get(t).copied().unwrap_or(-1) == st.turn
-                    && !st.mortgaged.get(t).copied().unwrap_or(false)
-                {
-                    if let Some(tile) = self.data.tiles.get(t) {
-                        let houses = st.houses.get(t).copied().unwrap_or(0);
-                        if houses < tile.rent.len().saturating_sub(1) as i32 {
-                            st.build_cost = tile.house.max(0);
-                        }
-                    }
-                }
-                // `why_not_act`'s build branch: `why_not_build` (the plan's
-                // `can_build` flag and `why_not_build_on`'s NO_BUILD vetoes,
-                // the halves the cost preview does not carry) plus the funds.
-                st.can_build_here = st.build_cost >= 0
-                    && st.plan.can_build
-                    && can_pay
-                    && self
-                        .world
-                        .why_not_build_on(&self.data, ti as i32, pos)
-                        .is_none()
-                    && self.world.purchase_funds(&self.data, ti, Some(t)) >= st.build_cost.max(0);
-            }
             let bonus = self.bonus_time.get(ti).copied().unwrap_or(0.0);
             let base = self.base_time.get(ti).copied().unwrap_or(0.0);
             st.base_time = base;
@@ -2732,17 +2658,22 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
                     let turn = cx.w.st.turn as usize;
                     cx.main_move(turn, i)
                 }
-                "buy" => {
-                    cx.buy(i, pos, purchase::BuyKind::Land).map(|_| ())
+                // Retired: buy / build are settle-time offers only. The parse
+                // path still accepts these acts (replay / old clients) and
+                // rejects them with a clear reason rather than failing to
+                // deserialize the record.
+                "buy" | "build" => {
+                    cx.w.log(
+                        "text",
+                        i as i32,
+                        Msg::new("err.buy_build_at_settle"),
+                    );
+                    Ok(())
                 }
-                "build" => {
-                    cx.build_landed(i, pos).map(|_| ())
-                }
-                "mortgage" => cx.mortgage(i, m.value as usize, None).map(|_| ()),
+                "mortgage" => cx.deed_mortgage(i, m.value as usize, 0).map(|_| ()),
 
                 "redeem" => {
-                    cx.redeem(i, m.value as usize);
-                    Ok(())
+                    cx.deed_redeem(i, m.value as usize).map(|_| ())
                 }
                 "play" => cx.play_from_hand(i, &m.card),
                 "skill" => cx.use_skill(i, &m.card),
@@ -2813,47 +2744,12 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             // rule body where the 规则书 clause lives.
             cx.rules_cant_play(i, &m.card)
         }
-        "buy" => {
-            if !my_turn || st.step != stage::END || busy {
-                return Some(Msg::new("err.no_buy_now"));
-            }
-            if let Some(e) = moved_off("err.moved_off_buy") {
-                return Some(e);
-            }
-            if !cx.buyable_here(i) {
-                return Some(Msg::new("err.cannot_buy"));
-            }
-            // The quoted price, not the base (`docs/PURCHASE.md`): a player who
-            // can afford only the discounted price is no longer refused.
-            let quote = cx.buy_quote_for(i, pos as usize, purchase::BuyKind::Land);
-            if quote.price < 0 {
-                return Some(Msg::new("err.cannot_buy"));
-            }
-            if cx.w.purchase_funds(cx.data, i, None) < quote.price.max(0) {
-                return Some(Msg::new("err.buy_poor"));
-            }
-            None
-        }
-        "build" => {
-            if !my_turn || st.step != stage::END || busy {
-                return Some(Msg::new("err.no_build_now"));
-            }
-            if let Some(e) = moved_off("err.moved_off_build") {
-                return Some(e);
-            }
-            if st.land_acted {
-                return Some(Msg::new("err.built_already"));
-            }
-            if let Some(e) = cx.why_not_build(i, pos as usize) {
-                return Some(e);
-            }
-            if cx.w.purchase_funds(cx.data, i, Some(pos as usize)) < cx.build_cost(pos as usize) {
-                return Some(Msg::new("err.poor"));
-            }
-            None
-        }
-        "mortgage" => cx.why_not_mortgage(i, m.value, busy),
-        "redeem" => cx.why_not_redeem(i, m.value, busy),
+        // Retired: buy / build are settle-time offers only. The parse path
+        // still accepts these acts (replay / old clients) and rejects them
+        // with a clear reason.
+        "buy" | "build" => Some(Msg::new("err.buy_build_at_settle")),
+        "mortgage" => cx.rules().why_not_deed_mortgage(cx, i, m.value, busy),
+        "redeem" => cx.rules().why_not_deed_redeem(cx, i, m.value, busy),
         "play" => cx.cant_play(i, &m.card, busy),
         "discard" => {
             if !cx.playing() || !cx.over_hand(i) {

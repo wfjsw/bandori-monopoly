@@ -620,6 +620,10 @@ extern "C-unwind" {
     pub fn card_immune(player_id: i32, cp: i32, cl: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_card_mortgage")]
     pub fn card_mortgage(player_id: i32, tile: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_apply_mortgage")]
+    pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32;
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_apply_redeem")]
+    pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_card_text_mentions")]
     pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "ruleset_card_prop")]

@@ -1561,19 +1561,15 @@ fn fix_note_halves_the_designated_build_costs() {
         t.own(0, &[1, 2, 3]);
         t.set_money(0, 20_000);
         until_turn(&mut t, 0);
-        // Land on 购物中心 (tile 1) and try to build.
+        // Land on 购物中心 (tile 1) and take the settle's optional build.
         t.set_pos(0, 0);
         t.dice(&[1]);
         let before = t.money(0);
         let _ = t.roll(0);
-        // G-SETTLE-06/07: the settle of a deed is the optional buy/build prompt.
-        // Decline it so exactly one END-stage `t.build()` runs (both paths apply
-        // fix_note; taking both would spend two half-price builds).
+        // G-SETTLE-06/07: the settle of a deed IS the optional build (the only
+        // build path). Accept it; follow-up prompts (mortgage funding) drain after.
+        let _ = t.build(0);
         drain(&mut t);
-        if t.step() == 4 {
-            let _ = t.build(0);
-            drain(&mut t);
-        }
         let spent = before - t.money(0);
         // Base house cost 2000 -> half is 1000. Rent/buy side effects may
         // also move money; pin the build discount via the houses count.
@@ -2370,22 +2366,13 @@ fn pool_bug_blocks_expensive_builds() {
         t.set_pos(0, 0);
         t.dice(&[1]);
         let _ = t.roll(0);
-        let mut built = false;
-        while let Some(_p) = t.prompt() {
-            // Try to accept a build offer; a legal engine must not offer one
-            // on a >=1500 tile while the card is up.
-            if t.houses(1) > 0 {
-                built = true;
-            }
-            t.decline();
-        }
-        if t.step() == 4 && t.houses(1) == 0 {
-            let _ = t.build(0);
-            drain(&mut t);
-        }
+        // G-SETTLE-06/07: the only build path is the settle's optional build.
+        // A legal engine must not offer one on a >=1500 tile while the card is up.
+        let built = t.build(0).is_ok();
+        drain(&mut t);
         if t.houses(1) > 0 || built {
             return Err(format!(
-                "E-pool-bug-04: a house went up on 购物中心 (cost 2000) while 卡池BUG is in play (houses {})",
+                "E-pool-bug-04: a house went up on 购物中心 (cost 2000) while 卡池BUG is in play (houses {}, build offered: {built})",
                 t.houses(1)
             ));
         }

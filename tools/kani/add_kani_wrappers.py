@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ON_RE = re.compile(
-    r"On::(Play|Counteract|Hook|Gate|RollPlan|AtEnd|Settle|Message)\s*\(",
+    r"On::(Play|Counteract|Hook|Gate|RollPlan|AtEnd|Settle|Message|Mortgage|Redeem)\s*\(",
 )
 
 WRAPPER_HEAD = "\n// Kani-only direct-call exports (ppcost). Production builds omit these.\n"

@@ -145,7 +145,7 @@ function stat(answer: Record<string, unknown>, visits: number, valueSum: number,
 }
 
 test("mergeRootStats sums visits and value sums, takes evalMax, sorts best-first", () => {
-  const a = { act: "buy", value: 5 };
+  const a = { act: "answer", prompt: 5, value: 1 };
   const b = { act: "end" };
   const parts = [
     [stat(a, 3, 1.2, { evalMax: 0.4, evalSum: 1.0, evalVisits: 2 }), stat(b, 5, 2.0, { evalMax: 0.1 })],
@@ -165,8 +165,8 @@ test("mergeRootStats sums visits and value sums, takes evalMax, sorts best-first
 });
 
 test("mergeRootStats breaks ties on mean, then a stable command order", () => {
-  const a = { act: "buy", value: 1 };
-  const b = { act: "buy", value: 2 };
+  const a = { act: "answer", prompt: 1, value: 1 };
+  const b = { act: "answer", prompt: 2, value: 1 };
   const merged = mergeRootStats([
     [stat(b, 2, 1.0), stat(a, 2, 1.0)],
     [stat(a, 2, 1.0), stat(b, 2, 1.0)],

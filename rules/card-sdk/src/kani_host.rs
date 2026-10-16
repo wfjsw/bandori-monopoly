@@ -334,6 +334,8 @@ pub enum Op {
     card_prop = 314,
     // v72: write the persona **name** `persona_is` matches (character swap).
     set_persona = 315,
+    apply_mortgage = 316,
+    apply_redeem = 317,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

@@ -26,7 +26,7 @@ function player(over: Partial<MatchPlayer> = {}): MatchPlayer {
     roll: 0,
     banDone: true,
     ban: "",
-    character: "户山香澄",
+    persona: "户山香澄",
     deckReady: true,
     money: 10_000,
     pos: 0,
@@ -43,7 +43,7 @@ function player(over: Partial<MatchPlayer> = {}): MatchPlayer {
     mentality: "standard",
     state: {},
     skillOwner: "",
-    bands: "",
+    affiliations: "",
     tokens: [],
     skillNote: { k: "" },
     field: [],
@@ -67,15 +67,12 @@ function state(over: Partial<MatchState> = {}): MatchState {
     skipMove: false,
     landed: -1,
     thinkTime: 0,
-    buyPrice: -1,
-    buildCost: -1,
+    canRollHere: false,
+    canEndHere: true,
     plan: { playerId: 0, from: 0, steps: 0, started: false, reach: [], canBuild: false },
     timeLeft: 30,
     baseTime: 0,
     bonusTime: 0,
-    bank: 0,
-    bought: false,
-    built: false,
     players,
     bans: [],
     owners: [],
@@ -190,10 +187,10 @@ test("driveSeat applies the search's answer through act", async () => {
     },
     () => v,
     1,
-    { ...h, pool: fakePool(async () => okAnswer("buy")) },
+    { ...h, pool: fakePool(async () => okAnswer("answer")) },
   );
   assert.equal(outcome, "searched");
-  assert.deepEqual(h.sent, [{ act: "buy" }]);
+  assert.deepEqual(h.sent, [{ act: "answer" }]);
 });
 
 test("driveSeat answers a reused ponder from the cache", async () => {
@@ -271,7 +268,7 @@ test("driveSeat falls back when the engine refuses the search's answer", async (
     },
     () => v,
     1,
-    { ...h, pool: fakePool(async () => okAnswer("buy")) },
+    { ...h, pool: fakePool(async () => okAnswer("answer")) },
   );
   assert.equal(outcome, "fallback");
   assert.equal(h.sent.length, 2, "search first, then the policy");
@@ -288,7 +285,7 @@ test("driveSeat: a seat with no decision is a no-op", async () => {
     },
     () => v,
     1,
-    { ...h, pool: fakePool(async () => okAnswer("buy")) },
+    { ...h, pool: fakePool(async () => okAnswer("answer")) },
   );
   assert.equal(outcome, "fallback");
   assert.deepEqual(h.sent, [], "nothing to answer");

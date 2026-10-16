@@ -1115,6 +1115,14 @@ pub fn card_mortgage(player_id: i32, tile: i32) -> i32 {
     kani_host::call_i32(Op::card_mortgage, [player_id, tile, 0, 0, 0, 0])
 }
 
+pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
+    kani_host::call_i32(Op::apply_mortgage, [player_id, tile, amount, 0, 0, 0])
+}
+
+pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
+    kani_host::call_i32(Op::apply_redeem, [player_id, tile, amount, 0, 0, 0])
+}
+
 pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32 {
     kani_host::call_i32(Op::card_text_mentions, [cp, cl, np, nl, 0, 0])
 }

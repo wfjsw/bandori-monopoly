@@ -343,7 +343,9 @@ fn g_settle_08_level_caps() {
 // =====================================================================
 
 /// G-SETTLE-09: 「升级所[消耗]的资金不可通过[抵押]正在升级的格子地契获得。」
-/// Scenario-only: the per-act window cannot see which mortgage funded a build.
+/// The pay pipeline's optional-funding arm excludes the deed being upgraded
+/// (`Cx::offer_mortgage_funds`'s `exclude`); a mortgaged deed settles to
+/// nothing (5.2).
 #[test]
 fn g_settle_09_upgrade_cannot_be_funded_by_mortgaging_that_deed() {
     let mut t = Table::vanilla(2);
@@ -351,21 +353,12 @@ fn g_settle_09_upgrade_cannot_be_funded_by_mortgaging_that_deed() {
     t.own(0, &[land]);
     t.set_money(0, 100); // far below the 2000 build cost
     settle_on(&mut t, 0, land);
-    // No build is possible at 100 money, and mortgaging the deed being
-    // upgraded must not unlock it.
-    if t.prompt().is_some() {
-        let _ = t.answer_one(0);
-    } else {
-        assert!(t.build(0).is_err(), "no build at 100 money");
-    }
-    // Mortgage the deed being upgraded (legal in 运营). The mortgage value
-    // (price/2 = 1500) is still below the 2000 house cost, so even if the
-    // engine allowed self-funding it could not cover the build.
-    t.mortgage(0, land).unwrap();
-    assert!(t.mortgaged(land));
+    // No build is offered at 100 money -- the deed being upgraded cannot fund
+    // its own construction.
+    assert!(t.prompt().is_none() || t.build(0).is_err(), "no build at 100 money");
+    // 5.2: a mortgaged deed's settle has no effect.
+    t.set_mortgaged(land, true);
     settle_on(&mut t, 0, land);
-    // 5.2: a mortgaged deed's settle has no effect -- and the upgrade still
-    // cannot be funded by that mortgage.
     assert!(t.prompt().is_none() || t.build(0).is_err());
     assert_eq!(t.houses(land), 0, "the upgrade never happened");
 }
