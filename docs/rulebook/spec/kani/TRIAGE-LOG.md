@@ -1394,3 +1394,12 @@ finished on the combined master. Non-success rows:
 | `pp::chisato_mask_01_total_iff` | TIMEOUT 1800 s | BMC/symex on `chisato_mask::split_pay` `find`/`try_fold` (slice iters) | **E** | pin `n_players=2`; `ctx::others` is a symbolic-length Vec at 2..=4. The OPEN-分摊 total (2000) is seat-count independent |
 | `pp::dream_ahead_01_crystal_per_draw_iff` | TIMEOUT 1800 s | BMC/symex on `add_crystals` `?` prompt path + overflow-X else branch | **E** | concrete `pre=0` so `crystals()<5` constant-folds and the else branch is dead in the CFG |
 | `pp::shine_again_01_rescue_iff` | TIMEOUT 1800 s | BMC/symex on `SliceContains` fold + `ask_pick` prompt + `owned_tiles` | **E** | `ask_pick` prompt path pulls `Msg` → memchr; body ABI. No cheap lever |
+
+## triage3 batch 4 — central retry rows (kani-pass@566b6761)
+
+| id | before | failing assertion / phase | class | action |
+|---|---|---|---|---|
+| `skills_pp::band_idol_01_start_grant_iff` + user1 | FAILED 577/507 s | `C-PP-band-idol-01: each non-PP player gains 1 reverse fan` | **C** | `arm_placed_cards` wrote only `field_n`; `ctx::placed_cards` expected postcard-encoded `Vec<String>` and got nothing → the pastel `at_start` "first copy" check never found the card → body returned early. Fixed: host now writes postcard-encoded card names |
+| `ppp::bang_dream_02_teleport_owned_iff` | UNWINDING 1560 s | `unwinding assertion loop 0` at `ctx::owned_tiles` Range fold | **A** | `owned_tiles` used a symbolic-length Range fold (`0..owned_count`); `collect`/`extend_trusted` cliffed at 32. Kani version uses a bounded while loop |
+| `ppp::pipopa_01_iff` | SUCCESSFUL 300 s | — | — | recorded (PlaceCard.dest fix from batch 3 landed) |
+| `skills_sumimi::band_01_clear_iff_at` | (proactive) | guard changed to `actor == owner` | **B** | both halves of （1） now tested: book 「这回合从别人那里拿到过钱：回合结束时团卡 +1 奇迹水晶；没拿到就清空团卡上的水晶。」 — add +1 when GOT, clear when not |
