@@ -3603,6 +3603,7 @@ impl<M: CardModules> RulesBridge<M> {
             player_id,
             kind,
             value,
+            tile,
             deal_owner,
             deal_houses,
             deal_mortgaged,
@@ -3612,6 +3613,7 @@ impl<M: CardModules> RulesBridge<M> {
             let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
             let t = self.raise_core(cx, kind, player_id, |t| {
                 t.value = value;
+                t.tile = tile;
                 if is_deal {
                     let mut b = game_core::engine::rules::TriggerBuy::new(
                         game_core::engine::purchase::BuyKind::Land,

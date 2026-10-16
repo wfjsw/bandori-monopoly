@@ -1249,9 +1249,10 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
                 // deal back so `trigger::deal_*` reads the fold.
                 let tk = card_sdk::abi::TriggerKind::from_i32(kind);
                 let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
+                let trig = c.st().wr().trigger();
+                let tile = trig.tile;
                 let (deal_owner, deal_houses, deal_mortgaged) = if is_deal {
-                    let t = c.st().wr().trigger();
-                    match t.buy {
+                    match trig.buy {
                         Some(b) => (
                             b.deal_owner.unwrap_or(i32::MIN),
                             b.deal_houses,
@@ -1266,6 +1267,7 @@ pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Re
                 player_id,
                 kind,
                 value,
+                tile,
                 deal_owner,
                 deal_houses,
                 deal_mortgaged,

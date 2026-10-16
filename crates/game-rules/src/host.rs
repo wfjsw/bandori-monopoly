@@ -485,6 +485,9 @@ pub enum HostRequest {
         player_id: i32,
         kind: i32,
         value: i32,
+        /// The tile the raise is about (`t.tile`) -- filter pres like
+        /// `tile.id == tile_named('…')` read it.
+        tile: i32,
         /// BuyAssign filter deal (in): owner after (`i32::MIN` = unset).
         deal_owner: i32,
         /// BuyAssign filter deal (in): houses after.

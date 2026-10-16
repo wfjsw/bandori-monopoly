@@ -108,18 +108,24 @@ pub(crate) fn buy(player_id: i32) -> card_sdk::Asked {
     let kind = card_sdk::ctx::trigger::buy_kind();
     let reason = card_sdk::ctx::trigger::value();
     let _ = reason;
-    // `BuyGate` (FilterFlag): may this player buy this tile at all?
-    let price0 = ctx::buy_price(at);
-    if !ctx::raise(player_id, TriggerKind::BuyGate, price0)? {
+    // `BuyGate` (FilterFlag): may this player buy this tile at all? The
+    // quote below also runs it in pure preview; this is the real raise.
+    let base = ctx::buy_price(at);
+    if !ctx::raise(player_id, TriggerKind::BuyGate, base)? {
         return Ok(());
     }
     // `buyBefore` -- a real pre-hook (runs even on the no-op path).
-    if !ctx::raise(player_id, TriggerKind::BuyBefore, price0)? {
+    if !ctx::raise(player_id, TriggerKind::BuyBefore, base)? {
         return Ok(());
     }
-    // The quoted price (the rules crate's `buy_quote` stages ride on
-    // `buy_price` in the host).
-    let price = ctx::buy_price(at).max(0);
+    // The hook-aware quote (`BuyAdd` → `BuyMul` → `BuySet`), so quote ==
+    // charge (`docs/PURCHASE.md`).
+    let quotes = ctx::buy_quotes(player_id, kind, &[at]);
+    let (price, eligible) = quotes.first().copied().unwrap_or((-1, false));
+    if !eligible || price < 0 {
+        return Ok(());
+    }
+    let price = price.max(0);
     // Pay through the money pipeline. Land / Agent arm the optional
     // mortgage-funding prompt; the pipeline can suspend (Halt) and resume.
     if price > 0 {
