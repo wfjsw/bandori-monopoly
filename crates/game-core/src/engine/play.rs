@@ -2533,8 +2533,8 @@ impl Cx<'_> {
             return Ok(false);
         }
         // rana_parking's 「该次传送不可进行地契购买」 (`docs/PURCHASE.md`) -- the
-        // plan's no-buy flag is a **native** gate on the ordinary Land offer,
-        // the same shape as `buyable_here`. TODO(规则书) ruling 6: whether it
+        // plan's no-buy flag is a **native** gate on the ordinary Land offer.
+        // TODO(规则书) ruling 6: whether it
         // also bars a card-driven (`BuyKind::Card`) buy is undecided; today it
         // does not, matching the flag being about the turn's own landing.
         if kind == purchase::BuyKind::Land && self.w.turn.plan.no_buy {
