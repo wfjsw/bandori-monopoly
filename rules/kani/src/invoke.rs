@@ -721,6 +721,7 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     const HOUSE_ADDED: (u8, u64, u64) = tag_key_const("HouseAdded");
     const COUNTER_CHANGED: (u8, u64, u64) = tag_key_const("CounterChanged");
     const FIRE_SPENT: (u8, u64, u64) = tag_key_const("FireSpent");
+    const FANS_FLIP: (u8, u64, u64) = tag_key_const("FansFlip");
     const TELEPORTED: (u8, u64, u64) = tag_key_const("Teleported");
     const TARGETED: (u8, u64, u64) = tag_key_const("Targeted");
     const PASS: (u8, u64, u64) = tag_key_const("Pass");
@@ -757,6 +758,7 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
         HOUSE_ADDED => Some(ruleset_core::kind::HouseAdded),
         COUNTER_CHANGED => Some(H::CounterChanged),
         FIRE_SPENT => Some(ruleset_core::kind::FireSpent),
+        FANS_FLIP => Some(ruleset_core::kind::FansFlip),
         TELEPORTED => Some(H::Teleported),
         TARGETED => Some(H::Targeted),
         PASS => Some(H::Pass),
@@ -799,6 +801,7 @@ fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
         ruleset_core::kind::HouseAdded => "HouseAdded",
         H::CounterChanged => "CounterChanged",
         ruleset_core::kind::FireSpent => "FireSpent",
+        ruleset_core::kind::FansFlip => "FansFlip",
         H::Teleported => "Teleported",
         H::Targeted => "Targeted",
         H::Pass => "Pass",

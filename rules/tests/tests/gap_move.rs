@@ -220,16 +220,10 @@ fn g10_eve_plus_yd4_on_a_2d20_move() {
         "P0 holds Eve's (2) via Eve's (1): {:?}",
         t.skills(0)
     );
-    // Flip 2 fans for +2d4, then the 2d20 move goes backwards. Fans use the
-    // `P✽P粉丝(正)` counter (clean() wipes them).
-    t.m.world_mut().st.players[0]
-        .tokens
-        .push(game_core::state::Counter {
-            name: "P✽P粉丝(正)".into(),
-            value: 2,
-        
-        instance: None,
-    });
+    // Flip 2 fans for +2d4, then the 2d20 move goes backwards. Fans live in
+    // the state dict (`ppFansUp` / `ppFansDown`); `clean()` wipes them.
+    t.set_state(0, "ppFansUp", 2);
+    t.set_state(0, "ppFansDown", 0);
     t.dice(&[5, 5, 1, 1]);
     t.roll(0).unwrap();
     // Eve's (2) is a pre-roll choice; the roll may raise the window.

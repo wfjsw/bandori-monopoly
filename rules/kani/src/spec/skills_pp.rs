@@ -43,7 +43,7 @@ pub fn char_start_five_fans_log_ok(
 /// they split across those players is not printed — the per-player cap is
 /// `min(y, that player's down)` in the live reading, applied to each).
 /// Non-PP branch: effect X = 1 per PP character (「1个反面…变正」) — the
-/// `fansFlip` handler flips `min(1, down)`. When `down == 0` the flip is 0
+/// `fans::flip_up` flips `min(1, down)`. When `down == 0` the flip is 0
 /// and band clause （2） sees `X=1 > down=0`, granting 1 overflow crystal.
 pub fn skill2_side_flip(target_down: i32, y: i32, actor_is_pp: bool, target_is_pp: bool) -> i32 {
     if actor_is_pp {

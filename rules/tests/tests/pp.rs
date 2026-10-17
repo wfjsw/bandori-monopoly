@@ -1,65 +1,43 @@
 //! Rulebook black-box tests: Pastel✽Palettes (PP) cards, character skills,
 //! band skill. Spec: `target/scratch/rb/pp.md` (live Google Sheet text).
 //!
-//! Fan tokens are `P✽P粉丝(正)` / `P✽P粉丝(反)`. 「乐队卡」 crystals live in
-//! **one** pool: the Pastel✽Palettes band skill's own field-card crystals
-//! (`skill:Pastel✽Palettes:与偶像一起`), which is what (4) accrues and spends
-//! and what TITLE IDOL / 同一个梦想 write. Book assertions about 「乐队卡」
-//! target that pool.
+//! Fan counters live in the **per-player state dict** (`ppFansUp` /
+//! `ppFansDown`, `skill_groups::fans`), owned by no card. 「乐队卡」 crystals
+//! live in **one** pool: the Pastel✽Palettes band skill's own field-card
+//! crystals (`skill:Pastel✽Palettes:与偶像一起`), which is what (4) accrues and
+//! spends and what TITLE IDOL / 同一个梦想 write. Book assertions about
+//! 「乐队卡」 target that pool.
 
 mod common;
 use common::*;
-use game_core::state::Counter;
 
 const BAND_SKILL: &str = "skill:Pastel✽Palettes:与偶像一起";
+/// Face-up fan counter (`skill_groups::fans::UP`).
+const FANS_UP: &str = "ppFansUp";
+/// Face-down fan counter (`skill_groups::fans::DOWN`).
+const FANS_DOWN: &str = "ppFansDown";
 
-/// Fan markers are counters of the Pastel✽Palettes band skill
-/// (`docs/CARDS.md` → 「Pastel fans owned by the band skill」). Ensure one
-/// live instance exists and return its field uid: the holder's own copy when
-/// they have one (clause （2） keys on that instance's owner), else any other
-/// seat's copy (the `fansGrant`/`fansFlip` fallback receiver), else place a
-/// fresh one on `who`. No band card on the field → every grant/flip is a no-op.
-fn ensure_band(t: &mut Table, who: usize) -> i32 {
+/// Place the Pastel✽Palettes band skill on `who` and return its field uid.
+/// Only needed where the **band card itself** is under test (clause （2）
+/// crystals, game-start grants, the (4) crystal/draw). Fan grant / flip
+/// themselves work with no band card on the board.
+fn place_band(t: &mut Table, who: usize) -> i32 {
     if let Some(f) = t.field(who).into_iter().find(|f| f.card == BAND_SKILL) {
         return f.uid;
-    }
-    for p in 0..t.n {
-        if p == who {
-            continue;
-        }
-        if let Some(f) = t.field(p).into_iter().find(|f| f.card == BAND_SKILL) {
-            return f.uid;
-        }
     }
     t.place_raw(who, BAND_SKILL)
 }
 
+/// Write the seat's fan counters directly. No band card is required: fans
+/// persist with the player, not with a card instance.
 fn set_fans(t: &mut Table, who: usize, up: i32, down: i32) {
-    // Update the two fan counters in place -- do not replace the whole
-    // tokens vector (that would wipe `skillBlock` and every other token).
-    // Stamp `Counter.instance` to the band-skill field uid so flips/grants
-    // have a receiver and `destroy_instance_units` / `purge_orphaned_markers`
-    // see a live owner (SKILL-01).
-    let uid = ensure_band(t, who);
     let p = &mut t.m.world_mut().st.players[who];
-    for (name, value) in [("P✽P粉丝(正)", up), ("P✽P粉丝(反)", down)] {
-        match p.tokens.iter_mut().find(|c| c.name == name) {
-            Some(c) => {
-                c.value = value;
-                c.instance = Some(uid);
-            }
-            None => p.tokens.push(Counter {
-                name: name.into(),
-                value,
-                instance: Some(uid),
-            }),
-        }
-    }
-    p.tokens.retain(|c| c.value > 0 || c.name.starts_with("P✽P粉丝"));
+    p.state_set(FANS_UP, up);
+    p.state_set(FANS_DOWN, down);
 }
 
 fn fans(t: &Table, who: usize) -> (i32, i32) {
-    (t.token(who, "P✽P粉丝(正)"), t.token(who, "P✽P粉丝(反)"))
+    (t.state(who, FANS_UP), t.state(who, FANS_DOWN))
 }
 
 /// Crystals on the Pastel✽Palettes band skill (the pool (4) spends).
@@ -139,10 +117,6 @@ fn shanyao_placed_on_field() {
 fn shanyao_counter_on_short_payment() {
     let mut t = Table::vanilla(2);
     t.place_raw(0, "PP:再次闪耀");
-    // The rescue's fan is a `fansGrant` to the band skill; place the receiver
-    // so the grant actually lands and the bankruptcy sweep below is the thing
-    // under test (not a vacuous 0 from a no-op grant).
-    ensure_band(&mut t, 0);
     t.own(0, &[7]); // 江户川公园, price 1400 -> 1400/5 = 280
     t.set_money(0, 50);
     t.own(1, &[1]);
@@ -242,9 +216,8 @@ fn accident_places_shuffles_overlap_draws() {
 #[test]
 fn overlap_play_teleports_and_turn_end() {
     let mut t = Table::vanilla(2);
-    // The turn-end grant is a `fansGrant` to the band skill; no band card on
-    // the field → reply 0 → no marker.
-    ensure_band(&mut t, 0);
+    // Turn-end 「获得1个正面的[P✽P粉丝]」 writes the state-dict counter; no
+    // band card is required.
     t.give_play(0, "PP:[衍生]重叠的声音").unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), 35, "teleported to Bandori车站");
@@ -295,10 +268,8 @@ fn seeyou_flips_fan_count_reverse_positive() {
     t.give_play(0, "PP:[衍生]明天见").unwrap();
     drain(&mut t);
     assert_eq!(fans(&t, 0), (5, 0), "flipped min(5, 4) reverse positive");
-    // Clause （2） (new with the FlipEffect retirement -- every down→up site
-    // goes through the band card now): X is the total fan count (5), the
-    // pre-flip face-downs are 4, so the overflow is 1 crystal.
-    assert_eq!(band_xtal(&t, 0), 1, "clause (2) overflow X=5 - 4 downs = 1");
+    // Clause （2） crystals need a band card on the flipping seat -- see
+    // `seeyou_clause2_overflow_crystals`. Without one the flip still runs.
 }
 
 /// 规则书: 「（2）[共鸣]无视此卡的[特]效果（1）。」
@@ -512,7 +483,9 @@ fn dream_ahead_extra_rent() {
             }
         }
     }
-    ensure_band(&mut t, 0);
+    // Band (4) draw overflows dream_ahead's crystal cap -- the band card is
+    // under test here, not the fan grant/flip path.
+    place_band(&mut t, 0);
     set_band_xtal(&mut t, 0, 5);
     t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
     t.begin_turn(0);
@@ -697,9 +670,6 @@ fn jennifer_places_on_another_player() {
 #[test]
 fn jennifer_pass_agency_pays_and_grants_ranger() {
     let mut t = Table::vanilla(2);
-    // The pass grants a fan to the user and flips one of the owner's -- both
-    // are `fansGrant` / `fansFlip` messages that need a live band card.
-    ensure_band(&mut t, 0);
     t.give(0, &["PP:找回珍妮弗"]);
     t.play(0, "PP:找回珍妮弗").unwrap();
     while t.prompt().is_some() {
@@ -746,7 +716,7 @@ fn rangers_steps_by_card_count() {
     set_fans(&mut t, 0, 0, 0);
     t.own(0, &[10]);
     t.set_houses(10, 1);
-    ensure_band(&mut t, 0);
+    place_band(&mut t, 0); // step 2 「为乐队卡添加3个[奇迹水晶]」
     t.place_raw(0, "PP:再次闪耀");
     t.place_raw(0, "PP:可爱又强壮的花朵");
     t.give_play(0, "PP:[衍生]魔法战队Pastel✽Ranger").unwrap();
@@ -912,7 +882,8 @@ fn maya_skill_2_watch_and_pick() {
     t.place_raw(0, "skill:大和麻弥:朝阳照耀的片刻");
     set_fans(&mut t, 0, 2, 0);
     t.set_draw(0, &["通用:GREAT", "通用:尽力后的收获", "通用:网络链接异常"]);
-    ensure_band(&mut t, 0);
+    // Band (4) spend-draw is the draw under maya's (2) watch.
+    place_band(&mut t, 0);
     set_band_xtal(&mut t, 0, 5);
     t.begin_turn(0);
     while t.prompt().is_some() {
@@ -988,99 +959,98 @@ fn band_skill_overflow_to_crystals() {
     assert_eq!(band_xtal(&t, 0), 4, "clause (2) overflow X=6 - 2 downs = 4");
 }
 
-// ============================================================ fan marker ownership
-// `P✽P粉丝(正)/(反)` are counters of the band-skill instance
-// (`docs/CARDS.md` → 「Pastel fans owned by the band skill」). Only
-// `skill:Pastel✽Palettes:与偶像一起` writes them; every other card sends
-// `fansGrant` / `fansFlip`. No band card on the field → no markers.
+// ============================================================ fan counters
+// Fan counters live in the per-player state dict (`ppFansUp` / `ppFansDown`),
+// owned by no card. Grants and flips work with no band card on the board.
+// Clause （2） crystals are the only fan-adjacent effect that needs one.
 
-/// No band card on the board: a grant / flip is a message with no receiver
-/// (`send_fans` replies 0), so neither moves a marker.
+/// No band card on the board: grant and flip still move the state-dict
+/// counters. The band card is only the clause （2） crystal listener.
 #[test]
-fn fans_no_band_grant_and_flip_do_nothing() {
+fn fans_persist_with_no_band_card() {
     let mut t = Table::vanilla(2);
     assert!(!t.on_field(0, BAND_SKILL) && !t.on_field(1, BAND_SKILL));
-    // Inject face-downs the pre-split way (instance: None, no band card).
-    {
-        let p = &mut t.m.world_mut().st.players[0];
-        p.tokens.push(Counter {
-            name: "P✽P粉丝(反)".into(),
-            value: 3,
-            instance: None,
-        });
-    }
+    set_fans(&mut t, 0, 0, 3);
     // Flip: 明天见's 「将自己拥有的[P✽P粉丝]数量个反面[P✽P粉丝]变正」.
     t.give_play(0, "PP:[衍生]明天见").unwrap();
     drain(&mut t);
-    assert_eq!(fans(&t, 0), (0, 3), "flip is a no-op without a band card");
+    assert_eq!(fans(&t, 0), (3, 0), "flip works with no band card");
     // Grant: overlap's turn-end 「获得1个正面的[P✽P粉丝]」.
     t.give_play(0, "PP:[衍生]重叠的声音").unwrap();
     drain(&mut t);
     t.end(0).unwrap();
     drain(&mut t);
-    assert_eq!(fans(&t, 0), (0, 3), "grant is a no-op without a band card");
+    assert_eq!(fans(&t, 0), (4, 0), "grant works with no band card");
 }
 
-/// Name-keyed fan rows whose owning rule (`marker_owner`) has no live
-/// instance are orphans: `purge_orphaned_markers` drops them.
+/// Fans are player state, not band-card counters: leaving the band card does
+/// not destroy them.
 #[test]
-fn fans_no_band_injected_markers_are_purged() {
+fn fans_survive_band_unplace() {
     let mut t = Table::vanilla(2);
-    {
-        let w = t.m.world_mut();
-        w.note_marker_owner("P✽P粉丝(正)", BAND_SKILL);
-        w.note_marker_owner("P✽P粉丝(反)", BAND_SKILL);
-        w.set_tok(0, "P✽P粉丝(正)", 3, -1);
-        w.set_tok(0, "P✽P粉丝(反)", 2, -1);
-    }
-    assert_eq!(fans(&t, 0), (3, 2), "injection landed");
-    t.m.world_mut().purge_orphaned_markers();
-    assert_eq!(
-        fans(&t, 0),
-        (0, 0),
-        "no live band instance -> the name-keyed rows are orphans"
-    );
-}
-
-/// The band-skill instance leaving the field destroys its counter units
-/// (`destroy_instance_units`): every fan stamped to that uid dies with it.
-#[test]
-fn fans_die_with_band_instance() {
-    let mut t = Table::vanilla(2);
-    let uid = ensure_band(&mut t, 0);
+    place_band(&mut t, 0);
     set_fans(&mut t, 0, 3, 2);
     set_fans(&mut t, 1, 1, 1);
-    assert_eq!(fans(&t, 0), (3, 2));
-    assert_eq!(fans(&t, 1), (1, 1));
     assert!(
         t.m.world_mut().unplace_card(0, BAND_SKILL).is_some(),
         "unplace the band skill"
     );
     assert!(!t.on_field(0, BAND_SKILL), "{:?}", t.field_ids(0));
-    assert_eq!(
-        fans(&t, 0),
-        (0, 0),
-        "seat 0's fans died with the band instance (uid {uid})"
-    );
-    assert_eq!(
-        fans(&t, 1),
-        (0, 0),
-        "seat 1's fans were counters of the same instance"
-    );
+    assert_eq!(fans(&t, 0), (3, 2), "seat 0's fans live in the state dict");
+    assert_eq!(fans(&t, 1), (1, 1), "seat 1's fans are independent");
+}
+
+/// `Match::save` / `Match::restore` round-trips the state-dict fan counters.
+#[test]
+fn fans_survive_save_restore() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 3, 2);
+    set_fans(&mut t, 1, 0, 5);
+    let saved = t.m.save();
+    let mut t2 = Table {
+        m: game_core::engine::Match::restore(common::data(), common::rules(), &saved)
+            .expect("restore"),
+        n: t.n,
+    };
+    assert_eq!(fans(&t2, 0), (3, 2), "seat 0 fans survive save/restore");
+    assert_eq!(fans(&t2, 1), (0, 5), "seat 1 fans survive save/restore");
+    // The restored match still accepts a grant / flip on the dict.
+    set_fans(&mut t2, 0, 4, 1);
+    assert_eq!(fans(&t2, 0), (4, 1));
+}
+
+/// Bankruptcy zeros every state value, so fans die with the bankrupt player.
+#[test]
+fn bankruptcy_zeros_fans() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 4, 2);
+    set_fans(&mut t, 1, 1, 1);
+    t.own(1, &[7]);
+    t.set_houses(7, 3);
+    t.set_money(0, 50);
+    t.begin_turn(0);
+    t.set_pos(0, 5);
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert!(t.p(0).bankrupt, "P0 is out: {:?}", t.recent_keys(10));
+    assert_eq!(fans(&t, 0), (0, 0), "bankruptcy zeros the state dict");
+    assert_eq!(fans(&t, 1), (1, 1), "other seats keep theirs");
 }
 
 // ============================================================ clause （2） sites
 // 「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的反面的
 // [P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 -- every
-// down→up flip site goes through the band card (the FlipEffect/FlipAfter
-// pair is retired), so each one can pay the overflow.
+// down→up flip raises `FansFlip` before the dict writes. The band card's
+// `On::Action(&[FansFlip], "actor == owner")` pays the overflow only when a
+// band card is on the board **and** the flipping seat owns that instance.
 
 /// together_here: X = 5 (+ceil((down-up)/2)), pin the overflow as crystals.
 /// (The loose twin is `band_skill_overflow_to_crystals`.)
 #[test]
 fn together_clause2_overflow_crystals() {
     let mut t = Table::vanilla(2);
-    ensure_band(&mut t, 0);
+    place_band(&mut t, 0);
     set_band_xtal(&mut t, 0, 0);
     // up >= down: X = 5, downs = 2 -> flips 2, overflow 3.
     set_fans(&mut t, 0, 9, 2);
@@ -1095,7 +1065,7 @@ fn together_clause2_overflow_crystals() {
 #[test]
 fn seeyou_clause2_overflow_crystals() {
     let mut t = Table::vanilla(2);
-    ensure_band(&mut t, 0);
+    place_band(&mut t, 0);
     set_band_xtal(&mut t, 0, 0);
     set_fans(&mut t, 0, 1, 4);
     t.give_play(0, "PP:[衍生]明天见").unwrap();
@@ -1123,11 +1093,11 @@ fn jennifer_owner_flip_clause2_crystal() {
     // Place the band card on the owner (seat 1) mid-turn so the turn-start
     // crystal of (4) does not land in the pool under test.
     t.begin_turn(1);
-    ensure_band(&mut t, 1);
+    place_band(&mut t, 1);
     set_band_xtal(&mut t, 1, 0);
     walk_onto(&mut t, 1, 3, 6); // path 4,5,6 passes 偶像经纪公司 (5)
     // Owner flip X=1, 0 face-downs → overflow 1. (The user's grant is a
-    // `fansGrant` and does not pay clause （2）.)
+    // plain `fans::grant` and does not pay clause （2）.)
     assert_eq!(band_xtal(&t, 1), 1, "clause (2): owner flip X=1 > 0 downs");
 }
 
@@ -1142,7 +1112,7 @@ fn aya_flip_all_pp_clause2_crystal() {
     // P1 holds the granted (2) skill (「所有非Pastel✽Palettes玩家获得丸山彩的
     // （2）技能」).
     t.place_raw(1, "skill:丸山彩:With~");
-    ensure_band(&mut t, 0);
+    place_band(&mut t, 0);
     set_band_xtal(&mut t, 0, 0);
     // P0 (PP) holds 0 face-downs: flip_all_pp's X=1 overflows.
     set_fans(&mut t, 0, 0, 0);
@@ -1157,6 +1127,81 @@ fn aya_flip_all_pp_clause2_crystal() {
         1,
         "clause (2): flip_all_pp X=1 > 0 downs on the PP seat"
     );
+}
+
+/// Clause （2） is silent when no band card is on the board: the flip still
+/// moves counters, only the crystal grant is skipped.
+#[test]
+fn clause2_silent_without_band_together() {
+    let mut t = Table::vanilla(2);
+    assert!(!t.on_field(0, BAND_SKILL) && !t.on_field(1, BAND_SKILL));
+    set_fans(&mut t, 0, 0, 2);
+    t.give_play(0, "PP:有你与我在这里共度").unwrap();
+    drain(&mut t);
+    assert_eq!(fans(&t, 0), (2, 0), "flip still moves counters");
+    // No band card → nowhere to put the overflow crystal. Pin "no silent
+    // money / crystal leak" by asserting the board has no band pool at all.
+    assert_eq!(band_xtal(&t, 0), 0);
+    assert_eq!(band_xtal(&t, 1), 0);
+}
+
+/// Clause （2） is silent when the band card sits on another seat: 「你」 is
+/// the flipping seat's own band instance (`actor == owner`).
+#[test]
+fn clause2_silent_when_band_on_other_seat_seeyou() {
+    let mut t = Table::vanilla(2);
+    place_band(&mut t, 1); // band owned by P1
+    set_band_xtal(&mut t, 1, 0);
+    set_fans(&mut t, 0, 1, 4); // P0 flips X=5
+    t.give_play(0, "PP:[衍生]明天见").unwrap();
+    drain(&mut t);
+    assert_eq!(fans(&t, 0), (5, 0), "P0's counters still flip");
+    assert_eq!(
+        band_xtal(&t, 1),
+        0,
+        "P1's band does not pay for P0's flip"
+    );
+}
+
+/// Jennifer owner flip: no band card on the owner → counters move, no crystal.
+#[test]
+fn clause2_silent_without_band_jennifer() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["PP:找回珍妮弗"]);
+    t.play(0, "PP:找回珍妮弗").unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("jennifer") {
+            let _ = t.answer(0, 0);
+        } else {
+            t.decline();
+        }
+    }
+    t.begin_turn(1);
+    assert!(!t.on_field(1, BAND_SKILL));
+    set_fans(&mut t, 1, 0, 0);
+    walk_onto(&mut t, 1, 3, 6);
+    assert_eq!(band_xtal(&t, 1), 0, "no band card → no clause (2) crystal");
+    assert_eq!(band_xtal(&t, 0), 0);
+}
+
+/// aya's flip_all_pp: the PP seat without a band card gets no crystal even
+/// when X > its pre-flip face-downs.
+#[test]
+fn clause2_silent_without_band_aya_flip_all_pp() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "丸山彩");
+    t.set_character_raw(1, "户山香澄");
+    t.place_raw(1, "skill:丸山彩:With~");
+    assert!(!t.on_field(0, BAND_SKILL) && !t.on_field(1, BAND_SKILL));
+    set_fans(&mut t, 0, 0, 0); // X=1 overflows 1 if a band were present
+    set_fans(&mut t, 1, 1, 0);
+    t.own(0, &[7]);
+    t.set_houses(7, 1);
+    t.begin_turn(1);
+    walk_onto_y(&mut t, 1, 5, 7, 1);
+    assert_eq!(band_xtal(&t, 0), 0, "no band card on the PP seat");
+    assert_eq!(band_xtal(&t, 1), 0);
 }
 
 // ============================================================ interactions
@@ -1299,6 +1344,16 @@ fn ix_shine_immunity_flag() {
 fn skill_1_grants_5_positive_fans_at_game_start() {
     let t = Table::new(&["丸山彩", "户山香澄"]);
     assert_eq!(fans(&t, 0), (5, 0), "5 positive fans at game start");
+}
+
+/// The persona +5 start grant is not seat- or start-order-dependent: the PP
+/// character on seat 1 still gets her five. The non-PP seat gets the band
+/// clause （1） reverse fan (1 down), not the +5.
+#[test]
+fn skill_1_grants_five_fans_any_seat() {
+    let t = Table::new(&["户山香澄", "丸山彩"]);
+    assert_eq!(fans(&t, 1), (5, 0), "PP character on seat 1 gets 5");
+    assert_eq!(fans(&t, 0), (0, 1), "non-PP seat gets the band (1) reverse only");
 }
 
 /// 规则书: 「（1）游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]」

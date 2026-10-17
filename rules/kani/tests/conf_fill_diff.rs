@@ -563,6 +563,11 @@ fn to_world(fx: &Fixture) -> KWorld {
         }
         for &(n, v) in &s.slots {
             w.player_keys[p].set(intern::intern(n), v);
+            if n == kworld::TOK_PP_POS {
+                w.fans_pos[p] = v;
+            } else if n == kworld::TOK_PP_NEG {
+                w.fans_neg[p] = v;
+            }
         }
     }
     for (i, t) in fx.tiles.iter().enumerate() {
@@ -843,7 +848,7 @@ fn fx_aya_poorest_value() -> Fixture {
     fx.seats[1].money = 5000;
     fx.seats[0].pos = 0;
     fx.seats[1].pos = 10;
-    fx.seats[0].tokens = vec![(ir_fill::TOK_PP_POS, 2), (ir_fill::TOK_PP_NEG, 1)];
+    fx.seats[0].slots = vec![(ir_fill::TOK_PP_POS, 2), (ir_fill::TOK_PP_NEG, 1)];
     fx.trig = Trig {
         kind: TriggerKind::PaySplitAdd,
         actor: 0,
@@ -865,7 +870,7 @@ fn fx_aya_value_zero_richest() -> Fixture {
     fx.seats[1].money = 100;
     fx.seats[0].pos = 0;
     fx.seats[1].pos = 10;
-    fx.seats[0].tokens = vec![(ir_fill::TOK_PP_POS, 2)];
+    fx.seats[0].slots = vec![(ir_fill::TOK_PP_POS, 2)];
     fx.trig = Trig {
         kind: TriggerKind::PaySplitAdd,
         actor: 0,
@@ -907,15 +912,18 @@ fn fx_tile_kinds() -> Fixture {
     fx
 }
 
-/// (4) tok('P✽P粉丝(正)') present vs the absent twin (seats differ).
+/// (4) slot('ppFansUp') present vs the absent twin (seats differ).
+/// Fans live in the per-player state dict (`slots` / `state_get`), matching
+/// `skill_groups::fans` (`ppFansUp` / `ppFansDown`).
 fn fx_fans_tok() -> Fixture {
     let mut fx = Fixture::new("fans_tok", 4);
     for (i, s) in fx.seats.iter_mut().enumerate() {
         s.pos = i as i32 * 7;
     }
-    fx.seats[0].tokens = vec![(ir_fill::TOK_PP_POS, 4), ("PAREO标记", 2), ("星星贴纸", 1)];
-    fx.seats[1].tokens = vec![(ir_fill::TOK_PP_NEG, 1)];
-    // seats 2/3: no fans tokens
+    fx.seats[0].tokens = vec![("PAREO标记", 2), ("星星贴纸", 1)];
+    fx.seats[0].slots = vec![(ir_fill::TOK_PP_POS, 4)];
+    fx.seats[1].slots = vec![(ir_fill::TOK_PP_NEG, 1)];
+    // seats 2/3: no fans counters
     fx.trig = Trig {
         kind: TriggerKind::Target,
         actor: 1,
@@ -1184,7 +1192,7 @@ fn fixtures_flip_the_guards_they_target() {
         "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0";
     let is_start = ruleset_core::guards::OWN_START;
     // No `actor == owner` clause — the fans fixture's actor is seat 1.
-    let fans = "value > 0 && tok('P✽P粉丝(正)') >= 1";
+    let fans = "value > 0 && slot('ppFansUp') >= 1";
     let placed = "card.placed";
     let band = "group_is(owner, 'Pastel✽Palettes')";
 

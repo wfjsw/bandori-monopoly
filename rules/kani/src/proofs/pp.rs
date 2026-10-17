@@ -17,8 +17,8 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+const FANS_UP: &str = "ppFansUp";
+const FANS_DOWN: &str = "ppFansDown";
 const FANS_BAND: &str = "skill:Pastel✽Palettes:与偶像一起";
 
 fn tok_pos() -> u16 {
@@ -29,7 +29,7 @@ fn tok_neg() -> u16 {
     crate::intern::intern(FANS_DOWN).0
 }
 
-/// Place the Pastel band skill on `owner`'s field (the fans marker owner).
+/// Place the Pastel band skill on `owner`'s field (clause （2） overflow target).
 /// Returns the instance uid so overflow crystals can be read back.
 fn place_band_skill(owner: i32) -> i32 {
     world::with_world_mut(|w| {
@@ -61,16 +61,19 @@ fn crystals_at(uid: i32) -> i32 {
 // ---------------------------------------------------------------------------
 // Per-harness host-op subset for `PP:同一个梦想` (TRIAGE-LOG `op-subset`).
 //
-// Unmodified body (`same_dream.rs` + `resonance::try_resonance` + fansFlip
-// → pastel `on_fans`) reaches:
-//   add_group_pool, tok→count_held_name, set_tok→set_held_name, log, gain,
-//   player_count, player_out, send + msg_* (fansFlip), add_counter_self
-//   (clause （2） overflow crystals), hand_count (try_resonance entry).
+// Unmodified body (`same_dream.rs` + `resonance::try_resonance` + fans::
+// state-dict helpers + FansFlip raise → pastel `on_fans_flip`) reaches:
+//   add_group_pool, log, gain, player_count, player_out, in_group,
+//   state_get / state_add (fans::up/down/flip_*), raise (fans::flip_up →
+//   FansFlip → on_fans_flip), trig_value (clause （2） reads X),
+//   add_counter_self (clause （2） overflow crystals), hand_count
+//   (try_resonance entry).
 // Isolation (no [共鸣] in hand) keeps try_resonance at `hand_count <= 0`, so
-// ask / take_card / to_discard / in_group are on a dead path — still declared
-// so that if isolation breaks the proof FAILS loudly (outside_subset) rather
-// than silently passing. `effect` / `gain_typed` / `count_held` ride the same
-// handlers as their siblings.
+// ask / take_card / to_discard are on a dead path — still declared so that if
+// isolation breaks the proof FAILS loudly (outside_subset) rather than
+// silently passing. `effect` / `gain_typed` / `count_held` ride the same
+// handlers as their siblings. Generic send/msg_* stay for residual
+// `ctx::send` (mark:cp / tests).
 // ---------------------------------------------------------------------------
 crate::host_subset!(same_dream_dispatch {
     add_group_pool => arm_add_band_crystals,
@@ -88,7 +91,12 @@ crate::host_subset!(same_dream_dispatch {
     in_group => arm_in_band,
     group_pool => arm_band_crystals,
     money => arm_money,
-    // fansFlip / fansGrant → pastel `on_fans` (clause （2） overflow crystals).
+    // fans:: state dict + FansFlip raise → pastel `on_fans_flip`.
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add | inc_slot => arm_state_add,
+    raise => arm_raise,
+    trig_value => arm_trig_value,
     send => arm_send,
     msg_name => arm_msg_name,
     msg_a => arm_msg_a,
@@ -133,7 +141,7 @@ fn symbolic_play_world() {
         }
         w.symbolic_answers = true;
     });
-    // Band skill on every seat so `fansGrant` / `fansFlip` find a receiver
+    // Band skill on every seat so FansFlip raises find the overflow target
     // (the marker owner) regardless of which seat the clause names.
     for p in 0..MAX_PLAYERS {
         place_band_skill(p as i32);
@@ -163,7 +171,7 @@ fn same_dream_world() {
         n_players: 2,
         ..Default::default()
     });
-    // Band skill on every used seat so `fansFlip` finds a receiver and
+    // Band skill on every used seat so FansFlip finds the overflow target and
     // clause （2） overflow lands on the user's own instance.
     place_band_skill(0);
     place_band_skill(1);

@@ -2235,8 +2235,92 @@ pub fn arm_players_on_count(a: Args) -> i64 {
     }) as i64
 }
 
-pub fn arm_raise(_a: Args) -> i64 {
-    1
+/// `ctx::raise(player_id, kind, value)` — record the trigger payload and run
+/// any in-host listener for the kind. Returns 1 = settled (nobody cancelled).
+///
+/// `FansFlip` (107) is the first real client: `fans::flip_up` raises it
+/// **before** the dict writes with `value` = the effect's intended X. Pastel
+/// listens `On::Action(&[FansFlip], "actor == owner")`, so only band-skill
+/// instances whose owner == `player_id` run `on_fans_flip_kani`. Cancelled /
+/// aborted (`0`) leaves the caller's counters untouched.
+pub fn arm_raise(a: Args) -> i64 {
+    let [player_id, kind, value, ..] = a;
+    // Nested trigger (matches `wasm_rules::raise_core`): save the outer
+    // payload, install the raise's, run listeners, restore. `arm_trig_value`
+    // answers `pay_amount` (the hostfns `trigger().value` twin); `trig_value`
+    // is the ir_fill / fixture view of the same number.
+    let saved = world::with_world(|w| {
+        (
+            w.trig_kind,
+            w.trig_player,
+            w.trig_value,
+            w.pay_amount,
+            w.trig_cancelled,
+        )
+    });
+    world::with_world_mut(|w| {
+        w.trig_kind = kind;
+        w.trig_player = player_id;
+        w.trig_value = value;
+        w.pay_amount = value;
+        w.trig_cancelled = false;
+    });
+    let mut settled = 1i64;
+    #[cfg(all(kani, feature = "skills-groups"))]
+    {
+        if kind == ruleset_core::kind::FANS_FLIP {
+            settled = arm_raise_fans_flip(player_id, value);
+        }
+    }
+    #[cfg(not(all(kani, feature = "skills-groups")))]
+    let _ = (player_id, value);
+    // Restore the outer trigger. The raise's cancelled flag is the *reply*
+    // (0 = cancelled), not a mutation of the outer payload.
+    world::with_world_mut(|w| {
+        w.trig_kind = saved.0;
+        w.trig_player = saved.1;
+        w.trig_value = saved.2;
+        w.pay_amount = saved.3;
+        w.trig_cancelled = saved.4;
+    });
+    settled
+}
+
+/// FansFlip listener dispatch: every `skill:Pastel✽Palettes:与偶像一起` field
+/// instance whose owner is the raise seat (`actor == owner`), newest first
+/// is irrelevant — one instance per seat in the proofs.
+#[cfg(all(kani, feature = "skills-groups"))]
+fn arm_raise_fans_flip(player_id: i32, value: i32) -> i64 {
+    let _ = value;
+    let band = intern::intern(world::TOK_PP_BAND).0;
+    let saved_uid = world::with_world(|w| w.last_uid);
+    // Collect matching uids first (the body may mutate the field).
+    let mut hits = [0i32; 4];
+    let mut n = 0usize;
+    world::with_world(|w| {
+        let mut j = 0usize;
+        while j < w.field_n as usize {
+            if w.field[j].player == player_id && w.field[j].card == band && n < hits.len() {
+                hits[n] = w.field[j].uid;
+                n += 1;
+            }
+            j += 1;
+        }
+    });
+    let mut i = 0usize;
+    while i < n {
+        let uid = hits[i];
+        world::with_world_mut(|w| w.last_uid = uid);
+        let _ = skill_groups::pastel::on_fans_flip_kani(player_id);
+        i += 1;
+    }
+    world::with_world_mut(|w| w.last_uid = saved_uid);
+    // A listener may have cancelled the raise.
+    if world::with_world(|w| w.trig_cancelled) {
+        0
+    } else {
+        1
+    }
 }
 
 pub fn arm_raise_bought(_a: Args) -> i64 {
@@ -3011,9 +3095,9 @@ pub fn arm_stub_zero(a: Args) -> i64 {
 // The kani facade packs Target / Message as fixed records (see
 // `card-sdk/src/ctx.rs` `target_bytes` / `msg_bytes` / `send_card_msg`).
 // `arm_send` unpacks them, stashes the payload on `World`, and dispatches to
-// the receiver's `On::Message` body. The fans channel (`fansGrant` /
-// `fansFlip` → `skill:Pastel✽Palettes:与偶像一起`) is the first real client;
-// it runs the **unmodified** `on_fans` body via `on_fans_kani`.
+// the receiver's `On::Message` body. Generic support stays for `mark:cp`'s
+// `"place"` channel and test fixtures; the PP fans channel is gone (state
+// dict + `FansFlip` raise, see [`arm_raise`]).
 
 /// Read a little-endian i32 at `off` from a packed arena record.
 fn le_i32(b: &[u8], off: usize) -> i32 {
@@ -3072,29 +3156,10 @@ pub fn arm_send(a: Args) -> i64 {
     // Sender context for the handler.
     let (sender_uid, sender_seat) = world::with_world(|w| (w.last_uid, w.trig_player));
 
-    // Resolve the receiver instance: the **first** field copy of `card` on
-    // `who` exactly (`Target::Card { player: who, card }`). Multi-seat
-    // fallback is the caller's job (`fans::send_fans` probes other seats as
-    // separate sends) so clause （2） always sees the holder's own band card.
-    let band_card = intern::intern(world::TOK_PP_BAND).0;
-    let want_card = if card != 0 { card } else { band_card };
-    let mut recv: Option<(i32, i32)> = None; // (uid, owner)
-    if kind == 1 {
-        let hit = world::with_world(|w| {
-            let mut j = 0usize;
-            let mut found: Option<(i32, i32)> = None;
-            while j < w.field_n as usize {
-                if w.field[j].player == who && w.field[j].card == want_card {
-                    found = Some((w.field[j].uid, who));
-                    break;
-                }
-                j += 1;
-            }
-            found
-        });
-        recv = hit;
-    }
-
+    // Stash the payload — `msg_*` reads it. No named-channel special-case:
+    // the only previous client (PP fans) moved to the state dict +
+    // `FansFlip` raise. Generic `ctx::send` / `msg_*` stay for `mark:cp`
+    // (`"place"`) and tests; those proofs call the body (`*_kani`) directly.
     world::with_world_mut(|w| {
         w.msg_name = name.0;
         w.msg_seat = seat;
@@ -3106,33 +3171,7 @@ pub fn arm_send(a: Args) -> i64 {
         w.msg_sender_uid = sender_uid;
         w.msg_sender_seat = sender_seat;
     });
-
-    let Some((uid, owner)) = recv else {
-        return 0;
-    };
-
-    // Run the handler as the receiver instance (crystals land on `last_uid`).
-    let saved_uid = world::with_world(|w| w.last_uid);
-    world::with_world_mut(|w| w.last_uid = uid);
-
-    // Fans channel: the Pastel band skill owns `fansGrant` / `fansFlip`.
-    // Call the **unmodified** `on_fans` body through its kani wrapper.
-    #[cfg(all(kani, feature = "skills-groups"))]
-    {
-        let is_grant = intern::id_eq_str(name, "fansGrant");
-        let is_flip = intern::id_eq_str(name, "fansFlip");
-        if is_grant || is_flip {
-            let _ = skill_groups::pastel::on_fans_kani(owner);
-            let reply = world::with_world(|w| w.msg_reply);
-            world::with_world_mut(|w| w.last_uid = saved_uid);
-            return reply as i64;
-        }
-    }
-
-    // No known receiver for this name: restore and reply 0.
-    world::with_world_mut(|w| w.last_uid = saved_uid);
-    #[cfg(not(all(kani, feature = "skills-groups")))]
-    let _ = (name, owner);
+    let _ = (kind, who, card);
     0
 }
 

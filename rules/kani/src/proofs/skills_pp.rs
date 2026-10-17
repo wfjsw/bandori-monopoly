@@ -15,8 +15,8 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+const FANS_UP: &str = "ppFansUp";
+const FANS_DOWN: &str = "ppFansDown";
 const FANS_BAND: &str = "skill:Pastel✽Palettes:与偶像一起";
 
 /// Place the Pastel band skill on `owner`'s field (fans marker owner).
@@ -79,7 +79,8 @@ crate::host_subset!(skills_pp_dispatch {
     placed_cards => arm_placed_cards,
     raise => arm_raise,
     gate => arm_gate,
-    // fansGrant / fansFlip → pastel `on_fans` (band clause （2）).
+    // FansFlip raise → pastel `on_fans_flip` (band clause （2）) via `arm_raise`.
+    // Generic send/msg_* stay for any residual `ctx::send` (mark:cp / tests).
     send => arm_send,
     msg_name => arm_msg_name,
     msg_a => arm_msg_a,
@@ -91,6 +92,7 @@ crate::host_subset!(skills_pp_dispatch {
     msg_sender_uid => arm_msg_sender_uid,
     msg_sender_seat => arm_msg_sender_seat,
     msg_text => arm_msg_text,
+    trig_value => arm_trig_value,
     set_steps | set_resolve | set_stop_at | schedule_turn_end | linger
     | card_offer_build | can_build_on => arm_protocol_stub,
     card_move => arm_card_move,
@@ -320,15 +322,16 @@ pub fn aya_with_02_mutant_is_detected() {
 }
 
 // ===========================================================================
-// C-PP-band-idol-02 overflow formula (pure) + body via `on_fans`.
+// C-PP-band-idol-02 overflow formula (pure) + body via `on_fans_flip`.
 // 「（2）你因任意原因受到“将X个反面[P✽P粉丝]变正”的效果且X大于拥有的反面的
 //  [P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。」
 //
 // SPEC NOTE (loud): the previous `band_idol_02_body_never_overflows` encoded
 // the OLD body (direct add_tok flip capped at `have`, so `X > down` was
 // unreachable and overflow never landed — LESS than the book). The new
-// `fansFlip` handler **does** apply clause （2） to the effect X, so the
-// harness below proves the book formula against the unmodified `on_fans`.
+// `on_fans_flip` dict body **does** apply clause （2） to the effect X, so the
+// harness below proves `min(X-down, 10)` against the unmodified body driven
+// by `fans::flip_up` (FansFlip raise → `on_fans_flip_kani`).
 // ===========================================================================
 
 #[kani::proof]
@@ -373,12 +376,15 @@ pub fn skill2_all_pp_overflow_formula() {
     }
 }
 
-/// Body check: the `fansFlip` handler applies clause （2） to the **effect X**
-/// (not the clamped flip count). `X > down` grants `min(X - down, 10)`
-/// crystals on this instance; `X <= down` grants none.
+/// Body check: the `on_fans_flip` dict body applies clause （2） to the
+/// **effect X** (not the clamped flip count). `X > down` grants
+/// `min(X - down, 10)` crystals on this instance; `X <= down` grants none.
 ///
 /// Isolation: the flip target is the band-card owner (`seat == player_id`),
 /// so 「你」 admits. Direction is down→up only (clause （2） is one-way).
+/// Drive: unmodified `fans::flip_up` raises `FansFlip` **before** the dict
+/// writes; `arm_raise` dispatches to `on_fans_flip_kani` with
+/// `trigger::value() == X` while `fans::down` is still the pre-flip count.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn band_idol_02_on_fans_overflow_iff() {
@@ -397,7 +403,8 @@ pub fn band_idol_02_on_fans_overflow_iff() {
     });
     let pre_cry = crystals_at(band_uid);
 
-    // Drive `on_fans` through the message channel (what `fans::flip_up` sends).
+    // Unmodified `fans::flip_up`: FansFlip raise (→ `on_fans_flip`) then the
+    // dict writes. Cancelled / aborted raise leaves both counters untouched.
     let _ = skill_groups::fans::flip_up(me, x);
 
     let post_cry = crystals_at(band_uid);

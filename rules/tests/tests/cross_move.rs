@@ -162,13 +162,9 @@ fn m03_eve_then_yolo() {
     let mut t = Table::new(&["若宫伊芙", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
-    // 5 face-up fans (one counter with value 5).
-    t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
-        name: "P✽P粉丝(正)".into(),
-        value: 5,
-
-        instance: None,
-    });
+    // 5 face-up fans (state dict).
+    t.set_state(0, "ppFansUp", 5);
+    t.set_state(0, "ppFansDown", 0);
     t.give(0, &["AG:Y.O.L.O"]);
     // Before the roll: flip Y = 2 fans for +2d4 (loaded 1, 1). d20 = 4.
     t.dice(&[4, 1, 1, 2]);
@@ -192,7 +188,7 @@ fn m03_eve_then_yolo() {
     );
     assert_eq!(t.pos(0), 8, "4 + 2 + 2");
     assert_eq!(
-        t.token(0, "P✽P粉丝(正)"),
+        t.state(0, "ppFansUp"),
         3,
         "flipped 2 of the 5 face-up fans"
     );
