@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:主唱太拼命了`）:
 //! > 主唱太拼命了：
-//! > [反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。
+//! > [反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。
 //!
 //! that cancels one 5,000+ payment to another player.
 
@@ -22,7 +22,7 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
         .name(r#"主唱太拼命了"#)
         .raw_name(r#"主唱太拼命了"#)
         .tags(&[r#"反击"#])
-        .text(r#"[反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。"#)
+        .text(r#"[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。"#)
         .cell(r#"M10"#)
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 

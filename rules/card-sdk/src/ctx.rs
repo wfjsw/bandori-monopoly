@@ -2757,7 +2757,7 @@ pub mod trigger {
 /// A [反击] card chooses how much of this to read. For the rulebook's recurring
 /// 「被其他玩家的卡效果影响」 clause the *whole list* is the right view -- any
 /// effect of that play touching me -- while a card like
-/// `CRYCHIC:主唱太拼命了` (「一次性向其他玩家支付5000以上资金时」) wants one
+/// `CRYCHIC:主唱太拼命了` (「一次性向其他玩家支付至少5000资金时」) wants one
 /// entry. Both are here; the card picks.
 pub mod effect {
     use super::sys;

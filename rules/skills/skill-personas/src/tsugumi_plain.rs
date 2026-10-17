@@ -1,7 +1,7 @@
 //! `skill:羽泽鸫:伟大的平凡`
 //!
 //! 规则书（skill sheet, 羽泽鸫）:
-//! > （1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
+//! > （1）每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
 //! > （2）当你进行主要移动时，你可以失去一个[火罐]使本次移动反向，如果你这样做
 //! > 了，你的下回合开始时，进行一次双倍掷骰的移动，向后移动经过CiRCLE时不获得
 //! > CiRCLE奖励。
@@ -48,7 +48,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
+/// （1）「每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
 fn tick(player_id: i32) -> card_sdk::Asked {
     // The owed move's 「不获得CiRCLE奖励」 clause ends with the turn (the
     // reward step consumes the prop if the move did pass CiRCLE).

@@ -1,11 +1,11 @@
 //! `skill:美竹兰:叛逆的红挑染`
 //!
 //! 规则书（skill sheet, 美竹兰）:
-//! > （1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
+//! > （1）每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
 //! > （2）投掷移动步数前可使用一个[火罐]选择本次移动向后，并且向后移动[经过]
 //! > CiRCLE时不获得CiRCLE奖励。
 //!
-//! （1） is shared by every Afterglow persona: 「每三回合没有使用Afterglow角色
+//! （1） is shared by every Afterglow persona: 「每四回合没有使用Afterglow角色
 //! 的（2）技能获得一个[火罐]」 -- a pot every three turns in which *nobody* in
 //! the band pressed their (2). It is a band-wide counter, not this player's, so
 //! the latch lives on the band and every Afterglow skill reads it.
@@ -18,7 +18,7 @@ use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-/// The band-wide 「每三回合没有使用…（2）技能」 counter. Shared by every
+/// The band-wide 「每四回合没有使用…（2）技能」 counter. Shared by every
 /// Afterglow skill: a press anywhere in the band resets it.
 pub const REST_TURNS: &str = "skill.afterglow.restTurns";
 
@@ -41,7 +41,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
+/// （1）「每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
 fn tick(player_id: i32) -> card_sdk::Asked {
     // （2）'s 「向后移动[经过]CiRCLE时不获得CiRCLE奖励」 ends with the turn (the
     // reward step consumes the prop if the move did pass CiRCLE).
@@ -49,12 +49,12 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     rest_tick(player_id)
 }
 
-/// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」, run at each
+/// （1）「每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]」, run at each
 /// Afterglow owner's turn end. Every outcome is logged: the count, the pot
 /// gained (the engine's own gain line), or the engine's cap-refused line.
 pub fn rest_tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
-    if n < 3 {
+    if n < 4 {
         state::set(player_id, REST_TURNS, n);
         ctx::log(player_id, &Msg::new(key!("afterglow_rest_count")).i("n", n as i64));
         return Ok(());

@@ -566,7 +566,7 @@ fn crychic_grab_grants_stay() {
 
 const VOCALIST: &str = "CRYCHIC:主唱太拼命了";
 
-/// C-CRYCHIC-vocalist-01 -- 「一次性向其他玩家支付5000以上资金时，免除此次支付。」
+/// C-CRYCHIC-vocalist-01 -- 「一次性向其他玩家支付至少5000资金时，免除此次支付。」
 #[test]
 fn crychic_vocalist_waives_big_payment() {
     forall(4, 0xC1C0_0008, |rng, _i| {

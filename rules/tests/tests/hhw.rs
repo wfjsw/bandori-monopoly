@@ -693,3 +693,100 @@ fn interaction_smile_patrol_and_owned_houses() {
     }
     assert!(t.houses(blue) >= 1, "houses {}", t.houses(blue));
 }
+
+// ----- 北泽育美：全垒打！ ----------------------------------------------
+
+#[test]
+fn hagumi_cash_trades_four_croquettes_for_1000() {
+    // 规则书: 「育美可在主要阶段消耗4个可乐饼兑换1000资金」
+    let mut t = Table::new(&["北泽育美", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    set_tok(&mut t, 0, "可乐饼", 4);
+    let money = t.money(0);
+    t.skill(0, "skill:北泽育美:全垒打！").unwrap();
+    drain(&mut t);
+    assert_eq!(t.token(0, "可乐饼"), 0, "4 croquettes spent");
+    assert_eq!(t.money(0), money + 1000, "+1000 money");
+}
+
+#[test]
+fn hagumi_cash_refused_below_four_croquettes() {
+    // 规则书: 「消耗4个可乐饼」 -- the gate is the held count.
+    let mut t = Table::new(&["北泽育美", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    set_tok(&mut t, 0, "可乐饼", 3);
+    let money = t.money(0);
+    assert!(t.skill(0, "skill:北泽育美:全垒打！").is_err());
+    drain(&mut t);
+    assert_eq!(t.token(0, "可乐饼"), 3);
+    assert_eq!(t.money(0), money);
+}
+
+#[test]
+fn hagumi_gives_croquettes_when_passing_another_player() {
+    // 规则书: 「育美经过其他角色时，可以把自己身上的可乐饼转移给该角色」
+    let mut t = Table::new(&["北泽育美", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    set_tok(&mut t, 0, "可乐饼", 5);
+    t.set_pos(0, 5);
+    t.set_pos(1, 7);
+    t.dice(&[2]); // 5 -> 7, stepping onto P1's tile
+    t.roll(0).unwrap();
+    let mut gave = false;
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let d = t.dump_prompt();
+        if d.contains("hagumi_homerun_give") || d.contains("可乐饼转移给") {
+            let _ = t.answer_one(0); // yes
+            // then the how-many pick (1..=max)
+            if t.prompt().is_some() {
+                let _ = t.answer_one(0); // transfer 1
+            }
+            gave = true;
+        } else {
+            t.decline();
+        }
+    }
+    assert!(gave, "the give was offered; keys={:?}", t.recent_keys(16));
+    assert_eq!(
+        t.token(1, "可乐饼") + t.token(0, "可乐饼"),
+        5,
+        "croquettes conserved: P0={} P1={}",
+        t.token(0, "可乐饼"),
+        t.token(1, "可乐饼")
+    );
+    assert_eq!(
+        t.token(1, "可乐饼"),
+        1,
+        "the other player received the chosen amount: P1={}",
+        t.token(1, "可乐饼")
+    );
+}
+
+#[test]
+fn hagumi_overflow_removes_all_and_stays_one_turn() {
+    // 规则书: 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」
+    let mut t = Table::new(&["北泽育美", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    set_tok(&mut t, 1, "可乐饼", 4);
+    // The standing sweep runs at each turn end (the count-change sites are this
+    // skill's own writes; the tick is the catch-all). Finish P0's main move
+    // first so the turn can end.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.token(1, "可乐饼"), 0, "all croquettes removed");
+    assert_eq!(t.state(1, "stay"), 1, "one [停留] layer");
+}

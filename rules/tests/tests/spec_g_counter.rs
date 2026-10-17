@@ -33,7 +33,7 @@ const VOW: &str = "AG:宣战布告";
 /// [支付][使用者]X资金。」 A multi-player [指定] fan-out.
 const BUDOKAN: &str = "通用:登上武道馆";
 
-/// `CRYCHIC:主唱太拼命了` -- 「[反击] 一次性向其他玩家支付5000以上资金时，
+/// `CRYCHIC:主唱太拼命了` -- 「[反击] 一次性向其他玩家支付至少5000资金时，
 /// 免除此次支付。」 A card that overrides the base payment rule.
 const ENCORE: &str = "CRYCHIC:主唱太拼命了";
 
