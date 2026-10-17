@@ -175,8 +175,8 @@ html, body { position: fixed; inset: 0; overscroll-behavior-x: none; }
 /* A game is not a document. Dragging across the board must not select the
    labels under the pointer, and a long press must not raise the iOS
    Copy / Lookup / Share callout. Everything inherits the ban from here; the
-   surfaces that take typed text opt back in just below, and the dev console
-   opts its log in where it is defined. */
+   surfaces that take typed text opt back in just below, and the logs you copy
+   out of (the match log, the dev console) opt in where they are defined. */
 body {
   touch-action: manipulation;
   user-select: none;
