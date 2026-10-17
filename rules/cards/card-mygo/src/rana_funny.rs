@@ -7,7 +7,7 @@
 //! plant this card on the current tile; passers-by who do not settle there
 //! grow a miracle crystal on it, and at 5+ the next foreign passer is trapped.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,7 +19,7 @@ pub const RANA_FUNNY: CardDef = CardDef::new(
         // -- placed, a still-walking pass (not a teleport, not the walk's end)
         // of the card's own tile.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id",
             None,
             pass_tile,

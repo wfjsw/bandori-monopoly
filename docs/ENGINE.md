@@ -114,7 +114,7 @@ helpers are gone. The other [CP点] kind is the **on-card** count
 (`FieldCard::cp`, 「自己[场上]N个[CP点]」, user ruling 2026-10-07): the card
 rule's own stock, the named `'cp'` counter of that instance
 (`ctx::counter` / `add_counter` / `counter_at` / `add_counter_at`, ABI v50).
-`HookKind::CounterChanged` / `TriggerKind::CounterChanged` (wire names
+`ActionKind::CounterChanged` / `TriggerKind::CounterChanged` (wire names
 `counterChanged`|`crystalsChanged`|`cpChanged`, ABI v50; one hook replaces
 `CpChanged` / `CrystalsChanged`) fires whenever a card instance's named
 counter is written: `Trigger.name` = the counter name, `Trigger.value` = the

@@ -18,7 +18,7 @@
 
 use alloc::string::String;
 
-use card_sdk::abi::{CardPile, HookKind};
+use card_sdk::abi::{CardPile, ActionKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
@@ -27,14 +27,14 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
         On::Action(
-            &[HookKind::DeckAtGameStart],
+            &[ActionKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
         // （2） replaces the draw, so it runs at the per-card **before** point.
         On::Action(
-            &[HookKind::DrewBefore],
+            &[ActionKind::DrewBefore],
             "actor == owner && slot('ppFansUp') >= 1",
             None,
             on_draw,

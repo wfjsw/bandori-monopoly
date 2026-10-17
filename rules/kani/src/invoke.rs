@@ -292,7 +292,7 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 /// `kind` is one of `"Play"`, `"Counteract"`, `"Action"` /
 /// `"Filter"`, `"Gate"`, `"AtEnd"`,
 /// `"DiceRollPlan"`, `"Settle"`, `"Message"`. For `Action`/`Filter`, `hook_name` may filter
-/// by `HookKind` short name (`"PaySplitAdd"`); `""` matches the first hook.
+/// by kind short name (`"PaySplitAdd"`); `""` matches the first hook.
 ///
 /// `kind` / `hook_name` are short ASCII tags (not card ids). Parsed to
 /// integers first so the `On` dispatch is enum compares, not `memcmp`.
@@ -304,19 +304,24 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
             (KindTag::Play, On::Play(..)) => true,
             (KindTag::Counteract, On::Counteract(..)) => true,
             (KindTag::Action, On::Action(kinds, ..)) => {
-                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+                hook_name.is_empty()
+                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
             }
             (KindTag::Filter, On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
-                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+                hook_name.is_empty()
+                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
             }
             (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
-                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+                hook_name.is_empty()
+                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
             }
             (KindTag::AtEnd, On::Action(kinds, ..)) => {
-                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+                hook_name.is_empty()
+                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
             }
             (KindTag::DiceRollPlan, On::FilterValue(kinds, ..)) => {
-                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+                hook_name.is_empty()
+                    || hook_kind_matches(kinds, |k| k.as_i32(), hook_name)
             }
             (KindTag::Settle, On::Settle(..)) => true,
             (KindTag::Mortgage, On::Mortgage(..)) => true,
@@ -476,7 +481,7 @@ pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
 /// `&str` tags, so CBMC never lowers the dispatch to `memcmp` (the shave
 /// profile's remaining 10 memcmps were `match name { "PaySplitAdd" => … }`).
 #[inline(always)]
-pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32) -> Asked {
+pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::ActionKind, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
         if let On::Action(kinds, _, _, _) = on {
@@ -516,7 +521,7 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32
 #[inline(always)]
 pub fn filter_kind_only_idx(
     idx: usize,
-    want: card_sdk::abi::HookKind,
+    want: card_sdk::abi::FilterKind,
     player: i32,
     value: i32,
 ) -> i32 {
@@ -546,7 +551,7 @@ pub fn filter_kind_only_idx(
 #[inline(always)]
 pub fn filter_flag_kind_only_idx(
     idx: usize,
-    want: card_sdk::abi::HookKind,
+    want: card_sdk::abi::FilterKind,
     player: i32,
     value: i32,
 ) -> bool {
@@ -651,49 +656,49 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-/// Match a `HookKind` by its short name without `format!` (no String/UTF-8).
+/// Match a kind list entry by its short name without `format!` (no String/UTF-8).
 ///
-/// Parse `hook_name` to a `HookKind` first (a `match` on literals that
-/// constant-folds when the caller passes `"PaySplitAdd"`), then an integer
-/// compare against `kinds`. The old `hook_kind_name(k) == hook_name` lowered
-/// to `memcmp` per arm (14 unwinds in the shave profile).
-fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool {
-    let want = hook_kind_parse(hook_name);
-    match want {
-        Some(w) => {
-            // Zero-loop (see `hook_kind_only_idx`).
-            let mut hit = false;
-            if let Some(&k0) = kinds.get(0) {
-                if k0 == w {
-                    hit = true;
-                }
-            }
-            if let Some(&k1) = kinds.get(1) {
-                if k1 == w {
-                    hit = true;
-                }
-            }
-            if let Some(&k2) = kinds.get(2) {
-                if k2 == w {
-                    hit = true;
-                }
-            }
-            if let Some(&k3) = kinds.get(3) {
-                if k3 == w {
-                    hit = true;
-                }
-            }
-            hit
+/// Parse `hook_name` to a [`card_sdk::abi::TriggerKind`] first (a `match` on
+/// literals that constant-folds when the caller passes `"PaySplitAdd"`), then
+/// an integer compare against `kinds`. Works for both [`card_sdk::abi::ActionKind`]
+/// and [`card_sdk::abi::FilterKind`] slices (same wire id space). The old
+/// `hook_kind_name(k) == hook_name` lowered to `memcmp` per arm (14 unwinds in
+/// the shave profile).
+fn hook_kind_matches<K: Copy>(kinds: &[K], id_of: fn(K) -> i32, hook_name: &str) -> bool {
+    let want = match hook_kind_parse(hook_name) {
+        Some(w) => w.as_i32(),
+        None => return false,
+    };
+    // Zero-loop (see `hook_kind_only_idx`).
+    let mut hit = false;
+    if let Some(&k0) = kinds.get(0) {
+        if id_of(k0) == want {
+            hit = true;
         }
-        None => false,
     }
+    if let Some(&k1) = kinds.get(1) {
+        if id_of(k1) == want {
+            hit = true;
+        }
+    }
+    if let Some(&k2) = kinds.get(2) {
+        if id_of(k2) == want {
+            hit = true;
+        }
+    }
+    if let Some(&k3) = kinds.get(3) {
+        if id_of(k3) == want {
+            hit = true;
+        }
+    }
+    hit
 }
 
-/// Short name → `HookKind`. `None` for `""` or an unknown tag.
-/// Dispatch is on [`tag_key`] integers — never `memcmp`.
+/// Short name → wire [`card_sdk::abi::TriggerKind`]. `None` for `""` or an
+/// unknown tag. Dispatch is on [`tag_key`] integers — never `memcmp`.
 #[inline(always)]
-fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
-    use card_sdk::abi::HookKind as H;
+fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::TriggerKind> {
+    use card_sdk::abi::TriggerKind as T;
     const PAY_ADD: (u8, u64, u64) = tag_key_const("PaySplitAdd");
     const PAY_MUL: (u8, u64, u64) = tag_key_const("PaySplitMul");
     const PAY_CHOOSE: (u8, u64, u64) = tag_key_const("PaySplitChoose");
@@ -729,81 +734,87 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     const PASS_PLAYER: (u8, u64, u64) = tag_key_const("PassPlayer");
     const EXILE: (u8, u64, u64) = tag_key_const("Exile");
     match tag_key(name) {
-        PAY_ADD => Some(H::PaySplitAdd),
-        PAY_MUL => Some(H::PaySplitMul),
-        PAY_CHOOSE => Some(H::PaySplitChoose),
-        PAY_AT => Some(H::PaySplitAt),
-        PAY_AFTER => Some(H::PayAfter),
-        PAY => Some(H::Pay),
-        TURN_END => Some(H::TurnEnd),
-        TURN_START => Some(H::TurnStart),
-        TURN_END_BEFORE => Some(H::TurnEndBefore),
-        TURN_END_AFTER => Some(H::TurnEndAfter),
-        ROLL => Some(H::DiceRollBefore),
-        ROLL_AFTER => Some(H::DiceRollAfter),
-        ROLL_PLAN => Some(H::DiceRollPlan),
-        SETTLE => Some(H::Settle),
-        SETTLE_BODY => Some(H::SettleBody),
-        SETTLE_AFTER => Some(H::SettleAfter),
-        CARD_PLAYED => Some(H::CardPlayed),
-        DISCARDED => Some(H::Discarded),
-        DISCARD_BEFORE => Some(H::DiscardBefore),
-        DISCARD_AFTER => Some(H::DiscardAfter),
-        BOUGHT => Some(H::Bought),
-        BUY_ADD => Some(H::BuyAdd),
-        BUY_MUL => Some(H::BuyMul),
-        BUY_SET => Some(H::BuySet),
-        HOUSE_ADDED => Some(ruleset_core::kind::HouseAdded),
-        COUNTER_CHANGED => Some(H::CounterChanged),
-        FIRE_SPENT => Some(ruleset_core::kind::FireSpent),
-        FANS_FLIP => Some(ruleset_core::kind::FansFlip),
-        TELEPORTED => Some(H::Teleported),
-        TARGETED => Some(H::Targeted),
-        PASS => Some(H::Pass),
-        PASS_TILE => Some(H::PassTile),
-        PASS_PLAYER => Some(H::PassPlayer),
-        EXILE => Some(H::Exile),
+        PAY_ADD => Some(T::PaySplitAdd),
+        PAY_MUL => Some(T::PaySplitMul),
+        PAY_CHOOSE => Some(T::PaySplitChoose),
+        PAY_AT => Some(T::PaySplitAt),
+        PAY_AFTER => Some(T::PayAfter),
+        PAY => Some(T::Pay),
+        TURN_END => Some(T::TurnEnd),
+        TURN_START => Some(T::TurnStart),
+        TURN_END_BEFORE => Some(T::TurnEndBefore),
+        TURN_END_AFTER => Some(T::TurnEndAfter),
+        ROLL => Some(T::DiceRollBefore),
+        ROLL_AFTER => Some(T::DiceRollAfter),
+        ROLL_PLAN => Some(T::DiceRollPlan),
+        SETTLE => Some(T::Settle),
+        SETTLE_BODY => Some(T::SettleBody),
+        SETTLE_AFTER => Some(T::SettleAfter),
+        CARD_PLAYED => Some(T::CardPlayed),
+        DISCARDED => Some(T::Discarded),
+        DISCARD_BEFORE => Some(T::DiscardBefore),
+        DISCARD_AFTER => Some(T::DiscardAfter),
+        BOUGHT => Some(T::Bought),
+        BUY_ADD => Some(T::BuyAdd),
+        BUY_MUL => Some(T::BuyMul),
+        BUY_SET => Some(T::BuySet),
+        HOUSE_ADDED => Some(ruleset_core::kind::HouseAdded.as_trigger()),
+        COUNTER_CHANGED => Some(T::CounterChanged),
+        FIRE_SPENT => Some(ruleset_core::kind::FireSpent.as_trigger()),
+        FANS_FLIP => Some(ruleset_core::kind::FansFlip.as_trigger()),
+        TELEPORTED => Some(T::Teleported),
+        TARGETED => Some(T::Targeted),
+        PASS => Some(T::Pass),
+        PASS_TILE => Some(T::PassTile),
+        PASS_PLAYER => Some(T::PassPlayer),
+        EXILE => Some(T::Exile),
         _ => None,
     }
 }
 
-fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
-    use card_sdk::abi::HookKind as H;
+fn hook_kind_name(k: card_sdk::abi::TriggerKind) -> &'static str {
+    use card_sdk::abi::TriggerKind as T;
+    if k.as_i32() == ruleset_core::kind::HOUSE_ADDED {
+        return "HouseAdded";
+    }
+    if k.as_i32() == ruleset_core::kind::FIRE_SPENT {
+        return "FireSpent";
+    }
+    if k.as_i32() == ruleset_core::kind::FANS_FLIP {
+        return "FansFlip";
+    }
     match k {
-        H::PaySplitAdd => "PaySplitAdd",
-        H::PaySplitMul => "PaySplitMul",
-        H::PaySplitChoose => "PaySplitChoose",
-        H::PaySplitAt => "PaySplitAt",
-        H::PayAfter => "PayAfter",
-        H::Pay => "Pay",
-        H::TurnEnd => "TurnEnd",
-        H::TurnStart => "TurnStart",
-        H::TurnEndBefore => "TurnEndBefore",
-        H::TurnEndAfter => "TurnEndAfter",
-        H::DiceRollBefore => "Roll",
-        H::DiceRollAfter => "DiceRollAfter",
-        H::DiceRollPlan => "DiceRollPlan",
-        H::Settle => "Settle",
-        H::SettleBody => "SettleBody",
-        H::SettleAfter => "SettleAfter",
-        H::CardPlayed => "CardPlayed",
-        H::Discarded => "Discarded",
-        H::DiscardBefore => "DiscardBefore",
-        H::DiscardAfter => "DiscardAfter",
-        H::Bought => "Bought",
-        H::BuyAdd => "BuyAdd",
-        H::BuyMul => "BuyMul",
-        H::BuySet => "BuySet",
-        ruleset_core::kind::HouseAdded => "HouseAdded",
-        H::CounterChanged => "CounterChanged",
-        ruleset_core::kind::FireSpent => "FireSpent",
-        ruleset_core::kind::FansFlip => "FansFlip",
-        H::Teleported => "Teleported",
-        H::Targeted => "Targeted",
-        H::Pass => "Pass",
-        H::PassTile => "PassTile",
-        H::PassPlayer => "PassPlayer",
-        H::Exile => "Exile",
+        T::PaySplitAdd => "PaySplitAdd",
+        T::PaySplitMul => "PaySplitMul",
+        T::PaySplitChoose => "PaySplitChoose",
+        T::PaySplitAt => "PaySplitAt",
+        T::PayAfter => "PayAfter",
+        T::Pay => "Pay",
+        T::TurnEnd => "TurnEnd",
+        T::TurnStart => "TurnStart",
+        T::TurnEndBefore => "TurnEndBefore",
+        T::TurnEndAfter => "TurnEndAfter",
+        T::DiceRollBefore => "Roll",
+        T::DiceRollAfter => "DiceRollAfter",
+        T::DiceRollPlan => "DiceRollPlan",
+        T::Settle => "Settle",
+        T::SettleBody => "SettleBody",
+        T::SettleAfter => "SettleAfter",
+        T::CardPlayed => "CardPlayed",
+        T::Discarded => "Discarded",
+        T::DiscardBefore => "DiscardBefore",
+        T::DiscardAfter => "DiscardAfter",
+        T::Bought => "Bought",
+        T::BuyAdd => "BuyAdd",
+        T::BuyMul => "BuyMul",
+        T::BuySet => "BuySet",
+        T::CounterChanged => "CounterChanged",
+        T::Teleported => "Teleported",
+        T::Targeted => "Targeted",
+        T::Pass => "Pass",
+        T::PassTile => "PassTile",
+        T::PassPlayer => "PassPlayer",
+        T::Exile => "Exile",
         _ => "",
     }
 }
@@ -835,7 +846,7 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
     hook_kind_only_idx(
         crate::card_id!("PP:[丸山彩]憧憬的前方"),
-        card_sdk::abi::HookKind::Effect,
+        card_sdk::abi::ActionKind::Effect,
         player_id,
     )
 }

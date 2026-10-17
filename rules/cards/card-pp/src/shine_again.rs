@@ -18,7 +18,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
@@ -38,7 +38,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
         // The pre's `money(owner) < value` still gates on the figure in flight.
         On::Action(
-            &[HookKind::PaySplitChooseBefore],
+            &[ActionKind::PaySplitChooseBefore],
             "actor == owner && card.placed && value > 0 && money(owner) < value",
             Some(has_unrecorded_color),
             pay_choose,
@@ -47,7 +47,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
         //   turn-start offer is a stand-in for the C# action window.
-        On::Action(&[HookKind::TurnStart], "actor == owner && card.placed", None, offer_resonance),
+        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", None, offer_resonance),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次闪耀"#)

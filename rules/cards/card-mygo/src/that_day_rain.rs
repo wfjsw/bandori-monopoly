@@ -9,7 +9,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,8 +18,8 @@ pub const THAT_DAY_RAIN: CardDef = CardDef::new(
     &[
         On::Play("", None, that_day_rain),
         // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-        On::Action(&[HookKind::TurnStart, HookKind::TurnEnd], "", Some(hook_guard), hook),
-        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[ActionKind::TurnStart, ActionKind::TurnEnd], "", Some(hook_guard), hook),
+        On::Action(&[ActionKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"那天的雨"#)
@@ -130,7 +130,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「移除所有奇迹水晶后将其放入弃牌堆」 -- C# `H.Unplace(this, "discard", ...)`.
 ///
-/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
 /// count emptied by *any* write leaves the field just the same.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`

@@ -17,7 +17,7 @@
 //! figure is untouched. That is a per-party bend, which `PaySplitMul` carries as the
 //! amount seen from one side.
 
-use card_sdk::abi::{counter, state_key, HookKind};
+use card_sdk::abi::{counter, state_key, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -33,15 +33,15 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
         On::Play("", Some(can_halve), halve),
-        On::Action(&[HookKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
         // Latch the declared figure for the PayAfter one-sided fixup. `Effect`
         // is the payment declaration (pre-PaySplitAdd); see `latch_orig`.
-        On::Action(&[HookKind::Effect], "slot('skillState') == 2 && card.placed", None, latch_orig),
-        On::Filter(&[HookKind::PaySplitMul], "slot('skillState') == 2 && card.placed", None, bend),
+        On::Action(&[ActionKind::Effect], "slot('skillState') == 2 && card.placed", None, latch_orig),
+        On::Filter(&[FilterKind::PaySplitMul], "slot('skillState') == 2 && card.placed", None, bend),
         // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
         // figure, so the counterpart's side is restored here.
-        On::Action(&[HookKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
-        On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
+        On::Action(&[ActionKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
     ],
 );
 
@@ -96,7 +96,7 @@ fn on_state(player_id: i32) {
 }
 
 /// Latch the declared (pre-PaySplitAdd) payment figure for [`after_bend`]. Rides
-/// `HookKind::Effect` (the payment declaration) so the PaySplitMul Filter below
+/// `ActionKind::Effect` (the payment declaration) so the PaySplitMul Filter below
 /// stays pure.
 /// TODO(规则书): this stores the *declared* amount, not the PaySplitMul input the
 ///   old in-Filter latch saw. Whenever a PaySplitAdd also rewrote the figure,

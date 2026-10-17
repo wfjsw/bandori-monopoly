@@ -14,7 +14,7 @@
 //! `card_move`, but the `GrabFx` attachment and the grid-nearest teleport
 //! (「视为你的主要移动」) are still held (see the TODOs below).
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{plan, trigger};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
@@ -31,8 +31,8 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
         // 经过 (行动阶段 12, a mid-route pass of my tile) or 重叠 (`passPlayer`,
         // the end-tile overlap)? The C# `GrabFx` used `PassPlayer`; the text
         // says 「经过」. Pending ruling -- left as `PassPlayer` (C#-carried).
-        On::Action(&[HookKind::PassPlayer], "actor != owner && actor >= 0", None, on_pass),
-        On::Action(&[HookKind::SettleBefore], "", None, grab),
+        On::Action(&[ActionKind::PassPlayer], "actor != owner && actor >= 0", None, on_pass),
+        On::Action(&[ActionKind::SettleBefore], "", None, grab),
     ],
 ).silent(&[1]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"想要抓住..."#)

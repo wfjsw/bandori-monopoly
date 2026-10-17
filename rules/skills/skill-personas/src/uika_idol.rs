@@ -10,7 +10,7 @@
 //! pay is `X*30` where X is how many steps were left *after* passing it. The
 //! mark is spent when it pays out.
 
-use card_sdk::abi::{state_key, HookKind, MarkFilter};
+use card_sdk::abi::{state_key, ActionKind, MarkFilter};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,13 +20,13 @@ const POT: &str = "skill.uikaIdol.pot";
 pub const UIKA_IDOL: CardDef = CardDef::new(
     "skill:三角初华（Sumimi）:成为偶像",
     &[
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 --
         // the offer exists only when such a tile exists. The colour-group
         // scan is residual (`is_color` / `tile_named`).
         On::Action(
-            &[HookKind::TurnStartBefore],
+            &[ActionKind::TurnStartBefore],
             "actor == owner && charge(owner) >= 1",
             Some(has_street_color_tile),
             at_turn_start,
@@ -36,7 +36,7 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
         // vocabulary, so it is the residual guard). `actor != owner &&
         // move.remaining > 0` states the rest of the clause.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor != owner && move.remaining > 0",
             Some(on_pass_tile_has_pot),
             on_pass_tile,

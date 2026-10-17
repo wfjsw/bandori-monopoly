@@ -16,7 +16,7 @@
 //!
 //! place with N crystals; spend a crystal to cut a payment by 1,000.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -39,13 +39,13 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // the interactive -1000 rewrite sits immediately before the pure
         // `PaySplitChoose` filter stage.
         On::Action(
-            &[HookKind::PaySplitChooseBefore],
+            &[ActionKind::PaySplitChooseBefore],
             "actor == owner && card.placed && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,
         ),
         On::Action(&[ruleset_core::kind::SkillUsed], "", Some(skill_used_guard), skill_used),
-        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[ActionKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )
 .labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])
@@ -164,7 +164,7 @@ fn skill_used(player_id: i32) -> card_sdk::Asked {
 /// 规则书[持续]（3）: 「此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区」 -- C# `Check` ->
 /// `H.Unplace(this, "discard", "奇迹水晶用完了")`.
 ///
-/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at each spend site, so a
 /// count emptied by *any* write -- a spend here, another card's
 /// `add_card_crystals`, the [手] placing none -- leaves the field just the same.

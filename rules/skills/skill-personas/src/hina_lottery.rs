@@ -15,7 +15,7 @@
 //! and unplacing it at the next turn start is the same shape as （1）, with an
 //! expiry -- which is what the keyed state's `expires` is for.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
@@ -35,12 +35,12 @@ pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
         On::Action(
-            &[HookKind::DeckAtGameStart],
+            &[ActionKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
-        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, roll),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, roll),
     ],
 );
 

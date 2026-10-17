@@ -18,7 +18,7 @@
 //! say *whose* skill a running body belongs to when the body was copied, which
 //! is the same provenance question as the temporary-pot cost. See the TODO.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,17 +28,17 @@ const X: &str = "skill.yuriCrit.x";
 pub const YURI_CRIT: CardDef = CardDef::new(
     "skill:八潮瑠唯:正论暴击",
     &[
-        On::Action(&[HookKind::TurnStartBefore], "", None, declare),
+        On::Action(&[ActionKind::TurnStartBefore], "", None, declare),
         // 「当你即将获得或失去资金（在所有其他资金量改动效果生效后并结果不等于0）时」
         // -- the *final* figure after every modifier, which is what the `pay`
-        // settlement hook carries (`HookKind::Pay`, a non-filter kind whose
+        // settlement hook carries (`ActionKind::Pay`, a non-filter kind whose
         // `t.value` the engine folds). ABI v74: the body rolls a die and writes
         // state, so it cannot be a pure Filter; the rewrite lives on the Action
         // as a documented exception. `pay` runs after paySplitAdd/paySplitMul/paySplitChoose/
         // paySplitAt (closer to 「在所有其他资金量改动效果生效后」 than the old
         // PaySplitChoose stage) and still sees a negative running figure for
         // 「无需失去资金」. PayAfter is too late to rewrite.
-        On::Action(&[HookKind::Pay], "", Some(mine), on_pay),
+        On::Action(&[ActionKind::Pay], "", Some(mine), on_pay),
     ],
 ).silent(&[0]);
 

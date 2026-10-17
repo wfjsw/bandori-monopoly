@@ -290,7 +290,7 @@ reading its default / sentinel):
 | `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
 | `Buy` / `Build` | a synthetic trigger (`kind = None`) on the perform: `actor` = the buyer / builder, `target` = the tile's owner, `tile` = the deed, `value` = the reason (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction); `buy.kind` is the [`BuyKind`] | `actor`, `target`, `tile.*`, `buy.kind`, `owner.*`, `turn_player`, `turn_key` | the body owns eligibility, the quote and the order of steps; `ctx::raise` / `ctx::pay_buy` / `ctx::pay_build` / `ctx::assign_deed` / `ctx::log` are the mechanism. Tile bodies do not flash |
 
-A `CounterChanged` hook (`On::Action(&[HookKind::CounterChanged], …)`, wire
+A `CounterChanged` hook (`On::Action(&[ActionKind::CounterChanged], …)`, wire
 names `counterChanged`|`crystalsChanged`|`cpChanged`) sees: `actor` = the
 owner of the instance whose counter changed (board-owned instances read
 `-1`), `target` = `-1` (not seat-scoped -- the counter lives on a card, not
@@ -1061,7 +1061,7 @@ carry **no** residual guard (the load refuses one): the condition is the answer.
 
 A band skill may further restrict **which exclusive cards its members play**.
 The question is the CEL-only `On::FilterFlag` kind
-`TriggerKind::ExclusiveUse` / `GateKind::ExclusiveUse` (wire name
+`TriggerKind::ExclusiveUse` / `FilterKind::ExclusiveUse` (wire name
 `exclusiveUse`), asked of the ruleset whenever an exclusive card is about to be
 played from hand. Same CEL-only rule as the status gates: the condition is the
 whole answer; a residual guard or a missing condition is refused at load.

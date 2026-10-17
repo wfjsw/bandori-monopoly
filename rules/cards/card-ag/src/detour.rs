@@ -8,7 +8,7 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{prop, ChainKind, HookKind};
+use card_sdk::abi::{prop, ChainKind, ActionKind, FilterKind};
 use card_sdk::ctx::plan;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -23,11 +23,11 @@ pub const DETOUR: CardDef = CardDef::new(
         // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
         // the condition now: the routine runs -- and flashes -- only when the
         // counteraction armed it.
-        On::FilterValue(&[HookKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, next_roll),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "slot('detour_next_roll') != 0", None, next_roll),
         // One-shot consume of the armed next-roll rewrite, on the roll that the
         // plan just built (DiceRollAfter is the next event after DiceRollPlan).
-        On::Action(&[HookKind::DiceRollAfter], "slot('detour_next_roll') != 0", None, consume_next_roll),
-        On::Action(&[HookKind::AtEnd], "", None, clear_no_reward),
+        On::Action(&[ActionKind::DiceRollAfter], "slot('detour_next_roll') != 0", None, consume_next_roll),
+        On::Action(&[ActionKind::AtEnd], "", None, clear_no_reward),
     ],
 )
     .silent(&[3]).meta(&card_sdk::meta::CardMeta::new()

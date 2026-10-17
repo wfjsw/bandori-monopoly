@@ -9,7 +9,7 @@
 //!
 //! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 
-use card_sdk::abi::{CardPile, HookKind};
+use card_sdk::abi::{CardPile, ActionKind};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -22,20 +22,20 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
         // would cost a pile walk per candidate for a hook that fires ~5 times
         // before the opening deal) -- the residual guard stays.
         On::Action(
-            &[HookKind::DeckBeforeGame],
+            &[ActionKind::DeckBeforeGame],
             "",
             Some(deck_before_game_guard),
             deck_before_game,
         ),
-        On::Action(&[HookKind::DeckAtGameStart], "card.placed", None, deck_at_game_start),
+        On::Action(&[ActionKind::DeckAtGameStart], "card.placed", None, deck_at_game_start),
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor == owner && move.main && tile.id == tile_named('Bandori车站')",
             None,
             pass_tile,
         ),
         On::Action(
-            &[HookKind::SettleBefore],
+            &[ActionKind::SettleBefore],
             "actor == owner && slot('lock_dream_tag') != 0",
             None,
             settle_before,

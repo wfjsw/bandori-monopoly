@@ -7,7 +7,7 @@
 //! [停留] layer and book an extra [触发结算] at this turn's end.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 
 pub const RINNE_RAIN: CardDef = CardDef::new(
     "MyGO:轮符雨",
@@ -18,7 +18,7 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         // end, and its body is a plain `ctx::settle`.
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
-        On::Action(&[HookKind::AtEnd], "owner.pos >= 0", None, settle_now),
+        On::Action(&[ActionKind::AtEnd], "owner.pos >= 0", None, settle_now),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

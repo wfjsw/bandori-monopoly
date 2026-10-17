@@ -9,7 +9,7 @@
 //! Sheet 2026-10-06 新卡组卡 M2: 「小于等于X」 (was 「小于X」) -- roll == X
 //! also banks a crystal.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,7 +18,7 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
     &[
         On::Play("", None, want_human),
         On::Action(
-            &[HookKind::TurnStart, HookKind::DiceRollAfter, HookKind::TurnEnd],
+            &[ActionKind::TurnStart, ActionKind::DiceRollAfter, ActionKind::TurnEnd],
             "actor == owner && card.placed",
             None,
             counteract,

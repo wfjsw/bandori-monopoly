@@ -11,7 +11,7 @@
 //! > （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。
 //!
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,8 +25,8 @@ pub const FEVER: CardDef = CardDef::new(
         // reaction) -- field hooks, not [反击]. Mixed kinds split (ABI v73);
         // bodies split to match the variant (Filter = pure integer, Action =
         // event reaction).
-        On::Filter(&[HookKind::PaySplitAdd], "card.placed", None, pay_add),
-        On::Action(&[HookKind::TurnStart], "card.placed", None, turn_start),
+        On::Filter(&[FilterKind::PaySplitAdd], "card.placed", None, pay_add),
+        On::Action(&[ActionKind::TurnStart], "card.placed", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"FEVER!"#)

@@ -17,7 +17,7 @@
 //! 原本的一半」 -- rides on the forced landing. The half-price is a pay bend on
 //! that settle, which is what `PaySplitMul` is.
 
-use card_sdk::abi::{state_key, AbKind, HookKind};
+use card_sdk::abi::{state_key, AbKind, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -27,19 +27,19 @@ const DUE: &str = "skill.tomoriPoem.due";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
         // （2）/（3） applicability: someone else's landing within five tiles of
         // this player. The pot-cost split and the fire balance stay residual
         // (dynamic). `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
         On::Action(
-            &[HookKind::SettleBefore],
+            &[ActionKind::SettleBefore],
             "tile.id >= 0 && actor != owner",
             Some(before_settle_applies),
             before_settle,
         ),
-        On::Filter(&[HookKind::PaySplitMul], "", Some(half), on_pay),
-        On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
+        On::Filter(&[FilterKind::PaySplitMul], "", Some(half), on_pay),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
 )
     .silent(&[0]);

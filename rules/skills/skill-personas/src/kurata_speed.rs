@@ -9,7 +9,7 @@
 //! default 1d20, (2) reverses the walk. 「[主动移动]」 is the turn's main move,
 //! so a card-driven side move keeps its own dice.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::FilterKind;
 use ruleset_core::ctx::{self, plan};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -17,7 +17,7 @@ pub const KURATA_SPEED: CardDef = CardDef::new(
     "skill:仓田真白:向后全速前进",
     // 「[主动移动]」 is the turn's main move, whose mover is `turn_player` --
     // the body-top `turn_player != player_id` early-out is the condition now.
-    &[On::FilterValue(&[HookKind::DiceRollPlan], "turn_player == owner", None, roll_plan)],
+    &[On::FilterValue(&[FilterKind::DiceRollPlan], "turn_player == owner", None, roll_plan)],
 );
 
 /// （1）「[主动移动]时移动掷骰变为2d20」, （2）「反方向移动」.

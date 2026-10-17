@@ -659,6 +659,15 @@ use alloc::{string::String, vec::Vec};
 ///      `HostRequest::Teleport` now runs through `card_teleport` /
 ///      `teleport_as(resolve=false)` so it raises the move tail like every
 ///      other movement path. SAVE_VERSION unchanged.
+/// v85 (source): **typed kind views** (`ActionKind` / `FilterKind`). The old
+///      `HookKind` / `GateKind` aliases are retired (no alias remains). `On::Action`
+///      takes `&'static [ActionKind]`, `On::Filter*` takes `&'static [FilterKind]`,
+///      so a wrong-side kind const is a rustc error rather than a ruleset-build
+///      failure. `TriggerKind` stays the single declaration source of truth
+///      (all consts, `as_str`/`from_str`, `is_filter`); the typed sets mirror it
+///      exactly. `ChainKind` remains the [`TriggerKind`] alias for
+///      `On::Counteract`. WIRE and SAVE unchanged -- one shared i32 id space,
+///      same name tables, no id renumbering. Source-only: ABI_VERSION stays 85.
 pub const ABI_VERSION: i32 = 85;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
@@ -739,13 +748,13 @@ pub const COUNTERACT_MOVE_EXTENSION: &str = "counteract.moveExtension";
 /// Tile-text slots (`CardDef::texts`, [`ManifestTileText::slot`], v59): which
 /// half of a deed popup an entry speaks for. The settle slot is the [结算]
 /// description; the pass slot is the [经过] one. Mirrors the body's
-/// `On::Settle` / `HookKind::PassTile` split -- the text an entry declares is
+/// `On::Settle` / `ActionKind::PassTile` split -- the text an entry declares is
 /// the description that entry speaks for, so a rule that replaces one half
 /// only replaces that half's text.
 pub mod text_slot {
     /// The [结算] / landing description (`On::Settle`).
     pub const SETTLE: &str = "settle";
-    /// The [经过] / pass description (`HookKind::PassTile`).
+    /// The [经过] / pass description (`ActionKind::PassTile`).
     pub const PASS: &str = "pass";
 }
 
@@ -1388,12 +1397,393 @@ pub const REWARD_CARD: i32 = 1;
 #[repr(transparent)]
 pub struct TriggerKind(pub i32);
 
-/// Field-card hook points (see [`TriggerKind`]). Same id space.
-pub type HookKind = TriggerKind;
-/// [反击] chain-link selectors (see [`TriggerKind`]). Same id space.
+/// Action-listener view of the wire id space (`On::Action`).
+///
+/// `#[repr(transparent)]` over the shared `i32` id. Associated consts mirror
+/// every `TriggerKind` const with `is_filter() == false` (see that fn -- the
+/// single declaration source of truth). Dual-role ids (a [反击] chain link that
+/// is also an Action-listened event, e.g. [`ActionKind::Effect`]) appear here
+/// *and* on [`ChainKind`]: one wire id, two typed views.
+///
+/// Rule-defined action kinds join via `ActionKind(id)` /
+/// `ruleset-core::kind` (see that module). Construction from a raw id is
+/// allowed for those; prefer the consts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct ActionKind(pub i32);
+
+/// Filter-listener view of the wire id space (`On::Filter` / `On::FilterFlag` /
+/// `On::FilterValue`).
+///
+/// `#[repr(transparent)]` over the shared `i32` id. Associated consts mirror
+/// every `TriggerKind` const with `is_filter() == true` (modifier-pipeline /
+/// value-shaping stages plus the decision gates). Gates that used to be typed
+/// `FilterKind` (`ImmuneAll`, `ActGate`, …) live here: `On::Gate` is long gone
+/// and those questions are `FilterFlag` / `FilterValue` entries.
+///
+/// A future rule-defined FILTER kind would declare `FilterKind(id)` on this
+/// side in `ruleset-core::kind` **and** teach `TriggerKind::is_filter()` (or a
+/// custom-filter id table beside `CUSTOM_LINKS`) about the id -- today every
+/// ruleset-declared kind is an Action (known gap; see docs/CARDS.md).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+#[repr(transparent)]
+pub struct FilterKind(pub i32);
+
+/// [反击] chain-link selectors (`On::Counteract`). Same wire id space as
+/// [`TriggerKind`] -- left as an alias so counteract sites keep compiling.
+/// Dual-role ids also have an [`ActionKind`] const (e.g. `Effect`).
 pub type ChainKind = TriggerKind;
-/// Declaration / resolution questions (see [`TriggerKind`]). Same id space.
-pub type GateKind = TriggerKind;
+
+impl ActionKind {
+
+    /// Mirror of [`TriggerKind::None`] (wire 0).
+    pub const None: Self = Self(TriggerKind::None.as_i32());
+
+    /// Mirror of [`TriggerKind::DiceRollBefore`] (wire 1).
+    pub const DiceRollBefore: Self = Self(TriggerKind::DiceRollBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::DiceRollResult`] (wire 2).
+    pub const DiceRollResult: Self = Self(TriggerKind::DiceRollResult.as_i32());
+
+    /// Mirror of [`TriggerKind::TurnStart`] (wire 3).
+    pub const TurnStart: Self = Self(TriggerKind::TurnStart.as_i32());
+
+    /// Mirror of [`TriggerKind::Pass`] (wire 4).
+    pub const Pass: Self = Self(TriggerKind::Pass.as_i32());
+
+    /// Mirror of [`TriggerKind::PassPlayer`] (wire 5).
+    pub const PassPlayer: Self = Self(TriggerKind::PassPlayer.as_i32());
+
+    /// Mirror of [`TriggerKind::SettleBefore`] (wire 6).
+    pub const SettleBefore: Self = Self(TriggerKind::SettleBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::Settle`] (wire 7).
+    pub const Settle: Self = Self(TriggerKind::Settle.as_i32());
+
+    /// Mirror of [`TriggerKind::Mortgage`] (wire 8).
+    pub const Mortgage: Self = Self(TriggerKind::Mortgage.as_i32());
+
+    /// Mirror of [`TriggerKind::Pay`] (wire 9).
+    pub const Pay: Self = Self(TriggerKind::Pay.as_i32());
+
+    /// Mirror of [`TriggerKind::Paid`] (wire 10).
+    pub const Paid: Self = Self(TriggerKind::Paid.as_i32());
+
+    /// Mirror of [`TriggerKind::Bankrupt`] (wire 11).
+    pub const Bankrupt: Self = Self(TriggerKind::Bankrupt.as_i32());
+
+    /// Mirror of [`TriggerKind::Card`] (wire 12).
+    pub const Card: Self = Self(TriggerKind::Card.as_i32());
+
+    /// Mirror of [`TriggerKind::Event`] (wire 13).
+    pub const Event: Self = Self(TriggerKind::Event.as_i32());
+
+    /// Mirror of [`TriggerKind::Abnormal`] (wire 14).
+    pub const Abnormal: Self = Self(TriggerKind::Abnormal.as_i32());
+
+    /// Mirror of [`TriggerKind::Target`] (wire 15).
+    pub const Target: Self = Self(TriggerKind::Target.as_i32());
+
+    /// Mirror of [`TriggerKind::Exile`] (wire 21).
+    pub const Exile: Self = Self(TriggerKind::Exile.as_i32());
+
+    /// Mirror of [`TriggerKind::State`] (wire 23).
+    pub const State: Self = Self(TriggerKind::State.as_i32());
+
+    /// Mirror of [`TriggerKind::Counteracted`] (wire 24).
+    pub const Counteracted: Self = Self(TriggerKind::Counteracted.as_i32());
+
+    /// Mirror of [`TriggerKind::DrawOut`] (wire 25).
+    pub const DrawOut: Self = Self(TriggerKind::DrawOut.as_i32());
+
+    /// Mirror of [`TriggerKind::TwoCards`] (wire 27).
+    pub const TwoCards: Self = Self(TriggerKind::TwoCards.as_i32());
+
+    /// Mirror of [`TriggerKind::TurnStartBefore`] (wire 28).
+    pub const TurnStartBefore: Self = Self(TriggerKind::TurnStartBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::PassBefore`] (wire 29).
+    pub const PassBefore: Self = Self(TriggerKind::PassBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::MortgageBefore`] (wire 30).
+    pub const MortgageBefore: Self = Self(TriggerKind::MortgageBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::BankruptBefore`] (wire 31).
+    pub const BankruptBefore: Self = Self(TriggerKind::BankruptBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::CardAfter`] (wire 32).
+    pub const CardAfter: Self = Self(TriggerKind::CardAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::EventAfter`] (wire 33).
+    pub const EventAfter: Self = Self(TriggerKind::EventAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::SettleAfter`] (wire 34).
+    pub const SettleAfter: Self = Self(TriggerKind::SettleAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::BuyBefore`] (wire 35).
+    pub const BuyBefore: Self = Self(TriggerKind::BuyBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::BuyAfter`] (wire 36).
+    pub const BuyAfter: Self = Self(TriggerKind::BuyAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::BuildBefore`] (wire 37).
+    pub const BuildBefore: Self = Self(TriggerKind::BuildBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::BuildAfter`] (wire 38).
+    pub const BuildAfter: Self = Self(TriggerKind::BuildAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::DiscardBefore`] (wire 39).
+    pub const DiscardBefore: Self = Self(TriggerKind::DiscardBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::DiscardAfter`] (wire 40).
+    pub const DiscardAfter: Self = Self(TriggerKind::DiscardAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::EndTurnBefore`] (wire 41).
+    pub const EndTurnBefore: Self = Self(TriggerKind::EndTurnBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::EndTurnAfter`] (wire 42).
+    pub const EndTurnAfter: Self = Self(TriggerKind::EndTurnAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::LeaveBefore`] (wire 43).
+    pub const LeaveBefore: Self = Self(TriggerKind::LeaveBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::LeaveAfter`] (wire 44).
+    pub const LeaveAfter: Self = Self(TriggerKind::LeaveAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::TurnEnd`] (wire 45).
+    pub const TurnEnd: Self = Self(TriggerKind::TurnEnd.as_i32());
+
+    /// Mirror of [`TriggerKind::Drawn`] (wire 46).
+    pub const Drawn: Self = Self(TriggerKind::Drawn.as_i32());
+
+    /// Mirror of [`TriggerKind::PassTile`] (wire 47).
+    pub const PassTile: Self = Self(TriggerKind::PassTile.as_i32());
+
+    /// Mirror of [`TriggerKind::PayAfter`] (wire 48).
+    pub const PayAfter: Self = Self(TriggerKind::PayAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::DiceRollAfter`] (wire 49).
+    pub const DiceRollAfter: Self = Self(TriggerKind::DiceRollAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::CardPlayed`] (wire 50).
+    pub const CardPlayed: Self = Self(TriggerKind::CardPlayed.as_i32());
+
+    /// Mirror of [`TriggerKind::Targeted`] (wire 51).
+    pub const Targeted: Self = Self(TriggerKind::Targeted.as_i32());
+
+    /// Mirror of [`TriggerKind::TurnEndBefore`] (wire 53).
+    pub const TurnEndBefore: Self = Self(TriggerKind::TurnEndBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::TurnEndAfter`] (wire 54).
+    pub const TurnEndAfter: Self = Self(TriggerKind::TurnEndAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::Discarded`] (wire 58).
+    pub const Discarded: Self = Self(TriggerKind::Discarded.as_i32());
+
+    /// Mirror of [`TriggerKind::DeckBeforeGame`] (wire 59).
+    pub const DeckBeforeGame: Self = Self(TriggerKind::DeckBeforeGame.as_i32());
+
+    /// Mirror of [`TriggerKind::DeckAtGameStart`] (wire 60).
+    pub const DeckAtGameStart: Self = Self(TriggerKind::DeckAtGameStart.as_i32());
+
+    /// Mirror of [`TriggerKind::Drew`] (wire 61).
+    pub const Drew: Self = Self(TriggerKind::Drew.as_i32());
+
+    /// Mirror of [`TriggerKind::Reshuffled`] (wire 62).
+    pub const Reshuffled: Self = Self(TriggerKind::Reshuffled.as_i32());
+
+    /// Mirror of [`TriggerKind::Bought`] (wire 63).
+    pub const Bought: Self = Self(TriggerKind::Bought.as_i32());
+
+    /// Mirror of [`TriggerKind::SettleBody`] (wire 64).
+    pub const SettleBody: Self = Self(TriggerKind::SettleBody.as_i32());
+
+    /// Mirror of [`TriggerKind::BeforeOut`] (wire 65).
+    pub const BeforeOut: Self = Self(TriggerKind::BeforeOut.as_i32());
+
+    /// Mirror of [`TriggerKind::Teleported`] (wire 66).
+    pub const Teleported: Self = Self(TriggerKind::Teleported.as_i32());
+
+    /// Mirror of [`TriggerKind::Effect`] (wire 72).
+    pub const Effect: Self = Self(TriggerKind::Effect.as_i32());
+
+    /// Mirror of [`TriggerKind::CounterChanged`] (wire 76).
+    pub const CounterChanged: Self = Self(TriggerKind::CounterChanged.as_i32());
+
+    /// Mirror of [`TriggerKind::DrewBefore`] (wire 77).
+    pub const DrewBefore: Self = Self(TriggerKind::DrewBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::TileResolved`] (wire 87).
+    pub const TileResolved: Self = Self(TriggerKind::TileResolved.as_i32());
+
+    /// Mirror of [`TriggerKind::MoveResolved`] (wire 88).
+    pub const MoveResolved: Self = Self(TriggerKind::MoveResolved.as_i32());
+
+    /// Mirror of [`TriggerKind::BankruptResolved`] (wire 89).
+    pub const BankruptResolved: Self = Self(TriggerKind::BankruptResolved.as_i32());
+
+    /// Mirror of [`TriggerKind::MoveBefore`] (wire 90).
+    pub const MoveBefore: Self = Self(TriggerKind::MoveBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::MoveAfter`] (wire 91).
+    pub const MoveAfter: Self = Self(TriggerKind::MoveAfter.as_i32());
+
+    /// Mirror of [`TriggerKind::MarkerSpend`] (wire 92).
+    pub const MarkerSpend: Self = Self(TriggerKind::MarkerSpend.as_i32());
+
+    /// Mirror of [`TriggerKind::MarkerGain`] (wire 93).
+    pub const MarkerGain: Self = Self(TriggerKind::MarkerGain.as_i32());
+
+    /// Mirror of [`TriggerKind::AtEnd`] (wire 103).
+    pub const AtEnd: Self = Self(TriggerKind::AtEnd.as_i32());
+
+    /// Mirror of [`TriggerKind::PaySplitChooseBefore`] (wire 105).
+    pub const PaySplitChooseBefore: Self = Self(TriggerKind::PaySplitChooseBefore.as_i32());
+
+    /// Mirror of [`TriggerKind::PayCombinedAddBefore`] (wire 106).
+    pub const PayCombinedAddBefore: Self = Self(TriggerKind::PayCombinedAddBefore.as_i32());
+
+    /// The wire value, shared with [`TriggerKind`] / [`ChainKind`].
+    pub const fn as_i32(self) -> i32 { self.0 }
+
+    /// Any code is a valid opaque id (rule-defined kinds use this).
+    pub const fn from_i32(v: i32) -> Self { Self(v) }
+
+    /// View this id in the wire namespace.
+    pub const fn as_trigger(self) -> TriggerKind { TriggerKind(self.0) }
+
+    /// View a wire id as this side (no side check -- the consts pin the set).
+    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k.as_i32()) }
+
+    /// Wire name (camelCase generic, or decimal for a ruleset-declared id).
+    pub fn as_str(self) -> &'static str { self.as_trigger().as_str() }
+
+    /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
+    /// const is always `false` and a `FilterKind` const always `true`; a raw
+    /// `Self(i)` still reports the wire fact.
+    pub const fn is_filter(self) -> bool { self.as_trigger().is_filter() }
+}
+
+impl From<ActionKind> for TriggerKind {
+    #[inline(always)]
+    fn from(k: ActionKind) -> Self { k.as_trigger() }
+}
+
+impl From<TriggerKind> for ActionKind {
+    #[inline(always)]
+    fn from(k: TriggerKind) -> Self { ActionKind::from_trigger(k) }
+}
+
+impl FilterKind {
+
+    /// Mirror of [`TriggerKind::PaySplitChoose`] (wire 52).
+    pub const PaySplitChoose: Self = Self(TriggerKind::PaySplitChoose.as_i32());
+
+    /// Mirror of [`TriggerKind::PaySplitAdd`] (wire 55).
+    pub const PaySplitAdd: Self = Self(TriggerKind::PaySplitAdd.as_i32());
+
+    /// Mirror of [`TriggerKind::PaySplitMul`] (wire 56).
+    pub const PaySplitMul: Self = Self(TriggerKind::PaySplitMul.as_i32());
+
+    /// Mirror of [`TriggerKind::PaySplitAt`] (wire 57).
+    pub const PaySplitAt: Self = Self(TriggerKind::PaySplitAt.as_i32());
+
+    /// Mirror of [`TriggerKind::DiceRollPlan`] (wire 67).
+    pub const DiceRollPlan: Self = Self(TriggerKind::DiceRollPlan.as_i32());
+
+    /// Mirror of [`TriggerKind::AbnormalGuard`] (wire 68).
+    pub const AbnormalGuard: Self = Self(TriggerKind::AbnormalGuard.as_i32());
+
+    /// Mirror of [`TriggerKind::ImmuneAll`] (wire 69).
+    pub const ImmuneAll: Self = Self(TriggerKind::ImmuneAll.as_i32());
+
+    /// Mirror of [`TriggerKind::Untargetable`] (wire 70).
+    pub const Untargetable: Self = Self(TriggerKind::Untargetable.as_i32());
+
+    /// Mirror of [`TriggerKind::Redirect`] (wire 71).
+    pub const Redirect: Self = Self(TriggerKind::Redirect.as_i32());
+
+    /// Mirror of [`TriggerKind::BuyGate`] (wire 79).
+    pub const BuyGate: Self = Self(TriggerKind::BuyGate.as_i32());
+
+    /// Mirror of [`TriggerKind::BuyAdd`] (wire 80).
+    pub const BuyAdd: Self = Self(TriggerKind::BuyAdd.as_i32());
+
+    /// Mirror of [`TriggerKind::BuyMul`] (wire 81).
+    pub const BuyMul: Self = Self(TriggerKind::BuyMul.as_i32());
+
+    /// Mirror of [`TriggerKind::BuySet`] (wire 82).
+    pub const BuySet: Self = Self(TriggerKind::BuySet.as_i32());
+
+    /// Mirror of [`TriggerKind::BuyAssign`] (wire 83).
+    pub const BuyAssign: Self = Self(TriggerKind::BuyAssign.as_i32());
+
+    /// Mirror of [`TriggerKind::PayCombinedAdd`] (wire 84).
+    pub const PayCombinedAdd: Self = Self(TriggerKind::PayCombinedAdd.as_i32());
+
+    /// Mirror of [`TriggerKind::PayCombinedMul`] (wire 85).
+    pub const PayCombinedMul: Self = Self(TriggerKind::PayCombinedMul.as_i32());
+
+    /// Mirror of [`TriggerKind::PayCombinedCancel`] (wire 86).
+    pub const PayCombinedCancel: Self = Self(TriggerKind::PayCombinedCancel.as_i32());
+
+    /// Mirror of [`TriggerKind::ActGate`] (wire 95).
+    pub const ActGate: Self = Self(TriggerKind::ActGate.as_i32());
+
+    /// Mirror of [`TriggerKind::PayGate`] (wire 96).
+    pub const PayGate: Self = Self(TriggerKind::PayGate.as_i32());
+
+    /// Mirror of [`TriggerKind::MoveGate`] (wire 97).
+    pub const MoveGate: Self = Self(TriggerKind::MoveGate.as_i32());
+
+    /// Mirror of [`TriggerKind::ExclusiveUse`] (wire 98).
+    pub const ExclusiveUse: Self = Self(TriggerKind::ExclusiveUse.as_i32());
+
+    /// Mirror of [`TriggerKind::TurnBonusTime`] (wire 99).
+    pub const TurnBonusTime: Self = Self(TriggerKind::TurnBonusTime.as_i32());
+
+    /// Mirror of [`TriggerKind::TurnBaseTime`] (wire 100).
+    pub const TurnBaseTime: Self = Self(TriggerKind::TurnBaseTime.as_i32());
+
+    /// Mirror of [`TriggerKind::PlayGate`] (wire 101).
+    pub const PlayGate: Self = Self(TriggerKind::PlayGate.as_i32());
+
+    /// Mirror of [`TriggerKind::DiceRollValue`] (wire 102).
+    pub const DiceRollValue: Self = Self(TriggerKind::DiceRollValue.as_i32());
+
+    /// The wire value, shared with [`TriggerKind`] / [`ChainKind`].
+    pub const fn as_i32(self) -> i32 { self.0 }
+
+    /// Any code is a valid opaque id (rule-defined kinds use this).
+    pub const fn from_i32(v: i32) -> Self { Self(v) }
+
+    /// View this id in the wire namespace.
+    pub const fn as_trigger(self) -> TriggerKind { TriggerKind(self.0) }
+
+    /// View a wire id as this side (no side check -- the consts pin the set).
+    pub const fn from_trigger(k: TriggerKind) -> Self { Self(k.as_i32()) }
+
+    /// Wire name (camelCase generic, or decimal for a ruleset-declared id).
+    pub fn as_str(self) -> &'static str { self.as_trigger().as_str() }
+
+    /// Same test as [`TriggerKind::is_filter`], on the wire id. An `ActionKind`
+    /// const is always `false` and a `FilterKind` const always `true`; a raw
+    /// `Self(i)` still reports the wire fact.
+    pub const fn is_filter(self) -> bool { self.as_trigger().is_filter() }
+}
+
+impl From<FilterKind> for TriggerKind {
+    #[inline(always)]
+    fn from(k: FilterKind) -> Self { k.as_trigger() }
+}
+
+impl From<TriggerKind> for FilterKind {
+    #[inline(always)]
+    fn from(k: TriggerKind) -> Self { FilterKind::from_trigger(k) }
+}
+
 
 #[allow(non_upper_case_globals)]
 impl TriggerKind {
@@ -1476,13 +1866,13 @@ impl TriggerKind {
     pub const Event: Self = Self(13);
 
     /// An abnormal effect settled on `target` (`t.value` is the [`AbKind`]).
-    /// The declaration gates are [`GateKind::AbnormalGuard`] + the [`Self::Effect`]
+    /// The declaration gates are [`FilterKind::AbnormalGuard`] + the [`Self::Effect`]
     /// [反击]; this hook reports what actually landed, self-applied included.
     pub const Abnormal: Self = Self(14);
 
     /// A single-target effect settled on `target`. Now a settlement hook: the
     /// [反击] key for 「被…效果影响」 is [`Self::Effect`]. Declaration-side gates:
-    /// [`GateKind::Untargetable`] / [`GateKind::Redirect`].
+    /// [`FilterKind::Untargetable`] / [`FilterKind::Redirect`].
     pub const Target: Self = Self(15);
 
     // Wire id 16 (`stop`) retired in v84 -- never reuse. Was 「强制停下」.
@@ -1711,7 +2101,7 @@ impl TriggerKind {
     /// The old `Target` / `Abnormal` / `Pay` windows are settlement hooks now:
     /// they fire as the effect settles and can no longer reconstruct this
     /// clause. A counter that means "an effect hit me" listens here and asks
-    /// `effect::`; one that means "a payment settled" listens at [`HookKind::PayAfter`].
+    /// `effect::`; one that means "a payment settled" listens at [`ActionKind::PayAfter`].
     pub const Effect: Self = Self(72);
 
     /// v50: a named on-card counter on a placed instance was just written.
@@ -2223,7 +2613,7 @@ const fn list_has(list: &[i32], v: i32) -> bool {
     false
 }
 
-/// Generic gate codes (see [`GateKind`] docs).
+/// Generic gate codes (see [`FilterKind`] docs).
 const GATE_CODES: &[i32] = &[68, 69, 70, 71, 79, 95, 96, 97, 98];
 /// Generic chain-link codes (see [`ChainKind`] docs).
 const CHAIN_CODES: &[i32] = &[
@@ -2240,13 +2630,13 @@ const CUSTOM_LINKS: &[i32] = &[26, 73, 74, 75, 78];
 ///
 /// [`TriggerKind`] is the *wire* id space: every event the engine raises, and
 /// what crosses the guest boundary. Cards declare against one of the three
-/// typed views ([`ChainKind`] / [`HookKind`] / [`GateKind`], aliases of
+/// typed views ([`ChainKind`] / [`ActionKind`] / [`FilterKind`] over
 /// [`TriggerKind`]); the `On` variant says what the event is for:
 ///
 /// * [`ChainKind`] -- a chain link answers it, so a [反击] window opens.
-/// * [`HookKind`] -- a field-card (`Fx`) settlement point; placed cards run
+/// * [`ActionKind`] -- a field-card (`Fx`) settlement point; placed cards run
 ///   automatically, no window.
-/// * [`GateKind`] -- a question posed to placed cards at declaration or at
+/// * [`FilterKind`] -- a question posed to placed cards at declaration or at
 ///   resolution (`may this effect name S?` / `does anything land on S?`).
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2375,7 +2765,7 @@ pub enum OnKind {
     /// Called at the counteraction offer, then again at LIFO resolution.
     Counteract = 2,
     /// `On::Action(kinds, cond, guard, body)` -- an **event reaction** at those
-    /// [`HookKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
+    /// [`ActionKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
     /// `cond`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
     /// **automatically** for every placed card (placement order per player)
     /// whenever one of the kinds is raised -- no window. May emit effects;
@@ -2410,7 +2800,7 @@ pub enum OnKind {
     /// 规则书 基础规则 6. Same split as [`Self::Mortgage`].
     Redeem = 10,
     /// v74: `On::Filter` / `On::FilterFlag` / `On::FilterValue` -- a **value
-    /// modifier** at those modifier [`HookKind`]s (`TriggerKind::is_filter()`).
+    /// modifier** at those modifier [`FilterKind`]s (`TriggerKind::is_filter()`).
     /// v75: the three shapes share this wire id (the host distinguishes by the
     /// guest's return convention). Kinds must be filter kinds. Id 11, not 9
     /// (9/10 are the v73 deed kinds).

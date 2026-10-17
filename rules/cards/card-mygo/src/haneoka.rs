@@ -7,7 +7,7 @@
 //! Sheet 2026-10-06: every threshold is inclusive (「至少为」), and the
 //! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
-use card_sdk::abi::{roll_source, HookKind};
+use card_sdk::abi::{roll_source, ActionKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,7 +20,7 @@ pub const HANEOKA: CardDef = CardDef::new(
         // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive `ask_yes` + `set_dest` + `set_pay_amount(0)` offer sits
         // immediately before the pure `PaySplitChoose` filter stage.
-        On::Action(&[HookKind::PaySplitChooseBefore], "actor == owner && card.placed && value > 0", None, pay_choose),
+        On::Action(&[ActionKind::PaySplitChooseBefore], "actor == owner && card.placed && value > 0", None, pay_choose),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"羽丘的不可思议女孩"#)

@@ -17,7 +17,7 @@
 //! `settleBefore`+`settleAfter`+`teleported` triple that missed a
 //! 「不触发结算」 walk.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -26,11 +26,11 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
-        On::Action(&[HookKind::MoveAfter], "actor == owner && move.main && card.placed", None, after_move),
+        On::Action(&[ActionKind::MoveAfter], "actor == owner && move.main && card.placed", None, after_move),
         // The body-top `!is_placed` early-out is the condition now: a card the
         // move already landed (or that otherwise left the field) has nothing
         // left to discard, so the callback must not run (or flash) for it.
-        On::Action(&[HookKind::AtEnd], "card.placed", None, at_end),
+        On::Action(&[ActionKind::AtEnd], "card.placed", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"儿时玩伴的鼓励"#)

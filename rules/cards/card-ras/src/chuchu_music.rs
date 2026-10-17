@@ -6,7 +6,7 @@
 //!
 //! park on another player; their buys pay the user and pass the card along.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -14,14 +14,14 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
     "RAS:（chuchu）演奏我的音乐吧",
     &[
         On::Play("", Some(cant_play), play),
-        On::Action(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
+        On::Action(&[ActionKind::TurnEnd], "", Some(turn_end_guard), turn_end),
         // 规则书: 「场上存在此卡的玩家下次购买地契时」 -- the acquisition moment,
         // C# `CardChuchuMusic.Bought` (`Fx.Bought` = 「a player became the owner
         // of `t.tile`」), the same hook Afterglow / Roselia / 朝日 listen on for
         // their 「购买…时」 clauses. It was `BuyAfter` (「after `Card.Buy`
         // resolves」), which `ctx::raise_bought`'s card-driven hand-over (巴's
         // 「收购该地契」) does not raise -- so the bonus never fired there.
-        On::Action(&[HookKind::Bought], "", Some(buy_after_guard), buy_after),
+        On::Action(&[ActionKind::Bought], "", Some(buy_after_guard), buy_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"演奏我的音乐吧"#)

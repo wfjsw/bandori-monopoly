@@ -13,7 +13,7 @@
 //! A pure [持续] card: the C# has no `Play`, it is placed by `CardPipopa`
 //! (`place_card` in `pipopa.rs`). Both continuous clauses are Fx hooks.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,7 +24,7 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // “山吹面包房”，“星之鼓动山丘”或“流星堂”时」 -- the five named spots
         // are the condition.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))",
             None,
             pass_tile,
@@ -36,7 +36,7 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // the interactive crystal spend sits immediately before the pure
         // `PaySplitChoose` filter stage.
         On::Action(
-            &[HookKind::PaySplitChooseBefore],
+            &[ActionKind::PaySplitChooseBefore],
             "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,

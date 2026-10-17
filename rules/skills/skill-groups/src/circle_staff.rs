@@ -8,7 +8,7 @@
 //! that card's effect runs. 「[手]效果中的一个数字」 is `ctx::n(k, value)` -- the
 //! play's own numbers are already tagged for a doubling to target.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -21,7 +21,7 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
     // for a 通用 card and with something to discard. Prefix is a residual
     // (string match on the played id); hand size is CEL.
     &[On::Action(
-        &[HookKind::Card],
+        &[ActionKind::Card],
         "actor == owner && hand(owner) >= 1",
         Some(is_general_card),
         on_played,

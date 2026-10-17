@@ -10,7 +10,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,9 +19,9 @@ pub const NFO: CardDef = CardDef::new(
     &[
         // 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 --
         // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
-        // live in a Filter. Whole offer on `HookKind::Effect` (payment
+        // live in a Filter. Whole offer on `ActionKind::Effect` (payment
         // declaration; `t.value` folds there).
-        On::Action(&[card_sdk::abi::HookKind::Effect], "", Some(gain_guard), gain_bump),
+        On::Action(&[card_sdk::abi::ActionKind::Effect], "", Some(gain_guard), gain_bump),
         On::Play("", None, play),
         // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
         // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
@@ -35,13 +35,13 @@ pub const NFO: CardDef = CardDef::new(
         //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
         //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
         On::Filter(
-            &[HookKind::PaySplitAt],
+            &[FilterKind::PaySplitAt],
             "actor == owner && card.placed && value > 0",
             None,
             pay_shave,
         ),
-        On::Action(&[HookKind::PayAfter], "actor == owner && card.placed", None, pay_unplace),
-        On::Action(&[HookKind::AtEnd], "", None, at_end),
+        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", None, pay_unplace),
+        On::Action(&[ActionKind::AtEnd], "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)

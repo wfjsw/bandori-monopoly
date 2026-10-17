@@ -14,7 +14,7 @@
 //! built. 「选择本次移动向后」 is the plan's reverse; 「[经过]CiRCLE时不获得
 //! CiRCLE奖励」 is the plan's no-circle-reward flag.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -26,8 +26,8 @@ pub const RAN_RED: CardDef = CardDef::new(
     "skill:美竹兰:叛逆的红挑染",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),
     ],
 ).silent(&[1]);
 

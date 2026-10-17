@@ -5,7 +5,7 @@
 
 use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 
 use crate::util::{expire, keep};
 
@@ -18,7 +18,7 @@ pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
         On::Play("", None, play),
-        On::Action(&[HookKind::AtEnd], "", None, expire_at_end),
+        On::Action(&[ActionKind::AtEnd], "", None, expire_at_end),
     ],
 );
 

@@ -21,7 +21,7 @@
 //! Kids / Parking Space), not a pre-settle write. Both used to be done at
 //! `settleBefore`.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -34,8 +34,8 @@ pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
         // rides the settle's effect list below.
         //
@@ -43,22 +43,22 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         // (「若space已属于其他玩家」) is non-interactive and stays on
         // `FilterFlag(PayCombinedCancel)` (false = drop the command). The
         // non-owner parfait-transfer branch prompts (「可」), so its
-        // `ask_yes` + `move_units` + `set_cancelled` ride `HookKind::Effect`
+        // `ask_yes` + `move_units` + `set_cancelled` ride `ActionKind::Effect`
         // (the payment declaration -- `t.value` the engine still folds).
         // PayAfter is too late to cancel. Effect fires per `money()` call,
         // so on a split-pay the interactive offer is per leg rather than once
         // on the command total (single-pair behaviour is identical).
-        On::FilterFlag(&[HookKind::PayCombinedCancel], "", Some(any), exempt_flag),
-        On::Action(&[HookKind::Effect], "", Some(any), exempt_offer),
+        On::FilterFlag(&[FilterKind::PayCombinedCancel], "", Some(any), exempt_flag),
+        On::Action(&[ActionKind::Effect], "", Some(any), exempt_offer),
         // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
-        On::Action(&[HookKind::SettleBody], "", Some(any), replace_body),
+        On::Action(&[ActionKind::SettleBody], "", Some(any), replace_body),
         // （3）「你与其他玩家重合时」 -- 行动阶段 13 [重叠] (`passPlayer`). The
         // pre puts the owner in the actor seat (the mover); `target` is the
         // other player already standing on the landing tile (one raise per
         // such other). The body must read `target`, not `player_id`.
-        On::Action(&[HookKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
+        On::Action(&[ActionKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
     ],
 )
     .labels(&[(2, "（1）"), (3, "（2）"), (4, "（2）"), (5, "（2）"), (6, "（3）")])
@@ -136,7 +136,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
 /// FilterFlag): the settling player is the Space owner and the tile belongs to
 /// someone else, so the payment is dropped outright. `false` = cancel (the host
 /// calls `set_cancelled()`). The interactive parfait-transfer half is
-/// [`exempt_offer`] on `HookKind::Effect`.
+/// [`exempt_offer`] on `ActionKind::Effect`.
 fn exempt_flag(player_id: i32, _value: i32) -> bool {
     // true = keep
     if trigger::cancelled() {
@@ -166,7 +166,7 @@ fn exempt_flag(player_id: i32, _value: i32) -> bool {
 /// 转移到该格上以免除当次付款」 -- the settling non-owner **may** (「可」) pay a
 /// held parfait instead of money. ABI v74 Pattern E: `ask_yes` + `move_units` +
 /// `set_cancelled` cannot live in a FilterFlag (which cannot prompt), so the
-/// offer rides `HookKind::Effect` (the payment declaration).
+/// offer rides `ActionKind::Effect` (the payment declaration).
 fn exempt_offer(player_id: i32) -> card_sdk::Asked {
     if trigger::cancelled() {
         return Ok(());

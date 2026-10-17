@@ -17,7 +17,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use skill_groups::fans;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -28,14 +28,14 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         On::Play("", None, aya_longing),
         // ABI v74 Pattern E: the body is interactive (共鸣 prompts + a second
         // amount rewrite) so it cannot be a pure Filter. It rides
-        // `HookKind::Effect` -- the payment declaration, whose `t.value` the
+        // `ActionKind::Effect` -- the payment declaration, whose `t.value` the
         // engine still folds (PayAfter is too late). Both shaves stay in one
         // body so the X-then-1500 order is unchanged.
         // TODO(规则书): the shaves land at Effect (before PaySplitAdd/PaySplitMul) rather
         //   than at the old PaySplitAdd stage, so a sibling PaySplitAdd modifier now sees
         //   the already-shaved figure. Same result when no other add/mul
         //   modifier touches the payment.
-        On::Action(&[HookKind::Effect], "actor == owner && value > 0", None, pay_add),
+        On::Action(&[ActionKind::Effect], "actor == owner && value > 0", None, pay_add),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)

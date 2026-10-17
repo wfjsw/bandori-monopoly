@@ -87,8 +87,8 @@ pub mod rt;
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
 ///     On::Play("", None, play),
-///     On::Action(&[HookKind::TurnEnd], pre::MINE, guard, tick),
-///     On::FilterFlag(&[GateKind::ImmuneAll], pre::MINE, None, immune),
+///     On::Action(&[ActionKind::TurnEnd], pre::MINE, guard, tick),
+///     On::FilterFlag(&[FilterKind::ImmuneAll], pre::MINE, None, immune),
 /// ]);
 /// ```
 ///
@@ -231,7 +231,7 @@ impl CardDef {
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
     ///     On::Play("", None, use_skill),                                     // 0: flashes
-    ///     On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+    ///     On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
     ///              "", None, declare_cap),                                   // 1: bookkeeping
     /// ]).silent(&[1]);
     /// ```
@@ -283,7 +283,7 @@ impl CardDef {
     /// ```ignore
     /// pub const T: CardDef = CardDef::new("skill:…", &[
     ///     On::Play("", None, use_skill),                 // 0: Auto
-    ///     On::Action(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    ///     On::Action(&[ActionKind::TurnEnd], "", None, tick), // 1: Always (self-only)
     /// ]).flash(&[(1, Flash::Always)]);
     /// ```
     pub const fn flash(self, entries: &'static [(i32, crate::abi::Flash)]) -> Self {
@@ -340,7 +340,7 @@ impl CardDef {
     /// use card_sdk::abi::text_slot;
     /// pub const CIRCLE: CardDef = CardDef::new("tile:circle", &[
     ///     On::Settle("", None, settle),                                       // 0
-    ///     On::Action(&[HookKind::PassTile], "", Some(pass_pays), on_pass),      // 1
+    ///     On::Action(&[ActionKind::PassTile], "", Some(pass_pays), on_pass),      // 1
     /// ]).texts(&[
     ///     (0, text_slot::SETTLE, "", "deed.note.circleSettle"),
     ///     (1, text_slot::PASS, "", "deed.note.circlePass"),
@@ -460,8 +460,8 @@ impl CardDef {
 
 /// One entry point of a card. The variant says what the
 /// entry is for, and its kind list is typed to match -- a counteraction can only be
-/// declared at a [`abi::ChainKind`], a field hook at a [`abi::HookKind`], a gate
-/// at a [`abi::GateKind`]. An empty list is never dispatched.
+/// declared at a [`abi::ChainKind`], an event reaction at a [`abi::ActionKind`],
+/// a modifier/gate at a [`abi::FilterKind`]. An empty list is never dispatched.
 ///
 /// WordPress `do_action` / `apply_filters` split (ABI v73):
 /// [`On::Action`] is an **event reaction** -- it may emit effects (`ctx::gain`,
@@ -504,10 +504,10 @@ pub enum On {
     ),
     /// An **event reaction** at these field-hook kinds: runs automatically
     /// while the card is in play. Same shape as [`On::Counteract`]. May emit
-    /// effects; does not modify the triggering value. Kinds must be
-    /// non-filter ([`abi::TriggerKind::is_filter`] == false).
+    /// effects; does not modify the triggering value. Kinds are
+    /// [`abi::ActionKind`] (non-filter: [`abi::TriggerKind::is_filter`] == false).
     Action(
-        &'static [abi::HookKind],
+        &'static [abi::ActionKind],
         &'static str,
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
@@ -516,24 +516,27 @@ pub enum On {
     /// `fn(player_id, value) -> i32` -- pure: no prompts, no `ctx::gain`,
     /// no plan/deal writes. The host folds the return into the running figure
     /// (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds).
-    /// Kinds must be filter kinds ([`abi::TriggerKind::is_filter`] == true)
+    /// Kinds are [`abi::FilterKind`] ([`abi::TriggerKind::is_filter`] == true)
     /// whose payload is an integer: PaySplitAdd / PaySplitMul / PaySplitAt / PayCombinedAdd /
     /// PayCombinedMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
     /// DiceRollValue.
     Filter(
-        &'static [abi::HookKind],
+        &'static [abi::FilterKind],
         &'static str,
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32, value: i32) -> i32,
     ),
     /// **Boolean decision** (ABI v74). Body is `fn(player_id, value) -> bool`
     /// -- pure. `false` cancels / substitutes the pipeline stage.
-    /// Kinds: PayCombinedCancel (false = drop the command), ChargePaying
-    /// (false = substitute the fire-pot cost), PaySplitChoose (false = cancel the
-    /// payment). A PaySplitChoose that *also* rewrites the amount is split into
-    /// [`On::Filter`] (amount) plus this variant (cancel).
+    /// Kinds: PayCombinedCancel (false = drop the command), PaySplitChoose
+    /// (false = cancel the payment), and the decision gates (AbnormalGuard /
+    /// ImmuneAll / Untargetable / Redirect / BuyGate / ActGate / PayGate /
+    /// MoveGate / ExclusiveUse / PlayGate -- true = allowed).
+    /// ChargePaying is **not** here: its 「可」 opt-in prompts, so it stays
+    /// `On::Action`. A PaySplitChoose that *also* rewrites the amount is split
+    /// into [`On::Filter`] (amount) plus this variant (cancel).
     FilterFlag(
-        &'static [abi::HookKind],
+        &'static [abi::FilterKind],
         &'static str,
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32, value: i32) -> bool,
@@ -543,7 +546,7 @@ pub enum On {
     /// Kinds: BuyAssign (deal owner/houses/mortgaged) and DiceRollPlan
     /// (move-plan shaping). See [`abi::FilterValue`].
     FilterValue(
-        &'static [abi::HookKind],
+        &'static [abi::FilterKind],
         &'static str,
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32, v: abi::FilterValue) -> abi::FilterValue,
@@ -743,22 +746,27 @@ impl On {
     }
 
     /// Kind/variant agreement (ABI v73): a [`On::Filter`] may only list filter
-    /// kinds and an [`On::Action`] only non-filter kinds. Returns the first
-    /// mismatched kind code, or `Ok(())`. Enforced at ruleset build; see also
-    /// the unit tests in [`abi::TriggerKind::is_filter`].
+    /// kinds and an [`On::Action`] only non-filter kinds. Wrong-side *consts*
+    /// are a rustc error at the signature; this cheap check still catches raw
+    /// ids (`ActionKind(i)` / rule-defined kinds) crossing the wire. Returns
+    /// the first mismatched kind code, or `Ok(())`.
     pub fn check_kind_variant(&self) -> Result<(), i32> {
-        let want_filter = matches!(
-            self,
-            On::Filter(..) | On::FilterFlag(..) | On::FilterValue(..)
-        );
         match self {
-            On::Action(kinds, ..)
-            | On::Filter(kinds, ..)
+            On::Action(kinds, ..) => {
+                for k in *kinds {
+                    let code = k.as_i32();
+                    if abi::TriggerKind::from_i32(code).is_filter() {
+                        return Err(code);
+                    }
+                }
+                Ok(())
+            }
+            On::Filter(kinds, ..)
             | On::FilterFlag(kinds, ..)
             | On::FilterValue(kinds, ..) => {
                 for k in *kinds {
                     let code = k.as_i32();
-                    if abi::TriggerKind::from_i32(code).is_filter() != want_filter {
+                    if !abi::TriggerKind::from_i32(code).is_filter() {
                         return Err(code);
                     }
                 }
@@ -798,7 +806,7 @@ impl On {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::abi::TriggerKind;
+    use crate::abi::{ActionKind, FilterKind, TriggerKind};
 
     fn body(_: i32) -> Asked {
         Ok(())
@@ -855,28 +863,157 @@ mod tests {
         }
     }
 
+    /// Pin the typed sides against `TriggerKind::is_filter()` (the single
+    /// declaration source of truth). Every ActionKind const id must be
+    /// `!is_filter()` and every FilterKind const id must be `is_filter()`.
+    #[test]
+    fn typed_kind_const_sides_match_is_filter() {
+        let action: &[(&str, ActionKind)] = &[
+            ("None", ActionKind::None),
+            ("DiceRollBefore", ActionKind::DiceRollBefore),
+            ("DiceRollResult", ActionKind::DiceRollResult),
+            ("TurnStart", ActionKind::TurnStart),
+            ("Pass", ActionKind::Pass),
+            ("PassPlayer", ActionKind::PassPlayer),
+            ("SettleBefore", ActionKind::SettleBefore),
+            ("Settle", ActionKind::Settle),
+            ("Mortgage", ActionKind::Mortgage),
+            ("Pay", ActionKind::Pay),
+            ("Paid", ActionKind::Paid),
+            ("Bankrupt", ActionKind::Bankrupt),
+            ("Card", ActionKind::Card),
+            ("Event", ActionKind::Event),
+            ("Abnormal", ActionKind::Abnormal),
+            ("Target", ActionKind::Target),
+            ("Exile", ActionKind::Exile),
+            ("State", ActionKind::State),
+            ("Counteracted", ActionKind::Counteracted),
+            ("DrawOut", ActionKind::DrawOut),
+            ("TwoCards", ActionKind::TwoCards),
+            ("TurnStartBefore", ActionKind::TurnStartBefore),
+            ("PassBefore", ActionKind::PassBefore),
+            ("MortgageBefore", ActionKind::MortgageBefore),
+            ("BankruptBefore", ActionKind::BankruptBefore),
+            ("CardAfter", ActionKind::CardAfter),
+            ("EventAfter", ActionKind::EventAfter),
+            ("SettleAfter", ActionKind::SettleAfter),
+            ("BuyBefore", ActionKind::BuyBefore),
+            ("BuyAfter", ActionKind::BuyAfter),
+            ("BuildBefore", ActionKind::BuildBefore),
+            ("BuildAfter", ActionKind::BuildAfter),
+            ("DiscardBefore", ActionKind::DiscardBefore),
+            ("DiscardAfter", ActionKind::DiscardAfter),
+            ("EndTurnBefore", ActionKind::EndTurnBefore),
+            ("EndTurnAfter", ActionKind::EndTurnAfter),
+            ("LeaveBefore", ActionKind::LeaveBefore),
+            ("LeaveAfter", ActionKind::LeaveAfter),
+            ("TurnEnd", ActionKind::TurnEnd),
+            ("Drawn", ActionKind::Drawn),
+            ("PassTile", ActionKind::PassTile),
+            ("PayAfter", ActionKind::PayAfter),
+            ("DiceRollAfter", ActionKind::DiceRollAfter),
+            ("CardPlayed", ActionKind::CardPlayed),
+            ("Targeted", ActionKind::Targeted),
+            ("TurnEndBefore", ActionKind::TurnEndBefore),
+            ("TurnEndAfter", ActionKind::TurnEndAfter),
+            ("Discarded", ActionKind::Discarded),
+            ("DeckBeforeGame", ActionKind::DeckBeforeGame),
+            ("DeckAtGameStart", ActionKind::DeckAtGameStart),
+            ("Drew", ActionKind::Drew),
+            ("Reshuffled", ActionKind::Reshuffled),
+            ("Bought", ActionKind::Bought),
+            ("SettleBody", ActionKind::SettleBody),
+            ("BeforeOut", ActionKind::BeforeOut),
+            ("Teleported", ActionKind::Teleported),
+            ("Effect", ActionKind::Effect),
+            ("CounterChanged", ActionKind::CounterChanged),
+            ("DrewBefore", ActionKind::DrewBefore),
+            ("TileResolved", ActionKind::TileResolved),
+            ("MoveResolved", ActionKind::MoveResolved),
+            ("BankruptResolved", ActionKind::BankruptResolved),
+            ("MoveBefore", ActionKind::MoveBefore),
+            ("MoveAfter", ActionKind::MoveAfter),
+            ("MarkerSpend", ActionKind::MarkerSpend),
+            ("MarkerGain", ActionKind::MarkerGain),
+            ("AtEnd", ActionKind::AtEnd),
+            ("PaySplitChooseBefore", ActionKind::PaySplitChooseBefore),
+            ("PayCombinedAddBefore", ActionKind::PayCombinedAddBefore),
+        ];
+        for (name, k) in action {
+            // `None`'s wire name is "" (unset); every other const has a wire name.
+            let wire = k.as_trigger().as_str();
+            if *name != "None" {
+                assert!(!wire.is_empty(), "ActionKind::{name} has empty wire name");
+            }
+            assert!(
+                !k.as_trigger().is_filter(),
+                "ActionKind::{name} must be !is_filter()"
+            );
+        }
+        let filter: &[(&str, FilterKind)] = &[
+            ("PaySplitChoose", FilterKind::PaySplitChoose),
+            ("PaySplitAdd", FilterKind::PaySplitAdd),
+            ("PaySplitMul", FilterKind::PaySplitMul),
+            ("PaySplitAt", FilterKind::PaySplitAt),
+            ("DiceRollPlan", FilterKind::DiceRollPlan),
+            ("AbnormalGuard", FilterKind::AbnormalGuard),
+            ("ImmuneAll", FilterKind::ImmuneAll),
+            ("Untargetable", FilterKind::Untargetable),
+            ("Redirect", FilterKind::Redirect),
+            ("BuyGate", FilterKind::BuyGate),
+            ("BuyAdd", FilterKind::BuyAdd),
+            ("BuyMul", FilterKind::BuyMul),
+            ("BuySet", FilterKind::BuySet),
+            ("BuyAssign", FilterKind::BuyAssign),
+            ("PayCombinedAdd", FilterKind::PayCombinedAdd),
+            ("PayCombinedMul", FilterKind::PayCombinedMul),
+            ("PayCombinedCancel", FilterKind::PayCombinedCancel),
+            ("ActGate", FilterKind::ActGate),
+            ("PayGate", FilterKind::PayGate),
+            ("MoveGate", FilterKind::MoveGate),
+            ("ExclusiveUse", FilterKind::ExclusiveUse),
+            ("TurnBonusTime", FilterKind::TurnBonusTime),
+            ("TurnBaseTime", FilterKind::TurnBaseTime),
+            ("PlayGate", FilterKind::PlayGate),
+            ("DiceRollValue", FilterKind::DiceRollValue),
+        ];
+        assert_eq!(filter.len(), 25);
+        for (name, k) in filter {
+            assert!(!k.as_trigger().as_str().is_empty(), "FilterKind::{name}");
+            assert!(
+                k.as_trigger().is_filter(),
+                "FilterKind::{name} must be is_filter()"
+            );
+        }
+    }
+
+    /// Runtime assert for raw ids crossing the wire (`ActionKind(i)` /
+    /// `FilterKind(i)` / rule-defined kinds). Wrong-side *consts* are already a
+    /// rustc error at the `On` signature.
     #[test]
     fn kind_variant_agreement() {
-        let filter_ok = On::Filter(&[TriggerKind::PaySplitAdd], "", None, fbody);
+        const FILTER_OK: &[FilterKind] = &[FilterKind::PaySplitAdd];
+        const ACTION_OK: &[ActionKind] = &[ActionKind::TurnEnd];
+        // Raw-id smuggle: the typed consts cannot land here, but `FilterKind(45)`
+        // can. The cheap runtime assert still fires.
+        const FILTER_BAD: &[FilterKind] = &[FilterKind(45)]; // TurnEnd
+        const ACTION_BAD: &[ActionKind] = &[ActionKind(55)]; // PaySplitAdd
+        const ACTION_MIXED: &[ActionKind] = &[ActionKind::TurnEnd, ActionKind(55)];
+        let filter_ok = On::Filter(FILTER_OK, "", None, fbody);
         assert!(filter_ok.check_kind_variant().is_ok());
-        let action_ok = On::Action(&[TriggerKind::TurnEnd], "", None, body);
+        let action_ok = On::Action(ACTION_OK, "", None, body);
         assert!(action_ok.check_kind_variant().is_ok());
-        let filter_bad = On::Filter(&[TriggerKind::TurnEnd], "", None, fbody);
+        let filter_bad = On::Filter(FILTER_BAD, "", None, fbody);
         assert_eq!(
             filter_bad.check_kind_variant(),
             Err(TriggerKind::TurnEnd.as_i32())
         );
-        let action_bad = On::Action(&[TriggerKind::PaySplitAdd], "", None, body);
+        let action_bad = On::Action(ACTION_BAD, "", None, body);
         assert_eq!(
             action_bad.check_kind_variant(),
             Err(TriggerKind::PaySplitAdd.as_i32())
         );
-        let mixed = On::Action(
-            &[TriggerKind::TurnEnd, TriggerKind::PaySplitAdd],
-            "",
-            None,
-            body,
-        );
+        let mixed = On::Action(ACTION_MIXED, "", None, body);
         assert_eq!(
             mixed.check_kind_variant(),
             Err(TriggerKind::PaySplitAdd.as_i32())

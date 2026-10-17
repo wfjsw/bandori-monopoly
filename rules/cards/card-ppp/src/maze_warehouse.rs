@@ -6,7 +6,7 @@
 //!
 //! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
-use card_sdk::abi::{FilterValue, HookKind};
+use card_sdk::abi::{FilterValue, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -17,8 +17,8 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).
-        On::Filter(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
-        On::FilterValue(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
+        On::Filter(&[FilterKind::BuySet], card_sdk::pre::MINE, None, free_buy),
+        On::FilterValue(&[FilterKind::BuyAssign], card_sdk::pre::MINE, None, raze),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 6000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷宫般的仓库"#)

@@ -624,7 +624,7 @@ fn cp_marks_are_neutral_and_attached_to_the_card() {
 // User ruling 2026-10-07 (on-card vs tile CP): 「该清CP了 should be graveyarded
 // as soon as the attached on-card cp mark is empty」 -- the card's **on-card**
 // [CP点] (`FieldCard::cp`, 「自己[场上]N个[CP点]」), not the tile marks it
-// placed. An event handler on that count (`HookKind::CpChanged`), so it fires
+// placed. An event handler on that count (`ActionKind::CpChanged`), so it fires
 // however the count drops -- here the `mark:cp` settle clause 「自己[场上]1个
 // [CP点]」 spending the last one.
 #[test]

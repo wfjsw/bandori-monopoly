@@ -28,7 +28,7 @@
 //! [不可阻挡] (`data/rules.txt` 51) 「无视已存在的[停留]」 is a
 //! cross-host clause: the move gate stays clear while `unstoppable` > 0.
 
-use card_sdk::abi::{AbKind, GateKind, HookKind};
+use card_sdk::abi::{AbKind, ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
 use card_sdk::{CardDef, On};
 
@@ -41,14 +41,14 @@ pub const STATUS_STAY: CardDef = CardDef::new(
         // already derived from the counter. This hook is the **clause**: a
         // card that wants to know 「受到[停留]时」 hears it here rather than
         // sniffing the grant site.
-        On::Action(&[HookKind::Abnormal], "", Some(stay_landed), on_stay_landed),
+        On::Action(&[ActionKind::Abnormal], "", Some(stay_landed), on_stay_landed),
         // 「处于该状态时[无法移动]」 + [不可阻挡] 「无视已存在的[停留]」
         // (rules.txt 47/48/51) -- the move gate, **CEL-only**: the condition is
         // the whole answer, so the host evaluates it natively in pure reads
         // (`Gate::Move` at turn start, the view's `can_roll_here`). Holding
         // another status (`unstoppable`) is why the vocabulary exposes
         // per-seat status functions.
-        On::FilterFlag(&[GateKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
+        On::FilterFlag(&[FilterKind::MoveGate], STAY_HOLDS_MOVE, None, refuse),
     ],
 )
     .board_role("status");

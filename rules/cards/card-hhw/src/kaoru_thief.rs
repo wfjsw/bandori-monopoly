@@ -9,7 +9,7 @@
 //! optional force-stop are in; the `H.AbnormalGate` wrapper around the stop
 //! stays a narrow TODO.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,7 +20,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), play),
         On::Action(
-            &[HookKind::TurnEnd],
+            &[ActionKind::TurnEnd],
             "actor == owner && card.placed",
             None,
             turn_end,
@@ -29,7 +29,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // offer is about the *marked* player. The mark-match is a dynamic-key
         // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
         On::Action(
-            &[HookKind::PassPlayer],
+            &[ActionKind::PassPlayer],
             "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key",
             Some(marked_here),
             pass_player,
@@ -38,13 +38,13 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
         // fixed roll yet.
-        On::FilterValue(&[HookKind::DiceRollPlan], 
+        On::FilterValue(&[FilterKind::DiceRollPlan], 
             "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null",
             None,
             roll_plan,
         ),
         On::Action(
-            &[HookKind::CounterChanged],
+            &[ActionKind::CounterChanged],
             "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0",
             Some(crystals_changed_guard),
             on_crystals_changed,

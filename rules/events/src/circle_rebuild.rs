@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `协助CiRCLE重建`）:
 //! > 将此卡放置于场地中央，为其放置5个奇迹水晶，每次有人经过CiRCLE时移除一个，为0时放入事件弃牌，期间CiRCLE的[触发结算]改为选择获得2层[停留]或失去500资金（该改变[触发结算]的效果优先于其他任何改变[触发结算]的效果），CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果
 
-use card_sdk::abi::{prop, text_slot, HookKind};
+use card_sdk::abi::{prop, text_slot, ActionKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -24,13 +24,13 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
         // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
         // bail stays a residual guard (not in the CEL schema).
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
             None,
             on_pass,
         ),
         On::Action(
-            &[HookKind::SettleBody],
+            &[ActionKind::SettleBody],
             "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
             Some(settle_applies),
             on_settle_body,

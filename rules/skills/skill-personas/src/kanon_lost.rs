@@ -15,7 +15,7 @@
 //! counter that a CiRCLE reward resets; 「下回合移动投掷改为1d20+1d4」 is the
 //! dice table being rewritten when it fires.
 
-use card_sdk::abi::{FilterValue, HookKind};
+use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -27,12 +27,12 @@ pub const KANON_LOST: CardDef = CardDef::new(
     &[
         // (1) is a starting square: the before-match-start point decides start
         // positions.
-        On::Action(&[HookKind::DeckBeforeGame], "", None, at_start),
+        On::Action(&[ActionKind::DeckBeforeGame], "", None, at_start),
         // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
         // dice, so there are not two faces to subtract.
-        On::Action(&[HookKind::DiceRollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
+        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
         On::Action(&[ruleset_core::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
-        On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
         // TODO(bug): possible engine issue — a `slot()` condition on a
         // FilterValue at DiceRollPlan did not observe a state write made
         // earlier in the same roll (seen while splitting eve_unify: the
@@ -42,7 +42,7 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // the roll). Verify whether the gate ever mis-fires here; if it does,
         // fix the condition evaluation snapshot (or move the gate into the
         // body) and re-run the kanon tests + a two-roll scenario.
-        On::FilterValue(&[HookKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
     ],
 )
     .silent(&[2, 3]);
