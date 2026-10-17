@@ -405,3 +405,56 @@ fn assign_deed_writes_owner_houses_mortgage() {
     assert!(deal.mortgaged_after, "FORCE_STAYS_MORTGAGED keeps it");
     assert!(!deal.direct, "direct is set by FORCE_FIXED, not by kind");
 }
+
+/// Marker convention: a token is a unit of its creating rule. Instance-stamped
+/// rows die with the instance (`destroy_instance_units`); name-keyed rows whose
+/// stamp is missing/stale die when the owning rule has no live instance left
+/// (`purge_orphaned_markers`). Neutral board marks stay.
+#[test]
+fn markers_die_with_the_creating_rule() {
+    let (d, mut w) = setup(2);
+    let uid = w.place_card(
+        &d,
+        0,
+        "skill:Pastel✽Palettes:与偶像一起",
+        crate::msg::Msg::new("test"),
+        Default::default(),
+    );
+    assert!(uid >= 0, "band skill placed");
+    w.note_marker_owner("P✽P粉丝(反)", "skill:Pastel✽Palettes:与偶像一起");
+    // Instance-stamped row on the *other* seat (held by a non-owner).
+    w.add_tok(1, "P✽P粉丝(反)", 1, i32::MAX, uid);
+    // Legacy name-keyed row (instance unknown).
+    w.set_tok(0, "P✽P粉丝(反)", 2, -1);
+    assert_eq!(w.tok(0, "P✽P粉丝(反)") + w.tok(1, "P✽P粉丝(反)"), 3);
+    // Unplace the only band-skill copy: both rows die.
+    w.unplace_at(uid);
+    assert_eq!(w.tok(0, "P✽P粉丝(反)"), 0, "legacy row purged with the rule");
+    assert_eq!(w.tok(1, "P✽P粉丝(反)"), 0, "instance row died with the instance");
+}
+
+/// A second live copy of the creating rule keeps the markers.
+#[test]
+fn markers_stay_while_another_copy_is_live() {
+    let (d, mut w) = setup(2);
+    let a = w.place_card(
+        &d,
+        0,
+        "skill:Pastel✽Palettes:与偶像一起",
+        crate::msg::Msg::new("test"),
+        Default::default(),
+    );
+    let b = w.place_card(
+        &d,
+        1,
+        "skill:Pastel✽Palettes:与偶像一起",
+        crate::msg::Msg::new("test"),
+        Default::default(),
+    );
+    w.note_marker_owner("P✽P粉丝(正)", "skill:Pastel✽Palettes:与偶像一起");
+    w.set_tok(0, "P✽P粉丝(正)", 5, -1);
+    w.unplace_at(a);
+    assert_eq!(w.tok(0, "P✽P粉丝(正)"), 5, "copy B still live");
+    w.unplace_at(b);
+    assert_eq!(w.tok(0, "P✽P粉丝(正)"), 0, "last copy gone");
+}
