@@ -126,6 +126,8 @@ pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
 
 pub const TOK_PP_POS: &str = "P✽P粉丝(正)";
 pub const TOK_PP_NEG: &str = "P✽P粉丝(反)";
+/// Band skill that owns the fans markers (`fansGrant` / `fansFlip`).
+pub const TOK_PP_BAND: &str = "skill:Pastel✽Palettes:与偶像一起";
 
 /// Cached `NameId`s for the two fan tokens. Interned once per proof (the
 /// same table `host::install` pre-fills); every later `sync_views` is a `u16`
@@ -725,6 +727,21 @@ pub struct World {
     pub blocked_bands: [i32; 4],
     pub blocked_bands_n: u8,
 
+    // ---- cross-card message context (`ctx::send` / `On::Message`) ----
+    /// Interned message name id (`fansGrant` / `fansFlip` / …). 0 = none.
+    pub msg_name: u16,
+    /// `Message.seat` — the holder / subject seat of the payload.
+    pub msg_seat: i32,
+    pub msg_a: i32,
+    pub msg_b: i32,
+    pub msg_c: i32,
+    pub msg_tile: i32,
+    /// Reply the handler set (`ctx::message::reply`).
+    pub msg_reply: i32,
+    /// Sender's instance uid / seat (`ctx::message::sender_*`).
+    pub msg_sender_uid: i32,
+    pub msg_sender_seat: i32,
+
     // ---- turn trackers (ir_fill `Gains` / `Targeted` / `Between`) ----
     /// Money gained this turn per seat (`hostfns::gains_this_turn`).
     pub gains_this_turn: [i32; MAX_PLAYERS],
@@ -828,6 +845,15 @@ impl World {
             plan_fixed_roll: -1,
             blocked_bands: [0; 4],
             blocked_bands_n: 0,
+            msg_name: 0,
+            msg_seat: -1,
+            msg_a: 0,
+            msg_b: 0,
+            msg_c: 0,
+            msg_tile: -1,
+            msg_reply: 0,
+            msg_sender_uid: 0,
+            msg_sender_seat: 0,
             gains_this_turn: [0; MAX_PLAYERS],
             targeted_count: [0; MAX_PLAYERS],
             between_seat: [-1; MAX_PLAYERS],

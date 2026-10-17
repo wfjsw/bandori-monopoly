@@ -42,7 +42,9 @@ pub fn char_start_five_fans_log_ok(
 /// PP branch: each of `y` reverse fans on *other-band* players (OPEN: how
 /// they split across those players is not printed — the per-player cap is
 /// `min(y, that player's down)` in the live reading, applied to each).
-/// Non-PP branch: exactly 1 reverse fan of each PP character.
+/// Non-PP branch: effect X = 1 per PP character (「1个反面…变正」) — the
+/// `fansFlip` handler flips `min(1, down)`. When `down == 0` the flip is 0
+/// and band clause （2） sees `X=1 > down=0`, granting 1 overflow crystal.
 pub fn skill2_side_flip(target_down: i32, y: i32, actor_is_pp: bool, target_is_pp: bool) -> i32 {
     if actor_is_pp {
         if target_is_pp {
@@ -55,6 +57,12 @@ pub fn skill2_side_flip(target_down: i32, y: i32, actor_is_pp: bool, target_is_p
     } else {
         0
     }
+}
+
+/// Band clause （2） overflow for the non-PP branch's per-seat `X = 1`.
+/// `min(1 - down, 10)` when `1 > down`, else 0.
+pub fn skill2_all_pp_overflow(target_down: i32) -> i32 {
+    band_idol_02_overflow(1, target_down)
 }
 
 // ===========================================================================

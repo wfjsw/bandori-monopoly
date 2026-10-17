@@ -987,7 +987,20 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::rent_unit_mult => arm_ring_multiplier(a),
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
-                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+
+        // ---- cross-card messages (`ctx::send` / `On::Message`) ----
+        Op::send => arm_send(a),
+        Op::msg_sender_uid => arm_msg_sender_uid(a),
+        Op::msg_sender_seat => arm_msg_sender_seat(a),
+        Op::msg_name => arm_msg_name(a),
+        Op::msg_a => arm_msg_a(a),
+        Op::msg_b => arm_msg_b(a),
+        Op::msg_c => arm_msg_c(a),
+        Op::msg_tile => arm_msg_tile(a),
+        Op::msg_seat => arm_msg_seat(a),
+        Op::msg_text => arm_msg_text(a),
+        Op::msg_reply => arm_msg_reply(a),
 
         other => unmodeled(other),
     }
@@ -2988,6 +3001,187 @@ pub fn arm_protocol_stub(_a: Args) -> i64 {
 
 pub fn arm_stub_zero(a: Args) -> i64 {
     let _ = a;
+    0
+}
+
+// ===========================================================================
+// Cross-card messages (`ctx::send` / `On::Message`)
+// ===========================================================================
+//
+// The kani facade packs Target / Message as fixed records (see
+// `card-sdk/src/ctx.rs` `target_bytes` / `msg_bytes` / `send_card_msg`).
+// `arm_send` unpacks them, stashes the payload on `World`, and dispatches to
+// the receiver's `On::Message` body. The fans channel (`fansGrant` /
+// `fansFlip` → `skill:Pastel✽Palettes:与偶像一起`) is the first real client;
+// it runs the **unmodified** `on_fans` body via `on_fans_kani`.
+
+/// Read a little-endian i32 at `off` from a packed arena record.
+fn le_i32(b: &[u8], off: usize) -> i32 {
+    let mut t = [0u8; 4];
+    let mut i = 0usize;
+    while i < 4 {
+        if let Some(&x) = b.get(off + i) {
+            t[i] = x;
+        }
+        i += 1;
+    }
+    i32::from_le_bytes(t)
+}
+
+fn le_u16(b: &[u8], off: usize) -> u16 {
+    let lo = b.get(off).copied().unwrap_or(0) as u16;
+    let hi = b.get(off + 1).copied().unwrap_or(0) as u16;
+    lo | (hi << 8)
+}
+
+/// Unpack a packed arena record into a small stack buffer.
+fn unpack_arena(handle: i32, len: i32, out: &mut [u8; 24]) -> usize {
+    let n = (len.max(0) as usize).min(out.len());
+    let b = card_sdk::native::read(handle, n);
+    let mut i = 0usize;
+    while i < n {
+        if let Some(&x) = b.get(i) {
+            out[i] = x;
+        }
+        i += 1;
+    }
+    n
+}
+
+/// `ctx::send` — unpack the packed Target/Message, run the receiver's
+/// `On::Message` body, return its reply (0 when nobody answers).
+pub fn arm_send(a: Args) -> i64 {
+    let [tp, tl, np, nl, pp, pl] = a;
+    // Message name rides the interned `s(name)` handle on `np`.
+    let name = name_id(np, nl);
+    // Target pack: kind (0=Uid, 1=Card, 2=Board), who, card NameId.
+    let mut tbuf = [0u8; 24];
+    unpack_arena(tp, tl, &mut tbuf);
+    let kind = le_i32(&tbuf, 0);
+    let who = le_i32(&tbuf, 4);
+    let card = le_u16(&tbuf, 8);
+    // Payload pack: seat, a, b, c, tile.
+    let mut pbuf = [0u8; 24];
+    unpack_arena(pp, pl, &mut pbuf);
+    let seat = le_i32(&pbuf, 0);
+    let av = le_i32(&pbuf, 4);
+    let bv = le_i32(&pbuf, 8);
+    let cv = le_i32(&pbuf, 12);
+    let tile = le_i32(&pbuf, 16);
+
+    // Sender context for the handler.
+    let (sender_uid, sender_seat) = world::with_world(|w| (w.last_uid, w.trig_player));
+
+    // Resolve the receiver instance: the **first** field copy of `card` on
+    // `who` exactly (`Target::Card { player: who, card }`). Multi-seat
+    // fallback is the caller's job (`fans::send_fans` probes other seats as
+    // separate sends) so clause （2） always sees the holder's own band card.
+    let band_card = intern::intern(world::TOK_PP_BAND).0;
+    let want_card = if card != 0 { card } else { band_card };
+    let mut recv: Option<(i32, i32)> = None; // (uid, owner)
+    if kind == 1 {
+        let hit = world::with_world(|w| {
+            let mut j = 0usize;
+            let mut found: Option<(i32, i32)> = None;
+            while j < w.field_n as usize {
+                if w.field[j].player == who && w.field[j].card == want_card {
+                    found = Some((w.field[j].uid, who));
+                    break;
+                }
+                j += 1;
+            }
+            found
+        });
+        recv = hit;
+    }
+
+    world::with_world_mut(|w| {
+        w.msg_name = name.0;
+        w.msg_seat = seat;
+        w.msg_a = av;
+        w.msg_b = bv;
+        w.msg_c = cv;
+        w.msg_tile = tile;
+        w.msg_reply = 0;
+        w.msg_sender_uid = sender_uid;
+        w.msg_sender_seat = sender_seat;
+    });
+
+    let Some((uid, owner)) = recv else {
+        return 0;
+    };
+
+    // Run the handler as the receiver instance (crystals land on `last_uid`).
+    let saved_uid = world::with_world(|w| w.last_uid);
+    world::with_world_mut(|w| w.last_uid = uid);
+
+    // Fans channel: the Pastel band skill owns `fansGrant` / `fansFlip`.
+    // Call the **unmodified** `on_fans` body through its kani wrapper.
+    #[cfg(all(kani, feature = "skills-groups"))]
+    {
+        let is_grant = intern::id_eq_str(name, "fansGrant");
+        let is_flip = intern::id_eq_str(name, "fansFlip");
+        if is_grant || is_flip {
+            let _ = skill_groups::pastel::on_fans_kani(owner);
+            let reply = world::with_world(|w| w.msg_reply);
+            world::with_world_mut(|w| w.last_uid = saved_uid);
+            return reply as i64;
+        }
+    }
+
+    // No known receiver for this name: restore and reply 0.
+    world::with_world_mut(|w| w.last_uid = saved_uid);
+    #[cfg(not(all(kani, feature = "skills-groups")))]
+    let _ = (name, owner);
+    0
+}
+
+pub fn arm_msg_sender_uid(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_sender_uid) as i64
+}
+
+pub fn arm_msg_sender_seat(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_sender_seat) as i64
+}
+
+/// `msg_name(0,0)` under kani returns the interned NameId handle (see
+/// `ctx::message::name_is`). A fill call is unused (`read_str` returns empty).
+pub fn arm_msg_name(a: Args) -> i64 {
+    let [p, n, ..] = a;
+    if p == 0 && n == 0 {
+        let id = world::with_world(|w| w.msg_name);
+        return intern::encode_handle(intern::NameId(id)) as i64;
+    }
+    0
+}
+
+pub fn arm_msg_a(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_a) as i64
+}
+
+pub fn arm_msg_b(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_b) as i64
+}
+
+pub fn arm_msg_c(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_c) as i64
+}
+
+pub fn arm_msg_tile(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_tile) as i64
+}
+
+pub fn arm_msg_seat(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_seat) as i64
+}
+
+pub fn arm_msg_text(_a: Args) -> i64 {
+    0
+}
+
+pub fn arm_msg_reply(a: Args) -> i64 {
+    let [v, ..] = a;
+    world::with_world_mut(|w| w.msg_reply = v);
     0
 }
 

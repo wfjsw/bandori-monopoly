@@ -493,6 +493,11 @@ pub fn jennifer_02_user_fan() -> i32 {
 // C-PP-together-01
 // 「[手]：将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于
 //  反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），」
+// The flip effect's X is the clause's X (even when fewer are owned). The
+// band-skill `fansFlip` handler flips `min(X, down)` and applies band clause
+// （2） overflow `min(X - down, 10)` crystals to the owner's band card.
+// 「[手]：将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于
+//  反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），」
 // ===========================================================================
 
 /// X before any [共鸣] cut.
