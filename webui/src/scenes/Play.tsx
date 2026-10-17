@@ -3,11 +3,10 @@
 // saved snapshot, online by re-attaching to the player).
 
 import { useEffect, useState } from "react";
-import { lockRoute, navigate } from "../app/router";
+import { navigate } from "../app/router";
 import { useBackdrop } from "../app/Stage";
 import { playSceneBgm } from "../core/audio";
 import { useMatchView } from "../core/hooks";
-import { useMountEffect } from "../hooks/mount";
 import { useCrossfade } from "../hooks/scene";
 import { type GameSession, discardSolo, matchScene, resumeSolo } from "../game/session";
 import { toast } from "../ui/Toast";
@@ -111,8 +110,5 @@ function Match({ sess }: { sess: GameSession }) {
 }
 
 export function Play({ id }: { id: string }) {
-  // A loaded game leaves through the leave / settle UI, never through the
-  // browser's edge-swipe back gesture.
-  useMountEffect(() => lockRoute());
   return id === "solo" ? <SoloPlay /> : <OnlinePlay id={id} />;
 }
