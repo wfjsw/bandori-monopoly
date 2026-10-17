@@ -1471,7 +1471,24 @@ Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`):
 * `cargo kani --only-codegen -p rules-kani --no-default-features --features band-morfonica,skills-groups,skills-personas` — Finished, no `error` lines.
 * `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed).
 
-All nine rows are **needs re-time** (CBMC budget left to the central pass).
+### batch-12 re-times (one CBMC at a time, `tools/kani/run.sh --unit mor`)
+
+| id | after |
+|---|---|
+| `starry_05_circle_iff` | **SUCCESSFUL 306 s** |
+| `starry_05_circle_user1_iff` | **SUCCESSFUL 299 s** |
+| `nnm_05_empty_discard_iff` | **SUCCESSFUL 160 s** |
+| `nnm_05_empty_discard_user1_iff` | **SUCCESSFUL 142 s** |
+| `nnm_03_amount_iff` | **SUCCESSFUL 0.3 s** |
+| `nnm_03_mutant_is_detected` | **SUCCESSFUL 0.6 s** |
+| `tritone_01_gain_place_iff` | **SUCCESSFUL 307 s** |
+| `tritone_01_gain_place_user1_iff` | **SUCCESSFUL 306 s** |
+| `tritone_02_tick_iff` | **SUCCESSFUL 335 s** |
+| `tritone_02_tick_user1_iff` | **SUCCESSFUL 351 s** |
+
+All nine central-pass FAILED rows are now SUCCESSFUL. No confirmed genuine
+discrepancy from this batch. Rainbow-01/02 stay FAILING (genuine D, out of scope).
+
 Renames mean the next central pass should select the new harness names.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
