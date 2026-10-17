@@ -100,7 +100,6 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::TurnEndBefore
         | TriggerKind::TurnEndAfter
         | TriggerKind::AtEnd
-        | TriggerKind::FlipAfter
         | TriggerKind::PaySplitChooseBefore
         | TriggerKind::PayCombinedAddBefore
         | TriggerKind::EndTurnBefore
@@ -250,7 +249,7 @@ fn kind_name(kind: &str) -> Msg {
     // wire spelling is only for a kind nobody has named yet.
     if matches!(
         kind,
-        "diceRollPlan" | "playGate" | "flipEffect" | "26" | "73" | "74" | "75" | "78"
+        "diceRollPlan" | "playGate" | "26" | "73" | "74" | "75" | "78"
     ) {
         return Msg::new(format!("log.kind.{kind}"));
     }

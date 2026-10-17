@@ -18,8 +18,8 @@
 use card_sdk::abi::HookKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
+use skill_groups::fans;
 
-const FANS_UP: &str = "P✽P粉丝(正)";
 /// Which character's (2) this player is currently holding, or `""`.
 const BORROWED: &str = "skill.hinaLottery.borrowed";
 
@@ -49,7 +49,7 @@ pub const HINA_LOTTERY: CardDef = CardDef::new(
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
     // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
+    let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;

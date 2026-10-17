@@ -38,6 +38,7 @@ pub mod sumimi;
 use sumimi::SUMIMI;
 pub mod pastel;
 use pastel::PASTEL;
+pub mod fans;
 pub mod hhw;
 use hhw::HHW;
 pub mod circle_staff;

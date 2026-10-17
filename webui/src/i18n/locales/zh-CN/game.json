@@ -310,7 +310,6 @@
   "log.kind.wire": "{{name}}",
   "log.kind.diceRollPlan": "掷骰计划",
   "log.kind.playGate": "出牌限制",
-  "log.kind.flipEffect": "翻面效果",
   "log.kind.26": "经过奖励",
   "log.kind.73": "火罐消耗后",
   "log.kind.74": "使用原有技能",

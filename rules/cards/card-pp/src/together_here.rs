@@ -6,10 +6,12 @@
 //! > 将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。
 //!
 //! X is 5, +ceil((down - up)/2) while down > up; [共鸣] cuts X by 5 and draws.
+//! The flip goes through the band-skill `fansFlip` message (`docs/CARDS.md`),
+//! which owns the markers and band clause （2） overflow crystals.
 
-use card_sdk::abi::TriggerKind;
 use card_sdk::{key, CardDef, Msg, On};
 use ruleset_core::ctx;
+use skill_groups::fans;
 
 pub const TOGETHER_HERE: CardDef =
     CardDef::new("PP:有你与我在这里共度", &[On::Play("", None, together_here)]).meta(&card_sdk::meta::CardMeta::new()
@@ -21,14 +23,10 @@ pub const TOGETHER_HERE: CardDef =
         .cell(r#"D9"#)
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
-/// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
-
 fn together_here(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整）」
-    let up = ctx::tok(player_id, FANS_UP);
-    let down = ctx::tok(player_id, FANS_DOWN);
+    let up = ctx::tok(player_id, fans::UP);
+    let down = ctx::tok(player_id, fans::DOWN);
     let mut x = 5i32;
     if up < down {
         x += (down - up + 1) / 2;
@@ -39,33 +37,19 @@ fn together_here(player_id: i32) -> card_sdk::Asked {
         ctx::draw(player_id, 1)?;
     }
     // 规则书[手]: 「将X个反面[P✽P粉丝]变正」 -- the flip effect's X is the
-    // clause's X, even when fewer are owned. `FlipEffect` runs before the
-    // counters move so a listener (PP band (2)) still sees the pre-flip count.
-    let flip = x.max(0).min(down);
+    // clause's X, even when fewer are owned. The band card's `fansFlip`
+    // handler flips `min(X, down)` and applies band clause （2） to the
+    // overflow `X - down`.
     if x > 0 {
-        ctx::raise(player_id, TriggerKind::FlipEffect, x)?;
-    }
-    if flip > 0 {
-        ctx::add_tok(player_id, FANS_DOWN, -flip, i32::MAX)?;
-        ctx::add_tok(player_id, FANS_UP, flip, i32::MAX)?;
-        ctx::log(
-            player_id,
-            &Msg::new(key!("together_here_up"))
-                .player_id("who", player_id)
-                .i("n", flip as i64),
-        );
-    }
-    // v78: post-flip event so side effects that used to ride the FlipEffect
-    // Filter (pastel's overflow crystals) have a non-filter home.
-    //
-    // The payload is the **overflow** `X - pre` (0 when X does not exceed the
-    // pre-flip face-down count), not X itself: a nested raise's world snapshot
-    // does not see a same-body `set_tok` stash, so pastel band (2) cannot
-    // recover the pre-count after the counters move. Together-here is the
-    // flip site and already has both figures.
-    let over = (x - down).max(0);
-    if x > 0 {
-        ctx::raise(player_id, TriggerKind::FlipAfter, over)?;
+        let flip = fans::flip_up(player_id, x)?;
+        if flip > 0 {
+            ctx::log(
+                player_id,
+                &Msg::new(key!("together_here_up"))
+                    .player_id("who", player_id)
+                    .i("n", flip as i64),
+            );
+        }
     }
     Ok(())
 }

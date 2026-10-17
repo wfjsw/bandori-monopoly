@@ -118,16 +118,19 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     }
     let mono = ctx::slot(player_id, "trainee_guide.mono");
     let dual = ctx::slot(player_id, "trainee_guide.dual");
-    // 2. 「每个双色效果为将自己的所有反面[P✨P粉丝]变正」
+    // 2. 「每个双色效果为将自己的所有反面[P✽P粉丝]变正」 -- X = all face-downs.
+    // Canonical marker name (U+273d); the previous body flipped a sparkle-spelled
+    // alias that is not the real marker.
     if dual > 0 {
-        let down = ctx::tok(player_id, "P✨P粉丝(反)");
+        let down = ctx::tok(player_id, skill_groups::fans::DOWN);
         if down > 0 {
-            ctx::add_tok(player_id, "P✨P粉丝(反)", -down, i32::MAX)?;
-            ctx::add_tok(player_id, "P✨P粉丝(正)", down, i32::MAX)?;
-            ctx::log(
-                player_id,
-                &Msg::new(key!("trainee_guide_flipped")).i("n", down as i64),
-            );
+            let flipped = skill_groups::fans::flip_up(player_id, down)?;
+            if flipped > 0 {
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("trainee_guide_flipped")).i("n", flipped as i64),
+                );
+            }
         }
     }
     // 1. 「每个单色效果为获得1层状态"下次盖房的价格减少1000（可溢出），盖房后减少1层"」

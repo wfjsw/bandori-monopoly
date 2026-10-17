@@ -453,7 +453,8 @@ use alloc::{string::String, vec::Vec};
 /// v57: **closeout integration** -- one monotonic bump covering every addition
 ///      the five closeout batches made on top of v56:
 ///      `TriggerKind::ChargePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
-///      substitution + flip-effect hook; `ctx::raise` is prompt-aware);
+///      substitution + flip-effect hook; `ctx::raise` is prompt-aware;
+///      FlipEffect retired in v83 -- id 94 never reuse);
 ///      `join_redirect_target` / `set_join_used` (真奈 join retarget, CH-05);
 ///      and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
 ///      `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
@@ -566,7 +567,8 @@ use alloc::{string::String, vec::Vec};
 ///      reuse. CEL-only status gates keep their native `admits_pre` /
 ///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
 /// v78: **purity + interactive pre-stages**. New kinds `FlipAfter = 104`
-///      (post-flip Action), `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`
+///      (post-flip Action; retired in v83 -- id 104 never reuse),
+///      `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`
 ///      (interactive Action pre-stages raised immediately before the pure
 ///      `PaySplitChoose` / `PayCombinedAdd` filter stages, restoring the rulebook
 ///      prompt position). FilterValue gains an interned `tag_key` / `reason`
@@ -637,7 +639,19 @@ use alloc::{string::String, vec::Vec};
 ///      Filter/Action classification unchanged: Combined*/Split* filters stay
 ///      filters; the two *Before prompts stay Actions.
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 82;
+/// v83: **`FlipEffect` / `FlipAfter` retired; PP fans owned by the band skill**.
+///      Ids 94 (`flipEffect`) and 104 (`flipAfter`) are **retired -- never
+///      reuse**. The only raise site (`PP:有你与我在这里共度`) and the only
+///      listener (`skill:Pastel✽Palettes:与偶像一起` clause （2） overflow)
+///      moved to the cross-card `On::Message` channel: `fansGrant` / `fansFlip`
+///      (`skill_groups::fans`, see docs/CARDS.md 「Pastel fans owned by the
+///      band skill」). The band card owns every `P✽P粉丝(正)/(反)` marker;
+///      other cards must not write them. Band clause （2） now runs for **every**
+///      down→up flip (not just together_here), inside the `fansFlip` handler.
+///      New message names `fansGrant` / `fansFlip` (payload `Message.seat` +
+///      `a`/`b`; reply = units granted / flipped).
+///      SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 83;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1719,11 +1733,9 @@ impl TriggerKind {
     /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
     pub const DrewBefore: Self = Self(77);
 
-    /// v56: a face-down counter is being flipped face-up (「将X个反面…变正」).
-    /// `t.value` is the effect's **intended** X (the number the clause names),
-    /// raised *before* the counters move so a listener still sees the pre-flip
-    /// count. Hook-only.
-    pub const FlipEffect: Self = Self(94);
+    // v56 was `FlipEffect = 94` (flip-to-up filter). Retired in v83: the PP
+    // fan flip moved to the band card's `fansFlip` message. Wire id 94 is
+    // retired -- never reuse.
 
     /// v36: a card instance's attached [CP点] count was just written (placed or
     /// cleared). `t.card` is the card the marks are attached to, `t.player_id`
@@ -1883,11 +1895,9 @@ impl TriggerKind {
     /// is `On::Action(&[AtEnd], pre, guard, body)`. Non-filter.
     pub const AtEnd: Self = Self(103);
 
-    /// v78: **post-flip event**. Raised after `FlipEffect`'s counters have
-    /// moved. `On::Action(&[FlipAfter])` is where a side effect that used to
-    /// ride the FlipEffect Filter (e.g. pastel's overflow crystals) lives.
-    /// Non-filter.
-    pub const FlipAfter: Self = Self(104);
+    // v78 was `FlipAfter = 104` (post-flip action for pastel's overflow
+    // crystals). Retired in v83 with FlipEffect: that clause lives in the
+    // band card's `fansFlip` handler. Wire id 104 is retired -- never reuse.
 
     /// Action · interactive pre-stage immediately before the pure
     /// [`Self::PaySplitChoose`] filter (支付阶段 on each settled leg) · payload
@@ -1908,7 +1918,7 @@ impl TriggerKind {
 
     /// Is this a **filter** kind (ABI v73)? Filter kinds are modifier-pipeline
     /// / value-shaping stages whose result the host folds back (pay amount,
-    /// buy price, turn clock, roll plan, flip count, charge-cost substitute).
+    /// buy price, turn clock, roll plan, charge-cost substitute).
     /// `On::Filter` may only list these; `On::Action` only non-filter kinds.
     ///
     /// Single source of truth -- everything else (ruleset-build validation,
@@ -1934,7 +1944,6 @@ impl TriggerKind {
                 | Self::PayCombinedAdd
                 | Self::PayCombinedMul
                 | Self::PayCombinedCancel
-                | Self::FlipEffect
                 | Self::TurnBonusTime
                 | Self::TurnBaseTime
                 // Decision gates (v76): pure yes/no or target/reason folds.
@@ -2035,7 +2044,7 @@ impl TriggerKind {
             72 => "effect",
             76 => "counterChanged",
             77 => "drewBefore",
-            94 => "flipEffect",
+            // 94 was "flipEffect" -- retired in v83, never reuse.
             79 => "buyGate",
             80 => "buyAdd",
             81 => "buyMul",
@@ -2060,7 +2069,7 @@ impl TriggerKind {
             101 => "playGate",
             102 => "diceRollValue",
             103 => "atEnd",
-            104 => "flipAfter",
+            // 104 was "flipAfter" -- retired in v83, never reuse.
             105 => "paySplitChooseBefore",
             106 => "payCombinedAddBefore",
             26 => "26",  // ruleset-declared custom id
@@ -2152,7 +2161,7 @@ impl TriggerKind {
             "effect" => Self(72),
             "counterChanged" => Self(76),
             "drewBefore" => Self(77),
-            "flipEffect" => Self(94),
+            // "flipEffect" retired in v83 (id 94 never reuse).
             "buyGate" => Self(79),
             "buyAdd" => Self(80),
             "buyMul" => Self(81),
@@ -2177,7 +2186,7 @@ impl TriggerKind {
             "playGate" => Self(101),
             "diceRollValue" => Self(102),
             "atEnd" => Self(103),
-            "flipAfter" => Self(104),
+            // "flipAfter" retired in v83 (id 104 never reuse).
             "paySplitChooseBefore" => Self(105),
             "payCombinedAddBefore" => Self(106),
             _ => Self::None,

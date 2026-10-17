@@ -21,6 +21,7 @@ use alloc::vec::Vec;
 use card_sdk::abi::HookKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
+use skill_groups::fans;
 
 pub const SHINE_AGAIN: CardDef = CardDef::new(
     "PP:再次闪耀",
@@ -145,13 +146,10 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[持续]（1）: 「[拥有者][获得]……资金和1个正面[P✽P粉丝]」 -- C#
     // `H.GainFans(Seat, 1, up: true)` + `H.GainR(Seat, maxPrice / 5)`.
-    // Write the fan counter directly (`set_tok`): `add_tok` opens a nested
-    // `markerGain` [反击] window inside the already-open pay pipeline, whose
-    // answers-replay can cancel the grant. C# `H.GainFans` is a direct count.
-    {
-        let up = ctx::tok(player_id, "P✽P粉丝(正)");
-        ctx::set_tok(player_id, "P✽P粉丝(正)", up + 1);
-    }
+    // The band card's `fansGrant` handler writes with `set_tok` (direct count),
+    // so this grant nested in the pay pipeline does not open a `markerGain`
+    // [反击] window.
+    let _ = fans::grant(player_id, 1, 0)?;
     // 「购买价格」÷5 is a formula-fixed gain, not a payment -- `gain_raw` so
     // the pay pipeline (PaySplitChoose etc.) cannot re-enter this hook or alter it.
     let money = best / 5;
@@ -214,7 +212,7 @@ fn record(player_id: i32) -> card_sdk::Asked {
         SLOT_COLORS,
         ctx::slot(player_id, SLOT_COLORS) | (1 << g),
     );
-    ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
+    let _ = fans::grant(player_id, 1, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("shine_again_recorded")).i("n", g as i64),

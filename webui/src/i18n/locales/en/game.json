@@ -310,7 +310,6 @@
   "log.kind.wire": "{{name}}",
   "log.kind.diceRollPlan": "Roll plan",
   "log.kind.playGate": "Play gate",
-  "log.kind.flipEffect": "Flip effect",
   "log.kind.26": "Pass reward",
   "log.kind.73": "After fire spend",
   "log.kind.74": "Own skill used",

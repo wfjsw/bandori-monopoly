@@ -14,6 +14,7 @@
 use card_sdk::abi::HookKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use skill_groups::fans;
 
 const PAREO: &str = "PAREO标记";
 
@@ -45,7 +46,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, PAREO, 1, 3)?;
     for p in 0..ctx::player_count() {
         if p != player_id && !ctx::player_out(p) && ctx::in_group(p, "Pastel✽Palettes") {
-            ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
+            let _ = fans::grant(player_id, 1, 0)?;
             return Ok(());
         }
     }

@@ -8908,7 +8908,6 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::DiceRollAfter
             | TriggerKind::DiceRollValue
             | TriggerKind::AtEnd
-            | TriggerKind::FlipAfter
             | TriggerKind::PaySplitChooseBefore
             | TriggerKind::PayCombinedAddBefore
             | TriggerKind::CardPlayed
@@ -8925,7 +8924,6 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::Drew
             | TriggerKind::DrewBefore
             | TriggerKind(78)
-            | TriggerKind::FlipEffect
             | TriggerKind::Reshuffled
             | TriggerKind::Bought
             | TriggerKind::BeforeOut

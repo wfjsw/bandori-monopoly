@@ -116,7 +116,7 @@ Folding would make the tile body just another `Action(SettleBody)` and lose the
 
 ### Why three Filter shapes (the minimal clean set)
 
-Integer pipelines (pay amount, buy price, turn-clock seconds, flip count,
+Integer pipelines (pay amount, buy price, turn-clock seconds,
 roll face) are `fn(player_id, value) -> i32` -- one number in, one number out.
 Cancel stages (`PayCombinedCancel`, `ChargePaying` substitute) are booleans:
 `false` drops the stage. `PaySplitChoose` may either rewrite the amount
@@ -154,21 +154,19 @@ immediately before the pure filter stage:
 |---|---|---|
 | `PaySplitChooseBefore` (105) | `PaySplitChoose` | 支付阶段, before the choose filter |
 | `PayCombinedAddBefore` (106) | `PayCombinedAdd` | 分摊前资金增减, before the total-add filter |
-| `FlipAfter` (104) | (post-`FlipEffect`) | after the flip counters move |
 
 `ChargePaying` stays a plain Action (its 「可」 opt-in is the whole window).
 
 ### Filter kinds
 
 `TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
-source of truth**. Today (27 kinds):
+source of truth**. Today (25 kinds):
 
 * payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
   `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
 * buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
-* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue`, `DiceRollValue` (v74)
-* flip count -- `FlipEffect`
+* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v74)
 * decision gates (v76) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
   `PlayGate`, `BuyGate`, `AbnormalGuard`, `ImmuneAll`, `Untargetable`,
   `Redirect`
@@ -212,7 +210,6 @@ return before the next raise, within a stage in placement order:
   `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
 * roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window)
-* flip: `FlipEffect` (Filter) → counters move → `FlipAfter` (Action)
 
 Money rounds **up to a multiple of 10 once**, after every add/mul modifier
 has rewritten the running figure (user ruling 2026-10-15). An amount no
@@ -812,6 +809,45 @@ The landing clause (settle on a CP tile: remove the tile unit + one on-card
 CP of the placer, gain 800) lives on `mark:cp`; the spread clause (「此卡在
 格子上添加的[CP点]及其产物」) keys on `TileMark.src` provenance the same way
 it does today.
+
+### Pastel fans owned by the band skill (ABI v83)
+
+The PP fan markers `P✽P粉丝(正)` / `P✽P粉丝(反)` are units of the
+Pastel✽Palettes band-skill counter, like crystals on that card. **Only**
+`skill:Pastel✽Palettes:与偶像一起` creates or moves them; every other card
+and persona skill goes through `ctx::send` to its `On::Message` handler. If no
+band-skill instance is on the field, grants and flips with no receiver do
+nothing (reply 0) -- there are no markers.
+
+Storage stays the holder-bound `Counter` row (display and `ctx::tok` / CEL
+`tok()` reads are unchanged). Writes run in the band card's handler, so
+`marker_owner` stamps `skill:Pastel✽Palettes:与偶像一起` deterministically
+(first writer wins is moot) and `Counter.instance` is that field uid. Bankruptcy
+of the owning rule's player purges every `P✽P粉丝*` row (`purge_markers_owned_by`);
+the instance leaving the field destroys its units (`destroy_instance_units`).
+
+Message API (wire names; payload `Message { seat, a, b, .. }`):
+
+| name | seat | a | b | reply (wire) | units |
+|---|---|---|---|---|---|
+| `fansGrant` | holder to grant | face-up count | face-down count | `1 + granted` | granted |
+| `fansFlip` | holder to flip | effect X (「将X个…」) | 0 = down→up, 1 = up→down | `1 + flipped` | flipped |
+
+Wire reply is `1 + units` so "handled, 0 moved" (1) is distinct from "no
+receiver" (0). `fans::send_fans` subtracts the 1 and stops at the first
+non-zero reply.
+
+The flip handler applies band clause （2） for every down→up flip: when the
+flipped seat is **this instance's owner** and `X >` pre-flip face-downs, it
+adds `min(X - down, 10)` 奇迹水晶 to this card and logs (`pastel_over`). That
+replaces the retired `FlipEffect`/`FlipAfter` pair (TriggerKind 94/104, never
+reuse).
+
+Addressing helper (used by every caller): send to
+`Target::Card { player: seat, card: BAND }` first (that seat's own band card
+owns clause （2） for that seat); if it does not answer, fall back to the first
+band card on any seat (lowest field order) so non-PP holders' markers still
+move. No band card anywhere → 0 → caller does nothing.
 
 ## Trigger points (`trigger::kind()`)
 

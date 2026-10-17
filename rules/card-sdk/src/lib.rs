@@ -519,7 +519,7 @@ pub enum On {
     /// Kinds must be filter kinds ([`abi::TriggerKind::is_filter`] == true)
     /// whose payload is an integer: PaySplitAdd / PaySplitMul / PaySplitAt / PayCombinedAdd /
     /// PayCombinedMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
-    /// FlipEffect / DiceRollValue.
+    /// DiceRollValue.
     Filter(
         &'static [abi::HookKind],
         &'static str,
@@ -823,7 +823,6 @@ mod tests {
             TriggerKind::PayCombinedAdd,
             TriggerKind::PayCombinedMul,
             TriggerKind::PayCombinedCancel,
-            TriggerKind::FlipEffect,
             TriggerKind::TurnBonusTime,
             TriggerKind::TurnBaseTime,
             TriggerKind::DiceRollValue,
@@ -903,5 +902,19 @@ mod tests {
         assert_eq!(abi::OnKind::from_i32(4), None);
         assert_eq!(abi::OnKind::from_i32(5), None);
         assert_eq!(abi::OnKind::from_i32(6), None);
+    }
+
+    #[test]
+    fn trigger_kind_ids() {
+        // TriggerKind ids are opaque; pin the retired wire names and holes.
+        // FlipEffect = 94 / FlipAfter = 104 retired in v83 -- never reuse.
+        assert_eq!(TriggerKind::from_i32(94).as_str(), "");
+        assert_eq!(TriggerKind::from_i32(104).as_str(), "");
+        assert_eq!(TriggerKind::from_str("flipEffect"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("flipAfter"), TriggerKind::None);
+        // Live neighbours still round-trip.
+        assert_eq!(TriggerKind::from_str("drewBefore").as_str(), "drewBefore");
+        assert_eq!(TriggerKind::from_str("atEnd").as_str(), "atEnd");
+        assert_eq!(TriggerKind::from_str("paySplitChooseBefore").as_str(), "paySplitChooseBefore");
     }
 }

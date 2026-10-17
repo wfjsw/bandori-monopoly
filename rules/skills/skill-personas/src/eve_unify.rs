@@ -16,9 +16,7 @@
 use card_sdk::abi::HookKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+use skill_groups::fans;
 
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
@@ -53,7 +51,7 @@ fn roll_ok(player_id: i32) -> bool {
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
     // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
+    let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
@@ -70,7 +68,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」. The fixed-face
 /// and has-fans clauses are the residual guard / pre.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
-    let up = ctx::tok(player_id, FANS_UP);
+    let up = ctx::tok(player_id, fans::UP);
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("eve_unify_title")),
@@ -82,8 +80,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let mut y = y;
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
+    let _ = fans::flip_down(player_id, y)?;
     // 「为此次投掷结果增加Yd4」
     let add = ctx::roll(player_id, y, 4);
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
@@ -96,10 +93,9 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            let down = ctx::tok(p, FANS_DOWN).min(y);
+            let down = ctx::tok(p, fans::DOWN).min(y);
             if down > 0 {
-                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
+                let _ = fans::flip_up(p, down)?;
                 y -= down;
             }
         }
@@ -108,10 +104,9 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             if ctx::player_out(p) || !ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            if ctx::tok(p, FANS_DOWN) > 0 {
-                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
-            }
+            // Always send -- the effect still hits a seat with 0 face-downs, so
+            // band clause （2） may grant an overflow crystal.
+            let _ = fans::flip_up(p, 1)?;
         }
     }
     ctx::log(
