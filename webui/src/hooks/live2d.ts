@@ -12,6 +12,7 @@ import { useAnimationFrame, useTimeout } from "./timers.ts";
 import { whenTransitionIdle } from "./scene.ts";
 import { useResizeObserver } from "./measure.ts";
 import { canvasBox, sameParams, type Framing, type StandBox } from "./pure.ts";
+import { designBox } from "../app/stageScale.ts";
 import { eyeLine, evalPose, figureTop, type ModelPose } from "../live2d/deform.ts";
 import {
   animQueue, animValues, applyProps, createAnim, playReaction, tickAnim, type AnimState,
@@ -150,7 +151,11 @@ export function useLive2DModel(opts: {
         const uploaded = renderer.setModelProgressive(data.model, data.textures);
         const wrap = wrapRef.current;
         if (wrap) {
-          renderer.resize(wrap.clientWidth, wrap.clientHeight, Math.min(window.devicePixelRatio || 1, 2));
+          // Screen CSS px (unambiguous under `zoom`) times the uncapped DPR:
+          // the drawing buffer must be device pixels or the stand draws soft
+          // on a 3x phone and on any display running the stage above 1x.
+          const r = wrap.getBoundingClientRect();
+          renderer.resize(r.width, r.height, window.devicePixelRatio || 1);
         }
         animRef.current = bundle
           ? createAnim({
@@ -219,7 +224,8 @@ export function useLive2DModel(opts: {
   useResizeObserver(wrapRef, () => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    rendererRef.current?.resize(wrap.clientWidth, wrap.clientHeight, Math.min(window.devicePixelRatio || 1, 2));
+    const r = wrap.getBoundingClientRect();
+    rendererRef.current?.resize(r.width, r.height, window.devicePixelRatio || 1);
     dirtyRef.current = true;
   });
 
@@ -418,8 +424,7 @@ export function useLive2DStand(opts: {
   // Lay the canvas out inside the stand box (re-run on box resize and when the
   // model or any of the framing inputs change).
   useResizeObserver(boxRef, (el) => {
-    const w = el.clientWidth;
-    const h = el.clientHeight;
+    const { width: w, height: h } = designBox(el);
     if (!measure || !w || !h) {
       setWin(null);
       setModel(null);

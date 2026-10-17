@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { navigate } from "../../app/router";
 import { useCompactValue, useStageFill } from "../../app/Stage";
+import { designBox } from "../../app/stageScale";
 import { RightTabs } from "./RightTabs";
 import { namesOf } from "../../core/names";
 import type { Msg } from "../../i18n/msg";
@@ -188,7 +189,7 @@ export function Board({ sess }: { sess: GameSession }) {
   useLayoutEffect(() => {
     const el = fxRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setFxH(el.offsetHeight || FX_REF_H));
+    const ro = new ResizeObserver(() => setFxH(designBox(el).height || FX_REF_H));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);

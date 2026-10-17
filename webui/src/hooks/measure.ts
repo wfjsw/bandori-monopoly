@@ -3,6 +3,7 @@
 // needs (pin to bottom on new content; snap to top when the subject changes).
 
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { designBox } from "../app/stageScale.ts";
 import { useLatestRef } from "./latest.ts";
 
 type ElementLike = RefObject<HTMLElement | null> | (() => HTMLElement | null | undefined);
@@ -111,8 +112,7 @@ export function useLayoutSize(
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const width = el.offsetWidth;
-    const height = el.offsetHeight;
+    const { width, height } = designBox(el);
     setBox((b) => (b.width === width && b.height === height ? b : { width, height }));
   }, [key, ref]);
   return box;

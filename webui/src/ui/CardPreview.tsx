@@ -16,6 +16,7 @@ import { Avatar } from "./Character";
 import { SkillBody } from "./SkillBody";
 import s from "./CardPreview.module.css";
 import { localRect } from "../app/rotation";
+import { designBox } from "../app/stageScale";
 
 const TAG_SHORT: Record<string, string> = { "手牌": "card.tag.hand", "手": "card.tag.hand", "反击": "card.tag.counter", "持续": "card.tag.cont" };
 
@@ -185,7 +186,7 @@ function stagePlace(stage: HTMLElement, el: HTMLElement): { left: number; top: n
   const w = er.width || 96;
   const gap = 14;
   const previewW = 260;
-  const stageW = stage.offsetWidth;
+  const stageW = designBox(stage).width;
   const flip = x + w + gap + previewW > stageW;
   return { left: flip ? x - gap - previewW : x + w + gap, top: Math.max(0, y) };
 }

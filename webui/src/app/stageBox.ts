@@ -1,10 +1,11 @@
 // The stage's screen geometry, extracted from Stage.tsx so the axis mapping
-// and the touch dead-zone floor can be unit-tested without a DOM. The stage
-// element is `position: fixed; left: 50%; top: 50%` with
+// and the touch dead-zone floor can be unit-tested without a DOM. The stage's
+// placer is `position: fixed; left: 50%; top: 50%` with
 // `transform: translate(calc(-50% + shiftX), calc(-50% + shiftY))
-// [rotate(90deg)] scale(scale)`. Because `translate` is the *outermost*
-// transform, `shiftX` / `shiftY` are screen pixels and the stage centre lands
-// at viewport-centre + (shiftX, shiftY) regardless of rotation.
+// [rotate(90deg)]`, sized in screen px, and the design-space child scales by
+// `zoom: scale`. Because `translate` is the *outermost* transform, `shiftX` /
+// `shiftY` are screen pixels and the stage centre lands at viewport-centre +
+// (shiftX, shiftY) regardless of rotation.
 
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, TOUCH_TOP_MIN, isCompactWindow } from "../styles/layout.ts";
 
