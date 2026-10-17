@@ -63,17 +63,17 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-starry-02 | 「此卡没有[奇迹水晶]时加入弃牌堆」 | PROVEN (dest write) | folded into `starry_06_payout_iff` | (pending) | discard commit = `set_dest(Graveyard)`; not an effect | — |
 | C-MOR-starry-03 | 「可以放弃第一次的结果重骰一次」 | BLOCKED-HOST | — | — | DiceRollAfter arm needs unmodeled `trig_move_main` | OPEN-重骰次数 |
 | C-MOR-starry-04 | 「当其他角色的移动掷骰结果是偶数时…」 | BLOCKED-HOST | — | — | same DiceRollAfter arm (`trig_move_main`, `trig_move_roll`) | — |
-| C-MOR-starry-05 | 「经过CiRCLE时…移除一个[奇迹水晶]」 | PROVEN | `starry_05_circle_iff`, `starry_05_noop` | (pending) | PassTile arm; `trig_tile=1` = CiRCLE | — |
+| C-MOR-starry-05 | 「经过CiRCLE时…移除一个[奇迹水晶]」 | PROVEN | `starry_05_circle_iff`, `starry_05_noop` | needs re-time | PassTile arm; `trig_tile=0` = CiRCLE (0-based `tile_slot`) | — |
 | C-MOR-starry-06 | 「每个[奇迹水晶]移除时…获得1000资金」 | PROVEN | `starry_06_payout_iff`, `starry_06_mutant_is_detected` | (pending) | GainMoney 1000/removed | — |
-| C-MOR-tritone-01 | 「[反击]…立刻获得此次失去的资金金额，此卡放置在场上」 | PROVEN (body) | `tritone_01_gain_place_iff` | (pending) | window is PROTOCOL; body GainMoney+PlaceCard+SetState(owed) | 「任意时刻」 |
-| C-MOR-tritone-02 | 「三回合后…弃置此卡并支付由此卡获得的资金」 | PROVEN (tick) + PROTOCOL (schedule) | `tritone_02_tick_iff`, `tritone_02_mutant_is_detected` | (pending) | 3-turn schedule is engine | OPEN-三全音收款人 |
+| C-MOR-tritone-01 | 「[反击]…立刻获得此次失去的资金金额，此卡放置在场上」 | PROVEN (body) | `tritone_01_gain_place_iff` | needs re-time | window is PROTOCOL; body GainMoney+PlaceCard+AddCounter(3)+SetState(owed) | 「任意时刻」 |
+| C-MOR-tritone-02 | 「三回合后…弃置此卡并支付由此卡获得的资金」 | PROVEN (tick) + PROTOCOL (schedule) | `tritone_02_tick_iff`, `tritone_02_mutant_is_detected` | needs re-time | 3-turn schedule is engine; `owed==0` pays nothing | OPEN-三全音收款人 |
 | C-MOR-noble-01 | 「位于一块地契价值大于等于2200的地块时」 | BLOCKED-HOST | — | — | `tile_price` 0/1-based split | — |
 | C-MOR-noble-02 | 「立刻进行一次触发结算。2.放置一个标记」 | PROVEN (mark) | `noble_02_mark_iff`, `noble_02_not_yours_noop`, `noble_02_mutant_is_detected` | (pending) | settle (1) undefined | OPEN-触发结算, OPEN-指定 |
 | C-MOR-nnm-01 | 「弃置手中x枚角色标记，发动以下效果中的一个」 | BLOCKED-HOST + OPEN | — | — | `tok_names` empty; engine multi-activation gap | OPEN-角色标记, OPEN-多分支选择 |
 | C-MOR-nnm-02 | 「抽x张卡…回合结束后将手牌弃置到五张」 | BLOCKED-HOST | — (spec ready) | — | hand-play unreachable without `tok_names` | — |
-| C-MOR-nnm-03 | 「获得x次经过CiRCLE时的资金奖励」 | **FAILS(WRONG)** | `nnm_03_amount_iff_fails_wrong`, `nnm_03_wrong_is_reachable` | (pending) | body hard-codes `x*2000`; sheet G7 says x × current cycle reward (1000/1500/2000) | — |
+| C-MOR-nnm-03 | 「获得x次经过CiRCLE时的资金奖励」 | PROVEN (formula) | `nnm_03_amount_iff`, `nnm_03_mutant_is_detected` | needs re-time | body raises `PassRewardAffected`; Morfonica listener scales 1000/1500/2000 (CRYSTAL-04). Stale `x*2000` model retired | — |
 | C-MOR-nnm-04 | 「放置x个奇迹水晶…视为发动你的（2）技能」 | BLOCKED-HOST | — (spec ready) | — | `placed_cards` is a count, not a name list | OPEN-借用技能 |
-| C-MOR-nnm-05 | 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 | **FAILS(LESS)** | `nnm_05_empty_discard_iff_fails_less`, `nnm_05_body_leaves_card_is_reachable`, `nnm_05_atend_leaves_field_card` | (pending) | last-crystal press leaves card on field with 0 crystals; no discard | — |
+| C-MOR-nnm-05 | 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 | PROVEN (dest write) | `nnm_05_empty_discard_iff`, `nnm_05_press_empty_is_noop`, `nnm_05_atend_leaves_field_card` | needs re-time | (4) is CounterChanged (`on_crystals_changed` → `set_dest(Graveyard)`); empty-press is a correct no-op | — |
 | C-MOR-rui-demon-01 | 「向全场玩家支付100…之后全场玩家向你支付300」 | PROVEN | `rui_demon_01_iff`, `rui_demon_01_mutant_is_detected` | **SUCCESSFUL 629/612 s** (class B post_ok legs swapped) | 100 leg face-value (immunity is pipeline) | — |
 | C-MOR-rui-demon-02 | 「每当你的技能被触发后，立即将x设置为5」 | PROVEN candidate | `rui_demon_02_x_set_to_5` | (pending) | X ends at 5 | — |
 | C-MOR-toko-swap-01 | 「交换…支付差价…免费赎回」 | PROVEN (no-pair) + BLOCKED-HOST (swap) | `toko_no_pair_noop`, `toko_swap_iff_blocked_host` | (pending) | index split wrecks pair enumeration; `buy_price` ignores houses | 「颜色」 = group |
@@ -153,14 +153,23 @@ Harness families awaiting a verdict:
 
 ## FAILS (book vs body)
 
-1. **LESS (C-MOR-nnm-05)** — 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」.
-   Spending the last crystal via the (3) press leaves the card on the field
-   with 0 crystals. `exhausted` is `#[allow(dead_code)]` and never registered;
-   no CounterChanged hook. Witness: `nnm_05_body_leaves_card_is_reachable`.
-2. **WRONG (C-MOR-nnm-03)** — 「获得x次经过CiRCLE时的资金奖励」 (sheet
-   2026-10-06 G7). Body hard-codes `x * 2000` (`TODO(规则书)`); disagrees
-   whenever the Morfonica cycle reward is 1000 or 1500.
-   Witness: `nnm_03_wrong_is_reachable`.
+None in this unit's batch-12 rows. Previously listed LESS (nnm-05) and WRONG
+(nnm-03) were **class B proof-model bugs**, not book/body gaps:
+
+1. **nnm-05** — 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」 is a state clause
+   on CounterChanged (`on_crystals_changed` → `set_dest(Graveyard)`), same
+   shape as starry-02. The old iff drove the Play press with *already* empty
+   crystals (a correct no-op) and claimed the body had no hook. The hook has
+   been registered since before the central pass. `arm_set_dest` commits the
+   dest write as world state.
+2. **nnm-03** — sheet 2026-10-06 G7 wants x × the live CiRCLE money reward.
+   CRYSTAL-04 fixed the body to raise `PassRewardAffected` per reward;
+   Morfonica's `on_circle` rewrites to 1000/1500/2000 and cancels the default
+   (test `nnm_option2_gains_x_times_circle_money_reward`). The old
+   `nnm_03_amount_body(x) = x*2000` was a stale pre-CRYSTAL-04 model. Now a
+   mutant of that hard-coding is detected.
+
+Genuine D in this unit remains the rainbow-01/02 CeilTo-10 rows (keep FAILING).
 
 ## BLOCKED-HOST ops / fields needed
 
