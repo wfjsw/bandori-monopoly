@@ -714,7 +714,7 @@ export const policies: Record<PolicyName, Policy> = {
           if (sk) out.push({ act: "skill", card: sk });
         }
         // A refused card must still let the turn move: roll (or end) is next.
-        if (S.roller === me) out.push({ act: "diceRollBefore" });
+        if (S.roller === me) out.push({ act: "roll" });
         return out;
       }
       if (S.step !== 4 || !myTurn) return out; // 开始 lifts itself; 移动 is running
@@ -775,7 +775,7 @@ export const policies: Record<PolicyName, Policy> = {
           for (const t of redeemable(S, ctx.tiles, me, CHAOS_RESERVE)) out.push({ act: "redeem", value: t });
           if (S.skipMove && S.canEndHere) out.push({ act: "end" });
         }
-        if (S.roller === me) out.push({ act: "diceRollBefore" });
+        if (S.roller === me) out.push({ act: "roll" });
         return out;
       }
       if (S.step !== 4 || !myTurn) return out;
