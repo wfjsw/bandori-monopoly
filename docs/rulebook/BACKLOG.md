@@ -1716,6 +1716,28 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 - **TILE-05 Parking Space + 要乐奈 (2)**: P0 played the [手] on P1's turn (`err.play_phase`); stay was read before `TurnEndAfter`. Fix: setup on P0's turn; assert stay after `pass`. Engine path (teleport → body-replace → stay at turn end, skillBlock) already green in `g15`.
 - Both un-ignored, green twice.
 
+## COND-01 — `slot()` conditions on FilterValue miss mid-roll state writes (possible engine defect)
+- **Symptom (2026-10-17, seen while splitting eve_unify):** a `slot('…') >= n`
+  *condition* on an `On::FilterValue` at `DiceRollPlan` did not observe a
+  per-player state write made earlier in the same roll, while `state::get`
+  inside the body saw it. The condition and the body therefore disagree about
+  the same world.
+- **Suspect:** the condition (CEL) evaluation uses a snapshot taken before
+  mid-roll writes (or a cached `slot` view), while body calls read the live
+  world. Affects any entry whose gate counts up during the roll.
+- **Likely affected:** `kanon_lost`'s `On::FilterValue(DiceRollPlan)` gate
+  `slot('skill.kanonLost.silent') >= 3` (TODO(bug) at the entry in
+  `rules/skills/skill-personas/src/kanon_lost.rs`); any future gate written the
+  same way. eve_unify worked around it (`actor == owner` + `state::get` in the
+  body).
+- **Check:** a two-roll scenario where the slot increments mid-roll and the
+  gate must flip on the same roll; compare `slot()` in the condition vs
+  `state::get` in the body.
+- **Fix needs:** make the condition see the same world the body sees (evaluate
+  conditions against the live world, or document that conditions are
+  pre-roll-snapshot and move such gates into the body); a test pinning both
+  readings agree.
+
 ---
 
 # Stale sections in TEST-FINDINGS.md / companion docs

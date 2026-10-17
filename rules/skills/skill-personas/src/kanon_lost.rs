@@ -33,6 +33,15 @@ pub const KANON_LOST: CardDef = CardDef::new(
         On::Action(&[HookKind::DiceRollAfter], "actor == owner && plan.fixed_roll == null", None, on_roll),
         On::Action(&[ruleset_core::kind::PassRewardAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
         On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
+        // TODO(bug): possible engine issue — a `slot()` condition on a
+        // FilterValue at DiceRollPlan did not observe a state write made
+        // earlier in the same roll (seen while splitting eve_unify: the
+        // condition evaluated before the mid-roll stash was visible, while
+        // `state::get` inside the body saw it). This entry's gate is exactly
+        // that pattern (`slot('skill.kanonLost.silent')` counting up during
+        // the roll). Verify whether the gate ever mis-fires here; if it does,
+        // fix the condition evaluation snapshot (or move the gate into the
+        // body) and re-run the kanon tests + a two-roll scenario.
         On::FilterValue(&[HookKind::DiceRollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
     ],
 )
