@@ -109,6 +109,31 @@ Legend: **P**=PROVEN, **F**=FAILS(finding), **B**=BLOCKED-HOST, **PROTO**=PROTOC
 | C-HHW-band-02 | 「移除一个奇迹水晶，记录该次收款的价格」 | P (spec) | (spec only) | — | — | OPEN-HHW-BAND-RECORD |
 | C-HHW-band-03 | 「从盖房花费中减去所记录的数字…归零」 | O / PROTO | — | — | — | needs a legal build window |
 
+## skills_hhw triage (triage3 batch 11)
+
+Central pass `kani-pass@fc3ff3e1`, unit features `band-hhw,skills-personas,skills-groups`.
+Classes: A bound-low / B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
+
+| harness | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|
+| `kokoro_02_circle_pass_1500_iff` | TIMEOUT 1800 s | **C** | `fill_for_guard` FnId bit masks stale: `TileIs` pulled `fill_geometry_bins` (60×seats fold cliff) and never filled `SetId::Circle`, so `tile_is('circle')` could not match | masks from `FnId::*`; sets = TileIs/TileIn/Blocked; geom = PlayersOn/NextDist/OthersWithin/OwnedWithin/OnPath | yes |
+| `kokoro_02_noop_non_circle` | TIMEOUT 1800 s | **C** | same | same | yes |
+| `misaki_skill_01_pass_fire_iff` | VACUOUS (cover.1 UNSATUSFIABLE; 2/3 covers unreachable) | **C** | `guard_needs` missed `TileNamed` name-id arg (`0..=4` only) → `tile_named('弦卷集团')` never filled → guard never admits | extend name-id range to `TileNamed` (`0..=5`) | yes |
+| `kaoru_01_pot_arm_iff` | TIMEOUT 1800 s | **C** (+E) | `symbolic_pass_world` called `host::install()`, wiping the per-harness op-subset and installing the full ~300-op dispatch (SSA cliff) | drop the reinstall; keep `skills_hhw_dispatch` | yes |
+| `kaoru_01_mutant_is_detected` | TIMEOUT 1800 s | **C** (+E) | same | same | yes |
+| `band_01_declined_is_noop` | FAILED (`outside_subset`) | **C** | `on_pay_choose` uses `trig_target`/`trig_value`/`trig_set_pay_amount`/`add_counter_self` not in the subset | add those arms (real host arms, not stubs) | yes |
+| `band_01_accepted_doubles_iff` | FAILED (`outside_subset`) | **C**+**B** | same + `ask_yes` polarity inverted (0=yes, not 0=decline) | subset + `answers[0]=0` accept / `=1` decline | yes |
+| `band_01_mutant_is_detected` | FAILED (`outside_subset`) | **C**+**B** | same | subset + accept arm (`answers[0]=0`) | yes |
+
+Kept levers from the hand-off: 8×8 chunk walk in `fill_geometry_bins` `players_on`; TileNamed name-id note.
+
+Gates: `cargo kani --only-codegen` (skills_hhw features) green; `cargo test -p rules-kani` ×2 green.
+No CBMC this batch (memory + central pass already running). All eight rows **needs re-time**.
+
+Body-side notes (not this batch's failures):
+* C-HHW-kaoru-01 mark-existence check vs the planted [怪盗标记] remains a TEST-FINDINGS §6 gap (class D candidate, kept failing).
+* C-HHW-misaki-skill-01 「上限2」 vs host `gain_fire` clamp is still an open MORE candidate; the vacuous was the guard, not the cap.
+
 ## Harness verdicts (runner)
 
 Filled in as `tools/kani/run.sh --unit hhw|skills_hhw --harness <name>` completes.

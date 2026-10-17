@@ -606,19 +606,27 @@ fn fill_geometry_bins(c: &mut IrCtx, w: &World) {
         d.min(n - d)
     };
     // players_on(tile, except) for every occupied tile × every seat.
-    let mut t = 0i64;
-    while t < n {
-        let mut except = -1i64;
-        while except < n_players {
-            let v = (0..n_players)
-                .filter(|&s| s != except && !out(s) && exile(s) == 0 && pos(s) == t)
-                .count() as i64;
-            if v != 0 {
-                c.bin_set(t, except, v);
+    // 8×8 chunk walk over tiles (unwind bound 8, not 60).
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let t = (outer * 8 + k) as i64;
+            if t < n {
+                let mut except = -1i64;
+                while except < n_players {
+                    let v = (0..n_players)
+                        .filter(|&s| s != except && !out(s) && exile(s) == 0 && pos(s) == t)
+                        .count() as i64;
+                    if v != 0 {
+                        c.bin_set(t, except, v);
+                    }
+                    except += 1;
+                }
             }
-            except += 1;
+            k += 1;
         }
-        t += 1;
+        outer += 1;
     }
     // next_dist(p, dir) for every seat × {-1, 1}.
     let mut p = 0i64;
@@ -1126,8 +1134,10 @@ pub fn guard_needs(gid: usize) -> GuardNeeds {
                                 // counts as the seat.
                                 let seat_arg = fn_takes_seat_arg0(node.payload);
                                 if arg.kind == rules_cond_ir::nodes::Kind::ConstInt {
-                                    // FnId Slot..=CounterIs (0..=4) take a name id.
-                                    if node.payload <= FnId::CounterIs as i64 {
+                                    // FnId Slot..=TileNamed (0..=5) take a name id
+                                    // (TileNamed is `tile_named('…')` — its arg 0
+                                    // is the tile-name id hash).
+                                    if node.payload <= FnId::TileNamed as i64 {
                                         n.note_named(arg.payload);
                                     } else if seat_arg && j == 0 {
                                         if n.seat_const < 0 {
@@ -1420,9 +1430,10 @@ pub fn fill_for_guard(
         }
     }
 
-    // `state(p, 'key')` (FnId 37): the finite key set for the seats the guard
-    // reads. `seat_fields` is empty for this fn -- it lives on `IrCtx::state`.
-    if (needs.fns >> 37) & 1 != 0 {
+    // `state(p, 'key')` (FnId::State): the finite key set for the seats the
+    // guard reads. `seat_fields` is empty for this fn -- it lives on
+    // `IrCtx::state`. Discriminant via the enum (renames shift the bit).
+    if (needs.fns >> (FnId::State as u64)) & 1 != 0 {
         let mut p = seat_lo;
         while p < world::MAX_PLAYERS {
             if p < seat_hi {
@@ -1479,13 +1490,29 @@ pub fn fill_for_guard(
     }
 
     // Board sets / geometry bins only when the guard's fns need them.
-    let needs_sets = (needs.fns >> 6) & 0xF != 0 // IsStart..IsBuyable
-        || (needs.fns >> 20) & 1 != 0 // Blocked
-        || (needs.fns >> 22) & 3 != 0; // ChainHas / ChainHits
+    // Bit i = `FnId` discriminant i. The old magic shifts (`>> 6`, `>> 27`)
+    // targeted a retired "IsStart..IsBuyable" / "Dist..OnPath" numbering and
+    // silently (a) skipped `fill_board_sets` for `TileIs`/`TileIn` (Circle /
+    // Ring / Buyable / LiveHouse stay empty → `tile_is('circle')` never
+    // matches) and (b) pulled in `fill_geometry_bins` for `TileIs` (the
+    // kokoro_02 1800 s cliff). Derive the masks from the enum.
+    let fid_bit = |f: FnId| 1u64 << (f as u64);
+    let needs_sets = (needs.fns
+        & (fid_bit(FnId::TileIs) | fid_bit(FnId::TileIn) | fid_bit(FnId::Blocked)))
+        != 0;
     if needs_sets {
         fill_board_sets(&mut c, w);
     }
-    let needs_geom = (needs.fns >> 27) & 0x1F != 0; // Dist..OnPath
+    // Geometry bins are the `bin_get` family only. `Dist` is modular distance
+    // on the fly; `Between` is a seat field; `Neighbor`/`RepeatedDigits` are
+    // pure — none of them read a bin.
+    let needs_geom = (needs.fns
+        & (fid_bit(FnId::PlayersOn)
+            | fid_bit(FnId::NextDist)
+            | fid_bit(FnId::OthersWithin)
+            | fid_bit(FnId::OwnedWithin)
+            | fid_bit(FnId::OnPath)))
+        != 0;
     if needs_geom {
         fill_geometry_bins(&mut c, w);
     }
