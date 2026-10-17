@@ -128,6 +128,25 @@ not set them is unchanged.
 | `--replay-bar-h` | `ReplayBar` (ResizeObserver on the bar) | measured transport height, `0` when hidden |
 | `--replay-bar-bottom` | `ReplayBar` | height while the transport is docked at the **bottom**, else `0` |
 | `--replay-bar-top` | `ReplayBar` | board-body top inset while the transport is docked at the **top**, else `0` |
+| `--safe-top` / `-right` / `-bottom` / `-left` | `Stage` (`stageBox`) | hardware sitting on that stage edge (safe-area inset + the landscape top touch dead zone), in design px |
+
+### Safe area: what respects it and what does not
+
+The stage's **width** axis is inset so the side columns clear the cutout. Its
+**height** axis runs to the real screen edges on purpose: that is the axis the
+retractable strips clip against -- the field row behind the top edge, the hand
+and the skill stack off the bottom, the prompt sheet and a bottom-docked
+transport along it. Inset that axis and those strips stop short of the border
+and leave a gap that reads as a bug.
+
+So the split is: **retractable / edge-docked strips do not respect the safe
+area** (they must connect to the real boundary); **controls do** (they pad by
+`--safe-*` so they stay tappable under the notch, the home indicator and the
+top touch dead zone). Today that is `TopBar` (`top: var(--safe-top)`), the left
+column's actions row and the prompt sheet's window body
+(`padding-bottom: var(--safe-bottom)`) -- the sheet's *surface* still runs to
+the screen edge. A new edge-anchored strip follows the strips, not the
+controls.
 
 Bottom-edge chrome (hand dock / peek / skill stack / sheet strip, the left
 column's actions and player list, the log) adds `--replay-bar-bottom` to its

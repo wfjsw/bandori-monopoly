@@ -245,7 +245,7 @@ function Backdrop({ src, snap }: { src: string; snap: boolean }) {
 
 export function Stage({ children, transitioning }: { children: ReactNode; transitioning: boolean }) {
   const tall = useStageFillValue();
-  const { scale, w, h, compact, shiftX, shiftY, rotated } = useStage(tall);
+  const { scale, w, h, compact, shiftX, shiftY, rotated, safe } = useStage(tall);
   setStageRotated(rotated);
   setStageScale(scale);
   useEffect(() => {
@@ -272,7 +272,23 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
           transform: `translate(calc(-50% + ${shiftX}px), calc(-50% + ${shiftY}px))${rotated ? " rotate(90deg)" : ""}`,
         }}
       >
-        <div className={s.stage} data-stage style={{ width: w, height: tall ? h : STAGE_H, zoom: scale }}>
+        {/* `--safe-*`: hardware sitting on each stage edge, in design px (see
+            `stageBox`). The stage's top and bottom ARE the real screen edges,
+            so a retractable strip anchored there runs to the border on
+            purpose; controls pad by these instead of leaving a gap. */}
+        <div
+          className={s.stage}
+          data-stage
+          style={{
+            width: w,
+            height: tall ? h : STAGE_H,
+            zoom: scale,
+            ["--safe-top" as string]: `${safe.top}px`,
+            ["--safe-right" as string]: `${safe.right}px`,
+            ["--safe-bottom" as string]: `${safe.bottom}px`,
+            ["--safe-left" as string]: `${safe.left}px`,
+          }}
+        >
           {children}
         </div>
       </div>
