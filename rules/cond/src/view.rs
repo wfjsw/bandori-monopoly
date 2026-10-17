@@ -45,6 +45,8 @@ pub trait CondView {
     fn move_remaining(&self) -> i64;
     /// `t.Move.Main` (`move.main`).
     fn move_main(&self) -> bool;
+    /// `move.by_skill` -- the move was shaped or started by a skill.
+    fn move_by_skill(&self) -> bool;
     /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward; `1` when the
     /// window has no move (matches the guest's `trigger::move_dir()`).
     fn move_dir(&self) -> i64;

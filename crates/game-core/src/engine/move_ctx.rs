@@ -89,6 +89,11 @@ pub struct MoveCtx {
     /// it goes through even when the turn's main move is already spent
     /// (`docs/EVENTS.md`). Set by the host when the running rule is `event:*`.
     pub forced: bool,
+    /// The move was shaped or started by a rule whose card id starts with
+    /// `skill:` (generic source tag; cond reads `move.by_skill`). Skipped when
+    /// false so saves stay byte-identical to the pre-v85 shape.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub by_skill: bool,
     /// Why the move happened (a card / effect), shown in parentheses on the
     /// log line.
     pub why: Option<Msg>,
@@ -206,6 +211,7 @@ impl Default for MoveCtx {
             roller: Self::ROLLER_UNSET,
             main: false,
             forced: false,
+            by_skill: false,
             why: None,
             kind: MoveKind::Walk,
             teleport_to: -1,

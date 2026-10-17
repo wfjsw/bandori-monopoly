@@ -306,6 +306,16 @@ pub struct Run {
 }
 
 impl Run {
+    /// Stamp the shared turn plan's skill-source tag when the running rule is
+    /// a skill (`card_id` starts with `skill:`). Cond reads it as `move.by_skill`.
+    /// Called from the plan-write host handlers so a skill's plan rewrite
+    /// carries the tag onto the move it shapes. Cleared after each move.
+    fn stamp_skill_source(&mut self) {
+        if self.current_card.starts_with("skill:") {
+            self.world.turn.plan.by_skill = true;
+        }
+    }
+
     /// An already-in-play card's log lines name their source: 「<卡名> 的效果：
     /// <what happened>」. A fresh activation (hand play, counteraction, skill press,
     /// drawn event) leaves its outcome lines bare -- the play already said
@@ -2140,6 +2150,7 @@ impl CardWorld for Run {
     }
     // movement shaping ---------------------------------------------------------
     fn set_steps(&mut self, v: i32) {
+        self.stamp_skill_source();
         let was = self.world.move_total();
         self.world.set_steps(v);
         // Keep the shared MoveBefore link coherent for later counters and
@@ -2158,6 +2169,7 @@ impl CardWorld for Run {
         }
     }
     fn set_roller(&mut self, v: i32) {
+        self.stamp_skill_source();
         // `plan::set_roller` -- the stand-in roller for 「上一名玩家代替进行此次
         // 投掷」. `MoveCtx::roller` rides `TurnCtx.plan`, so `main_move`'s
         // post-`rollPlan` re-clone picks it up.
@@ -2166,12 +2178,15 @@ impl CardWorld for Run {
         }
     }
     fn set_reverse(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_reverse(v);
     }
     fn set_signed(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_signed(v);
     }
     fn set_stop_at(&mut self, v: i32) {
+        self.stamp_skill_source();
         let was = self.world.move_stop_at();
         self.world.set_stop_at(v);
         if v != was {
@@ -2179,21 +2194,26 @@ impl CardWorld for Run {
         }
     }
     fn set_parity(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_parity(v);
     }
     fn set_resolve(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_resolve(v);
     }
     fn set_no_buy(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_no_buy(v);
         if v {
             self.outcome_plan("log.outcome.plan_no_buy", -1, 0, "");
         }
     }
     fn set_kind(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_kind(v);
     }
     fn set_tag(&mut self, key: &str, v: i32) {
+        self.stamp_skill_source();
         self.world.set_tag(key, v);
     }
     fn recorded_roll(&self) -> i32 {
@@ -2203,64 +2223,81 @@ impl CardWorld for Run {
         self.world.move_tag(key)
     }
     fn set_min_roll(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_min_roll(v);
     }
     fn set_extra_steps(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_extra_steps(v);
         if v != 0 {
             self.outcome_plan("log.outcome.plan_steps", -1, v, "");
         }
     }
     fn set_settle_tile(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_settle_tile(v);
     }
     fn set_pay_factor(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_pay_factor(v);
     }
     fn set_rent_factor(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_rent_factor(v);
     }
     fn set_can_build(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_can_build(v);
     }
     fn set_no_build(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_no_build(v);
         if v {
             self.outcome_plan("log.outcome.plan_no_build", -1, 0, "");
         }
     }
     fn set_build_anywhere(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_build_anywhere(v);
     }
     fn set_settle_as_agent(&mut self, v: bool) {
+        self.stamp_skill_source();
         self.world.set_settle_as_agent(v);
     }
     fn plan_add_follower(&mut self, player_id: i32) {
+        self.stamp_skill_source();
         self.world.plan_add_follower(player_id);
     }
     fn set_more_steps(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_more_steps(v);
     }
 
     fn set_teleport_to(&mut self, v: i32) {
+        self.stamp_skill_source();
         self.world.set_teleport_to(v);
         self.outcome_plan("log.outcome.plan_teleport", v, 0, "");
     }
     fn set_start(&mut self, v: i32, why: &str) {
+        self.stamp_skill_source();
         self.world.set_start(v, why);
         self.outcome_plan("log.outcome.plan_start", v, 0, why);
     }
     fn clear_dice(&mut self) {
+        self.stamp_skill_source();
         self.world.clear_dice();
     }
     fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+        self.stamp_skill_source();
         self.world.set_base_dice(count, sides, why);
         self.outcome_plan("log.outcome.plan_dice", -1, count, why);
     }
     fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+        self.stamp_skill_source();
         self.world.add_base_dice(count, sides, why);
     }
     fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
+        self.stamp_skill_source();
         self.world.add_extra_dice(count, sides, why);
     }
     fn move_stopped(&self) -> bool {
@@ -3413,6 +3450,10 @@ impl<M: CardModules> RulesBridge<M> {
             if card_id.starts_with("event:") {
                 plan.forced = true;
             }
+            // Skill-source tag (cond `move.by_skill`): the calling rule's id.
+            if card_id.starts_with("skill:") {
+                plan.by_skill = true;
+            }
             // Forced moves go through the abnormal gate so counteraction cards
             // (安可, 像往常一样) get their window. `AbKind::Forced`
             // covers both other-player and self-applied forced moves.
@@ -3433,11 +3474,10 @@ impl<M: CardModules> RulesBridge<M> {
             }
             return Ok(allowed as i32);
         }
-        // A position write with no settle: the gate and the write land on
-        // the **live** world here (not on the run's copy), so a `card_move`
-        // that follows in the same body starts at the destination -- and
-        // the replay skips the call (the answer below), so it cannot
-        // re-teleport over a move the engine already ran.
+        // A bare jump with no settle (`resolve = false`): runs through the
+        // engine teleport so the move tail (`moveBefore` / `moveAfter` /
+        // `moveResolved`) raises like every other movement case (B41). The
+        // engine sets the position; do not also do the old bare write.
         HostRequest::Teleport { player_id, tile } => {
             let allowed = self.abnormal_gate(
                 cx,
@@ -3446,9 +3486,13 @@ impl<M: CardModules> RulesBridge<M> {
                 call.player_id(),
             )?;
             if allowed {
-                let mut w = cx.world_copy();
-                w.teleport_to(player_id, tile);
-                cx.swap_world(w);
+                // Skill-source tag (cond `move.by_skill`) from the calling rule.
+                if card_id.starts_with("skill:") {
+                    let mut w = cx.world_copy();
+                    w.turn.plan.by_skill = true;
+                    cx.swap_world(w);
+                }
+                cx.card_teleport(player_id.max(0) as usize, tile.max(0) as usize)?;
             }
             return Ok(allowed as i32);
         }
@@ -6537,6 +6581,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         remaining: m.remaining,
         total: m.total,
         roll: is_roll_kind.then_some(t.value),
+        by_skill: m.by_skill,
     });
     let buy = t.buy.map(|b| TriggerBuy {
         kind: card_sdk::abi::BuyKind::from_i32(b.kind.as_i32())
@@ -7202,6 +7247,9 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     }
     fn move_main(&self) -> bool {
         self.trigger.main
+    }
+    fn move_by_skill(&self) -> bool {
+        self.trigger.mv.as_ref().map(|m| m.by_skill).unwrap_or(false)
     }
     fn move_dir(&self) -> i64 {
         self.trigger

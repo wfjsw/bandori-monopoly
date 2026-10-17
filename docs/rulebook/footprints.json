@@ -1930,7 +1930,7 @@
    "skill.teleport"
   ],
   "triggers": [
-   "Counteract:SkillTeleport"
+   "Counteract:MoveAfter"
   ]
  },
  "R:曲奇时间": {

@@ -88,6 +88,8 @@ pub struct MoveSnap {
     pub dir: i64,
     /// `t.Move.Tags` (`move.tag(name)`) -- per-card counters on the move.
     pub tags: Vec<(String, i64)>,
+    /// The move was shaped or started by a skill (`move.by_skill`).
+    pub by_skill: bool,
 }
 
 impl Default for MoveSnap {
@@ -101,6 +103,7 @@ impl Default for MoveSnap {
             // caused the window (the guest's `trigger::move_dir()` reads 1).
             dir: 1,
             tags: Vec::new(),
+            by_skill: false,
         }
     }
 }

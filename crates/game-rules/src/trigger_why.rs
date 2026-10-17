@@ -50,7 +50,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
                 .player_id("who", who)
                 .i("value", value)
         }
-        TriggerKind::SkillTeleport | TriggerKind::Teleported => {
+        TriggerKind::Teleported => {
             Msg::new("log.why.teleport")
                 .player_id("who", who)
                 .tile("tile", tile)

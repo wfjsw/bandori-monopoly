@@ -645,12 +645,21 @@ use alloc::{string::String, vec::Vec};
 /// v84: **Dead trigger kinds retired**. Ids 16 (`stop`), 17 (`teleport`),
 ///      19 (`stun`), 20 (`stay`), 22 (`forced`) are **retired -- never
 ///      reuse**. None of them is raised by the engine and none has a live
-///      listener. Not retired (still live): `skillTeleport` (18), `exile`
-///      (21), `teleported` (66), `MoveKind::Teleport`, and the `AbKind`
-///      status vocabulary. The CEL names `Stop` / `TeleportTrigger` /
-///      `Stun` / `Stay` / `Forced` leave the kind table (`Teleport` stays
+///      listener. Not retired (still live at v84): `skillTeleport` (18),
+///      `exile` (21), `teleported` (66), `MoveKind::Teleport`, and the
+///      `AbKind` status vocabulary. The CEL names `Stop` / `TeleportTrigger`
+///      / `Stun` / `Stay` / `Forced` leave the kind table (`Teleport` stays
 ///      as `MoveKind`). SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 84;
+/// v85: **`SkillTeleport` retired; `move.by_skill` source tag**. Wire id 18
+///      (`skillTeleport`) is **retired -- never reuse**. The only listener
+///      (R:必然的联系（莉莎）) rides `MoveAfter` + cond
+///      `move.kind == Teleport && move.by_skill` instead. `MoveCtx.by_skill`
+///      is a generic "shaped or started by a `skill:` rule" tag (cond
+///      `move.by_skill`); serde skip-if-false so saves stay stable.
+///      `HostRequest::Teleport` now runs through `card_teleport` /
+///      `teleport_as(resolve=false)` so it raises the move tail like every
+///      other movement path. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 85;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1481,9 +1490,8 @@ impl TriggerKind {
     // Wire id 17 (`teleport`) retired in v84 -- never reuse. The teleport
     // points today are [`Self::MoveBefore`] (before) and [`Self::Teleported`].
 
-    /// Wire name `skillTeleport`: 「当你使用技能进行传送后」 (R:必然的联系（莉莎）).
-    /// Not raised by the current engine; kept for wire compatibility.
-    pub const SkillTeleport: Self = Self(18);
+    // Wire id 18 (`skillTeleport`) retired in v85 -- never reuse. Use
+    // [`Self::MoveAfter`] + cond (`move.kind == Teleport && move.by_skill`).
 
     // Wire id 19 (`stun`) retired in v84 -- never reuse. A [晕眩] landing
     // reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`].
@@ -1982,7 +1990,7 @@ impl TriggerKind {
             15 => "target",
             // 16 was "stop" -- retired in v84, never reuse.
             // 17 was "teleport" -- retired in v84, never reuse.
-            18 => "skillTeleport",
+            // 18 was "skillTeleport" -- retired in v85, never reuse.
             // 19 was "stun" -- retired in v84, never reuse.
             // 20 was "stay" -- retired in v84, never reuse.
             21 => "exile",
@@ -2100,7 +2108,7 @@ impl TriggerKind {
             "target" => Self(15),
             // "stop" retired in v84 (id 16 never reuse).
             // "teleport" retired in v84 (id 17 never reuse).
-            "skillTeleport" => Self(18),
+            // "skillTeleport" retired in v85 (id 18 never reuse).
             // "stun" retired in v84 (id 19 never reuse).
             // "stay" retired in v84 (id 20 never reuse).
             "exile" => Self(21),
@@ -2507,5 +2515,26 @@ impl OnKind {
             13 => Self::Build,
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TriggerKind;
+
+    /// ABI v85: wire id 18 (`skillTeleport`) is retired forever. Do not reuse
+    /// the id or the spelling; listeners discriminate with `MoveAfter` + cond
+    /// (`move.kind == Teleport && move.by_skill`).
+    #[test]
+    fn skill_teleport_id_18_is_retired_forever() {
+        assert_eq!(TriggerKind(18).as_str(), "", "id 18 must stay unnamed");
+        assert_eq!(
+            TriggerKind::from_str("skillTeleport"),
+            TriggerKind::None,
+            "skillTeleport spelling is retired"
+        );
+        // Nearby live ids must keep working.
+        assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::Teleport);
+        assert_eq!(TriggerKind::MoveAfter.as_str(), "moveAfter");
     }
 }

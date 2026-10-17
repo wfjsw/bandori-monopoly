@@ -136,6 +136,9 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     if plan.tags != before.tags {
         m.tags = plan.tags.clone();
     }
+    if plan.by_skill != before.by_skill {
+        m.by_skill = plan.by_skill;
+    }
 }
 
 /// Why a payment is happening -- what caused the money to move. Distinct from
@@ -687,6 +690,23 @@ impl Cx<'_> {
 
     // =============================================================== movement
 
+    /// Card-driven bare teleport (`ctx::teleport_to` / `HostRequest::Teleport`):
+    /// a position write with no settle. Runs through [`Self::teleport_as`] so the
+    /// move tail (`moveBefore` / `moveAfter` / `moveResolved`) raises like every
+    /// other movement case (B41 raises [pass],overlap at the endpoint;
+    /// `resolve = false` gates only the settle stages).
+    pub fn card_teleport(&mut self, player_id: usize, tile: usize) -> Flow<()> {
+        if self.move_depth > 0 {
+            // Nested jump (a `passTile` / move hook calling `ctx::teleport_to`):
+            // a bare position write, no second move tail -- the outer move's
+            // raise is already in flight and a nested `teleport_as` would
+            // re-enter the same hook.
+            self.w.teleport_to(player_id as i32, tile as i32);
+            return Ok(());
+        }
+        self.teleport_as(player_id, tile, false, None, false)
+    }
+
     /// Run a card-shaped movement **now**, as the player's main move. This is
     /// the 「立刻进入移动阶段」/「视为你的主要移动」 case: the card has already
     /// shaped `plan` (via the `World` plan ops) and this consumes the turn's
@@ -738,7 +758,11 @@ impl Cx<'_> {
             // One-shot: see `main_move`. A `card_move` that teleported must not
             // leave the destination on the shared turn plan for a later move.
             self.w.turn.plan.teleport_to = -1;
-            self.teleport(i, to, resolve, why)?;
+            // Carry the skill-source tag onto the shared plan so `teleport_as`
+            // stamps it on the raise payload, then clear it (one-shot).
+            self.w.turn.plan.by_skill = plan.by_skill;
+            self.teleport_as(i, to, resolve, why, as_main)?;
+            self.w.turn.plan.by_skill = false;
         } else {
             if plan.steps < 0 {
                 // No fixed step count: roll it now, with the same raise points.
@@ -752,7 +776,9 @@ impl Cx<'_> {
                     let resolve = plan.resolve;
                     let why = plan.why.clone();
                     self.w.turn.plan.teleport_to = -1;
-                    self.teleport(i, to, resolve, why)?;
+                    self.w.turn.plan.by_skill = plan.by_skill;
+                    self.teleport_as(i, to, resolve, why, as_main)?;
+                    self.w.turn.plan.by_skill = false;
                 } else {
                     plan.roll = match self.w.turn.fixed_roll {
                         Some(n) => n,
@@ -794,6 +820,7 @@ impl Cx<'_> {
         // One-shot: see `main_move`. A mid-move hook write (or a walk that
         // ignored one) must not shape a later move in this turn.
         self.w.turn.plan.teleport_to = -1;
+        self.w.turn.plan.by_skill = false;
         // Record the walked length: `lastWalk` is written from `total`.
         if as_main {
             self.w.turn.main_steps = if plan.kind == MoveKind::Teleport {
@@ -1240,7 +1267,9 @@ impl Cx<'_> {
                 let resolve = m.resolve;
                 let why = m.why.clone();
                 self.w.turn.plan.teleport_to = -1;
-                self.teleport(i, to, resolve, why)?;
+                // `m.main` is true here (the turn's main move); pass it so the
+                // raise payload's `move.main` discriminates.
+                self.teleport_as(i, to, resolve, why, m.main)?;
             } else {
                 // A stored fixed face ([`super::world::TurnCtx`]'s `fixed_roll`)
                 // replaces the roll, otherwise sum the `base` + `dice` tables
@@ -1304,8 +1333,10 @@ impl Cx<'_> {
             }
             // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
             // `DiceRollAfter` floor, saki_crychic's `SettleBefore` nudge): this
-            // move is over and the write must not shape the next one.
+            // move is over and the write must not shape the next one. Same for
+            // the skill-source tag.
             self.w.turn.plan.teleport_to = -1;
+            self.w.turn.plan.by_skill = false;
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
             // 玩家按行动顺序依次触发结算」:
             // each follower recorded on the plan replays this move's result,
@@ -1398,6 +1429,13 @@ impl Cx<'_> {
     }
 
     fn walk_inner(&mut self, m: &mut Move) -> Flow<()> {
+        self.move_depth += 1;
+        let r = self.walk_inner_depth(m);
+        self.move_depth -= 1;
+        r
+    }
+
+    fn walk_inner_depth(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         let n = self.data.tiles.len() as i32;
         // 「此次移动以X为起点（不触发起点地块效果）」: the walk begins at
@@ -1410,6 +1448,11 @@ impl Cx<'_> {
             m.from = m.start;
         } else {
             m.from = self.w.st.players[i].pos;
+        }
+        // Skill-source tag from the shared plan (stamped by the host when the
+        // calling rule's id starts with `skill:`).
+        if self.w.turn.plan.by_skill {
+            m.by_skill = true;
         }
         self.move_start = m.from;
         // `moveBefore` (`SETTLE-STAGES.md` §7 「移动前」, ABI v43) -- the move's
@@ -1633,6 +1676,20 @@ impl Cx<'_> {
         why: Option<Msg>,
         main: bool,
     ) -> Flow<()> {
+        self.move_depth += 1;
+        let r = self.teleport_as_depth(i, to, resolve, why, main);
+        self.move_depth -= 1;
+        r
+    }
+
+    fn teleport_as_depth(
+        &mut self,
+        i: usize,
+        to: usize,
+        resolve: bool,
+        why: Option<Msg>,
+        main: bool,
+    ) -> Flow<()> {
         if to >= self.data.tiles.len() || self.out(i) {
             return Ok(());
         }
@@ -1645,6 +1702,9 @@ impl Cx<'_> {
         m.from = from;
         m.path = vec![to as i32];
         m.total = 1;
+        // Skill-source tag from the shared plan (stamped by the host when the
+        // calling rule's id starts with `skill:`).
+        m.by_skill = self.w.turn.plan.by_skill;
         self.move_start = from;
         // `moveBefore` (`SETTLE-STAGES.md` §7 「移动前」, ABI v43) -- the
         // teleport's destination is fixed and nothing has moved yet. A
@@ -1706,7 +1766,9 @@ impl Cx<'_> {
             self.after_walk(&mut m)?;
         }
         // `Teleported` after the settlement (or at once when the move
-        // does not settle).
+        // does not settle). Retained for wire/replay compatibility only --
+        // the listener-facing move-end point is `moveAfter` (supersedes this
+        // for card listeners; `Teleported` is hook-only).
         if !self.out(i) && self.playing() {
             raise!(self, "teleported", i, @m m, tile = m.to)?;
         }

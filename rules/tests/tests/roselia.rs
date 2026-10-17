@@ -624,6 +624,100 @@ fn lisa_skill_2_shapes_the_main_move_into_a_teleport() {
     );
 }
 
+/// 必然的联系 (莉莎) [反击]: 「当你使用技能进行传送后，你可以打出此卡并指定一个
+/// 和你在同一地块的角色，将此卡放在对方的游戏区」.
+///
+/// A **skill** teleport (慈爱女神 plan rewrite -> main-move teleport) must open
+/// the [反击] window; playing the card places it on the same-tile target's field.
+#[test]
+fn lisa_link_offers_on_skill_teleport_and_places_on_target_field() {
+    const LISA_LINK: &str = "R:必然的联系（莉莎）";
+    let mut t = Table::new(&["今井莉莎", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &[LISA_LINK]);
+    t.set_pos(0, 0);
+    t.set_pos(1, 10);
+    t.set_fire(0, 2, 2);
+    let skill = t.skill_id(0, "慈爱女神");
+    t.skill(0, &skill).unwrap();
+    // Decline the optional settle-cancel (「此次传送不触发任何结算」).
+    while let Some(_) = t.prompt() {
+        t.decline();
+    }
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    // Walk the prompts: the MoveAfter [反击] window must offer the card, then
+    // the body's same-tile designation.
+    let mut offered = false;
+    let mut prompts = Vec::new();
+    loop {
+        let Some(p) = t.prompt() else { break };
+        prompts.push(t.dump_prompt());
+        if t.counteract_offered(LISA_LINK) {
+            offered = true;
+            t.counteract(0, LISA_LINK).unwrap();
+        } else if p.kind == "player" {
+            // 「指定一个和你在同一地块的角色」 -- P1 stands on the landing tile.
+            let k = p
+                .options
+                .iter()
+                .position(|o| format!("{o:?}").contains("who") || format!("{o:?}").contains("1"))
+                .unwrap_or_else(|| panic!("P1 not offered: {}", t.dump_prompt()));
+            t.answer(0, k as i32).unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    assert!(offered, "the [反击] window offered 必然的联系: {prompts:?}");
+    assert_eq!(t.pos(0), 10, "skill teleported onto P1: {:?}", t.recent_keys(15));
+    assert!(
+        t.on_field(1, LISA_LINK),
+        "card placed on the target's field: p1={:?} prompts={prompts:?}",
+        t.field_ids(1)
+    );
+    assert!(
+        !t.on_field(0, LISA_LINK),
+        "card left the owner's hand/field: p0={:?}",
+        t.field_ids(0)
+    );
+}
+
+/// 必然的联系 discriminates the source: a **non-skill** teleport (Mor:纯真振翅
+/// is a hand card, not a `skill:` rule) must NOT offer the card even when the
+/// landing tile shares a character.
+#[test]
+fn lisa_link_does_not_offer_on_non_skill_teleport() {
+    const LISA_LINK: &str = "R:必然的联系（莉莎）";
+    let mut t = vanilla2();
+    t.give(0, &[LISA_LINK]);
+    // 纯真振翅: 「传送到移动方向20格后（不触发结算）」 -- put P1 on the landing.
+    t.set_pos(0, 5);
+    t.set_pos(1, 25);
+    t.dice(&[3]);
+    t.give_play(0, "Mor:纯真振翅").unwrap();
+    // Collect prompts; the card must never be offered.
+    let mut prompts = Vec::new();
+    loop {
+        let Some(_) = t.prompt() else { break };
+        prompts.push(t.dump_prompt());
+        assert!(
+            !t.counteract_offered(LISA_LINK),
+            "non-skill teleport must not offer 必然的联系: {prompts:?}"
+        );
+        t.decline();
+    }
+    // 纯真振翅: teleport 20 ahead (5 -> 25, onto P1), then 「立刻进行移动掷骰」
+    // walks the loaded face from there (25 + 3 = 28).
+    assert_eq!(t.pos(0), 28, "teleport then roll walks on: {:?}", t.recent_keys(15));
+    assert!(
+        !t.on_field(1, LISA_LINK),
+        "card stays in hand: p1={:?} prompts={prompts:?}",
+        t.field_ids(1)
+    );
+}
+
 // ================================================================ band skill
 
 #[test]

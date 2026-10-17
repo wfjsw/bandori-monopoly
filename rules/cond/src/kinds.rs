@@ -33,8 +33,7 @@ pub mod trig {
     pub const Abnormal: i64 = 14;
     pub const Target: i64 = 15;
     // 16 / 17 / 19 / 20 / 22 retired in ABI v84 (Stop / Teleport / Stun /
-    // Stay / Forced) -- never reuse.
-    pub const SkillTeleport: i64 = 18;
+    // Stay / Forced); 18 (SkillTeleport) retired in ABI v85 -- never reuse.
     pub const Exile: i64 = 21;
     pub const State: i64 = 23;
     pub const Counteracted: i64 = 24;
@@ -106,7 +105,7 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         // `Teleport` is MoveKind (1) only -- TriggerKind 17 retired in v84.
         ("Teleport", mv::Teleport),
         ("Walk", mv::Walk),
-        ("SkillTeleport", trig::SkillTeleport),
+        // "SkillTeleport" retired in ABI v85 (id 18 never reuse).
         ("Exile", trig::Exile),
         ("State", trig::State),
         ("Counteracted", trig::Counteracted),

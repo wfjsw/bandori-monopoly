@@ -29,6 +29,7 @@ fn win() -> WindowCtx {
             main: true,
             dir: 1,
             tags: Vec::new(),
+            by_skill: false,
         },
         roll_source: 0,
         abnormal: false,

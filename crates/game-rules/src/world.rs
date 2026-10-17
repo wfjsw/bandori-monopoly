@@ -110,6 +110,9 @@ pub struct TriggerMove {
     pub total: i32,
     /// `t.Move.Roll`; `None` when there is no face to show.
     pub roll: Option<i32>,
+    /// The move was shaped or started by a rule whose card id starts with
+    /// `skill:` (cond `move.by_skill`).
+    pub by_skill: bool,
 }
 
 /// The payment a `pay` / `paid` trigger is about.
