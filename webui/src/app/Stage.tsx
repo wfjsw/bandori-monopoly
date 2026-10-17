@@ -6,6 +6,7 @@
 
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { backdropUrl } from "./backdrops";
+import { cx } from "../core/cx";
 import { useEventListener } from "../hooks/dom";
 import { clearForced, isForced, setStageRotated, subscribeForced, usePortraitPhone } from "./rotation";
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
@@ -174,7 +175,7 @@ export function useCompactValue(): boolean {
  * pre-blurred (see `backdrops.ts`), so the cross-fade is a pure compositor
  * effect with no filter to re-rasterise.
  */
-function Backdrop({ src }: { src: string }) {
+function Backdrop({ src, snap }: { src: string; snap: boolean }) {
   const [plates, setPlates] = useState<{ a: string; b: string; front: "a" | "b" }>({ a: src, b: "", front: "a" });
   useEffect(() => {
     setPlates((p) => {
@@ -183,13 +184,20 @@ function Backdrop({ src }: { src: string }) {
       return { ...p, [back]: src, front: back };
     });
   }, [src]);
+  // While a scene change is being dissolved, the two plates must land on their
+  // new opacities in the same frame the swap is snapshotted -- a slow CSS
+  // cross-fade would be captured mid-flight and the backdrop would never
+  // appear to change.
   const plate = (k: "a" | "b") => (
-    <div className={plates.front === k ? `${s.backdrop} ${s.front}` : s.backdrop} style={{ backgroundImage: plates[k] ? `url("${plates[k]}")` : undefined }} />
+    <div
+      className={cx(plates.front === k ? `${s.backdrop} ${s.front}` : s.backdrop, snap && s.snap)}
+      style={{ backgroundImage: plates[k] ? `url("${plates[k]}")` : undefined }}
+    />
   );
   return <>{plate("a")}{plate("b")}</>;
 }
 
-export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
+export function Stage({ children, transitioning }: { children: ReactNode; transitioning: boolean }) {
   const tall = useStageFillValue();
   const { scale, w, h, compact, shift, rotated } = useStage(tall);
   setStageRotated(rotated);
@@ -203,14 +211,13 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
   const src = bg ? backdropUrl(bg) : "";
   return (
     <>
-      <Backdrop src={src} />
+      <Backdrop src={src} snap={transitioning} />
       <div
         className={s.stage}
         data-stage
         style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(calc(-50% + ${shift}px), -50%)${rotated ? " rotate(90deg)" : ""} scale(${scale})` }}
       >
         {children}
-        <div className={fading ? `${s.fader} ${s.on}` : s.fader} />
       </div>
     </>
   );
