@@ -321,12 +321,80 @@ fn want_to_grab_gives_stay() {
 
 // -- CRYCHIC:优雅的呐喊 ------------------------------------------------
 
+fn pass_cry(t: &mut Table, who: usize) {
+    t.m.world_mut().st.skip_move = true;
+    t.end(who).unwrap();
+    drain(t);
+}
+
+/// 规则书: 「[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。」
+/// An effect draw that hits the holder outside their own turn opens the
+/// counteraction; the [反击] half schedules a draw at the end of their next turn.
 #[test]
-fn elegant_cry_is_a_counter() {
+fn elegant_shout_offered_on_out_of_turn_effect_draw() {
     let mut t = Table::vanilla(2);
-    t.give(0, &["CRYCHIC:优雅的呐喊"]);
-    // 规则书: 「[反击] 当你在回合外受到抽卡效果时打出」
-    assert!(t.hand(0).contains(&"CRYCHIC:优雅的呐喊".to_string()));
+    // chuchu music is persona-locked to 珠手知由.
+    t.set_character_raw(0, "珠手知由");
+    // P0 holds the counter. P0's own card parks on P1 and, at P1's turn end
+    // with 1 crystal left, draws for the user (P0) -- an out-of-turn effect draw.
+    t.give(0, &["CRYCHIC:优雅的呐喊", "RAS:（chuchu）演奏我的音乐吧"]);
+    t.set_draw(0, &["PPP:Popipa"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.play(0, "RAS:（chuchu）演奏我的音乐吧").unwrap();
+    while t.prompt().is_some() {
+        if let Some(k) = t.option("PlayerId(1)") {
+            t.answer(0, k).unwrap();
+        } else {
+            decline_q(&mut t);
+        }
+    }
+    t.set_crystals(1, "RAS:（chuchu）演奏我的音乐吧", 1);
+    // P0's turn ends; P1's turn ends and the decayed crystal draws for P0.
+    pass_cry(&mut t, 0);
+    assert_eq!(t.turn(), 1, "now P1's turn");
+    t.m.world_mut().st.skip_move = true;
+    t.end(1).unwrap();
+    assert!(
+        t.counteract_offered("CRYCHIC:优雅的呐喊"),
+        "out-of-turn effect draw opens [反击]: {}",
+        t.dump_prompt()
+    );
+    let hand_before = t.hand(0).len();
+    t.counteract(0, "CRYCHIC:优雅的呐喊").unwrap();
+    drain(&mut t);
+    // 规则书: 「你的下回合结束时抽一张卡」 -- P0's next turn end.
+    assert_eq!(t.turn(), 0, "P0's next turn follows P1");
+    pass_cry(&mut t, 0);
+    assert_eq!(
+        t.hand(0).len(),
+        hand_before + 1,
+        "AtEnd half drew 1 at the end of the next turn: {:?}",
+        t.hand(0)
+    );
+}
+
+/// 规则书: 「当你在回合外受到抽卡效果时」 -- a self draw on your own turn is
+/// not 回合外 and must not offer the counteraction.
+#[test]
+fn elegant_shout_not_offered_on_in_turn_self_draw() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["CRYCHIC:优雅的呐喊", "PPP:Popipa"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    let r = t.play(0, "PPP:Popipa");
+    assert!(
+        !t.counteract_offered("CRYCHIC:优雅的呐喊"),
+        "in-turn self draw must not open [反击]: {} (play={r:?})",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+    assert!(r.is_ok(), "the draw still happens: {r:?}");
+    assert!(
+        t.hand(0).contains(&"CRYCHIC:优雅的呐喊".to_string()),
+        "the counter stays in hand: {:?}",
+        t.hand(0)
+    );
 }
 
 // -- CRYCHIC:是我自己的问题 ---------------------------------------------

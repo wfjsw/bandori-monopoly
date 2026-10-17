@@ -5,6 +5,10 @@
 //! >  ：[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。
 //!
 //! on an out-of-turn draw, draw 1 at the end of your next turn.
+//!
+//! The engine raises `drawOut` at the `ctx::draw` chokepoint when the draw is
+//! effect-caused and lands outside the drawer's own turn (wasm_rules
+//! `HostRequest::Draw`). `pre::MINE` is the drawer (「你」).
 
 use card_sdk::abi::{ChainKind, HookKind};
 use ruleset_core::ctx;
