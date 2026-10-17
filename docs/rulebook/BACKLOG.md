@@ -252,7 +252,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   `Card`/`SkillUsed` with `target == owner && actor != owner` (the counter link's
   `target` is the countered seat, `actor` the declarer). Force-move lands on
   `trigger::player_id` of the answered link (the immediate 「有玩家对你使用[反击]
-  后」); the full-turn history (ABI-04) stays a separate hole.
+  后」); the full-turn history (ABI-03) stays a separate hole.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high
@@ -611,8 +611,17 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **severity**: medium
 - **suggested batch**: counteraction windows
 - **locations**
-  - `rules/cards/card-mujica/src/cant_look_away.rs:48`
-- **rulebook**: filter on players counteracted this turn.
+  - `rules/cards/card-mujica/src/cant_look_away.rs` (`run`, `TODO(规则书)`)
+- **card**: `Mujica:无法将视线移开`
+- **rulebook clause**: 「使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算]」
+- **missing**: a per-turn counteraction history (who countered whom) the
+  engine lacks. `ctx::turn_key()` names the turn but cannot rebuild the list.
+  The body today moves only the immediate counterer
+  (`trigger::player_id()` of the answered link) — less than the book.
+- **fix needs**: SDK query for the per-turn counteraction history (declarer ×
+  countered seat) + cond vocab to filter it + append at the counter-declaration
+  loop (`crates/game-rules/src/wasm_rules.rs` ~5480, where `link.target` = the
+  countered seat and `actor`/`player_id` = the declarer) + ABI bump.
 - **current**: `ctx::turn_key()` covers half the filter; the list itself cannot be built.
 - **capability**: per-player counteraction-history list on the turn.
 
