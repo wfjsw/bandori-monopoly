@@ -731,12 +731,12 @@ pub fn together_01_x_formula_iff() {
     );
     // Band clause （2）「X大于拥有的反面的[P✽P粉丝]时…添加等量溢出的[奇迹水晶]
     // （最多10个）」 — X is the clause's X, not the clamped flip count.
-    let over = spec::skills_pp::band_idol_02_overflow(x, down);
+    let over = spec::skills_pp::band_idol_02_overflow(x, down, pre_cry);
     let post_cry = crystals_at(band_uid);
     kani::cover!(over > 0, "X > down grants overflow crystals");
     crate::kassert!(
         post_cry == pre_cry + over,
-        "C-PP-together-01 + band (2): overflow = min(X-down, 10) when X > down"
+        "C-PP-together-01 + band (2): overflow = min(X-down, 10-held) when X > down"
     );
     // The formula itself
     let expect_x = if up < down {

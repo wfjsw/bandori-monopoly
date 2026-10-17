@@ -837,10 +837,14 @@ both counters untouched. `flip_down` does not raise (clause （2） is only
 
 Band clause （2） lives on `skill:Pastel㏄Palettes:与偶像一起` as
 `On::Action(&[FansFlip], "actor == owner", …)`: when `X >` pre-flip
-face-downs it adds `min(X - down, 10)` 奇迹水晶 to **this card** and logs
-(`pastel_over`). 「…时」 state clause = event handler on the change, not an
-inline check at each flip site. No band card on the board → the raise still
-moves the counters; only the crystal grant is silently absent.
+face-downs it adds `min(X - down, 10 - held)` 奇迹水晶 to **this card** and
+logs the amount actually added (`pastel_over`). 「最多10个」 caps the
+card's **TOTAL** crystals at 10 (user ruling 2026-10-17), not the overflow
+amount — a pile already at/over 10 (clause （4）'s uncapped tick can
+overshoot) gets nothing and is never force-reduced. 「…时」 state clause =
+event handler on the change, not an inline check at each flip site. No band
+card on the board → the raise still moves the counters; only the crystal
+grant is silently absent.
 
 That replaces the retired `FlipEffect` / `FlipAfter` pair (TriggerKind
 94/104, never reuse).

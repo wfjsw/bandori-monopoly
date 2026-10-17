@@ -79,21 +79,31 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// `trigger::value()` is the effect's intended X; `fans::down` is still the
 /// pre-flip count (the raise happens before the dict writes). 「可为此卡添加」
 /// is the book's permissive may -- the overflow is applied.
+///
+/// 「最多10个」 caps this card's **TOTAL** crystals at 10 (user ruling
+/// 2026-10-17), not the overflow amount: grant `X - down`, clamped by the
+/// room left under 10. A pile already at/over 10 (clause （4）'s uncapped
+/// tick can overshoot) gets nothing — never force-reduce.
 fn on_fans_flip(player_id: i32) -> card_sdk::Asked {
     let x = ctx::trigger::value();
     let down = fans::down(player_id);
     if x <= down {
         return Ok(());
     }
-    let over = (x - down).min(10);
-    if over <= 0 {
+    let before = ctx::crystals();
+    if before >= 10 {
         return Ok(());
     }
-    // 「最多10个」 caps the **overflow amount**, not this card's total.
-    let _ = ctx::add_crystals(over, 0);
+    let after = ctx::add_crystals(x - down, 10)?;
+    let added = after - before;
+    if added <= 0 {
+        return Ok(());
+    }
+    // Log the amount actually added (clamped by the total-10 cap), not the
+    // requested overflow.
     ctx::log(
         player_id,
-        &Msg::new(key!("pastel_over")).i("n", over as i64),
+        &Msg::new(key!("pastel_over")).i("n", added as i64),
     );
     Ok(())
 }

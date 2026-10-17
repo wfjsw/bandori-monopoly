@@ -60,9 +60,9 @@ pub fn skill2_side_flip(target_down: i32, y: i32, actor_is_pp: bool, target_is_p
 }
 
 /// Band clause （2） overflow for the non-PP branch's per-seat `X = 1`.
-/// `min(1 - down, 10)` when `1 > down`, else 0.
-pub fn skill2_all_pp_overflow(target_down: i32) -> i32 {
-    band_idol_02_overflow(1, target_down)
+/// `min(1 - down, 10 - held)` clamped ≥ 0 when `1 > down`, else 0.
+pub fn skill2_all_pp_overflow(target_down: i32, held: i32) -> i32 {
+    band_idol_02_overflow(1, target_down, held)
 }
 
 // ===========================================================================
@@ -177,10 +177,13 @@ pub fn band_idol_01_fires_once(copies: i32) -> i32 {
 //  [P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。」
 // ===========================================================================
 
-/// Overflow crystals = `min(X - down, 10)`, and only when `X > down`.
-pub fn band_idol_02_overflow(x: i32, down: i32) -> i32 {
+/// Overflow crystals **added** = `min(X - down, 10 - held)` clamped ≥ 0, and
+/// only when `X > down`. `held` is this card's crystals before the grant;
+/// 「最多10个」 caps the card's **TOTAL** at 10 (user ruling 2026-10-17), not
+/// the overflow amount. A pile already at/over 10 adds nothing.
+pub fn band_idol_02_overflow(x: i32, down: i32, held: i32) -> i32 {
     if x > down {
-        (x - down).min(10).max(0)
+        (x - down).min(10 - held).max(0)
     } else {
         0
     }
@@ -232,9 +235,11 @@ pub fn aya_with_02_amount_mutant(pre_amount: i32, y: i32) -> i32 {
     (pre_amount - y * 99).max(0)
 }
 
-pub fn band_idol_02_overflow_mutant(x: i32, down: i32) -> i32 {
+/// Wrong total-cap of 11 (book: 10). Still held-aware so the disagreement
+/// region is `X - down > 10 - held`.
+pub fn band_idol_02_overflow_mutant(x: i32, down: i32, held: i32) -> i32 {
     if x > down {
-        (x - down).min(11).max(0)
+        (x - down).min(11 - held).max(0)
     } else {
         0
     }

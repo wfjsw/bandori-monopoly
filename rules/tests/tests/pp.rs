@@ -1074,6 +1074,43 @@ fn seeyou_clause2_overflow_crystals() {
     assert_eq!(band_xtal(&t, 0), 1, "clause (2) overflow X=5 - 4 downs = 1");
 }
 
+/// 「最多10个」 caps the card's TOTAL crystals at 10 (user ruling 2026-10-17),
+/// not the overflow amount. held=8, overflow=4 → adds 2, total 10.
+#[test]
+fn clause2_overflow_caps_total_at_10() {
+    let mut t = Table::vanilla(2);
+    place_band(&mut t, 0);
+    set_band_xtal(&mut t, 0, 8);
+    // together_here: up >= down → X = 5, downs = 2 → overflow 3? Need 4.
+    // seeyou: X = up+down. 2 up + 2 down → X=4, overflow = 4-2 = 2. Not 4.
+    // together with up < down: X = 5 + ceil((down-up)/2).
+    // up=0, down=2 → X = 5 + 1 = 6, overflow = 6-2 = 4. Perfect.
+    set_fans(&mut t, 0, 0, 2);
+    t.give_play(0, "PP:有你与我在这里共度").unwrap();
+    accept_echo(&mut t);
+    drain(&mut t);
+    assert_eq!(fans(&t, 0), (2, 0), "flipped the 2 face-downs");
+    // Requested overflow 4, room under the total-10 cap is 2 → adds 2.
+    assert_eq!(
+        band_xtal(&t, 0),
+        10,
+        "held=8 + overflow 4 clamped by total cap 10 → adds 2"
+    );
+}
+
+/// A pile already at/over the total cap gets nothing and is never reduced.
+#[test]
+fn clause2_overflow_no_add_when_full() {
+    let mut t = Table::vanilla(2);
+    place_band(&mut t, 0);
+    set_band_xtal(&mut t, 0, 12); // clause (4)'s uncapped tick can overshoot
+    set_fans(&mut t, 0, 0, 2);
+    t.give_play(0, "PP:有你与我在这里共度").unwrap();
+    accept_echo(&mut t);
+    drain(&mut t);
+    assert_eq!(band_xtal(&t, 0), 12, "full pile is left alone (no force-reduce)");
+}
+
 /// jennifer's owner flip is X=1 with 0 face-downs → overflow 1 crystal on
 /// the **owner's** band card (clause （2）'s 「你」 is this instance's owner).
 #[test]
