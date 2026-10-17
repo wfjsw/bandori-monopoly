@@ -19,18 +19,46 @@ const ECHO: &str = "PP:[衍生]共鸣";
 
 // ---------------------------------------------------------------- helpers
 
+/// Fan markers are counters of the Pastel✽Palettes band skill
+/// (`docs/CARDS.md` → 「Pastel fans owned by the band skill」). Ensure one
+/// live instance exists and return its field uid: the holder's own copy when
+/// they have one (clause （2） keys on that instance's owner), else any other
+/// seat's copy (the `fansGrant`/`fansFlip` fallback receiver), else place a
+/// fresh one on `who`. No band card on the field → every grant/flip is a no-op.
+/// Same shape as `pp.rs::ensure_band` (SKILL-01).
+fn ensure_band(t: &mut Table, who: usize) -> i32 {
+    if let Some(f) = t.field(who).into_iter().find(|f| f.card == BAND_SKILL) {
+        return f.uid;
+    }
+    for p in 0..t.n {
+        if p == who {
+            continue;
+        }
+        if let Some(f) = t.field(p).into_iter().find(|f| f.card == BAND_SKILL) {
+            return f.uid;
+        }
+    }
+    t.place_raw(who, BAND_SKILL)
+}
+
 fn set_fans(t: &mut Table, who: usize, up: i32, down: i32) {
     // Update the two fan counters in place -- do not replace the whole
     // tokens vector (that would wipe `skillBlock` and every other token).
-    // Same shape as `pp.rs::set_fans` (SKILL-01).
+    // Stamp `Counter.instance` to the band-skill field uid so flips/grants
+    // have a receiver and `destroy_instance_units` / `purge_orphaned_markers`
+    // see a live owner (SKILL-01).
+    let uid = ensure_band(t, who);
     let p = &mut t.m.world_mut().st.players[who];
     for (name, value) in [("P✽P粉丝(正)", up), ("P✽P粉丝(反)", down)] {
         match p.tokens.iter_mut().find(|c| c.name == name) {
-            Some(c) => c.value = value,
+            Some(c) => {
+                c.value = value;
+                c.instance = Some(uid);
+            }
             None => p.tokens.push(Counter {
                 name: name.into(),
                 value,
-                instance: None,
+                instance: Some(uid),
             }),
         }
     }
@@ -597,6 +625,16 @@ fn seeyou_flip_owned_count() {
                 down - flipped
             ));
         }
+        // Clause （2） (band sheet): X is the owned count (up+down), so the
+        // face-ups make X > the pre-flip face-downs and the overflow is `up`
+        // crystals (cap 10) on the band card.
+        let c = band_xtal(&t, 0);
+        if c != up.min(10) {
+            return Err(format!(
+                "C-PP-seeyou-03 clause (2): band crystals {c}, expected {} (X {owned} - {down} downs)",
+                up.min(10)
+            ));
+        }
         Ok(())
     })
     .expect("C-PP-seeyou-03");
@@ -842,6 +880,9 @@ fn flower_pass_discards_and_echo_pays() {
 fn jennifer_place_and_agency_pass() {
     forall(4, 0x4A_454E, |rng, _i| {
         let mut t = Table::vanilla(2);
+        // The pass grants a fan to the user and flips one of the owner's --
+        // both are `fansGrant` / `fansFlip` messages that need a live band card.
+        ensure_band(&mut t, 0);
         t.give(0, &["PP:找回珍妮弗"]);
         t.play(0, "PP:找回珍妮弗")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -935,7 +976,7 @@ fn ranger_steps_by_count() {
         set_fans(&mut t, 0, 0, 0);
         t.own(0, &[10]);
         t.set_houses(10, 1);
-        t.place_raw(0, BAND_SKILL);
+        ensure_band(&mut t, 0);
         t.place_raw(0, "PP:再次闪耀");
         t.place_raw(0, "PP:可爱又强壮的花朵");
         set_band_xtal(&mut t, 0, rng.range(0, 3));
@@ -1646,6 +1687,10 @@ fn shine_again_rescue_on_short_pay() {
     forall(4, 0x53_4849, |rng, _i| {
         let mut t = Table::vanilla(2);
         t.place_raw(0, "PP:再次闪耀");
+        // The rescue's fan is a `fansGrant` to the band skill; without a
+        // live band card the grant is a no-op and the `fans >= 1` book
+        // assertion below would fail.
+        ensure_band(&mut t, 0);
         // Own 购物中心 (tile 1, price 3000) so the rescue is 600. Land on
         // 江户川公园 (tile 7, base rent 140) without wrapping through CiRCLE
         // (its reward would cover the shortfall). 50 < 140 <= 650.
