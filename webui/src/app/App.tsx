@@ -1,6 +1,6 @@
 // App shell: boot gate, History API routes with the scene fade (0.14 s each way), BGM per screen, popups and toasts.
 
-import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { playSceneBgm, sfx, unlockAudio } from "../core/audio";
 import { useLangVersion, useProfile } from "../core/hooks";
 import { preloadRoute, warmAllWhenIdle, within } from "../core/preload";
@@ -17,12 +17,7 @@ import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
 import { RotateHint } from "./RotateHint";
 import { Console } from "../console/Console";
-
-// Rarely visited scenes load as separate chunks (core/preload.ts warms them).
-const Deck = lazy(() => import("../scenes/deck/Deck").then((m) => ({ default: m.Deck })));
-const Gallery = lazy(() => import("../scenes/gallery/Gallery").then((m) => ({ default: m.Gallery })));
-const Replays = lazy(() => import("../scenes/replay/Replays").then((m) => ({ default: m.Replays })));
-const ReplayPlayer = lazy(() => import("../scenes/replay/ReplayPlayer").then((m) => ({ default: m.ReplayPlayer })));
+import { LazyScene } from "./scenes";
 
 const BACKDROP: Record<Route["name"], string> = { menu: "bg_common", lobby: "bg_live", room: "bg_live", play: "bg_band", gallery: "bg_band", deck: "bg_band", replay: "bg_common", replayView: "bg_common" };
 const BGM: Record<Route["name"], string> = { menu: "menu", lobby: "lobby", room: "lobby", play: "select", gallery: "gallery", deck: "deck", replay: "menu", replayView: "board" };
@@ -30,13 +25,13 @@ const BGM: Record<Route["name"], string> = { menu: "menu", lobby: "lobby", room:
 function scene(r: Route): ReactNode {
   switch (r.name) {
     case "menu": return <Menu />;
-    case "gallery": return <Gallery />;
-    case "deck": return <Deck />;
+    case "gallery": return <LazyScene name="gallery" />;
+    case "deck": return <LazyScene name="deck" />;
     case "lobby": return <Lobby />;
     case "room": return <Room id={r.id} />;
     case "play": return <Play id={r.id} />;
-    case "replay": return <Replays />;
-    case "replayView": return <ReplayPlayer />;
+    case "replay": return <LazyScene name="replay" />;
+    case "replayView": return <LazyScene name="replayView" />;
   }
 }
 
@@ -74,13 +69,12 @@ export function App() {
     if (ready) warmAllWhenIdle();
   }, [ready]);
 
-  // Fade out while the next scene's art loads, swap (backdrop + BGM) with the
-  // new scene already decoded, then fade in. The preload is capped so a slow
-  // network delays the swap by at most 450ms.
-  const { shown, fading } = useCrossfade(ready ? target : null, {
+  // Dissolve to the next scene once its art is loaded. The preload is capped so
+  // a slow network delays the swap by at most 450ms.
+  const { shown, fading, dimmed } = useCrossfade(ready ? target : null, {
     eq: (a, b) => href(a) === href(b),
     outMs: 140,
-    inMs: 0,
+    inMs: 140,
     prepare: (r) => within(preloadRoute(r), 450),
     onSwap: (r) => {
       closeAllModals();
@@ -92,10 +86,13 @@ export function App() {
   const booted = ready && profile;
   return (
     <>
-      <Stage fading={fading}>
+      <Stage transitioning={fading}>
         {/* Remount on language change so every already-rendered string is re-read. */}
         <div key={lang} style={{ position: "absolute", inset: 0 }}>
-          {booted ? shown && <div key={href(shown)}><Suspense fallback={null}>{scene(shown)}</Suspense></div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
+          {/* `dimmed` fades this layer out to the backdrop on the fallback path. */}
+          <div style={{ position: "absolute", inset: 0, opacity: dimmed ? 0 : 1, transition: "opacity 0.14s" }}>
+            {booted ? shown && <div key={href(shown)}><Suspense fallback={null}>{scene(shown)}</Suspense></div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
+          </div>
         </div>
         <ModalHost />
         <InspectPreviewHost />

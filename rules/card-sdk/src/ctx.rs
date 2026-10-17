@@ -762,17 +762,15 @@ pub fn take_from_hand(player_id: i32, card: &str) -> bool {
 ///
 /// Under `cfg(kani)` the result is a `Vec<String>` of **length 0 or 4**
 /// (never 1..=3): empty pile → empty vec; otherwise 4 slots where unused
-/// slots repeat earlier facade ids. The unmodified body's
-/// `ids.contains` dedups the repeats, so `ids` still holds exactly the
-/// distinct cards — and every `Vec<String>` walk in the body (`contains` /
-/// `map().collect()` / `drop_glue`) sees a **constant** length 0 or 4, so
-/// it unwinds to 4 instead of the global bound (prompt profile: fold 31,
-/// `drop_glue<[String]>` 62).
+/// slots repeat earlier facade ids. Short static strings (`"c0"`..`"c3"`)
+/// — no `from_raw_parts`, no arena intern, no `postcard`. The unmodified
+/// body's `ids.contains` dedups the repeats, so `ids` still holds exactly
+/// the distinct cards — and every `Vec<String>` walk in the body sees a
+/// **constant** length 0 or 4.
 #[cfg(kani)]
 pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let need = unsafe { sys::cards_in(player_id, pile as i32, 0, 0) };
     if need < 2 {
-        // 0 cards (`need = 1 + n`, n=0) or a host error — empty (constant len 0).
         return Vec::new();
     }
     let (p, scratch) = out_buf(need as usize);
@@ -781,29 +779,16 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // 1-byte facade strings. `from_raw_parts` over a **real 1-byte
-    // allocation** (not a static — kani's `__rust_dealloc` rejects non-malloc
-    // pointers and that vacuities the covers) keeps `len` the constant 1 so
-    // `String::eq` is a 1-byte `memcmp` (v3 profile: memcmp 0). The
-    // allocation is the system allocator kani tracks.
+    // Short static strings — `String::from` over a literal is a single
+    // small `alloc` + byte copy (no `from_raw_parts`, no `memchr`).
+    const SLOTS: [&str; 4] = ["c0", "c1", "c2", "c3"];
     fn slot_str(buf: &[u8], i: usize) -> String {
         let slot = (if 1 + i < buf.len() { buf[1 + i] } else { 2 }) & 3;
-        let layout = core::alloc::Layout::from_size_align(1, 1).unwrap();
-        let p = unsafe { std::alloc::alloc(layout) };
-        if p.is_null() {
-            return String::new();
-        }
-        unsafe {
-            *p = slot;
-            String::from_raw_parts(p, 1, 1)
-        }
+        String::from(SLOTS[slot as usize])
     }
-    // Real slots (branch tree, 0..=3 of them).
     let s0 = slot_str(&buf, 0);
     let s1 = slot_str(&buf, 1);
     let s2 = slot_str(&buf, 2);
-    // Always 4 elements; pad with repeats so `len` is the constant 4.
-    // `ids.contains` in the body dedups.
     let a = if need >= 2 { s0.clone() } else { s1.clone() };
     let b = if need >= 3 { s1.clone() } else { a.clone() };
     let c = if need >= 4 { s2.clone() } else { b.clone() };
@@ -2832,6 +2817,29 @@ pub fn do_move_roll(player_id: i32) -> i32 {
 
 /// Is this card in play at the player?
 /// Ids of the player's placed field cards, in placement order.
+#[cfg(kani)]
+pub fn placed_cards(player_id: i32) -> Vec<String> {
+    // Short static strings — no `postcard`, no `from_raw_parts`.
+    let cap = 16;
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::placed_cards(player_id, p, cap) };
+    if n <= 0 {
+        return Vec::new();
+    }
+    let buf = out_read(p, n, scratch);
+    const SLOTS: [&str; 4] = ["p0", "p1", "p2", "p3"];
+    let count = buf.first().copied().unwrap_or(0).min(4) as usize;
+    let mut out = Vec::new();
+    let mut i = 0usize;
+    while i < count {
+        let slot = buf.get(1 + i).copied().unwrap_or(0) & 3;
+        out.push(String::from(SLOTS[slot as usize]));
+        i += 1;
+    }
+    out
+}
+
+#[cfg(not(kani))]
 pub fn placed_cards(player_id: i32) -> Vec<String> {
     let cap = 4096;
     let (p, scratch) = out_buf(cap as usize);

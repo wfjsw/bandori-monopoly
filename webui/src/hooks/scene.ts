@@ -2,14 +2,24 @@
 // use to swap one scene for another without a hard cut.
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useLatestRef } from "./latest.ts";
 
 export interface Crossfade<K> {
   /** The scene to render right now (lags `key` while fading out). */
   shown: K | null;
-  /** True while the fader should cover the swap. */
+  /** True while a scene change is in flight. */
   fading: boolean;
+  /**
+   * True while the outgoing scene is dissolving away on the no-View-Transition
+   * fallback. Put this on the scene layer's `opacity`; the blurred backdrop
+   * shows through, so there is never a flat plate over the screen.
+   */
+  dimmed: boolean;
 }
+
+/** Browsers that can dissolve between the two scenes as composited snapshots. */
+const supportsViewTransition = typeof document !== "undefined" && "startViewTransition" in document;
 
 // Is a scene transition in flight? Expensive work that would jank the fade
 // (Live2D's GL setup in particular) waits for this to go idle.
@@ -45,17 +55,21 @@ export function whenTransitionIdle(maxWaitMs = 600): Promise<void> {
 }
 
 /**
- * Cross-fade between successive `key`s. The outgoing scene stays under the
- * fader for `outMs`, then `onSwap` runs and `shown` flips to the new key; the
- * fader lifts `inMs` later. `initial` is the scene already on screen (no fade
- * out of it); without one the first key appears after a single tick and fades
- * in. A key that changes again mid-fade restarts from whatever is still on
- * screen -- the pending swap is dropped.
+ * Dissolve between successive `key`s. On a browser with the View Transitions
+ * API the old scene stays live while `prepare` loads the new one, then both
+ * are snapshotted and composited into each other -- no plate ever covers the
+ * screen, so there is no blank step between the two. Elsewhere the scene layer
+ * fades out to the backdrop, the swap runs under it, and it fades back in.
+ *
+ * `initial` is the scene already on screen (no dissolve out of it); without
+ * one the first key appears after a single tick. A key that changes again
+ * mid-transition restarts from whatever is still on screen -- the pending
+ * swap is dropped.
  *
  * `eq` decides when two keys name the same scene (default `===`). A caller may
  * rebuild its key object every render (a route object, say); `eq` is what
- * keeps that from restarting the fade or -- worse -- clearing the lift timer
- * and leaving the fader up. While a fade is already running toward an `eq`
+ * keeps that from restarting the dissolve or -- worse -- clearing its timers
+ * and leaving it half-done. While a dissolve is already running toward an `eq`
  * key, this effect leaves the timers alone.
  */
 export function useCrossfade<K>(
@@ -66,7 +80,7 @@ export function useCrossfade<K>(
     initial?: K | null;
     eq?: (a: K, b: K) => boolean;
     onSwap?: (key: K) => void;
-    /** Awaited after the fade-out, before the swap (preloading); the fader stays up meanwhile. */
+    /** Awaited before the swap (preloading). The old scene stays up meanwhile. */
     prepare?: (key: K) => Promise<unknown>;
   } = {},
 ): Crossfade<K> {
@@ -76,6 +90,7 @@ export function useCrossfade<K>(
   const eq = useLatestRef(opts.eq ?? ((a: K, b: K) => a === b));
   const [shown, setShown] = useState<K | null>(() => opts.initial ?? null);
   const [fading, setFading] = useState(false);
+  const [dimmed, setDimmed] = useState(false);
   // Read at effect time so the swap check does not put `shown` in the deps
   // (which would cancel the in-fade timer the moment it was scheduled).
   const shownRef = useLatestRef(shown);
@@ -92,13 +107,14 @@ export function useCrossfade<K>(
   useEffect(() => {
     if (key === null) return;
     const cur = shownRef.current;
-    // Already on this scene: drop any stale pending fade and make sure the
-    // fader is down (heals a swap that raced a re-render).
+    // Already on this scene: drop any stale pending dissolve and make sure it
+    // is not left half-done (heals a swap that raced a re-render).
     if (cur !== null && eq.current(cur, key)) {
       pending.current = null;
       window.clearTimeout(timers.current.swap);
       window.clearTimeout(timers.current.lift);
       setFading(false);
+      setDimmed(false);
       return;
     }
     // Already fading toward this same scene: leave the timers running.
@@ -109,19 +125,51 @@ export function useCrossfade<K>(
     window.clearTimeout(timers.current.lift);
     pending.current = key;
     setFading(true);
-    // The preload starts now and overlaps the fade-out; the swap waits for both.
+    // The preload starts now and overlaps the dissolve; the swap waits for it.
     const ready = Promise.resolve(prepare.current?.(key)).catch(() => undefined);
-    timers.current.swap = window.setTimeout(() => {
+    const swap = () => {
+      onSwap.current?.(key);
+      setShown(key);
+      pending.current = null;
+    };
+    const settle = () => {
+      setFading(false);
+      setDimmed(false);
+    };
+
+    if (supportsViewTransition) {
+      // The old scene stays on screen while the art loads (live, not frozen);
+      // only the swap is snapshotted and dissolved into. No plate goes over the
+      // screen at any point, so there is nothing blank in between.
       void ready.then(() => {
-        // A newer key took over while we waited: this swap is stale.
         if (pending.current !== key) return;
-        onSwap.current?.(key);
-        setShown(key);
-        pending.current = null;
-        if (inMs <= 0) setFading(false);
-        else timers.current.lift = window.setTimeout(() => setFading(false), inMs);
+        const vt = document.startViewTransition(async () => {
+          flushSync(swap);
+          // Let the new scene paint before the browser snapshots it: a snapshot
+          // taken on the commit alone can land on a half-built frame and the
+          // dissolve would fade into that instead of into the scene.
+          await Promise.race([
+            new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res()))),
+            new Promise<void>((res) => setTimeout(res, 80)),
+          ]);
+        });
+        void vt.finished.then(settle, settle);
       });
-    }, cur === null ? 0 : outMs);
+    } else {
+      // No snapshot dissolve: fade the scene layer out to the backdrop, swap
+      // under it, fade back in. The backdrop is continuous, so the worst case
+      // is a soft dissolve rather than a flat flash.
+      setDimmed(true);
+      timers.current.swap = window.setTimeout(() => {
+        void ready.then(() => {
+          if (pending.current !== key) return;
+          swap();
+          setDimmed(false);
+          if (inMs <= 0) setFading(false);
+          else timers.current.lift = window.setTimeout(settle, inMs);
+        });
+      }, cur === null ? 0 : outMs);
+    }
   }, [key, outMs, inMs, onSwap, prepare, eq, shownRef]);
 
   // Unmount: stop the timers so a lift cannot fire into a dead tree.
@@ -130,5 +178,5 @@ export function useCrossfade<K>(
     window.clearTimeout(timers.current.lift);
   }, []);
 
-  return { shown, fading };
+  return { shown, fading, dimmed };
 }

@@ -1,9 +1,10 @@
 // Scene preloading: fetch + decode a scene's images (and its code chunk)
 // before the shell swaps to it, so the new scene paints complete instead of
-// popping in piece by piece under the lifting fader.
+// popping in piece by piece mid-dissolve.
 
 import type { Route } from "../app/router";
 import { backdropUrl } from "../app/backdrops";
+import { loadSceneChunk } from "../app/scenes";
 import { cardArt, charArt, sceneImg } from "./assets";
 import { D, rules } from "./data";
 import { getProfile } from "./store";
@@ -23,12 +24,12 @@ const IMAGES: Partial<Record<Name, string[]>> = {
   gallery: ["card_back"],
 };
 
-/** Code chunks of the lazily loaded scenes. */
+/** Code chunks of the lazily loaded scenes (shared with `app/scenes.ts`). */
 const CHUNKS: Partial<Record<Name, () => Promise<unknown>>> = {
-  gallery: () => import("../scenes/gallery/Gallery"),
-  deck: () => import("../scenes/deck/Deck"),
-  replay: () => import("../scenes/replay/Replays"),
-  replayView: () => import("../scenes/replay/ReplayPlayer"),
+  gallery: () => loadSceneChunk("gallery"),
+  deck: () => loadSceneChunk("deck"),
+  replay: () => loadSceneChunk("replay"),
+  replayView: () => loadSceneChunk("replayView"),
 };
 
 const done = new Map<string, Promise<void>>();
