@@ -1494,3 +1494,38 @@ Renames mean the next central pass should select the new harness names.
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
 weakening (tritone-02 `owed<=0` limb matches `arm_pay`'s zero-pay no-op — not
 a weaker pin); no production-file edits (only `rules/kani/**`).
+
+## triage3 batch 13 — skills_mor central non-success rows (kani-pass@fc3ff3e1)
+
+Central pass rows (unit `skills_mor`, features `band-morfonica,skills-groups,skills-personas`).
+Per-proof detail lives in `docs/rulebook/spec/kani/mor.md` § skills_mor triage.
+
+| id | before | failing assertion / phase | class | action |
+|---|---|---|---|---|
+| `touko_01_fire_iff` + `touko_01_user1_fire_iff` | UNWINDING 170/145 s | `unwinding assertion loop 0` at `pass_fire::pass_world` `while i < 60` (find first CiRCLE), `skills_mor.rs:458` iteration 32 | **A** | 8×8 chunk walk (true N 60 → 8). Same recipe as `ir_fill` / TUNING §2 |
+| `nanami_01_fire_iff` + `nanami_01_user1_fire_iff` | UNWINDING 156/118 s | same `pass_world` 60-trip | **A** | same |
+| `touko_01_mutant_is_detected` | UNWINDING 116 s | same `pass_world` | **A** | same |
+| `touko_01_noop_not_circle` | UNWINDING 39 s (`#[kani::unwind(8)]`) | `fill_pass_circle` `while i < 60` (fill `SetId::Circle`), `skills_mor.rs:69` iteration 8 | **A** | 8×8 chunk walk (true N 60 → 8) |
+| `tsukushi_01_redirect_iff` + `_user1_` + `_mutant_is_detected` | TIMEOUT 1800 s ×3 | BMC/symex only (never SAT). Profile: memchr_naive 2788 + memchr_aligned 894 + memcmp 864 + `PadAdapter::write_str` recursion 33 + `std::fmt::format`. Root: body `rec_key` = `alloc::format!("skill.tsugushi.rec:{p}")` → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. Symbolic `who = others.get(ask_pick)` made Display unroll all digit paths on a symbolic-length string. Msg facade already O(1) | **E** | (1) `ask_pick` returns a literal 0 when `options.len()<=1` (forced pick; `rules/card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump (`rules/card-sdk/src/kani_alloc.rs`) kills system-allocator OOM/`RawVec` CBMC paths. Body `format!` is production — cannot edit |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch.
+
+### Book quotes checked
+
+* touko-01 / nanami-01: 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」 / cap 2
+* tsukushi-01: 「当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，
+  发送给对方一个X（占位）标记并记录获得因此效果获得资金的数量」
+
+Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`):
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features band-morfonica,skills-groups,skills-personas` — Finished, no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed).
+
+No CBMC re-times this batch: central pass `skills_mor` still has its own `cbmc`
+(~5.5 GB RSS) and `free -m` available is under the 12000 MB gate with that
+running. All nine rows are **needs re-time**.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening; production bodies untouched. Allowed Kani-only surface used:
+`rules/kani/**` + `cfg(kani)` in `rules/card-sdk`.

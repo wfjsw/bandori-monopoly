@@ -109,6 +109,59 @@ verdict is CBMC's `VERIFICATION:- …` line.
 
 ---
 
+## skills_mor triage (triage3 batch 13)
+
+Central pass `kani-pass@fc3ff3e1`, unit `skills_mor`, features
+`band-morfonica,skills-groups,skills-personas`. Classes: A bound-low /
+B setup-spec / C host-model / D rulebook gap / E perf / F vacuous.
+
+| harness | before | class | root cause | fix | re-time |
+|---|---|---|---|---|---|
+| `touko_01_fire_iff` | UNWINDING 170 s | **A** | `pass_world` `while i < 60` (find first CiRCLE) vs `#[kani::unwind(32)]`. Log: `Not unwinding … skills_mor.rs:458` iteration 32 | 8×8 chunk walk (true N was 60; now 8) | yes |
+| `touko_01_user1_fire_iff` | UNWINDING 145 s | **A** | same `pass_world` 60-trip | same | yes |
+| `nanami_01_fire_iff` | UNWINDING 156 s | **A** | same | same | yes |
+| `nanami_01_user1_fire_iff` | UNWINDING 118 s | **A** | same | same | yes |
+| `touko_01_mutant_is_detected` | UNWINDING 116 s | **A** | same (`pass_world`) | same | yes |
+| `touko_01_noop_not_circle` | UNWINDING 39 s (unwind 8) | **A** | `fill_pass_circle` `while i < 60` (fill `SetId::Circle`) vs unwind 8. Log: `skills_mor.rs:69` iteration 8 | 8×8 chunk walk (true N 60 → 8) | yes |
+| `tsukushi_01_redirect_iff` | TIMEOUT 1800 s | **E** | BMC/symex never reached SAT. Profile: `memchr_naive` 2788 + `memchr_aligned` 894 + `memcmp` 864 + `PadAdapter::write_str` **recursion 33** + `std::fmt::format`. Source: body `rec_key` = `alloc::format!("skill.tsugushi.rec:{p}")` (`tsugushi_monitor.rs`) → `fmt::write` → `PadAdapter` → `split('\n')` → memchr. `who = others.get(ask_pick)` left symbolic so Display unrolls all digit paths on a symbolic-length string. Msg facade is already O(1); the cliff is body `format!` | (1) `ask_pick` now returns a **literal** 0 when `options.len()<=1` (forced pick; `card-sdk` cfg(kani)) (2) TUNING §11 `kani_alloc` bump landed (`card-sdk/kani_alloc.rs`, cfg(kani)) so alloc-error/`RawVec` paths die. Body `format!` itself cannot be edited (production) | yes |
+| `tsukushi_01_user1_redirect_iff` | TIMEOUT 1800 s | **E** | same `rec_key` format! / PadAdapter / memchr | same | yes |
+| `tsukushi_01_mutant_is_detected` | TIMEOUT 1800 s | **E** | same (accept limb always reaches `rec_key`) | same | yes |
+
+### Loop bounds (true needed unwind N)
+
+| loop | before | after 8×8 | note |
+|---|---|---|---|
+| `pass_world` find-first CiRCLE (`skills_mor.rs`) | **60** (static trip) | 8 | early-exit still visits up to 60 under the old bound |
+| `fill_pass_circle` Circle-set fill | **60** | 8 | must visit all 60 tiles; chunk walk is the TUNING recipe |
+| `PadAdapter::write_str` recursion (tsukushi) | ≥ **33** (hit at 32+1) | n/a | string-length bound; raising unwind fights memchr. Class E |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch.
+
+### Book quotes checked
+
+* touko-01 / nanami-01: 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」 / cap 2
+  (`docs/rulebook/cards.json`, skill sheet)
+* tsukushi-01: 「当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，
+  发送给对方一个X（占位）标记并记录获得因此效果获得资金的数量」
+
+### Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`)
+
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features band-morfonica,skills-groups,skills-personas` — Finished, no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed).
+
+No CBMC re-times this batch: central pass `skills_mor` is still running its own
+`cbmc` (~5.5 GB RSS) and `free -m` available is below the 12000 MB gate once
+that is counted. All nine rows are **needs re-time**.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening; production bodies untouched. Allowed Kani-only surface used:
+`rules/kani/**` + `cfg(kani)` in `rules/card-sdk` (ask_pick forced-pick fold,
+`kani_alloc` bump).
+
+---
+
 ## Harness verdict table
 
 A harness counts as **PROVEN** only when CBMC is SUCCESSFUL **and** the
