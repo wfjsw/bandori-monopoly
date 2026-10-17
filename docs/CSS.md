@@ -106,14 +106,13 @@ the ring, a dialogue over a stand that owns a stacking context) is exempt.
 | `--z-auto-banner` | `45` | auto-mode banner |
 | `--z-hosted` | `60` | stage-hosted card peek (escapes scroll boxes) |
 | `--z-toast` | `80` | toasts |
-| `--z-fader` | `90` | scene fader |
 | `--z-console` | `100` | dev console (fixed, over everything) |
 
 `--z-transport` is the replay playback bar (and its show handle). It sits
 above every in-board surface the viewer may still be inspecting -- hand dock
 (30), field row (15), peeks / previews (31–32), card flash (25) -- so
 play / pause / seek stay clickable while a hand card is up. It sits below the
-interruptions: a modal (40), toast (80) or the scene fader (90) covers the
+interruptions: a modal (40) or toast (80) covers the
 transport, because those own the screen until answered. The status banners
 (`--z-chrome-banner`) ride one step above the transport so a divergence /
 verify notice is never buried under the bar.
