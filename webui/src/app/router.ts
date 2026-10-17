@@ -5,6 +5,7 @@
 //   /replay  /replay/view
 
 import { useSyncExternalStore } from "react";
+import { isNavLockEntry, rearmNavLock } from "./navLock.ts";
 
 export type Route =
   | { name: "menu" | "gallery" | "deck" | "lobby" | "replay" }
@@ -35,14 +36,43 @@ export function href(r: Route): string {
 
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((cb) => cb());
-window.addEventListener("popstate", emit);
+
+/** The path `lockRoute` is holding, or null when nothing is locked. */
+let lockPath: string | null = null;
+/** Nesting depth, so StrictMode's simulated remount does not double-arm. */
+let lockDepth = 0;
+
+window.addEventListener("popstate", () => {
+  // Back / edge-swipe popped us. Put the sentinel (and the locked path) back
+  // before any subscriber can swap the screen.
+  if (lockPath) rearmNavLock(history, location, lockPath);
+  emit();
+});
 
 export function navigate(r: Route, opts: { replace?: boolean } = {}): void {
   const path = href(r);
   if (location.pathname === path) return;
-  if (opts.replace) history.replaceState(null, "", path);
+  // A lock sentinel on top is not a real screen: leaving through it replaces
+  // it, so Back after an intentional leave lands on the pre-match screen
+  // instead of a stale /play entry.
+  if (opts.replace || isNavLockEntry(history.state)) history.replaceState(null, "", path);
   else history.pushState(null, "", path);
   emit();
+}
+
+/**
+ * Hold the current route against Back and the mobile edge-swipe back gesture
+ * (the match screen: a swipe must not drop a loaded game). Arms a same-document
+ * sentinel above the real entry -- the swipe lands there and is undone -- and
+ * `navigate()` consumes it when the screen leaves through the UI. The disposer
+ * only unlocks; it never trims history, so a StrictMode remount is safe.
+ */
+export function lockRoute(): () => void {
+  if (lockDepth++ === 0) lockPath = location.pathname;
+  rearmNavLock(history, location, lockPath!);
+  return () => {
+    if (--lockDepth === 0) lockPath = null;
+  };
 }
 
 /** The current path (re-renders when it changes). */
