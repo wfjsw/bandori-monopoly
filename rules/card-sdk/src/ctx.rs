@@ -1592,7 +1592,8 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
 /// (e.g. `ruleset_core::kind::PassRewardAffected`); `value` is the trigger's `value`.
 /// Returns true when the link settled (nobody cancelled it). A hook that
 /// prompts pauses the run (`Err(Prompt)`).
-pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prompt> {
+pub fn raise(player_id: i32, kind: impl Into<TriggerKind>, value: i32) -> Result<bool, Prompt> {
+    let kind = kind.into();
     asked(unsafe { sys::raise(player_id, kind.as_i32(), value) }).map(|v| v != 0)
 }
 

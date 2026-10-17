@@ -6,13 +6,19 @@
 //! Wire codes are stable (ABI v70).
 //!
 //! Call sites read `ruleset_core::kind::PassRewardAffected` (etc.). The values
-//! share `TriggerKind`'s id space (`HookKind` / `ChainKind` are aliases).
+//! share `TriggerKind`'s id space. Each rule-defined kind is declared on its
+//! typed side -- today every one is [`ActionKind`] (an `On::Action` listener).
+//!
+//! A future rule-defined **FILTER** kind would declare `FilterKind(id)` here
+//! **and** teach `TriggerKind::is_filter()` (or a `CUSTOM_FILTERS` table beside
+//! `CUSTOM_LINKS` in `card-sdk::abi`) about that id, so the typed sets keep
+//! mirroring `is_filter()` exactly. Known gap: no rule-defined filter kinds yet.
 
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::ActionKind;
 
 // ------------------------------------------------------- raise-point ids
 
@@ -31,18 +37,21 @@ pub const CHARGE_PAYING: i32 = 78;
 pub const FANS_FLIP: i32 = 107;
 
 /// 「经过奖励受影响」 -- a [反击] to the pass-reward pick, before the payout.
-pub const PassRewardAffected: TriggerKind = TriggerKind(PASS_REWARD_AFFECTED);
+/// Dual-role: also a [`card_sdk::abi::ChainKind`] (`CUSTOM_LINKS` 26).
+pub const PassRewardAffected: ActionKind = ActionKind(PASS_REWARD_AFFECTED);
 /// 「每当你消耗火罐时」 -- after the spend commits.
-pub const FireSpent: TriggerKind = TriggerKind(FIRE_SPENT);
+pub const FireSpent: ActionKind = ActionKind(FIRE_SPENT);
 /// 「使用自己原有的技能（2）时」 -- after the press.
-pub const SkillUsed: TriggerKind = TriggerKind(SKILL_USED);
+/// Dual-role: also a [`card_sdk::abi::ChainKind`] (`CUSTOM_LINKS` 74).
+pub const SkillUsed: ActionKind = ActionKind(SKILL_USED);
 /// 「盖房」 -- after the house count is written.
-pub const HouseAdded: TriggerKind = TriggerKind(HOUSE_ADDED);
-/// Before one charge spend commits; cancel to substitute the cost.
-pub const ChargePaying: TriggerKind = TriggerKind(CHARGE_PAYING);
+pub const HouseAdded: ActionKind = ActionKind(HOUSE_ADDED);
+/// Before one charge spend commits; cancel to substitute the cost. Action
+/// (prompts; not a FilterFlag).
+pub const ChargePaying: ActionKind = ActionKind(CHARGE_PAYING);
 /// 「将X个反面[P㏄P粉丝]变正」 -- raised by [`rule fans::flip_up`] before the
 /// dict writes so a listener sees the pre-flip face-down count. Action kind.
-pub const FansFlip: TriggerKind = TriggerKind(FANS_FLIP);
+pub const FansFlip: ActionKind = ActionKind(FANS_FLIP);
 
 // ------------------------------------------------------- tile kind strings
 
