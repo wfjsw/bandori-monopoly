@@ -47,6 +47,12 @@ pub mod intern;
 /// builds never call it (`sys` still uses the `extern` block).
 pub mod kani_host;
 
+/// `cfg(kani)` static bump allocator (TUNING §11). Kills the system
+/// allocator's OOM / `RawVec::reserve` CBMC model on every body `String`/`Vec`
+/// (including `alloc::format!`). Not compiled outside `cargo kani`.
+#[cfg(kani)]
+mod kani_alloc;
+
 /// Native-only: how guest buffers cross the ABI on a 64-bit build (wasm32 uses
 /// real 32-bit pointers; see the module docs).
 #[cfg(not(target_arch = "wasm32"))]

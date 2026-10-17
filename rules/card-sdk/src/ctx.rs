@@ -1869,6 +1869,15 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
         if options.len() > CAP {
             kani::assert(false, "ask_pick: more than 16 options under Kani");
         }
+        // 0 or 1 options: the pick is forced. Take the ask so `opt_n`
+        // accounting matches the host, but return a **literal** index — a
+        // symbolic `i.max(0).min(len-1)` leaves `who` symbolic in the body and
+        // a later `format!("{p}")` then unrolls Display + memchr (class-E
+        // `rec_key` cliff on tsukushi-01).
+        if options.len() <= 1 {
+            let _ = ask_raw(PromptKind::Choice, player_id, title, text)?;
+            return Ok(0);
+        }
         let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
         return Ok((i.max(0) as usize).min(options.len().saturating_sub(1)));
     }
