@@ -149,7 +149,7 @@ fn g01_fire_bird_times_ave_mujica_on_one_rent() {
 // RULING: the sheet's payment stages order it -- `回合階段&註釋` `C28` 「2.0 /
 // 支付计算时 / 支付增加/减少(固定值)」 then `C30` 「4.0 / 支付前 / 支付减半/翻倍」.
 // Two separate windows: flat add at 2, half/double at 4. So (R+100)/2, not
-// R/2+100. The engine's money pipeline is `payAdd -> payMul -> …` (`play.rs`),
+// R/2+100. The engine's money pipeline is `paySplitAdd -> paySplitMul -> …` (`play.rs`),
 // which is that order.
 //
 // `place_raw` arms the card's hooks but not its 「生效2次」 stack counter (the

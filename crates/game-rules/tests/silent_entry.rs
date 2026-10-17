@@ -82,7 +82,7 @@ fn silent_entry_produces_no_card_event_and_the_sibling_still_flashes() {
 /// entry's own flash).
 ///
 /// `TEST:silentPay`'s silent settle body gains money; that runs the money
-/// pipeline's `payTotalAdd` stage, which runs `TEST:totalCut`'s hook.
+/// pipeline's `payCombinedAdd` stage, which runs `TEST:totalCut`'s hook.
 #[test]
 fn nested_activation_from_a_silent_body_still_announces() {
     let mut t = Table::vanilla(2);

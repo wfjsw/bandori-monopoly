@@ -713,7 +713,7 @@ pub fn noble_02_effects_ok(effects: &[Effect], tile: i32) -> bool {
 // ===========================================================================
 // C-MOR-again-02  `Mor:再次牵起手来` [持续]
 // 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区。」
-// The [反击] window of -01 is PROTOCOL-LEVEL. This is the PayAt hook body.
+// The [反击] window of -01 is PROTOCOL-LEVEL. This is the PaySplitAt hook body.
 // OPEN-取消范围: one-sided on the owner (the clause pins the owner's side).
 // ===========================================================================
 

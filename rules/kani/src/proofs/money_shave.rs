@@ -5,7 +5,7 @@
 //! > 「（1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时
 //! >  将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。」
 //!
-//! Trigger: `On::Filter(PayAdd)` with the single-source condition
+//! Trigger: `On::Filter(PaySplitAdd)` with the single-source condition
 //! `"actor == owner && value > 0"` — the SAME string the host compiles.
 //! Under Kani we lower that string to the heap-free IR once (generated) and
 //! evaluate it against a symbolic context. When the guard admits we invoke
@@ -21,7 +21,7 @@ use crate::ir_fill;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-/// Symbolic PayAdd world for C-PP-aya-haruka-02.
+/// Symbolic PaySplitAdd world for C-PP-aya-haruka-02.
 ///
 /// State restrictions (each is a documented reduction in the clause's terms,
 /// never a silent cut of reachable behaviour):

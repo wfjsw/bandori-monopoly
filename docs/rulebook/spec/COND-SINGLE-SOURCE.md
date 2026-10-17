@@ -48,7 +48,7 @@ is **AST-derived IR**.
 Write the CEL string exactly as today:
 
 ```rust
-On::Filter(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
+On::Filter(&[HookKind::PaySplitAdd], "actor == owner && value > 0", None, pay_add),
 ```
 
 Then, to prove it under Kani:
@@ -299,7 +299,7 @@ them): `move.*`, `plan_fixed_roll`, `trigger_card`, `counter_name`,
 
 | guard | card / shape | evidence |
 |---|---|---|
-| `"actor == owner && value > 0"` | PP:[丸山彩]憧憬的前方 `On::Filter(PayAdd)` | in the generated table; `money_shave.rs` evaluates it under symbolic context (no `assume`); `wrong_guard.rs` shows `value >= 0` fails the iff |
+| `"actor == owner && value > 0"` | PP:[丸山彩]憧憬的前方 `On::Filter(PaySplitAdd)` | in the generated table; `money_shave.rs` evaluates it under symbolic context (no `assume`); `wrong_guard.rs` shows `value >= 0` fails the iff |
 | `"actor == owner && is_circle(tile.id)"` | function (`is_circle`) | in the generated table; `pilot_guards.rs` truth table |
 | `"actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0"` | chain/kind | in the generated table; `pilot_guards.rs` truth table |
 
@@ -380,7 +380,7 @@ Invocation: `cargo kani -p rules-kani --harness <name> --default-unwind 8 --no-u
 `tile_named` entries, board sets, per-seat keys) is pinned by the host-side
 guard-fill differential (`tests/conf_fill_diff.rs`, 8 fixtures × 139 guards).
 The Kani proof uses `fill_pay_add`, a light fill of the window/candidate
-scalars the PayAdd guard family reads — CBMC does not finish the bulk fill
+scalars the PaySplitAdd guard family reads — CBMC does not finish the bulk fill
 inside a harness (slice iterators + `named_set` scans over 80 slots × 60
 tiles). Both paths share the same field semantics; the differential is the
 control.

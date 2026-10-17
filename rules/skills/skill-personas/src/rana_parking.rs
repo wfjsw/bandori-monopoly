@@ -15,7 +15,7 @@
 //!
 //! R4 (`SETTLE-STAGES.md` §9, user ruling 2026-10-07): （2）'s two branches are
 //! two different gestures and live on two different stages. 「免除付款」 is a
-//! **payment-stage cancel** (`payTotalCancel`, 规则书 支付阶段 5). 「将该次结算
+//! **payment-stage cancel** (`payCombinedCancel`, 规则书 支付阶段 5). 「将该次结算
 //! 改为在space格子上添加一个"抹茶芭菲"」 is a **settle replacement** -- the
 //! `settleBody` body-replace gesture (「将该次结算改为」, the same shape as Hey
 //! Kids / Parking Space), not a pre-settle write. Both used to be done at
@@ -41,14 +41,14 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         //
         // ABI v74 split (FilterFlag + Action): the owner-branch auto-cancel
         // (「若space已属于其他玩家」) is non-interactive and stays on
-        // `FilterFlag(PayTotalCancel)` (false = drop the command). The
+        // `FilterFlag(PayCombinedCancel)` (false = drop the command). The
         // non-owner parfait-transfer branch prompts (「可」), so its
         // `ask_yes` + `move_units` + `set_cancelled` ride `HookKind::Effect`
         // (the payment declaration -- `t.value` the engine still folds).
         // PayAfter is too late to cancel. Effect fires per `money()` call,
         // so on a split-pay the interactive offer is per leg rather than once
         // on the command total (single-pair behaviour is identical).
-        On::FilterFlag(&[HookKind::PayTotalCancel], "", Some(any), exempt_flag),
+        On::FilterFlag(&[HookKind::PayCombinedCancel], "", Some(any), exempt_flag),
         On::Action(&[HookKind::Effect], "", Some(any), exempt_offer),
         // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
@@ -223,7 +223,7 @@ fn replace_body(player_id: i32) -> card_sdk::Asked {
     let mover = trigger::player_id();
     if owner >= 0 && owner != mover {
         // 「免除付款并抽1张卡」 -- the draw half. (The payment cancel already
-        // ran at `payTotalCancel`.)
+        // ran at `payCombinedCancel`.)
         if mover == player_id {
             ctx::draw(player_id, 1)?;
             ctx::log(player_id, &Msg::new(key!("rana_parking_free")));

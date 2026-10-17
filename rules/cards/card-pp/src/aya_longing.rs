@@ -13,7 +13,7 @@
 //! stay in play, take a card back from the discard, and shave payments while
 //! poorest.
 //! The discard pick runs in `Play`; the [持续]（1） shave lives in the
-//! `PayChoose` hook.
+//! `PaySplitChoose` hook.
 
 use alloc::vec::Vec;
 
@@ -30,8 +30,8 @@ pub const AYA_LONGING: CardDef = CardDef::new(
         // `HookKind::Effect` -- the payment declaration, whose `t.value` the
         // engine still folds (PayAfter is too late). Both shaves stay in one
         // body so the X-then-1500 order is unchanged.
-        // TODO(规则书): the shaves land at Effect (before PayAdd/PayMul) rather
-        //   than at the old PayAdd stage, so a sibling PayAdd modifier now sees
+        // TODO(规则书): the shaves land at Effect (before PaySplitAdd/PaySplitMul) rather
+        //   than at the old PaySplitAdd stage, so a sibling PaySplitAdd modifier now sees
         //   the already-shaved figure. Same result when no other add/mul
         //   modifier touches the payment.
         On::Action(&[HookKind::Effect], "actor == owner && value > 0", None, pay_add),
@@ -104,7 +104,7 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardAyaLonging.PayAdd` -- while the owner is
+/// C# `CardAyaLonging.PaySplitAdd` -- while the owner is
 /// the poorest alive player, every [消耗]/[支付] drops by X (floor 0).
 fn pay_add(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && value > 0` is the pre; `poorest` is a derived-list

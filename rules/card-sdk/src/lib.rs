@@ -467,7 +467,7 @@ impl CardDef {
 /// [`On::Action`] is an **event reaction** -- it may emit effects (`ctx::gain`,
 /// log, place, …) and does not modify the triggering value. [`On::Filter`] is
 /// a **value modifier** at a modifier hook kind ([`abi::TriggerKind::is_filter`]:
-/// `PayAdd` / `PayMul` / `BuySet` / `TurnBaseTime` / …). A kind list may not
+/// `PaySplitAdd` / `PaySplitMul` / `BuySet` / `TurnBaseTime` / …). A kind list may not
 /// mix the two; a mixed declaration is split into one Action and one Filter
 /// entry (kind/variant agreement is enforced at ruleset build).
 ///
@@ -517,8 +517,8 @@ pub enum On {
     /// no plan/deal writes. The host folds the return into the running figure
     /// (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds).
     /// Kinds must be filter kinds ([`abi::TriggerKind::is_filter`] == true)
-    /// whose payload is an integer: PayAdd / PayMul / PayAt / PayTotalAdd /
-    /// PayTotalMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
+    /// whose payload is an integer: PaySplitAdd / PaySplitMul / PaySplitAt / PayCombinedAdd /
+    /// PayCombinedMul / BuyAdd / BuyMul / BuySet / TurnBonusTime / TurnBaseTime /
     /// FlipEffect / DiceRollValue.
     Filter(
         &'static [abi::HookKind],
@@ -528,9 +528,9 @@ pub enum On {
     ),
     /// **Boolean decision** (ABI v74). Body is `fn(player_id, value) -> bool`
     /// -- pure. `false` cancels / substitutes the pipeline stage.
-    /// Kinds: PayTotalCancel (false = drop the command), ChargePaying
-    /// (false = substitute the fire-pot cost), PayChoose (false = cancel the
-    /// payment). A PayChoose that *also* rewrites the amount is split into
+    /// Kinds: PayCombinedCancel (false = drop the command), ChargePaying
+    /// (false = substitute the fire-pot cost), PaySplitChoose (false = cancel the
+    /// payment). A PaySplitChoose that *also* rewrites the amount is split into
     /// [`On::Filter`] (amount) plus this variant (cancel).
     FilterFlag(
         &'static [abi::HookKind],
@@ -811,18 +811,18 @@ mod tests {
     fn is_filter_set_matches_docs() {
         for k in [
             TriggerKind::DiceRollValue,
-            TriggerKind::PayChoose,
-            TriggerKind::PayAdd,
-            TriggerKind::PayMul,
-            TriggerKind::PayAt,
+            TriggerKind::PaySplitChoose,
+            TriggerKind::PaySplitAdd,
+            TriggerKind::PaySplitMul,
+            TriggerKind::PaySplitAt,
             TriggerKind::DiceRollPlan,
             TriggerKind::BuyAdd,
             TriggerKind::BuyMul,
             TriggerKind::BuySet,
             TriggerKind::BuyAssign,
-            TriggerKind::PayTotalAdd,
-            TriggerKind::PayTotalMul,
-            TriggerKind::PayTotalCancel,
+            TriggerKind::PayCombinedAdd,
+            TriggerKind::PayCombinedMul,
+            TriggerKind::PayCombinedCancel,
             TriggerKind::FlipEffect,
             TriggerKind::TurnBonusTime,
             TriggerKind::TurnBaseTime,
@@ -858,7 +858,7 @@ mod tests {
 
     #[test]
     fn kind_variant_agreement() {
-        let filter_ok = On::Filter(&[TriggerKind::PayAdd], "", None, fbody);
+        let filter_ok = On::Filter(&[TriggerKind::PaySplitAdd], "", None, fbody);
         assert!(filter_ok.check_kind_variant().is_ok());
         let action_ok = On::Action(&[TriggerKind::TurnEnd], "", None, body);
         assert!(action_ok.check_kind_variant().is_ok());
@@ -867,20 +867,20 @@ mod tests {
             filter_bad.check_kind_variant(),
             Err(TriggerKind::TurnEnd.as_i32())
         );
-        let action_bad = On::Action(&[TriggerKind::PayAdd], "", None, body);
+        let action_bad = On::Action(&[TriggerKind::PaySplitAdd], "", None, body);
         assert_eq!(
             action_bad.check_kind_variant(),
-            Err(TriggerKind::PayAdd.as_i32())
+            Err(TriggerKind::PaySplitAdd.as_i32())
         );
         let mixed = On::Action(
-            &[TriggerKind::TurnEnd, TriggerKind::PayAdd],
+            &[TriggerKind::TurnEnd, TriggerKind::PaySplitAdd],
             "",
             None,
             body,
         );
         assert_eq!(
             mixed.check_kind_variant(),
-            Err(TriggerKind::PayAdd.as_i32())
+            Err(TriggerKind::PaySplitAdd.as_i32())
         );
     }
 

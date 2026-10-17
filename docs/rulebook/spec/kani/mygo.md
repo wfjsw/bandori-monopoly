@@ -54,7 +54,7 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 | `C-MYGO-haneoka-01` | 「位于属于自己的格子上时，投掷1d20」 | **PROVEN** | `haneoka_thresholds_iff` | pending | own-tile gate + symbolic 1d20 | — |
 | `C-MYGO-haneoka-02` | 「若出目至少为10则…免费加盖一层房屋」 | **PROVEN** | `haneoka_thresholds_iff` | pending | free house, money unchanged | — |
 | `C-MYGO-haneoka-03` | 「若出目至少为15，则额外抽一张卡」 | **PROVEN** | `haneoka_thresholds_iff` | pending | Draw 1 | — |
-| `C-MYGO-haneoka-04` | 「至少为20，则将此卡放置在自己场上…抵消一次任意付款」 | **PROVEN** (place leg) / **PROTOCOL-LEVEL** (later cancel) | `haneoka_thresholds_iff` | pending | placement proven; the later PayChoose cancel is a separate window | — |
+| `C-MYGO-haneoka-04` | 「至少为20，则将此卡放置在自己场上…抵消一次任意付款」 | **PROVEN** (place leg) / **PROTOCOL-LEVEL** (later cancel) | `haneoka_thresholds_iff` | pending | placement proven; the later PaySplitChoose cancel is a separate window | — |
 | `C-MYGO-haneoka-05` | 「若小于10，此卡放入弃牌堆且视为此卡未生效」 | **PROVEN** | `haneoka_thresholds_iff`, `haneoka_05_mutant_is_detected` | pending | empty body log; discard is the play pipeline's default dest | — |
 | `C-MYGO-rainday-01` | 「将此卡放置于自己场上并为其放置5个奇迹水晶」 | **PROVEN** | `rainday_01_place_five_crystals_iff`, `rainday_01_mutant_is_detected` | pending | — | — |
 | `C-MYGO-rainday-02` | 「打出此卡时及你的每回合开始时投掷1d10…获得一层[停留]」 | **PROVEN** (play leg shape) / **PROTOCOL-LEVEL** (turn-start leg) | `rainday_01_place_five_crystals_iff` (covers stay) | pending | zone set is the body's AGENTS table (implementation reading of 「地产商」 order) | OPEN-rainday-d10 |

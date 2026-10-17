@@ -98,7 +98,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-tsukushi-02 | 「将对方的X标记翻面并代替其进行一次该动作」 | Spec pinned; harness deferred | — | — | mark flip OPEN; draw-tag PROTOCOL | OPEN-X标记 |
 | C-MOR-tsukushi-03 | 「移除所有X标记…获得移除标记数量*800…」 | PROVEN (n×rate+decay) | `tsukushi_03_sweep_iff`, `tsukushi_03_mutant_is_detected` | (pending) | unseeded RATE maps 0→200 not first-fire 800 (legal play seeds 800) | OPEN-X标记 |
 | C-MOR-rui-crit-01 | 「当复制者使x重置为0时，对方失去该技能（2）」 | OPEN / documented-only | — | — | copy mechanism undefined | OPEN-复制 |
-| C-MOR-rui-crit-02 | 「roll1d20…获得资金翻倍或无需失去资金」 | PROVEN candidate | `rui_crit_02_roll_iff`, `rui_crit_02_noop`, `rui_crit_02_mutant_is_detected` | (pending) | watch: signedness of PayChoose value | OPEN-双方影响 |
+| C-MOR-rui-crit-02 | 「roll1d20…获得资金翻倍或无需失去资金」 | PROVEN candidate | `rui_crit_02_roll_iff`, `rui_crit_02_noop`, `rui_crit_02_mutant_is_detected` | (pending) | watch: signedness of PaySplitChoose value | OPEN-双方影响 |
 
 ## Band-skill clauses
 

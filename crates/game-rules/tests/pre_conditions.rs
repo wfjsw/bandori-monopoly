@@ -109,10 +109,10 @@ fn pre_hook_does_not_fire() {
     let r = fixtures();
     let card = r.card("TEST:preHook").expect("fixture present");
     let mut w = effect_window(0, 1);
-    w.trigger.kind = TriggerKind::PayAdd;
+    w.trigger.kind = TriggerKind::PaySplitAdd;
     let call = Call::Hook {
         card,
-        kind: TriggerKind::PayAdd,
+        kind: TriggerKind::PaySplitAdd,
         player_id: 0,
     };
     let ran = r.run_hook(&w, call, &[], None).unwrap();

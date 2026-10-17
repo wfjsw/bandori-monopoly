@@ -27,10 +27,10 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
             Some(pass_tile_guard),
             pass_tile,
         ),
-        // (3)'s surcharge joins the rent payment at `payAdd` (before `payMul`),
+        // (3)'s surcharge joins the rent payment at `paySplitAdd` (before `paySplitMul`),
         // so a 「支付减半」 scaler sees the shaped total.
         On::Filter(
-            &[HookKind::PayAdd],
+            &[HookKind::PaySplitAdd],
             "card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner",
             Some(pay_add_guard),
             pay_add,
@@ -135,11 +135,11 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// (3)'s surcharge, as a flat add on the rent payment (`payAdd` runs before
-/// `payMul`, so a 「支付减半」 scaler sees rent + surcharge as one figure).
+/// (3)'s surcharge, as a flat add on the rent payment (`paySplitAdd` runs before
+/// `paySplitMul`, so a 「支付减半」 scaler sees rent + surcharge as one figure).
 /// The guard carries the whole applicability: the route must be finished, the
 /// payment a rent on the owner's own tile by someone else, and there must be a
-/// surcharge to add. `TriggerKind::PayAdd` is the category's job -- not
+/// surcharge to add. `TriggerKind::PaySplitAdd` is the category's job -- not
 /// re-checked here (docs/GUARDS.md).
 fn pay_add_guard(player_id: i32) -> bool {
     // `card.placed && pay_is_rent && actor != owner && tile.id >= 0 &&

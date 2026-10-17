@@ -10,7 +10,7 @@
 //! The second paragraph is the playable half and is self-contained: a 1d20
 //! against a counter X that starts at 0 and climbs by one on every miss. A hit
 //! doubles a gain or voids a loss, and resets X. 「在所有其他资金量改动效果
-//! 生效后并结果不等于0」 is the *final* figure, which is what `PayChoose`
+//! 生效后并结果不等于0」 is the *final* figure, which is what `PaySplitChoose`
 //! carries once the other bends have run.
 //!
 //! The first paragraph is the copy-detection half: 「如果你的（2）技能或角色卡
@@ -34,9 +34,9 @@ pub const YURI_CRIT: CardDef = CardDef::new(
         // settlement hook carries (`HookKind::Pay`, a non-filter kind whose
         // `t.value` the engine folds). ABI v74: the body rolls a die and writes
         // state, so it cannot be a pure Filter; the rewrite lives on the Action
-        // as a documented exception. `pay` runs after payAdd/payMul/payChoose/
-        // payAt (closer to 「在所有其他资金量改动效果生效后」 than the old
-        // PayChoose stage) and still sees a negative running figure for
+        // as a documented exception. `pay` runs after paySplitAdd/paySplitMul/paySplitChoose/
+        // paySplitAt (closer to 「在所有其他资金量改动效果生效后」 than the old
+        // PaySplitChoose stage) and still sees a negative running figure for
         // 「无需失去资金」. PayAfter is too late to rewrite.
         On::Action(&[HookKind::Pay], "", Some(mine), on_pay),
     ],

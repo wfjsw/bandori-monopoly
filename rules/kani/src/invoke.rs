@@ -292,7 +292,7 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 /// `kind` is one of `"Play"`, `"Counteract"`, `"Action"` /
 /// `"Filter"`, `"Gate"`, `"AtEnd"`,
 /// `"DiceRollPlan"`, `"Settle"`, `"Message"`. For `Action`/`Filter`, `hook_name` may filter
-/// by `HookKind` short name (`"PayAdd"`); `""` matches the first hook.
+/// by `HookKind` short name (`"PaySplitAdd"`); `""` matches the first hook.
 ///
 /// `kind` / `hook_name` are short ASCII tags (not card ids). Parsed to
 /// integers first so the `On` dispatch is enum compares, not `memcmp`.
@@ -474,7 +474,7 @@ pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
 
 /// First `On::Action` of card `idx` matching `want`. **Integer-only** — no
 /// `&str` tags, so CBMC never lowers the dispatch to `memcmp` (the shave
-/// profile's remaining 10 memcmps were `match name { "PayAdd" => … }`).
+/// profile's remaining 10 memcmps were `match name { "PaySplitAdd" => … }`).
 #[inline(always)]
 pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32) -> Asked {
     let card = by_idx(idx);
@@ -654,7 +654,7 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 /// Match a `HookKind` by its short name without `format!` (no String/UTF-8).
 ///
 /// Parse `hook_name` to a `HookKind` first (a `match` on literals that
-/// constant-folds when the caller passes `"PayAdd"`), then an integer
+/// constant-folds when the caller passes `"PaySplitAdd"`), then an integer
 /// compare against `kinds`. The old `hook_kind_name(k) == hook_name` lowered
 /// to `memcmp` per arm (14 unwinds in the shave profile).
 fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool {
@@ -694,10 +694,10 @@ fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool
 #[inline(always)]
 fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     use card_sdk::abi::HookKind as H;
-    const PAY_ADD: (u8, u64, u64) = tag_key_const("PayAdd");
-    const PAY_MUL: (u8, u64, u64) = tag_key_const("PayMul");
-    const PAY_CHOOSE: (u8, u64, u64) = tag_key_const("PayChoose");
-    const PAY_AT: (u8, u64, u64) = tag_key_const("PayAt");
+    const PAY_ADD: (u8, u64, u64) = tag_key_const("PaySplitAdd");
+    const PAY_MUL: (u8, u64, u64) = tag_key_const("PaySplitMul");
+    const PAY_CHOOSE: (u8, u64, u64) = tag_key_const("PaySplitChoose");
+    const PAY_AT: (u8, u64, u64) = tag_key_const("PaySplitAt");
     const PAY_AFTER: (u8, u64, u64) = tag_key_const("PayAfter");
     const PAY: (u8, u64, u64) = tag_key_const("Pay");
     const TURN_END: (u8, u64, u64) = tag_key_const("TurnEnd");
@@ -730,10 +730,10 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     const STAY: (u8, u64, u64) = tag_key_const("Stay");
     const STUN: (u8, u64, u64) = tag_key_const("Stun");
     match tag_key(name) {
-        PAY_ADD => Some(H::PayAdd),
-        PAY_MUL => Some(H::PayMul),
-        PAY_CHOOSE => Some(H::PayChoose),
-        PAY_AT => Some(H::PayAt),
+        PAY_ADD => Some(H::PaySplitAdd),
+        PAY_MUL => Some(H::PaySplitMul),
+        PAY_CHOOSE => Some(H::PaySplitChoose),
+        PAY_AT => Some(H::PaySplitAt),
         PAY_AFTER => Some(H::PayAfter),
         PAY => Some(H::Pay),
         TURN_END => Some(H::TurnEnd),
@@ -772,10 +772,10 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
 fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
     use card_sdk::abi::HookKind as H;
     match k {
-        H::PayAdd => "PayAdd",
-        H::PayMul => "PayMul",
-        H::PayChoose => "PayChoose",
-        H::PayAt => "PayAt",
+        H::PaySplitAdd => "PaySplitAdd",
+        H::PaySplitMul => "PaySplitMul",
+        H::PaySplitChoose => "PaySplitChoose",
+        H::PaySplitAt => "PaySplitAt",
         H::PayAfter => "PayAfter",
         H::Pay => "Pay",
         H::TurnEnd => "TurnEnd",
@@ -831,7 +831,7 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), player_id)
 }
 
-/// `PP:[丸山彩]憧憬的前方` -- `On::Action(Effect)` (was PayAdd; the interactive
+/// `PP:[丸山彩]憧憬的前方` -- `On::Action(Effect)` (was PaySplitAdd; the interactive
 /// resonance shave moved to the payment declaration so `set_pay_amount` still
 /// lands -- see the card's Pattern E comment).
 #[cfg(feature = "band-pp")]

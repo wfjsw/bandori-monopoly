@@ -369,7 +369,7 @@ impl TriggerOverlay {
 // -------------------------------------------------------------------------
 
 pub mod src {
-    /// PP:[丸山彩]憧憬的前方 `On::Filter(PayAdd)`.
+    /// PP:[丸山彩]憧憬的前方 `On::Filter(PaySplitAdd)`.
     pub const AYA_PAY_ADD: &str = "actor == owner && value > 0";
     /// A function-carrying guard (`is_start`).
     pub const IS_CIRCLE: &str = ruleset_core::guards::OWN_START;
@@ -944,7 +944,7 @@ pub fn fill_from_world(
     c
 }
 
-/// PayAdd-shaped fill: actor = triggering seat, owner = card owner,
+/// PaySplitAdd-shaped fill: actor = triggering seat, owner = card owner,
 /// value = pay amount.
 ///
 /// This is a **light** fill (window + candidate scalars + per-seat money/out
@@ -955,7 +955,7 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     let mut c = IrCtx::default();
     c.n_players = w.n_players as i64;
     c.tile_count = 60;
-    // OptInt slots that the PayAdd guard family may read. No VARS walk —
+    // OptInt slots that the PaySplitAdd guard family may read. No VARS walk —
     // iterating the 43-entry table is a CBMC cliff inside a proof.
     c.set_scalar(VarId::PlanFixedRoll, -1);
     c.set_scalar(VarId::MoveRoll, -1);

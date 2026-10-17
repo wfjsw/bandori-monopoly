@@ -24,18 +24,18 @@ pub const NFO: CardDef = CardDef::new(
         On::Action(&[card_sdk::abi::HookKind::Effect], "", Some(gain_guard), gain_bump),
         On::Play("", None, play),
         // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
-        // Pattern A/D: pure amount shave on Filter(PayAt); the card is used up
+        // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
         // by a paired Action (Filter cannot `set_dest`). The unplace rides
         // PayAfter (always raised, so a shave-to-0 still uses the card up).
-        // TODO(规则书): a payment cancelled *before* PayAt (effect window /
-        //   payTotalCancel) never reaches the shave, so the card should stay;
+        // TODO(规则书): a payment cancelled *before* PaySplitAt (effect window /
+        //   payCombinedCancel) never reaches the shave, so the card should stay;
         //   the book ties 「置入弃牌堆」 to 「减免1000」 and the old C# body
-        //   unplaced only when `PayAt` ran. PayAfter fires for cancelled /
-        //   zeroed payments too and carries no "PayAt ran" bit, and a Filter
+        //   unplaced only when `PaySplitAt` ran. PayAfter fires for cancelled /
+        //   zeroed payments too and carries no "PaySplitAt ran" bit, and a Filter
         //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
-        //   unplace cannot tell cancelled-before-PayAt from shave-to-0.
+        //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
         On::Filter(
-            &[HookKind::PayAt],
+            &[HookKind::PaySplitAt],
             "actor == owner && card.placed && value > 0",
             None,
             pay_shave,
@@ -251,9 +251,9 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
     Ok(())
 }
 
-/// C# `CardNfo.PayAt` (effect 3, while placed): the owner's next payment is cut
+/// C# `CardNfo.PaySplitAt` (effect 3, while placed): the owner's next payment is cut
 /// by 1000. Pure Filter half (ABI v74) -- returns the shaved figure and logs.
-/// Runs through the Fx hook dispatch at `payAt` (after `PayChoose`, before the
+/// Runs through the Fx hook dispatch at `paySplitAt` (after `PaySplitChoose`, before the
 /// `pay` [反击] window).
 fn pay_shave(player_id: i32, value: i32) -> i32 {
     let cut = (value - 1000).max(0);
@@ -279,7 +279,7 @@ fn gain_guard(player_id: i32) -> bool {
 }
 
 /// 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 -- C#
-/// `NfoCrystalsFx.PayChoose`, keyed on `p.to == Player` (the gainer).
+/// `NfoCrystalsFx.PaySplitChoose`, keyed on `p.to == Player` (the gainer).
 fn gain_bump(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() != player_id {
         return Ok(());

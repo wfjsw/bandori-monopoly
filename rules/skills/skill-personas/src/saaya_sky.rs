@@ -31,8 +31,8 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         // （2）'s 「可使用5个[火罐]」 -- the amount and the pot are the
         // applicability; spending the pot is the cost, kept in the body.
         // Interactive (ask_yes + fire spend + amount rewrite). Rides
-        // `PayChooseAsk` (v78), restoring the rulebook PayChoose position.
-        On::Action(&[HookKind::PayChooseAsk], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
+        // `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
+        On::Action(&[HookKind::PaySplitChooseBefore], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
     ],
 )
     .silent(&[0]);

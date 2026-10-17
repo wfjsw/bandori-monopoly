@@ -39,7 +39,7 @@ use alloc::{string::String, vec::Vec};
 ///      follows `set_pay_amount`, so a reduced payment credits the payee less too.
 /// v17: field-card (`Fx`) hooks + per-card crystals. New `TriggerKind`s
 ///      (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `DiceRollAfter`, `CardPlayed`,
-///      `Targeted`, `PayChoose`) are **hook points**, not [反击] points: the
+///      `Targeted`, `PaySplitChoose`) are **hook points**, not [反击] points: the
 ///      engine runs every *placed* card's `counteract` against them automatically.
 ///      `crystals` / `set_crystals` / `add_crystals` on the running field card.
 /// v18: `take_from_hand`; `drawn` self-dispatches to the card named on `t.card`
@@ -62,7 +62,7 @@ use alloc::{string::String, vec::Vec};
 ///      replaces `ruleset_play` / `_can_react` / `_react` / `_cant_play` (the
 ///      pre-v21 names, kept here as history).
 /// v23: hook kinds for the remaining raise points -- TurnEndBefore / TurnEndAfter,
-///      PayAdd / PayMul / PayAt (the Money pipeline), Discarded, DeckBeforeGame /
+///      PaySplitAdd / PaySplitMul / PaySplitAt (the Money pipeline), Discarded, DeckBeforeGame /
 ///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleBody, BeforeOut,
 ///      Teleported. Move payload `trig_move_remaining` / `trig_move_total` and
 ///      `MoveFlags::TELEPORT_WALK`. `schedule_turn_end` takes a mode (bit 1 =
@@ -227,11 +227,11 @@ use alloc::{string::String, vec::Vec};
 ///      props. The retired props `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY`
 ///      go with them.
 /// v42: the payment command's **pre-split** stage and the terminal hooks
-///      (`PIPELINE-AUDIT` Q2 / Q6). `TriggerKind`s `PayTotalAdd` / `PayTotalMul`
-///      / `PayTotalCancel` (wire names `payTotalAdd` / `payTotalMul` /
-///      `payTotalCancel`) run command-wide on the figure **before** any
+///      (`PIPELINE-AUDIT` Q2 / Q6). `TriggerKind`s `PayCombinedAdd` / `PayCombinedMul`
+///      / `PayCombinedCancel` (wire names `payCombinedAdd` / `payCombinedMul` /
+///      `payCombinedCancel`) run command-wide on the figure **before** any
 ///      「[分摊]」 divides it -- 「分摊前」 -- alongside the existing per-share
-///      `PayAdd` / `PayMul` / `PayChoose` / `PayAt`. `ctx::pay_total` /
+///      `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt`. `ctx::pay_total` /
 ///      `ctx::split_pay` / `ctx::transfer_leg` drive them. Terminal
 ///      `<thing>Resolved` hooks: `tileResolved` (after `settleAfter`),
 ///      `moveResolved` (after a move and its settle), `bankruptResolved` (after
@@ -458,8 +458,8 @@ use alloc::{string::String, vec::Vec};
 ///      and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
 ///      `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
 ///      `adjust_money`). `money += delta` with a `log.gain` / `log.lose` line
-///      and **no** payment pipeline: no `payAdd` / `payMul` / `payChoose` /
-///      `payAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
+///      and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` /
+///      `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
 ///      任何效果影响」 wants a [指定] split's amount to land as-is (ONE OF US's
 ///      「被分享方资金直接增加，不受其他任何效果影响」). Non-pausing. Positive
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
@@ -511,7 +511,7 @@ use alloc::{string::String, vec::Vec};
 ///      `tile_attr` only. SAVE_VERSION unchanged.
 /// v71: **money rounds once after add/mul** (user ruling 2026-10-15,
 ///      OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
-///      `payAdd` / `payMul` / `payTotal*` / `set_pay_factor`) transform the
+///      `paySplitAdd` / `paySplitMul` / `payCombined*` / `set_pay_factor`) transform the
 ///      running amount exactly and must not CeilTo-10 inside their own body;
 ///      `money_inner` / `pay_total` round a positive figure **up to a multiple
 ///      of 10 once** after every add/mul modifier has been processed. An
@@ -566,9 +566,9 @@ use alloc::{string::String, vec::Vec};
 ///      reuse. CEL-only status gates keep their native `admits_pre` /
 ///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
 /// v78: **purity + interactive pre-stages**. New kinds `FlipAfter = 104`
-///      (post-flip Action), `PayChooseAsk = 105` / `PayTotalAddAsk = 106`
+///      (post-flip Action), `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`
 ///      (interactive Action pre-stages raised immediately before the pure
-///      `PayChoose` / `PayTotalAdd` filter stages, restoring the rulebook
+///      `PaySplitChoose` / `PayCombinedAdd` filter stages, restoring the rulebook
 ///      prompt position). FilterValue gains an interned `tag_key` / `reason`
 ///      id and a host-supplied `recorded_roll` so dice-rolling Filter bodies
 ///      become pure. `card_sdk::pure::refuse_if_filter` covers every mutating
@@ -610,7 +610,34 @@ use alloc::{string::String, vec::Vec};
 ///      `set_move_roll` / `do_move_roll` / `trigger::move_roll` / CEL
 ///      `move_roll` are **not** kind names and are unchanged.
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 81;
+/// v82: **`Pay*` kind family renamed to Combined/Split levels** (numeric ids
+///      unchanged). Names name the pipeline LEVEL, not whether a 「[分摊]」
+///      split happened: a payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」)
+///      first runs the Combined stages on the WHOLE figure before 「[分摊]」
+///      divides it, then each settled leg/share runs the Split stages. A
+///      single non-split payment runs both levels once each.
+///      `PayTotalAdd(84) -> PayCombinedAdd`, `PayTotalMul(85) -> PayCombinedMul`,
+///      `PayTotalCancel(86) -> PayCombinedCancel`;
+///      `PayAdd(55) -> PaySplitAdd`, `PayMul(56) -> PaySplitMul`,
+///      `PayChoose(52) -> PaySplitChoose`, `PayAt(57) -> PaySplitAt`;
+///      pre-stage prompts `PayTotalAddAsk(106) -> PayCombinedAddBefore`,
+///      `PayChooseAsk(105) -> PaySplitChooseBefore`.
+///      Wire names change too (`payTotalAdd` -> `payCombinedAdd`,
+///      `payTotalMul` -> `payCombinedMul`, `payTotalCancel` -> `payCombinedCancel`,
+///      `payAdd` -> `paySplitAdd`, `payMul` -> `paySplitMul`,
+///      `payChoose` -> `paySplitChoose`, `payAt` -> `paySplitAt`,
+///      `payTotalAddAsk` -> `payCombinedAddBefore`,
+///      `payChooseAsk` -> `paySplitChooseBefore`) -- those strings ride logs,
+///      the CEL kind vocabulary, and `anim.chainKind.*` locales, so this is a
+///      version bump. Hard rename: no aliases (old records replay on archived
+///      engines). Not renamed: `Pay(9)` / `Paid(10)` / `PayAfter(48)` /
+///      `PayGate(96)` / `ChargePaying(78)`, host fns (`ctx::pay_*`, `pay_buy`,
+///      `pay_build`, `pay_leg`, `split_pay`, `set_pay_amount`,
+///      `set_pay_target`), and CEL variables (`pay_is_rent`, `pay_*`).
+///      Filter/Action classification unchanged: Combined*/Split* filters stay
+///      filters; the two *Before prompts stay Actions.
+///      SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 82;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1568,8 +1595,11 @@ impl TriggerKind {
     /// The player was targeted.
     pub const Targeted: Self = Self(51);
 
-    /// The player is about to pay (may modify/decline).
-    pub const PayChoose: Self = Self(52);
+    /// Filter · a settled payment leg is about to settle its amount (支付阶段,
+    /// after Combined levels and any 「[分摊]」 divide) · payload `value` the
+    /// running figure, `target` the payee, `pay_is_rent` · no prompt (use
+    /// [`Self::PaySplitChooseBefore`])
+    pub const PaySplitChoose: Self = Self(52);
 
     /// v23: first step of a turn end (结束阶段前), before the `On::AtEnd`
     /// callbacks and the status wear-off.
@@ -1578,16 +1608,20 @@ impl TriggerKind {
     /// v23: after [`Self::TurnEnd`]; the scheduled turn-end callbacks run here.
     pub const TurnEndAfter: Self = Self(54);
 
-    /// v23: a payment's amount, first modifier pass (规则书 支付阶段 2, before
-    /// any money moves).
-    pub const PayAdd: Self = Self(55);
+    /// Filter · a settled payment leg's first amount modifier (规则书 支付阶段 2
+    /// on each share, before any money moves) · payload `value` the running
+    /// figure, `target` the payee · no prompt
+    pub const PaySplitAdd: Self = Self(55);
 
-    /// v23: second modifier pass (规则书 支付阶段 4), after [`Self::PayAdd`].
-    pub const PayMul: Self = Self(56);
+    /// Filter · a settled payment leg's second amount modifier (规则书 支付阶段 4
+    /// on each share, after [`Self::PaySplitAdd`]) · payload `value` the running
+    /// figure, `target` the payee · no prompt
+    pub const PaySplitMul: Self = Self(56);
 
-    /// v23: after [`Self::PayChoose`], before the `pay` [反击] window
-    /// (规则书 支付阶段 5).
-    pub const PayAt: Self = Self(57);
+    /// Filter · a settled payment leg is about to pay (规则书 支付阶段 5 on each
+    /// share, after [`Self::PaySplitChoose`], before the `pay` [反击] window) ·
+    /// payload `value` the running figure, `target` the payee · no prompt
+    pub const PaySplitAt: Self = Self(57);
 
     /// v23: this card (named on `t.card`) just went to the discard pile.
     pub const Discarded: Self = Self(58);
@@ -1721,25 +1755,32 @@ impl TriggerKind {
 
     // v42: the command-wide **pre-split** payment stage (`PIPELINE-AUDIT` Q2)
     // and the terminal `<thing>Resolved` hooks (Q6).
-    /// The payment command's **pre-split** fixed ± stage
-    /// (「分摊前资金减少/增加」, 规则书 支付阶段 2 applied to the command total).
-    /// Runs once per payment command, on the figure **before** any 「[分摊]」
-    /// divides it into shares; a single-pair payment's command total is its own
-    /// amount. `t.value` / `set_pay_amount` rewrite the total. Composes with
-    /// [`Self::PayTotalMul`] and [`Self::PayTotalCancel`] (add → mul → cancel).
-    /// The per-share counterparts are [`Self::PayAdd`] / [`Self::PayMul`] /
-    /// [`Self::PayChoose`] / [`Self::PayAt`], which run on each settled leg.
-    pub const PayTotalAdd: Self = Self(84);
+    /// Filter · the payment COMMAND's Combined fixed ± stage
+    /// (「分摊前资金减少/增加」, 规则书 支付阶段 2 on the WHOLE figure) · payload
+    /// `value` the command total, `target` the payee · no prompt (use
+    /// [`Self::PayCombinedAddBefore`])
+    ///
+    /// Level semantics (v82): a payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」)
+    /// first runs the Combined stages on the whole figure before 「[分摊]」
+    /// divides it; then each settled leg/share runs the Split stages. A single
+    /// non-split payment runs both levels once each -- the names name the
+    /// LEVEL, not whether a split happened. Composes with
+    /// [`Self::PayCombinedMul`] and [`Self::PayCombinedCancel`] (add → mul →
+    /// cancel). Split counterparts: [`Self::PaySplitAdd`] /
+    /// [`Self::PaySplitMul`] / [`Self::PaySplitChoose`] / [`Self::PaySplitAt`].
+    pub const PayCombinedAdd: Self = Self(84);
 
-    /// The pre-split × stage (规则书 支付阶段 4), after
-    /// [`Self::PayTotalAdd`]. `t.value` / `set_pay_amount`.
-    pub const PayTotalMul: Self = Self(85);
+    /// Filter · the payment COMMAND's Combined × stage (规则书 支付阶段 4 on the
+    /// WHOLE figure, after [`Self::PayCombinedAdd`]) · payload `value` the
+    /// command total, `target` the payee · no prompt
+    pub const PayCombinedMul: Self = Self(85);
 
-    /// The pre-split cancel (规则书 支付阶段 5's
-    /// 「取消支付」 on the command rather than on one pair), after
-    /// [`Self::PayTotalMul`]. `trigger::set_cancelled()` drops the whole
-    /// command: no leg runs and nothing moves.
-    pub const PayTotalCancel: Self = Self(86);
+    /// FilterFlag · the payment COMMAND's Combined cancel (规则书 支付阶段 5
+    /// 「取消支付」 on the whole command rather than on one pair, after
+    /// [`Self::PayCombinedMul`]) · payload `value` the command total · no prompt;
+    /// `trigger::set_cancelled()` (FilterFlag `false`) drops the whole command:
+    /// no leg runs and nothing moves
+    pub const PayCombinedCancel: Self = Self(86);
 
     /// Terminal: the tile's settlement is fully resolved (after
     /// [`Self::SettleAfter`], including when the settle was cancelled -- the
@@ -1848,17 +1889,17 @@ impl TriggerKind {
     /// Non-filter.
     pub const FlipAfter: Self = Self(104);
 
-    /// v78: **interactive pay-choose pre-stage**. Raised at the rulebook
-    /// `PayChoose` position (支付阶段, immediately before the pure `PayChoose`
-    /// filter stage). `On::Action(&[PayChooseAsk])` may prompt; the pure
-    /// `On::Filter`/`On::FilterFlag` at `PayChoose` then applies. Non-filter.
-    pub const PayChooseAsk: Self = Self(105);
+    /// Action · interactive pre-stage immediately before the pure
+    /// [`Self::PaySplitChoose`] filter (支付阶段 on each settled leg) · payload
+    /// `value` the running figure, `target` the payee · **may prompt**; the pure
+    /// `On::Filter`/`On::FilterFlag` at `PaySplitChoose` then applies
+    pub const PaySplitChooseBefore: Self = Self(105);
 
-    /// v78: **interactive pay-total-add pre-stage**. Raised at the rulebook
-    /// `PayTotalAdd` position (分摊前资金增减, immediately before the pure
-    /// `PayTotalAdd` filter stage). `On::Action(&[PayTotalAddAsk])` may prompt.
-    /// Non-filter.
-    pub const PayTotalAddAsk: Self = Self(106);
+    /// Action · interactive pre-stage immediately before the pure
+    /// [`Self::PayCombinedAdd`] filter (分摊前资金增减 on the WHOLE figure) ·
+    /// payload `value` the command total, `target` the payee · **may prompt**;
+    /// the pure `On::Filter`/`On::FilterFlag` at `PayCombinedAdd` then applies
+    pub const PayCombinedAddBefore: Self = Self(106);
 
     /// The wire value, shared with every kind view.
     pub const fn as_i32(self) -> i32 {
@@ -1878,10 +1919,10 @@ impl TriggerKind {
         matches!(
             self,
             Self::DiceRollValue
-                | Self::PayChoose
-                | Self::PayAdd
-                | Self::PayMul
-                | Self::PayAt
+                | Self::PaySplitChoose
+                | Self::PaySplitAdd
+                | Self::PaySplitMul
+                | Self::PaySplitAt
                 | Self::DiceRollPlan
                 // ChargePaying (78) is NOT a filter: its 「可」 opt-in prompts,
                 // and Filter bodies cannot. It stays on On::Action (deferred
@@ -1890,9 +1931,9 @@ impl TriggerKind {
                 | Self::BuyMul
                 | Self::BuySet
                 | Self::BuyAssign
-                | Self::PayTotalAdd
-                | Self::PayTotalMul
-                | Self::PayTotalCancel
+                | Self::PayCombinedAdd
+                | Self::PayCombinedMul
+                | Self::PayCombinedCancel
                 | Self::FlipEffect
                 | Self::TurnBonusTime
                 | Self::TurnBaseTime
@@ -1971,12 +2012,12 @@ impl TriggerKind {
             49 => "diceRollAfter",
             50 => "cardPlayed",
             51 => "targeted",
-            52 => "payChoose",
+            52 => "paySplitChoose",
             53 => "turnEndBefore",
             54 => "turnEndAfter",
-            55 => "payAdd",
-            56 => "payMul",
-            57 => "payAt",
+            55 => "paySplitAdd",
+            56 => "paySplitMul",
+            57 => "paySplitAt",
             58 => "discarded",
             59 => "deckBeforeGame",
             60 => "deckAtGameStart",
@@ -2000,9 +2041,9 @@ impl TriggerKind {
             81 => "buyMul",
             82 => "buySet",
             83 => "buyAssign",
-            84 => "payTotalAdd",
-            85 => "payTotalMul",
-            86 => "payTotalCancel",
+            84 => "payCombinedAdd",
+            85 => "payCombinedMul",
+            86 => "payCombinedCancel",
             87 => "tileResolved",
             88 => "moveResolved",
             89 => "bankruptResolved",
@@ -2020,8 +2061,8 @@ impl TriggerKind {
             102 => "diceRollValue",
             103 => "atEnd",
             104 => "flipAfter",
-            105 => "payChooseAsk",
-            106 => "payTotalAddAsk",
+            105 => "paySplitChooseBefore",
+            106 => "payCombinedAddBefore",
             26 => "26",  // ruleset-declared custom id
             73 => "73",  // ruleset-declared custom id
             74 => "74",  // ruleset-declared custom id
@@ -2088,12 +2129,12 @@ impl TriggerKind {
             "diceRollAfter" => Self(49),
             "cardPlayed" => Self(50),
             "targeted" => Self(51),
-            "payChoose" => Self(52),
+            "paySplitChoose" => Self(52),
             "turnEndBefore" => Self(53),
             "turnEndAfter" => Self(54),
-            "payAdd" => Self(55),
-            "payMul" => Self(56),
-            "payAt" => Self(57),
+            "paySplitAdd" => Self(55),
+            "paySplitMul" => Self(56),
+            "paySplitAt" => Self(57),
             "discarded" => Self(58),
             "deckBeforeGame" => Self(59),
             "deckAtGameStart" => Self(60),
@@ -2117,9 +2158,9 @@ impl TriggerKind {
             "buyMul" => Self(81),
             "buySet" => Self(82),
             "buyAssign" => Self(83),
-            "payTotalAdd" => Self(84),
-            "payTotalMul" => Self(85),
-            "payTotalCancel" => Self(86),
+            "payCombinedAdd" => Self(84),
+            "payCombinedMul" => Self(85),
+            "payCombinedCancel" => Self(86),
             "tileResolved" => Self(87),
             "moveResolved" => Self(88),
             "bankruptResolved" => Self(89),
@@ -2137,8 +2178,8 @@ impl TriggerKind {
             "diceRollValue" => Self(102),
             "atEnd" => Self(103),
             "flipAfter" => Self(104),
-            "payChooseAsk" => Self(105),
-            "payTotalAddAsk" => Self(106),
+            "paySplitChooseBefore" => Self(105),
+            "payCombinedAddBefore" => Self(106),
             _ => Self::None,
         }
     }

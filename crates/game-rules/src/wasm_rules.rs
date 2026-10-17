@@ -2748,8 +2748,8 @@ impl<M: CardModules> RulesBridge<M> {
         // argument for `MAX_MONEY_DEPTH` (see `play.rs`).
         //
         // `On::Play` is an activation, not a hook: its body may drive a move
-        // whose settle pays money, and that card's own `payTotalCancel` /
-        // `payAdd` hooks must still hear it (MyGO 「投币式停车场的猫」 (2)
+        // whose settle pays money, and that card's own `payCombinedCancel` /
+        // `paySplitAdd` hooks must still hear it (MyGO 「投币式停车场的猫」 (2)
         // 「免除付款」). Only hook bodies mark the uid busy.
         let marked = uid >= 0 && !matches!(call, Call::Play { .. });
         if marked {
@@ -3180,7 +3180,7 @@ impl<M: CardModules> RulesBridge<M> {
                     let _ = player_id;
                 }
                 // A card-driven payment: the same money pipeline as `money()`
-                // -- PayAdd -> PayMul -> PayChoose -> PayAt -> the `pay` counteraction
+                // -- PaySplitAdd -> PaySplitMul -> PaySplitChoose -> PaySplitAt -> the `pay` counteraction
                 // window -- then replay the effect with the adjudicated amount
                 // (0 = cancelled, and PayAfter runs with 0).
                 Ok(Outcome::NeedHost(req, mut run)) => {
@@ -3882,9 +3882,9 @@ impl<M: CardModules> RulesBridge<M> {
                 return Ok(0);
             }
             // One pipeline: `Cx::money` runs the staged adjustment
-            // points (pre-split `effect` counteraction window -> payTotalAdd /
-            // payTotalMul / payTotalCancel -> payAdd / payMul /
-            // payChoose / payAt -> split -> post-split `pay` /
+            // points (pre-split `effect` counteraction window -> payCombinedAdd /
+            // payCombinedMul / payCombinedCancel -> paySplitAdd / paySplitMul /
+            // paySplitChoose / paySplitAt -> split -> post-split `pay` /
             // `payAfter` / `paid`) whatever the cause -- print (game ->
             // player), delete (player -> game) or pay-player. The
             // counteraction window opens here the same way it does for rent, so
@@ -3928,7 +3928,7 @@ impl<M: CardModules> RulesBridge<M> {
         } => {
             // `PIPELINE-AUDIT` Q2: the command-wide pre-split stage on
             // its own. No money moves; the answer is the shaped total
-            // (or -1 when a `payTotalCancel` hook dropped the command).
+            // (or -1 when a `payCombinedCancel` hook dropped the command).
             let from = (from >= 0).then_some(from as usize);
             let to = (to >= 0).then_some(to as usize);
             let shaped = cx.pay_total(from, to, asked, Some(call.player_id()))?;
@@ -8823,14 +8823,14 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
 fn is_money_hook_kind(kind: TriggerKind) -> bool {
     matches!(
         kind,
-        TriggerKind::PayAdd
-            | TriggerKind::PayMul
-            | TriggerKind::PayChoose
-            | TriggerKind::PayAt
+        TriggerKind::PaySplitAdd
+            | TriggerKind::PaySplitMul
+            | TriggerKind::PaySplitChoose
+            | TriggerKind::PaySplitAt
             | TriggerKind::PayAfter
-            | TriggerKind::PayTotalAdd
-            | TriggerKind::PayTotalMul
-            | TriggerKind::PayTotalCancel
+            | TriggerKind::PayCombinedAdd
+            | TriggerKind::PayCombinedMul
+            | TriggerKind::PayCombinedCancel
     )
 }
 
@@ -8909,16 +8909,16 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::DiceRollValue
             | TriggerKind::AtEnd
             | TriggerKind::FlipAfter
-            | TriggerKind::PayChooseAsk
-            | TriggerKind::PayTotalAddAsk
+            | TriggerKind::PaySplitChooseBefore
+            | TriggerKind::PayCombinedAddBefore
             | TriggerKind::CardPlayed
             | TriggerKind::Targeted
-            | TriggerKind::PayChoose
+            | TriggerKind::PaySplitChoose
             | TriggerKind::TurnEndBefore
             | TriggerKind::TurnEndAfter
-            | TriggerKind::PayAdd
-            | TriggerKind::PayMul
-            | TriggerKind::PayAt
+            | TriggerKind::PaySplitAdd
+            | TriggerKind::PaySplitMul
+            | TriggerKind::PaySplitAt
             | TriggerKind::Discarded
             | TriggerKind::DeckBeforeGame
             | TriggerKind::DeckAtGameStart
@@ -9106,13 +9106,13 @@ mod tests {
             "diceRollValue",
             "cardPlayed",
             "targeted",
-            "payChoose",
+            "paySplitChoose",
             // v23 hook points
             "turnEndBefore",
             "turnEndAfter",
-            "payAdd",
-            "payMul",
-            "payAt",
+            "paySplitAdd",
+            "paySplitMul",
+            "paySplitAt",
             "discarded",
             "deckBeforeGame",
             "deckAtGameStart",
@@ -9142,9 +9142,9 @@ mod tests {
             "counterChanged",
             "78",
             // v42: the command-wide pre-split payment stage + terminals
-            "payTotalAdd",
-            "payTotalMul",
-            "payTotalCancel",
+            "payCombinedAdd",
+            "payCombinedMul",
+            "payCombinedCancel",
             "tileResolved",
             "moveResolved",
             "bankruptResolved",

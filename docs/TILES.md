@@ -10,7 +10,7 @@ Status: **Phase 2 complete; Phase 3 mostly complete (engine-fix batch,
 its test gate in [Per-step results](#per-step-results). Phase 2's six tile
 kinds settle through rule instances on the board owner. Phase 3 removed the
 CiRCLE-reward flag, `settleAtEnd` and (for placed cards) `noBuild`, moved the
-「支付减半」 scale into the money pipeline's `payMul` stage, and made the settle
+「支付减半」 scale into the money pipeline's `paySplitMul` stage, and made the settle
 body its own [反击]-able chain link. What is still short is listed under
 [Left short](#left-short).
 
@@ -24,7 +24,7 @@ through **engine flags** -- side channels the rulebook never names:
 | flag | where | set by | after Phase 3 |
 |---|---|---|---|
 | ~~`no_circle_reward`~~ | ~~`MoveCtx.plan` + `state::key::NO_CIRCLE_REWARD`~~ | detour, PPP band (2), PP band (3), 凑友希那 (1), 赤音, tsugumi | **done** -- `prop::NO_REWARD` on the rule instance |
-| `rent_factor` / `pay_factor` | `MoveCtx.plan` | studio_storm, kasumi_love_all, council_check / sakiko_lead, saki_move, rana_funny, taki_serious, repaint, kaede_support | **moved** -- the read is the money pipeline's `payMul` stage (`scale_settle_payment`), so it covers the payment as card effects shape it; the arming is still `plan::set_*_factor` for a hand card (see [Left short](#left-short)) |
+| `rent_factor` / `pay_factor` | `MoveCtx.plan` | studio_storm, kasumi_love_all, council_check / sakiko_lead, saki_move, rana_funny, taki_serious, repaint, kaede_support | **moved** -- the read is the money pipeline's `paySplitMul` stage (`scale_settle_payment`), so it covers the payment as card effects shape it; the arming is still `plan::set_*_factor` for a hand card (see [Left short](#left-short)) |
 | ~~`buy_discount` / `free_buy` / `raze_on_buy`~~ | ~~`TurnCtx`~~ | tsugu_ycm, roselia band (1) / maze_warehouse | **done** -- `ctx::linger` + `BuyAdd` −1500 / `BuyMul` ½ / `BuySet` 0 + `BuyAssign` houses 0 (`docs/PURCHASE.md`) |
 | ~~`extraColor:<tile>` / `st.tile_colors`~~ | ~~per-player state / `MatchState`~~ | soyo_colors, asahi_aim, roselia band (1), guerrilla, soyo_clear | **done** -- tile props `colorFor:<p>` (per player) and `prop::ANY_COLOR` (「该格获得所有颜色」); `is_color` / `is_live_house_for` read them |
 | ~~`noBuild` (play-from-hand)~~ | ~~per-player state~~ | council_check | **done** -- a `ctx::linger` instance carrying `prop::NO_BUILD`, which `why_not_build_on` reads |
@@ -445,7 +445,7 @@ with `player_id = -1`.
 | （soyo）色彩 | `ctx::set_tile_color` / `ALL_COLORS` | **sets the tile instance's `group` prop** (`ALL_COLORS`) |
 | Roselia band (1) | `set_extra_color` | sets `group` on the tile instance |
 | 朝日六花 | `set_extra_color` | sets `group` on the tile instance |
-| Anon Tokyo | tile marks + `anon_tokyo_link_<tile>` slots + a field stand-in for `PayAdd` | **attaches a link rule instance to each tile**, partner in its props (「被[奇迹水晶]连接的格子收费时…」 is that instance's pay entry) |
+| Anon Tokyo | tile marks + `anon_tokyo_link_<tile>` slots + a field stand-in for `PaySplitAdd` | **attaches a link rule instance to each tile**, partner in its props (「被[奇迹水晶]连接的格子收费时…」 is that instance's pay entry) |
 | 练习室里的风暴 | `place_card_on` + slot + `rent_factor` | **attaches a remote-settle rule instance to its tile**; the (4-X)/4 scale is that instance's prop |
 | Change the world | `place_card_on` + `change_world_turn` slot + `pay_factor` | **attaches a surcharge instance to its tile**; the 50×(y+1)×n term is its props |
 
@@ -582,7 +582,7 @@ report it.
 | 2 | `tile:event` | `settle_draw` + `settle_event` | **done** -- added the `ctx::draw_event` primitive |
 | 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Action(&[HookKind::PassTile])` -> `circle::settle_reward`, the body itself). The walk's `circle_reward` is the **built-in fallback** when no instance is bound |
 | 4 | `tile:agent` | the 「若…则…否则…」 branch | **done** -- the body is the branch (同色 set / all-owned half-rent / one buy-build offer). `Play::agent_landing` is the **built-in fallback** |
-| 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `payMul` stage (step 9) |
+| 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `paySplitMul` stage (step 9) |
 | 6 | `tile:property` | the four-way branch | **done** -- `land_at`'s `match` is now the **built-in fallback** (`land_at_built_in`) for `StubRules` and unbound kinds, not the only path |
 | 7 | flags | card migrations | **done** -- `settleInstead` → `HookKind::SettleBody`, `settleAtEnd` → `On::Action(&[AtEnd])`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
 | 8 | docs + perf | ENGINE.md, CARDS.md, this doc | **done** |
@@ -619,7 +619,7 @@ than the only path. Phase 3 landed the following (2026-10-06):
 * **`settleAtEnd` is gone** -- 「并在回合结束时额外进行一次[触发结算]」 is a
   scheduling clause: `ctx::before_turn_end` + `On::Action(&[AtEnd])` whose body calls
   `ctx::settle`.
-* **「支付减半」** rides the money pipeline's `payMul` stage
+* **「支付减半」** rides the money pipeline's `paySplitMul` stage
   (`scale_settle_payment`), not `pay_rent`, so the scale covers the payment as
   card effects shape it (a rent-region expansion, a forced stop-and-pay).
 * **`tools/rulebook/check.py`** now checks `rules/tiles/*` and
@@ -647,12 +647,12 @@ Concretely still short:
   instance, and on a **lingering** instance (`TurnCtx.lingering`) -- the
   hand-card home 学生会的检查 uses. The per-player `noBuild` scratch key is gone.
 * **`rent_factor` / `pay_factor` still arm through `plan::set_*_factor`.** The
-  *read* moved into the `payMul` stage, but a hand card (祥，移动, Repaint,
+  *read* moved into the `paySplitMul` stage, but a hand card (祥，移动, Repaint,
   （立希）…) leaves the field and cannot leave a hook behind, so the move plan
   remains the arming surface for a settle-scoped scale. The tile-prop home
   (`prop::RENT_FACTOR` / `PAY_FACTOR`) is read in the same stage for a card
   that retunes a tile. TODO(规则书): whether a settle-scoped scale should be a
-  placed marker carrying a `payMul` hook instead.
+  placed marker carrying a `paySplitMul` hook instead.
 * **`cross_tiles.rs`'s `t01`–`t05` and `t11` stay `#[ignore]`d** -- they are
   the card-side gaps (Anon Tokyo's link, ONE OF US, the Fire bird ordering
   ruling) that the card migrations of step 7 still owe.
@@ -661,7 +661,7 @@ Concretely still short:
 
 「触发结算时进行的支付价格减半」 covers the settlement payment **as card
 effects shape it**. The cards whose sheet wording matches that reading and now
-ride the `payMul` stage: **祥，移动**, **（祥子）带领着大家** (sakiko_lead),
+ride the `paySplitMul` stage: **祥，移动**, **（祥子）带领着大家** (sakiko_lead),
 **（乐奈）有趣的女人** (rana_funny), **（立希）想认真去做** (taki_serious, ¼
 rather than ½), **Repaint**, **八幡海铃:熟练的支援贝斯手** (kaede_support).
 
@@ -701,7 +701,7 @@ is unchanged at every step.
 Step 9 removed `#[ignore]` from nine ruling tests the migration fixed:
 `ras`'s eight `hey_kids_*` (the settle-body chain link + the user ruling
 that it fires on **another** player's rent settle) and
-`mujica`'s `saki_move_halves_settlement_payments` (the `payMul`-stage
+`mujica`'s `saki_move_halves_settlement_payments` (the `paySplitMul`-stage
 halving). No assertion was weakened. `mujica`'s other two 「支付减半」
 ruling tests stay `#[ignore]`d: `saki_move_halves_a_door_surcharge_rent` has a
 setup that cannot reach the hill it names (a 3-tile move from tile 12), and

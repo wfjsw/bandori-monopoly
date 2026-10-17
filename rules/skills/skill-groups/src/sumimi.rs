@@ -29,7 +29,7 @@ pub const SUMIMI: CardDef = CardDef::new(
         On::Action(&[HookKind::PayAfter], "card.placed", None, after_pay),
         // 「向其他人收费」 -- this player is the payee of a charge from another
         // seat. Again `MINE` is the payer side; `target == owner` is the charge.
-        On::Filter(&[HookKind::PayMul], "target == owner && card.placed", None, bend),
+        On::Filter(&[HookKind::PaySplitMul], "target == owner && card.placed", None, bend),
         // Both halves of （1） live in the body: add when GOT, else clear.
         // The old `slot('skill.sumimi.got') == 0` guard only ever admitted the
         // clear branch (FINDINGS C-SUMIMI-band-01).

@@ -18,7 +18,7 @@ live in `rules/tiles/src/deed.rs` + `On::Mortgage` / `On::Redeem` (ABI v73).
 calling generic mechanism primitives: `ctx::raise` (filter fold for `BuyGate`
 FilterFlag / `BuyAssign` FilterValue, action chain for `buyBefore` / `bought` /
 `buyAfter` / `buildBefore` / `houseAdded` / `buildAfter`), `ctx::pay_buy` /
-`ctx::pay_build` through `Cx::money` (so payAdd/payMul/payTotal and
+`ctx::pay_build` through `Cx::money` (so paySplitAdd/paySplitMul/payCombined and
 allow_mortgage funding prompts behave identically), `ctx::assign_deed`
 (`purchase::assign_deed`) and `ctx::log`. All acquisitions route through
 `CardRules::deed_buy` / `deed_build`; `StubRules` keeps the engine's standing
@@ -56,7 +56,7 @@ how ownership is assigned — are handled by the `rules/` crates.
   1. `buyBefore`;
   2. `buy_price` (`tile.price + houses*tile.house`);
   3. the `TurnCtx` flags `buy_discount` / `free_buy`;
-  4. `money()` with kind `buy` (`payAdd` / `payMul` apply);
+  4. `money()` with kind `buy` (`paySplitAdd` / `paySplitMul` apply);
   5. the `owners[t]` write and mortgage clear;
   6. `raze_on_buy`;
   7. `bought` → `buyAfter`.

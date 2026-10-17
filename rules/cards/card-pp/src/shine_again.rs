@@ -13,7 +13,7 @@
 //! > （2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。
 //!
 //! while short on cash the owner may record a colour and take a rescue.
-//! The rescue runs in the `PayChoose` hook; the recorded colours live in a
+//! The rescue runs in the `PaySplitChoose` hook; the recorded colours live in a
 //! player slot (stand-in for the C# per-card `HashSet<int> _colors`).
 
 use alloc::vec::Vec;
@@ -26,7 +26,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
     "PP:再次闪耀",
     &[
         // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- the hand play. The
-        // [共鸣] branch (2) is offered from the `PayChoose` hook below, not as a
+        // [共鸣] branch (2) is offered from the `PaySplitChoose` hook below, not as a
         // second `Play` entry (its `is_placed` gate was blocking this play).
         On::Play("", None, shine_again),
         // 规则书[持续]（1）: 「[拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡
@@ -34,10 +34,10 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // short on cash and with an unrecorded owned colour to name. The money
         // shortfall is CEL; the colour scan is residual.
         //
-        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position.
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
         // The pre's `money(owner) < value` still gates on the figure in flight.
         On::Action(
-            &[HookKind::PayChooseAsk],
+            &[HookKind::PaySplitChooseBefore],
             "actor == owner && card.placed && value > 0 && money(owner) < value",
             Some(has_unrecorded_color),
             pay_choose,
@@ -110,7 +110,7 @@ fn has_unrecorded_color(player_id: i32) -> bool {
     !unrecorded_owned_colors(player_id).is_empty()
 }
 
-/// C# `CardShineAgain.PayChoose` -- while the owner cannot cover a payment,
+/// C# `CardShineAgain.PaySplitChoose` -- while the owner cannot cover a payment,
 /// record a colour and take that colour's top deed price / 5 plus a fan.
 /// Applicability is `money(owner) < value` + `has_unrecorded_color`.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
@@ -153,7 +153,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         ctx::set_tok(player_id, "P✽P粉丝(正)", up + 1);
     }
     // 「购买价格」÷5 is a formula-fixed gain, not a payment -- `gain_raw` so
-    // the pay pipeline (PayChoose etc.) cannot re-enter this hook or alter it.
+    // the pay pipeline (PaySplitChoose etc.) cannot re-enter this hook or alter it.
     let money = best / 5;
     if money > 0 {
         ctx::gain_raw(

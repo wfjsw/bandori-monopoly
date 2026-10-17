@@ -15,7 +15,7 @@
 //!
 //! （2）'s follow-up -- the 1d20, the [停留] on 6 or less, and 「支付价格变为
 //! 原本的一半」 -- rides on the forced landing. The half-price is a pay bend on
-//! that settle, which is what `PayMul` is.
+//! that settle, which is what `PaySplitMul` is.
 
 use card_sdk::abi::{state_key, AbKind, HookKind};
 use ruleset_core::ctx::{self, state, trigger};
@@ -38,7 +38,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
             Some(before_settle_applies),
             before_settle,
         ),
-        On::Filter(&[HookKind::PayMul], "", Some(half), on_pay),
+        On::Filter(&[HookKind::PaySplitMul], "", Some(half), on_pay),
         On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
 )

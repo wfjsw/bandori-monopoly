@@ -48,7 +48,7 @@ Every handler is a `fn(player_id: i32)` (the player the card is placed at for ho
 `On::Counteract` carries its [反击] trigger kinds + the condition + a pure `bool`
 guard + the effect, `On::Action` the event-hook kinds (`passTile`, `drawn`,
 `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) and `On::Filter` the
-modifier stages (`payAdd`, `buySet`, ...) in the same shape. An empty kind list
+modifier stages (`paySplitAdd`, `buySet`, ...) in the same shape. An empty kind list
 is never dispatched.
 
 * `id` is the **data** card id from the roster (Chinese; an identifier,
@@ -118,8 +118,8 @@ Folding would make the tile body just another `Action(SettleBody)` and lose the
 
 Integer pipelines (pay amount, buy price, turn-clock seconds, flip count,
 roll face) are `fn(player_id, value) -> i32` -- one number in, one number out.
-Cancel stages (`PayTotalCancel`, `ChargePaying` substitute) are booleans:
-`false` drops the stage. `PayChoose` may either rewrite the amount
+Cancel stages (`PayCombinedCancel`, `ChargePaying` substitute) are booleans:
+`false` drops the stage. `PaySplitChoose` may either rewrite the amount
 (`On::Filter`) or decline (`On::FilterFlag`); a card that does both is
 **split into two entries**.
 
@@ -152,8 +152,8 @@ immediately before the pure filter stage:
 
 | pre-stage (Action) | pure stage (Filter*) | rulebook position |
 |---|---|---|
-| `PayChooseAsk` (105) | `PayChoose` | 支付阶段, before the choose filter |
-| `PayTotalAddAsk` (106) | `PayTotalAdd` | 分摊前资金增减, before the total-add filter |
+| `PaySplitChooseBefore` (105) | `PaySplitChoose` | 支付阶段, before the choose filter |
+| `PayCombinedAddBefore` (106) | `PayCombinedAdd` | 分摊前资金增减, before the total-add filter |
 | `FlipAfter` (104) | (post-`FlipEffect`) | after the flip counters move |
 
 `ChargePaying` stays a plain Action (its 「可」 opt-in is the whole window).
@@ -163,8 +163,8 @@ immediately before the pure filter stage:
 `TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
 source of truth**. Today (27 kinds):
 
-* payment amount stages -- `PayChoose`, `PayAdd`, `PayMul`, `PayAt`,
-  `PayTotalAdd`, `PayTotalMul`, `PayTotalCancel`
+* payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
+  `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
 * buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
 * roll / plan shaping -- `DiceRollPlan`, `DiceRollValue`, `DiceRollValue` (v74)
@@ -189,14 +189,27 @@ filter kinds and a `On::Action` only non-filter kinds
 (`On::check_kind_variant`, enforced in `rt::manifest` and the host loader).
 A kind list that mixes the two must be **split into two entries**.
 
+### Combined vs Split payment levels (v82)
+
+A payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」) first runs the
+**Combined** stages on the WHOLE figure before 「[分摊]」 divides it; then
+each settled leg/share runs the **Split** stages. A single non-split payment
+runs both levels once each -- the names name the LEVEL, not whether a split
+happened.
+
+| level | kinds | when |
+|---|---|---|
+| Combined | `PayCombinedAdd` / `PayCombinedMul` / `PayCombinedCancel` (+ `PayCombinedAddBefore` prompt) | once per payment command, on the figure before any 「[分摊]」 divide |
+| Split | `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt` (+ `PaySplitChooseBefore` prompt) | on each settled leg/share (and once for a non-split payment) |
+
 ### Host application order
 
 The host raises the pipeline stages in rulebook order and folds each stage's
 return before the next raise, within a stage in placement order:
 
-* pay: `effect` declaration → `payTotalAddAsk` (Action) → `payTotalAdd` →
-  `payTotalMul` → `payTotalCancel` → `payAdd` → `payMul` →
-  `payChooseAsk` (Action) → `payChoose` → `payAt` → `pay` settlement
+* pay: `effect` declaration → `payCombinedAddBefore` (Action) → `payCombinedAdd` →
+  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMul` →
+  `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
 * roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window)
 * flip: `FlipEffect` (Filter) → counters move → `FlipAfter` (Action)
@@ -421,7 +434,7 @@ Two write surfaces, matching the two clause shapes (ABI v32):
 `prop::NO_REWARD` is the CiRCLE-reward veto (`tile:circle`'s Pass entry reads
 and consumes the tile-scoped one); `prop::NO_BUILD` gates `why_not_build_on`;
 `prop::RENT_FACTOR` / `PAY_FACTOR` scale a settlement payment at the money
-pipeline's `payMul` stage. A rule body's own instance is the one running
+pipeline's `paySplitMul` stage. A rule body's own instance is the one running
 (`ctx::self_tile()` names its tile).
 
 **Defined default: `0`** for every key -- a card that does not declare a
@@ -817,7 +830,7 @@ original names where the pairing is already implied (`settleBefore` →
 | `settleBefore` / `settle` / `settleBody` / `settleAfter` | landing -- before resolving the tile / before its effect / the settle's effect list (a field card may replace it with 「将本次结算改为…」) / after it fully resolves |
 | `mortgageBefore` / `mortgage` | mortgaging a deed -- before any guard (can block) / after it applied |
 | `pay` / `paid` | money leaving a player -- before the deduction / after. `player_id` = payer, `target` = payee, `value` = amount. `paid` is the [反击] window and opens only on a payer-side loss (再次牵起手来 / 游击演出 are 「[消耗]或[支付]」 / 「被…收取资金」). `payAfter` is the 「资金变动」 hook (rulebook 支付阶段 7, 「合并到[支付后]」) and fires on **any** money change, a print (`gain`) and a `gain_fixed` included |
-| `payTotalAdd` / `payTotalMul` / `payTotalCancel` | the **command-wide pre-split** stage (「分摊前」, `PIPELINE-AUDIT` Q2): `payTotalAdd` (fixed ±) → `payTotalMul` (×) → `payTotalCancel` (drop the whole command) shape the figure **before** any 「[分摊]」 divides it into shares. A single-pair payment's command total is its own amount, so the three run there too. `trigger::value()` / `set_pay_amount` rewrite the total; `set_cancelled` on `payTotalCancel` drops the command. The per-share counterparts are `payAdd` / `payMul` / `payChoose` / `payAt` |
+| `payCombinedAdd` / `payCombinedMul` / `payCombinedCancel` | the **command-wide pre-split** stage (「分摊前」, `PIPELINE-AUDIT` Q2): `payCombinedAdd` (fixed ±) → `payCombinedMul` (×) → `payCombinedCancel` (drop the whole command) shape the figure **before** any 「[分摊]」 divides it into shares. A single-pair payment's command total is its own amount, so the three run there too. `trigger::value()` / `set_pay_amount` rewrite the total; `set_cancelled` on `payCombinedCancel` drops the command. The per-share counterparts are `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt` |
 | `tileResolved` / `moveResolved` / `bankruptResolved` | terminal points (「结算完成时」, `PIPELINE-AUDIT` Q6). `tileResolved` fires after `settleAfter` (and after a cancelled settle); `moveResolved` after a move and any settle it asked for; `bankruptResolved` after the seat is cleared and the leftover auctions finish. `payAfter` / `buyAfter`+`bought` / `eventAfter` are already the terminals of their pipelines |
 | `bankruptBefore` / `bankrupt` | bankruptcy -- before asset cash-in / after cash-in, before removal from the game. The seat is marked **dead before `bankruptBefore`** (B3), so the dying player's own sources cannot join that window; other players' hooks still fire and may inspect the remaining state. `bankruptResolved` is the terminal |
 | `card` / `cardAfter` | playing a card from hand -- before its `play` body / after its `Dest` handling |
@@ -927,7 +940,7 @@ cannot ship with a raw key showing to players.
   **automatically**, in placement order per player, with no player declaration.
   They use their own `TriggerKind`s (`turnEnd`, `drewBefore`, `drew`,
   `passTile`, `payAfter`,
-  `diceRollAfter`, `cardPlayed`, `targeted`, `payChoose`) so a card can tell a field
+  `diceRollAfter`, `cardPlayed`, `targeted`, `paySplitChoose`) so a card can tell a field
   effect from a hand counteraction by its kind alone -- `match trigger::kind()` is the
   dispatch. Every hook kind is raised except `targeted` (it waits on the
   targeting pipeline). `drawn` runs on the card just drawn (named on
@@ -972,7 +985,7 @@ cannot ship with a raw key showing to players.
   notes in `skill-bands` / `skill-characters`'s `lib.rs`; the card pool's
   `TODO(ABI)` list is empty). What is **landed** since the first cut: the `On::` handler
   form (Play / CantPlay / Counteract / Hook / AtEnd / DiceRollPlan), the field-hook kinds
-  (`PassTile`, `PayAdd/PayMul/PayChoose/PayAt/PayAfter`, `SettleAfter` /
+  (`PassTile`, `PaySplitAdd/PaySplitMul/PaySplitChoose/PaySplitAt/PayAfter`, `SettleAfter` /
   `SettleBody` -- `SettleBody` replaced `SettleInstead` --,
   `TurnStart`/`TurnEnd(+Before/After)`, `Drew/Drawn`, `DiceRollAfter`, `Reshuffled`,
   `Bought`, `Discarded`, `DeckBeforeGame`/`DeckAtGameStart`, `BeforeOut`,

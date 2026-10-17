@@ -69,13 +69,13 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::Pay
         | TriggerKind::Paid
         | TriggerKind::PayAfter
-        | TriggerKind::PayChoose
-        | TriggerKind::PayAdd
-        | TriggerKind::PayMul
-        | TriggerKind::PayAt
-        | TriggerKind::PayTotalAdd
-        | TriggerKind::PayTotalMul
-        | TriggerKind::PayTotalCancel => {
+        | TriggerKind::PaySplitChoose
+        | TriggerKind::PaySplitAdd
+        | TriggerKind::PaySplitMul
+        | TriggerKind::PaySplitAt
+        | TriggerKind::PayCombinedAdd
+        | TriggerKind::PayCombinedMul
+        | TriggerKind::PayCombinedCancel => {
             if who < 0 {
                 Msg::new("log.why.gain")
                     .player_id("target", target)
@@ -101,8 +101,8 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         | TriggerKind::TurnEndAfter
         | TriggerKind::AtEnd
         | TriggerKind::FlipAfter
-        | TriggerKind::PayChooseAsk
-        | TriggerKind::PayTotalAddAsk
+        | TriggerKind::PaySplitChooseBefore
+        | TriggerKind::PayCombinedAddBefore
         | TriggerKind::EndTurnBefore
         | TriggerKind::EndTurnAfter => Msg::new("log.why.turn_end").player_id("who", who),
         TriggerKind::DeckBeforeGame => Msg::new("log.why.deck_before").player_id("who", who),

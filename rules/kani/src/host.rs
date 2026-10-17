@@ -1195,7 +1195,7 @@ pub fn arm_adjust_money(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
             // Raw money adjustment: `money += delta` with **no** payment
-            // pipeline (no payAdd/payMul, no effect window). Mirrors
+            // pipeline (no paySplitAdd/paySplitMul, no effect window). Mirrors
             // `hostfns::adjust_money` / `World::adjust_money_raw`.
             let delta = a1;
             if delta != 0 {

@@ -552,8 +552,8 @@ impl World {
     /// (「立刻获得此次失去的资金金额」).
     ///
     /// The ledger still closes: the movement is logged as a `gain` event with
-    /// its bank leg (`value`), even though it bypasses the `payAdd`/`payMul`/
-    /// `payChoose` modifier pipeline.
+    /// its bank leg (`value`), even though it bypasses the `paySplitAdd`/`paySplitMul`/
+    /// `paySplitChoose` modifier pipeline.
     pub fn gain_fixed(&mut self, player_id: i32, amount: i32, why: crate::msg::Msg) -> i32 {
         if amount == 0 {
             return 0;

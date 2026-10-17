@@ -23,7 +23,7 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
         On::Play("", Some(cant_play), anon_tokyo),
-        On::Filter(&[HookKind::PayAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
+        On::Filter(&[HookKind::PaySplitAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)
@@ -125,7 +125,7 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
                 ctx::self_uid(),
                 1,
                 &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other), card_sdk::abi::Stack::Fresh);
-            // Remember the pairing so the `PayAdd` hook below can find the partner
+            // Remember the pairing so the `PaySplitAdd` hook below can find the partner
             // (mark notes are not readable across the ABI).
             ctx::set_slot(player_id, &alloc::format!("{LINK}{tile}"), other);
         }
@@ -137,7 +137,7 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
                 .card("card", "MyGO:[千早爱音]Anon Tokyo"),
         );
         // 规则书[手]1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的
-        // 一半」 -- rides the `PayAdd` hook on a field stand-in (the C# puts the body
+        // 一半」 -- rides the `PaySplitAdd` hook on a field stand-in (the C# puts the body
         // on `AnonLinkFx`, an `H.ExtraOf` attachment; the hook surface only dispatches
         // to placed cards, so this placement stands in for it -- same pattern as
         // `HHW:（育美）`'s `HagumiMarkFx`).
@@ -171,7 +171,7 @@ fn link_guard(player_id: i32) -> bool {
 }
 
 /// 规则书[手]1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半」
-/// -- C# `AnonLinkFx.PayAdd`: `p.IsRent && p.to == Seat && p.amount > 0`, then per
+/// -- C# `AnonLinkFx.PaySplitAdd`: `p.IsRent && p.to == Seat && p.amount > 0`, then per
 /// link add `RentOf(linked) / 2` when `p.tile` is either end and the other end is
 /// owned by Player.
 fn link_rent(player_id: i32, value: i32) -> i32 {

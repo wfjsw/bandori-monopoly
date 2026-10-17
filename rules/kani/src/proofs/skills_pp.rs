@@ -570,7 +570,7 @@ fn first_accident_02_iff_at(me: i32) {
 
     // 2) 丸山彩 (2) must refuse
     let pre_amount2 = world::with_world(|ww| ww.pay_amount);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayCombinedAdd */);
     let post = world::snapshot();
     crate::kassert!(
         post.pay_amount == pre_amount2,

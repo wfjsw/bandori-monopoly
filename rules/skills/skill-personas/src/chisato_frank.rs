@@ -28,16 +28,16 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
             at_start,
         ),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
-        // so this rides `payTotalAddAsk` (PIPELINE-AUDIT Q2), not the per-share
-        // `payChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
+        // so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not the per-share
+        // `paySplitChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
         // money, so the hook's `target` (the payee) is the skill owner. A print
         // (game -> player) carries `target = me`, `player_id = -1`.
         //
-        // Rides `PayTotalAddAsk` (v78), restoring the rulebook PayTotalAdd
+        // Rides `PayCombinedAddBefore` (v78), restoring the rulebook PayCombinedAdd
         // position: the interactive `ask_number` + `set_pay_amount` sits
-        // immediately before the pure `PayTotalAdd` filter stage (pre-split).
+        // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(
-            &[HookKind::PayTotalAddAsk],
+            &[HookKind::PayCombinedAddBefore],
             "target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1",
             Some(mine),
             on_gain,
@@ -71,7 +71,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「自己每次收取资金时可选择将自己Y个正面[P✽P粉丝]变反，此次获得的分摊前
 /// 数量增加Y×100」 -- the gain is `to == me` and the figure is the amount.
-/// Rides `PayTotalAddAsk` (v78): the prompt picks Y, which drives both the
+/// Rides `PayCombinedAddBefore` (v78): the prompt picks Y, which drives both the
 /// amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();

@@ -58,16 +58,16 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
         On::Play("", Some(can_enter_two), enter_two),
         // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
-        // Filter/Action split). The PayMul Filter reshapes the owner's take; the
+        // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
         // Effect Action pays the other half out. Effect (not PayAfter) so the
         // gain's `trigger::value()` is still the declared figure -- PayAfter's
         // value is the settled amount and cannot re-derive `amount/2` for odd.
         // TODO(规则书): the gain half reads the declared amount at Effect, so a
-        //   PayAdd modifier that runs after this declaration would not be split
-        //   (the reshape half sees the PayMul-stage figure). Same figure when no
+        //   PaySplitAdd modifier that runs after this declaration would not be split
+        //   (the reshape half sees the PaySplitMul-stage figure). Same figure when no
         //   other add/mul modifier touches the rent.
         On::Filter(
-            &[HookKind::PayMul],
+            &[HookKind::PaySplitMul],
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
             Some(split_rent_applies),
             split_rent,
@@ -106,7 +106,7 @@ fn split_rent(_player_id: i32, value: i32) -> i32 {
 
 /// Action half of the split: `ctx::gain(player_id, half, ...)`. Reads the
 /// **declared** amount at `TriggerKind::Effect` (the figure the old body saw
-/// at PayMul when no other add/mul modifier touched the rent) and gains
+/// at PaySplitMul when no other add/mul modifier touched the rent) and gains
 /// `amount / 2`.
 fn split_rent_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
@@ -334,7 +334,7 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
 }
 
 // 「你与对方均分那些地契收取的资金」 -- the split is a bend on the rent a named
-// deed collects, which is the `payMul` window with `t.Pay.IsRent`. 状态2's exit
+// deed collects, which is the `paySplitMul` window with `t.Pay.IsRent`. 状态2's exit
 // is the band skill's fire-pot drain (`skill_groups::ave_mujica`), so the split
 // runs only while `skillState == 2`.
 // TODO(规则书)[judgement]: 「均分」 -- the clause does not say whether it divides

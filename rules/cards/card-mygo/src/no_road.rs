@@ -20,7 +20,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // ABI v75: the payee rewrite is `FilterValue.payee` (the body returns
         // the new target; the wrapper calls `set_pay_target`). Pure.
         On::FilterValue(
-            &[HookKind::PayAdd],
+            &[HookKind::PaySplitAdd],
             "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
             Some(redirect_applies),
             redirect,

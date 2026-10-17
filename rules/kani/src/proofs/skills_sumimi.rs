@@ -21,7 +21,7 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // isolated paths — if isolation breaks the proof FAILS loudly).
 // ---------------------------------------------------------------------------
 
-/// `skill:Sumimi:人气偶像组合` `bend` (PayMul) — crystal read + pay fold.
+/// `skill:Sumimi:人气偶像组合` `bend` (PaySplitMul) — crystal read + pay fold.
 /// ABI v75 pure Filter: the body RETURNS `value + n*100` (no
 /// `trig_set_pay_amount`); it still reads `trigger::player_id` /
 /// `trigger::target` for 「向其他人收费」.
@@ -75,14 +75,14 @@ fn crystals_key() -> intern::NameId {
 // ===========================================================================
 // C-SUMIMI-band-02 -- rent bonus +100 per crystal
 // 「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。」
-// Entry: `On::Filter(PayMul)` on `skill:Sumimi:人气偶像组合`.
+// Entry: `On::Filter(PaySplitMul)` on `skill:Sumimi:人气偶像组合`.
 // Convention: `crystals()` is the running instance's counter (host: keyed on
 // `trig_player`); the body admits when `trigger.target == owner` (money
 // flowing to this player — 「向其他人收费」).
 // Seat-symmetric (the owner is the collector).
 // ===========================================================================
 
-/// In-place 2-seat world for the PayMul rewrite. Crystals live on the
+/// In-place 2-seat world for the PaySplitMul rewrite. Crystals live on the
 /// running instance (`self_crystals`).
 ///
 /// 「向其他人收费」: the owner is the **payee** of another seat's payment

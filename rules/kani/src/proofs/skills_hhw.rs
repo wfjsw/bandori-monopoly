@@ -445,7 +445,7 @@ pub fn kaoru_01_mutant_is_detected() {
 // ===========================================================================
 // C-HHW-band-01 -- 「向他人的格子付款时可选择支付双倍价格，若如此做，记录该玩家
 // 并使此卡获得一个奇迹水晶。」
-// Entry: `skill:Hello, Happy World!:传播笑容` / `On::Filter(PayChoose)` (MINE)
+// Entry: `skill:Hello, Happy World!:传播笑容` / `On::Filter(PaySplitChoose)` (MINE)
 // ===========================================================================
 
 #[kani::proof]

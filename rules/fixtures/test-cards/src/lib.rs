@@ -366,13 +366,13 @@ fn deny(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `PIPELINE-AUDIT` Q2 -- a 「分摊前」 probe: a placed card whose `payTotalAdd`
+/// `PIPELINE-AUDIT` Q2 -- a 「分摊前」 probe: a placed card whose `payCombinedAdd`
 /// hook cuts the **command total** by 500 (floor 0). With the pre-split stage
 /// wired right, a 「[分摊][支付]2000」 across two payers charges 750 each
 /// (ceil10(1500/2)); wired as a per-share stage it would charge 500 each.
 const TOTAL_CUT: CardDef = CardDef::new(
     "TEST:totalCut",
-    &[On::Filter(&[HookKind::PayTotalAdd], "", Some(total_cut_yes), total_cut)],
+    &[On::Filter(&[HookKind::PayCombinedAdd], "", Some(total_cut_yes), total_cut)],
 );
 
 fn total_cut_yes(_player_id: i32) -> bool {
@@ -426,7 +426,7 @@ fn self_charge(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `PIPELINE-AUDIT` B2 -- a `payAdd` probe that boosts **every** payment
+/// `PIPELINE-AUDIT` B2 -- a `paySplitAdd` probe that boosts **every** payment
 /// through the pipeline by 100, with no target filter. Placed on a seat that
 /// then goes bankrupt: after 规则书 L81 「所有其正在生效的卡，技能效果停止生效」
 /// the boost must not reach anyone's money.
@@ -434,7 +434,7 @@ const PAY_ADD_ANY: CardDef = CardDef::new(
     "TEST:payAddAny",
     &[
         On::Play("", None, pay_add_any_play),
-        On::Filter(&[HookKind::PayAdd], "", Some(total_cut_yes), pay_add_any)],
+        On::Filter(&[HookKind::PaySplitAdd], "", Some(total_cut_yes), pay_add_any)],
 );
 
 fn pay_add_any_play(player_id: i32) -> card_sdk::Asked {
@@ -478,13 +478,13 @@ fn tele_nosettle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Q3 (`PIPELINE-AUDIT`, user ruling 2026-10-07): a `payAdd` hook that drives
+/// Q3 (`PIPELINE-AUDIT`, user ruling 2026-10-07): a `paySplitAdd` hook that drives
 /// a **1000**-shaped payment to **-500**, with no floor. The reverse child
 /// (amount 500) does not match the guard and settles normally -- so one
 /// reversal, not a flip-flop loop. Placed like `TEST:totalCut`.
 const PAY_OVERCUT: CardDef = CardDef::new(
     "TEST:payOvercut",
-    &[On::Filter(&[HookKind::PayAdd], "", Some(total_cut_yes), pay_overcut)],
+    &[On::Filter(&[HookKind::PaySplitAdd], "", Some(total_cut_yes), pay_overcut)],
 );
 
 fn pay_overcut(player_id: i32, value: i32) -> i32 {
@@ -656,7 +656,7 @@ const PRE_HOOK: CardDef = CardDef::new(
     "TEST:preHook",
     &[
         On::Play("", None, pre_hook_place),
-        On::Filter(&[HookKind::PayAdd], "false", Some(pre_hook_guard), pre_hook_body,),
+        On::Filter(&[HookKind::PaySplitAdd], "false", Some(pre_hook_guard), pre_hook_body,),
     ],
 );
 

@@ -332,7 +332,7 @@ pub fn money<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
 pub fn gain<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let src = guest_msg(c, p, n)?;
                         // A card-driven gain runs the same `Money` pipeline as a payment --
-            // print (game -> player) -- so PayAdd / PayChoose / the `effect`
+            // print (game -> player) -- so PaySplitAdd / PaySplitChoose / the `effect`
             // counteraction window all see it. The pause/resume is the same as `pay`:
             // the engine answers with the amount that actually moved.
             {
@@ -371,7 +371,7 @@ pub fn gain_typed<C: HostCtx>(
 
 /// Raw money adjustment (`ctx::adjust_money` / `gain_raw` / `lose_raw`):
 /// `money += delta` with a `log.gain` / `log.lose` line and **no** payment
-/// pipeline (no `payAdd`, no `effect` window, no `payAfter`). 规则书
+/// pipeline (no `paySplitAdd`, no `effect` window, no `payAfter`). 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is.
 pub fn adjust_money<C: HostCtx>(
     c: &mut C,
