@@ -30,8 +30,23 @@ LOCALES = ROOT / "webui" / "src" / "i18n" / "locales"
 LANGS = ("zh-CN", "en")
 # webui files that emit protocol messages (their keys belong to the `game` namespace)
 PROTOCOL = {"net/api.ts", "game/session.ts", "i18n/msg.ts"}
-DYNAMIC = ("err.join.", "anim.chainKind.", "anim.chainSrc.")  # built at run time: net::describe, Board.tsx ChainOrigin
+DYNAMIC = ("err.join.", "anim.chainKind.", "anim.chainSrc.", "log.counter.")  # built at run time: net::describe, Board.tsx ChainOrigin, trigger_why::counter_name
 SPECIAL = ("blank", "list")  # message plumbing, not sentences
+# Tile-mark kinds: `TileMark::kind` **is** the i18n key (`trigger_why::mark_kind_name`
+# -> `Msg::new(kind)`), looked up at render time by fmtMsg, never referenced as a
+# message key in source. A colon is part of the key (`mark:cp`), not a namespace.
+# Without this list the "unused" sweep deletes every one of them and every mark
+# on the board renders as a raw key. Card-declared kinds (`key!("anon_tokyo_mark")`)
+# ride the `cards` namespace and are checked against the bundle below; rulebook
+# display-name kinds (多惠兔子, 抹茶芭菲, ...) fall back to their literal.
+RUNTIME_KEYS = (
+    "ember",
+    "mark:cp",
+    "mark:designate",
+    "noTarget",
+    "skillBlock",
+    "skill.uikaIdol.pot",
+)
 
 
 def load(lang: str, ns: str) -> dict[str, str]:
@@ -60,6 +75,8 @@ def main() -> int:
         for p in ROOT.glob(pat):
             if "target" in p.parts or "locales" in p.parts or "wasm" in p.parts or "tests" in p.parts:
                 continue
+            if p.name.endswith((".test.ts", ".test.tsx")):
+                continue  # unit tests name keys as fixtures, not as live references
             rel = p.relative_to(ROOT).as_posix()
             text = p.read_text(encoding="utf-8")
             if p.suffix == ".rs":
@@ -90,7 +107,8 @@ def main() -> int:
     for lang in LANGS:
         game, ui = load(lang, "game"), load(lang, "ui")
         report(lang, "game.json is missing keys the code emits", (k for k in engine_used if k not in game))
-        report(lang, "game.json has keys no code emits", (k for k in game if k not in engine_used and not any(k.startswith(d) for d in DYNAMIC)))
+        report(lang, "game.json is missing run-time mark kinds", (k for k in RUNTIME_KEYS if k not in game))
+        report(lang, "game.json has keys no code emits", (k for k in game if k not in engine_used and k not in RUNTIME_KEYS and not any(k.startswith(d) for d in DYNAMIC)))
         report(lang, "ui.json is missing keys the code emits", (k for k in ui_used if k not in ui))
         report(lang, "ui.json has keys no code uses", (k for k in ui if k not in ui_used and not any(k.startswith(d) for d in DYNAMIC)))
 

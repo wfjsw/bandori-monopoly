@@ -196,6 +196,21 @@ impl Cx<'_> {
         }
     }
 
+    /// Would a force-buy at `price` leave the reserve? Mirrors
+    /// `offer_force_buy`'s `Ask::with_ai` fill: standard reads
+    /// [`StrategyParams::wants_force_buy`], chaos keeps [`CHAOS_RESERVE`].
+    /// `price` is the quoted force-buy figure (the prompt's `view.price`),
+    /// which is not the plain land quote.
+    #[inline]
+    pub(crate) fn ai_wants_force_buy(&self, i: usize, price: i32) -> bool {
+        let money = self.w.st.players[i].money;
+        if self.is_chaos(i) {
+            bot_wants_force_buy(self.bot_mentality(i), money, price)
+        } else {
+            self.strategy_of(i).wants_force_buy(money, price)
+        }
+    }
+
     /// Standard: first affordable purchase, else first build,
     /// else none. Chaos: a random option it can pay for, never "none" while one
     /// exists.

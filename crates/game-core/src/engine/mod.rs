@@ -1254,16 +1254,32 @@ impl Match {
     /// A determinized fork has no precomputed fill (`bot-core`'s `stub_pending`
     /// can only mirror the searching seat's public `aiAnswer`, which the online
     /// frame no longer carries). This entry runs the same choice functions the
-    /// prompt-open fill ran: [`Cx::ai_auction_worth`] for an auction ceiling,
-    /// [`Cx::auto_mortgage`] for a mortgage selection, and
-    /// [`Cx::ai_answer_for_entry`] for every other prompt (the fallback, or a
-    /// counteraction propensity roll).
+    /// prompt-open fill ran:
+    ///
+    /// * [`Cx::ai_auction_worth`] for an auction ceiling,
+    /// * [`Cx::auto_mortgage`] for a mortgage selection,
+    /// * the `Ask::with_ai` policy tests the settle offers stamp -- "no"
+    ///   only when the fill said no ([`Cx::ai_wants_buy`] /
+    ///   [`Cx::ai_wants_build`] / [`Cx::ai_wants_force_buy`], 0 = accept),
+    /// * [`Cx::ai_agent_choice`] for the agent landing's tile pick
+    ///   (`rules/tiles`' `ask.agent.title`),
+    /// * [`Cx::ai_answer_for_entry`] for every other prompt (the fallback, or
+    ///   a counteraction propensity roll).
+    ///
+    /// The `with_ai` row matters: those fills are **not** the fallback. A
+    /// recompute that only ran `ai_answer_for_entry` answered a fundable buy
+    /// with the prompt's "decline" slot, and online 托管 (which trusts this
+    /// number over its own policy table) never bought a tile. Keep the
+    /// title-keyed rows in step with the `Ask::with_ai` sites in
+    /// [`super::play`] (`offer_buy` / `offer_build` / `offer_force_buy`) and
+    /// `rules/tiles` (`agent.rs`).
     ///
     /// `None` when the seat has no open prompt or has already answered. The
     /// result is **not** bit-identical to the live match's precomputed fill
     /// whenever that fill drew from the match RNG (auction ceilings, counteraction
     /// propensity) -- the fork owns a fresh stream. That is expected and
-    /// listed in the hidden-state audit (`docs/BOT.md` §1).
+    /// listed in the hidden-state audit (`docs/BOT.md` §1). The rows above are
+    /// deterministic and must match exactly.
     pub fn compute_ai_answer(&mut self, member: i32) -> Option<RawAiAnswer> {
         let i = self.player_index(member)?;
         let prompt = {
@@ -1306,6 +1322,38 @@ impl Match {
                 })
             }
             _ => {
+                // `Ask::with_ai` rows first: the settle offers stamp a policy
+                // test, not the fallback, and `ai_answer_for_entry` would
+                // return the prompt's "decline" / "none" slot for them. Title
+                // key is the marker (the client's `autopilot.ts` reads the
+                // same keys). 0 = accept the offer.
+                let t = prompt.tile;
+                let title = prompt.title.key();
+                let policy: Option<i32> = match title {
+                    "ask.buy.title" if t >= 0 => Some(if cx.ai_wants_buy(i, t as usize) { 0 } else { 1 }),
+                    "ask.build.title" if t >= 0 => Some(if cx.ai_wants_build(i, t as usize) { 0 } else { 1 }),
+                    "ask.force_buy.title" if t >= 0 => {
+                        let price = if prompt.price >= 0 {
+                            prompt.price
+                        } else {
+                            purchase::quote_native(&self.data, &self.world.st, t as usize).max(0)
+                        };
+                        Some(if cx.ai_wants_force_buy(i, price) { 0 } else { 1 })
+                    }
+                    "ask.agent.title" => {
+                        let tiles: Vec<usize> =
+                            prompt.items.iter().filter_map(|s| s.parse().ok()).collect();
+                        Some(cx.ai_agent_choice(i, &tiles))
+                    }
+                    _ => None,
+                };
+                if let Some(answer) = policy {
+                    return Some(RawAiAnswer {
+                        answer,
+                        picked: Vec::new(),
+                        worth: 0,
+                    });
+                }
                 // `fill_ai`'s per-seat body, on a throwaway `Ask` view of the
                 // same prompt (the fallback / counteraction propensity path). The
                 // prompt's own `Ask` is already filled on a stubbed fork, so
