@@ -2533,8 +2533,9 @@ mod tests {
             TriggerKind::None,
             "skillTeleport spelling is retired"
         );
-        // Nearby live ids must keep working.
-        assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::Teleport);
+        // Nearby ids: "teleport" (id 17) retired in v84, and live ids keep
+        // working.
+        assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
         assert_eq!(TriggerKind::MoveAfter.as_str(), "moveAfter");
     }
 }
