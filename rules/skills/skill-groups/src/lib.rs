@@ -12,7 +12,7 @@
 //!
 //! Hooks: the same two the character skills use, no third kind. A half the
 //! player presses is [`On::Play`] with its gate; a half a field event calls is
-//! [`On::Hook`] (the skill is a field card, C# `Fx`). See the module docs in
+//! [`On::Action`] (the skill is a field card, C# `Fx`). See the module docs in
 //! `skill-personas` for the shape and for what is still missing (id
 //! resolution, not hooks).
 
@@ -38,6 +38,7 @@ pub mod sumimi;
 use sumimi::SUMIMI;
 pub mod pastel;
 use pastel::PASTEL;
+pub mod fans;
 pub mod hhw;
 use hhw::HHW;
 pub mod circle_staff;

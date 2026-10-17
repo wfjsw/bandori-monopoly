@@ -55,13 +55,13 @@ Both resolve harnesses below are `VERIFICATION:- SUCCESSFUL`.
 | C-R-louder-01 | 「使ring的价格基础乘数+5」 | BLOCKED-HOST | — | — | `add_ring_bonus` / `ring_multiplier` are protocol stubs with no world slot | OPEN-RING-MULT |
 | C-R-Fire bird-01 | 「支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶」 | PROVEN (pay+place) | `fire_bird_place_iff`, `fire_bird_place_mutant_is_detected` | (pending) | PayMoney 1600 + PlaceCard(Field). Crystals are a silent `set_counter` write (no effect-log entry) | OPEN-FIRE-X |
 | C-R-Fire bird-02 | 「每回合结束时失去400资金并移除1个奇迹水晶」 | PROVEN (pay) | `fire_bird_burn_iff`, `fire_bird_burn_mutant_is_detected` | (pending) | PayMoney 400; crystal decay is a silent counter write | — |
-| C-R-Fire bird-03 | 「自己的所有格子收费变成1.5倍」 | PROTOCOL-LEVEL | — | — | rent multiplier is a `PayMul` hook over the settle pipeline | OPEN-R1, OPEN-ROUND10 |
+| C-R-Fire bird-03 | 「自己的所有格子收费变成1.5倍」 | PROTOCOL-LEVEL | — | — | rent multiplier is a `PaySplitMul` hook over the settle pipeline | OPEN-R1, OPEN-ROUND10 |
 | C-R-Fire bird-04 | 「奇迹水晶耗尽时将此卡放入弃牌堆」 | PROTOCOL-LEVEL | — | — | `CounterChanged` unplace-to-discard is the field lifecycle | — |
 | C-R-NFO-01 | 「投掷1d6」 | PROVEN (folded into face slices) | (face harnesses cover 1..=6) | (pending) | Kani `roll(1,6)` is already 1..=6 | — |
 | C-R-NFO-02 | 「并在回合结束后获得一层[停留]」 | PROVEN (harness written; verdict pending slot) | `nfo_stay_iff`, `nfo_stay_mutant_is_detected` | (slot starved) | AtEnd entry: exactly GiveStay{1} | — |
 | C-R-NFO-03 | 「若投掷结果为1，获得1500资金」 | PROVEN | `nfo_face1_iff`, `nfo_face1_mutant_is_detected` | (pending) | face-1 slice: exactly GainMoney 1500 | — |
 | C-R-NFO-04 | face 2 jump + 分摊 1000 | OPEN / PROTOCOL-LEVEL | — | — | move plan + split pay + main-move consume | OPEN-分摊, OPEN-触发结算 |
-| C-R-NFO-05 | face 3 field + 1000 off next pay | PROTOCOL-LEVEL | — | — | place + later PayAt discount + discard is multi-window | — |
+| C-R-NFO-05 | face 3 field + 1000 off next pay | PROTOCOL-LEVEL | — | — | place + later PaySplitAt discount + discard is multi-window | — |
 | C-R-NFO-06 | face 4 replay a discard card | PROTOCOL-LEVEL | — | — | `play_card` of another card is nested activation | — |
 | C-R-NFO-07 | face 5 +6 crystals on character card | OPEN | — | — | character-card crystal host is outside 「[场上]」 | OPEN-场上 |
 | C-R-NFO-08 | face 6 = 1-5 in order | PROTOCOL-LEVEL | — | — | union of 03-07, multi-window | — |

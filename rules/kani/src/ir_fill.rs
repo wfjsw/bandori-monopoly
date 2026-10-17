@@ -71,8 +71,9 @@
 //! ### Named counters
 //!
 //! Every `(NameId, i32)` in `w.player_keys[owner]` (tokens / slots / state)
-//! is copied via `id_of` of the interned name. The well-known `P✽P粉丝(正)/(反)`
-//! keys are also the pilot views `w.fans_pos/neg`. Candidate `card.counter`
+//! is copied via `id_of` of the interned name. The well-known `ppFansUp` /
+//! `ppFansDown` state-dict keys are also the pilot views `w.fans_pos/neg`.
+//! Candidate `card.counter`
 //! pairs come from `ov.card_counters` (key = `id_of(name)`). Every board tile
 //! name is registered (`tile_named`), matching `fill_window`'s `tile_ids`.
 //! Missing names answer 0 (`tok` / `slot` / `card.counter` default) or -1
@@ -113,8 +114,8 @@ use crate::world::{self, World};
 pub const TOK_PP_POS: &str = world::TOK_PP_POS;
 pub const TOK_PP_NEG: &str = world::TOK_PP_NEG;
 
-/// Compile-time `id_of` for the pilot fan tokens. Using the consts (not a
-/// runtime `id_of` call) keeps those hashes out of the CBMC unwind path.
+/// Compile-time `id_of` for the pilot fan state-dict keys. Using the consts
+/// (not a runtime `id_of` call) keeps those hashes out of the CBMC unwind path.
 pub const ID_TOK_PP_POS: i64 = rules_cond_ir::ctx::id_of(TOK_PP_POS);
 pub const ID_TOK_PP_NEG: i64 = rules_cond_ir::ctx::id_of(TOK_PP_NEG);
 /// Player-state keys the host reads as `stun` / `exile` / `noHand`.
@@ -125,21 +126,26 @@ pub const KEY_NO_HAND: &str = "noHand";
 pub const KEY_UNSTOPPABLE: &str = "unstoppable";
 /// The finite player-state key set the IR `state(p, 'key')` table carries
 /// (`STATE_CAP = 64` = 4 seats x these). `stay` lives on `World::stay`, not
-/// `player_keys`, and is folded in by [`fill_state_rows`].
-pub const STATE_KEYS: [&str; 5] = [
+/// `player_keys`, and is folded in by [`fill_state_rows`]. Fan counters are
+/// the `ppFansUp` / `ppFansDown` dict keys (`skill_groups::fans`).
+pub const STATE_KEYS: [&str; 7] = [
     KEY_STUN,
     KEY_STUN_START,
     KEY_EXILE,
     KEY_NO_HAND,
     KEY_UNSTOPPABLE,
+    TOK_PP_POS,
+    TOK_PP_NEG,
 ];
 /// `id_of` of each [`STATE_KEYS`] entry (const, so never a CBMC hash walk).
-pub const STATE_KEY_IDS: [i64; 5] = [
+pub const STATE_KEY_IDS: [i64; 7] = [
     rules_cond_ir::ctx::id_of(KEY_STUN),
     rules_cond_ir::ctx::id_of(KEY_STUN_START),
     rules_cond_ir::ctx::id_of(KEY_EXILE),
     rules_cond_ir::ctx::id_of(KEY_NO_HAND),
     rules_cond_ir::ctx::id_of(KEY_UNSTOPPABLE),
+    rules_cond_ir::ctx::id_of(TOK_PP_POS),
+    rules_cond_ir::ctx::id_of(TOK_PP_NEG),
 ];
 /// `id_of("stay")` -- the one state key backed by `World::stay` rather than
 /// `player_keys`.
@@ -369,7 +375,7 @@ impl TriggerOverlay {
 // -------------------------------------------------------------------------
 
 pub mod src {
-    /// PP:[丸山彩]憧憬的前方 `On::Hook(PayAdd)`.
+    /// PP:[丸山彩]憧憬的前方 `On::Filter(PaySplitAdd)`.
     pub const AYA_PAY_ADD: &str = "actor == owner && value > 0";
     /// A function-carrying guard (`is_start`).
     pub const IS_CIRCLE: &str = ruleset_core::guards::OWN_START;
@@ -500,8 +506,8 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
 }
 
 /// Fill seat `p`'s `state(p, 'key')` rows: the finite [`STATE_KEYS`] set plus
-/// `stay` (backed by `World::stay`, not `player_keys`). 5 key-ids + stay =
-/// 6 rows per seat; 4 seats = 24 of `STATE_CAP = 64`.
+/// `stay` (backed by `World::stay`, not `player_keys`). 7 key-ids + stay =
+/// 8 rows per seat; 4 seats = 32 of `STATE_CAP = 64`.
 fn fill_state_rows(c: &mut IrCtx, w: &World, p: usize) {
     c.state_set(p as i64, ID_STATE_STAY, w.stay[p] as i64);
     let mut i = 0usize;
@@ -944,7 +950,7 @@ pub fn fill_from_world(
     c
 }
 
-/// PayAdd-shaped fill: actor = triggering seat, owner = card owner,
+/// PaySplitAdd-shaped fill: actor = triggering seat, owner = card owner,
 /// value = pay amount.
 ///
 /// This is a **light** fill (window + candidate scalars + per-seat money/out
@@ -955,7 +961,7 @@ pub fn fill_pay_add(w: &World, owner: i32) -> IrCtx {
     let mut c = IrCtx::default();
     c.n_players = w.n_players as i64;
     c.tile_count = 60;
-    // OptInt slots that the PayAdd guard family may read. No VARS walk —
+    // OptInt slots that the PaySplitAdd guard family may read. No VARS walk —
     // iterating the 43-entry table is a CBMC cliff inside a proof.
     c.set_scalar(VarId::PlanFixedRoll, -1);
     c.set_scalar(VarId::MoveRoll, -1);

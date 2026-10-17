@@ -23,7 +23,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // 「花音每次倒走时」 -- a backward walk that is not a teleport (C#
         // `m.Reverse && !m.Teleport`). `move.dir < 0` is the direction clause:
         // the body-top `move_dir() >= 0` early-out is the condition now.
-        On::Hook(
+        On::Action(
             &[HookKind::Pass],
             "actor == owner && move.kind != Teleport && move.dir < 0",
             None,

@@ -6,7 +6,7 @@
 //!
 //! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{FilterValue, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -17,8 +17,8 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).
-        On::Hook(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
-        On::Hook(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
+        On::Filter(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
+        On::FilterValue(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 6000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷宫般的仓库"#)
@@ -29,23 +29,22 @@ pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
         .fields(&[("group", r#"Poppin' Party"#), ("owner", "")]));
 
 /// 「本回合购买格子不[消耗]资金」 -- `BuySet` is the free / fixed stage
-/// (`docs/PURCHASE.md`), so the hook sets the running price to 0.
-fn free_buy(_player_id: i32) -> card_sdk::Asked {
+/// (`docs/PURCHASE.md`), so the hook returns 0 as the running price.
+fn free_buy(_player_id: i32, value: i32) -> i32 {
     if trigger::tile() < 0 {
-        return Ok(());
+        return value;
     }
-    trigger::set_price(0);
-    Ok(())
+    0
 }
 
 /// 「如果购买则拆除那个格子上的所有房屋」 -- `BuyAssign` rewrites the deal's
 /// post-commit house count (`docs/PURCHASE.md`).
-fn raze(_player_id: i32) -> card_sdk::Asked {
+fn raze(_player_id: i32, mut v: FilterValue) -> FilterValue {
     if trigger::tile() < 0 {
-        return Ok(());
+        return v;
     }
-    trigger::set_deal_houses(0);
-    Ok(())
+    v.deal_houses = 0;
+    v
 }
 
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -147,12 +146,12 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn free_buy_kani(player_id: i32) -> card_sdk::Asked {
-    free_buy(player_id)
+pub fn free_buy_kani(player_id: i32, value: i32) -> i32 {
+    free_buy(player_id, value)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn raze_kani(player_id: i32) -> card_sdk::Asked {
-    raze(player_id)
+pub fn raze_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    raze(player_id, v)
 }

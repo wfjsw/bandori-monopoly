@@ -25,7 +25,7 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         // stage on the buy price, riding a `ctx::linger` instance for the turn
         // (`docs/PURCHASE.md`). The engine floors the stage at 0. The tile is
         // the hook's applicability (the residual guard).
-        On::Hook(&[HookKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
+        On::Filter(&[HookKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"@Tsugu ycm"#)
@@ -49,9 +49,8 @@ fn buy_add_on_a_tile(_player_id: i32) -> bool {
 /// （3）: 「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- `BuyAdd` is the
 /// fixed-± stage (`docs/PURCHASE.md`), so the hook subtracts and the engine
 /// floors the stage at 0.
-fn buy_add_1500(_player_id: i32) -> card_sdk::Asked {
-    trigger::set_price(trigger::price() - 1500);
-    Ok(())
+fn buy_add_1500(_player_id: i32, value: i32) -> i32 {
+    value - 1500
 }
 
 /// C# `H.TileNamed("Bandori车站")` -- the rulebook spells it “bandori车站”.
@@ -185,6 +184,6 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn buy_add_1500_kani(player_id: i32) -> card_sdk::Asked {
-    buy_add_1500(player_id)
+pub fn buy_add_1500_kani(player_id: i32, value: i32) -> i32 {
+    buy_add_1500(player_id, value)
 }

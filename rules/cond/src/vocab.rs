@@ -378,6 +378,16 @@ pub const VOCAB: &[Name] = &[
         doc: "was this the turn's main move",
     },
     Name {
+        cel: "move.by_skill",
+        aliases: &[],
+        flat: "move_by_skill",
+        scope: Scope::Window,
+        ty: Ty::Bool,
+        get: |v| v.move_by_skill() as i64,
+        fx: NO_FX,
+        doc: "the move was shaped or started by a skill",
+    },
+    Name {
         cel: "move.dir",
         aliases: &[],
         flat: "move_dir",

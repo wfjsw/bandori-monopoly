@@ -17,7 +17,7 @@ use crate::engine::world::Extreme;
 impl World {
     // ------------------------------------------- move shaping
 
-    // These shape the movement being planned (set from a card's RollPlan
+    // These shape the movement being planned (set from a card's DiceRollPlan
     // routine). They read/write `TurnCtx::plan`, which is the live routine
     // state; the broadcast summary is `MatchState::plan` (`MoveCtx::to_plan`).
 
@@ -552,8 +552,8 @@ impl World {
     /// (「立刻获得此次失去的资金金额」).
     ///
     /// The ledger still closes: the movement is logged as a `gain` event with
-    /// its bank leg (`value`), even though it bypasses the `payAdd`/`payMul`/
-    /// `payChoose` modifier pipeline.
+    /// its bank leg (`value`), even though it bypasses the `paySplitAdd`/`paySplitMul`/
+    /// `paySplitChoose` modifier pipeline.
     pub fn gain_fixed(&mut self, player_id: i32, amount: i32, why: crate::msg::Msg) -> i32 {
         if amount == 0 {
             return 0;
@@ -1400,7 +1400,7 @@ impl World {
     }
 
     /// Place the player's skill rules on their field. This is the binding:
-    /// see [`crate::data::GameData::skill_rules_of`]. Once placed, `On::Hook`
+    /// see [`crate::data::GameData::skill_rules_of`]. Once placed, `On::Action`
     /// reaches them like any other field card and named counter counters work on
     /// them. Idempotent -- calling it twice does not double-place.
     pub fn bind_skills(
@@ -1530,7 +1530,7 @@ impl World {
     /// the event in [`crate::state::MatchState::event_active`] (`docs/EVENTS.md`).
     ///
     /// Called from `draw_event` when the event's rule exists in the ruleset, so
-    /// the body's `On::Play` and any `On::Hook` it declares run against a live
+    /// the body's `On::Play` and any `On::Action` it declares run against a live
     /// instance (props, named counters, `unplace_self` = expire). Idempotent per
     /// event id: a second activation of the same event keeps the first
     /// instance. Returns the instance uid, or -1 when there is no rule

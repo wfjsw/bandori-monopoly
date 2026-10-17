@@ -32,7 +32,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn karaoke(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。」
     // -- C# arms `KaraokeFx` and the rolls happen when the main move rolls
-    // (`KaraokeFx.RollAfter` -> `Sing`). Shaping this turn's main move is the
+    // (`KaraokeFx.DiceRollAfter` -> `Sing`). Shaping this turn's main move is the
     // plan-flags path: roll the faces here and pin the chosen one with
     // `set_fixed_roll`, so the walk then runs as a normal dice move.
     ctx::log(

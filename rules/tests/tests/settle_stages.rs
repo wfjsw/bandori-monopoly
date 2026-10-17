@@ -306,7 +306,7 @@ fn q7_settle_before_relocation_settles_at_the_new_tile() {
 /// 规则书 (要乐奈 (2)): 「其他人在space触发结算时可将自己拥有的一个"抹茶芭菲"
 /// 转移到该格上以免除当次付款」. The settling non-owner who holds a held
 /// parfait is **offered** the transfer; on yes one unit moves onto Space and
-/// the payment-stage cancel runs (same `payTotalCancel` gesture as the owner
+/// the payment-stage cancel runs (same `payCombinedCancel` gesture as the owner
 /// branch). Deliberate behaviour change: this clause was previously unimplemented.
 ///
 /// Setup: P0 owns the skill (and so every 抹茶芭菲), P1 owns Space, P2 settles it.

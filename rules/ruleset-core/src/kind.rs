@@ -26,6 +26,9 @@ pub const SKILL_USED: i32 = 74;
 pub const HOUSE_ADDED: i32 = 75;
 /// 「以代替此次技能的火罐消耗」 (before one charge spend commits). Wire 78.
 pub const CHARGE_PAYING: i32 = 78;
+/// 「将X个反面[P㏄P粉丝]变正」 (after the flip request is known, before the
+/// dict writes). Wire 107. `trigger::value()` is the effect's intended X.
+pub const FANS_FLIP: i32 = 107;
 
 /// 「经过奖励受影响」 -- a [反击] to the pass-reward pick, before the payout.
 pub const PassRewardAffected: TriggerKind = TriggerKind(PASS_REWARD_AFFECTED);
@@ -37,6 +40,9 @@ pub const SkillUsed: TriggerKind = TriggerKind(SKILL_USED);
 pub const HouseAdded: TriggerKind = TriggerKind(HOUSE_ADDED);
 /// Before one charge spend commits; cancel to substitute the cost.
 pub const ChargePaying: TriggerKind = TriggerKind(CHARGE_PAYING);
+/// 「将X个反面[P㏄P粉丝]变正」 -- raised by [`rule fans::flip_up`] before the
+/// dict writes so a listener sees the pre-flip face-down count. Action kind.
+pub const FansFlip: TriggerKind = TriggerKind(FANS_FLIP);
 
 // ------------------------------------------------------- tile kind strings
 

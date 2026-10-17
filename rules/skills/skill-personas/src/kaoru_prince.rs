@@ -36,18 +36,18 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
     "skill:濑田薰:梦幻的王子殿下",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], "", None, declare_cap),
+        On::Action(&[HookKind::TurnStartBefore], "", None, declare_cap),
         // （1） 「每次[经过]…时」 -- "I pass" is `actor == owner` (`MINE`); an
         // unfiltered `Pass` fires for every passer's every step. The two halves
         // of 「[经过]或被[经过]」 never both fire on one step: `Pass` here needs
         // the owner to be the passer, and `PassTile` below needs someone else
         // to step onto the owner's tile.
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Action(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4), the passer's step onto this player's tile -- not the end-tile
         // [重叠]. `target` is not on a `passTile` payload, so the condition
         // reads the tile being entered.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor != owner && tile.id == owner.pos",
             None,

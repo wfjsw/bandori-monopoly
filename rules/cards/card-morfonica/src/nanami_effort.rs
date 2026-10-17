@@ -35,10 +35,10 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // or the placed (3) press (spend 1 crystal to fire the owner's (2)
         // skill). The gate admits whenever either branch is available.
         On::Play("", Some(cant_play), play),
-        On::AtEnd("", None, discard_down_to_five),
+        On::Action(&[HookKind::AtEnd], "", None, discard_down_to_five),
         // （4）「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- same CounterChanged
         // shape as AG:（摩卡）0.5倍速 / R:Fire bird.
-        On::Hook(
+        On::Action(
             &[HookKind::CounterChanged],
             "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0",
             Some(crystals_changed_guard),

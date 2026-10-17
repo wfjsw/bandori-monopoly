@@ -28,9 +28,9 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         // must still enter the body; gating the hook on `builtLast == 0` left
         // that arm dead (and skipped the builtThis reset), so the second build
         // paid full price.
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        On::Hook(&[ruleset_core::kind::HouseAdded], card_sdk::pre::MINE, None, on_built),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[ruleset_core::kind::HouseAdded], card_sdk::pre::MINE, None, on_built),
+        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .silent(&[1, 2]);

@@ -19,8 +19,8 @@ pub const SPARKLER: CardDef = CardDef::new(
         // C# `CardSparkler.TurnEndAfter` -> `Burn` -- a field hook on the card's own
         // turn end while it is in play (ABI v23 `TurnEndAfter`: after `TurnEnd`,
         // matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
-        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
+        On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"燃尽前的线香花火"#)

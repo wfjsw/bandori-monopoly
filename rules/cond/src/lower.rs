@@ -287,12 +287,17 @@ fn collect_dir(dir: &std::path::Path, out: &mut Vec<String>) {
         };
         for kind in [
             "Play",
-            "Hook",
+            "Action",
+            "Filter",
+            "FilterFlag",
+            "FilterValue",
             "Counteract",
             "Gate",
-            "RollPlan",
-            "AtEnd",
             "Settle",
+            "Mortgage",
+            "Redeem",
+            "Buy",
+            "Build",
             "Message",
         ] {
             let pat = format!("On::{kind}(");

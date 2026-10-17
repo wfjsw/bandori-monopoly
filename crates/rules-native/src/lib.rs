@@ -537,11 +537,13 @@ fn entry_of(info: &CardInfo, call: &Call, trigger_kind: TriggerKind) -> Option<i
         // (Play mode selection happens in `NativeModules::play_entry_for`.)
         Call::Counteract { .. } => info.entry(OnKind::Counteract, Some(trigger_kind)),
         Call::Hook { kind, .. } => info.hook_entry(*kind),
-        Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
-        Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
+        Call::AtEnd { .. } => info.hook_entry(card_sdk::abi::TriggerKind::AtEnd),
+        Call::DiceRollPlan { .. } => info.hook_entry(card_sdk::abi::TriggerKind::DiceRollPlan),
         Call::Settle { .. } => info.entry(OnKind::Settle, None),
         Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
         Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
+        Call::Buy { .. } => info.entry(OnKind::Buy, None),
+        Call::Build { .. } => info.entry(OnKind::Build, None),
     }
 }
 
@@ -718,16 +720,18 @@ impl CardModules for NativeModules {
         let Some(entry) = entry_of(info, &call, world.trigger().kind) else {
             return Ok(Outcome::Done(world.clone()));
         };
-        // v49: AtEnd / RollPlan / Settle answer "does this entry apply?" here
+        // v49: AtEnd / DiceRollPlan / Settle answer "does this entry apply?" here
         // (mirrors `Ruleset::run`). A rejecting entry runs no body and so never
         // flashes.
         if matches!(
             call,
             Call::AtEnd { .. }
-            | Call::RollPlan { .. }
+            | Call::DiceRollPlan { .. }
             | Call::Settle { .. }
             | Call::Mortgage { .. }
             | Call::Redeem { .. }
+            | Call::Buy { .. }
+            | Call::Build { .. }
         ) {
             let scope =
                 game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
@@ -799,7 +803,7 @@ impl CardModules for NativeModules {
             answers.to_vec(),
             0,
         ));
-        // v49: `On::Hook` and `On::Gate` both carry the condition /
+        // v49: `On::Action` and `On::Gate` both carry the condition /
         // residual-guard pair; a rejecting entry is skipped (and so never
         // flashes).
         {

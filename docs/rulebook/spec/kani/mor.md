@@ -61,8 +61,8 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-wing-02 | 「立刻进行移动掷骰」 | PROTOCOL-LEVEL | — | — | `card_move` scheduling stub | — |
 | C-MOR-starry-01 | 「支付X次1000…放置X个[奇迹水晶]」 | PROVEN | `starry_01_place_iff`, `starry_01_mutant_is_detected` | (pending) | X symbolic 1..=5 | OPEN-X, OPEN-场地中央 |
 | C-MOR-starry-02 | 「此卡没有[奇迹水晶]时加入弃牌堆」 | PROVEN (dest write) | folded into `starry_06_payout_iff` | (pending) | discard commit = `set_dest(Graveyard)`; not an effect | — |
-| C-MOR-starry-03 | 「可以放弃第一次的结果重骰一次」 | BLOCKED-HOST | — | — | RollAfter arm needs unmodeled `trig_move_main` | OPEN-重骰次数 |
-| C-MOR-starry-04 | 「当其他角色的移动掷骰结果是偶数时…」 | BLOCKED-HOST | — | — | same RollAfter arm (`trig_move_main`, `trig_move_roll`) | — |
+| C-MOR-starry-03 | 「可以放弃第一次的结果重骰一次」 | BLOCKED-HOST | — | — | DiceRollAfter arm needs unmodeled `trig_move_main` | OPEN-重骰次数 |
+| C-MOR-starry-04 | 「当其他角色的移动掷骰结果是偶数时…」 | BLOCKED-HOST | — | — | same DiceRollAfter arm (`trig_move_main`, `trig_move_roll`) | — |
 | C-MOR-starry-05 | 「经过CiRCLE时…移除一个[奇迹水晶]」 | PROVEN | `starry_05_circle_iff`, `starry_05_noop` | (pending) | PassTile arm; `trig_tile=1` = CiRCLE | — |
 | C-MOR-starry-06 | 「每个[奇迹水晶]移除时…获得1000资金」 | PROVEN | `starry_06_payout_iff`, `starry_06_mutant_is_detected` | (pending) | GainMoney 1000/removed | — |
 | C-MOR-tritone-01 | 「[反击]…立刻获得此次失去的资金金额，此卡放置在场上」 | PROVEN (body) | `tritone_01_gain_place_iff` | (pending) | window is PROTOCOL; body GainMoney+PlaceCard+SetState(owed) | 「任意时刻」 |
@@ -87,7 +87,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 
 | ID | book quote (short) | classification | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-MOR-mashiro-01 | 「[主动移动]时移动掷骰变为2d20」 | PROTOCOL-LEVEL | — | — | RollPlan plan-field stubs | OPEN-主动移动 |
+| C-MOR-mashiro-01 | 「[主动移动]时移动掷骰变为2d20」 | PROTOCOL-LEVEL | — | — | DiceRollPlan plan-field stubs | OPEN-主动移动 |
 | C-MOR-mashiro-02 | 「反方向移动」 | PROTOCOL-LEVEL | — | — | move direction is plan scheduling | — |
 | C-MOR-touko-01 | 「每次[经过]CiRCLE时获得一个[火罐]（初始1，上限1）」 | PROVEN (below-cap) | `touko_01_fire_iff`, `touko_01_noop_not_circle`, `touko_01_mutant_is_detected` | (pending) | at-cap: `gain_fire` ignores `fire_max` → BLOCKED-HOST | — |
 | C-MOR-touko-02 | 「消耗一个火罐并指定你的一个地块…支付你X」 | BLOCKED-HOST | — | — | body uses `rent_of` (unmodeled); `touko_02_x` arithmetic ready | OPEN-地租档 |
@@ -98,7 +98,7 @@ verdict is CBMC's `VERIFICATION:- …` line.
 | C-MOR-tsukushi-02 | 「将对方的X标记翻面并代替其进行一次该动作」 | Spec pinned; harness deferred | — | — | mark flip OPEN; draw-tag PROTOCOL | OPEN-X标记 |
 | C-MOR-tsukushi-03 | 「移除所有X标记…获得移除标记数量*800…」 | PROVEN (n×rate+decay) | `tsukushi_03_sweep_iff`, `tsukushi_03_mutant_is_detected` | (pending) | unseeded RATE maps 0→200 not first-fire 800 (legal play seeds 800) | OPEN-X标记 |
 | C-MOR-rui-crit-01 | 「当复制者使x重置为0时，对方失去该技能（2）」 | OPEN / documented-only | — | — | copy mechanism undefined | OPEN-复制 |
-| C-MOR-rui-crit-02 | 「roll1d20…获得资金翻倍或无需失去资金」 | PROVEN candidate | `rui_crit_02_roll_iff`, `rui_crit_02_noop`, `rui_crit_02_mutant_is_detected` | (pending) | watch: signedness of PayChoose value | OPEN-双方影响 |
+| C-MOR-rui-crit-02 | 「roll1d20…获得资金翻倍或无需失去资金」 | PROVEN candidate | `rui_crit_02_roll_iff`, `rui_crit_02_noop`, `rui_crit_02_mutant_is_detected` | (pending) | watch: signedness of PaySplitChoose value | OPEN-双方影响 |
 
 ## Band-skill clauses
 
@@ -176,7 +176,7 @@ Harness families awaiting a verdict:
 7. **`gain_fire` must honour `fire_max`** — at-cap fire legs (touko-01, nanami-01).
 8. **`trig_set_cancelled` must set true** — currently always false. Blocks band-02 cancel.
 9. **`move_dir` / `card_settle_at` / `fixed_roll` / `trig_card_is`** — protocol
-   stubs returning 0; needed for wing-01, noble-02 settle, starry RollAfter.
+   stubs returning 0; needed for wing-01, noble-02 settle, starry DiceRollAfter.
 
 ## OPEN refs
 

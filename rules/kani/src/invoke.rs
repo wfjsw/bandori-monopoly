@@ -160,14 +160,18 @@ fn body_of(on: &On) -> fn(i32) -> Asked {
     match on {
         On::Play(_, _, f)
         | On::Counteract(_, _, _, f)
-        | On::Hook(_, _, _, f)
-        | On::Gate(_, _, _, f)
-        | On::RollPlan(_, _, f)
-        | On::AtEnd(_, _, f)
+        | On::Action(_, _, _, f)
         | On::Settle(_, _, f)
         | On::Mortgage(_, _, f)
         | On::Redeem(_, _, f)
+        | On::Buy(_, _, f)
+        | On::Build(_, _, f)
         | On::Message(_, _, _, f) => *f,
+        // Filter bodies are not `fn(i32) -> Asked`; kani proofs call them
+        // through `filter_*_idx` / direct trampolines instead.
+        On::Filter(..) | On::FilterFlag(..) | On::FilterValue(..) => {
+            fail_no_kind("Filter (use filter_idx)")
+        }
     }
 }
 
@@ -285,9 +289,10 @@ pub fn entry_c<const IDX: usize>(entry_index: usize, player: i32) -> Asked {
 
 /// First entry of card `idx` whose kind matches `kind` / `hook_name`.
 ///
-/// `kind` is one of `"Play"`, `"Counteract"`, `"Hook"`, `"Gate"`, `"AtEnd"`,
-/// `"RollPlan"`, `"Settle"`, `"Message"`. For `Hook`, `hook_name` may filter
-/// by `HookKind` short name (`"PayAdd"`); `""` matches the first hook.
+/// `kind` is one of `"Play"`, `"Counteract"`, `"Action"` /
+/// `"Filter"`, `"Gate"`, `"AtEnd"`,
+/// `"DiceRollPlan"`, `"Settle"`, `"Message"`. For `Action`/`Filter`, `hook_name` may filter
+/// by `HookKind` short name (`"PaySplitAdd"`); `""` matches the first hook.
 ///
 /// `kind` / `hook_name` are short ASCII tags (not card ids). Parsed to
 /// integers first so the `On` dispatch is enum compares, not `memcmp`.
@@ -298,15 +303,26 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
         let hit = match (ktag, on) {
             (KindTag::Play, On::Play(..)) => true,
             (KindTag::Counteract, On::Counteract(..)) => true,
-            (KindTag::Hook, On::Hook(kinds, ..)) => {
+            (KindTag::Action, On::Action(kinds, ..)) => {
                 hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
             }
-            (KindTag::Gate, On::Gate(..)) => true,
-            (KindTag::AtEnd, On::AtEnd(..)) => true,
-            (KindTag::RollPlan, On::RollPlan(..)) => true,
+            (KindTag::Filter, On::Filter(kinds, ..) | On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
+                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+            }
+            (KindTag::Gate, On::FilterFlag(kinds, ..) | On::FilterValue(kinds, ..)) => {
+                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+            }
+            (KindTag::AtEnd, On::Action(kinds, ..)) => {
+                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+            }
+            (KindTag::DiceRollPlan, On::FilterValue(kinds, ..)) => {
+                hook_name.is_empty() || hook_kind_matches(kinds, hook_name)
+            }
             (KindTag::Settle, On::Settle(..)) => true,
             (KindTag::Mortgage, On::Mortgage(..)) => true,
             (KindTag::Redeem, On::Redeem(..)) => true,
+            (KindTag::Buy, On::Buy(..)) => true,
+            (KindTag::Build, On::Build(..)) => true,
             (KindTag::Message, On::Message(..)) => true,
             _ => false,
         };
@@ -322,14 +338,17 @@ pub fn hook_idx(idx: usize, kind: &str, hook_name: &str, player: i32) -> Asked {
 enum KindTag {
     Play,
     Counteract,
-    Hook,
+    Action,
+    Filter,
     Gate,
     AtEnd,
-    RollPlan,
+    DiceRollPlan,
     Settle,
     Message,
     Mortgage,
     Redeem,
+    Buy,
+    Build,
     Other,
 }
 
@@ -413,25 +432,31 @@ const fn tag_key_const(s: &str) -> (u8, u64, u64) {
 fn kind_tag(kind: &str) -> KindTag {
     const PLAY: (u8, u64, u64) = tag_key_const("Play");
     const COUNTERACT: (u8, u64, u64) = tag_key_const("Counteract");
-    const HOOK: (u8, u64, u64) = tag_key_const("Hook");
+    const ACTION: (u8, u64, u64) = tag_key_const("Action");
+    const FILTER: (u8, u64, u64) = tag_key_const("Filter");
     const GATE: (u8, u64, u64) = tag_key_const("Gate");
     const AT_END: (u8, u64, u64) = tag_key_const("AtEnd");
-    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
+    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("DiceRollPlan");
     const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
     const MESSAGE: (u8, u64, u64) = tag_key_const("Message");
     const MORTGAGE: (u8, u64, u64) = tag_key_const("Mortgage");
     const REDEEM: (u8, u64, u64) = tag_key_const("Redeem");
+    const BUY: (u8, u64, u64) = tag_key_const("Buy");
+    const BUILD: (u8, u64, u64) = tag_key_const("Build");
     match tag_key(kind) {
         PLAY => KindTag::Play,
         COUNTERACT => KindTag::Counteract,
-        HOOK => KindTag::Hook,
+        ACTION => KindTag::Action,
+        FILTER => KindTag::Filter,
         GATE => KindTag::Gate,
         AT_END => KindTag::AtEnd,
-        ROLL_PLAN => KindTag::RollPlan,
+        ROLL_PLAN => KindTag::DiceRollPlan,
         SETTLE => KindTag::Settle,
         MESSAGE => KindTag::Message,
         MORTGAGE => KindTag::Mortgage,
         REDEEM => KindTag::Redeem,
+        BUY => KindTag::Buy,
+        BUILD => KindTag::Build,
         _ => KindTag::Other,
     }
 }
@@ -441,20 +466,20 @@ pub fn counteract_idx(idx: usize, player: i32) -> Asked {
     hook_idx(idx, "Counteract", "", player)
 }
 
-/// First `On::Hook` of card `idx`, optionally filtered by hook-kind name.
+/// First `On::Action` of card `idx`, optionally filtered by hook-kind name.
 #[inline(always)]
 pub fn hook_only_idx(idx: usize, hook_name: &str, player: i32) -> Asked {
-    hook_idx(idx, "Hook", hook_name, player)
+    hook_idx(idx, "Action", hook_name, player)
 }
 
-/// First `On::Hook` of card `idx` matching `want`. **Integer-only** — no
+/// First `On::Action` of card `idx` matching `want`. **Integer-only** — no
 /// `&str` tags, so CBMC never lowers the dispatch to `memcmp` (the shave
-/// profile's remaining 10 memcmps were `match name { "PayAdd" => … }`).
+/// profile's remaining 10 memcmps were `match name { "PaySplitAdd" => … }`).
 #[inline(always)]
 pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32) -> Asked {
     let card = by_idx(idx);
     for (i, on) in card.on.iter().enumerate() {
-        if let On::Hook(kinds, _, _, _) = on {
+        if let On::Action(kinds, _, _, _) = on {
             // Zero-loop kind match (`iter().any` over a short slice unrolls
             // to the global bound under CBMC).
             let mut hit = false;
@@ -483,7 +508,68 @@ pub fn hook_kind_only_idx(idx: usize, want: card_sdk::abi::HookKind, player: i32
             }
         }
     }
-    fail_no_kind("Hook")
+    fail_no_kind("Action")
+}
+
+/// First `On::Filter` of card `idx` matching `want`; returns the transformed
+/// value (v74 pure body). **Integer-only** kind match.
+#[inline(always)]
+pub fn filter_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::HookKind,
+    player: i32,
+    value: i32,
+) -> i32 {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::Filter(kinds, _, _, run) = on {
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == want {
+                    hit = true;
+                }
+            }
+            if hit {
+                return run(player, value);
+            }
+        }
+    }
+    fail_no_kind("Filter")
+}
+
+/// First `On::FilterFlag` of card `idx` matching `want` (true = keep).
+#[inline(always)]
+pub fn filter_flag_kind_only_idx(
+    idx: usize,
+    want: card_sdk::abi::HookKind,
+    player: i32,
+    value: i32,
+) -> bool {
+    let card = by_idx(idx);
+    for on in card.on.iter() {
+        if let On::FilterFlag(kinds, _, _, run) = on {
+            let mut hit = false;
+            if let Some(&k0) = kinds.get(0) {
+                if k0 == want {
+                    hit = true;
+                }
+            }
+            if let Some(&k1) = kinds.get(1) {
+                if k1 == want {
+                    hit = true;
+                }
+            }
+            if hit {
+                return run(player, value);
+            }
+        }
+    }
+    fail_no_kind("FilterFlag")
 }
 
 /// Skill entry: alias of [`play_idx`].
@@ -546,9 +632,9 @@ pub fn counteract(id: &str, player: i32) -> Asked {
     hook(id, "Counteract", "", player)
 }
 
-/// First `On::Hook` of `id`, optionally filtered by hook-kind name.
+/// First `On::Action` of `id`, optionally filtered by hook-kind name.
 pub fn hook_only(id: &str, hook_name: &str, player: i32) -> Asked {
-    hook(id, "Hook", hook_name, player)
+    hook(id, "Action", hook_name, player)
 }
 
 /// Skill entry: alias of [`play`].
@@ -568,7 +654,7 @@ pub fn event_play(id: &str, player: i32) -> Asked {
 /// Match a `HookKind` by its short name without `format!` (no String/UTF-8).
 ///
 /// Parse `hook_name` to a `HookKind` first (a `match` on literals that
-/// constant-folds when the caller passes `"PayAdd"`), then an integer
+/// constant-folds when the caller passes `"PaySplitAdd"`), then an integer
 /// compare against `kinds`. The old `hook_kind_name(k) == hook_name` lowered
 /// to `memcmp` per arm (14 unwinds in the shave profile).
 fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool {
@@ -608,10 +694,10 @@ fn hook_kind_matches(kinds: &[card_sdk::abi::HookKind], hook_name: &str) -> bool
 #[inline(always)]
 fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     use card_sdk::abi::HookKind as H;
-    const PAY_ADD: (u8, u64, u64) = tag_key_const("PayAdd");
-    const PAY_MUL: (u8, u64, u64) = tag_key_const("PayMul");
-    const PAY_CHOOSE: (u8, u64, u64) = tag_key_const("PayChoose");
-    const PAY_AT: (u8, u64, u64) = tag_key_const("PayAt");
+    const PAY_ADD: (u8, u64, u64) = tag_key_const("PaySplitAdd");
+    const PAY_MUL: (u8, u64, u64) = tag_key_const("PaySplitMul");
+    const PAY_CHOOSE: (u8, u64, u64) = tag_key_const("PaySplitChoose");
+    const PAY_AT: (u8, u64, u64) = tag_key_const("PaySplitAt");
     const PAY_AFTER: (u8, u64, u64) = tag_key_const("PayAfter");
     const PAY: (u8, u64, u64) = tag_key_const("Pay");
     const TURN_END: (u8, u64, u64) = tag_key_const("TurnEnd");
@@ -619,8 +705,8 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     const TURN_END_BEFORE: (u8, u64, u64) = tag_key_const("TurnEndBefore");
     const TURN_END_AFTER: (u8, u64, u64) = tag_key_const("TurnEndAfter");
     const ROLL: (u8, u64, u64) = tag_key_const("Roll");
-    const ROLL_AFTER: (u8, u64, u64) = tag_key_const("RollAfter");
-    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("RollPlan");
+    const ROLL_AFTER: (u8, u64, u64) = tag_key_const("DiceRollAfter");
+    const ROLL_PLAN: (u8, u64, u64) = tag_key_const("DiceRollPlan");
     const SETTLE: (u8, u64, u64) = tag_key_const("Settle");
     const SETTLE_BODY: (u8, u64, u64) = tag_key_const("SettleBody");
     const SETTLE_AFTER: (u8, u64, u64) = tag_key_const("SettleAfter");
@@ -635,28 +721,27 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     const HOUSE_ADDED: (u8, u64, u64) = tag_key_const("HouseAdded");
     const COUNTER_CHANGED: (u8, u64, u64) = tag_key_const("CounterChanged");
     const FIRE_SPENT: (u8, u64, u64) = tag_key_const("FireSpent");
+    const FANS_FLIP: (u8, u64, u64) = tag_key_const("FansFlip");
     const TELEPORTED: (u8, u64, u64) = tag_key_const("Teleported");
     const TARGETED: (u8, u64, u64) = tag_key_const("Targeted");
     const PASS: (u8, u64, u64) = tag_key_const("Pass");
     const PASS_TILE: (u8, u64, u64) = tag_key_const("PassTile");
     const PASS_PLAYER: (u8, u64, u64) = tag_key_const("PassPlayer");
     const EXILE: (u8, u64, u64) = tag_key_const("Exile");
-    const STAY: (u8, u64, u64) = tag_key_const("Stay");
-    const STUN: (u8, u64, u64) = tag_key_const("Stun");
     match tag_key(name) {
-        PAY_ADD => Some(H::PayAdd),
-        PAY_MUL => Some(H::PayMul),
-        PAY_CHOOSE => Some(H::PayChoose),
-        PAY_AT => Some(H::PayAt),
+        PAY_ADD => Some(H::PaySplitAdd),
+        PAY_MUL => Some(H::PaySplitMul),
+        PAY_CHOOSE => Some(H::PaySplitChoose),
+        PAY_AT => Some(H::PaySplitAt),
         PAY_AFTER => Some(H::PayAfter),
         PAY => Some(H::Pay),
         TURN_END => Some(H::TurnEnd),
         TURN_START => Some(H::TurnStart),
         TURN_END_BEFORE => Some(H::TurnEndBefore),
         TURN_END_AFTER => Some(H::TurnEndAfter),
-        ROLL => Some(H::Roll),
-        ROLL_AFTER => Some(H::RollAfter),
-        ROLL_PLAN => Some(H::RollPlan),
+        ROLL => Some(H::DiceRollBefore),
+        ROLL_AFTER => Some(H::DiceRollAfter),
+        ROLL_PLAN => Some(H::DiceRollPlan),
         SETTLE => Some(H::Settle),
         SETTLE_BODY => Some(H::SettleBody),
         SETTLE_AFTER => Some(H::SettleAfter),
@@ -671,14 +756,13 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
         HOUSE_ADDED => Some(ruleset_core::kind::HouseAdded),
         COUNTER_CHANGED => Some(H::CounterChanged),
         FIRE_SPENT => Some(ruleset_core::kind::FireSpent),
+        FANS_FLIP => Some(ruleset_core::kind::FansFlip),
         TELEPORTED => Some(H::Teleported),
         TARGETED => Some(H::Targeted),
         PASS => Some(H::Pass),
         PASS_TILE => Some(H::PassTile),
         PASS_PLAYER => Some(H::PassPlayer),
         EXILE => Some(H::Exile),
-        STAY => Some(H::Stay),
-        STUN => Some(H::Stun),
         _ => None,
     }
 }
@@ -686,19 +770,19 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
 fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
     use card_sdk::abi::HookKind as H;
     match k {
-        H::PayAdd => "PayAdd",
-        H::PayMul => "PayMul",
-        H::PayChoose => "PayChoose",
-        H::PayAt => "PayAt",
+        H::PaySplitAdd => "PaySplitAdd",
+        H::PaySplitMul => "PaySplitMul",
+        H::PaySplitChoose => "PaySplitChoose",
+        H::PaySplitAt => "PaySplitAt",
         H::PayAfter => "PayAfter",
         H::Pay => "Pay",
         H::TurnEnd => "TurnEnd",
         H::TurnStart => "TurnStart",
         H::TurnEndBefore => "TurnEndBefore",
         H::TurnEndAfter => "TurnEndAfter",
-        H::Roll => "Roll",
-        H::RollAfter => "RollAfter",
-        H::RollPlan => "RollPlan",
+        H::DiceRollBefore => "Roll",
+        H::DiceRollAfter => "DiceRollAfter",
+        H::DiceRollPlan => "DiceRollPlan",
         H::Settle => "Settle",
         H::SettleBody => "SettleBody",
         H::SettleAfter => "SettleAfter",
@@ -713,14 +797,13 @@ fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
         ruleset_core::kind::HouseAdded => "HouseAdded",
         H::CounterChanged => "CounterChanged",
         ruleset_core::kind::FireSpent => "FireSpent",
+        ruleset_core::kind::FansFlip => "FansFlip",
         H::Teleported => "Teleported",
         H::Targeted => "Targeted",
         H::Pass => "Pass",
         H::PassTile => "PassTile",
         H::PassPlayer => "PassPlayer",
         H::Exile => "Exile",
-        H::Stay => "Stay",
-        H::Stun => "Stun",
         _ => "",
     }
 }
@@ -745,12 +828,14 @@ pub fn aya_longing_play(player_id: i32) -> Asked {
     play_idx(crate::card_id!("PP:[丸山彩]憧憬的前方"), player_id)
 }
 
-/// `PP:[丸山彩]憧憬的前方` -- `On::Hook(PayAdd)`.
+/// `PP:[丸山彩]憧憬的前方` -- `On::Action(Effect)` (was PaySplitAdd; the interactive
+/// resonance shave moved to the payment declaration so `set_pay_amount` still
+/// lands -- see the card's Pattern E comment).
 #[cfg(feature = "band-pp")]
 pub fn aya_longing_pay_add(player_id: i32) -> Asked {
     hook_kind_only_idx(
         crate::card_id!("PP:[丸山彩]憧憬的前方"),
-        card_sdk::abi::HookKind::PayAdd,
+        card_sdk::abi::HookKind::Effect,
         player_id,
     )
 }

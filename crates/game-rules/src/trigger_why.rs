@@ -45,12 +45,12 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::PassPlayer => Msg::new("log.why.pass_player")
             .player_id("who", who)
             .player_id("target", target),
-        TriggerKind::Roll | TriggerKind::MoveRoll | TriggerKind::RollAfter => {
+        TriggerKind::DiceRollBefore | TriggerKind::DiceRollResult | TriggerKind::DiceRollAfter | TriggerKind::DiceRollValue => {
             Msg::new("log.why.roll")
                 .player_id("who", who)
                 .i("value", value)
         }
-        TriggerKind::Teleport | TriggerKind::SkillTeleport | TriggerKind::Teleported => {
+        TriggerKind::Teleported => {
             Msg::new("log.why.teleport")
                 .player_id("who", who)
                 .tile("tile", tile)
@@ -69,13 +69,13 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::Pay
         | TriggerKind::Paid
         | TriggerKind::PayAfter
-        | TriggerKind::PayChoose
-        | TriggerKind::PayAdd
-        | TriggerKind::PayMul
-        | TriggerKind::PayAt
-        | TriggerKind::PayTotalAdd
-        | TriggerKind::PayTotalMul
-        | TriggerKind::PayTotalCancel => {
+        | TriggerKind::PaySplitChoose
+        | TriggerKind::PaySplitAdd
+        | TriggerKind::PaySplitMul
+        | TriggerKind::PaySplitAt
+        | TriggerKind::PayCombinedAdd
+        | TriggerKind::PayCombinedMul
+        | TriggerKind::PayCombinedCancel => {
             if who < 0 {
                 Msg::new("log.why.gain")
                     .player_id("target", target)
@@ -99,6 +99,9 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
         TriggerKind::TurnEnd
         | TriggerKind::TurnEndBefore
         | TriggerKind::TurnEndAfter
+        | TriggerKind::AtEnd
+        | TriggerKind::PaySplitChooseBefore
+        | TriggerKind::PayCombinedAddBefore
         | TriggerKind::EndTurnBefore
         | TriggerKind::EndTurnAfter => Msg::new("log.why.turn_end").player_id("who", who),
         TriggerKind::DeckBeforeGame => Msg::new("log.why.deck_before").player_id("who", who),
@@ -155,16 +158,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .player_id("who", who)
             .player_id("target", target)
             .i("value", value),
-        TriggerKind::Stun => Msg::new("log.why.stun")
-            .player_id("who", who)
-            .player_id("target", target),
-        TriggerKind::Stay => Msg::new("log.why.stay")
-            .player_id("who", who)
-            .player_id("target", target),
         TriggerKind::Exile => Msg::new("log.why.exile")
-            .player_id("who", who)
-            .player_id("target", target),
-        TriggerKind::Forced | TriggerKind::Stop => Msg::new("log.why.forced")
             .player_id("who", who)
             .player_id("target", target),
         TriggerKind::BeforeOut
@@ -246,7 +240,7 @@ fn kind_name(kind: &str) -> Msg {
     // wire spelling is only for a kind nobody has named yet.
     if matches!(
         kind,
-        "rollPlan" | "playGate" | "flipEffect" | "26" | "73" | "74" | "75" | "78"
+        "diceRollPlan" | "playGate" | "26" | "73" | "74" | "75" | "78"
     ) {
         return Msg::new(format!("log.kind.{kind}"));
     }

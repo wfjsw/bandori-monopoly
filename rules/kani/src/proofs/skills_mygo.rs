@@ -16,7 +16,7 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // Host-op subsets (body-reachable ops).
 // ---------------------------------------------------------------------------
 
-/// `after_roll` (RollAfter) — add_crystals(1,1) + log.
+/// `after_roll` (DiceRollAfter) — add_crystals(1,1) + log.
 crate::host_subset!(mygo_after_roll_dispatch {
     add_counter_self => arm_add_counter_self,
     add_card_counter => arm_add_card_counter,
@@ -69,7 +69,7 @@ fn crystals_key() -> crate::intern::NameId {
 // ===========================================================================
 // C-MYGO-band-02
 // 「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。」
-// Hook entry index 1 (`On::Hook(RollAfter)`). Seat-symmetric (「为此卡」).
+// Hook entry index 1 (`On::Action(DiceRollAfter)`). Seat-symmetric (「为此卡」).
 // ===========================================================================
 
 /// Shared iff at a **concrete** user seat.
@@ -140,7 +140,7 @@ pub fn band_02_mutant_is_detected() {
 // C-MYGO-band-04
 // 「每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个可超出上限的[奇迹水晶]
 //  （最多超出2个）」
-// Hook entry index 2 (`On::Hook(Discarded)`).
+// Hook entry index 2 (`On::Action(Discarded)`).
 // KNOWN black-box LESS: the over-cap crystal does not land when the band card
 // is already at the roll cap of 1. Spec from the book.
 // ===========================================================================
@@ -217,7 +217,7 @@ pub fn band_04_mutant_is_detected() {
 // ===========================================================================
 // Classification notes (no harness — documented in the unit table):
 // C-MYGO-band-01 (开局 3d20 start tile) — PROTOCOL-LEVEL: game-start
-//   scheduling (`On::Hook(DeckBeforeGame)`); the body's 3d20 sum is
+//   scheduling (`On::Action(DeckBeforeGame)`); the body's 3d20 sum is
 //   `roll(3,20)` (symbolic sum 3..=60) then `teleport_to`. Leaf body could be
 //   proven but the start-of-game window is engine scheduling.
 // C-MYGO-band-03 (move-1 instead of dice) — the press body spends a crystal

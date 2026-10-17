@@ -311,7 +311,7 @@ const G_STATUS_02: Clause = Clause::new(
 /// (TEST-FINDINGS §6 / glossary 51, OPEN-停留-中途) and is left alone here.
 pub fn g_status_02(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
-    let is_roll = matches!(step.act, StepAct::Act { msg, .. } if msg.act == "roll");
+    let is_roll = matches!(step.act, StepAct::Act { msg, .. } if msg.act == "diceRollBefore");
     verify_main_move_skipped(step.pre, step.post, step.events, who, is_roll)
 }
 

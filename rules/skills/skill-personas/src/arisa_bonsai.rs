@@ -21,17 +21,17 @@ fn station() -> i32 {
 pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Event], "actor != owner && tile.id == tile_named('流星堂')", None, on_event),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Event], "actor != owner && tile.id == tile_named('流星堂')", None, on_event),
         // （2）: the turn's main move walked past 流星堂 and did not end there,
         // and the pass latch is armed. The named tile must exist (residual).
-        On::Hook(
+        On::Action(
             &[HookKind::TurnEnd],
             "actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0",
             Some(station_exists),
             at_turn_end,
         ),
-        On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('流星堂')", None, on_pass),
+        On::Action(&[HookKind::Pass], "actor == owner && tile.id == tile_named('流星堂')", None, on_pass),
     ],
 )
     .silent(&[0]);

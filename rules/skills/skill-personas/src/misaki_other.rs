@@ -30,9 +30,9 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
     "skill:奥泽美咲:另一个我",
     &[
         On::Play("", Some(can_use_exile), use_exile),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", None, on_pass),
-        On::Hook(
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", None, on_pass),
+        On::Action(
             &[HookKind::TurnStartBefore],
             "actor == owner && charge(owner) >= 1",
             None,

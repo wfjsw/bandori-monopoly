@@ -215,11 +215,8 @@ fn g28_maya_look_at_top_still_counts_as_a_draw() {
     t.place_raw(0, "PP:梦在前方，结彩当下");
     t.set_crystals(0, "PP:梦在前方，结彩当下", 0);
     // `clean()` wipes the start-of-game fans; Maya (2) needs one to flip.
-    t.m.world_mut().st.players[0].tokens = vec![game_core::state::Counter {
-        name: "P✽P粉丝(正)".into(),
-        value: 2,
-        instance: None,
-    }];
+    t.set_state(0, "ppFansUp", 2);
+    t.set_state(0, "ppFansDown", 0);
     set_draw_n(&mut t, 0, 3);
     t.set_hand(0, &["R:[衍生] 觉悟", "R:[衍生] 觉悟", "R:[衍生] 觉悟"]);
     // Trigger a draw. The PP band skill's (3) suppresses [CiRCLE奖励], so
@@ -423,25 +420,19 @@ fn g32_eve_fan_flip_leaves_the_matcha_crepe() {
     t.begin_turn(0);
     drain(&mut t);
     // P0 holds 1 抹茶芭菲 (a token) and 2 positive [P✽P粉丝(正)] (Eve's (1)
-    // hands out 5 at game start; `clean()` wipes them, so restore 2).
+    // hands out 5 at game start; `clean()` wipes them, so restore 2). Fans
+    // live in the state dict (`ppFansUp` / `ppFansDown`).
     t.m.world_mut().st.players[0]
         .tokens
         .push(game_core::state::Counter {
             name: "抹茶芭菲".into(),
             value: 1,
-        
-        instance: None,
-    });
-    t.m.world_mut().st.players[0]
-        .tokens
-        .push(game_core::state::Counter {
-            name: "P✽P粉丝(正)".into(),
-            value: 2,
-        
-        instance: None,
-    });
+            instance: None,
+        });
+    t.set_state(0, "ppFansUp", 2);
+    t.set_state(0, "ppFansDown", 0);
     assert_eq!(t.token(0, "抹茶芭菲"), 1);
-    assert_eq!(t.token(0, "P✽P粉丝(正)"), 2);
+    assert_eq!(t.state(0, "ppFansUp"), 2);
     // Roll with Y = 2 fans: d20 + 2d4. Eve's (2) is a pre-roll choice; the
     // roll may raise the window itself.
     t.dice(&[6, 2, 2]);

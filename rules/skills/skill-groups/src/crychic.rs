@@ -24,25 +24,25 @@ const SEEN: &str = "skill.crychic.seen";
 pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        On::Hook(&[HookKind::Drawn], card_sdk::pre::MINE, None, on_drawn),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[HookKind::Drawn], card_sdk::pre::MINE, None, on_drawn),
         // （2） 「当此卡移除时」's empty-deck trigger: only when both piles are
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
-        On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
-        On::Hook(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
-        On::Hook(&[ruleset_core::kind::PassRewardAffected], "", Some(in_lock), force_card),
+        On::Action(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
+        On::Filter(&[HookKind::PaySplitChoose], "", Some(in_lock), lock_pay),
+        On::Action(&[ruleset_core::kind::PassRewardAffected], "", Some(in_lock), force_card),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also
         // skips the whole turn at 开始阶段). The window's `hand(actor)` is the
         // seat's hand size.
-        On::Gate(&[GateKind::PlayGate], "hand(actor) >= 6", None, refuse),
+        On::FilterFlag(&[GateKind::PlayGate], "hand(actor) >= 6", None, refuse),
         // 「CRYCHIC variants may not use base character's exclusives」 -- a
         // CEL-only `ExclusiveUse` gate (docs/GUARDS.md). The engine's default
         // is the generic own/base rule; this entry closes the base case for
         // CRYCHIC variants. `value` = the card's owner is the actor's base
         // character; `step` = the owner is the actor's own character.
-        On::Gate(&[GateKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
+        On::FilterFlag(&[GateKind::ExclusiveUse], EXCLUSIVE_USE_DENIED, None, refuse),
         On::Play("", Some(can_transform), transform_now),
     ],
 )
@@ -56,9 +56,8 @@ pub const EXCLUSIVE_USE_DENIED: &str =
 
 /// The answer of a closed exclusive-use gate (only run if a gate is ever
 /// raised; pure reads use the condition alone).
-fn refuse(_owner: i32) -> card_sdk::Asked {
-    ctx::trigger::set_cancelled();
-    Ok(())
+fn refuse(_owner: i32, _v: i32) -> bool {
+    false // deny
 }
 
 /// （1）「任何时刻拥有手牌数大于等于6时」.
@@ -76,15 +75,14 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// （1）「你无法获得或失去资金」 -- a payment in **either direction for this
 /// player** is voided. The lock is the skill owner's money only (`你`); a
 /// payment between two other players is untouched.
-fn lock_pay(player_id: i32) -> card_sdk::Asked {
+fn lock_pay(player_id: i32, value: i32) -> i32 {
     let payer = ctx::trigger::player_id();
     let payee = ctx::trigger::target();
     if payer != player_id && payee != player_id {
-        return Ok(());
+        return value;
     }
-    ctx::trigger::set_pay_amount(0);
     ctx::log(player_id, &Msg::new(key!("crychic_locked")));
-    Ok(())
+    0
 }
 
 /// （3）「每当你的手牌数从4增加至5，为此卡放置一个奇迹水晶（上限10）」.
@@ -265,8 +263,8 @@ pub fn at_turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn lock_pay_kani(player_id: i32) -> card_sdk::Asked {
-    lock_pay(player_id)
+pub fn lock_pay_kani(player_id: i32, value: i32) -> i32 {
+    lock_pay(player_id, value)
 }
 
 #[cfg(kani)]
@@ -277,8 +275,8 @@ pub fn force_card_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn refuse_kani(player_id: i32) -> card_sdk::Asked {
-    refuse(player_id)
+pub fn refuse_kani(player_id: i32, v: i32) -> bool {
+    refuse(player_id, v)
 }
 
 #[cfg(kani)]

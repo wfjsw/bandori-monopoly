@@ -1142,7 +1142,7 @@ pub fn g_money_12(step: &Step<'_>) -> Result<(), String> {
 ///   `scale(B) ± A`.
 /// * **Frame:** the ledger (G-MONEY-04) owns who moved.
 /// * **Rulings & OPEN:** the table's stage names are the book's; the engine
-///   raises them as `payAdd` (row 2) then `payMul` (row 4). 丸山彩（2） /
+///   raises them as `paySplitAdd` (row 2) then `paySplitMul` (row 4). 丸山彩（2） /
 ///   白鹭千圣（2） say 「分摊前」, which is the pre-split figure the row-2
 ///   window rewrites. OPEN-支付阶段7 (where row 7 sits) does not change this
 ///   order.

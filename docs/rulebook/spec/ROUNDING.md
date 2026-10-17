@@ -23,17 +23,17 @@ the base formula produced it (rent table, printed X, mortgage/redeem rate, …).
 
 | Site | Behaviour |
 |---|---|
-| `crates/game-core/src/engine/play.rs` `money_inner` | Tracks `modified` across `effect` / `payTotal*` / `payAdd` / `payMul`+`scale_settle_payment` / `payChoose` / `payAt` / `pay`. After the chain, a **positive** modified figure is `ceil10`'d once. Negative figures are not rounded (the Q3 reversal must see the true sign). |
-| `pay_total` (pre-split / 「[分摊]」) | If a `payTotal*` hook rewrote the total, `ceil10` it once before the share formula. Untouched totals divide as-is; each share is still `ceil10(ceil(total/n))` (printed rule). |
+| `crates/game-core/src/engine/play.rs` `money_inner` | Tracks `modified` across `effect` / `payCombined*` / `paySplitAdd` / `paySplitMul`+`scale_settle_payment` / `paySplitChoose` / `paySplitAt` / `pay`. After the chain, a **positive** modified figure is `ceil10`'d once. Negative figures are not rounded (the Q3 reversal must see the true sign). |
+| `pay_total` (pre-split / 「[分摊]」) | If a `payCombined*` hook rewrote the total, `ceil10` it once before the share formula. Untouched totals divide as-is; each share is still `ceil10(ceil(total/n))` (printed rule). |
 | `ceil10_money` | `((x + 9) / 10) * 10` for `x > 0`; `x` unchanged otherwise. |
 
 ### Modifier stages (rulebook 支付阶段)
 
 | Stage | Hooks | Rounding |
 |---|---|---|
-| 2 计算时 ± | `payAdd` / `payTotalAdd` | transform exactly |
-| 4 支付前 × | `payMul` / `payTotalMul` / `set_pay_factor` / `scale_settle_payment` | transform exactly (factor path keeps its f64 milli scale) |
-| 5 支付时 | `payChoose` / `payAt` / `pay` (incl. amount rewrites) | transform exactly; still counts toward the one end round |
+| 2 计算时 ± | `paySplitAdd` / `payCombinedAdd` | transform exactly |
+| 4 支付前 × | `paySplitMul` / `payCombinedMul` / `set_pay_factor` / `scale_settle_payment` | transform exactly (factor path keeps its f64 milli scale) |
+| 5 支付时 | `paySplitChoose` / `paySplitAt` / `pay` (incl. amount rewrites) | transform exactly; still counts toward the one end round |
 | settle | — | **the one `ceil10`**, if any modifier rewrote the figure |
 
 ## Card inventory (running-amount modifiers)

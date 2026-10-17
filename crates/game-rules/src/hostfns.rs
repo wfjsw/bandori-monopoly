@@ -332,7 +332,7 @@ pub fn money<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
 pub fn gain<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let src = guest_msg(c, p, n)?;
                         // A card-driven gain runs the same `Money` pipeline as a payment --
-            // print (game -> player) -- so PayAdd / PayChoose / the `effect`
+            // print (game -> player) -- so PaySplitAdd / PaySplitChoose / the `effect`
             // counteraction window all see it. The pause/resume is the same as `pay`:
             // the engine answers with the amount that actually moved.
             {
@@ -371,7 +371,7 @@ pub fn gain_typed<C: HostCtx>(
 
 /// Raw money adjustment (`ctx::adjust_money` / `gain_raw` / `lose_raw`):
 /// `money += delta` with a `log.gain` / `log.lose` line and **no** payment
-/// pipeline (no `payAdd`, no `effect` window, no `payAfter`). 规则书
+/// pipeline (no `paySplitAdd`, no `effect` window, no `payAfter`). 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is.
 pub fn adjust_money<C: HostCtx>(
     c: &mut C,
@@ -1217,14 +1217,73 @@ pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
             }
 }
 
+/// Pack a `FilterValue` (BuyAssign) raise result into the single answer log
+/// slot: bit 0 = cancelled, bits 1-4 = houses, bit 5 = mortgaged, bits 6-31 =
+/// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
+pub fn pack_deal(cancelled: bool, owner: i32, houses: i32, mortgaged: bool) -> i32 {
+    let o = if owner == i32::MIN {
+        0
+    } else {
+        (owner + 2).clamp(0, (1 << 26) - 1)
+    };
+    ((cancelled as i32) & 1)
+        | ((houses.clamp(0, 15) & 15) << 1)
+        | (((mortgaged as i32) & 1) << 5)
+        | (o << 6)
+}
+
+/// Inverse of [`pack_deal`].
+pub fn unpack_deal(v: i32) -> (bool, i32, i32, bool) {
+    let cancelled = v & 1 != 0;
+    let houses = (v >> 1) & 15;
+    let mortgaged = (v >> 5) & 1 != 0;
+    let o = (v >> 6) & ((1 << 26) - 1);
+    let owner = if o == 0 { i32::MIN } else { o - 2 };
+    (cancelled, owner, houses, mortgaged)
+}
+
 pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Result<i32, HostErr> {
                         {
+                // v78: a `FilterValue` kind (BuyAssign) carries the default
+                // deal from the guest's trigger in, and writes the rewritten
+                // deal back so `trigger::deal_*` reads the fold.
+                let tk = card_sdk::abi::TriggerKind::from_i32(kind);
+                let is_deal = tk == card_sdk::abi::TriggerKind::BuyAssign;
+                let trig = c.st().wr().trigger();
+                let tile = trig.tile;
+                let (deal_owner, deal_houses, deal_mortgaged) = if is_deal {
+                    match trig.buy {
+                        Some(b) => (
+                            b.deal_owner.unwrap_or(i32::MIN),
+                            b.deal_houses,
+                            b.deal_mortgaged as i32,
+                        ),
+                        None => (i32::MIN, 0, 0),
+                    }
+                } else {
+                    (i32::MIN, 0, 0)
+                };
                 let req = HostRequest::Raise {
                 player_id,
                 kind,
                 value,
+                tile,
+                deal_owner,
+                deal_houses,
+                deal_mortgaged,
             };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+                let packed = crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel)?;
+                if is_deal {
+                    let (_cancelled, o, h, m) = unpack_deal(packed);
+                    let st = c.st_mut();
+                    if o != i32::MIN {
+                        st.w().set_trigger_deal_owner(o);
+                    }
+                    st.w().set_trigger_deal_houses(h);
+                    st.w().set_trigger_deal_mortgaged(m as i32);
+                    return Ok(packed);
+                }
+                return Ok(packed);
             }
 }
 
@@ -1826,6 +1885,64 @@ pub fn apply_redeem<C: HostCtx>(
             player_id,
             tile,
             amount,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
+}
+
+/// Pay the buy price through the money pipeline. `kind` is the
+/// [`card_sdk::abi::BuyKind`] wire value. Answers the amount actually paid.
+pub fn pay_buy<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+    kind: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::PayBuy {
+            player_id,
+            tile,
+            amount,
+            kind,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
+}
+
+/// Pay the build cost through the money pipeline. Answers the amount paid.
+pub fn pay_build<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    amount: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::PayBuild {
+            player_id,
+            tile,
+            amount,
+        };
+        return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+    }
+}
+
+/// Write the deed after a buy (`purchase::assign_deed`).
+pub fn assign_deed<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    tile: i32,
+    owner: i32,
+    houses: i32,
+    mortgaged: i32,
+) -> Result<i32, HostErr> {
+    {
+        let req = HostRequest::AssignDeed {
+            player_id,
+            tile,
+            owner,
+            houses,
+            mortgaged,
         };
         return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
     }
@@ -2446,6 +2563,21 @@ pub fn set_tag<C: HostCtx>(c: &mut C, kp: i32, kl: i32, v: i32) -> Result<(), Ho
             let key = guest_str(c, kp, kl)?;
             c.st_mut().w().set_tag(&key, v);
             Ok(())
+}
+
+/// v78: `set_tag` with the key as an intern id. The host stores the id as the
+/// tag key's decimal spelling (the guest's `write_filter_value` resolves the
+/// id to a known name via a small table and calls the string form instead;
+/// this import exists for the wire and for tests).
+pub fn set_tag_id<C: HostCtx>(c: &mut C, key_id: i32, v: i32) -> Result<(), HostErr> {
+    c.st_mut().w().set_tag(&key_id.to_string(), v);
+    Ok(())
+}
+
+/// v78: host-supplied recorded roll (`i32::MIN` when none). The host fills
+/// this before a Filter raise that would have rolled dice.
+pub fn recorded_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().wr().recorded_roll())
 }
 
 pub fn set_min_roll<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {

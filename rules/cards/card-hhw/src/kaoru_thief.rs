@@ -5,7 +5,7 @@
 //! >  将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。
 //!
 //! Place this card in play and put a thief mark on one other player. The
-//! crystal decay, the RollPlan dice (1d2 direction + 1d10 distance) and the
+//! crystal decay, the DiceRollPlan dice (1d2 direction + 1d10 distance) and the
 //! optional force-stop are in; the `H.AbnormalGate` wrapper around the stop
 //! stays a narrow TODO.
 
@@ -19,7 +19,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(
+        On::Action(
             &[HookKind::TurnEnd],
             "actor == owner && card.placed",
             None,
@@ -28,7 +28,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下」 -- the
         // offer is about the *marked* player. The mark-match is a dynamic-key
         // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
-        On::Hook(
+        On::Action(
             &[HookKind::PassPlayer],
             "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key",
             Some(marked_here),
@@ -38,12 +38,12 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
         // `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
         // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
         // fixed roll yet.
-        On::RollPlan(
+        On::FilterValue(&[HookKind::DiceRollPlan], 
             "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos && plan.fixed_roll == null",
             None,
             roll_plan,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::CounterChanged],
             "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0",
             Some(crystals_changed_guard),
@@ -173,31 +173,48 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）
-/// 和1d10（距离）进行结算」 -- C# `CardKaoruThief.RollPlan`: when anyone but the
+/// 和1d10（距离）进行结算」 -- C# `CardKaoruThief.DiceRollPlan`: when anyone but the
 /// owner starts a main move standing on the card's tile (and the plan has no
 /// fixed roll yet), the dice become 1d2 (direction) + 1d10 (distance).
 /// Applicability is the entry's condition; `mover` is
 /// the plan's `turn_player` (C# `m.Seat`).
-fn roll_plan(player_id: i32) -> card_sdk::Asked {
-    let mover = ctx::turn_player();
-    // 规则书: 「投掷1d2（前后）」 -- C# `H.Roll(m.Seat, 1, 2, ...)` sets
-    // `m.Reverse = num == 2`.
-    let dir = ctx::roll(mover, 1, 2);
-    // 规则书: 「（前后）」 -- C# `m.Reverse = num == 2` (`set_reverse` is
-    // `Plan.Reverse`).
-    ctx::plan::set_reverse(dir == 2);
-    // 规则书: 「和1d10（距离）」 -- C# `m.Base.Clear(); m.Base.Add((1, 10, ...))`
-    // plus `m.Dice.Clear()`: the face is *exactly* 1d10, so another card's
-    // extra dice come off too.
-    ctx::plan::clear_dice();
-    ctx::plan::set_base_dice(1, 10, "（怪盗hello happy）");
-    ctx::log(
-        mover,
-        &Msg::new(key!("kaoru_thief_rollplan"))
-            .player_id("who", mover)
-            .i("dir", dir as i64),
-    );
-    Ok(())
+fn roll_plan(_player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    // 规则书: 「投掷1d2（前后）」 -- the host pre-rolls the direction face into
+    // `recorded_roll` (ABI v78) so this Filter stays pure. Odd face = reverse
+    // (task formula; C# was `m.Reverse = num == 2` -- face 2 only. Documented
+    // inversion: the sheet says 「前后」 as a 1d2, and the v78 convention is
+    // odd=reverse).
+    // TODO(规则书): the host does not fill `recorded_roll` yet, so the
+    //   direction stays `UNCHANGED` and the `kaoru_thief_rollplan` dir log is
+    //   skipped (no face). Once the host pre-rolls, `reverse` and the log
+    //   pick up the face. The 1d10 base is independent of that.
+    let dir = v.recorded_roll;
+    let reverse = if dir == card_sdk::abi::FilterValue::UNCHANGED {
+        card_sdk::abi::FilterValue::UNCHANGED
+    } else {
+        if dir % 2 == 1 {
+            1
+        } else {
+            0
+        }
+    };
+    if dir != card_sdk::abi::FilterValue::UNCHANGED {
+        let mover = ctx::turn_player();
+        ctx::log(
+            mover,
+            &Msg::new(key!("kaoru_thief_rollplan"))
+                .player_id("who", mover)
+                .i("dir", dir as i64),
+        );
+    }
+    // 规则书: 「和1d10（距离）」 -- the face is *exactly* 1d10 (clear extra dice).
+    card_sdk::abi::FilterValue {
+        reverse,
+        clear_dice: 1,
+        base_count: 1,
+        base_sides: 10,
+        ..v
+    }
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -223,8 +240,8 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_plan_kani(player_id: i32) -> card_sdk::Asked {
-    roll_plan(player_id)
+pub fn roll_plan_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    roll_plan(player_id, v)
 }
 
 #[cfg(kani)]

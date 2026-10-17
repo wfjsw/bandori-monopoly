@@ -25,12 +25,12 @@ const USED: &str = "skill.poppin.used";
 pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
         // not its effect. The four spots are fixed tile ids, so the OR is the
         // condition (docs/GUARDS.md §0); a body that ran and immediately
         // returned still flashed -- one per step of every walk.
-        On::Hook(
+        On::Action(
             &[HookKind::Pass],
             "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
             None,
@@ -39,7 +39,7 @@ pub const POPPIN: CardDef = CardDef::new(
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
-        On::Hook(&[HookKind::SettleBefore], "", Some(before_settle_applies), before_settle),
+        On::Action(&[HookKind::SettleBefore], "", Some(before_settle_applies), before_settle),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（1） chains two independent 「随后可使用…」 actions
         // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather
@@ -56,7 +56,8 @@ pub const POPPIN: CardDef = CardDef::new(
         // (`tile.id == tile_named('星之鼓动山丘')` -- an unknown name reads -1 and so
         // never matches a real buy tile); 「只有全部…破产后」 is the residual
         // guard, a derived scan outside the CEL schema (docs/GUARDS.md §4.2c).
-        On::Gate(
+        // FilterValue (not FilterFlag) so the denial reason rides `reason`.
+        On::FilterValue(
             &[GateKind::BuyGate],
             "tile.id == tile_named('星之鼓动山丘')",
             Some(lock_hill_applies),
@@ -66,15 +67,21 @@ pub const POPPIN: CardDef = CardDef::new(
 )
     .silent(&[0]);
 
+/// Denial reason intern id 1 = `poppin_locked` (see rt.rs REASON_POPPIN_LOCKED).
+const REASON_POPPIN_LOCKED: i32 = 1;
+
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].
-fn lock_hill(player_id: i32) -> card_sdk::Asked {
+/// Pure: deny via `allowed: 0`; the reason id rides `FilterValue.reason`.
+fn lock_hill(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
     // 「只有全部Poppin' Party角色破产后才可被正常购买」 -- someone is still
     // standing, so the lock holds.
-    ctx::trigger::set_cancelled();
-    ctx::trigger::set_reason(key!("poppin_locked"));
     ctx::log(player_id, &Msg::new(key!("poppin_locked")));
-    Ok(())
+    card_sdk::abi::FilterValue {
+        allowed: 0,
+        reason: REASON_POPPIN_LOCKED,
+        ..v
+    }
 }
 
 /// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- the lock is in play
@@ -357,6 +364,6 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 /// cfg(kani) direct-call wrapper (ppcost body-id pattern).
 #[cfg(kani)]
-pub fn lock_hill_kani(player_id: i32) -> card_sdk::Asked {
-    lock_hill(player_id)
+pub fn lock_hill_kani(player_id: i32, v: card_sdk::abi::FilterValue) -> card_sdk::abi::FilterValue {
+    lock_hill(player_id, v)
 }

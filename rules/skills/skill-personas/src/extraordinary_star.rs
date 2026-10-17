@@ -36,10 +36,10 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     "skill:户山香澄:非凡之星",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         // （1） is 「其他玩家"星之鼓动山丘"上[结算]时」 -- who and where are the
         // hook's applicability (the residual guard), not its effect.
-        On::Hook(&[HookKind::Settle], "", Some(on_settle_applies), on_settle),
+        On::Action(&[HookKind::Settle], "", Some(on_settle_applies), on_settle),
     ],
 )
 .silent(&[1])
@@ -60,7 +60,7 @@ fn on_settle_applies(player_id: i32) -> bool {
 }
 
 /// （1）「其他玩家"星之鼓动山丘"上[结算]时获得一个[火罐]」 -- a field event, so
-/// an [`On::Hook`] at `Settle`. The settler is the trigger's player and the tile
+/// an [`On::Action`] at `Settle`. The settler is the trigger's player and the tile
 /// is the trigger's tile; the clause says *another* player, so this player's own
 /// landing does not pay out ([`on_settle_applies`]).
 fn on_settle(player_id: i32) -> card_sdk::Asked {

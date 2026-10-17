@@ -433,7 +433,7 @@ fn g_move_07_main_move_is_1d20_clockwise() {
         drain_circle(&mut t, 0);
         drain(&mut t);
         let evs = t.events_since(mark);
-        let rolls: Vec<_> = evs.iter().filter(|e| e.r#type == "roll").collect();
+        let rolls: Vec<_> = evs.iter().filter(|e| e.r#type == "diceRollBefore").collect();
         if rolls.is_empty() {
             return Err(format!("no roll event: {:?}", t.keys_since(mark)));
         }

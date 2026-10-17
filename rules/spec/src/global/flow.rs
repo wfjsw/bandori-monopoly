@@ -157,7 +157,7 @@ pub fn g_flow_01(step: &Step<'_>) -> Result<(), String> {
     // 「视为[主要移动]」 that re-spends the move logs `log.main_move_used` and
     // must not walk -- checked below on that key. (Forced / teleport moves are
     // not [主要移动] and are out of scope.)
-    let is_roll_cmd = is_act(step, "roll");
+    let is_roll_cmd = is_act(step, "diceRollBefore");
     if is_roll_cmd && pre_moved {
         let seat = step.pre.turn.player_id;
         let pos_before = step
@@ -794,7 +794,7 @@ const G_FLOW_11: Clause = Clause::new(
 
 /// Executable form of [`G-FLOW-11`].
 pub fn g_flow_11(step: &Step<'_>) -> Result<(), String> {
-    if !is_act(step, "roll") {
+    if !is_act(step, "diceRollBefore") {
         return Ok(());
     }
     let busy = step.pre.st.busy || step.pre_prompt_open;

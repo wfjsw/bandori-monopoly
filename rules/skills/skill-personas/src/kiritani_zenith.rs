@@ -25,9 +25,9 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     "skill:桐谷透子:天上天下，唯我独尊",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
     ],
 )
     .silent(&[1, 3]);

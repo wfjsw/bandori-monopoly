@@ -21,23 +21,21 @@ use alloc::string::String;
 use card_sdk::abi::{CardPile, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
-
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+use skill_groups::fans;
 
 pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
         // （2） replaces the draw, so it runs at the per-card **before** point.
-        On::Hook(
+        On::Action(
             &[HookKind::DrewBefore],
-            "actor == owner && tok('P✽P粉丝(正)') >= 1",
+            "actor == owner && slot('ppFansUp') >= 1",
             None,
             on_draw,
         ),
@@ -49,7 +47,7 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
     // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
+    let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
@@ -66,7 +64,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「自己抽卡时时可选择将自己Y个正面[P✽P粉丝]变反，此次抽卡改为观看卡组顶端
 /// Y+1张卡…」.
 fn on_draw(player_id: i32) -> card_sdk::Asked {
-    let up = ctx::tok(player_id, FANS_UP);
+    let up = fans::up(player_id);
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("maya_dawn_title")),
@@ -78,8 +76,7 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let mut y = y;
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
+    let _ = fans::flip_down(player_id, y)?;
     // 「观看卡组顶端Y+1张卡（卡组数量不足Y+1则观看全部卡组）」
     let deck = ctx::cards_in(player_id, CardPile::Deck);
     let n = deck.len().min((y + 1) as usize);
@@ -120,10 +117,9 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
             if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            let down = ctx::tok(p, FANS_DOWN).min(y);
+            let down = fans::down(p).min(y);
             if down > 0 {
-                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
+                let _ = fans::flip_up(p, down)?;
                 y -= down;
             }
         }
@@ -132,10 +128,9 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
             if ctx::player_out(p) || !ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            if ctx::tok(p, FANS_DOWN) > 0 {
-                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
-            }
+            // Always send -- the effect still hits a seat with 0 face-downs, so
+            // band clause （2） may grant an overflow crystal.
+            let _ = fans::flip_up(p, 1)?;
         }
     }
     ctx::log(

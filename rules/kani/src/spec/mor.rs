@@ -713,20 +713,27 @@ pub fn noble_02_effects_ok(effects: &[Effect], tile: i32) -> bool {
 // ===========================================================================
 // C-MOR-again-02  `Mor:再次牵起手来` [持续]
 // 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区。」
-// The [反击] window of -01 is PROTOCOL-LEVEL. This is the PayAt hook body.
+// The [反击] window of -01 is PROTOCOL-LEVEL. This is the PaySplitAt hook body.
 // OPEN-取消范围: one-sided on the owner (the clause pins the owner's side).
 // ===========================================================================
 
-/// Cancel the pending payment (`SetPayAmount { to: 0 }`) and send the card to
-/// the discard (`dest = Graveyard`; the unplace is engine post). Exactly one
-/// effect: the pay-amount rewrite to 0.
+/// ABI v75 pure Filter (PayAt): 「取消此次资金变动」 -- the body RETURNS 0 and
+/// the host folds that into the running amount. SPEC CHANGE (Action→Filter +
+/// PayAfter split): the old combined Action wrote `SetPayAmount{0}` itself;
+/// the pure Filter's no-less/no-more is the return value plus an empty effect
+/// log. The discard half (`dest = Graveyard`) is `pay_after` on PayAfter.
 pub fn again_02_effects_ok(effects: &[Effect]) -> bool {
-    effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == 0)
+    effects.is_empty()
+}
+
+/// Cancel half: the Filter return is 0 (「取消此次资金变动」).
+pub fn again_02_cancel_ok(cancelled: i32) -> bool {
+    cancelled == 0
 }
 
 /// MUTANT: cancels to 1, not 0.
-pub fn again_02_effects_ok_mutant(effects: &[Effect]) -> bool {
-    effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == 1)
+pub fn again_02_cancel_ok_mutant(cancelled: i32) -> bool {
+    cancelled == 1
 }
 
 // ===========================================================================

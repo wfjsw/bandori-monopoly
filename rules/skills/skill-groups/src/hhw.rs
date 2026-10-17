@@ -26,16 +26,20 @@ pub const HHW: CardDef = CardDef::new(
     &[
         // （1）「向他人的格子付款时」 -- another player, a rent. The
         // recorded-player / crystals scans stay residual (dynamic keys).
-        On::Hook(
-            &[HookKind::PayChoose],
+        //
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
+        // the interactive `ask_yes` + `set_pay_amount` + state/crystal writes sit
+        // immediately before the pure `PaySplitChoose` filter stage.
+        On::Action(
+            &[HookKind::PaySplitChooseBefore],
             "actor == owner && target >= 0 && target != owner && pay_is_rent",
             None,
             on_pay_choose,
         ),
         // （2） a recorded player's rent collection, with a crystal to spend.
-        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, Some(after_pay_applies), after_pay),
+        On::Action(&[HookKind::PayAfter], card_sdk::pre::MINE, Some(after_pay_applies), after_pay),
         // （3） a recorded amount to spend down.
-        On::Hook(&[HookKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
+        On::Action(&[HookKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
     ],
 );
 
@@ -61,6 +65,8 @@ fn has_saved(player_id: i32) -> bool {
 
 /// （1）「向他人的格子付款时可选择支付双倍价格」.
 /// Applicability is the entry's condition; the ask is the 「可」 opt-in.
+/// Rides `PaySplitChooseBefore` (v78): the prompt and the `set_pay_amount` rewrite sit
+/// at the rulebook PaySplitChoose position.
 fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
     let to = ctx::trigger::target();
     if !ctx::ask_yes(

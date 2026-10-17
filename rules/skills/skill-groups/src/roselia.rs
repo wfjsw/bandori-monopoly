@@ -9,7 +9,7 @@
 //! while the condition holds. 「初始Live House格子」 is a tile whose own group is
 //! the Live House one -- not one this skill recoloured.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::HookKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{CardDef, On};
 
@@ -25,21 +25,21 @@ pub const ROSELIA: CardDef = CardDef::new(
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
         // The Live-House / one-shot split is residual (`is_live_house_for` is a
         // per-player colour, not CEL's tile-kind `is_venue`).
-        On::Hook(&[HookKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
+        On::Filter(&[HookKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
-        On::Hook(
+        On::Action(
             &[HookKind::Bought],
             "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
             Some(on_bought_applies),
             on_bought,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::Bought],
             "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0",
             Some(on_live_bought_applies),
             on_live_bought,
         ),
-        On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
+        On::Action(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
     ],
 )
     .silent(&[1]);
@@ -57,9 +57,8 @@ fn half_price_applies(player_id: i32) -> bool {
 
 /// （2）「购买任何Live House格子的地契时购买价格减半」, and （1）'s one-shot.
 /// Applicability is [`half_price_applies`]; this side only halves.
-fn half_price(player_id: i32) -> card_sdk::Asked {
-    ctx::trigger::set_price(ctx::trigger::price() / 2);
-    Ok(())
+fn half_price(player_id: i32, value: i32) -> i32 {
+    value / 2
 }
 
 /// Residual guard for [`on_bought`]: the tile is a real non-Live-House buy
@@ -130,8 +129,8 @@ ruleset_core::roster::GroupDef::new(r#"Roselia"#)
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
-pub fn half_price_kani(player_id: i32) -> card_sdk::Asked {
-    half_price(player_id)
+pub fn half_price_kani(player_id: i32, value: i32) -> i32 {
+    half_price(player_id, value)
 }
 
 #[cfg(kani)]

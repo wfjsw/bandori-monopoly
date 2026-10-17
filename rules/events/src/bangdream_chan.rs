@@ -20,7 +20,7 @@ pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     "event:元祖！邦多利酱",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
+        On::Action(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
     ],
 );
 

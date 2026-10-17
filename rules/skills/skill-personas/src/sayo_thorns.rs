@@ -26,17 +26,17 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
     "skill:冰川纱夜:踏上荆棘之路的觉悟",
     &[
         On::Play("", Some(cant_press), offer),
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
             "",
             None,
             declare_cap,
         ),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor != owner && tile.id == owner.pos",
             None,

@@ -145,6 +145,9 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn move_main(&self) -> bool {
         self.trigger.main
     }
+    fn move_by_skill(&self) -> bool {
+        self.trigger.mv.as_ref().map(|m| m.by_skill).unwrap_or(false)
+    }
     fn move_dir(&self) -> i64 {
         self.trigger
             .mv
@@ -1294,6 +1297,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             .as_ref()
             .map(|m| m.tags.iter().map(|(k, v)| (k.clone(), *v as i64)).collect())
             .unwrap_or_default(),
+        by_skill: t.mv.as_ref().map(|m| m.by_skill).unwrap_or(false),
     };
 
     let tile = TileSnap {
@@ -1607,6 +1611,9 @@ pub const SLOT_NAMES: &[&str] = &[
     "umiri_user",
     // `dream_ahead` overflow counter (`ctx::inc_slot(player_id, SLOT_X, 1)`).
     "dream_ahead_x",
+    // PP fan counters (`skill_groups::fans::{UP,DOWN}` in the state dict).
+    "ppFansUp",
+    "ppFansDown",
     // `detour` next-roll 1d6 arm (`state::set(player_id, NEXT_ROLL, 1)`); the
     // `On::RollPlan` condition is `slot('detour_next_roll') != 0`.
     "detour_next_roll",
@@ -1614,6 +1621,9 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.sayoThorns.used",
     // `mumei_streamer` flip count (`state::set(player_id, FLIPPED, n)`).
     "skill.mumei.flipped",
+    // `mumei_streamer` post-gain pot X latched at the payment declaration for
+    // the pure `PaySplitAdd` filter (`state::set(player_id, BUMP_X, x)`).
+    "skill.mumei.bumpX",
     // `hina_lottery` borrowed-skill index (`state::set(player_id, BORROWED, k)`).
     "skill.hinaLottery.borrowed",
     // `arisa_bonsai` passed-station latch (`ctx::set_slot(player_id, …, 1)`).

@@ -7,6 +7,7 @@
 //! lap without settling, then pay 1,000 at end of turn.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 pub const SIGNPOST: CardDef = CardDef::new(
     "PPP:向着未来的路标",
@@ -14,7 +15,7 @@ pub const SIGNPOST: CardDef = CardDef::new(
     // bankrupt seat pays nobody, so the callback must not run (or flash).
     &[
         On::Play("", Some(cant_play), play),
-        On::AtEnd("owner.out == 0", None, at_end),
+        On::Action(&[HookKind::AtEnd], "owner.out == 0", None, at_end),
     ],
 )
 .props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()

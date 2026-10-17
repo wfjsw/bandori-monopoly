@@ -981,7 +981,86 @@ fn welcome_to_ave_mujica_switches_state() {
     assert!(r.is_ok(), "the card plays: {r:?}");
     // 「转换任意一名玩家的状态」 — the designated player switches.
     assert_eq!(designated, Some(1), "the prompt offers a player to switch");
+
     assert_eq!(t.state(1, "skillState"), 2, "丰川祥子's state switched to 2");
+}
+
+/// 规则书（2）: 「[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态」
+/// A skill-state 1↔2 toggle by one player opens the counteraction for a
+/// different holder; the re-toggle covers every player who switched this turn
+/// and must not chain further.
+#[test]
+fn welcome_counter_on_other_state_switch() {
+    let mut t = Table::vanilla(3);
+    t.clean();
+    // P1 has the 状态1/状态2 axis; P0 plays clause (1) and toggles P1.
+    // P2 holds the clause (2) counter.
+    t.set_state(0, "skillState", 1);
+    t.set_state(1, "skillState", 1);
+    t.set_state(2, "skillState", 1);
+    t.give(0, &["Mujica:欢迎来到ave mujica的世界"]);
+    t.give(2, &["Mujica:欢迎来到ave mujica的世界"]);
+    t.begin_turn(0);
+    while t.prompt().is_some() {
+        decline_q(&mut t);
+    }
+    // P0 also "switched" this turn (test seam for 「所有本回合切换了状态的玩家」).
+    // Stamped before the play so `world_mut` is legal (no pending routine).
+    {
+        let w = t.m.world();
+        let key = w.st.round * 100 + w.st.turn + 1;
+        t.set_state(0, "switchedRound", key);
+    }
+    t.play(0, "Mujica:欢迎来到ave mujica的世界").unwrap();
+    // Designate P1; the State raise then opens clause (2) for other holders.
+    loop {
+        if t.counteract_offered("Mujica:欢迎来到ave mujica的世界") {
+            break;
+        }
+        let Some(p) = t.prompt() else { break };
+        if p.kind == "choice" || p.kind == "player" {
+            if let Some(k) = t.option("PlayerId(1)").or_else(|| t.option("P1")) {
+                answer_q(&mut t, 0, k).unwrap();
+            } else {
+                decline_q(&mut t);
+            }
+        } else {
+            decline_q(&mut t);
+        }
+    }
+    assert!(
+        t.counteract_offered("Mujica:欢迎来到ave mujica的世界"),
+        "a different player's state switch opens clause (2): {}",
+        t.dump_prompt()
+    );
+    assert_eq!(t.state(1, "skillState"), 2, "P1 toggled 1→2 before the counter");
+    // P2 is the counter user; the re-toggle list is P2 + everyone who switched.
+    let s0 = t.state(0, "skillState");
+    let s1 = t.state(1, "skillState");
+    let s2 = t.state(2, "skillState");
+    t.counteract(2, "Mujica:欢迎来到ave mujica的世界").unwrap();
+    // Must NOT chain further -- no second [反击] window from the re-toggle.
+    assert!(
+        !t.counteract_offered("Mujica:欢迎来到ave mujica的世界"),
+        "the re-toggle must not open another window: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+    // Re-toggle includes every player who switched this turn (P0 seam + P1)
+    // plus the counter user (P2).
+    if s0 == 1 || s0 == 2 {
+        assert_eq!(t.state(0, "skillState"), if s0 == 2 { 1 } else { 2 }, "P0 re-toggled");
+    }
+    assert_eq!(
+        t.state(1, "skillState"),
+        if s1 == 2 { 1 } else { 2 },
+        "P1 (switcher) re-toggled"
+    );
+    assert_eq!(
+        t.state(2, "skillState"),
+        if s2 == 2 { 1 } else { 2 },
+        "P2 (counter user) re-toggled"
+    );
 }
 
 // -- Mujica:（喵梦） ----------------------------------------------------

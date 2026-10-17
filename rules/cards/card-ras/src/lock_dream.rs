@@ -21,20 +21,20 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
         // Card-in-deck is not in the CEL schema (and a `card_in(pile)` probe
         // would cost a pile walk per candidate for a hook that fires ~5 times
         // before the opening deal) -- the residual guard stays.
-        On::Hook(
+        On::Action(
             &[HookKind::DeckBeforeGame],
             "",
             Some(deck_before_game_guard),
             deck_before_game,
         ),
-        On::Hook(&[HookKind::DeckAtGameStart], "card.placed", None, deck_at_game_start),
-        On::Hook(
+        On::Action(&[HookKind::DeckAtGameStart], "card.placed", None, deck_at_game_start),
+        On::Action(
             &[HookKind::PassTile],
             "actor == owner && move.main && tile.id == tile_named('Bandori车站')",
             None,
             pass_tile,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBefore],
             "actor == owner && slot('lock_dream_tag') != 0",
             None,

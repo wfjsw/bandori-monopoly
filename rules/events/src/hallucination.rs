@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `幻觉来了`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有影响投掷的效果服从于原本进行投掷的玩家所收影响）。
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{FilterValue, HookKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -22,8 +22,8 @@ pub const HALLUCINATION: CardDef = CardDef::new(
         On::Play("", None, play),
         // 「任何玩家进行投掷前」 -- every plan, so the category filter is the
         // whole applicability. `always` deleted (a no-op prefetch).
-        On::Hook(&[HookKind::RollPlan], "", None, on_plan),
-        On::Hook(&[HookKind::TurnStartBefore], "", None, on_turn_start),
+        On::FilterValue(&[HookKind::DiceRollPlan], "", None, on_plan),
+        On::Action(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
 
@@ -59,26 +59,26 @@ fn prev_player(p: i32) -> i32 {
 /// 规则书: 「任何玩家进行投掷前在行动顺序的上一名玩家代替进行此次投掷（所有
 /// 影响投掷的效果服从于原本进行投掷的玩家所收影响）」 -- the roller is the
 /// previous player; the move still belongs to the original one (and its
-/// modifiers key off them), which is what `plan::set_roller` does: the log line
+/// modifiers key off them), which is what `v.roller` does: the log line
 /// shows 「by」, `t.Move.Main` / the mover are unchanged.
-fn on_plan(_owner: i32) -> card_sdk::Asked {
+fn on_plan(_owner: i32, mut v: FilterValue) -> FilterValue {
     let who = trigger::player_id();
     if who < 0 {
-        return Ok(());
+        return v;
     }
     let by = prev_player(who);
     if by == who {
-        return Ok(());
+        return v;
     }
     // 「上一名玩家代替进行此次投掷」
-    ctx::plan::set_roller(by);
+    v.roller = by;
     ctx::log(
         who,
         &Msg::new("log.event.hallucination_sub")
             .player_id("who", who)
             .player_id("by", by),
     );
-    Ok(())
+    v
 }
 
 /// 规则书: 「抽到的玩家的下回合开始时放入事件弃牌」 -- count the drawer's own
@@ -104,8 +104,8 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
 }
 
 #[cfg(kani)]

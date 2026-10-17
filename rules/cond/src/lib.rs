@@ -50,7 +50,7 @@ pub use compile::Cond;
 pub use compile::compile;
 pub use ctx::{CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx};
 pub use eval::{EvalError, WindowScope};
-pub use kinds::{constants as kind_constants, mv, trig, TELEPORT_TRIGGER};
+pub use kinds::{constants as kind_constants, mv, trig};
 
 /// Stable int id for a string identity (character name / band name / card id).
 /// Not the data-table index -- a name-stable hash so a condition's

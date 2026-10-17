@@ -255,7 +255,7 @@ fn diff_operators_boundary_grid() {
         "value > 0 && actor == owner",
         "kind == Teleport",
         "move_kind == Walk",
-        "kind == MoveRoll",
+        "kind == DiceRollResult",
     ] {
         if compile(expr).is_err() {
             continue;

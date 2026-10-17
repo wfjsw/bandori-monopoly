@@ -16,7 +16,7 @@ pub const SOYO_BACK: CardDef = CardDef::new(
     "CRYCHIC:（soyo）回到曾经",
     &[
         On::Play("", None, soyo_back),
-        On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
+        On::Action(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回到曾经"#)

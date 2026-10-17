@@ -34,7 +34,7 @@ fn activation_header_precedes_the_host_effects_it_causes() {
     let mut t = Table::vanilla(2);
     t.set_hand(0, &[]);
     t.set_hand(1, &[]);
-    // `TEST:payAddAny` is a placed card whose `payAdd` hook runs on every
+    // `TEST:payAddAny` is a placed card whose `paySplitAdd` hook runs on every
     // payment -- a hook body with a host-effect-shaped outcome. Better: use
     // the tile hook and assert the header is first among this drive's events.
     t.give_play(0, "TEST:tileHook").unwrap();
@@ -149,7 +149,7 @@ fn guard_reject_emits_nothing() {
 #[test]
 fn every_listened_trigger_kind_has_a_real_why() {
     use game_rules::{trigger_reason, Trigger, TriggerKind};
-    // Kinds the shipped rules declare (Hook / Gate / Counteract / RollPlan /
+    // Kinds the shipped rules declare (Hook / Gate / Counteract / DiceRollPlan /
     // AtEnd). A kind missing from `trigger_reason`'s dedicated arms falls
     // through to `log.why.generic`; this test pins the ones that matter.
     let kinds = [
@@ -164,16 +164,16 @@ fn every_listened_trigger_kind_has_a_real_why() {
         TriggerKind::Pay,
         TriggerKind::Paid,
         TriggerKind::PayAfter,
-        TriggerKind::PayChoose,
-        TriggerKind::PayAdd,
-        TriggerKind::PayMul,
-        TriggerKind::PayAt,
-        TriggerKind::PayTotalAdd,
-        TriggerKind::PayTotalMul,
-        TriggerKind::PayTotalCancel,
-        TriggerKind::Roll,
-        TriggerKind::MoveRoll,
-        TriggerKind::RollAfter,
+        TriggerKind::PaySplitChoose,
+        TriggerKind::PaySplitAdd,
+        TriggerKind::PaySplitMul,
+        TriggerKind::PaySplitAt,
+        TriggerKind::PayCombinedAdd,
+        TriggerKind::PayCombinedMul,
+        TriggerKind::PayCombinedCancel,
+        TriggerKind::DiceRollBefore,
+        TriggerKind::DiceRollResult,
+        TriggerKind::DiceRollAfter,
         TriggerKind::TurnStart,
         TriggerKind::TurnStartBefore,
         TriggerKind::TurnEnd,

@@ -23,7 +23,7 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
         On::Play("", None, chisato_mask),
-        On::Hook(&[HookKind::Reshuffled], "", Some(reshuffled_guard), reshuffled),
+        On::Action(&[HookKind::Reshuffled], "", Some(reshuffled_guard), reshuffled),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
@@ -89,8 +89,8 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
 
 /// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
 ///
-/// `PIPELINE-AUDIT` Q2: the command-wide **pre-split** stage (`payTotalAdd` /
-/// `payTotalMul` / `payTotalCancel`) shapes `total` before it divides -- the
+/// `PIPELINE-AUDIT` Q2: the command-wide **pre-split** stage (`payCombinedAdd` /
+/// `payCombinedMul` / `payCombinedCancel`) shapes `total` before it divides -- the
 /// 「分摊前」 figure of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)). Each share
 /// then runs the per-share pipeline through `ctx::pay_leg`.
 fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {

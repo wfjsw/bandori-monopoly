@@ -92,7 +92,7 @@ pub fn walk_path(events: &[game_core::state::MatchEvent], who: i32, n: usize) ->
             continue;
         }
         match e.r#type.as_str() {
-            "roll" | "move" => {
+            "diceRollBefore" | "move" => {
                 let seg = segment_path(e.from, e.to, e.value, n)?;
                 path.extend(seg);
             }
@@ -110,7 +110,7 @@ pub fn move_start(events: &[game_core::state::MatchEvent], who: i32) -> Option<i
             continue;
         }
         match e.r#type.as_str() {
-            "roll" | "move" | "teleport" => return Some(e.from),
+            "diceRollBefore" | "move" | "teleport" => return Some(e.from),
             _ => {}
         }
     }
@@ -131,7 +131,7 @@ pub fn move_path(
             continue;
         }
         match e.r#type.as_str() {
-            "roll" | "move" => {
+            "diceRollBefore" | "move" => {
                 saw_walk = true;
                 path.extend(segment_path(e.from, e.to, e.value, n)?);
             }
@@ -275,7 +275,7 @@ pub fn g_move_02(step: &Step<'_>) -> Result<(), String> {
     }
     for e in step.events {
         match e.r#type.as_str() {
-            "roll" | "move" => {
+            "diceRollBefore" | "move" => {
                 let from = e.from;
                 let to = e.to;
                 let value = e.value;
@@ -346,7 +346,7 @@ pub fn g_move_03(step: &Step<'_>) -> Result<(), String> {
         return Err("board has no tiles".into());
     }
     for e in step.events {
-        if e.r#type != "roll" && e.r#type != "move" {
+        if e.r#type != "diceRollBefore" && e.r#type != "move" {
             continue;
         }
         let path = segment_path(e.from, e.to, e.value, n)?;
@@ -490,7 +490,7 @@ pub fn g_move_06(step: &Step<'_>) -> Result<(), String> {
             && step
                 .events
                 .iter()
-                .filter(|e| e.r#type == "roll" || e.r#type == "move" || e.r#type == "teleport")
+                .filter(|e| e.r#type == "diceRollBefore" || e.r#type == "move" || e.r#type == "teleport")
                 .count()
                 == 0
             && !step
@@ -583,7 +583,7 @@ pub fn g_move_07(step: &Step<'_>) -> Result<(), String> {
         return Err("board has no tiles".into());
     }
     for e in step.events {
-        if e.r#type != "roll" {
+        if e.r#type != "diceRollBefore" {
             continue;
         }
         let d = e.dice;
@@ -615,7 +615,7 @@ pub fn g_move_07(step: &Step<'_>) -> Result<(), String> {
 /// * **ID:** G-MOVE-08
 /// * **Source:** `rulebook-doc.md:207`
 /// * **Quote:** 行动阶段 7 「一回合只能触发一次［主要移动］效果,多次触发［主要移动］时无效」
-/// * **Trigger:** a `roll` command (`StepAct::Act` with `act == "roll"`).
+/// * **Trigger:** a `roll` command (`StepAct::Act` with `act == "diceRollBefore"`).
 /// * **Condition:** the turn's [主要移动] has already been spent, or the
 ///   engine refuses the roll for another reason.
 /// * **Effect:** a refused roll is a pure no-op -- no walk / teleport /
@@ -638,7 +638,7 @@ const G_MOVE_08: Clause = Clause::new(
 pub fn g_move_08(step: &Step<'_>) -> Result<(), String> {
     let is_roll = matches!(
         step.act,
-        spec_kit::StepAct::Act { ref msg, .. } if msg.act == "roll"
+        spec_kit::StepAct::Act { ref msg, .. } if msg.act == "diceRollBefore"
     );
     if !is_roll {
         return Ok(());
@@ -647,7 +647,7 @@ pub fn g_move_08(step: &Step<'_>) -> Result<(), String> {
     // one (`err.roll_main_used`) and a card's second 主要移动 early-outs; both
     // leave no walk. So: at most one `roll` walk event, and a window with no
     // walk must not have moved anyone (「多次触发［主要移动］时无效」).
-    let rolls = step.events.iter().filter(|e| e.r#type == "roll").count();
+    let rolls = step.events.iter().filter(|e| e.r#type == "diceRollBefore").count();
     if rolls > 1 {
         return Err(format!(
             "one [主要移动] per turn, but the window logged {rolls} roll walks"
@@ -656,7 +656,7 @@ pub fn g_move_08(step: &Step<'_>) -> Result<(), String> {
     let walks = step
         .events
         .iter()
-        .filter(|e| matches!(e.r#type.as_str(), "roll" | "move" | "teleport"))
+        .filter(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move" | "teleport"))
         .count();
     if walks == 0 {
         for (i, (pre, post)) in step
@@ -718,7 +718,7 @@ pub fn g_move_10(step: &Step<'_>) -> Result<(), String> {
     // Who moved in this window?
     let mut movers = Vec::new();
     for e in step.events {
-        if matches!(e.r#type.as_str(), "roll" | "move" | "teleport") && e.player_id >= 0 {
+        if matches!(e.r#type.as_str(), "diceRollBefore" | "move" | "teleport") && e.player_id >= 0 {
             let who = e.player_id as usize;
             if !movers.contains(&who) {
                 movers.push(who);
@@ -816,7 +816,7 @@ pub fn g_move_11(step: &Step<'_>) -> Result<(), String> {
     }
     // Indices of the observable classes. The CiRCLE *reward* is a [经过]
     // step (行动阶段 12), not a settle (15) -- `log.land_*` is the settle.
-    let walk_is = |e: &game_core::state::MatchEvent| e.r#type == "roll" || e.r#type == "move";
+    let walk_is = |e: &game_core::state::MatchEvent| e.r#type == "diceRollBefore" || e.r#type == "move";
     let settle_is = |e: &game_core::state::MatchEvent| {
         let k = spec_kit::event_key(e);
         k.contains("land") || k.contains("rent")
@@ -938,13 +938,13 @@ pub fn verify_one_main_move(
     if pre_pos.len() != post_pos.len() {
         return Err("pre/post pos arity mismatch".into());
     }
-    let rolls = events.iter().filter(|e| e.r#type == "roll").count();
+    let rolls = events.iter().filter(|e| e.r#type == "diceRollBefore").count();
     if rolls > 1 {
         return Err(format!("one [主要移动] per turn, window logged {rolls} roll walks"));
     }
     let walks = events
         .iter()
-        .filter(|e| matches!(e.r#type.as_str(), "roll" | "move" | "teleport"))
+        .filter(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move" | "teleport"))
         .count();
     if walks == 0 {
         for (i, (a, b)) in pre_pos.iter().zip(post_pos.iter()).enumerate() {
@@ -999,7 +999,7 @@ pub fn verify_overlap(
 /// settle line (`land*` / `rent`). The CiRCLE *reward* is a [经过] line
 /// (行动阶段 12), not a settle (15).
 pub fn verify_timing_order(events: &[game_core::state::MatchEvent]) -> Result<(), String> {
-    let walk_is = |e: &game_core::state::MatchEvent| e.r#type == "roll" || e.r#type == "move";
+    let walk_is = |e: &game_core::state::MatchEvent| e.r#type == "diceRollBefore" || e.r#type == "move";
     let settle_is = |e: &game_core::state::MatchEvent| {
         let k = spec_kit::event_key(e);
         k.contains("land") || k.contains("rent")

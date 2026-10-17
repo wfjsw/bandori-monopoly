@@ -146,14 +146,15 @@ impl CardInfo {
     }
 
     /// The field-card entries that answer `trigger`, whether declared as a
-    /// settlement hook (`On::Hook`) or as a gate (`On::Gate`). Both run
-    /// automatically on a placed card and neither opens a counteraction window; they
-    /// are separate declarations only so the type can say which is a question.
+    /// settlement hook (`On::Action` / `On::Filter`) or as a gate (`On::Gate`).
+    /// All run automatically on a placed card and none opens a counteraction
+    /// window; they are separate declarations only so the type can say which
+    /// is a question and which is a value modifier.
     /// **All** of them run, in declaration order -- each carries its own
     /// condition / guard and at most one body entry per entry per raise.
     pub fn hook_entries(&self, trigger: crate::TriggerKind) -> Vec<i32> {
-        let mut v = self.entries(OnKind::Hook, Some(trigger));
-        v.extend(self.entries(OnKind::Gate, Some(trigger)));
+        let mut v = self.entries(OnKind::Action, Some(trigger));
+        v.extend(self.entries(OnKind::Filter, Some(trigger)));
         v
     }
 
@@ -162,8 +163,10 @@ impl CardInfo {
         self.hook_entries(trigger).first().copied()
     }
 
+    /// Scheduled turn-end callback (`ctx::at_turn_end`): an `On::Action` at
+    /// [`crate::TriggerKind::AtEnd`].
     pub fn has_at_end(&self) -> bool {
-        self.entry(OnKind::AtEnd, None).is_some()
+        self.hook_entry(crate::TriggerKind::AtEnd).is_some()
     }
 }
 
@@ -175,17 +178,17 @@ pub enum Call {
     Play { card: i32, player_id: i32 },
     /// `On::Counteract` -- the counteraction effect, for the world's current trigger kind.
     Counteract { card: i32, player_id: i32 },
-    /// `On::Hook` -- the field-card hook for `kind`.
+    /// `On::Action` -- the field-card hook for `kind`.
     Hook {
         card: i32,
         kind: crate::TriggerKind,
         player_id: i32,
     },
-    /// `On::AtEnd` -- the scheduled turn-end callback.
+    /// Scheduled turn-end callback (`On::Action(&[AtEnd])`).
     AtEnd { card: i32, player_id: i32 },
-    /// `On::RollPlan` -- the card's movement routine, called while the walk
+    /// Movement routine (`On::FilterValue(&[DiceRollPlan])`), called while the walk
     /// is being planned.
-    RollPlan { card: i32, player_id: i32 },
+    DiceRollPlan { card: i32, player_id: i32 },
     /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the
     /// tile the rule instance governs. `player_id` is the player settling.
     Settle { card: i32, player_id: i32 },
@@ -200,6 +203,23 @@ pub enum Call {
     },
     /// `On::Redeem` -- the rule's redeem body (规则书 基础规则 6).
     Redeem { card: i32, player_id: i32, tile: i32 },
+    /// `On::Buy` -- the rule's buy body (v80). `kind` is the
+    /// [`card_sdk::abi::BuyKind`] wire value; `reason` is the source
+    /// (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction).
+    Buy {
+        card: i32,
+        player_id: i32,
+        tile: i32,
+        kind: i32,
+        reason: i32,
+    },
+    /// `On::Build` -- the rule's build body (v80).
+    Build {
+        card: i32,
+        player_id: i32,
+        tile: i32,
+        reason: i32,
+    },
 }
 
 impl Call {
@@ -211,10 +231,12 @@ impl Call {
             | Call::Counteract { player_id, .. }
             | Call::Hook { player_id, .. }
             | Call::AtEnd { player_id, .. }
-            | Call::RollPlan { player_id, .. }
+            | Call::DiceRollPlan { player_id, .. }
             | Call::Settle { player_id, .. }
             | Call::Mortgage { player_id, .. }
             | Call::Redeem { player_id, .. } => player_id,
+            Call::Buy { player_id, .. } => player_id,
+            Call::Build { player_id, .. } => player_id,
         }
     }
 
@@ -224,10 +246,12 @@ impl Call {
             | Call::Counteract { card, .. }
             | Call::Hook { card, .. }
             | Call::AtEnd { card, .. }
-            | Call::RollPlan { card, .. }
+            | Call::DiceRollPlan { card, .. }
             | Call::Settle { card, .. }
             | Call::Mortgage { card, .. }
             | Call::Redeem { card, .. } => card,
+            Call::Buy { card, .. } => card,
+            Call::Build { card, .. } => card,
         }
     }
 }
@@ -274,16 +298,16 @@ pub enum HostRequest {
         to: i32,
         amount: i32,
         src: Option<crate::Msg>,
-        /// Run the command-wide **pre-split** stage (`payTotalAdd` /
-        /// `payTotalMul` / `payTotalCancel`) on this payment's amount. `true`
+        /// Run the command-wide **pre-split** stage (`payCombinedAdd` /
+        /// `payCombinedMul` / `payCombinedCancel`) on this payment's amount. `true`
         /// for every ordinary payment; a 「[分摊]」 leg sets it `false` because
         /// the card body has already shaped the command total through
         /// [`Self::PayTotal`] before dividing (`PIPELINE-AUDIT` Q2).
         total_stage: bool,
     },
     /// The command-wide **pre-split** stage alone (`PIPELINE-AUDIT` Q2): the
-    /// engine runs `payTotalAdd` → `payTotalMul` → `payTotalCancel` on `total`
-    /// and answers with the shaped figure, or `-1` when a `payTotalCancel`
+    /// engine runs `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel` on `total`
+    /// and answers with the shaped figure, or `-1` when a `payCombinedCancel`
     /// hook dropped the whole command. No money moves here -- the card body
     /// divides the answer and runs each share through [`Self::Pay`] with
     /// `total_stage: false`.
@@ -372,6 +396,32 @@ pub enum HostRequest {
         tile: i32,
         amount: i32,
     },
+    /// Pay the buy price through the money pipeline (`Cx::money` with
+    /// `PayKind::Buy`). `kind` is the [`card_sdk::abi::BuyKind`] wire value;
+    /// `allow_mortgage` is the Land/Agent funding arm. Answers the amount
+    /// actually paid (0 = refused / cancelled).
+    PayBuy {
+        player_id: i32,
+        tile: i32,
+        amount: i32,
+        kind: i32,
+    },
+    /// Pay the build cost through the money pipeline (`PayKind::Build`).
+    /// Answers the amount actually paid (0 = refused / cancelled).
+    PayBuild {
+        player_id: i32,
+        tile: i32,
+        amount: i32,
+    },
+    /// Write the deed after a buy (`purchase::assign_deed`). Mechanism only --
+    /// the tile rule already decided owner / houses / mortgaged.
+    AssignDeed {
+        player_id: i32,
+        tile: i32,
+        owner: i32,
+        houses: i32,
+        mortgaged: i32,
+    },
     /// Draw `n` cards. The engine runs the draw itself -- one card at
     /// a time, raising the per-draw points (`drewBefore` / `drawn` / `drew`) on
     /// each, so a `drewBefore` hook may replace a card of it -- and answers with
@@ -424,10 +474,26 @@ pub enum HostRequest {
     /// wire name, e.g. `PassReward` → `"the pass-reward trigger"`); `value` is the
     /// trigger's `value`. Answers 1 when the link settled, 0 when a
     /// counteraction cancelled it.
+    ///
+    /// v78: when `kind` is a filter (`TriggerKind::is_filter`), the host folds
+    /// the filter chain instead of opening a counteraction window. A
+    /// `FilterValue` kind (BuyAssign) carries the default deal in and answers
+    /// the packed rewritten deal (see `hostfns::pack_deal` / `unpack_deal`):
+    /// bit 0 = cancelled, bits 1-4 = houses, bit 5 = mortgaged, bits 6-31 =
+    /// owner + 2 (0 = unset, 1 = bank / -1, 2+ = seat + 2).
     Raise {
         player_id: i32,
         kind: i32,
         value: i32,
+        /// The tile the raise is about (`t.tile`) -- filter pres like
+        /// `tile.id == tile_named('…')` read it.
+        tile: i32,
+        /// BuyAssign filter deal (in): owner after (`i32::MIN` = unset).
+        deal_owner: i32,
+        /// BuyAssign filter deal (in): houses after.
+        deal_houses: i32,
+        /// BuyAssign filter deal (in): mortgaged after (0/1).
+        deal_mortgaged: i32,
     },
     /// Which option `player_id`'s AI would take among `tiles` on an agent offer
     /// (`ctx::ai_agent_choice`). Answers the index; `tiles.len()` = skip.
@@ -448,7 +514,7 @@ pub enum HostRequest {
     /// `ctx::lose_raw`. Positive `delta` is a gain, negative a loss. Moves the
     /// balance directly (`World::gain_money` / a raw decrement) with a
     /// `log.gain` / `log.lose` line, **without** the `HostRequest::Pay` money
-    /// pipeline: no `payAdd` / `payMul` / `payChoose` / `payAt`, no `effect`
+    /// pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`, no `effect`
     /// counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
     /// amount a designate split moves to land as-is (ONE OF US's 「被分享方资金
     /// 直接增加」). Answers the amount actually moved (0 = the seat was out).
@@ -615,7 +681,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
     let mut out = Vec::new();
     for (ci, c) in cards.iter().enumerate() {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
+            if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_i32()) {
                 out.push((ci as i32, ei as i32));
             }
         }
@@ -629,7 +695,7 @@ pub fn gate_entries_scan(cards: &[CardInfo], kind: crate::TriggerKind) -> Vec<(i
 pub fn validate_cel_only_gates(cards: &[CardInfo]) -> Result<(), RuleError> {
     for c in cards {
         for (ei, o) in c.on.iter().enumerate() {
-            if o.kind != OnKind::Gate as i32 {
+            if o.kind != OnKind::Filter as i32 {
                 continue;
             }
             if !o.triggers.iter().any(|&t| GATE_KINDS.iter().any(|&k| k.as_i32() == t)) {
@@ -740,14 +806,31 @@ impl RulesetBuilder {
         for c in &self.cards {
             let mut cm = 0u128;
             let mut hm = 0u128;
-            for o in &c.on {
+            for (ei, o) in c.on.iter().enumerate() {
                 let ok = OnKind::from_i32(o.kind);
+                // ABI v73: kind/variant agreement -- a Filter may only list
+                // filter kinds and an Action only non-filter kinds.
+                if matches!(ok, Some(OnKind::Action) | Some(OnKind::Filter)) {
+                    let want_filter = ok == Some(OnKind::Filter);
+                    for &k in &o.triggers {
+                        if crate::TriggerKind::from_i32(k).is_filter() != want_filter {
+                            return Err(RuleError::Load(format!(
+                                "{} entry {ei}: {} lists trigger {k} which is filter={} (see TriggerKind::is_filter)",
+                                c.id,
+                                if want_filter { "On::Filter" } else { "On::Action" },
+                                crate::TriggerKind::from_i32(k).is_filter(),
+                            )));
+                        }
+                    }
+                }
                 for &k in &o.triggers {
                     if (0..128).contains(&k) {
                         declared |= 1u128 << k;
                         match ok {
                             Some(OnKind::Counteract) => cm |= 1u128 << k,
-                            Some(OnKind::Hook) | Some(OnKind::Gate) => hm |= 1u128 << k,
+                            Some(OnKind::Action) | Some(OnKind::Filter) => {
+                                hm |= 1u128 << k
+                            }
                             _ => {}
                         }
                     }
@@ -1172,7 +1255,7 @@ impl Ruleset {
     /// will write into. The activation announcement (the client's card flash)
     /// goes there, so a drive with no entry, a guard reject or a probe is silent.
     ///
-    /// `AtEnd` / `RollPlan` / `Settle` entries carry their admission here
+    /// `AtEnd` / `DiceRollPlan` / `Settle` entries carry their admission here
     /// (category → condition → guard → body, docs/GUARDS.md §4.3): a rejecting
     /// entry runs no body and so never flashes. `Play` / `Counteract` keep their
     /// own separate admission (the play gate / `can_counteract` at offer time).
@@ -1192,22 +1275,27 @@ impl Ruleset {
             // have admitted an `Effect` entry on a `card` raise; resolve it too.
             Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
-            Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
-            Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
+            // v75: AtEnd / DiceRollPlan are ordinary kind-keyed entries
+            // (`On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])`).
+            Call::AtEnd { .. } => info.hook_entry(crate::TriggerKind::AtEnd),
+            Call::DiceRollPlan { .. } => info.hook_entry(crate::TriggerKind::DiceRollPlan),
             Call::Settle { .. } => info.entry(OnKind::Settle, None),
             Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
             Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
+            Call::Buy { .. } => info.entry(OnKind::Buy, None),
+            Call::Build { .. } => info.entry(OnKind::Build, None),
         };
         let Some(entry) = entry else {
             return Ok(Outcome::Done(world.clone()));
         };
-        // v49: AtEnd / RollPlan / Settle answer "does this entry apply?" here.
+        // v49: AtEnd / DiceRollPlan / Settle answer "does this entry apply?" here.
         // (`Play`'s gate and `Counteract`'s `can_counteract` are their own
         // admission and are not re-checked at body time.)
         if matches!(
             call,
-            Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
+            Call::AtEnd { .. } | Call::DiceRollPlan { .. } | Call::Settle { .. }
                 | Call::Mortgage { .. } | Call::Redeem { .. }
+                | Call::Buy { .. } | Call::Build { .. }
         ) {
             let scope = crate::cond_pre::window_scope_owned(crate::cond_pre::fill_window(world));
             let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
@@ -1234,7 +1322,7 @@ impl Ruleset {
     /// does `entry` admit against `world` / `player_id`? A rejecting condition
     /// skips the wasm guard entirely (`admits_pre`); a residual guard runs on a
     /// throwaway copy. Used by [`Self::run_hook`] (Hook + Gate) and [`Self::run`]
-    /// (AtEnd / RollPlan / Settle).
+    /// (AtEnd / DiceRollPlan / Settle).
     fn entry_admitted<W: CardWorld>(
         &self,
         world: &W,
@@ -1290,7 +1378,7 @@ impl Ruleset {
     /// the outcome; the drive's multi-pass loop re-runs this whole sequence
     /// with the new answers.
     ///
-    /// `On::Gate` entries share this path with `On::Hook` (v49): a gate whose
+    /// `On::Gate` entries share this path with `On::Action` (v49): a gate whose
     /// condition rejects does not answer at all.
     pub fn run_hook<W: CardWorld>(
         &self,
@@ -1321,7 +1409,7 @@ impl Ruleset {
         let mut announced = false;
         let mut ran_any = false;
         for entry in entries {
-            // v49: `On::Hook` and `On::Gate` both carry the condition /
+            // v49: `On::Action` and `On::Gate` both carry the condition /
             // residual-guard pair; a rejecting entry is skipped (and so never
             // flashes).
             if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {
@@ -2120,7 +2208,7 @@ pub trait RulesHandle: Clone + Send + Sync + 'static {
         let mut i = 0;
         while let Some(c) = self.card(i) {
             for (ei, o) in c.on.iter().enumerate() {
-                if o.kind == OnKind::Gate as i32 && o.triggers.contains(&kind.as_i32()) {
+                if o.kind == OnKind::Filter as i32 && o.triggers.contains(&kind.as_i32()) {
                     entries.push((i, ei as i32));
                 }
             }
@@ -4152,6 +4240,34 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "pay_buy",
+        |mut c: C<W>, player_id: i32, tile: i32, amount: i32, kind: i32| -> Result<i32, Error> {
+            hostfns::pay_buy(&mut c, player_id, tile, amount, kind).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "pay_build",
+        |mut c: C<W>, player_id: i32, tile: i32, amount: i32| -> Result<i32, Error> {
+            hostfns::pay_build(&mut c, player_id, tile, amount).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "assign_deed",
+        |mut c: C<W>,
+         player_id: i32,
+         tile: i32,
+         owner: i32,
+         houses: i32,
+         mortgaged: i32|
+         -> Result<i32, Error> {
+            hostfns::assign_deed(&mut c, player_id, tile, owner, houses, mortgaged)
+                .map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "placed_tile",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
             hostfns::placed_tile(&mut c, player_id, p, n).map_err(HostErr::into_err)
@@ -4726,6 +4842,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "set_tag_id",
+        |mut c: C<W>, key_id: i32, v: i32| -> Result<(), Error> {
+            hostfns::set_tag_id(&mut c, key_id, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(m, "recorded_roll", |mut c: C<W>| -> Result<i32, Error> {
+        hostfns::recorded_roll(&mut c).map_err(HostErr::into_err)
+    })?;
+    l.func_wrap(
+        m,
         "set_min_roll",
         |mut c: C<W>, v: i32| -> Result<(), Error> {
             hostfns::set_min_roll(&mut c, v).map_err(HostErr::into_err)
@@ -5237,7 +5363,7 @@ mod gate_tests {
 
     fn gate(has_guard: bool, pre: Option<&str>) -> ManifestOn {
         ManifestOn {
-            kind: OnKind::Gate as i32,
+            kind: OnKind::Filter as i32,
             triggers: vec![crate::TriggerKind::PayGate.as_i32() as i32],
             pre: pre.map(str::to_string),
             has_guard,

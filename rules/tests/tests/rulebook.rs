@@ -475,7 +475,7 @@ fn s10_force_buy_is_double_the_total_and_stays_mortgaged() {
 
 // 规则书 基础[结算] 6.2: 「此次购买的价格不受任何资金变动效果影响」.
 // O6 says the same for 抵押 / 赎回 / 强制购买. The engine moves the force-buy
-// sum outside the pay pipeline entirely, so a payMul cannot touch it.
+// sum outside the pay pipeline entirely, so a paySplitMul cannot touch it.
 #[test]
 fn s11_force_buy_ignores_a_pay_multiplier() {
     let mut t = Table::vanilla(2);
@@ -1061,7 +1061,7 @@ fn o06_mortgage_and_redeem_ignore_pay_modifiers() {
     let land = tile("购物中心");
     t.own(0, &[land]);
     t.set_money(0, 10_000);
-    // A payMul halver armed for the turn must not touch the mortgage proceeds.
+    // A paySplitMul halver armed for the turn must not touch the mortgage proceeds.
     t.m.world_mut().turn.plan.pay_factor = 0.5;
     t.mortgage(0, land).unwrap();
     assert_eq!(
@@ -1106,7 +1106,7 @@ fn bankruptcy_stops_field_effects() {
     let rent_land = tile("购物中心");
     t.own(2, &[rent_land]);
     t.set_houses(rent_land, 3);
-    // P1 holds a `payAdd` probe that would boost **every** payment by 100.
+    // P1 holds a `paySplitAdd` probe that would boost **every** payment by 100.
     t.place_raw(1, "TEST:payAddAny");
     assert!(!t.field(1).is_empty(), "the probe is on P1's field");
     // P1 goes under on the rent (0 cash, nothing raiseable).

@@ -5,40 +5,44 @@
 //! the roster character / band rows (never from implementation
 //! behaviour).
 //!
-//! Fan tokens are `P✽P粉丝(正)` / `P✽P粉丝(反)`. The band-skill crystal pool
-//! named 「Pastel✽Palettes乐队卡」 is the band skill field card
+//! Fan counters live in the per-player state dict (`ppFansUp` /
+//! `ppFansDown`, `skill_groups::fans`). The band-skill crystal pool named
+//! 「Pastel✽Palettes乐队卡」 is the band skill field card
 //! (`skill:Pastel✽Palettes:与偶像一起`) -- see the OPEN-乐队卡 note in the doc.
 //!
 //! A discrepancy is a plain failing test. No `#[ignore]`.
 
-use game_core::state::Counter;
 use rules_spec::{forall, frame, Clause, Step, Table};
 
 const BAND_SKILL: &str = "skill:Pastel✽Palettes:与偶像一起";
 const ECHO: &str = "PP:[衍生]共鸣";
+/// Face-up fan counter (`skill_groups::fans::UP`).
+const FANS_UP: &str = "ppFansUp";
+/// Face-down fan counter (`skill_groups::fans::DOWN`).
+const FANS_DOWN: &str = "ppFansDown";
 
 // ---------------------------------------------------------------- helpers
 
-fn set_fans(t: &mut Table, who: usize, up: i32, down: i32) {
-    // Update the two fan counters in place -- do not replace the whole
-    // tokens vector (that would wipe `skillBlock` and every other token).
-    // Same shape as `pp.rs::set_fans` (SKILL-01).
-    let p = &mut t.m.world_mut().st.players[who];
-    for (name, value) in [("P✽P粉丝(正)", up), ("P✽P粉丝(反)", down)] {
-        match p.tokens.iter_mut().find(|c| c.name == name) {
-            Some(c) => c.value = value,
-            None => p.tokens.push(Counter {
-                name: name.into(),
-                value,
-                instance: None,
-            }),
-        }
+/// Place the Pastel✽Palettes band skill on `who` and return its field uid.
+/// Only needed where the **band card itself** is under test (clause （2）
+/// crystals, game-start grants, the (4) crystal/draw). Fan grant / flip
+/// themselves work with no band card on the board.
+fn place_band(t: &mut Table, who: usize) -> i32 {
+    if let Some(f) = t.field(who).into_iter().find(|f| f.card == BAND_SKILL) {
+        return f.uid;
     }
-    p.tokens.retain(|c| c.value > 0 || c.name.starts_with("P✽P粉丝"));
+    t.place_raw(who, BAND_SKILL)
+}
+
+/// Write the seat's fan counters directly. No band card is required.
+fn set_fans(t: &mut Table, who: usize, up: i32, down: i32) {
+    let p = &mut t.m.world_mut().st.players[who];
+    p.state_set(FANS_UP, up);
+    p.state_set(FANS_DOWN, down);
 }
 
 fn fans(t: &Table, who: usize) -> (i32, i32) {
-    (t.token(who, "P✽P粉丝(正)"), t.token(who, "P✽P粉丝(反)"))
+    (t.state(who, FANS_UP), t.state(who, FANS_DOWN))
 }
 
 fn band_xtal(t: &Table, who: usize) -> i32 {
@@ -303,9 +307,14 @@ fn same_dream_three_steps() {
     forall(6, 0x50_444D, |rng, _i| {
         let mut t = Table::vanilla(2);
         t.place_raw(0, BAND_SKILL);
-        let up = rng.range(0, 6);
-        let down = rng.range(0, 4);
+        // Start face-down only so step 2 (positive → reverse) is a no-op and
+        // step 3's X equals the pre-flip downs -- clause （2） overflow is 0,
+        // and the band pool under test is exactly the card's step-1 +3.
+        let up = 0;
+        let down = rng.range(1, 5);
         set_fans(&mut t, 0, up, down);
+        place_band(&mut t, 0);
+        set_band_xtal(&mut t, 0, 0);
         let band0 = band_xtal(&t, 0);
         let money0 = 10_000;
         t.give(0, &["PP:同一个梦想"]);
@@ -349,6 +358,7 @@ fn same_dream_three_steps() {
                 "crystals:P0",
                 "pool:",
                 "token:P0",
+                "state:P0",
             ],
         )
     })
@@ -397,6 +407,9 @@ fn same_dream_echo_all_pp_characters() {
                 "crystals:P0",
                 "token:P0",
                 "token:P2",
+                "state:P0",
+                "state:P1",
+                "state:P2",
             ],
         )
     })
@@ -531,10 +544,10 @@ fn overlap_play_and_turn_end() {
                 t.state(0, "stay")
             ));
         }
-        if t.token(0, "P✽P粉丝(正)") != 1 && t.token(0, "P✽P粉丝(正)") < 1 {
+        if fans(&t, 0).0 < 1 {
             return Err(format!(
                 "C-PP-overlap-03: positive fans {}, expected +1",
-                t.token(0, "P✽P粉丝(正)")
+                fans(&t, 0).0
             ));
         }
         if !t.hand(0).contains(&"PP:[衍生]明天见".to_string()) {
@@ -584,6 +597,9 @@ fn seeyou_flip_owned_count() {
         let up = rng.range(0, 3);
         let down = rng.range(up, up + 5); // ensure gate
         set_fans(&mut t, 0, up, down);
+        // Clause （2） crystals need a band card owned by the flipping seat.
+        place_band(&mut t, 0);
+        set_band_xtal(&mut t, 0, 0);
         let owned = up + down;
         t.give_play(0, "PP:[衍生]明天见")
             .map_err(|e| format!("play rejected: {e}"))?;
@@ -595,6 +611,16 @@ fn seeyou_flip_owned_count() {
                 "C-PP-seeyou-03: ({up},{down}) -> ({u},{d}), expected ({},{})",
                 up + flipped,
                 down - flipped
+            ));
+        }
+        // Clause （2） (band sheet): X is the owned count (up+down), so the
+        // face-ups make X > the pre-flip face-downs and the overflow is `up`
+        // crystals (cap 10) on the band card.
+        let c = band_xtal(&t, 0);
+        if c != up.min(10) {
+            return Err(format!(
+                "C-PP-seeyou-03 clause (2): band crystals {c}, expected {} (X {owned} - {down} downs)",
+                up.min(10)
             ));
         }
         Ok(())
@@ -883,10 +909,10 @@ fn jennifer_place_and_agency_pass() {
                 t.money(1)
             ));
         }
-        if t.token(0, "P✽P粉丝(正)") < 1 {
+        if fans(&t, 0).0 < 1 {
             return Err(format!(
                 "C-PP-jennifer-02: user positive fans {}, expected >=1",
-                t.token(0, "P✽P粉丝(正)")
+                fans(&t, 0).0
             ));
         }
         if t.on_field(1, "PP:找回珍妮弗") {
@@ -935,7 +961,7 @@ fn ranger_steps_by_count() {
         set_fans(&mut t, 0, 0, 0);
         t.own(0, &[10]);
         t.set_houses(10, 1);
-        t.place_raw(0, BAND_SKILL);
+        place_band(&mut t, 0); // step 2 「为乐队卡添加3个[奇迹水晶]」
         t.place_raw(0, "PP:再次闪耀");
         t.place_raw(0, "PP:可爱又强壮的花朵");
         set_band_xtal(&mut t, 0, rng.range(0, 3));
@@ -1286,6 +1312,64 @@ fn character_start_five_fans() {
     let (u, d) = fans(&t, 0);
     if u != 5 || d != 0 {
         panic!("C-PP-aya-with-01: fans ({u},{d}), expected (5,0)");
+    }
+}
+
+/// The +5 start grant is seat-independent: PP on seat 1 still gets her five.
+#[test]
+fn character_start_five_fans_any_seat() {
+    let t = Table::new(&["户山香澄", "丸山彩"]);
+    let (u, d) = fans(&t, 1);
+    if u != 5 || d != 0 {
+        panic!("C-PP-aya-with-01: seat-1 fans ({u},{d}), expected (5,0)");
+    }
+}
+
+/// Fans live in the player state dict: no band card required for grant/flip.
+#[test]
+fn fans_persist_without_band() {
+    let mut t = Table::vanilla(2);
+    if t.on_field(0, BAND_SKILL) || t.on_field(1, BAND_SKILL) {
+        panic!("vanilla table must not carry a band card");
+    }
+    set_fans(&mut t, 0, 0, 3);
+    t.give_play(0, "PP:[衍生]明天见")
+        .map_err(|e| format!("play rejected: {e}"))
+        .unwrap();
+    drain(&mut t);
+    let (u, d) = fans(&t, 0);
+    if (u, d) != (3, 0) {
+        panic!("flip without band: fans ({u},{d}), expected (3,0)");
+    }
+    t.give_play(0, "PP:[衍生]重叠的声音")
+        .map_err(|e| format!("play rejected: {e}"))
+        .unwrap();
+    drain(&mut t);
+    t.end(0).map_err(|e| format!("end rejected: {e}")).unwrap();
+    drain(&mut t);
+    let (u, d) = fans(&t, 0);
+    if (u, d) != (4, 0) {
+        panic!("grant without band: fans ({u},{d}), expected (4,0)");
+    }
+}
+
+/// `Match::save` / `Match::restore` keeps the state-dict fan counters.
+#[test]
+fn fans_survive_save_restore() {
+    let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 3, 2);
+    set_fans(&mut t, 1, 0, 5);
+    let saved = t.m.save();
+    let m2 = game_core::engine::Match::restore(rules_spec::data(), rules_spec::rules(), &saved)
+        .expect("restore");
+    let u0 = m2.world().st.players[0].state_get(FANS_UP);
+    let d0 = m2.world().st.players[0].state_get(FANS_DOWN);
+    let u1 = m2.world().st.players[1].state_get(FANS_UP);
+    let d1 = m2.world().st.players[1].state_get(FANS_DOWN);
+    if (u0, d0) != (3, 2) || (u1, d1) != (0, 5) {
+        panic!(
+            "save/restore lost fans: ({u0},{d0}) / ({u1},{d1}), expected (3,2) / (0,5)"
+        );
     }
 }
 
@@ -1687,7 +1771,7 @@ fn shine_again_rescue_on_short_pay() {
                 "C-PP-shine-again-01: money {money} (from {money0}), expected {expect_money} (+600 rescue, -140 rent)"
             ));
         }
-        let fans_up = t.token(0, "P✽P粉丝(正)");
+        let fans_up = fans(&t, 0).0;
         if fans_up < 1 {
             return Err(format!(
                 "C-PP-shine-again-01: book also grants 1 positive fan; fans {fans_up}, money {money}, events {}",

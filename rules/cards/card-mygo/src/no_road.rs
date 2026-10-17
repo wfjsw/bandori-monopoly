@@ -7,6 +7,7 @@
 //! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::abi::{FilterValue, HookKind};
 
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",
@@ -15,8 +16,11 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // the exile lasts, only for this player's own tile rent, and only with a
         // live partner. The clause is residual (live exile count + the pay
         // shape); `card.placed` is the `pre`.
-        On::Hook(
-            &[card_sdk::abi::HookKind::PayAdd],
+        //
+        // ABI v75: the payee rewrite is `FilterValue.payee` (the body returns
+        // the new target; the wrapper calls `set_pay_target`). Pure.
+        On::FilterValue(
+            &[HookKind::PaySplitAdd],
             "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
             Some(redirect_applies),
             redirect,
@@ -139,14 +143,14 @@ fn redirect_applies(player_id: i32) -> bool {
 /// 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
 /// `NoRoadFx.RedirectReceiver`. Applicability is the `pre` +
 /// [`redirect_applies`]; this side only reroutes the pay target.
-fn redirect(player_id: i32) -> card_sdk::Asked {
+/// Pure: the new payee rides `FilterValue.payee` (amount unchanged).
+fn redirect(player_id: i32, v: FilterValue) -> FilterValue {
     let who = ctx::slot(player_id, "noRoad.who");
-    ctx::trigger::set_pay_target(who);
     ctx::log(
         player_id,
         &Msg::new(key!("no_road_redirect")).player_id("who", who),
     );
-    Ok(())
+    FilterValue { payee: who, ..v }
 }
 
 // `exileMain` is honoured by the engine now (2026-10-06): `game-core`'s exile
@@ -164,6 +168,6 @@ pub fn no_road_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn redirect_kani(player_id: i32) -> card_sdk::Asked {
-    redirect(player_id)
+pub fn redirect_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    redirect(player_id, v)
 }

@@ -24,12 +24,12 @@ function quiet(m: TurnView, c: Controls): boolean {
 }
 
 /** One small button: roll, or skip movement after playing OPS cards on [Stay]. */
-export function movementControl(m: TurnView, c: Controls): "roll" | "end" | null {
+export function movementControl(m: TurnView, c: Controls): "diceRollBefore" | "end" | null {
   if (!quiet(m, c) || m.S.step !== 2) return null;
   if (m.myTurn && m.S.canEndHere && !m.overHand) return "end";
   // canRollHere belongs to the current turn's seat. A delegated roller uses
   // `roller` instead, since it is rolling on behalf of another player.
-  if (m.S.roller === m.playerId && (!m.myTurn || m.S.canRollHere)) return "roll";
+  if (m.S.roller === m.playerId && (!m.myTurn || m.S.canRollHere)) return "diceRollBefore";
   return null;
 }
 

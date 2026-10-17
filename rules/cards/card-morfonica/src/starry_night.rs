@@ -25,8 +25,8 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
         On::Play("", None, starry_night),
-        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], "card.placed && card.counter('crystals') > 0", None, hook),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::DiceRollAfter, HookKind::PassTile], "card.placed && card.counter('crystals') > 0", None, hook),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"蝴蝶飞舞的星月夜"#)
@@ -82,7 +82,7 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
             .i("n", x as i64),
     );
     // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」 and 规则书（2）/（3） -- the
-    // RollAfter / PassTile hooks below handle the reroll, the even-roll attack and
+    // DiceRollAfter / PassTile hooks below handle the reroll, the even-roll attack and
     // the CiRCLE decay; [`on_crystals_changed`] pays out each removal and
     // discards at 0.
     Ok(())
@@ -131,11 +131,11 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `Fx.RollAfter` / `Fx.PassTile` (C# `CardStarryNight.RollAfter` / `PassTile`).
+/// `Fx.DiceRollAfter` / `Fx.PassTile` (C# `CardStarryNight.DiceRollAfter` / `PassTile`).
 /// Runs through the Fx hook dispatch, so these are field effects, not [反击].
 fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        TriggerKind::RollAfter => {
+        TriggerKind::DiceRollAfter => {
             // C# `!m.Main || m.FixedRoll >= 0` -- only the main move's free roll.
             if !trigger::move_is_main() || ctx::fixed_roll().is_some() {
                 return Ok(());

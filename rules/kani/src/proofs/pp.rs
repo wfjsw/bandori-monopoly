@@ -17,8 +17,9 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+const FANS_UP: &str = "ppFansUp";
+const FANS_DOWN: &str = "ppFansDown";
+const FANS_BAND: &str = "skill:Pastel✽Palettes:与偶像一起";
 
 fn tok_pos() -> u16 {
     crate::intern::intern(FANS_UP).0
@@ -28,17 +29,51 @@ fn tok_neg() -> u16 {
     crate::intern::intern(FANS_DOWN).0
 }
 
+/// Place the Pastel band skill on `owner`'s field (clause （2） overflow target).
+/// Returns the instance uid so overflow crystals can be read back.
+fn place_band_skill(owner: i32) -> i32 {
+    world::with_world_mut(|w| {
+        let uid = w.next_uid;
+        w.next_uid += 1;
+        let fi = w.field_n as usize;
+        if fi < world::MAX_FIELD {
+            w.field[fi] = world::FieldCard {
+                uid,
+                card: crate::intern::intern(FANS_BAND).0,
+                player: owner,
+                tile: 0,
+                face_down: false,
+                immune: false,
+                crystals: 0,
+                props: world::NameMap::new(),
+            };
+            w.field_n += 1;
+        }
+        uid
+    })
+}
+
+/// Crystals on a field instance (band clause （2） overflow lands here).
+fn crystals_at(uid: i32) -> i32 {
+    world::with_world(|w| w.field_crystals(uid))
+}
+
 // ---------------------------------------------------------------------------
 // Per-harness host-op subset for `PP:同一个梦想` (TRIAGE-LOG `op-subset`).
 //
-// Unmodified body (`same_dream.rs` + `resonance::try_resonance`) reaches:
-//   add_group_pool, tok→count_held_name, add_tok→add_held, log, gain,
-//   player_count, hand_count (try_resonance entry).
+// Unmodified body (`same_dream.rs` + `resonance::try_resonance` + fans::
+// state-dict helpers + FansFlip raise → pastel `on_fans_flip`) reaches:
+//   add_group_pool, log, gain, player_count, player_out, in_group,
+//   state_get / state_add (fans::up/down/flip_*), raise (fans::flip_up →
+//   FansFlip → on_fans_flip), trig_value (clause （2） reads X),
+//   add_counter_self (clause （2） overflow crystals), hand_count
+//   (try_resonance entry).
 // Isolation (no [共鸣] in hand) keeps try_resonance at `hand_count <= 0`, so
-// ask / take_card / to_discard / in_group are on a dead path — still declared
-// so that if isolation breaks the proof FAILS loudly (outside_subset) rather
-// than silently passing. `effect` / `gain_typed` / `count_held` ride the same
-// handlers as their siblings.
+// ask / take_card / to_discard are on a dead path — still declared so that if
+// isolation breaks the proof FAILS loudly (outside_subset) rather than
+// silently passing. `effect` / `gain_typed` / `count_held` ride the same
+// handlers as their siblings. Generic send/msg_* stay for residual
+// `ctx::send` (mark:cp / tests).
 // ---------------------------------------------------------------------------
 crate::host_subset!(same_dream_dispatch {
     add_group_pool => arm_add_band_crystals,
@@ -48,6 +83,7 @@ crate::host_subset!(same_dream_dispatch {
     log | effect => arm_log,
     gain | gain_typed | gain_fixed => arm_gain,
     player_count => arm_player_count,
+    player_out => arm_player_out,
     hand_count => arm_hand_count,
     take_card => arm_take_card,
     to_discard => arm_to_discard,
@@ -55,6 +91,25 @@ crate::host_subset!(same_dream_dispatch {
     in_group => arm_in_band,
     group_pool => arm_band_crystals,
     money => arm_money,
+    // fans:: state dict + FansFlip raise → pastel `on_fans_flip`.
+    state_get => arm_state_get,
+    state_set => arm_state_set,
+    state_add | inc_slot => arm_state_add,
+    raise => arm_raise,
+    trig_value => arm_trig_value,
+    send => arm_send,
+    msg_name => arm_msg_name,
+    msg_a => arm_msg_a,
+    msg_b => arm_msg_b,
+    msg_c => arm_msg_c,
+    msg_seat => arm_msg_seat,
+    msg_tile => arm_msg_tile,
+    msg_reply => arm_msg_reply,
+    msg_sender_uid => arm_msg_sender_uid,
+    msg_sender_seat => arm_msg_sender_seat,
+    msg_text => arm_msg_text,
+    add_counter_self => arm_add_counter_self,
+    counter_self => arm_counter_self,
 });
 
 /// Install the symbolic play world **in place** (2..=4 players, bounded
@@ -86,6 +141,11 @@ fn symbolic_play_world() {
         }
         w.symbolic_answers = true;
     });
+    // Band skill on every seat so FansFlip raises find the overflow target
+    // (the marker owner) regardless of which seat the clause names.
+    for p in 0..MAX_PLAYERS {
+        place_band_skill(p as i32);
+    }
 }
 
 /// Seat-count-independent clauses (pp steps 1–2, no 共鸣): pin `n_players`
@@ -111,6 +171,10 @@ fn same_dream_world() {
         n_players: 2,
         ..Default::default()
     });
+    // Band skill on every used seat so FansFlip finds the overflow target and
+    // clause （2） overflow lands on the user's own instance.
+    place_band_skill(0);
+    place_band_skill(1);
 }
 
 fn any_player_in() -> i32 {
@@ -644,6 +708,15 @@ pub fn together_01_x_formula_iff() {
     let user = any_player_in();
     let up = fans_pos_of(user as usize);
     let down = fans_neg_of(user as usize);
+    // Band clause （2）: overflow crystals land on the user's band skill.
+    let band_uid = world::with_world(|w| {
+        (0..w.field_n as usize)
+            .map(|i| w.field[i])
+            .find(|f| f.player == user && f.card == crate::intern::intern(FANS_BAND).0)
+            .map(|f| f.uid)
+            .unwrap_or(1)
+    });
+    let pre_cry = crystals_at(band_uid);
         invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
     let post = world::snapshot();
     let flip = spec::pp::together_01_flip(up, down);
@@ -655,6 +728,15 @@ pub fn together_01_x_formula_iff() {
     crate::kassert!(
         post.fans_pos[user as usize] == up + flip && post.fans_neg[user as usize] == down - flip,
         "C-PP-together-01: flip min(X, down) reverse positive"
+    );
+    // Band clause （2）「X大于拥有的反面的[P✽P粉丝]时…添加等量溢出的[奇迹水晶]
+    // （最多10个）」 — X is the clause's X, not the clamped flip count.
+    let over = spec::skills_pp::band_idol_02_overflow(x, down, pre_cry);
+    let post_cry = crystals_at(band_uid);
+    kani::cover!(over > 0, "X > down grants overflow crystals");
+    crate::kassert!(
+        post_cry == pre_cry + over,
+        "C-PP-together-01 + band (2): overflow = min(X-down, 10-held) when X > down"
     );
     // The formula itself
     let expect_x = if up < down {
@@ -848,7 +930,7 @@ pub fn first_accident_01_place_deck_draw_iff() {
 // C-PP-maya-inf-02 formula (host-independent piece) + body hook.
 // 「（1）[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡添加1个[奇迹水晶]，
 //  否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个[奇迹水晶]。」
-// The hook is `On::Hook(Drew)`. We invoke it directly with a placed card.
+// The hook is `On::Action(Drew)`. We invoke it directly with a placed card.
 // ===========================================================================
 
 #[kani::proof]
@@ -941,7 +1023,7 @@ pub fn shine_again_01_formula() {
 // ===========================================================================
 // C-PP-eve-bushido-04
 // 「（1）[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）。」
-// Body: `On::Hook(Drew)` with guard `is_placed && trigger.player == player`.
+// Body: `On::Action(Drew)` with guard `is_placed && trigger.player == player`.
 // Isolation: card placed; trigger value > 0; no [共鸣].
 // NOTE: the Kani host's `add_counter_self` currently ignores the `max`
 // argument, so the cap-3 clamp is not modelled. The +1 increment is proved
@@ -1013,7 +1095,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
 // ===========================================================================
 // C-PP-guide-04
 // 「（2）回合结束时添加1个[奇迹水晶]。」
-// Body: `On::Hook(TurnEnd)` with guard `is_placed`.
+// Body: `On::Action(TurnEnd)` with guard `is_placed`.
 // ===========================================================================
 
 #[kani::proof]
@@ -1052,7 +1134,7 @@ pub fn guide_04_turn_end_crystal_iff() {
 // C-PP-dream-ahead-01
 // 「（1）[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每获得一个超出上限的
 //  [奇迹水晶]就为此卡的X加1（X初始0）。」
-// Body: `On::Hook(Drew)` guard `actor == owner && card.placed`.
+// Body: `On::Action(Drew)` guard `actor == owner && card.placed`.
 // Isolation: pre < 5 so the cap / overflow leg is not entered (overflow X
 // is a named counter the host models as a key; cap clamp is BLOCKED-HOST).
 // ===========================================================================
@@ -1306,7 +1388,7 @@ pub fn chisato_mask_01_total_iff() {
 // so the harness was cfg'd out and `cargo kani` "Failed to match" it).
 
 // ===========================================================================
-// C-PP-shine-again-01 body (PayChoose) formula — both legs.
+// C-PP-shine-again-01 body (PaySplitChoose) formula — both legs.
 // Isolation: owner is short on cash and owns a buyable deed of some group.
 // The [反击] window itself is PROTOCOL-LEVEL; this pins the body once the
 // hook fires.
@@ -1343,7 +1425,7 @@ pub fn shine_again_01_rescue_iff() {
     // Host model of `is_buyable` / `tile_price` / `tile_group` is partial;
     // the body's rescue is: +1 positive fan and gain price/5.
     let pre_fans = world::with_world(|ww| fans_pos_of(me as usize));
-    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PayChoose", me));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PaySplitChoose", me));
     let post_fans = world::with_world(|ww| fans_pos_of(me as usize));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];

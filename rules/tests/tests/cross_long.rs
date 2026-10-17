@@ -515,15 +515,9 @@ fn l06_one_draw_several_effects() {
     let mut t = Table::new(&["大和麻弥", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
-    // 3 face-up fans.
-    for _ in 0..3 {
-        t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
-            name: "P✽P粉丝(正)".into(),
-            value: 1,
-        
-        instance: None,
-    });
-    }
+    // 3 face-up fans (state dict).
+    t.set_state(0, "ppFansUp", 3);
+    t.set_state(0, "ppFansDown", 0);
     t.place_raw(0, "PP:梦在前方，结彩当下");
     t.set_hand(0, &[FILL, FILL, FILL]);
     // Draw pile, top first: filler, 朝同一片天空迈进, filler.

@@ -7,7 +7,7 @@
 //! One clause, two halves: the pay is voided, and the next main move is a
 //! teleport back to that tile. 「取消那次支付」 is the pay chain's own cancel
 //! (`set_pay_amount(0)`); 「下回合的主要移动变为传送至…」 is an armed one-shot
-//! the next `RollPlan` consumes -- the same shape as detour's 「下一次的移动掷骰
+//! the next `DiceRollPlan` consumes -- the same shape as detour's 「下一次的移动掷骰
 //! 变更为1d6」.
 //!
 //! The latch is a presence flag plus a tile memory (the detour / soyo_clear
@@ -16,8 +16,8 @@
 //! gates the read and the CEL `slot('skill.soyoCrychic.armed')` condition, so
 //! the residual guard is gone.
 
-use card_sdk::abi::HookKind;
-use ruleset_core::ctx::{self, plan, state};
+use card_sdk::abi::{FilterValue, HookKind};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The teleport is armed (0/1). Presence only -- the tile to teleport to rides
@@ -35,21 +35,34 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // (`actor != owner`, not `MINE` -- the old `mine` guard was inverted
         // against the body and the rulebook), a tile we own, and a positive
         // amount. The opt-in ask stays in the body (a player choice).
-        On::Hook(
-            &[HookKind::PayChoose],
+        //
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
+        // the interactive cancel (`ask_yes` + `set_pay_amount(0)` + state writes)
+        // sits immediately before the pure `PaySplitChoose` filter stage.
+        On::Action(
+            &[HookKind::PaySplitChooseBefore],
             "actor != owner && tile.owner == owner && value > 0",
             None,
             on_pay,
         ),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
-        // the armed one-shot (`actor == owner` on `RollPlan`). The latch is a
+        // the armed one-shot (`actor == owner` on `DiceRollPlan`). The latch is a
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
         // so the condition alone decides and no residual guard remains.
-        On::Hook(
-            &[HookKind::RollPlan],
+        On::FilterValue(
+            &[HookKind::DiceRollPlan],
             "actor == owner && slot('skill.soyoCrychic.armed') != 0",
             None,
             on_plan,
+        ),
+        // One-shot latch clear once the rewritten move has been taken. This is
+        // a teleport plan, so `DiceRollAfter` never fires (no dice) -- `MoveAfter`
+        // is the next event for both teleports and walks.
+        On::Action(
+            &[HookKind::MoveAfter],
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+            None,
+            on_plan_after,
         ),
     ],
 );
@@ -57,6 +70,8 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
 /// 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」.
 /// Applicability is the entry's condition (`actor != owner && tile.owner ==
 /// owner && value > 0`); the ask is the 「可」 opt-in.
+/// Rides `PaySplitChooseBefore` (v78): the prompt and the `set_pay_amount(0)` cancel
+/// sit at the rulebook PaySplitChoose position.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if !ctx::ask_yes(
@@ -80,16 +95,24 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 
 /// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan. The latch
 /// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`).
-fn on_plan(player_id: i32) -> card_sdk::Asked {
+/// Pure: the teleport rides `FilterValue.move_kind` / `teleport_to` / `resolve`.
+/// The one-shot latch clear is [`on_plan_after`] on `MoveAfter` (teleports
+/// skip `DiceRollAfter`).
+fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
     let t = state::get(player_id, TILE);
-    state::set(player_id, ARMED, 0);
-    plan::set_kind(card_sdk::abi::MoveKind::Teleport);
-    plan::set_teleport_to(t);
-    plan::set_resolve(true);
+    v.move_kind = 1; // teleport
+    v.teleport_to = t;
+    v.resolve = 1;
     ctx::log(
         player_id,
         &Msg::new(key!("soyo_crychic_moved")).tile("tile", t),
     );
+    v
+}
+
+/// Drop the one-shot [`ARMED`] latch once the teleport move has been taken.
+fn on_plan_after(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, ARMED, 0);
     Ok(())
 }
 
@@ -102,6 +125,12 @@ pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_after_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan_after(player_id)
 }

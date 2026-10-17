@@ -651,12 +651,9 @@ fn pay_stages_add_before_halve() -> Result<(), String> {
     t.begin_turn(0);
     drain(&mut t);
     // 丸山彩（1） grants 5 face-up [P✽P粉丝] at game start; `clean` wiped
-    // them, so re-seed two for a Y=2 spend.
-    t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
-        name: "P✽P粉丝(正)".into(),
-        value: 2,
-        ..Default::default()
-    });
+    // them, so re-seed two for a Y=2 spend. Fans live in the state dict.
+    t.set_state(0, "ppFansUp", 2);
+    t.set_state(0, "ppFansDown", 0);
     t.give(0, &["HHW:爱心义演"]);
     t.observe(rules_spec::global::money::CLAUSES);
 
@@ -722,11 +719,8 @@ fn pay_stages_fixed_add_on_receive() -> Result<(), String> {
     t.begin_turn(0);
     drain(&mut t);
     // Two face-up fans for a Y=2 spend.
-    t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
-        name: "P✽P粉丝(正)".into(),
-        value: 2,
-        ..Default::default()
-    });
+    t.set_state(0, "ppFansUp", 2);
+    t.set_state(0, "ppFansDown", 0);
     t.observe(rules_spec::global::money::CLAUSES);
 
     // P1 pays P0 a rent of 60 on 富士见坂. 白鹭千圣（2） may raise the take

@@ -37,9 +37,9 @@ test("[Stay] leaves OPS available for cards, with skip on the compact movement b
 
 test("normal and delegated dice use the correct engine permission", () => {
   const ops = { ...landed, S: { ...landed.S, step: 2, canEndHere: false, canRollHere: true } };
-  assert.equal(movementControl(ops, controls), "roll");
+  assert.equal(movementControl(ops, controls), "diceRollBefore");
   assert.equal(movementControl({ ...ops, S: { ...ops.S, canRollHere: false } }, controls), null);
   assert.equal(movementControl({ ...ops, S: { ...ops.S, roller: 1 } }, controls), null, "wait for the delegated roller");
-  assert.equal(movementControl({ ...ops, myTurn: false, S: { ...ops.S, canRollHere: false } }, controls), "roll", "roll for another seat");
+  assert.equal(movementControl({ ...ops, myTurn: false, S: { ...ops.S, canRollHere: false } }, controls), "diceRollBefore", "roll for another seat");
   assert.equal(movementControl(landed, controls), null, "settlement is automatic, not another dice action");
 });

@@ -27,7 +27,7 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), umiri_card),
         // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStart],
             "card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1",
             None,
@@ -35,7 +35,7 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
         ),
         // 规则书（3）: the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
-        On::Hook(
+        On::Action(
             &[HookKind::TurnEnd],
             "card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1",
             None,

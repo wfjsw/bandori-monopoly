@@ -108,9 +108,13 @@ pub fn half_speed_04_amount_even(pre_amount: i32) -> i32 {
     pre_amount / 2
 }
 
-/// Exact log of a positive-amount rewrite (the fold, not the end-of-calc round).
-pub fn half_speed_04_log_ok(effects: &[Effect], expected_to: i32) -> bool {
-    effects.len() == 1 && matches!(effects[0], Effect::SetPayAmount { to } if to == expected_to)
+/// ABI v75 pure Filter: the PayMul body RETURNS the fold and emits **no**
+/// Effect (narration is separate; the host writes `SetPayAmount` when it folds
+/// the return). SPEC CHANGE (Action→Filter stage move): the old Action body
+/// wrote `set_pay_amount` itself and this pinned exactly that effect; the pure
+/// body's no-less/no-more is the return value plus an empty effect log.
+pub fn half_speed_04_log_ok(effects: &[Effect]) -> bool {
+    effects.is_empty()
 }
 
 /// MUTANT: off-by-one high on the fold the body writes.

@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MEET_AGAIN: CardDef = CardDef::new(
     "MyGO:若能再次交汇",
     &[On::Counteract(
-        &[ChainKind::MoveRoll],
+        &[ChainKind::DiceRollResult],
         "actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0",
         None,
         counteract,

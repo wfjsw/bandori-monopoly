@@ -38,8 +38,8 @@ use alloc::{string::String, vec::Vec};
 ///      pending `pay` (`t.Pay.to`; -1 = the bank). The transfer amount
 ///      follows `set_pay_amount`, so a reduced payment credits the payee less too.
 /// v17: field-card (`Fx`) hooks + per-card crystals. New `TriggerKind`s
-///      (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `RollAfter`, `CardPlayed`,
-///      `Targeted`, `PayChoose`) are **hook points**, not [反击] points: the
+///      (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `DiceRollAfter`, `CardPlayed`,
+///      `Targeted`, `PaySplitChoose`) are **hook points**, not [反击] points: the
 ///      engine runs every *placed* card's `counteract` against them automatically.
 ///      `crystals` / `set_crystals` / `add_crystals` on the running field card.
 /// v18: `take_from_hand`; `drawn` self-dispatches to the card named on `t.card`
@@ -62,13 +62,13 @@ use alloc::{string::String, vec::Vec};
 ///      replaces `ruleset_play` / `_can_react` / `_react` / `_cant_play` (the
 ///      pre-v21 names, kept here as history).
 /// v23: hook kinds for the remaining raise points -- TurnEndBefore / TurnEndAfter,
-///      PayAdd / PayMul / PayAt (the Money pipeline), Discarded, DeckBeforeGame /
+///      PaySplitAdd / PaySplitMul / PaySplitAt (the Money pipeline), Discarded, DeckBeforeGame /
 ///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleBody, BeforeOut,
 ///      Teleported. Move payload `trig_move_remaining` / `trig_move_total` and
 ///      `MoveFlags::TELEPORT_WALK`. `schedule_turn_end` takes a mode (bit 1 =
 ///      the player's next turn, bit 2 = before the wear-off).
-///      RollAfter now fires before the moveRoll [反击] window.
-///      `RollPlan` is the point `On::RollPlan` (v22) is dispatched at.
+///      DiceRollAfter now fires before the moveRoll [反击] window.
+///      `DiceRollPlan` is the point `On::RollPlan` (v22) is dispatched at.
 /// v24: movement shaping -- `set_steps` / `set_reverse` / `set_signed` /
 ///      `set_stop_at` / `set_parity` / `set_resolve` / `set_settle_tile` /
 ///      `set_pay_factor` / `set_rent_factor` / `set_no_buy` / `set_can_build` /
@@ -227,11 +227,11 @@ use alloc::{string::String, vec::Vec};
 ///      props. The retired props `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY`
 ///      go with them.
 /// v42: the payment command's **pre-split** stage and the terminal hooks
-///      (`PIPELINE-AUDIT` Q2 / Q6). `TriggerKind`s `PayTotalAdd` / `PayTotalMul`
-///      / `PayTotalCancel` (wire names `payTotalAdd` / `payTotalMul` /
-///      `payTotalCancel`) run command-wide on the figure **before** any
+///      (`PIPELINE-AUDIT` Q2 / Q6). `TriggerKind`s `PayCombinedAdd` / `PayCombinedMul`
+///      / `PayCombinedCancel` (wire names `payCombinedAdd` / `payCombinedMul` /
+///      `payCombinedCancel`) run command-wide on the figure **before** any
 ///      「[分摊]」 divides it -- 「分摊前」 -- alongside the existing per-share
-///      `PayAdd` / `PayMul` / `PayChoose` / `PayAt`. `ctx::pay_total` /
+///      `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt`. `ctx::pay_total` /
 ///      `ctx::split_pay` / `ctx::transfer_leg` drive them. Terminal
 ///      `<thing>Resolved` hooks: `tileResolved` (after `settleAfter`),
 ///      `moveResolved` (after a move and its settle), `bankruptResolved` (after
@@ -453,13 +453,14 @@ use alloc::{string::String, vec::Vec};
 /// v57: **closeout integration** -- one monotonic bump covering every addition
 ///      the five closeout batches made on top of v56:
 ///      `TriggerKind::ChargePaying = 78` / `HookKind::FlipEffect = 94` (fire-cost
-///      substitution + flip-effect hook; `ctx::raise` is prompt-aware);
+///      substitution + flip-effect hook; `ctx::raise` is prompt-aware;
+///      FlipEffect retired in v83 -- id 94 never reuse);
 ///      `join_redirect_target` / `set_join_used` (真奈 join retarget, CH-05);
 ///      and **raw money adjustment** -- `ctx::adjust_money` / `ctx::gain_raw` /
 ///      `ctx::lose_raw` (`HostRequest::AdjustMoney`, wire name
 ///      `adjust_money`). `money += delta` with a `log.gain` / `log.lose` line
-///      and **no** payment pipeline: no `payAdd` / `payMul` / `payChoose` /
-///      `payAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
+///      and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` /
+///      `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书 「不受其他
 ///      任何效果影响」 wants a [指定] split's amount to land as-is (ONE OF US's
 ///      「被分享方资金直接增加，不受其他任何效果影响」). Non-pausing. Positive
 ///      `delta` is a gain, negative a loss. `World::gain_money` / a raw
@@ -511,7 +512,7 @@ use alloc::{string::String, vec::Vec};
 ///      `tile_attr` only. SAVE_VERSION unchanged.
 /// v71: **money rounds once after add/mul** (user ruling 2026-10-15,
 ///      OPEN-取整 family). Modifier cards (`减半` / `1.5倍` / `+x` / `×y` /
-///      `payAdd` / `payMul` / `payTotal*` / `set_pay_factor`) transform the
+///      `paySplitAdd` / `paySplitMul` / `payCombined*` / `set_pay_factor`) transform the
 ///      running amount exactly and must not CeilTo-10 inside their own body;
 ///      `money_inner` / `pay_total` round a positive figure **up to a multiple
 ///      of 10 once** after every add/mul modifier has been processed. An
@@ -520,19 +521,145 @@ use alloc::{string::String, vec::Vec};
 ///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
 ///      No new import; host semantics of `set_pay_amount` composition change.
 ///      SAVE_VERSION unchanged (no save field).
+/// v72: **persona write** -- new host import `set_persona(player_id, name)`
+///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
+///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
+///      exclusive gate and `persona_is` see the new identity; skills are
+///      swapped separately. SAVE_VERSION unchanged.
 /// v73: **deed bodies** -- `OnKind::Mortgage` (9) / `OnKind::Redeem` (10)
 ///      (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
 ///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
 ///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
 ///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
 ///      direct money move (hooks + logging stay in that mechanism).
-///
-/// v72: **persona write** -- new host import `set_persona(player_id, name)`
-///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
-///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
-///      exclusive gate and `persona_is` see the new identity; skills are
-///      swapped separately. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 73;
+/// v74: **Action / Filter split** (WordPress `do_action` / `apply_filters`).
+///      `On::Hook` is removed (no alias). `OnKind::Hook = 3` is renamed
+///      `OnKind::Action` and **keeps id 3** (old compiled modules stay
+///      loadable). New `OnKind::Filter = 11` (11, not 9 -- 9/10 are the v73
+///      deed kinds) carries the modifier-pipeline / value-shaping kinds
+///      (`TriggerKind::is_filter`). A Filter may only list filter kinds and an
+///      Action only non-filter kinds; the check runs at ruleset build
+///      (`On::check_kind_variant`). SAVE_VERSION unchanged.
+/// v75: **pure Filter bodies**. `On::Filter` becomes
+///      `fn(player_id, value) -> i32`; `On::FilterFlag` is
+///      `fn(player_id, value) -> bool` (false = cancel/substitute);
+///      `On::FilterValue` is `fn(player_id, FilterValue) -> FilterValue`.
+///      Bodies may not prompt or emit mutating ctx effects; the host folds the
+///      return. New filter kind `TriggerKind::DiceRollValue = 102` is raised
+///      immediately before `DiceRollAfter` for roll reshaping (DiceRollAfter stays a
+///      pure Action event). SAVE_VERSION unchanged.
+/// v76: **DiceRollPlan / AtEnd fold**. `On::RollPlan` is
+///      `On::FilterValue(&[TriggerKind::DiceRollPlan], …)`; `On::AtEnd` is
+///      `On::Action(&[TriggerKind::AtEnd], …)` (one-shot via the existing
+///      `schedule_turn_end` list). `OnKind::RollPlan = 5` / `OnKind::AtEnd = 4`
+///      are retired -- never reuse those wire ids. New kind
+///      `TriggerKind::AtEnd = 103` (wire `atEnd`). SAVE_VERSION unchanged.
+/// v77: **Gate fold**. `On::Gate` is `On::FilterFlag` (yes/no: true = allowed)
+///      or `On::FilterValue` (target / reason). All gate kinds join
+///      `TriggerKind::is_filter()`. `OnKind::Gate = 6` is retired -- never
+///      reuse. CEL-only status gates keep their native `admits_pre` /
+///      `gate_open` path (condition is the whole answer). SAVE_VERSION unchanged.
+/// v78: **purity + interactive pre-stages**. New kinds `FlipAfter = 104`
+///      (post-flip Action; retired in v83 -- id 104 never reuse),
+///      `PaySplitChooseBefore = 105` / `PayCombinedAddBefore = 106`
+///      (interactive Action pre-stages raised immediately before the pure
+///      `PaySplitChoose` / `PayCombinedAdd` filter stages, restoring the rulebook
+///      prompt position). FilterValue gains an interned `tag_key` / `reason`
+///      id and a host-supplied `recorded_roll` so dice-rolling Filter bodies
+///      become pure. `card_sdk::pure::refuse_if_filter` covers every mutating
+///      ctx call. SAVE_VERSION unchanged.
+/// v79: **`Roll*` kind family renamed to `DiceRoll*`** (numeric ids unchanged).
+///      `Roll(1) -> DiceRollBefore`, `RollAfter(49) -> DiceRollAfter`,
+///      `RollPlan(67) -> DiceRollPlan`, `RollValue(102) -> DiceRollValue`.
+///      `MoveRoll(2)` is **not** renamed (it is a [反击] ChainKind, a different
+///      mechanism from Action/Filter). Wire names change too (`roll` ->
+///      `diceRollBefore`, `rollAfter` -> `diceRollAfter`, `rollPlan` ->
+///      `diceRollPlan`, `rollValue` -> `diceRollValue`) -- those strings ride
+///      logs, the CEL kind vocabulary, and `anim.chainKind.*` locales, so this
+///      is a version bump. Hard rename: no aliases (old records replay on
+///      archived engines). SAVE_VERSION unchanged.
+/// v80: **buy / build bodies** -- `OnKind::Buy` (12) / `OnKind::Build` (13)
+///      (`On::Buy` / `On::Build`, same pre/guard/body shape as
+///      `On::Mortgage` / `On::Redeem`). The body owns the order of steps,
+///      eligibility and the quote, and calls generic mechanism primitives
+///      (`ctx::raise` dispatching on `TriggerKind::is_filter`, `ctx::pay_buy` /
+///      `ctx::pay_build` through the money pipeline, `ctx::assign_deed`,
+///      `ctx::log`). `buyGate` is a `FilterFlag`, `buyAssign` a `FilterValue`
+///      (deal owner/houses/mortgaged); `buyBefore` / `bought` / `buyAfter` /
+///      `buildBefore` / `houseAdded` / `buildAfter` stay Actions. Force-buy
+///      money remains a direct transfer outside effects (规则书 其他规则 6).
+///      Ids 12/13, not 4/5/6 (retired) or 11 (`Filter`). Renumbered once past
+///      the v79 DiceRoll* rename (the buy/build branch also claimed v79).
+///      SAVE_VERSION unchanged.
+/// v81: **`MoveRoll` kind renamed to `DiceRollResult`** (numeric id 2 unchanged).
+///      Completes the v79 `DiceRoll*` family: `MoveRoll(2) -> DiceRollResult`
+///      so every roll kind shares the `DiceRoll*` prefix
+///      (`DiceRollBefore(1)` / `DiceRollResult(2)` / `DiceRollPlan(67)` /
+///      `DiceRollAfter(49)` / `DiceRollValue(102)`). Wire name changes too
+///      (`moveRoll` -> `diceRollResult`) -- that string rides logs, the CEL
+///      kind vocabulary (`kind == DiceRollResult`), and `anim.chainKind.*`
+///      locales, so this is a version bump. Hard rename: no aliases (old
+///      records replay on archived engines). Still a [反击] ChainKind
+///      (counteraction window), NOT an Action/Filter kind and still absent
+///      from `TriggerKind::is_filter()`. The host/ctx API names
+///      `set_move_roll` / `do_move_roll` / `trigger::move_roll` / CEL
+///      `move_roll` are **not** kind names and are unchanged.
+///      SAVE_VERSION unchanged.
+/// v82: **`Pay*` kind family renamed to Combined/Split levels** (numeric ids
+///      unchanged). Names name the pipeline LEVEL, not whether a 「[分摊]」
+///      split happened: a payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」)
+///      first runs the Combined stages on the WHOLE figure before 「[分摊]」
+///      divides it, then each settled leg/share runs the Split stages. A
+///      single non-split payment runs both levels once each.
+///      `PayTotalAdd(84) -> PayCombinedAdd`, `PayTotalMul(85) -> PayCombinedMul`,
+///      `PayTotalCancel(86) -> PayCombinedCancel`;
+///      `PayAdd(55) -> PaySplitAdd`, `PayMul(56) -> PaySplitMul`,
+///      `PayChoose(52) -> PaySplitChoose`, `PayAt(57) -> PaySplitAt`;
+///      pre-stage prompts `PayTotalAddAsk(106) -> PayCombinedAddBefore`,
+///      `PayChooseAsk(105) -> PaySplitChooseBefore`.
+///      Wire names change too (`payTotalAdd` -> `payCombinedAdd`,
+///      `payTotalMul` -> `payCombinedMul`, `payTotalCancel` -> `payCombinedCancel`,
+///      `payAdd` -> `paySplitAdd`, `payMul` -> `paySplitMul`,
+///      `payChoose` -> `paySplitChoose`, `payAt` -> `paySplitAt`,
+///      `payTotalAddAsk` -> `payCombinedAddBefore`,
+///      `payChooseAsk` -> `paySplitChooseBefore`) -- those strings ride logs,
+///      the CEL kind vocabulary, and `anim.chainKind.*` locales, so this is a
+///      version bump. Hard rename: no aliases (old records replay on archived
+///      engines). Not renamed: `Pay(9)` / `Paid(10)` / `PayAfter(48)` /
+///      `PayGate(96)` / `ChargePaying(78)`, host fns (`ctx::pay_*`, `pay_buy`,
+///      `pay_build`, `pay_leg`, `split_pay`, `set_pay_amount`,
+///      `set_pay_target`), and CEL variables (`pay_is_rent`, `pay_*`).
+///      Filter/Action classification unchanged: Combined*/Split* filters stay
+///      filters; the two *Before prompts stay Actions.
+///      SAVE_VERSION unchanged.
+/// v83: **`FlipEffect` / `FlipAfter` retired; PP fans in the per-player state
+///      dict**. Ids 94 (`flipEffect`) and 104 (`flipAfter`) are **retired --
+///      never reuse**. Fan counters move to `ctx::state` keys `ppFansUp` /
+///      `ppFansDown` (`skill_groups::fans`, docs/CARDS.md 「PP fans in the
+///      per-player state dict」), owned by no card. Band clause （2） runs for
+///      **every** down→up flip via the ruleset-defined Action kind `FansFlip`
+///      (wire 107, `ruleset_core::kind`; raised before the dict writes with
+///      `value` = the effect's intended X). CEL reads the fans as
+///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
+///      SAVE_VERSION unchanged.
+/// v84: **Dead trigger kinds retired**. Ids 16 (`stop`), 17 (`teleport`),
+///      19 (`stun`), 20 (`stay`), 22 (`forced`) are **retired -- never
+///      reuse**. None of them is raised by the engine and none has a live
+///      listener. Not retired (still live at v84): `skillTeleport` (18),
+///      `exile` (21), `teleported` (66), `MoveKind::Teleport`, and the
+///      `AbKind` status vocabulary. The CEL names `Stop` / `TeleportTrigger`
+///      / `Stun` / `Stay` / `Forced` leave the kind table (`Teleport` stays
+///      as `MoveKind`). SAVE_VERSION unchanged.
+/// v85: **`SkillTeleport` retired; `move.by_skill` source tag**. Wire id 18
+///      (`skillTeleport`) is **retired -- never reuse**. The only listener
+///      (R:必然的联系（莉莎）) rides `MoveAfter` + cond
+///      `move.kind == Teleport && move.by_skill` instead. `MoveCtx.by_skill`
+///      is a generic "shaped or started by a `skill:` rule" tag (cond
+///      `move.by_skill`); serde skip-if-false so saves stay stable.
+///      `HostRequest::Teleport` now runs through `card_teleport` /
+///      `teleport_as(resolve=false)` so it raises the move tail like every
+///      other movement path. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 85;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1004,8 +1131,8 @@ pub mod prop {
     pub const COLOR_FOR_PREFIX: &str = "colorFor:";
 }
 
-/// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from. Read by
-/// 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `roll` / `moveRoll`
+/// `t.Roll.Source` -- where a `diceRollBefore` / `diceRollResult` face came from. Read by
+/// 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `diceRollBefore` / `diceRollResult`
 /// trigger carries one; every other trigger reads [`roll_source::NONE`].
 pub mod roll_source {
     /// Unattributed (the engine's own move roll, or a roll with no named source).
@@ -1275,14 +1402,18 @@ impl TriggerKind {
 
     /// The main move's pre-roll point (行动阶段 8 「移动掷骰前」) -- raised before
     /// the d20 is cast, with `value = -1` as a "no roll yet" sentinel so a
-    /// counter matching [`Self::Roll`] / [`Self::MoveRoll`] stays dormant before
+    /// counter matching [`Self::DiceRollBefore`] / [`Self::DiceRollResult`] stays dormant before
     /// the dice exist. Payload: `@m` the move.
-    pub const Roll: Self = Self(1);
+    pub const DiceRollBefore: Self = Self(1);
 
-    /// The move roll resolved (行动阶段 9–10 「移动掷骰时/后」) -- after the dice,
-    /// before the walk. `value` is the face; a counteraction may reroll it with
-    /// `set_move_roll` (`t.value` is read back). Payload: `@m` the move.
-    pub const MoveRoll: Self = Self(2);
+    /// ChainKind (counteraction window) · after the dice landed and after [`Self::DiceRollAfter`] (行动阶段 10 「移动掷骰后」), before the walk · payload `@m` the move, `value` = the face · may prompt and reroll via `set_move_roll`
+    ///
+    /// [反击] counteraction window for the main move roll. NOT an Action/Filter
+    /// kind -- never listed in [`Self::is_filter`]. A counteraction may reroll
+    /// the face with `set_move_roll` (`t.value` is read back). Sibling kinds:
+    /// [`Self::DiceRollBefore`] (1), [`Self::DiceRollPlan`] (67),
+    /// [`Self::DiceRollAfter`] (49), [`Self::DiceRollValue`] (102 filter).
+    pub const DiceRollResult: Self = Self(2);
 
     /// A turn begins (行动阶段 2 「回合开始时」) -- after the exile/stun status
     /// ticks, so a hook sees the turn as it opens. `turnStartBefore` is the
@@ -1354,28 +1485,18 @@ impl TriggerKind {
     /// [`GateKind::Untargetable`] / [`GateKind::Redirect`].
     pub const Target: Self = Self(15);
 
-    /// Wire name `stop`: a player was forced to stop (「强制停下」,
-    /// [`AbKind::Stop`]). Not raised by the current engine; kept for wire
-    /// compatibility.
-    pub const Stop: Self = Self(16);
+    // Wire id 16 (`stop`) retired in v84 -- never reuse. Was 「强制停下」.
 
-    /// Wire name `teleport`: a teleport was performed. Not raised by the current
-    /// engine; kept for wire compatibility. The teleport-specific points today
-    /// are [`Self::MoveBefore`] (before) and [`Self::Teleported`] (after).
-    pub const Teleport: Self = Self(17);
+    // Wire id 17 (`teleport`) retired in v84 -- never reuse. The teleport
+    // points today are [`Self::MoveBefore`] (before) and [`Self::Teleported`].
 
-    /// Wire name `skillTeleport`: 「当你使用技能进行传送后」 (R:必然的联系（莉莎）).
-    /// Not raised by the current engine; kept for wire compatibility.
-    pub const SkillTeleport: Self = Self(18);
+    // Wire id 18 (`skillTeleport`) retired in v85 -- never reuse. Use
+    // [`Self::MoveAfter`] + cond (`move.kind == Teleport && move.by_skill`).
 
-    /// Wire name `stun`: a [晕眩] layer landed. Not raised by the current engine
-    /// (the landing reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`]);
-    /// kept for wire compatibility.
-    pub const Stun: Self = Self(19);
+    // Wire id 19 (`stun`) retired in v84 -- never reuse. A [晕眩] landing
+    // reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`].
 
-    /// Wire name `stay`: a [停留] layer landed. Not raised by the current engine
-    /// (see [`Self::Stun`]); kept for wire compatibility.
-    pub const Stay: Self = Self(20);
+    // Wire id 20 (`stay`) retired in v84 -- never reuse.
 
     /// Wire name `exile`: 「任意玩家获得[除外]…时」 -- an [除外] layer was granted
     /// by any path (火种燃尽之后会怎么样呢？ listens here). Raised from the grant
@@ -1383,13 +1504,11 @@ impl TriggerKind {
     /// itself.
     pub const Exile: Self = Self(21);
 
-    /// Wire name `forced`: a [强制移动] landed. Not raised by the current engine
-    /// (see [`Self::Stun`]); kept for wire compatibility.
-    pub const Forced: Self = Self(22);
+    // Wire id 22 (`forced`) retired in v84 -- never reuse.
 
     /// Wire name `state`: 「当有其他玩家切换状态时」 -- a player toggled skill
-    /// state (Mujica:欢迎来到ave mujica的世界). Not raised by the current
-    /// engine; kept for wire compatibility.
+    /// state (Mujica:欢迎来到ave mujica的世界). Raised at the skill-state
+    /// 1↔2 toggle chokepoint (`wasm_rules` `note_state_toggle` commit).
     pub const State: Self = Self(23);
 
     /// Wire name `counteracted`: 「有玩家对你使用[反击]后」 -- a [反击] was
@@ -1398,8 +1517,8 @@ impl TriggerKind {
     pub const Counteracted: Self = Self(24);
 
     /// Wire name `drawOut`: 「回合外受到抽卡效果时」 -- a draw hit you outside
-    /// your own turn (CRYCHIC:优雅的呐喊). Not raised by the current engine;
-    /// kept for wire compatibility. The per-draw points today are
+    /// your own turn (CRYCHIC:优雅的呐喊). Raised at the `HostRequest::Draw`
+    /// chokepoint before the cards move. The per-draw after points remain
     /// [`Self::DrewBefore`] / [`Self::Drawn`] / [`Self::Drew`].
     pub const DrawOut: Self = Self(25);
 
@@ -1477,8 +1596,12 @@ impl TriggerKind {
     /// A payment settled (规则书 支付阶段 6–7 「资金变动」).
     pub const PayAfter: Self = Self(48);
 
-    /// A move roll resolved (行动阶段 10 「移动掷骰后」).
-    pub const RollAfter: Self = Self(49);
+    /// A move roll resolved (行动阶段 10 「移动掷骰后」). Action. The face is
+    /// already landed; the pure reshape stage is [`Self::DiceRollValue`].
+    /// **Documented exception** to filter-purity (user decision 2026-10-17):
+    /// an `On::Action` here **may** prompt, roll dice, and write the face
+    /// (trigger value read back) — the one Action allowed to reshape a roll.
+    pub const DiceRollAfter: Self = Self(49);
 
     /// A card's hand effect resolved.
     pub const CardPlayed: Self = Self(50);
@@ -1486,8 +1609,11 @@ impl TriggerKind {
     /// The player was targeted.
     pub const Targeted: Self = Self(51);
 
-    /// The player is about to pay (may modify/decline).
-    pub const PayChoose: Self = Self(52);
+    /// Filter · a settled payment leg is about to settle its amount (支付阶段,
+    /// after Combined levels and any 「[分摊]」 divide) · payload `value` the
+    /// running figure, `target` the payee, `pay_is_rent` · no prompt (use
+    /// [`Self::PaySplitChooseBefore`])
+    pub const PaySplitChoose: Self = Self(52);
 
     /// v23: first step of a turn end (结束阶段前), before the `On::AtEnd`
     /// callbacks and the status wear-off.
@@ -1496,16 +1622,20 @@ impl TriggerKind {
     /// v23: after [`Self::TurnEnd`]; the scheduled turn-end callbacks run here.
     pub const TurnEndAfter: Self = Self(54);
 
-    /// v23: a payment's amount, first modifier pass (规则书 支付阶段 2, before
-    /// any money moves).
-    pub const PayAdd: Self = Self(55);
+    /// Filter · a settled payment leg's first amount modifier (规则书 支付阶段 2
+    /// on each share, before any money moves) · payload `value` the running
+    /// figure, `target` the payee · no prompt
+    pub const PaySplitAdd: Self = Self(55);
 
-    /// v23: second modifier pass (规则书 支付阶段 4), after [`Self::PayAdd`].
-    pub const PayMul: Self = Self(56);
+    /// Filter · a settled payment leg's second amount modifier (规则书 支付阶段 4
+    /// on each share, after [`Self::PaySplitAdd`]) · payload `value` the running
+    /// figure, `target` the payee · no prompt
+    pub const PaySplitMul: Self = Self(56);
 
-    /// v23: after [`Self::PayChoose`], before the `pay` [反击] window
-    /// (规则书 支付阶段 5).
-    pub const PayAt: Self = Self(57);
+    /// Filter · a settled payment leg is about to pay (规则书 支付阶段 5 on each
+    /// share, after [`Self::PaySplitChoose`], before the `pay` [反击] window) ·
+    /// payload `value` the running figure, `target` the payee · no prompt
+    pub const PaySplitAt: Self = Self(57);
 
     /// v23: this card (named on `t.card`) just went to the discard pile.
     pub const Discarded: Self = Self(58);
@@ -1548,9 +1678,9 @@ impl TriggerKind {
     /// settle).
     pub const Teleported: Self = Self(66);
 
-    /// v23: the main move's `RollPlan` pass (行动阶段 8, before the dice are
+    /// v23: the main move's `DiceRollPlan` pass (行动阶段 8, before the dice are
     /// rolled). The host runs every placed card's `On::RollPlan` here.
-    pub const RollPlan: Self = Self(67);
+    pub const DiceRollPlan: Self = Self(67);
 
     /// v25: an abnormal effect is about to hit
     /// `t.target` (`trigger::abnormal_kind()` says which). A field card blocks it
@@ -1603,11 +1733,9 @@ impl TriggerKind {
     /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
     pub const DrewBefore: Self = Self(77);
 
-    /// v56: a face-down counter is being flipped face-up (「将X个反面…变正」).
-    /// `t.value` is the effect's **intended** X (the number the clause names),
-    /// raised *before* the counters move so a listener still sees the pre-flip
-    /// count. Hook-only.
-    pub const FlipEffect: Self = Self(94);
+    // v56 was `FlipEffect = 94` (flip-to-up filter). Retired in v83: the PP
+    // fan flip moved to the state-dict `fans::flip_up` + `FansFlip` raise.
+    // Wire id 94 is retired -- never reuse.
 
     /// v36: a card instance's attached [CP点] count was just written (placed or
     /// cleared). `t.card` is the card the marks are attached to, `t.player_id`
@@ -1639,25 +1767,32 @@ impl TriggerKind {
 
     // v42: the command-wide **pre-split** payment stage (`PIPELINE-AUDIT` Q2)
     // and the terminal `<thing>Resolved` hooks (Q6).
-    /// The payment command's **pre-split** fixed ± stage
-    /// (「分摊前资金减少/增加」, 规则书 支付阶段 2 applied to the command total).
-    /// Runs once per payment command, on the figure **before** any 「[分摊]」
-    /// divides it into shares; a single-pair payment's command total is its own
-    /// amount. `t.value` / `set_pay_amount` rewrite the total. Composes with
-    /// [`Self::PayTotalMul`] and [`Self::PayTotalCancel`] (add → mul → cancel).
-    /// The per-share counterparts are [`Self::PayAdd`] / [`Self::PayMul`] /
-    /// [`Self::PayChoose`] / [`Self::PayAt`], which run on each settled leg.
-    pub const PayTotalAdd: Self = Self(84);
+    /// Filter · the payment COMMAND's Combined fixed ± stage
+    /// (「分摊前资金减少/增加」, 规则书 支付阶段 2 on the WHOLE figure) · payload
+    /// `value` the command total, `target` the payee · no prompt (use
+    /// [`Self::PayCombinedAddBefore`])
+    ///
+    /// Level semantics (v82): a payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」)
+    /// first runs the Combined stages on the whole figure before 「[分摊]」
+    /// divides it; then each settled leg/share runs the Split stages. A single
+    /// non-split payment runs both levels once each -- the names name the
+    /// LEVEL, not whether a split happened. Composes with
+    /// [`Self::PayCombinedMul`] and [`Self::PayCombinedCancel`] (add → mul →
+    /// cancel). Split counterparts: [`Self::PaySplitAdd`] /
+    /// [`Self::PaySplitMul`] / [`Self::PaySplitChoose`] / [`Self::PaySplitAt`].
+    pub const PayCombinedAdd: Self = Self(84);
 
-    /// The pre-split × stage (规则书 支付阶段 4), after
-    /// [`Self::PayTotalAdd`]. `t.value` / `set_pay_amount`.
-    pub const PayTotalMul: Self = Self(85);
+    /// Filter · the payment COMMAND's Combined × stage (规则书 支付阶段 4 on the
+    /// WHOLE figure, after [`Self::PayCombinedAdd`]) · payload `value` the
+    /// command total, `target` the payee · no prompt
+    pub const PayCombinedMul: Self = Self(85);
 
-    /// The pre-split cancel (规则书 支付阶段 5's
-    /// 「取消支付」 on the command rather than on one pair), after
-    /// [`Self::PayTotalMul`]. `trigger::set_cancelled()` drops the whole
-    /// command: no leg runs and nothing moves.
-    pub const PayTotalCancel: Self = Self(86);
+    /// FilterFlag · the payment COMMAND's Combined cancel (规则书 支付阶段 5
+    /// 「取消支付」 on the whole command rather than on one pair, after
+    /// [`Self::PayCombinedMul`]) · payload `value` the command total · no prompt;
+    /// `trigger::set_cancelled()` (FilterFlag `false`) drops the whole command:
+    /// no leg runs and nothing moves
+    pub const PayCombinedCancel: Self = Self(86);
 
     /// Terminal: the tile's settlement is fully resolved (after
     /// [`Self::SettleAfter`], including when the settle was cancelled -- the
@@ -1677,7 +1812,7 @@ impl TriggerKind {
     /// not -- once the move's plan is fixed and before the first step / the
     /// teleport. This is where a counteraction cancels or alters the move
     /// (`SETTLE-STAGES.md` §7 「移动前」). The roll-specific `rollPlan` /
-    /// `moveRoll` and the teleport-specific `teleport` stay inside a main move's
+    /// `diceRollResult` and the teleport-specific `teleport` stay inside a main move's
     /// own head; this is the generic move point.
     /// For a walk, `value` is the resolved base distance and `move_total` /
     /// `move_remaining` include existing extra steps, before any are walked.
@@ -1747,9 +1882,84 @@ impl TriggerKind {
     /// cancelling the rest of the turn. CEL-only, like [`Self::ActGate`].
     pub const PlayGate: Self = Self(101);
 
+    /// v75: **roll-value modifier** -- raised immediately before
+    /// [`Self::DiceRollAfter`] with the same payload, for reshaping the face
+    /// (`fn(player_id, value) -> i32`). Filter-only (pure). Prefer this over
+    /// the [`Self::DiceRollAfter`] exception: only an Action at `DiceRollAfter`
+    /// that must prompt may roll and write the face (see that kind's docs).
+    pub const DiceRollValue: Self = Self(102);
+
+    /// v76: **scheduled turn-end callback**. Raised only for the card/uid a
+    /// `ctx::at_turn_end` / `ctx::at_next_turn_end` schedule entry names, at
+    /// that turn's end (one-shot). Replaces `On::AtEnd`: the registered entry
+    /// is `On::Action(&[AtEnd], pre, guard, body)`. Non-filter.
+    pub const AtEnd: Self = Self(103);
+
+    // v78 was `FlipAfter = 104` (post-flip action for pastel's overflow
+    // crystals). Retired in v83 with FlipEffect: that clause lives on the
+    // band card's `FansFlip` Action listener. Wire id 104 is retired -- never
+    // reuse.
+
+    /// Action · interactive pre-stage immediately before the pure
+    /// [`Self::PaySplitChoose`] filter (支付阶段 on each settled leg) · payload
+    /// `value` the running figure, `target` the payee · **may prompt**; the pure
+    /// `On::Filter`/`On::FilterFlag` at `PaySplitChoose` then applies
+    pub const PaySplitChooseBefore: Self = Self(105);
+
+    /// Action · interactive pre-stage immediately before the pure
+    /// [`Self::PayCombinedAdd`] filter (分摊前资金增减 on the WHOLE figure) ·
+    /// payload `value` the command total, `target` the payee · **may prompt**;
+    /// the pure `On::Filter`/`On::FilterFlag` at `PayCombinedAdd` then applies
+    pub const PayCombinedAddBefore: Self = Self(106);
+
     /// The wire value, shared with every kind view.
     pub const fn as_i32(self) -> i32 {
         self.0
+    }
+
+    /// Is this a **filter** kind (ABI v74)? Filter kinds are modifier-pipeline
+    /// / value-shaping stages whose result the host folds back (pay amount,
+    /// buy price, turn clock, roll plan, charge-cost substitute).
+    /// `On::Filter` may only list these; `On::Action` only non-filter kinds.
+    ///
+    /// Single source of truth -- everything else (ruleset-build validation,
+    /// host, docs) reads this. Includes the v77 decision gates
+    /// (`AbnormalGuard` / `ImmuneAll` / `Untargetable` / `Redirect` /
+    /// `BuyGate` / `ActGate` / `PayGate` / `MoveGate` / `ExclusiveUse` /
+    /// `PlayGate`); see docs/CARDS.md.
+    pub const fn is_filter(self) -> bool {
+        matches!(
+            self,
+            Self::DiceRollValue
+                | Self::PaySplitChoose
+                | Self::PaySplitAdd
+                | Self::PaySplitMul
+                | Self::PaySplitAt
+                | Self::DiceRollPlan
+                // ChargePaying (78) is NOT a filter: its 「可」 opt-in prompts,
+                // and Filter bodies cannot. It stays on On::Action (see
+                // docs/CARDS.md).
+                | Self::BuyAdd
+                | Self::BuyMul
+                | Self::BuySet
+                | Self::BuyAssign
+                | Self::PayCombinedAdd
+                | Self::PayCombinedMul
+                | Self::PayCombinedCancel
+                | Self::TurnBonusTime
+                | Self::TurnBaseTime
+                // Decision gates (v77): pure yes/no or target/reason folds.
+                | Self::AbnormalGuard
+                | Self::ImmuneAll
+                | Self::Untargetable
+                | Self::Redirect
+                | Self::BuyGate
+                | Self::ActGate
+                | Self::PayGate
+                | Self::MoveGate
+                | Self::ExclusiveUse
+                | Self::PlayGate
+        )
     }
 
     /// Any code is a valid opaque id.
@@ -1763,8 +1973,8 @@ impl TriggerKind {
     pub fn as_str(self) -> &'static str {
         match self.0 {
             0 => "",
-            1 => "roll",
-            2 => "moveRoll",
+            1 => "diceRollBefore",
+            2 => "diceRollResult",
             3 => "turnStart",
             4 => "pass",
             5 => "passPlayer",
@@ -1778,13 +1988,13 @@ impl TriggerKind {
             13 => "event",
             14 => "abnormal",
             15 => "target",
-            16 => "stop",
-            17 => "teleport",
-            18 => "skillTeleport",
-            19 => "stun",
-            20 => "stay",
+            // 16 was "stop" -- retired in v84, never reuse.
+            // 17 was "teleport" -- retired in v84, never reuse.
+            // 18 was "skillTeleport" -- retired in v85, never reuse.
+            // 19 was "stun" -- retired in v84, never reuse.
+            // 20 was "stay" -- retired in v84, never reuse.
             21 => "exile",
-            22 => "forced",
+            // 22 was "forced" -- retired in v84, never reuse.
             23 => "state",
             24 => "counteracted",
             25 => "drawOut",
@@ -1810,15 +2020,15 @@ impl TriggerKind {
             46 => "drawn",
             47 => "passTile",
             48 => "payAfter",
-            49 => "rollAfter",
+            49 => "diceRollAfter",
             50 => "cardPlayed",
             51 => "targeted",
-            52 => "payChoose",
+            52 => "paySplitChoose",
             53 => "turnEndBefore",
             54 => "turnEndAfter",
-            55 => "payAdd",
-            56 => "payMul",
-            57 => "payAt",
+            55 => "paySplitAdd",
+            56 => "paySplitMul",
+            57 => "paySplitAt",
             58 => "discarded",
             59 => "deckBeforeGame",
             60 => "deckAtGameStart",
@@ -1828,7 +2038,7 @@ impl TriggerKind {
             64 => "settleBody",
             65 => "beforeOut",
             66 => "teleported",
-            67 => "rollPlan",
+            67 => "diceRollPlan",
             68 => "abnormalGuard",
             69 => "immuneAll",
             70 => "untargetable",
@@ -1836,15 +2046,15 @@ impl TriggerKind {
             72 => "effect",
             76 => "counterChanged",
             77 => "drewBefore",
-            94 => "flipEffect",
+            // 94 was "flipEffect" -- retired in v83, never reuse.
             79 => "buyGate",
             80 => "buyAdd",
             81 => "buyMul",
             82 => "buySet",
             83 => "buyAssign",
-            84 => "payTotalAdd",
-            85 => "payTotalMul",
-            86 => "payTotalCancel",
+            84 => "payCombinedAdd",
+            85 => "payCombinedMul",
+            86 => "payCombinedCancel",
             87 => "tileResolved",
             88 => "moveResolved",
             89 => "bankruptResolved",
@@ -1859,11 +2069,17 @@ impl TriggerKind {
             99 => "turnBonusTime",
             100 => "turnBaseTime",
             101 => "playGate",
+            102 => "diceRollValue",
+            103 => "atEnd",
+            // 104 was "flipAfter" -- retired in v83, never reuse.
+            105 => "paySplitChooseBefore",
+            106 => "payCombinedAddBefore",
             26 => "26",  // ruleset-declared custom id
             73 => "73",  // ruleset-declared custom id
             74 => "74",  // ruleset-declared custom id
             75 => "75",  // ruleset-declared custom id
             78 => "78",  // ruleset-declared custom id
+            107 => "107", // ruleset-declared custom id (FansFlip)
             _ => "",
         }
     }
@@ -1875,8 +2091,8 @@ impl TriggerKind {
             return Self(s.parse::<i32>().unwrap_or(0));
         }
         match s {
-            "roll" => Self(1),
-            "moveRoll" => Self(2),
+            "diceRollBefore" => Self(1),
+            "diceRollResult" => Self(2),
             "turnStart" => Self(3),
             "pass" => Self(4),
             "passPlayer" => Self(5),
@@ -1890,13 +2106,13 @@ impl TriggerKind {
             "event" => Self(13),
             "abnormal" => Self(14),
             "target" => Self(15),
-            "stop" => Self(16),
-            "teleport" => Self(17),
-            "skillTeleport" => Self(18),
-            "stun" => Self(19),
-            "stay" => Self(20),
+            // "stop" retired in v84 (id 16 never reuse).
+            // "teleport" retired in v84 (id 17 never reuse).
+            // "skillTeleport" retired in v85 (id 18 never reuse).
+            // "stun" retired in v84 (id 19 never reuse).
+            // "stay" retired in v84 (id 20 never reuse).
             "exile" => Self(21),
-            "forced" => Self(22),
+            // "forced" retired in v84 (id 22 never reuse).
             "state" => Self(23),
             "counteracted" => Self(24),
             "drawOut" => Self(25),
@@ -1922,15 +2138,15 @@ impl TriggerKind {
             "drawn" => Self(46),
             "passTile" => Self(47),
             "payAfter" => Self(48),
-            "rollAfter" => Self(49),
+            "diceRollAfter" => Self(49),
             "cardPlayed" => Self(50),
             "targeted" => Self(51),
-            "payChoose" => Self(52),
+            "paySplitChoose" => Self(52),
             "turnEndBefore" => Self(53),
             "turnEndAfter" => Self(54),
-            "payAdd" => Self(55),
-            "payMul" => Self(56),
-            "payAt" => Self(57),
+            "paySplitAdd" => Self(55),
+            "paySplitMul" => Self(56),
+            "paySplitAt" => Self(57),
             "discarded" => Self(58),
             "deckBeforeGame" => Self(59),
             "deckAtGameStart" => Self(60),
@@ -1940,7 +2156,7 @@ impl TriggerKind {
             "settleBody" => Self(64),
             "beforeOut" => Self(65),
             "teleported" => Self(66),
-            "rollPlan" => Self(67),
+            "diceRollPlan" => Self(67),
             "abnormalGuard" => Self(68),
             "immuneAll" => Self(69),
             "untargetable" => Self(70),
@@ -1948,15 +2164,15 @@ impl TriggerKind {
             "effect" => Self(72),
             "counterChanged" => Self(76),
             "drewBefore" => Self(77),
-            "flipEffect" => Self(94),
+            // "flipEffect" retired in v83 (id 94 never reuse).
             "buyGate" => Self(79),
             "buyAdd" => Self(80),
             "buyMul" => Self(81),
             "buySet" => Self(82),
             "buyAssign" => Self(83),
-            "payTotalAdd" => Self(84),
-            "payTotalMul" => Self(85),
-            "payTotalCancel" => Self(86),
+            "payCombinedAdd" => Self(84),
+            "payCombinedMul" => Self(85),
+            "payCombinedCancel" => Self(86),
             "tileResolved" => Self(87),
             "moveResolved" => Self(88),
             "bankruptResolved" => Self(89),
@@ -1971,6 +2187,11 @@ impl TriggerKind {
             "turnBonusTime" => Self(99),
             "turnBaseTime" => Self(100),
             "playGate" => Self(101),
+            "diceRollValue" => Self(102),
+            "atEnd" => Self(103),
+            // "flipAfter" retired in v83 (id 104 never reuse).
+            "paySplitChooseBefore" => Self(105),
+            "payCombinedAddBefore" => Self(106),
             _ => Self::None,
         }
     }
@@ -2153,26 +2374,20 @@ pub enum OnKind {
     /// is offered in the hand window; `body` resolves against the answered link.
     /// Called at the counteraction offer, then again at LIFO resolution.
     Counteract = 2,
-    /// `On::Hook(kinds, cond, guard, body)` -- a field-card (`Fx`) hook at those
-    /// [`HookKind`]s. Same `cond`/`guard`/`body` shape as [`Self::Counteract`].
-    /// The host calls it **automatically** for every placed card (placement
-    /// order per player) whenever one of the kinds is raised -- no window.
-    Hook = 3,
-    /// `On::AtEnd(pre, guard, body)` -- what `ctx::at_turn_end` /
-    /// `ctx::at_next_turn_end` schedules: `body` runs once at that turn end,
-    /// when the entry's condition / residual guard admit (v49).
-    AtEnd = 4,
-    /// `On::RollPlan(pre, guard, body)` -- this card has a movement routine.
-    /// The host calls it on the main-move [`TriggerKind::RollPlan`] pass, before
-    /// the dice, so `body` can shape `turn.plan`. Condition / residual guard (v49)
-    /// decide whether the routine applies to the move being planned.
-    RollPlan = 5,
-    /// `On::Gate(kinds, pre, guard, body)` -- a question at those [`GateKind`]s.
-    /// `body` answers with `set_cancelled` / `set_target` / `set_reason`; the
-    /// host asks every placed card at declaration or at resolution, per the
-    /// kind. Since v49 it carries the same condition / residual guard as
-    /// [`Self::Hook`]: a rejecting entry does not answer (and so never flashes).
-    Gate = 6,
+    /// `On::Action(kinds, cond, guard, body)` -- an **event reaction** at those
+    /// [`HookKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
+    /// `cond`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
+    /// **automatically** for every placed card (placement order per player)
+    /// whenever one of the kinds is raised -- no window. May emit effects;
+    /// does not modify the triggering value. Kinds must be non-filter
+    /// (`TriggerKind::is_filter() == false`).
+    Action = 3,
+    // 4 was `AtEnd`, folded into `Action(&[TriggerKind::AtEnd], …)` in v76.
+    // Wire id 4 is retired -- never reuse.
+    // 5 was `DiceRollPlan`, folded into `FilterValue(&[TriggerKind::DiceRollPlan], …)`
+    // in v76. Wire id 5 is retired -- never reuse.
+    // 6 was `Gate`, folded into `FilterFlag` / `FilterValue` at the gate kinds
+    // in v77. Wire id 6 is retired -- never reuse.
     /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(pre, guard,
     /// body)`. Tile rules (`tile:*`) are one per board tile kind and this is what
     /// runs when that tile is [结算]d, inside the settle chain (a
@@ -2182,7 +2397,7 @@ pub enum OnKind {
     /// v50: `On::Message(names, pre, guard, body)` -- this card answers a
     /// cross-card message (`ctx::send`). `names` are the message names it
     /// answers; the same category → condition → residual guard → body layering
-    /// as [`Self::Hook`]. The handler reads the sender and payload from
+    /// as [`Self::Action`]. The handler reads the sender and payload from
     /// `ctx::message` and returns a reply value. Does **not** flash the card
     /// (internal plumbing); the handler may log.
     Message = 8,
@@ -2194,6 +2409,94 @@ pub enum OnKind {
     /// v73: a rule's **redeem body** (`On::Redeem(pre, guard, body)`) --
     /// 规则书 基础规则 6. Same split as [`Self::Mortgage`].
     Redeem = 10,
+    /// v74: `On::Filter` / `On::FilterFlag` / `On::FilterValue` -- a **value
+    /// modifier** at those modifier [`HookKind`]s (`TriggerKind::is_filter()`).
+    /// v75: the three shapes share this wire id (the host distinguishes by the
+    /// guest's return convention). Kinds must be filter kinds. Id 11, not 9
+    /// (9/10 are the v73 deed kinds).
+    Filter = 11,
+    /// v80: a rule's **buy body** (`On::Buy(pre, guard, body)`) -- what runs
+    /// when the deed this rule instance governs is bought (settle offer,
+    /// card-driven `ctx::buy`, agent branch, acquire / auction / card kinds).
+    /// The body owns eligibility, the quote, and the order of steps; the
+    /// engine keeps the money pipeline and deed write as `ctx` primitives.
+    /// Force-buy stays a direct transfer outside effects (规则书 其他规则 6).
+    Buy = 12,
+    /// v80: a rule's **build body** (`On::Build(pre, guard, body)`) -- what
+    /// runs when a house is built on the deed this rule instance governs.
+    /// Same split as [`Self::Buy`].
+    Build = 13,
+}
+
+/// Small typed payload for [`crate::On::FilterValue`] (BuyAssign / DiceRollPlan).
+/// Unchanged fields keep their sentinel (`UNCHANGED`); the host applies only
+/// the fields the body rewrote. Pure: the body copies, tweaks, returns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FilterValue {
+    /// The integer being filtered (amount / price / roll / seconds / flip count).
+    pub value: i32,
+    /// BuyAssign: new owner (`UNCHANGED` / `-1` = bank / `>=0` = seat).
+    pub deal_owner: i32,
+    /// BuyAssign: house count (`UNCHANGED` keeps the deal's).
+    pub deal_houses: i32,
+    /// BuyAssign: mortgaged flag (`UNCHANGED` / 0 / 1).
+    pub deal_mortgaged: i32,
+    /// DiceRollPlan: who rolls (`UNCHANGED` / `-1` = the mover / `>=0` = stand-in).
+    pub roller: i32,
+    /// DiceRollPlan: base dice count / sides (sides 0 = a flat `count`).
+    pub base_count: i32,
+    pub base_sides: i32,
+    /// DiceRollPlan: extra dice count / sides.
+    pub extra_count: i32,
+    pub extra_sides: i32,
+    /// DiceRollPlan: step override (`UNCHANGED` keeps the roll; else exact count).
+    pub steps: i32,
+    /// DiceRollPlan: walk direction (`UNCHANGED` / 0 = forward / 1 = reverse).
+    pub reverse: i32,
+    /// DiceRollPlan: whether the move settles (`UNCHANGED` / 0 / 1).
+    pub resolve: i32,
+    /// DiceRollPlan: unsigned-roll floor.
+    pub min_roll: i32,
+    /// DiceRollPlan: pay / rent factor in milli (`UNCHANGED` / 0 = ×0 / 1000 = ×1).
+    pub pay_factor: i32,
+    pub rent_factor: i32,
+    /// DiceRollPlan: stop-at / settle-tile / teleport-to tile (`UNCHANGED`).
+    pub stop_at: i32,
+    pub settle_tile: i32,
+    pub teleport_to: i32,
+    /// DiceRollPlan: clear the dice table first (`UNCHANGED` / 0 / 1).
+    pub clear_dice: i32,
+    /// DiceRollPlan: `plan::set_tag("key", value)` -- the key is the creating
+    /// card's own tag name (see the body); `UNCHANGED` keeps the plan's.
+    pub tag: i32,
+    /// Pay pipeline: new payee (`UNCHANGED` / `-1` = bank / `>=0` = seat).
+    pub payee: i32,
+    /// DiceRollPlan: move kind (`UNCHANGED` / 0 = walk / 1 = teleport).
+    pub move_kind: i32,
+    /// DiceRollPlan: append this many base dice (`UNCHANGED` / count, sides).
+    pub add_base_count: i32,
+    pub add_base_sides: i32,
+    /// Gate: allow? (`UNCHANGED` / 0 = deny / 1 = allow). Prefer
+    /// [`crate::On::FilterFlag`] for a bare yes/no; this field is for a gate
+    /// that also rewrites `payee` / carries a reason.
+    pub allowed: i32,
+    /// Gate: denial reason message key (intern id, 0 = none). The host maps
+    /// the id back to the key for the UI.
+    pub reason: i32,
+    /// Host-supplied recorded roll (v78). The host pre-rolls dice into the
+    /// recorded RNG stream and exposes the face here, so a Filter body that
+    /// would have called `ctx::roll` (kaoru_thief's 1d2 direction, heat_head's
+    /// 1d6 cut) stays pure and replay-deterministic. `UNCHANGED` = no
+    /// recorded roll for this raise.
+    pub recorded_roll: i32,
+    /// `plan::set_tag` key as an intern id (v78; 0 = none). Write-back calls
+    /// `plan::set_tag_id(key, tag)`.
+    pub tag_key: i32,
+}
+
+impl FilterValue {
+    /// Sentinel: leave the host's current field alone.
+    pub const UNCHANGED: i32 = i32::MIN;
 }
 
 impl OnKind {
@@ -2201,15 +2504,38 @@ impl OnKind {
         Some(match v {
             0 => Self::Play,
             2 => Self::Counteract,
-            3 => Self::Hook,
-            4 => Self::AtEnd,
-            5 => Self::RollPlan,
-            6 => Self::Gate,
+            3 => Self::Action,
+            // 4 / 5 / 6 retired (AtEnd / DiceRollPlan / Gate) -- see the enum docs.
             7 => Self::Settle,
             8 => Self::Message,
             9 => Self::Mortgage,
             10 => Self::Redeem,
+            11 => Self::Filter,
+            12 => Self::Buy,
+            13 => Self::Build,
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TriggerKind;
+
+    /// ABI v85: wire id 18 (`skillTeleport`) is retired forever. Do not reuse
+    /// the id or the spelling; listeners discriminate with `MoveAfter` + cond
+    /// (`move.kind == Teleport && move.by_skill`).
+    #[test]
+    fn skill_teleport_id_18_is_retired_forever() {
+        assert_eq!(TriggerKind(18).as_str(), "", "id 18 must stay unnamed");
+        assert_eq!(
+            TriggerKind::from_str("skillTeleport"),
+            TriggerKind::None,
+            "skillTeleport spelling is retired"
+        );
+        // Nearby ids: "teleport" (id 17) retired in v84, and live ids keep
+        // working.
+        assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
+        assert_eq!(TriggerKind::MoveAfter.as_str(), "moveAfter");
     }
 }

@@ -16,6 +16,7 @@
 //! The ladder body runs off `cards_in(Field)` for the placed-card count.
 
 use ruleset_core::ctx;
+use skill_groups::fans;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANGER: CardDef = CardDef::new(
@@ -39,14 +40,12 @@ pub const RANGER: CardDef = CardDef::new(
         .fields(&[("group", r#"Pastel✽Palettes"#), ("owner", "")]));
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书[特]: 「仅在你的绝对距离30-“粉丝数量”格内有你拥有房的格子时可使用」
     // C# `CardRanger.WhyNot`: `range = 30 - H.Fans(player_id)`, refuse unless some
     // owned tile has houses and `H.Dist(pos, t) <= range`.
-    let range = 30 - (ctx::tok(player_id, FANS_UP) + ctx::tok(player_id, FANS_DOWN));
+    let range = 30 - (fans::total(player_id));
     let pos = ctx::player_pos(player_id);
     let ok = ctx::owned_tiles(player_id)
         .into_iter()

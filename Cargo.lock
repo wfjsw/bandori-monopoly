@@ -340,6 +340,7 @@ dependencies = [
  "card-sdk",
  "rules-status",
  "ruleset-core",
+ "skill-groups",
 ]
 
 [[package]]
@@ -2069,6 +2070,7 @@ dependencies = [
  "card-sdk",
  "rules-status",
  "ruleset-core",
+ "skill-groups",
 ]
 
 [[package]]

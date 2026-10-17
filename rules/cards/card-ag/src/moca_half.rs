@@ -17,10 +17,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Hook(&[HookKind::RollAfter], "actor == owner && move.main && card.placed", None, roll_after),
-        On::Hook(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
-        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
+        On::Filter(&[HookKind::DiceRollValue], "actor == owner && move.main && card.placed", None, roll_half),
+        On::Filter(&[HookKind::PaySplitMul], "actor == owner && card.placed && value > 0", None, pay_mul),
+        On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)
@@ -75,46 +75,42 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书(2): 「此卡在场时，你的移动掷骰的最终结算/2（向上取整）」 -- C#
-/// `CardMocaHalf.RollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
-/// main-move roll.
-fn roll_after(player_id: i32) -> card_sdk::Asked {
-    let roll = trigger::value().max(0);
+/// `CardMocaHalf.DiceRollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
+/// main-move roll. ABI v74: a pure `DiceRollValue` filter (placement order among
+/// roll reshapes is preserved).
+fn roll_half(player_id: i32, value: i32) -> i32 {
+    let roll = value.max(0);
     let halved = (roll + 1) / 2;
-    trigger::set_move_roll(halved);
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_roll"))
-            .player_id("who", player_id)
             .i("from", roll as i64)
             .i("to", halved as i64),
     );
-    Ok(())
+    halved
 }
 
-/// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PayMul` pass (after
-/// `PayAdd`, before `PayChoose`) rewrites the amount via
-/// `ctx::trigger::set_pay_amount`.
+/// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PaySplitMul` pass (after
+/// `PaySplitAdd`, before `PaySplitChoose`) rewrites the amount via the Filter fold.
 ///
 /// User ruling 2026-10-15 (OPEN-取整 family): a 减半 modifier transforms the
 /// running amount exactly and must NOT CeilTo in its own body; the engine
 /// rounds up to a multiple of 10 once after all add/mul modifiers. Integer
 /// fold rounds the .5 up (`(amount + 1) / 2`) so a sole modifier still settles
 /// at `round10(exact)` (25 → 12.5 → 20).
-fn pay_mul(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
+fn pay_mul(player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
-    let half = ((amount as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
-    trigger::set_pay_amount(half);
+    let half = ((value as i64 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     ctx::log(
         player_id,
         &Msg::new(key!("moca_half_pay"))
             .player_id("who", player_id)
-            .n("from", amount as i64)
+            .n("from", value as i64)
             .n("to", half as i64),
     );
-    Ok(())
+    half
 }
 
 // Kani-only direct-call exports (ppcost). Production builds omit these.
@@ -132,14 +128,14 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn roll_after_kani(player_id: i32) -> card_sdk::Asked {
-    roll_after(player_id)
+pub fn roll_half_kani(player_id: i32, value: i32) -> i32 {
+    roll_half(player_id, value)
 }
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_mul_kani(player_id: i32) -> card_sdk::Asked {
-    pay_mul(player_id)
+pub fn pay_mul_kani(player_id: i32, value: i32) -> i32 {
+    pay_mul(player_id, value)
 }
 
 #[cfg(kani)]

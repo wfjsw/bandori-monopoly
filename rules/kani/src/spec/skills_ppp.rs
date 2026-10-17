@@ -558,6 +558,17 @@ pub fn band_03c_buy_refused(any_ppp_alive: bool) -> bool {
     any_ppp_alive
 }
 
+/// ABI v77 pure FilterValue gate: deny is `allowed == 0` in the returned
+/// payload (the host reads it; the body no longer cancels the trigger).
+pub fn band_03c_gate_denied(allowed: i32) -> bool {
+    allowed == 0
+}
+
+/// Denial reason intern id 1 = `poppin_locked` (matches the body's const).
+pub fn band_03c_denial_reason() -> i32 {
+    1
+}
+
 // ===========================================================================
 // C-PPP-band-04
 // 「不能通过[主要移动]的[结算]盖房。」

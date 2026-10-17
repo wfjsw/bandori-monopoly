@@ -15,7 +15,7 @@
 //! move at turn start」) and the engine reads; see the TODO below for the piece
 //! that is not expressible yet.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, FilterValue, HookKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,9 +28,12 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
-        On::Hook(&[HookKind::RollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        // Pure plan reshape; the one-shot latch / CiRCLE-veto arming ride
+        // DiceRollAfter (the next event after the plan, before the walk).
+        On::FilterValue(&[HookKind::DiceRollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
+        On::Action(&[HookKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan_after),
     ],
 )
     .silent(&[1]);
@@ -54,15 +57,20 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「当你进行主要移动时」 -- the (2) press is offered while the move is being
-/// planned.
-fn on_plan(player_id: i32) -> card_sdk::Asked {
+/// planned. Pure: the dice/plan reshape only.
+fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
     // 「进行一次双倍掷骰的移动，向后移动经过CiRCLE时不获得CiRCLE奖励」 --
-    // the owed move's own shape. The CiRCLE veto is `prop::NO_REWARD` on this
-    // instance (`docs/TILES.md`); `tick` disarms it at the turn end, when the
-    // move is over.
+    // the owed move's own shape.
+    v.base_count = 2;
+    v.base_sides = 20;
+    v.reverse = 1;
+    v
+}
+
+/// One-shot consume + CiRCLE-veto arming, on the roll the plan just built
+/// (before the walk passes CiRCLE). `tick` disarms the veto at the turn end.
+fn on_plan_after(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, OWED, 0);
-    plan::set_base_dice(2, 20, "伟大的平凡");
-    plan::set_reverse(true);
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
     ctx::at_turn_end(player_id);
     ctx::log(player_id, &Msg::new(key!("tsugumi_plain_owed")));
@@ -87,7 +95,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, 0);
     plan::set_reverse(true);
     // 「你的下回合开始时，进行一次双倍掷骰的移动」 -- armed for the next
-    // `RollPlan` of this player's own turn.
+    // `DiceRollPlan` of this player's own turn.
     state::set(player_id, OWED, 1);
     ctx::log(player_id, &Msg::new(key!("tsugumi_plain_reverse")));
     Ok(())
@@ -114,6 +122,12 @@ pub fn tick_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_after_kani(player_id: i32) -> card_sdk::Asked {
+    on_plan_after(player_id)
 }

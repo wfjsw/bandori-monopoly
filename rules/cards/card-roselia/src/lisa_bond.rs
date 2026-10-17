@@ -5,6 +5,10 @@
 //!
 //! after a skill teleport: park this card on a same-tile character's field so
 //! your skills on them may skip the 「距离最近」 limit.
+//!
+//! Raised on the unified `MoveAfter` (every movement case) and discriminated
+//! by cond: `move.kind == Teleport && move.by_skill` selects 「使用技能进行传送」.
+//! The pre reads the POST-move position (`players_on(owner.pos, …)`).
 
 use alloc::vec::Vec;
 
@@ -14,9 +18,12 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
     "R:必然的联系（莉莎）",
+    // TODO(规则书): 「后」 names no stage number (closest is stage 13
+    // 「传送后在终点触发重叠」). `MoveAfter` is 「移动后」 (行动阶段 13) --
+    // the move-end point every movement case raises.
     &[On::Counteract(
-        &[ChainKind::SkillTeleport],
-        "actor == owner && players_on(owner.pos, owner) > 0",
+        &[ChainKind::MoveAfter],
+        "actor == owner && move.kind == Teleport && move.by_skill && players_on(owner.pos, owner) > 0",
         None,
         counteract,
     )],

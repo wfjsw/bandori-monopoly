@@ -26,14 +26,14 @@ pub const SUMIMI: CardDef = CardDef::new(
         // when this player is the *payer*, which is the opposite of an inbound
         // charge; the raise's `actor` is `from`. Fire on every placed pay and
         // let the body keep the from/to filter.
-        On::Hook(&[HookKind::PayAfter], "card.placed", None, after_pay),
+        On::Action(&[HookKind::PayAfter], "card.placed", None, after_pay),
         // 「向其他人收费」 -- this player is the payee of a charge from another
         // seat. Again `MINE` is the payer side; `target == owner` is the charge.
-        On::Hook(&[HookKind::PayMul], "target == owner && card.placed", None, bend),
+        On::Filter(&[HookKind::PaySplitMul], "target == owner && card.placed", None, bend),
         // Both halves of （1） live in the body: add when GOT, else clear.
         // The old `slot('skill.sumimi.got') == 0` guard only ever admitted the
         // clear branch (FINDINGS C-SUMIMI-band-01).
-        On::Hook(&[HookKind::TurnEndBefore], "actor == owner", None, at_turn_end),
+        On::Action(&[HookKind::TurnEndBefore], "actor == owner", None, at_turn_end),
     ],
 )
     .silent(&[0]);
@@ -53,22 +53,20 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金」.
-fn bend(player_id: i32) -> card_sdk::Asked {
+fn bend(player_id: i32, value: i32) -> i32 {
     let n = ctx::crystals();
     if n <= 0 {
-        return Ok(());
+        return value;
     }
     // 「向其他人收费」 -- this player is the payee of another seat's payment.
     if ctx::trigger::target() != player_id {
-        return Ok(());
+        return value;
     }
     let from = ctx::trigger::player_id();
     if from < 0 || from == player_id {
-        return Ok(());
+        return value;
     }
-    let amount = ctx::trigger::value();
-    ctx::trigger::set_pay_amount(amount + n * 100);
-    Ok(())
+    value + n * 100
 }
 
 /// （1）「你的回合结束时为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶」.
@@ -120,8 +118,8 @@ pub fn after_pay_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn bend_kani(player_id: i32) -> card_sdk::Asked {
-    bend(player_id)
+pub fn bend_kani(player_id: i32, value: i32) -> i32 {
+    bend(player_id, value)
 }
 
 #[cfg(kani)]

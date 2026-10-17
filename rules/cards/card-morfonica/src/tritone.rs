@@ -21,7 +21,7 @@ pub const TRITONE: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Hook(&[HookKind::TurnEnd], "", None, counteract),
+        On::Action(&[HookKind::TurnEnd], "", None, counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫之蝶们的三全音"#)

@@ -30,8 +30,8 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
     "skill:今井莉莎:慈爱女神",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
     ],
 )
     .silent(&[1]);

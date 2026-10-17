@@ -10,37 +10,86 @@
 //! （1）'s grant is the skill rule placed on the grantee's field (see
 //! [`super::aya_with`]).
 //!
-//! （2） 「因任意原因投掷前」 is every roll, not just the move dice -- `RollAfter`
-//! is the moment the face exists, and 「为此次投掷结果增加Yd4」 adds Yd4 to it.
+//! （2） is **two-part** and must run 「投掷前」 -- before the dice land:
+//!
+//! 1. **[`HookKind::DiceRollBefore`] (Action)** -- the `ask_number` for Y, the
+//!    self `fans::flip_down(Y)`, the other-seat `fans::flip_up` loop, and the
+//!    log. Prompts are allowed here; this is the only window that is actually
+//!    before the roll.
+//! 2. **[`HookKind::DiceRollPlan`] (FilterValue)** -- pure: reads the Y the
+//!    Before action stashed in per-player state and appends `Y`d4 to the move's
+//!    dice table (`add_base_count` / `add_base_sides`, same shape as
+//!    [`super::kanon_lost`]'s 「1d20+1d4」). The host folds that into the plan
+//!    before `roll_tables`, so 「为此次投掷结果增加Yd4」 is *part of* the roll
+//!    result (not a post-hoc `set_move_roll` patch).
+//!
+//! Raise order at the main-move site (`play.rs` `main_move`):
+//! `diceRollBefore` → `diceRollPlan` → `roll_tables` → `diceRollValue` →
+//! `diceRollAfter`. The plan is re-seeded from the move *after* Before, so a
+//! `plan::add_base_dice` call inside Before would be wiped; Y is therefore
+//! stashed in state at Before and read by the pure Plan filter.
+//! A silent `diceRollAfter` Action clears the stash so a later roll cannot
+//! inherit it; Before always overwrites (including `Y = 0` on decline).
+//! The Plan filter's *condition* is `actor == owner` (not `slot(…) >= 1`):
+//! a `slot()` condition on FilterValue at DiceRollPlan did not observe a
+//! stash written earlier in the same roll, while `state::get` in the body
+//! does.
+//!
+//! TODO(规则书): 「因任意原因投掷前」 also covers card-driven rolls, but the
+//! card_move site (`play.rs` ~743) never raises `diceRollBefore` (only
+//! `diceRollPlan` / `diceRollValue` / `diceRollAfter` / `diceRollResult`), so
+//! this skill cannot prompt before those dice. `DiceRollPlan` is Filter-only
+//! (no prompts). Fixing that needs a `diceRollBefore` raise on the card_move
+//! path.
 
-use card_sdk::abi::HookKind;
-use ruleset_core::ctx;
+use card_sdk::abi::{FilterValue, HookKind};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
+use skill_groups::fans;
 
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+/// Y chosen at [`HookKind::DiceRollBefore`], consumed by the Plan filter.
+/// One-shot per roll: Before always writes it (0 on decline); a silent
+/// After action clears it.
+const PENDING_Y: &str = "evePendingY";
 
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
-        On::Hook(
-            &[HookKind::RollAfter],
-            "actor == owner && tok('P✽P粉丝(正)') >= 1",
+        // （2） 「投掷前」 -- ask + flips. Action: prompts allowed.
+        On::Action(
+            &[HookKind::DiceRollBefore],
+            "actor == owner && slot('ppFansUp') >= 1",
             Some(roll_ok),
-            on_roll,
+            on_before,
+        ),
+        // （2） 「为此次投掷结果增加Yd4」 -- pure dice-table append.
+        On::FilterValue(
+            &[HookKind::DiceRollPlan],
+            "actor == owner",
+            None,
+            on_plan,
+        ),
+        // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
+        On::Action(
+            &[HookKind::DiceRollAfter],
+            "actor == owner",
+            None,
+            clear_pending,
         ),
     ],
-);
+)
+// 2 (plan shape) and 3 (stash clear) are bookkeeping; 1 is the visible clause.
+.silent(&[2, 3]);
 
 /// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
 /// (derived plan state) stay here (not yet in the condition vocabulary).
-/// `actor == owner && tok('P✽P粉丝(正)') >= 1` is the pre.
+/// `actor == owner && slot('ppFansUp') >= 1` is the pre.
 fn roll_ok(player_id: i32) -> bool {
     if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
@@ -53,7 +102,7 @@ fn roll_ok(player_id: i32) -> bool {
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
     // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
+    let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
@@ -67,10 +116,14 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」. The fixed-face
-/// and has-fans clauses are the residual guard / pre.
-fn on_roll(player_id: i32) -> card_sdk::Asked {
-    let up = ctx::tok(player_id, FANS_UP);
+/// （2） at 「投掷前」: ask Y, flip fans now, stash Y for the Plan filter.
+/// The Yd4 itself is *not* rolled here -- it joins the move's dice table via
+/// [`on_plan`] so the sum is part of the roll result.
+fn on_before(player_id: i32) -> card_sdk::Asked {
+    // Always write the stash (including 0) so a decline cannot inherit a
+    // previous roll's Y.
+    state::set(player_id, PENDING_Y, 0);
+    let up = fans::up(player_id);
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("eve_unify_title")),
@@ -81,26 +134,23 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     if y < 1 {
         return Ok(());
     }
-    let mut y = y;
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
-    // 「为此次投掷结果增加Yd4」
-    let add = ctx::roll(player_id, y, 4);
-    let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
-    ctx::trigger::set_move_roll(before + add);
+    let chosen = y;
+    let mut left = y;
+    let _ = fans::flip_down(player_id, chosen)?;
+    // Stash for [`on_plan`]; the Plan filter is pure and cannot `state::set`.
+    state::set(player_id, PENDING_Y, chosen);
     if ctx::in_group(player_id, "Pastel✽Palettes") {
         for p in 0..ctx::player_count() {
-            if y <= 0 {
+            if left <= 0 {
                 break;
             }
             if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            let down = ctx::tok(p, FANS_DOWN).min(y);
+            let down = fans::down(p).min(left);
             if down > 0 {
-                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
-                y -= down;
+                let _ = fans::flip_up(p, down)?;
+                left -= down;
             }
         }
     } else {
@@ -108,16 +158,39 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             if ctx::player_out(p) || !ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            if ctx::tok(p, FANS_DOWN) > 0 {
-                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
-            }
+            // Always send -- the effect still hits a seat with 0 face-downs, so
+            // band clause （2） may grant an overflow crystal.
+            let _ = fans::flip_up(p, 1)?;
         }
     }
+    // `n` is the chosen Y (the dice count), not the Yd4 sum -- the dice have
+    // not landed yet.
     ctx::log(
         player_id,
-        &Msg::new(key!("eve_unify_done")).i("n", add as i64),
+        &Msg::new(key!("eve_unify_done")).i("n", chosen as i64),
     );
+    Ok(())
+}
+
+/// （2） 「为此次投掷结果增加Yd4」 -- pure FilterValue at [`HookKind::DiceRollPlan`].
+/// Appends `Y`d4 to the move's dice table (`add_base_*`), so `roll_tables`
+/// includes it in the face. Reads the stash [`on_before`] wrote; never writes.
+fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
+    // NOTE: `slot('evePendingY')` as a *condition* on this FilterValue did not
+    // see the stash `on_before` writes earlier in the same roll (the Action
+    // `slot` conditions do). Gate on `actor == owner` and read the stash here
+    // -- `state::get` is legal in filters and does see it.
+    let y = state::get(player_id, PENDING_Y);
+    if y >= 1 {
+        v.add_base_count = y;
+        v.add_base_sides = 4;
+    }
+    v
+}
+
+/// Drop the one-shot Y after the roll (including its `diceRollValue` reshape).
+fn clear_pending(player_id: i32) -> card_sdk::Asked {
+    state::set(player_id, PENDING_Y, 0);
     Ok(())
 }
 
@@ -130,6 +203,18 @@ pub fn at_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_roll_kani(player_id: i32) -> card_sdk::Asked {
-    on_roll(player_id)
+pub fn on_before_kani(player_id: i32) -> card_sdk::Asked {
+    on_before(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn clear_pending_kani(player_id: i32) -> card_sdk::Asked {
+    clear_pending(player_id)
 }

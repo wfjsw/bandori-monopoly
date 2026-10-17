@@ -15,7 +15,7 @@
 //!
 //! （2）'s follow-up -- the 1d20, the [停留] on 6 or less, and 「支付价格变为
 //! 原本的一半」 -- rides on the forced landing. The half-price is a pay bend on
-//! that settle, which is what `PayMul` is.
+//! that settle, which is what `PaySplitMul` is.
 
 use card_sdk::abi::{state_key, AbKind, HookKind};
 use ruleset_core::ctx::{self, state, trigger};
@@ -27,19 +27,19 @@ const DUE: &str = "skill.tomoriPoem.due";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_DEED, None, on_pass),
         // （2）/（3） applicability: someone else's landing within five tiles of
         // this player. The pot-cost split and the fire balance stay residual
         // (dynamic). `dist` / `pos` are CEL natives (docs/GUARDS.md §4.2).
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBefore],
             "tile.id >= 0 && actor != owner",
             Some(before_settle_applies),
             before_settle,
         ),
-        On::Hook(&[HookKind::PayMul], "", Some(half), on_pay),
-        On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
+        On::Filter(&[HookKind::PaySplitMul], "", Some(half), on_pay),
+        On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
 )
     .silent(&[0]);
@@ -146,13 +146,11 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「在此技能影响下的支付价格变为原本的一半」.
-fn on_pay(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
+fn on_pay(_player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
-    trigger::set_pay_amount((amount + 1) / 2);
-    Ok(())
+    (value + 1) / 2
 }
 
 /// 「并在自己的下回合结束时[触发结算]」 -- the owed settle.
@@ -181,8 +179,8 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_pay_kani(player_id: i32) -> card_sdk::Asked {
-    on_pay(player_id)
+pub fn on_pay_kani(player_id: i32, value: i32) -> i32 {
+    on_pay(player_id, value)
 }
 
 #[cfg(kani)]

@@ -1716,8 +1716,8 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | 6 | 经营/出牌阶段后 | **miss** | none |
 | 7 | 主要移动阶段前 (停留 skips; one move) | **diff** | `skip_move` + `main_moved`, both checked early (no trigger) |
 | 8 | 掷骰前 | **ok** | `roll` (`value = -1`) |
-| 9 | 掷骰时 | **diff** | `rollPlan` + an un-raised table roll |
-| 10 | 掷骰后 | **ok** | `rollAfter` + `moveRoll` |
+| 9 | 掷骰时 | **diff** | `diceRollPlan` + an un-raised table roll |
+| 10 | 掷骰后 | **ok** | `diceRollAfter` + `diceRollResult` |
 | 11 | 移动前 | **miss** | none |
 | 12 | 移动时/[经过] | **ok** | `passBefore`/`passTile`/`pass` per step; a teleport fires at the end **including onto its own tile** (`B41`; `rulebook::t06b`). TODO(规则书): whether a 0-step move also fires [经过] -- `E14` names only [重叠] there (`t06c`) |
 | 13 | 移动后/[重叠] | **ok** | `passPlayer` at the end of a walk (`E13`, `t06`), on a teleport's target (`B41`, `t06b`) and on a 0-step move (`E14`, `t06c`) |
@@ -1733,10 +1733,10 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | # | window | status | engine kind |
 |---|---|---|---|
 | 1 | 支付计算前 | **diff** | folded into `effect`, which also carries window 5's cancel/retarget power |
-| 2 | 支付计算时 (flat add/sub) | **ok** | `payAdd` |
-| 3 | 支付计算后 | **miss** | none between `payAdd` and `payMul` |
-| 4 | 支付前 (halve/double) | **ok** | `payMul` + `scale_settle_payment` |
-| 5 | 支付时 (pay / 无需失去 / 取消 / 更改目标) | **diff** | split across `effect` + `payChoose`/`payAt` (unnamed) + `pay` |
+| 2 | 支付计算时 (flat add/sub) | **ok** | `paySplitAdd` |
+| 3 | 支付计算后 | **miss** | none between `paySplitAdd` and `paySplitMul` |
+| 4 | 支付前 (halve/double) | **ok** | `paySplitMul` + `scale_settle_payment` |
+| 5 | 支付时 (pay / 无需失去 / 取消 / 更改目标) | **diff** | split across `effect` + `paySplitChoose`/`paySplitAt` (unnamed) + `pay` |
 | 6 | 支付后 | **ok** | `payAfter` |
 | 7 | 资金变动 | **diff** | `paid`, payer-loss only; a distinct kind from `payAfter` despite the doc's 「合并到[支付后]?」 |
 

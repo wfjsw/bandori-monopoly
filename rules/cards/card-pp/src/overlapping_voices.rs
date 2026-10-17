@@ -16,12 +16,14 @@
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
+use skill_groups::fans;
 
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
         On::Play("", Some(cant_play), overlapping_voices),
-        On::AtEnd("", None, at_end),
+        On::Action(&[HookKind::AtEnd], "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"重叠的声音"#)
@@ -75,7 +77,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]3: 「获得1层[停留]」
     rules_status::stay::add(player_id, 1);
     // 规则书[手]3: 「和1个正面的[P✽P粉丝]」 -- C# `H.GainFans(i, 1, up: true)`.
-    ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
+    let _ = fans::grant(player_id, 1, 0)?;
     // 规则书[手]3: 「将1张“明天见”加入手卡」
     ctx::add_to_hand(player_id, "PP:[衍生]明天见");
     ctx::log(

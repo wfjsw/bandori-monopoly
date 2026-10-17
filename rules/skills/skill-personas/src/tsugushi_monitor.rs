@@ -36,9 +36,12 @@ pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     "skill:二叶筑紫:交给班长吧",
     &[
         On::Play("", Some(can_cash), cash),
-        On::Hook(&[HookKind::TurnStartBefore], "", None, declare),
-        On::Hook(&[HookKind::PayChoose], "", Some(mine), on_gain),
-        On::Hook(&[HookKind::PayChoose], "", Some(other), on_theirs),
+        On::Action(&[HookKind::TurnStartBefore], "", None, declare),
+        // （1）/（2） interactive redirects. Rides `PaySplitChooseBefore` (v78),
+        // restoring the rulebook PaySplitChoose position: the offers sit immediately
+        // before the pure `PaySplitChoose` filter stage (per leg on a split).
+        On::Action(&[HookKind::PaySplitChooseBefore], "", Some(mine), on_gain),
+        On::Action(&[HookKind::PaySplitChooseBefore], "", Some(other), on_theirs),
     ],
 ).silent(&[1]);
 
@@ -82,6 +85,8 @@ fn declare(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，
 /// 发送给对方一个X（占位）标记并记录…数量」.
+/// Rides `PaySplitChooseBefore` (v78): the prompts and the `set_pay_amount(0)` redirect
+/// sit at the rulebook PaySplitChoose position.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
@@ -132,6 +137,8 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作」.
+/// Rides `PaySplitChooseBefore` (v78): the prompt and the `set_pay_amount(0)` + split
+/// gains sit at the rulebook PaySplitChoose position.
 fn on_theirs(player_id: i32) -> card_sdk::Asked {
     // 「当有角色获得金钱」 -- the gainer is the payee (`target`), not `player_id`
     // (which is the payer, -1 on a print). Applicability is `other`.

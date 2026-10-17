@@ -34,7 +34,7 @@ rows when those arrive.
 |---|---|---|---|---|---|---|
 | G-SETTLE-02 (edogawa) | 「江户川乐器店的[结算]是：抽取一张手卡。」 | **PROVEN** | `edogawa_settle_draw_one_iff`, `edogawa_settle_mutant_two_cards`, `edogawa_settle_mutant_wrong_player` | see run table | — | — |
 | G-SETTLE-02 (circle settle) | 「CiRCLE…[结算]是：抽取一张手卡。」 | **PROVEN** | `circle_settle_draw_one_iff`, `circle_settle_mutant_two_cards`, `circle_settle_mutant_wrong_player` | see run table | — | — |
-| G-SETTLE-02 / 151 [CiRCLE奖励] | 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]。」 「[获得]2000资金或抽1张卡。」 | **BLOCKED-HOST** | (specs: `circle_pass_pays`, `circle_reward_money_ok`, `circle_reward_card_ok`) | not run | needs `trig_move_from`, `trig_move_resolve`, `trig_move_remaining` (all unmodeled `Op`) before `tile:circle`'s `On::Hook(PassTile)` can even run | — |
+| G-SETTLE-02 / 151 [CiRCLE奖励] | 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]。」 「[获得]2000资金或抽1张卡。」 | **BLOCKED-HOST** | (specs: `circle_pass_pays`, `circle_reward_money_ok`, `circle_reward_card_ok`) | not run | needs `trig_move_from`, `trig_move_resolve`, `trig_move_remaining` (all unmodeled `Op`) before `tile:circle`'s `On::Action(PassTile)` can even run | — |
 | G-SETTLE-03 | 「抽取一张手卡，然后抽取一个事件卡。」 | **PROVEN** (observable half) + **PROTOCOL-LEVEL** (event half) | `event_settle_draw_one_iff`, `event_settle_mutant_two_cards`, `event_settle_mutant_wrong_player` | see run table | event draw is `ctx::draw_event` = protocol stub (no effect); G-SETTLE-04/05 ride on it | OPEN-结算定义 |
 | G-SETTLE-04 | 「抽取的事件卡不进入手卡…效果立刻生效。」 | **PROTOCOL-LEVEL** | — | — | engine `H.DrawEvent` / event pipeline (KANI.md §6) | — |
 | G-SETTLE-05 | 「如果没有事件可抽取则将事件弃卡区洗切…」 | **PROTOCOL-LEVEL** | — | — | same; reshuffle is engine scheduling | — |

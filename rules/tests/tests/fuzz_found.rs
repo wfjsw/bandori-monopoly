@@ -20,7 +20,7 @@ use common::*;
 
 /// The money ledger closes over every window. `迷茫之蝶们的三全音`'s
 /// 「立刻获得此次失去的资金金额」 now logs a `gain` bank leg (via `gain_fixed`),
-/// and FEVER!'s pay hook goes through the money pipeline's `payAdd` stage.
+/// and FEVER!'s pay hook goes through the money pipeline's `paySplitAdd` stage.
 #[test]
 fn money_ledger_gap() {
     let seed = 0xF022_F022_F022_F022u64.wrapping_mul(0x9E37_79B9_7F4A_7C15);

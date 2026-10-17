@@ -30,14 +30,14 @@ fn used_key(src: i32) -> alloc::string::String {
 pub const MOCA_SELF: CardDef = CardDef::new(
     "skill:青叶摩卡:我行我素",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),
         // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…该效果对
         // 每个玩家的被动技能和卡存在2次使用cd」 -- the offer exists only for
         // another seat, under the per-source CD, with a pot to spend. Fire is
         // CEL; the dynamic CD key is residual.
-        On::Hook(&[HookKind::CardPlayed], "charge(owner) >= 1", Some(other_and_cooled), on_card),
-        On::Hook(&[ruleset_core::kind::SkillUsed], "charge(owner) >= 1", Some(other_and_cooled), on_skill),
+        On::Action(&[HookKind::CardPlayed], "charge(owner) >= 1", Some(other_and_cooled), on_card),
+        On::Action(&[ruleset_core::kind::SkillUsed], "charge(owner) >= 1", Some(other_and_cooled), on_skill),
     ],
 ).silent(&[0]);
 

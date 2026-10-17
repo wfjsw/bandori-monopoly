@@ -258,7 +258,7 @@ in behaviour). All changes are `cfg(kani)`-gated or live in `rules-kani`.
 | `card-sdk/src/native.rs` `read` | tagged handles resolve from the intern table (static bytes). Untagged handles stay arena out-buffers. |
 | `rules/kani/src/host.rs` | `name_id` decodes the tag (O(1)). `Known` pre-interns pilot names at `install()`; `key == intern::intern(TOK_PP_POS)` becomes `key == known().tok_pp_pos` (`u16` compare). `card_slot` / `card_u16` / `card_slot_of_id` are NameId compares. |
 | `rules/kani/src/world.rs` | `sync_views` / `rent_houses` cache `NameId`s once per proof. `card_slot_of_bytes` zero-loop. |
-| `rules/kani/src/invoke.rs` | `hook_idx` / `hook_kind_matches` parse `"PayAdd"` / `"Hook"` to `HookKind` / `KindTag` and compare integers — kills the 14 `memcmp`s of short ASCII tags. |
+| `rules/kani/src/invoke.rs` | `hook_idx` / `hook_kind_matches` parse `"PaySplitAdd"` / `"Hook"` to `HookKind` / `KindTag` and compare integers — kills the 14 `memcmp`s of short ASCII tags. |
 | `rules/kani/src/board.rs` | `bytes_eq` zero-loop (same bits as the old 8×8 walk). |
 
 Card bodies still see `Vec<String>` / `String`. `ctx::cards_in` already
@@ -272,7 +272,7 @@ with the NameId ABI, `ids.contains(&c)` and `take_card(..., &id)` are
 |---|---|
 | `fnv1a` 144 unrolls, `bytes_eq` 127, `intern_bytes` 15 (900 s profile of `aya_haruka_02_shave_iff`) | **0** unwind (zero-loop); hash of a literal constant-folds through `inline(always)` |
 | `intern::intern(CONST)` on every `count_held` / `set_held` / `crystals` check | pre-interned `Known` ids — `u16` compare |
-| 14 `memcmp`s of `"PayAdd"` etc. in `invoke::hook_idx` | integer `KindTag` / `HookKind` match |
+| 14 `memcmp`s of `"PaySplitAdd"` etc. in `invoke::hook_idx` | integer `KindTag` / `HookKind` match |
 | `copy_from_slice` `len_mismatch_fail` panic paths in intern insert | zero-loop `.get` byte copy |
 | host `name_eq` 8×8 byte walk over CJK | `NameId` compare for the four pilots; `.get` walk otherwise |
 
