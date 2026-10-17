@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { useLatestRef } from "./latest.ts";
 import { useAnimationFrame, useTimeout } from "./timers.ts";
+import { whenTransitionIdle } from "./scene.ts";
 import { useResizeObserver } from "./measure.ts";
 import { canvasBox, sameParams, type Framing, type StandBox } from "./pure.ts";
 import { eyeLine, evalPose, figureTop, type ModelPose } from "../live2d/deform.ts";
@@ -21,6 +22,20 @@ import { loadLive2D, loadLive2DAnim, type LoadedLive2D } from "../live2d/load.ts
 export { canvasBox, type Framing, type StandBox };
 
 export type Live2DModelState = "loading" | "ready" | "load-error" | "gl-error";
+
+/** Is any part of `el` inside the viewport? (The stand is clipped by the stage.) */
+function intersectsViewport(el: Element): boolean {
+  const r = el.getBoundingClientRect();
+  return r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
+}
+
+/** A frame gap beyond this budget drops the next Live2D draw. */
+const FRAME_BUDGET_MS = 16;
+
+/** How long the static stand art holds before the model takes over. */
+const STAND_SETTLE_MS = 250;
+
+const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
 
 export interface Live2DModelApi {
   /** Put these on the wrapping box and the canvas. */
@@ -61,6 +76,27 @@ export function useLive2DModel(opts: {
   const poseRef = useRef<ModelPose | null>(null);
   const evaluatedRef = useRef<Record<string, number> | undefined>(undefined);
   const dirtyRef = useRef(true);
+  // Draw only while the stand is on screen and the tab is visible.
+  const visibleRef = useRef(true);
+  // Frames to drop after an overrun draw.
+  const skipRef = useRef(0);
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const update = () => {
+      visibleRef.current = !document.hidden && !!wrap && intersectsViewport(wrap);
+    };
+    update();
+    const io = typeof IntersectionObserver === "function" && wrap ? new IntersectionObserver(update) : null;
+    if (io && wrap) io.observe(wrap);
+    window.addEventListener("resize", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      io?.disconnect();
+      window.removeEventListener("resize", update);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, []);
   const paramsRef = useLatestRef(params);
   const [status, setStatus] = useState<Live2DModelState>("loading");
 
@@ -85,6 +121,15 @@ export function useLive2DModel(opts: {
     animRef.current = null;
     Promise.all([loadLive2D(id), animate ? loadLive2DAnim(id) : Promise.resolve(null)])
       .then(async ([data, bundle]) => {
+        if (cancelled) return;
+        // The fetch rides along with the scene fade; the GL side does not.
+        // Context creation, shader compile and texture upload are main-thread
+        // work that janks the fade, so they wait for it to settle -- and for
+        // the static stand art to get a beat on screen before the model
+        // replaces it. The art is the designed fallback, so this reads as the
+        // character stepping in rather than as a stutter.
+        await whenTransitionIdle();
+        await sleep(STAND_SETTLE_MS);
         if (cancelled) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -142,13 +187,29 @@ export function useLive2DModel(opts: {
     const model = modelRef.current;
     if (!renderer || !model) return;
     const anim = animRef.current;
+    // The clock keeps running while the stand is off-screen or the tab is
+    // hidden, but the draw is skipped: a Live2D canvas is a whole stage of
+    // raster work per frame and nobody is looking at it.
+    const draw = visibleRef.current && !document.hidden;
+    // A frame that came in late (the raster is async, so the real cost shows
+    // up as the gap to the next RAF, not around the `render()` call) drops the
+    // next draw. A slow device then animates at half rate instead of making
+    // every UI frame late; the motion still ticks, so the pose stays correct.
+    if (skipRef.current > 0) {
+      skipRef.current -= 1;
+      if (anim) tickAnim(anim, dt);
+      return;
+    }
+    if (dt > FRAME_BUDGET_MS * 1.5) skipRef.current = 1;
     if (anim) {
       tickAnim(anim, dt);
+      if (!draw) return;
       poseRef.current = evalPose(model.model, animValues(anim));
       renderer.render(poseRef.current.meshes);
       return;
     }
     if (!dirtyRef.current) return;
+    if (!draw) return;
     dirtyRef.current = false;
     const pose = poseRef.current;
     if (pose) renderer.render(pose.meshes);

@@ -647,7 +647,16 @@ export interface ModelPose {
  *
  * Returns deformer index -> the toggle param indices gating it.
  */
+const poseGates = new WeakMap<ModelJson, Map<number, number[]>>();
+
+/**
+ * Pose gates depend only on the model's static structure (never on `values`),
+ * so computing them inside `evalPose` would rebuild every name family and map
+ * on each frame. Cached per model; the map must not be mutated by callers.
+ */
 export function detectPoseGates(model: ModelJson): Map<number, number[]> {
+  const cached = poseGates.get(model);
+  if (cached) return cached;
   const family = (id: string) => id.replace(/\d+/g, "#");
   const isToggle = (param: number, keys: number[]) =>
     keys.length > 0
@@ -675,6 +684,7 @@ export function detectPoseGates(model: ModelJson): Map<number, number[]> {
     if (g) g.push(b.param);
     else gates.set(i, [b.param]);
   }
+  poseGates.set(model, gates);
   return gates;
 }
 

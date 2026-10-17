@@ -1009,7 +1009,6 @@ fn chuchu_buy_pays_user_and_passes_the_card_on() {
     t.set_money(1, 20_000);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    drain(&mut t);
     let before = t.money(0);
     t.buy(1).unwrap();
     drain(&mut t);
@@ -1226,7 +1225,6 @@ fn chuchu_skill_builds_at_half_price() {
     t.set_pos(0, ASTRONOMY - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    drain(&mut t);
     t.build(0).unwrap();
     // 天文馆 house cost 1500 -> half is 750.
     assert_eq!(t.houses(ASTRONOMY), 1);
@@ -1243,9 +1241,16 @@ fn lock_skill_colors_the_first_deed_like_a_live_house() {
     drain(&mut t);
     t.set_pos(0, 59);
     t.set_money(0, 20_000);
-    t.dice(&[2]); // land on 购物中心 (1)
+    t.dice(&[2]); // land on 购物中心 (1); path passes corner #1
     t.roll(0).unwrap();
-    drain(&mut t);
+    // Corner pass-reward (if any) is not the buy -- answer it first.
+    while let Some(p) = t.prompt() {
+        if format!("{:?}", p.title).contains("buy") {
+            break;
+        }
+        let _ = p;
+        t.decline();
+    }
     t.buy(0).unwrap();
     drain(&mut t);
     assert_eq!(t.owner(SHOPPING), Some(0));

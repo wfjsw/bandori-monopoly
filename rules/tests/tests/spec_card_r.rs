@@ -43,12 +43,12 @@ fn vanilla2() -> Table {
     t
 }
 
-/// Land `who` on `tile` and buy it (an action, not a prompt).
+/// Land `who` on `tile` and buy it via the settle prompt.
 fn land_and_buy(t: &mut Table, who: usize, tile: usize) {
     t.set_pos(who, (tile + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(who).unwrap();
-    drain(t);
+    // G-SETTLE-06/07: the settle of an unowned buyable IS the optional buy.
     t.buy(who).unwrap();
     drain(t);
 }

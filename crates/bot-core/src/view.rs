@@ -221,8 +221,8 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
     if st.prompt.id > 0 {
         return None;
     }
-    // Mid-move: the 结束 surface's `landed` (and therefore the buy / build
-    // menu) depends on the dice -- do not guess it.
+    // Mid-move: the 结束 surface's `landed` (and therefore any settle offer)
+    // depends on the dice -- do not guess it.
     if st.turn == me && st.step == stage::MOVE {
         return None;
     }
@@ -251,18 +251,13 @@ pub fn predict_upcoming_view(view: &SeatView) -> Option<SeatView> {
         s.roller = me;
         s.busy = false;
         s.landed = -1;
-        s.land_acted = false;
         s.skip_move = false;
         s.prompt = MatchPrompt::default();
         s.plan = MovePlan::default();
-        // Nothing is buyable / buildable at a position that has not been
-        // reached; roll is owed, so `end` is gated off (`why_not_act`).
-        s.can_buy_here = false;
-        s.can_build_here = false;
+        // Roll is owed, so `end` is gated off (`why_not_act`). No settle
+        // offer exists at a position that has not been reached.
         s.can_roll_here = true;
         s.can_end_here = false;
-        s.buy_price = -1;
-        s.build_cost = -1;
         if wrap {
             s.round += 1;
         }

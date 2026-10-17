@@ -1055,13 +1055,11 @@ fn ci_bounds(e: &Edge) -> Option<(f64, f64)> {
 fn ordered(a: &Action) -> u8 {
     match a {
         Action::Play { .. } => 0,
-        Action::Buy { .. } => 1,
-        Action::Build { .. } => 2,
-        Action::Decline => 3,
-        Action::Offer { .. } => 4,
-        Action::Bid { .. } => 5,
-        Action::Counteract { .. } => 6,
-        Action::Pick { .. } => 7,
-        Action::Mortgage { .. } => 8,
+        Action::Decline => 1,
+        Action::Offer { .. } => 2,
+        Action::Bid { .. } => 3,
+        Action::Counteract { .. } => 4,
+        Action::Pick { .. } => 5,
+        Action::Mortgage { .. } => 6,
     }
 }

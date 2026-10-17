@@ -87,6 +87,12 @@ fn drain(t: &mut Table) {
     fix_step(t);
 }
 
+/// Accept the settle's optional buy (the only buy path), then drain anything else.
+fn accept_buy(t: &mut Table) {
+    t.buy(0).unwrap();
+    drain(t);
+}
+
 /// Answer the first option matching `needle`, or panic with the dump.
 fn answer_opt(t: &mut Table, who: usize, needle: &str) {
     let k = t
@@ -508,9 +514,7 @@ fn umiri_take_gives_the_user_a_working_band_skill_copy() {
     t.set_pos(0, cheap - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    drain(&mut t);
-    t.buy(0).unwrap();
-    drain(&mut t);
+    accept_buy(&mut t);
     assert_eq!(t.owner(cheap), Some(0), "events {:?}", t.recent_keys(10));
     assert_eq!(
         t.houses(cheap),
@@ -554,9 +558,7 @@ fn umiri_take_does_not_stack_the_same_band_skill() {
     t.set_pos(0, cheap - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    drain(&mut t);
-    t.buy(0).unwrap();
-    drain(&mut t);
+    accept_buy(&mut t);
     assert_eq!(t.houses(cheap), 1, "one free house, not two: {:?}", t.recent_keys(10));
 }
 

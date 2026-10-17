@@ -43,6 +43,12 @@ impl Match {
                         .state
                         .contains_key(&m.persona)
             }
+            // Deed cheats: same tile-rule primitives as the settle / net
+            // commands (`ctx::buy` / `card_build` / `mortgage` / `redeem`),
+            // bypassing only the prompt and the phase/turn gates.
+            "buy" | "build" | "mortgage" | "redeem" => {
+                (0..self.data.tiles.len() as i32).contains(&m.value)
+            }
             _ => false,
         };
         if !valid {
@@ -67,6 +73,26 @@ impl Match {
                 }
                 "state" => {
                     cx.w.st.players[target].state_set(&m.persona, m.value);
+                }
+                // The same mechanism primitives the tile rule's
+                // `On::Mortgage` / `On::Redeem` bodies call -- eligibility and
+                // amounts live in `rules/tiles`; these bypass only the prompt
+                // and the phase/turn gate (cheats already do).
+                "buy" => {
+                    let _ = cx.buy(target, m.value as usize, super::purchase::BuyKind::Land);
+                }
+                "build" => {
+                    let _ = cx.build(target, m.value as usize);
+                }
+                "mortgage" => {
+                    let t = m.value as usize;
+                    let v = cx.mortgage_value(t);
+                    let _ = cx.apply_mortgage(target, t, v);
+                }
+                "redeem" => {
+                    let t = m.value as usize;
+                    let v = cx.redeem_cost(t);
+                    let _ = cx.apply_redeem(target, t, v);
                 }
                 _ => unreachable!(),
             }

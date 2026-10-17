@@ -520,12 +520,19 @@ use alloc::{string::String, vec::Vec};
 ///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
 ///      No new import; host semantics of `set_pay_amount` composition change.
 ///      SAVE_VERSION unchanged (no save field).
+/// v73: **deed bodies** -- `OnKind::Mortgage` (9) / `OnKind::Redeem` (10)
+///      (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
+///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
+///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
+///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
+///      direct money move (hooks + logging stay in that mechanism).
+///
 /// v72: **persona write** -- new host import `set_persona(player_id, name)`
 ///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
 ///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
 ///      exclusive gate and `persona_is` see the new identity; skills are
 ///      swapped separately. SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 72;
+pub const ABI_VERSION: i32 = 73;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -2179,6 +2186,14 @@ pub enum OnKind {
     /// `ctx::message` and returns a reply value. Does **not** flash the card
     /// (internal plumbing); the handler may log.
     Message = 8,
+    /// v73: a rule's **mortgage body** (`On::Mortgage(pre, guard, body)`) --
+    /// what runs when the deed this rule instance governs is [抵押]d. The body
+    /// owns eligibility (规则书 基础规则 5) and the payout; the engine keeps the
+    /// flag write + direct money move (`ctx::apply_mortgage`).
+    Mortgage = 9,
+    /// v73: a rule's **redeem body** (`On::Redeem(pre, guard, body)`) --
+    /// 规则书 基础规则 6. Same split as [`Self::Mortgage`].
+    Redeem = 10,
 }
 
 impl OnKind {
@@ -2192,6 +2207,8 @@ impl OnKind {
             6 => Self::Gate,
             7 => Self::Settle,
             8 => Self::Message,
+            9 => Self::Mortgage,
+            10 => Self::Redeem,
             _ => return None,
         })
     }

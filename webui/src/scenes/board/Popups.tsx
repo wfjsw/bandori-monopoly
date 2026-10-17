@@ -16,7 +16,7 @@ import { InspectCard } from "../../ui/Card";
 import { Avatar } from "../../ui/Character";
 import { openModal } from "../../ui/Modal";
 import { SkillBody } from "../../ui/SkillBody";
-import { act, buyable, canBuildOn, type Model, model, mortgageValue, RING_MULTIPLIER, redeemCost } from "./model";
+import { act, type Model, model, mortgageValue, RING_MULTIPLIER, redeemCost } from "./model";
 import { winningTileText } from "./tileText";
 import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
@@ -34,13 +34,9 @@ function deedAction(m: Model, i: number): { label: string; cmd: { act: string; v
   const S = m.S;
   if (S.phase !== "play") return null;
   const t = D.tiles[i];
-  if (buyable(m, i)) {
-    const price = S.buyPrice >= 0 ? S.buyPrice : t.price + (S.houses[i] ?? 0) * t.house;
-    const poor = m.me.money < price ? tr(S.canBuyHere ? "deed.fundByMortgage" : "deed.poor") : "";
-    return { label: tr("deed.buy", { n: n0(price), poor }), cmd: { act: "buy", value: i }, enabled: S.canBuyHere };
-  }
+  // Buy / build happen only at the settle Prompt (`ask.buy` / `ask.build`).
+  // The deed popup is inspection + mortgage / redeem.
   if (S.owners[i] !== m.playerId) return null;
-  if (canBuildOn(m, i)) return { label: tr("deed.buildN", { n: (S.houses[i] ?? 0) + 1, cost: n0(t.house) }), cmd: { act: "build", value: i }, enabled: S.canBuildHere };
   if (!S.mortgaged[i] && t.kind !== "ring" && m.myTurn) return { label: tr("deed.mortgage", { n: n0(mortgageValue(i)) }), cmd: { act: "mortgage", value: i }, enabled: true };
   if (S.mortgaged[i] && m.myTurn) return { label: tr("deed.redeem", { n: n0(redeemCost(i)) }), cmd: { act: "redeem", value: i }, enabled: true };
   return null;
@@ -48,7 +44,7 @@ function deedAction(m: Model, i: number): { label: string; cmd: { act: string; v
 
 function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => void }) {
   const m = useModel(sess);
-  const auto = useAutoplay(sess); // 托管: the buy/build/mortgage/redeem button is locked
+  const auto = useAutoplay(sess); // 托管: the mortgage/redeem button is locked
   // A new turn (or the end of the match) closes the deed card.
   const turnKey = m ? `${m.S.phase}:${m.S.round}:${m.S.turn}` : "";
   const [openedAt] = useState(turnKey);

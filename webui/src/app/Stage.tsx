@@ -5,7 +5,7 @@
 // slide out to the sides instead of leaving a letterbox.
 
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { sceneImg } from "../core/assets";
+import { backdropUrl } from "./backdrops";
 import { useEventListener } from "../hooks/dom";
 import { clearForced, isForced, setStageRotated, subscribeForced, usePortraitPhone } from "./rotation";
 import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
@@ -169,6 +169,26 @@ export function useCompactValue(): boolean {
   );
 }
 
+/**
+ * Two stacked backdrop plates that swap by `opacity`. The images arrive
+ * pre-blurred (see `backdrops.ts`), so the cross-fade is a pure compositor
+ * effect with no filter to re-rasterise.
+ */
+function Backdrop({ src }: { src: string }) {
+  const [plates, setPlates] = useState<{ a: string; b: string; front: "a" | "b" }>({ a: src, b: "", front: "a" });
+  useEffect(() => {
+    setPlates((p) => {
+      if (p[p.front] === src) return p;
+      const back = p.front === "a" ? "b" : "a";
+      return { ...p, [back]: src, front: back };
+    });
+  }, [src]);
+  const plate = (k: "a" | "b") => (
+    <div className={plates.front === k ? `${s.backdrop} ${s.front}` : s.backdrop} style={{ backgroundImage: plates[k] ? `url("${plates[k]}")` : undefined }} />
+  );
+  return <>{plate("a")}{plate("b")}</>;
+}
+
 export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
   const tall = useStageFillValue();
   const { scale, w, h, compact, shift, rotated } = useStage(tall);
@@ -180,10 +200,10 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
     compactListeners.forEach((cb) => cb());
   }, [compact]);
   const bg = useBackdropValue();
-  const src = bg ? sceneImg(bg) : "";
+  const src = bg ? backdropUrl(bg) : "";
   return (
     <>
-      <div className={s.backdrop} style={{ backgroundImage: src ? `url("${src}")` : undefined }} />
+      <Backdrop src={src} />
       <div
         className={s.stage}
         data-stage

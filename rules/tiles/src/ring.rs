@@ -26,12 +26,19 @@ use card_sdk::{CardDef, On};
 /// The engine charges `count_owned_kind(owner, kind) × rentDiceMult × 1d20`.
 pub const RENT_DICE_MULT: i32 = 10;
 
-pub const RING: CardDef = CardDef::new("tile:ring", &[On::Settle("", None, settle)])
-    .board_role("tile")
-    .props(&[
-        (prop::NO_MORTGAGE, 1),
-        (prop::RENT_DICE_MULT, RENT_DICE_MULT),
-    ]);
+pub const RING: CardDef = CardDef::new(
+    "tile:ring",
+    &[
+        On::Settle("", None, settle),
+        On::Mortgage("", None, mortgage),
+        On::Redeem("", None, redeem),
+    ],
+)
+.board_role("tile")
+.props(&[
+    (prop::NO_MORTGAGE, 1),
+    (prop::RENT_DICE_MULT, RENT_DICE_MULT),
+]);
 
 /// 规则书: the [可购买格子] branch (lines 100–106) with 「所有RiNG不可升级」
 /// folded in as `buildMax = 0`. Dice rent is `prop::RENT_DICE_MULT` (see above).
@@ -39,9 +46,31 @@ fn settle(player_id: i32) -> card_sdk::Asked {
     super::property::settle(player_id)
 }
 
+/// Same mortgage body as `tile:property`. RiNG carries `NO_MORTGAGE`, so the
+/// body's prop check refuses it (「非自动化环境中可将地契翻面」 is cosmetic).
+fn mortgage(player_id: i32) -> card_sdk::Asked {
+    super::property::mortgage(player_id)
+}
+
+fn redeem(player_id: i32) -> card_sdk::Asked {
+    super::property::redeem(player_id)
+}
+
 // Kani-only direct-call exports (ppcost). Production builds omit these.
 #[cfg(kani)]
 #[inline(always)]
 pub fn settle_kani(player_id: i32) -> card_sdk::Asked {
     settle(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn mortgage_kani(player_id: i32) -> card_sdk::Asked {
+    mortgage(player_id)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn redeem_kani(player_id: i32) -> card_sdk::Asked {
+    redeem(player_id)
 }

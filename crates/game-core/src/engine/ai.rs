@@ -455,14 +455,14 @@ impl Cx<'_> {
                         return Ok(());
                     }
                     if let Some(t) = self.ai_redeem_choice(i) {
-                        self.redeem(i, t);
+                        let _ = self.deed_redeem(i, t);
                         self.wait(1.2);
                         return Ok(());
                     }
                 } else {
                     let p = self.strategy_of(i);
                     if let Some(t) = self.ai_redeem_choice(i) {
-                        self.redeem(i, t);
+                        let _ = self.deed_redeem(i, t);
                         self.wait(1.2);
                         return Ok(());
                     }
@@ -496,23 +496,10 @@ impl Cx<'_> {
             };
             return self.main_move(i, roller);
         }
-        let pos = self.w.st.players[i].pos as usize;
-        // Bots do not mortgage to buy land (user ruling 2026-10-08): require
-        // **cash alone** to cover the quoted price. `can_buy_here` is funded
-        // by `purchase_funds` (cash + mortgageable deeds) -- legality for
-        // humans is unchanged; the bot just declines (end-turn) instead of
-        // auto-mortgaging. `ai_wants_buy` already reads cash, but the gate is
-        // explicit here so a policy whose reserve is 0 cannot slip past it.
-        let cash = self.w.st.players[i].money;
-        let quote = self.buy_quote_for(i, pos, super::purchase::BuyKind::Land);
-        let cash_covers_buy = quote.eligible && cash >= quote.price.max(0);
-        if bot && self.can_buy_here(i) && cash_covers_buy && self.ai_wants_buy(i, pos) {
-            self.buy(i, pos, super::purchase::BuyKind::Land)?;
-            self.wait(1.2);
-        } else if bot && self.can_build_here(i) && self.ai_wants_build(i, pos) {
-            self.build_landed(i, pos)?;
-            self.wait(1.2);
-        } else if self.over_hand(i) {
+        // Buy / build are settle-time offers only: the tile rule's
+        // `ctx::offer_buy` / `ctx::offer_build` prompt already carried the
+        // bot's `ai_wants_*` answer. END is discard / end-turn.
+        if self.over_hand(i) {
             let hand_len = self.w.hidden[i].hand.len();
             let k = self.w.rng.below(hand_len);
             let card = self.w.hidden[i].hand[k].clone();

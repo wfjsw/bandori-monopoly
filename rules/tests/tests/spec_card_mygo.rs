@@ -995,13 +995,13 @@ fn miracle_build_spends_one_crystal_not_money() {
         t.set_pos(0, 0);
         t.dice(&[1]);
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
-        rest(&mut t);
-        drain(&mut t);
+        t.settle();
         if t.pos(0) != 1 {
             return Err(format!("setup: landed on {}", t.pos(0)));
         }
         let money = t.money(0);
         let crystals = t.crystals(0, MIRACLE).unwrap_or(-1);
+        // G-SETTLE-06/07: the settle of an own un-mortgaged buyable IS the optional build.
         let r = t.build(0);
         if r.is_err() {
             return Err(format!(

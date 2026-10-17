@@ -321,19 +321,13 @@ fn a_human_plays_a_turn_with_commands() {
         .iter()
         .any(|e| e.r#type == "roll" && e.player_id == me));
 
-    // Buy if we landed on unowned land and can afford it.
+    // Buy/build are settle-time offers only -- a net `act buy` is rejected.
     let pos = st.players[me as usize].pos as usize;
     let d = data();
     if d.tiles[pos].is_buyable() && st.owners[pos] < 0 && st.landed == pos as i32 {
-        let price = d.tiles[pos].price + st.houses[pos] * d.tiles[pos].house;
-        let money = st.players[me as usize].money;
-        m.act(1, &NetMessage::act("buy")).unwrap();
-        let st = m.state();
-        assert_eq!(st.owners[pos], me);
-        assert_eq!(st.players[me as usize].money, money - price);
         assert_eq!(
             m.act(1, &NetMessage::act("buy")).unwrap_err().key(),
-            "err.cannot_buy"
+            "err.buy_build_at_settle"
         );
     }
     if m.state().players[me as usize].hand as usize <= 5 {

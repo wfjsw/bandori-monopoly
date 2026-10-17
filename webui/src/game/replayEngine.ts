@@ -103,8 +103,8 @@ export function normalizeMatchView(raw: unknown): MatchView {
     ? { price: -1, prices: [], items: [], options: [], players: [], answers: [], ...st.prompt }
     : st.prompt;
   st.vote = st.vote ? { players: [], answers: [], ...st.vote } : st.vote;
-  st.buyPrice = def(st.buyPrice, -1);
-  st.buildCost = def(st.buildCost, -1);
+  // `buyPrice` / `buildCost` retired with the END buy/build acts -- old
+  // snapshots may still carry the keys; they are ignored.
   st.timeLeft = def(st.timeLeft, 0);
   // Accept both the old `shield` / `bank` names and the renamed fields so a
   // record written before the turn-clock rename still hydrates.

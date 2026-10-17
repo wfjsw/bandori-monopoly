@@ -1,10 +1,10 @@
 //! Action abstraction (`docs/BOT.md` §3.4): what the search branches on.
 //!
-//! Searched decisions only -- card plays, buy / build / force-buy, auctions,
-//! counteract offers, agent picks. Everything else (roll, end, discard,
-//! trivial prompts) is delegated to the heuristic: an empty action list means
-//! "not a tree decision" and the caller answers it with the engine's own
-//! `aiAnswer` / step machine.
+//! Searched decisions only -- card plays, settle buy / build / force-buy
+//! offers, auctions, counteract offers, agent picks. Everything else (roll,
+//! end, discard, trivial prompts) is delegated to the heuristic: an empty
+//! action list means "not a tree decision" and the caller answers it with the
+//! engine's own `aiAnswer` / step machine.
 
 use game_core::data::GameData;
 use game_core::engine::purchase;
@@ -44,13 +44,8 @@ pub fn ab_on(key: &str) -> bool {
 pub enum Action {
     /// Play a hand card.
     Play { card: String },
-    /// Buy the landed tile.
-    Buy { tile: usize },
-    /// Build one more house on the landed tile.
-    Build { tile: usize },
-    /// End the turn without buying / building (`act: "end"` at 结束). Always
-    /// offered where the engine accepts `end`, so the search can pass on a
-    /// buy instead of being forced into one.
+    /// End the turn (`act: "end"` at 结束). Buy / build are no longer turn
+    /// acts -- they happen only by answering a settle Ask (`Action::Offer`).
     Decline,
     /// A buy / build / force-buy offer prompt: option index.
     Offer { index: i32 },
@@ -70,7 +65,7 @@ pub enum Action {
 pub enum Surface {
     /// The open prompt, waiting on the searching seat.
     Prompt(MatchPrompt),
-    /// The turn surface: 运营 (card plays) or 结束 (buy / build).
+    /// The turn surface: 运营 (card plays) or 结束 (decline / end).
     Turn,
 }
 
@@ -98,7 +93,7 @@ pub fn surface(st: &MatchState, seat: usize) -> Option<Surface> {
 /// The abstracted action list at `st` for `seat`.
 ///
 /// An empty list means "nothing worth searching here" -- the caller applies
-/// the heuristic and moves on. Searched set: card plays, buy / build /
+/// the heuristic and moves on. Searched set: card plays, settle buy / build /
 /// force-buy offers, auction bids, counteract offers, agent picks.
 pub fn legal_actions(
     data: &GameData,
@@ -181,34 +176,13 @@ fn turn_actions(
         return out;
     }
     if st.step == stage::END {
-        let t = st.landed;
-        if t >= 0 {
-            let t = t as usize;
-            if buyable(data, st, seat, t) {
-                out.push(Action::Buy { tile: t });
-            }
-            if can_build(data, st, seat, t) {
-                out.push(Action::Build { tile: t });
-            }
-        }
-        // Decline -- "end the turn without buying" -- only when the turn would
-        // otherwise have no action at all. The 2026-10-08 C1 bisect
-        // (`docs/BOT.md` §5 C1) proved that putting Decline on the menu next
-        // to a *legal* Buy/Build costs ~5 wins on StubRules: `net_worth` counts
-        // a deed at its price, so a buy is worth-neutral at the instant and
-        // the tie goes to the progressive bias, which leans Decline below
-        // `BUY_RESERVE` -- exactly where the old bot was forced to buy. So a
-        // paid option that the engine accepts stays forced (the search cannot
-        // pass on it); Decline covers the empty menu -- the unaffordable /
-        // gate-refused buy of the stall, where the alternative was a refused
-        // `Buy` replayed every 200 ms. Gated on `can_end_here`
-        // (`why_not_act`'s end branch: `err.over_hand` / `err.roll_first`).
+        // Buy / build are settle-prompt answers (`Action::Offer` via
+        // `prompt_actions`), never turn acts. The END surface is just end.
         //
         // A/B: `BOT_STRENGTH_AB_NO_DECLINE` drops the option entirely;
         // `BOT_STRENGTH_AB_NO_GATES` drops the `can_end_here` half of the gate
-        // (it also drops the buy/build/roll/end gates -- see [`ab_on`]).
-        if out.is_empty()
-            && !ab_on("BOT_STRENGTH_AB_NO_DECLINE")
+        // (it also drops the roll/end gates -- see [`ab_on`]).
+        if !ab_on("BOT_STRENGTH_AB_NO_DECLINE")
             && (st.can_end_here || ab_on("BOT_STRENGTH_AB_NO_GATES"))
         {
             out.push(Action::Decline);
@@ -294,7 +268,9 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
             let base = if p.tile >= 0 {
                 purchase::quote_native(data, st, p.tile as usize).max(0)
             } else {
-                st.buy_price.max(0)
+                // No tile on the prompt: the quoted price the engine put on
+                // the ask (MatchPrompt::price), else 0.
+                p.price.max(0)
             };
             for a in [
                 min,
@@ -383,66 +359,6 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
     out
 }
 
-/// `BuyableHere` (autopilot.ts / `why_not_act`'s buy gate).
-///
-/// The shape half is re-checked here; the engine's own eligibility half --
-/// the plan's no-buy flag, the quote's `BuyGate`, and the funds -- is
-/// [`MatchState::can_buy_here`], computed inside `Match::state` from the same
-/// predicates `why_not_act` uses. Never offer a Buy the engine would refuse
-/// (`err.cannot_buy` / `err.buy_poor`).
-///
-/// **Cash-only for bots** (user ruling 2026-10-08: "avoid mortgage to buy
-/// land"). `can_buy_here` is funded by [`World::purchase_funds`] = cash +
-/// mortgageable deeds, so a cash-poor / deed-rich seat legally *could* buy by
-/// mortgaging first -- and because the C1 menu treats a legal Buy as forced
-/// (no Decline beside it), the search would take it and the engine would
-/// auto-mortgage. Bots decline instead: require **cash alone** to cover the
-/// quoted price. Legality for humans is unchanged (`can_buy_here` still
-/// gates the button); this is a bot-side preference filter that leaves the
-/// menu empty -- Decline covers it (see [`legal_actions`]), so no refusal
-/// loop. Builds keep the old funds rule (the ruling names *buy land*).
-pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool {
-    let Some(t) = data.tiles.get(i) else {
-        return false;
-    };
-    let cash = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-    t.is_buyable()
-        && st.phase == "play"
-        && st.step == stage::END
-        && st.turn == seat as i32
-        && !st.busy
-        && !st.land_acted
-        && st.landed == i as i32
-        && st.players.get(seat).map(|p| p.pos) == Some(i as i32)
-        && st.owners.get(i).copied().unwrap_or(-1) < 0
-        && (st.can_buy_here || ab_on("BOT_STRENGTH_AB_NO_GATES"))
-        // Bots do not mortgage to buy (see the doc above).
-        && cash >= st.buy_price.max(0)
-}
-
-/// `CanBuildHere` (autopilot.ts). Gated on [`MatchState::can_build_here`] --
-/// `why_not_build` (the plan's `can_build` flag, the NO_BUILD vetoes) plus the
-/// funds half of `why_not_act`'s build branch.
-pub fn can_build(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool {
-    let Some(t) = data.tiles.get(i) else {
-        return false;
-    };
-    t.is_buyable()
-        && t.rent.len() >= 2
-        && st.phase == "play"
-        && st.step == stage::END
-        && st.turn == seat as i32
-        && !st.busy
-        && !st.land_acted
-        && st.landed == i as i32
-        && st.players.get(seat).map(|p| p.pos) == Some(i as i32)
-        && st.owners.get(i).copied().unwrap_or(-1) == seat as i32
-        && t.rent.len() > 1
-        && !st.mortgaged.get(i).copied().unwrap_or(false)
-        && st.houses.get(i).copied().unwrap_or(0) < t.rent.len() as i32 - 1
-        && (st.can_build_here || ab_on("BOT_STRENGTH_AB_NO_GATES"))
-}
-
 /// Hand cards the engine would let `seat` play right now (from the view's
 /// `playable` flags, parallel to `hand`).
 pub fn playable_cards(hand: &[String], playable: &[bool]) -> Vec<String> {
@@ -460,16 +376,6 @@ pub fn to_net_message(action: &Action, st: &MatchState, seat: usize) -> game_cor
         Action::Play { card } => NetMessage {
             act: "play".into(),
             card: card.clone(),
-            ..Default::default()
-        },
-        Action::Buy { tile } => NetMessage {
-            act: "buy".into(),
-            value: *tile as i32,
-            ..Default::default()
-        },
-        Action::Build { tile } => NetMessage {
-            act: "build".into(),
-            value: *tile as i32,
             ..Default::default()
         },
         Action::Decline => NetMessage::act("end"),
@@ -551,12 +457,12 @@ impl WithSeat for game_core::net::NetMessage {
 /// Progressive-bias prior per action, in `[0, 1]` (`docs/BOT-RESEARCH` #3).
 ///
 /// Folds the engine's own heuristic signals -- the live prompt's `aiAnswer` /
-/// `ai_picked`, the `wants_buy` / `wants_build` thresholds, and the bot-only
-/// `estCost` -- into one preference number per abstracted action. The
-/// heuristic's own choice gets `1.0`; alternatives get a kind-specific base
-/// (buy / build follow the thresholds, card plays are cheaper = better, a
-/// counteraction skip is the default). This is *search* guidance only -- never
-/// legality, never the answer. `hand` / `est_cost` are parallel view columns.
+/// `ai_picked`, the settle-offer thresholds, and the bot-only `estCost` -- into
+/// one preference number per abstracted action. The heuristic's own choice
+/// gets `1.0`; alternatives get a kind-specific base (card plays are cheaper =
+/// better, a counteraction skip is the default). This is *search* guidance only
+/// -- never legality, never the answer. `hand` / `est_cost` are parallel view
+/// columns.
 pub fn action_priors(
     data: &GameData,
     st: &MatchState,
@@ -567,8 +473,7 @@ pub fn action_priors(
     actions: &[Action],
 ) -> Vec<f64> {
     // The seat's `StrategyParams` (`docs/BOT.md` §3.8): the prior constants
-    // and the `wants_buy` / `wants_build` thresholds all read them. Defaults
-    // are the old f64s (`800/1000.0 == 0.8` exactly).
+    // all read them. Defaults are the old f64s (`800/1000.0 == 0.8` exactly).
     let params = game_core::strategy::for_seat(data, st, seat);
     let preferred = heuristic_preferred(data, st, ai_answer, seat, &params);
     let est_of = |card: &str| -> Option<i32> {
@@ -592,30 +497,9 @@ pub fn action_priors(
                 return 1.0;
             }
             match a {
-                Action::Buy { tile } => {
-                    let price = st.buy_price.max(0);
-                    let money = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-                    let group = data.tiles.get(*tile).map(|x| x.group).unwrap_or(0);
-                    if params.wants_buy_tile(money, price, group, st.round, false) {
-                        params.prior_buy_yes()
-                    } else {
-                        params.prior_buy_no()
-                    }
-                }
-                Action::Build { tile } => {
-                    let cost = st.build_cost.max(0);
-                    let money = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-                    let group = data.tiles.get(*tile).map(|x| x.group).unwrap_or(0);
-                    let houses = st.houses.get(*tile).copied().unwrap_or(0);
-                    if params.wants_build_tile(money, cost, group, houses) {
-                        params.prior_build_yes()
-                    } else {
-                        params.prior_build_no()
-                    }
-                }
                 Action::Decline => {
-                    // The heuristic's default at 结束 when it would not buy or
-                    // build; below a paid option when it would.
+                    // The heuristic's default at 结束; the settle buy / build
+                    // offers are `Action::Offer`, answered at the prompt.
                     if preferred.is_none() {
                         1.0
                     } else {
@@ -701,14 +585,14 @@ pub fn action_priors(
 }
 
 /// The engine's own heuristic choice at this decision (the progressive-bias
-/// anchor): `aiAnswer` mapped onto an abstracted action for prompts, the
-/// `wants_buy` / `wants_build` thresholds for the turn surface.
+/// anchor): `aiAnswer` mapped onto an abstracted action for prompts; at 结束
+/// the only turn action is Decline (buy / build ride settle `Action::Offer`).
 fn heuristic_preferred(
-    data: &GameData,
+    _data: &GameData,
     st: &MatchState,
     ai_answer: Option<&crate::view::AiAnswer>,
     seat: usize,
-    params: &game_core::strategy::StrategyParams,
+    _params: &game_core::strategy::StrategyParams,
 ) -> Option<Action> {
     if st.prompt.id > 0 && st.prompt.waiting(seat as i32) {
         let a = ai_answer?;
@@ -720,23 +604,6 @@ fn heuristic_preferred(
         return crate::sim::ai_answer_to_action(st, a, seat);
     }
     if st.step == stage::END {
-        let t = st.landed;
-        if t >= 0 {
-            let t = t as usize;
-            let money = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-            let group = data.tiles.get(t).map(|x| x.group).unwrap_or(0);
-            let houses = st.houses.get(t).copied().unwrap_or(0);
-            if buyable(data, st, seat, t)
-                && params.wants_buy_tile(money, st.buy_price.max(0), group, st.round, false)
-            {
-                return Some(Action::Buy { tile: t });
-            }
-            if can_build(data, st, seat, t)
-                && params.wants_build_tile(money, st.build_cost.max(0), group, houses)
-            {
-                return Some(Action::Build { tile: t });
-            }
-        }
         return Some(Action::Decline);
     }
     None
@@ -764,7 +631,7 @@ pub enum Trivial {
 ///   is deliberately *not* used on its own: two equal-prior card plays still
 ///   differ tactically, so it is only a skip when the menu is already free.)
 ///
-/// Always keeps the full search for buys / builds / force-buy offers /
+/// Always keeps the full search for settle buy / build / force-buy offers /
 /// auctions with a real bid / counteraction declarations / card plays / agent picks /
 /// tile choices / mortgages -- anything that moves money, ownership or cards.
 pub fn trivial_decision(actions: &[Action]) -> Option<Trivial> {
@@ -794,15 +661,15 @@ fn has_stakes(a: &Action) -> bool {
         Action::Bid { amount } => *amount > 0,
         Action::Counteract { card: None } => false,
         Action::Counteract { card: Some(_) } => true,
-        // Offers (force-buy / buy / build) commit money on the non-fallback
-        // option; treat any offer as staked -- the fallback alone would have
-        // been a 1-action root.
+        // Offers (settle buy / build / force-buy) commit money on the
+        // non-fallback option; treat any offer as staked -- the fallback alone
+        // would have been a 1-action root.
         Action::Offer { .. } => true,
         // Agent picks and tile choices are searched by design.
         Action::Pick { .. } => true,
         // A card play moves the board even at estCost 0.
         Action::Play { .. } => true,
-        Action::Buy { .. } | Action::Build { .. } | Action::Mortgage { .. } => true,
+        Action::Mortgage { .. } => true,
     }
 }
 

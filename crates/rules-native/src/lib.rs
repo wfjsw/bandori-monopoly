@@ -540,6 +540,8 @@ fn entry_of(info: &CardInfo, call: &Call, trigger_kind: TriggerKind) -> Option<i
         Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
         Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
         Call::Settle { .. } => info.entry(OnKind::Settle, None),
+        Call::Mortgage { .. } => info.entry(OnKind::Mortgage, None),
+        Call::Redeem { .. } => info.entry(OnKind::Redeem, None),
     }
 }
 
@@ -721,7 +723,11 @@ impl CardModules for NativeModules {
         // flashes.
         if matches!(
             call,
-            Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
+            Call::AtEnd { .. }
+            | Call::RollPlan { .. }
+            | Call::Settle { .. }
+            | Call::Mortgage { .. }
+            | Call::Redeem { .. }
         ) {
             let scope =
                 game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));

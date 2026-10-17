@@ -40,7 +40,7 @@ function player(over: Partial<MatchPlayer> = {}): MatchPlayer {
     roll: 0,
     banDone: false,
     ban: "",
-    character: "",
+    persona: "",
     deckReady: false,
     money: 10000,
     pos: 0,
@@ -56,7 +56,7 @@ function player(over: Partial<MatchPlayer> = {}): MatchPlayer {
     rank: 0,
     state: { handLimit: { value: 5, min: 0, max: 99 } },
     skillOwner: "",
-    bands: "",
+    affiliations: "",
     tokens: [],
     skillNote: { k: "" },
     field: [],
@@ -79,15 +79,12 @@ function state(over: Partial<MatchState> = {}): MatchState {
     skipMove: false,
     landed: -1,
     thinkTime: 0,
-    buyPrice: -1,
-    buildCost: -1,
+    canRollHere: false,
+    canEndHere: true,
     plan: { playerId: 0, from: 0, steps: 0, started: false, reach: [], canBuild: true },
     timeLeft: 0,
     baseTime: 0,
     bonusTime: 0,
-    bank: 0,
-    bought: false,
-    built: false,
     players: [player()],
     bans: [],
     owners: [-1, -1, -1, -1],
@@ -165,18 +162,17 @@ test("on your turn in 运营 it suggests roll", () => {
   assert.deepEqual(cmd, { act: "roll" });
 });
 
-test("after landing on an affordable unowned tile it suggests buy", () => {
-  // 结束, standing on tile 1 (1000), money 10000 -> 10000 - 2400 >= 2000.
+test("after landing at 结束 it suggests end, never a buy act", () => {
+  // Buy is a settle Ask (`ask.buy` → `act:"answer"`), not an END act.
   const v = view({
     state: state({
       step: 4,
       landed: 1,
-      bought: false,
-      players: [player({ pos: 1 })],
+      players: [player({ pos: 1, money: 10000 })],
     }),
   });
   const cmd = suggest(v, ctx());
-  assert.deepEqual(cmd, { act: "buy", value: 1 });
+  assert.deepEqual(cmd, { act: "end" });
 });
 
 test("it answers a prompt with the AI answer", () => {
@@ -436,8 +432,8 @@ test("chaos buys when money - price >= 1000 and declines below it", () => {
   assert.deepEqual(suggest(tight, ctx(), "chaos"), { act: "answer", prompt: 6, value: 1 });
 });
 
-test("chaos buys after landing only while the reserve survives", () => {
-  // 结束 on tile 1 (1000): 2000 - 1000 >= 1000 -> buy; 1999 - 1000 < 1000 -> end.
+test("chaos at 结束 suggests end, never a buy act", () => {
+  // Buy is a settle Ask (`ask.buy` → `act:"answer"`). END is always end.
   const at = (money: number) =>
     view({
       state: state({
@@ -446,7 +442,7 @@ test("chaos buys after landing only while the reserve survives", () => {
         players: [player({ pos: 1, money })],
       }),
     });
-  assert.deepEqual(suggest(at(2000), ctx(), "chaos"), { act: "buy", value: 1 });
+  assert.deepEqual(suggest(at(2000), ctx(), "chaos"), { act: "end" });
   assert.deepEqual(suggest(at(1999), ctx(), "chaos"), { act: "end" });
   assert.equal(CHAOS_RESERVE, 1000);
 });
@@ -473,9 +469,9 @@ test("standard 托管 picks the deck book entry for the public table key", () =>
     state: state({
       phase: "deck",
       players: [
-        player({ character: "A", deckReady: true }),
-        player({ character: "B", deckReady: false }),
-        player({ character: "C", deckReady: true }),
+        player({ persona: "A", deckReady: true }),
+        player({ persona: "B", deckReady: false }),
+        player({ persona: "C", deckReady: true }),
       ],
     }),
   });
@@ -498,7 +494,7 @@ test("standard 托管 falls back to the preset when the suggestion is empty", ()
     playerId: 0,
     state: state({
       phase: "deck",
-      players: [player({ character: "A", deckReady: false })],
+      players: [player({ persona: "A", deckReady: false })],
     }),
   });
   const cmd = suggest(v, ctx({ deckSuggest: () => [] }));
@@ -510,7 +506,7 @@ test("chaos still picks a random deck, not the book", () => {
     playerId: 0,
     state: state({
       phase: "deck",
-      players: [player({ character: "A", deckReady: false })],
+      players: [player({ persona: "A", deckReady: false })],
     }),
   });
   let asked = false;
@@ -562,14 +558,30 @@ test("autopilot reads the glue's strategy params instead of hard-coded threshold
 });
 
 test("strategyFor is asked for the seat's public table key", () => {
+  // The settle buy Ask is the buy path; it still reads the seat's params.
+  const prompt = {
+    id: 3,
+    kind: "choice",
+    title: { k: "ask.buy.title" },
+    text: { k: "ask.buy.text" },
+    card: "",
+    options: [{ k: "ask.buy.yes" }, { k: "ask.no_buy" }],
+    fallback: 1,
+    players: [1],
+    answers: [-1],
+    timeLeft: 15,
+    tile: 1,
+    bid: 0,
+    bidder: -1,
+    items: [],
+    count: 0,
+  };
   const v = view({
     playerId: 1,
     state: state({
-      step: 4,
-      turn: 1,
-      landed: 1,
-      bought: false,
-      players: [player({ character: "A", pos: 0 }), player({ character: "B", pos: 1, money: 10000 })],
+      busy: true,
+      prompt,
+      players: [player({ persona: "A", pos: 0 }), player({ persona: "B", pos: 1, money: 10000 })],
     }),
   });
   let got: [string, number, string[]] | null = null;

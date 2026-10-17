@@ -148,6 +148,13 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
       const max = name === "money" ? 100_000_000 : name === "tp" ? ctx.tiles().length - 1 : 100;
       return send({ act: "debug", debug: name, value: num(args[0], name === "draw" ? 1 : 0, max), target: seat(args[1]) });
     }
+    case "buy": case "build": case "mortgage": case "redeem": {
+      // Deed cheats: the same tile-rule primitives as the settle / net
+      // commands, bypassing only the prompt and the phase/turn gates.
+      if (!cheatsOn()) return fail("console.cheatsDisabled");
+      arity(1, 2);
+      return send({ act: "debug", debug: name, value: num(args[0], 0, ctx.tiles().length - 1), target: seat(args[1]) });
+    }
     case "give": {
       if (!cheatsOn()) return fail("console.cheatsDisabled");
       arity(1, 3);

@@ -43,14 +43,12 @@ fn vanilla2() -> Table {
     Table::vanilla(2)
 }
 
-/// Land on an unowned deed and buy it (`buy` is an action, not a prompt).
+/// Land on an unowned deed and buy it via the settle prompt.
 fn land_and_buy(t: &mut Table, who: usize, tile: usize) {
     t.set_pos(who, (tile + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(who).unwrap();
-    // G-SETTLE-06/07: the settle of an unowned buyable is the optional buy
-    // prompt. Decline it so the end-step `buy` button still runs.
-    drain(t);
+    // G-SETTLE-06/07: the settle of an unowned buyable IS the optional buy.
     t.buy(who).expect("buy the unowned deed");
     drain(t);
 }

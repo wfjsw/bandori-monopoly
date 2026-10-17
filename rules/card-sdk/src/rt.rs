@@ -168,6 +168,8 @@ pub fn on(
         | (On::RollPlan(_, guard, _), export::OP_GUARD)
         | (On::AtEnd(_, guard, _), export::OP_GUARD)
         | (On::Settle(_, guard, _), export::OP_GUARD)
+        | (On::Mortgage(_, guard, _), export::OP_GUARD)
+        | (On::Redeem(_, guard, _), export::OP_GUARD)
         | (On::Message(_, _, guard, _), export::OP_GUARD) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
             // normally skips this call (`has_guard == false`). If it does ask,
@@ -195,6 +197,8 @@ pub fn on(
         | (On::Gate(_, _, _, run), _)
         | (On::AtEnd(_, _, run), _)
         | (On::Settle(_, _, run), _)
+        | (On::Mortgage(_, _, run), _)
+        | (On::Redeem(_, _, run), _)
         | (On::RollPlan(_, _, run), _)
         | (On::Message(_, _, _, run), _) => match run(player_id) {
             Ok(()) => 0,

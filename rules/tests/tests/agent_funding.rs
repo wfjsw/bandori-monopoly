@@ -125,13 +125,10 @@ fn land_on_property(t: &mut Table, target: usize) {
     t.set_pos(0, target - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    // G-SETTLE-06/07: the settle of a deed is the optional buy/build prompt.
-    // Decline it so the end-step button flow under test still runs.
-    while let Some(p) = t.prompt() {
-        let _ = p;
-        t.decline();
-    }
-    assert_eq!(t.step(), 4);
+    // G-SETTLE-06/07: the settle of a deed IS the optional buy/build prompt.
+    // Leave whatever the settle produced open (or already committed) for the
+    // caller. A shortfall settle produces no prompt at all.
+    let _ = target;
 }
 
 #[test]
@@ -142,7 +139,11 @@ fn ordinary_purchase_gate_and_commit_include_mortgage_funds() {
     t.own(0, &[fund]);
     t.set_money(0, 100);
     land_on_property(&mut t, target);
-    assert!(t.m.state().can_buy_here, "the purchase button is enabled");
+    assert!(
+        t.prompt().is_some(),
+        "the settle offers the optional buy: {}",
+        t.dump_prompt()
+    );
     t.buy(0).unwrap();
     assert_eq!(t.expect_prompt().kind, "mortgage");
     assert_eq!(t.expect_prompt().bid, 1500);
@@ -175,7 +176,11 @@ fn ordinary_purchase_rejects_cash_plus_deeds_shortfall() {
     t.own(0, &[tile("小豆岛")]);
     t.set_money(0, 100);
     land_on_property(&mut t, target);
-    assert!(!t.m.state().can_buy_here);
+    assert!(
+        t.prompt().is_none(),
+        "short of cash + deeds: the settle does not offer: {}",
+        t.dump_prompt()
+    );
     assert!(t.buy(0).is_err());
     assert_eq!(t.owner(target), None);
     assert_eq!(t.money(0), 100);
@@ -189,8 +194,9 @@ fn ordinary_build_gate_excludes_the_deed_being_upgraded() {
     t.set_money(0, 500);
     land_on_property(&mut t, target);
     assert!(
-        !t.m.state().can_build_here,
-        "cannot fund construction with its own deed"
+        t.prompt().is_none(),
+        "cannot fund construction with its own deed -- no build offer: {}",
+        t.dump_prompt()
     );
     assert!(t.build(0).is_err());
     assert!(!t.mortgaged(target));
@@ -204,7 +210,11 @@ fn ordinary_build_can_be_funded_by_another_deed() {
     t.own(0, &[target, fund]);
     t.set_money(0, 1000);
     land_on_property(&mut t, target);
-    assert!(t.m.state().can_build_here);
+    assert!(
+        t.prompt().is_some(),
+        "the settle offers the optional build: {}",
+        t.dump_prompt()
+    );
     t.build(0).unwrap();
     let prompt = t.expect_prompt();
     assert_eq!(prompt.kind, "mortgage");

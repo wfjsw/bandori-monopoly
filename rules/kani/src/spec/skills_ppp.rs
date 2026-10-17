@@ -202,17 +202,25 @@ pub fn rimi_01_fire_after(pre: i32) -> i32 {
     }
 }
 
-/// Turn-end payout when the latch is set: +1 fire (cap 3).
+/// Turn-end payout when the latch is set: +1 fire (cap 3). The body also
+/// clears the latch (`state::set(PASSED, 0)`) which pushes a `SetState`
+/// bookkeeping effect — ignore it (class B: the exact-match originally
+/// rejected it).
 pub fn rimi_01_log_ok(effects: &[Effect], player: i32, pre: i32) -> bool {
     let after = rimi_01_fire_after(pre);
-    if after == pre {
-        return effects.is_empty();
+    let mut gain = 0;
+    let mut other = 0;
+    for e in effects {
+        match e {
+            Effect::GainFire { player: p, n } if *p == player => gain += *n,
+            Effect::SetState { .. } => {}
+            _ => other += 1,
+        }
     }
-    effects.len() == 1
-        && matches!(
-            effects[0],
-            Effect::GainFire { player: p, n } if p == player && n == 1
-        )
+    if after == pre {
+        return other == 0 && gain == 0;
+    }
+    other == 0 && gain == 1
 }
 
 /// The TurnEnd CEL guard: `actor == owner && slot('skill.rimiResolve.passed') != 0`.
@@ -240,17 +248,23 @@ pub fn rimi_02_abs_dist(a: i32, b: i32) -> i32 {
 }
 
 /// Max absolute distance from `at` among tiles satisfying `is_target`.
+/// 8×8 chunk walk (TUNING) keeps the unwind bound at 8 instead of 60.
 pub fn rimi_02_farthest_abs<F: Fn(i32) -> bool>(at: i32, is_target: F) -> i32 {
     let mut best = -1;
-    let mut t = 0;
-    while t < 60 {
-        if is_target(t) {
-            let d = rimi_02_abs_dist(at, t);
-            if d > best {
-                best = d;
+    let mut outer = 0usize;
+    while outer < 8 {
+        let mut k = 0usize;
+        while k < 8 {
+            let t = outer * 8 + k;
+            if t < 60 && is_target(t as i32) {
+                let d = rimi_02_abs_dist(at, t as i32);
+                if d > best {
+                    best = d;
+                }
             }
+            k += 1;
         }
-        t += 1;
+        outer += 1;
     }
     best
 }
@@ -364,12 +378,20 @@ pub fn aoki_02_end_admits(end_pos: i32, passed_latch: i32) -> bool {
 }
 
 pub fn aoki_02_log_ok(effects: &[Effect], player: i32) -> bool {
-    effects.len() == 2
-        && matches!(effects[0], Effect::Draw { player: p, n } if p == player && n == 1)
-        && matches!(
-            effects[1],
-            Effect::GainFire { player: p, n } if p == player && n == 1
-        )
+    // The body also clears the latch (`set_slot`) which pushes `SetState`
+    // bookkeeping — ignore it.
+    let mut draw = 0;
+    let mut gain = 0;
+    let mut other = 0;
+    for e in effects {
+        match e {
+            Effect::Draw { player: p, n } if *p == player => draw += *n,
+            Effect::GainFire { player: p, n } if *p == player => gain += *n,
+            Effect::SetState { .. } => {}
+            _ => other += 1,
+        }
+    }
+    other == 0 && draw == 1 && gain == 1
 }
 
 // ===========================================================================
@@ -484,7 +506,20 @@ pub fn band_02_reward_forbidden() -> bool {
 // ===========================================================================
 
 pub fn band_03a_co_owns(group: &str, hill: i32) -> bool {
-    group == "Poppin' Party" && hill == TILE_HILL
+    // Zero-loop byte compare (memcmp is an unwinding cliff at low bounds).
+    const PPP: &[u8] = b"Poppin' Party";
+    let b = group.as_bytes();
+    if b.len() != PPP.len() {
+        return false;
+    }
+    let mut i = 0usize;
+    while i < PPP.len() {
+        if b[i] != PPP[i] {
+            return false;
+        }
+        i += 1;
+    }
+    hill == TILE_HILL
 }
 
 // ===========================================================================
