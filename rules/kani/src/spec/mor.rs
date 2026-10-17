@@ -563,13 +563,23 @@ pub fn nnm_02_effects_ok(effects: &[Effect], player: i32, x: i32) -> bool {
     effects.len() == 1 && matches!(effects[0], Effect::Draw { player: p, n } if p == player && n == x)
 }
 
-/// nnm-03 clause pin: x times the *current* CiRCLE money reward.
+/// nnm-03 clause pin: x times the *live* CiRCLE money reward.
+/// Sheet 2026-10-06 新卡组卡 G7: 「获得x次经过CiRCLE时的资金奖励」 (was
+/// 「x*2000资金」). Morfonica's cycle rewrites the reward to 1000/1500/2000.
 pub fn nnm_03_amount(x: i32, reward: i32) -> i32 {
     x * reward
 }
 
-/// nnm-03 as the body hard-codes it (TODO(规则书) in the source): x * 2000.
-pub fn nnm_03_amount_body(x: i32) -> i32 {
+/// nnm-03 as the body pays it: x times the live reward the reward step yields
+/// (`PassRewardAffected` + listener, default 专有名词 11 = 2000). `reward` is
+/// that live figure, so this matches the book.
+pub fn nnm_03_amount_body(x: i32, reward: i32) -> i32 {
+    x * reward
+}
+
+/// MUTANT of the body: hard-codes the default 2000 even when the live reward
+/// has been rewritten (the pre-CRYSTAL-04 shape).
+pub fn nnm_03_amount_body_hardcoded(x: i32) -> i32 {
     x * 2000
 }
 
@@ -601,9 +611,10 @@ pub fn nnm_05_wants_discard(dest: i32) -> bool {
     dest == 0
 }
 
-/// nnm-05 FAILS(LESS) witness predicate: empty crystals leave the card on
-/// the field — no `UnplaceCard` and dest unchanged by this body.
-pub fn nnm_05_body_leaves_card(effects: &[Effect], dest: i32, pre_dest: i32) -> bool {
+/// nnm-05 companion: the Play press with already-empty crystals is a no-op —
+/// no `UnplaceCard` and dest unchanged. Exhaustion is a CounterChanged clause,
+/// not an inline check at the press site.
+pub fn nnm_05_press_empty_noop(effects: &[Effect], dest: i32, pre_dest: i32) -> bool {
     !effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. })) && dest == pre_dest
 }
 
@@ -617,10 +628,11 @@ pub fn nnm_05_body_leaves_card(effects: &[Effect], dest: i32, pre_dest: i32) -> 
 
 /// tritone-01 body effects (counteraction window is PROTOCOL-LEVEL; this is
 /// the admitted body): GainMoney(user, amount), PlaceCard(user, Field),
-/// SetState(user, tritone_owed, amount). `set_crystals(3)` is a counter write
-/// with **no** effect-log entry under the Kani host.
+/// AddCounter(user, crystals, 3) from `set_crystals(3)` (bookkeeping under the
+/// current host, same as AG half-speed / R fire-bird), SetState(user,
+/// tritone_owed, amount).
 pub fn tritone_01_effects_ok(effects: &[Effect], player: i32, amount: i32) -> bool {
-    if effects.len() != 3 {
+    if effects.len() != 4 {
         return false;
     }
     matches!(
@@ -631,6 +643,9 @@ pub fn tritone_01_effects_ok(effects: &[Effect], player: i32, amount: i32) -> bo
         Effect::PlaceCard { player: p, dest, .. } if p == player && dest == 2
     ) && matches!(
         effects[2],
+        Effect::AddCounter { owner: o, n, .. } if o == player && n == 3
+    ) && matches!(
+        effects[3],
         Effect::SetState { player: p, n, .. } if p == player && n == amount
     )
 }
@@ -643,7 +658,8 @@ pub fn tritone_01_crystals_ok(crystals: i32) -> bool {
 /// tritone-02 single turn-end tick. `pre_crystals` is the count before the
 /// tick; one crystal is removed. While any remain the tick is decay-only
 /// (exactly `AddCounter(owner, -1)`). When the count hits 0 the card is
-/// discarded (`dest = Graveyard`) and the owner pays back `owed`.
+/// discarded (`dest = Graveyard`) and the owner pays back `owed` (a no-op when
+/// `owed == 0` — `arm_pay` logs nothing for a zero payment).
 /// OPEN-三全音收款人: the body `pay`s (bank); the clause pins the amount only.
 pub fn tritone_02_tick_effects_ok(
     effects: &[Effect],
@@ -652,6 +668,11 @@ pub fn tritone_02_tick_effects_ok(
     owed: i32,
 ) -> bool {
     if pre_crystals > 1 {
+        return effects.len() == 1
+            && matches!(effects[0], Effect::AddCounter { owner: o, n, .. } if o == owner && n == -1);
+    }
+    // Last crystal: decay, then payback if anything is owed.
+    if owed <= 0 {
         return effects.len() == 1
             && matches!(effects[0], Effect::AddCounter { owner: o, n, .. } if o == owner && n == -1);
     }

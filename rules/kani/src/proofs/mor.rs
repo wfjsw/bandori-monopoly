@@ -1120,10 +1120,11 @@ pub fn starry_06_mutant_is_detected() {
 // ===========================================================================
 // C-MOR-starry-05  `Mor:蝴蝶飞舞的星月夜`
 // 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」
-// PassTile hook arm. `is_start` uses 1-based `board::tile_slot`; we pin
-// `trig_tile = 1` (board index 1 is the CiRCLE) so the gate holds. The
-// DiceRollAfter arm of the same hook is BLOCKED-HOST on `Op::trig_move_main`
-// (unmodeled) and is not driven here (starry-03/04). Seat-symmetric.
+// PassTile hook arm. `is_start` / `arm_tile_is` use the 0-based engine tile
+// index (`board::tile_slot` is the identity on `0..60`); pin `trig_tile = 0`
+// (TILES[0] kind 0 = CiRCLE) so the gate holds. The DiceRollAfter arm of the
+// same hook is BLOCKED-HOST on `Op::trig_move_main` (unmodeled) and is not
+// driven here (starry-03/04). Seat-symmetric.
 // ===========================================================================
 
 /// `Mor:蝴蝶飞舞的星月夜` Hook body ops (DiceRollAfter + PassTile arms).
@@ -1151,7 +1152,7 @@ crate::host_subset!(starry_hook_dispatch {
 fn starry_pass_world(user: i32, crystals: i32) {
     set_self_crystals(crystals);
     sparse2(starry_hook_dispatch, user, |w| {
-        w.trig_tile = 1; // board index 1 = CiRCLE (kind 0)
+        w.trig_tile = 0; // 0-based engine index; TILES[0] kind 0 = CiRCLE
         w.trig_kind = card_sdk::abi::TriggerKind::PassTile.as_i32() as i32;
         w.field_n = 1;
     });
@@ -1247,11 +1248,13 @@ pub fn starry_05_noop_user1() {
 // list) so the (3) press cannot find a bound skill. The multi-branch pick is
 // OPEN-多分支选择 (engine runs the first Play only).
 //
-// FAILS(LESS) C-MOR-nnm-05: the body has **no** CounterChanged / empty-crystal
-// hook. `exhausted` is `#[allow(dead_code)]` and never registered. Spending
-// (or already having) 0 crystals leaves the card on the field. The witness
-// below drives the play body with the card placed and crystals already empty
-// and shows the body never requests the discard.
+// C-MOR-nnm-05 is a state clause (「当奇迹水晶耗尽时」) and lives on the
+// CounterChanged hook (`on_crystals_changed` → `set_dest(Graveyard)`), same
+// shape as starry-02 / AG half-speed. The play press with *already* empty
+// crystals is a no-op (it does not itself discard) — that is correct, not a
+// LESS: exhaustion is observed on the count *change*. The iff below drives
+// the hook and pins the dest write; `arm_set_dest` commits it as world state
+// (field slot drops, discard pile gains the card).
 // Seat-symmetric.
 // ===========================================================================
 
@@ -1294,50 +1297,44 @@ fn nnm_world(user: i32, crystals: i32) {
     });
 }
 
-/// FAILS(LESS) C-MOR-nnm-05: with the card on the field and crystals at 0,
-/// the Play press does not put the card into the discard.
-/// Book: 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」.
-/// Body: `exhausted` is `#[allow(dead_code)]` and never registered; no
-/// CounterChanged hook discards on empty. The iff below asserts the book pin
-/// and is expected to FAIL — that failure is the finding.
+/// IFF C-MOR-nnm-05: the CounterChanged hook (「当奇迹水晶耗尽时」) requests
+/// `dest = Graveyard`. Book: 「（4）当奇迹水晶耗尽时，将此卡置入弃牌堆」.
+/// Body: `on_crystals_changed` → `set_dest(Dest::Graveyard)`; `arm_set_dest`
+/// commits it as world state (field slot drops, discard pile gains the card).
+/// Driven directly (the CEL residual `trigger::card_is` is unmodeled under
+/// Kani — same style as starry-02/06).
 fn nnm_05_empty_discard_iff_at(user: i32) {
+    // Crystals just hit 0 (`value <= 0`, count is 0) on a placed instance.
     nnm_world(user, 0);
-    let _pre = world::snapshot();
-    // Play press (entry 0): `is_placed` ⇒ `use_skill`; crystals < 1 ⇒ return.
-    invoke::unwrap_done(card_morfonica::nanami_effort::play_kani(user));
+    invoke::unwrap_done(card_morfonica::nanami_effort::on_crystals_changed_kani(user));
     kani::cover!(true, "body returned");
-    let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
-    let log_n = effects_of(&mut ebuf);
-    let effects = &ebuf[..log_n];
     let dest = world::with_world(|w| w.dest);
 
-    // Book pin: empty crystals ⇒ the card goes to the discard.
+    // Book pin: exhausted crystals ⇒ the card goes to the discard.
     crate::kassert!(
         spec::nnm_05_wants_discard(dest),
-        "C-MOR-nnm-05 FAILS(LESS): book wants dest=Graveyard when crystals hit 0"
+        "C-MOR-nnm-05: book wants dest=Graveyard when crystals hit 0"
     );
-    let _ = effects;
-    let _ = log_n;
 }
 
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn nnm_05_empty_discard_iff_fails_less() {
+pub fn nnm_05_empty_discard_iff() {
     nnm_05_empty_discard_iff_at(0);
 }
 
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn nnm_05_empty_discard_user1_iff_fails_less() {
+pub fn nnm_05_empty_discard_user1_iff() {
     nnm_05_empty_discard_iff_at(1);
 }
 
-/// Reachable-disagreement companion for C-MOR-nnm-05: the body really does
-/// leave the card on the field when crystals are empty (the LESS is not
-/// vacuous). Covers the bad state.
-fn nnm_05_body_leaves_card_at(user: i32) {
+/// Companion: the Play press with *already* empty crystals is a no-op —
+/// `use_skill` returns without writing dest. That is correct (exhaustion is
+/// observed on the CounterChanged *change*), not a LESS.
+fn nnm_05_press_empty_is_noop_at(user: i32) {
     nnm_world(user, 0);
-    let pre_dest = 2i32; // sentinel Field; body must leave it alone
+    let pre_dest = 2i32; // sentinel Field; the press must leave it alone
     let pre = world::snapshot();
     invoke::unwrap_done(card_morfonica::nanami_effort::play_kani(user));
     kani::cover!(true, "body returned");
@@ -1347,22 +1344,21 @@ fn nnm_05_body_leaves_card_at(user: i32) {
     let dest = world::with_world(|w| w.dest);
 
     kani::cover!(
-        spec::nnm_05_body_leaves_card(effects, dest, pre_dest),
-        "LESS reachable: empty crystals, card stays"
+        spec::nnm_05_press_empty_noop(effects, dest, pre_dest),
+        "empty press is a no-op"
     );
     crate::kassert!(
-        spec::nnm_05_body_leaves_card(effects, dest, pre_dest),
-        "C-MOR-nnm-05 LESS witness: body leaves the empty card on the field"
+        spec::nnm_05_press_empty_noop(effects, dest, pre_dest),
+        "C-MOR-nnm-05: Play press with 0 crystals is a no-op (no dest write)"
     );
-    crate::kassert!(!spec::nnm_05_wants_discard(dest), "book pin is not met (LESS)");
     let post = world::snapshot();
     crate::kassert!(world::arr4_eq(post.money, pre.money), "frame: money");
 }
 
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn nnm_05_body_leaves_card_is_reachable() {
-    nnm_05_body_leaves_card_at(0);
+pub fn nnm_05_press_empty_is_noop() {
+    nnm_05_press_empty_is_noop_at(0);
 }
 
 /// nnm-05 companion: the AtEnd entry (discard-down-to-five) also does not
@@ -1387,7 +1383,8 @@ fn nnm_05_atend_at(user: i32) {
     let effects = &ebuf[..log_n];
     let dest = world::with_world(|w| w.dest);
 
-    // AtEnd only touches the hand; the field card stays (LESS for -05).
+    // AtEnd only touches the hand; the field card stays. (4) is the
+    // CounterChanged hook, not this entry.
     crate::kassert!(
         !effects.iter().any(|e| matches!(e, Effect::UnplaceCard { .. })),
         "C-MOR-nnm-05: AtEnd must not be the discard-on-empty path (and is not)"
@@ -1404,43 +1401,47 @@ pub fn nnm_05_atend_leaves_field_card() {
     nnm_05_atend_at(0);
 }
 
-/// nnm-03 FAILS(WRONG): the book pins x × the *current* CiRCLE money reward;
-/// the body hard-codes x × 2000 (TODO(规则书) in the source). We cannot drive
-/// the branch (`Op::tok_names` is empty — BLOCKED-HOST), so this is a
-/// formula-level iff against the book that is expected to FAIL whenever the
-/// Morfonica cycle reward is 1000 or 1500. Spec-only (no body).
+/// nnm-03 formula-level iff. Book (sheet 2026-10-06 G7): 「获得x次经过CiRCLE
+/// 时的资金奖励」 = x × the *live* CiRCLE money reward (Morfonica cycle
+/// 1000/1500/2000, else the 专有名词 11 default 2000). The body raises
+/// `PassRewardAffected` per reward; a listener (Morfonica `on_circle`) may
+/// replace the amount and cancel the default. Spec-only (hand-play is
+/// BLOCKED-HOST on `tok_names`); `reward` is the live figure the reward step
+/// yields, so book == body.
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn nnm_03_amount_iff_fails_wrong() {
+pub fn nnm_03_amount_iff() {
     let x: i32 = kani::any();
     kani::assume(x >= 1 && x <= 5);
     let reward: i32 = kani::any();
     kani::assume(reward == 1000 || reward == 1500 || reward == 2000);
     let book = spec::nnm_03_amount(x, reward);
-    let body = spec::nnm_03_amount_body(x);
+    let body = spec::nnm_03_amount_body(x, reward);
     kani::cover!(reward == 1000, "cycle step 1000");
     kani::cover!(reward == 1500, "cycle step 1500");
     kani::cover!(reward == 2000, "cycle step 2000");
-    // Book pin: the body must pay x · reward.
+    // Book pin: the body pays x · live reward.
     crate::kassert!(
         book == body,
-        "C-MOR-nnm-03 FAILS(WRONG): body pays x·2000, book wants x·reward (G7)"
+        "C-MOR-nnm-03: body pays x · live CiRCLE money reward"
     );
 }
 
-/// Reachable-disagreement companion for C-MOR-nnm-03. Spec-only (no body).
+/// MUTANT companion: hard-coding the default 2000 (the pre-CRYSTAL-04 shape)
+/// disagrees with the book whenever the live reward has been rewritten.
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn nnm_03_wrong_is_reachable() {
+pub fn nnm_03_mutant_is_detected() {
     let x: i32 = kani::any();
     kani::assume(x >= 1 && x <= 5);
-    let reward: i32 = 1000; // Morfonica cycle 1st step
+    let reward: i32 = kani::any();
+    kani::assume(reward == 1000 || reward == 1500);
     let book = spec::nnm_03_amount(x, reward);
-    let body = spec::nnm_03_amount_body(x);
-    kani::cover!(book != body, "book ≠ body on reward=1000");
+    let mutant = spec::nnm_03_amount_body_hardcoded(x);
+    kani::cover!(book != mutant, "mutant disagrees");
     crate::kassert!(
-        book != body,
-        "C-MOR-nnm-03 WRONG witness: x·1000 ≠ x·2000"
+        book != mutant,
+        "C-MOR-nnm-03 mutant: hardcoded x·2000 must not match x·reward"
     );
 }
 

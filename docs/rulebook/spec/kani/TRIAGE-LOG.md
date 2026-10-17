@@ -1431,3 +1431,66 @@ Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`):
 No CBMC re-times this batch: `free -m` available 1317 MB (< 12000) and `tools/kani/central.sh --retry-nonsuccess` is already running its own `cbmc` (mor unit). All eight rows are **needs re-time**.
 
 Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec weakening; no production-file edits (only `rules/kani/**`).
+
+## triage3 batch 12 — mor central non-success rows (kani-pass@fc3ff3e1)
+
+Central pass rows (unit `mor`, features `band-morfonica,skills-groups,skills-personas`).
+Per-proof detail lives in `docs/rulebook/spec/kani/mor.md`.
+
+| id | before | failing assertion / phase | class | action |
+|---|---|---|---|---|
+| `starry_05_circle_iff` + `starry_05_circle_user1_iff` | FAILED 236/208 s | `C-MOR-starry-05: owner passing CiRCLE removes one crystal` | **B** | `trig_tile = 1` was the board.json 1-based CiRCLE index. After `board::tile_slot` became the 0-based identity, `TILES[1]` is a property (kind 1), so `is_start` never admitted and the PassTile arm was a no-op. → `trig_tile = 0` (TILES[0] kind 0 = CiRCLE) |
+| `nnm_05_empty_discard_iff_fails_less` + `_user1_` | FAILED 244/225 s | `C-MOR-nnm-05 FAILS(LESS): book wants dest=Graveyard` | **B** (suspected D, disproved) | (4) 「当奇迹水晶耗尽时」 is a CounterChanged state clause; the body registered `on_crystals_changed` → `set_dest(Graveyard)` long before the central pass. The iff drove the Play press with *already* empty crystals (a correct no-op) and a stale comment claiming `exhausted` was dead. Rewritten to drive `on_crystals_changed_kani` (starry-02/06 style); companion is now `nnm_05_press_empty_is_noop`. Host `arm_set_dest` commits dest as world state — proof observes `w.dest == 0` |
+| `nnm_03_amount_iff_fails_wrong` | FAILED 3.9 s | `C-MOR-nnm-03 FAILS(WRONG): body pays x·2000` | **B** (suspected D, disproved) | Spec-only formula compared book `x·reward` against a stale `nnm_03_amount_body = x·2000`. CRYSTAL-04 already fixed the body: `gain_circle_money` raises `PassRewardAffected`; Morfonica `on_circle` rewrites to 1000/1500/2000 and cancels the default (test `nnm_option2_gains_x_times_circle_money_reward` expects 1000). `CIRCLE_MONEY=2000` is the 专有名词 11 default, not a hard-coding bug. → body model is `x·live_reward`; mutant of the hard-coding is detected |
+| `tritone_01_gain_place_iff` + `_user1_iff` | FAILED 270/280 s | `C-MOR-tritone-01: GainMoney + PlaceCard + SetState(owed)` | **B** | Spec claimed `set_crystals(3)` logs no effect. `arm_set_counter_self` **does** push `AddCounter` (same bookkeeping as AG half-speed / R fire-bird). Spec now pins 4 effects: GainMoney, PlaceCard, AddCounter(n=3), SetState(owed) |
+| `tritone_02_tick_iff` + `_user1_iff` | FAILED 332/291 s | `C-MOR-tritone-02: tick is decay-only, or decay + payback(owed)` | **B** | Spec required `AddCounter + PayMoney` on the last crystal even when `owed == 0`. `arm_pay` logs nothing for a zero payment. Spec now: `owed <= 0` → decay-only; `owed > 0` → decay + payback |
+
+### CONFIRMED genuine discrepancies
+
+None from this batch. The coordinator's suspected D rows (nnm-05 last-crystal press,
+nnm-03 x·2000) are both **class B** after reading the current body + sheet + BACKLOG
+CRYSTAL-04. Genuine D in `mor` remains rainbow-01/02 (CeilTo-10; keep FAILING).
+
+### Book quotes checked
+
+* starry-05: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」 (`docs/rulebook/cards.json`)
+* nnm-03/05: 「获得x次经过CiRCLE时的资金奖励」 / 「当奇迹水晶耗尽时，将此卡置入弃牌堆」
+* tritone: 「立刻获得此次失去的资金金额，此卡放置在场上」 / 「三回合后…弃置此卡并支付由此卡获得的资金」
+
+### Harness renames
+
+| old | new |
+|---|---|
+| `nnm_05_empty_discard_iff_fails_less` | `nnm_05_empty_discard_iff` |
+| `nnm_05_empty_discard_user1_iff_fails_less` | `nnm_05_empty_discard_user1_iff` |
+| `nnm_05_body_leaves_card_is_reachable` | `nnm_05_press_empty_is_noop` |
+| `nnm_03_amount_iff_fails_wrong` | `nnm_03_amount_iff` |
+| `nnm_03_wrong_is_reachable` | `nnm_03_mutant_is_detected` |
+
+Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`):
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features band-morfonica,skills-groups,skills-personas` — Finished, no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed).
+
+### batch-12 re-times (one CBMC at a time, `tools/kani/run.sh --unit mor`)
+
+| id | after |
+|---|---|
+| `starry_05_circle_iff` | **SUCCESSFUL 306 s** |
+| `starry_05_circle_user1_iff` | **SUCCESSFUL 299 s** |
+| `nnm_05_empty_discard_iff` | **SUCCESSFUL 160 s** |
+| `nnm_05_empty_discard_user1_iff` | **SUCCESSFUL 142 s** |
+| `nnm_03_amount_iff` | **SUCCESSFUL 0.3 s** |
+| `nnm_03_mutant_is_detected` | **SUCCESSFUL 0.6 s** |
+| `tritone_01_gain_place_iff` | **SUCCESSFUL 307 s** |
+| `tritone_01_gain_place_user1_iff` | **SUCCESSFUL 306 s** |
+| `tritone_02_tick_iff` | **SUCCESSFUL 335 s** |
+| `tritone_02_tick_user1_iff` | **SUCCESSFUL 351 s** |
+
+All nine central-pass FAILED rows are now SUCCESSFUL. No confirmed genuine
+discrepancy from this batch. Rainbow-01/02 stay FAILING (genuine D, out of scope).
+
+Renames mean the next central pass should select the new harness names.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec
+weakening (tritone-02 `owed<=0` limb matches `arm_pay`'s zero-pay no-op — not
+a weaker pin); no production-file edits (only `rules/kani/**`).

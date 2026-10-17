@@ -459,6 +459,12 @@ pub fn id_eq_str(id: NameId, s: &str) -> bool {
     id_eq_bytes(id, s.as_bytes())
 }
 
+// TODO(bug): `intern_fixed_loop_bounds` and `intern_roundtrip` flake when run
+// in parallel (~1 in 5 runs) because they share the `static mut TABLE` above
+// with no synchronization. Single-threaded runs are always green. Decide
+// whether the table needs locking (production is believed to intern from one
+// thread only — verify) or whether the tests should serialize; then pin the
+// fix with a stress run.
 #[cfg(test)]
 mod tests {
     use super::*;
