@@ -1,18 +1,15 @@
 //! Ruleset-declared kind ids and kind/class strings (opaque to the engine).
 //!
-//! `card-sdk`'s [`TriggerKind`] is a transparent `i32` newtype. The engine
-//! fires and dispatches by numeric id; the *names* of this game's raise points
-//! live here so `crates/` and `rules/card-sdk` carry no game vocabulary.
-//! Wire codes are stable (ABI v70).
+//! The engine fires and dispatches by numeric id; the names of this game's
+//! raise points live here so the engine crates and card-sdk carry no game
+//! vocabulary. The values share the trigger-kind wire id space. Each
+//! rule-defined kind is declared on its typed side -- today every one is an
+//! action kind (an event-reaction listener).
 //!
-//! Call sites read `ruleset_core::kind::PassRewardAffected` (etc.). The values
-//! share `TriggerKind`'s id space. Each rule-defined kind is declared on its
-//! typed side -- today every one is [`ActionKind`] (an `On::Action` listener).
-//!
-//! A future rule-defined **FILTER** kind would declare `FilterKind(id)` here
-//! **and** teach `TriggerKind::is_filter()` (or a `CUSTOM_FILTERS` table beside
-//! `CUSTOM_LINKS` in `card-sdk::abi`) about that id, so the typed sets keep
-//! mirroring `is_filter()` exactly. Known gap: no rule-defined filter kinds yet.
+//! A future rule-defined filter kind must declare `FilterKind(id)` here and
+//! also register that id as a filter in the trigger-kind filter test, so the
+//! typed sets keep mirroring that test exactly. No rule-defined filter kinds
+//! exist yet.
 
 use alloc::string::String;
 use alloc::vec;
@@ -22,35 +19,43 @@ use card_sdk::abi::ActionKind;
 
 // ------------------------------------------------------- raise-point ids
 
-/// 「经过奖励受影响」 (pass-reward half). Wire 26.
+/// Pass-reward half of the pass reward. Wire 26.
 pub const PASS_REWARD_AFFECTED: i32 = 26;
-/// 「每当你消耗火罐时」 (after the spend commits). Wire 73.
+/// After a fire-pot charge spend commits. Wire 73.
 pub const FIRE_SPENT: i32 = 73;
-/// 「使用自己原有的技能（2）时」. Wire 74.
+/// After a skill press. Wire 74.
 pub const SKILL_USED: i32 = 74;
-/// 「盖房」 (after the house count is written). Wire 75.
+/// After a house count is written. Wire 75.
 pub const HOUSE_ADDED: i32 = 75;
-/// 「以代替此次技能的火罐消耗」 (before one charge spend commits). Wire 78.
+/// Before one charge spend commits. Wire 78.
 pub const CHARGE_PAYING: i32 = 78;
-/// 「将X个反面[P㏄P粉丝]变正」 (after the flip request is known, before the
-/// dict writes). Wire 107. `trigger::value()` is the effect's intended X.
+/// After the fan-flip request is known, before the dict writes. Wire 107.
 pub const FANS_FLIP: i32 = 107;
 
-/// 「经过奖励受影响」 -- a [反击] to the pass-reward pick, before the payout.
-/// Dual-role: also a [`card_sdk::abi::ChainKind`] (`CUSTOM_LINKS` 26).
+/// Action / Counteraction window. The pass-reward pick is known, before the
+/// payout. Payload: player_id = the mover, value = the pick (0 = money,
+/// 1 = card). A counteraction may cancel and rewrite the reward.
+/// Dual-role: also a counteraction-window selector.
 pub const PassRewardAffected: ActionKind = ActionKind(PASS_REWARD_AFFECTED);
-/// 「每当你消耗火罐时」 -- after the spend commits.
+/// Action / Counteraction window. A fire-pot charge spend just committed.
+/// Payload: player_id, value = how many pots. A listener may emit effects.
 pub const FireSpent: ActionKind = ActionKind(FIRE_SPENT);
-/// 「使用自己原有的技能（2）时」 -- after the press.
-/// Dual-role: also a [`card_sdk::abi::ChainKind`] (`CUSTOM_LINKS` 74).
+/// Action / Counteraction window. A skill press is about to run its body.
+/// Payload: card = the skill id, cards = that id, by_card = its player.
+/// A counteraction may negate the press. Dual-role: also a counteraction-window
+/// selector.
 pub const SkillUsed: ActionKind = ActionKind(SKILL_USED);
-/// 「盖房」 -- after the house count is written.
+/// Action / Counteraction window. A house count has just been written.
+/// Payload: tile, value = the house count. A listener may emit effects.
 pub const HouseAdded: ActionKind = ActionKind(HOUSE_ADDED);
-/// Before one charge spend commits; cancel to substitute the cost. Action
-/// (prompts; not a FilterFlag).
+/// Action / Counteraction window. Before one charge spend commits, so a
+/// listener may substitute the cost. Payload: player_id, value = the cost.
+/// May prompt; not a pure filter. Dual-role: also a counteraction-window
+/// selector.
 pub const ChargePaying: ActionKind = ActionKind(CHARGE_PAYING);
-/// 「将X个反面[P㏄P粉丝]变正」 -- raised by [`rule fans::flip_up`] before the
-/// dict writes so a listener sees the pre-flip face-down count. Action kind.
+/// Action. A fan-flip request is known, before the dict writes, so a listener
+/// sees the pre-flip face-down count. Payload: player_id = the seat,
+/// value = the intended flip count.
 pub const FansFlip: ActionKind = ActionKind(FANS_FLIP);
 
 // ------------------------------------------------------- tile kind strings
