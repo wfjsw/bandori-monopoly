@@ -1045,7 +1045,7 @@ fn fx_four_players_teleport() -> Fixture {
     }
     fx.tiles[51].owner = 0; // 北泽精肉店 — dist from pos 3 is large
     fx.trig = Trig {
-        kind: TriggerKind::Teleport,
+        kind: TriggerKind::Teleported,
         actor: 2,
         target: 2,
         tile: 9, // RiNG 2

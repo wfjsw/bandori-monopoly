@@ -50,7 +50,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
                 .player_id("who", who)
                 .i("value", value)
         }
-        TriggerKind::Teleport | TriggerKind::SkillTeleport | TriggerKind::Teleported => {
+        TriggerKind::SkillTeleport | TriggerKind::Teleported => {
             Msg::new("log.why.teleport")
                 .player_id("who", who)
                 .tile("tile", tile)
@@ -158,16 +158,7 @@ pub fn trigger_reason(t: &Trigger) -> Msg {
             .player_id("who", who)
             .player_id("target", target)
             .i("value", value),
-        TriggerKind::Stun => Msg::new("log.why.stun")
-            .player_id("who", who)
-            .player_id("target", target),
-        TriggerKind::Stay => Msg::new("log.why.stay")
-            .player_id("who", who)
-            .player_id("target", target),
         TriggerKind::Exile => Msg::new("log.why.exile")
-            .player_id("who", who)
-            .player_id("target", target),
-        TriggerKind::Forced | TriggerKind::Stop => Msg::new("log.why.forced")
             .player_id("who", who)
             .player_id("target", target),
         TriggerKind::BeforeOut

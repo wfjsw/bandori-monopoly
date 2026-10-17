@@ -144,6 +144,11 @@ A Filter body that would have rolled dice reads `FilterValue.recorded_roll`
 deterministic). A named plan tag rides `FilterValue.tag_key` (intern id) +
 `tag`.
 
+**The one exception (user decision 2026-10-17, keep it):** an `On::Action`
+at `DiceRollAfter` may prompt, roll dice, and write the face (trigger value
+read back). Every other reshape is the pure `DiceRollValue` filter. See the
+filter-kind section below.
+
 ### Interactive pre-stages (v78)
 
 A prompt cannot live in a Filter. Where the rulebook puts a 「可」 offer at a
@@ -174,6 +179,13 @@ source of truth**. Today (25 kinds):
 `DiceRollValue` (id 102) is raised **immediately before** `DiceRollAfter` with the
 same payload: the pure roll-reshape stage. `DiceRollAfter` stays an Action event
 (dice already landed) and no longer rewrites the face.
+
+**Documented exception (user decision 2026-10-17, keep it):** an
+`On::Action` at `DiceRollAfter` **may** prompt, roll dice, and write the face
+(trigger value read back). That is the one exception to the filter-purity
+rule — the only Action that may reshape a roll. Prefer the pure
+`DiceRollValue` filter when no prompt is needed; use the Action half only
+when the rulebook puts a 「可」 offer on the reshape.
 
 `ChargePaying` (ruleset-core kind 78) is **not** a filter kind: its 「可」
 opt-in prompts and Filter bodies cannot. It stays on `On::Action`.
@@ -209,7 +221,9 @@ return before the next raise, within a stage in placement order:
   `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMul` →
   `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
 * buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
-* roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window)
+* roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window).
+  `DiceRollAfter` is the one Action that may still roll and write the face
+  (documented exception above); everything else reshapes purely at `DiceRollValue`.
 
 Money rounds **up to a multiple of 10 once**, after every add/mul modifier
 has rewritten the running figure (user ruling 2026-10-15). An amount no
@@ -837,10 +851,14 @@ both counters untouched. `flip_down` does not raise (clause （2） is only
 
 Band clause （2） lives on `skill:Pastel㏄Palettes:与偶像一起` as
 `On::Action(&[FansFlip], "actor == owner", …)`: when `X >` pre-flip
-face-downs it adds `min(X - down, 10)` 奇迹水晶 to **this card** and logs
-(`pastel_over`). 「…时」 state clause = event handler on the change, not an
-inline check at each flip site. No band card on the board → the raise still
-moves the counters; only the crystal grant is silently absent.
+face-downs it adds `min(X - down, 10 - held)` 奇迹水晶 to **this card** and
+logs the amount actually added (`pastel_over`). 「最多10个」 caps the
+card's **TOTAL** crystals at 10 (user ruling 2026-10-17), not the overflow
+amount — a pile already at/over 10 (clause （4）'s uncapped tick can
+overshoot) gets nothing and is never force-reduced. 「…时」 state clause =
+event handler on the change, not an inline check at each flip site. No band
+card on the board → the raise still moves the counters; only the crystal
+grant is silently absent.
 
 That replaces the retired `FlipEffect` / `FlipAfter` pair (TriggerKind
 94/104, never reuse).

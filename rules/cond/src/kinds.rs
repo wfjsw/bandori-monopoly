@@ -10,12 +10,8 @@
 //! `effect.has(Pay)`. They are bound as int constants at compile time
 //! (unknown-var check) and at eval time (the window scope).
 //!
-//! # Name collision: `Teleport`
-//!
-//! `Teleport` is both a [`TriggerKind`] (17) and a [`MoveKind`] (1). In the
-//! CEL namespace `Walk` / `Teleport` are the **MoveKind** values (0 / 1) --
-//! `move.kind == Teleport` is the common spelling. The trigger kind 17 is
-//! exposed as [`TELEPORT_TRIGGER`]; write `effect.has(TeleportTrigger)`.
+//! `Teleport` is a [`MoveKind`] only (the old TriggerKind 17 was retired in
+//! ABI v84). Write `move.kind == Teleport`.
 
 /// Trigger / chain / hook kind values (shared wire numbering).
 #[allow(non_upper_case_globals)]
@@ -36,13 +32,10 @@ pub mod trig {
     pub const Event: i64 = 13;
     pub const Abnormal: i64 = 14;
     pub const Target: i64 = 15;
-    pub const Stop: i64 = 16;
-    pub const Teleport: i64 = 17;
+    // 16 / 17 / 19 / 20 / 22 retired in ABI v84 (Stop / Teleport / Stun /
+    // Stay / Forced) -- never reuse.
     pub const SkillTeleport: i64 = 18;
-    pub const Stun: i64 = 19;
-    pub const Stay: i64 = 20;
     pub const Exile: i64 = 21;
-    pub const Forced: i64 = 22;
     pub const State: i64 = 23;
     pub const Counteracted: i64 = 24;
     pub const DrawOut: i64 = 25;
@@ -86,9 +79,7 @@ pub mod mv {
     pub const Teleport: i64 = 1;
 }
 
-/// TriggerKind::Teleport (17), under a name that cannot collide with
-/// [`mv::Teleport`].
-pub const TELEPORT_TRIGGER: i64 = trig::Teleport;
+// TELEPORT_TRIGGER (TriggerKind 17) retired in ABI v84 -- never reuse.
 
 /// (CEL name, value) for every int constant a condition may reference.
 ///
@@ -112,17 +103,11 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("Event", trig::Event),
         ("Abnormal", trig::Abnormal),
         ("Target", trig::Target),
-        ("Stop", trig::Stop),
-        // `Teleport` is MoveKind (1) -- see the module docs. The trigger kind
-        // 17 is `TeleportTrigger`.
+        // `Teleport` is MoveKind (1) only -- TriggerKind 17 retired in v84.
         ("Teleport", mv::Teleport),
         ("Walk", mv::Walk),
-        ("TeleportTrigger", TELEPORT_TRIGGER),
         ("SkillTeleport", trig::SkillTeleport),
-        ("Stun", trig::Stun),
-        ("Stay", trig::Stay),
         ("Exile", trig::Exile),
-        ("Forced", trig::Forced),
         ("State", trig::State),
         ("Counteracted", trig::Counteracted),
         ("DrawOut", trig::DrawOut),

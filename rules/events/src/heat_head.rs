@@ -61,9 +61,9 @@ fn add_die(_player_id: i32, mut v: FilterValue) -> FilterValue {
 /// `add_extra_dice(-1, 6)` term -- the dice pool has no negative-die op. The
 /// sheet says 减少1d6 (a d6 less), not 少投1d6; if the intent is dropping a die
 /// from a pool that has one, this body is short.
-/// TODO(规则书): value reshape on an Action (impure: rolls dice). Kept as
-/// `On::Action(DiceRollAfter)` writing `set_move_roll` -- see the entry comment
-/// for the blocked `DiceRollValue` Filter shape.
+// Body is a pure DiceRollValue FilterValue (v79); the old Action-at-
+// DiceRollAfter shape is gone. See docs/CARDS.md for the one documented
+// exception that still allows an Action at DiceRollAfter to write the face.
 fn sub_die_filter(_player_id: i32, v: FilterValue) -> FilterValue {
     if ctx::crystals() != PHASE_DOWN {
         return v;

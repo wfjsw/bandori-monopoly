@@ -330,8 +330,9 @@ pub fn aya_with_02_mutant_is_detected() {
 // the OLD body (direct add_tok flip capped at `have`, so `X > down` was
 // unreachable and overflow never landed — LESS than the book). The new
 // `on_fans_flip` dict body **does** apply clause （2） to the effect X, so the
-// harness below proves `min(X-down, 10)` against the unmodified body driven
-// by `fans::flip_up` (FansFlip raise → `on_fans_flip_kani`).
+// harness below proves `min(X-down, 10-held)` against the unmodified body
+// driven by `fans::flip_up` (FansFlip raise → `on_fans_flip_kani`).
+// 「最多10个」 caps the card's TOTAL at 10 (user ruling 2026-10-17).
 // ===========================================================================
 
 #[kani::proof]
@@ -339,46 +340,57 @@ pub fn aya_with_02_mutant_is_detected() {
 pub fn band_idol_02_overflow_formula() {
     let x: i32 = kani::any();
     let down: i32 = kani::any();
+    let held: i32 = kani::any();
     kani::assume(x >= 0 && x <= 30);
     kani::assume(down >= 0 && down <= 20);
-    let over = spec::skills_pp::band_idol_02_overflow(x, down);
+    kani::assume(held >= 0 && held <= 10);
+    let over = spec::skills_pp::band_idol_02_overflow(x, down, held);
     kani::cover!(x > down, "overflow applies");
     kani::cover!(x <= down, "no overflow");
+    kani::cover!(x > down && held < 10, "room under the total cap");
+    kani::cover!(x > down && held >= 10, "card full → adds 0");
     if x > down {
-        crate::kassert!(over == (x - down).min(10), "overflow = min(X-down, 10)");
+        crate::kassert!(
+            over == (x - down).min(10 - held).max(0),
+            "overflow added = min(X-down, 10-held)"
+        );
     } else {
         crate::kassert!(over == 0, "no overflow when X <= down");
     }
-    // Mutant caps at 11 vs the book's 10 — they disagree only when
-    // x-down >= 11 (in 1..=10 both are x-down). Class B: the old check
-    // asserted disagreement in the agreeing range.
-    let m = spec::skills_pp::band_idol_02_overflow_mutant(x, down);
-    kani::cover!(x > down && (x - down) >= 11, "reachable disagreement (cap 11)");
-    if x > down && (x - down) >= 11 {
+    // Mutant caps the total at 11 vs the book's 10 — they disagree only when
+    // x-down > 10-held. Class B: the old check asserted disagreement in the
+    // agreeing range.
+    let m = spec::skills_pp::band_idol_02_overflow_mutant(x, down, held);
+    kani::cover!(x > down && (x - down) > 10 - held, "reachable disagreement (cap 11)");
+    if x > down && (x - down) > 10 - held {
         crate::kassert!(m != over, "mutant cap 11 vs 10");
     }
 }
 
 /// Non-PP `flip_all_pp` half: effect X = 1 per PP seat. When that seat holds
-/// 0 face-downs the flip is 0 and clause （2） grants 1 overflow crystal.
+/// 0 face-downs and the card has room, clause （2） grants 1 overflow crystal.
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn skill2_all_pp_overflow_formula() {
     let down: i32 = kani::any();
+    let held: i32 = kani::any();
     kani::assume(down >= 0 && down <= 5);
-    let over = spec::skills_pp::skill2_all_pp_overflow(down);
-    kani::cover!(down == 0, "X=1 > down=0 → 1 overflow crystal");
+    kani::assume(held >= 0 && held <= 15);
+    let over = spec::skills_pp::skill2_all_pp_overflow(down, held);
+    kani::cover!(down == 0 && held < 10, "X=1 > down=0, room → 1 overflow crystal");
+    kani::cover!(down == 0 && held >= 10, "X=1 but card full → 0");
     kani::cover!(down >= 1, "X=1 <= down → no overflow");
-    if down == 0 {
+    if down == 0 && held < 10 {
         crate::kassert!(over == 1, "non-PP branch: 1 overflow crystal when down==0");
     } else {
-        crate::kassert!(over == 0, "non-PP branch: no overflow when down>=1");
+        crate::kassert!(over == 0, "non-PP branch: no overflow when down>=1 or full");
     }
 }
 
 /// Body check: the `on_fans_flip` dict body applies clause （2） to the
 /// **effect X** (not the clamped flip count). `X > down` grants
-/// `min(X - down, 10)` crystals on this instance; `X <= down` grants none.
+/// `min(X - down, 10 - pre_cry)` crystals on this instance (total capped at
+/// 10); `X <= down` grants none.
 ///
 /// Isolation: the flip target is the band-card owner (`seat == player_id`),
 /// so 「你」 admits. Direction is down→up only (clause （2） is one-way).
@@ -411,12 +423,12 @@ pub fn band_idol_02_on_fans_overflow_iff() {
     let post_up = world::with_world(|w| w.fans_pos[me as usize]);
     let post_dn = world::with_world(|w| w.fans_neg[me as usize]);
     let flip = x.min(down).max(0);
-    let over = spec::skills_pp::band_idol_02_overflow(x, down);
+    let over = spec::skills_pp::band_idol_02_overflow(x, down, pre_cry);
     kani::cover!(x > down, "overflow applies");
     kani::cover!(x <= down, "no overflow");
     crate::kassert!(
         post_cry == pre_cry + over,
-        "C-PP-band-idol-02: overflow crystals = min(X-down, 10) when X > down"
+        "C-PP-band-idol-02: overflow crystals = min(X-down, 10-held) when X > down"
     );
     crate::kassert!(
         post_up == pre_up + flip && post_dn == down - flip,

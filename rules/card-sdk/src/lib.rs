@@ -912,6 +912,18 @@ mod tests {
         assert_eq!(TriggerKind::from_i32(104).as_str(), "");
         assert_eq!(TriggerKind::from_str("flipEffect"), TriggerKind::None);
         assert_eq!(TriggerKind::from_str("flipAfter"), TriggerKind::None);
+        // Stop=16 / Teleport=17 / Stun=19 / Stay=20 / Forced=22 retired in
+        // v84 -- never reuse.
+        assert_eq!(TriggerKind::from_i32(16).as_str(), "");
+        assert_eq!(TriggerKind::from_i32(17).as_str(), "");
+        assert_eq!(TriggerKind::from_i32(19).as_str(), "");
+        assert_eq!(TriggerKind::from_i32(20).as_str(), "");
+        assert_eq!(TriggerKind::from_i32(22).as_str(), "");
+        assert_eq!(TriggerKind::from_str("stop"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("stun"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("stay"), TriggerKind::None);
+        assert_eq!(TriggerKind::from_str("forced"), TriggerKind::None);
         // Live neighbours still round-trip.
         assert_eq!(TriggerKind::from_str("drewBefore").as_str(), "drewBefore");
         assert_eq!(TriggerKind::from_str("atEnd").as_str(), "atEnd");

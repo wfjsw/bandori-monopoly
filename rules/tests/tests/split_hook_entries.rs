@@ -142,8 +142,8 @@ fn no_expectation_both_halves_fire() {
     while t.prompt().is_some() {
         let _ = t.answer(0, 0);
     }
-    // Action half (DiceRollAfter): face - 2.
-    assert_eq!(t.pos(0), (face - 2) as usize, "DiceRollAfter half shaves by 2");
+    // FilterValue half (DiceRollValue): face - 2.
+    assert_eq!(t.pos(0), (face - 2) as usize, "DiceRollValue half shaves by 2");
 }
 
 /// j11 both halves: TurnEnd decay (Action) burns a crystal. Sequence matches
