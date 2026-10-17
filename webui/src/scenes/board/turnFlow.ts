@@ -23,13 +23,19 @@ function quiet(m: TurnView, c: Controls): boolean {
     && !c.auto && !c.animating && !c.readOnly && c.connected;
 }
 
-/** One small button: roll, or skip movement after playing OPS cards on [Stay]. */
-export function movementControl(m: TurnView, c: Controls): "diceRollBefore" | "end" | null {
+/** One small button: roll, or skip movement after playing OPS cards on [Stay].
+ *
+ * The returned strings are engine act names (`roll` / `end` — the match
+ * command vocabulary in game-core's act table), NOT TriggerKind wire names.
+ * The roll act is `roll` even though the roll trigger kinds are
+ * `diceRollBefore`/`diceRollValue`; confusing the two sends
+ * `err.unknown_act`. */
+export function movementControl(m: TurnView, c: Controls): "roll" | "end" | null {
   if (!quiet(m, c) || m.S.step !== 2) return null;
   if (m.myTurn && m.S.canEndHere && !m.overHand) return "end";
   // canRollHere belongs to the current turn's seat. A delegated roller uses
   // `roller` instead, since it is rolling on behalf of another player.
-  if (m.S.roller === m.playerId && (!m.myTurn || m.S.canRollHere)) return "diceRollBefore";
+  if (m.S.roller === m.playerId && (!m.myTurn || m.S.canRollHere)) return "roll";
   return null;
 }
 
