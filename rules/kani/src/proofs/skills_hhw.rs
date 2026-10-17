@@ -43,6 +43,11 @@ crate::host_subset!(skills_hhw_dispatch {
     set_steps | set_resolve | schedule_turn_end | linger
     | card_offer_build | can_build_on => arm_protocol_stub,
     card_move => arm_card_move,
+    trig_target => arm_trig_target,
+    trig_value => arm_trig_value,
+    trig_set_pay_amount => arm_trig_set_pay_amount,
+    add_counter_self => arm_add_counter_self,
+    counter_self => arm_counter_self,
 });
 
 /// Install sparse 2-seat world + subset (concrete owner seat).
@@ -61,8 +66,12 @@ fn skills_hhw_world(owner: i32) {
 }
 
 /// Shared world shape for a `Pass` hook on a named tile.
+///
+/// Does **not** call `host::install()`: that would replace the per-harness
+/// `skills_hhw_dispatch` subset with the full ~300-op match (the CBMC SSA
+/// cliff — TRIAGE-LOG `op-subset`). Callers install the subset first via
+/// [`skills_hhw_world`]; this only builds the world snapshot.
 fn symbolic_pass_world(owner: i32, tile: i32) -> World {
-    host::install();
     let mut w = World::new();
     w.n_players = 3;
     for p in 0..MAX_PLAYERS {
@@ -460,7 +469,9 @@ pub fn band_01_declined_is_noop() {
     w.trig_value = 500;
     w.pay_amount = 500;
     w.symbolic_answers = false;
-    w.answers[0] = 0; // decline (no)
+    // `ask_yes` is `ask_raw(...)? == 0` — answer 0 is YES, 1 is NO
+    // (events.rs `chart_rush_world`: `answers[0]=0 → ask_yes is yes`).
+    w.answers[0] = 1; // decline (no)
     let pre_amount = w.pay_amount;
     let pre = {
         world::reset_world(w);
@@ -490,7 +501,7 @@ pub fn band_01_accepted_doubles_iff() {
     w.trig_value = 500;
     w.pay_amount = 500;
     w.symbolic_answers = false;
-    w.answers[0] = 1; // accept (yes)
+    w.answers[0] = 0; // accept (yes) — ask_yes: 0 = yes
     let pre_amount = w.pay_amount;
     let pre = {
         world::reset_world(w);
@@ -545,7 +556,7 @@ pub fn band_01_mutant_is_detected() {
     w.trig_value = 500;
     w.pay_amount = 500;
     w.symbolic_answers = false;
-    w.answers[0] = 1;
+    w.answers[0] = 0; // accept (yes) — exercise the doubling arm
     let pre_amount = w.pay_amount;
     world::reset_world(w);
     invoke::unwrap_done(skill_groups::hhw::on_pay_choose_kani(owner));
