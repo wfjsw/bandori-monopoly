@@ -13,7 +13,7 @@
 //! kickback. The pairing is a value (「你与一名其他玩家」) and the two rolls are
 //! a countdown, both of which the keyed state holds.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,10 +28,10 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[HookKind::DiceRollAfter], "", Some(paired), on_roll),
-        On::Filter(&[HookKind::PaySplitChoose], "", Some(paired), on_pay),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, at_start),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::DiceRollAfter], "", Some(paired), on_roll),
+        On::Filter(&[FilterKind::PaySplitChoose], "", Some(paired), on_pay),
         On::Action(&[ruleset_core::kind::HouseAdded], "", Some(partner), on_built),
     ],
 );

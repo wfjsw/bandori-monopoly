@@ -5,7 +5,7 @@
 //! >  支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款
 //!
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -21,7 +21,7 @@ pub const KOKORO_CIRCLE: CardDef = CardDef::new(
         // card that replaces the body skips this entry. `docs/TILES.md` names
         // the long-term home as a collect rule instance on CiRCLE; the
         // `settleBody` hook is the same list entry for now.
-        On::Action(&[HookKind::SettleBody], "", None, settle_body),
+        On::Action(&[ActionKind::SettleBody], "", None, settle_body),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 10000)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"前往笑容集结的地方！"#)

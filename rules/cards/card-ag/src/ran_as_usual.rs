@@ -9,7 +9,7 @@
 //!
 //! arm a turn-end undo of abnormal movement (counteraction or hand play).
 
-use card_sdk::abi::{ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, ActionKind};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -37,7 +37,7 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         // The body-top applicability checks are the condition / residual guard
         // now: a seat still in the game (`owner.out == 0`) that actually took
         // an abnormal effect this turn (`at_end_something_to_undo`).
-        On::Action(&[HookKind::AtEnd], "owner.out == 0", Some(at_end_something_to_undo), at_end),
+        On::Action(&[ActionKind::AtEnd], "owner.out == 0", Some(at_end_something_to_undo), at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"像往常一样"#)

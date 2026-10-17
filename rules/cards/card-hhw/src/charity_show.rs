@@ -11,7 +11,7 @@
 //! stand-in and files it to the discard pile at the owner's turn end (C#
 //! `CharityFx.TurnEndAfter` -> `H.RemoveExtra(this)`).
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -37,7 +37,7 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // other players, only on the armed turn (`charity.turn`). The turn-key
         // latch is an instance prop (residual).
         On::Filter(
-            &[HookKind::PaySplitMul],
+            &[FilterKind::PaySplitMul],
             "card.placed && actor == owner && target >= 0 && target != owner && value > 0",
             Some(pay_applies),
             pay_mul,
@@ -46,13 +46,13 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // -- a dice (main) walk step onto a tile that counts as yours, first
         // time this turn. `mine` / the first-pass marker are residual.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0",
             Some(pass_applies),
             pass_tile,
         ),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
-        On::Action(&[HookKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
+        On::Action(&[ActionKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"爱心义演"#)

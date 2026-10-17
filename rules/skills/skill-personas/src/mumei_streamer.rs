@@ -17,7 +17,7 @@
 //! field card does, not something this skill can enforce from inside its own
 //! hooks.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -31,19 +31,19 @@ const BUMP_X: &str = "skill.mumei.bumpX";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
-        // mutating, so they ride `HookKind::Effect` (the payment declaration,
+        // mutating, so they ride `ActionKind::Effect` (the payment declaration,
         // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
         On::Action(
-            &[HookKind::Effect],
+            &[ActionKind::Effect],
             "target == owner && actor != owner && slot('skillState') != 2",
             None,
             on_pay_declare,
         ),
         // 状态1（1）「并使那次支付的金额提高X*100」 -- pure amount reshape.
         On::Filter(
-            &[HookKind::PaySplitAdd],
+            &[FilterKind::PaySplitAdd],
             "target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0",
             None,
             on_pay_add,
@@ -51,13 +51,13 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         // Drop the one-shot latch once the payment is done (split legs all see
         // the same X).
         On::Action(
-            &[HookKind::PayAfter],
+            &[ActionKind::PayAfter],
             "actor == owner && slot('skill.mumei.bumpX') >= 0",
             None,
             clear_bump,
         ),
         On::Action(
-            &[HookKind::TurnEnd],
+            &[ActionKind::TurnEnd],
             "actor == owner && slot('skillState') != 2",
             Some(fire_at_cap),
             at_turn_end,
@@ -67,7 +67,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         // and the `skill.mumei.flipped` count), so the entry does not activate
         // (and so does not flash) when there is nothing to sweep.
         On::Action(
-            &[HookKind::TurnEnd],
+            &[ActionKind::TurnEnd],
             "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0",
             None,
             at_turn_end_exit,
@@ -84,7 +84,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// 状态1（1）「每次其他玩家向你支付资金时，你立即获得1火罐」 and （2）'s
 /// cap transition. Mutating halves of the clause, riding the payment
-/// declaration (`HookKind::Effect`) so the `PaySplitAdd` filter below sees the
+/// declaration (`ActionKind::Effect`) so the `PaySplitAdd` filter below sees the
 /// post-gain X.
 fn on_pay_declare(player_id: i32) -> card_sdk::Asked {
     // 「你立即获得1火罐」 first, so X counts it.

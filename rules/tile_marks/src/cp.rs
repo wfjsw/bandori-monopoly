@@ -73,7 +73,7 @@
 //!   here takes the settler. (C# paid `Seat`, but its `m.Seat == Seat` gate
 //!   made settler and card controller the same player.)
 
-use card_sdk::abi::{counter, mark, HookKind, MarkFilter};
+use card_sdk::abi::{counter, mark, ActionKind, MarkFilter};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -88,7 +88,7 @@ pub const MARK_CP: CardDef = CardDef::new(
     "mark:cp",
     &[
         On::Message(&["place"], "", Some(place_ok), on_place),
-        On::Action(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
+        On::Action(&[ActionKind::SettleBody], "", Some(lands_on_cp), on_land),
     ],
 )
     .board_role("mark");

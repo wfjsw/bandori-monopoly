@@ -15,7 +15,7 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{prop, FilterValue, HookKind};
+use card_sdk::abi::{prop, FilterValue, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,10 +28,10 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         // FilterValue at DiceRollValue (option C -- the text is a result
         // modifier, not a 「掷骰后」 listener). No DiceRollAfter entry.
         // PaySplitAdd is the pure payment bend.
-        On::FilterValue(&[HookKind::DiceRollValue], "card.placed", None, roll_shave),
-        On::Filter(&[HookKind::PaySplitAdd], "card.placed", None, pay_add),
+        On::FilterValue(&[FilterKind::DiceRollValue], "card.placed", None, roll_shave),
+        On::Filter(&[FilterKind::PaySplitAdd], "card.placed", None, pay_add),
         On::Action(
-            &[HookKind::Reshuffled],
+            &[ActionKind::Reshuffled],
             "actor == owner && card.placed",
             None,
             reshuffled,

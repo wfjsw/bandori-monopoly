@@ -16,7 +16,7 @@
 //! gates the read and the CEL `slot('skill.soyoCrychic.armed')` condition, so
 //! the residual guard is gone.
 
-use card_sdk::abi::{FilterValue, HookKind};
+use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -40,7 +40,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // the interactive cancel (`ask_yes` + `set_pay_amount(0)` + state writes)
         // sits immediately before the pure `PaySplitChoose` filter stage.
         On::Action(
-            &[HookKind::PaySplitChooseBefore],
+            &[ActionKind::PaySplitChooseBefore],
             "actor != owner && tile.owner == owner && value > 0",
             None,
             on_pay,
@@ -50,7 +50,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
         // so the condition alone decides and no residual guard remains.
         On::FilterValue(
-            &[HookKind::DiceRollPlan],
+            &[FilterKind::DiceRollPlan],
             "actor == owner && slot('skill.soyoCrychic.armed') != 0",
             None,
             on_plan,
@@ -59,7 +59,7 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // a teleport plan, so `DiceRollAfter` never fires (no dice) -- `MoveAfter`
         // is the next event for both teleports and walks.
         On::Action(
-            &[HookKind::MoveAfter],
+            &[ActionKind::MoveAfter],
             "actor == owner && slot('skill.soyoCrychic.armed') != 0",
             None,
             on_plan_after,

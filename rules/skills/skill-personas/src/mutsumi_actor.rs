@@ -14,7 +14,7 @@
 //! character swap two_in_one already does -- unplace the old skill, place the
 //! new -- plus the new character's initial fire.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,13 +25,13 @@ pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
     "skill:若叶睦:天生的演员",
     &[
         On::Action(
-            &[HookKind::TurnStartBefore],
+            &[ActionKind::TurnStartBefore],
             "actor == owner && slot('skillState') != 2",
             None,
             at_turn_start,
         ),
-        On::Action(&[HookKind::CardPlayed], card_sdk::pre::MINE, None, on_play),
-        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Action(&[ActionKind::CardPlayed], card_sdk::pre::MINE, None, on_play),
+        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .silent(&[1]);

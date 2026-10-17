@@ -17,7 +17,7 @@
 
 use alloc::string::String;
 
-use card_sdk::abi::{CardPile, HookKind};
+use card_sdk::abi::CardPile;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 

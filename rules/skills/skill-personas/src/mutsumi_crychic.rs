@@ -15,7 +15,7 @@
 //! axis is `skillState`, and 「只有洗牌时可以为你的乐队技能卡上添加奇迹水晶」
 //! carves a class of crystal gains the engine does not tag.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,9 +28,9 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[HookKind::DiceRollAfter], "", Some(other), latch),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, at_start),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::DiceRollAfter], "", Some(other), latch),
     ],
 )
     .silent(&[3]);

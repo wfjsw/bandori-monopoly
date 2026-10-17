@@ -16,7 +16,7 @@
 //! for money. The duel runs in the `SettleBefore` hook; the crystal growth
 //! runs on the `Drew` hook.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,8 +24,8 @@ pub const EVE_BUSHIDO: CardDef = CardDef::new(
     "PP:[若宫伊芙]属于我的武士道！",
     &[
         On::Play("", None, eve_bushido),
-        On::Action(&[HookKind::Drew], "", Some(drew_guard), drew),
-        On::Action(&[HookKind::SettleBefore], "", None, settle_before),
+        On::Action(&[ActionKind::Drew], "", Some(drew_guard), drew),
+        On::Action(&[ActionKind::SettleBefore], "", None, settle_before),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"属于我的武士道！"#)

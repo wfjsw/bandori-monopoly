@@ -7,7 +7,7 @@
 //! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, ActionKind};
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
@@ -20,7 +20,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         // that spends a 火罐 on a kept die. The gate admits whenever either
         // branch is available.
         On::Play("", Some(cant_play), play),
-        On::Action(&[HookKind::DiceRollAfter], "actor == owner && card.placed", None, roll_after),
+        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && card.placed", None, roll_after),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::CHARGE` (「使用火罐进行掷骰」).

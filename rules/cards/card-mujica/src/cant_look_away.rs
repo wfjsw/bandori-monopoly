@@ -23,7 +23,7 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
         // `skillUsed` kind (a counter to a counter is answered there), so both
         // selectors are declared.
         On::Counteract(
-            &[ChainKind::Counteracted, ChainKind::Card, ruleset_core::kind::SkillUsed],
+            &[ChainKind::Counteracted, ChainKind::Card, ruleset_core::kind::SkillUsed.as_trigger()],
             "target == owner && actor != owner",
             None,
             counteract,

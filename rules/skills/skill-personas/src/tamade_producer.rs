@@ -11,7 +11,7 @@
 //! 「上回合进行过房屋加盖」 is latched at `houseAdded` and read at the next
 //! turn start; the free turn is announced when it is taken.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,9 +28,9 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         // must still enter the body; gating the hook on `builtLast == 0` left
         // that arm dead (and skipped the builtThis reset), so the second build
         // paid full price.
-        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         On::Action(&[ruleset_core::kind::HouseAdded], card_sdk::pre::MINE, None, on_built),
-        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .silent(&[1, 2]);

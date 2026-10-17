@@ -15,7 +15,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{HookKind, MarkFilter, TriggerKind};
+use card_sdk::abi::{FilterKind, MarkFilter, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,7 +23,7 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
         On::Play("", Some(cant_play), anon_tokyo),
-        On::Filter(&[HookKind::PaySplitAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
+        On::Filter(&[FilterKind::PaySplitAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Anon Tokyo"#)

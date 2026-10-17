@@ -14,22 +14,22 @@
 //! them. 「沿最短路径」 is whichever direction shortens `dist`. The move-end
 //! moment is `settleBefore` -- the settle has not run yet.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）/（3）「主要移动结束时，[触发结算]前若在你的前后5格内」 -- the
         // move-main fact is the condition; the within-5 geometry is residual
         // (`dist` is not in the condition vocabulary).
         // （3） 「你可消耗1火罐…」 -- the self-nudge offer needs a pot. Fire is
         // CEL; split from (2) so the other-mover arm is not gated on it.
         On::Action(
-            &[HookKind::SettleBefore],
+            &[ActionKind::SettleBefore],
             "actor == owner && move.main && tile.id >= 0 && charge(owner) >= 1",
             Some(within5),
             before_settle_self,
@@ -37,7 +37,7 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         // （2） 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」
         // -- the other-mover offer (the mover is prompted to pay).
         On::Action(
-            &[HookKind::SettleBefore],
+            &[ActionKind::SettleBefore],
             "actor != owner && move.main && tile.id >= 0",
             Some(within5),
             before_settle_other,

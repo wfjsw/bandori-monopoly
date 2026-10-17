@@ -11,7 +11,7 @@ The same authoring shape covers the other rule categories: board tiles
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
 the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
-what runs while it is active, `On::Action(&[HookKind::AtEnd])` for expiry.
+what runs while it is active, `On::Action(&[ActionKind::AtEnd])` for expiry.
 
 ## How a card runs
 
@@ -34,9 +34,9 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     On::Play("", None, press),
     // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
     // On::Counteract(&[ChainKind::Pay], "", guard, counteract),  // [反击]: kinds + condition + guard + effect
-    // On::Action(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
-    // On::Action(&[HookKind::AtEnd], "", None, at_end),        // scheduled turn-end body
-    // On::FilterValue(&[HookKind::DiceRollPlan], "", None, roll_plan), // shapes the main move
+    // On::Action(&[ActionKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
+    // On::Action(&[ActionKind::AtEnd], "", None, at_end),        // scheduled turn-end body
+    // On::FilterValue(&[FilterKind::DiceRollPlan], "", None, roll_plan), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
 fn press(player_id: i32) {
@@ -103,7 +103,7 @@ v73 deed kinds).
 ### On::Settle is kept (not folded into SettleBody)
 
 `On::Settle` is the tile rule's **base settle body** (what runs when that tile
-is [结算]d). `HookKind::SettleBody` is a field hook that may **cancel / replace**
+is [结算]d). `ActionKind::SettleBody` is a field hook that may **cancel / replace**
 that body (`set_cancelled`). They are two roles in one chain link:
 
 1. raise `SettleBody` -- a placed card may claim the body (`set_cancelled` = "do
@@ -114,20 +114,68 @@ Folding would make the tile body just another `Action(SettleBody)` and lose the
 "one base body, optional replacement" shape (and the `[反击]`-able
 `ChainKind::SettleBody` link). **Decision: keep `On::Settle`.**
 
-### Why three Filter shapes (the minimal clean set)
+### Filter payload shapes (the minimal clean set)
+
+| shape | body | kinds | fold |
+|---|---|---|---|
+| `On::Filter` | `fn(i32, value: i32) -> i32` | scalar modifiers | host writes the returned figure (`set_pay_amount` / `set_price` / `set_move_roll` / clock seconds) |
+| `On::FilterFlag` | `fn(i32, value: i32) -> bool` | decision stages + gates | **bool polarity:** gates `true` = allowed, cancel stages `false` = cancel / drop |
+| `On::FilterValue` | `fn(i32, v: FilterValue) -> FilterValue` | struct rewrite | host writes back only fields the body changed (`UNCHANGED = i32::MIN` is left alone) |
 
 Integer pipelines (pay amount, buy price, turn-clock seconds,
-roll face) are `fn(player_id, value) -> i32` -- one number in, one number out.
-Cancel stages (`PayCombinedCancel`, `ChargePaying` substitute) are booleans:
-`false` drops the stage. `PaySplitChoose` may either rewrite the amount
+roll face) are the scalar fold -- one number in, one number out.
+Cancel stages (`PayCombinedCancel`) and the decision gates are booleans.
+`PaySplitChoose` may either rewrite the amount
 (`On::Filter`) or decline (`On::FilterFlag`); a card that does both is
-**split into two entries**.
+**split into two entries**. `ChargePaying` is **not** a FilterFlag: its 「可」
+opt-in prompts, so it stays `On::Action`.
 
 `BuyAssign` and `DiceRollPlan` do not carry a single integer -- they rewrite a
 small record (deal owner/houses/mortgaged; roller/dice/steps/…). Those use
-`On::FilterValue` and a `FilterValue` struct (`rules/card-sdk/src/abi.rs`).
-Fields the body leaves as `FilterValue::UNCHANGED` (`i32::MIN`) are not
+`On::FilterValue`. Fields the body leaves as `FilterValue::UNCHANGED` (`i32::MIN`) are not
 written back.
+
+### Typed kinds (`ActionKind` / `FilterKind`) — v85 (source)
+
+`TriggerKind` is the **single declaration source of truth**: every wire id,
+the `as_str` / `from_str` tables, and `is_filter()`. Two typed views mirror it
+exactly and are what `On` signatures take:
+
+| view | `On` variants | consts = |
+|---|---|---|
+| `ActionKind` | `On::Action` | every `TriggerKind` const with `is_filter() == false` |
+| `FilterKind` | `On::Filter` / `FilterFlag` / `FilterValue` | every `TriggerKind` const with `is_filter() == true` (25 kinds: `DiceRollValue` / `DiceRollPlan` / `PaySplit*` / `PayCombined*` / `Buy*` / `TurnBaseTime` / `TurnBonusTime` + the 10 gates) |
+| `ChainKind` | `On::Counteract` | still the `TriggerKind` alias (same id space) |
+
+Each typed const is declared as `Self(TriggerKind::X.as_i32())`, so the mirror
+is compile-time tied; `typed_kind_const_sides_match_is_filter` pins the sides
+(`ActionKind` ids are `!is_filter()`, `FilterKind` ids are `is_filter()`).
+Misdeclaring a kind on the wrong `On` variant is a **rustc error**. Wire and
+save are unchanged: one shared `i32` id space, no id renumbering.
+
+**Dual-role ids** (one wire id, two typed views) are ids used both as a
+[反击] chain link and as an Action-listened event. They have an `ActionKind`
+const *and* a `ChainKind` value. From the current codebase:
+
+`DiceRollBefore`, `Effect`, `Bankrupt`, `Card`, `Event`, `MoveBefore`,
+`MoveAfter`, `Pass`, `PassBefore`, `PassTile`, `Settle`, `SettleBefore`,
+`SettleBody`, plus the rule-defined `PassRewardAffected` (26) and `SkillUsed`
+(74). `Effect` (72) is the canonical example. No Filter kind is a ChainKind.
+
+**Rule-defined kinds** live in `rules/ruleset-core/src/kind.rs` and join the
+Action side today:
+
+```rust
+pub const PassRewardAffected: ActionKind = ActionKind(PASS_REWARD_AFFECTED); // 26
+```
+
+A future rule-defined **FILTER** kind would declare `FilterKind(id)` there
+**and** teach `TriggerKind::is_filter()` (or a `CUSTOM_FILTERS` table beside
+`CUSTOM_LINKS` in `card-sdk::abi`) about that id. Known gap: none exist yet.
+
+`HookKind` and `GateKind` are retired (no alias). Gates that used to be
+`GateKind` (`ImmuneAll`, `ActGate`, …) are `FilterKind` consts: `On::Gate` is
+long gone and those questions are `FilterFlag` / `FilterValue` entries.
 
 ### Purity
 
@@ -231,8 +279,8 @@ modifier touched stays exactly as the base formula produced it.
 
 ### v76: DiceRollPlan / AtEnd fold
 
-`On::RollPlan` is `On::FilterValue(&[HookKind::DiceRollPlan], …)` (the plan is a
-`FilterValue`). `On::AtEnd` is `On::Action(&[HookKind::AtEnd], …)`: the
+`On::RollPlan` is `On::FilterValue(&[FilterKind::DiceRollPlan], …)` (the plan is a
+`FilterValue`). `On::AtEnd` is `On::Action(&[ActionKind::AtEnd], …)`: the
 one-shot-ness lives in the existing `schedule_turn_end` list
 (`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire ids
 `OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never be
@@ -264,7 +312,7 @@ On::Counteract(&[ChainKind::DiceRollValue], "actor == owner && move.roll != null
                can_counteract, counteract),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Action(&[HookKind::TurnEnd], pre::MINE, guard, decay),
+On::Action(&[ActionKind::TurnEnd], pre::MINE, guard, decay),
 
 // or the const builder
 On::Play("", Some(cant_play), play).pre("owner.money >= 1500"),
@@ -299,9 +347,9 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
                  "", None, declare_cap),                               // 1: bookkeeping
-        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
+        On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
     ],
 )
 .silent(&[1]);
@@ -347,7 +395,7 @@ pulse) shows:
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
     On::Play("", None, use_skill),                  // 0: Auto
-    On::Action(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    On::Action(&[ActionKind::TurnEnd], "", None, tick), // 1: Always (self-only)
 ]).flash(&[(1, Flash::Always)]);
 ```
 
@@ -722,12 +770,12 @@ marks and the landing clause that spends both kinds
 The shape:
 
 **Before** -- 该清CP了 called the CP helpers directly and listened to
-`HookKind::CpChanged`:
+`ActionKind::CpChanged`:
 
 ```rust
 // 通用:该清CP了
 On::Play("", Some(cant_play), clear_cp),
-On::Action(&[HookKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Action(&[ActionKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -745,13 +793,13 @@ fn cp_empty_guard(player_id: i32) -> bool {
 asking it to place CP units; `mark:cp`'s `On::Message` handler runs
 `ctx::place_mark`. The landing hook spends the placer's on-card CP via
 `ctx::add_counter_at`. The graveyard rule is an `On::Action` on
-`HookKind::CounterChanged` filtering `counter_is('cp')` /
+`ActionKind::CounterChanged` filtering `counter_is('cp')` /
 `card.counter('cp') == 0`:
 
 ```rust
 // 通用:该清CP了
 On::Play("", Some(cant_play), clear_cp),
-On::Action(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Action(&[ActionKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -785,7 +833,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
 
 // rules/tile_marks/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
-On::Action(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
+On::Action(&[ActionKind::SettleBody], "", Some(lands_on_cp), on_land),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();
@@ -1008,7 +1056,7 @@ cannot ship with a raw key showing to players.
   is a no-op; several band cards (PPP:Returns) target the first in placement
   order; a swapped or removed band card takes its crystals with it. The
   empty-out clause (「此卡上不再拥有[奇迹水晶]时」) is an `On::Action` on
-  `HookKind::CounterChanged` filtering `counter_is('crystals')`, not a check
+  `ActionKind::CounterChanged` filtering `counter_is('crystals')`, not a check
   at each spend site.
 * A counteraction can reshape the trigger it answered: `set_move_roll` rewrites a
   move roll, `set_pay_amount` reduces or cancels (0) a payment, `set_pay_target`

@@ -17,7 +17,7 @@
 //! （3） has three parts: a pot on ending on a RiNG, losing them all off a RiNG,
 //! and a forced stop bought with a pot when someone passes you.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -34,13 +34,13 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
     &[
         // （1）'s starting square and deed: the before-match-start point decides
         // start positions.
-        On::Action(&[HookKind::DeckBeforeGame], "", None, at_start),
-        On::Action(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Action(&[ActionKind::DeckBeforeGame], "", None, at_start),
+        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor != owner && tile.id == owner.pos && charge(owner) >= 1 && move.remaining > 0",
             None,
             on_passed,
@@ -49,7 +49,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // 「移动终点」 (`SETTLE-STAGES.md` §4 M1): after [重叠], before any
         // settle, for every completed move including a 「不触发结算」 one.
         On::Action(
-            &[HookKind::MoveAfter],
+            &[ActionKind::MoveAfter],
             ruleset_core::guards::OWN_DEED,
             None,
             on_move_end,
@@ -57,7 +57,7 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // （3）「获得一个火罐（上限1）」 -- the cap has to hold from match start,
         // or `gain_charge` (cap 0 = no pots) drops the grant on the floor.
         On::Action(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            &[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart],
             "",
             None,
             declare_cap,

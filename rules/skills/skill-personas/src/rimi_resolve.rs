@@ -14,7 +14,7 @@
 //! maximum absolute `dist` from where the player stands; 「并[结算]」 is the
 //! teleport resolving, and 「可选择盖房」 is the build offer that follows.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,12 +25,12 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
     "skill:牛込里美:里美的决心",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
         // （1）「你的回合中[经过]任意Live House颜色格子」 -- `is_live_house_for`
         // is player-relative (sees a recolour too) and not in the condition
         // vocabulary, so it is the residual guard. `actor == owner` is the pre.
-        On::Action(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_live_house), on_pass),
-        On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skill.rimiResolve.passed') != 0", None, at_turn_end),
+        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, Some(on_pass_live_house), on_pass),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && slot('skill.rimiResolve.passed') != 0", None, at_turn_end),
     ],
 )
     .silent(&[1, 2]);

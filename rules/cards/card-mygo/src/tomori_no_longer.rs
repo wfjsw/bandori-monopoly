@@ -13,7 +13,7 @@
 use alloc::vec::Vec;
 
 use alloc::string::String;
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,7 +25,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // count empties, whichever write emptied it (the skill-cost swap, a
         // move, or a decay). `CounterChanged` is name-filtered to
         // `counter::CRYSTALS`.
-        On::Action(&[HookKind::CounterChanged], "", Some(sweep_guard), sweep),
+        On::Action(&[ActionKind::CounterChanged], "", Some(sweep_guard), sweep),
         // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
         // fire-cost substitution. The offer exists only for a positive spend
         // with a crystal to trade; accepting cancels the fire spend and burns
@@ -43,10 +43,10 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
             cover,
         ),
         // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
-        // 获得等同于减少量的[奇迹水晶]」. `HookKind::CounterChanged`
+        // 获得等同于减少量的[奇迹水晶]」. `ActionKind::CounterChanged`
         // name-filtered to `counter::CRYSTALS` (the name is not yet in the
         // condition vocabulary).
-        On::Action(&[HookKind::CounterChanged], card_sdk::pre::MINE, Some(refill_guard), refill),
+        On::Action(&[ActionKind::CounterChanged], card_sdk::pre::MINE, Some(refill_guard), refill),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不再迷茫"#)

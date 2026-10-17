@@ -6,7 +6,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{HookKind, MoveKind};
+use card_sdk::abi::{ActionKind, MoveKind};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
@@ -24,7 +24,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // `m.Reverse && !m.Teleport`). `move.dir < 0` is the direction clause:
         // the body-top `move_dir() >= 0` early-out is the condition now.
         On::Action(
-            &[HookKind::Pass],
+            &[ActionKind::Pass],
             "actor == owner && move.kind != Teleport && move.dir < 0",
             None,
             on_pass,

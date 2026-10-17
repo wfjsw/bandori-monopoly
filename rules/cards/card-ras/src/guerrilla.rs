@@ -10,7 +10,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
+use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -22,14 +22,14 @@ pub const GUERRILLA: CardDef = CardDef::new(
         // arms the turn-end check for *this* turn (C# `OnDiscarded`). The
         // counteract body also arms (the card lands in the discard after that
         // counteraction resolves).
-        On::Action(&[HookKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
+        On::Action(&[ActionKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
         // 规则书[特]: 「此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家
         // 支付了至少1000资金且你不拥有任何可盖房的live house格子且场上已不存在
         // 可购买的此类格子，则可选择…」 -- the offer exists only when every
         // clause of that 「如果」 holds. Derived scans, residual. The arm-latch
         // clear is the same entry's bookkeeping (the engine dispatches one
         // `AtEnd` body per entry), so the gate lives in the body.
-        On::Action(&[HookKind::AtEnd], "", None, at_end),
+        On::Action(&[ActionKind::AtEnd], "", None, at_end),
     ],
 )
 .silent(&[1]).meta(&card_sdk::meta::CardMeta::new()

@@ -11,7 +11,7 @@
 //! > （2）事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。
 //!
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -21,7 +21,7 @@ pub const ARISA_WAIT: CardDef = CardDef::new(
     "PPP:（有咲）等等等一下",
     &[
         On::Play("", None, arisa_wait),
-        On::Action(&[HookKind::EventAfter], "", Some(event_after_guard), event_after),
+        On::Action(&[ActionKind::EventAfter], "", Some(event_after_guard), event_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"等等等一下"#)

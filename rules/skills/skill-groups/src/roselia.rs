@@ -9,7 +9,7 @@
 //! while the condition holds. 「初始Live House格子」 is a tile whose own group is
 //! the Live House one -- not one this skill recoloured.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{CardDef, On};
 
@@ -25,21 +25,21 @@ pub const ROSELIA: CardDef = CardDef::new(
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
         // The Live-House / one-shot split is residual (`is_live_house_for` is a
         // per-player colour, not CEL's tile-kind `is_venue`).
-        On::Filter(&[HookKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
+        On::Filter(&[FilterKind::BuyMul], "actor == owner && tile.id >= 0", Some(half_price_applies), half_price),
         // （1）'s one-shot marker: a real buy of a non-Live-House tile.
         On::Action(
-            &[HookKind::Bought],
+            &[ActionKind::Bought],
             "actor == owner && slot('skill.roselia.first') == 0 && tile.id >= 0",
             Some(on_bought_applies),
             on_bought,
         ),
         On::Action(
-            &[HookKind::Bought],
+            &[ActionKind::Bought],
             "actor == owner && slot('skill.roselia.first') != 0 && tile.id >= 0",
             Some(on_live_bought_applies),
             on_live_bought,
         ),
-        On::Action(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
+        On::Action(&[ActionKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
     ],
 )
     .silent(&[1]);

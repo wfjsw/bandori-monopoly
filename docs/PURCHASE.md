@@ -85,7 +85,7 @@ how ownership is assigned — are handled by the `rules/` crates.
 
 * **Eligibility:**
   * the tile prop `BUYABLE` (「可购买格子」, rules.txt line 19);
-  * `HookKind::BuyGate` (Poppin hill lock, parking no-buy, 「不可被抵押双倍支付购买」).
+  * `FilterKind::BuyGate` (Poppin hill lock, parking no-buy, 「不可被抵押双倍支付购买」).
 * **Price:**
   * the base from tile props;
   * then the stages `BuyAdd` (fixed ±) → `BuyMul` (×) → `BuySet` (free /
@@ -96,7 +96,7 @@ how ownership is assigned — are handled by the `rules/` crates.
   * `direct` (bypass the pipeline) is set by the tile prop `FORCE_FIXED`
     (line 106 「不受任何资金变动效果影响…」, line 92).
 * **Assignment:**
-  * `HookKind::BuyAssign` runs at commit, before `bought`;
+  * `FilterKind::BuyAssign` runs at commit, before `bought`;
   * hooks rewrite `owner_after`, `houses_after` (raze) and `mortgaged_after`;
   * the defaults come from tile props. A land buy clears the mortgage;
     `FORCE_STAYS_MORTGAGED` (「获得的地契仍为抵押状态」) keeps it.
@@ -118,7 +118,7 @@ StubRules and the sim run.
 
 ## ABI surface
 
-* **`TriggerKind` / `HookKind`:**
+* **`TriggerKind` / `ActionKind`:**
   * `BuyGate`, `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign` (the next free values);
   * wire names `buyGate`, `buyAdd`, `buyMul`, `buySet`, `buyAssign`.
 * **`BuyKind`:** `{ Land, Agent, Card, Force, Acquire, Auction }`.

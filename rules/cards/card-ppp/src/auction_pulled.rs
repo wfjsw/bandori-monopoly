@@ -10,7 +10,7 @@
 //! raises the owner's fire-pot cap.
 //! A pure [特] card (C# has no `Play`, `Normal => false`, `Immune => true`).
 
-use card_sdk::abi::{CardPile, HookKind, TriggerKind};
+use card_sdk::abi::{CardPile, ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,7 +19,7 @@ const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(
     ID,
-    &[On::Action(&[HookKind::Drawn, HookKind::TurnStart], "", None, hook)],
+    &[On::Action(&[ActionKind::Drawn, ActionKind::TurnStart], "", None, hook)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 540)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"拍卖撤下来了"#)
         .raw_name(r#"[衍生]拍卖撤下来了"#)

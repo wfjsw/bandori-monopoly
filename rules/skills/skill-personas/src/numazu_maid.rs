@@ -11,7 +11,7 @@
 //! whichever of the player's deeds gives the largest such product before the
 //! quarter is taken. 「分摊支付」 is the split-pay the vocabulary already has.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
@@ -21,7 +21,7 @@ const PAREO: &str = "PAREO标记";
 pub const NUMAZU_MAID: CardDef = CardDef::new(
     "skill:鳰原令王那:梦幻可爱♪女仆",
     &[
-        On::Action(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Action(&[ActionKind::DeckAtGameStart], "", None, at_start),
         // （2）「所有你拥有的格子中取最高值」 -- the offer exists only when some
         // deed carries a positive `build_cost × houses`. Derived scan, residual.
         On::Action(

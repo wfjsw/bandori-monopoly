@@ -7,7 +7,7 @@
 //! that places itself and locks other players out of hand [反击]s this turn.
 
 use card_sdk::abi::state_key;
-use card_sdk::abi::{ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, ActionKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -33,7 +33,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         ),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Action(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
+        On::Action(&[ActionKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

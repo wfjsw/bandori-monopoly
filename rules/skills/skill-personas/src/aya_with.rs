@@ -18,7 +18,7 @@
 //! （2）'s 「分摊前」 is the figure *before* any split-pay divides it -- so the
 //! cut applies to the whole, and the split happens afterwards.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
@@ -27,7 +27,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
     "skill:丸山彩:With~",
     &[
         On::Action(
-            &[HookKind::DeckAtGameStart],
+            &[ActionKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
@@ -41,7 +41,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
         // position: the interactive `ask_number` + `set_pay_amount` sits
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(
-            &[HookKind::PayCombinedAddBefore],
+            &[ActionKind::PayCombinedAddBefore],
             "value > 0 && slot('ppFansUp') >= 1",
             Some(mine),
             on_pay,

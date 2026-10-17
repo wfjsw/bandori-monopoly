@@ -16,7 +16,7 @@
 //! 「一次」 is per occurrence: a player passes a given CiRCLE at most once per
 //! move, so there is nothing to latch.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,7 +24,7 @@ pub const MARINA_GIFTS: CardDef = CardDef::new(
     "skill:月岛麻里奈:礼物还有好多好多哟",
     // 「其他玩家经过CiRCLE时」 -- another player's pass onto CiRCLE.
     &[On::Action(
-        &[HookKind::Pass],
+        &[ActionKind::Pass],
         "actor != owner && actor >= 0 && tile_is(tile.id, \"circle\")",
         None,
         on_pass,

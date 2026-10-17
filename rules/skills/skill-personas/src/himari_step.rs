@@ -9,7 +9,7 @@
 //! （2） 「仅在单/双数格上进行」 is the move plan's parity filter: the walk
 //! lands only on odd- or even-numbered tiles. `plan::set_parity` is that field.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,8 +19,8 @@ pub const HIMARI_STEP: CardDef = CardDef::new(
     "skill:上原绯玛丽:大家一起迈出新的一步",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),
     ],
 ).silent(&[1]);
 

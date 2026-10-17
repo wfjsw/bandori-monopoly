@@ -9,7 +9,7 @@
 //!
 //! the card stays in play; the 流星堂 stop is live on the `PassTile` hook.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,7 +20,7 @@ pub const RANDOM_STAR: CardDef = CardDef::new(
         // 规则书（2）: 「[经过]“流星堂”时可使用2星星贴纸」 -- the owner's
         // still-walking (non-teleport) pass of 流星堂, with two stickers in hand.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2",
             None,
             pass_tile,

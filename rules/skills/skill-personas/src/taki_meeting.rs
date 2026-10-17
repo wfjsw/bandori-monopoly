@@ -12,7 +12,7 @@
 //! on the band or the player. 「每回合限一次」 is a latch, which is what the
 //! keyed state is for.
 
-use card_sdk::abi::{counter, state_key, AbKind, HookKind};
+use card_sdk::abi::{counter, state_key, AbKind, ActionKind};
 use ruleset_core::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,9 +23,9 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Abnormal], "", None, on_abnormal),
-        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Abnormal], "", None, on_abnormal),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
     ],
 )
     .silent(&[1, 3]);

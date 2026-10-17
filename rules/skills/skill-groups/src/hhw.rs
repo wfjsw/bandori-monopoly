@@ -9,7 +9,7 @@
 //! 「记录该玩家」 is one named player; 「记录该次收款的价格（可累加）」 is a running
 //! total this card holds. （3） spends that total against a build.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -31,15 +31,15 @@ pub const HHW: CardDef = CardDef::new(
         // the interactive `ask_yes` + `set_pay_amount` + state/crystal writes sit
         // immediately before the pure `PaySplitChoose` filter stage.
         On::Action(
-            &[HookKind::PaySplitChooseBefore],
+            &[ActionKind::PaySplitChooseBefore],
             "actor == owner && target >= 0 && target != owner && pay_is_rent",
             None,
             on_pay_choose,
         ),
         // （2） a recorded player's rent collection, with a crystal to spend.
-        On::Action(&[HookKind::PayAfter], card_sdk::pre::MINE, Some(after_pay_applies), after_pay),
+        On::Action(&[ActionKind::PayAfter], card_sdk::pre::MINE, Some(after_pay_applies), after_pay),
         // （3） a recorded amount to spend down.
-        On::Action(&[HookKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
+        On::Action(&[ActionKind::BuildBefore], card_sdk::pre::MINE, Some(has_saved), before_build),
     ],
 );
 

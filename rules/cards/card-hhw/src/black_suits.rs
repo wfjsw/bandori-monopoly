@@ -12,7 +12,7 @@
 //! `tile:agent` body. It is not an after-hook: a body replace must not leave a
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
-use card_sdk::abi::{ChainKind, HookKind, MarkFilter};
+use card_sdk::abi::{ChainKind, ActionKind, MarkFilter};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -27,7 +27,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // and the owner's own pass are the condition; the crystal mark count is
         // the residual guard.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor == owner && tile.id == tile_named('弦卷集团')",
             Some(pass_tile_guard),
             pass_tile,

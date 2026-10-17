@@ -5,7 +5,7 @@
 //! > 将此卡放置于自己场上，直到自己的下一回合开始，场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你，你的下回合开始时将其翻入弃牌堆，若在此期间此卡没有造成影响，抽1张卡
 //!
 
-use card_sdk::abi::FilterValue; use card_sdk::abi::{GateKind, HookKind};
+use card_sdk::abi::FilterValue; use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -15,12 +15,12 @@ pub const EXIST: CardDef = CardDef::new(
         On::Play("", None, exist),
         // The body-top `target == owner` early-out is the condition now (C#
         // `return target != Seat`): already aimed at us, nothing to retarget.
-        On::FilterValue(&[GateKind::Redirect], "target != owner", None, redirect),
+        On::FilterValue(&[FilterKind::Redirect], "target != owner", None, redirect),
         // 「造成影响」 latch: the redirect lands, then `Effect` fires at the
         // target window. Mark used there (Action) rather than inside the
         // Redirect Filter (`set_prop` is refuse_if_filter'd).
-        On::Action(&[HookKind::Effect], "target == owner && actor != owner", None, mark_used),
-        On::Action(&[HookKind::TurnStart], "", Some(turn_start_guard), turn_start),
+        On::Action(&[ActionKind::Effect], "target == owner && actor != owner", None, mark_used),
+        On::Action(&[ActionKind::TurnStart], "", Some(turn_start_guard), turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"EXIST"#)

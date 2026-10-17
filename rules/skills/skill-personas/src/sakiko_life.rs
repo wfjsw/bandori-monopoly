@@ -16,7 +16,7 @@
 //! 「每回合开始时自动打出一张抽牌堆顶端的牌」 is a free `play_card` of the
 //! deck's top card at each of this player's turn starts.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -26,12 +26,12 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
         // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
         // exists only at the pot cap. 状态2's auto-play still has to run
         // whenever state is 2, so the residual is the disjunction.
         On::Action(
-            &[HookKind::TurnStartBefore],
+            &[ActionKind::TurnStartBefore],
             card_sdk::pre::MINE,
             Some(state2_or_fire_capped),
             at_turn_start,
@@ -40,7 +40,7 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor == owner && move.main && slot('skillState') != 2",
             None,
             on_pass_player,
@@ -50,7 +50,7 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
         // raised. The guard keeps 状态1 and this player as the *recipient*
         // (`trigger::target()`), not the causer.
-        On::Action(&[HookKind::Abnormal], "target == owner", Some(im_hit), on_abnormal),
+        On::Action(&[ActionKind::Abnormal], "target == owner", Some(im_hit), on_abnormal),
     ],
 )
     .silent(&[0]);

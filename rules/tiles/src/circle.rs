@@ -9,7 +9,7 @@
 //!
 //! Two entries. The **landing** half is `On::Settle` -- one draw, the
 //! 「[结算]是：抽取一张手卡」 clause. The **pass** half (「[经过]CiRCLE」) is
-//! `On::Action(&[HookKind::PassTile], "")` -- [`settle_reward`], the reward
+//! `On::Action(&[ActionKind::PassTile], "")` -- [`settle_reward`], the reward
 //! choice. `docs/TILES.md`.
 //!
 //! Suppression is `prop::NO_REWARD` on *this* instance: a rule that
@@ -27,7 +27,7 @@
 //! TODO(规则书): the stunned player's card-only reward is a ruling, not book
 //! text (`回合階段&註釋` `C44` blocks the money half; `团技能` `D13` forces the
 //! card half).
-use card_sdk::abi::{prop, text_slot, HookKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
+use card_sdk::abi::{prop, text_slot, ActionKind, TriggerKind, REWARD_CARD, REWARD_MONEY};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -38,7 +38,7 @@ pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
         On::Settle("", None, settle),
-        On::Action(&[HookKind::PassTile], "", Some(pass_pays), on_pass),
+        On::Action(&[ActionKind::PassTile], "", Some(pass_pays), on_pass),
     ],
 )
 .board_role("tile")

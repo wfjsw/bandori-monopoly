@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,7 +18,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
         // 规则书: 「当其中一方破产时」 -- the leaver is one of the pair.
         On::Action(
-            &[HookKind::BeforeOut],
+            &[ActionKind::BeforeOut],
             "card.placed && slot('one_of_us_partner') > 0 && (actor == owner || actor == slot('one_of_us_partner') - 1)",
             None,
             before_out,
@@ -28,11 +28,11 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // 「结算完成时」 terminal, `SETTLE-STAGES.md` §4 M5) and only then does
         // the partner's share land. `PayAfter` just measures the rent income
         // the settle produced; the split is the terminal's job.
-        On::Action(&[HookKind::PayAfter], "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0", Some(measure_rent_guard), measure_rent),
+        On::Action(&[ActionKind::PayAfter], "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0", Some(measure_rent_guard), measure_rent),
         // The split only speaks when a designated deed produced income.
         // Runs before the silent consume below so it can read the measured rent.
         On::Action(
-            &[HookKind::TileResolved],
+            &[ActionKind::TileResolved],
             "card.placed && slot('one_of_us_partner') > 0",
             Some(share_at_resolved_applies),
             share_at_resolved,
@@ -42,7 +42,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         // rather than `silent`: it shares a TileResolved drive with the
         // visible share above, and the per-drive silent check would see the
         // share's logs and accuse this bookkeeping of hiding a real effect.
-        On::Action(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, clear_measured_rent),
+        On::Action(&[ActionKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, clear_measured_rent),
     ],
 ).props(&[(card_sdk::abi::prop::SONG, 1)]).silent(&[2]).quiet_when_empty(&[4]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"ONE OF US"#)
@@ -179,7 +179,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // (`tileResolved`), then the other side's half lands as a **raw** money
     // add (`ctx::adjust_money`), so no payment hook can boost it.
     // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有次地契」
-    // -- the deed hand-over is `On::Action(&[HookKind::BeforeOut], "", Some(...))` below
+    // -- the deed hand-over is `On::Action(&[ActionKind::BeforeOut], "", Some(...))` below
     // (C# `CardOneOfUs.BeforeOut`).
     Ok(())
 }

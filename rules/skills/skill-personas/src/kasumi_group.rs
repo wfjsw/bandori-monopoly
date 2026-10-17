@@ -14,7 +14,7 @@
 //! That is close to 开局 rather than equal to it -- anything that paid out
 //! between setup and the first turn start would come first.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,8 +25,8 @@ const DONE: &str = "skill.kasumiGroup.start";
 pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
-        On::Action(&[HookKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", None, at_start),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", None, at_start),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
     ],
 );
 
