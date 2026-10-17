@@ -89,7 +89,8 @@ fn on_fans_flip(player_id: i32) -> card_sdk::Asked {
     if over <= 0 {
         return Ok(());
     }
-    let _ = ctx::add_crystals(over, 10);
+    // 「最多10个」 caps the **overflow amount**, not this card's total.
+    let _ = ctx::add_crystals(over, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("pastel_over")).i("n", over as i64),
