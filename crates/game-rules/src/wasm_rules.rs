@@ -165,6 +165,13 @@ pub struct Run {
     /// concrete so the native backend can hold one in a thread-local.
     props: Arc<std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>>,
     trigger: Trigger,
+    /// The seat whose activation this is (`Call::player_id`) -- the hand play's
+    /// player, the counteraction's declarer. Distinct from
+    /// [`Run::trigger`].`player_id`, which is the *answered* link's player on a
+    /// counteraction (the payer). [`Run::stamp_owner`] falls back to this, not
+    /// to the trigger, so a counter that places itself keeps its declarer as
+    /// owner.
+    activation_player: i32,
     /// The card whose effect is running -- the one `place_card` /
     /// `unplace_self` act on.
     current_card: String,
@@ -2337,12 +2344,20 @@ impl Run {
     /// the owner it carried off the field (a hop), else the player whose
     /// activation this is (a hand play). Placement alone stamps the field
     /// holder, which loses the owner of a card parked on another player.
+    ///
+    /// The hand-play fallback is [`Run::activation_player`] (`Call::player_id`),
+    /// not `trigger.player_id`: a [反击] body runs against the *answered* link,
+    /// whose `player_id` is the payer, while the card belongs to its declarer.
     fn stamp_owner(&mut self, uid: i32, card: &str) {
         if uid < 0 || card != self.current_card {
             return;
         }
         let held = self.world.field_by_uid(self.current_uid).map(|f| f.owner);
-        let owner = self.carried_owner.take().or(held).unwrap_or(self.trigger.player_id);
+        let owner = self
+            .carried_owner
+            .take()
+            .or(held)
+            .unwrap_or(self.activation_player);
         if owner >= 0 {
             self.world.set_field_owner(uid, owner);
         }
@@ -2898,6 +2913,7 @@ impl<M: CardModules> RulesBridge<M> {
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: trigger.clone(),
+                activation_player: call.player_id(),
                 current_card: card_id.to_string(),
                 current_uid: uid,
                 carried_owner: None,
@@ -3100,6 +3116,7 @@ impl<M: CardModules> RulesBridge<M> {
                         data: self.data.clone(),
                         props: self.modules_props(),
                         trigger: trigger.clone(),
+                        activation_player: call.player_id(),
                         current_card: card_id.to_string(),
                         current_uid: uid,
                         carried_owner: None,
@@ -6043,6 +6060,7 @@ impl<M: CardModules> RulesBridge<M> {
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: top.clone(),
+            activation_player: top.player_id,
             current_card: card.to_string(),
             current_uid: -1,
             carried_owner: None,
@@ -6268,6 +6286,7 @@ impl<M: CardModules> RulesBridge<M> {
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: top.clone(),
+                activation_player: top.player_id,
                 current_card: String::new(),
                 current_uid: -1,
                 carried_owner: None,
@@ -8450,6 +8469,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: Trigger::default(),
+            activation_player: player_id as i32,
             current_card: card.to_string(),
             current_uid: uid,
             carried_owner: None,
@@ -8541,6 +8561,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: Trigger::default(),
+            activation_player: -1,
             current_card: String::new(),
             current_uid: -1,
             carried_owner: None,

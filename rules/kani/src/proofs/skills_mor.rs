@@ -60,17 +60,25 @@ fn fill_mine(owner: i32) -> rules_cond_ir::ctx::IrCtx {
 
 /// Light IrCtx for `actor == owner && is_start(tile.id)` — the Pass hook.
 /// (Full `fill_from_world` is a CBMC cliff; `conf_fill_diff` pins the binding.)
+///
+/// Board walk is an 8×8 chunk (TUNING) so the unwind bound is 8, not 60.
 #[allow(dead_code)]
 fn fill_pass_circle(owner: i32) -> rules_cond_ir::ctx::IrCtx {
     world::with_world(|w| {
         let mut c = crate::ir_fill::fill_pay_add(w, owner);
         c.set_scalar(rules_cond_ir::vars::VarId::TileId, w.trig_tile as i64);
-        let mut i = 0usize;
-        while i < 60 {
-            if crate::board::TILES[i].kind == 0 {
-                c.set_insert(rules_cond_ir::ctx::SetId::Circle, i as i64);
+        // 8×8 chunk walk over the 60-tile board (unwind bound 8).
+        let mut outer = 0usize;
+        while outer < 8 {
+            let mut k = 0usize;
+            while k < 8 {
+                let i = outer * 8 + k;
+                if i < 60 && crate::board::TILES[i].kind == 0 {
+                    c.set_insert(rules_cond_ir::ctx::SetId::Circle, i as i64);
+                }
+                k += 1;
             }
-            i += 1;
+            outer += 1;
         }
         c
     })
@@ -452,14 +460,20 @@ mod pass_fire {
         world::with_world_mut(|w| {
             w.trig_player = user;
             // The tile being passed. Circle tiles are kind 0 on the static
-            // board. Pin to a known CiRCLE so the host gate admits.
+            // board. Pin to a known CiRCLE so the host gate admits. 8×8 chunk
+            // walk (TUNING) keeps the unwind bound at 8, not 60.
             let mut circle = -1i32;
-            let mut i = 0usize;
-            while i < 60 {
-                if crate::board::TILES[i].kind == 0 && circle < 0 {
-                    circle = i as i32;
+            let mut outer = 0usize;
+            while outer < 8 {
+                let mut k = 0usize;
+                while k < 8 {
+                    let i = outer * 8 + k;
+                    if i < 60 && crate::board::TILES[i].kind == 0 && circle < 0 {
+                        circle = i as i32;
+                    }
+                    k += 1;
                 }
-                i += 1;
+                outer += 1;
             }
             kani::assume(circle >= 0);
             w.trig_tile = circle;

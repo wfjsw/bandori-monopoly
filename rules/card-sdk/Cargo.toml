@@ -19,3 +19,5 @@ bitflags = { version = "2", default-features = false }
 # Guest builds (no_std cdylibs): panic handler + bump allocator. Enable it in
 # the card crate AND put `#![cfg_attr(target_arch = "wasm32", no_std)]` there too.
 guest = []
+# cfg(kani) only: static bump GlobalAlloc (experimental, see kani_alloc.rs).
+kani-bump = []

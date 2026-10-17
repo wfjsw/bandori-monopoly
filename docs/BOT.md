@@ -140,8 +140,8 @@ prompt-open (`Ask::ai` / `ai_picked` / `worth`: `Cx::fill_ai` for ordinary
 prompts, `Ask::mortgage`'s `ai_pick` from `auto_mortgage(_from)`,
 `Ask::auction`'s `worth` from `ai_auction_worth` per seat). The seat-view
 engine **recomputes** via `compute_ai_answer` on the fork
-(`ai_auction_worth` / `auto_mortgage(_from)` / `ai_answer_for_entry`). Every
-way those can disagree:
+(`ai_auction_worth` / `auto_mortgage(_from)` / the `Ask::with_ai` policy
+tests / `ai_answer_for_entry`). Every way those can disagree:
 
 | name / gate | reads | client vs server | blast radius |
 |---|---|---|---|
@@ -150,13 +150,23 @@ way those can disagree:
 | `chaos_pick` (chaos non-counteract prompts) | **RNG** (`w.rng.below`) | **may diverge** (RNG) | `aiAnswer.answer` differs |
 | `counteract_pick` (standard, title `ask.counteract.title`) | **RNG** one `f64` per offered card until one fires + `strategy_of(seat).counteract_propensity` (public characters + ruleset sha) + prompt `options` (public to the asked seat) | **may diverge** (RNG) | `aiAnswer.answer` differs |
 | chaos [反击] pass roll (`CHAOS_COUNTER_CHANCE`) | **RNG** (`w.rng.f64`) | **may diverge** (RNG) | `aiAnswer.answer` differs |
-| standard non-counteract / non-chaos | deterministic `fallback` | always equal | -- |
+| standard non-counteract / non-chaos **without** `Ask::with_ai` | deterministic `fallback` | always equal | -- |
+| **`Ask::with_ai` policy tests** -- `offer_buy` / `offer_build` / `offer_force_buy` (titles `ask.buy.title` / `ask.build.title` / `ask.force_buy.title`) | **public** money + quoted price + `StrategyParams` + round (and the force-buy reserve). Deterministic, no draw. `compute_ai_answer` re-runs them (`ai_wants_buy` / `ai_wants_build` / `ai_wants_force_buy`); the answer is 0 = accept, 1 = decline | always equal (regression: `crates/game-core/tests/compute_ai_answer.rs`) | -- |
+| **`Ask::with_ai` tile pick** -- `rules/tiles` `agent.rs` (title `ask.agent.title`) | `ai_agent_choice` over the offered tiles: public money / quotes / strategy. Deterministic for standard; chaos draws. `compute_ai_answer` re-runs `ai_agent_choice` | always equal (standard); **may diverge** (RNG) for chaos | `aiAnswer.answer` differs |
+| any other `Ask::with_ai` (a card body's own hint) | card-defined; the fork cannot re-run the card body, so `compute_ai_answer` takes the fallback | **may diverge** | `aiAnswer.answer` is the fallback, not the card's hint |
 | `ai_auction_worth` -- standard | **RNG** (`w.rng.f64` into `StrategyParams::auction_worth`) + public money + public tile quote | **may diverge** (RNG) | `aiAnswer.worth` differs (auction ceiling) |
 | `ai_auction_worth` -- chaos | deterministic `money - CHAOS_RESERVE` | always equal (same formula) | -- |
 | `auto_mortgage` / `auto_mortgage_from` -- standard | **public** deeds (`mortgageable` = own buyable unmortgaged tiles), sort key from `StrategyParams` (public). No draw. | always equal | -- |
 | `auto_mortgage_from` -- chaos | **RNG** (`w.rng.below` per pick) over the deed list | **may diverge** (RNG) | `aiAnswer.picked` differs |
 | `Ask::mortgage` / `Ask::auction` fill timing | the fill is stamped once at prompt-open on the live stream; a later recompute on the live match would already see a moved RNG. The fork never shares that stream. | **may diverge** (timing + RNG) | `aiAnswer` differs |
 | stubbed other seats' auction ceilings (`stub_pending`) | approximate (`base.min(money-1000)`) -- **not** used by `compute_ai_answer`, which only fills the viewer's own entry | n/a for extras | none |
+
+**The `with_ai` row is load-bearing.** Those fills are *not* the fallback
+(`fill_ai` skips an entry `with_ai` already set). A recompute that only ran
+`ai_answer_for_entry` answered every fundable buy with the prompt's "decline"
+slot, and online 托管 -- which trusts `aiAnswer` over its own policy table in
+`autopilot.ts` `botPrompt` -- never bought a tile, while solo (which reads the
+fill) kept buying. Pinned by `crates/game-core/tests/compute_ai_answer.rs`.
 
 No `ai_*` choice fn in the extras path reads another seat's hand, the deck
 order, or a hidden zone. Hidden-state risk is limited to the **RNG**.

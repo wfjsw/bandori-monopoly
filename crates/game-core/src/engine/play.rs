@@ -2301,15 +2301,9 @@ impl Cx<'_> {
             );
             return Ok(());
         }
-        let money = self.w.st.players[i].money;
-        let m = self.bot_mentality(i);
         // Standard reads `StrategyParams::force_buy_reserve` (default ==
         // `FORCE_BUY_RESERVE`); chaos keeps its own `CHAOS_RESERVE`.
-        let wants_force = if self.is_chaos(i) {
-            super::ai::bot_wants_force_buy(m, money, price)
-        } else {
-            self.strategy_of(i).wants_force_buy(money, price)
-        };
+        let wants_force = self.ai_wants_force_buy(i, price);
         let ask = Ask::choice(
             vec![i],
             Msg::new("ask.force_buy.title"),
