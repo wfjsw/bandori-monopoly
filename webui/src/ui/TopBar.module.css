@@ -1,9 +1,7 @@
 /* The bar spans the whole stage width, but only its own pieces take the
    pointer: its empty middle must not swallow clicks meant for what sits under
-   it (the board's turn card, for one). Controls respect the hardware on the
-   stage's top edge (`--safe-top`, the notch plus the landscape touch dead
-   zone) -- the retractable strips do not, so they still reach the border. */
-.bar { position: absolute; left: 0; right: 0; top: var(--safe-top, 0px); height: 110px; z-index: var(--z-topbar); pointer-events: none; }
+   it (the board's turn card, for one). */
+.bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: var(--z-topbar); pointer-events: none; }
 .bar > * { pointer-events: auto; }
 /* The breadcrumb is a label: it lets clicks through to anything under it (only
    its help button takes the pointer). */

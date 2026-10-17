@@ -283,9 +283,6 @@
   max-height: 640px;
   animation: sheetIn 0.22s var(--ease-sheet);
   transition: transform 0.22s var(--ease-sheet);
-  /* The window itself still runs to the screen's bottom edge; only its
-     contents lift clear of the home indicator (`--safe-bottom`). */
-  padding-bottom: var(--safe-bottom, 0px);
 }
 .sheetWin.retracted {
   transform: translateY(calc(100% - var(--sheet-strip)));
