@@ -1509,8 +1509,8 @@ impl TriggerKind {
     pub const Forced: Self = Self(22);
 
     /// Wire name `state`: 「当有其他玩家切换状态时」 -- a player toggled skill
-    /// state (Mujica:欢迎来到ave mujica的世界). Not raised by the current
-    /// engine; kept for wire compatibility.
+    /// state (Mujica:欢迎来到ave mujica的世界). Raised at the skill-state
+    /// 1↔2 toggle chokepoint (`wasm_rules` `note_state_toggle` commit).
     pub const State: Self = Self(23);
 
     /// Wire name `counteracted`: 「有玩家对你使用[反击]后」 -- a [反击] was
@@ -1519,8 +1519,8 @@ impl TriggerKind {
     pub const Counteracted: Self = Self(24);
 
     /// Wire name `drawOut`: 「回合外受到抽卡效果时」 -- a draw hit you outside
-    /// your own turn (CRYCHIC:优雅的呐喊). Not raised by the current engine;
-    /// kept for wire compatibility. The per-draw points today are
+    /// your own turn (CRYCHIC:优雅的呐喊). Raised at the `HostRequest::Draw`
+    /// chokepoint before the cards move. The per-draw after points remain
     /// [`Self::DrewBefore`] / [`Self::Drawn`] / [`Self::Drew`].
     pub const DrawOut: Self = Self(25);
 

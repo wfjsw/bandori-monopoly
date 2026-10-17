@@ -207,6 +207,10 @@ pub struct Run {
     /// Players this run granted exile layers to -- the engine raises `exile`
     /// for each once the run commits (「任意玩家获得exile…时」 handlers).
     exile_log: Vec<i32>,
+    /// Skill-state 1↔2 toggles this run made, `(who, from, to)` -- the engine
+    /// raises `state` for each once the run commits (Mujica:欢迎来到ave
+    /// mujica的世界 clause (2)). The initial 0→1 / 0→2 write is not a toggle.
+    state_log: Vec<(i32, i32, i32)>,
     /// Which of the card's numbers this play doubles, or -1. Set by the
     /// doubling group skill, which is not ported yet.
     doubled: i32,
@@ -535,6 +539,24 @@ impl Run {
                 .i("value", now as i64)
                 .i("from", was as i64),
         );
+    }
+
+    /// Record a real skill-state 1↔2 toggle so the commit point can raise
+    /// `state` (Mujica:欢迎来到ave mujica的世界 clause (2)) and stamp
+    /// `switchedRound = turn_key` for 「所有本回合切换了状态的玩家」.
+    /// The 0→1 / 0→2 initial write (band-skill placement) is not a toggle.
+    fn note_state_toggle(&mut self, who: i32, key: &str, was: i32, now: i32) {
+        if key != card_sdk::abi::state_key::SKILL_STATE {
+            return;
+        }
+        if was == now || !matches!(was, 1 | 2) || !matches!(now, 1 | 2) {
+            return;
+        }
+        // Host stamp: character skills never wrote the flag themselves, so
+        // clause (2)'s 「所有本回合切换了状态的玩家」 never lit.
+        let turn_key = self.world.st.round * 100 + self.world.st.turn + 1;
+        self.world.state_set(who, "switchedRound", turn_key);
+        self.state_log.push((who, was, now));
     }
 
     /// Outcome line for a plan rewrite the rulebook words as happening (dice,
@@ -1466,12 +1488,14 @@ impl CardWorld for Run {
         let was = self.world.state_get(player_id, key);
         let now = self.world.state_set(player_id, key, value);
         self.outcome_state(player_id, key, was, now);
+        self.note_state_toggle(player_id, key, was, now);
         now
     }
     fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
         let was = self.world.state_get(player_id, key);
         let now = self.world.state_add(player_id, key, delta);
         self.outcome_state(player_id, key, was, now);
+        self.note_state_toggle(player_id, key, was, now);
         now
     }
     fn state_set_bounds(&mut self, player_id: i32, key: &str, min: i32, max: i32) {
@@ -2850,6 +2874,7 @@ impl<M: CardModules> RulesBridge<M> {
                 house_log: vec![],
                 counter_log: vec![],
                 exile_log: vec![],
+                state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
                 wrap_effect: Self::wraps_effect(call, card_id),
@@ -3051,6 +3076,7 @@ impl<M: CardModules> RulesBridge<M> {
                         house_log: vec![],
                         counter_log: vec![],
                         exile_log: vec![],
+                        state_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
                         wrap_effect: Self::wraps_effect(call, card_id),
@@ -3854,6 +3880,31 @@ impl<M: CardModules> RulesBridge<M> {
             let Ok(player) = usize::try_from(player_id) else {
                 return Ok(-1);
             };
+            // 「回合外受到抽卡效果」 (CRYCHIC:优雅的呐喊): a guest-effect draw
+            // that lands outside the drawer's own turn. `HostRequest::Draw` is
+            // always a card/event rule's `ctx::draw`, so `by_card` is the
+            // causing seat (`call.player_id()`).
+            // TODO(规则书): 「受到抽卡效果」 -- does it include self-caused
+            // draws on someone else's turn? Implemented as effect-caused only
+            // (this arm always is), so a self-caused out-of-turn draw still
+            // opens the window.
+            if n > 0 && player_id >= 0 && player_id != cx.state().turn {
+                let t = self.raise_core(cx, "drawOut", player_id, |t| {
+                    t.target = player_id;
+                    t.value = n;
+                    t.by_card = Some(call.player_id());
+                    t.effects.push(game_core::engine::rules::Effect {
+                        kind: "drawOut",
+                        target: player_id,
+                        from: call.player_id(),
+                        tile: -1,
+                        value: n,
+                    });
+                })?;
+                if t.is_cancelled() {
+                    return Ok(0);
+                }
+            }
             let got = cx.draw_cards_with_hooks(player, n.max(0) as usize, true)?;
             return Ok(-got - 1);
         }
@@ -4196,6 +4247,7 @@ impl<M: CardModules> RulesBridge<M> {
                     && after.reshuffle_log.is_empty()
                     && after.house_log.is_empty()
                     && after.exile_log.is_empty()
+                    && after.state_log.is_empty()
                     && after.charge_spent_log.is_empty();
                 if quiet_when_empty && body_empty && !after.prompted && !flash_requested {
                     cx.drop_events(&[header]);
@@ -4329,6 +4381,29 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = 1;
                     t.by_card = by;
                 })?;
+            }
+            // `state` -- 「当有其他玩家切换状态时」 (Mujica:欢迎来到ave
+            // mujica的世界 (2)). Raised once per real skill-state 1↔2 toggle
+            // this run made, same post-commit shape as `exile`. The counter's
+            // own re-toggles must not chain further (`Cx::state_raise_depth`).
+            for (who, _from, to) in after.state_log {
+                if cx.state_raise_depth > 0 {
+                    continue;
+                }
+                cx.state_raise_depth += 1;
+                let raised = self.raise_core(cx, "state", who, |t| {
+                    t.value = to;
+                    t.by_card = by;
+                    t.effects.push(game_core::engine::rules::Effect {
+                        kind: "state",
+                        target: who,
+                        from: by.unwrap_or(-1),
+                        tile: -1,
+                        value: to,
+                    });
+                });
+                cx.state_raise_depth = cx.state_raise_depth.saturating_sub(1);
+                raised?;
             }
             // A run that has an instance owns that instance's fate:
             // 「将此卡放入[使用者]弃卡区」 is `set_dest(Graveyard)` whether
@@ -5937,6 +6012,7 @@ impl<M: CardModules> RulesBridge<M> {
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
+            state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
             wrap_effect: false,
@@ -6161,6 +6237,7 @@ impl<M: CardModules> RulesBridge<M> {
                 house_log: vec![],
                 counter_log: vec![],
                 exile_log: vec![],
+                state_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
                 wrap_effect: false,
@@ -8338,6 +8415,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
+            state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
             wrap_effect: false,
@@ -8428,6 +8506,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             house_log: vec![],
             counter_log: vec![],
             exile_log: vec![],
+            state_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
             wrap_effect: false,

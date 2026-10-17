@@ -68,6 +68,9 @@ fn switch_state(player_id: i32, hit: i32) -> card_sdk::Asked {
         &Msg::new(key!("welcome_mujica_switched")).player_id("who", hit),
     );
     // 「转换任意一名玩家的状态」 -- a straight toggle of the keyed `skillState`.
+    // The host stamps `switchedRound = turn_key` on every real 1↔2 toggle
+    // (wasm_rules `note_state_toggle`), so the explicit mark below is redundant
+    // but kept as a local belt-and-suspenders for the same value.
     let to = if cur == 2 { 1 } else { 2 };
     ctx::state::set(hit, state_key::SKILL_STATE, to);
     ctx::state::set(hit, "switchedRound", ctx::turn_key());
@@ -82,10 +85,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     targets.push(player_id);
     let key = ctx::turn_key();
     for p in ctx::others(player_id) {
-        // C# `H.V(p, "switchedRound") == H.TurnKey` -- the slot is set by the
-        // missing `H.SwitchState`, so the comparison is real but the flag never
-        // lights until that hook lands (which also implies `H.HasStates(p)`,
-        // the C#'s other filter).
+        // C# `H.V(p, "switchedRound") == H.TurnKey`. The host stamps this flag
+        // on every skill-state 1↔2 toggle (`note_state_toggle`), including
+        // character skills that never wrote it themselves.
         if ctx::slot(p, "switchedRound") == key {
             targets.push(p);
         }
@@ -97,7 +99,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         );
     }
     // 规则书（2）: `H.SwitchState` on each -- the same skill-state toggle the
-    // play half runs, plus the `switchedRound` mark the filter above keys on.
+    // play half runs. The host stamps `switchedRound` on each real toggle and
+    // suppresses further `state` windows from this re-toggle
+    // (`Cx::state_raise_depth`), so the counter cannot ping-pong.
     // Same 「若指定了不存在状态2的玩家则无效果」 no-op on a seat without the axis.
     for &t in &targets {
         switch_state(player_id, t)?;

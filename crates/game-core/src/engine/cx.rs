@@ -418,6 +418,9 @@ pub struct Cx<'a> {
     /// Card uids whose hooks are currently running and must not re-trigger on
     /// their own movement (the termination argument for nested money). Transient.
     pub reentrant_hooks: Vec<i32>,
+    /// Nested `state` [反击] settlement depth. A counter's own skill-state
+    /// toggles must not open another window (ping-pong). Transient.
+    pub state_raise_depth: u32,
     /// `"card"` activation event ids currently open, innermost last. A nested
     /// drive groups under the top of this stack; `-1` at the bottom.
     pub activation: Vec<i32>,
@@ -912,6 +915,7 @@ impl<'a> Cx<'a> {
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
+            state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,
             guest_overlays: Vec::new(),
