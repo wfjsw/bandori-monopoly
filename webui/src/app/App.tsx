@@ -1,19 +1,15 @@
-// App shell: boot gate, History API routes with the scene fade (SceneFader: 0.18 s
-// out, 0.3 s in), BGM per screen, popups and toasts.
+// App shell: boot gate, History API routes with the scene fade (0.14 s each way), BGM per screen, popups and toasts.
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { playSceneBgm, sfx, unlockAudio } from "../core/audio";
 import { useLangVersion, useProfile } from "../core/hooks";
+import { preloadRoute, warmAllWhenIdle, within } from "../core/preload";
 import { useCrossfade } from "../hooks/scene";
 import { Boot } from "../scenes/boot/Boot";
-import { Deck } from "../scenes/deck/Deck";
-import { Gallery } from "../scenes/gallery/Gallery";
 import { Lobby } from "../scenes/lobby/Lobby";
 import { Room } from "../scenes/lobby/Room";
 import { Menu } from "../scenes/menu/Menu";
 import { Play } from "../scenes/Play";
-import { Replays } from "../scenes/replay/Replays";
-import { ReplayPlayer } from "../scenes/replay/ReplayPlayer";
 import { closeAllModals, ModalHost } from "../ui/Modal";
 import { InspectPreviewHost } from "../ui/CardPreview";
 import { ToastHost } from "../ui/Toast";
@@ -21,6 +17,12 @@ import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
 import { RotateHint } from "./RotateHint";
 import { Console } from "../console/Console";
+
+// Rarely visited scenes load as separate chunks (core/preload.ts warms them).
+const Deck = lazy(() => import("../scenes/deck/Deck").then((m) => ({ default: m.Deck })));
+const Gallery = lazy(() => import("../scenes/gallery/Gallery").then((m) => ({ default: m.Gallery })));
+const Replays = lazy(() => import("../scenes/replay/Replays").then((m) => ({ default: m.Replays })));
+const ReplayPlayer = lazy(() => import("../scenes/replay/ReplayPlayer").then((m) => ({ default: m.ReplayPlayer })));
 
 const BACKDROP: Record<Route["name"], string> = { menu: "bg_common", lobby: "bg_live", room: "bg_live", play: "bg_band", gallery: "bg_band", deck: "bg_band", replay: "bg_common", replayView: "bg_common" };
 const BGM: Record<Route["name"], string> = { menu: "menu", lobby: "lobby", room: "lobby", play: "select", gallery: "gallery", deck: "deck", replay: "menu", replayView: "board" };
@@ -67,12 +69,19 @@ export function App() {
     if (ready && profile && !target) navigate({ name: "menu" }, { replace: true });
   }, [ready, profile, target]);
 
-  // Fade out, swap the scene (backdrop + BGM), fade in. The first scene fades
-  // in over 30ms from the boot screen; later ones cross-fade under the fader.
+  // Warm every screen's art and code once the app is up.
+  useEffect(() => {
+    if (ready) warmAllWhenIdle();
+  }, [ready]);
+
+  // Fade out while the next scene's art loads, swap (backdrop + BGM) with the
+  // new scene already decoded, then fade in. The preload is capped so a slow
+  // network delays the swap by at most 450ms.
   const { shown, fading } = useCrossfade(ready ? target : null, {
     eq: (a, b) => href(a) === href(b),
-    outMs: 180,
-    inMs: 30,
+    outMs: 140,
+    inMs: 0,
+    prepare: (r) => within(preloadRoute(r), 450),
     onSwap: (r) => {
       closeAllModals();
       setBackdrop(BACKDROP[r.name]);
@@ -86,7 +95,7 @@ export function App() {
       <Stage fading={fading}>
         {/* Remount on language change so every already-rendered string is re-read. */}
         <div key={lang} style={{ position: "absolute", inset: 0 }}>
-          {booted ? shown && <div key={href(shown)}>{scene(shown)}</div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
+          {booted ? shown && <div key={href(shown)}><Suspense fallback={null}>{scene(shown)}</Suspense></div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
         </div>
         <ModalHost />
         <InspectPreviewHost />

@@ -11,6 +11,39 @@ export interface Crossfade<K> {
   fading: boolean;
 }
 
+// Is a scene transition in flight? Expensive work that would jank the fade
+// (Live2D's GL setup in particular) waits for this to go idle.
+let idle = true;
+const idleListeners = new Set<() => void>();
+
+function setIdle(v: boolean): void {
+  if (idle === v) return;
+  idle = v;
+  idleListeners.forEach((cb) => cb());
+}
+
+/** True when no scene cross-fade is running. */
+export function isTransitionIdle(): boolean {
+  return idle;
+}
+
+/** Resolves once no cross-fade is running, or after `maxWaitMs` regardless. */
+export function whenTransitionIdle(maxWaitMs = 600): Promise<void> {
+  if (idle) return Promise.resolve();
+  return new Promise((res) => {
+    const done = () => {
+      clearTimeout(timer);
+      idleListeners.delete(listener);
+      res();
+    };
+    const listener = () => {
+      if (idle) done();
+    };
+    const timer = setTimeout(done, maxWaitMs);
+    idleListeners.add(listener);
+  });
+}
+
 /**
  * Cross-fade between successive `key`s. The outgoing scene stays under the
  * fader for `outMs`, then `onSwap` runs and `shown` flips to the new key; the
@@ -33,10 +66,13 @@ export function useCrossfade<K>(
     initial?: K | null;
     eq?: (a: K, b: K) => boolean;
     onSwap?: (key: K) => void;
+    /** Awaited after the fade-out, before the swap (preloading); the fader stays up meanwhile. */
+    prepare?: (key: K) => Promise<unknown>;
   } = {},
 ): Crossfade<K> {
   const { outMs = 180, inMs = 0 } = opts;
   const onSwap = useLatestRef(opts.onSwap);
+  const prepare = useLatestRef(opts.prepare);
   const eq = useLatestRef(opts.eq ?? ((a: K, b: K) => a === b));
   const [shown, setShown] = useState<K | null>(() => opts.initial ?? null);
   const [fading, setFading] = useState(false);
@@ -47,6 +83,11 @@ export function useCrossfade<K>(
   // key object of the same scene must not cancel the in-flight fade.
   const pending = useRef<K | null>(null);
   const timers = useRef<{ swap: number; lift: number }>({ swap: 0, lift: 0 });
+
+  // Publish "a transition is running" for `whenTransitionIdle`.
+  useEffect(() => {
+    setIdle(!fading);
+  }, [fading]);
 
   useEffect(() => {
     if (key === null) return;
@@ -68,14 +109,20 @@ export function useCrossfade<K>(
     window.clearTimeout(timers.current.lift);
     pending.current = key;
     setFading(true);
+    // The preload starts now and overlaps the fade-out; the swap waits for both.
+    const ready = Promise.resolve(prepare.current?.(key)).catch(() => undefined);
     timers.current.swap = window.setTimeout(() => {
-      onSwap.current?.(key);
-      setShown(key);
-      pending.current = null;
-      if (inMs <= 0) setFading(false);
-      else timers.current.lift = window.setTimeout(() => setFading(false), inMs);
+      void ready.then(() => {
+        // A newer key took over while we waited: this swap is stale.
+        if (pending.current !== key) return;
+        onSwap.current?.(key);
+        setShown(key);
+        pending.current = null;
+        if (inMs <= 0) setFading(false);
+        else timers.current.lift = window.setTimeout(() => setFading(false), inMs);
+      });
     }, cur === null ? 0 : outMs);
-  }, [key, outMs, inMs, onSwap, eq, shownRef]);
+  }, [key, outMs, inMs, onSwap, prepare, eq, shownRef]);
 
   // Unmount: stop the timers so a lift cannot fire into a dead tree.
   useEffect(() => () => {
