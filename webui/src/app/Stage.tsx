@@ -9,7 +9,9 @@ import { backdropUrl } from "./backdrops";
 import { cx } from "../core/cx";
 import { useEventListener } from "../hooks/dom";
 import { clearForced, isForced, setStageRotated, subscribeForced, usePortraitPhone } from "./rotation";
-import { COMPACT_H, COMPACT_MIN_W, STAGE_H, STAGE_W, isCompactWindow } from "../styles/layout";
+import { STAGE_H, STAGE_W } from "../styles/layout";
+import { type Insets, type StageBox, stageBox } from "./stageBox";
+import { setStageScale } from "./stageScale";
 import s from "./Stage.module.css";
 
 export { STAGE_H, STAGE_W };
@@ -43,26 +45,65 @@ function forcedCompact(): boolean | null {
   return q === null ? null : q !== "0";
 }
 
-/** The device's left / right safe-area insets (notch side), read off a probe element. */
-function useSafeInsets(): { left: number; right: number } {
-  const read = () => {
+/**
+ * The device's safe-area insets on all four sides, read off a probe element.
+ * `env(safe-area-inset-*)` is only available to CSS, so a hidden fixed div
+ * with the values in its padding forces a sync layout that reports them.
+ * The values can resolve late on a PWA cold start and go stale across a
+ * rotation, so re-probe on the events below rather than trusting one read.
+ * (Toggling `viewport-fit=auto` and back would also force a re-resolve, but
+ * it thrashes the layout visibly; the staggered re-probe covers cold start.)
+ */
+function useSafeInsets(): Insets {
+  const read = (): Insets => {
     const probe = document.createElement("div");
-    probe.style.cssText = "position:fixed;visibility:hidden;padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left)";
+    probe.style.cssText =
+      "position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
     document.body.appendChild(probe);
     const cs = getComputedStyle(probe);
-    const r = { left: parseFloat(cs.paddingLeft) || 0, right: parseFloat(cs.paddingRight) || 0 };
+    const r = {
+      top: parseFloat(cs.paddingTop) || 0,
+      right: parseFloat(cs.paddingRight) || 0,
+      bottom: parseFloat(cs.paddingBottom) || 0,
+      left: parseFloat(cs.paddingLeft) || 0,
+    };
     probe.remove();
     return r;
   };
-  const [v, set] = useState(read);
-  useEventListener(window, "resize", () => {
-    const n = read();
-    if (n.left !== v.left || n.right !== v.right) set(n);
-  });
+  const [v, set] = useState<Insets>(read);
+  useEffect(() => {
+    // Functional update so the comparison never closes over a stale value.
+    const probe = () => {
+      const n = read();
+      set((prev) => (prev.top === n.top && prev.right === n.right && prev.bottom === n.bottom && prev.left === n.left ? prev : n));
+    };
+    // iOS reports stale geometry through intermediate resize events while
+    // turning, and iOS 17+ takes 500ms+ to settle; sample past both.
+    const orientation = () => {
+      window.setTimeout(probe, 300);
+      window.setTimeout(probe, 800);
+    };
+    // `env()` can resolve late on a PWA cold start without ever firing resize.
+    const cold = [100, 500, 1000].map((ms) => window.setTimeout(probe, ms));
+    const visible = () => {
+      if (document.visibilityState === "visible") probe();
+    };
+    window.addEventListener("resize", probe);
+    window.addEventListener("orientationchange", orientation);
+    window.addEventListener("pageshow", probe);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("resize", probe);
+      window.removeEventListener("orientationchange", orientation);
+      window.removeEventListener("pageshow", probe);
+      document.removeEventListener("visibilitychange", visible);
+      cold.forEach((id) => clearTimeout(id));
+    };
+  }, []);
   return v;
 }
 
-function useStage(tall: boolean): { scale: number; w: number; h: number; compact: boolean; shift: number; rotated: boolean } {
+function useStage(tall: boolean): StageBox {
   // Size against the *visual* viewport where there is one: on a phone the
   // layout viewport (innerWidth / innerHeight) and what is on screen differ
   // while the address bar or keyboard is showing.
@@ -89,23 +130,28 @@ function useStage(tall: boolean): { scale: number; w: number; h: number; compact
   useEventListener(() => window.visualViewport, "resize", () => set(measure()));
   useEventListener(() => window.visualViewport, "scroll", () => set(measure()));
   useEventListener(document, "focusout", () => setTimeout(() => set(measure()), 50));
-  // Landscape phones: keep the stage out from under the notch / home bar.
+  // Landscape phones: keep the stage out from under the notch / home bar, and
+  // out of the phantom top dead zone the system eats touches from. The stage
+  // axes swap under `rotate(90deg)`: its width lies along the screen's vertical
+  // axis, so the insets just trade sides (see `stageBox`).
   const inset = useSafeInsets();
   // A phone held upright, once the user asked for it: lay the stage out on the swapped (landscape) window
-  // and turn it a quarter clockwise. The insets are then the wrong axes; skip them.
+  // and turn it a quarter clockwise.
   const forced = useSyncExternalStore(subscribeForced, isForced);
   const portrait = usePortraitPhone();
   useEffect(() => {
     if (!portrait) clearForced();
   }, [portrait]);
   const rotated = forced && portrait;
-  const vw = rotated ? win.vh : win.vw - inset.left - inset.right;
-  const vh = rotated ? win.vw : win.vh;
-  // The compact (phone) canvas is the board's alone: the other scenes are
-  // laid out for the 1600 x 900 design and keep scaling it.
-  const compact = tall && isCompactWindow(vw, vh, window.matchMedia("(pointer: coarse)").matches, forcedCompact());
-  const scale = compact ? Math.min(vw / COMPACT_MIN_W, vh / COMPACT_H) : Math.min(vw / STAGE_W, vh / STAGE_H);
-  const box = { scale, w: vw / scale, h: vh / scale, compact, shift: rotated ? 0 : (inset.left - inset.right) / 2, rotated };
+  const box = stageBox({
+    vw: win.vw,
+    vh: win.vh,
+    inset,
+    rotated,
+    tall,
+    coarse: window.matchMedia("(pointer: coarse)").matches,
+    compactForced: forcedCompact(),
+  });
   // A scrolled document desyncs touches from the fixed stage (the mobile
   // touch fix); snap back to the origin wherever the scroll came from.
   const unscroll = () => {
@@ -199,8 +245,9 @@ function Backdrop({ src, snap }: { src: string; snap: boolean }) {
 
 export function Stage({ children, transitioning }: { children: ReactNode; transitioning: boolean }) {
   const tall = useStageFillValue();
-  const { scale, w, h, compact, shift, rotated } = useStage(tall);
+  const { scale, w, h, compact, shiftX, shiftY, rotated } = useStage(tall);
   setStageRotated(rotated);
+  setStageScale(scale);
   useEffect(() => {
     document.documentElement.toggleAttribute("data-compact", compact);
     if (compactNow === compact) return;
@@ -209,15 +256,25 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
   }, [compact]);
   const bg = useBackdropValue();
   const src = bg ? backdropUrl(bg) : "";
+  // Split the scaled element in two: the placer owns screen-space geometry
+  // (`shiftX` / `shiftY` and the fixed-centre transform), and the stage lays
+  // out at design size under `zoom`. `zoom` scales used length values, so the
+  // engine rasterizes glyphs at the final device size instead of texture-
+  // scaling a design-sized layer (the source of the softness).
   return (
     <>
       <Backdrop src={src} snap={transitioning} />
       <div
-        className={s.stage}
-        data-stage
-        style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(calc(-50% + ${shift}px), -50%)${rotated ? " rotate(90deg)" : ""} scale(${scale})` }}
+        className={s.placer}
+        style={{
+          width: w * scale,
+          height: (tall ? h : STAGE_H) * scale,
+          transform: `translate(calc(-50% + ${shiftX}px), calc(-50% + ${shiftY}px))${rotated ? " rotate(90deg)" : ""}`,
+        }}
       >
-        {children}
+        <div className={s.stage} data-stage style={{ width: w, height: tall ? h : STAGE_H, zoom: scale }}>
+          {children}
+        </div>
       </div>
     </>
   );

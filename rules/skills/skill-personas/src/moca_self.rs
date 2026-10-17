@@ -1,10 +1,9 @@
 //! `skill:青叶摩卡:我行我素`
 //!
 //! 规则书（skill sheet, 青叶摩卡）:
-//! > （1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
+//! > （1）每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
 //! > （2）当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]传送到其所在格子
-//! > （不触发结算且该传送本身不引发其他被动效果（如玩家重叠），该效果对每个玩家
-//! > 的被动技能和卡存在2次使用cd）
+//! > （不触发结算且该传送本身不引发其他被动效果（如玩家重叠））
 //!
 //! （1） is the shared Afterglow rest counter (see [`super::ran_red`]).
 //!
@@ -13,8 +12,8 @@
 //! （如玩家重叠）」. Both are the plan's own flags (`resolve: false`) plus the
 //! fact that a plain position write raises nothing.
 //!
-//! 「该效果对每个玩家的被动技能和卡存在2次使用cd」 is a per-*source* cooldown of
-//! two uses, which is a counter keyed on the source rather than on the target.
+//! Sheet 2026-10-17 drops the old 「该效果对每个玩家的被动技能和卡存在2次使用cd」
+//! per-source cooldown; the offer is now unbounded apart from the pot.
 
 use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, state};
@@ -22,22 +21,15 @@ use card_sdk::{key, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;
 
-/// Per-source use count, keyed `skill.mocaSelf.used:<player>`. Cap 2.
-fn used_key(src: i32) -> alloc::string::String {
-    alloc::format!("skill.mocaSelf.used:{src}")
-}
-
 pub const MOCA_SELF: CardDef = CardDef::new(
     "skill:青叶摩卡:我行我素",
     &[
         On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
         On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),
-        // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…该效果对
-        // 每个玩家的被动技能和卡存在2次使用cd」 -- the offer exists only for
-        // another seat, under the per-source CD, with a pot to spend. Fire is
-        // CEL; the dynamic CD key is residual.
-        On::Action(&[ActionKind::CardPlayed], "charge(owner) >= 1", Some(other_and_cooled), on_card),
-        On::Action(&[ruleset_core::kind::SkillUsed], "charge(owner) >= 1", Some(other_and_cooled), on_skill),
+        // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…」 -- the
+        // offer exists only for another seat, with a pot to spend. Fire is CEL.
+        On::Action(&[ActionKind::CardPlayed], "charge(owner) >= 1", Some(other_seat), on_card),
+        On::Action(&[ruleset_core::kind::SkillUsed], "charge(owner) >= 1", Some(other_seat), on_skill),
     ],
 ).silent(&[0]);
 
@@ -45,13 +37,10 @@ fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_group(player_id, "Afterglow")
 }
 
-/// Residual guard for the （2） offer: the actor is another seat and this
-/// player's per-source CD for them is under 2. Dynamic key (`used_key(src)`).
-fn other_and_cooled(player_id: i32) -> bool {
+/// Residual guard for the （2） offer: the actor is another seat.
+fn other_seat(player_id: i32) -> bool {
     let src = ctx::trigger::player_id();
-    src >= 0
-        && src != player_id
-        && state::get(player_id, &used_key(src)) < 2
+    src >= 0 && src != player_id
 }
 
 /// 「初始1，上限1」.
@@ -60,7 +49,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
+/// （1）「每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
 fn tick(player_id: i32) -> card_sdk::Asked {
     super::ran_red::rest_tick(player_id)
 }
@@ -78,10 +67,8 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2） 「你可以消耗一个[火罐]传送到其所在格子」.
-/// Applicability is `charge(owner) >= 1` + `other_and_cooled`.
+/// Applicability is `charge(owner) >= 1` + `other_seat`.
 fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
-    // 「该效果对每个玩家的被动技能和卡存在2次使用cd」
-    let key = used_key(src);
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("moca_self_title")),
@@ -92,7 +79,6 @@ fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
     if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("moca_self_spend")))? {
         return Ok(());
     }
-    state::set(player_id, &key, state::get(player_id, &key) + 1);
     state::set(player_id, REST_TURNS, 0);
     // 「不触发结算且该传送本身不引发其他被动效果」 -- a plain position write:
     // no move plan, so no pass/arrive/settle and no player-overlap bookkeeping.

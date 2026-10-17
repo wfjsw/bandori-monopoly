@@ -774,7 +774,7 @@ fn pay_stages_fixed_add_on_receive() -> Result<(), String> {
 /// G-MONEY-14 -- 「取消支付」 / 「无需失去资金」 moves no money.
 ///
 /// Armed with CRYCHIC:主唱太拼命了:
-/// 「[反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。」
+/// 「[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付。」
 #[test]
 fn pay_stages_cancel_moves_nothing() -> Result<(), String> {
     let mut t = Table::vanilla(2);

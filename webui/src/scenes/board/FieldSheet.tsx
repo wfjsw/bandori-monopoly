@@ -21,6 +21,7 @@ import { Avatar } from "../../ui/Character";
 import { showEvent } from "./Popups";
 import { setHoverCardTiles, useHoverSeat } from "./hoverSeat";
 import { t as tr } from "../../i18n/t";
+import { designBox } from "../../app/stageScale";
 import s from "./FieldSheet.module.css";
 
 /** Card face width (px) and the step bounds of the overlapped row. */
@@ -54,9 +55,9 @@ export const FieldSheet = memo(function FieldSheet({ m, pulse }: { m: Model; pul
   useEffect(() => {
     const el = sheetRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const ro = new ResizeObserver(() => setWidth(designBox(el).width));
     ro.observe(el);
-    setWidth(el.clientWidth);
+    setWidth(designBox(el).width);
     return () => ro.disconnect();
   }, [any]);
   // Touch screens: the first tap only highlights a card (like the hand); a

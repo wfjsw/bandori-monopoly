@@ -7,6 +7,12 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#ed4e76" />
+    <!-- No apple-mobile-web-app-status-bar-style: the UI's backdrop is light
+         (--backdrop), so black-translucent would put white status-bar text on
+         it; the layout already respects safe-area insets either way. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BanG Dream 大富翁" />
     <title>BanG Dream 大富翁</title>
   </head>
   <body>

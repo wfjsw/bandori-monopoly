@@ -619,7 +619,7 @@ fn one_of_us_places_on_field() {
 // Character skills
 // =====================================================================
 
-// 规则书: 美竹兰「（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）」
+// 规则书: 美竹兰「（1）每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）」
 #[test]
 fn ran_skill_starts_with_one_fire() {
     let mut t = Table::new(&["美竹兰", "户山香澄"]);
@@ -722,8 +722,9 @@ fn himari_skill_parity_move() {
     eprintln!("pos={} fire={}", t.pos(0), t.charge(0));
 }
 
-// 规则书: 上原绯玛丽「（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」
+// 规则书: 上原绯玛丽「（1）每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]」
 // -- the turn-end tick logs its outcome (count / gain / cap) instead of nothing.
+// The counter fires at n=4 (rest=3 → n=4, not < 4).
 fn himari_end_turn_keys(rest: i32, fire: i32) -> Vec<String> {
     let mut t = Table::new(&["上原绯玛丽", "美竹兰"]);
     t.clean();
@@ -746,13 +747,13 @@ fn himari_rest_tick_logs_count() {
 
 #[test]
 fn himari_rest_tick_logs_gain() {
-    let keys = himari_end_turn_keys(2, 0);
+    let keys = himari_end_turn_keys(3, 0);
     assert!(keys.iter().any(|k| k.contains("log.gain_charge")), "{keys:?}");
 }
 
 #[test]
 fn himari_rest_tick_logs_cap() {
-    let keys = himari_end_turn_keys(2, 1);
+    let keys = himari_end_turn_keys(3, 1);
     assert!(keys.iter().any(|k| k.contains("log.gain_charge_capped")), "{keys:?}");
 }
 

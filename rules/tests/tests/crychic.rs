@@ -169,16 +169,68 @@ fn haruhikage_plays_as_counter() {
     assert!(t.hand(0).contains(&"CRYCHIC:春日影".to_string()));
 }
 
-#[test]
-fn haruhikage_special_draw_gate() {
+/// 规则书（1）: 「[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，
+/// 可选择使其直接从抽牌堆打出」 -- the offer exists only when *both* gates hold
+/// at the `Drawn` moment (the card itself is already in hand).
+///
+/// Drives a real `Drawn` of 春日影 via 「10次招募」 ([手] pays 1500, draws 1)
+/// and returns the live prompt dump if the [特] offer is open, else `None`.
+fn haruhikage_draw_special(money: i32, spare: &[&str]) -> Option<String> {
     let mut t = Table::vanilla(2);
-    t.set_money(0, 25_000); // assets ≥ 20000
-    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
-    t.give(0, &["CRYCHIC:春日影"]);
-    // 规则书: 「[特] 若抽到此卡时你的总资产大于等于20000」 -- triggers on draw, not play.
-    // We verify the card is in hand (the [特] fires on draw which we can't easily trigger).
-    assert!(t.hand(0).contains(&"CRYCHIC:春日影".to_string()));
+    t.set_money(0, money);
+    t.set_hand(0, spare);
+    t.set_draw(0, &["CRYCHIC:春日影", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    drain(&mut t);
+    t.give(0, &["通用:10次招募（1回限定）"]);
+    let r = t.play(0, "通用:10次招募（1回限定）");
+    // Walk the post-play prompts without accepting the [特] offer: decline
+    // everything except stop as soon as the 春日影 special is the open prompt.
+    for _ in 0..30 {
+        let p = t.dump_prompt();
+        if p.contains("haruhikage_special_ask") {
+            return Some(p);
+        }
+        if t.prompt().is_none() {
+            break;
+        }
+        // Any other prompt (including a would-be special under another key).
+        if p.contains("haruhikage") {
+            return Some(p);
+        }
+        decline_q(&mut t);
+    }
+    let _ = r;
+    None
+}
+
+#[test]
+fn haruhikage_special_offered_when_hand_le_5() {
+    // 4 spare cards + the drawn 春日影 = 5, which is 「不多于5张」.
+    let spare = ["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"];
+    let got = haruhikage_draw_special(25_000, &spare);
+    assert!(
+        got.is_some(),
+        "assets ≥ 20000 and hand ≤ 5 must offer the [特]"
+    );
+}
+
+#[test]
+fn haruhikage_special_not_offered_when_hand_over_5() {
+    // 6 spare cards + the drawn 春日影 = 7, which is over 「不多于5张」.
+    let spare = [
+        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
+        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
+    ];
+    let got = haruhikage_draw_special(25_000, &spare);
+    assert!(got.is_none(), "hand over 5 must not offer the [特]: {got:?}");
+}
+
+#[test]
+fn haruhikage_special_not_offered_under_assets() {
+    // 4 spare cards (hand ≤ 5 holds) but assets under 20000.
+    let spare = ["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"];
+    let got = haruhikage_draw_special(3_000, &spare);
+    assert!(got.is_none(), "assets under 20000 must not offer the [特]: {got:?}");
 }
 
 /// 规则书（2）: 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 -- against a
@@ -499,7 +551,7 @@ fn destiny_together_plays() {
 fn vocalist_too_hard_is_a_counter() {
     let mut t = Table::vanilla(2);
     t.give(0, &["CRYCHIC:主唱太拼命了"]);
-    // 规则书: 「[反击] 一次性向其他玩家支付5000以上资金时，免除此次支付」
+    // 规则书: 「[反击] 一次性向其他玩家支付至少5000资金时，免除此次支付」
     assert!(t.hand(0).contains(&"CRYCHIC:主唱太拼命了".to_string()));
 }
 

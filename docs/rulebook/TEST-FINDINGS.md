@@ -425,6 +425,28 @@ only.
   band (4).
 * Sheet-superseded 2026-10-06: 黑色生日 「不多于1000」 is inclusive (1000
   pays 800); 羽丘 的 thresholds are 「至少为10/15/20」.
+* Sheet-superseded 2026-10-17 (live `角色技能` / `新卡组卡` tabs; the
+  spreadsheet's default tab `gid=0` is 「原事件卡」 and is **not** a source):
+  * **北泽育美 「全垒打！」 second paragraph is back.** The 2026-10-06 sheet
+    read dropped 「育美经过其他角色时，可以把自己身上的可乐饼转移给该角色」,
+    「育美可在主要阶段消耗4个可乐饼兑换1000资金」 and 「其他角色拥有4个可乐饼
+    时自动移除所有可乐饼停留一回合」; the 2026-10-17 sheet restores all three
+    and they are implemented (`hagumi_homerun.rs`). The old "these are off the
+    sheet" note in that file is superseded.
+  * **Afterglow (1) rest counter is 「每四回合」**, not 「每三回合」 (all five
+    Afterglow personas share `rest_tick`).
+  * **青叶摩卡 (2) has no per-source 「2次使用cd」** any more; the offer is
+    gated only by the fire pot.
+  * **冰川纱夜 (2) is 「一回合一次，你可以在进入移动阶段时」** -- the sheet now
+    carries the once-per-turn window that was previously ruling-only.
+  * **高松灯 (2)(3) teleports are 「…并[触发结算]」** -- the settle runs at the
+    destination (the engine's `SettleBefore` redirect), never at the abandoned
+    landing.
+  * **春日影 (1) [特] also needs 「手牌不多于5张」** at the `Drawn` moment.
+  * **主唱太拼命了 「至少5000」** (was 「5000以上」) -- same `>= 5000` reading.
+  * The `中立事件` tab has four sheet-side typos (dropped/redundant characters
+    in 前往哈比内尔王国旅游 / 飞鸟山之战 / 修复公告 / 一切不会结束) that were
+    **not** copied over; repo text is grammatical and semantically identical.
 * User rulings 2026-10-07 (通用:该清CP了 / the [CP点] mark owner; see
   `rules/tile_marks/src/cp.rs` and `rules/cards/card-general/src/clear_cp.rs`):
   * **[CP点] is its own tile-mark category, never owned by a player.**

@@ -3,16 +3,22 @@
 //! 规则书（skill sheet, 冰川纱夜）:
 //! > （1）每次[经过]CiRCLE时获得2个[火罐]，每次被别的玩家[经过]时获得1个
 //! > [火罐]（初始10，上限10）
-//! > （2）你可以消耗6个[火罐]将非[传送]的主要移动添加1或2格
+//! > （2）一回合一次，你可以在进入移动阶段时消耗6个[火罐]将非[传送]的主要移动
+//! > 添加1或2格
 //! > （3）第一个玩家被淘汰，经过Circle时获得的火罐加1
 //!
 //! （1） is two `Pass` halves of one clause: your own pass onto CiRCLE pays 2,
 //! being passed by anyone pays 1. 「被别的玩家[经过]」 is the *player* being
 //! passed, which is `passPlayer`, not `pass`.
 //!
-//! （2） 「非[传送]的主要移动」 is the walk, not a teleport, and 「添加1或2格」
-//! is offered once per turn after the final roll/counteractions, before the
-//! first step (the confirmed timing; the skill sheet text remains unchanged).
+//! （2） 「一回合一次」 is the `skill.sayoThorns.used` turn-key latch (reset at
+//! turn start, including an extra turn). 「进入移动阶段时」 is read as the
+//! move-phase entry that already carries the resolved main move -- the
+//! `MoveBefore` counteraction after the final roll/counteractions and before
+//! the first step -- because 「添加1或2格」 extends the *determined* distance
+//! (the offer previews each landing) and the sheet's added 「一回合一次」
+//! confirms the once-per-turn window. 「非[传送]的主要移动」 is the walk, not
+//! a teleport.
 //!
 //! （3） is a standing modifier to （1） that lights up once anyone is out.
 

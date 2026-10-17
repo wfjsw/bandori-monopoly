@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（祥子）带领着大家`）:
 //! > （祥子）带领着大家：
-//! >  回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的支付价格减半。
+//! >  回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的[支付]价格减半。
 //!
 //! record the players sharing your tile; they follow your next main move.
 
@@ -15,7 +15,7 @@ pub const SAKIKO_LEAD: CardDef = CardDef::new(
         .name(r#"带领着大家"#)
         .raw_name(r#"（祥子）带领着大家"#)
         .tags(&[])
-        .text(r#"回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的支付价格减半。"#)
+        .text(r#"回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的[支付]价格减半。"#)
         .cell(r#"M14"#)
         .fields(&[("group", r#"CRYCHIC"#), ("owner", r#"丰川祥子（CRYCHIC）"#)]));
 
@@ -58,7 +58,7 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
         // result for each follower (`ctx::plan::add_follower`).
         ctx::plan::add_follower(who);
     }
-    // 规则书: 「触发结算时进行的支付价格减半」 -- C# `LeadFx.Mark` on the player's
+    // 规则书: 「触发结算时进行的[支付]价格减半」 -- C# `LeadFx.Mark` on the player's
     // next main move (`m.PayFactor *= 0.5`). Milli-units: 500 = x0.5. Written on
     // the turn's move plan here at 「回合开始时」 (before the dice), the same
     // `MoveCtx` the C# marks at `MoveBefore`; with the default factor of 1.0
