@@ -59,7 +59,8 @@ pub mod stage {
     pub const OPS: i32 = 2;
     /// 移动阶段 -- the main move.
     pub const MOVE: i32 = 3;
-    /// 结束阶段 -- the move has resolved; buy and build happen here.
+    /// 结束阶段 -- the move has resolved. (Buy/build are ordinary OPS actions,
+    /// not an end-step phase; this stage only closes the turn.)
     pub const END: i32 = 4;
 }
 
@@ -144,7 +145,7 @@ pub struct MatchState {
     pub landed: i32,
     /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
-    /// Would `act {act:"roll"}` be accepted
+    /// Would `act {act:"diceRollBefore"}` be accepted
     /// (`why_not_act`'s roll branch: the live `skip_move` latch, the
     /// `main_moved` flag, and the roller).
     pub can_roll_here: bool,

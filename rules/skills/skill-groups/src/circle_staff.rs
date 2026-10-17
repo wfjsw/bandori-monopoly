@@ -20,7 +20,7 @@ pub const CIRCLE_STAFF: CardDef = CardDef::new(
     // 「在你打出的"通用"卡生效时，可额外弃一张牌」 -- the offer exists only
     // for a 通用 card and with something to discard. Prefix is a residual
     // (string match on the played id); hand size is CEL.
-    &[On::Hook(
+    &[On::Action(
         &[HookKind::Card],
         "actor == owner && hand(owner) >= 1",
         Some(is_general_card),

@@ -25,8 +25,8 @@ fn skip_all(t: &mut Table) {
 
 /// The money pipeline runs its stages in order on a card-driven **print**
 /// (game -> player): the `effect` declaration (the [反击] window) opens first,
-/// then the modifier passes (`payAdd` -> `payMul` -> `payChoose` -> `payAt`),
-/// then the settlement `pay`, then `payAfter` / `paid`. FEVER! is a `payAdd`
+/// then the modifier passes (`paySplitAdd` -> `paySplitMul` -> `paySplitChoose` -> `paySplitAt`),
+/// then the settlement `pay`, then `payAfter` / `paid`. FEVER! is a `paySplitAdd`
 /// hook; it must raise a card's own [获得], not just board-driven money.
 ///
 /// 规则书（FEVER!）: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X」
@@ -259,7 +259,7 @@ fn card_shortfall_may_be_funded_by_mortgage() {
 
 /// A command-wide **pre-split** modifier shapes the 「[分摊]」 total before it is
 /// divided, not each leg afterwards. 「[分摊][支付]2000」 across two payers with
-/// a `payTotalAdd` of -500 charges `ceil10(1500/2) = 750` each; wired as a
+/// a `payCombinedAdd` of -500 charges `ceil10(1500/2) = 750` each; wired as a
 /// per-share stage it would charge `ceil10(2000/2) - 500 = 500` each.
 ///
 /// 规则书（微笑的铁假面）: 「其他玩家[分摊][支付][使用者]2000资金」.
@@ -297,7 +297,7 @@ fn pre_split_modifier_shapes_the_total_not_each_leg() {
 #[test]
 fn self_payment_leaves_money_unchanged_when_affordable() {
     let mut t = Table::vanilla(2);
-    // A `payAdd` probe on P1: it must see the self-payment's windows fire.
+    // A `paySplitAdd` probe on P1: it must see the self-payment's windows fire.
     t.place_raw(1, "TEST:payAddAny");
     let mark = t.mark();
     t.give_play(0, "TEST:selfCharge").unwrap();
@@ -306,7 +306,7 @@ fn self_payment_leaves_money_unchanged_when_affordable() {
     let keys = t.keys_since(mark);
     assert!(
         keys.iter().any(|k| k.contains("pay_add_any")),
-        "the counteraction windows ran (the payAdd probe fired): {keys:?}"
+        "the counteraction windows ran (the paySplitAdd probe fired): {keys:?}"
     );
 }
 
@@ -648,8 +648,8 @@ fn round10_after_fold_matches_the_ruling_table() {
     }
 }
 
-/// Rainbow (1) 「此次支付金额减半」 + `TEST:payAddAny`'s `payAdd` +100.
-/// Stage order: `effect` (rainbow half) → `payAdd` (+100) → … → the one
+/// Rainbow (1) 「此次支付金额减半」 + `TEST:payAddAny`'s `paySplitAdd` +100.
+/// Stage order: `effect` (rainbow half) → `paySplitAdd` (+100) → … → the one
 /// `ceil10`. Rent 140 → fold 70 → 170 → final 170 (already a multiple of 10).
 /// If the +100 ran first and then a body-local CeilTo half, the figure would
 /// be CeilTo(120)=120 -- order-dependent.
@@ -660,7 +660,7 @@ fn rainbow_half_then_pay_add_rounds_once_at_settle() {
     let mut t = Table::vanilla(2);
     t.own(1, &[7]); // rent 140
     t.set_pos(0, 6);
-    // +100 on every `payAdd` -- runs AFTER the rainbow `effect` rewrite.
+    // +100 on every `paySplitAdd` -- runs AFTER the rainbow `effect` rewrite.
     t.place_raw(0, "TEST:payAddAny");
     t.give(0, &["Mor:秘密与青春的虹彩"]);
     t.dice(&[1]);
@@ -688,7 +688,7 @@ fn untouched_amount_is_not_rounded() {
 }
 
 /// Order-dependence: the `effect` rewrite (rainbow) is folded **before**
-/// `payAdd`. 25 would be 12.5 → +100 = 112.5 → 120 if the base were 25; with
+/// `paySplitAdd`. 25 would be 12.5 → +100 = 112.5 → 120 if the base were 25; with
 /// rent 140 the same shape is 70 + 100 = 170. The old body-local CeilTo on the
 /// half would have written 20 (for base 25) before the +100 landed.
 ///

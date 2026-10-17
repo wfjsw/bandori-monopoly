@@ -18,8 +18,8 @@ pub const THAT_DAY_RAIN: CardDef = CardDef::new(
     &[
         On::Play("", None, that_day_rain),
         // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-        On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], "", Some(hook_guard), hook),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::TurnStart, HookKind::TurnEnd], "", Some(hook_guard), hook),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"那天的雨"#)

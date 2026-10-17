@@ -115,7 +115,7 @@ Everything else is the rule's:
 | mechanic | where |
 |---|---|
 | what happens on draw | the body's `On::Play` |
-| ongoing effects | `On::Hook` entries, dispatched like a tile instance's |
+| ongoing effects | `On::Action` entries, dispatched like a tile instance's |
 | counters | the instance's `crystals` / `props` (view mirrors them into `ActiveEvent`) |
 | expiry | `ctx::event_expire(id, removed)` -- 「放入事件弃牌」 / 「永久移除」 |
 | derived-on-deck-top | `ctx::event_deck_push(id, face_down)` -- 「背面朝上放置于事件牌堆顶部」 |

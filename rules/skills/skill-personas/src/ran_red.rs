@@ -10,7 +10,7 @@
 //! the band pressed their (2). It is a band-wide counter, not this player's, so
 //! the latch lives on the band and every Afterglow skill reads it.
 //!
-//! （2） 「投掷移动步数前」 is `RollPlan`, the moment the dice table is being
+//! （2） 「投掷移动步数前」 is `DiceRollPlan`, the moment the dice table is being
 //! built. 「选择本次移动向后」 is the plan's reverse; 「[经过]CiRCLE时不获得
 //! CiRCLE奖励」 is the plan's no-circle-reward flag.
 
@@ -26,8 +26,8 @@ pub const RAN_RED: CardDef = CardDef::new(
     "skill:美竹兰:叛逆的红挑染",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),
     ],
 ).silent(&[1]);
 

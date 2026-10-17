@@ -9,7 +9,7 @@
 //!
 //! Two entries. The **landing** half is `On::Settle` -- one draw, the
 //! 「[结算]是：抽取一张手卡」 clause. The **pass** half (「[经过]CiRCLE」) is
-//! `On::Hook(&[HookKind::PassTile], "")` -- [`settle_reward`], the reward
+//! `On::Action(&[HookKind::PassTile], "")` -- [`settle_reward`], the reward
 //! choice. `docs/TILES.md`.
 //!
 //! Suppression is `prop::NO_REWARD` on *this* instance: a rule that
@@ -38,7 +38,7 @@ pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
         On::Settle("", None, settle),
-        On::Hook(&[HookKind::PassTile], "", Some(pass_pays), on_pass),
+        On::Action(&[HookKind::PassTile], "", Some(pass_pays), on_pass),
     ],
 )
 .board_role("tile")

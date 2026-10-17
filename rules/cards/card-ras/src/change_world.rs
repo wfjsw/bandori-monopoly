@@ -18,7 +18,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
         // 规则书: 「期间每经过一个不属于你的livehouse格子」 -- the owner's main
         // walk this turn, over a buyable Live House the owner does not hold.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && tile_in(-1, tile.id, \"livehouse\") && tile_in(-1, tile.id, \"buyable\") && tile.owner != owner",
             None,
@@ -27,13 +27,13 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         // 「此地块的下一次收费」 -- the rent on *this* card's tile, with a
         // house count `n` to scale by. Tile match + houses are derived scans
         // (self_tile / houses_of), residual (docs/GUARDS.md §4.2).
-        On::Hook(
-            &[HookKind::PayAdd],
+        On::Filter(
+            &[HookKind::PaySplitAdd],
             "card.placed && pay_is_rent && target == owner",
             Some(on_card_tile_with_houses),
             pay_choose,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::PayAfter],
             "card.placed && pay_is_rent && target == owner",
             Some(on_card_tile_with_houses),
@@ -151,33 +151,32 @@ fn on_card_tile_with_houses(_player_id: i32) -> bool {
     tile >= 0 && trigger::tile() == tile && ctx::houses_of(tile) > 0
 }
 
-/// C# `CardChangeWorld.PayAdd` -- when rent on the card's tile is paid to the
+/// C# `CardChangeWorld.PaySplitAdd` -- when rent on the card's tile is paid to the
 /// card's owner, the rent grows by `50 * (Crystals + 1) * houses[Tile]`.
 /// Applicability is `on_card_tile_with_houses`.
-fn pay_choose(player_id: i32) -> card_sdk::Asked {
+fn pay_choose(player_id: i32, value: i32) -> i32 {
     let tile = ctx::self_tile().unwrap_or(-1);
     let houses = ctx::houses_of(tile);
     // 规则书: 「此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数」
     // -- C# `Bonus() = 50 * (Crystals + 1) * houses[Tile]`, added to `p.amount`.
     let bonus = 50 * (ctx::crystals() + 1) * houses;
     if bonus <= 0 {
-        return Ok(());
+        return value;
     }
-    trigger::set_pay_amount(trigger::value() + bonus);
     ctx::log(
         player_id,
         &Msg::new(key!("change_world_bonus"))
             .player_id("who", player_id)
             .i("n", bonus as i64),
     );
-    Ok(())
+    value + bonus
 }
 
 /// C# `CardChangeWorld.PayAfter` -- the pay that carried the bonus discards the
 /// card. Applicability is `on_card_tile_with_houses`.
 fn pay_after(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「触发后将该卡放入弃牌堆」 -- C# `PayAfter` fires when the pay
-    // carried the `changeWorld` tag (i.e. `PayAdd` ran). Applicability is the
+    // carried the `changeWorld` tag (i.e. `PaySplitAdd` ran). Applicability is the
     // shared residual `on_card_tile_with_houses`.
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
@@ -202,8 +201,8 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_choose_kani(player_id: i32) -> card_sdk::Asked {
-    pay_choose(player_id)
+pub fn pay_choose_kani(player_id: i32, value: i32) -> i32 {
+    pay_choose(player_id, value)
 }
 
 #[cfg(kani)]

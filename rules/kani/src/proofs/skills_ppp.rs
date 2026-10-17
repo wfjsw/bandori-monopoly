@@ -1541,10 +1541,20 @@ pub fn band_skill_03c_buy_gate_iff() {
     kani::cover!(any_ppp_alive, "PPP alive ⇒ lock");
     crate::kassert!(spec::band_03c_buy_refused(any_ppp_alive));
     world::reset_world(w);
-    invoke::unwrap_done(skill_groups::poppin::lock_hill_kani(me));
+    // ABI v75/77 pure FilterValue gate: the body RETURNS `allowed: 0` and the
+    // host denies the buy. Stage moved out of `trig_cancelled` (the old Gate
+    // body cancelled the trigger itself).
+    let out = skill_groups::poppin::lock_hill_kani(
+        me,
+        card_sdk::abi::FilterValue::default(),
+    );
     crate::kassert!(
-        world::with_world(|ww| ww.trig_cancelled),
+        spec::band_03c_gate_denied(out.allowed),
         "C-PPP-band-03c: hill buy must be cancelled while PPP lives"
+    );
+    crate::kassert!(
+        out.reason == spec::band_03c_denial_reason(),
+        "C-PPP-band-03c: denial reason rides FilterValue.reason"
     );
 }
 

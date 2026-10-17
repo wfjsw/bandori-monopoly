@@ -15,8 +15,12 @@ pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
     &[
         On::Play("", Some(cant_play), haneoka),
-        // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-        On::Hook(&[HookKind::PayChoose], "actor == owner && card.placed && value > 0", None, pay_choose),
+        // C# `CardHaneoka.PaySplitChoose` -- while placed, may cancel one payment.
+        //
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
+        // the interactive `ask_yes` + `set_dest` + `set_pay_amount(0)` offer sits
+        // immediately before the pure `PaySplitChoose` filter stage.
+        On::Action(&[HookKind::PaySplitChooseBefore], "actor == owner && card.placed && value > 0", None, pay_choose),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"羽丘的不可思议女孩"#)
@@ -101,7 +105,7 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     }
     if r >= 20 {
         // 规则书 (sheet 2026-10-06): 「至少为20，则将此卡放置在自己场上」;
-        // the PayChoose hook below offers 「在后续任何时刻可将其置入弃牌堆并
+        // the PaySplitChoose hook below offers 「在后续任何时刻可将其置入弃牌堆并
         // 抵消一次任意付款」.
         ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(
@@ -115,7 +119,7 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardHaneoka.PayChoose` -- while placed, ask to bin the card and cancel
+/// C# `CardHaneoka.PaySplitChoose` -- while placed, ask to bin the card and cancel
 /// one payment of yours (`p.cancel = true`).
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();

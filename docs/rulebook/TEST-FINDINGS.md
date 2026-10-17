@@ -222,7 +222,7 @@ Still open from that check:
   present under other names; the gap matters only for cards that hook a window
   the engine never raises.
 * **支付阶段 1 / 5 and 7 shaping.** One `effect` raise carries window 5's
-  cancel/retarget power at window 1's position; `payChoose` / `payAt` are
+  cancel/retarget power at window 1's position; `paySplitChoose` / `paySplitAt` are
   unnamed extra stages; `paid` fires only on a payer-side loss and is distinct
   from `payAfter`. Card-facing order is pinned by `gap_money::g01`/`g02`.
 
@@ -259,7 +259,7 @@ batch)**); entries below marked that way are theirs.
   overlaid on the live world for a host routine's duration and dropped again,
   keeping only the routine's own effects -- so a status clear reaches
   `can_pay` without double-counting on the replay. 壱雫空's money now runs
-  through `transfer` / `gain` (the full money pipeline, payAdd/payMul/payChoose
+  through `transfer` / `gain` (the full money pipeline, paySplitAdd/paySplitMul/paySplitChoose
   + the `pay` [反击] window). Clearing a [停留] to 0 also un-skips the turn's
   move (`give_stay`).
 * ~~无路矢: honour the `exileMain` slot so the expiry teleport runs.~~
@@ -314,7 +314,7 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * 网络链接异常's drop-one is landed (§3); two cross fixtures still see the
     whole-card negate (c05 / g19) -- see cross below.
 * **pp** (3)
-  * ~~丸山彩's (2) PayChoose hook still prompts under 初次演出事故.~~
+  * ~~丸山彩's (2) PaySplitChoose hook still prompts under 初次演出事故.~~
     **Fixed 2026-10-13** (the residual guard was fine; the test's `set_fans`
     wiped `skillBlock`. SKILL-01).
   * 冰川日菜 (2) never rolls 1d4 nor borrows a skill (`skill.hinaLottery`
@@ -839,7 +839,7 @@ their own counter's round and ruling 2026-10-07 is observable. Un-ignored, green
 * **Ruling 5** (soyo 「所有颜色」 toward half-charge; per-player 「视为live
   house」 widen the agent set?): **superseded 2026-10-13** — `ANY_COLOR`
   widens the colour set for buy **and** rent offers (never buildable); the
-  half-charge set includes `ANY_COLOR`-only members, and soyo's PayMul
+  half-charge set includes `ANY_COLOR`-only members, and soyo's PaySplitMul
   halves again on top (「地产商的减半收费基础上额外减半」).
 * **Ruling 6** (is 强制购买 a 「购买」 for 「购买…时」 listeners?): no hooks
   today — `bought` / `buyAfter` do not fire on force-buy.
@@ -954,9 +954,9 @@ Nine new black-box tests for the decided `PIPELINE-AUDIT` items (see
 | `rulebook::auction_winner_may_mortgage_to_fund_the_bid` | B4 |
 
 New `TEST:*` fixtures in `rules/fixtures/test-cards/src/lib.rs`:
-`TEST:totalCut` (a `payTotalAdd` probe that cuts the command total by 500),
+`TEST:totalCut` (a `payCombinedAdd` probe that cuts the command total by 500),
 `TEST:deadPay` (a `bankruptBefore` probe that tries to move the dying seat's
-money), `TEST:selfCharge` (「A[支付]A」 5000), `TEST:payAddAny` (a `payAdd`
+money), `TEST:selfCharge` (「A[支付]A」 5000), `TEST:payAddAny` (a `paySplitAdd`
 probe that boosts every payment by 100).
 
 ### One pinned behaviour read against the ruling's wording
@@ -989,7 +989,7 @@ prompts     {"auction": 255, "choice": 6414, "mortgage": 1068, "tile": 3922}
 event kinds {"bankrupt": 96, "build": 4669, "buy": 2899, "draw": 2320,
               "event": 1187, "forcebuy": 392, "lose": 7313, "mortgage": 2245,
               "move": 5347, "overlap": 1517, "pass": 5909, "play": 2709,
-              "redeem": 1517, "rent": 19567, "roll": 34398, "text": 55654,
+              "redeem": 1517, "rent": 19567, "diceRollBefore": 34398, "text": 55654,
               "turn": 34437}
 details     {"agent half rent": 4218, "auction won": 255, "circle money": 5909,
               "force buy": 392}
@@ -1000,7 +1000,7 @@ disabled produced **identical counts**, so the ordering key is a no-op on
 today's behaviour. The counts above are the post-batch shape: B1 (card payments
 may now bankrupt) and B4 (a short bidder may 抵押 rather than void) are the
 legitimate movers of `bankrupt` / `mortgage` / `auction`, and the pre-split
-stage is a no-op with no `payTotal*` card in the sim pool. The purchase-surface
+stage is a no-op with no `payCombined*` card in the sim pool. The purchase-surface
 baseline quoted above (buy 2899 / forcebuy 392 / auctions 255) is **unchanged**.
 
 ## Settle/move stage model (2026-10-07, ABI 43)
@@ -1224,7 +1224,7 @@ or A/B items that need a wider surface than this batch:
   (`q4_soak`, `q4_print_coverage_section`).
 * **MOVE-04 (2026-10-10, test-harness sequencing):** `m06_reunion_20_tile_cap`
   / `m06b_reunion_stops_on_passing` un-ignored. The `world_mut` panic was
-  `Table::dice` after `t.roll` (the `moveRoll` [反击] window is a pending
+  `Table::dice` after `t.roll` (the `diceRollResult` [反击] window is a pending
   routine). Faces must be queued before `t.roll` — routines replay from their
   start-time snapshot. Card / `do_move_roll` / `set_move_roll` unchanged.
 * **MOVE-02 (2026-10-10, test drive shape):** `m10_rinko_while_stunned` /
@@ -1321,8 +1321,8 @@ Six ignored DISCREPANCY tests un-ignored and green. Root causes split
 * **D, `m03_eve_then_yolo` (MOVE-10):** Eve's (2) is an `ask_number` 0..=up
   choice (options are `ask.intOption`); the old matcher looked for 「若宫伊芙」
   /「粉丝」 in the options and declined. Drive is `answer(0, 2)` (Y = 2), same
-  as the green twins `g10` / `g32`. Additive timing Eve `RollAfter` → Y.O.L.O
-  `MoveRoll` was already correct (4 + 2d4 + 1d4 = 8).
+  as the green twins `g10` / `g32`. Additive timing Eve `DiceRollAfter` → Y.O.L.O
+  `DiceRollValue` was already correct (4 + 2d4 + 1d4 = 8).
 * **D, `m22_mygo_band_move1` (MOVE-03):** 「于移动掷骰前选择移动1格以替代
   移动掷骰」 is a skill press *before* the roll (`t.skill`), not a window
   inside `t.roll`. The multi-activation half was already merged into one
@@ -1351,7 +1351,7 @@ Six ignored DISCREPANCY tests un-ignored and green. Root causes split
 * **A + D, `m09_ras_band_first_abnormal_only` (MOVE-12):** RAS band (1)'s
   drop of the second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late
   to cancel) with pre `actor == owner` (the causer). Moved to
-  `On::Gate(&[GateKind::AbnormalGuard])` with pre `target == owner` (the
+  `On::FilterFlag(&[GateKind::AbnormalGuard])` with pre `target == owner` (the
   recipient). Same saki_move drive fix as MOVE-11.
 
 **Pre-existing (not this batch):** `inter_yolo_pushes_haneoka_over_20` fails

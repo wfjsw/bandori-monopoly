@@ -418,6 +418,9 @@ pub struct Cx<'a> {
     /// Card uids whose hooks are currently running and must not re-trigger on
     /// their own movement (the termination argument for nested money). Transient.
     pub reentrant_hooks: Vec<i32>,
+    /// Nested `state` [反击] settlement depth. A counter's own skill-state
+    /// toggles must not open another window (ping-pong). Transient.
+    pub state_raise_depth: u32,
     /// `"card"` activation event ids currently open, innermost last. A nested
     /// drive groups under the top of this stack; `-1` at the bottom.
     pub activation: Vec<i32>,
@@ -426,6 +429,11 @@ pub struct Cx<'a> {
     /// (the built-in pass reward). Transient (not serialized) -- the walk sets it as it
     /// starts and the reward step is the only reader.
     pub(crate) move_start: i32,
+    /// How deep the move pipeline (`walk_inner` / `teleport_as`) is nested.
+    /// A `passTile` (or other) hook that calls `ctx::teleport_to` re-enters
+    /// `card_teleport`; at depth > 0 that stays a bare position write (no
+    /// second move tail) so the hook cannot recurse. Transient (not serialized).
+    pub(crate) move_depth: u32,
     /// Guest state writes overlaid on the live world for a host routine's
     /// duration (see [`Self::overlay_guest_state`]). A stack: nested drives push
     /// and pop their own. Transient (not serialized).
@@ -912,8 +920,10 @@ impl<'a> Cx<'a> {
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
+            state_raise_depth: 0,
             activation: Vec::new(),
             move_start: -1,
+            move_depth: 0,
             guest_overlays: Vec::new(),
             play_memo: std::cell::RefCell::new(PlayMemo::default()),
             work_stack: Vec::new(),

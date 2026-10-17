@@ -36,8 +36,8 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // 规则书: 「本回合中向其他玩家支付时你的付款减半」 -- only payments to
         // other players, only on the armed turn (`charity.turn`). The turn-key
         // latch is an instance prop (residual).
-        On::Hook(
-            &[HookKind::PayMul],
+        On::Filter(
+            &[HookKind::PaySplitMul],
             "card.placed && actor == owner && target >= 0 && target != owner && value > 0",
             Some(pay_applies),
             pay_mul,
@@ -45,14 +45,14 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
         // -- a dice (main) walk step onto a tile that counts as yours, first
         // time this turn. `mine` / the first-pass marker are residual.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "card.placed && actor == owner && move.kind != Teleport && move.main && tile.id >= 0",
             Some(pass_applies),
             pass_tile,
         ),
         // 规则书: 「打出此卡的回合内」 -- both effects end with the turn.
-        On::Hook(&[HookKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
+        On::Action(&[HookKind::TurnEndAfter], "card.placed && actor == owner", None, turn_end_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"爱心义演"#)
@@ -115,21 +115,19 @@ fn pay_applies(player_id: i32) -> bool {
 /// 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- C#
 /// `SettleFactor`: `p.amount = CeilTo(p.amount / 2.0, 10)`. `target >= 0 &&
 /// target != owner && value > 0` is the pre; [`pay_applies`] is the residual.
-fn pay_mul(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
+fn pay_mul(player_id: i32, value: i32) -> i32 {
     // `CeilTo(amount / 2.0, 10)` -- half, rounded up to a multiple of 10.
-    let half = (amount as i64 + 1) / 2;
+    let half = (value as i64 + 1) / 2;
     let half = ((half + 9) / 10) * 10;
     let half = half.clamp(0, i32::MAX as i64) as i32;
-    trigger::set_pay_amount(half);
     ctx::log(
         player_id,
         &Msg::new(key!("charity_show_pay"))
             .player_id("who", player_id)
-            .n("from", amount as i64)
+            .n("from", value as i64)
             .n("to", half as i64),
     );
-    Ok(())
+    half
 }
 
 /// Residual guard for [`pass_tile`]: the turn-key latch, the tile counts as
@@ -205,8 +203,8 @@ pub fn turn_end_after_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_mul_kani(player_id: i32) -> card_sdk::Asked {
-    pay_mul(player_id)
+pub fn pay_mul_kani(player_id: i32, value: i32) -> i32 {
+    pay_mul(player_id, value)
 }
 
 #[cfg(kani)]

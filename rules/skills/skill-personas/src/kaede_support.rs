@@ -39,29 +39,44 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         // 状态1's offer: another player's turn start, not in 状态2, and the
         // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
         // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore],
             "actor != owner && slot('skillState') != 2",
             Some(offer_support_open),
             offer_support,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore],
             "actor == owner && slot('skillState') != 2",
             None,
             at_turn_start,
         ),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
         On::Play("", Some(can_enter_two), enter_two),
-        On::Hook(
-            &[HookKind::PayMul],
+        // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
+        // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
+        // Effect Action pays the other half out. Effect (not PayAfter) so the
+        // gain's `trigger::value()` is still the declared figure -- PayAfter's
+        // value is the settled amount and cannot re-derive `amount/2` for odd.
+        // TODO(规则书): the gain half reads the declared amount at Effect, so a
+        //   PaySplitAdd modifier that runs after this declaration would not be split
+        //   (the reshape half sees the PaySplitMul-stage figure). Same figure when no
+        //   other add/mul modifier touches the rent.
+        On::Filter(
+            &[HookKind::PaySplitMul],
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
             Some(split_rent_applies),
             split_rent,
+        ),
+        On::Action(
+            &[HookKind::Effect],
+            "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
+            Some(split_rent_applies),
+            split_rent_gain,
         ),
     ],
 )
@@ -78,16 +93,28 @@ fn split_rent_applies(player_id: i32) -> bool {
 /// 「你与对方均分那些地契收取的资金」 -- half to the deed's owner, half here.
 /// `slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0` is
 /// the pre and [`split_rent_applies`] the residual.
-fn split_rent(player_id: i32) -> card_sdk::Asked {
+///
+/// Filter half: reshape the owner's take to `amount - amount/2` (exact old
+/// `set_pay_amount(amount - half)`). `value < 2` early-returns unchanged
+/// (`half <= 0` in the old body).
+fn split_rent(_player_id: i32, value: i32) -> i32 {
+    if value < 2 {
+        return value;
+    }
+    value - value / 2
+}
+
+/// Action half of the split: `ctx::gain(player_id, half, ...)`. Reads the
+/// **declared** amount at `TriggerKind::Effect` (the figure the old body saw
+/// at PaySplitMul when no other add/mul modifier touched the rent) and gains
+/// `amount / 2`.
+fn split_rent_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     let half = amount / 2;
     if half <= 0 {
         // `value > 0` admits 1, whose half is 0 -- nothing to split.
         return Ok(());
     }
-    // 「均分」 -- the payer's outlay is unchanged; the owner's take is halved and
-    // the other half lands here.
-    ctx::trigger::set_pay_amount(amount - half);
     ctx::gain(
         player_id,
         half,
@@ -307,7 +334,7 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
 }
 
 // 「你与对方均分那些地契收取的资金」 -- the split is a bend on the rent a named
-// deed collects, which is the `payMul` window with `t.Pay.IsRent`. 状态2's exit
+// deed collects, which is the `paySplitMul` window with `t.Pay.IsRent`. 状态2's exit
 // is the band skill's fire-pot drain (`skill_groups::ave_mujica`), so the split
 // runs only while `skillState == 2`.
 // TODO(规则书)[judgement]: 「均分」 -- the clause does not say whether it divides
@@ -350,8 +377,14 @@ pub fn offer_support_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn split_rent_kani(player_id: i32) -> card_sdk::Asked {
-    split_rent(player_id)
+pub fn split_rent_kani(player_id: i32, value: i32) -> i32 {
+    split_rent(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn split_rent_gain_kani(player_id: i32) -> card_sdk::Asked {
+    split_rent_gain(player_id)
 }
 
 #[cfg(kani)]

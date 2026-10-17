@@ -8,10 +8,11 @@
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",
-    &[On::Play("", None, debut_success), On::AtEnd("", None, at_end)],
+    &[On::Play("", None, debut_success), On::Action(&[HookKind::AtEnd], "", None, at_end)],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"初演大成功"#)
         .raw_name(r#"初演大成功"#)

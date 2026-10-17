@@ -658,7 +658,7 @@ mod yuri_crit {
         log | effect => arm_log,
     });
 
-    /// In-place world for the PayChoose rewrite. Concrete user seat.
+    /// In-place world for the PaySplitChoose rewrite. Concrete user seat.
     fn yuri_world(user: i32) {
         host::install_backend(yuri_on_pay_dispatch);
         crate::harness::sparse_play_world(crate::harness::SparsePlay {
@@ -686,7 +686,7 @@ mod yuri_crit {
         });
     }
 
-    /// Residual host gate of the PayChoose hook (`Some(mine)`): this seat is on
+    /// Residual host gate of the PaySplitChoose hook (`Some(mine)`): this seat is on
     /// either side of the move. Matches the book's 「获得或失去资金」.
     fn yuri_residual(user: i32) -> bool {
         world::with_world(|w| w.trig_player == user || w.trig_target == user)
@@ -904,7 +904,7 @@ mod tsukushi_on_gain {
         on_gain_world(owner);
         let amount = world::with_world(|w| w.pay_amount);
 
-        // Host residual of the first PayChoose hook (`mine`).
+        // Host residual of the first PaySplitChoose hook (`mine`).
         let residual = world::with_world(|w| {
             w.trig_target == owner
                 && w.trig_value > 0
@@ -1200,7 +1200,7 @@ pub use tsukushi_cash::*;
 
 // ===========================================================================
 // Documented-only / blocked clauses (no harness — see spec/skills_mor.rs):
-//   C-MOR-mashiro-01 / -02   PROTOCOL-LEVEL (RollPlan plan-field stubs)
+//   C-MOR-mashiro-01 / -02   PROTOCOL-LEVEL (DiceRollPlan plan-field stubs)
 //   C-MOR-touko-02           BLOCKED-HOST: `rent_of`
 //   C-MOR-nanami-02 / -03    PROTOCOL-LEVEL / documented-only
 //   C-MOR-rui-crit-01        OPEN-复制 / documented-only

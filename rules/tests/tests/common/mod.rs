@@ -624,8 +624,11 @@ impl Table {
                 f.props.remove(prop::NO_REWARD);
             }
             p.state_set(key::EXILE_TO, -1);
-            // Start-time resources: the value, not the cap.
+            // Start-time resources: the value, not the cap. Fans live in the
+            // state dict now (`ppFansUp` / `ppFansDown`), owned by no card.
             p.state_set(key::CHARGE, 0);
+            p.state_set("ppFansUp", 0);
+            p.state_set("ppFansDown", 0);
             p.tokens
                 .retain(|t| !t.name.starts_with("P✽P粉丝"));
         }

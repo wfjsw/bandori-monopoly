@@ -7,31 +7,27 @@
 //! > [奇迹水晶]（最多10个）。（3）[经过]CiRCLE时不获得[CiRCLE奖励]。（4）回合开始时
 //! > 此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡。
 //!
-//! 「反面[P✽P粉丝]」 is a player counter, held face-down by default; 「将X个…
-//! 变正」 is the flip effect that consumes them. （3） is the plan's
-//! no-circle-reward flag on the walk that passes a CiRCLE.
+//! Fan markers live in the per-player state dict ([`crate::fans`]), owned by
+//! no card. Clause （2） is an `On::Action` listener on
+//! [`ruleset_core::kind::FansFlip`] (「…时」 state clause = event handler).
 
-use card_sdk::abi::{state_key, HookKind, TriggerKind};
-use ruleset_core::ctx::{self, state, trigger};
+use card_sdk::abi::HookKind;
+use ruleset_core::ctx;
+use ruleset_core::kind;
 use card_sdk::{key, CardDef, Msg, On};
+use crate::fans;
 
 const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
-/// 「反面[P✽P粉丝]」 -- a face-down fan counter (`P✽P粉丝(反)`, the same token
-/// every other card reads and writes).
-const FAN: &str = "P✽P粉丝(反)";
 
 pub const PASTEL: CardDef = CardDef::new(
-    "skill:Pastel✽Palettes:与偶像一起",
+    ID,
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        // （2）「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的
-        // 反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 --
-        // a passive hook on the flip effect, not a press. `FlipEffect` is raised
-        // with the clause's X before the counters move, so `tok(FAN)` is still
-        // the pre-flip count. 「可为此卡添加」 is the book's permissive may
-        // (there is no cost or downside), so the overflow is applied here.
-        On::Hook(&[HookKind::FlipEffect], "actor == owner", None, on_flip),
+        On::Action(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        // （2） overflow crystals. `FansFlip` is raised with the effect's X
+        // before the dict writes, so `fans::down` is still the pre-flip count.
+        // 「你」 is this card's owner (`actor == owner`).
+        On::Action(&[kind::FansFlip], "actor == owner", None, on_fans_flip),
     ],
 );
 
@@ -50,7 +46,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         if ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
         }
-        ctx::add_tok(p, FAN, 1, i32::MAX)?;
+        let _ = fans::grant(p, 0, 1)?;
     }
     Ok(())
 }
@@ -78,20 +74,36 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]
-/// （最多10个）」 -- the overflow is `X - owned`, taken while `tok(FAN)` is
-/// still the pre-flip count.
-fn on_flip(player_id: i32) -> card_sdk::Asked {
-    let x = trigger::value();
-    let have = ctx::tok(player_id, FAN);
-    let over = (x - have).max(0);
-    if over <= 0 {
+/// （2）「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的反面的
+/// [P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 --
+/// `trigger::value()` is the effect's intended X; `fans::down` is still the
+/// pre-flip count (the raise happens before the dict writes). 「可为此卡添加」
+/// is the book's permissive may -- the overflow is applied.
+///
+/// 「最多10个」 caps this card's **TOTAL** crystals at 10 (user ruling
+/// 2026-10-17), not the overflow amount: grant `X - down`, clamped by the
+/// room left under 10. A pile already at/over 10 (clause （4）'s uncapped
+/// tick can overshoot) gets nothing — never force-reduce.
+fn on_fans_flip(player_id: i32) -> card_sdk::Asked {
+    let x = ctx::trigger::value();
+    let down = fans::down(player_id);
+    if x <= down {
         return Ok(());
     }
-    ctx::add_crystals(over, 10)?;
+    let before = ctx::crystals();
+    if before >= 10 {
+        return Ok(());
+    }
+    let after = ctx::add_crystals(x - down, 10)?;
+    let added = after - before;
+    if added <= 0 {
+        return Ok(());
+    }
+    // Log the amount actually added (clamped by the total-10 cap), not the
+    // requested overflow.
     ctx::log(
         player_id,
-        &Msg::new(key!("pastel_over")).i("n", over as i64),
+        &Msg::new(key!("pastel_over")).i("n", added as i64),
     );
     Ok(())
 }
@@ -123,6 +135,6 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_flip_kani(player_id: i32) -> card_sdk::Asked {
-    on_flip(player_id)
+pub fn on_fans_flip_kani(player_id: i32) -> card_sdk::Asked {
+    on_fans_flip(player_id)
 }

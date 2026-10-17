@@ -47,7 +47,7 @@ costs.
 | Tile settle `settle_at` | `settle` then `settleBody` (`play.rs:1512-1531`) | only if neither cancelled | `ctx::pay_rent` / `ctx::pay` | **clean** |
 | Counteraction link | `resolve_rounds` checks `link.is_cancelled()` **before** `drive(Call::Counteract)` (`wasm_rules.rs:2695-2726`) | negated → body skipped, card already spent | body's own `ctx::pay` etc. | **clean** for money |
 | Any raise (`Cx::counteract`) | order at one trigger: (1) acting card's own follow-up → (2) hooks → (3) `hand_counteractions` (`wasm_rules.rs:3610-3887`) | see **V1** | | **gap** |
-| Money movement `Cx::money` | `effect` declaration window **before** money moves (`play.rs:2955-2987`); `payTotalCancel` before split (`play.rs:3201`) | payment settles only if not cancelled | the payment itself | **clean** |
+| Money movement `Cx::money` | `effect` declaration window **before** money moves (`play.rs:2955-2987`); `payCombinedCancel` before split (`play.rs:3201`) | payment settles only if not cancelled | the payment itself | **clean** |
 
 Chain resolution is LIFO over the answer tree; answers settle before the link
 they answer, so a counter that negates an earlier link runs before that link's
@@ -119,7 +119,7 @@ be left behind by a **later** link.
 
 * **Where:** `ctx::spend_fire` → `Run::spend_fire` (`wasm_rules.rs:1092-1109`),
   `ctx::add_crystals`/`set_crystals`, token writes. Direct world mutation on the
-  run's copy; **no** `effect`/`payTotalCancel`/`pay` window, no per-marker
+  run's copy; **no** `effect`/`payCombinedCancel`/`pay` window, no per-marker
   counteraction. All-or-nothing; logged to `fire_spent_log` and raised as
   `fireSpent` after commit.
 * **Current behaviour:** the marker leaves when the body reaches the call. The
@@ -138,8 +138,8 @@ be left behind by a **later** link.
 * **Where:** `crates/game-core/src/engine/ops.rs:517-531`; only call site
   `rules/cards/card-morfonica/src/tritone.rs:51` (三全音's
   「立刻获得此次失去的资金金额」).
-* **Current behaviour:** money moves immediately on the world copy; `payAdd` /
-  `payMul` / `payChoose` / `effect` / `payTotal*` / `pay` never see it (by
+* **Current behaviour:** money moves immediately on the world copy; `paySplitAdd` /
+  `paySplitMul` / `paySplitChoose` / `effect` / `payCombined*` / `pay` never see it (by
   design, "skills and crits may not bend the figure"). `payAfter`/`paid` are
   raised only after the body commits (`wasm_rules.rs:1570-1611`).
 * **Gap:** a counteraction cannot cancel or reshape this money movement. For a
@@ -161,7 +161,7 @@ be left behind by a **later** link.
   on the `pay` link does **not** stop the payment unless it also sets the value
   to 0. (No card does this today — 秘密与青春的虹彩 reshapes the amount; the
   rulebook timing table's 「取消支付」 is carried by the `effect` /
-  `payTotalCancel` windows instead. See PIPELINE-AUDIT **B2**: window-5 cancel
+  `payCombinedCancel` windows instead. See PIPELINE-AUDIT **B2**: window-5 cancel
   power sits at window-1 position.)
 * **Gap:** the API invites a counter body to cancel `pay` and get silence.
 * **Proposed test:** `money::pay_window_set_cancelled_stops_the_payment` —
@@ -178,7 +178,7 @@ be left behind by a **later** link.
 | Gesture | Where | Scope | Payment consequence |
 |---|---|---|---|
 | Whole-effect negation (`set_cancelled` / `negate_effect` on the `card`/`skillUsed`/`event`/`settle` link) | pre-body window | all-or-nothing | body never runs — **no payment left behind** |
-| Pay-stage cancel (`effect` cancelled, or `payTotalCancel`) | inside `Cx::money`, before money moves | **this payment only** | that payment returns `Paid::default()`; the body resumes with 0 |
+| Pay-stage cancel (`effect` cancelled, or `payCombinedCancel`) | inside `Cx::money`, before money moves | **this payment only** | that payment returns `Paid::default()`; the body resumes with 0 |
 | Per-recipient (`Trigger::spare`, `ctx::cancel_designation`) | `play.rs:2974` `settles_for`, `net_error.rs:78-93` | one seat | that seat's leg skipped, the rest lands |
 | Mid-body later-step negation | a nested window (e.g. `target`, `drew`) | that step | **earlier settled payments in the same body stand** |
 
@@ -198,7 +198,7 @@ one_of_us:173, dream_return:94) or `if paid > 0 { … }` (gacha10:30,
 crimson_soul:66) drop the rest of the effect when the payment is cancelled or
 reduced. A pure 「取消支付」 therefore cancels the whole remainder — which is one
 reading of 「resolves together」, but it also means a **modifier-reduced** payment
-(e.g. payAdd −600 on fire_bird's 1600) kills the placement even though the
+(e.g. paySplitAdd −600 on fire_bird's 1600) kills the placement even though the
 payment did settle. Worth a ruling.
 
 Whole-effect negation at the top level is genuinely all-or-nothing and never
@@ -305,7 +305,7 @@ LIFO), so a later link that negates it prevents its payment entirely. Clean.
   through `Cx::money` (host request → `wasm_rules.rs:1971-2033`), so every
   money movement opens the `effect` declaration window before any money moves,
   and `Pay::must = true` routes shortfall through `raise_funds` → `bankrupt`.
-* `payTotalCancel` drops the whole command before any 「[分摊]」 leg splits
+* `payCombinedCancel` drops the whole command before any 「[分摊]」 leg splits
   (`play.rs:3201`, `ctx::split_pay`).
 * Chain LIFO: a counter that negates an earlier link runs first; the negated
   link's body (and its payments) never start.

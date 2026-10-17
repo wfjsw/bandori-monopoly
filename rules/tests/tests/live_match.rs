@@ -105,7 +105,7 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
 #[test]
 fn a_characters_skill_binds_to_whoever_picked_them() {
     // The binding: a player's two skill rules follow from the character they
-    // picked and land on their field, which is what makes `On::Hook` reach them
+    // picked and land on their field, which is what makes `On::Action` reach them
     // exactly as it reaches any other field card. See `game_core::data::skill_id`.
     let members = vec![member(1, false), member(2, true)];
     let mut m = Match::new(

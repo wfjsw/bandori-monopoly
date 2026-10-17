@@ -58,7 +58,7 @@ pub const MAX_SETTLE_DEPTH: u32 = 64;
 /// Money rounding (user ruling 2026-10-15, OPEN-取整 family): round **up** to a
 /// multiple of 10. Applied once, after every add/mul modifier of a payment has
 /// been processed (`money_inner`), and to a pre-split total that some
-/// `payTotal*` hook rewrote (`pay_total`). Non-positive figures are returned
+/// `payCombined*` hook rewrote (`pay_total`). Non-positive figures are returned
 /// unchanged -- a negative is reversed into a child payment and must not be
 /// CeilTo'd toward +inf first.
 fn ceil10_money(x: i32) -> i32 {
@@ -135,6 +135,9 @@ fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
     }
     if plan.tags != before.tags {
         m.tags = plan.tags.clone();
+    }
+    if plan.by_skill != before.by_skill {
+        m.by_skill = plan.by_skill;
     }
 }
 
@@ -236,8 +239,8 @@ pub struct Pay {
     /// is board-driven (rent, buy, build). Stamped onto the `pay` / `paid`
     /// triggers so 「被…效果影响」 can tell the two apart.
     pub by_card: Option<i32>,
-    /// Run the command-wide **pre-split** stage (`payTotalAdd` → `payTotalMul`
-    /// → `payTotalCancel`) on this payment's amount. `true` for every ordinary
+    /// Run the command-wide **pre-split** stage (`payCombinedAdd` → `payCombinedMul`
+    /// → `payCombinedCancel`) on this payment's amount. `true` for every ordinary
     /// payment: a single-pair payment's command total *is* its amount. A
     /// 「[分摊]」 leg sets it `false` -- the card body has already shaped the
     /// command total through [`Cx::pay_total`] before dividing it into shares
@@ -687,6 +690,23 @@ impl Cx<'_> {
 
     // =============================================================== movement
 
+    /// Card-driven bare teleport (`ctx::teleport_to` / `HostRequest::Teleport`):
+    /// a position write with no settle. Runs through [`Self::teleport_as`] so the
+    /// move tail (`moveBefore` / `moveAfter` / `moveResolved`) raises like every
+    /// other movement case (B41 raises [pass],overlap at the endpoint;
+    /// `resolve = false` gates only the settle stages).
+    pub fn card_teleport(&mut self, player_id: usize, tile: usize) -> Flow<()> {
+        if self.move_depth > 0 {
+            // Nested jump (a `passTile` / move hook calling `ctx::teleport_to`):
+            // a bare position write, no second move tail -- the outer move's
+            // raise is already in flight and a nested `teleport_as` would
+            // re-enter the same hook.
+            self.w.teleport_to(player_id as i32, tile as i32);
+            return Ok(());
+        }
+        self.teleport_as(player_id, tile, false, None, false)
+    }
+
     /// Run a card-shaped movement **now**, as the player's main move. This is
     /// the 「立刻进入移动阶段」/「视为你的主要移动」 case: the card has already
     /// shaped `plan` (via the `World` plan ops) and this consumes the turn's
@@ -738,12 +758,16 @@ impl Cx<'_> {
             // One-shot: see `main_move`. A `card_move` that teleported must not
             // leave the destination on the shared turn plan for a later move.
             self.w.turn.plan.teleport_to = -1;
-            self.teleport(i, to, resolve, why)?;
+            // Carry the skill-source tag onto the shared plan so `teleport_as`
+            // stamps it on the raise payload, then clear it (one-shot).
+            self.w.turn.plan.by_skill = plan.by_skill;
+            self.teleport_as(i, to, resolve, why, as_main)?;
+            self.w.turn.plan.by_skill = false;
         } else {
             if plan.steps < 0 {
                 // No fixed step count: roll it now, with the same raise points.
                 self.w.turn.plan = plan.clone();
-                raise!(self, "rollPlan", i, @m plan)?;
+                raise!(self, "diceRollPlan", i, @m plan)?;
                 plan = self.w.turn.plan.clone();
                 // A `rollPlan` body may have rewritten this move as a teleport
                 // (same branch `main_move` takes for the turn's main move).
@@ -752,21 +776,40 @@ impl Cx<'_> {
                     let resolve = plan.resolve;
                     let why = plan.why.clone();
                     self.w.turn.plan.teleport_to = -1;
-                    self.teleport(i, to, resolve, why)?;
+                    self.w.turn.plan.by_skill = plan.by_skill;
+                    self.teleport_as(i, to, resolve, why, as_main)?;
+                    self.w.turn.plan.by_skill = false;
                 } else {
                     plan.roll = match self.w.turn.fixed_roll {
                         Some(n) => n,
                         None => self.roll_tables(&plan),
                     };
-                    let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
+                    // v79: DiceRollValue is the pure roll-reshape stage;
+                    // DiceRollAfter is the Action event; DiceRollResult is the
+                    // [反击] reroll window (unchanged).
+                    let t = raise!(self, "diceRollValue", i, @m plan, value = plan.roll)?;
                     plan.roll = t.value.max(0);
-                    let t = raise!(self, "moveRoll", i, @m plan, value = plan.roll)?;
+                    let t = raise!(self, "diceRollAfter", i, @m plan, value = plan.roll)?;
+                    if t.value != plan.roll {
+                        plan.roll = t.value.max(0);
+                    }
+                    let t = raise!(self, "diceRollResult", i, @m plan, value = plan.roll)?;
                     plan.roll = t.value.max(0);
                     if let Some(steps) = self.w.hidden[i].next_steps.take() {
                         plan.roll = steps.max(0);
                     }
                     if !plan.signed {
                         plan.roll = plan.roll.max(plan.min_roll);
+                    }
+                    // A `rollAfter` / `diceRollResult` body may have cleared resolve
+                    // on the turn plan (`plan::set_resolve(false)`, e.g.
+                    // 不要背负期待's 「如果为0则此次移动不[结算]」). The plan is
+                    // never reset between moves, so only pull the *clear*
+                    // direction; `walk_inner`'s `fold_plan_delta` sees writes
+                    // from `moveBefore` onward and the step loop syncs mid-walk,
+                    // but a 0-step walk takes neither path.
+                    if !self.w.turn.plan.resolve {
+                        plan.resolve = false;
                     }
                 }
             }
@@ -777,6 +820,7 @@ impl Cx<'_> {
         // One-shot: see `main_move`. A mid-move hook write (or a walk that
         // ignored one) must not shape a later move in this turn.
         self.w.turn.plan.teleport_to = -1;
+        self.w.turn.plan.by_skill = false;
         // Record the walked length: `lastWalk` is written from `total`.
         if as_main {
             self.w.turn.main_steps = if plan.kind == MoveKind::Teleport {
@@ -844,7 +888,7 @@ impl Cx<'_> {
     }
 
     /// Sum the move's dice tables into one face, without the
-    /// `rollAfter` / `moveRoll` raise points. A card that re-rolls an in-flight
+    /// `rollAfter` / `diceRollResult` raise points. A card that re-rolls an in-flight
     /// move (「放弃第一次的结果重骰一次」) is usually *inside* one of those hooks,
     /// so re-raising them would recurse; the plain table roll is what it wants.
     pub fn do_move_roll(&mut self, plan: &Move) -> i32 {
@@ -914,7 +958,7 @@ impl Cx<'_> {
             return Ok(false);
         }
         let kind = purchase::BuyKind::from_i32(kind).unwrap_or(purchase::BuyKind::Card);
-        self.buy(player_id, tile, kind)
+        self.deed_buy(player_id, tile, kind, 1)
     }
 
     /// A card handed a deed over outside the buy routine (tomoe_savior's
@@ -1085,7 +1129,7 @@ impl Cx<'_> {
             self.w.log("text", player_id as i32, why);
             return Ok(false);
         }
-        self.build(player_id, tile)
+        self.deed_build(player_id, tile)
     }
 
     /// Prompt to build on one of `tiles`, then build there.
@@ -1132,7 +1176,7 @@ impl Cx<'_> {
         let Some(&t) = usize::try_from(pick).ok().and_then(|p| options.get(p)) else {
             return Ok(false);
         };
-        self.build(player_id, t)
+        self.deed_build(player_id, t)
     }
 
     /// Mortgage one of the player's deeds, forced by a
@@ -1184,8 +1228,8 @@ impl Cx<'_> {
             // `roll` (pre) -- before the d20 is cast. `value = -1` is the
             // sentinel meaning "no roll yet": the bridge would otherwise
             // derive `move_roll` from `value` and let roll-counteracting cards
-            // (which match `Roll | MoveRoll`) run before any dice exist.
-            raise!(self, "roll", i, @m m, value = -1)?;
+            // (which match `DiceRollBefore | DiceRollResult`) run before any dice exist.
+            raise!(self, "diceRollBefore", i, @m m, value = -1)?;
             if self.out(i) || !self.playing() {
                 self.w.st.step = stage::END;
                 return Ok(());
@@ -1193,14 +1237,14 @@ impl Cx<'_> {
         }
         if !self.out(i) {
             // `rollPlan` -- every placed card's `On::RollPlan` shapes the move
-            // before the dice (RollPlan -> roll -> RollAfter -> the moveRoll
-            // counteraction window).
+            // before the dice (DiceRollPlan -> roll -> DiceRollValue ->
+            // DiceRollAfter -> the diceRollResult counteraction window).
             //
             // The card bodies shape `TurnCtx::plan` (that is what the `World`
             // plan ops write), so the walk has to take the move back afterwards.
             // Seed first so a body that only reads sees the fresh move.
             self.w.turn.plan = m.clone();
-            raise!(self, "rollPlan", i, @m m)?;
+            raise!(self, "diceRollPlan", i, @m m)?;
             m = self.w.turn.plan.clone();
             if self.out(i) || !self.playing() {
                 self.w.st.step = stage::END;
@@ -1218,12 +1262,14 @@ impl Cx<'_> {
                 // 传送」, ras 「下一次主要移动可变为传送至…」) -- rewrote this
                 // move as a teleport: the destination is the plan's, and no dice
                 // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
-                // …那格」 writes it from a `RollPlan` hook.
+                // …那格」 writes it from a `DiceRollPlan` hook.
                 let to = m.teleport_to as usize;
                 let resolve = m.resolve;
                 let why = m.why.clone();
                 self.w.turn.plan.teleport_to = -1;
-                self.teleport(i, to, resolve, why)?;
+                // `m.main` is true here (the turn's main move); pass it so the
+                // raise payload's `move.main` discriminates.
+                self.teleport_as(i, to, resolve, why, m.main)?;
             } else {
                 // A stored fixed face ([`super::world::TurnCtx`]'s `fixed_roll`)
                 // replaces the roll, otherwise sum the `base` + `dice` tables
@@ -1232,14 +1278,16 @@ impl Cx<'_> {
                     Some(n) => n,
                     None => self.roll_tables(&m),
                 };
-                // `rollAfter` (Fx) runs on the fresh roll, *before* the moveRoll
-                // counteraction window; a field card may rewrite it (`set_move_roll`),
-                // which is how a stored boost lands.
-                let t = raise!(self, "rollAfter", i, @m m, value = m.roll)?;
+                // v79: DiceRollValue is the pure roll-reshape stage;
+                // DiceRollAfter is the Action event; DiceRollResult is the
+                // [反击] reroll window (unchanged).
+                let t = raise!(self, "diceRollValue", i, @m m, value = m.roll)?;
                 m.roll = t.value.max(0);
-                let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
-                // A counteraction may have rerolled the dice: the face the walk uses is
-                // the one left on the trigger.
+                let t = raise!(self, "diceRollAfter", i, @m m, value = m.roll)?;
+                if t.value != m.roll {
+                    m.roll = t.value.max(0);
+                }
+                let t = raise!(self, "diceRollResult", i, @m m, value = m.roll)?;
                 m.roll = t.value.max(0);
                 // A stored step count (`next_steps`) overrides the roll for this
                 // one main move.
@@ -1251,6 +1299,16 @@ impl Cx<'_> {
                 // pushes the roll down still respects the floor.
                 if !m.signed {
                     m.roll = m.roll.max(m.min_roll);
+                }
+                // A `rollAfter` / `diceRollResult` body may have cleared resolve on
+                // the turn plan (`plan::set_resolve(false)`, e.g. 不要背负期待's
+                // 「如果为0则此次移动不[结算]」). Only pull the clear direction --
+                // the plan is sticky and a stale `true` must not revive a move
+                // the immobile clamp (below) is about to pin. `walk_inner`
+                // folds `moveBefore` writes and the step loop syncs mid-walk;
+                // a 0-step walk takes neither path.
+                if !self.w.turn.plan.resolve {
+                    m.resolve = false;
                 }
                 // G-STATUS-02 [无法移动] (glossary 10 / items 11-13):
                 // 「main move的[move end]视为当前所在格子且不settle」. The roll
@@ -1274,16 +1332,18 @@ impl Cx<'_> {
                 self.walk(&mut m)?;
             }
             // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
-            // `RollAfter` floor, saki_crychic's `SettleBefore` nudge): this
-            // move is over and the write must not shape the next one.
+            // `DiceRollAfter` floor, saki_crychic's `SettleBefore` nudge): this
+            // move is over and the write must not shape the next one. Same for
+            // the skill-source tag.
             self.w.turn.plan.teleport_to = -1;
+            self.w.turn.plan.by_skill = false;
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
             // 玩家按行动顺序依次触发结算」:
             // each follower recorded on the plan replays this move's result,
             // after the mover has settled, in the order the card added them.
             // The replay carries the same plan -- steps / kind / destination /
             // `pay_factor` -- so 「触发结算时进行的支付价格减半」 reaches them too.
-            // No `roll` / `rollPlan` / `rollAfter` / `moveRoll`: the result is
+            // No `roll` / `rollPlan` / `rollAfter` / `diceRollResult`: the result is
             // already resolved, this is the same move re-executed.
             let followers = std::mem::take(&mut m.followers);
             for &f in &followers {
@@ -1369,6 +1429,13 @@ impl Cx<'_> {
     }
 
     fn walk_inner(&mut self, m: &mut Move) -> Flow<()> {
+        self.move_depth += 1;
+        let r = self.walk_inner_depth(m);
+        self.move_depth -= 1;
+        r
+    }
+
+    fn walk_inner_depth(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         let n = self.data.tiles.len() as i32;
         // 「此次移动以X为起点（不触发起点地块效果）」: the walk begins at
@@ -1382,6 +1449,11 @@ impl Cx<'_> {
         } else {
             m.from = self.w.st.players[i].pos;
         }
+        // Skill-source tag from the shared plan (stamped by the host when the
+        // calling rule's id starts with `skill:`).
+        if self.w.turn.plan.by_skill {
+            m.by_skill = true;
+        }
         self.move_start = m.from;
         // `moveBefore` (`SETTLE-STAGES.md` §7 「移动前」, ABI v43) -- the move's
         // plan is fixed and nothing has been walked yet. Every move raises it:
@@ -1391,7 +1463,7 @@ impl Cx<'_> {
         // the walk pulls the write in below.
         //
         // The plan (`turn.plan`) is the authoritative move *shape* -- cards
-        // write it both before the walk (a `moveRoll` counteraction's
+        // write it both before the walk (a `diceRollResult` counteraction's
         // `set_pay_factor`) and inside this window. Fold the window's writes
         // into the running move; do **not** copy `m` over the plan, which would
         // wipe the earlier ones (`scale_settle_payment` reads the plan's
@@ -1437,7 +1509,7 @@ impl Cx<'_> {
                 .opt("nores", (!resolve).then(|| Msg::new("log.part.no_resolve")))
                 .opt("still", still.then(|| Msg::new("log.part.no_move")))
         };
-        let kind = if m.main { "roll" } else { "move" };
+        let kind = if m.main { "diceRollBefore" } else { "move" };
         let pos = self.w.st.players[i].pos;
         if steps <= 0 {
             let e = self.w.log(kind, i as i32, head(true));
@@ -1604,6 +1676,20 @@ impl Cx<'_> {
         why: Option<Msg>,
         main: bool,
     ) -> Flow<()> {
+        self.move_depth += 1;
+        let r = self.teleport_as_depth(i, to, resolve, why, main);
+        self.move_depth -= 1;
+        r
+    }
+
+    fn teleport_as_depth(
+        &mut self,
+        i: usize,
+        to: usize,
+        resolve: bool,
+        why: Option<Msg>,
+        main: bool,
+    ) -> Flow<()> {
         if to >= self.data.tiles.len() || self.out(i) {
             return Ok(());
         }
@@ -1616,6 +1702,9 @@ impl Cx<'_> {
         m.from = from;
         m.path = vec![to as i32];
         m.total = 1;
+        // Skill-source tag from the shared plan (stamped by the host when the
+        // calling rule's id starts with `skill:`).
+        m.by_skill = self.w.turn.plan.by_skill;
         self.move_start = from;
         // `moveBefore` (`SETTLE-STAGES.md` §7 「移动前」, ABI v43) -- the
         // teleport's destination is fixed and nothing has moved yet. A
@@ -1677,7 +1766,9 @@ impl Cx<'_> {
             self.after_walk(&mut m)?;
         }
         // `Teleported` after the settlement (or at once when the move
-        // does not settle).
+        // does not settle). Retained for wire/replay compatibility only --
+        // the listener-facing move-end point is `moveAfter` (supersedes this
+        // for card listeners; `Teleported` is hook-only).
         if !self.out(i) && self.playing() {
             raise!(self, "teleported", i, @m m, tile = m.to)?;
         }
@@ -2091,7 +2182,7 @@ impl Cx<'_> {
             );
         }
         // The 「支付」 / 「地租」 scalars no longer scale the rent table here:
-        // they ride the money pipeline's `payMul` stage (`scale_settle_payment`),
+        // they ride the money pipeline's `paySplitMul` stage (`scale_settle_payment`),
         // so a rule that halves a settlement payment covers the payment **as
         // card effects have shaped it** -- a rent-region expansion, a forced
         // stop-and-pay -- and not just this table's number. 规则书
@@ -2124,7 +2215,7 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// The 「支付减半」 / 「地租」 scale, applied at the money pipeline's `payMul`
+    /// The 「支付减半」 / 「地租」 scale, applied at the money pipeline's `paySplitMul`
     /// stage (`docs/TILES.md`; 「支付减半」 ruling 2026-10-06).
     ///
     /// Two homes, both read here rather than in `pay_rent`:
@@ -2342,7 +2433,7 @@ impl Cx<'_> {
             && self.w.st.owners[t] < 0
             && !self.out(i)
         {
-            self.buy(i, t, purchase::BuyKind::Land)?;
+            self.deed_buy(i, t, purchase::BuyKind::Land, 0)?;
         }
         Ok(())
     }
@@ -2381,7 +2472,7 @@ impl Cx<'_> {
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
         if self.ask(ask)?.of(i) == 0 && self.why_not_build_on(i, t).is_none() {
-            self.build(i, t)?;
+            self.deed_build(i, t)?;
         }
         Ok(())
     }
@@ -2498,7 +2589,7 @@ impl Cx<'_> {
     /// `true` when the deed actually changed hands (HOST-06: every refusal
     /// path -- `BuyGate` / `buyBefore` cancel, already owned, unpaid quote,
     /// unpaid money -- is `false`).
-    pub(crate) fn buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind) -> Flow<bool> {
+    pub fn buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind) -> Flow<bool> {
         // `BuyGate` -- may this player buy this tile at all? Every kind, Force
         // included (Poppin's hill lock covers 「不可被抵押双倍支付购买」).
         let gate = raise!(
@@ -2604,7 +2695,7 @@ impl Cx<'_> {
         Ok(true)
     }
 
-    pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
+    pub fn build(&mut self, i: usize, t: usize) -> Flow<bool> {
         // `buildBefore` -- before any guard or payment, so it is a real pre-hook.
         // A hook that claims it with `set_cancelled` vetoes the build outright
         // (卡池BUG 「不可在造价1500及以上的格子上加盖房屋」).
@@ -2842,6 +2933,19 @@ impl Cx<'_> {
         self.rules().deed_redeem(self, i, t)
     }
 
+    /// Route a buy through the tile rule's `On::Buy` body
+    /// (`CardRules::deed_buy`). `reason`: 0 = settle offer, 1 = card-driven,
+    /// 2 = agent, 3 = acquire / auction.
+    pub fn deed_buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind, reason: i32) -> Flow<bool> {
+        self.rules().deed_buy(self, i, t, kind, reason)
+    }
+
+    /// Route a build through the tile rule's `On::Build` body
+    /// (`CardRules::deed_build`).
+    pub fn deed_build(&mut self, i: usize, t: usize) -> Flow<bool> {
+        self.rules().deed_build(self, i, t)
+    }
+
     /// Mortgage one of the player's deeds.
     /// `true` when the deed actually went onto mortgage (HOST-06).
     pub fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<bool> {
@@ -2874,7 +2978,7 @@ impl Cx<'_> {
     ///
     /// This is the **one pipeline** every money operation runs through. It
     /// stages the adjustment points -- pre-split `effect` (the counteraction window)
-    /// then `payAdd` / `payMul` / `payChoose` / `payAt`, then split into
+    /// then `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`, then split into
     /// concrete payer/payee entries, then post-split `pay` / `payAfter` /
     /// `paid` -- and runs before/after money events on every entry.
     ///
@@ -2930,7 +3034,7 @@ impl Cx<'_> {
             // (rulebook 49: 「无法收付款」 -- stunned cannot *receive* either).
             // Exile is **not** blocked here: 「exile期间本应获得的格子收入由
             // 此前指定的那名玩家获得」 (MyGO:无路矢) reroutes the payee from a
-            // `payAdd` hook, which runs below. The unredirected exile payee is
+            // `paySplitAdd` hook, which runs below. The unredirected exile payee is
             // refused at transfer time instead (see the final-payee gate).
             let stunned_payee = p.to.filter(|&t| self.w.st.players[t].stunned());
             if let Some(x) = p.from.filter(|&f| !self.can_pay(f)).or(stunned_payee) {
@@ -2946,7 +3050,7 @@ impl Cx<'_> {
                 return Ok(Paid::default());
             }
         }
-        // The amount runs PayAdd -> PayMul -> PayChoose -> PayAt -> the `pay`
+        // The amount runs PaySplitAdd -> PaySplitMul -> PaySplitChoose -> PaySplitAt -> the `pay`
         // counteraction window *before* any money moves or funds are raised.
         // `player_id` is the payer and `target` the payee (-1 = the bank); any
         // of them may rewrite the amount (`set_pay_amount`).
@@ -3022,7 +3126,7 @@ impl Cx<'_> {
             to = (t.target >= 0).then_some(t.target as usize);
         }
         // ---- pre-split (command-wide) ------------------------------------
-        // `PIPELINE-AUDIT` Q2: `payTotalAdd` → `payTotalMul` → `payTotalCancel`
+        // `PIPELINE-AUDIT` Q2: `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel`
         // shape the **command total** -- the figure a 「[分摊]」 will divide --
         // before any per-share stage touches a leg. A single-pair payment's
         // command total is its own amount, so the same three stages run here.
@@ -3031,7 +3135,7 @@ impl Cx<'_> {
         //
         // They run *after* the `effect` declaration, so a counter still hears
         // the **declared** amount (`docs/ENGINE.md` 「Effect vs settlement」) --
-        // the same position the per-share `payAdd` occupies, one level up.
+        // the same position the per-share `paySplitAdd` occupies, one level up.
         if p.total_stage {
             let mut to_slot = to;
             let before_total = amount;
@@ -3044,7 +3148,7 @@ impl Cx<'_> {
                 rent,
                 p.tile,
             )? {
-                // `payTotalCancel` dropped the whole command.
+                // `payCombinedCancel` dropped the whole command.
                 None => {
                     raise!(
                         self,
@@ -3074,7 +3178,32 @@ impl Cx<'_> {
         // **not** stop at zero. A figure driven negative is still in flight;
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
-        for kind in ["payAdd", "payMul", "payChoose", "payAt"] {
+        for kind in ["paySplitAdd", "paySplitMul", "paySplitChoose", "paySplitAt"] {
+            // v78: interactive pre-stage. A prompt that used to live inside the
+            // PaySplitChoose Filter rides `paySplitChooseBefore` (an Action) so the prompt is
+            // at the rulebook position and the pure Filter still applies here.
+            // The ask's `set_pay_amount` / `set_pay_target` fold here just like
+            // any other stage's rewrite.
+            if kind == "paySplitChoose" {
+                let ask = raise!(
+                    self,
+                    "paySplitChooseBefore",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = amount,
+                    by_card = p.by_card,
+                    @p TriggerPay::new(rent),
+                    tile = p.tile.map_or(-1, |t| t as i32)
+                )?;
+                if ask.value != amount {
+                    modified = true;
+                }
+                amount = ask.value;
+                if ask.target >= 0 {
+                    to = Some(ask.target as usize);
+                }
+            }
             let before = amount;
             let t = raise!(
                 self,
@@ -3098,11 +3227,11 @@ impl Cx<'_> {
             if t.target >= 0 {
                 to = Some(t.target as usize);
             }
-            // The 「支付」 / 「地租」 scalars ride the `payMul` stage
-            // (`docs/TILES.md`): applied *after* `payAdd` and the `effect`
+            // The 「支付」 / 「地租」 scalars ride the `paySplitMul` stage
+            // (`docs/TILES.md`): applied *after* `paySplitAdd` and the `effect`
             // window, so the scale covers the payment as card effects have
             // shaped it and not only `pay_rent`'s table number.
-            if kind == "payMul" {
+            if kind == "paySplitMul" {
                 let before_scale = amount;
                 amount = self.scale_settle_payment(amount, p.kind, rent, p.tile);
                 if amount != before_scale {
@@ -3334,9 +3463,9 @@ impl Cx<'_> {
     }
 
     /// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2):
-    /// `payTotalAdd` → `payTotalMul` → `payTotalCancel`, composing, on `total`.
+    /// `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel`, composing, on `total`.
     ///
-    /// Returns the shaped total, or `None` when a `payTotalCancel` hook dropped
+    /// Returns the shaped total, or `None` when a `payCombinedCancel` hook dropped
     /// the whole command. This is the 「分摊前」 figure: a 「[分摊]pay2000」
     /// divides *this*, not the raw 2000, into shares (规则书 支付阶段 2/4/5
     /// applied to the command rather than to one pair). A pre-split hook may
@@ -3356,7 +3485,27 @@ impl Cx<'_> {
         tile: Option<usize>,
     ) -> Flow<Option<i32>> {
         let mut amount = total;
-        for kind in ["payTotalAdd", "payTotalMul", "payTotalCancel"] {
+        for kind in ["payCombinedAdd", "payCombinedMul", "payCombinedCancel"] {
+            // v78: interactive pre-stage (see the paySplitChooseBefore note above).
+            // The ask's `set_pay_amount` / `set_pay_target` fold here just like
+            // any other stage's rewrite.
+            if kind == "payCombinedAdd" {
+                let ask = raise!(
+                    self,
+                    "payCombinedAddBefore",
+                    side,
+                    player_id = payer,
+                    target = to.map_or(-1, |t| t as i32),
+                    value = amount,
+                    by_card = by_card,
+                    @p TriggerPay::new(rent),
+                    tile = tile.map_or(-1, |t| t as i32)
+                )?;
+                amount = ask.value;
+                if ask.target >= 0 {
+                    *to = Some(ask.target as usize);
+                }
+            }
             let t = raise!(
                 self,
                 kind,
@@ -3368,7 +3517,7 @@ impl Cx<'_> {
                 @p TriggerPay::new(rent),
                 tile = tile.map_or(-1, |t| t as i32)
             )?;
-            if kind == "payTotalCancel" && t.is_cancelled() {
+            if kind == "payCombinedCancel" && t.is_cancelled() {
                 return Ok(None);
             }
             amount = t.value;
@@ -3705,6 +3854,13 @@ impl Cx<'_> {
             key::UNSTOPPABLE,
         ] {
             s.state_set(k, 0);
+        }
+        // Bankruptcy clears **everything the player holds** (规则书 L81) --
+        // including ruleset-invented state keys (PP fans live here). The
+        // engine-owned keys above are listed for their expiry side effects;
+        // this zeros every remaining value in one generic sweep.
+        for v in s.state.values_mut() {
+            v.value = 0;
         }
         s.state_set(key::EXILE_TO, -1);
         // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81: 「将其控制的所有棋子，persona卡，
@@ -4445,7 +4601,7 @@ impl Cx<'_> {
     }
 
     /// Build-and-raise a [`Trigger`], returning it as [`Self::counteract`] left it so
-    /// a counteraction's rewrite of a field (e.g. `moveRoll`'s reroll) can be read
+    /// a counteraction's rewrite of a field (e.g. `diceRollResult`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
     fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
         self.counteract(&mut t)?;

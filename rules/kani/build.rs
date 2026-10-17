@@ -15,7 +15,9 @@ const ARRAY_OPS: &[&str] = &[
     "set_houses", "add_house", "mortgaged_of", "set_mortgaged", "set_owner", "dist", "tile_forward", "neighbor",
     "players_on_count", "players_on_at", "player_count", "player_out", "others_count", "others_at", "money", "gain",
     "gain_typed", "pay", "pay_to", "pay_total", "pay_leg", "draw", "draw_event", "pay_rent",
-    "offer_buy", "offer_force_buy", "offer_build", "apply_mortgage", "apply_redeem", "add_to_hand", "add_to_deck", "add_to_deck_at", "take_card", "cards_in",
+    "offer_buy", "offer_force_buy", "offer_build", "apply_mortgage", "apply_redeem",
+    "pay_buy", "pay_build", "assign_deed",
+    "add_to_hand", "add_to_deck", "add_to_deck_at", "take_card", "cards_in",
     "to_discard", "hand_count", "hand_size", "discard_count", "deck_count", "discard_size", "discard_from_hand", "shuffle_into_deck",
     "place_card_at", "set_dest", "set_transfer_to_dest", "send_to_dest", "transfer_to_dest", "rent_unit_mult", "add_rent_unit_bonus", "teleport_to",
     "unplace_card", "event_expire", "event_is_active", "event_deck_push", "event_banish", "self_tile", "set_self_tile", "self_face_down",
@@ -34,7 +36,7 @@ const ARRAY_OPS: &[&str] = &[
     "play_card", "card_move", "card_replayable", "set_roller", "set_steps", "set_reverse", "set_signed", "set_stop_at",
     "set_parity", "set_resolve", "set_settle_tile", "set_pay_factor", "set_rent_factor", "set_no_buy", "set_no_build", "set_build_anywhere",
     "set_kind", "set_teleport_to", "set_start", "set_base_dice", "add_base_dice", "add_extra_dice", "move_stopped", "set_min_roll",
-    "set_extra_steps", "set_more_steps", "set_tag", "set_settle_as_agent", "plan_add_follower", "move_stop_at", "move_parity", "move_resolve",
+    "set_extra_steps", "set_more_steps", "set_tag", "set_tag_id", "recorded_roll", "set_settle_as_agent", "plan_add_follower", "move_stop_at", "move_parity", "move_resolve",
     "move_steps", "move_remaining", "move_total", "move_dir", "abnormal_count", "target", "targeted_count", "gains_this_turn",
     "placed_tile", "play_doubled", "set_play_doubled", "schedule_turn_end", "set_no_money_loss", "set_fixed_roll", "fixed_roll", "set_next_steps",
     "turn_main_steps", "add_charge_max", "card_build", "set_can_build", "clear_dice", "can_build_on", "card_buy", "buy_quotes",
@@ -305,7 +307,7 @@ fn gen_body_dispatch() {
                     std::fs::read_to_string(&p).unwrap_or_default()
                 };
                 s.push_str("    match entry_index {\n");
-                for (ei, body) in bodies.iter().enumerate() {
+                for (ei, (variant, body)) in bodies.iter().enumerate() {
                     // Self-healing: if `NAME_kani` is missing (a new On:: body
                     // without its wrapper), fall back to calling the plain body
                     // directly. The wrapper is an optimisation (direct call),
@@ -317,7 +319,21 @@ fn gen_body_dispatch() {
                     } else {
                         format!("{crate_name}::{module}::{body}")
                     };
-                    let _ = writeln!(s, "        {ei} => {target}(player),");
+                    // v74 Filter bodies are `fn(i32, …) -> …`, not `-> Asked`.
+                    // This trampoline is the Asked-shaped entry dispatch; a
+                    // Filter entry is reached via `filter_kind_only_idx` (which
+                    // calls the body with a value). Here we invoke it with the
+                    // trigger value and discard the result so entry indices
+                    // stay aligned with the manifest.
+                    let call = match variant.as_str() {
+                        "Filter" => format!("{{ let _ = {target}(player, 0); Ok(()) }}"),
+                        "FilterFlag" => format!("{{ let _ = {target}(player, 0); Ok(()) }}"),
+                        "FilterValue" => format!(
+                            "{{ let _ = {target}(player, card_sdk::abi::FilterValue::default()); Ok(()) }}"
+                        ),
+                        _ => format!("{target}(player)"),
+                    };
+                    let _ = writeln!(s, "        {ei} => {call},");
                 }
                 let _ = writeln!(s, "        _ => fail_entry_oob({idx}, entry_index),");
                 s.push_str("    }\n");
@@ -394,12 +410,15 @@ fn strip_rust_comments(src: &str) -> String {
     out
 }
 
+/// `(variant, body_fn)` for each `On::*` constructor in declaration order.
+/// `variant` is `Play` / `Action` / `Filter` / `FilterFlag` / `FilterValue` /
+/// … -- Filter* bodies are `fn(i32, …)` and the trampoline wraps them.
 fn parse_on_bodies(
     crate_name: &str,
     rules_dir: &PathBuf,
     module: &str,
     konst: &str,
-) -> Vec<String> {
+) -> Vec<(String, String)> {
     let lib = crate_dir(rules_dir, crate_name)
         .join("src")
         .join(format!("{module}.rs"));
@@ -417,7 +436,7 @@ fn parse_on_bodies(
         {
             name_end += 1;
         }
-        let _ = &src[after..name_end]; // variant name
+        let variant = src[after..name_end].to_string();
         // skip whitespace to '('
         let mut p = name_end;
         while p < src.len() && src.as_bytes()[p].is_ascii_whitespace() {
@@ -459,7 +478,7 @@ fn parse_on_bodies(
             }
         }
         parts.push(inner[cur..].trim());
-        // Trailing comma in `On::Hook(…, body,)` leaves an empty last part —
+        // Trailing comma in `On::Action(…, body,)` leaves an empty last part —
         // take the last **non-empty** ident instead (class B: aya_with's
         // `at_start,` / `on_pay,` trailing commas made the dispatch emit
         // `fail_entry_oob` for every entry).
@@ -470,7 +489,7 @@ fn parse_on_bodies(
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
                 && last.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_') == Some(true)
             {
-                bodies.push(last.to_string());
+                bodies.push((variant.clone(), last.to_string()));
             }
         }
         search_from = j + 1;

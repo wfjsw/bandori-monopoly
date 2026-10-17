@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MISAKI_CARD: CardDef = CardDef::new(
     "HHW:（美咲）",
     &[On::Counteract(
-        &[ChainKind::MoveRoll],
+        &[ChainKind::DiceRollResult],
         // 规则书[反击]: 「使用火罐进行移动掷骰后」 -- the [火罐] roll is
         // card-owned state: the card that armed one tagged the move
         // (`ctx::plan::set_tag("fireRoll", 1)`).

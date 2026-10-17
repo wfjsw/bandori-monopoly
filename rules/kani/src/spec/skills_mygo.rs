@@ -9,7 +9,7 @@ use crate::world::Effect;
 // ===========================================================================
 // C-MYGO-band-02
 // 「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）。」
-// Hook: `skill:MyGO!!!!!:迷途之星` On::Hook(RollAfter),
+// Hook: `skill:MyGO!!!!!:迷途之星` On::Action(DiceRollAfter),
 // guard `"actor == owner && move.roll >= 16"`.
 // Effect: the band card gains exactly one [奇迹水晶], capped at 1.
 // Frame: only the band-card crystal count moves.

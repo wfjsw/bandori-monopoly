@@ -162,13 +162,9 @@ fn m03_eve_then_yolo() {
     let mut t = Table::new(&["若宫伊芙", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
-    // 5 face-up fans (one counter with value 5).
-    t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
-        name: "P✽P粉丝(正)".into(),
-        value: 5,
-
-        instance: None,
-    });
+    // 5 face-up fans (state dict).
+    t.set_state(0, "ppFansUp", 5);
+    t.set_state(0, "ppFansDown", 0);
     t.give(0, &["AG:Y.O.L.O"]);
     // Before the roll: flip Y = 2 fans for +2d4 (loaded 1, 1). d20 = 4.
     t.dice(&[4, 1, 1, 2]);
@@ -192,7 +188,7 @@ fn m03_eve_then_yolo() {
     );
     assert_eq!(t.pos(0), 8, "4 + 2 + 2");
     assert_eq!(
-        t.token(0, "P✽P粉丝(正)"),
+        t.state(0, "ppFansUp"),
         3,
         "flipped 2 of the 5 face-up fans"
     );
@@ -233,6 +229,32 @@ fn m04b_minus_two_clamped_to_zero() {
     drain(&mut t);
     assert_eq!(t.pos(0), 4, "clamped to 0, no settle");
     assert_eq!(t.money(0), 10_000, "no rent paid");
+}
+
+// 规则书: 不要背负期待 [持续]（1）: 「如果为0则此次移动不[结算]」 -- a face
+// that shaves to 0 while already standing on a foreign rent tile must not
+// settle that tile (the 0-step walk takes neither `fold_plan_delta` nor the
+// mid-step sync, so the engine has to pull `plan.resolve` before the walk).
+#[test]
+fn m04c_zero_step_walk_does_not_settle_the_tile_underfoot() {
+    let mut t = Table::vanilla(2);
+    t.place_raw(0, "PP:不要背负期待");
+    let blue = tile("江户川公园");
+    t.set_owner(blue, Some(1));
+    // Standing on P1's rent tile. The shave cuts the face 1 -> 0, so the
+    // walk is 0 steps and 「不[结算]」 -- no rent either way.
+    t.set_pos(0, blue);
+    let rent = data().tiles[blue].rent[0];
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), blue, "0-step walk stays put");
+    assert_eq!(
+        t.money(0),
+        10_000,
+        "face-0 suppresses settle; rent would have been {rent}"
+    );
+    assert_eq!(t.money(1), 10_000, "owner receives nothing");
 }
 
 // =====================================================================
@@ -276,7 +298,7 @@ fn m05_repaint_plus_half_speed() {
 // =====================================================================
 
 // 规则书: 若能再次交汇: 「持续进行移动掷骰直至[经过]下一名玩家（最多…超过原本移动终点的20格以后）」.
-// Faces are queued before `t.roll`: the moveRoll [反击] window is a pending
+// Faces are queued before `t.roll`: the diceRollResult [反击] window is a pending
 // routine, and `world_mut` (what `Table::dice` uses) is illegal under one.
 // The routine also replays from its start-time snapshot, so mid-window loads
 // would not reach the re-roll anyway.
@@ -512,7 +534,7 @@ fn m10_rinko_while_stunned() {
 // =====================================================================
 
 // 规则书: 同上 + Y.O.L.O. RULING: whether 「固定为X*6」 overrides later additions.
-// Drive: press (X prompt) → `t.roll` (fixed face) → Y.O.L.O [反击] on moveRoll.
+// Drive: press (X prompt) → `t.roll` (fixed face) → Y.O.L.O [反击] on diceRollResult.
 #[test]
 fn m11_rinko_plus_yolo() {
     let mut t = Table::new(&["白金燐子", "花园多惠"]);
@@ -538,7 +560,7 @@ fn m11_rinko_plus_yolo() {
             }
         }
     }
-    // The main move: the face is the fixed 12; Y.O.L.O may still add on moveRoll.
+    // The main move: the face is the fixed 12; Y.O.L.O may still add on diceRollResult.
     t.roll(0).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };

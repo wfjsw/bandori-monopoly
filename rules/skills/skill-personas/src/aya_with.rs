@@ -21,26 +21,28 @@
 use card_sdk::abi::HookKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+use skill_groups::fans;
 
 pub const AYA_WITH: CardDef = CardDef::new(
     "skill:丸山彩:With~",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
         // 「此次支付的分摊前资金减少Y×100（最少0）」 -- the **pre-split** total
-        // (「分摊前」), so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the
-        // per-share `payChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
+        // (「分摊前」), so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not
+        // the per-share `paySplitChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
         // it divides, not 500 off each share.
-        On::Hook(
-            &[HookKind::PayTotalAdd],
-            "value > 0 && tok('P✽P粉丝(正)') >= 1",
+        //
+        // Rides `PayCombinedAddBefore` (v78), restoring the rulebook PayCombinedAdd
+        // position: the interactive `ask_number` + `set_pay_amount` sits
+        // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
+        On::Action(
+            &[HookKind::PayCombinedAddBefore],
+            "value > 0 && slot('ppFansUp') >= 1",
             Some(mine),
             on_pay,
         ),
@@ -63,7 +65,8 @@ fn mine(player_id: i32) -> bool {
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
     // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
+    // Grant via the band card; no band card on the board → no markers.
+    let _ = fans::grant(player_id, 5, 0)?;
     // 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- a grant is the skill
     // rule placed on the grantee's field. `bind_skills` already puts a player's
     // own two there; this adds a third. The body runs for whoever presses it,
@@ -80,13 +83,15 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「自己每次需要支付资金时可选择将自己Y个正面[P✽P粉丝]变反，此次支付的
 /// 分摊前资金减少Y×100（最少0）」.
+/// Rides `PayCombinedAddBefore` (v78): the prompt picks Y, which drives both the
+/// amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     // 「不可使用」 -- same gate as `mine`, repeated in the body.
     if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
     let amount = ctx::trigger::value();
-    let up = ctx::tok(player_id, FANS_UP);
+    let up = fans::up(player_id);
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("aya_with_title")),
@@ -98,8 +103,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「将自己Y个正面[P✽P粉丝]变反」
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
+    let _ = fans::flip_down(player_id, y)?;
     // 「此次支付的分摊前资金减少Y×100（最少0）」
     ctx::trigger::set_pay_amount((amount - y * 100).max(0));
     // 「如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]
@@ -114,7 +118,10 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正」 -- spread Y flips across the
-/// other players who hold face-down fans.
+/// other players who hold face-down fans. One `fans::flip_up` per seat (X =
+/// the slice requested for that seat). TODO(规则书): 「将Y个…变正」 is a pool
+/// of Y across others; if each seat instead receives the remaining Y as its
+/// own effect X, overflow crystals would fire. Current reading = the slice.
 fn flip_others(player_id: i32, mut y: i32) -> card_sdk::Asked {
     for p in 0..ctx::player_count() {
         if y <= 0 {
@@ -123,26 +130,24 @@ fn flip_others(player_id: i32, mut y: i32) -> card_sdk::Asked {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
         }
-        let down = ctx::tok(p, FANS_DOWN).min(y);
+        let down = fans::down(p).min(y);
         if down > 0 {
-            ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
-            ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
+            let _ = fans::flip_up(p, down)?;
             y -= down;
         }
     }
     Ok(())
 }
 
-/// 「将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正」.
+/// 「将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正」. X = 1 per seat even
+/// when they hold 0 face-downs -- the effect still hits them, so band clause
+/// （2） sees `X > down` and may add the overflow crystal.
 fn flip_all_pp() -> card_sdk::Asked {
     for p in 0..ctx::player_count() {
         if ctx::player_out(p) || !ctx::in_group(p, "Pastel✽Palettes") {
             continue;
         }
-        if ctx::tok(p, FANS_DOWN) > 0 {
-            ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
-            ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
-        }
+        let _ = fans::flip_up(p, 1)?;
     }
     Ok(())
 }

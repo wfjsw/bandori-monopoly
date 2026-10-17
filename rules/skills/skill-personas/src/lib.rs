@@ -23,7 +23,7 @@
 //!   gate is the "can I press this right now?" query (C# `Card.WhyNot`) and
 //!   `run` is what the press does.
 //! - **Called by a field event** -- the skill is a field card on the player
-//!   (C# `Fx`, from `MatchPlayer.field`), which is why [`On::Hook`] reaches it.
+//!   (C# `Fx`, from `MatchPlayer.field`), which is why [`On::Action`] reaches it.
 //!   It answers settlement points automatically, with no declaration and no
 //!   press. A fire cap that has to hold from the moment the character is taken
 //!   belongs here.
@@ -36,7 +36,7 @@
 //! The rule needs to know whose it is. The id carries that --
 //! `skill:户山香澄:非凡之星` -- and `GameData::skill_rules_of` resolves a
 //! player's two skills from the character they picked and their band. The
-//! engine places them at match start (`bind_skills`), so `On::Hook` reaches
+//! engine places them at match start (`bind_skills`), so `On::Action` reaches
 //! them like any field card and `On::Play` answers the skill button. A card
 //! that reaches a skill by name uses `ctx::persona_skill` /
 //! `ctx::group_skill` + `ctx::invoke_skill` (ABI v35).
@@ -47,7 +47,7 @@
 
 extern crate alloc;
 
-use card_sdk::abi::{state_key, TriggerKind};
+use card_sdk::abi::{state_key, TriggerKind, HookKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::CardDef;
 
@@ -57,7 +57,7 @@ use card_sdk::CardDef;
 /// Hook this from both `TurnStartBefore` (so the cap holds from the first turn
 /// even when the skill is placed mid-game) and `DeckAtGameStart` (where
 /// 「初始N」 is created), e.g.
-/// `On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap)`.
+/// `On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap)`.
 ///
 /// The cap is written **only when unset** (0), so a later `add_charge_max`
 /// (「火罐上限加1」, e.g. `PPP:[衍生]拍卖撤下来了`) survives the per-turn

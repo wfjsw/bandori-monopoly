@@ -13,28 +13,32 @@
 //! > （2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。
 //!
 //! while short on cash the owner may record a colour and take a rescue.
-//! The rescue runs in the `PayChoose` hook; the recorded colours live in a
+//! The rescue runs in the `PaySplitChoose` hook; the recorded colours live in a
 //! player slot (stand-in for the C# per-card `HashSet<int> _colors`).
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
+use skill_groups::fans;
 
 pub const SHINE_AGAIN: CardDef = CardDef::new(
     "PP:再次闪耀",
     &[
         // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- the hand play. The
-        // [共鸣] branch (2) is offered from the `PayChoose` hook below, not as a
+        // [共鸣] branch (2) is offered from the `PaySplitChoose` hook below, not as a
         // second `Play` entry (its `is_placed` gate was blocking this play).
         On::Play("", None, shine_again),
         // 规则书[持续]（1）: 「[拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡
         // 未记录且[拥有者]拥有同色地契的颜色」 -- the offer exists only while
         // short on cash and with an unrecorded owned colour to name. The money
         // shortfall is CEL; the colour scan is residual.
-        On::Hook(
-            &[HookKind::PayChoose],
+        //
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position.
+        // The pre's `money(owner) < value` still gates on the figure in flight.
+        On::Action(
+            &[HookKind::PaySplitChooseBefore],
             "actor == owner && card.placed && value > 0 && money(owner) < value",
             Some(has_unrecorded_color),
             pay_choose,
@@ -43,7 +47,7 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
         //   turn-start offer is a stand-in for the C# action window.
-        On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, offer_resonance),
+        On::Action(&[HookKind::TurnStart], "actor == owner && card.placed", None, offer_resonance),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次闪耀"#)
@@ -107,7 +111,7 @@ fn has_unrecorded_color(player_id: i32) -> bool {
     !unrecorded_owned_colors(player_id).is_empty()
 }
 
-/// C# `CardShineAgain.PayChoose` -- while the owner cannot cover a payment,
+/// C# `CardShineAgain.PaySplitChoose` -- while the owner cannot cover a payment,
 /// record a colour and take that colour's top deed price / 5 plus a fan.
 /// Applicability is `money(owner) < value` + `has_unrecorded_color`.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
@@ -142,15 +146,11 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[持续]（1）: 「[拥有者][获得]……资金和1个正面[P✽P粉丝]」 -- C#
     // `H.GainFans(Seat, 1, up: true)` + `H.GainR(Seat, maxPrice / 5)`.
-    // Write the fan counter directly (`set_tok`): `add_tok` opens a nested
-    // `markerGain` [反击] window inside the already-open pay pipeline, whose
-    // answers-replay can cancel the grant. C# `H.GainFans` is a direct count.
-    {
-        let up = ctx::tok(player_id, "P✽P粉丝(正)");
-        ctx::set_tok(player_id, "P✽P粉丝(正)", up + 1);
-    }
+    // Dict writes (`ctx::state`) do not open a `markerGain` [反击] window,
+    // so this grant is safe nested in the pay pipeline.
+    let _ = fans::grant(player_id, 1, 0)?;
     // 「购买价格」÷5 is a formula-fixed gain, not a payment -- `gain_raw` so
-    // the pay pipeline (PayChoose etc.) cannot re-enter this hook or alter it.
+    // the pay pipeline (PaySplitChoose etc.) cannot re-enter this hook or alter it.
     let money = best / 5;
     if money > 0 {
         ctx::gain_raw(
@@ -211,7 +211,7 @@ fn record(player_id: i32) -> card_sdk::Asked {
         SLOT_COLORS,
         ctx::slot(player_id, SLOT_COLORS) | (1 << g),
     );
-    ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
+    let _ = fans::grant(player_id, 1, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("shine_again_recorded")).i("n", g as i64),

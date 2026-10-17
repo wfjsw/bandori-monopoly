@@ -79,10 +79,10 @@ impl Match {
                 // amounts live in `rules/tiles`; these bypass only the prompt
                 // and the phase/turn gate (cheats already do).
                 "buy" => {
-                    let _ = cx.buy(target, m.value as usize, super::purchase::BuyKind::Land);
+                    let _ = cx.deed_buy(target, m.value as usize, super::purchase::BuyKind::Land, 0);
                 }
                 "build" => {
-                    let _ = cx.build(target, m.value as usize);
+                    let _ = cx.deed_build(target, m.value as usize);
                 }
                 "mortgage" => {
                     let t = m.value as usize;

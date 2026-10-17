@@ -15,7 +15,7 @@
 //!
 //! R4 (`SETTLE-STAGES.md` §9, user ruling 2026-10-07): （2）'s two branches are
 //! two different gestures and live on two different stages. 「免除付款」 is a
-//! **payment-stage cancel** (`payTotalCancel`, 规则书 支付阶段 5). 「将该次结算
+//! **payment-stage cancel** (`payCombinedCancel`, 规则书 支付阶段 5). 「将该次结算
 //! 改为在space格子上添加一个"抹茶芭菲"」 is a **settle replacement** -- the
 //! `settleBody` body-replace gesture (「将该次结算改为」, the same shape as Hey
 //! Kids / Parking Space), not a pre-settle write. Both used to be done at
@@ -34,23 +34,34 @@ pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
         // rides the settle's effect list below.
-        On::Hook(&[HookKind::PayTotalCancel], "", Some(any), exempt_pay),
+        //
+        // ABI v74 split (FilterFlag + Action): the owner-branch auto-cancel
+        // (「若space已属于其他玩家」) is non-interactive and stays on
+        // `FilterFlag(PayCombinedCancel)` (false = drop the command). The
+        // non-owner parfait-transfer branch prompts (「可」), so its
+        // `ask_yes` + `move_units` + `set_cancelled` ride `HookKind::Effect`
+        // (the payment declaration -- `t.value` the engine still folds).
+        // PayAfter is too late to cancel. Effect fires per `money()` call,
+        // so on a split-pay the interactive offer is per leg rather than once
+        // on the command total (single-pair behaviour is identical).
+        On::FilterFlag(&[HookKind::PayCombinedCancel], "", Some(any), exempt_flag),
+        On::Action(&[HookKind::Effect], "", Some(any), exempt_offer),
         // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
-        On::Hook(&[HookKind::SettleBody], "", Some(any), replace_body),
+        On::Action(&[HookKind::SettleBody], "", Some(any), replace_body),
         // （3）「你与其他玩家重合时」 -- 行动阶段 13 [重叠] (`passPlayer`). The
         // pre puts the owner in the actor seat (the mover); `target` is the
         // other player already standing on the landing tile (one raise per
         // such other). The body must read `target`, not `player_id`.
-        On::Hook(&[HookKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
+        On::Action(&[HookKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
     ],
 )
-    .labels(&[(2, "（1）"), (3, "（2）"), (4, "（2）"), (5, "（3）")])
+    .labels(&[(2, "（1）"), (3, "（2）"), (4, "（2）"), (5, "（2）"), (6, "（3）")])
     .silent(&[1]);
 
 fn any(_player_id: i32) -> bool {
@@ -121,10 +132,42 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「若space已属于其他玩家，免除付款」 -- R4: a **payment-stage cancel**
-/// (规则书 支付阶段 5 「取消支付」), not a pre-settle write. Cancels the Space
-/// payment the mover would have owed; the 「并抽1张卡」 half rides the settle
-/// body entry below.
-fn exempt_pay(player_id: i32) -> card_sdk::Asked {
+/// (规则书 支付阶段 5 「取消支付」). Non-interactive owner-branch half (ABI v74
+/// FilterFlag): the settling player is the Space owner and the tile belongs to
+/// someone else, so the payment is dropped outright. `false` = cancel (the host
+/// calls `set_cancelled()`). The interactive parfait-transfer half is
+/// [`exempt_offer`] on `HookKind::Effect`.
+fn exempt_flag(player_id: i32, _value: i32) -> bool {
+    // true = keep
+    if trigger::cancelled() {
+        return true;
+    }
+    let space = ctx::tile_named("Space");
+    if space < 0 || trigger::tile() != space {
+        return true;
+    }
+    let mover = trigger::player_id();
+    if mover != player_id {
+        // The non-owner branch is interactive (「可」) -- left to [`exempt_offer`].
+        return true;
+    }
+    let owner = ctx::tile_owner(space);
+    // 「若space已属于其他玩家」 -- the owner-branch is the settle replace, not
+    // this.
+    if owner < 0 || owner == mover {
+        return true;
+    }
+    // 「免除付款」 -- drop the payment command.
+    ctx::log(player_id, &Msg::new(key!("rana_parking_free")));
+    false
+}
+
+/// （2）'s non-owner branch: 「其他人在space触发结算时可将自己拥有的一个"抹茶芭菲"
+/// 转移到该格上以免除当次付款」 -- the settling non-owner **may** (「可」) pay a
+/// held parfait instead of money. ABI v74 Pattern E: `ask_yes` + `move_units` +
+/// `set_cancelled` cannot live in a FilterFlag (which cannot prompt), so the
+/// offer rides `HookKind::Effect` (the payment declaration).
+fn exempt_offer(player_id: i32) -> card_sdk::Asked {
     if trigger::cancelled() {
         return Ok(());
     }
@@ -133,40 +176,28 @@ fn exempt_pay(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let mover = trigger::player_id();
-    if mover != player_id {
-        // 规则书: 「其他人在space触发结算时可将自己拥有的一个"抹茶芭菲"转移到
-        //   该格上以免除当次付款」 -- the settling non-owner **may** (「可」) pay
-        //   a held parfait instead of money. Same payment-stage cancel gesture
-        //   (R4 / `payTotalCancel`) as the owner branch above.
-        if ctx::tok(mover, PARFAIT) < 1 {
-            return Ok(());
-        }
-        let yes = ctx::ask_yes(
-            mover,
-            &Msg::new(key!("rana_parking_title")),
-            &Msg::new(key!("rana_parking_transfer")),
-        )?;
-        if !yes {
-            return Ok(());
-        }
-        // One held unit moves onto space; the payment never runs.
-        ctx::move_units(PARFAIT, -1, mover, space, -1, 1);
-        trigger::set_cancelled();
-        ctx::log(
-            player_id,
-            &Msg::new(key!("rana_parking_transfer_done")).player_id("who", mover),
-        );
+    if mover == player_id {
+        // The owner-branch auto-cancel is [`exempt_flag`].
         return Ok(());
     }
-    let owner = ctx::tile_owner(space);
-    // 「若space已属于其他玩家」 -- the owner-branch is the settle replace, not
-    // this.
-    if owner < 0 || owner == mover {
+    if ctx::tok(mover, PARFAIT) < 1 {
         return Ok(());
     }
-    // 「免除付款」 -- drop the payment command.
+    let yes = ctx::ask_yes(
+        mover,
+        &Msg::new(key!("rana_parking_title")),
+        &Msg::new(key!("rana_parking_transfer")),
+    )?;
+    if !yes {
+        return Ok(());
+    }
+    // One held unit moves onto space; the payment never runs.
+    ctx::move_units(PARFAIT, -1, mover, space, -1, 1);
     trigger::set_cancelled();
-    ctx::log(player_id, &Msg::new(key!("rana_parking_free")));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("rana_parking_transfer_done")).player_id("who", mover),
+    );
     Ok(())
 }
 
@@ -192,7 +223,7 @@ fn replace_body(player_id: i32) -> card_sdk::Asked {
     let mover = trigger::player_id();
     if owner >= 0 && owner != mover {
         // 「免除付款并抽1张卡」 -- the draw half. (The payment cancel already
-        // ran at `payTotalCancel`.)
+        // ran at `payCombinedCancel`.)
         if mover == player_id {
             ctx::draw(player_id, 1)?;
             ctx::log(player_id, &Msg::new(key!("rana_parking_free")));
@@ -274,8 +305,14 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn exempt_pay_kani(player_id: i32) -> card_sdk::Asked {
-    exempt_pay(player_id)
+pub fn exempt_flag_kani(player_id: i32, value: i32) -> bool {
+    exempt_flag(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn exempt_offer_kani(player_id: i32) -> card_sdk::Asked {
+    exempt_offer(player_id)
 }
 
 #[cfg(kani)]

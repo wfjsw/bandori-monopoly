@@ -26,7 +26,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
         // 规则书: 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- the tile
         // and the owner's own pass are the condition; the crystal mark count is
         // the residual guard.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor == owner && tile.id == tile_named('弦卷集团')",
             Some(pass_tile_guard),

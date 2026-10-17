@@ -23,7 +23,7 @@ fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landin
     let events = t.events_since(mark);
     let walks: Vec<_> = events
         .iter()
-        .filter(|e| matches!(e.r#type.as_str(), "roll" | "move"))
+        .filter(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"))
         .collect();
     assert_eq!(
         walks.len(),
@@ -31,7 +31,7 @@ fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landin
         "the approach must be available before the prompt: {events:?}"
     );
     let first = walks[0];
-    assert_eq!(first.r#type, "roll");
+    assert_eq!(first.r#type, "diceRollBefore");
     assert_eq!(
         (first.from, first.to, first.value, first.dice),
         (from as i32, 0, segment, steps)
@@ -59,7 +59,7 @@ fn pass_reward_stop(from: usize, reverse: bool, steps: i32, segment: i32, landin
     assert!(first_id < reward.id, "walk to the start square, then pay the reward");
     let walks: Vec<_> = events
         .iter()
-        .filter(|e| matches!(e.r#type.as_str(), "roll" | "move"))
+        .filter(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"))
         .collect();
     assert_eq!(
         walks[0].id, first_id,
@@ -118,7 +118,7 @@ fn a_long_walk_announces_each_lap_before_its_reward() {
     let first = t
         .events_since(mark)
         .into_iter()
-        .find(|e| e.r#type == "roll")
+        .find(|e| e.r#type == "diceRollBefore")
         .expect("announce the first segment before asking");
     assert_eq!(
         (first.from, first.to, first.value, first.dice),
@@ -152,7 +152,7 @@ fn a_long_walk_announces_each_lap_before_its_reward() {
 fn walks(events: &[MatchEvent]) -> Vec<&MatchEvent> {
     events
         .iter()
-        .filter(|e| matches!(e.r#type.as_str(), "roll" | "move"))
+        .filter(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"))
         .collect()
 }
 
@@ -206,7 +206,7 @@ fn a_pass_tile_flash_waits_for_the_walk_to_the_hook_tile() {
     assert_eq!(flashes.len(), 1, "one card flash: {:?}", t.recent_keys(20));
     // The walk onto tile 21 must be announced before the flash.
     let first = segs.first().expect("a walk segment");
-    assert_eq!(first.r#type, "roll");
+    assert_eq!(first.r#type, "diceRollBefore");
     assert_eq!((first.from, first.to, first.value, first.dice), (20, 21, 1, 4));
     assert!(
         first.id < flashes[0].id,
@@ -236,7 +236,7 @@ fn a_mid_route_pass_tile_flash_splits_the_walk_around_it() {
     assert_eq!(flashes.len(), 1, "one card flash: {:?}", t.recent_keys(20));
     // Steps 21-22 are silent (no flush); the flash on 23 flushes 20 -> 23.
     let first = segs.first().expect("a walk segment");
-    assert_eq!(first.r#type, "roll");
+    assert_eq!(first.r#type, "diceRollBefore");
     assert_eq!((first.from, first.to, first.value, first.dice), (20, 23, 3, 5));
     assert!(
         first.id < flashes[0].id,
@@ -266,7 +266,7 @@ fn a_pass_before_flash_waits_for_the_walk_to_the_previous_tile() {
     let flashes = cards(&events);
     assert_eq!(flashes.len(), 1, "one card flash: {:?}", t.recent_keys(20));
     let first = segs.first().expect("a walk segment");
-    assert_eq!(first.r#type, "roll");
+    assert_eq!(first.r#type, "diceRollBefore");
     assert_eq!((first.from, first.to, first.value, first.dice), (20, 22, 2, 5));
     assert!(
         first.id < flashes[0].id,
@@ -297,7 +297,7 @@ fn a_flash_on_the_first_pass_before_shows_the_dice_first() {
     let flashes = cards(&events);
     assert_eq!(flashes.len(), 1, "one card flash: {:?}", t.recent_keys(20));
     let first = segs.first().expect("a walk segment");
-    assert_eq!(first.r#type, "roll", "the head is the main move's roll");
+    assert_eq!(first.r#type, "diceRollBefore", "the head is the main move's roll");
     assert_eq!(
         (first.from, first.to, first.value, first.dice),
         (20, 20, 0, 4),
@@ -330,7 +330,7 @@ fn a_silent_walk_is_not_split() {
     let segs = walks(&events);
     assert_eq!(segs.len(), 1, "no events mid-walk, no split: {:?}", segs);
     let only = segs[0];
-    assert_eq!(only.r#type, "roll");
+    assert_eq!(only.r#type, "diceRollBefore");
     assert_eq!((only.from, only.to, only.value, only.dice), (20, 24, 4, 4));
     assert!(cards(&events).is_empty(), "no card ran: {events:?}");
     assert_eq!(t.pos(0), 24);

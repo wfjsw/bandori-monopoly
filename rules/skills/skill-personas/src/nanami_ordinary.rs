@@ -46,20 +46,20 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
         // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
         // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
-        On::Hook(
+        On::Action(
             &[ruleset_core::kind::SkillUsed],
             "actor != owner && trigger_card != 0 && charge(owner) >= 1",
             Some(on_skill_applies),
             on_skill,
         ),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
+        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
     ],
 )
     .silent(&[1])

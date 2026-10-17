@@ -159,7 +159,7 @@ const ctx = (over: Partial<AutopilotCtx> = {}): AutopilotCtx => ({
 
 test("on your turn in 运营 it suggests roll", () => {
   const cmd = suggest(view(), ctx());
-  assert.deepEqual(cmd, { act: "roll" });
+  assert.deepEqual(cmd, { act: "diceRollBefore" });
 });
 
 test("after landing at 结束 it suggests end, never a buy act", () => {
@@ -456,7 +456,7 @@ test("chaos lists every playable card before rolling", () => {
   const list = plan(v, ctx({ random: rng(0.5) }), "chaos");
   assert.deepEqual(
     list.map((c) => c.act),
-    ["play", "play", "roll"],
+    ["play", "play", "diceRollBefore"],
   );
 });
 

@@ -552,10 +552,10 @@ async fn a_match_over_http_and_sse() {
         (s, v["error"]["k"].as_str()),
         (StatusCode::BAD_REQUEST, Some("err.roll_first"))
     );
-    a.ok(&path, json!({ "act": "roll" })).await;
+    a.ok(&path, json!({ "act": "diceRollBefore" })).await;
     sse.until(Duration::from_secs(10), |f| {
         f.event == "event"
-            && f.data["type"] == "roll"
+            && f.data["type"] == "diceRollBefore"
             && f.data["playerId"].as_u64() == Some(player_id as u64)
     })
     .await;

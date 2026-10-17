@@ -22,7 +22,7 @@ pub const FOREVER: CardDef = CardDef::new(
         // continuous condition, so the check runs at every point a hand size
         // moves (draw, discard-from-hand, play-from-hand) and at the turn
         // boundaries as a backstop. `Drew` alone only sees draws.
-        On::Hook(
+        On::Action(
             &[
                 HookKind::Drew,
                 HookKind::DiscardAfter,

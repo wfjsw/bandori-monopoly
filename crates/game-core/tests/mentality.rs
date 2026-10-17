@@ -176,7 +176,7 @@ impl game_core::engine::CardRules for PromptRules {
     /// skip (the shape `ask.counteract.*` uses -- the offered card id rides the
     /// option label, as in a live ask).
     fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
-        if t.kind != "roll" {
+        if t.kind != "diceRollBefore" {
             return Ok(());
         }
         let who = t.player_id.max(0) as usize;
@@ -314,7 +314,7 @@ fn chaos_plays_a_playable_card_instead_of_rolling() {
                 last = e.id;
                 match e.r#type.as_str() {
                     "play" => plays_before_first_move += 1,
-                    "roll" | "move" => saw_move = true,
+                    "diceRollBefore" | "move" => saw_move = true,
                     _ => {}
                 }
             }

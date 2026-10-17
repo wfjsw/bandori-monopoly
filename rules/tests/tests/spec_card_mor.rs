@@ -385,7 +385,7 @@ pub fn c_mor_wing_roll(step: &Step<'_>) -> Result<(), String> {
     }
     // A movement dice roll must have happened in this window.
     let rolled = step.events.iter().any(|e| {
-        e.r#type == "roll" || e.r#type == "move" || e.r#type == "dice"
+        e.r#type == "diceRollBefore" || e.r#type == "move" || e.r#type == "dice"
     });
     if !rolled {
         return Err(

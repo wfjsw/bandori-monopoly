@@ -336,6 +336,11 @@ pub enum Op {
     set_persona = 315,
     apply_mortgage = 316,
     apply_redeem = 317,
+    set_tag_id = 318,
+    recorded_roll = 319,
+    pay_buy = 320,
+    pay_build = 321,
+    assign_deed = 322,
 }
 
 /// Six i32 wire slots, matching the ABI's arg convention.

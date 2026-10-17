@@ -51,16 +51,16 @@ per-card probes.
 | family | decls | distinct fns | entry | where |
 |---|---|---|---|---|
 | counteract guards | 51 | 50 (`can_counteract`×48, `can_counteract2`, `can_counter_fire`, `can_negate`) | `On::Counteract` | cards + `tae_police.rs:87` |
-| hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Hook` | cards, skills, events, tiles |
+| hook guards | 250 | ~44 (`mine`×118, `always`×19, `crystals_changed_guard`×11, `is_placed`-only ≈30, …) | `On::Action` | cards, skills, events, tiles |
 | play gates | 97 of 201 `On::Play` (`None`×104) | `cant_play`×62 + `can_use`×19 + 16 one-offs | `On::Play(Some(..))` | cards |
 | skill usability | (in play gates) | `can_use` family ×35 | `On::Play` | skills/ |
-| gates / settle / rollplan | no guard fn (body only) | — | `On::Gate`/`Settle`/`RollPlan` | tiles, cards |
+| gates / settle / rollplan | no guard fn (body only) | — | `On::FilterFlag`/`Settle`/`DiceRollPlan` | tiles, cards |
 
 ### 2.1 Recurring patterns (50 counteract bodies; hot path)
 
 | pattern | guards | fully expressible | example |
 |---|---|---|---|
-| trigger kind | 44 | 44 (multi-kind arms stay as OR-lists) | `detour.rs:34` `kind == MoveRoll` |
+| trigger kind | 44 | 44 (multi-kind arms stay as OR-lists) | `detour.rs:34` `kind == DiceRollValue` |
 | actor rel (self / other / any) | ~30 | 30 | `welcome_mujica.rs:67` `actor != owner` |
 | target rel (self / other / exists) | ~13 | 13 | `cant_look_away.rs:21` `target == owner && actor != owner` |
 | `by_card` rel | 6 | 6 | `riot.rs:21` `by != owner && effect.hits(owner)` |
@@ -101,10 +101,10 @@ Overall: **~75 % of guards fully expressible, ~20 % partial, ~5 % prefix-only**;
 
 `declare_one` (wasm_rules.rs:2638-2681) probes every distinct hand card that
 declares the answered kind, per seat visit, per chain link. Responders per
-`ChainKind` (static): **Effect 18, MoveRoll 10**, Card 4, Roll 3, SettleBefore 3,
+`ChainKind` (static): **Effect 18, DiceRollValue 10**, Card 4, Roll 3, SettleBefore 3,
 Pass 2, Paid 2, 1 each ×15. Runtime frequency (≈250 probes/round × 196 rounds):
 every move roll, every payment/effect declaration, every settle — i.e. the
-Effect/MoveRoll/Settle*/Card windows hold most of the 48 900 probes. The
+Effect/DiceRollValue/Settle*/Card windows hold most of the 48 900 probes. The
 actor-relation atom alone rejects ~3/4 of the probes on `actor == owner` guards
 whenever the trigger belongs to another seat (13 of 50 counteract bodies lead
 with it; 118 hook decls are exactly `mine`).
@@ -273,8 +273,9 @@ table. Adding a name never edits their bodies.
 
 ### 4.2c Window variables per entry kind (ABI v49)
 
-`On::Gate` / `On::AtEnd` / `On::RollPlan` / `On::Settle` / `On::Mortgage` / `On::Redeem` carry the same
-`pre` + residual-guard pair as `On::Hook` (v49), so their conditions see the
+`On::FilterFlag` / `On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])` /
+`On::Settle` / `On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` carry the same
+`pre` + residual-guard pair as `On::Action` (v49), so their conditions see the
 §4.2 schema. The window is built with `fill_window` from the **trigger / context
 the entry is dispatched on**; the candidate is `owner` = the entry's
 `player_id`. What is meaningful per kind (the rest of the schema still binds,
@@ -283,12 +284,13 @@ reading its default / sentinel):
 | kind | dispatch trigger | meaningful window vars | notes |
 |---|---|---|---|
 | `Gate` | the gate's own raise (`ImmuneAll` / `Untargetable` / `Redirect` / `BuyGate` / `AbnormalGuard`, …) | `kind`, `actor` (the protected seat / buyer / named target), `target` (`Redirect`'s current name), `tile` (`BuyGate`'s tile), `value`, `by` (the causing card's seat, `null` when not card-caused), `trigger_card`, `turn_player`, `turn_key` | a gate is asked per raise; `card.placed` is true by construction (only placed instances are asked) |
-| `RollPlan` | `rollPlan` (the move being planned) | `actor` = the mover (`turn_player`), `turn_player`, `turn_key`, `move.*` (kind / main / remaining; `move.roll` is still `null` -- the dice are not cast yet), `card.*` | `pos(seat)` reads a seat's tile, so 「与自己同格」 is `pos(turn_player) == owner.pos` |
+| `DiceRollPlan` | `diceRollPlan` (the move being planned) | `actor` = the mover (`turn_player`), `turn_player`, `turn_key`, `move.*` (kind / main / remaining; `move.roll` is still `null` -- the dice are not cast yet), `card.*` | `pos(seat)` reads a seat's tile, so 「与自己同格」 is `pos(turn_player) == owner.pos` |
 | `AtEnd` | `turnEndBefore` / `turnEndAfter` (the ended turn) | `owner.*` (the scheduled player), `turn_player`, `turn_key`, `actor` (the turn player whose turn ended) | `slot(name)` / `tok('name')` read `owner`'s counters -- the scheduling card's own state |
 | `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.main` | `actor`, `target`, `tile.*`, `move.main`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
 | `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
+| `Buy` / `Build` | a synthetic trigger (`kind = None`) on the perform: `actor` = the buyer / builder, `target` = the tile's owner, `tile` = the deed, `value` = the reason (0 = settle offer, 1 = card-driven, 2 = agent, 3 = acquire / auction); `buy.kind` is the [`BuyKind`] | `actor`, `target`, `tile.*`, `buy.kind`, `owner.*`, `turn_player`, `turn_key` | the body owns eligibility, the quote and the order of steps; `ctx::raise` / `ctx::pay_buy` / `ctx::pay_build` / `ctx::assign_deed` / `ctx::log` are the mechanism. Tile bodies do not flash |
 
-A `CounterChanged` hook (`On::Hook(&[HookKind::CounterChanged], …)`, wire
+A `CounterChanged` hook (`On::Action(&[HookKind::CounterChanged], …)`, wire
 names `counterChanged`|`crystalsChanged`|`cpChanged`) sees: `actor` = the
 owner of the instance whose counter changed (board-owned instances read
 `-1`), `target` = `-1` (not seat-scoped -- the counter lives on a card, not
@@ -299,7 +301,7 @@ the instance's card id hash, `name` / `counter_name` = the counter name
 `card.counter('cp') == 0`.
 
 `pay.*` fields are meaningful only where the dispatch trigger carries them (a
-`pay`/`paid` raise); a `Settle` / `AtEnd` / `RollPlan` window reads `value = 0`
+`pay`/`paid` raise); a `Settle` / `AtEnd` / `DiceRollPlan` window reads `value = 0`
 / `pay_is_rent = false`. Derived state that the schema does not cover
 (`ctx::fixed_roll()`, `ctx::abnormal_count`, a "every X is out" scan) stays a
 residual wasm guard -- exactly the G3 split.
@@ -315,8 +317,9 @@ residual wasm guard -- exactly the G3 split.
   declaration sites. Sugar consts `pre::MINE` (`actor == owner`) replaces the
   118 `mine` guards outright; the 19 `always` guards are deleted. The condition
   sits beside the (now residual) guard fn, and each clause lives in exactly one
-  of the two. **v49** extends the pair to `On::Gate` / `On::AtEnd` /
-  `On::RollPlan` / `On::Settle` / `On::Mortgage` / `On::Redeem` too (§4.2c): no entry kind is unguarded any
+  of the two. **v49** extends the pair to `On::FilterFlag` /
+  `On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])` / `On::Settle` /
+  `On::Mortgage` / `On::Redeem` too (§4.2c): no entry kind is unguarded any
   more, and an entry whose condition rejects runs no body (and so emits no
   `card` flash).
 * Load time: `RulesetBuilder::build` parses + compiles every `pre` once
@@ -330,8 +333,9 @@ residual wasm guard -- exactly the G3 split.
    per `top` trigger; evaluate per (card, seat). This is the 48 900-call path.
 2. `run_hook` (host.rs) / `drive_inner` guard step: before
    `self.store(...)`; window context per trigger, owner = card's player.
-   Since v49 this covers `On::Gate` entries too (they share `hook_entries`).
-3. `run` (host.rs) for `On::AtEnd` / `On::RollPlan` / `On::Settle` / `On::Mortgage` / `On::Redeem` (v49):
+   Since v49 this covers `On::FilterFlag` entries too (they share `hook_entries`).
+3. `run` (host.rs) for `On::Action(&[AtEnd])` / `On::FilterValue(&[DiceRollPlan])` /
+   `On::Settle` / `On::Mortgage` / `On::Redeem` (v49):
    the same category → condition → guard → body, before `on_body` / `OP_RUN`,
    so a rejecting entry never flashes.
 4. `cant_play` (host.rs:648-671, wasm_rules.rs:3099-3136) and the skill gates
@@ -681,9 +685,9 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 
 ### 9.1 What landed
 
-**G0 — surface.** `On::Counteract` / `On::Hook` / `On::Play` (the guarded
+**G0 — surface.** `On::Counteract` / `On::Action` / `On::Play` (the guarded
 entries) carry a `pre: &'static str` condition immediately before the residual
-guard (`On::Counteract(kinds, pre, guard, body)`, `On::Hook(kinds, pre, guard,
+guard (`On::Counteract(kinds, pre, guard, body)`, `On::Action(kinds, pre, guard,
 body)`, `On::Play(pre, gate, body)`); `""` = none. `On::pre(..)` is
 the const builder and `card_sdk::pre::MINE` (`actor == owner`) the sugar.
 `ManifestOn` gains `pre: Option<String>` (the CEL source) and `ABI_VERSION`
@@ -1056,7 +1060,7 @@ carry **no** residual guard (the load refuses one): the condition is the answer.
 ## Exclusive-use gate (ABI 60)
 
 A band skill may further restrict **which exclusive cards its members play**.
-The question is the CEL-only `On::Gate` kind
+The question is the CEL-only `On::FilterFlag` kind
 `TriggerKind::ExclusiveUse` / `GateKind::ExclusiveUse` (wire name
 `exclusiveUse`), asked of the ruleset whenever an exclusive card is about to be
 played from hand. Same CEL-only rule as the status gates: the condition is the
@@ -1084,7 +1088,7 @@ further deny.
 ### Band-skill denial (the card)
 
 CRYCHIC's 「variants may not use the base character's exclusives」 is an
-`On::Gate` entry on `skill:CRYCHIC:美好的往日幻影`
+`On::FilterFlag` entry on `skill:CRYCHIC:美好的往日幻影`
 (`rules/skills/skill-bands/src/crychic.rs`):
 
 ```

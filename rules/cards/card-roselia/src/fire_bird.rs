@@ -20,9 +20,9 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
         On::Play("", None, play),
-        On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Hook(&[HookKind::PayMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
-        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
+        On::Filter(&[HookKind::PaySplitMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
+        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Fire bird"#)
@@ -70,14 +70,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 / 「奇迹水晶耗尽时将此卡放入
     // 弃牌堆」 -- `DecayCard.TurnEnd` -> `CardFireBird.Burn`, see `turn_end`.
-    // 规则书: 「自己的所有格子收费变成1.5倍」 -- C# `CardFireBird.PayMul`, see
+    // 规则书: 「自己的所有格子收费变成1.5倍」 -- C# `CardFireBird.PaySplitMul`, see
     // `pay_mul`.
     Ok(())
 }
 
 /// 规则书: 「自己的所有格子收费变成1.5倍」. Rent paid to this card's owner is
-/// charged at ×1.5. Runs through the Fx hook dispatch at `payMul` (after
-/// `PayAdd`, before `PayChoose`), so this is a field effect, not a [反击].
+/// charged at ×1.5. Runs through the Fx hook dispatch at `paySplitMul` (after
+/// `PaySplitAdd`, before `PaySplitChoose`), so this is a field effect, not a [反击].
 /// Pure guard for [`pay_mul`] -- the activation gate. `false`
 /// means the card is not activated at all.
 ///
@@ -86,21 +86,19 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// rounds up to a multiple of 10 once after all add/mul modifiers. Integer
 /// fold rounds the .5 up (`(amount * 3 + 1) / 2`) so a sole modifier still
 /// settles at `round10(exact)` (25 → 37.5 → 40).
-fn pay_mul(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
+fn pay_mul(player_id: i32, value: i32) -> i32 {
+    if value <= 0 {
+        return value;
     }
-    let boosted = ((amount as i64 * 3 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
-    trigger::set_pay_amount(boosted);
+    let boosted = ((value as i64 * 3 + 1) / 2).clamp(0, i32::MAX as i64) as i32;
     ctx::log(
         player_id,
         &Msg::new(key!("fire_bird_pay_mul"))
             .player_id("who", player_id)
-            .n("from", amount as i64)
+            .n("from", value as i64)
             .n("to", boosted as i64),
     );
-    Ok(())
+    boosted
 }
 
 /// `DecayCard.TurnEnd` -> `CardFireBird.Burn` (C# `H.LoseR(Seat, 400, "Fire bird")`
@@ -163,8 +161,8 @@ pub fn turn_end_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_mul_kani(player_id: i32) -> card_sdk::Asked {
-    pay_mul(player_id)
+pub fn pay_mul_kani(player_id: i32, value: i32) -> i32 {
+    pay_mul(player_id, value)
 }
 
 #[cfg(kani)]

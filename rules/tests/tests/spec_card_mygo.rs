@@ -2396,7 +2396,7 @@ fn soyo_skill_endpoint_as_coloured_agent() {
         t.set_pos(0, 11); // will roll onto a non-agent tile
         t.dice(&[2]); // 11 -> 13
         t.roll(0).map_err(|e| format!("roll: {e}"))?;
-        // 「移动掷骰后可消耗一个火罐」 -- the `RollAfter` hook opens a YesNo
+        // 「移动掷骰后可消耗一个火罐」 -- the `DiceRollAfter` hook opens a YesNo
         // ask (`soyo_clear_title`) during the roll. Accept it.
         if !accept_yes(&mut t, 0, "soyo_clear") {
             return Err(format!(

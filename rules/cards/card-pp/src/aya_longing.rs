@@ -13,11 +13,12 @@
 //! stay in play, take a card back from the discard, and shave payments while
 //! poorest.
 //! The discard pick runs in `Play`; the [持续]（1） shave lives in the
-//! `PayChoose` hook.
+//! `PaySplitChoose` hook.
 
 use alloc::vec::Vec;
 
 use card_sdk::abi::HookKind;
+use skill_groups::fans;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,7 +26,16 @@ pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
         On::Play("", None, aya_longing),
-        On::Hook(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
+        // ABI v74 Pattern E: the body is interactive (共鸣 prompts + a second
+        // amount rewrite) so it cannot be a pure Filter. It rides
+        // `HookKind::Effect` -- the payment declaration, whose `t.value` the
+        // engine still folds (PayAfter is too late). Both shaves stay in one
+        // body so the X-then-1500 order is unchanged.
+        // TODO(规则书): the shaves land at Effect (before PaySplitAdd/PaySplitMul) rather
+        //   than at the old PaySplitAdd stage, so a sibling PaySplitAdd modifier now sees
+        //   the already-shaved figure. Same result when no other add/mul
+        //   modifier touches the payment.
+        On::Action(&[HookKind::Effect], "actor == owner && value > 0", None, pay_add),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"憧憬的前方"#)
@@ -41,7 +51,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
 fn shave_x(player_id: i32) -> i32 {
-    let fans = ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)");
+    let fans = fans::up(player_id) + fans::down(player_id);
     if fans < 10 {
         100
     } else {
@@ -95,7 +105,7 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardAyaLonging.PayAdd` -- while the owner is
+/// C# `CardAyaLonging.PaySplitAdd` -- while the owner is
 /// the poorest alive player, every [消耗]/[支付] drops by X (floor 0).
 fn pay_add(player_id: i32) -> card_sdk::Asked {
     // `actor == owner && value > 0` is the pre; `poorest` is a derived-list

@@ -15,8 +15,36 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+const FANS_UP: &str = "ppFansUp";
+const FANS_DOWN: &str = "ppFansDown";
+const FANS_BAND: &str = "skill:Pastel✽Palettes:与偶像一起";
+
+/// Place the Pastel band skill on `owner`'s field (fans marker owner).
+fn place_band_skill(owner: i32) -> i32 {
+    world::with_world_mut(|w| {
+        let uid = w.next_uid;
+        w.next_uid += 1;
+        let fi = w.field_n as usize;
+        if fi < world::MAX_FIELD {
+            w.field[fi] = world::FieldCard {
+                uid,
+                card: crate::intern::intern(FANS_BAND).0,
+                player: owner,
+                tile: 0,
+                face_down: false,
+                immune: false,
+                crystals: 0,
+                props: world::NameMap::new(),
+            };
+            w.field_n += 1;
+        }
+        uid
+    })
+}
+
+fn crystals_at(uid: i32) -> i32 {
+    world::with_world(|w| w.field_crystals(uid))
+}
 
 // Ops the aya_with / pastel skill bodies reach.
 crate::host_subset!(skills_pp_dispatch {
@@ -51,6 +79,20 @@ crate::host_subset!(skills_pp_dispatch {
     placed_cards => arm_placed_cards,
     raise => arm_raise,
     gate => arm_gate,
+    // FansFlip raise → pastel `on_fans_flip` (band clause （2）) via `arm_raise`.
+    // Generic send/msg_* stay for any residual `ctx::send` (mark:cp / tests).
+    send => arm_send,
+    msg_name => arm_msg_name,
+    msg_a => arm_msg_a,
+    msg_b => arm_msg_b,
+    msg_c => arm_msg_c,
+    msg_seat => arm_msg_seat,
+    msg_tile => arm_msg_tile,
+    msg_reply => arm_msg_reply,
+    msg_sender_uid => arm_msg_sender_uid,
+    msg_sender_seat => arm_msg_sender_seat,
+    msg_text => arm_msg_text,
+    trig_value => arm_trig_value,
     set_steps | set_resolve | set_stop_at | schedule_turn_end | linger
     | card_offer_build | can_build_on => arm_protocol_stub,
     card_move => arm_card_move,
@@ -81,6 +123,9 @@ fn skills_pp_world(user: i32) {
             w.key_set(p as i32, down, w.fans_neg[p]);
         }
     });
+    // Band skill on both used seats (fans marker owner / clause （2）).
+    place_band_skill(0);
+    place_band_skill(1);
 }
 
 fn effects_slice() -> ([Effect; 24], usize) {
@@ -277,10 +322,17 @@ pub fn aya_with_02_mutant_is_detected() {
 }
 
 // ===========================================================================
-// C-PP-band-idol-02 overflow formula (pure) + reachable-disagreement against
-// the body's own flip (which caps X at `have`, so overflow is unreachable).
+// C-PP-band-idol-02 overflow formula (pure) + body via `on_fans_flip`.
 // 「（2）你因任意原因受到“将X个反面[P✽P粉丝]变正”的效果且X大于拥有的反面的
 //  [P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。」
+//
+// SPEC NOTE (loud): the previous `band_idol_02_body_never_overflows` encoded
+// the OLD body (direct add_tok flip capped at `have`, so `X > down` was
+// unreachable and overflow never landed — LESS than the book). The new
+// `on_fans_flip` dict body **does** apply clause （2） to the effect X, so the
+// harness below proves `min(X-down, 10-held)` against the unmodified body
+// driven by `fans::flip_up` (FansFlip raise → `on_fans_flip_kani`).
+// 「最多10个」 caps the card's TOTAL at 10 (user ruling 2026-10-17).
 // ===========================================================================
 
 #[kani::proof]
@@ -288,52 +340,99 @@ pub fn aya_with_02_mutant_is_detected() {
 pub fn band_idol_02_overflow_formula() {
     let x: i32 = kani::any();
     let down: i32 = kani::any();
+    let held: i32 = kani::any();
     kani::assume(x >= 0 && x <= 30);
     kani::assume(down >= 0 && down <= 20);
-    let over = spec::skills_pp::band_idol_02_overflow(x, down);
+    kani::assume(held >= 0 && held <= 10);
+    let over = spec::skills_pp::band_idol_02_overflow(x, down, held);
     kani::cover!(x > down, "overflow applies");
     kani::cover!(x <= down, "no overflow");
+    kani::cover!(x > down && held < 10, "room under the total cap");
+    kani::cover!(x > down && held >= 10, "card full → adds 0");
     if x > down {
-        crate::kassert!(over == (x - down).min(10), "overflow = min(X-down, 10)");
+        crate::kassert!(
+            over == (x - down).min(10 - held).max(0),
+            "overflow added = min(X-down, 10-held)"
+        );
     } else {
         crate::kassert!(over == 0, "no overflow when X <= down");
     }
-    // Mutant caps at 11 vs the book's 10 — they disagree only when
-    // x-down >= 11 (in 1..=10 both are x-down). Class B: the old check
-    // asserted disagreement in the agreeing range.
-    let m = spec::skills_pp::band_idol_02_overflow_mutant(x, down);
-    kani::cover!(x > down && (x - down) >= 11, "reachable disagreement (cap 11)");
-    if x > down && (x - down) >= 11 {
+    // Mutant caps the total at 11 vs the book's 10 — they disagree only when
+    // x-down > 10-held. Class B: the old check asserted disagreement in the
+    // agreeing range.
+    let m = spec::skills_pp::band_idol_02_overflow_mutant(x, down, held);
+    kani::cover!(x > down && (x - down) > 10 - held, "reachable disagreement (cap 11)");
+    if x > down && (x - down) > 10 - held {
         crate::kassert!(m != over, "mutant cap 11 vs 10");
     }
 }
 
-/// Body check: the band skill's own flip asks for `X` in `1..=have`, so
-/// `X > have` is unreachable and the overflow never lands. That is LESS
-/// than the book (any flip-effect with X > down should grant crystals).
+/// Non-PP `flip_all_pp` half: effect X = 1 per PP seat. When that seat holds
+/// 0 face-downs and the card has room, clause （2） grants 1 overflow crystal.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn skill2_all_pp_overflow_formula() {
+    let down: i32 = kani::any();
+    let held: i32 = kani::any();
+    kani::assume(down >= 0 && down <= 5);
+    kani::assume(held >= 0 && held <= 15);
+    let over = spec::skills_pp::skill2_all_pp_overflow(down, held);
+    kani::cover!(down == 0 && held < 10, "X=1 > down=0, room → 1 overflow crystal");
+    kani::cover!(down == 0 && held >= 10, "X=1 but card full → 0");
+    kani::cover!(down >= 1, "X=1 <= down → no overflow");
+    if down == 0 && held < 10 {
+        crate::kassert!(over == 1, "non-PP branch: 1 overflow crystal when down==0");
+    } else {
+        crate::kassert!(over == 0, "non-PP branch: no overflow when down>=1 or full");
+    }
+}
+
+/// Body check: the `on_fans_flip` dict body applies clause （2） to the
+/// **effect X** (not the clamped flip count). `X > down` grants
+/// `min(X - down, 10 - pre_cry)` crystals on this instance (total capped at
+/// 10); `X <= down` grants none.
+///
+/// Isolation: the flip target is the band-card owner (`seat == player_id`),
+/// so 「你」 admits. Direction is down→up only (clause （2） is one-way).
+/// Drive: unmodified `fans::flip_up` raises `FansFlip` **before** the dict
+/// writes; `arm_raise` dispatches to `on_fans_flip_kani` with
+/// `trigger::value() == X` while `fans::down` is still the pre-flip count.
 #[kani::proof]
 #[kani::unwind(32)]
-pub fn band_idol_02_body_never_overflows() {
+pub fn band_idol_02_on_fans_overflow_iff() {
     let me = 0i32;
     skills_pp_world(me);
-    let mut w = world::with_world(|ww| ww.clone());
-    w.group_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
-    let down = w.fans_neg[me as usize];
-    kani::assume(down >= 1);
-    world::reset_world(w);
-    invoke::unwrap_done(skill_groups::pastel::at_start_kani(me));
-    // Book allows crystals = min(X - down, 10) when X > down. The body's
-    // prompt max is `have`, so X > down is impossible and no AddCounter
-    // overflow is produced. Assert the gap is reachable in the *spec*:
-    kani::cover!(down >= 1, "player has reverse fans");
-    // Detect: if the body ever produced overflow crystals, the book formula
-    // for some X > down would match. Under this host/body it never does.
-    // Crystals live on the on-card `crystals` counter (`field_crystals`),
-    // not the player key `"奇迹水晶"`.
-    let cry = world::with_world(|w| w.field_crystals(w.last_uid));
+    let pre_up = world::with_world(|w| w.fans_pos[me as usize]);
+    let down = world::with_world(|w| w.fans_neg[me as usize]);
+    let x: i32 = kani::any();
+    kani::assume(x >= 0 && x <= 30);
+    let band_uid = world::with_world(|w| {
+        (0..w.field_n as usize)
+            .map(|i| w.field[i])
+            .find(|f| f.player == me && f.card == crate::intern::intern(FANS_BAND).0)
+            .map(|f| f.uid)
+            .unwrap_or(1)
+    });
+    let pre_cry = crystals_at(band_uid);
+
+    // Unmodified `fans::flip_up`: FansFlip raise (→ `on_fans_flip`) then the
+    // dict writes. Cancelled / aborted raise leaves both counters untouched.
+    let _ = skill_groups::fans::flip_up(me, x);
+
+    let post_cry = crystals_at(band_uid);
+    let post_up = world::with_world(|w| w.fans_pos[me as usize]);
+    let post_dn = world::with_world(|w| w.fans_neg[me as usize]);
+    let flip = x.min(down).max(0);
+    let over = spec::skills_pp::band_idol_02_overflow(x, down, pre_cry);
+    kani::cover!(x > down, "overflow applies");
+    kani::cover!(x <= down, "no overflow");
     crate::kassert!(
-        cry == 0 || cry < 11,
-        "C-PP-band-idol-02: overflow crystals capped at 10 if any"
+        post_cry == pre_cry + over,
+        "C-PP-band-idol-02: overflow crystals = min(X-down, 10-held) when X > down"
+    );
+    crate::kassert!(
+        post_up == pre_up + flip && post_dn == down - flip,
+        "C-PP-band-idol-02: flip min(X, down) face-downs positive"
     );
 }
 
@@ -570,7 +669,7 @@ fn first_accident_02_iff_at(me: i32) {
 
     // 2) 丸山彩 (2) must refuse
     let pre_amount2 = world::with_world(|ww| ww.pay_amount);
-    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayCombinedAdd */);
     let post = world::snapshot();
     crate::kassert!(
         post.pay_amount == pre_amount2,

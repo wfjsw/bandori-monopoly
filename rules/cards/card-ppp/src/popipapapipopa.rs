@@ -23,7 +23,7 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // 规则书[持续]（1）: 「此卡拥有者每次[经过]“东京外”，“江户川乐器店”，
         // “山吹面包房”，“星之鼓动山丘”或“流星堂”时」 -- the five named spots
         // are the condition.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))",
             None,
@@ -31,8 +31,12 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         ),
         // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶」 -- a payment
         // the owner owes, with a crystal to spend.
-        On::Hook(
-            &[HookKind::PayChoose],
+        //
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
+        // the interactive crystal spend sits immediately before the pure
+        // `PaySplitChoose` filter stage.
+        On::Action(
+            &[HookKind::PaySplitChooseBefore],
             "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,
@@ -76,7 +80,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `Fx.PayChoose` (C# `CardPopipapapipopa.PayChoose` -> `Use`) -- the owner may
+/// `Fx.PaySplitChoose` (C# `CardPopipapapipopa.PaySplitChoose` -> `Use`) -- the owner may
 /// spend crystals to shrink the pending payment by 150 each.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     // `card.placed && actor == owner && value > 0 && card.counter('crystals') > 0` is the pre.

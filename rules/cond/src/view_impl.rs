@@ -62,6 +62,9 @@ impl CondView for SnapshotView<'_> {
     fn move_main(&self) -> bool {
         self.win.mv.main
     }
+    fn move_by_skill(&self) -> bool {
+        self.win.mv.by_skill
+    }
     fn move_dir(&self) -> i64 {
         self.win.mv.dir
     }

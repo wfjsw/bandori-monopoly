@@ -23,9 +23,9 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Abnormal], "", None, on_abnormal),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Abnormal], "", None, on_abnormal),
+        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
     ],
 )
     .silent(&[1, 3]);

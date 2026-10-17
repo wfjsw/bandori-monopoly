@@ -21,12 +21,14 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // isolated paths — if isolation breaks the proof FAILS loudly).
 // ---------------------------------------------------------------------------
 
-/// `skill:Sumimi:人气偶像组合` `bend` (PayMul) — crystal read + pay rewrite.
+/// `skill:Sumimi:人气偶像组合` `bend` (PaySplitMul) — crystal read + pay fold.
+/// ABI v75 pure Filter: the body RETURNS `value + n*100` (no
+/// `trig_set_pay_amount`); it still reads `trigger::player_id` /
+/// `trigger::target` for 「向其他人收费」.
 crate::host_subset!(sumimi_bend_dispatch {
     counter_self => arm_counter_self,
     trig_target => arm_trig_target,
-    trig_value => arm_trig_value,
-    trig_set_pay_amount => arm_trig_set_pay_amount,
+    trig_player => arm_trig_player,
 });
 
 /// `skill:Sumimi:人气偶像组合` `at_turn_end` (TurnEndBefore) — latch + crystal
@@ -73,15 +75,20 @@ fn crystals_key() -> intern::NameId {
 // ===========================================================================
 // C-SUMIMI-band-02 -- rent bonus +100 per crystal
 // 「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。」
-// Entry: `On::Hook(PayMul)` on `skill:Sumimi:人气偶像组合`.
+// Entry: `On::Filter(PaySplitMul)` on `skill:Sumimi:人气偶像组合`.
 // Convention: `crystals()` is the running instance's counter (host: keyed on
 // `trig_player`); the body admits when `trigger.target == owner` (money
 // flowing to this player — 「向其他人收费」).
 // Seat-symmetric (the owner is the collector).
 // ===========================================================================
 
-/// In-place 2-seat world for the PayMul rewrite. Crystals live on the
+/// In-place 2-seat world for the PaySplitMul rewrite. Crystals live on the
 /// running instance (`self_crystals`).
+///
+/// 「向其他人收费」: the owner is the **payee** of another seat's payment
+/// (`trig_target == owner`, `trig_player` is the other seat). A self-pay
+/// (`trig_player == owner`) is the no-bonus half of the body and is not
+/// this world.
 fn band_02_world(owner: i32, crystals: i32, pre_amount: i32) {
     debug_assert!(owner == 0 || owner == 1);
     host::install_backend(sumimi_bend_dispatch);
@@ -91,7 +98,7 @@ fn band_02_world(owner: i32, crystals: i32, pre_amount: i32) {
         ..Default::default()
     });
     world::with_world_mut(|w| {
-        w.trig_player = owner;
+        w.trig_player = 1 - owner;
         w.trig_target = owner;
         w.trig_value = pre_amount;
         w.pay_amount = pre_amount;
@@ -115,23 +122,24 @@ fn band_02_rent_bonus_iff_at(owner: i32) {
     kani::cover!(crystals > 0, "crystals > 0 (bonus applies)");
     kani::cover!(crystals == 0, "crystals == 0 (no-op)");
 
-    // DIRECT body call (ppcost).
-    invoke::unwrap_done(skill_groups::sumimi::bend_kani(owner));
+    // DIRECT body call (ppcost). ABI v75 pure Filter: the body RETURNS the
+    // folded amount; the host folds it into the running figure.
+    let folded = skill_groups::sumimi::bend_kani(owner, pre_amount);
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
     let expected = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
     crate::kassert!(
-        spec::sumimi::band_rent_bonus_log_ok(effects, crystals, expected),
-        "C-SUMIMI-band-02: exactly one SetPayAmount to pre + crystals*100 (or empty at 0)"
+        spec::sumimi::band_rent_bonus_log_ok(effects),
+        "C-SUMIMI-band-02: pure Filter emits no effects (host folds the return)"
     );
     crate::kassert!(
-        post.pay_amount == expected || crystals <= 0,
-        "C-SUMIMI-band-02: post pay_amount must be pre + crystals*100"
+        folded == expected,
+        "C-SUMIMI-band-02: return must be pre + crystals*100"
     );
     if crystals <= 0 {
-        crate::kassert!(post.pay_amount == pre_amount, "no crystals: amount untouched");
+        crate::kassert!(folded == pre_amount, "no crystals: amount untouched");
     }
     // Frame: money of every seat untouched at rewrite time.
     for p in 0..MAX_PLAYERS {
@@ -161,12 +169,11 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
     let pre_amount: i32 = kani::any();
     kani::assume(pre_amount >= 0 && pre_amount <= 10_000);
     band_02_world(owner, 3, pre_amount);
-    invoke::unwrap_done(skill_groups::sumimi::bend_kani(owner));
-    let post = world::snapshot();
+    let folded = skill_groups::sumimi::bend_kani(owner, pre_amount);
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
-    kani::cover!(post.pay_amount != wrong, "disagreement live");
+    kani::cover!(folded != wrong, "disagreement live");
     crate::kassert!(
-        post.pay_amount != wrong,
+        folded != wrong,
         "mutant: bonus is +100 per crystal, not +100 total"
     );
 }

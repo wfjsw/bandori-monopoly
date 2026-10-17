@@ -21,16 +21,16 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
         On::Play("", None, play),
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "card.placed && actor == owner",
             Some(pass_tile_guard),
             pass_tile,
         ),
-        // (3)'s surcharge joins the rent payment at `payAdd` (before `payMul`),
+        // (3)'s surcharge joins the rent payment at `paySplitAdd` (before `paySplitMul`),
         // so a 「支付减半」 scaler sees the shaped total.
-        On::Hook(
-            &[HookKind::PayAdd],
+        On::Filter(
+            &[HookKind::PaySplitAdd],
             "card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner",
             Some(pay_add_guard),
             pay_add,
@@ -39,7 +39,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // -- an entry in the settle's effect list, for the shapes no rent
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
         // that replaces the body skips this entry.
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBody],
             "card.placed && actor != owner && tile.id >= 0",
             Some(settle_body_guard),
@@ -135,11 +135,11 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// (3)'s surcharge, as a flat add on the rent payment (`payAdd` runs before
-/// `payMul`, so a 「支付减半」 scaler sees rent + surcharge as one figure).
+/// (3)'s surcharge, as a flat add on the rent payment (`paySplitAdd` runs before
+/// `paySplitMul`, so a 「支付减半」 scaler sees rent + surcharge as one figure).
 /// The guard carries the whole applicability: the route must be finished, the
 /// payment a rent on the owner's own tile by someone else, and there must be a
-/// surcharge to add. `TriggerKind::PayAdd` is the category's job -- not
+/// surcharge to add. `TriggerKind::PaySplitAdd` is the category's job -- not
 /// re-checked here (docs/GUARDS.md).
 fn pay_add_guard(player_id: i32) -> bool {
     // `card.placed && pay_is_rent && actor != owner && tile.id >= 0 &&
@@ -168,11 +168,9 @@ fn tax_due() -> i32 {
     houses * 100
 }
 
-fn pay_add(player_id: i32) -> card_sdk::Asked {
+fn pay_add(player_id: i32, value: i32) -> i32 {
     let due = tax_due();
     let payer = trigger::player_id();
-    let amount = trigger::value();
-    trigger::set_pay_amount(amount + due);
     ctx::log(
         player_id,
         &Msg::new(key!("tomorrows_door_tax"))
@@ -180,7 +178,7 @@ fn pay_add(player_id: i32) -> card_sdk::Asked {
             .player_id("target", payer)
             .n("money", due as i64),
     );
-    Ok(())
+    value + due
 }
 
 /// `Fx.SettleBody` -- the non-rent side of (3): a settle on 梦开始的地方 (or on
@@ -248,8 +246,8 @@ pub fn pass_tile_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn pay_add_kani(player_id: i32) -> card_sdk::Asked {
-    pay_add(player_id)
+pub fn pay_add_kani(player_id: i32, value: i32) -> i32 {
+    pay_add(player_id, value)
 }
 
 #[cfg(kani)]

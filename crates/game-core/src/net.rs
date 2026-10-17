@@ -46,12 +46,12 @@ pub fn describe(reason: &str) -> crate::msg::Msg {
 
 /// One **match command** from the client.
 /// The client sends exactly these fields; `serde(default)` keeps partial
-/// commands (`{"act":"roll"}`) working and unknown fields from older clients
+/// commands (`{"act":"diceRollBefore"}`) working and unknown fields from older clients
 /// are ignored rather than rejected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct NetMessage {
-    /// "roll" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" |
+    /// "diceRollBefore" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" |
     /// "end" | "ban" | "pick" | "deck" | "answer" | "vote" | "leave" | "debug"
     /// ("debug" only in debug builds -- see `engine/debug.rs`).
     pub act: String,

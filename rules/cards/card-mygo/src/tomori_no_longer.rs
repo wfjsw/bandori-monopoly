@@ -25,14 +25,20 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // count empties, whichever write emptied it (the skill-cost swap, a
         // move, or a decay). `CounterChanged` is name-filtered to
         // `counter::CRYSTALS`.
-        On::Hook(&[HookKind::CounterChanged], "", Some(sweep_guard), sweep),
+        On::Action(&[HookKind::CounterChanged], "", Some(sweep_guard), sweep),
         // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- a
-        // `ChargePaying` pre-spend substitution. The offer exists only for a
-        // positive spend with a crystal to trade; accepting cancels the fire
-        // spend and burns one crystal instead.
-        On::Hook(
+        // fire-cost substitution. The offer exists only for a positive spend
+        // with a crystal to trade; accepting cancels the fire spend and burns
+        // one crystal instead.
+        //
+        // ABI v74: ChargePaying is **not** a FilterFlag -- its 「可」 opt-in
+        // prompts, and Filter bodies cannot. It stays an `On::Action` on
+        // `ChargePaying` (the window `spend_charge` raises before the pots
+        // move); `set_cancelled()` makes `raise` return false, i.e. cost
+        // substituted and the skill body proceeds.
+        On::Action(
             &[ruleset_core::kind::ChargePaying],
-            "actor == owner && card.counter('crystals') >= 1 && value > 0",
+            "actor == owner && card.counter('crystals') >= 1",
             None,
             cover,
         ),
@@ -40,7 +46,7 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
         // 获得等同于减少量的[奇迹水晶]」. `HookKind::CounterChanged`
         // name-filtered to `counter::CRYSTALS` (the name is not yet in the
         // condition vocabulary).
-        On::Hook(&[HookKind::CounterChanged], card_sdk::pre::MINE, Some(refill_guard), refill),
+        On::Action(&[HookKind::CounterChanged], card_sdk::pre::MINE, Some(refill_guard), refill),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"不再迷茫"#)
@@ -54,11 +60,16 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
 /// is the skill-cost swap and must not be refunded.
 const SLOT_COVERING: &str = "tomori_no_longer.covering";
 
-/// （2）'s substitution. Applicability is the entry's condition (`value > 0`).
-/// Cancelling the `ChargePaying` link is the substitution: the fire pots never
-/// move, and one crystal is removed instead.
+/// （2）'s substitution. Applicability is the entry's condition (a fire-pot
+/// spend with a crystal to trade). Cancelling the `ChargePaying` window is the
+/// substitute gesture: `raise` returns false (`cost substituted`), the fire
+/// pots never move, and one crystal is removed instead.
 fn cover(player_id: i32) -> card_sdk::Asked {
+    // `ChargePaying`'s `value` is the cost.
     let spent = ctx::trigger::value();
+    if spent <= 0 {
+        return Ok(());
+    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tomori_no_longer_title")),

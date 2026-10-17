@@ -1094,7 +1094,7 @@ pub fn marina_box_02_decline_is_noop() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Hook", "PassTile", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Action", "PassTile", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1141,7 +1141,7 @@ pub fn marina_box_02_mutant_always_pays() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Hook", "PassTile", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Action", "PassTile", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1190,7 +1190,7 @@ fn assert_activation_keep(idx: usize) {
 
 // ---- E-hallucination-01 — 幻觉来了 -----------------------------------------
 // 「将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌。」
-// On:: 0=Play, 1=Hook(RollPlan), 2=Hook(TurnStartBefore).
+// On:: 0=Play, 1=Hook(DiceRollPlan), 2=Hook(TurnStartBefore).
 // Roll substitution is E-hallucination-02 (follow-up / OPEN-hallucination-effects).
 
 #[kani::proof]
@@ -1349,10 +1349,10 @@ pub fn surprise_duel_02_expiry_blocked_by_set_prop() {
 // ---- E-heat-head-01 / 02 / 03 — 超燃甩头 -----------------------------------
 // 「将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，
 // 此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。」
-// On:: 0=Play, 1=Hook(RollPlan), 2=Hook(RollAfter), 3=AtEnd.
+// On:: 0=Play, 1=FilterValue(DiceRollPlan), 2=FilterValue(DiceRollValue), 3=AtEnd.
 // Phase crystals via set_crystals → counter_self (modeled on trig_player).
-// Dice modifiers are PROTOCOL stubs; `sub_die` reads `trigger::move_roll`
-// (UNMODELED) — BLOCKED-HOST(trig_move_roll). Scheduling is PROTOCOL.
+// `sub_die_filter` is a pure DiceRollValue Filter reading `recorded_roll`;
+// if that host peek is unmodeled it is BLOCKED-HOST. Scheduling is PROTOCOL.
 
 #[kani::proof]
 #[kani::unwind(16)]

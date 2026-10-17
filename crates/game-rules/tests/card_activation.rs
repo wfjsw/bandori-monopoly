@@ -217,9 +217,9 @@ fn negated_play_shows_negated() {
 }
 
 /// A hook whose CEL `pre` rejects is not an activation at all: the body never
-/// runs and nothing about the card reaches the UI. `TEST:preHook`'s `PayAdd`
+/// runs and nothing about the card reaches the UI. `TEST:preHook`'s `PaySplitAdd`
 /// entry carries `pre: "false"`; `TEST:selfCharge` moving money raises the
-/// `PayAdd` the hook declares.
+/// `PaySplitAdd` the hook declares.
 #[test]
 fn hook_whose_cel_pre_rejects_stays_silent() {
     let mut t = Table::vanilla(2);
@@ -230,7 +230,7 @@ fn hook_whose_cel_pre_rejects_stays_silent() {
     assert!(t.on_field(0, "TEST:preHook"), "{}", t.dump_prompt());
 
     let mark = t.mark();
-    // Money moves -> `PayAdd` -> every field card's `PayAdd` hook is asked.
+    // Money moves -> `PaySplitAdd` -> every field card's `PaySplitAdd` hook is asked.
     t.give(0, &["TEST:selfCharge"]);
     t.play(0, "TEST:selfCharge").unwrap();
     drain(&mut t);
@@ -392,9 +392,9 @@ fn a_negated_play_emits_exactly_one_negated() {
     assert_eq!(aimer[0].kind, "play");
 }
 
-// ------------------------------------------------ v49: Gate / AtEnd / RollPlan --
+// ------------------------------------------------ v49: Gate / AtEnd / DiceRollPlan --
 // docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
-// pair as `On::Hook` (ABI v49). A rejecting entry runs no body and so emits
+// pair as `On::Action` (ABI v49). A rejecting entry runs no body and so emits
 // no `card` flash -- exactly like `hook_whose_cel_pre_rejects_stays_silent`
 // above. (`On::Settle` is a tile rule's body and is covered at the host layer
 // in `pre_conditions.rs`.)
@@ -460,13 +460,13 @@ fn rollplan_whose_cel_pre_rejects_stays_silent() {
     let ran = activations_since(&t, mark, "TEST:preRollPlan");
     assert!(
         ran.is_empty(),
-        "a rejecting RollPlan condition must not flash: {:?} / {}",
+        "a rejecting DiceRollPlan condition must not flash: {:?} / {}",
         ran,
         t.recent_keys(20).join(", ")
     );
     assert!(
         !t.recent_keys(40).iter().any(|k| k.contains("pre_rollplan_ran")),
-        "a rejecting RollPlan body must not run: {}",
+        "a rejecting DiceRollPlan body must not run: {}",
         t.recent_keys(20).join(", ")
     );
 }

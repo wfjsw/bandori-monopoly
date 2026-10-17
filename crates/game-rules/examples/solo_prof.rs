@@ -68,7 +68,7 @@ fn main() {
                     let r = m.act(1, &NetMessage { value: st.prompt.fallback, prompt: st.prompt.id, ..NetMessage::act("answer") }); if n < 60000 && r.is_err() { eprintln!("answer err {:?} id={} tl={} answers={:?} wait/phase={} n={n}", r.as_ref().err().map(|e| e.key().to_string()), st.prompt.id, st.prompt.time_left, st.prompt.answers, st.phase); }
                     did = format!("answer:{}", st.prompt.kind);
                 } else if st.phase == "play" && st.turn == me && st.prompt.id == 0 {
-                    let act = if st.step == stage::OPS { "roll" } else { "end" };
+                    let act = if st.step == stage::OPS { "diceRollBefore" } else { "end" };
                     let _ = m.act(1, &NetMessage::act(act));
                     did = act.into();
                 }

@@ -19,16 +19,17 @@
 //! and the cash-in still need hooks the ABI lacks.
 
 use card_sdk::abi::{prop, state_key, HookKind};
+use skill_groups::fans;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
-        On::Hook(&[card_sdk::abi::HookKind::BuildAfter], card_sdk::pre::MINE, None, after_build),
+        On::Action(&[card_sdk::abi::HookKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
+        On::Action(&[card_sdk::abi::HookKind::BuildAfter], card_sdk::pre::MINE, None, after_build),
         On::Play("", None, trainee_guide),
-        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
+        On::Action(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
@@ -61,7 +62,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[手]: 「在此卡上放置“粉丝数量”÷3个[奇迹水晶]」 -- C#
     // `H.PlaceFromPlay(c, -1, -1, H.Fans(i) / 3)`.
-    let fans = ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)");
+    let fans = fans::up(player_id) + fans::down(player_id);
     ctx::set_crystals(fans / 3);
     // 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」
     // -- `cards_in(Deck)` is the reveal; a card's colour is the band prefix of
@@ -118,16 +119,19 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     }
     let mono = ctx::slot(player_id, "trainee_guide.mono");
     let dual = ctx::slot(player_id, "trainee_guide.dual");
-    // 2. 「每个双色效果为将自己的所有反面[P✨P粉丝]变正」
+    // 2. 「每个双色效果为将自己的所有反面[P✽P粉丝]变正」 -- X = all face-downs.
+    // Canonical marker name (U+273d); the previous body flipped a sparkle-spelled
+    // alias that is not the real marker.
     if dual > 0 {
-        let down = ctx::tok(player_id, "P✨P粉丝(反)");
+        let down = skill_groups::fans::down(player_id);
         if down > 0 {
-            ctx::add_tok(player_id, "P✨P粉丝(反)", -down, i32::MAX)?;
-            ctx::add_tok(player_id, "P✨P粉丝(正)", down, i32::MAX)?;
-            ctx::log(
-                player_id,
-                &Msg::new(key!("trainee_guide_flipped")).i("n", down as i64),
-            );
+            let flipped = skill_groups::fans::flip_up(player_id, down)?;
+            if flipped > 0 {
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("trainee_guide_flipped")).i("n", flipped as i64),
+                );
+            }
         }
     }
     // 1. 「每个单色效果为获得1层状态"下次盖房的价格减少1000（可溢出），盖房后减少1层"」

@@ -17,8 +17,8 @@
 //! cap; 「每拥有一个可乐饼，移动时多投掷1个1d2」 is one extra die per croquette,
 //! which rides on the plan's dice table.
 
-use card_sdk::abi::{HookKind, MarkFilter};
-use ruleset_core::ctx::{self, plan};
+use card_sdk::abi::{FilterValue, HookKind, MarkFilter};
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「可乐饼」 parked on a tile.
@@ -29,12 +29,12 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Hook(&[HookKind::TurnEnd], "", None, spawn),
+        On::Action(&[HookKind::TurnEnd], "", None, spawn),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
-        On::Hook(&[HookKind::Pass], "", Some(on_pass_has_croquette), on_pass),
-        On::Hook(&[HookKind::RollPlan], "", None, on_plan),
+        On::Action(&[HookKind::Pass], "", Some(on_pass_has_croquette), on_pass),
+        On::FilterValue(&[HookKind::DiceRollPlan], "", None, on_plan),
     ],
 );
 
@@ -113,13 +113,16 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「角色每拥有一个可乐饼，移动时多投掷1个1d2」.
-fn on_plan(player_id: i32) -> card_sdk::Asked {
+/// 「角色每拥有一个可乐饼，移动时多投掷1个1d2」 -- one extra d2 per croquette.
+/// The host folds `extra_count`/`extra_sides` via `add_extra_dice`, so a single
+/// `(n, 2)` pair is the same dice pool as the old `n` one-die calls.
+fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {
     let n = ctx::tok(player_id, HELD);
-    for _ in 0..n {
-        plan::add_extra_dice(1, 2, "全垒打！");
+    if n > 0 {
+        v.extra_count = n;
+        v.extra_sides = 2;
     }
-    Ok(())
+    v
 }
 
 // Removed (sheet 2026-10-06 `角色技能` E14 lacks them):
@@ -142,6 +145,6 @@ pub fn on_pass_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
 }

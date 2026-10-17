@@ -337,7 +337,7 @@ use crate::state::{MoneyFlow, TileQuote, TileQuoteKind};
 /// `BuyMul` / `BuySet` stages are included (quote == charge). Rent is the
 /// pre-pipeline table figure with the counted-house override and the tile's
 /// persistent `RENT_FACTOR` / `PAY_FACTOR` scalars -- the same halves
-/// `Play::scale_settle_payment` reads. Card `payAdd` / `payMul` / `payTotal*`
+/// `Play::scale_settle_payment` reads. Card `paySplitAdd` / `paySplitMul` / `payCombined*`
 /// hooks (「支付减半」 riding a card body, payee redirects, …) need the money
 /// pipeline's `raise!` and are **not** included; the caption is the
 /// pre-pipeline rent, a known approximation. The current turn's plan factors

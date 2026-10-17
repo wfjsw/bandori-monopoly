@@ -27,7 +27,7 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), play),
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
-        On::Hook(&[HookKind::SettleBody, HookKind::TurnEndAfter], "", Some(counteract_guard), counteract),
+        On::Action(&[HookKind::SettleBody, HookKind::TurnEndAfter], "", Some(counteract_guard), counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Parking Space"#)

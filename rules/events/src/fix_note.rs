@@ -23,8 +23,8 @@ pub const FIX_NOTE: CardDef = CardDef::new(
     "event:修复公告",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::BuildBefore], "", Some(always), before_build),
-        On::Hook(&[HookKind::BuildAfter], "", Some(always), after_build),
+        On::Action(&[HookKind::BuildBefore], "", Some(always), before_build),
+        On::Action(&[HookKind::BuildAfter], "", Some(always), after_build),
     ],
 );
 

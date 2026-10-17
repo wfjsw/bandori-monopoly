@@ -531,18 +531,19 @@ fn g_counter_06_band_filter_uses_held_band_cards() {
     );
     // Pastel✽Palettes band (1): 「游戏开始时非Pastel✽Palettes角色获得1个
     // 反面[P✽P粉丝]」. P1 (non-PP) gets 1 反面; P0 (PP) does not.
+    // Fan counters live in the per-player state dict (`ppFansUp`/`ppFansDown`).
     assert_eq!(
-        t.token(1, "P✽P粉丝(反)"),
+        t.state(1, "ppFansDown"),
         1,
         "non-PP seat gets the band (1) 反面 fan"
     );
     assert_eq!(
-        t.token(0, "P✽P粉丝(反)"),
+        t.state(0, "ppFansDown"),
         0,
         "PP seat does not get the band (1) 反面 fan"
     );
     // 丸山彩 (1) also: 「游戏开始后获得5个正面[P✽P粉丝]」 for herself.
-    assert_eq!(t.token(0, "P✽P粉丝(正)"), 5);
+    assert_eq!(t.state(0, "ppFansUp"), 5);
 }
 
 // =====================================================================

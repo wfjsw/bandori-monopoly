@@ -227,7 +227,7 @@ Engine ops (`crates/game-core/src/engine/ops.rs`): `counter_at` /
 `On::Message` + `ctx::send(Target, name, &Message)` is the generic cross-card
 channel: a nested run against the receiver (a uid, a card id on a seat, or a
 standing board-owned pseudo card like `mark:cp`), same condition / residual
-guard / body layering as `On::Hook`. `Trigger.name` carries the message name;
+guard / body layering as `On::Action`. `Trigger.name` carries the message name;
 `ctx::message::*` reads the payload and sets the reply. The 该清CP了 →
 `mark:cp` placement is the worked example (`docs/CARDS.md` → 「Cross-card
 messages」).
@@ -245,11 +245,11 @@ running, nested money pipelines skip X (`Cx::reentrant_hooks`). A safety cap
 ### The pre-split stage (「分摊前」)
 
 A payment **command** runs a command-wide modifier stage on its total before
-any 「[分摊]」 divides it into shares: `payTotalAdd` -> `payTotalMul` ->
-`payTotalCancel`, composing (`PIPELINE-AUDIT` Q2). This is the 「分摊前」 figure
+any 「[分摊]」 divides it into shares: `payCombinedAdd` -> `payCombinedMul` ->
+`payCombinedCancel`, composing (`PIPELINE-AUDIT` Q2). This is the 「分摊前」 figure
 of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)) and 「此次获得的分摊前数量
-增加Y×100」 (白鹭千圣 (2)); both hook `payTotalAdd`. The per-share stages
-(`payAdd` / `payMul` / `payChoose` / `payAt`) still run on each settled leg.
+增加Y×100」 (白鹭千圣 (2)); both hook `payCombinedAdd`. The per-share stages
+(`paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`) still run on each settled leg.
 
 A single-pair payment's command total *is* its amount, so the same three stages
 run inside `money_inner` -- after the `effect` declaration (a counter still
@@ -299,7 +299,7 @@ Every move -- walk or teleport, main or card-driven, settling or not -- runs
 the same tail. The plan (`turn.plan`) is the authoritative move *shape*; the
 running `MoveCtx` carries the engine's run fields. `moveBefore` folds only the
 window's plan writes into the run (`fold_plan_delta`), never the other way
-round (a blanket copy would wipe a `moveRoll` counteraction's `pay_factor`).
+round (a blanket copy would wipe a `diceRollResult` counteraction's `pay_factor`).
 
 ```
 moveBefore         「移动前」  plan fixed, nothing walked. Counteractions that
@@ -343,9 +343,9 @@ L81's removal list is cards and skill effects, not the marker vocabulary. The
 seat is marked dead **before** `bankruptBefore`, so the dying player's own
 sources cannot join that window (L16/L17/L81 read together).
 
-### 「支付减半」 rides `payMul`
+### 「支付减半」 rides `paySplitMul`
 
-A rule that halves a settlement payment scales it at the pipeline's **`payMul`
+A rule that halves a settlement payment scales it at the pipeline's **`paySplitMul`
 stage** (`play.rs::scale_settle_payment`), not at `pay_rent`. That is the
 「支付减半」 ruling (2026-10-06): the scale covers the payment **as card effects
 have shaped it** -- a rent-region expansion that adds a surcharge, a forced
@@ -541,7 +541,7 @@ chaos game replays and restores like any other (`tests/mentality.rs`).
 
 | What | C# | Where it goes |
 |---|---|---|
-| Card, skill, band and `Fx` hooks (`PayAdd`, `CircleRewardChoice`, `SkipTile`, `BuyPrice`...) | nested classes | card rules (WASM) |
+| Card, skill, band and `Fx` hooks (`PaySplitAdd`, `CircleRewardChoice`, `SkipTile`, `BuyPrice`...) | nested classes | card rules (WASM) |
 | Event cards (事件卡: 对邦, 协助CiRCLE重建, Forbidden Moca, ...) | `EventEffect` | `rules/events` (`docs/EVENTS.md`); the engine keeps the deck, the draw, the active list and the filing away |
 | Per-player card variables (`V(i, ...)`), marks, embers, field cards | `V`/`AddMark`/... | with card content |
 | Character skills (`skill` command) | `DoSkill` | card rules; currently rejected with a message |

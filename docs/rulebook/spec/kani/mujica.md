@@ -87,7 +87,7 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-海铃技能-01 | 「向你支付400…半价[结算]」 | PROTOCOL-LEVEL | — | — | multi-player interrupt | — |
 | C-MUJICA-海铃技能-02 | 「每两个回合…火罐（…上限4）」 | PROVEN (cap arith) | `umiri_fire_cap_is_four` | see run table | two-turn counter is multi-turn | — |
 | C-MUJICA-海铃技能-03 | 「100+n*100…每4火罐抽1」 | PROVEN (arith) | `umiri_deed_pay_and_draw_arithmetic` | see run table | 均分 split is OPEN | OPEN-分摊 |
-| C-MUJICA-若麦技能-01 | 「获得1火罐…提高X*100，X为…火罐数」 | PROVEN (arith) | `nyamu_pay_raise_uses_new_pot_count`, `nyamu_pay_raise_mutant_is_detected` | see run table | PayAdd body + host raise are pipeline | — |
+| C-MUJICA-若麦技能-01 | 「获得1火罐…提高X*100，X为…火罐数」 | PROVEN (arith) | `nyamu_pay_raise_uses_new_pot_count`, `nyamu_pay_raise_mutant_is_detected` | see run table | PaySplitAdd body + host raise are pipeline | — |
 | C-MUJICA-若麦技能-02 | 「到达上限时…进入状态2」 | PROTOCOL-LEVEL | — | — | immediate transition | — |
 | C-MUJICA-若麦技能-03 | 「翻为背面朝上…无法产生效果」 | PROTOCOL-LEVEL | — | — | face-down untracked in host | — |
 
@@ -162,7 +162,7 @@ Harnesses owned by this unit (34):
 | `band_halve_pay_amount` | C-MUJICA-团技能-03 arith | written | pending |
 | `band_starts_in_state1` | C-MUJICA-团技能-00 | written | pending |
 | `band_state2_pay_is_150_only_on_self` | C-MUJICA-团技能-01 one-sided | written | pending |
-| `band_state2_bend_hook_rewrites_amount` | C-MUJICA-团技能-01 PayMul | written | pending |
+| `band_state2_bend_hook_rewrites_amount` | C-MUJICA-团技能-01 PaySplitMul | written | pending |
 | `band_state2_bend_mutant_is_detected` | mutant no-rewrite | written | pending |
 
 ### mujica (21)

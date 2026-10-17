@@ -11,16 +11,37 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use card_sdk::abi::HookKind;
-use ruleset_core::ctx::{self, trigger};
+use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NFO: CardDef = CardDef::new(
     "R:NFO",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::PayChoose], "", Some(gain_guard), gain_bump),
+        // 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 --
+        // ABI v74 Pattern E: `ask_yes` + tok spend + `set_pay_amount` cannot
+        // live in a Filter. Whole offer on `HookKind::Effect` (payment
+        // declaration; `t.value` folds there).
+        On::Action(&[card_sdk::abi::HookKind::Effect], "", Some(gain_guard), gain_bump),
         On::Play("", None, play),
-        On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, counteract),
-        On::AtEnd("", None, at_end),
+        // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- ABI v74
+        // Pattern A/D: pure amount shave on Filter(PaySplitAt); the card is used up
+        // by a paired Action (Filter cannot `set_dest`). The unplace rides
+        // PayAfter (always raised, so a shave-to-0 still uses the card up).
+        // TODO(规则书): a payment cancelled *before* PaySplitAt (effect window /
+        //   payCombinedCancel) never reaches the shave, so the card should stay;
+        //   the book ties 「置入弃牌堆」 to 「减免1000」 and the old C# body
+        //   unplaced only when `PaySplitAt` ran. PayAfter fires for cancelled /
+        //   zeroed payments too and carries no "PaySplitAt ran" bit, and a Filter
+        //   cannot latch one (`state::set` is refuse_if_filter'd) -- so the
+        //   unplace cannot tell cancelled-before-PaySplitAt from shave-to-0.
+        On::Filter(
+            &[HookKind::PaySplitAt],
+            "actor == owner && card.placed && value > 0",
+            None,
+            pay_shave,
+        ),
+        On::Action(&[HookKind::PayAfter], "actor == owner && card.placed", None, pay_unplace),
+        On::Action(&[HookKind::AtEnd], "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"NFO"#)
@@ -230,20 +251,26 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
     Ok(())
 }
 
-/// C# `CardNfo.PayAt` (effect 3, while placed): the owner's next payment is cut
-/// by 1000, then the card is used up and goes to the discard pile. Runs through
-/// the Fx hook dispatch at `payAt` (after `PayChoose`, before the `pay` [反击]
-/// window), so this is a field effect, not a [反击].
-fn counteract(player_id: i32) -> card_sdk::Asked {
-    let amount = trigger::value();
-    trigger::set_pay_amount((amount - 1000).max(0));
-    ctx::set_dest(ctx::Dest::Graveyard);
+/// C# `CardNfo.PaySplitAt` (effect 3, while placed): the owner's next payment is cut
+/// by 1000. Pure Filter half (ABI v74) -- returns the shaved figure and logs.
+/// Runs through the Fx hook dispatch at `paySplitAt` (after `PaySplitChoose`, before the
+/// `pay` [反击] window).
+fn pay_shave(player_id: i32, value: i32) -> i32 {
+    let cut = (value - 1000).max(0);
     ctx::log(
         player_id,
         &Msg::new(key!("nfo_used"))
             .player_id("who", player_id)
-            .n("money", (amount.min(1000)) as i64),
+            .n("money", (value.min(1000)) as i64),
     );
+    cut
+}
+
+/// Action half of [`pay_shave`]: 「并将此卡置入弃牌堆」 -- the card is used up.
+/// Rides PayAfter (Filter cannot `set_dest`); see the TODO on the entry.
+fn pay_unplace(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Graveyard);
+    let _ = player_id;
     Ok(())
 }
 
@@ -252,7 +279,7 @@ fn gain_guard(player_id: i32) -> bool {
 }
 
 /// 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 -- C#
-/// `NfoCrystalsFx.PayChoose`, keyed on `p.to == Player` (the gainer).
+/// `NfoCrystalsFx.PaySplitChoose`, keyed on `p.to == Player` (the gainer).
 fn gain_bump(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() != player_id {
         return Ok(());
@@ -288,8 +315,14 @@ pub fn play_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn counteract_kani(player_id: i32) -> card_sdk::Asked {
-    counteract(player_id)
+pub fn pay_shave_kani(player_id: i32, value: i32) -> i32 {
+    pay_shave(player_id, value)
+}
+
+#[cfg(kani)]
+#[inline(always)]
+pub fn pay_unplace_kani(player_id: i32) -> card_sdk::Asked {
+    pay_unplace(player_id)
 }
 
 #[cfg(kani)]

@@ -174,6 +174,7 @@ pub mod raw {
 /// 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」) goes through
 /// [`roll_ask`] instead, which raises the `Roll` chain link.
 pub fn roll(player_id: i32, count: i32, sides: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::roll");
     unsafe { sys::roll(player_id, count, sides) }
 }
 
@@ -501,10 +502,11 @@ pub fn money_of(player_id: i32) -> i32 {
 
 /// Money in, logged with its reason (`src` is a message key).
 /// Runs the same `Money` pipeline as [`pay`] (print, game -> player), so
-/// `payAdd` / `payChoose` and the `effect` [反击] window see it; the answer is
+/// `paySplitAdd` / `paySplitChoose` and the `effect` [反击] window see it; the answer is
 /// the amount that actually moved (0 = cancelled).
 #[cfg_attr(kani, inline(always))]
 pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::gain");
     let (p, l) = mj(src);
     asked(unsafe { sys::gain(player_id, amount, p, l) })
 }
@@ -521,8 +523,8 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
 }
 
 /// A **raw** money adjustment -- `money += delta` with a `log.gain` /
-/// `log.lose` line and **no** payment pipeline: no `payAdd` / `payMul` /
-/// `payChoose` / `payAt`, no `effect` [反击] window, no `payAfter`. 规则书
+/// `log.lose` line and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` /
+/// `paySplitChoose` / `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is (ONE OF US's 「被分享方
 /// 资金直接增加」). Positive `delta` is a gain, negative a loss. Non-pausing:
 /// returns the amount actually moved (0 = the seat was out).
@@ -561,13 +563,13 @@ pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Promp
 
 // ------------------------------------------------------------- 「[分摊]」 / 分摊前
 
-/// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2): `payTotalAdd` →
-/// `payTotalMul` → `payTotalCancel` shape `total` **before** any 「[分摊]」
+/// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2): `payCombinedAdd` →
+/// `payCombinedMul` → `payCombinedCancel` shape `total` **before** any 「[分摊]」
 /// divides it into shares. This is the 「分摊前」 figure of
 /// 「此次支付的分摊前资金减少Y×100」 and kin (规则书 支付阶段 2/4/5 applied to
 /// the command rather than to one pair).
 ///
-/// Returns the shaped total, or `None` when a `payTotalCancel` hook dropped the
+/// Returns the shaped total, or `None` when a `payCombinedCancel` hook dropped the
 /// whole command. A single-pair payment runs the same three stages inside
 /// [`transfer`] / [`pay`] / [`gain`] -- call this only when *you* are about to
 /// split, and follow it with [`pay_leg`] per share (see [`split_pay`]).
@@ -590,7 +592,7 @@ pub fn pay_leg(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt
 /// `to` (the 规则书 「向上取整10」 share). Returns the per-leg amounts, or an
 /// empty list when the command was cancelled.
 ///
-/// The legs run [`pay_leg`], so a `payTotalAdd` hook hits the **total** once
+/// The legs run [`pay_leg`], so a `payCombinedAdd` hook hits the **total** once
 /// rather than each share (`PIPELINE-AUDIT` Q2 / `rb_money::
 /// pre_split_modifier_shapes_the_total_not_each_leg`).
 pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i32>, Prompt> {
@@ -670,6 +672,7 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 /// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
 /// does; the body must `?` the result.
 pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::draw");
     #[cfg(kani)]
     {
         // Zero-loop (card-pool draws are 1..=3; a `for _ in 0..n` unrolls to
@@ -892,6 +895,7 @@ pub fn shuffle_into_deck(player_id: i32, hand: bool, discard: bool) -> i32 {
 /// This card stays in play at the player.
 #[cfg_attr(kani, inline(always))]
 pub fn place_card(player_id: i32, card: &str, note: &Msg) -> i32 {
+    crate::pure::refuse_if_filter("ctx::place_card");
     place_card_at(player_id, card, note)
 }
 
@@ -909,6 +913,7 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
 /// Where this card goes afterwards (see [`Dest`]). For a
 /// play it is the hand card's fate; for a field effect, the instance's.
 pub fn set_dest(dest: Dest) {
+    crate::pure::refuse_if_filter("ctx::set_dest");
     unsafe { sys::set_dest(dest as i32) }
 }
 
@@ -1000,6 +1005,7 @@ pub fn prop(key: &str) -> i32 {
 /// （soyo） sets `prop::GROUP`, and so on. `docs/TILES.md`.
 #[cfg_attr(kani, inline(always))]
 pub fn set_prop(key: &str, value: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::set_prop");
     let (p, l) = s(key);
     unsafe { sys::set_self_prop(p, l, value) }
 }
@@ -1058,6 +1064,7 @@ pub fn counter(name: &str) -> i32 {
 /// (the marker window can pause).
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter(name: &str, n: i32, max: i32) -> Result<i32, Prompt> {
+    crate::pure::refuse_if_filter("ctx::add_counter");
     let (p, l) = s(name);
     asked(unsafe { sys::add_counter_self(p, l, n, max) })
 }
@@ -1083,6 +1090,7 @@ pub fn counter_at(uid: i32, name: &str) -> i32 {
 /// spending the placer's on-card CP).
 #[cfg_attr(kani, inline(always))]
 pub fn add_counter_at(uid: i32, name: &str, n: i32, max: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::add_counter_at");
     let (p, l) = s(name);
     unsafe { sys::add_counter_at(uid, p, l, n, max) }
 }
@@ -1354,13 +1362,48 @@ fn mf(f: &crate::abi::MarkFilter) -> (i32, i32) {
 }
 
 fn target_bytes(t: &crate::abi::Target) -> (i32, i32) {
-    let bytes = postcard::to_allocvec(t).unwrap_or_default();
-    in_bytes(&bytes)
+    #[cfg(kani)]
+    {
+        // Fixed pack, no postcard/heap: kind (0=Uid, 1=Card, 2=Board),
+        // player/uid, card-name NameId (0 when Board / unused).
+        let (kind, who, card) = match t {
+            crate::abi::Target::Uid(u) => (0i32, *u, 0u16),
+            crate::abi::Target::Card { player, card } => {
+                (1i32, *player, crate::intern::intern(card).0)
+            }
+            crate::abi::Target::Board(id) => (2i32, -1i32, crate::intern::intern(id).0),
+        };
+        let mut buf = [0u8; 12];
+        buf[0..4].copy_from_slice(&kind.to_le_bytes());
+        buf[4..8].copy_from_slice(&who.to_le_bytes());
+        buf[8..10].copy_from_slice(&card.to_le_bytes());
+        in_bytes(&buf)
+    }
+    #[cfg(not(kani))]
+    {
+        let bytes = postcard::to_allocvec(t).unwrap_or_default();
+        in_bytes(&bytes)
+    }
 }
 
 fn msg_bytes(m: &crate::abi::Message) -> (i32, i32) {
-    let bytes = postcard::to_allocvec(m).unwrap_or_default();
-    in_bytes(&bytes)
+    #[cfg(kani)]
+    {
+        // Fixed pack, no postcard/heap. The message **name** rides the
+        // `send()` `np` slot (interned via `s`); this is only the typed ints.
+        let mut buf = [0u8; 20];
+        buf[0..4].copy_from_slice(&m.seat.to_le_bytes());
+        buf[4..8].copy_from_slice(&m.a.to_le_bytes());
+        buf[8..12].copy_from_slice(&m.b.to_le_bytes());
+        buf[12..16].copy_from_slice(&m.c.to_le_bytes());
+        buf[16..20].copy_from_slice(&m.tile.to_le_bytes());
+        in_bytes(&buf)
+    }
+    #[cfg(not(kani))]
+    {
+        let bytes = postcard::to_allocvec(m).unwrap_or_default();
+        in_bytes(&bytes)
+    }
 }
 
 fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
@@ -1472,6 +1515,7 @@ pub mod state {
 
     /// Write the value raw. Not clamped to `min`/`max`.
     pub fn set(player_id: i32, key: &str, value: i32) -> i32 {
+        crate::pure::refuse_if_filter("state::set");
         set_field(player_id, key, VALUE, value)
     }
 
@@ -1483,6 +1527,7 @@ pub mod state {
 
     /// Declare the bounds a consumer may enforce. Stored, not applied.
     pub fn set_bounds(player_id: i32, key: &str, min: i32, max: i32) {
+        crate::pure::refuse_if_filter("plan::set_bounds");
         set_field(player_id, key, MIN, min);
         set_field(player_id, key, MAX, max);
     }
@@ -1510,6 +1555,7 @@ pub fn slot(player_id: i32, key: &str) -> i32 {
 
 #[cfg_attr(kani, inline(always))]
 pub fn set_slot(player_id: i32, key: &str, value: i32) {
+    crate::pure::refuse_if_filter("ctx::set_slot");
     let (p, l) = s(key);
     unsafe { sys::set_slot(player_id, p, l, value) }
 }
@@ -1525,6 +1571,7 @@ pub fn set_persona(player_id: i32, name: &str) {
 
 #[cfg_attr(kani, inline(always))]
 pub fn inc_slot(player_id: i32, key: &str, by: i32) -> i32 {
+    crate::pure::refuse_if_filter("ctx::inc_slot");
     let (p, l) = s(key);
     unsafe { sys::inc_slot(player_id, p, l, by) }
 }
@@ -2129,8 +2176,21 @@ pub mod plan {
     /// the card that arms one tags the move (`set_tag("fireRoll", 1)`) and
     /// readers ask [`trigger::move_tag`].
     pub fn set_tag(key: &str, value: i32) {
+        crate::pure::refuse_if_filter("plan::set_tag");
         let (p, l) = s(key);
         unsafe { sys::set_tag(p, l, value) }
+    }
+
+    /// `set_tag` with the key as an intern id (v78). Used by the FilterValue
+    /// write-back so a pure body can name a tag without a `&str` on the wire.
+    pub fn set_tag_id(key_id: i32, value: i32) {
+        unsafe { sys::set_tag_id(key_id, value) }
+    }
+
+    /// Host-supplied recorded roll (v78), or `FilterValue::UNCHANGED` when the
+    /// host did not pre-roll one for this raise.
+    pub fn recorded_roll() -> i32 {
+        unsafe { sys::recorded_roll() }
     }
 
     /// Passing CiRCLE pays nothing on this walk.
@@ -2469,7 +2529,7 @@ pub mod trigger {
 
     /// `t.Move` -- how the move that caused this trigger got there:
     /// `None` when the move did not cause it. Present on
-    /// `moveRoll` / `pass` / `settleBefore` / `settle` / `settleAfter` raised
+    /// `diceRollResult` / `pass` / `settleBefore` / `settle` / `settleAfter` raised
     /// while a player is moving. A walk enters every tile it steps on; a teleport
     /// enters only its destination.
     pub fn move_kind() -> Option<MoveKind> {
@@ -2546,7 +2606,7 @@ pub mod trigger {
         (v >= 0).then_some(v)
     }
 
-    /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from, as a
+    /// `t.Roll.Source` -- where a `diceRollBefore` / `diceRollResult` face came from, as a
     /// [`crate::abi::roll_source`] code (`0` = unattributed, `1` = a fire pot,
     /// `2` = a card, `3` = a skill). 「当你使用火罐进行掷骰时」 reads this.
     /// [`crate::abi::roll_source::NONE`] on every non-roll trigger.
@@ -2808,7 +2868,7 @@ pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
 }
 
 /// Sum the planned move's dice tables into one face. The
-/// `rollAfter` / `moveRoll` hooks are **not** raised: a re-roll is usually being
+/// `rollAfter` / `diceRollResult` hooks are **not** raised: a re-roll is usually being
 /// requested from inside one of them, and re-raising would recurse.
 pub fn do_move_roll(player_id: i32) -> i32 {
     unsafe { sys::do_move_roll(player_id) }
@@ -2988,6 +3048,27 @@ pub fn apply_mortgage(player_id: i32, tile: i32, amount: i32) -> i32 {
 #[cfg_attr(kani, inline(always))]
 pub fn apply_redeem(player_id: i32, tile: i32, amount: i32) -> i32 {
     unsafe { sys::apply_redeem(player_id, tile, amount) }
+}
+
+/// Pay the buy price through the money pipeline (`PayKind::Buy`). `kind` is
+/// the [`crate::abi::BuyKind`] wire value; Land / Agent allow the optional
+/// mortgage-funding arm. Answers the amount actually paid (0 = refused).
+/// May prompt (raise-funds / optional funding) and pause the run.
+pub fn pay_buy(player_id: i32, tile: i32, amount: i32, kind: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::pay_buy(player_id, tile, amount, kind) })
+}
+
+/// Pay the build cost through the money pipeline (`PayKind::Build`).
+/// Answers the amount actually paid (0 = refused). May prompt and pause.
+pub fn pay_build(player_id: i32, tile: i32, amount: i32) -> Result<i32, Prompt> {
+    asked(unsafe { sys::pay_build(player_id, tile, amount) })
+}
+
+/// Write the deed after a buy (`purchase::assign_deed`). Mechanism only --
+/// the tile body already decided owner / houses / mortgaged (e.g. from a
+/// `BuyAssign` filter fold).
+pub fn assign_deed(player_id: i32, tile: i32, owner: i32, houses: i32, mortgaged: bool) -> i32 {
+    unsafe { sys::assign_deed(player_id, tile, owner, houses, mortgaged as i32) }
 }
 
 /// Does this card's rule text mention `needle`? 「所有效果包含[奇迹水晶]的卡」

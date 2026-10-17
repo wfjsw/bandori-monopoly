@@ -23,13 +23,13 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
         // body-top tile check is the condition now (`is_start(tile.id)` and
         // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
         // bail stays a residual guard (not in the CEL schema).
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
             None,
             on_pass,
         ),
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBody],
             "tile_is(tile.id, \"circle\") || tile.id == tile_named('CiRCLE 咖啡厅')",
             Some(settle_applies),

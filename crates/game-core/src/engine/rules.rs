@@ -96,6 +96,9 @@ pub struct TriggerMove {
     /// The face the move rolled. `None` before the dice land (the `roll`
     /// window) and whenever the face is not this trigger's subject.
     pub roll: Option<i32>,
+    /// The move was shaped or started by a rule whose card id starts with
+    /// `skill:` (cond `move.by_skill`).
+    pub by_skill: bool,
 }
 
 /// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
@@ -192,7 +195,7 @@ impl TriggerPay {
     }
 }
 
-/// Where a `roll` / `moveRoll` face came from (「when you roll using charge pots」).
+/// Where a `diceRollBefore` / `diceRollResult` face came from (「when you roll using charge pots」).
 /// Mirrors `card_sdk::abi::roll_source`'s codes; the guest ABI still sees the
 /// `i32`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -309,7 +312,7 @@ pub struct Trigger {
     /// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on
     /// every other kind.
     pub buy: Option<TriggerBuy>,
-    /// Where a `roll` / `moveRoll` face came from. [`RollSource::Unattributed`]
+    /// Where a `diceRollBefore` / `diceRollResult` face came from. [`RollSource::Unattributed`]
     /// on every non-roll trigger.
     pub roll_source: RollSource,
     /// How a counter invalidated this link. The effect body is skipped when this
@@ -417,6 +420,7 @@ impl Trigger {
             remaining: m.remaining,
             total: m.total,
             roll: None,
+            by_skill: m.by_skill,
         });
         self.main = m.main;
         self
@@ -434,13 +438,13 @@ impl Trigger {
 /// any `field = value` overrides.
 ///
 /// The result is the trigger as `raise` left it, so a counteraction that rewrites a
-/// field (e.g. `moveRoll`'s reroll) can read it back:
+/// field (e.g. `diceRollResult`'s reroll) can read it back:
 ///
 /// ```ignore
 /// raise!(self, "passBefore", i, @m m, tile = next)?;
-/// raise!(self, "roll", i, value = -1)?;
+/// raise!(self, "diceRollBefore", i, value = -1)?;
 /// raise!(self, "card", i, card = Some(id.to_string()))?;
-/// let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?; // keep `t` to read back
+/// let t = raise!(self, "diceRollValue", i, @m m, value = m.roll)?; // keep `t` to read back
 /// ```
 macro_rules! raise {
     ($cx:expr, $kind:expr, $player_id:expr $(, $($rest:tt)*)?) => {{
@@ -758,6 +762,28 @@ pub trait CardRules: Send + Sync {
         }
         cx.redeem(player, tile);
         Ok(true)
+    }
+
+    /// Run the tile rule's buy body (`On::Buy`) for `tile`.
+    /// `kind` is the buy kind; `reason` is the source (0 = settle offer,
+    /// 1 = card-driven, 2 = agent, 3 = acquire / auction). `true` when the
+    /// deed changed hands. The default is the engine's standing `Cx::buy`
+    /// (StubRules).
+    fn deed_buy(
+        &self,
+        cx: &mut super::Cx,
+        player: usize,
+        tile: usize,
+        kind: super::play::purchase::BuyKind,
+        _reason: i32,
+    ) -> super::Flow<bool> {
+        cx.buy(player, tile, kind)
+    }
+
+    /// Run the tile rule's build body (`On::Build`) for `tile`.
+    /// The default is the engine's standing `Cx::build` (StubRules).
+    fn deed_build(&self, cx: &mut super::Cx, player: usize, tile: usize) -> super::Flow<bool> {
+        cx.build(player, tile)
     }
 }
 

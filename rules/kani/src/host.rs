@@ -987,7 +987,20 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::rent_unit_mult => arm_ring_multiplier(a),
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
-                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::send | Op::msg_sender_uid | Op::msg_sender_seat | Op::msg_name | Op::msg_a | Op::msg_b | Op::msg_c | Op::msg_tile | Op::msg_seat | Op::msg_text | Op::msg_reply | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+                Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build | Op::card_build | Op::card_buy | Op::card_offer_build | Op::card_settle_at | Op::card_mortgage | Op::card_replayable | Op::card_text_mentions | Op::card_prop | Op::buy | Op::acquire | Op::agent_offer | Op::buy_quotes | Op::ai_agent_choice | Op::play_card | Op::play_from_hand | Op::can_build_on | Op::add_rent_unit_bonus | Op::move_units | Op::designations | Op::cancel_designation | Op::designation_cancelled | Op::flash | Op::no_flash | Op::flash_card | Op::flash_card_keyed | Op::flash_tile => arm_protocol_stub(a),
+
+        // ---- cross-card messages (`ctx::send` / `On::Message`) ----
+        Op::send => arm_send(a),
+        Op::msg_sender_uid => arm_msg_sender_uid(a),
+        Op::msg_sender_seat => arm_msg_sender_seat(a),
+        Op::msg_name => arm_msg_name(a),
+        Op::msg_a => arm_msg_a(a),
+        Op::msg_b => arm_msg_b(a),
+        Op::msg_c => arm_msg_c(a),
+        Op::msg_tile => arm_msg_tile(a),
+        Op::msg_seat => arm_msg_seat(a),
+        Op::msg_text => arm_msg_text(a),
+        Op::msg_reply => arm_msg_reply(a),
 
         other => unmodeled(other),
     }
@@ -1195,7 +1208,7 @@ pub fn arm_adjust_money(a: Args) -> i64 {
     let [a0, a1, a2, a3, a4, a5] = a;
 {
             // Raw money adjustment: `money += delta` with **no** payment
-            // pipeline (no payAdd/payMul, no effect window). Mirrors
+            // pipeline (no paySplitAdd/paySplitMul, no effect window). Mirrors
             // `hostfns::adjust_money` / `World::adjust_money_raw`.
             let delta = a1;
             if delta != 0 {
@@ -2222,8 +2235,92 @@ pub fn arm_players_on_count(a: Args) -> i64 {
     }) as i64
 }
 
-pub fn arm_raise(_a: Args) -> i64 {
-    1
+/// `ctx::raise(player_id, kind, value)` — record the trigger payload and run
+/// any in-host listener for the kind. Returns 1 = settled (nobody cancelled).
+///
+/// `FansFlip` (107) is the first real client: `fans::flip_up` raises it
+/// **before** the dict writes with `value` = the effect's intended X. Pastel
+/// listens `On::Action(&[FansFlip], "actor == owner")`, so only band-skill
+/// instances whose owner == `player_id` run `on_fans_flip_kani`. Cancelled /
+/// aborted (`0`) leaves the caller's counters untouched.
+pub fn arm_raise(a: Args) -> i64 {
+    let [player_id, kind, value, ..] = a;
+    // Nested trigger (matches `wasm_rules::raise_core`): save the outer
+    // payload, install the raise's, run listeners, restore. `arm_trig_value`
+    // answers `pay_amount` (the hostfns `trigger().value` twin); `trig_value`
+    // is the ir_fill / fixture view of the same number.
+    let saved = world::with_world(|w| {
+        (
+            w.trig_kind,
+            w.trig_player,
+            w.trig_value,
+            w.pay_amount,
+            w.trig_cancelled,
+        )
+    });
+    world::with_world_mut(|w| {
+        w.trig_kind = kind;
+        w.trig_player = player_id;
+        w.trig_value = value;
+        w.pay_amount = value;
+        w.trig_cancelled = false;
+    });
+    let mut settled = 1i64;
+    #[cfg(all(kani, feature = "skills-groups"))]
+    {
+        if kind == ruleset_core::kind::FANS_FLIP {
+            settled = arm_raise_fans_flip(player_id, value);
+        }
+    }
+    #[cfg(not(all(kani, feature = "skills-groups")))]
+    let _ = (player_id, value);
+    // Restore the outer trigger. The raise's cancelled flag is the *reply*
+    // (0 = cancelled), not a mutation of the outer payload.
+    world::with_world_mut(|w| {
+        w.trig_kind = saved.0;
+        w.trig_player = saved.1;
+        w.trig_value = saved.2;
+        w.pay_amount = saved.3;
+        w.trig_cancelled = saved.4;
+    });
+    settled
+}
+
+/// FansFlip listener dispatch: every `skill:Pastel✽Palettes:与偶像一起` field
+/// instance whose owner is the raise seat (`actor == owner`), newest first
+/// is irrelevant — one instance per seat in the proofs.
+#[cfg(all(kani, feature = "skills-groups"))]
+fn arm_raise_fans_flip(player_id: i32, value: i32) -> i64 {
+    let _ = value;
+    let band = intern::intern(world::TOK_PP_BAND).0;
+    let saved_uid = world::with_world(|w| w.last_uid);
+    // Collect matching uids first (the body may mutate the field).
+    let mut hits = [0i32; 4];
+    let mut n = 0usize;
+    world::with_world(|w| {
+        let mut j = 0usize;
+        while j < w.field_n as usize {
+            if w.field[j].player == player_id && w.field[j].card == band && n < hits.len() {
+                hits[n] = w.field[j].uid;
+                n += 1;
+            }
+            j += 1;
+        }
+    });
+    let mut i = 0usize;
+    while i < n {
+        let uid = hits[i];
+        world::with_world_mut(|w| w.last_uid = uid);
+        let _ = skill_groups::pastel::on_fans_flip_kani(player_id);
+        i += 1;
+    }
+    world::with_world_mut(|w| w.last_uid = saved_uid);
+    // A listener may have cancelled the raise.
+    if world::with_world(|w| w.trig_cancelled) {
+        0
+    } else {
+        1
+    }
 }
 
 pub fn arm_raise_bought(_a: Args) -> i64 {
@@ -2988,6 +3085,142 @@ pub fn arm_protocol_stub(_a: Args) -> i64 {
 
 pub fn arm_stub_zero(a: Args) -> i64 {
     let _ = a;
+    0
+}
+
+// ===========================================================================
+// Cross-card messages (`ctx::send` / `On::Message`)
+// ===========================================================================
+//
+// The kani facade packs Target / Message as fixed records (see
+// `card-sdk/src/ctx.rs` `target_bytes` / `msg_bytes` / `send_card_msg`).
+// `arm_send` unpacks them, stashes the payload on `World`, and dispatches to
+// the receiver's `On::Message` body. Generic support stays for `mark:cp`'s
+// `"place"` channel and test fixtures; the PP fans channel is gone (state
+// dict + `FansFlip` raise, see [`arm_raise`]).
+
+/// Read a little-endian i32 at `off` from a packed arena record.
+fn le_i32(b: &[u8], off: usize) -> i32 {
+    let mut t = [0u8; 4];
+    let mut i = 0usize;
+    while i < 4 {
+        if let Some(&x) = b.get(off + i) {
+            t[i] = x;
+        }
+        i += 1;
+    }
+    i32::from_le_bytes(t)
+}
+
+fn le_u16(b: &[u8], off: usize) -> u16 {
+    let lo = b.get(off).copied().unwrap_or(0) as u16;
+    let hi = b.get(off + 1).copied().unwrap_or(0) as u16;
+    lo | (hi << 8)
+}
+
+/// Unpack a packed arena record into a small stack buffer.
+fn unpack_arena(handle: i32, len: i32, out: &mut [u8; 24]) -> usize {
+    let n = (len.max(0) as usize).min(out.len());
+    let b = card_sdk::native::read(handle, n);
+    let mut i = 0usize;
+    while i < n {
+        if let Some(&x) = b.get(i) {
+            out[i] = x;
+        }
+        i += 1;
+    }
+    n
+}
+
+/// `ctx::send` — unpack the packed Target/Message, run the receiver's
+/// `On::Message` body, return its reply (0 when nobody answers).
+pub fn arm_send(a: Args) -> i64 {
+    let [tp, tl, np, nl, pp, pl] = a;
+    // Message name rides the interned `s(name)` handle on `np`.
+    let name = name_id(np, nl);
+    // Target pack: kind (0=Uid, 1=Card, 2=Board), who, card NameId.
+    let mut tbuf = [0u8; 24];
+    unpack_arena(tp, tl, &mut tbuf);
+    let kind = le_i32(&tbuf, 0);
+    let who = le_i32(&tbuf, 4);
+    let card = le_u16(&tbuf, 8);
+    // Payload pack: seat, a, b, c, tile.
+    let mut pbuf = [0u8; 24];
+    unpack_arena(pp, pl, &mut pbuf);
+    let seat = le_i32(&pbuf, 0);
+    let av = le_i32(&pbuf, 4);
+    let bv = le_i32(&pbuf, 8);
+    let cv = le_i32(&pbuf, 12);
+    let tile = le_i32(&pbuf, 16);
+
+    // Sender context for the handler.
+    let (sender_uid, sender_seat) = world::with_world(|w| (w.last_uid, w.trig_player));
+
+    // Stash the payload — `msg_*` reads it. No named-channel special-case:
+    // the only previous client (PP fans) moved to the state dict +
+    // `FansFlip` raise. Generic `ctx::send` / `msg_*` stay for `mark:cp`
+    // (`"place"`) and tests; those proofs call the body (`*_kani`) directly.
+    world::with_world_mut(|w| {
+        w.msg_name = name.0;
+        w.msg_seat = seat;
+        w.msg_a = av;
+        w.msg_b = bv;
+        w.msg_c = cv;
+        w.msg_tile = tile;
+        w.msg_reply = 0;
+        w.msg_sender_uid = sender_uid;
+        w.msg_sender_seat = sender_seat;
+    });
+    let _ = (kind, who, card);
+    0
+}
+
+pub fn arm_msg_sender_uid(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_sender_uid) as i64
+}
+
+pub fn arm_msg_sender_seat(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_sender_seat) as i64
+}
+
+/// `msg_name(0,0)` under kani returns the interned NameId handle (see
+/// `ctx::message::name_is`). A fill call is unused (`read_str` returns empty).
+pub fn arm_msg_name(a: Args) -> i64 {
+    let [p, n, ..] = a;
+    if p == 0 && n == 0 {
+        let id = world::with_world(|w| w.msg_name);
+        return intern::encode_handle(intern::NameId(id)) as i64;
+    }
+    0
+}
+
+pub fn arm_msg_a(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_a) as i64
+}
+
+pub fn arm_msg_b(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_b) as i64
+}
+
+pub fn arm_msg_c(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_c) as i64
+}
+
+pub fn arm_msg_tile(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_tile) as i64
+}
+
+pub fn arm_msg_seat(_a: Args) -> i64 {
+    world::with_world(|w| w.msg_seat) as i64
+}
+
+pub fn arm_msg_text(_a: Args) -> i64 {
+    0
+}
+
+pub fn arm_msg_reply(a: Args) -> i64 {
+    let [v, ..] = a;
+    world::with_world_mut(|w| w.msg_reply = v);
     0
 }
 

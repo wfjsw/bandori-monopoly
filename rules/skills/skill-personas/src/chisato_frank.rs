@@ -14,27 +14,29 @@
 use card_sdk::abi::HookKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-
-const FANS_UP: &str = "P✽P粉丝(正)";
-const FANS_DOWN: &str = "P✽P粉丝(反)";
+use skill_groups::fans;
 
 pub const CHISATO_FRANK: CardDef = CardDef::new(
     "skill:白鹭千圣:保持坦率的你",
     &[
-        On::Hook(
+        On::Action(
             &[HookKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
-        // so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the per-share
-        // `payChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
+        // so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not the per-share
+        // `paySplitChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
         // money, so the hook's `target` (the payee) is the skill owner. A print
         // (game -> player) carries `target = me`, `player_id = -1`.
-        On::Hook(
-            &[HookKind::PayTotalAdd],
-            "target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1",
+        //
+        // Rides `PayCombinedAddBefore` (v78), restoring the rulebook PayCombinedAdd
+        // position: the interactive `ask_number` + `set_pay_amount` sits
+        // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
+        On::Action(
+            &[HookKind::PayCombinedAddBefore],
+            "target == owner && value > 0 && slot('ppFansUp') >= 1",
             Some(mine),
             on_gain,
         ),
@@ -51,7 +53,7 @@ fn mine(player_id: i32) -> bool {
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
     // the grantees of the (2) below -- the `group_is(owner, …)` pre owns that.
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
+    let _ = fans::grant(player_id, 5, 0)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
@@ -67,9 +69,11 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「自己每次收取资金时可选择将自己Y个正面[P✽P粉丝]变反，此次获得的分摊前
 /// 数量增加Y×100」 -- the gain is `to == me` and the figure is the amount.
+/// Rides `PayCombinedAddBefore` (v78): the prompt picks Y, which drives both the
+/// amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
-    let up = ctx::tok(player_id, FANS_UP);
+    let up = fans::up(player_id);
     let mut y = ctx::ask_number(
         player_id,
         &Msg::new(key!("chisato_frank_title")),
@@ -80,8 +84,7 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
     if y < 1 {
         return Ok(());
     }
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
+    let _ = fans::flip_down(player_id, y)?;
     // 「此次获得的分摊前数量增加Y×100」
     ctx::trigger::set_pay_amount(amount + y * 100);
     if ctx::in_group(player_id, "Pastel✽Palettes") {
@@ -92,10 +95,9 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
             if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            let down = ctx::tok(p, FANS_DOWN).min(y);
+            let down = fans::down(p).min(y);
             if down > 0 {
-                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
+                let _ = fans::flip_up(p, down)?;
                 y -= down;
             }
         }
@@ -104,10 +106,9 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
             if ctx::player_out(p) || !ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            if ctx::tok(p, FANS_DOWN) > 0 {
-                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
-                ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
-            }
+            // Always send -- the effect still hits a seat with 0 face-downs, so
+            // band clause （2） may grant an overflow crystal.
+            let _ = fans::flip_up(p, 1)?;
         }
     }
     ctx::log(

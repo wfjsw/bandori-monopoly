@@ -50,15 +50,15 @@ and `gap_money::g02_*` (`rules/tests/tests/gap_money.rs:159`).
 |---|---|---|---|---|
 | P1 | Root caller or effect requests Print / Delete / PlayerPayPlayer | `Pay::new` + `Cx::money`; card path `HostRequest::Pay` (`game-rules/src/wasm_rules.rs:1971-2022`) | MATCHES | One entry point for all three directions. |
 | P2 | Validate endpoints before opening events; reject invalid silently | `money_inner` early-outs: `amount <= 0`, `from == to`, dead endpoints (`play.rs:2672-2677`) | MATCHES (with gaps P14/P15) | |
-| P3 | Command-wide pre-split: AddDiff → MultDiff → Cancel, composing | `effect` ([反击] window, `play.rs:2736-2771`) → `payAdd` → `payMul` → `payChoose` → `payAt` (`play.rs:2774-2804`) | DIFFERS | See P3a. Rulebook 支付阶段 (rulebook-doc.md:227-235) is 1 计算前 / 2 计算时(±) / 3 计算后 / 4 支付前(×) / 5 支付时(取消/改目标) / 6 支付后 / 7 资金变动. |
-| P3a | Cancel runs *after* Add and Mult | our `effect` (cancel-capable) runs *before* `payAdd`/`payMul`; a second cancel-capable point is `pay` after the modifiers | DIFFERS | Already recorded: `docs/rulebook/TEST-FINDINGS.md:189-192` (「One `effect` raise carries window 5's cancel/retarget power at window 1's position」). Card-facing order pinned by `gap_money::g01`(ignored)/`g02`. |
+| P3 | Command-wide pre-split: AddDiff → MultDiff → Cancel, composing | `effect` ([反击] window, `play.rs:2736-2771`) → `paySplitAdd` → `paySplitMul` → `paySplitChoose` → `paySplitAt` (`play.rs:2774-2804`) | DIFFERS | See P3a. Rulebook 支付阶段 (rulebook-doc.md:227-235) is 1 计算前 / 2 计算时(±) / 3 计算后 / 4 支付前(×) / 5 支付时(取消/改目标) / 6 支付后 / 7 资金变动. |
+| P3a | Cancel runs *after* Add and Mult | our `effect` (cancel-capable) runs *before* `paySplitAdd`/`paySplitMul`; a second cancel-capable point is `pay` after the modifiers | DIFFERS | Already recorded: `docs/rulebook/TEST-FINDINGS.md:189-192` (「One `effect` raise carries window 5's cancel/retarget power at window 1's position」). Card-facing order pinned by `gap_money::g01`(ignored)/`g02`. |
 | P4 | Build split-entry list (print: one/payee; delete: one/payer; transfer: payee-major Cartesian) | **No split in the pipeline.** Multi-endpoint plays split at the card body; each 分摊 leg is its own `money()` call (`gap_money.rs:298` ruling comment) | DIFFERS | See P4a. Spec's own text calls the split-damage/pay-me content "future". |
 | P4a | Split share = divide final amount, round each share **up to a multiple of ten** | Card body computes `ceil10(total/n)` (微笑的铁假面 legs; `gap_money::g03/g05/g06`) | MATCHES (rule) / DIFFERS (home) | The ceil-10 rule is implemented, but in the card body, not the pipeline. |
 | P4b | Pre-split modifiers are **command-wide** (one double hits the total before division) | Each leg runs its own full pipeline; a modifier on one leg does not hit the others | DIFFERS | Ruling question Q2. |
 | P5 | Post-split Add/Mult/Cancel per concrete entry | Per-leg pipeline (same stages as P3) — equivalent when there is one leg | MATCHES (single-pair) | |
 | P6 | Inactive/Void entries skip; explicit cancel runs `PlayerRejectPayPlayer` for that pair only | Cancel → `payAfter` value 0 + `Paid::default` (`play.rs:2755-2767`, `2825-2837`). No rejection event | DIFFERS | No `PlayerRejectPayPlayer`-equivalent. Observable: nothing in the log names "this pair was refused". |
 | P7 | Negative final → zero + exactly one positive **reverse child** (swapped endpoints) | Clamped to 0 at every stage (`t.value.max(0)`, `play.rs:2769/2789/2820`); no reverse child | DIFFERS | For *prints* the clamp is pinned: `money::negative_final_amount_clamps_to_zero` (`money.rs:99`, FEVER! 「可小于0」). For a pay-player going negative the spec would reverse direction. Q3. |
-| P8 | Normalize, then settle: Before* events → affordability → mortgage loop → commit | `payAdd..payAt` → `pay` → affordability check (`play.rs:2839-2852`) → `raise_funds` (`play.rs:2955-3002`) → debit/credit | MATCHES (shape) | |
+| P8 | Normalize, then settle: Before* events → affordability → mortgage loop → commit | `paySplitAdd..paySplitAt` → `pay` → affordability check (`play.rs:2839-2852`) → `raise_funds` (`play.rs:2955-3002`) → debit/credit | MATCHES (shape) | |
 | P9 | When short: try mortgage (`BeforeMortgage` → commit marker + fixed credit → `AfterMortgage`), loop until affordable or exhausted | `raise_funds` → `Ask::mortgage` / auto-mortgage → `mortgage()` (`mortgageBefore` → `do_mortgage` → `mortgage`, `play.rs:2582-2615`) | MATCHES | `do_mortgage` credits `mortgage_value` directly — event-free, as rulebook L92 requires. Tests: `rulebook::gf05_mortgage_pays_fifty_percent_of_the_price`. |
 | P10 | Mortgage proceeds are a fixed, event-free credit | `do_mortgage` (`play.rs:2582-2599`); `redeem` likewise (`play.rs:2618-2635`) | MATCHES | 规则书 L92: 「抵押，赎回，和强制购买的资金变动不受任何效果影响」. Pinned by `rulebook::o06_mortgage_and_redeem_ignore_pay_modifiers` (`rulebook.rs:858`). |
 | P11 | Strict unaffordability → mark pair cancelled + rejection flow (no settlement, no bankruptcy) | Our `must` flag: `must = true` → raise funds then bankruptcy; `must = false` → **cap the loss to available cash and settle** (`play.rs:2840-2850`) | DIFFERS | See P11a. There is no "refuse the pair" outcome. |
@@ -70,7 +70,7 @@ and `gap_money::g02_*` (`rules/tests/tests/gap_money.rs:159`).
 | P16 | Self-payment follows the affordability/bankruptcy path (zero net) | `from == to` returns `Paid::default` before any event (`play.rs:2672-2674`) | DIFFERS (minor) | No events, no bankruptcy on a self-charge. Q4. |
 | P17 | Operation stack LIFO; a child cannot overwrite the paused parent's stage; resume at saved stage | Rust recursion over `money_inner` with `money_depth` (`play.rs:2652-2671`); each call owns its locals | MATCHES (effect) | No explicit stack object — not adopted (§0). |
 | P18 | Nested money from a responding effect opens its own windows at every depth | Same recursion; `effect` opens per movement (`play.rs:2733-2735`); `reentrant_hooks` prevents self-retrigger (`wasm_rules.rs:1465-1500`); `MAX_MONEY_DEPTH = 32` traps loudly (`play.rs:25`) | MATCHES | Documented in `docs/ENGINE.md` 「Money pipeline depth」. |
-| P19 | Before/After per transaction type (`BeforePlayerGainMoney` / `AfterPlayerGainMoney` / `BeforePlayerLossMoney` / `AfterPlayerLossMoney` / `Before/AfterPlayerPayPlayer`) | Coarser: `effect` / `payAdd..payAt` / `pay` / `payAfter` / `paid`. `payAfter` fires on any money change (print included); `paid` only on payer-side loss | DIFFERS (shape) | 规则书 支付阶段 7 「资金变动(合并到[支付后]?)」 → merged into `payAfter` by design (`docs/ENGINE.md` 「资金变动 is payAfter」). Direction-specific Before events do not exist. Pinned: `money::card_payment_opens_the_counteract_window`. |
+| P19 | Before/After per transaction type (`BeforePlayerGainMoney` / `AfterPlayerGainMoney` / `BeforePlayerLossMoney` / `AfterPlayerLossMoney` / `Before/AfterPlayerPayPlayer`) | Coarser: `effect` / `paySplitAdd..paySplitAt` / `pay` / `payAfter` / `paid`. `payAfter` fires on any money change (print included); `paid` only on payer-side loss | DIFFERS (shape) | 规则书 支付阶段 7 「资金变动(合并到[支付后]?)」 → merged into `payAfter` by design (`docs/ENGINE.md` 「资金变动 is payAfter」). Direction-specific Before events do not exist. Pinned: `money::card_payment_opens_the_counteract_window`. |
 | P20 | DeleteMoney is an event-free authoritative debit | Card prints/deletes go through the pipeline; `gain_fixed` is the event-free API (`ops.rs:517-532`) | MATCHES | |
 | P21 | Cancellation is successful completion; state/overflow/callback failures are operation failures | Cancel returns `Paid::default` = success; panics on depth cap | MATCHES | |
 | P22 | Ordered pair results + one completion callback to the root caller | Callers receive `Paid { paid, loss, gain }`; no multi-pair result list | MATCHES (single-pair) | Multi-pair result list is part of the unadopted split model. |
@@ -94,11 +94,11 @@ pre-gates (`play.rs:2051`, `2092`) and stay `must = false`.
 before 「支付增加/翻倍」 windows have run, so it cannot see the shaped amount, and
 a window-2 modifier still applies to a payment that window 5 would have
 cancelled if ordering were per the table. Test: `money::cancel_window_sees_the_shaped_amount`
-— a payAdd +500 and a window-5 cancel; expect the cancel to be offered against
+— a paySplitAdd +500 and a window-5 cancel; expect the cancel to be offered against
 the modified figure and to drop the payment entirely. Fix sketch: split the
 `effect` raise into a pre-window (计算前, declaration only) and move the
 cancel/retarget gestures onto the `pay` raise (支付时) — or add a
-`payCancel` stage after `payAt`. Keep one `Trigger` so the [反击] key is stable
+`payCancel` stage after `paySplitAt`. Keep one `Trigger` so the [反击] key is stable
 (`docs/ENGINE.md` 「Effect vs settlement」).
 
 **B3 (missing stage).** 支付阶段 3 「支付计算后」 has no trigger kind
@@ -161,7 +161,7 @@ Our path: `raise_funds` → `bankrupt` (`play.rs:3005-3054`) → `remove_from_ga
 Consequence: a bankrupt player's placed cards keep running buy hooks, pay hooks
 and field effects for the rest of the match — e.g. a lingering 「[拥有者]被[支付]时…」
 on a dead seat still fires. Test: `rulebook::bankruptcy_stops_field_effects`
-— P1 has a placed FEVER!-style payAdd hook; P1 goes bankrupt; P0 then gains
+— P1 has a placed FEVER!-style paySplitAdd hook; P1 goes bankrupt; P0 then gains
 money; expect no boost and `P1.field` empty. Fix sketch: in `remove_from_game`,
 clear `s.field` (and `s.tokens`, character/band bindings) after raising
 `beforeOut`, and keep only instances whose uid is on the live answer tree if a
@@ -426,10 +426,10 @@ cancel (`BANKRUPTCY_PIPELINE` invariant, `P16`/`K17`).
 
 ### Q2 -- 分摊 modifiers, the pre-split stage (done)
 
-New hook kinds `payTotalAdd` / `payTotalMul` / `payTotalCancel` (TriggerKind
+New hook kinds `payCombinedAdd` / `payCombinedMul` / `payCombinedCancel` (TriggerKind
 84/85/86) run **command-wide on the total** before any 「[分摊]」 divides it --
 the spec's `PreSplitAddDiff` / `PreSplitMultDiff` / `PreSplitCancel`, renamed
-after our per-share `payAdd` / `payMul` / `payChoose` / `payAt`. Order is
+after our per-share `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`. Order is
 add -> mul -> cancel, composing. `Cx::pay_total` / `ctx::pay_total` expose the
 stage on its own; `ctx::split_pay` / `ctx::pay_leg` drive a 「[分摊]」 command
 (total stage once, then one `money()` per share with `Pay::total_stage = false`).
@@ -441,8 +441,8 @@ Cards moved onto the new stage (both say 「分摊前」):
 
 | Card | Text | Was | Now |
 |---|---|---|---|
-| `skill:丸山彩:With~` (2) | 「此次支付的分摊前资金减少Y×100（最少0）」 | `payChoose` | `payTotalAdd` |
-| `skill:白鹭千圣:保持坦率的你` (2) | 「此次获得的分摊前数量增加Y×100」 | `payChoose` | `payTotalAdd` |
+| `skill:丸山彩:With~` (2) | 「此次支付的分摊前资金减少Y×100（最少0）」 | `paySplitChoose` | `payCombinedAdd` |
+| `skill:白鹭千圣:保持坦率的你` (2) | 「此次获得的分摊前数量增加Y×100」 | `paySplitChoose` | `payCombinedAdd` |
 
 Every other card stays on its current stage. The 「[分摊]」 bodies
 (`PP:[白鹭千圣]微笑的铁假面`, `R:NFO`, `skill:鳰原令王那:梦幻可爱♪女仆`,
@@ -521,7 +521,7 @@ already has is the key's own order.
 with and without the `buy_hook_instances` sort --
 `{"bankrupt": 96, "build": 4669, "buy": 2899, "draw": 2320, "event": 1187,
 "forcebuy": 392, "lose": 7313, "mortgage": 2245, "move": 5347, "overlap": 1517,
-"pass": 5909, "play": 2709, "redeem": 1517, "rent": 19567, "roll": 34398,
+"pass": 5909, "play": 2709, "redeem": 1517, "rent": 19567, "diceRollBefore": 34398,
 "text": 55654, "turn": 34437}`. Today's behaviour is unchanged.
 
 Note one place the key records a deviation rather than moving anything:

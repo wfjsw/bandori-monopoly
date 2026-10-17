@@ -1066,7 +1066,7 @@ fn band_state2_pay_is_150_only_on_self() {
                 "hand:P0",
                 "draw:P0",
                 "discard:P0",
-                // One-sided bend bookkeeping (printed figure latched at PayMul).
+                // One-sided bend bookkeeping (printed figure latched at PaySplitMul).
                 "state:P0:skill.aveMujica.orig",
                 "turn.paid_in_settle",
             ],

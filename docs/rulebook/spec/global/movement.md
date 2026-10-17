@@ -189,7 +189,7 @@ index, wrapping at 60.
 * **Source:** `rulebook-doc.md:207`
 * **Quote:** 行动阶段 7 「一回合只能触发一次［主要移动］效果,多次触发［主要
   移动］时无效」
-* **Trigger:** a `roll` command (`StepAct::Act` with `act == "roll"`).
+* **Trigger:** a `roll` command (`StepAct::Act` with `act == "diceRollBefore"`).
 * **Condition:** the turn's [主要移动] has already been spent, or the
   engine refuses the roll for another reason.
 * **Effect:** a refused / extra [主要移动] is a pure no-op -- no walk /

@@ -583,7 +583,7 @@ fn turn_phases_and_immediate_next_turn() {
 
     // The main move (loaded die) runs → 结束.
     t.dice(&[3]);
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     // G-SETTLE-06/07 may open a buy/build prompt; answer it so the stage can
     // finish the settle and reach 结束.
     t.settle_answering_defaults();
@@ -807,13 +807,13 @@ fn stage_order_is_monotonic_inside_a_turn() {
     t.observe(CLAUSES);
     assert_eq!(t.step(), stage::OPS);
     t.dice(&[1]);
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END);
     t.end(0).expect("end");
     assert_eq!(t.step(), stage::OPS);
     t.dice(&[1]);
-    t.roll(1).expect("roll");
+    t.roll(1).expect("diceRollBefore");
     t.settle_answering_defaults();
     assert_eq!(t.step(), stage::END);
 }

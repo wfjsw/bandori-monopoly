@@ -219,7 +219,7 @@ pub fn idolband_mutant_is_detected() {
 
 // ===========================================================================
 // C-SUMIMI-hina-01 -- pass CiRCLE → +1 [火罐]
-// `skill:三角初华（Sumimi）:成为偶像` `On::Hook(Pass)` with the single-source
+// `skill:三角初华（Sumimi）:成为偶像` `On::Action(Pass)` with the single-source
 // guard `ruleset_core::guards::OWN_START`.
 // Isolation: the turn-start pot placement (clause (2)) is a different entry.
 // Seat-symmetric (the user's own fire).
@@ -341,7 +341,7 @@ pub fn hina_01_mutant_is_detected() {
 
 // ===========================================================================
 // C-SUMIMI-childhood-02 -- after-move +1 [火罐]
-// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `On::Hook(MoveAfter)`.
+// `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` `On::Action(MoveAfter)`.
 // Guard: `"actor == owner && move.main && card.placed"`.
 // C-SUMIMI-childhood-01 (move start = 小豆岛) is PROTOCOL-LEVEL (plan stub).
 // Seat-symmetric (the user's own fire).

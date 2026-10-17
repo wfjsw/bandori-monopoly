@@ -55,7 +55,7 @@ fn main() {
             // Only the guarded entries matter for the split.
             if !matches!(
                 OnKind::from_i32(o.kind),
-                Some(OnKind::Play) | Some(OnKind::Counteract) | Some(OnKind::Hook)
+                Some(OnKind::Play) | Some(OnKind::Counteract) | Some(OnKind::Action)
             ) {
                 continue;
             }

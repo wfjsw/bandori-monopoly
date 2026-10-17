@@ -322,7 +322,7 @@ export function Board({ sess }: { sess: GameSession }) {
 /** The FX layer height (design px) the chain's desktop sizes were drawn for: 900 stage - 110 top bar. */
 const FX_REF_H = 790;
 
-const ROLL_KINDS = new Set(["roll", "moveRoll"]);
+const ROLL_KINDS = new Set(["diceRollBefore", "diceRollValue"]);
 
 /** The tile standing in for a chain's link 1 when the timing is no card (a
  *  roll, a payment, a landing ...): an icon, what happened, and the

@@ -10,18 +10,15 @@
 //! `effect.has(Pay)`. They are bound as int constants at compile time
 //! (unknown-var check) and at eval time (the window scope).
 //!
-//! # Name collision: `Teleport`
-//!
-//! `Teleport` is both a [`TriggerKind`] (17) and a [`MoveKind`] (1). In the
-//! CEL namespace `Walk` / `Teleport` are the **MoveKind** values (0 / 1) --
-//! `move.kind == Teleport` is the common spelling. The trigger kind 17 is
-//! exposed as [`TELEPORT_TRIGGER`]; write `effect.has(TeleportTrigger)`.
+//! `Teleport` is a [`MoveKind`] only (the old TriggerKind 17 was retired in
+//! ABI v84). Write `move.kind == Teleport`.
 
 /// Trigger / chain / hook kind values (shared wire numbering).
 #[allow(non_upper_case_globals)]
 pub mod trig {
-    pub const Roll: i64 = 1;
-    pub const MoveRoll: i64 = 2;
+    pub const DiceRollBefore: i64 = 1;
+    pub const DiceRollValue: i64 = 102;
+    pub const DiceRollResult: i64 = 2;
     pub const TurnStart: i64 = 3;
     pub const Pass: i64 = 4;
     pub const PassPlayer: i64 = 5;
@@ -35,13 +32,9 @@ pub mod trig {
     pub const Event: i64 = 13;
     pub const Abnormal: i64 = 14;
     pub const Target: i64 = 15;
-    pub const Stop: i64 = 16;
-    pub const Teleport: i64 = 17;
-    pub const SkillTeleport: i64 = 18;
-    pub const Stun: i64 = 19;
-    pub const Stay: i64 = 20;
+    // 16 / 17 / 19 / 20 / 22 retired in ABI v84 (Stop / Teleport / Stun /
+    // Stay / Forced); 18 (SkillTeleport) retired in ABI v85 -- never reuse.
     pub const Exile: i64 = 21;
-    pub const Forced: i64 = 22;
     pub const State: i64 = 23;
     pub const Counteracted: i64 = 24;
     pub const DrawOut: i64 = 25;
@@ -74,6 +67,8 @@ pub mod trig {
     /// v43: the move head / move-tail pair (`SETTLE-STAGES.md` §7).
     pub const MoveBefore: i64 = 90;
     pub const MoveAfter: i64 = 91;
+    /// 「将X个反面[P㏄P粉丝]变正」 (ruleset-core::kind::FansFlip). Wire 107.
+    pub const FansFlip: i64 = 107;
 }
 
 /// MoveKind values. `Walk` / `Teleport` are what `move.kind ==` compares.
@@ -83,9 +78,7 @@ pub mod mv {
     pub const Teleport: i64 = 1;
 }
 
-/// TriggerKind::Teleport (17), under a name that cannot collide with
-/// [`mv::Teleport`].
-pub const TELEPORT_TRIGGER: i64 = trig::Teleport;
+// TELEPORT_TRIGGER (TriggerKind 17) retired in ABI v84 -- never reuse.
 
 /// (CEL name, value) for every int constant a condition may reference.
 ///
@@ -93,8 +86,9 @@ pub const TELEPORT_TRIGGER: i64 = trig::Teleport;
 /// context variables, and the table the eval scope binds.
 pub fn constants() -> &'static [(&'static str, i64)] {
     &[
-        ("Roll", trig::Roll),
-        ("MoveRoll", trig::MoveRoll),
+        ("DiceRollBefore", trig::DiceRollBefore),
+        ("DiceRollResult", trig::DiceRollResult),
+        ("DiceRollValue", trig::DiceRollValue),
         ("TurnStart", trig::TurnStart),
         ("Pass", trig::Pass),
         ("PassPlayer", trig::PassPlayer),
@@ -108,17 +102,11 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("Event", trig::Event),
         ("Abnormal", trig::Abnormal),
         ("Target", trig::Target),
-        ("Stop", trig::Stop),
-        // `Teleport` is MoveKind (1) -- see the module docs. The trigger kind
-        // 17 is `TeleportTrigger`.
+        // `Teleport` is MoveKind (1) only -- TriggerKind 17 retired in v84.
         ("Teleport", mv::Teleport),
         ("Walk", mv::Walk),
-        ("TeleportTrigger", TELEPORT_TRIGGER),
-        ("SkillTeleport", trig::SkillTeleport),
-        ("Stun", trig::Stun),
-        ("Stay", trig::Stay),
+        // "SkillTeleport" retired in ABI v85 (id 18 never reuse).
         ("Exile", trig::Exile),
-        ("Forced", trig::Forced),
         ("State", trig::State),
         ("Counteracted", trig::Counteracted),
         ("DrawOut", trig::DrawOut),
@@ -150,5 +138,6 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("HouseAdded", trig::HouseAdded),
         ("MoveBefore", trig::MoveBefore),
         ("MoveAfter", trig::MoveAfter),
+        ("FansFlip", trig::FansFlip),
     ]
 }

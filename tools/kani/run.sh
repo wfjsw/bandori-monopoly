@@ -287,7 +287,7 @@ PY
 # Shrinks CBMC's address-taken `fn(i32)->Asked` set (874 → tens).
 unit_features() {
   case "$1" in
-    pp|money_shave|prompt) echo "band-pp" ;;
+    pp|money_shave|prompt) echo "band-pp,skills-groups" ;;
     ppp|teleport) echo "band-ppp,skills-personas,skills-groups" ;;
     r) echo "band-roselia,skills-personas,skills-groups" ;;
     ag) echo "band-ag,skills-personas,skills-groups" ;;

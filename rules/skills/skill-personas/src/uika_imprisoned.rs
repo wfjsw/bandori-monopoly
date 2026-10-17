@@ -18,8 +18,8 @@
 //! reads. 「主动移动经过任何玩家都将向其收取200资金」 is `PassPlayer`, and
 //! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
 
-use card_sdk::abi::{state_key, HookKind};
-use ruleset_core::ctx::{self, plan, state};
+use card_sdk::abi::{state_key, FilterValue, HookKind};
+use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「回忆地块」 -- the three the clause names.
@@ -39,25 +39,25 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // -- the offer exists only while the memory latch stayed clear.
         // 状态2's cap write still has to run whenever state is 2, so the
         // residual is the disjunction. Dynamic latch, residual.
-        On::Hook(
+        On::Action(
             &[HookKind::TurnStartBefore],
             card_sdk::pre::MINE,
             Some(state2_or_clean),
             at_turn_start,
         ),
         // 状态1 「移动改为10+1d10」 -- only while this player is in 状态1.
-        On::Hook(
-            &[HookKind::RollPlan],
+        On::FilterValue(
+            &[HookKind::DiceRollPlan],
             "actor == owner && slot('skillState') != 2",
             None,
             on_plan,
         ),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
         // settle that marks the latch is the owner's own settle onto one of the
         // three named tiles. Both facts are CEL (`actor == owner` and the three
         // `tile_named` ids), so a reject runs no body (and so posts no flash).
-        On::Hook(
+        On::Action(
             &[HookKind::Settle],
             "actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))",
             None,
@@ -66,7 +66,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "actor == owner && move.main && slot('skillState') == 2",
             None,
@@ -75,7 +75,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // 状态2 「每次成功收取后可选择在[触发结算]前额外移动1d6」.
         // 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」 -- the
         // 4-shot cap is `slot('skill.uikaImprisoned.bonus') < 4`.
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBefore],
             "slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4",
             None,
@@ -116,13 +116,15 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态1: 「移动改为10+1d10」.
-fn on_plan(player_id: i32) -> card_sdk::Asked {
+fn on_plan(_player_id: i32, mut v: FilterValue) -> FilterValue {
     // 规则书: 「移动改为10+1d10」 -- the d20 becomes a d10 and a flat 10 rides
     // along; the summed roll is the walk's length (`set_steps` would pin the
     // walk to 10 and drop the die).
-    plan::set_base_dice(1, 10, "Imprisoned XII");
-    plan::add_extra_dice(10, 0, "Imprisoned XII");
-    Ok(())
+    v.base_count = 1;
+    v.base_sides = 10;
+    v.extra_count = 10;
+    v.extra_sides = 0;
+    v
 }
 
 /// 「每当你经过CiRCLE的回合结束后…」 -- the pass clears the memory latch.
@@ -210,8 +212,8 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_plan_kani(player_id: i32) -> card_sdk::Asked {
-    on_plan(player_id)
+pub fn on_plan_kani(player_id: i32, v: FilterValue) -> FilterValue {
+    on_plan(player_id, v)
 }
 
 #[cfg(kani)]

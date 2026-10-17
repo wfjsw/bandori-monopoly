@@ -201,15 +201,14 @@ pub fn band_rent_bonus_amount(pre_amount: i32, crystals: i32) -> i32 {
     pre_amount + crystals * 100
 }
 
-/// Exactly one SetPayAmount to the raised amount. When `crystals <= 0` the
-/// body is a no-op (nothing to raise).
-pub fn band_rent_bonus_log_ok(effects: &[Effect], crystals: i32, expected_to: i32) -> bool {
-    if crystals <= 0 {
-        effects.is_empty()
-    } else {
-        effects.len() == 1
-            && matches!(effects[0], Effect::SetPayAmount { to } if to == expected_to)
-    }
+/// ABI v75 pure Filter: the PayMul body RETURNS the raised amount and emits
+/// **no** Effect (narration is separate; the host writes `SetPayAmount` when
+/// it folds the return). SPEC CHANGE (Action→Filter stage move): the old
+/// Action body wrote `set_pay_amount` itself and this pinned exactly that
+/// effect; the pure body's no-less/no-more is the return value plus an empty
+/// effect log. When `crystals <= 0` the return is the unchanged amount.
+pub fn band_rent_bonus_log_ok(effects: &[Effect]) -> bool {
+    effects.is_empty()
 }
 
 /// Mutant: +100 total instead of +100 per crystal.

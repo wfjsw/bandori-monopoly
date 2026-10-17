@@ -9,7 +9,8 @@
 //!   touch `0..n_players`.
 //! * **Named counters / tokens / state** — generic key→i32 maps keyed by
 //!   interned [`crate::intern`] ids (u16). The pilot's `fans_pos` /
-//!   `hand_resonance` fields remain as *views* so existing proofs compile.
+//!   `fans_neg` views mirror the `ppFansUp` / `ppFansDown` state-dict keys;
+//!   `hand_resonance` remains a view so existing proofs compile.
 //! * **Piles** — hand / draw / discard / field are bounded arrays of interned
 //!   card ids (`u16`), with uid / crystals / props per field instance.
 //! * **Tiles** — 60 board slots from `data/board.json` ([`board`]), each with
@@ -124,8 +125,13 @@ pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
     }
 }
 
-pub const TOK_PP_POS: &str = "P✽P粉丝(正)";
-pub const TOK_PP_NEG: &str = "P✽P粉丝(反)";
+/// Per-player state-dict keys (`skill_groups::fans::{UP,DOWN}`). Owned by no
+/// card; grants/flips go through `fans::` helpers. Same keys the CEL
+/// `slot('ppFansUp')` / `slot('ppFansDown')` read.
+pub const TOK_PP_POS: &str = "ppFansUp";
+pub const TOK_PP_NEG: &str = "ppFansDown";
+/// Band skill that listens `On::Action(FansFlip)` for clause （2） overflow.
+pub const TOK_PP_BAND: &str = "skill:Pastel✽Palettes:与偶像一起";
 
 /// Cached `NameId`s for the two fan tokens. Interned once per proof (the
 /// same table `host::install` pre-fills); every later `sync_views` is a `u16`
@@ -639,7 +645,7 @@ pub struct World {
     pub group_pool: [i32; MAX_PLAYERS],
 
     // ---- compatibility views for the pilot proofs ----
-    /// `P✽P粉丝(正)` / `(反)` counts (also in `player_keys`).
+    /// `ppFansUp` / `ppFansDown` counts (also in `player_keys`).
     pub fans_pos: [i32; MAX_PLAYERS],
     pub fans_neg: [i32; MAX_PLAYERS],
     /// Copies of `PP:[衍生]共鸣` in hand (the only hand identity the pilot needs).
@@ -724,6 +730,21 @@ pub struct World {
     /// Non-zero entries are band name ids.
     pub blocked_bands: [i32; 4],
     pub blocked_bands_n: u8,
+
+    // ---- cross-card message context (`ctx::send` / `On::Message`) ----
+    /// Interned message name id (`mark:cp`'s `"place"` / …). 0 = none.
+    pub msg_name: u16,
+    /// `Message.seat` — the holder / subject seat of the payload.
+    pub msg_seat: i32,
+    pub msg_a: i32,
+    pub msg_b: i32,
+    pub msg_c: i32,
+    pub msg_tile: i32,
+    /// Reply the handler set (`ctx::message::reply`).
+    pub msg_reply: i32,
+    /// Sender's instance uid / seat (`ctx::message::sender_*`).
+    pub msg_sender_uid: i32,
+    pub msg_sender_seat: i32,
 
     // ---- turn trackers (ir_fill `Gains` / `Targeted` / `Between`) ----
     /// Money gained this turn per seat (`hostfns::gains_this_turn`).
@@ -828,6 +849,15 @@ impl World {
             plan_fixed_roll: -1,
             blocked_bands: [0; 4],
             blocked_bands_n: 0,
+            msg_name: 0,
+            msg_seat: -1,
+            msg_a: 0,
+            msg_b: 0,
+            msg_c: 0,
+            msg_tile: -1,
+            msg_reply: 0,
+            msg_sender_uid: 0,
+            msg_sender_seat: 0,
             gains_this_turn: [0; MAX_PLAYERS],
             targeted_count: [0; MAX_PLAYERS],
             between_seat: [-1; MAX_PLAYERS],
@@ -888,13 +918,25 @@ impl World {
             return;
         }
         self.player_keys[player as usize].set(key, v);
+        self.sync_fan_key(player, key);
     }
 
     pub fn key_add(&mut self, player: i32, key: NameId, delta: i32) -> i32 {
         if player < 0 || player as usize >= MAX_PLAYERS {
             return 0;
         }
-        self.player_keys[player as usize].add(key, delta)
+        let v = self.player_keys[player as usize].add(key, delta);
+        self.sync_fan_key(player, key);
+        v
+    }
+
+    /// Mirror a fan-key write into the pilot `fans_pos` / `fans_neg` views.
+    /// `state_get` / `state_add` / `state_set` all land here via `key_*`.
+    fn sync_fan_key(&mut self, player: i32, key: NameId) {
+        let (pos_id, neg_id) = fan_tok_ids();
+        if key == pos_id || key == neg_id {
+            self.sync_views_player(player);
+        }
     }
 
     /// Keep `fans_pos` / `fans_neg` / `hand_resonance` in sync with the

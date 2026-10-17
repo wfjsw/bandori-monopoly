@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TAKI_EVEN_IF: CardDef = CardDef::new(
     "CRYCHIC:（立希）即便比不上...",
     &[On::Counteract(
-        &[ChainKind::MoveRoll],
+        &[ChainKind::DiceRollResult],
         "actor == owner && move.roll != null",
         None,
         counteract,

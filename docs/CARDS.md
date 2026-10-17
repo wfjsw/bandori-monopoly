@@ -10,8 +10,8 @@ The same authoring shape covers the other rule categories: board tiles
 (`rules/tiles`, [TILES.md](TILES.md)), tile marks (`rules/tile_marks`, `mark:*`
 -- [TILES.md](TILES.md) → 「Board marks」) and event cards (`rules/events`,
 [EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
-the same `On::` table -- `On::Play` for what happens on draw, `On::Hook` for
-what runs while it is active, `On::AtEnd` for expiry.
+the same `On::` table -- `On::Play` for what happens on draw, `On::Action` for
+what runs while it is active, `On::Action(&[HookKind::AtEnd])` for expiry.
 
 ## How a card runs
 
@@ -34,9 +34,9 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     On::Play("", None, press),
     // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
     // On::Counteract(&[ChainKind::Pay], "", guard, counteract),  // [反击]: kinds + condition + guard + effect
-    // On::Hook(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
-    // On::AtEnd(at_end),                             // scheduled turn-end body
-    // On::RollPlan(roll_plan),                       // shapes the main move
+    // On::Action(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
+    // On::Action(&[HookKind::AtEnd], "", None, at_end),        // scheduled turn-end body
+    // On::FilterValue(&[HookKind::DiceRollPlan], "", None, roll_plan), // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
 fn press(player_id: i32) {
@@ -46,9 +46,10 @@ fn press(player_id: i32) {
 
 Every handler is a `fn(player_id: i32)` (the player the card is placed at for hooks);
 `On::Counteract` carries its [反击] trigger kinds + the condition + a pure `bool`
-guard + the effect, `On::Hook` the field-hook kinds (`passTile`, `payAdd`,
-`drawn`, `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) in the same
-shape. An empty kind list is never dispatched.
+guard + the effect, `On::Action` the event-hook kinds (`passTile`, `drawn`,
+`turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) and `On::Filter` the
+modifier stages (`paySplitAdd`, `buySet`, ...) in the same shape. An empty kind list
+is never dispatched.
 
 * `id` is the **data** card id from the roster (Chinese; an identifier,
   not display text).
@@ -61,9 +62,193 @@ shape. An empty kind list is never dispatched.
 * names are arguments, not text: `Msg::new(key!("x")).player_id("who", s).tile("tile", t)`
   -- the client resolves them to display names.
 
+## Action vs Filter (do_action / apply_filters) — final architecture
+
+The entry surface is the WordPress `do_action` / `apply_filters` split. The
+final `On` set (ABI v83):
+
+| variant | body signature | role | may emit effects? |
+|---|---|---|---|
+| `On::Play(pre, gate, body)` | `fn(i32) -> Asked` | play from hand | yes |
+| `On::Counteract(kinds, pre, guard, body)` | `fn(i32) -> Asked` | [反击] at those chain links | yes |
+| `On::Message(names, pre, guard, body)` | `fn(i32) -> Asked` | cross-card message | yes (log) |
+| `On::Settle(pre, guard, body)` | `fn(i32) -> Asked` | a tile rule's settle body | yes |
+| `On::Mortgage(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [抵押] body (v73) | yes (`ctx::apply_mortgage`) |
+| `On::Redeem(pre, guard, body)` | `fn(i32) -> Asked` | a deed's [赎回] body (v73) | yes (`ctx::apply_redeem`) |
+| `On::Buy(pre, guard, body)` | `fn(i32) -> Asked` | a deed's buy / perform body (v80) | yes (`ctx::pay_buy`, `ctx::assign_deed`, `ctx::raise`, `ctx::log`) |
+| `On::Build(pre, guard, body)` | `fn(i32) -> Asked` | a deed's build / perform body (v80) | yes (`ctx::pay_build`, `ctx::raise`, `ctx::log`) |
+| `On::Action(kinds, pre, guard, body)` | `fn(i32) -> Asked` | **event reaction** | yes (`ctx::gain`, log, place, …) |
+| `On::Filter(kinds, pre, guard, body)` | `fn(i32, value: i32) -> i32` | **integer value transform** | no (pure) |
+| `On::FilterFlag(kinds, pre, guard, body)` | `fn(i32, value: i32) -> bool` | **cancel / allow decision** | no (pure) |
+| `On::FilterValue(kinds, pre, guard, body)` | `fn(i32, v: FilterValue) -> FilterValue` | **struct rewrite** (deal / plan / payee / gate) | no (pure) |
+
+`On::Mortgage` / `On::Redeem` / `On::Buy` / `On::Build` stay their own
+variants (like `On::Settle`): a deed body owns eligibility + the amounts and
+calls `ctx::apply_mortgage` / `ctx::apply_redeem` / `ctx::pay_buy` /
+`ctx::pay_build` / `ctx::assign_deed`, so it is not a pure value transform.
+Wire ids 9 / 10 (master's v73) and 12 / 13 (v80).
+
+### Retired wire ids (never reuse)
+
+| id | was | folded into | ABI |
+|---|---|---|---|
+| 4 | `OnKind::AtEnd` | `On::Action(&[TriggerKind::AtEnd])` | v76 |
+| 5 | `OnKind::RollPlan` | `On::FilterValue(&[TriggerKind::DiceRollPlan])` | v76 |
+| 6 | `OnKind::Gate` | `On::FilterFlag` / `On::FilterValue` at the gate kinds | v77 |
+
+`On::Hook` (the pre-v74 name) is gone; `OnKind::Hook = 3` was renamed
+`OnKind::Action` and keeps id 3. `OnKind::Filter = 11` (not 9 -- 9/10 are the
+v73 deed kinds).
+
+### On::Settle is kept (not folded into SettleBody)
+
+`On::Settle` is the tile rule's **base settle body** (what runs when that tile
+is [结算]d). `HookKind::SettleBody` is a field hook that may **cancel / replace**
+that body (`set_cancelled`). They are two roles in one chain link:
+
+1. raise `SettleBody` -- a placed card may claim the body (`set_cancelled` = "do
+   my thing instead");
+2. if not cancelled, run the tile rule's `On::Settle`.
+
+Folding would make the tile body just another `Action(SettleBody)` and lose the
+"one base body, optional replacement" shape (and the `[反击]`-able
+`ChainKind::SettleBody` link). **Decision: keep `On::Settle`.**
+
+### Why three Filter shapes (the minimal clean set)
+
+Integer pipelines (pay amount, buy price, turn-clock seconds,
+roll face) are `fn(player_id, value) -> i32` -- one number in, one number out.
+Cancel stages (`PayCombinedCancel`, `ChargePaying` substitute) are booleans:
+`false` drops the stage. `PaySplitChoose` may either rewrite the amount
+(`On::Filter`) or decline (`On::FilterFlag`); a card that does both is
+**split into two entries**.
+
+`BuyAssign` and `DiceRollPlan` do not carry a single integer -- they rewrite a
+small record (deal owner/houses/mortgaged; roller/dice/steps/…). Those use
+`On::FilterValue` and a `FilterValue` struct (`rules/card-sdk/src/abi.rs`).
+Fields the body leaves as `FilterValue::UNCHANGED` (`i32::MIN`) are not
+written back.
+
+### Purity
+
+Filter bodies may not prompt and may not call mutating `ctx` effects.
+`card_sdk::pure::refuse_if_filter` debug-asserts (and tests enforce) every
+mutating call: `gain` / `draw` / `place_card` / `set_dest` / `set_slot` /
+`inc_slot` / `roll` / `set_prop` / `state::set` / `plan::set_tag` /
+`add_counter`. They **may** `ctx::log` (the why-line of the effect-applied
+log-why rule). A fused hook (value rewrite + gain/place/…) is split into a
+Filter half and an `On::Action` half on the appropriate event (e.g. `PayAfter`).
+
+A Filter body that would have rolled dice reads `FilterValue.recorded_roll`
+(v78: the host pre-rolls into the recorded RNG stream so replay stays
+deterministic). A named plan tag rides `FilterValue.tag_key` (intern id) +
+`tag`.
+
+**The one exception (user decision 2026-10-17, keep it):** an `On::Action`
+at `DiceRollAfter` may prompt, roll dice, and write the face (trigger value
+read back). Every other reshape is the pure `DiceRollValue` filter. See the
+filter-kind section below.
+
+### Interactive pre-stages (v78)
+
+A prompt cannot live in a Filter. Where the rulebook puts a 「可」 offer at a
+modifier stage, the prompt rides an `On::Action` at a **pre-stage** kind raised
+immediately before the pure filter stage:
+
+| pre-stage (Action) | pure stage (Filter*) | rulebook position |
+|---|---|---|
+| `PaySplitChooseBefore` (105) | `PaySplitChoose` | 支付阶段, before the choose filter |
+| `PayCombinedAddBefore` (106) | `PayCombinedAdd` | 分摊前资金增减, before the total-add filter |
+
+`ChargePaying` stays a plain Action (its 「可」 opt-in is the whole window).
+
+### Filter kinds
+
+`TriggerKind::is_filter()` in `rules/card-sdk/src/abi.rs` is the **single
+source of truth**. Today (25 kinds):
+
+* payment amount stages -- `PaySplitChoose`, `PaySplitAdd`, `PaySplitMul`, `PaySplitAt`,
+  `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
+* buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
+* turn clock -- `TurnBonusTime`, `TurnBaseTime`
+* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v75)
+* decision gates (v77) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
+  `PlayGate`, `BuyGate`, `AbnormalGuard`, `ImmuneAll`, `Untargetable`,
+  `Redirect`
+
+`DiceRollValue` (id 102) is raised **immediately before** `DiceRollAfter` with the
+same payload: the pure roll-reshape stage. `DiceRollAfter` stays an Action event
+(dice already landed) and no longer rewrites the face.
+
+**Documented exception (user decision 2026-10-17, keep it):** an
+`On::Action` at `DiceRollAfter` **may** prompt, roll dice, and write the face
+(trigger value read back). That is the one exception to the filter-purity
+rule — the only Action that may reshape a roll. Prefer the pure
+`DiceRollValue` filter when no prompt is needed; use the Action half only
+when the rulebook puts a 「可」 offer on the reshape.
+
+`ChargePaying` (ruleset-core kind 78) is **not** a filter kind: its 「可」
+opt-in prompts and Filter bodies cannot. It stays on `On::Action`.
+
+Everything else is `On::Action` (turn/pass/draw/settle/buy/build/counter/…
+event points, including the custom ruleset-core kinds `PassRewardAffected` /
+`FireSpent` / `SkillUsed` / `HouseAdded`).
+
+**Kind/variant agreement is a ruleset-build error:** a Filter* may only list
+filter kinds and a `On::Action` only non-filter kinds
+(`On::check_kind_variant`, enforced in `rt::manifest` and the host loader).
+A kind list that mixes the two must be **split into two entries**.
+
+### Combined vs Split payment levels (v82)
+
+A payment COMMAND (e.g. 「其他玩家[分摊][支付]2000」) first runs the
+**Combined** stages on the WHOLE figure before 「[分摊]」 divides it; then
+each settled leg/share runs the **Split** stages. A single non-split payment
+runs both levels once each -- the names name the LEVEL, not whether a split
+happened.
+
+| level | kinds | when |
+|---|---|---|
+| Combined | `PayCombinedAdd` / `PayCombinedMul` / `PayCombinedCancel` (+ `PayCombinedAddBefore` prompt) | once per payment command, on the figure before any 「[分摊]」 divide |
+| Split | `PaySplitAdd` / `PaySplitMul` / `PaySplitChoose` / `PaySplitAt` (+ `PaySplitChooseBefore` prompt) | on each settled leg/share (and once for a non-split payment) |
+
+### Host application order
+
+The host raises the pipeline stages in rulebook order and folds each stage's
+return before the next raise, within a stage in placement order:
+
+* pay: `effect` declaration → `payCombinedAddBefore` (Action) → `payCombinedAdd` →
+  `payCombinedMul` → `payCombinedCancel` → `paySplitAdd` → `paySplitMul` →
+  `paySplitChooseBefore` (Action) → `paySplitChoose` → `paySplitAt` → `pay` settlement
+* buy price: `BuyAdd` → `BuyMul` → `BuySet`, each floored at 0
+* roll: `DiceRollPlan` → dice → `DiceRollValue` → `DiceRollAfter` → `diceRollResult` ([反击] reroll window).
+  `DiceRollAfter` is the one Action that may still roll and write the face
+  (documented exception above); everything else reshapes purely at `DiceRollValue`.
+
+Money rounds **up to a multiple of 10 once**, after every add/mul modifier
+has rewritten the running figure (user ruling 2026-10-15). An amount no
+modifier touched stays exactly as the base formula produced it.
+
+### v76: DiceRollPlan / AtEnd fold
+
+`On::RollPlan` is `On::FilterValue(&[HookKind::DiceRollPlan], …)` (the plan is a
+`FilterValue`). `On::AtEnd` is `On::Action(&[HookKind::AtEnd], …)`: the
+one-shot-ness lives in the existing `schedule_turn_end` list
+(`ctx::at_turn_end` / `at_next_turn_end`), not in the entry variant. Wire ids
+`OnKind::AtEnd = 4` / `OnKind::RollPlan = 5` are **retired** and must never be
+reused.
+
+**ChargePaying stays Action.** Its 「可」 opt-in prompts and Filter bodies
+cannot. Everything else that used to be a gate is a Filter.
+
+**CEL-only status gates** (`ActGate` / `PayGate` / `MoveGate` /
+`ExclusiveUse` / `PlayGate`) keep their native path: the condition is the
+whole answer, evaluated by `gate_open` / `admits_pre` with no wasm. The
+`On::FilterFlag` body only runs if the hook path asks.
+
 ## Authoring a condition (`pre`, ABI v45)
 
-A guarded entry (`On::Counteract`, `On::Hook`, `On::Play` gates) carries a
+A guarded entry (`On::Counteract`, `On::Action`, `On::Play` gates) carries a
 **condition** string immediately before the residual guard -- category →
 condition → guard → body, the three-layer model of
 docs/[GUARDS.md](GUARDS.md) §4.3. `""` = no condition. The condition is a CEL
@@ -75,11 +260,11 @@ instantiated.
 use card_sdk::{pre, On};
 
 // condition (`pre: &'static str`) before the guard
-On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null",
+On::Counteract(&[ChainKind::DiceRollValue], "actor == owner && move.roll != null",
                can_counteract, counteract),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Hook(&[HookKind::TurnEnd], pre::MINE, guard, decay),
+On::Action(&[HookKind::TurnEnd], pre::MINE, guard, decay),
 
 // or the const builder
 On::Play("", Some(cant_play), play).pre("owner.money >= 1500"),
@@ -114,9 +299,9 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
         // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
                  "", None, declare_cap),                               // 1: bookkeeping
-        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
+        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
     ],
 )
 .silent(&[1]);
@@ -162,7 +347,7 @@ pulse) shows:
 ```rust
 pub const T: CardDef = CardDef::new("skill:…", &[
     On::Play("", None, use_skill),                  // 0: Auto
-    On::Hook(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
+    On::Action(&[HookKind::TurnEnd], "", None, tick), // 1: Always (self-only)
 ]).flash(&[(1, Flash::Always)]);
 ```
 
@@ -260,7 +445,7 @@ Two write surfaces, matching the two clause shapes (ABI v32):
 `prop::NO_REWARD` is the CiRCLE-reward veto (`tile:circle`'s Pass entry reads
 and consumes the tile-scoped one); `prop::NO_BUILD` gates `why_not_build_on`;
 `prop::RENT_FACTOR` / `PAY_FACTOR` scale a settlement payment at the money
-pipeline's `payMul` stage. A rule body's own instance is the one running
+pipeline's `paySplitMul` stage. A rule body's own instance is the one running
 (`ctx::self_tile()` names its tile).
 
 **Defined default: `0`** for every key -- a card that does not declare a
@@ -513,7 +698,7 @@ that storage and add the mark as the displayed record.
 
 `ctx::send(Target, name, &Message)` is the generic cross-card channel.
 `On::Message(names, pre, guard, body)` is the answering entry -- same
-condition / residual guard / body layering as `On::Hook`. The handler reads
+condition / residual guard / body layering as `On::Action`. The handler reads
 the sender and payload from `ctx::message::*` and returns a reply value via
 `ctx::message::reply(v)`; the sender's `ctx::send` returns it (0 when no
 receiver admitted the message). Handling a message does not flash the card.
@@ -542,7 +727,7 @@ The shape:
 ```rust
 // 通用:该清CP了
 On::Play("", Some(cant_play), clear_cp),
-On::Hook(&[HookKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Action(&[HookKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -559,14 +744,14 @@ fn cp_empty_guard(player_id: i32) -> bool {
 **After** -- 该清CP了 `ctx::send`s a message to `Target::Board("mark:cp")`
 asking it to place CP units; `mark:cp`'s `On::Message` handler runs
 `ctx::place_mark`. The landing hook spends the placer's on-card CP via
-`ctx::add_counter_at`. The graveyard rule is an `On::Hook` on
+`ctx::add_counter_at`. The graveyard rule is an `On::Action` on
 `HookKind::CounterChanged` filtering `counter_is('cp')` /
 `card.counter('cp') == 0`:
 
 ```rust
 // 通用:该清CP了
 On::Play("", Some(cant_play), clear_cp),
-On::Hook(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
+On::Action(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
 
 fn clear_cp(player_id: i32) -> Asked {
     // ...
@@ -600,7 +785,7 @@ fn cp_empty_guard(player_id: i32) -> bool {
 
 // rules/tile_marks/src/cp.rs
 On::Message(&["place"], "", Some(places_cp), place_cp),
-On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
+On::Action(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
 
 fn place_cp(_owner: i32) -> Asked {
     let tile = ctx::message::tile();
@@ -639,30 +824,69 @@ CP of the placer, gain 800) lives on `mark:cp`; the spread clause (「此卡在
 格子上添加的[CP点]及其产物」) keys on `TileMark.src` provenance the same way
 it does today.
 
+### PP fans in the per-player state dict (ABI v83)
+
+The PP fan counters are two keys in the **per-player state dict**
+(`ctx::state`, `MatchPlayer.state`), owned by **no card**:
+
+| key | meaning |
+|---|---|
+| `ppFansUp` | face-up fans (`P㏄P粉丝(正)`) |
+| `ppFansDown` | face-down fans (`P㏄P粉丝(反)`) |
+
+Key constants live once in `rules/skills/skill-groups/src/fans.rs`
+(`skill_groups::fans::{UP, DOWN}`). Every grant / flip goes through
+`fans::{grant, flip_up, flip_down}`; readers use `fans::{up, down, total}`.
+CEL pre strings read them as `slot('ppFansUp')` (the existing 1-arg
+per-player state accessor). The webui lists non-zero state values in the
+player marker strip like tokens.
+
+`fans::flip_up(seat, x)` is the one flip helper for 「将X个反面…变正」. It
+raises the **ruleset-defined** Action kind `FansFlip`
+(`ruleset_core::kind`, wire 107, `trigger::value()` = the effect's intended
+X) **before** the dict writes, so a listener still sees the pre-flip
+face-down count. A cancelled / aborted raise (`Ok(false)` / `Err`) leaves
+both counters untouched. `flip_down` does not raise (clause （2） is only
+「变正」).
+
+Band clause （2） lives on `skill:Pastel㏄Palettes:与偶像一起` as
+`On::Action(&[FansFlip], "actor == owner", …)`: when `X >` pre-flip
+face-downs it adds `min(X - down, 10 - held)` 奇迹水晶 to **this card** and
+logs the amount actually added (`pastel_over`). 「最多10个」 caps the
+card's **TOTAL** crystals at 10 (user ruling 2026-10-17), not the overflow
+amount — a pile already at/over 10 (clause （4）'s uncapped tick can
+overshoot) gets nothing and is never force-reduced. 「…时」 state clause =
+event handler on the change, not an inline check at each flip site. No band
+card on the board → the raise still moves the counters; only the crystal
+grant is silently absent.
+
+That replaces the retired `FlipEffect` / `FlipAfter` pair (TriggerKind
+94/104, never reuse).
+
 ## Trigger points (`trigger::kind()`)
 
 Every point the engine raises is a pair: a `*Before` half that fires before the
 thing happens (so a counteraction can block or rewrite it) and a `*After` half that
 fires after it commits. A few legacy kinds from the original port kept their
 original names where the pairing is already implied (`settleBefore` →
-`settle` → `settleAfter`, `pay` → `paid`, `roll` → `moveRoll`).
+`settle` → `settleAfter`, `pay` → `paid`, `diceRollBefore` → `diceRollResult`).
 
 | pair | when |
 |---|---|
 | `turnStartBefore` / `turnStart` | a turn begins -- before / after the exile & stun status ticks |
-| `roll` / `moveRoll` | the main roll -- before the d20 is cast / after it, before walking (a counteraction may reroll via `set_move_roll`) |
+| `diceRollBefore` / `diceRollResult` | the main roll -- before the d20 is cast / after it (after `diceRollAfter`, 行动阶段 10 「移动掷骰后」), before walking. `diceRollResult` is a [反击] counteraction window; a counteraction may reroll via `set_move_roll` |
 | `passBefore` / `pass` / `passTile` | each tile stepped over (CiRCLE and the destination) -- before / after the player arrives. `passTile` is the [经过] step (行动阶段 12); a 「被[经过]」 clause reads the tile being entered. `passPlayer` is the end-tile [重叠] only |
 | `moveBefore` / `moveAfter` | the move head / tail (ABI v43, `SETTLE-STAGES.md` §7). `moveBefore` fires once the plan is fixed and before the first step / the teleport -- counteractions that cancel or alter the move go here. `moveAfter` is 「移动后」/「主要移动结束时」/「[移动终点]」: after `passPlayer`, before `settleBefore`, for every completed move including a 「不触发结算」 one |
 | `settleBefore` / `settle` / `settleBody` / `settleAfter` | landing -- before resolving the tile / before its effect / the settle's effect list (a field card may replace it with 「将本次结算改为…」) / after it fully resolves |
 | `mortgageBefore` / `mortgage` | mortgaging a deed -- before any guard (can block) / after it applied |
 | `pay` / `paid` | money leaving a player -- before the deduction / after. `player_id` = payer, `target` = payee, `value` = amount. `paid` is the [反击] window and opens only on a payer-side loss (再次牵起手来 / 游击演出 are 「[消耗]或[支付]」 / 「被…收取资金」). `payAfter` is the 「资金变动」 hook (rulebook 支付阶段 7, 「合并到[支付后]」) and fires on **any** money change, a print (`gain`) and a `gain_fixed` included |
-| `payTotalAdd` / `payTotalMul` / `payTotalCancel` | the **command-wide pre-split** stage (「分摊前」, `PIPELINE-AUDIT` Q2): `payTotalAdd` (fixed ±) → `payTotalMul` (×) → `payTotalCancel` (drop the whole command) shape the figure **before** any 「[分摊]」 divides it into shares. A single-pair payment's command total is its own amount, so the three run there too. `trigger::value()` / `set_pay_amount` rewrite the total; `set_cancelled` on `payTotalCancel` drops the command. The per-share counterparts are `payAdd` / `payMul` / `payChoose` / `payAt` |
+| `payCombinedAdd` / `payCombinedMul` / `payCombinedCancel` | the **command-wide pre-split** stage (「分摊前」, `PIPELINE-AUDIT` Q2): `payCombinedAdd` (fixed ±) → `payCombinedMul` (×) → `payCombinedCancel` (drop the whole command) shape the figure **before** any 「[分摊]」 divides it into shares. A single-pair payment's command total is its own amount, so the three run there too. `trigger::value()` / `set_pay_amount` rewrite the total; `set_cancelled` on `payCombinedCancel` drops the command. The per-share counterparts are `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt` |
 | `tileResolved` / `moveResolved` / `bankruptResolved` | terminal points (「结算完成时」, `PIPELINE-AUDIT` Q6). `tileResolved` fires after `settleAfter` (and after a cancelled settle); `moveResolved` after a move and any settle it asked for; `bankruptResolved` after the seat is cleared and the leftover auctions finish. `payAfter` / `buyAfter`+`bought` / `eventAfter` are already the terminals of their pipelines |
 | `bankruptBefore` / `bankrupt` | bankruptcy -- before asset cash-in / after cash-in, before removal from the game. The seat is marked **dead before `bankruptBefore`** (B3), so the dying player's own sources cannot join that window; other players' hooks still fire and may inspect the remaining state. `bankruptResolved` is the terminal |
 | `card` / `cardAfter` | playing a card from hand -- before its `play` body / after its `Dest` handling |
 | `event` / `eventAfter` | drawing an event -- before it resolves / after it is filed away |
 | `buyBefore` / `buyAfter` | buying a deed -- before any guard (fires even on a no-op attempt) / after the deed changes hands |
-| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::Gate`, runs for **every** `BuyKind` -- Force included) refuses a buy with `set_cancelled` + `set_reason`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
+| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::FilterFlag`, runs for **every** `BuyKind` -- Force included) refuses a buy with `set_cancelled` + `set_reason`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
 | `buildBefore` / `buildAfter` | building a house -- before payment / after the house commits (not on the refund path) |
 | `discardBefore` / `discardAfter` | discarding from hand -- before the card leaves / after it is in the pile |
 | `endTurnBefore` / `endTurnAfter` | ending a turn -- the player's command / any turn end, including stun & exile auto-skips |
@@ -670,8 +894,8 @@ original names where the pairing is already implied (`settleBefore` →
 | `deckBeforeGame` / `deckAtGameStart` | the two match-start points. `deckBeforeGame` = **before match start**, before the opening hands are drawn: start positions and the authoritative initial hand size (`ctx::inc_start_hand`, default 2, minimum 0) are decided here. `deckAtGameStart` = **after match start**, after the opening deal and mulligan: initial tokens/resources (fire pots 「初始N」, P✽P fans). Both dispatch to **every effect source** of the player they are raised for -- field cards including skills (per player, in field order) and the card ids in that player's piles/hands -- each source running its own hook with `t.card` naming it. There is no separate "match started" point; nothing in the pool wants "after positions are set, before the deal". |
 | `drewBefore` / `drawn` + `drew` | the per-draw points, **one raise per single card** (an N-card draw is N iterations, each payload naming one card). `drewBefore` is the *replacement* point: `t.card` is the deck's top, and a hook that replaces the draw calls `trigger::set_cancelled()` and performs its own look/pick -- whatever it adds to the hand is the replacement draw (「此次加手视为抽卡动作」) and the after points fire for it. After the card is in hand: `drawn` runs on the **drawn card itself** (C# `AfterDraw`), `drew` on the **field cards** (crystal-per-draw effects). Opening hands raise **none** of the three -- 「抽卡」 means a draw during play, and 朝同一片天空迈进's 「（开局时抽到此卡洗回）」 is a `deckAtGameStart` clause for exactly that reason. |
 
-`roll` carries `value = -1` as a "no roll yet" sentinel so roll-counteracting cards
-(which match `Roll | MoveRoll`) stay dormant before the dice are cast.
+`diceRollBefore` carries `value = -1` as a "no roll yet" sentinel so roll-counteracting cards
+(which match `DiceRollBefore | DiceRollResult`) stay dormant before the dice are cast.
 
 ## Every line cites the rule book
 
@@ -766,7 +990,7 @@ cannot ship with a raw key showing to players.
   **automatically**, in placement order per player, with no player declaration.
   They use their own `TriggerKind`s (`turnEnd`, `drewBefore`, `drew`,
   `passTile`, `payAfter`,
-  `rollAfter`, `cardPlayed`, `targeted`, `payChoose`) so a card can tell a field
+  `diceRollAfter`, `cardPlayed`, `targeted`, `paySplitChoose`) so a card can tell a field
   effect from a hand counteraction by its kind alone -- `match trigger::kind()` is the
   dispatch. Every hook kind is raised except `targeted` (it waits on the
   targeting pipeline). `drawn` runs on the card just drawn (named on
@@ -783,7 +1007,7 @@ cannot ship with a raw key showing to players.
   side store. Edge cases: a player with no band skill reads 0 and every write
   is a no-op; several band cards (PPP:Returns) target the first in placement
   order; a swapped or removed band card takes its crystals with it. The
-  empty-out clause (「此卡上不再拥有[奇迹水晶]时」) is an `On::Hook` on
+  empty-out clause (「此卡上不再拥有[奇迹水晶]时」) is an `On::Action` on
   `HookKind::CounterChanged` filtering `counter_is('crystals')`, not a check
   at each spend site.
 * A counteraction can reshape the trigger it answered: `set_move_roll` rewrites a
@@ -810,10 +1034,10 @@ cannot ship with a raw key showing to players.
   the v35 wave -- 2 of them `TODO(ABI)`, and those two are only the convention
   notes in `skill-bands` / `skill-characters`'s `lib.rs`; the card pool's
   `TODO(ABI)` list is empty). What is **landed** since the first cut: the `On::` handler
-  form (Play / CantPlay / Counteract / Hook / AtEnd / RollPlan), the field-hook kinds
-  (`PassTile`, `PayAdd/PayMul/PayChoose/PayAt/PayAfter`, `SettleAfter` /
+  form (Play / CantPlay / Counteract / Hook / AtEnd / DiceRollPlan), the field-hook kinds
+  (`PassTile`, `PaySplitAdd/PaySplitMul/PaySplitChoose/PaySplitAt/PayAfter`, `SettleAfter` /
   `SettleBody` -- `SettleBody` replaced `SettleInstead` --,
-  `TurnStart`/`TurnEnd(+Before/After)`, `Drew/Drawn`, `RollAfter`, `Reshuffled`,
+  `TurnStart`/`TurnEnd(+Before/After)`, `Drew/Drawn`, `DiceRollAfter`, `Reshuffled`,
   `Bought`, `Discarded`, `DeckBeforeGame`/`DeckAtGameStart`, `BeforeOut`,
   `Teleported`), per-card `Crystals`, pile enumeration/take
   (`cards_in`/`take_card`/`card_replayable`), the turn-end scheduler

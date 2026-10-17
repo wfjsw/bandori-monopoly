@@ -81,7 +81,7 @@ fn replay_moves(events: &[MatchEvent], who: i32, start: i32) -> i32 {
                 .collect::<Vec<_>>()
         };
         match e.r#type.as_str() {
-            "roll" | "move" => {
+            "diceRollBefore" | "move" => {
                 if let Some(prev) = last {
                     if prev.r#type == "teleport" {
                         assert_eq!(
@@ -130,7 +130,7 @@ fn assert_walks_start_at(events: &[MatchEvent], who: i32, allowed: &[i32], label
         if e.player_id != who {
             continue;
         }
-        if matches!(e.r#type.as_str(), "roll" | "move") {
+        if matches!(e.r#type.as_str(), "diceRollBefore" | "move") {
             assert!(
                 allowed.contains(&e.from),
                 "{label}: walk starts at {} but must start at one of {allowed:?}: {:?}",
@@ -146,7 +146,7 @@ fn moves_since(t: &Table, mark: i32, who: usize) -> Vec<MatchEvent> {
     t.events_since(mark)
         .into_iter()
         .filter(|e| {
-            e.player_id == who as i32 && matches!(e.r#type.as_str(), "roll" | "move" | "teleport")
+            e.player_id == who as i32 && matches!(e.r#type.as_str(), "diceRollBefore" | "move" | "teleport")
         })
         .collect()
 }
@@ -225,7 +225,7 @@ fn asukayama_drawer_walk_stream_starts_at_the_park() {
     let first_after_jump = ev
         .iter()
         .skip_while(|e| e.r#type != "teleport")
-        .find(|e| matches!(e.r#type.as_str(), "roll" | "move"));
+        .find(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"));
     let first = first_after_jump.expect("a walk after the jump");
     assert_eq!(
         first.from, park as i32,
@@ -341,8 +341,10 @@ fn my_own_problem_counteraction_stream_is_continuous() {
     assert!(played, "the [反击] window offered the card");
     assert_eq!(t.pos(0), 8, "steps away from P1: {:?}", t.recent_keys(20));
     // The main walk is announced 5 -> 9; the counteraction's 1-step push is a
-    // bare `ctx::teleport_to` (no movement event). The walk itself must start
-    // at 5 -- not at some earlier tile.
+    // nested `ctx::teleport_to` (called from a settleBefore body during the
+    // move) and stays a bare position write (move_depth guard, ABI v85) -- no
+    // movement event. The walk itself must start at 5 -- not at some earlier
+    // tile.
     let ev = moves_since(&t, mark, 0);
     assert_walks_start_at(&ev, 0, &[5], "my_own_problem roll");
     let end = replay_moves(&ev, 0, 5);
@@ -633,7 +635,7 @@ fn pass_tile_teleport_does_not_send_the_walk_back_to_the_old_tile() {
     // "move starts from the location prior to the teleport" bug.
     let walk = ev
         .iter()
-        .find(|e| matches!(e.r#type.as_str(), "roll" | "move"))
+        .find(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"))
         .expect("the 1-step walk is announced");
     assert_eq!(walk.from, 20, "the walk starts at the pre-walk tile: {:?}", ev);
     assert_eq!(walk.to, 21, "the walk ends at the step's landing: {:?}", ev);
@@ -681,7 +683,7 @@ fn pass_tile_teleport_then_card_move_walks_from_the_destination() {
     let walk_after = ev
         .iter()
         .skip_while(|e| e.id < jump.id)
-        .find(|e| matches!(e.r#type.as_str(), "roll" | "move"));
+        .find(|e| matches!(e.r#type.as_str(), "diceRollBefore" | "move"));
     let w = walk_after.expect("a walk after the jump");
     assert_eq!(
         w.from, park as i32,

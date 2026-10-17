@@ -24,13 +24,13 @@ pub const MARINA_BOX: CardDef = CardDef::new(
         // spendability are the condition now (body-top early-outs). The
         // `always` guard is deleted: it prefetched every pass of every tile
         // for a no-op.
-        On::Hook(
+        On::Action(
             &[HookKind::PassTile],
             "tile_is(tile.id, \"circle\") && actor >= 0 && money(actor) >= 500",
             None,
             on_pass,
         ),
-        On::Hook(&[HookKind::TurnStartBefore], "", None, on_turn_start),
+        On::Action(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
 

@@ -197,7 +197,7 @@ fn settle_on(t: &mut Table, tile: &str) -> Vec<String> {
     t.set_pos(0, (target + 59) % 60);
     t.dice(&[1]);
     let mark = t.mark();
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     for _ in 0..8 {
         t.settle();
         if t.prompt().is_none() {
@@ -915,7 +915,7 @@ fn g_cards_13_event_discard_reshuffles_only_when_pile_empty() {
     t.dice(&[1]);
     let mark = t.mark();
     t.observe(CLAUSES);
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     for _ in 0..16 {
         t.settle();
         if t.prompt().is_none() {
@@ -946,7 +946,7 @@ fn g_cards_13_event_discard_reshuffles_only_when_pile_empty() {
     t.dice(&[1]);
     let mark = t.mark();
     t.observe(CLAUSES);
-    t.roll(0).expect("roll");
+    t.roll(0).expect("diceRollBefore");
     for _ in 0..16 {
         t.settle();
         if t.prompt().is_none() {

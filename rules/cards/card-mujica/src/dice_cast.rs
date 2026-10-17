@@ -33,7 +33,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
         ),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
+        On::Action(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
     ],
 )
 .props(&[(card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()

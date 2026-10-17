@@ -23,6 +23,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{prop, CardPile, HookKind, TriggerKind};
+use skill_groups::fans;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -30,12 +31,12 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
     &[
         On::Play("", Some(can_buy), buy_one),
-        On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
-        On::Hook(&[HookKind::Drew], "actor == owner && card.placed", None, drew),
+        On::Action(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
+        On::Action(&[HookKind::Drew], "actor == owner && card.placed", None, drew),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
-        On::Hook(
+        On::Action(
             &[HookKind::SettleBody],
             "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner",
             None,
@@ -70,7 +71,7 @@ fn x(player_id: i32) -> i32 {
 
 /// C# `H.Fans(seat)` -- both [P✽P粉丝] faces together.
 fn fans(player_id: i32) -> i32 {
-    ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)")
+    fans::up(player_id) + fans::down(player_id)
 }
 
 /// C# `CardDreamAhead.DeckBeforeGame` -- pull the card out of the draw pile and

@@ -29,6 +29,7 @@ fn win() -> WindowCtx {
             main: true,
             dir: 1,
             tags: Vec::new(),
+            by_skill: false,
         },
         roll_source: 0,
         abnormal: false,
@@ -176,21 +177,21 @@ fn int_division_allowed() {
 
 #[test]
 fn kind_is_a_window_variable() {
-    let c = compile("kind == MoveRoll && move.roll < 6 || kind != MoveRoll && value >= 500").unwrap();
+    let c = compile("kind == DiceRollResult && move.roll < 6 || kind != DiceRollResult && value >= 500").unwrap();
     let mut w = win();
-    w.kind = rules_cond::trig::MoveRoll;
+    w.kind = rules_cond::trig::DiceRollResult;
     w.mv.roll = Some(3);
     assert!(c.eval(&w, &cand(0)));
-    w.kind = rules_cond::trig::MoveRoll + 1;
+    w.kind = rules_cond::trig::DiceRollResult + 1;
     w.value = 100;
     assert!(!c.eval(&w, &cand(0)));
 }
 
 #[test]
 fn trigger_kind_is_an_alias() {
-    let c = compile("trigger.kind == MoveRoll").unwrap();
+    let c = compile("trigger.kind == DiceRollResult").unwrap();
     let mut w = win();
-    w.kind = rules_cond::trig::MoveRoll;
+    w.kind = rules_cond::trig::DiceRollResult;
     assert!(c.eval(&w, &cand(0)));
 }
 

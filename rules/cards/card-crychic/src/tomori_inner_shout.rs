@@ -13,6 +13,7 @@
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
 
 use crate::want_human::SLOT_X;
 
@@ -22,13 +23,13 @@ pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
         // 规则书（3）: 「你位于此卡前后5格内时可在时机合适时消耗1火罐…」 -- the
         // offer exists only within 5 of this card and with a fire to spend.
         // Geometry + fire are CEL (`dist` / `card.tile` / `pos` / `fire`).
-        On::Hook(
+        On::Action(
             &[card_sdk::abi::HookKind::SettleBefore],
             "actor != owner && move.main && card.placed && charge(owner) >= 1 && dist(pos(actor), card.tile) <= 5",
             None,
             pull,
         ),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(empty_piles), shuffle_in),
+        On::Action(&[card_sdk::abi::HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(empty_piles), shuffle_in),
         On::Play("", None, tomori_inner_shout),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()

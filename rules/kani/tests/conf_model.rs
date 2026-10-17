@@ -768,6 +768,7 @@ impl CardWorld for ConfWorld {
                 } else {
                     None
                 },
+                by_skill: false,
             });
         }
         if self.trig_pay_is_rent {

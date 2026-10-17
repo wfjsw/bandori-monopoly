@@ -336,7 +336,7 @@ interrupt typing in other inputs or IME composition. The console stays above
 scene transitions and popups and is also available during boot and replays.
 
 Enter `help` for all commands. `status`, `players`, `hand`, `inspect`, `cards`
-and `tiles` inspect the current screen's match and data. `act {"act":"roll"}`
+and `tiles` inspect the current screen's match and data. `act {"act":"diceRollBefore"}`
 sends an ordinary engine command; `auto off` returns the seat from autopilot
 before manual commands. Replays allow inspection only. Up/Down recalls the
 last 100 commands; Tab completes an unambiguous command name.

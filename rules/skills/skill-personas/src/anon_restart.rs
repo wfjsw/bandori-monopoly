@@ -18,12 +18,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐」 --
         // the offer exists only for those two abnormal kinds and with two
         // pots to spend. Kind is a residual (`AbKind` match); fire is CEL.
-        On::Hook(
+        On::Action(
             &[HookKind::Abnormal],
             "actor == owner && charge(owner) >= 2",
             Some(stay_or_teleport),

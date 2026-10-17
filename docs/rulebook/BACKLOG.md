@@ -84,7 +84,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
     ```
   - no depth guard on nested settles (`MAX_SETTLE_REDIRECTS` = 8 only caps *redirects inside one* settlement, `play.rs:41/1641`; `MAX_COUNTERACT_DEPTH` = 16 only caps one counteract *tree*, `wasm_rules.rs:53/3149`; `MAX_MONEY_DEPTH` = 32 only caps the money pipeline, `play.rs:27/3048`)
   - guest callers of `ctx::card_settle_at` from hook bodies (any of these can re-enter `settle_at`):
-    `rules/cards/card-hhw/src/smile_parade.rs:122` (`On::Hook(SettleBody, settle_instead)` — direct self-nest: the body cancels the tile settle and `card_settle_at`s at 「弦卷集团」),
+    `rules/cards/card-hhw/src/smile_parade.rs:122` (`On::Action(SettleBody, settle_instead)` — direct self-nest: the body cancels the tile settle and `card_settle_at`s at 「弦卷集团」),
     `card-ras/src/{studio_storm,guerrilla}.rs`, `card-mygo/src/{taki_serious,rinne_rain}.rs`,
     `card-morfonica/src/noble_blue.rs`, `skills/skill-characters/src/{kaede_support,tomori_crychic,tukushi_try,tomori_poem}.rs`
   - related: `crates/bot-core/src/ismcts.rs:823-830` already documents "a rollout's trigger chain can nest deeply" and spawns 32 MiB stacks for that reason
@@ -143,15 +143,15 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **severity**: high
 - **suggested batch**: payment pipeline
 - **status**: **fixed** (this batch, `fix: MONEY-03 …`) — the pipeline
-  already halves the shaped total (`payAdd` runs Tomorrow's Door's surcharge,
-  `payMul` applies `plan::set_pay_factor(500)`). The test's dice math put
+  already halves the shaped total (`paySplitAdd` runs Tomorrow's Door's surcharge,
+  `paySplitMul` applies `plan::set_pay_factor(500)`). The test's dice math put
   the hill off the planned path (`hill - 1 - 5 - 2` → X = 0, Repaint never
   offered), so the discrepancy was never actually observed. Dice is now
   `(hill − 5) + X` from a close start. Un-ignored, green twice.
 - **locations**
   - `rules/tests/tests/ras.rs` `repaint_halves_a_shaped_settlement_payment` (un-ignored)
-  - `rules/cards/card-ppp/src/tomorrows_door.rs` (`pay_add` at `payAdd`)
-  - `crates/game-core/src/engine/play.rs` (`scale_settle_payment` at `payMul`)
+  - `rules/cards/card-ppp/src/tomorrows_door.rs` (`pay_add` at `paySplitAdd`)
+  - `crates/game-core/src/engine/play.rs` (`scale_settle_payment` at `paySplitMul`)
   - related tests `cross_tiles.rs:163` `t03_anon_link_plus_repaint` (Anon link arrangement, still ignored)
 - **rulebook**: ruling 2026-10-06 + sheet 「对方此次结算的支付减半」 — the *settlement payment* (post-shape) is halved.
 - **was**: test dice put the hill off-path; X = 0 so Repaint was never offered.
@@ -252,7 +252,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   `Card`/`SkillUsed` with `target == owner && actor != owner` (the counter link's
   `target` is the countered seat, `actor` the declarer). Force-move lands on
   `trigger::player_id` of the answered link (the immediate 「有玩家对你使用[反击]
-  后」); the full-turn history (ABI-04) stays a separate hole.
+  后」); the full-turn history (ABI-03) stays a separate hole.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high
@@ -383,7 +383,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **locations**
   - `rules/tests/tests/cross_move.rs` `m06_reunion_20_tile_cap` / `m06b_reunion_stops_on_passing` (un-ignored, green twice)
 - **rulebook**: 若能再次交汇 — re-roll the move dice (with a 20-tile cap / stop-on-passing shape).
-- **was**: `t.dice` after `t.roll` called `Match::world_mut` while the `moveRoll` [反击] window was a pending routine.
+- **was**: `t.dice` after `t.roll` called `Match::world_mut` while the `diceRollResult` [反击] window was a pending routine.
 - **fixed**: queue all faces before `t.roll` (snapshot replay also means mid-window loads never reach the re-roll). Card (`meet_again.rs`) and host `do_move_roll` / `set_move_roll` write-back are correct and unchanged.
 
 ## MOVE-05 — mid-turn [停留] does not stop the main move
@@ -453,7 +453,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   not one card's `cant_play`). The engine's play path consults the played
   card's own gate only. Capability: **`cantPlayHand`** (a `GateKind` /
   standing veto consulted on every hand play, the shape
-  `On::Gate(&[GateKind::CantPlayHand], …)`). Not implemented here. The s05
+  `On::FilterFlag(&[GateKind::CantPlayHand], …)`). Not implemented here. The s05
   `t.play(1, FILL)` line is a record, not an assertion.
 
 ## SETTLE-03 — 丰川祥子 (1) does not absorb stays when passing another player
@@ -611,8 +611,17 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **severity**: medium
 - **suggested batch**: counteraction windows
 - **locations**
-  - `rules/cards/card-mujica/src/cant_look_away.rs:48`
-- **rulebook**: filter on players counteracted this turn.
+  - `rules/cards/card-mujica/src/cant_look_away.rs` (`run`, `TODO(规则书)`)
+- **card**: `Mujica:无法将视线移开`
+- **rulebook clause**: 「使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算]」
+- **missing**: a per-turn counteraction history (who countered whom) the
+  engine lacks. `ctx::turn_key()` names the turn but cannot rebuild the list.
+  The body today moves only the immediate counterer
+  (`trigger::player_id()` of the answered link) — less than the book.
+- **fix needs**: SDK query for the per-turn counteraction history (declarer ×
+  countered seat) + cond vocab to filter it + append at the counter-declaration
+  loop (`crates/game-rules/src/wasm_rules.rs` ~5480, where `link.target` = the
+  countered seat and `actor`/`player_id` = the declarer) + ABI bump.
 - **current**: `ctx::turn_key()` covers half the filter; the list itself cannot be built.
 - **capability**: per-player counteraction-history list on the turn.
 
@@ -732,7 +741,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   updates the two fan counters in place. Test: `accident_blocks_pp_skill_2`.
 - **locations**
   - `rules/tests/tests/pp.rs:1078` `accident_blocks_pp_skill_2`
-- **rulebook**: 初次演出事故 blocks the PP skill; 丸山彩 (2) PayChoose hook must not prompt.
+- **rulebook**: 初次演出事故 blocks the PP skill; 丸山彩 (2) PaySplitChoose hook must not prompt.
 - **current**: `skillBlock` token is set (`tok=1`) but the guard/body `skill_blocked` check does not see it.
 - **expected**: hook-guard dispatch consults the token.
 
@@ -827,7 +836,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   - `rules/skills/skill-characters/src/kaoru_prince.rs` — Pass half is already `pre::MINE`; 被[经过] is a filtered `PassTile`
   - live pins: `hhw.rs` `kaoru_skill_1_own_walk_gains_one_pot_per_step` / `kaoru_skill_1_another_players_walk_gives_nothing` / `kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step`
 - **rulebook**: 「每次[经过]或被[经过]时」 — `Pass` half is "I pass" (`actor == owner`).
-- **fixed already**: `On::Hook(&[HookKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half. Nothing to un-ignore.
+- **fixed already**: `On::Action(&[HookKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half. Nothing to un-ignore.
 
 ## TILE-01 — Anon Tokyo link arrangements (Fire bird / Repaint / ONE OF US / linked rent)
 - **status**: **fixed** (this batch, 2026-10-13, `closeout-4-tiles`) —
@@ -854,7 +863,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   「无主或玩家拥有的」 reads as unowned **or any player-owned**: unowned →
   buy, own → build, another seat's non-mortgaged deed → the agent's
   「半价收费的[结算]（向上取整10）」. `ANY_COLOR` still widens the colour set
-  for buy/rent but is never buildable. soyo's PayMul halves again on top.
+  for buy/rent but is never buildable. soyo's PaySplitMul halves again on top.
   `t16_soyo_mixed_colors` un-ignored, green (R/2/2).
 - **kind**: rulebook divergence (resolved)
 - **class**: C
@@ -1067,7 +1076,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **status**: **fixed** (2026-10-13, `closeout-2-movement`) — the drop of the
   second+ hit sat on `HookKind::Abnormal` (the *outcome*, too late to cancel)
   with pre `actor == owner` (the causer, not the recipient). Moved to
-  `On::Gate(&[GateKind::AbnormalGuard])` with pre `target == owner`, so the
+  `On::FilterFlag(&[GateKind::AbnormalGuard])` with pre `target == owner`, so the
   declaration gate refuses the second [异常移动效果] of the turn. The test
   drive also had a **D** bug (same saki_move matcher as MOVE-11) that left
   `err.play_phase` because the force-move never landed. Un-ignored and green.
@@ -1680,7 +1689,7 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 - per-pair cancel (`ctx::cancel_designation`); `payAfter` / `gains_this_turn`; `overlay_guest_state`; `EXILE_MAIN`; ABI v35 skill-attachment / `invoke_skill` / `raise_bought` / `add_follower`; purchase surface P0–P5; settle/move stage model ABI 43; counteract ring ruling 2026-10-07.
 
 ## D-05 — MOVE-04 若能再次交汇 re-roll (test-harness sequencing; 2026-10-10)
-- Root cause: `Table::dice` → `Match::world_mut` after `t.roll` left the `moveRoll` [反击] window pending (`mod.rs:783` assert). The card body's `do_move_roll` / `set_move_roll` / `log` never touches `world_mut`; real matches never do either.
+- Root cause: `Table::dice` → `Match::world_mut` after `t.roll` left the `diceRollResult` [反击] window pending (`mod.rs:783` assert). The card body's `do_move_roll` / `set_move_roll` / `log` never touches `world_mut`; real matches never do either.
 - Secondary: routines replay from their start-time snapshot, so faces loaded after the halt never reach the re-roll. All faces must be queued before `t.roll` (same pattern as `gap_move` G08 / `hhw` 运动的天赋).
 - Fix: merge the re-roll faces into the pre-roll `t.dice` load in `m06` / `m06b`. Un-ignored, green twice. No engine/card change.
 
@@ -1706,6 +1715,28 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 - **TILE-04 学生会的检查**: the card is a SettleBefore [反击], not a free [手]. `t.play` silently no-ops (no `On::Play` entry) and never places. The body's ask_yes (allowNone stand-in) + ask_tile also had to be accepted. `t1 - 2` usize-underflowed on 购物中心 = 1. Fix: roll + `counteract`, answer yes then the tile, wrap the start. Engine forced-stop + rent-half already matched the green 香澄 shape.
 - **TILE-05 Parking Space + 要乐奈 (2)**: P0 played the [手] on P1's turn (`err.play_phase`); stay was read before `TurnEndAfter`. Fix: setup on P0's turn; assert stay after `pass`. Engine path (teleport → body-replace → stay at turn end, skillBlock) already green in `g15`.
 - Both un-ignored, green twice.
+
+## COND-01 — `slot()` conditions on FilterValue miss mid-roll state writes (possible engine defect)
+- **Symptom (2026-10-17, seen while splitting eve_unify):** a `slot('…') >= n`
+  *condition* on an `On::FilterValue` at `DiceRollPlan` did not observe a
+  per-player state write made earlier in the same roll, while `state::get`
+  inside the body saw it. The condition and the body therefore disagree about
+  the same world.
+- **Suspect:** the condition (CEL) evaluation uses a snapshot taken before
+  mid-roll writes (or a cached `slot` view), while body calls read the live
+  world. Affects any entry whose gate counts up during the roll.
+- **Likely affected:** `kanon_lost`'s `On::FilterValue(DiceRollPlan)` gate
+  `slot('skill.kanonLost.silent') >= 3` (TODO(bug) at the entry in
+  `rules/skills/skill-personas/src/kanon_lost.rs`); any future gate written the
+  same way. eve_unify worked around it (`actor == owner` + `state::get` in the
+  body).
+- **Check:** a two-roll scenario where the slot increments mid-roll and the
+  gate must flip on the same roll; compare `slot()` in the condition vs
+  `state::get` in the body.
+- **Fix needs:** make the condition see the same world the body sees (evaluate
+  conditions against the live world, or document that conditions are
+  pre-roll-snapshot and move such gates into the body); a test pinning both
+  readings agree.
 
 ---
 

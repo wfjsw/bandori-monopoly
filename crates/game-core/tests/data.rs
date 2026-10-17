@@ -96,7 +96,7 @@ fn json_defaults_match_csharp_initializers() {
         (7, "dice", -1, -1)
     );
 
-    let m: NetMessage = serde_json::from_str(r#"{"t":"act","act":"roll"}"#).unwrap();
+    let m: NetMessage = serde_json::from_str(r#"{"t":"act","act":"diceRollBefore"}"#).unwrap();
     assert_eq!(m.target, -1);
     let json = serde_json::to_value(&m).unwrap();
     assert!(
