@@ -1382,11 +1382,9 @@ impl World {
     pub fn unplace_at(&mut self, uid: i32) -> i32 {
         // One cleanup path keyed by the instance (user ruling 2026-10-10):
         // every bound counter unit -- tile mark or held token -- dies with it.
-        // Field entry comes off first so the orphan purge below sees the rule
-        // as gone when this was its last copy.
+        self.destroy_instance_units(uid);
         if let Some(i) = self.st.board_field.iter().position(|f| f.uid == uid) {
             let card = self.st.board_field.remove(i).card;
-            self.destroy_instance_units(uid);
             if let Some(id) = card.strip_prefix("event:") {
                 self.st.event_active.retain(|e| e.id != id);
             }
@@ -1395,11 +1393,9 @@ impl World {
         for (pi, s) in self.st.players.iter_mut().enumerate() {
             if let Some(i) = s.field.iter().position(|f| f.uid == uid) {
                 s.field.remove(i);
-                self.destroy_instance_units(uid);
                 return pi as i32;
             }
         }
-        self.destroy_instance_units(uid);
         -1
     }
 
@@ -1871,53 +1867,13 @@ impl World {
     /// and player-held tokens alike. Called when the instance leaves the field
     /// (discard, unplace, player leave / bankrupt, event expire). The standing
     /// the tile-mark owner pseudo card is never destroyed, so its units stay.
-    ///
-    /// Also drops name-keyed rows whose **owning rule** has no live instance
-    /// left (marker dies with its creating rule / 「if the card is not on the
-    /// board there are no markers」). Call after the leaving instance is off
-    /// the field so this was its last copy is visible.
     pub fn destroy_instance_units(&mut self, uid: i32) {
-        if uid >= 0 {
-            self.st.marks.retain(|m| m.instance != Some(uid));
-            for p in self.st.players.iter_mut() {
-                p.tokens.retain(|t| t.instance != Some(uid));
-            }
-        }
-        self.purge_orphaned_markers();
-    }
-
-    /// Drop every marker kind whose owning rule (`World::marker_owner`) has no
-    /// live instance on any player field or the board. Engine-generic: any
-    /// creating (pseudo) card. Instance-stamped rows already died with their
-    /// instance; this catches name-keyed rows whose stamp is missing or stale
-    /// (legacy saves, test injection). Neutral board marks (`owner == -1`)
-    /// stay. `marker_owner` entries themselves are kept (first-writer stamp).
-    pub fn purge_orphaned_markers(&mut self) {
-        if self.marker_owner.is_empty() {
+        if uid < 0 {
             return;
         }
-        let mut live = std::collections::BTreeSet::new();
-        for s in &self.st.players {
-            for f in &s.field {
-                live.insert(f.card.clone());
-            }
-        }
-        for f in &self.st.board_field {
-            live.insert(f.card.clone());
-        }
-        let doomed: Vec<String> = self
-            .marker_owner
-            .iter()
-            .filter(|(_, rule)| !live.contains(rule.as_str()))
-            .map(|(name, _)| name.clone())
-            .collect();
-        for name in doomed {
-            for p in self.st.players.iter_mut() {
-                p.tokens.retain(|t| t.name != name);
-            }
-            self.st.marks.retain(|m| {
-                m.owner == crate::state::BOARD_OWNER || m.kind != name
-            });
+        self.st.marks.retain(|m| m.instance != Some(uid));
+        for p in self.st.players.iter_mut() {
+            p.tokens.retain(|t| t.instance != Some(uid));
         }
     }
 
