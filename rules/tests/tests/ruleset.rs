@@ -155,6 +155,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
             remaining: 0,
             total: 0,
             roll: Some(12),
+            by_skill: false,
         }),
         ..Default::default()
     };

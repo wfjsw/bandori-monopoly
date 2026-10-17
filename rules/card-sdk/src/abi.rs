@@ -649,7 +649,16 @@ use alloc::{string::String, vec::Vec};
 ///      `value` = the effect's intended X). CEL reads the fans as
 ///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 83;
+/// v85: **`SkillTeleport` retired; `move.by_skill` source tag**. Wire id 18
+///      (`skillTeleport`) is **retired -- never reuse**. The only listener
+///      (R:必然的联系（莉莎）) rides `MoveAfter` + cond
+///      `move.kind == Teleport && move.by_skill` instead. `MoveCtx.by_skill`
+///      is a generic "shaped or started by a `skill:` rule" tag (cond
+///      `move.by_skill`); serde skip-if-false so saves stay stable.
+///      `HostRequest::Teleport` now runs through `card_teleport` /
+///      `teleport_as(resolve=false)` so it raises the move tail like every
+///      other movement path. SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 85;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1485,9 +1494,8 @@ impl TriggerKind {
     /// are [`Self::MoveBefore`] (before) and [`Self::Teleported`] (after).
     pub const Teleport: Self = Self(17);
 
-    /// Wire name `skillTeleport`: 「当你使用技能进行传送后」 (R:必然的联系（莉莎）).
-    /// Not raised by the current engine; kept for wire compatibility.
-    pub const SkillTeleport: Self = Self(18);
+    // Wire id 18 (`skillTeleport`) retired in v85 -- never reuse. Use
+    // [`Self::MoveAfter`] + cond (`move.kind == Teleport && move.by_skill`).
 
     /// Wire name `stun`: a [晕眩] layer landed. Not raised by the current engine
     /// (the landing reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`]);
@@ -1987,7 +1995,7 @@ impl TriggerKind {
             15 => "target",
             16 => "stop",
             17 => "teleport",
-            18 => "skillTeleport",
+            // 18 was "skillTeleport" -- retired in v85, never reuse.
             19 => "stun",
             20 => "stay",
             21 => "exile",
@@ -2105,7 +2113,7 @@ impl TriggerKind {
             "target" => Self(15),
             "stop" => Self(16),
             "teleport" => Self(17),
-            "skillTeleport" => Self(18),
+            // "skillTeleport" retired in v85 (id 18 never reuse).
             "stun" => Self(19),
             "stay" => Self(20),
             "exile" => Self(21),
@@ -2512,5 +2520,26 @@ impl OnKind {
             13 => Self::Build,
             _ => return None,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TriggerKind;
+
+    /// ABI v85: wire id 18 (`skillTeleport`) is retired forever. Do not reuse
+    /// the id or the spelling; listeners discriminate with `MoveAfter` + cond
+    /// (`move.kind == Teleport && move.by_skill`).
+    #[test]
+    fn skill_teleport_id_18_is_retired_forever() {
+        assert_eq!(TriggerKind(18).as_str(), "", "id 18 must stay unnamed");
+        assert_eq!(
+            TriggerKind::from_str("skillTeleport"),
+            TriggerKind::None,
+            "skillTeleport spelling is retired"
+        );
+        // Nearby live ids must keep working.
+        assert_eq!(TriggerKind::from_str("teleport"), TriggerKind::Teleport);
+        assert_eq!(TriggerKind::MoveAfter.as_str(), "moveAfter");
     }
 }

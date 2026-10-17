@@ -96,6 +96,9 @@ pub struct TriggerMove {
     /// The face the move rolled. `None` before the dice land (the `roll`
     /// window) and whenever the face is not this trigger's subject.
     pub roll: Option<i32>,
+    /// The move was shaped or started by a rule whose card id starts with
+    /// `skill:` (cond `move.by_skill`).
+    pub by_skill: bool,
 }
 
 /// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
@@ -417,6 +420,7 @@ impl Trigger {
             remaining: m.remaining,
             total: m.total,
             roll: None,
+            by_skill: m.by_skill,
         });
         self.main = m.main;
         self

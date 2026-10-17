@@ -426,6 +426,11 @@ pub struct Cx<'a> {
     /// (the built-in pass reward). Transient (not serialized) -- the walk sets it as it
     /// starts and the reward step is the only reader.
     pub(crate) move_start: i32,
+    /// How deep the move pipeline (`walk_inner` / `teleport_as`) is nested.
+    /// A `passTile` (or other) hook that calls `ctx::teleport_to` re-enters
+    /// `card_teleport`; at depth > 0 that stays a bare position write (no
+    /// second move tail) so the hook cannot recurse. Transient (not serialized).
+    pub(crate) move_depth: u32,
     /// Guest state writes overlaid on the live world for a host routine's
     /// duration (see [`Self::overlay_guest_state`]). A stack: nested drives push
     /// and pop their own. Transient (not serialized).
@@ -914,6 +919,7 @@ impl<'a> Cx<'a> {
             reentrant_hooks: Vec::new(),
             activation: Vec::new(),
             move_start: -1,
+            move_depth: 0,
             guest_overlays: Vec::new(),
             play_memo: std::cell::RefCell::new(PlayMemo::default()),
             work_stack: Vec::new(),

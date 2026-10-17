@@ -321,6 +321,7 @@ impl SnapSrc for Fixture {
                 remaining: m.remaining as i32,
                 total: m.remaining as i32,
                 roll: m.roll.map(|r| r as i32),
+                by_skill: false,
             });
         }
         tr.effects = t

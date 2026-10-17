@@ -341,8 +341,10 @@ fn my_own_problem_counteraction_stream_is_continuous() {
     assert!(played, "the [反击] window offered the card");
     assert_eq!(t.pos(0), 8, "steps away from P1: {:?}", t.recent_keys(20));
     // The main walk is announced 5 -> 9; the counteraction's 1-step push is a
-    // bare `ctx::teleport_to` (no movement event). The walk itself must start
-    // at 5 -- not at some earlier tile.
+    // nested `ctx::teleport_to` (called from a settleBefore body during the
+    // move) and stays a bare position write (move_depth guard, ABI v85) -- no
+    // movement event. The walk itself must start at 5 -- not at some earlier
+    // tile.
     let ev = moves_since(&t, mark, 0);
     assert_walks_start_at(&ev, 0, &[5], "my_own_problem roll");
     let end = replay_moves(&ev, 0, 5);

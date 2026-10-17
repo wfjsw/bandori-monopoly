@@ -38,7 +38,7 @@ pub mod trig {
     pub const Target: i64 = 15;
     pub const Stop: i64 = 16;
     pub const Teleport: i64 = 17;
-    pub const SkillTeleport: i64 = 18;
+    // 18 was SkillTeleport -- retired in ABI v85, never reuse.
     pub const Stun: i64 = 19;
     pub const Stay: i64 = 20;
     pub const Exile: i64 = 21;
@@ -118,7 +118,7 @@ pub fn constants() -> &'static [(&'static str, i64)] {
         ("Teleport", mv::Teleport),
         ("Walk", mv::Walk),
         ("TeleportTrigger", TELEPORT_TRIGGER),
-        ("SkillTeleport", trig::SkillTeleport),
+        // "SkillTeleport" retired in ABI v85 (id 18 never reuse).
         ("Stun", trig::Stun),
         ("Stay", trig::Stay),
         ("Exile", trig::Exile),

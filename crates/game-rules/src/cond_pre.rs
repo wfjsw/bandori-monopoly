@@ -145,6 +145,9 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn move_main(&self) -> bool {
         self.trigger.main
     }
+    fn move_by_skill(&self) -> bool {
+        self.trigger.mv.as_ref().map(|m| m.by_skill).unwrap_or(false)
+    }
     fn move_dir(&self) -> i64 {
         self.trigger
             .mv
@@ -1294,6 +1297,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             .as_ref()
             .map(|m| m.tags.iter().map(|(k, v)| (k.clone(), *v as i64)).collect())
             .unwrap_or_default(),
+        by_skill: t.mv.as_ref().map(|m| m.by_skill).unwrap_or(false),
     };
 
     let tile = TileSnap {
