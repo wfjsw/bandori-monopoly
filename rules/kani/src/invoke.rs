@@ -728,8 +728,6 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
     const PASS_TILE: (u8, u64, u64) = tag_key_const("PassTile");
     const PASS_PLAYER: (u8, u64, u64) = tag_key_const("PassPlayer");
     const EXILE: (u8, u64, u64) = tag_key_const("Exile");
-    const STAY: (u8, u64, u64) = tag_key_const("Stay");
-    const STUN: (u8, u64, u64) = tag_key_const("Stun");
     match tag_key(name) {
         PAY_ADD => Some(H::PaySplitAdd),
         PAY_MUL => Some(H::PaySplitMul),
@@ -765,8 +763,6 @@ fn hook_kind_parse(name: &str) -> Option<card_sdk::abi::HookKind> {
         PASS_TILE => Some(H::PassTile),
         PASS_PLAYER => Some(H::PassPlayer),
         EXILE => Some(H::Exile),
-        STAY => Some(H::Stay),
-        STUN => Some(H::Stun),
         _ => None,
     }
 }
@@ -808,8 +804,6 @@ fn hook_kind_name(k: card_sdk::abi::HookKind) -> &'static str {
         H::PassTile => "PassTile",
         H::PassPlayer => "PassPlayer",
         H::Exile => "Exile",
-        H::Stay => "Stay",
-        H::Stun => "Stun",
         _ => "",
     }
 }

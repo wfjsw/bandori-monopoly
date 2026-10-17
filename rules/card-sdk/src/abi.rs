@@ -649,7 +649,15 @@ use alloc::{string::String, vec::Vec};
 ///      `value` = the effect's intended X). CEL reads the fans as
 ///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 83;
+/// v84: **Dead trigger kinds retired**. Ids 16 (`stop`), 17 (`teleport`),
+///      19 (`stun`), 20 (`stay`), 22 (`forced`) are **retired -- never
+///      reuse**. None of them is raised by the engine and none has a live
+///      listener. Not retired (still live): `skillTeleport` (18), `exile`
+///      (21), `teleported` (66), `MoveKind::Teleport`, and the `AbKind`
+///      status vocabulary. The CEL names `Stop` / `TeleportTrigger` /
+///      `Stun` / `Stay` / `Forced` leave the kind table (`Teleport` stays
+///      as `MoveKind`). SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 84;
 
 /// How an entry presents itself in the log (`ManifestOn::presentation`, v54).
 #[repr(i32)]
@@ -1475,28 +1483,19 @@ impl TriggerKind {
     /// [`GateKind::Untargetable`] / [`GateKind::Redirect`].
     pub const Target: Self = Self(15);
 
-    /// Wire name `stop`: a player was forced to stop (「强制停下」,
-    /// [`AbKind::Stop`]). Not raised by the current engine; kept for wire
-    /// compatibility.
-    pub const Stop: Self = Self(16);
+    // Wire id 16 (`stop`) retired in v84 -- never reuse. Was 「强制停下」.
 
-    /// Wire name `teleport`: a teleport was performed. Not raised by the current
-    /// engine; kept for wire compatibility. The teleport-specific points today
-    /// are [`Self::MoveBefore`] (before) and [`Self::Teleported`] (after).
-    pub const Teleport: Self = Self(17);
+    // Wire id 17 (`teleport`) retired in v84 -- never reuse. The teleport
+    // points today are [`Self::MoveBefore`] (before) and [`Self::Teleported`].
 
     /// Wire name `skillTeleport`: 「当你使用技能进行传送后」 (R:必然的联系（莉莎）).
     /// Not raised by the current engine; kept for wire compatibility.
     pub const SkillTeleport: Self = Self(18);
 
-    /// Wire name `stun`: a [晕眩] layer landed. Not raised by the current engine
-    /// (the landing reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`]);
-    /// kept for wire compatibility.
-    pub const Stun: Self = Self(19);
+    // Wire id 19 (`stun`) retired in v84 -- never reuse. A [晕眩] landing
+    // reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`].
 
-    /// Wire name `stay`: a [停留] layer landed. Not raised by the current engine
-    /// (see [`Self::Stun`]); kept for wire compatibility.
-    pub const Stay: Self = Self(20);
+    // Wire id 20 (`stay`) retired in v84 -- never reuse.
 
     /// Wire name `exile`: 「任意玩家获得[除外]…时」 -- an [除外] layer was granted
     /// by any path (火种燃尽之后会怎么样呢？ listens here). Raised from the grant
@@ -1504,9 +1503,7 @@ impl TriggerKind {
     /// itself.
     pub const Exile: Self = Self(21);
 
-    /// Wire name `forced`: a [强制移动] landed. Not raised by the current engine
-    /// (see [`Self::Stun`]); kept for wire compatibility.
-    pub const Forced: Self = Self(22);
+    // Wire id 22 (`forced`) retired in v84 -- never reuse.
 
     /// Wire name `state`: 「当有其他玩家切换状态时」 -- a player toggled skill
     /// state (Mujica:欢迎来到ave mujica的世界). Not raised by the current
@@ -1985,13 +1982,13 @@ impl TriggerKind {
             13 => "event",
             14 => "abnormal",
             15 => "target",
-            16 => "stop",
-            17 => "teleport",
+            // 16 was "stop" -- retired in v84, never reuse.
+            // 17 was "teleport" -- retired in v84, never reuse.
             18 => "skillTeleport",
-            19 => "stun",
-            20 => "stay",
+            // 19 was "stun" -- retired in v84, never reuse.
+            // 20 was "stay" -- retired in v84, never reuse.
             21 => "exile",
-            22 => "forced",
+            // 22 was "forced" -- retired in v84, never reuse.
             23 => "state",
             24 => "counteracted",
             25 => "drawOut",
@@ -2103,13 +2100,13 @@ impl TriggerKind {
             "event" => Self(13),
             "abnormal" => Self(14),
             "target" => Self(15),
-            "stop" => Self(16),
-            "teleport" => Self(17),
+            // "stop" retired in v84 (id 16 never reuse).
+            // "teleport" retired in v84 (id 17 never reuse).
             "skillTeleport" => Self(18),
-            "stun" => Self(19),
-            "stay" => Self(20),
+            // "stun" retired in v84 (id 19 never reuse).
+            // "stay" retired in v84 (id 20 never reuse).
             "exile" => Self(21),
-            "forced" => Self(22),
+            // "forced" retired in v84 (id 22 never reuse).
             "state" => Self(23),
             "counteracted" => Self(24),
             "drawOut" => Self(25),
