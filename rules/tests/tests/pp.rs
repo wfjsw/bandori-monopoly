@@ -837,6 +837,9 @@ fn aya_skill_2_discount_and_flip() {
 }
 
 /// 规则书: 若宫伊芙（2）「投掷前可选择将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」
+/// Two-part timing (DiceRollBefore Action + DiceRollPlan FilterValue): the ask
+/// fires before any die lands, the fan flips happen at ask time, and Yd4 is
+/// part of the same roll's face (not a post-hoc patch).
 #[test]
 fn eve_skill_2_adds_yd4() {
     let mut t = Table::vanilla(2);
@@ -845,19 +848,99 @@ fn eve_skill_2_adds_yd4() {
     set_fans(&mut t, 0, 3, 0);
     t.begin_turn(0);
     t.dice(&[2, 1, 1, 1]);
+    let mark = t.mark();
     t.roll(0).unwrap();
+    // The ask is at DiceRollBefore: prompt open, no die consumed, fans intact.
+    {
+        let p = t.expect_prompt();
+        assert!(
+            p.title.key().contains("eve")
+                || p.options.iter().any(|o| format!("{o:?}").contains("intOption")),
+            "first prompt is the eve ask: {}",
+            t.dump_prompt()
+        );
+        assert_eq!(
+            t.dice_left(),
+            4,
+            "DiceRollBefore: no die has landed yet: {}",
+            t.dump_prompt()
+        );
+        assert_eq!(fans(&t, 0), (3, 0), "fans flip only after the Y answer");
+    }
+    t.answer(0, 2).unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
-        if p.title.key().contains("eve") || p.options.iter().any(|o| format!("{o:?}").contains("intOption")) {
+        if p.title.key().contains("eve")
+            || p.options.iter().any(|o| format!("{o:?}").contains("intOption"))
+        {
             let _ = t.answer(0, 2);
         } else {
             t.decline();
         }
     }
-    assert_eq!(t.pos(0), 4, "roll 2 + 2d4(1+1)");
     assert_eq!(fans(&t, 0), (1, 2), "Y=2 flipped");
+    assert_eq!(t.pos(0), 4, "roll 2 + 2d4(1+1) -- Yd4 is part of the face");
+    assert_eq!(t.state(0, "evePendingY"), 0, "stash cleared after the roll");
+    // Ask/log precede the roll line in the trace.
+    let keys = t.keys_since(mark);
+    let eve = keys.iter().position(|k| k.contains("eve_unify"));
+    let rolled = keys
+        .iter()
+        .position(|k| k.contains("log.roll") || k.contains("log.dice") || k.contains("roll"));
+    if let (Some(e), Some(r)) = (eve, rolled) {
+        assert!(e < r, "eve ask/log before the roll line: {keys:?}");
+    }
 }
 
+/// 规则书: 「为此次投掷结果增加Yd4」 is this roll only -- the next roll must
+/// not inherit a stale +Yd4 after the player declines.
+#[test]
+fn eve_skill_2_no_stale_yd4_on_next_roll() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "若宫伊芙");
+    t.place_raw(0, "skill:若宫伊芙:天下统一");
+    t.begin_turn(0);
+    // Roll 1: Y = 2 -> +2d4.
+    set_fans(&mut t, 0, 3, 0);
+    t.dice(&[2, 1, 1]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("eve")
+            || p.options.iter().any(|o| format!("{o:?}").contains("intOption"))
+        {
+            let _ = t.answer(0, 2);
+        } else {
+            t.decline();
+        }
+    }
+    drain(&mut t);
+    assert_eq!(t.pos(0), 4, "roll 2 + 2d4(1+1)");
+    // Roll 2 (next turn): decline (Y = 0). Face only -- the 9, 9 are decoys
+    // that a stale +2d4 would consume.
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.begin_turn(0);
+    t.set_pos(0, 0);
+    set_fans(&mut t, 0, 1, 2);
+    t.dice(&[5, 9, 9]);
+    t.roll(0).unwrap();
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.title.key().contains("eve")
+            || p.options.iter().any(|o| format!("{o:?}").contains("intOption"))
+        {
+            // Y = 0: decline.
+            let _ = t.answer(0, 0);
+        } else {
+            t.decline();
+        }
+    }
+    drain(&mut t);
+    assert_eq!(t.pos(0), 5, "declined Y: face 5 only, no stale +Yd4");
+    assert_eq!(t.dice_left(), 2, "stale Yd4 must not consume the decoys");
+    assert_eq!(fans(&t, 0), (1, 2), "Y=0 flips nothing");
+}
 /// 规则书: 白鹭千圣（2）「收取资金时…增加Y×100」
 #[test]
 fn chiasa_skill_2_income_boost() {
