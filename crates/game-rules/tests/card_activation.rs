@@ -217,9 +217,9 @@ fn negated_play_shows_negated() {
 }
 
 /// A hook whose CEL `pre` rejects is not an activation at all: the body never
-/// runs and nothing about the card reaches the UI. `TEST:preHook`'s `PayAdd`
+/// runs and nothing about the card reaches the UI. `TEST:preHook`'s `PaySplitAdd`
 /// entry carries `pre: "false"`; `TEST:selfCharge` moving money raises the
-/// `PayAdd` the hook declares.
+/// `PaySplitAdd` the hook declares.
 #[test]
 fn hook_whose_cel_pre_rejects_stays_silent() {
     let mut t = Table::vanilla(2);
@@ -230,7 +230,7 @@ fn hook_whose_cel_pre_rejects_stays_silent() {
     assert!(t.on_field(0, "TEST:preHook"), "{}", t.dump_prompt());
 
     let mark = t.mark();
-    // Money moves -> `PayAdd` -> every field card's `PayAdd` hook is asked.
+    // Money moves -> `PaySplitAdd` -> every field card's `PaySplitAdd` hook is asked.
     t.give(0, &["TEST:selfCharge"]);
     t.play(0, "TEST:selfCharge").unwrap();
     drain(&mut t);

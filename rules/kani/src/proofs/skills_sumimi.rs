@@ -21,7 +21,7 @@ use crate::world::{self, Effect, MAX_PLAYERS};
 // isolated paths — if isolation breaks the proof FAILS loudly).
 // ---------------------------------------------------------------------------
 
-/// `skill:Sumimi:人气偶像组合` `bend` (PayMul) — crystal read + pay rewrite.
+/// `skill:Sumimi:人气偶像组合` `bend` (PaySplitMul) — crystal read + pay rewrite.
 crate::host_subset!(sumimi_bend_dispatch {
     counter_self => arm_counter_self,
     trig_target => arm_trig_target,
@@ -73,14 +73,14 @@ fn crystals_key() -> intern::NameId {
 // ===========================================================================
 // C-SUMIMI-band-02 -- rent bonus +100 per crystal
 // 「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金。」
-// Entry: `On::Filter(PayMul)` on `skill:Sumimi:人气偶像组合`.
+// Entry: `On::Filter(PaySplitMul)` on `skill:Sumimi:人气偶像组合`.
 // Convention: `crystals()` is the running instance's counter (host: keyed on
 // `trig_player`); the body admits when `trigger.target == owner` (money
 // flowing to this player — 「向其他人收费」).
 // Seat-symmetric (the owner is the collector).
 // ===========================================================================
 
-/// In-place 2-seat world for the PayMul rewrite. Crystals live on the
+/// In-place 2-seat world for the PaySplitMul rewrite. Crystals live on the
 /// running instance (`self_crystals`).
 fn band_02_world(owner: i32, crystals: i32, pre_amount: i32) {
     debug_assert!(owner == 0 || owner == 1);

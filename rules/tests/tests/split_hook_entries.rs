@@ -33,7 +33,7 @@ fn split_cards_declare_filter_and_action_halves() {
     };
 
     // no_expectation (ABI v79): Play / FilterValue(DiceRollValue) /
-    //   Filter(PayAdd) / Action(Reshuffled). The roll shave + 0-step
+    //   Filter(PaySplitAdd) / Action(Reshuffled). The roll shave + 0-step
     //   no-settle clamp are one FilterValue (option C).
     let s = shape("PP:不要背负期待");
     assert_eq!(s.len(), 4, "no_expectation entries: {s:?}");
@@ -41,12 +41,12 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s[1].0, kind("Filter"));
     assert_eq!(s[1].1, vec![102], "DiceRollValue");
     assert_eq!(s[2].0, kind("Filter"));
-    assert_eq!(s[2].1, vec![55], "PayAdd");
+    assert_eq!(s[2].1, vec![55], "PaySplitAdd");
     assert_eq!(s[3].0, kind("Action"));
     assert_eq!(s[3].1, vec![62], "Reshuffled");
 
     // j11 (ABI v78): Play / Action(TurnEnd, Targeted) /
-    //   Action(PayChooseAsk) / FilterFlag(PayChoose) / Action(CounterChanged)
+    //   Action(PaySplitChooseBefore) / FilterFlag(PaySplitChoose) / Action(CounterChanged)
     //   -- the old combined Effect arm moved to the interactive pre-stage.
     let s = shape("Mujica:#J11");
     assert_eq!(s.len(), 5, "j11 entries: {s:?}");
@@ -54,18 +54,18 @@ fn split_cards_declare_filter_and_action_halves() {
     assert_eq!(s[1].0, kind("Action"));
     assert_eq!(s[1].1, vec![45, 51], "TurnEnd, Targeted");
     assert_eq!(s[2].0, kind("Action"));
-    assert_eq!(s[2].1, vec![105], "PayChooseAsk");
+    assert_eq!(s[2].1, vec![105], "PaySplitChooseBefore");
     assert_eq!(s[3].0, kind("Filter"));
-    assert_eq!(s[3].1, vec![52], "PayChoose");
+    assert_eq!(s[3].1, vec![52], "PaySplitChoose");
     assert_eq!(s[4].0, kind("Action"));
     assert_eq!(s[4].1, vec![76], "CounterChanged");
 
-    // fever: Play / Filter(PayAdd) / Action(TurnStart)
+    // fever: Play / Filter(PaySplitAdd) / Action(TurnStart)
     let s = shape("通用:[衍生]FEVER!");
     assert_eq!(s.len(), 3, "fever entries: {s:?}");
     assert_eq!(s[0].0, kind("Play"));
     assert_eq!(s[1].0, kind("Filter"));
-    assert_eq!(s[1].1, vec![55], "PayAdd");
+    assert_eq!(s[1].1, vec![55], "PaySplitAdd");
     assert_eq!(s[2].0, kind("Action"));
     assert_eq!(s[2].1, vec![3], "TurnStart");
 }
@@ -88,7 +88,7 @@ fn no_expectation_silent_index_follows_the_split() {
     assert_eq!(
         info.on[2].presentation,
         card_sdk::abi::Presentation::Visible,
-        "entry 2 (Filter PayAdd) announces"
+        "entry 2 (Filter PaySplitAdd) announces"
     );
     assert_eq!(
         info.on[3].presentation,
@@ -97,7 +97,7 @@ fn no_expectation_silent_index_follows_the_split() {
     );
 }
 
-/// FEVER! Filter half: the PayAdd boost still rewrites the amount
+/// FEVER! Filter half: the PaySplitAdd boost still rewrites the amount
 /// (master `fever_payment_boost` outcome).
 #[test]
 fn fever_filter_half_pay_add_still_boosts() {
@@ -125,7 +125,7 @@ fn fever_filter_half_pay_add_still_boosts() {
     assert_eq!(paid, 60 + x, "Filter half applied exactly once (rent 60 + X {x}, n {n})");
 }
 
-/// no_expectation both halves: the roll shave (Filter DiceRollValue) and PayAdd
+/// no_expectation both halves: the roll shave (Filter DiceRollValue) and PaySplitAdd
 /// bend (Filter) still land. Outcome matches master
 /// `no_expect_roll_minus_2` + the pay-arm of the old shared `hook`.
 #[test]
@@ -147,7 +147,7 @@ fn no_expectation_both_halves_fire() {
 }
 
 /// j11 both halves: TurnEnd decay (Action) burns a crystal. Sequence matches
-/// master `mujica::j11_decays_one_crystal_per_turn` (the Filter PayChoose half
+/// master `mujica::j11_decays_one_crystal_per_turn` (the Filter PaySplitChoose half
 /// is covered by that suite's pay-choose probes and the manifest shape test).
 #[test]
 fn j11_action_half_decays_on_turn_end() {

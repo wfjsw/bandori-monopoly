@@ -28,7 +28,7 @@ crate::host_subset!(ave_turn_start_dispatch {
     log | effect => arm_log,
 });
 
-/// `skill:Ave Mujica:假面之下的真实` `bend` (PayMul) — rewrite the amount.
+/// `skill:Ave Mujica:假面之下的真实` `bend` (PaySplitMul) — rewrite the amount.
 crate::host_subset!(ave_bend_dispatch {
     trig_value => arm_trig_value,
     trig_player => arm_trig_player,
@@ -162,7 +162,7 @@ pub fn band_user1_starts_in_state1() {
 // C-MUJICA-团技能-01
 // 「你在状态2时从[收取]与[支付]的资金改为1.5倍
 //  （只对自己结算，对应的其他玩家收支不变）」
-// The PayMul hook body rewrites the trigger amount. The one-sided
+// The PaySplitMul hook body rewrites the trigger amount. The one-sided
 // application (「只对自己结算」) is a pay-pipeline property: under the
 // current host `pay_to` moves a single amount both ways, so the full
 // one-sided transfer is PROTOCOL-LEVEL / the known FAILS finding. Here we
@@ -219,7 +219,7 @@ fn bend_world(user: i32) -> i32 {
 }
 
 /// Hook body: `bend` rewrites `pay_amount` to 1.5x when the user is a side.
-/// Entry 2 = On::Filter(PayMul) `bend`. Direct body call.
+/// Entry 2 = On::Filter(PaySplitMul) `bend`. Direct body call.
 fn band_bend_iff_at(user: i32) {
     debug_assert!(user == 0 || user == 1);
     let pre_amount = bend_world(user);
@@ -236,7 +236,7 @@ fn band_bend_iff_at(user: i32) {
         let fold = (pre_amount * 3 + 1) / 2;
         crate::kassert!(
             post.pay_amount == fold,
-            "C-MUJICA-团技能-01: PayMul rewrites the amount to the 1.5x fold"
+            "C-MUJICA-团技能-01: PaySplitMul rewrites the amount to the 1.5x fold"
         );
         let final_amt = if fold <= 0 {
             fold

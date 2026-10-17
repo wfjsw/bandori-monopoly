@@ -35,11 +35,11 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // only with a crystal on the card and a positive amount to cut.
         // Fully expressible (actor / placed / value / card.counter) -- G4.
         //
-        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position:
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive -1000 rewrite sits immediately before the pure
-        // `PayChoose` filter stage.
+        // `PaySplitChoose` filter stage.
         On::Action(
-            &[HookKind::PayChooseAsk],
+            &[HookKind::PaySplitChooseBefore],
             "actor == owner && card.placed && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,
@@ -98,7 +98,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书[持续]（1）: 「[拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次
-/// [消耗]或[支付]金额减少1000」 -- C# `CardCrimsonSoul.PayChoose` / `Use`:
+/// [消耗]或[支付]金额减少1000」 -- C# `CardCrimsonSoul.PaySplitChoose` / `Use`:
 /// the owner is about to pay -> may spend 1 crystal for −1,000 (0 floor).
 /// Applicability is the entry's condition.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {

@@ -58,7 +58,7 @@ pub const MAX_SETTLE_DEPTH: u32 = 64;
 /// Money rounding (user ruling 2026-10-15, OPEN-取整 family): round **up** to a
 /// multiple of 10. Applied once, after every add/mul modifier of a payment has
 /// been processed (`money_inner`), and to a pre-split total that some
-/// `payTotal*` hook rewrote (`pay_total`). Non-positive figures are returned
+/// `payCombined*` hook rewrote (`pay_total`). Non-positive figures are returned
 /// unchanged -- a negative is reversed into a child payment and must not be
 /// CeilTo'd toward +inf first.
 fn ceil10_money(x: i32) -> i32 {
@@ -236,8 +236,8 @@ pub struct Pay {
     /// is board-driven (rent, buy, build). Stamped onto the `pay` / `paid`
     /// triggers so 「被…效果影响」 can tell the two apart.
     pub by_card: Option<i32>,
-    /// Run the command-wide **pre-split** stage (`payTotalAdd` → `payTotalMul`
-    /// → `payTotalCancel`) on this payment's amount. `true` for every ordinary
+    /// Run the command-wide **pre-split** stage (`payCombinedAdd` → `payCombinedMul`
+    /// → `payCombinedCancel`) on this payment's amount. `true` for every ordinary
     /// payment: a single-pair payment's command total *is* its amount. A
     /// 「[分摊]」 leg sets it `false` -- the card body has already shaped the
     /// command total through [`Cx::pay_total`] before dividing it into shares
@@ -2120,7 +2120,7 @@ impl Cx<'_> {
             );
         }
         // The 「支付」 / 「地租」 scalars no longer scale the rent table here:
-        // they ride the money pipeline's `payMul` stage (`scale_settle_payment`),
+        // they ride the money pipeline's `paySplitMul` stage (`scale_settle_payment`),
         // so a rule that halves a settlement payment covers the payment **as
         // card effects have shaped it** -- a rent-region expansion, a forced
         // stop-and-pay -- and not just this table's number. 规则书
@@ -2153,7 +2153,7 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// The 「支付减半」 / 「地租」 scale, applied at the money pipeline's `payMul`
+    /// The 「支付减半」 / 「地租」 scale, applied at the money pipeline's `paySplitMul`
     /// stage (`docs/TILES.md`; 「支付减半」 ruling 2026-10-06).
     ///
     /// Two homes, both read here rather than in `pay_rent`:
@@ -2916,7 +2916,7 @@ impl Cx<'_> {
     ///
     /// This is the **one pipeline** every money operation runs through. It
     /// stages the adjustment points -- pre-split `effect` (the counteraction window)
-    /// then `payAdd` / `payMul` / `payChoose` / `payAt`, then split into
+    /// then `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`, then split into
     /// concrete payer/payee entries, then post-split `pay` / `payAfter` /
     /// `paid` -- and runs before/after money events on every entry.
     ///
@@ -2972,7 +2972,7 @@ impl Cx<'_> {
             // (rulebook 49: 「无法收付款」 -- stunned cannot *receive* either).
             // Exile is **not** blocked here: 「exile期间本应获得的格子收入由
             // 此前指定的那名玩家获得」 (MyGO:无路矢) reroutes the payee from a
-            // `payAdd` hook, which runs below. The unredirected exile payee is
+            // `paySplitAdd` hook, which runs below. The unredirected exile payee is
             // refused at transfer time instead (see the final-payee gate).
             let stunned_payee = p.to.filter(|&t| self.w.st.players[t].stunned());
             if let Some(x) = p.from.filter(|&f| !self.can_pay(f)).or(stunned_payee) {
@@ -2988,7 +2988,7 @@ impl Cx<'_> {
                 return Ok(Paid::default());
             }
         }
-        // The amount runs PayAdd -> PayMul -> PayChoose -> PayAt -> the `pay`
+        // The amount runs PaySplitAdd -> PaySplitMul -> PaySplitChoose -> PaySplitAt -> the `pay`
         // counteraction window *before* any money moves or funds are raised.
         // `player_id` is the payer and `target` the payee (-1 = the bank); any
         // of them may rewrite the amount (`set_pay_amount`).
@@ -3064,7 +3064,7 @@ impl Cx<'_> {
             to = (t.target >= 0).then_some(t.target as usize);
         }
         // ---- pre-split (command-wide) ------------------------------------
-        // `PIPELINE-AUDIT` Q2: `payTotalAdd` → `payTotalMul` → `payTotalCancel`
+        // `PIPELINE-AUDIT` Q2: `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel`
         // shape the **command total** -- the figure a 「[分摊]」 will divide --
         // before any per-share stage touches a leg. A single-pair payment's
         // command total is its own amount, so the same three stages run here.
@@ -3073,7 +3073,7 @@ impl Cx<'_> {
         //
         // They run *after* the `effect` declaration, so a counter still hears
         // the **declared** amount (`docs/ENGINE.md` 「Effect vs settlement」) --
-        // the same position the per-share `payAdd` occupies, one level up.
+        // the same position the per-share `paySplitAdd` occupies, one level up.
         if p.total_stage {
             let mut to_slot = to;
             let before_total = amount;
@@ -3086,7 +3086,7 @@ impl Cx<'_> {
                 rent,
                 p.tile,
             )? {
-                // `payTotalCancel` dropped the whole command.
+                // `payCombinedCancel` dropped the whole command.
                 None => {
                     raise!(
                         self,
@@ -3116,16 +3116,16 @@ impl Cx<'_> {
         // **not** stop at zero. A figure driven negative is still in flight;
         // later stages may bring it back, and only the post-chain sign decides
         // between settle / nothing / reverse.
-        for kind in ["payAdd", "payMul", "payChoose", "payAt"] {
+        for kind in ["paySplitAdd", "paySplitMul", "paySplitChoose", "paySplitAt"] {
             // v78: interactive pre-stage. A prompt that used to live inside the
-            // PayChoose Filter rides `payChooseAsk` (an Action) so the prompt is
+            // PaySplitChoose Filter rides `paySplitChooseBefore` (an Action) so the prompt is
             // at the rulebook position and the pure Filter still applies here.
             // The ask's `set_pay_amount` / `set_pay_target` fold here just like
             // any other stage's rewrite.
-            if kind == "payChoose" {
+            if kind == "paySplitChoose" {
                 let ask = raise!(
                     self,
-                    "payChooseAsk",
+                    "paySplitChooseBefore",
                     side,
                     player_id = payer,
                     target = to.map_or(-1, |t| t as i32),
@@ -3165,11 +3165,11 @@ impl Cx<'_> {
             if t.target >= 0 {
                 to = Some(t.target as usize);
             }
-            // The 「支付」 / 「地租」 scalars ride the `payMul` stage
-            // (`docs/TILES.md`): applied *after* `payAdd` and the `effect`
+            // The 「支付」 / 「地租」 scalars ride the `paySplitMul` stage
+            // (`docs/TILES.md`): applied *after* `paySplitAdd` and the `effect`
             // window, so the scale covers the payment as card effects have
             // shaped it and not only `pay_rent`'s table number.
-            if kind == "payMul" {
+            if kind == "paySplitMul" {
                 let before_scale = amount;
                 amount = self.scale_settle_payment(amount, p.kind, rent, p.tile);
                 if amount != before_scale {
@@ -3401,9 +3401,9 @@ impl Cx<'_> {
     }
 
     /// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2):
-    /// `payTotalAdd` → `payTotalMul` → `payTotalCancel`, composing, on `total`.
+    /// `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel`, composing, on `total`.
     ///
-    /// Returns the shaped total, or `None` when a `payTotalCancel` hook dropped
+    /// Returns the shaped total, or `None` when a `payCombinedCancel` hook dropped
     /// the whole command. This is the 「分摊前」 figure: a 「[分摊]pay2000」
     /// divides *this*, not the raw 2000, into shares (规则书 支付阶段 2/4/5
     /// applied to the command rather than to one pair). A pre-split hook may
@@ -3423,14 +3423,14 @@ impl Cx<'_> {
         tile: Option<usize>,
     ) -> Flow<Option<i32>> {
         let mut amount = total;
-        for kind in ["payTotalAdd", "payTotalMul", "payTotalCancel"] {
-            // v78: interactive pre-stage (see the payChooseAsk note above).
+        for kind in ["payCombinedAdd", "payCombinedMul", "payCombinedCancel"] {
+            // v78: interactive pre-stage (see the paySplitChooseBefore note above).
             // The ask's `set_pay_amount` / `set_pay_target` fold here just like
             // any other stage's rewrite.
-            if kind == "payTotalAdd" {
+            if kind == "payCombinedAdd" {
                 let ask = raise!(
                     self,
-                    "payTotalAddAsk",
+                    "payCombinedAddBefore",
                     side,
                     player_id = payer,
                     target = to.map_or(-1, |t| t as i32),
@@ -3455,7 +3455,7 @@ impl Cx<'_> {
                 @p TriggerPay::new(rent),
                 tile = tile.map_or(-1, |t| t as i32)
             )?;
-            if kind == "payTotalCancel" && t.is_cancelled() {
+            if kind == "payCombinedCancel" && t.is_cancelled() {
                 return Ok(None);
             }
             amount = t.value;

@@ -1306,7 +1306,7 @@ pub fn chisato_mask_01_total_iff() {
 // so the harness was cfg'd out and `cargo kani` "Failed to match" it).
 
 // ===========================================================================
-// C-PP-shine-again-01 body (PayChoose) formula — both legs.
+// C-PP-shine-again-01 body (PaySplitChoose) formula — both legs.
 // Isolation: owner is short on cash and owns a buyable deed of some group.
 // The [反击] window itself is PROTOCOL-LEVEL; this pins the body once the
 // hook fires.
@@ -1343,7 +1343,7 @@ pub fn shine_again_01_rescue_iff() {
     // Host model of `is_buyable` / `tile_price` / `tile_group` is partial;
     // the body's rescue is: +1 positive fan and gain price/5.
     let pre_fans = world::with_world(|ww| fans_pos_of(me as usize));
-    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PayChoose", me));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PaySplitChoose", me));
     let post_fans = world::with_world(|ww| fans_pos_of(me as usize));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];

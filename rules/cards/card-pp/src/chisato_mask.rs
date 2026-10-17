@@ -89,8 +89,8 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
 
 /// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
 ///
-/// `PIPELINE-AUDIT` Q2: the command-wide **pre-split** stage (`payTotalAdd` /
-/// `payTotalMul` / `payTotalCancel`) shapes `total` before it divides -- the
+/// `PIPELINE-AUDIT` Q2: the command-wide **pre-split** stage (`payCombinedAdd` /
+/// `payCombinedMul` / `payCombinedCancel`) shapes `total` before it divides -- the
 /// 「分摊前」 figure of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)). Each share
 /// then runs the per-share pipeline through `ctx::pay_leg`.
 fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {

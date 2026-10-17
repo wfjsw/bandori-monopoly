@@ -835,7 +835,7 @@ fn check_all(fx: &Fixture) {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-/// (1) 2 players, poorest-style money split, PayAdd value > 0, card with owner,
+/// (1) 2 players, poorest-style money split, PaySplitAdd value > 0, card with owner,
 /// circle tile, fans present. Covers aya_haruka_02 `value > 0` (true).
 fn fx_aya_poorest_value() -> Fixture {
     let mut fx = Fixture::new("aya_poorest_value", 2);
@@ -845,7 +845,7 @@ fn fx_aya_poorest_value() -> Fixture {
     fx.seats[1].pos = 10;
     fx.seats[0].tokens = vec![(ir_fill::TOK_PP_POS, 2), (ir_fill::TOK_PP_NEG, 1)];
     fx.trig = Trig {
-        kind: TriggerKind::PayAdd,
+        kind: TriggerKind::PaySplitAdd,
         actor: 0,
         target: 1,
         tile: 0, // CiRCLE
@@ -867,7 +867,7 @@ fn fx_aya_value_zero_richest() -> Fixture {
     fx.seats[1].pos = 10;
     fx.seats[0].tokens = vec![(ir_fill::TOK_PP_POS, 2)];
     fx.trig = Trig {
-        kind: TriggerKind::PayAdd,
+        kind: TriggerKind::PaySplitAdd,
         actor: 0,
         target: 1,
         tile: 0,

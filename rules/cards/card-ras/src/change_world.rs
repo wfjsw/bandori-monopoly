@@ -28,7 +28,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
         // house count `n` to scale by. Tile match + houses are derived scans
         // (self_tile / houses_of), residual (docs/GUARDS.md §4.2).
         On::Filter(
-            &[HookKind::PayAdd],
+            &[HookKind::PaySplitAdd],
             "card.placed && pay_is_rent && target == owner",
             Some(on_card_tile_with_houses),
             pay_choose,
@@ -151,7 +151,7 @@ fn on_card_tile_with_houses(_player_id: i32) -> bool {
     tile >= 0 && trigger::tile() == tile && ctx::houses_of(tile) > 0
 }
 
-/// C# `CardChangeWorld.PayAdd` -- when rent on the card's tile is paid to the
+/// C# `CardChangeWorld.PaySplitAdd` -- when rent on the card's tile is paid to the
 /// card's owner, the rent grows by `50 * (Crystals + 1) * houses[Tile]`.
 /// Applicability is `on_card_tile_with_houses`.
 fn pay_choose(player_id: i32, value: i32) -> i32 {
@@ -176,7 +176,7 @@ fn pay_choose(player_id: i32, value: i32) -> i32 {
 /// card. Applicability is `on_card_tile_with_houses`.
 fn pay_after(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「触发后将该卡放入弃牌堆」 -- C# `PayAfter` fires when the pay
-    // carried the `changeWorld` tag (i.e. `PayAdd` ran). Applicability is the
+    // carried the `changeWorld` tag (i.e. `PaySplitAdd` ran). Applicability is the
     // shared residual `on_card_tile_with_houses`.
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(

@@ -8,7 +8,7 @@
 //! > 直到状态2结束为止，场上所有背面朝上的卡无法产生效果，且不受任何效果影响。你
 //! > 退出状态2后，被你翻面的卡自动翻回。
 //!
-//! 状态1（1） is a `PayAdd` bend plus a pot: the pot is granted first, so the
+//! 状态1（1） is a `PaySplitAdd` bend plus a pot: the pot is granted first, so the
 //! 「X为你拥有的火罐数」 figure already counts the one just gained.
 //!
 //! 状态2's face-down sweep is `set_card_face_down` on every face-up placed
@@ -24,7 +24,7 @@ use card_sdk::{key, CardDef, Msg, On};
 /// Cards this skill flipped, so it can flip them back on exit.
 const FLIPPED: &str = "skill.mumei.flipped";
 /// Post-gain pot count latched at the payment declaration, so the pure
-/// `PayAdd` filter sees the post-gain X even when the gain just filled the pot
+/// `PaySplitAdd` filter sees the post-gain X even when the gain just filled the pot
 /// (and so entered 状态2 before the filter's own condition is read).
 const BUMP_X: &str = "skill.mumei.bumpX";
 
@@ -34,7 +34,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         // 状态1（1）「你立即获得1火罐」 + （2） enter 状态2 at the cap -- both are
         // mutating, so they ride `HookKind::Effect` (the payment declaration,
-        // before `PayAdd`). The post-gain X is latched for the pure filter.
+        // before `PaySplitAdd`). The post-gain X is latched for the pure filter.
         On::Action(
             &[HookKind::Effect],
             "target == owner && actor != owner && slot('skillState') != 2",
@@ -43,7 +43,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         ),
         // 状态1（1）「并使那次支付的金额提高X*100」 -- pure amount reshape.
         On::Filter(
-            &[HookKind::PayAdd],
+            &[HookKind::PaySplitAdd],
             "target == owner && actor != owner && slot('skill.mumei.bumpX') >= 0",
             None,
             on_pay_add,
@@ -84,15 +84,15 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// 状态1（1）「每次其他玩家向你支付资金时，你立即获得1火罐」 and （2）'s
 /// cap transition. Mutating halves of the clause, riding the payment
-/// declaration (`HookKind::Effect`) so the `PayAdd` filter below sees the
+/// declaration (`HookKind::Effect`) so the `PaySplitAdd` filter below sees the
 /// post-gain X.
 fn on_pay_declare(player_id: i32) -> card_sdk::Asked {
     // 「你立即获得1火罐」 first, so X counts it.
     rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
     let x = state::get(player_id, state_key::CHARGE);
-    // Latch the post-gain X. The latch is what the pure `PayAdd` filter reads;
+    // Latch the post-gain X. The latch is what the pure `PaySplitAdd` filter reads;
     // it also lets that filter fire for this very payment when the gain just
-    // filled the pot and （2） entered 状态2 before `PayAdd` is dispatched.
+    // filled the pot and （2） entered 状态2 before `PaySplitAdd` is dispatched.
     state::set(player_id, BUMP_X, x);
     // （2）「任何时刻当你的火罐数到达上限时，你立即进入状态2」
     if x >= state::max(player_id, state_key::CHARGE) {

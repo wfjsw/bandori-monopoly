@@ -96,7 +96,7 @@ pub fn band_state2_one_sided_ok_mutant(
     user_delta.abs() == bent && other_delta.abs() == bent
 }
 
-/// Pure `PayMul` hook obligation: rewrite the trigger amount to the bent
+/// Pure `PaySplitMul` hook obligation: rewrite the trigger amount to the bent
 /// figure when the user is one side of the transfer.
 pub fn band_state2_pay_amount_ok(pre_amount: i32, post_amount: i32, user_is_side: bool) -> bool {
     if !user_is_side {

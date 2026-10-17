@@ -25,12 +25,12 @@ pub const J11: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        // C# `CardJ11.PayChoose` interactive arm: `ask_yes` → `charge` →
-        // `set_pay_amount(0)`. Rides `PayChooseAsk` (v78), restoring the
-        // rulebook PayChoose position (its own entry; the TurnEnd/Targeted
+        // C# `CardJ11.PaySplitChoose` interactive arm: `ask_yes` → `charge` →
+        // `set_pay_amount(0)`. Rides `PaySplitChooseBefore` (v78), restoring the
+        // rulebook PaySplitChoose position (its own entry; the TurnEnd/Targeted
         // dispatcher is separate). The pure stun cancel stays on FilterFlag.
-        On::Action(&[HookKind::PayChooseAsk], "card.placed", None, pay_choose_ask),
-        On::FilterFlag(&[HookKind::PayChoose], "card.placed", None, pay_choose_cancel),
+        On::Action(&[HookKind::PaySplitChooseBefore], "card.placed", None, pay_choose_ask),
+        On::FilterFlag(&[HookKind::PaySplitChoose], "card.placed", None, pay_choose_cancel),
         On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -109,11 +109,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardJ11.PayChoose` (MatchHost.cs:5895-5901): about to pay money -> may
+/// C# `CardJ11.PaySplitChoose` (MatchHost.cs:5895-5901): about to pay money -> may
 /// discard; the stun then cancels the payment (C# `p.cancel = true` when
-/// `Me.Stunned`). Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose
+/// `Me.Stunned`). Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose
 /// position: the interactive `ask_yes` → `charge` → `set_pay_amount(0)` sits
-/// immediately before the pure `PayChoose` filter stage.
+/// immediately before the pure `PaySplitChoose` filter stage.
 fn pay_choose_ask(player_id: i32) -> card_sdk::Asked {
     if trigger::player_id() != player_id || trigger::value() <= 0 {
         return Ok(());
@@ -130,12 +130,12 @@ fn pay_choose_ask(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// PayChoose cancel half (ABI v74 FilterFlag). C# `p.cancel = true when
+/// PaySplitChoose cancel half (ABI v74 FilterFlag). C# `p.cancel = true when
 /// Me.Stunned` -- an already-stunned owner's payment is cancelled outright.
 /// Pure: no prompt (the interactive offer lives on the Effect arm of
 /// [`counteract`]).
 ///
-/// Note: the engine's `payChoose` stage currently folds only `t.value` /
+/// Note: the engine's `paySplitChoose` stage currently folds only `t.value` /
 /// `t.target` and ignores `set_cancelled()` (unlike the `effect` and `pay`
 /// windows). The live cancel for the accept path is still the Effect arm's
 /// `set_pay_amount(0)`; this flag is the non-interactive stun condition and

@@ -80,8 +80,8 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // player with stay only pays 1000. Not a flat 1000 × (types cleared
     // table-wide).
     //
-    // The money moves through the pipeline (`transfer` / `gain` -> payAdd /
-    // payMul / payChoose / payAt -> the `pay` [反击] window), so 「[支付]时可以
+    // The money moves through the pipeline (`transfer` / `gain` -> paySplitAdd /
+    // paySplitMul / paySplitChoose / paySplitAt -> the `pay` [反击] window), so 「[支付]时可以
     // 打出」 windows open on each leg. The status clears above reach the live
     // world for the routine's duration (`Cx::overlay_guest_state`), so a payer
     // we just un-stunned is not blocked by `can_pay`.

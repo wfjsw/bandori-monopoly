@@ -35,15 +35,15 @@ pub const AYA_WITH: CardDef = CardDef::new(
             at_start,
         ),
         // 「此次支付的分摊前资金减少Y×100（最少0）」 -- the **pre-split** total
-        // (「分摊前」), so this rides `payTotalAddAsk` (PIPELINE-AUDIT Q2), not
-        // the per-share `payChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
+        // (「分摊前」), so this rides `payCombinedAddBefore` (PIPELINE-AUDIT Q2), not
+        // the per-share `paySplitChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
         // it divides, not 500 off each share.
         //
-        // Rides `PayTotalAddAsk` (v78), restoring the rulebook PayTotalAdd
+        // Rides `PayCombinedAddBefore` (v78), restoring the rulebook PayCombinedAdd
         // position: the interactive `ask_number` + `set_pay_amount` sits
-        // immediately before the pure `PayTotalAdd` filter stage (pre-split).
+        // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(
-            &[HookKind::PayTotalAddAsk],
+            &[HookKind::PayCombinedAddBefore],
             "value > 0 && tok('P✽P粉丝(正)') >= 1",
             Some(mine),
             on_pay,
@@ -84,7 +84,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「自己每次需要支付资金时可选择将自己Y个正面[P✽P粉丝]变反，此次支付的
 /// 分摊前资金减少Y×100（最少0）」.
-/// Rides `PayTotalAddAsk` (v78): the prompt picks Y, which drives both the
+/// Rides `PayCombinedAddBefore` (v78): the prompt picks Y, which drives both the
 /// amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     // 「不可使用」 -- same gate as `mine`, repeated in the body.

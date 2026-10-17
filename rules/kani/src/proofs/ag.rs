@@ -320,13 +320,13 @@ fn half_speed_04_pay_mul_iff_at(user: i32) {
     ag_world(user);
     let player = user;
     let pre_amount = amount;
-    // Card is on the field (PayMul pre: `card.placed && value > 0`).
+    // Card is on the field (PaySplitMul pre: `card.placed && value > 0`).
     // `trig_value` under Kani reads `pay_amount`.
     world::with_world_mut(|w| {
         w.pay_amount = amount;
     });
     plant_field(user, CARD_MOCA_HALF, 1, 0);
-    // Entry 3 is PayMul (`actor == owner && card.placed && value > 0`).
+    // Entry 3 is PaySplitMul (`actor == owner && card.placed && value > 0`).
     invoke::unwrap_done(card_ag::moca_half::pay_mul_kani(user));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     let (logbuf, log_n) = log_slice();
@@ -802,7 +802,7 @@ fn soul_02_pay_choose_yes_iff_at(owner: i32, payee: i32) {
     });
     plant_field(owner, CARD_SOUL, 1, crystals);
     // Yes/no prompt: symbolic answers cover both; assert only on yes.
-    // Entry 1 is PayChoose (residual `is_placed && actor == owner`).
+    // Entry 1 is PaySplitChoose (residual `is_placed && actor == owner`).
     invoke::unwrap_done(card_ag::crimson_soul::pay_choose_kani(owner));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     let post_crystals = world::with_world(crystals_of);

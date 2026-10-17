@@ -143,15 +143,15 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
 - **severity**: high
 - **suggested batch**: payment pipeline
 - **status**: **fixed** (this batch, `fix: MONEY-03 …`) — the pipeline
-  already halves the shaped total (`payAdd` runs Tomorrow's Door's surcharge,
-  `payMul` applies `plan::set_pay_factor(500)`). The test's dice math put
+  already halves the shaped total (`paySplitAdd` runs Tomorrow's Door's surcharge,
+  `paySplitMul` applies `plan::set_pay_factor(500)`). The test's dice math put
   the hill off the planned path (`hill - 1 - 5 - 2` → X = 0, Repaint never
   offered), so the discrepancy was never actually observed. Dice is now
   `(hill − 5) + X` from a close start. Un-ignored, green twice.
 - **locations**
   - `rules/tests/tests/ras.rs` `repaint_halves_a_shaped_settlement_payment` (un-ignored)
-  - `rules/cards/card-ppp/src/tomorrows_door.rs` (`pay_add` at `payAdd`)
-  - `crates/game-core/src/engine/play.rs` (`scale_settle_payment` at `payMul`)
+  - `rules/cards/card-ppp/src/tomorrows_door.rs` (`pay_add` at `paySplitAdd`)
+  - `crates/game-core/src/engine/play.rs` (`scale_settle_payment` at `paySplitMul`)
   - related tests `cross_tiles.rs:163` `t03_anon_link_plus_repaint` (Anon link arrangement, still ignored)
 - **rulebook**: ruling 2026-10-06 + sheet 「对方此次结算的支付减半」 — the *settlement payment* (post-shape) is halved.
 - **was**: test dice put the hill off-path; X = 0 so Repaint was never offered.
@@ -732,7 +732,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   updates the two fan counters in place. Test: `accident_blocks_pp_skill_2`.
 - **locations**
   - `rules/tests/tests/pp.rs:1078` `accident_blocks_pp_skill_2`
-- **rulebook**: 初次演出事故 blocks the PP skill; 丸山彩 (2) PayChoose hook must not prompt.
+- **rulebook**: 初次演出事故 blocks the PP skill; 丸山彩 (2) PaySplitChoose hook must not prompt.
 - **current**: `skillBlock` token is set (`tok=1`) but the guard/body `skill_blocked` check does not see it.
 - **expected**: hook-guard dispatch consults the token.
 
@@ -854,7 +854,7 @@ Deferred from the `card-std-split` / ABI v56 pass (ruleset-core + `tile_is`/
   「无主或玩家拥有的」 reads as unowned **or any player-owned**: unowned →
   buy, own → build, another seat's non-mortgaged deed → the agent's
   「半价收费的[结算]（向上取整10）」. `ANY_COLOR` still widens the colour set
-  for buy/rent but is never buildable. soyo's PayMul halves again on top.
+  for buy/rent but is never buildable. soyo's PaySplitMul halves again on top.
   `t16_soyo_mixed_colors` un-ignored, green (R/2/2).
 - **kind**: rulebook divergence (resolved)
 - **class**: C

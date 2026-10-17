@@ -37,7 +37,7 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
         // other players, only on the armed turn (`charity.turn`). The turn-key
         // latch is an instance prop (residual).
         On::Filter(
-            &[HookKind::PayMul],
+            &[HookKind::PaySplitMul],
             "card.placed && actor == owner && target >= 0 && target != owner && value > 0",
             Some(pay_applies),
             pay_mul,

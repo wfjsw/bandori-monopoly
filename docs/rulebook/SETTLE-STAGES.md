@@ -151,7 +151,7 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 | `Sumimi:两个甜甜圈` （2） | 「可在那名玩家**触发结算后**选择传送至…并触发结算」 | `HookKind::SettleAfter` `two_donuts.rs:27` | 16 | OK |
 | `MyGO:哪怕这旅程没有终点` （2） | 「[持续] **触发结算时**，获得X*60资金」 | `HookKind::SettleAfter` `endless_journey.rs:20` | 15 「触发结算时」 | **AT** |
 | `PP:梦在前方，结彩当下` （3） | 「[拥有者]以外的玩家在[拥有者]拥有的格子**[结算]时**额外[支付]…」 | `HookKind::SettleAfter` `dream_ahead.rs:35` | 15 (「[结算]时」) — an extra charge that belongs in the settle's effect list | **AT/BODY** |
-| `PPP:Tomorrow's Door` （3） | 「…在[拥有者]拥有的格子或梦开始的地方**[结算]时**额外支付…」 | `HookKind::SettleAfter` `tomorrows_door.rs:28` (+ `PayAdd`) | 15 | **AT/BODY** |
+| `PPP:Tomorrow's Door` （3） | 「…在[拥有者]拥有的格子或梦开始的地方**[结算]时**额外支付…」 | `HookKind::SettleAfter` `tomorrows_door.rs:28` (+ `PaySplitAdd`) | 15 | **AT/BODY** |
 | `RAS:练习室里的风暴` （2） | 「[使用者]以外的玩家在距此卡所在格子X个格子处**[结算]时**将此卡放入弃牌堆且对那个玩家进行一次…收费」 | `HookKind::SettleAfter` `studio_storm.rs:21` | 15 「[结算]时」 (a remote settle-shaped charge) | **AT** |
 | `HHW:黑衣人的补给` | 「该格上拥有奇迹水晶时，该格**获得"CiRCLE"格子的全部效果**」 (landing draw 1) | `HookKind::SettleAfter` `black_suits.rs:17` | this *is* the tile's [结算] (「获得CiRCLE格子的全部效果」) | **BODY** |
 | `HHW:（kkr）前往笑容集结的地方！` | 「若其他玩家在该格**[触发结算]**则向所有者支付6000资金，**视为格子的收款**」 | `HookKind::SettleAfter` `kokoro_circle.rs:18` | 15; 「视为格子的收款」 = a settle-body entry (`docs/TILES.md` already says so) | **BODY** |
@@ -449,7 +449,7 @@ about which tile is being settled.
   player's: is 「免除付款」 a pay-stage cancel (so a 「支付减半」 etc. never
   sees it) or a body replace (「将本次结算改为…」 for the owner branch only)?
   The text uses 「免除付款」 for one branch and 「将该次结算改为」 for the other —
-  **Ruled (user 2026-10-07):** 「免除付款」 is a payment-stage cancel (`payTotalCancel`); 「将该次结算改为」 is a settleBody replace. Implemented in `rana_parking.rs`.
+  **Ruled (user 2026-10-07):** 「免除付款」 is a payment-stage cancel (`payCombinedCancel`); 「将该次结算改为」 is a settleBody replace. Implemented in `rana_parking.rs`.
 * **R5 — `want_to_grab` 「当第一位其他玩家经过你」**: 经过 (passTile, first
   passer mid-move) or 重叠 (passPlayer)? **Pending.** Left as-is with a
   `TODO(规则书) R5` marker. The C# GrabFx used PassPlayer. The force-move is 「在那名玩家[触发结算]前」, which only exists if

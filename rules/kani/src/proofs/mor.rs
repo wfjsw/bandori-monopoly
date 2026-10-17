@@ -19,7 +19,7 @@
 //! (`host_subset!`) — an op outside the subset FAILS loudly.
 //!
 //! Isolation assumes (module-level):
-//! * no stacked PayAdd hooks besides the clause under test;
+//! * no stacked PaySplitAdd hooks besides the clause under test;
 //! * `n_players = 2`, money `0..=10_000`, both seats living unless stated.
 
 use crate::host;
@@ -1737,10 +1737,10 @@ pub fn noble_02_mutant_is_detected() {
 // C-MOR-again-02  `Mor:再次牵起手来` [持续]
 // 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区。」
 // The [反击] window of -01 is PROTOCOL-LEVEL (KANI.md §6). This is the
-// PayAt hook body. OPEN-取消范围: one-sided on the owner. Seat-symmetric.
+// PaySplitAt hook body. OPEN-取消范围: one-sided on the owner. Seat-symmetric.
 // ===========================================================================
 
-/// `Mor:再次牵起手来` PayAt hook body ops.
+/// `Mor:再次牵起手来` PaySplitAt hook body ops.
 crate::host_subset!(hold_hands_dispatch {
     trig_set_pay_amount => arm_trig_set_pay_amount,
     set_dest => arm_set_dest,

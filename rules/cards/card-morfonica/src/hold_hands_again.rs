@@ -26,7 +26,7 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Filter(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, pay_at),
+        On::Filter(&[HookKind::PaySplitAt], "actor == owner && card.placed && value > 0", None, pay_at),
         On::Action(&[HookKind::PayAfter], "actor == owner && card.placed", None, pay_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -64,9 +64,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书[持续]: 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 -- C#
-/// `CardHoldHandsAgain.PayAt` cancels the next `PayCtx` with `p.from == Player` and
+/// `CardHoldHandsAgain.PaySplitAt` cancels the next `PayCtx` with `p.from == Player` and
 /// `H.Unplace(this, "discard", "用掉了")`. Runs through the Fx hook dispatch at
-/// `payAt` (after `PayChoose`, before the `pay` [反击] window), so this is a
+/// `paySplitAt` (after `PaySplitChoose`, before the `pay` [反击] window), so this is a
 /// field effect, not a [反击].
 ///
 /// Split (ABI v74): the Filter returns 0 (「取消此次资金变动」) and logs; the

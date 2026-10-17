@@ -14,7 +14,7 @@ pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",
     &[
         On::Play("", Some(cant_play), soyo_colors),
-        On::Filter(&[card_sdk::abi::HookKind::PayMul], "", Some(on_rent), half_again),
+        On::Filter(&[card_sdk::abi::HookKind::PaySplitMul], "", Some(on_rent), half_again),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"混合的颜色"#)

@@ -30,7 +30,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         // empty. The body used to re-check and return early -- a flash per
         // ordinary turn end. Pile sizes are derived scans (docs/GUARDS.md §4.2).
         On::Action(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(decks_empty), at_turn_end),
-        On::Filter(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
+        On::Filter(&[HookKind::PaySplitChoose], "", Some(in_lock), lock_pay),
         On::Action(&[ruleset_core::kind::PassRewardAffected], "", Some(in_lock), force_card),
         // （1）「任何时刻拥有手牌数大于等于6时…无法从手中打出任何牌」 -- a
         // standing **play-only** lock. `PlayGate` (not `ActGate`: that one also

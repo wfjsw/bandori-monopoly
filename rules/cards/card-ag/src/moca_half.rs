@@ -19,7 +19,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
         On::Filter(&[HookKind::DiceRollValue], "actor == owner && move.main && card.placed", None, roll_half),
-        On::Filter(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
+        On::Filter(&[HookKind::PaySplitMul], "actor == owner && card.placed && value > 0", None, pay_mul),
         On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -90,8 +90,8 @@ fn roll_half(player_id: i32, value: i32) -> i32 {
     halved
 }
 
-/// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PayMul` pass (after
-/// `PayAdd`, before `PayChoose`) rewrites the amount via the Filter fold.
+/// 规则书(2): 「且你的所有资金支付与消耗减半」. The `PaySplitMul` pass (after
+/// `PaySplitAdd`, before `PaySplitChoose`) rewrites the amount via the Filter fold.
 ///
 /// User ruling 2026-10-15 (OPEN-取整 family): a 减半 modifier transforms the
 /// running amount exactly and must NOT CeilTo in its own body; the engine

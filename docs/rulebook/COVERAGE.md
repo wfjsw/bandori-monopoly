@@ -1733,10 +1733,10 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | # | window | status | engine kind |
 |---|---|---|---|
 | 1 | 支付计算前 | **diff** | folded into `effect`, which also carries window 5's cancel/retarget power |
-| 2 | 支付计算时 (flat add/sub) | **ok** | `payAdd` |
-| 3 | 支付计算后 | **miss** | none between `payAdd` and `payMul` |
-| 4 | 支付前 (halve/double) | **ok** | `payMul` + `scale_settle_payment` |
-| 5 | 支付时 (pay / 无需失去 / 取消 / 更改目标) | **diff** | split across `effect` + `payChoose`/`payAt` (unnamed) + `pay` |
+| 2 | 支付计算时 (flat add/sub) | **ok** | `paySplitAdd` |
+| 3 | 支付计算后 | **miss** | none between `paySplitAdd` and `paySplitMul` |
+| 4 | 支付前 (halve/double) | **ok** | `paySplitMul` + `scale_settle_payment` |
+| 5 | 支付时 (pay / 无需失去 / 取消 / 更改目标) | **diff** | split across `effect` + `paySplitChoose`/`paySplitAt` (unnamed) + `pay` |
 | 6 | 支付后 | **ok** | `payAfter` |
 | 7 | 资金变动 | **diff** | `paid`, payer-loss only; a distinct kind from `payAfter` despite the doc's 「合并到[支付后]?」 |
 

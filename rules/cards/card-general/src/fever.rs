@@ -21,11 +21,11 @@ pub const FEVER: CardDef = CardDef::new(
     "通用:[衍生]FEVER!",
     &[
         On::Play("", None, fever),
-        // C# `CardFever.PayAdd` (value modifier) / `CardFever.TurnStart` (event
+        // C# `CardFever.PaySplitAdd` (value modifier) / `CardFever.TurnStart` (event
         // reaction) -- field hooks, not [反击]. Mixed kinds split (ABI v73);
         // bodies split to match the variant (Filter = pure integer, Action =
         // event reaction).
-        On::Filter(&[HookKind::PayAdd], "card.placed", None, pay_add),
+        On::Filter(&[HookKind::PaySplitAdd], "card.placed", None, pay_add),
         On::Action(&[HookKind::TurnStart], "card.placed", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
@@ -48,7 +48,7 @@ fn fever(player_id: i32) -> card_sdk::Asked {
     // C# `H.PlaceFromPlay(c).Mem["x"] = c.N(0, 600)` -- the printed 600 is the
     // card's number, read through `ctx::n` in `x_of` (the C# stores the played
     // value in `Mem["x"]`; equivalent while `PlayCtx.Doubled` is unported).
-    // 规则书（1）[持续] runs in `counteract` at `payAdd`; 规则书（2）[持续] at `turnStart`.
+    // 规则书（1）[持续] runs in `counteract` at `paySplitAdd`; 规则书（2）[持续] at `turnStart`.
     Ok(())
 }
 
@@ -64,7 +64,7 @@ fn x_of(player_id: i32) -> i32 {
 }
 
 /// 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
-/// [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PayAdd`
+/// [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PaySplitAdd`
 /// (`p.to == Player && p.amount > 0` -> `p.amount = Math.Max(0, p.amount + x)`).
 /// `t.target` is the payee (a gain is the bank paying the owner) and `value` the
 /// pending amount. Early-returns that skipped the log still return `value`

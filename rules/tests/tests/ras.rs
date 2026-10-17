@@ -931,8 +931,8 @@ fn repaint_halves_the_settle_payment() {
 // Ruling 2026-10-06 (the 祥，移动 reading, which applies here because the
 // sheet wording is 「对方此次结算的支付减半」 -- the settlement payment): a
 // payment shaped by another card effect is halved too. Tomorrow's Door (3)
-// adds (houses on 星之鼓动山丘)×100 on top of the rent at `payAdd`; the
-// `payMul` scale (Repaint's `set_pay_factor(500)`) sees the shaped total.
+// adds (houses on 星之鼓动山丘)×100 on top of the rent at `paySplitAdd`; the
+// `paySplitMul` scale (Repaint's `set_pay_factor(500)`) sees the shaped total.
 #[test]
 fn repaint_halves_a_shaped_settlement_payment() {
     let mut t = Table::vanilla(3);

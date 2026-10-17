@@ -32,11 +32,11 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶」 -- a payment
         // the owner owes, with a crystal to spend.
         //
-        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position:
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive crystal spend sits immediately before the pure
-        // `PayChoose` filter stage.
+        // `PaySplitChoose` filter stage.
         On::Action(
-            &[HookKind::PayChooseAsk],
+            &[HookKind::PaySplitChooseBefore],
             "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,
@@ -80,7 +80,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `Fx.PayChoose` (C# `CardPopipapapipopa.PayChoose` -> `Use`) -- the owner may
+/// `Fx.PaySplitChoose` (C# `CardPopipapapipopa.PaySplitChoose` -> `Use`) -- the owner may
 /// spend crystals to shrink the pending payment by 150 each.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     // `card.placed && actor == owner && value > 0 && card.counter('crystals') > 0` is the pre.

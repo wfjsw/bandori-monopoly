@@ -502,7 +502,7 @@ pub fn money_of(player_id: i32) -> i32 {
 
 /// Money in, logged with its reason (`src` is a message key).
 /// Runs the same `Money` pipeline as [`pay`] (print, game -> player), so
-/// `payAdd` / `payChoose` and the `effect` [反击] window see it; the answer is
+/// `paySplitAdd` / `paySplitChoose` and the `effect` [反击] window see it; the answer is
 /// the amount that actually moved (0 = cancelled).
 #[cfg_attr(kani, inline(always))]
 pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
@@ -523,8 +523,8 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
 }
 
 /// A **raw** money adjustment -- `money += delta` with a `log.gain` /
-/// `log.lose` line and **no** payment pipeline: no `payAdd` / `payMul` /
-/// `payChoose` / `payAt`, no `effect` [反击] window, no `payAfter`. 规则书
+/// `log.lose` line and **no** payment pipeline: no `paySplitAdd` / `paySplitMul` /
+/// `paySplitChoose` / `paySplitAt`, no `effect` [反击] window, no `payAfter`. 规则书
 /// 「不受其他任何效果影响」 -- the amount moves as-is (ONE OF US's 「被分享方
 /// 资金直接增加」). Positive `delta` is a gain, negative a loss. Non-pausing:
 /// returns the amount actually moved (0 = the seat was out).
@@ -563,13 +563,13 @@ pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Promp
 
 // ------------------------------------------------------------- 「[分摊]」 / 分摊前
 
-/// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2): `payTotalAdd` →
-/// `payTotalMul` → `payTotalCancel` shape `total` **before** any 「[分摊]」
+/// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2): `payCombinedAdd` →
+/// `payCombinedMul` → `payCombinedCancel` shape `total` **before** any 「[分摊]」
 /// divides it into shares. This is the 「分摊前」 figure of
 /// 「此次支付的分摊前资金减少Y×100」 and kin (规则书 支付阶段 2/4/5 applied to
 /// the command rather than to one pair).
 ///
-/// Returns the shaped total, or `None` when a `payTotalCancel` hook dropped the
+/// Returns the shaped total, or `None` when a `payCombinedCancel` hook dropped the
 /// whole command. A single-pair payment runs the same three stages inside
 /// [`transfer`] / [`pay`] / [`gain`] -- call this only when *you* are about to
 /// split, and follow it with [`pay_leg`] per share (see [`split_pay`]).
@@ -592,7 +592,7 @@ pub fn pay_leg(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt
 /// `to` (the 规则书 「向上取整10」 share). Returns the per-leg amounts, or an
 /// empty list when the command was cancelled.
 ///
-/// The legs run [`pay_leg`], so a `payTotalAdd` hook hits the **total** once
+/// The legs run [`pay_leg`], so a `payCombinedAdd` hook hits the **total** once
 /// rather than each share (`PIPELINE-AUDIT` Q2 / `rb_money::
 /// pre_split_modifier_shapes_the_total_not_each_leg`).
 pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i32>, Prompt> {

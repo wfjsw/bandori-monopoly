@@ -36,11 +36,11 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
         // against the body and the rulebook), a tile we own, and a positive
         // amount. The opt-in ask stays in the body (a player choice).
         //
-        // Rides `PayChooseAsk` (v78), restoring the rulebook PayChoose position:
+        // Rides `PaySplitChooseBefore` (v78), restoring the rulebook PaySplitChoose position:
         // the interactive cancel (`ask_yes` + `set_pay_amount(0)` + state writes)
-        // sits immediately before the pure `PayChoose` filter stage.
+        // sits immediately before the pure `PaySplitChoose` filter stage.
         On::Action(
-            &[HookKind::PayChooseAsk],
+            &[HookKind::PaySplitChooseBefore],
             "actor != owner && tile.owner == owner && value > 0",
             None,
             on_pay,
@@ -70,8 +70,8 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
 /// 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」.
 /// Applicability is the entry's condition (`actor != owner && tile.owner ==
 /// owner && value > 0`); the ask is the 「可」 opt-in.
-/// Rides `PayChooseAsk` (v78): the prompt and the `set_pay_amount(0)` cancel
-/// sit at the rulebook PayChoose position.
+/// Rides `PaySplitChooseBefore` (v78): the prompt and the `set_pay_amount(0)` cancel
+/// sit at the rulebook PaySplitChoose position.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if !ctx::ask_yes(

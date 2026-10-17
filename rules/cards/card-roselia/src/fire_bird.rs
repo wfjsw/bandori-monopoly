@@ -21,7 +21,7 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
         On::Play("", None, play),
         On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Filter(&[HookKind::PayMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
+        On::Filter(&[HookKind::PaySplitMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
         On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600), (card_sdk::abi::prop::SONG, 1)]).meta(&card_sdk::meta::CardMeta::new()
@@ -70,14 +70,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶」 / 「奇迹水晶耗尽时将此卡放入
     // 弃牌堆」 -- `DecayCard.TurnEnd` -> `CardFireBird.Burn`, see `turn_end`.
-    // 规则书: 「自己的所有格子收费变成1.5倍」 -- C# `CardFireBird.PayMul`, see
+    // 规则书: 「自己的所有格子收费变成1.5倍」 -- C# `CardFireBird.PaySplitMul`, see
     // `pay_mul`.
     Ok(())
 }
 
 /// 规则书: 「自己的所有格子收费变成1.5倍」. Rent paid to this card's owner is
-/// charged at ×1.5. Runs through the Fx hook dispatch at `payMul` (after
-/// `PayAdd`, before `PayChoose`), so this is a field effect, not a [反击].
+/// charged at ×1.5. Runs through the Fx hook dispatch at `paySplitMul` (after
+/// `PaySplitAdd`, before `PaySplitChoose`), so this is a field effect, not a [反击].
 /// Pure guard for [`pay_mul`] -- the activation gate. `false`
 /// means the card is not activated at all.
 ///

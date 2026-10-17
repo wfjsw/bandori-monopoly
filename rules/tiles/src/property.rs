@@ -85,7 +85,7 @@ pub(crate) fn settle(player_id: i32) -> card_sdk::Asked {
 /// The body owns eligibility, the quote and the order of steps. Each step is a
 /// generic mechanism primitive: `ctx::raise` (filter fold for `BuyGate` /
 /// `BuyAssign`, action chain for `buyBefore` / `bought` / `buyAfter`),
-/// `ctx::pay_buy` (the money pipeline -- payAdd/payMul/payTotal, allow_mortgage
+/// `ctx::pay_buy` (the money pipeline -- paySplitAdd/paySplitMul/payCombined, allow_mortgage
 /// funding prompts), `ctx::assign_deed`, `ctx::log`.
 ///
 /// `trigger::value()` is the reason (0 = settle offer, 1 = card-driven,

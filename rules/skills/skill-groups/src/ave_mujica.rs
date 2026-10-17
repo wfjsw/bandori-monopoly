@@ -14,7 +14,7 @@
 //!
 //! 「从[收取]与[支付]的资金改为1.5倍（只对自己结算，对应的其他玩家收支不变）」
 //! is a bend on *this* player's side of a transfer only -- the other party's
-//! figure is untouched. That is a per-party bend, which `PayMul` carries as the
+//! figure is untouched. That is a per-party bend, which `PaySplitMul` carries as the
 //! amount seen from one side.
 
 use card_sdk::abi::{counter, state_key, HookKind};
@@ -35,10 +35,10 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
         On::Play("", Some(can_halve), halve),
         On::Action(&[HookKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
         // Latch the declared figure for the PayAfter one-sided fixup. `Effect`
-        // is the payment declaration (pre-PayAdd); see `latch_orig`.
+        // is the payment declaration (pre-PaySplitAdd); see `latch_orig`.
         On::Action(&[HookKind::Effect], "slot('skillState') == 2 && card.placed", None, latch_orig),
-        On::Filter(&[HookKind::PayMul], "slot('skillState') == 2 && card.placed", None, bend),
-        // 「只对自己结算，对应的其他玩家收支不变」 -- PayMul rewrites one shared
+        On::Filter(&[HookKind::PaySplitMul], "slot('skillState') == 2 && card.placed", None, bend),
+        // 「只对自己结算，对应的其他玩家收支不变」 -- PaySplitMul rewrites one shared
         // figure, so the counterpart's side is restored here.
         On::Action(&[HookKind::PayAfter], "slot('skillState') == 2 && card.placed", None, after_bend),
         On::Action(&[HookKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
@@ -95,14 +95,14 @@ fn on_state(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("ave_mujica_refill")));
 }
 
-/// Latch the declared (pre-PayAdd) payment figure for [`after_bend`]. Rides
-/// `HookKind::Effect` (the payment declaration) so the PayMul Filter below
+/// Latch the declared (pre-PaySplitAdd) payment figure for [`after_bend`]. Rides
+/// `HookKind::Effect` (the payment declaration) so the PaySplitMul Filter below
 /// stays pure.
-/// TODO(规则书): this stores the *declared* amount, not the PayMul input the
-///   old in-Filter latch saw. Whenever a PayAdd also rewrote the figure,
+/// TODO(规则书): this stores the *declared* amount, not the PaySplitMul input the
+///   old in-Filter latch saw. Whenever a PaySplitAdd also rewrote the figure,
 ///   `after_bend`'s clawback is against the declared figure instead of the
-///   PayMul input. Kept as the pure-split shape; tests do not combine
-///   ave_mujica bend with a PayAdd modifier.
+///   PaySplitMul input. Kept as the pure-split shape; tests do not combine
+///   ave_mujica bend with a PaySplitAdd modifier.
 fn latch_orig(player_id: i32) -> card_sdk::Asked {
     let value = ctx::trigger::value();
     if value <= 0 {
@@ -139,7 +139,7 @@ fn bend(player_id: i32, value: i32) -> i32 {
     (value * 3 + 1) / 2
 }
 
-/// The counterpart's figure stays the printed amount (`PayMul` rewrites one
+/// The counterpart's figure stays the printed amount (`PaySplitMul` rewrites one
 /// shared transfer). Claw the 0.5× delta back to / from the bank so only this
 /// player's side moved.
 fn after_bend(player_id: i32) -> card_sdk::Asked {

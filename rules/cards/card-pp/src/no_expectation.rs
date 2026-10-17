@@ -25,13 +25,13 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         On::Play("", None, no_expectation),
         // ABI v74 Filter/Action split of the old shared `hook` body:
         // DiceRollValue is the pure face shave; DiceRollAfter only records the
-        // 「如果为0则此次移动不[结算]」 no-resolve side effect; PayAdd is the
+        // 「如果为0则此次移动不[结算]」 no-resolve side effect; PaySplitAdd is the
         // pure payment bend.
         // v79: the shave + the 「为0则不[结算]」 clamp are one pure
         // FilterValue at DiceRollValue (option C -- the text is a result
         // modifier, not a 「掷骰后」 listener).
         On::FilterValue(&[HookKind::DiceRollValue], "card.placed", None, roll_shave),
-        On::Filter(&[HookKind::PayAdd], "card.placed", None, pay_add),
+        On::Filter(&[HookKind::PaySplitAdd], "card.placed", None, pay_add),
         On::Action(
             &[HookKind::Reshuffled],
             "actor == owner && card.placed",
@@ -125,7 +125,7 @@ fn roll_shave(player_id: i32, v: FilterValue) -> FilterValue {
 }
 
 /// 规则书[持续]（2）: 「[支付]资金时金额提高100；[收取]资金时金额减少100（最低0）」
-/// -- C# `CardNoExpectation.PayAdd`, once per stack. Pure Filter (ABI v74):
+/// -- C# `CardNoExpectation.PaySplitAdd`, once per stack. Pure Filter (ABI v74):
 /// returns the bent figure.
 fn pay_add(player_id: i32, value: i32) -> i32 {
     let n = stacks(player_id);

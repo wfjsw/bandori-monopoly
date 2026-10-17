@@ -298,16 +298,16 @@ pub enum HostRequest {
         to: i32,
         amount: i32,
         src: Option<crate::Msg>,
-        /// Run the command-wide **pre-split** stage (`payTotalAdd` /
-        /// `payTotalMul` / `payTotalCancel`) on this payment's amount. `true`
+        /// Run the command-wide **pre-split** stage (`payCombinedAdd` /
+        /// `payCombinedMul` / `payCombinedCancel`) on this payment's amount. `true`
         /// for every ordinary payment; a 「[分摊]」 leg sets it `false` because
         /// the card body has already shaped the command total through
         /// [`Self::PayTotal`] before dividing (`PIPELINE-AUDIT` Q2).
         total_stage: bool,
     },
     /// The command-wide **pre-split** stage alone (`PIPELINE-AUDIT` Q2): the
-    /// engine runs `payTotalAdd` → `payTotalMul` → `payTotalCancel` on `total`
-    /// and answers with the shaped figure, or `-1` when a `payTotalCancel`
+    /// engine runs `payCombinedAdd` → `payCombinedMul` → `payCombinedCancel` on `total`
+    /// and answers with the shaped figure, or `-1` when a `payCombinedCancel`
     /// hook dropped the whole command. No money moves here -- the card body
     /// divides the answer and runs each share through [`Self::Pay`] with
     /// `total_stage: false`.
@@ -514,7 +514,7 @@ pub enum HostRequest {
     /// `ctx::lose_raw`. Positive `delta` is a gain, negative a loss. Moves the
     /// balance directly (`World::gain_money` / a raw decrement) with a
     /// `log.gain` / `log.lose` line, **without** the `HostRequest::Pay` money
-    /// pipeline: no `payAdd` / `payMul` / `payChoose` / `payAt`, no `effect`
+    /// pipeline: no `paySplitAdd` / `paySplitMul` / `paySplitChoose` / `paySplitAt`, no `effect`
     /// counteraction window, no `payAfter`. 规则书 「不受其他任何效果影响」 wants the
     /// amount a designate split moves to land as-is (ONE OF US's 「被分享方资金
     /// 直接增加」). Answers the amount actually moved (0 = the seat was out).

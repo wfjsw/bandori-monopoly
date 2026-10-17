@@ -57,7 +57,7 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // `set_pay_amount((amount + 1) / 2)`). No prompt, no side effects -- the
         // `pay(` hit in the catalog is `ctx::pay` in [`on_pass`], not here.
         On::Filter(
-            &[HookKind::PayChoose],
+            &[HookKind::PaySplitChoose],
             "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
             None,
             on_pay,
