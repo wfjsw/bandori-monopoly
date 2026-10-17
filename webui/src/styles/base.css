@@ -172,12 +172,26 @@ html, body, #root { margin: 0; height: 100%; overflow: hidden; background: var(-
    layout, so every button answers below where it is drawn. A fixed body
    cannot scroll. */
 html, body { position: fixed; inset: 0; overscroll-behavior-x: none; }
-body { touch-action: manipulation; }
+/* A game is not a document. Dragging across the board must not select the
+   labels under the pointer, and a long press must not raise the iOS
+   Copy / Lookup / Share callout. Everything inherits the ban from here; the
+   surfaces that take typed text opt back in just below, and the dev console
+   opts its log in where it is defined. */
+body {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; padding: 0; }
 button:disabled { cursor: default; }
+input, textarea, [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
 h1, h2, h3, p { margin: 0; }
-img { user-select: none; -webkit-user-drag: none; }
+img { -webkit-user-drag: none; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #e0cfd6; border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }

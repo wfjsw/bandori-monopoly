@@ -14,7 +14,7 @@
 .players::-webkit-scrollbar { width: 5px; }
 .players::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.3); border-radius: 3px; }
 .players { scrollbar-width: thin; overscroll-behavior: contain; }
-.panel { position: relative; flex: none; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 4px; row-gap: 3px; overflow: hidden; box-sizing: border-box; background: var(--panel); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.panel { position: relative; flex: none; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 4px; row-gap: 3px; overflow: hidden; box-sizing: border-box; background: var(--panel); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; -webkit-tap-highlight-color: transparent; }
 .panel img { -webkit-user-drag: none; pointer-events: none; }
 .turn { border-color: var(--pink); background: #fff7f9; }
 /* Your own seat: a fixed blue (never the pink of the turn frame, and not your
