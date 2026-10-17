@@ -3,6 +3,9 @@
 //
 //   /menu  /gallery  /deck  /lobby  /room/<id>  /play/solo  /play/<roomId>
 //   /replay  /replay/view
+//
+// Phones and the iOS PWA shell replace the current History entry instead of
+// stacking one (see `navigate`): a swipe-back then has nothing to walk through.
 
 import { useSyncExternalStore } from "react";
 
@@ -37,10 +40,33 @@ const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((cb) => cb());
 window.addEventListener("popstate", emit);
 
+/**
+ * A phone, in either orientation: the rotate hint's size class without its
+ * portrait clause. Tablets and desktops keep a normal History stack.
+ */
+export const PHONE_QUERY = "(pointer: coarse) and (max-width: 600px)";
+
+/** iOS home-screen PWA (`navigator.standalone`); absent in every other shell. */
+type StandaloneNavigator = Navigator & { standalone?: boolean };
+
+/**
+ * Phone, or the iOS PWA shell at any size. Both replace the History entry
+ * instead of stacking one (see `navigate`): a swipe-back then has nothing to
+ * walk through.
+ */
+export function isPhone(): boolean {
+  return window.matchMedia(PHONE_QUERY).matches
+    || (navigator as StandaloneNavigator).standalone === true;
+}
+
 export function navigate(r: Route, opts: { replace?: boolean } = {}): void {
   const path = href(r);
   if (location.pathname === path) return;
-  if (opts.replace) history.replaceState(null, "", path);
+  // Replace-only on a phone / iOS PWA. `overscroll-behavior-x: none` is
+  // ignored by the iOS PWA shell, so the edge-swipe back gesture is the only
+  // way out of a screen -- and with a single entry it has nothing to go back
+  // to. Desktop keeps pushState so Back walks the screens as usual.
+  if (opts.replace || isPhone()) history.replaceState(null, "", path);
   else history.pushState(null, "", path);
   emit();
 }
