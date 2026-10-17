@@ -29,7 +29,7 @@ through **engine flags** -- side channels the rulebook never names:
 | ~~`extraColor:<tile>` / `st.tile_colors`~~ | ~~per-player state / `MatchState`~~ | soyo_colors, asahi_aim, roselia band (1), guerrilla, soyo_clear | **done** -- tile props `colorFor:<p>` (per player) and `prop::ANY_COLOR` (「该格获得所有颜色」); `is_color` / `is_live_house_for` read them |
 | ~~`noBuild` (play-from-hand)~~ | ~~per-player state~~ | council_check | **done** -- a `ctx::linger` instance carrying `prop::NO_BUILD`, which `why_not_build_on` reads |
 | ~~`settleAtEnd`~~ | ~~per-player state~~ | rinne_rain, tomori_crychic | **done** -- `ctx::before_turn_end` + `On::Action(&[AtEnd])` whose body calls `ctx::settle` |
-| ~~`settleInstead`~~ | ~~`HookKind`~~ | ~~parking_space, smile_parade~~ | **done** -- `HookKind::SettleBody`; hey_kids moved to `ChainKind::SettleBody` |
+| ~~`settleInstead`~~ | ~~`ActionKind`~~ | ~~parking_space, smile_parade~~ | **done** -- `ActionKind::SettleBody`; hey_kids moved to `ChainKind::SettleBody` |
 
 Cards and skills are **rule instances** (`CardDef` → manifest → `FieldCard`
 placed by `bind_skills`); tiles are not. That asymmetry is what this doc
@@ -187,7 +187,7 @@ per-player `Tok(Seat, "CP点")` and gated the clause on `m.Seat == Seat`; the
 2026-10-07 ruling replaces the counter with the card's own count and this
 reading drops the gate. The landing hook lives on `mark:cp`. The 该清CP了
 graveyard rule is the on-card count hitting 0
-(`On::Action(&[HookKind::CounterChanged], …)` filtering `counter_is('cp')`),
+(`On::Action(&[ActionKind::CounterChanged], …)` filtering `counter_is('cp')`),
 not the tile marks running out.
 
 ### The bodies stay thin
@@ -269,7 +269,7 @@ reads `rentLen - 1` -- but is declared so a card can raise the cap (「升级
 ## Settlement
 
 `settle_at` becomes a **two-phase link**, and the tile's rule instances *are*
-the second phase. This replaces `land_at`'s `match` **and** `HookKind::SettleInstead`.
+the second phase. This replaces `land_at`'s `match` **and** `ActionKind::SettleInstead`.
 
 ```
 settleBefore                          (unchanged)
@@ -296,7 +296,7 @@ replacing the body (「it settled, differently」) are two different things and
 stay two different gestures -- the same distinction `Negation::{Activation,
 Effect}` draws for [反击].
 
-**`HookKind::SettleInstead` is removed.** Its three users (Parking Space,
+**`ActionKind::SettleInstead` is removed.** Its three users (Parking Space,
 笑容大游行, Hey Kids) move to the `settleBody` replace gesture. Wire name
 `settleBody`; ABI bump.
 
@@ -356,7 +356,7 @@ per slot.
 | `key` | a `ui`-namespace i18n key | `deed.note.*` in `webui/src/i18n/locales/*/ui.json` |
 | | `""` | suppresses the slot |
 
-The `slot` mirrors the body's own split (`On::Settle` / `HookKind::PassTile`),
+The `slot` mirrors the body's own split (`On::Settle` / `ActionKind::PassTile`),
 so a rule that replaces one half only replaces that half's text.
 
 ### Manifest
@@ -440,8 +440,8 @@ with `player_id = -1`.
 | 黑衣人的补给 | ~~a 「黑衣人的补给」 tile mark + `CircleLike` special case~~ **done** | **attaches a `tile:circle` instance to 弦卷集团** while it carries the crystal (`place_card_on(BOARD_OWNER, tile, "tile:circle")`); passing/landing runs it alongside `tile:agent`. 「获得CiRCLE格子的全部效果」 is additive. No card hook draws. |
 | 笑容大游行 | `settleInstead` + tile-position rewrite | **swaps the two tiles' instances** (「那格视为与"弦卷集团"格子交换位置」); the move's endpoint borrows 弦卷集团's `tile:agent` instance for that one settle |
 | （kkr）前往笑容集结的地方！ | ~~a `settleAfter` hook on a field stand-in~~ moved to `settleBody` | 「视为格子的收款」 is an entry in the tile's settle effect list (`SETTLE-STAGES.md` §4 M3), skipped when a field card replaces the body. Long-term home: a collect rule instance on CiRCLE. |
-| Parking Space | `HookKind::SettleInstead` | **replaces the body in the chain** (a `settleBody` instance on the Space tile) |
-| Hey Kids | `HookKind::SettleInstead` | same |
+| Parking Space | `ActionKind::SettleInstead` | **replaces the body in the chain** (a `settleBody` instance on the Space tile) |
+| Hey Kids | `ActionKind::SettleInstead` | same |
 | （soyo）色彩 | `ctx::set_tile_color` / `ALL_COLORS` | **sets the tile instance's `group` prop** (`ALL_COLORS`) |
 | Roselia band (1) | `set_extra_color` | sets `group` on the tile instance |
 | 朝日六花 | `set_extra_color` | sets `group` on the tile instance |
@@ -471,7 +471,7 @@ Every flag in the table at the top leaves the engine. The home for each:
 | ~~`extraColor:` / `st.tile_colors`~~ | **done** -- `prop::ANY_COLOR` (tile-wide 「该格获得所有颜色」) and `colorFor:<p>` (per player) on the tile's rule instance |
 | `noBuild` | prop `noBuild` on the tile instance; `why_not_build_on` reads it |
 | `settleAtEnd` | a scheduled turn-end rule op (`On::Action(&[AtEnd])`) whose body calls `ctx::settle` -- 「并在回合结束时触发结算」 is a scheduling clause, not a tile fact (rinne_rain, tomori_crychic) |
-| `settleInstead` | **done** -- renamed `HookKind::SettleBody`, the body-replace gesture on the tile's rule instances |
+| `settleInstead` | **done** -- renamed `ActionKind::SettleBody`, the body-replace gesture on the tile's rule instances |
 
 `buy_price` / `build_cost` / `mortgage_value` / `force_buy_price` / the ring
 rent table all become **reads of the instance's props**, so a card that retunes
@@ -580,11 +580,11 @@ report it.
 |---|---|---|---|
 | 1 | `tile:edogawa` | one `settle_draw` | **done** -- smallest body; proves bind + dispatch |
 | 2 | `tile:event` | `settle_draw` + `settle_event` | **done** -- added the `ctx::draw_event` primitive |
-| 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Action(&[HookKind::PassTile])` -> `circle::settle_reward`, the body itself). The walk's `circle_reward` is the **built-in fallback** when no instance is bound |
+| 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Action(&[ActionKind::PassTile])` -> `circle::settle_reward`, the body itself). The walk's `circle_reward` is the **built-in fallback** when no instance is bound |
 | 4 | `tile:agent` | the 「若…则…否则…」 branch | **done** -- the body is the branch (同色 set / all-owned half-rent / one buy-build offer). `Play::agent_landing` is the **built-in fallback** |
 | 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `paySplitMul` stage (step 9) |
 | 6 | `tile:property` | the four-way branch | **done** -- `land_at`'s `match` is now the **built-in fallback** (`land_at_built_in`) for `StubRules` and unbound kinds, not the only path |
-| 7 | flags | card migrations | **done** -- `settleInstead` → `HookKind::SettleBody`, `settleAtEnd` → `On::Action(&[AtEnd])`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
+| 7 | flags | card migrations | **done** -- `settleInstead` → `ActionKind::SettleBody`, `settleAtEnd` → `On::Action(&[AtEnd])`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
 | 8 | docs + perf | ENGINE.md, CARDS.md, this doc | **done** |
 | 9 | Phase 3 (engine-fix batch) | the flag removal + card migrations | **mostly done** -- see [Left short](#left-short) |
 
@@ -599,7 +599,7 @@ board owner, and the engine's `land_at` is now the **built-in fallback** rather
 than the only path. Phase 3 landed the following (2026-10-06):
 
 * **The [经过] CiRCLE reward** is `tile:circle`'s **Pass entry** --
-  `On::Action(&[HookKind::PassTile])` running `circle::settle_reward` (the body
+  `On::Action(&[ActionKind::PassTile])` running `circle::settle_reward` (the body
   itself: suppression, the choice, the `passRewardAffected (kind 26)` window, the payout).
   `event:协助CiRCLE重建` re-homes the same function onto 「CiRCLE咖啡厅」.
   The hook dispatch visits `board_field` (tile-filtered, and only for kinds a
@@ -615,7 +615,7 @@ than the only path. Phase 3 landed the following (2026-10-06):
   means 「it settled, differently」 (the body is skipped, `settleAfter` runs).
   Hey Kids moved to `ChainKind::SettleBody` and to the user ruling (2026-10-06):
   it fires when **another** player settles rent on my tiles. Parking Space and
-  笑容大游行 keep `HookKind::SettleBody` (the body-replace gesture).
+  笑容大游行 keep `ActionKind::SettleBody` (the body-replace gesture).
 * **`settleAtEnd` is gone** -- 「并在回合结束时额外进行一次[触发结算]」 is a
   scheduling clause: `ctx::before_turn_end` + `On::Action(&[AtEnd])` whose body calls
   `ctx::settle`.
