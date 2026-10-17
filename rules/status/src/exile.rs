@@ -29,7 +29,7 @@
 //! * **`exileMain`** -- the return teleport is consumed as the turn's
 //!   [主要移动] (`main_moved = true`), so the player cannot also roll.
 
-use card_sdk::abi::{AbKind, GateKind, HookKind};
+use card_sdk::abi::{AbKind, ActionKind, FilterKind};
 use card_sdk::ctx::trigger;
 use card_sdk::{CardDef, On};
 
@@ -40,15 +40,15 @@ pub const STATUS_EXILE: CardDef = CardDef::new(
         // 「任意玩家获得[除外]…时」 -- the landing clause (already raised from
         // the engine's `exile_log` as `TriggerKind::Exile`; this `Abnormal`
         // hook is the same moment from the abnormal path).
-        On::Action(&[HookKind::Abnormal], "", Some(exile_landed), on_exile_landed),
-        On::Action(&[HookKind::Exile], "", None, on_exile_granted),
+        On::Action(&[ActionKind::Abnormal], "", Some(exile_landed), on_exile_landed),
+        On::Action(&[ActionKind::Exile], "", None, on_exile_granted),
         // rules.txt 50: 「处于该状态时[无法移动]，…无法使用[主动]技能和手卡的
         // [手]效果，无法收付款」 -- three gates, **CEL-only**.
         // TODO(规则书): 「不能被[指定]」 and the on-board clause are still
         // engine-side (`MatchPlayer::status_gates`), pending Untargetable /
         // on-board gate kinds.
         On::FilterFlag(
-            &[GateKind::ActGate, GateKind::PayGate, GateKind::MoveGate],
+            &[FilterKind::ActGate, FilterKind::PayGate, FilterKind::MoveGate],
             EXILED,
             None,
             refuse,

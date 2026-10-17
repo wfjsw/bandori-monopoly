@@ -12,11 +12,11 @@
 //!
 //! （2） is **two-part** and must run 「投掷前」 -- before the dice land:
 //!
-//! 1. **[`HookKind::DiceRollBefore`] (Action)** -- the `ask_number` for Y, the
+//! 1. **[`ActionKind::DiceRollBefore`] (Action)** -- the `ask_number` for Y, the
 //!    self `fans::flip_down(Y)`, the other-seat `fans::flip_up` loop, and the
 //!    log. Prompts are allowed here; this is the only window that is actually
 //!    before the roll.
-//! 2. **[`HookKind::DiceRollPlan`] (FilterValue)** -- pure: reads the Y the
+//! 2. **[`FilterKind::DiceRollPlan`] (FilterValue)** -- pure: reads the Y the
 //!    Before action stashed in per-player state and appends `Y`d4 to the move's
 //!    dice table (`add_base_count` / `add_base_sides`, same shape as
 //!    [`super::kanon_lost`]'s 「1d20+1d4」). The host folds that into the plan
@@ -42,12 +42,12 @@
 //! (no prompts). Fixing that needs a `diceRollBefore` raise on the card_move
 //! path.
 
-use card_sdk::abi::{FilterValue, HookKind};
+use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
 
-/// Y chosen at [`HookKind::DiceRollBefore`], consumed by the Plan filter.
+/// Y chosen at [`ActionKind::DiceRollBefore`], consumed by the Plan filter.
 /// One-shot per roll: Before always writes it (0 on decline); a silent
 /// After action clears it.
 const PENDING_Y: &str = "evePendingY";
@@ -56,28 +56,28 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
         On::Action(
-            &[HookKind::DeckAtGameStart],
+            &[ActionKind::DeckAtGameStart],
             "group_is(owner, 'Pastel✽Palettes')",
             None,
             at_start,
         ),
         // （2） 「投掷前」 -- ask + flips. Action: prompts allowed.
         On::Action(
-            &[HookKind::DiceRollBefore],
+            &[ActionKind::DiceRollBefore],
             "actor == owner && slot('ppFansUp') >= 1",
             Some(roll_ok),
             on_before,
         ),
         // （2） 「为此次投掷结果增加Yd4」 -- pure dice-table append.
         On::FilterValue(
-            &[HookKind::DiceRollPlan],
+            &[FilterKind::DiceRollPlan],
             "actor == owner",
             None,
             on_plan,
         ),
         // Bookkeeping: drop the one-shot Y so a later roll cannot inherit it.
         On::Action(
-            &[HookKind::DiceRollAfter],
+            &[ActionKind::DiceRollAfter],
             "actor == owner",
             None,
             clear_pending,
@@ -172,7 +172,7 @@ fn on_before(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2） 「为此次投掷结果增加Yd4」 -- pure FilterValue at [`HookKind::DiceRollPlan`].
+/// （2） 「为此次投掷结果增加Yd4」 -- pure FilterValue at [`FilterKind::DiceRollPlan`].
 /// Appends `Y`d4 to the move's dice table (`add_base_*`), so `roll_tables`
 /// includes it in the face. Reads the stash [`on_before`] wrote; never writes.
 fn on_plan(player_id: i32, mut v: FilterValue) -> FilterValue {

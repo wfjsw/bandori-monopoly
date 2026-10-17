@@ -15,7 +15,7 @@
 //! move at turn start」) and the engine reads; see the TODO below for the piece
 //! that is not expressible yet.
 
-use card_sdk::abi::{state_key, FilterValue, HookKind};
+use card_sdk::abi::{state_key, FilterValue, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,12 +28,12 @@ pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnEnd], "", Some(afterglow), tick),
         // Pure plan reshape; the one-shot latch / CiRCLE-veto arming ride
         // DiceRollAfter (the next event after the plan, before the walk).
-        On::FilterValue(&[HookKind::DiceRollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
-        On::Action(&[HookKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan_after),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan),
+        On::Action(&[ActionKind::DiceRollAfter], "actor == owner && slot('skill.tsugumiPlain.owed') != 0", None, on_plan_after),
     ],
 )
     .silent(&[1]);

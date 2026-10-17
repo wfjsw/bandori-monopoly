@@ -12,7 +12,7 @@
 //! （3） has two halves on one condition: a [停留] now, and a settle at turn end.
 //! The settle is the `settleAtEnd` counter the engine already honours.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -20,12 +20,12 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[HookKind::DiceRollAfter], card_sdk::pre::MINE, None, on_roll),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::DiceRollAfter], card_sdk::pre::MINE, None, on_roll),
         // The body-top `player_pos < 0` early-out is the condition now: a
         // player not standing on a square has nothing to settle.
-        On::Action(&[HookKind::AtEnd], "owner.pos >= 0", None, settle_now),
+        On::Action(&[ActionKind::AtEnd], "owner.pos >= 0", None, settle_now),
     ],
 )
     .silent(&[1]);

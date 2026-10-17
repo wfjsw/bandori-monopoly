@@ -6,15 +6,15 @@
 //!
 //! [反击] auto-plays when drawn: money by hand size, else draw.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
-        On::Action(&[HookKind::Drawn], "trigger_card == card.id", None, counteract),
-        On::Action(&[HookKind::DeckAtGameStart], "", None, return_at_opening),
+        On::Action(&[ActionKind::Drawn], "trigger_card == card.id", None, counteract),
+        On::Action(&[ActionKind::DeckAtGameStart], "", None, return_at_opening),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"朝同一片天空迈进"#)
@@ -29,7 +29,7 @@ const ID: &str = "AG:朝同一片天空迈进";
 /// 规则书[反击]: 「（开局时抽到此卡洗回）」 -- C# `ReturnAtOpening` /
 /// `FixOpeningHand`. The opening deal and mulligan raise no `Drawn` hooks, so
 /// the old `step() == 0` branch is unreachable; the brief maps this to
-/// `On::Action(&[HookKind::DeckAtGameStart], "", Some(...))`, which fires on this card
+/// `On::Action(&[ActionKind::DeckAtGameStart], "", Some(...))`, which fires on this card
 /// over draw + hand after the mulligan.
 fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.

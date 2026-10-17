@@ -13,7 +13,7 @@
 //! place on Space, hand its houses to your other tiles, settle becomes a
 //! turn-end [停留].
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -27,7 +27,7 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), play),
         // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
-        On::Action(&[HookKind::SettleBody, HookKind::TurnEndAfter], "", Some(counteract_guard), counteract),
+        On::Action(&[ActionKind::SettleBody, ActionKind::TurnEndAfter], "", Some(counteract_guard), counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"Parking Space"#)

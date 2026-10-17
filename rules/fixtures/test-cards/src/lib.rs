@@ -2,7 +2,7 @@
 
 //! Test-only cards for the host's cross-module tests.
 
-use card_sdk::abi::{ChainKind, FilterValue, GateKind, HookKind};
+use card_sdk::abi::{ChainKind, FilterValue, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -32,7 +32,7 @@ const STUNNER: CardDef = CardDef::new("TEST:stunner", &[On::Play("", None, stunn
 /// Models 「a counter's stun landed mid-turn」 without opening a new main move.
 const STUN_SELF_MOVER: CardDef = CardDef::new(
     "TEST:stun_self_mover",
-    &[On::Action(&[HookKind::MoveBefore], "actor == owner && card.placed", None, stun_self)],
+    &[On::Action(&[ActionKind::MoveBefore], "actor == owner && card.placed", None, stun_self)],
 );
 /// Placed on the first other player's field; guards that player against every
 /// abnormal effect (C# `IAbnormalGuard`).
@@ -40,7 +40,7 @@ const GUARD: CardDef = CardDef::new(
     "TEST:guard",
     &[
         On::Play("", None, guard_play),
-        On::FilterFlag(&[GateKind::AbnormalGuard], "", None, guard),
+        On::FilterFlag(&[FilterKind::AbnormalGuard], "", None, guard),
     ],
 );
 
@@ -54,7 +54,7 @@ const SHIELD: CardDef = CardDef::new(
     "TEST:shield",
     &[
         On::Play("", None, shield_play),
-        On::FilterFlag(&[GateKind::ImmuneAll], "", None, shield),
+        On::FilterFlag(&[FilterKind::ImmuneAll], "", None, shield),
     ],
 );
 
@@ -134,7 +134,7 @@ const CRYSTAL: CardDef = CardDef::new(
     "TEST:named-counter",
     &[
         On::Play("", None, crystal_play),
-        On::Action(&[HookKind::CounterChanged], "", Some(crystal_changed_guard), crystal_changed),
+        On::Action(&[ActionKind::CounterChanged], "", Some(crystal_changed_guard), crystal_changed),
     ],
 );
 
@@ -372,7 +372,7 @@ fn deny(player_id: i32) -> card_sdk::Asked {
 /// (ceil10(1500/2)); wired as a per-share stage it would charge 500 each.
 const TOTAL_CUT: CardDef = CardDef::new(
     "TEST:totalCut",
-    &[On::Filter(&[HookKind::PayCombinedAdd], "", Some(total_cut_yes), total_cut)],
+    &[On::Filter(&[FilterKind::PayCombinedAdd], "", Some(total_cut_yes), total_cut)],
 );
 
 fn total_cut_yes(_player_id: i32) -> bool {
@@ -394,7 +394,7 @@ fn total_cut(player_id: i32, value: i32) -> i32 {
 /// nothing.
 const DEAD_PAY: CardDef = CardDef::new(
     "TEST:deadPay",
-    &[On::Action(&[HookKind::BankruptBefore], "", Some(dead_pay_yes), dead_pay)],
+    &[On::Action(&[ActionKind::BankruptBefore], "", Some(dead_pay_yes), dead_pay)],
 );
 
 fn dead_pay_yes(player_id: i32) -> bool {
@@ -434,7 +434,7 @@ const PAY_ADD_ANY: CardDef = CardDef::new(
     "TEST:payAddAny",
     &[
         On::Play("", None, pay_add_any_play),
-        On::Filter(&[HookKind::PaySplitAdd], "", Some(total_cut_yes), pay_add_any)],
+        On::Filter(&[FilterKind::PaySplitAdd], "", Some(total_cut_yes), pay_add_any)],
 );
 
 fn pay_add_any_play(player_id: i32) -> card_sdk::Asked {
@@ -484,7 +484,7 @@ fn tele_nosettle(player_id: i32) -> card_sdk::Asked {
 /// reversal, not a flip-flop loop. Placed like `TEST:totalCut`.
 const PAY_OVERCUT: CardDef = CardDef::new(
     "TEST:payOvercut",
-    &[On::Filter(&[HookKind::PaySplitAdd], "", Some(total_cut_yes), pay_overcut)],
+    &[On::Filter(&[FilterKind::PaySplitAdd], "", Some(total_cut_yes), pay_overcut)],
 );
 
 fn pay_overcut(player_id: i32, value: i32) -> i32 {
@@ -569,7 +569,7 @@ const CHARGE_ROLL: CardDef = CardDef::new(
     "TEST:fireRoll",
     &[
         On::Play("", None, fire_roll_play),
-        On::FilterValue(&[HookKind::DiceRollPlan], "", None, fire_roll_plan),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, fire_roll_plan),
     ],
 );
 
@@ -656,7 +656,7 @@ const PRE_HOOK: CardDef = CardDef::new(
     "TEST:preHook",
     &[
         On::Play("", None, pre_hook_place),
-        On::Filter(&[HookKind::PaySplitAdd], "false", Some(pre_hook_guard), pre_hook_body,),
+        On::Filter(&[FilterKind::PaySplitAdd], "false", Some(pre_hook_guard), pre_hook_body,),
     ],
 );
 
@@ -686,7 +686,7 @@ const PRE_GATE: CardDef = CardDef::new(
     "TEST:preGate",
     &[
         On::Play("", None, pre_gate_place),
-        On::FilterFlag(&[GateKind::ImmuneAll], "false", None, pre_gate_body),
+        On::FilterFlag(&[FilterKind::ImmuneAll], "false", None, pre_gate_body),
     ],
 );
 
@@ -706,7 +706,7 @@ const PRE_ROLLPLAN: CardDef = CardDef::new(
     "TEST:preRollPlan",
     &[
         On::Play("", None, pre_rollplan_place),
-        On::FilterValue(&[HookKind::DiceRollPlan], "false", None, pre_rollplan_body),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "false", None, pre_rollplan_body),
     ],
 );
 
@@ -734,7 +734,7 @@ const PRE_ATEMD: CardDef = CardDef::new(
     "TEST:preAtEnd",
     &[
         On::Play("", None, pre_at_end_place),
-        On::Action(&[HookKind::AtEnd], "false", None, pre_at_end_body),
+        On::Action(&[ActionKind::AtEnd], "false", None, pre_at_end_body),
     ],
 );
 
@@ -773,7 +773,7 @@ const PASS_TELE: CardDef = CardDef::new(
     "TEST:pass_tele",
     &[
         On::Play("", None, pass_tele_place),
-        On::Action(&[HookKind::PassTile], "", Some(pass_tele_guard), pass_tele_body),
+        On::Action(&[ActionKind::PassTile], "", Some(pass_tele_guard), pass_tele_body),
     ],
 );
 
@@ -820,7 +820,7 @@ const TILE_HOOK: CardDef = CardDef::new(
     "TEST:tileHook",
     &[
         On::Play("", None, tile_hook_place),
-        On::Action(&[HookKind::Settle], "", Some(tile_hook_yes), tile_hook),
+        On::Action(&[ActionKind::Settle], "", Some(tile_hook_yes), tile_hook),
     ],
 );
 
@@ -872,7 +872,7 @@ const PASS_FLASH: CardDef = CardDef::new(
     "TEST:pass_flash",
     &[
         On::Play("", None, pass_flash_place),
-        On::Action(&[HookKind::PassTile], "", Some(pass_flash_guard), pass_flash_body),
+        On::Action(&[ActionKind::PassTile], "", Some(pass_flash_guard), pass_flash_body),
     ],
 );
 
@@ -906,7 +906,7 @@ const PASS_BEFORE_FLASH: CardDef = CardDef::new(
     &[
         On::Play("", None, pass_before_flash_place),
         On::Action(
-            &[HookKind::PassBefore],
+            &[ActionKind::PassBefore],
             "",
             Some(pass_before_flash_guard),
             pass_before_flash_body,
@@ -1001,7 +1001,7 @@ fn roll_then_pay(player_id: i32) -> card_sdk::Asked {
 /// must not dispatch it twice (two headers for one body).
 const DECK_ONCE: CardDef = CardDef::new(
     "TEST:deckOnce",
-    &[On::Action(&[HookKind::DeckBeforeGame], "", None, deck_once)],
+    &[On::Action(&[ActionKind::DeckBeforeGame], "", None, deck_once)],
 );
 
 fn deck_once(player_id: i32) -> card_sdk::Asked {
@@ -1016,8 +1016,8 @@ const CLOCK_HOOK: CardDef = CardDef::new(
     "TEST:clockHook",
     &[
         On::Play("", None, clock_hook_play),
-        On::Filter(&[HookKind::TurnBonusTime], "", None, clock_bonus),
-        On::Filter(&[HookKind::TurnBaseTime], "", None, clock_base),
+        On::Filter(&[FilterKind::TurnBonusTime], "", None, clock_bonus),
+        On::Filter(&[FilterKind::TurnBaseTime], "", None, clock_base),
     ],
 );
 
@@ -1067,7 +1067,7 @@ fn read_host_read(player_id: i32) -> card_sdk::Asked {
 const SETTLE_NEST: CardDef = CardDef::new(
     "TEST:settleNest",
     &[On::Action(
-        &[HookKind::SettleBody],
+        &[ActionKind::SettleBody],
         "actor == owner && card.placed && card.counter('crystals') > 0",
         None,
         settle_nest,
@@ -1094,7 +1094,7 @@ fn settle_nest(player_id: i32) -> card_sdk::Asked {
 /// runs exactly once and the sibling is not re-run.
 const SETTLE_TAIL: CardDef = CardDef::new(
     "TEST:settleTail",
-    &[On::Action(&[HookKind::SettleBody], "actor == owner && card.placed", None, settle_tail)],
+    &[On::Action(&[ActionKind::SettleBody], "actor == owner && card.placed", None, settle_tail)],
 );
 
 fn settle_tail(player_id: i32) -> card_sdk::Asked {
@@ -1114,7 +1114,7 @@ fn settle_tail(player_id: i32) -> card_sdk::Asked {
 /// Sibling hook on SettleBody -- must run once per settle, not again on resume.
 const SETTLE_SIB: CardDef = CardDef::new(
     "TEST:settleSib",
-    &[On::Action(&[HookKind::SettleBody], "actor == owner && card.placed", None, settle_sib)],
+    &[On::Action(&[ActionKind::SettleBody], "actor == owner && card.placed", None, settle_sib)],
 );
 
 fn settle_sib(player_id: i32) -> card_sdk::Asked {
@@ -1137,8 +1137,8 @@ const SILENT_PAIR: CardDef = CardDef::new(
     "TEST:silentPair",
     &[
         On::Play("", None, silent_pair_place),
-        On::Action(&[HookKind::Settle], "", Some(silent_hook_yes), silent_pair_book),
-        On::Action(&[HookKind::Settle], "", Some(silent_hook_yes), silent_pair_flash),
+        On::Action(&[ActionKind::Settle], "", Some(silent_hook_yes), silent_pair_book),
+        On::Action(&[ActionKind::Settle], "", Some(silent_hook_yes), silent_pair_flash),
     ],
 )
 .silent(&[1]);
@@ -1147,7 +1147,7 @@ const SILENT_NEST: CardDef = CardDef::new(
     "TEST:silentNest",
     &[
         On::Play("", None, silent_nest_place),
-        On::Action(&[HookKind::Settle], "", Some(silent_hook_yes), silent_nest_body),
+        On::Action(&[ActionKind::Settle], "", Some(silent_hook_yes), silent_nest_body),
     ],
 )
 .silent(&[1]);
@@ -1156,7 +1156,7 @@ const SILENT_PAY: CardDef = CardDef::new(
     "TEST:silentPay",
     &[
         On::Play("", None, silent_pay_place),
-        On::Action(&[HookKind::Settle], "", Some(silent_hook_yes), silent_pay_body),
+        On::Action(&[ActionKind::Settle], "", Some(silent_hook_yes), silent_pay_body),
     ],
 )
 .silent(&[1]);
@@ -1218,8 +1218,8 @@ const SILENT_QUIET: CardDef = CardDef::new(
     "TEST:silentQuiet",
     &[
         On::Play("", None, silent_quiet_place),
-        On::Action(&[HookKind::Settle], "", Some(silent_hook_yes), quiet_noop),
-        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, quiet_log),
+        On::Action(&[ActionKind::Settle], "", Some(silent_hook_yes), quiet_noop),
+        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, None, quiet_log),
     ],
 )
 .quiet_when_empty(&[1, 2]);
@@ -1250,7 +1250,7 @@ const SILENT_ASK: CardDef = CardDef::new(
     "TEST:silentAsk",
     &[
         On::Play("", None, silent_ask_place),
-        On::Action(&[HookKind::Settle], "", Some(silent_hook_yes), silent_ask_body),
+        On::Action(&[ActionKind::Settle], "", Some(silent_hook_yes), silent_ask_body),
     ],
 );
 

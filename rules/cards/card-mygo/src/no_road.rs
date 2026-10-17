@@ -7,7 +7,7 @@
 //! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
-use card_sdk::abi::{FilterValue, HookKind};
+use card_sdk::abi::{FilterValue, FilterKind};
 
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",
@@ -20,7 +20,7 @@ pub const NO_ROAD: CardDef = CardDef::new(
         // ABI v75: the payee rewrite is `FilterValue.payee` (the body returns
         // the new target; the wrapper calls `set_pay_target`). Pure.
         On::FilterValue(
-            &[HookKind::PaySplitAdd],
+            &[FilterKind::PaySplitAdd],
             "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
             Some(redirect_applies),
             redirect,

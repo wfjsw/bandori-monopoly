@@ -14,7 +14,7 @@
 //! The [持续] runs in the `PassTile` hook; the user is kept in a player slot
 //! (stand-in for the C# per-card `Card.User`).
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 use skill_groups::fans;
@@ -25,7 +25,7 @@ pub const JENNIFER: CardDef = CardDef::new(
         On::Play("", Some(cant_play), jennifer),
         // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')",
             None,
             pass_tile,

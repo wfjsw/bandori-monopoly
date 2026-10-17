@@ -14,7 +14,7 @@
 //! 取整百）」 -- half the tile's rent, divided by how many players are being
 //! charged, rounded **up to a hundred**.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,9 +25,9 @@ pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     "skill:桐谷透子:天上天下，唯我独尊",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
-        On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore], card_sdk::pre::MINE, None, reset),
     ],
 )
     .silent(&[1, 3]);

@@ -18,7 +18,7 @@
 //! The crystal counter and the turn-end tick are live; the mark bookkeeping
 //! and the cash-in still need hooks the ABI lacks.
 
-use card_sdk::abi::{prop, state_key, HookKind};
+use card_sdk::abi::{prop, state_key, ActionKind};
 use skill_groups::fans;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
@@ -26,10 +26,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
-        On::Action(&[card_sdk::abi::HookKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
-        On::Action(&[card_sdk::abi::HookKind::BuildAfter], card_sdk::pre::MINE, None, after_build),
+        On::Action(&[card_sdk::abi::ActionKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
+        On::Action(&[card_sdk::abi::ActionKind::BuildAfter], card_sdk::pre::MINE, None, after_build),
         On::Play("", None, trainee_guide),
-        On::Action(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
+        On::Action(&[ActionKind::TurnEnd], "", Some(turn_end_guard), turn_end),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property

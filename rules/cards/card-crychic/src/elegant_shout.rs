@@ -10,7 +10,7 @@
 //! effect-caused and lands outside the drawer's own turn (wasm_rules
 //! `HostRequest::Draw`). `pre::MINE` is the drawer (「你」).
 
-use card_sdk::abi::{ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, ActionKind};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,7 +18,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
         On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract),
-        On::Action(&[HookKind::AtEnd], "", None, at_end),
+        On::Action(&[ActionKind::AtEnd], "", None, at_end),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"优雅的呐喊"#)

@@ -9,7 +9,7 @@
 //!
 //! park on 星之鼓动山丘; anyone who passes it is force-stopped there at half rent.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,7 +23,7 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
         // 在此卡所在格子[强制停下]」 -- the body only acts on a step onto this
         // card's own tile (`card.tile`, docs/GUARDS.md §4.2).
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport && tile.id == card.tile && card.tile >= 0",
             None,
             pass_tile,

@@ -7,7 +7,7 @@
 //!
 //! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -17,10 +17,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
         On::Play("", None, play),
-        On::Action(&[HookKind::TurnEnd], "card.placed", None, turn_end),
-        On::Filter(&[HookKind::DiceRollValue], "actor == owner && move.main && card.placed", None, roll_half),
-        On::Filter(&[HookKind::PaySplitMul], "actor == owner && card.placed && value > 0", None, pay_mul),
-        On::Action(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Action(&[ActionKind::TurnEnd], "card.placed", None, turn_end),
+        On::Filter(&[FilterKind::DiceRollValue], "actor == owner && move.main && card.placed", None, roll_half),
+        On::Filter(&[FilterKind::PaySplitMul], "actor == owner && card.placed && value > 0", None, pay_mul),
+        On::Action(&[ActionKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"0.5倍速"#)
@@ -56,7 +56,7 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 /// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」 -- C# `Empty()` /
 /// `H.Unplace(this, "discard")`.
 ///
-/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
 /// count emptied by *any* write leaves the field just the same.
 /// Residual guard for [`on_crystals_changed`] -- `card_is` + the counter name

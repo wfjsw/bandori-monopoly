@@ -6,13 +6,13 @@
 //! 「商店街的」 is the shop tile group; 「价值小于等于1200」 is a price filter.
 //! 「自动免费在上面加盖一栋房子」 is `card_build` with the build cost waived.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AFTERGLOW: CardDef = CardDef::new(
     "skill:Afterglow:商店街的宠儿",
-    &[On::Action(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought)],
+    &[On::Action(&[ActionKind::Bought], card_sdk::pre::MINE, None, on_bought)],
 );
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.

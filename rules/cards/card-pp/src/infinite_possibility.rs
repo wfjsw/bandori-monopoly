@@ -15,7 +15,7 @@
 //! Not a hand play (C# `Normal => false`, no `Play` override): the [特] places it
 //! out of a deck inspection; the crystal growth runs on the `Drew` hook.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,7 +23,7 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     "PP:[大和麻弥]可能性为∞",
     &[
         On::Play("", Some(can_swap), swap),
-        On::Action(&[HookKind::Drew], "actor == owner && card.placed && value > 0", None, drew),
+        On::Action(&[ActionKind::Drew], "actor == owner && card.placed && value > 0", None, drew),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"可能性为∞"#)

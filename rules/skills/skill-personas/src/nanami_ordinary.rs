@@ -19,7 +19,7 @@
 //! invoked skill's cost, not a rule -- the sheet's `思路` column is play advice
 //! and is not implemented.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -46,8 +46,8 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Action(&[HookKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::Pass], ruleset_core::guards::OWN_START, None, on_pass),
         // （2）'s applicability is the condition + residual: another player's
         // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
         // no mark of that kind yet. The CD is a dynamic per-skill state key
@@ -59,7 +59,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
             Some(on_skill_applies),
             on_skill,
         ),
-        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
+        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, None, tick),
     ],
 )
     .silent(&[1])

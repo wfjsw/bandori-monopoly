@@ -27,7 +27,7 @@
 //! spends both kinds.
 
 use alloc::vec::Vec;
-use card_sdk::abi::{counter, mark, HookKind, MarkFilter, Message, Target, TriggerKind};
+use card_sdk::abi::{counter, mark, ActionKind, MarkFilter, Message, Target, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -36,12 +36,12 @@ pub const CLEAR_CP: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), clear_cp),
         // （1）: the spread runs at the [使用者]'s turn starts for 2 of them.
-        On::Action(&[HookKind::TurnStart], "", Some(spread_guard), spread),
+        On::Action(&[ActionKind::TurnStart], "", Some(spread_guard), spread),
         // User ruling 2026-10-07: the card leaves for the discard as soon as
         // its attached [CP点] is empty -- an event handler on the count, not a
         // check at each spend site. `CpChanged` is gone; `CounterChanged` with
         // the name check in the residual guard speaks for `counter::CP` only.
-        On::Action(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
+        On::Action(&[ActionKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"该清CP了"#)
@@ -232,7 +232,7 @@ fn spread(player_id: i32) -> card_sdk::Asked {
 /// placed (the older reading): those are the other [CP点] kind and may outlive
 /// the card, inert.
 ///
-/// Listens to this card's own [`HookKind::CounterChanged`] rather than being
+/// Listens to this card's own [`ActionKind::CounterChanged`] rather than being
 /// re-checked at each spend site, so a count emptied by *any* write -- the
 /// `mark:cp` settle clause spending one, another effect removing one -- leaves
 /// the field just the same. `CpChanged` is gone: the name check in the

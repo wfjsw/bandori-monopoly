@@ -8,7 +8,7 @@
 //! > （2）[手] 获得500资金
 //!
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -16,7 +16,7 @@ pub const SOYO_BACK: CardDef = CardDef::new(
     "CRYCHIC:（soyo）回到曾经",
     &[
         On::Play("", None, soyo_back),
-        On::Action(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
+        On::Action(&[ActionKind::Drawn], "trigger_card == card.id", None, on_drawn),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"回到曾经"#)

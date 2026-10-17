@@ -10,7 +10,7 @@
 //! id). （1）'s 「从其他玩家处获得过资金」 is a `PayAfter` landing in this
 //! player's favour, latched per turn.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -26,14 +26,14 @@ pub const SUMIMI: CardDef = CardDef::new(
         // when this player is the *payer*, which is the opposite of an inbound
         // charge; the raise's `actor` is `from`. Fire on every placed pay and
         // let the body keep the from/to filter.
-        On::Action(&[HookKind::PayAfter], "card.placed", None, after_pay),
+        On::Action(&[ActionKind::PayAfter], "card.placed", None, after_pay),
         // 「向其他人收费」 -- this player is the payee of a charge from another
         // seat. Again `MINE` is the payer side; `target == owner` is the charge.
-        On::Filter(&[HookKind::PaySplitMul], "target == owner && card.placed", None, bend),
+        On::Filter(&[FilterKind::PaySplitMul], "target == owner && card.placed", None, bend),
         // Both halves of （1） live in the body: add when GOT, else clear.
         // The old `slot('skill.sumimi.got') == 0` guard only ever admitted the
         // clear branch (FINDINGS C-SUMIMI-band-01).
-        On::Action(&[HookKind::TurnEndBefore], "actor == owner", None, at_turn_end),
+        On::Action(&[ActionKind::TurnEndBefore], "actor == owner", None, at_turn_end),
     ],
 )
     .silent(&[0]);

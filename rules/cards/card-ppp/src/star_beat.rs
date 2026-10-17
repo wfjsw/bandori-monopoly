@@ -8,7 +8,7 @@
 //!
 //! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
-use card_sdk::abi::{MoveKind, HookKind};
+use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const STAR_BEAT: CardDef = CardDef::new(
@@ -19,7 +19,7 @@ pub const STAR_BEAT: CardDef = CardDef::new(
         // tile within 5. Layer is CEL (`slot`); the near-buildable scan is
         // residual (owned ∩ dist ≤ 5 ∩ can_build_on).
         On::Action(
-            &[card_sdk::abi::HookKind::SettleAfter],
+            &[card_sdk::abi::ActionKind::SettleAfter],
             "actor == owner && slot('star_beat.layers') > 0",
             Some(has_near_buildable),
             after_settle,

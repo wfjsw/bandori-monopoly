@@ -14,7 +14,7 @@
 //! *placed* cards, so the play body places this card as the `HagumiMarkFx`
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
-use card_sdk::abi::{ChainKind, HookKind, MarkFilter, MoveKind};
+use card_sdk::abi::{ChainKind, ActionKind, MarkFilter, MoveKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,7 +28,7 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
         // only when one of this player's 育美标记 sits on the tile. Mark count
         // is a derived scan, residual (docs/GUARDS.md §4.2).
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor == owner && card.placed && move.kind != Teleport && tile.id >= 0",
             Some(has_mark_here),
             hook,

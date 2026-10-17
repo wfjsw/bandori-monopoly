@@ -20,7 +20,7 @@
 //! （3） 「不会经过…所拥有的格子」 is a walk that skips another player's deeds
 //! when they hold a mark -- the plan's route filter.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -36,19 +36,19 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
     "skill:濑田薰:梦幻的王子殿下",
     &[
         On::Play("", Some(can_use), use_skill),
-        On::Action(&[HookKind::TurnStartBefore], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnStartBefore], "", None, declare_cap),
         // （1） 「每次[经过]…时」 -- "I pass" is `actor == owner` (`MINE`); an
         // unfiltered `Pass` fires for every passer's every step. The two halves
         // of 「[经过]或被[经过]」 never both fire on one step: `Pass` here needs
         // the owner to be the passer, and `PassTile` below needs someone else
         // to step onto the owner's tile.
-        On::Action(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Action(&[ActionKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4), the passer's step onto this player's tile -- not the end-tile
         // [重叠]. `target` is not on a `passTile` payload, so the condition
         // reads the tile being entered.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor != owner && tile.id == owner.pos",
             None,
             on_passed,

@@ -8,7 +8,7 @@
 //!
 //! Counteraction-only (`Normal => false`): the player is about to lose or pay money.
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
+use card_sdk::abi::{ChainKind, ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -21,7 +21,7 @@ pub const TRITONE: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Action(&[HookKind::TurnEnd], "", None, counteract),
+        On::Action(&[ActionKind::TurnEnd], "", None, counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"迷茫之蝶们的三全音"#)

@@ -11,7 +11,7 @@
 //!
 //! Counteraction-only (`Normal => false`).
 
-use card_sdk::abi::{ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -26,8 +26,8 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Filter(&[HookKind::PaySplitAt], "actor == owner && card.placed && value > 0", None, pay_at),
-        On::Action(&[HookKind::PayAfter], "actor == owner && card.placed", None, pay_after),
+        On::Filter(&[FilterKind::PaySplitAt], "actor == owner && card.placed && value > 0", None, pay_at),
+        On::Action(&[ActionKind::PayAfter], "actor == owner && card.placed", None, pay_after),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"再次牵起手来"#)

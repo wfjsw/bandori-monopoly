@@ -11,7 +11,7 @@
 //!
 //! placed card that walks one player per turn and takes band skill cards.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -28,7 +28,7 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
         On::Play("", Some(cant_play), umiri_card),
         // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
         On::Action(
-            &[HookKind::TurnStart],
+            &[ActionKind::TurnStart],
             "card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1",
             None,
             turn_start,
@@ -36,7 +36,7 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
         // 规则书（3）: the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
         On::Action(
-            &[HookKind::TurnEnd],
+            &[ActionKind::TurnEnd],
             "card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1",
             None,
             turn_end,

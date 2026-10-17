@@ -10,7 +10,7 @@
 //! crystals for 2,000 + 500·X, then stays in play as [持续] until a draw
 //! leaves the owner holding 7+ cards.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::ActionKind;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,11 +24,11 @@ pub const FOREVER: CardDef = CardDef::new(
         // boundaries as a backstop. `Drew` alone only sees draws.
         On::Action(
             &[
-                HookKind::Drew,
-                HookKind::DiscardAfter,
-                HookKind::CardPlayed,
-                HookKind::TurnEndBefore,
-                HookKind::TurnEnd,
+                ActionKind::Drew,
+                ActionKind::DiscardAfter,
+                ActionKind::CardPlayed,
+                ActionKind::TurnEndBefore,
+                ActionKind::TurnEnd,
             ],
             "card.placed && owner.hand >= 7",
             None,

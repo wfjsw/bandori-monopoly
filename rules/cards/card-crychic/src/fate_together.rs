@@ -10,7 +10,7 @@
 //!
 //! until your next turn start, hop to the next player's tile on every rent collection.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{ActionKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,7 +18,7 @@ pub const FATE_TOGETHER: CardDef = CardDef::new(
     "CRYCHIC:一起演奏音乐的命运共同体",
     &[
         On::Play("", None, fate_together),
-        On::Action(&[HookKind::PayAfter, HookKind::TurnStart], "", Some(counteract_guard), counteract),
+        On::Action(&[ActionKind::PayAfter, ActionKind::TurnStart], "", Some(counteract_guard), counteract),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"一起演奏音乐的命运共同体"#)

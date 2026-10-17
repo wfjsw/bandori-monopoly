@@ -27,7 +27,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{CardPile, HookKind};
+use card_sdk::abi::{CardPile, ActionKind};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -47,7 +47,7 @@ pub const RETURNS: CardDef = CardDef::new(
         // used to re-check the actor and the prefix and return early -- a flash
         // per non-通用 play by the owner.
         On::Action(
-            &[card_sdk::abi::HookKind::CardPlayed],
+            &[card_sdk::abi::ActionKind::CardPlayed],
             card_sdk::pre::MINE,
             Some(on_played_is_general),
             on_played,
@@ -56,7 +56,7 @@ pub const RETURNS: CardDef = CardDef::new(
         // exists only while Returns is placed and some other survivor has a
         // band card to borrow. Derived scans (pool + `is_placed`), residual.
         On::Action(
-            &[card_sdk::abi::HookKind::TurnStartBefore],
+            &[card_sdk::abi::ActionKind::TurnStartBefore],
             card_sdk::pre::MINE,
             Some(choose_band_applies),
             choose_band,
@@ -64,9 +64,9 @@ pub const RETURNS: CardDef = CardDef::new(
         // [特]（1）「如果此卡被加入初始卡组则卡组卡数添加8」 -- the +8 is
         // unconditional on the rulebook, but the pick prompt only exists when
         // the pool can feed eight draws. Empty pool = no offer, no flash.
-        On::Action(&[HookKind::DeckBeforeGame], "", Some(deck_pool_ready), deck_before_game),
+        On::Action(&[ActionKind::DeckBeforeGame], "", Some(deck_pool_ready), deck_before_game),
         On::Action(
-            &[HookKind::DeckAtGameStart],
+            &[ActionKind::DeckAtGameStart],
             "trigger_card == card.id",
             None,
             deck_at_game_start,

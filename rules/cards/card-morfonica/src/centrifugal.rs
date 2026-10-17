@@ -8,7 +8,7 @@
 //!
 //! Counteraction-only (`Normal => false`).
 
-use card_sdk::abi::{ChainKind, GateKind, HookKind, TriggerKind};
+use card_sdk::abi::{ChainKind, ActionKind, FilterKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -30,8 +30,8 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         // The body-top `trigger::player_id() != player_id` early-out is
         // `actor == owner` (`pre::MINE`): the gate only claims immunity for
         // the seat it protects.
-        On::FilterFlag(&[GateKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
-        On::Action(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
+        On::FilterFlag(&[FilterKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
+        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"离心力，不为所动"#)

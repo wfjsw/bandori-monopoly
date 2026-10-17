@@ -17,7 +17,7 @@
 //! cap; 「每拥有一个可乐饼，移动时多投掷1个1d2」 is one extra die per croquette,
 //! which rides on the plan's dice table.
 
-use card_sdk::abi::{FilterValue, HookKind, MarkFilter};
+use card_sdk::abi::{FilterValue, ActionKind, FilterKind, MarkFilter};
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -29,12 +29,12 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Action(&[HookKind::TurnEnd], "", None, spawn),
+        On::Action(&[ActionKind::TurnEnd], "", None, spawn),
         // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
         // with a croquette is the hook's applicability (`count_marks` is not in
         // the condition vocabulary, so it is the residual guard).
-        On::Action(&[HookKind::Pass], "", Some(on_pass_has_croquette), on_pass),
-        On::FilterValue(&[HookKind::DiceRollPlan], "", None, on_plan),
+        On::Action(&[ActionKind::Pass], "", Some(on_pass_has_croquette), on_pass),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, on_plan),
     ],
 );
 

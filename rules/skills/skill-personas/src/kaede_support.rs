@@ -22,7 +22,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -39,23 +39,23 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Action(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Action(&[ActionKind::TurnStartBefore, ActionKind::DeckAtGameStart], "", None, declare_cap),
         // 状态1's offer: another player's turn start, not in 状态2, and the
         // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
         // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
         On::Action(
-            &[HookKind::TurnStartBefore],
+            &[ActionKind::TurnStartBefore],
             "actor != owner && slot('skillState') != 2",
             Some(offer_support_open),
             offer_support,
         ),
         On::Action(
-            &[HookKind::TurnStartBefore],
+            &[ActionKind::TurnStartBefore],
             "actor == owner && slot('skillState') != 2",
             None,
             at_turn_start,
         ),
-        On::Action(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Action(&[ActionKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
         On::Play("", Some(can_enter_two), enter_two),
         // 「你与对方均分那些地契收取的资金」 -- two halves of one clause (ABI v74
         // Filter/Action split). The PaySplitMul Filter reshapes the owner's take; the
@@ -67,13 +67,13 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         //   (the reshape half sees the PaySplitMul-stage figure). Same figure when no
         //   other add/mul modifier touches the rent.
         On::Filter(
-            &[HookKind::PaySplitMul],
+            &[FilterKind::PaySplitMul],
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
             Some(split_rent_applies),
             split_rent,
         ),
         On::Action(
-            &[HookKind::Effect],
+            &[ActionKind::Effect],
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
             Some(split_rent_applies),
             split_rent_gain,

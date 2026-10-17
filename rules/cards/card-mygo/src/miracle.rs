@@ -11,7 +11,7 @@
 //! instead of money when building; after passing every other player once,
 //! collect the "last three digits" purse of the crystal-closest rival.
 
-use card_sdk::abi::{counter, HookKind};
+use card_sdk::abi::{counter, ActionKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,20 +19,20 @@ pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
         On::Play("", None, miracle),
-        On::Action(&[HookKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0", None, before_build),
-        On::Action(&[HookKind::BuildAfter], "actor == owner && card.counter('crystals') >= 1 && card.placed", None, after_build),
+        On::Action(&[ActionKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed && tile.id >= 0", None, before_build),
+        On::Action(&[ActionKind::BuildAfter], "actor == owner && card.counter('crystals') >= 1 && card.placed", None, after_build),
         // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
         // counts, not only the end-tile [重叠]. Bookkeeping (the running mask)
         // is silent; the reward is the visible entry.
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor == owner && card.placed && players_on(tile.id, owner) > 0",
             Some(record_pass_applies),
             record_pass,
         ),
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "actor == owner && card.placed",
             Some(all_others_passed),
             pass_player,

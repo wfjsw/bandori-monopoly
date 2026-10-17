@@ -6,7 +6,7 @@
 //!
 //! by others until your next turn, then draw if nothing was blocked.
 
-use card_sdk::abi::{GateKind, HookKind};
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,12 +24,12 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
         // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
         // the targeting is not card-caused, so `by >= 0` is "there is a card".
         On::FilterFlag(
-            &[GateKind::Untargetable],
+            &[FilterKind::Untargetable],
             "actor == owner && by >= 0 && by != owner",
             None,
             untargetable,
         ),
-        On::Action(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
+        On::Action(&[ActionKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"夏日合宿"#)

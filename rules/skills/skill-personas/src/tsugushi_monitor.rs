@@ -19,7 +19,7 @@
 //! recipient holding the recorded figure. 「若为抽卡效果则记录2200」 is the
 //! text's own constant for a draw.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -36,12 +36,12 @@ pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     "skill:二叶筑紫:交给班长吧",
     &[
         On::Play("", Some(can_cash), cash),
-        On::Action(&[HookKind::TurnStartBefore], "", None, declare),
+        On::Action(&[ActionKind::TurnStartBefore], "", None, declare),
         // （1）/（2） interactive redirects. Rides `PaySplitChooseBefore` (v78),
         // restoring the rulebook PaySplitChoose position: the offers sit immediately
         // before the pure `PaySplitChoose` filter stage (per leg on a split).
-        On::Action(&[HookKind::PaySplitChooseBefore], "", Some(mine), on_gain),
-        On::Action(&[HookKind::PaySplitChooseBefore], "", Some(other), on_theirs),
+        On::Action(&[ActionKind::PaySplitChooseBefore], "", Some(mine), on_gain),
+        On::Action(&[ActionKind::PaySplitChooseBefore], "", Some(other), on_theirs),
     ],
 ).silent(&[1]);
 

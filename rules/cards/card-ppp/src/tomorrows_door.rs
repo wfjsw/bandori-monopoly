@@ -13,7 +13,7 @@
 //! route marker that walks 流星堂 -> 大阪中之岛公园 as its user passes it, then
 //! taxes settles from the owner's field.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{ActionKind, FilterKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -22,7 +22,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && actor == owner",
             Some(pass_tile_guard),
             pass_tile,
@@ -30,7 +30,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // (3)'s surcharge joins the rent payment at `paySplitAdd` (before `paySplitMul`),
         // so a 「支付减半」 scaler sees the shaped total.
         On::Filter(
-            &[HookKind::PaySplitAdd],
+            &[FilterKind::PaySplitAdd],
             "card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner",
             Some(pay_add_guard),
             pay_add,
@@ -40,7 +40,7 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
         // that replaces the body skips this entry.
         On::Action(
-            &[HookKind::SettleBody],
+            &[ActionKind::SettleBody],
             "card.placed && actor != owner && tile.id >= 0",
             Some(settle_body_guard),
             settle_body,

@@ -18,7 +18,7 @@
 //! 消耗减半」 also scopes to the owner's own spending: the pay bend is
 //! `actor == owner`.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -40,16 +40,16 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // 「初始1」 is created at game start; the cap is declared here and
         // re-declared (only when unset) at a turn start so a mid-game
         // placement still gets one. Both write only what they must.
-        On::Action(&[HookKind::DeckAtGameStart], "card.placed", None, declare_cap),
+        On::Action(&[ActionKind::DeckAtGameStart], "card.placed", None, declare_cap),
         On::Action(
-            &[HookKind::TurnStartBefore],
+            &[ActionKind::TurnStartBefore],
             "card.placed",
             Some(cap_unset),
             declare_cap,
         ),
         // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
         // branch. The choice / spend / pay stay in the body.
-        On::Action(&[HookKind::Pass], PASS_PRE, None, on_pass),
+        On::Action(&[ActionKind::Pass], PASS_PRE, None, on_pass),
         // 「你的资金消耗减半」 -- only the owner's own pays, and only while
         // the window is armed. `value > 0` is the amount floor.
         //
@@ -57,7 +57,7 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // `set_pay_amount((amount + 1) / 2)`). No prompt, no side effects -- the
         // `pay(` hit in the catalog is `ctx::pay` in [`on_pass`], not here.
         On::Filter(
-            &[HookKind::PaySplitChoose],
+            &[FilterKind::PaySplitChoose],
             "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
             None,
             on_pay,

@@ -5,7 +5,7 @@
 //! >  将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。
 //!
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -16,11 +16,11 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         // 规则书: 「每回合结束时失去一个」 -- the owner's own turn end.
-        On::Action(&[HookKind::TurnEnd], "actor == owner && card.placed", None, at_turn_end),
+        On::Action(&[ActionKind::TurnEnd], "actor == owner && card.placed", None, at_turn_end),
         // 规则书: 「每次掷骰获得一次资金」 -- the owner's own main-move dice
         // (`m.Seat == Seat && m.Main`). The free-roll check is residual.
         On::Action(
-            &[HookKind::DiceRollAfter],
+            &[ActionKind::DiceRollAfter],
             "actor == owner && card.placed && move.main",
             Some(roll_after_applies),
             on_roll_after,
@@ -29,8 +29,8 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         // `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's own main
         // move, with no fixed face yet. `plan.fixed_roll` carries the "no fixed
         // face" half now.
-        On::FilterValue(&[HookKind::DiceRollPlan], "card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
-        On::Action(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
+        On::Action(&[ActionKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"运动的天赋"#)
@@ -133,7 +133,7 @@ fn reroll_to_ten(player_id: i32) {
 
 /// 规则书: 「为0时置入弃牌堆」 -- C# `Empty()` / `H.Unplace(this, "discard")`.
 ///
-/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// Listens to this card's own [`ActionKind::CounterChanged`] (name-filtered to
 /// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
 /// count emptied by *any* write leaves the field just the same.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`

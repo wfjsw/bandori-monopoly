@@ -8,7 +8,6 @@
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
-use card_sdk::abi::HookKind;
 
 pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", Some(cant_play), play)]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"曲奇时间"#)
@@ -47,7 +46,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_why")))?;
     // 规则书: the C# also fires `H.Each((Fx f) => f.Reshuffled(i))` on the player.
     // `shuffle_into_deck` raises `reshuffled` from the host on commit.
-    // Listener cards declare `On::Action(&[HookKind::Reshuffled], "", Some(...))`
+    // Listener cards declare `On::Action(&[ActionKind::Reshuffled], "", Some(...))`
     // and get the notification without any card-side raise.
     Ok(())
 }

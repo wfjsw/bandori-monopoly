@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `超燃甩头`）:
 //! > 将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动掷骰增加1d6，此后抽到的玩家的下回合结束前所有玩家的移动掷骰减少1d6，此后放入事件弃牌。
 
-use card_sdk::abi::{FilterValue, HookKind};
+use card_sdk::abi::{FilterValue, ActionKind, FilterKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -23,11 +23,11 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         // (a no-op prefetch). The phase split lives in the bodies: the crystal
         // counter is the event's own phase state (`card.cp` is not a reliable
         // read on a BOARD_OWNER event instance).
-        On::FilterValue(&[HookKind::DiceRollPlan], "", None, add_die),
+        On::FilterValue(&[FilterKind::DiceRollPlan], "", None, add_die),
         // v79: `sub_die` is a pure DiceRollValue Filter using the host-supplied
         // `recorded_roll` (a peeked 1d6 from the RNG stream clone).
-        On::FilterValue(&[HookKind::DiceRollValue], "", None, sub_die_filter),
-        On::Action(&[HookKind::AtEnd], "", None, phase_end),
+        On::FilterValue(&[FilterKind::DiceRollValue], "", None, sub_die_filter),
+        On::Action(&[ActionKind::AtEnd], "", None, phase_end),
     ],
 );
 

@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `Forbidden Moca`）:
 //! > 直到你的下个回合结束，场上所有移动掷骰/2，在你的下个回合结束时永久移除此事件！
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{ActionKind, FilterKind};
 use ruleset_core::ctx;
 use card_sdk::{CardDef, Msg, On};
 
@@ -18,8 +18,8 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
         // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
         // deleted (a no-op prefetch); the `value` param is the face being
         // halved (effect), not applicability.
-        On::Filter(&[HookKind::DiceRollValue], "", None, halve),
-        On::Action(&[HookKind::AtEnd], "", None, expire),
+        On::Filter(&[FilterKind::DiceRollValue], "", None, halve),
+        On::Action(&[ActionKind::AtEnd], "", None, expire),
     ],
 );
 

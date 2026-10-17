@@ -10,7 +10,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, HookKind, MoveKind, TriggerKind};
+use card_sdk::abi::{ChainKind, ActionKind, MoveKind, TriggerKind};
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -25,18 +25,18 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
             counteract,
         ),
         On::Action(
-            &[HookKind::PassTile],
+            &[ActionKind::PassTile],
             "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport",
             None,
             pass_tile,
         ),
         On::Action(
-            &[HookKind::PayAfter],
+            &[ActionKind::PayAfter],
             "card.placed && pay_is_rent && target == owner",
             None,
             pay_after,
         ),
-        On::Action(&[HookKind::SettleAfter], "card.placed", None, settle_after),
+        On::Action(&[ActionKind::SettleAfter], "card.placed", None, settle_after),
     ],
 ).silent(&[2]).meta(&card_sdk::meta::CardMeta::new()
         .name(r#"学生会的检查"#)
