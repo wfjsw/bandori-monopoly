@@ -122,7 +122,7 @@
   /* Replay transport (bar + show handle): over every in-board surface the user
      is still inspecting -- hand dock, field row, peeks, previews, flashes --
      so play / pause / seek stay reachable mid-look. Below the interruptions
-     (modal, toast, fader): a dialog owns the screen until it is answered. */
+     (modal, toast): a dialog owns the screen until it is answered. */
   --z-transport: 35;
   /* Status banners (replay divergence / verify) ride over the transport. */
   --z-chrome-banner: 36;
@@ -132,7 +132,6 @@
   --z-auto-banner: 45;
   --z-hosted: 60;
   --z-toast: 80;
-  --z-fader: 90;
   --z-console: 1000;
 
   font-family: "BDRounded", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
@@ -182,3 +181,12 @@ img { user-select: none; -webkit-user-drag: none; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #e0cfd6; border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
+/* Scene change: the two scenes dissolve into each other as composited
+   snapshots (View Transitions API). No plate covers the screen at any point,
+   so there is no blank step between the two scenes.
+   The new scene is opaque from the first frame and the old one fades out over
+   it. The API's own symmetric cross-fade lets both go half-transparent at once,
+   which would veil the screen with the page background part-way through. */
+@keyframes scene-out { from { opacity: 1; } to { opacity: 0; } }
+::view-transition-old(root) { animation: scene-out 0.22s both; z-index: 1; }
+::view-transition-new(root) { animation: none; opacity: 1; }
