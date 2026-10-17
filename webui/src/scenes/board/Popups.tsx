@@ -195,6 +195,11 @@ export function showPlayerInfo(m: Model, i: number): void {
     (() => { const bb = borrowedBand(x); return bb ? tr("player.borrowed", { skill: cardTitle(bb.skill), who: m.charOf(bb.from)?.display ?? "" }) : ""; })(),
     x.skillNote?.k ? tr("player.skillNote", { note: fmtMsg(x.skillNote, namesOf(S)) }) : "",
     ...(x.tokens ?? []).map((tok) => `${tok.name} ×${tok.value}`),
+    ...Object.entries(x.state ?? {}).flatMap(([key, v]) => {
+      const n = typeof v === "number" ? v : (v?.value ?? 0);
+      const label = tr(`board.state.${key}`);
+      return n > 0 ? [`${label === `board.state.${key}` ? key : label} ×${n}`] : [];
+    }),
   ].filter(Boolean);
   openModal(`${namesOf(S).playerId(i)}${i === m.playerId ? tr("common.youSuffix") : ""}`, (
     <div className={s.info}>

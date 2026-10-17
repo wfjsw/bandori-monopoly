@@ -7,33 +7,34 @@
 //! > [奇迹水晶]（最多10个）。（3）[经过]CiRCLE时不获得[CiRCLE奖励]。（4）回合开始时
 //! > 此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡。
 //!
-//! Fan markers `P✽P粉丝(正)/(反)` are units of **this** card's counter
-//! (`docs/CARDS.md` → 「Pastel fans owned by the band skill」). Only this rule
-//! creates or moves them; every other card sends `fansGrant` / `fansFlip`
-//! ([`crate::fans`]). No band-skill instance on the field → no markers.
+//! Fan markers live in the per-player state dict ([`crate::fans`]), owned by
+//! no card. Clause （2） is an `On::Action` listener on
+//! [`ruleset_core::kind::FansFlip`] (「…时」 state clause = event handler).
 
 use card_sdk::abi::HookKind;
 use ruleset_core::ctx;
+use ruleset_core::kind;
 use card_sdk::{key, CardDef, Msg, On};
 use crate::fans;
 
 const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
 
 pub const PASTEL: CardDef = CardDef::new(
-    "skill:Pastel✽Palettes:与偶像一起",
+    ID,
     &[
         On::Action(&[HookKind::DeckAtGameStart], "", None, at_start),
         On::Action(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        // Fan ownership. `fansGrant` adds face-up / face-down to a holder;
-        // `fansFlip` moves `X` in one direction and applies clause （2）.
-        On::Message(&[fans::MSG_GRANT, fans::MSG_FLIP], "", None, on_fans),
+        // （2） overflow crystals. `FansFlip` is raised with the effect's X
+        // before the dict writes, so `fans::down` is still the pre-flip count.
+        // 「你」 is this card's owner (`actor == owner`).
+        On::Action(&[kind::FansFlip], "actor == owner", None, on_fans_flip),
     ],
 );
 
 /// （1）「游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张
 /// Pastel✽Palettes乐队卡时此效果不重复发动）」 -- the band card's own game-start
 /// clause; it hits every non-Pastel✽Palettes character on the board, not just
-/// the card's owner. Direct write (this IS the owning rule).
+/// the card's owner.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // 「如有场上有多张…乐队卡时此效果不重复发动」 -- only the first copy on
     // the board (lowest seat holding one) deals.
@@ -45,7 +46,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         if ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
         }
-        ctx::set_tok(p, fans::DOWN, ctx::tok(p, fans::DOWN) + 1);
+        let _ = fans::grant(p, 0, 1)?;
     }
     Ok(())
 }
@@ -73,71 +74,26 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `fansGrant` / `fansFlip`. Payload: `seat` = holder, `a`/`b` per
-/// [`crate::fans`]. Direct `set_tok` (C# `H.GainFans` is a count write) so a
-/// grant nested in an open pay pipeline does not open a `markerGain` window
-/// (same reason `PP:再次闪耀` used `set_tok` before this split).
-fn on_fans(player_id: i32) -> card_sdk::Asked {
-    let seat = ctx::message::seat();
-    if seat < 0 || ctx::player_out(seat) {
-        ctx::message::reply(0);
+/// （2）「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的反面的
+/// [P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 --
+/// `trigger::value()` is the effect's intended X; `fans::down` is still the
+/// pre-flip count (the raise happens before the dict writes). 「可为此卡添加」
+/// is the book's permissive may -- the overflow is applied.
+fn on_fans_flip(player_id: i32) -> card_sdk::Asked {
+    let x = ctx::trigger::value();
+    let down = fans::down(player_id);
+    if x <= down {
         return Ok(());
     }
-    let name_grant = ctx::message::name_is(fans::MSG_GRANT);
-    if name_grant {
-        let up = ctx::message::a().max(0);
-        let down = ctx::message::b().max(0);
-        if up > 0 {
-            ctx::set_tok(seat, fans::UP, ctx::tok(seat, fans::UP) + up);
-        }
-        if down > 0 {
-            ctx::set_tok(seat, fans::DOWN, ctx::tok(seat, fans::DOWN) + down);
-        }
-        // Wire reply = 1 + units (see `fans::MSG_FLIP`) so "handled, 0 moved"
-        // is distinct from "no receiver".
-        ctx::message::reply(up + down + 1);
+    let over = (x - down).min(10);
+    if over <= 0 {
         return Ok(());
     }
-    if !ctx::message::name_is(fans::MSG_FLIP) {
-        ctx::message::reply(0);
-        return Ok(());
-    }
-    let x = ctx::message::a();
-    let dir = ctx::message::b();
-    if x <= 0 {
-        // Handled, nothing to do — still non-zero so the sender stops.
-        ctx::message::reply(1);
-        return Ok(());
-    }
-    let (from, to) = if dir == fans::DIR_DOWN {
-        (fans::UP, fans::DOWN)
-    } else {
-        (fans::DOWN, fans::UP)
-    };
-    let held = ctx::tok(seat, from);
-    let flip = x.min(held).max(0);
-    // Pre-flip count of the from-face, for clause （2） below.
-    let pre_from = held;
-    if flip > 0 {
-        ctx::set_tok(seat, from, held - flip);
-        ctx::set_tok(seat, to, ctx::tok(seat, to) + flip);
-    }
-    // （2）「你因任意原因受到"将X个反面[P✽P粉丝]变正"的效果且X大于拥有的
-    // 反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」 --
-    // 「你」 is **this instance's owner**. Overflow is `X - pre` face-downs,
-    // taken before the counters move. Every down→up flip site goes through
-    // here (the retired FlipEffect/FlipAfter pair only covered `together_here`).
-    if dir == fans::DIR_UP && seat == player_id && x > pre_from {
-        let over = (x - pre_from).min(10);
-        if over > 0 {
-            let _ = ctx::add_crystals(over, 10);
-            ctx::log(
-                player_id,
-                &Msg::new(key!("pastel_over")).i("n", over as i64),
-            );
-        }
-    }
-    ctx::message::reply(flip + 1);
+    let _ = ctx::add_crystals(over, 10);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pastel_over")).i("n", over as i64),
+    );
     Ok(())
 }
 
@@ -168,6 +124,6 @@ pub fn at_turn_start_kani(player_id: i32) -> card_sdk::Asked {
 
 #[cfg(kani)]
 #[inline(always)]
-pub fn on_fans_kani(player_id: i32) -> card_sdk::Asked {
-    on_fans(player_id)
+pub fn on_fans_flip_kani(player_id: i32) -> card_sdk::Asked {
+    on_fans_flip(player_id)
 }

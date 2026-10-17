@@ -29,7 +29,7 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
         ),
         On::Action(
             &[HookKind::DiceRollAfter],
-            "actor == owner && tok('P✽P粉丝(正)') >= 1",
+            "actor == owner && slot('ppFansUp') >= 1",
             Some(roll_ok),
             on_roll,
         ),
@@ -38,7 +38,7 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
 
 /// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
 /// (derived plan state) stay here (not yet in the condition vocabulary).
-/// `actor == owner && tok('P✽P粉丝(正)') >= 1` is the pre.
+/// `actor == owner && slot('ppFansUp') >= 1` is the pre.
 fn roll_ok(player_id: i32) -> bool {
     if ruleset_core::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
@@ -68,7 +68,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」. The fixed-face
 /// and has-fans clauses are the residual guard / pre.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
-    let up = ctx::tok(player_id, fans::UP);
+    let up = fans::up(player_id);
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("eve_unify_title")),
@@ -93,7 +93,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            let down = ctx::tok(p, fans::DOWN).min(y);
+            let down = fans::down(p).min(y);
             if down > 0 {
                 let _ = fans::flip_up(p, down)?;
                 y -= down;

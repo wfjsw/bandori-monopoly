@@ -9,7 +9,7 @@
 //! > 3. 将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有Pastel✽Palettes角色生效。
 //!
 //! then flip every face-down fan back up. Fan moves go through the band-skill
-//! `fansFlip` message.
+//! `fans::flip_up` (state dict + `FansFlip` raise).
 
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
@@ -31,7 +31,7 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]1: 「为自己的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
     ctx::add_group_crystals(player_id, 3, i32::MAX);
     // 规则书[手]2: 「将所有正面[P✽P粉丝]变反，[获得]变反数量乘100的资金」
-    let up = ctx::tok(player_id, fans::UP);
+    let up = fans::up(player_id);
     if up > 0 {
         let flipped = fans::flip_down(player_id, up)?;
         if flipped > 0 {
@@ -57,7 +57,7 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
         if p != player_id && !(widen && ctx::in_group(p, "Pastel✽Palettes")) {
             continue;
         }
-        let down = ctx::tok(p, fans::DOWN);
+        let down = fans::down(p);
         if down > 0 {
             let flipped = fans::flip_up(p, down)?;
             if flipped > 0 {

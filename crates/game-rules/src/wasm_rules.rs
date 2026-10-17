@@ -8924,6 +8924,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::Drew
             | TriggerKind::DrewBefore
             | TriggerKind(78)
+            | TriggerKind(107) // ruleset FansFlip
             | TriggerKind::Reshuffled
             | TriggerKind::Bought
             | TriggerKind::BeforeOut

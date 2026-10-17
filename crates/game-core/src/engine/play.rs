@@ -3793,6 +3793,13 @@ impl Cx<'_> {
         ] {
             s.state_set(k, 0);
         }
+        // Bankruptcy clears **everything the player holds** (规则书 L81) --
+        // including ruleset-invented state keys (PP fans live here). The
+        // engine-owned keys above are listed for their expiry side effects;
+        // this zeros every remaining value in one generic sweep.
+        for v in s.state.values_mut() {
+            v.value = 0;
+        }
         s.state_set(key::EXILE_TO, -1);
         // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81: 「将其控制的所有棋子，persona卡，
         // group卡，和手卡移出游戏。所有其正在生效的卡，技能效果停止生效。」 The

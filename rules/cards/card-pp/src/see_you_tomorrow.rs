@@ -36,8 +36,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书[特]（1）: 「只有[使用者]的正面[P✽P粉丝]数量少等于反面[P✽P粉丝]数量才可使用」
     // 规则书[特]（2）: 「[共鸣]无视此卡的[特]效果（1）」 -- C# `CardSeeYouTomorrow.WhyNot`
     // opens the gate while `H.HasResonance(seat)` (「PP:[衍生]共鸣」 is in hand).
-    let up = ctx::tok(player_id, fans::UP);
-    let down = ctx::tok(player_id, fans::DOWN);
+    let up = fans::up(player_id);
+    let down = fans::down(player_id);
     let has_resonance = ctx::hand_count(player_id, "PP:[衍生]共鸣") > 0;
     if up > down && !has_resonance {
         return Some(Msg::new(key!("see_you_tomorrow_why_not")));
@@ -46,8 +46,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
-    let up = ctx::tok(player_id, fans::UP);
-    let down = ctx::tok(player_id, fans::DOWN);
+    let up = fans::up(player_id);
+    let down = fans::down(player_id);
     // 规则书[特]（2）: 「[共鸣]无视此卡的[特]效果（1）」 -- when the gate was passed
     // only because a 共鸣 is in hand, paying that 共鸣 is the cost of the play.
     // Declining ends the effect here.

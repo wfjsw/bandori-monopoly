@@ -1321,54 +1321,6 @@ pub fn send(
     asked(unsafe { sys::send(tp, tl, np, nl, pp, pl) })
 }
 
-/// Kani-safe cross-card send: same wire as [`send`] for a `Target::Card`
-/// message whose payload is only the typed ints. No `String` / postcard.
-///
-/// Used by the fans channel (`skill_groups::fans`) so the unmodified card
-/// bodies keep calling `fans::flip_*` / `grant` without a heap under CBMC.
-#[cfg_attr(kani, inline(always))]
-pub fn send_card_msg(
-    card: &str,
-    player: i32,
-    name: &str,
-    seat: i32,
-    a: i32,
-    b: i32,
-) -> Result<i32, Prompt> {
-    #[cfg(kani)]
-    {
-        // Pack Target::Card + typed ints without `String` / postcard.
-        let mut tbuf = [0u8; 12];
-        tbuf[0..4].copy_from_slice(&1i32.to_le_bytes()); // kind = Card
-        tbuf[4..8].copy_from_slice(&player.to_le_bytes());
-        let cid = crate::intern::intern(card).0;
-        tbuf[8..10].copy_from_slice(&cid.to_le_bytes());
-        let (tp, tl) = in_bytes(&tbuf);
-        let (np, nl) = s(name);
-        let mut pbuf = [0u8; 20];
-        pbuf[0..4].copy_from_slice(&seat.to_le_bytes());
-        pbuf[4..8].copy_from_slice(&a.to_le_bytes());
-        pbuf[8..12].copy_from_slice(&b.to_le_bytes());
-        let (pp, pl) = in_bytes(&pbuf);
-        return asked(unsafe { sys::send(tp, tl, np, nl, pp, pl) });
-    }
-    #[cfg(not(kani))]
-    {
-        let target = crate::abi::Target::Card {
-            player,
-            card: card.into(),
-        };
-        let payload = crate::abi::Message {
-            name: name.into(),
-            seat,
-            a,
-            b,
-            ..Default::default()
-        };
-        send(&target, name, &payload)
-    }
-}
-
 /// The message being handled (`On::Message`). Sender + payload + reply.
 pub mod message {
     use super::*;
@@ -1387,27 +1339,6 @@ pub mod message {
     pub fn name() -> String {
         unsafe { sys::msg_name(0, 0) };
         read_str(|b, c| unsafe { sys::msg_name(b, c) })
-    }
-
-    /// True when the message name equals `s`.
-    ///
-    /// Kani-safe: compares interned name ids (no `String`, no UTF-8 loop).
-    /// Production keeps the `name() == s` compare.
-    #[cfg_attr(kani, inline(always))]
-    pub fn name_is(s: &str) -> bool {
-        #[cfg(kani)]
-        {
-            // Host returns the interned NameId encoded as the (0,0) probe.
-            let h = unsafe { sys::msg_name(0, 0) };
-            match crate::intern::decode_handle(h) {
-                Some(id) => crate::intern::id_eq_str(id, s),
-                None => false,
-            }
-        }
-        #[cfg(not(kani))]
-        {
-            name() == s
-        }
     }
 
     /// The payload ints.

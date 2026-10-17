@@ -1607,6 +1607,9 @@ pub const SLOT_NAMES: &[&str] = &[
     "umiri_user",
     // `dream_ahead` overflow counter (`ctx::inc_slot(player_id, SLOT_X, 1)`).
     "dream_ahead_x",
+    // PP fan counters (`skill_groups::fans::{UP,DOWN}` in the state dict).
+    "ppFansUp",
+    "ppFansDown",
     // `detour` next-roll 1d6 arm (`state::set(player_id, NEXT_ROLL, 1)`); the
     // `On::RollPlan` condition is `slot('detour_next_roll') != 0`.
     "detour_next_roll",

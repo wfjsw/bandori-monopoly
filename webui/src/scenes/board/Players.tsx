@@ -98,11 +98,16 @@ function turnOrder(S: Model["S"]): number[] {
   return [...seats.filter((i) => !out(i)), ...seats.filter(out)];
 }
 
-/** Every marker a player holds: counter units, plus each field card's crystals, CP and named counters. */
+/** Every marker a player holds: counter units, keyed state values, plus each field card's crystals, CP and named counters. */
 function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
   if (!x) return [];
   const out: { label: string; n: number }[] = [];
   for (const tok of x.tokens ?? []) if (tok.value > 0) out.push({ label: tok.name, n: tok.value });
+  for (const [key, v] of Object.entries(x.state ?? {})) {
+    if (typeof v === "number") {
+      if (v > 0) out.push({ label: stateLabel(key), n: v });
+    } else if ((v?.value ?? 0) > 0) out.push({ label: stateLabel(key), n: v.value });
+  }
   for (const fc of x.field ?? []) {
     const card = cardTitle(fc.card);
     if (fc.counters["crystals"] ?? 0 > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.counters["crystals"] ?? 0 });
@@ -110,6 +115,13 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
     for (const [name, n] of Object.entries(fc.counters ?? {})) if (n > 0) out.push({ label: `${card} · ${name}`, n });
   }
   return out;
+}
+
+/** Display name for a keyed state item. Known keys have i18n; others show the wire key. */
+function stateLabel(key: string): string {
+  const k = `board.state.${key}`;
+  const s = tr(k);
+  return s === k ? key : s;
 }
 
 export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {

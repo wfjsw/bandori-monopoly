@@ -810,44 +810,40 @@ CP of the placer, gain 800) lives on `mark:cp`; the spread clause (「此卡在
 格子上添加的[CP点]及其产物」) keys on `TileMark.src` provenance the same way
 it does today.
 
-### Pastel fans owned by the band skill (ABI v83)
+### PP fans in the per-player state dict (ABI v83)
 
-The PP fan markers `P✽P粉丝(正)` / `P✽P粉丝(反)` are units of the
-Pastel✽Palettes band-skill counter, like crystals on that card. **Only**
-`skill:Pastel✽Palettes:与偶像一起` creates or moves them; every other card
-and persona skill goes through `ctx::send` to its `On::Message` handler. If no
-band-skill instance is on the field, grants and flips with no receiver do
-nothing (reply 0) -- there are no markers.
+The PP fan counters are two keys in the **per-player state dict**
+(`ctx::state`, `MatchPlayer.state`), owned by **no card**:
 
-Storage stays the holder-bound `Counter` row (display and `ctx::tok` / CEL
-`tok()` reads are unchanged). Writes run in the band card's handler, so
-`marker_owner` stamps `skill:Pastel✽Palettes:与偶像一起` deterministically
-(first writer wins is moot) and `Counter.instance` is that field uid. Bankruptcy
-of the owning rule's player purges every `P✽P粉丝*` row (`purge_markers_owned_by`);
-the instance leaving the field destroys its units (`destroy_instance_units`).
+| key | meaning |
+|---|---|
+| `ppFansUp` | face-up fans (`P㏄P粉丝(正)`) |
+| `ppFansDown` | face-down fans (`P㏄P粉丝(反)`) |
 
-Message API (wire names; payload `Message { seat, a, b, .. }`):
+Key constants live once in `rules/skills/skill-groups/src/fans.rs`
+(`skill_groups::fans::{UP, DOWN}`). Every grant / flip goes through
+`fans::{grant, flip_up, flip_down}`; readers use `fans::{up, down, total}`.
+CEL pre strings read them as `slot('ppFansUp')` (the existing 1-arg
+per-player state accessor). The webui lists non-zero state values in the
+player marker strip like tokens.
 
-| name | seat | a | b | reply (wire) | units |
-|---|---|---|---|---|---|
-| `fansGrant` | holder to grant | face-up count | face-down count | `1 + granted` | granted |
-| `fansFlip` | holder to flip | effect X (「将X个…」) | 0 = down→up, 1 = up→down | `1 + flipped` | flipped |
+`fans::flip_up(seat, x)` is the one flip helper for 「将X个反面…变正」. It
+raises the **ruleset-defined** Action kind `FansFlip`
+(`ruleset_core::kind`, wire 107, `trigger::value()` = the effect's intended
+X) **before** the dict writes, so a listener still sees the pre-flip
+face-down count. A cancelled / aborted raise (`Ok(false)` / `Err`) leaves
+both counters untouched. `flip_down` does not raise (clause （2） is only
+「变正」).
 
-Wire reply is `1 + units` so "handled, 0 moved" (1) is distinct from "no
-receiver" (0). `fans::send_fans` subtracts the 1 and stops at the first
-non-zero reply.
+Band clause （2） lives on `skill:Pastel㏄Palettes:与偶像一起` as
+`On::Action(&[FansFlip], "actor == owner", …)`: when `X >` pre-flip
+face-downs it adds `min(X - down, 10)` 奇迹水晶 to **this card** and logs
+(`pastel_over`). 「…时」 state clause = event handler on the change, not an
+inline check at each flip site. No band card on the board → the raise still
+moves the counters; only the crystal grant is silently absent.
 
-The flip handler applies band clause （2） for every down→up flip: when the
-flipped seat is **this instance's owner** and `X >` pre-flip face-downs, it
-adds `min(X - down, 10)` 奇迹水晶 to this card and logs (`pastel_over`). That
-replaces the retired `FlipEffect`/`FlipAfter` pair (TriggerKind 94/104, never
-reuse).
-
-Addressing helper (used by every caller): send to
-`Target::Card { player: seat, card: BAND }` first (that seat's own band card
-owns clause （2） for that seat); if it does not answer, fall back to the first
-band card on any seat (lowest field order) so non-PP holders' markers still
-move. No band card anywhere → 0 → caller does nothing.
+That replaces the retired `FlipEffect` / `FlipAfter` pair (TriggerKind
+94/104, never reuse).
 
 ## Trigger points (`trigger::kind()`)
 

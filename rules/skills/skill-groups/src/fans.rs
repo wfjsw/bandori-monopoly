@@ -1,77 +1,85 @@
-//! Cross-card fan-marker channel for `P✽P粉丝` (Pastel✽Palettes band skill).
+//! PP fan counters in the **per-player state dict** (`ctx::state`).
 //!
-//! The markers are units of the band-skill card's named counter. **Only**
-//! [`crate::pastel`] creates or moves them; every other card / persona skill
-//! sends these messages (see `docs/CARDS.md` → 「Pastel fans owned by the band
-//! skill」). No band-skill instance on the field → reply 0 → caller does
-//! nothing.
+//! The markers are two keyed values on each seat (`ppFansUp` / `ppFansDown`),
+//! owned by no card. Grants and flips go through these helpers so every site
+//! shares one key spelling and one flip raise. Band clause （2） is an
+//! `On::Action` listener on [`ruleset_core::kind::FansFlip`], not an inline
+//! check at each spend site.
+//!
+//! `FansFlip` is raised **before** the dict writes, with `trigger::value()` =
+//! the effect's intended X, so a listener still sees the pre-flip face-down
+//! count. A cancelled / aborted raise leaves the counters untouched.
 
 use ruleset_core::ctx;
+use ruleset_core::kind;
+use card_sdk::Prompt;
 
 /// Face-up fan counter (C# `H.FansUp`).
-pub const UP: &str = "P✽P粉丝(正)";
+pub const UP: &str = "ppFansUp";
 /// Face-down fan counter (C# `H.FansDown`).
-pub const DOWN: &str = "P✽P粉丝(反)";
-/// The owning band-skill rule id.
-pub const BAND: &str = "skill:Pastel✽Palettes:与偶像一起";
+pub const DOWN: &str = "ppFansDown";
 
-/// `Message.a` / `b` for [`grant`]: face-up / face-down counts to add.
-pub const MSG_GRANT: &str = "fansGrant";
-/// `Message.seat` = holder, `a` = effect X (「将X个…」), `b` = direction
-/// (0 = down→up 「变正」, 1 = up→down 「变反」).
-///
-/// Wire reply is `1 + units moved` so a handled-but-empty reply (1) is
-/// distinct from "no receiver" (0) — `ctx::send` returns the raw reply and
-/// [`send_fans`] subtracts the 1. Without that, a 0-flip handler would look
-/// absent and the fallback probe would run `on_fans` twice (double overflow).
-pub const MSG_FLIP: &str = "fansFlip";
-/// Direction bit: face-down → face-up (「变正」).
-pub const DIR_UP: i32 = 0;
-/// Direction bit: face-up → face-down (「变反」).
-pub const DIR_DOWN: i32 = 1;
-
-/// Grant `up` face-up / `down` face-down fans to `seat`. Reply = units granted.
-pub fn grant(seat: i32, up: i32, down: i32) -> Result<i32, card_sdk::Prompt> {
-    send_fans(MSG_GRANT, seat, up, down)
-}
-
-/// Flip `x` of `seat`'s fans in `dir` (effect X, not the clamped count).
-/// Reply = units actually flipped.
-pub fn flip(seat: i32, x: i32, dir: i32) -> Result<i32, card_sdk::Prompt> {
-    send_fans(MSG_FLIP, seat, x, dir)
+/// Grant `up` face-up / `down` face-down fans to `seat`. No raise.
+/// Returns the number of units added.
+pub fn grant(seat: i32, up: i32, down: i32) -> Result<i32, Prompt> {
+    let up = up.max(0);
+    let down = down.max(0);
+    if up > 0 {
+        ctx::state::add(seat, UP, up);
+    }
+    if down > 0 {
+        ctx::state::add(seat, DOWN, down);
+    }
+    Ok(up + down)
 }
 
 /// Flip `x` face-down → face-up (「将X个反面[P✽P粉丝]变正」).
-pub fn flip_up(seat: i32, x: i32) -> Result<i32, card_sdk::Prompt> {
-    flip(seat, x, DIR_UP)
+/// Returns the number actually flipped.
+pub fn flip_up(seat: i32, x: i32) -> Result<i32, Prompt> {
+    if x <= 0 {
+        return Ok(0);
+    }
+    let down = ctx::state::get(seat, DOWN);
+    let flip = x.min(down).max(0);
+    // Raise first so a clause-（2） listener sees `down` pre-flip. `value` is
+    // the effect's intended X (even when X > down). Cancelled / aborted
+    // (`Ok(false)` / `Err`) leaves both counters untouched -- never half-move.
+    if !ctx::raise(seat, kind::FansFlip, x)? {
+        return Ok(0);
+    }
+    if flip > 0 {
+        ctx::state::add(seat, DOWN, -flip);
+        ctx::state::add(seat, UP, flip);
+    }
+    Ok(flip)
 }
 
-/// Flip `x` face-up → face-down (「将X个正面[P✽P粉丝]变反」).
-pub fn flip_down(seat: i32, x: i32) -> Result<i32, card_sdk::Prompt> {
-    flip(seat, x, DIR_DOWN)
+/// Flip `x` face-up → face-down (「将X个正面[P✽P粉丝]变反」). No `FansFlip`
+/// raise (clause （2） is only 「变正」).
+pub fn flip_down(seat: i32, x: i32) -> Result<i32, Prompt> {
+    if x <= 0 {
+        return Ok(0);
+    }
+    let up = ctx::state::get(seat, UP);
+    let flip = x.min(up).max(0);
+    if flip > 0 {
+        ctx::state::add(seat, UP, -flip);
+        ctx::state::add(seat, DOWN, flip);
+    }
+    Ok(flip)
 }
 
-/// Address the seat's own band card first (it owns clause （2） for that seat);
-/// fall back to the first band card on any seat so non-PP holders' markers
-/// still move. No band card anywhere → 0.
-///
-/// Goes through `ctx::send_card_msg` (typed ints + interned name — no
-/// `String`/postcard under Kani). The wire reply is `1 + units` (see
-/// [`MSG_FLIP`]); this maps it back to units moved and stops at the first
-/// receiver (0 = nobody answered).
-fn send_fans(name: &str, seat: i32, a: i32, b: i32) -> Result<i32, card_sdk::Prompt> {
-    let r = card_sdk::ctx::send_card_msg(BAND, seat, name, seat, a, b)?;
-    if r != 0 {
-        return Ok(r - 1);
-    }
-    for p in 0..ctx::player_count() {
-        if p == seat {
-            continue;
-        }
-        let r = card_sdk::ctx::send_card_msg(BAND, p, name, seat, a, b)?;
-        if r != 0 {
-            return Ok(r - 1);
-        }
-    }
-    Ok(0)
+/// Face-up count on `seat`.
+pub fn up(seat: i32) -> i32 {
+    ctx::state::get(seat, UP)
+}
+
+/// Face-down count on `seat`.
+pub fn down(seat: i32) -> i32 {
+    ctx::state::get(seat, DOWN)
+}
+
+/// Total fans on `seat`.
+pub fn total(seat: i32) -> i32 {
+    up(seat) + down(seat)
 }

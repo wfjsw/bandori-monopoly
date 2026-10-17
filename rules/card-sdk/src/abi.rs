@@ -639,17 +639,15 @@ use alloc::{string::String, vec::Vec};
 ///      Filter/Action classification unchanged: Combined*/Split* filters stay
 ///      filters; the two *Before prompts stay Actions.
 ///      SAVE_VERSION unchanged.
-/// v83: **`FlipEffect` / `FlipAfter` retired; PP fans owned by the band skill**.
-///      Ids 94 (`flipEffect`) and 104 (`flipAfter`) are **retired -- never
-///      reuse**. The only raise site (`PP:有你与我在这里共度`) and the only
-///      listener (`skill:Pastel✽Palettes:与偶像一起` clause （2） overflow)
-///      moved to the cross-card `On::Message` channel: `fansGrant` / `fansFlip`
-///      (`skill_groups::fans`, see docs/CARDS.md 「Pastel fans owned by the
-///      band skill」). The band card owns every `P✽P粉丝(正)/(反)` marker;
-///      other cards must not write them. Band clause （2） now runs for **every**
-///      down→up flip (not just together_here), inside the `fansFlip` handler.
-///      New message names `fansGrant` / `fansFlip` (payload `Message.seat` +
-///      `a`/`b`; reply = units granted / flipped).
+/// v83: **`FlipEffect` / `FlipAfter` retired; PP fans in the per-player state
+///      dict**. Ids 94 (`flipEffect`) and 104 (`flipAfter`) are **retired --
+///      never reuse**. Fan counters move to `ctx::state` keys `ppFansUp` /
+///      `ppFansDown` (`skill_groups::fans`, docs/CARDS.md 「PP fans in the
+///      per-player state dict」), owned by no card. Band clause （2） runs for
+///      **every** down→up flip via the ruleset-defined Action kind `FansFlip`
+///      (wire 107, `ruleset_core::kind`; raised before the dict writes with
+///      `value` = the effect's intended X). CEL reads the fans as
+///      `slot('ppFansUp')` / `slot('ppFansDown')` (SLOT_NAMES).
 ///      SAVE_VERSION unchanged.
 pub const ABI_VERSION: i32 = 83;
 
@@ -1734,8 +1732,8 @@ impl TriggerKind {
     pub const DrewBefore: Self = Self(77);
 
     // v56 was `FlipEffect = 94` (flip-to-up filter). Retired in v83: the PP
-    // fan flip moved to the band card's `fansFlip` message. Wire id 94 is
-    // retired -- never reuse.
+    // fan flip moved to the state-dict `fans::flip_up` + `FansFlip` raise.
+    // Wire id 94 is retired -- never reuse.
 
     /// v36: a card instance's attached [CP点] count was just written (placed or
     /// cleared). `t.card` is the card the marks are attached to, `t.player_id`
@@ -1896,8 +1894,9 @@ impl TriggerKind {
     pub const AtEnd: Self = Self(103);
 
     // v78 was `FlipAfter = 104` (post-flip action for pastel's overflow
-    // crystals). Retired in v83 with FlipEffect: that clause lives in the
-    // band card's `fansFlip` handler. Wire id 104 is retired -- never reuse.
+    // crystals). Retired in v83 with FlipEffect: that clause lives on the
+    // band card's `FansFlip` Action listener. Wire id 104 is retired -- never
+    // reuse.
 
     /// Action · interactive pre-stage immediately before the pure
     /// [`Self::PaySplitChoose`] filter (支付阶段 on each settled leg) · payload
@@ -2077,6 +2076,7 @@ impl TriggerKind {
             74 => "74",  // ruleset-declared custom id
             75 => "75",  // ruleset-declared custom id
             78 => "78",  // ruleset-declared custom id
+            107 => "107", // ruleset-declared custom id (FansFlip)
             _ => "",
         }
     }

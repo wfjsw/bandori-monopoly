@@ -19,6 +19,7 @@
 //! and the cash-in still need hooks the ABI lacks.
 
 use card_sdk::abi::{prop, state_key, HookKind};
+use skill_groups::fans;
 use ruleset_core::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -61,7 +62,7 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[手]: 「在此卡上放置“粉丝数量”÷3个[奇迹水晶]」 -- C#
     // `H.PlaceFromPlay(c, -1, -1, H.Fans(i) / 3)`.
-    let fans = ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)");
+    let fans = fans::up(player_id) + fans::down(player_id);
     ctx::set_crystals(fans / 3);
     // 「然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记」
     // -- `cards_in(Deck)` is the reveal; a card's colour is the band prefix of
@@ -122,7 +123,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // Canonical marker name (U+273d); the previous body flipped a sparkle-spelled
     // alias that is not the real marker.
     if dual > 0 {
-        let down = ctx::tok(player_id, skill_groups::fans::DOWN);
+        let down = skill_groups::fans::down(player_id);
         if down > 0 {
             let flipped = skill_groups::fans::flip_up(player_id, down)?;
             if flipped > 0 {

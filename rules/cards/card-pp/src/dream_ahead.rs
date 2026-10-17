@@ -23,6 +23,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{prop, CardPile, HookKind, TriggerKind};
+use skill_groups::fans;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -70,7 +71,7 @@ fn x(player_id: i32) -> i32 {
 
 /// C# `H.Fans(seat)` -- both [P✽P粉丝] faces together.
 fn fans(player_id: i32) -> i32 {
-    ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)")
+    fans::up(player_id) + fans::down(player_id)
 }
 
 /// C# `CardDreamAhead.DeckBeforeGame` -- pull the card out of the draw pile and

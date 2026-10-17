@@ -6,8 +6,8 @@
 //! > 将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。
 //!
 //! X is 5, +ceil((down - up)/2) while down > up; [共鸣] cuts X by 5 and draws.
-//! The flip goes through the band-skill `fansFlip` message (`docs/CARDS.md`),
-//! which owns the markers and band clause （2） overflow crystals.
+//! The flip goes through `skill_groups::fans::flip_up` (state-dict +
+//! `FansFlip` raise; `docs/CARDS.md`), which band clause （2） listens to.
 
 use card_sdk::{key, CardDef, Msg, On};
 use ruleset_core::ctx;
@@ -25,8 +25,8 @@ pub const TOGETHER_HERE: CardDef =
 
 fn together_here(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整）」
-    let up = ctx::tok(player_id, fans::UP);
-    let down = ctx::tok(player_id, fans::DOWN);
+    let up = fans::up(player_id);
+    let down = fans::down(player_id);
     let mut x = 5i32;
     if up < down {
         x += (down - up + 1) / 2;
@@ -37,9 +37,9 @@ fn together_here(player_id: i32) -> card_sdk::Asked {
         ctx::draw(player_id, 1)?;
     }
     // 规则书[手]: 「将X个反面[P✽P粉丝]变正」 -- the flip effect's X is the
-    // clause's X, even when fewer are owned. The band card's `fansFlip`
-    // handler flips `min(X, down)` and applies band clause （2） to the
-    // overflow `X - down`.
+    // clause's X, even when fewer are owned. `fans::flip_up` raises
+    // `FansFlip` with X before the dict writes; band clause （2） applies the
+    // overflow `X - down` as crystals.
     if x > 0 {
         let flip = fans::flip_up(player_id, x)?;
         if flip > 0 {

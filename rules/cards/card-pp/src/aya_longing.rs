@@ -18,6 +18,7 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::HookKind;
+use skill_groups::fans;
 use ruleset_core::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -50,7 +51,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
 fn shave_x(player_id: i32) -> i32 {
-    let fans = ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)");
+    let fans = fans::up(player_id) + fans::down(player_id);
     if fans < 10 {
         100
     } else {

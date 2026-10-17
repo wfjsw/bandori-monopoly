@@ -36,7 +36,7 @@ pub const CHISATO_FRANK: CardDef = CardDef::new(
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(
             &[HookKind::PayCombinedAddBefore],
-            "target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1",
+            "target == owner && value > 0 && slot('ppFansUp') >= 1",
             Some(mine),
             on_gain,
         ),
@@ -73,7 +73,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// amount rewrite (`set_pay_amount`) and the fan flips.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
-    let up = ctx::tok(player_id, fans::UP);
+    let up = fans::up(player_id);
     let mut y = ctx::ask_number(
         player_id,
         &Msg::new(key!("chisato_frank_title")),
@@ -95,7 +95,7 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
             if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
                 continue;
             }
-            let down = ctx::tok(p, fans::DOWN).min(y);
+            let down = fans::down(p).min(y);
             if down > 0 {
                 let _ = fans::flip_up(p, down)?;
                 y -= down;

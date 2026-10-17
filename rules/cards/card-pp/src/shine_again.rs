@@ -146,9 +146,8 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[持续]（1）: 「[拥有者][获得]……资金和1个正面[P✽P粉丝]」 -- C#
     // `H.GainFans(Seat, 1, up: true)` + `H.GainR(Seat, maxPrice / 5)`.
-    // The band card's `fansGrant` handler writes with `set_tok` (direct count),
-    // so this grant nested in the pay pipeline does not open a `markerGain`
-    // [反击] window.
+    // Dict writes (`ctx::state`) do not open a `markerGain` [反击] window,
+    // so this grant is safe nested in the pay pipeline.
     let _ = fans::grant(player_id, 1, 0)?;
     // 「购买价格」÷5 is a formula-fixed gain, not a payment -- `gain_raw` so
     // the pay pipeline (PaySplitChoose etc.) cannot re-enter this hook or alter it.

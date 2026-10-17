@@ -42,7 +42,7 @@ pub const AYA_WITH: CardDef = CardDef::new(
         // immediately before the pure `PayCombinedAdd` filter stage (pre-split).
         On::Action(
             &[HookKind::PayCombinedAddBefore],
-            "value > 0 && tok('P✽P粉丝(正)') >= 1",
+            "value > 0 && slot('ppFansUp') >= 1",
             Some(mine),
             on_pay,
         ),
@@ -91,7 +91,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let amount = ctx::trigger::value();
-    let up = ctx::tok(player_id, fans::UP);
+    let up = fans::up(player_id);
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("aya_with_title")),
@@ -118,8 +118,10 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正」 -- spread Y flips across the
-/// other players who hold face-down fans. One `fansFlip` per seat (X = the
-/// slice requested for that seat).
+/// other players who hold face-down fans. One `fans::flip_up` per seat (X =
+/// the slice requested for that seat). TODO(规则书): 「将Y个…变正」 is a pool
+/// of Y across others; if each seat instead receives the remaining Y as its
+/// own effect X, overflow crystals would fire. Current reading = the slice.
 fn flip_others(player_id: i32, mut y: i32) -> card_sdk::Asked {
     for p in 0..ctx::player_count() {
         if y <= 0 {
@@ -128,7 +130,7 @@ fn flip_others(player_id: i32, mut y: i32) -> card_sdk::Asked {
         if p == player_id || ctx::player_out(p) || ctx::in_group(p, "Pastel✽Palettes") {
             continue;
         }
-        let down = ctx::tok(p, fans::DOWN).min(y);
+        let down = fans::down(p).min(y);
         if down > 0 {
             let _ = fans::flip_up(p, down)?;
             y -= down;
