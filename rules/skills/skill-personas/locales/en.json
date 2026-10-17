@@ -48,7 +48,7 @@
   "uika_imprisoned_title": "Imprisoned XII",
   "uika_imprisoned_two": "Entered state 2: [Unstoppable], fire cap 3",
   "eve_unify_ask": "Flip how many face-up [P✽P Fans]? (this roll +Yd4)",
-  "eve_unify_done": "Unify the Realm: +{{n}}",
+  "eve_unify_done": "Unify the Realm: +{{n}}d4",
   "eve_unify_granted": "Granted Eve's (2)",
   "eve_unify_title": "Unify the Realm",
   "extraordinary_star.gain": "Gained 1 fire pot: {{why}}",

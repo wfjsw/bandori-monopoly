@@ -48,7 +48,7 @@
   "uika_imprisoned_title": "Imprisoned XII",
   "uika_imprisoned_two": "进入状态2：获得[不可阻挡]，火罐上限 3",
   "eve_unify_ask": "将几个正面 [P✽P粉丝] 变反？（本次投掷 +Yd4）",
-  "eve_unify_done": "天下统一：+{{n}}",
+  "eve_unify_done": "天下统一：+{{n}}d4",
   "eve_unify_granted": "获得若宫伊芙的（2）技能",
   "eve_unify_title": "天下统一",
   "extraordinary_star.gain": "获得 1 个[火罐]：{{why}}",
