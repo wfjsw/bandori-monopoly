@@ -671,6 +671,18 @@ fn again_hand_counter_places_on_field_and_loses_equal() {
     assert_eq!(t.money(0), 10_000 - 140);
     assert_eq!(t.money(1), 10_000 - 140);
     assert!(t.on_field(1, "Mor:再次牵起手来"), "{:?}", t.field_ids(1));
+    // The card belongs to its declarer (p1), not to the payer it answered (p0):
+    // the [反击] body runs against the payment link, whose `player_id` is p0.
+    let fc = t
+        .field(1)
+        .into_iter()
+        .find(|f| f.card == "Mor:再次牵起手来")
+        .expect("placed on the declarer's field");
+    assert_eq!(
+        (fc.owner, fc.user),
+        (1, 1),
+        "owner is the counteraction declarer, not the payer it answered"
+    );
 }
 
 #[test]
