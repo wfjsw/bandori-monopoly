@@ -2790,33 +2790,6 @@ pub fn send<C: HostCtx>(
                 "send nested deeper than {MAX_NESTING}"
             )));
         }
-        // The body's `player_id` is the **receiver instance's owner** (the
-        // seat the card sits on), matching `On::Action` -- not the sender.
-        // `Target::Card { player, ..}` already names that seat; for a uid /
-        // board target, scan the fields.
-        let receiver_owner = {
-            let w = c.st().wr();
-            let mut owner = match &target {
-                abi::Target::Card { player, .. } => *player,
-                _ => sender_seat,
-            };
-            if !matches!(&target, abi::Target::Card { .. }) {
-                for p in 0..w.player_count() {
-                    if w.field_instances(p).iter().any(|(u, _)| *u == uid) {
-                        owner = p;
-                        break;
-                    }
-                }
-                if w
-                    .field_instances(game_core::state::BOARD_OWNER)
-                    .iter()
-                    .any(|(u, _)| *u == uid)
-                {
-                    owner = game_core::state::BOARD_OWNER;
-                }
-            }
-            owner
-        };
         let fuel = c.fuel()?;
         let st = c.st_mut();
         // The handler runs **as the receiver instance** (user ruling
@@ -2841,7 +2814,7 @@ pub fn send<C: HostCtx>(
         nested.msg_name = name.clone();
         nested.msg = payload.clone();
         nested.msg_reply = 0;
-        let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, receiver_owner, false);
+        let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, false);
         let st = c.st_mut();
         st.world = inner.world;
         if let Some(w) = st.world.as_mut() {
