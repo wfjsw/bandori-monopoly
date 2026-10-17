@@ -1,7 +1,7 @@
 //! Kind constants as they are written inside conditions.
 //!
 //! The values mirror the host wire enums (`card-sdk::abi::{TriggerKind,
-//! ChainKind, HookKind, MoveKind}`) so a host can pass its raw `i32` through
+//! ChainKind, ActionKind, MoveKind}`) so a host can pass its raw `i32` through
 //! without a translation table. This crate stays free of `card-sdk` /
 //! `game-core` types on purpose (G1 is an isolated module); when the host
 //! wires it up (G2) it fills these `i64`s from the same discriminants.
