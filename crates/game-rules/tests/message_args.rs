@@ -191,6 +191,42 @@ fn chain_kinds_and_counters_have_locale_text() {
     assert!(missing.is_empty(), "missing locale text: {missing:?}");
 }
 
+/// `TileMark::kind` **is** the i18n key (`mark_kind_name` -> `Msg::new(kind)`),
+/// so every kind a shipped rule places has to carry display text in both
+/// locales. The keys are looked up at render time (nothing references them as
+/// message keys), which is exactly how an unused-key sweep once deleted every
+/// one of them and left the board printing raw kinds. Keep this list in step
+/// with `tools/i18n/check.py`'s `RUNTIME_KEYS`.
+#[test]
+fn mark_kinds_have_locale_text() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../webui/src/i18n/locales");
+    let kinds = [
+        card_sdk::abi::mark::CP_KIND,
+        card_sdk::abi::mark::DESIGNATE_KIND,
+        card_sdk::abi::mark::NO_TARGET,
+        // Ruleset kinds that are not ABI constants (events/skills/cards).
+        "ember",
+        "skillBlock",
+        "skill.uikaIdol.pot",
+    ];
+    let mut missing = Vec::new();
+    for loc in ["zh-CN", "en"] {
+        let p = format!("{dir}/{loc}/game.json");
+        let game: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap();
+        for kind in kinds {
+            let text = game.get(kind).and_then(|v| v.as_str()).unwrap_or("");
+            if text.is_empty() {
+                missing.push(format!("{loc}: {kind}"));
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "mark kinds without locale text (a mark would render as its raw key): {missing:?}"
+    );
+}
+
 /// The name helpers must produce nested Msg, never a Text arg for a known key.
 #[test]
 fn name_helpers_never_text_a_known_key() {

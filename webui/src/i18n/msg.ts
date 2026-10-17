@@ -4,6 +4,9 @@
 // are resolved against the match data here, so the Rust side never carries names.
 
 import i18n from "./index";
+import { msgLookup } from "./msgKey";
+
+export { msgLookup } from "./msgKey";
 
 export type MsgArg =
   | { playerId: number }
@@ -52,10 +55,8 @@ export function fmtMsg(m: Msg | string | undefined | null, names: Names = dataNa
   if (!isMsg(m)) return "";
   const args: Record<string, unknown> = {};
   for (const [name, arg] of Object.entries(m.a ?? {})) args[name] = fmtArg(arg, names);
-  // Engine keys have no prefix and live in `game`; card keys name their own
-  // namespace ("cards:crate.key"). Unknown keys fall back to the raw key.
-  const ns = m.k.includes(":") ? undefined : "game";
-  return i18n.t(m.k, { ...args, ns, defaultValue: m.k }) as string;
+  // Unknown keys fall back to the raw key.
+  return i18n.t(m.k, { ...args, ...msgLookup(m.k), defaultValue: m.k }) as string;
 }
 
 /** One piece of a log line: plain text, or a card reference to hover/click. */
@@ -92,8 +93,7 @@ export function fmtMsgParts(m: Msg | string | undefined | null, names: Names = d
 function fmtMsgMarkers(m: Msg, names: Names, cards: { card: string; text: string }[]): string {
   const args: Record<string, unknown> = {};
   for (const [name, arg] of Object.entries(m.a ?? {})) args[name] = fmtArgMarkers(arg, names, cards);
-  const ns = m.k.includes(":") ? undefined : "game";
-  return i18n.t(m.k, { ...args, ns, defaultValue: m.k }) as string;
+  return i18n.t(m.k, { ...args, ...msgLookup(m.k), defaultValue: m.k }) as string;
 }
 
 function fmtArgMarkers(arg: MsgArg, names: Names, cards: { card: string; text: string }[]): string {
