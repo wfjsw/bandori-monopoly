@@ -65,7 +65,7 @@ is never dispatched.
 ## Action vs Filter (do_action / apply_filters) — final architecture
 
 The entry surface is the WordPress `do_action` / `apply_filters` split. The
-final `On` set (ABI v80):
+final `On` set (ABI v83):
 
 | variant | body signature | role | may emit effects? |
 |---|---|---|---|
@@ -166,8 +166,8 @@ source of truth**. Today (25 kinds):
   `PayCombinedAdd`, `PayCombinedMul`, `PayCombinedCancel`
 * buy price / deal stages -- `BuyAdd`, `BuyMul`, `BuySet`, `BuyAssign`
 * turn clock -- `TurnBonusTime`, `TurnBaseTime`
-* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v74)
-* decision gates (v76) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
+* roll / plan shaping -- `DiceRollPlan`, `DiceRollValue` (v75)
+* decision gates (v77) -- `ActGate`, `PayGate`, `MoveGate`, `ExclusiveUse`,
   `PlayGate`, `BuyGate`, `AbnormalGuard`, `ImmuneAll`, `Untargetable`,
   `Redirect`
 
@@ -215,7 +215,7 @@ Money rounds **up to a multiple of 10 once**, after every add/mul modifier
 has rewritten the running figure (user ruling 2026-10-15). An amount no
 modifier touched stays exactly as the base formula produced it.
 
-### v75: DiceRollPlan / AtEnd fold
+### v76: DiceRollPlan / AtEnd fold
 
 `On::RollPlan` is `On::FilterValue(&[HookKind::DiceRollPlan], …)` (the plan is a
 `FilterValue`). `On::AtEnd` is `On::Action(&[HookKind::AtEnd], …)`: the

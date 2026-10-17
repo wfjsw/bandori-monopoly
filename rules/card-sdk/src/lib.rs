@@ -88,7 +88,7 @@ pub mod rt;
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
 ///     On::Play("", None, play),
 ///     On::Action(&[HookKind::TurnEnd], pre::MINE, guard, tick),
-///     On::Gate(&[GateKind::ImmuneAll], pre::MINE, None, immune),
+///     On::FilterFlag(&[GateKind::ImmuneAll], pre::MINE, None, immune),
 /// ]);
 /// ```
 ///

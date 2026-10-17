@@ -521,13 +521,6 @@ use alloc::{string::String, vec::Vec};
 ///      `HHW:爱心义演`) are that end-of-calc round and keep their CeilTo.
 ///      No new import; host semantics of `set_pay_amount` composition change.
 ///      SAVE_VERSION unchanged (no save field).
-/// v73: **deed bodies** -- `OnKind::Mortgage` (9) / `OnKind::Redeem` (10)
-///      (`On::Mortgage` / `On::Redeem`, same pre/guard/body shape as
-///      `On::Settle`). A tile rule owns mortgage/redeem eligibility
-///      (规则书 基础规则 5–6) and the 50% / 60% amounts, and calls
-///      `ctx::apply_mortgage` / `ctx::apply_redeem` for the flag write +
-///      direct money move (hooks + logging stay in that mechanism).
-///
 /// v72: **persona write** -- new host import `set_persona(player_id, name)`
 ///      writes `MatchPlayer::persona` (the name `persona_is` matches). Used by
 ///      character-swap cards (Two-in-One 「替换为sumimi的另一名角色」) so the
@@ -1880,14 +1873,14 @@ impl TriggerKind {
     /// cancelling the rest of the turn. CEL-only, like [`Self::ActGate`].
     pub const PlayGate: Self = Self(101);
 
-    /// v74: **roll-value modifier** -- raised immediately before
+    /// v75: **roll-value modifier** -- raised immediately before
     /// [`Self::DiceRollAfter`] with the same payload, for reshaping the face
     /// (`fn(player_id, value) -> i32`). `DiceRollAfter` stays a pure Action event
     /// (dice already landed; a listener may log / latch / spend) and no longer
     /// rewrites `t.value`. Filter-only.
     pub const DiceRollValue: Self = Self(102);
 
-    /// v75: **scheduled turn-end callback**. Raised only for the card/uid a
+    /// v76: **scheduled turn-end callback**. Raised only for the card/uid a
     /// `ctx::at_turn_end` / `ctx::at_next_turn_end` schedule entry names, at
     /// that turn's end (one-shot). Replaces `On::AtEnd`: the registered entry
     /// is `On::Action(&[AtEnd], pre, guard, body)`. Non-filter.
@@ -1915,15 +1908,16 @@ impl TriggerKind {
         self.0
     }
 
-    /// Is this a **filter** kind (ABI v73)? Filter kinds are modifier-pipeline
+    /// Is this a **filter** kind (ABI v74)? Filter kinds are modifier-pipeline
     /// / value-shaping stages whose result the host folds back (pay amount,
     /// buy price, turn clock, roll plan, charge-cost substitute).
     /// `On::Filter` may only list these; `On::Action` only non-filter kinds.
     ///
     /// Single source of truth -- everything else (ruleset-build validation,
-    /// host, docs) reads this. Deferred (not filter today): the pure decision
-    /// gates `AbnormalGuard` / `ImmuneAll` / `Untargetable` / `Redirect` /
-    /// `BuyGate` (see docs/CARDS.md).
+    /// host, docs) reads this. Includes the v77 decision gates
+    /// (`AbnormalGuard` / `ImmuneAll` / `Untargetable` / `Redirect` /
+    /// `BuyGate` / `ActGate` / `PayGate` / `MoveGate` / `ExclusiveUse` /
+    /// `PlayGate`); see docs/CARDS.md.
     pub const fn is_filter(self) -> bool {
         matches!(
             self,
@@ -1934,8 +1928,8 @@ impl TriggerKind {
                 | Self::PaySplitAt
                 | Self::DiceRollPlan
                 // ChargePaying (78) is NOT a filter: its 「可」 opt-in prompts,
-                // and Filter bodies cannot. It stays on On::Action (deferred
-                // with the decision gates -- see docs/CARDS.md).
+                // and Filter bodies cannot. It stays on On::Action (see
+                // docs/CARDS.md).
                 | Self::BuyAdd
                 | Self::BuyMul
                 | Self::BuySet
@@ -1945,7 +1939,7 @@ impl TriggerKind {
                 | Self::PayCombinedCancel
                 | Self::TurnBonusTime
                 | Self::TurnBaseTime
-                // Decision gates (v76): pure yes/no or target/reason folds.
+                // Decision gates (v77): pure yes/no or target/reason folds.
                 | Self::AbnormalGuard
                 | Self::ImmuneAll
                 | Self::Untargetable
@@ -2372,19 +2366,19 @@ pub enum OnKind {
     /// Called at the counteraction offer, then again at LIFO resolution.
     Counteract = 2,
     /// `On::Action(kinds, cond, guard, body)` -- an **event reaction** at those
-    /// [`HookKind`]s (v73 rename of `On::Hook`; wire id 3 unchanged). Same
+    /// [`HookKind`]s (v74 rename of `On::Hook`; wire id 3 unchanged). Same
     /// `cond`/`guard`/`body` shape as [`Self::Counteract`]. The host calls it
     /// **automatically** for every placed card (placement order per player)
     /// whenever one of the kinds is raised -- no window. May emit effects;
     /// does not modify the triggering value. Kinds must be non-filter
     /// (`TriggerKind::is_filter() == false`).
     Action = 3,
-    // 4 was `AtEnd`, folded into `Action(&[TriggerKind::AtEnd], …)` in v75.
+    // 4 was `AtEnd`, folded into `Action(&[TriggerKind::AtEnd], …)` in v76.
     // Wire id 4 is retired -- never reuse.
     // 5 was `DiceRollPlan`, folded into `FilterValue(&[TriggerKind::DiceRollPlan], …)`
-    // in v75. Wire id 5 is retired -- never reuse.
+    // in v76. Wire id 5 is retired -- never reuse.
     // 6 was `Gate`, folded into `FilterFlag` / `FilterValue` at the gate kinds
-    // in v76. Wire id 6 is retired -- never reuse.
+    // in v77. Wire id 6 is retired -- never reuse.
     /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(pre, guard,
     /// body)`. Tile rules (`tile:*`) are one per board tile kind and this is what
     /// runs when that tile is [结算]d, inside the settle chain (a
