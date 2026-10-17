@@ -41,10 +41,12 @@ const emit = () => listeners.forEach((cb) => cb());
 window.addEventListener("popstate", emit);
 
 /**
- * A phone, in either orientation: the rotate hint's size class without its
- * portrait clause. Tablets and desktops keep a normal History stack.
+ * A phone-sized touch device in either orientation (short side <= 600): the
+ * viewport's long side is ~850px in landscape, so a plain `max-width` misses
+ * it there. Tablets and desktops keep a normal History stack.
  */
-export const PHONE_QUERY = "(pointer: coarse) and (max-width: 600px)";
+export const PHONE_QUERY =
+  "(pointer: coarse) and (max-width: 600px), (pointer: coarse) and (max-height: 600px)";
 
 /** iOS home-screen PWA (`navigator.standalone`); absent in every other shell. */
 type StandaloneNavigator = Navigator & { standalone?: boolean };
