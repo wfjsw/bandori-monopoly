@@ -110,7 +110,7 @@ fn firepot_tick_world(user: i32, pre_rest: i32, pre_fire: i32) -> World {
 fn firepot_01_tick_iff_at(user: i32) {
     let player = user;
     let pre_rest: i32 = kani::any();
-    kani::assume(pre_rest >= 0 && pre_rest <= 2);
+    kani::assume(pre_rest >= 0 && pre_rest <= 3);
     let pre_fire: i32 = kani::any();
     kani::assume(pre_fire >= 0 && pre_fire <= 1);
     let w = firepot_tick_world(user, pre_rest, pre_fire);
@@ -127,8 +127,8 @@ fn firepot_01_tick_iff_at(user: i32) {
     let post_fire = world::with_world(|ww| ww.charge[player as usize]);
 
     let grants = spec::skills_ag::firepot_01_grants(pre_rest);
-    kani::cover!(grants, "third idle turn grants a pot");
-    kani::cover!(!grants, "first/second idle turn grants nothing");
+    kani::cover!(grants, "fourth idle turn grants a pot");
+    kani::cover!(!grants, "first/second/third idle turn grants nothing");
     if grants {
         crate::kassert!(
             spec::skills_ag::firepot_01_grant_log_ok(effects, player),
@@ -196,7 +196,8 @@ fn moca_offer_world(pre_fire: i32, src_pos: i32, used: i32) -> World {
     w.pos[src as usize] = src_pos;
     w.pos[owner as usize] = (src_pos + 17) % 60; // not already there
     w.group_id[owner as usize] = band_key();
-    // Per-source CD key the body builds as `skill.mocaSelf.used:<src>`.
+    // The old per-source CD key (`skill.mocaSelf.used:<src>`) is gone with the
+    // 2026-10-17 sheet drop; `used` only seeds a stale key the body ignores.
     let key = intern::intern(alloc_key(src));
     w.key_set(owner, key, used);
     // Yes/no prompt: pre-seat opt_n so ask explores both answers.
@@ -236,11 +237,10 @@ pub fn moca_02_teleport_iff() {
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
 
-    let gated = used >= 2 || pre_fire < 1;
+    let gated = pre_fire < 1;
     let accepted = !effects.is_empty();
     kani::cover!(accepted, "owner accepts (fire spend + teleport)");
     kani::cover!(!accepted, "gated or declined (no-op)");
-    kani::cover!(used == 2, "CD exhausted (OPEN-2次cd)");
     kani::cover!(pre_fire == 0, "no fire pot");
 
     if gated {
@@ -357,22 +357,22 @@ pub fn ran_02_mutant_is_detected() {
 #[kani::unwind(8)]
 pub fn firepot_01_tick_formula() {
     let pre_rest: i32 = kani::any();
-    kani::assume(pre_rest >= 0 && pre_rest <= 2);
+    kani::assume(pre_rest >= 0 && pre_rest <= 3);
     let grants = spec::skills_ag::firepot_01_grants(pre_rest);
     let next = spec::skills_ag::firepot_01_next_rest(pre_rest);
-    if pre_rest == 2 {
-        crate::kassert!(grants, "third idle turn grants");
+    if pre_rest == 3 {
+        crate::kassert!(grants, "fourth idle turn grants");
         crate::kassert!(next == 0, "counter resets");
     } else {
-        crate::kassert!(!grants, "first/second idle turn grants nothing");
+        crate::kassert!(!grants, "first/second/third idle turn grants nothing");
         crate::kassert!(next == pre_rest + 1, "counter advances");
     }
-    // Mutant is `pre+1 >= 2` (grants at rest 1 and 2); card is `pre+1 >= 3`
-    // (grants only at rest 2). They disagree exactly at rest 1.
+    // Mutant is `pre+1 >= 2` (grants far too early); card is `pre+1 >= 4`
+    // (grants only at rest 3). They disagree at rests 1, 2 and 3.
     kani::cover!(pre_rest == 1, "reachable disagreement (rest 1)");
     crate::kassert!(
-        grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest != 1,
-        "mutant disagrees at rest 1"
+        grants != spec::skills_ag::firepot_01_grants_mutant(pre_rest) || pre_rest < 1,
+        "mutant disagrees at rest 1+"
     );
 }
 

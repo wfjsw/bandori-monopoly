@@ -8,26 +8,27 @@ use crate::world::Effect;
 
 // ===========================================================================
 // C-AG-firepot-01 (shared (1) of all five)
-// 「（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）」
-// OPEN-每三回合: whose turns? The sheet's (1) is the band-wide rest counter;
+// 「（1）每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）」
+// OPEN-每四回合: whose turns? The sheet's (1) is the band-wide rest counter;
 // this spec pins the tick arithmetic the text determines: after three ticks
 // with no (2) press, +1 [火罐]; the counter resets. 「初始1，上限1」 is the
 // pot cap (rulebook-doc.md 专有名词 2).
 // ===========================================================================
 
 /// Next rest-counter value after one idle turn-end tick.
+/// 「每四回合」: fires when `pre_rest + 1 >= 4`.
 pub fn firepot_01_next_rest(pre_rest: i32) -> i32 {
     let n = pre_rest + 1;
-    if n >= 3 {
+    if n >= 4 {
         0
     } else {
         n
     }
 }
 
-/// Does this tick grant a pot? (pre_rest + 1 >= 3)
+/// Does this tick grant a pot? (pre_rest + 1 >= 4)
 pub fn firepot_01_grants(pre_rest: i32) -> bool {
-    pre_rest + 1 >= 3
+    pre_rest + 1 >= 4
 }
 
 /// Exact log of a granting tick: +1 fire.
@@ -55,10 +56,10 @@ pub fn firepot_01_grants_mutant(pre_rest: i32) -> bool {
 // ===========================================================================
 // C-AG-moca-02 (青叶摩卡 我行我素 (2))
 // 「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]传送到其所在格子
-//  （不触发结算且该传送本身不引发其他被动效果（如玩家重叠），该效果对每个
-//  玩家的被动技能和卡存在2次使用cd）」
+//  （不触发结算且该传送本身不引发其他被动效果（如玩家重叠））」
 // Determined half: spend 1 [火罐] and [传送] to the actor's tile, no settle.
-// OPEN-2次cd: cooldown arithmetic not invented.
+// Sheet 2026-10-17 drops the old per-source 「2次使用cd」; the offer is gated
+// only by the fire pot.
 // ===========================================================================
 
 /// Accepted offer: fire −1 and teleport to the actor's tile. The CD counter

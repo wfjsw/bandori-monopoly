@@ -1,7 +1,7 @@
 //! `skill:上原绯玛丽:大家一起迈出新的一步`
 //!
 //! 规则书（skill sheet, 上原绯玛丽）:
-//! > （1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
+//! > （1）每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）
 //! > （2）移动阶段前，你可以消耗一个火罐指定你的此次移动仅在单/双数格上进行。
 //!
 //! （1） is the shared Afterglow rest counter (see [`super::ran_red`]).
@@ -34,7 +34,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
+/// （1）「每四回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
 fn tick(player_id: i32) -> card_sdk::Asked {
     super::ran_red::rest_tick(player_id)
 }

@@ -3,7 +3,7 @@
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:春日影`）:
 //! > 春日影 
 //! >  ：
-//! > （1）[特] 若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。
+//! > （1）[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。
 //! > （2）（此卡可作为[反击]打出）使用一次Crychic角色的技能
 //!
 //! runs a CRYCHIC character skill (reroll / step toward / cancel a rent).
@@ -33,9 +33,11 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             None,
             counteract
         ),
-        // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000，可选择…」 -- the
-        // offer exists only at that asset threshold. `assets_of` is a derived
-        // list (money + land + houses), residual (docs/GUARDS.md §4.2).
+        // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择…」 -- the
+        // offer exists only at that asset *and* hand-size threshold. `assets_of`
+        // is a derived list (money + land + houses), residual (docs/GUARDS.md
+        // §4.2). `Drawn` fires with the card already in hand (`wasm_rules.rs`
+        // 「it is still in hand」), so 「手牌」 counts this card.
         On::Action(
             &[ActionKind::Drawn],
             "trigger_card == card.id",
@@ -48,7 +50,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
         .name(r#"春日影"#)
         .raw_name(r#"春日影"#)
         .tags(&[r#"反击"#, r#"特"#])
-        .text(r#"（1）[特] 若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。（2）（此卡可作为[反击]打出）使用一次Crychic角色的技能"#)
+        .text(r#"（1）[特] 若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。（2）（此卡可作为[反击]打出）使用一次Crychic角色的技能"#)
         .cell(r#"M3"#)
         .fields(&[("group", r#"CRYCHIC"#), ("owner", "")]));
 
@@ -114,14 +116,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`on_drawn`]: 「若抽到此卡时你的总资产大于等于20000」.
+/// Residual guard for [`on_drawn`]: 「若抽到此卡时你的总资产大于等于20000且手牌不多于5张」.
 /// C# `H.AssetsOf(seat) >= 20000`. Derived scan (money + land + houses),
-/// outside the CEL schema (docs/GUARDS.md §4.2).
+/// outside the CEL schema (docs/GUARDS.md §4.2). 「手牌不多于5张」 is the hand
+/// size at the `Drawn` moment -- the card itself is already in hand.
 fn assets_ready(player_id: i32) -> bool {
-    assets_of(player_id) >= 20000
+    assets_of(player_id) >= 20000 && ctx::hand_size(player_id) <= 5
 }
 
-/// 规则书（1）[特]: 「若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，
+/// 规则书（1）[特]: 「若抽到此卡时你的总资产大于等于20000且手牌不多于5张，可选择使其直接从抽牌堆打出，
 /// 依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- C#
 /// `CardHaruhikage.Drawn` -> `Special`.
 /// Applicability is `assets_ready`; the ask is the 「可选择」 opt-in.

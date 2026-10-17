@@ -1028,6 +1028,94 @@ fn tomori_fire_on_passing_through_ring() {
     assert_eq!(t.charge(0), 4, "+1 for [经过] RiNG 1 on the way");
 }
 
+#[test]
+fn tomori_teleport_settles_at_the_destination() {
+    // 规则书 (2): 「在该玩家[触发结算]前强制将该玩家[传送]至自己所在的格子
+    // 并[触发结算]」 -- the settle of the abandoned landing is retargeted to the
+    // destination tile (Q7). The destination's own [触发结算] must run.
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 4, 4);
+    // P0 stands on an unowned deed; its settle IS the optional buy.
+    let deed = tile("江户川公园");
+    t.set_pos(0, deed);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, deed + 2); // landing at deed+3, within 5 of P0
+    t.dice(&[1]); // deed+2 -> deed+3
+    t.roll(1).unwrap();
+    let mut pressed = false;
+    let mut bought = false;
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori_poem") {
+            let _ = t.answer_one(0); // accept the 诗超绊 press
+            pressed = true;
+        } else if p.title.key().contains("ask.buy") {
+            bought = true;
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(pressed, "诗超绊 was offered; keys={:?}", t.recent_keys(16));
+    assert_eq!(
+        t.pos(1),
+        deed,
+        "P1 landed on P0's tile; keys={:?}",
+        t.recent_keys(20)
+    );
+    assert!(
+        bought,
+        "the destination tile's [触发结算] ran (buy prompt); keys={:?}",
+        t.recent_keys(20)
+    );
+}
+
+#[test]
+fn tomori_self_teleport_settles_at_the_destination() {
+    // 规则书 (3): 「在[触发结算]前将自己[传送]至那名玩家所在的格子并[触发结算]」
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 4, 4);
+    let deed = tile("江户川公园");
+    t.set_pos(1, deed);
+    t.set_pos(0, deed + 2); // P0's landing at deed+3, within 5 of P1
+    t.dice(&[1]); // deed+2 -> deed+3
+    t.roll(0).unwrap();
+    let mut pressed = false;
+    let mut bought = false;
+    for _ in 0..32 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        if t.prompt_refers("tomori") || p.title.key().contains("tomori_poem") {
+            let _ = t.answer_one(0); // accept the 诗超绊 press (cost 1)
+            pressed = true;
+        } else if p.title.key().contains("ask.buy") {
+            bought = true;
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(pressed, "诗超绊 was offered; keys={:?}", t.recent_keys(16));
+    assert_eq!(t.pos(0), deed, "P0 landed on P1's tile");
+    assert!(
+        bought,
+        "the destination tile's [触发结算] ran (buy prompt); keys={:?}",
+        t.recent_keys(20)
+    );
+}
+
 // ---------------------------------------------------------------- 千早爱音 重新开始
 
 #[test]
