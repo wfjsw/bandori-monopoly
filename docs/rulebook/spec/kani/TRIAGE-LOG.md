@@ -1403,3 +1403,31 @@ finished on the combined master. Non-success rows:
 | `ppp::bang_dream_02_teleport_owned_iff` | UNWINDING 1560 s | `unwinding assertion loop 0` at `ctx::owned_tiles` Range fold | **A** | `owned_tiles` used a symbolic-length Range fold (`0..owned_count`); `collect`/`extend_trusted` cliffed at 32. Kani version uses a bounded while loop |
 | `ppp::pipopa_01_iff` | SUCCESSFUL 300 s | — | — | recorded (PlaceCard.dest fix from batch 3 landed) |
 | `skills_sumimi::band_01_clear_iff_at` | (proactive) | guard changed to `actor == owner` | **B** | both halves of （1） now tested: book 「这回合从别人那里拿到过钱：回合结束时团卡 +1 奇迹水晶；没拿到就清空团卡上的水晶。」 — add +1 when GOT, clear when not |
+
+## triage3 batch 11 — skills_hhw central non-success rows (kani-pass@fc3ff3e1)
+
+Central pass rows (unit `skills_hhw`, features `band-hhw,skills-personas,skills-groups`).
+Per-proof detail lives in `docs/rulebook/spec/kani/hhw.md` § skills_hhw triage.
+
+| id | before | failing assertion / phase | class | action |
+|---|---|---|---|---|
+| `kokoro_02_circle_pass_1500_iff` | TIMEOUT 1800 s | BMC/symex stuck in `ir_fill::fill_geometry_bins` (`players_on` 60×seats×filter fold). Log never reached `Generated N VCC(s)` | **C** (+E cliff) | `fill_for_guard` bit masks targeted a retired FnId numbering. `needs_geom = (fns >> 27) & 0x1F` treated `TileIs` (30) as geometry and **skipped** `fill_board_sets` for it (`needs_sets = >> 6` hit Money..Hand). `OWN_START` = `tile_is(tile.id,'circle')` therefore (a) filled the expensive geometry bins and (b) left `SetId::Circle` empty so the guard could never admit. Masks now derived from `FnId::*` (sets: TileIs/TileIn/Blocked; geom: PlayersOn/NextDist/OthersWithin/OwnedWithin/OnPath). Also `State` bit was `>> 37` (enum is 33) — `state()` rows never filled |
+| `kokoro_02_noop_non_circle` | TIMEOUT 1800 s | same geometry cliff | **C** | same mask fix; `tile_is` now consults the filled Circle set and rejects tile 5 |
+| `misaki_skill_01_pass_fire_iff` | VACUOUS 444 s | cover.1 `guard admits` **UNSATUSFIABLE**; covers 2/3 UNREACHABLE (`0 of 3 cover properties satisfied (2 unreachable)`) | **C** | `guard_needs` only treated `FnId Slot..=CounterIs (0..=4)` args as name ids, so `TileNamed('弦卷集团')`'s const hash was never `note_named`'d → no `named` row → `tile_named` answered -1 → `tile.id == tile_named(…)` unsat. Now `Slot..=TileNamed (0..=5)` |
+| `kaoru_01_pot_arm_iff` | TIMEOUT 1800 s | last unwind `symbolic_pass_world`; body `settle` does `tok(p,THIEF/THIEF_WIRE)` ×4 + `fire::gain`/Msg | **C** (+E body ABI) | `symbolic_pass_world` called `host::install()`, **replacing** the per-harness `skills_hhw_dispatch` subset with the full ~300-op match (TRIAGE-LOG `op-subset` SSA cliff). Subset is now kept; body ops are `player_count`/`count_held_name`/`gain_charge`/`log` — all declared |
+| `kaoru_01_mutant_is_detected` | TIMEOUT 1800 s | same | **C** | same |
+| `band_01_declined_is_noop` | FAILED 158 s | `host op outside declared per-harness subset` (`host::outside_subset`) | **C** | `on_pay_choose` reaches `trig_target`/`trig_value`/`trig_set_pay_amount`/`add_counter_self` (+ `counter_self`). Arms exist; added to `skills_hhw_dispatch` |
+| `band_01_accepted_doubles_iff` | FAILED 213 s | same `outside_subset`; cover `accepted path` unreachable | **C**+**B** | subset fix + **answer polarity inverted**: `ask_yes` is `ask_raw==0` (0=yes, 1=no; see `events.rs` `chart_rush_world`). Harnesses had 0=decline / 1=accept. Flipped |
+| `band_01_mutant_is_detected` | FAILED 159 s | same `outside_subset` | **C**+**B** | same; mutant now takes the accept arm (answers[0]=0) so the doubling is actually exercised |
+
+Also kept from the in-progress hand-off (sound):
+* `fill_geometry_bins` `players_on` outer tile loop rewritten as an 8×8 chunk walk (unwind bound 8, not 60).
+* `guard_needs` TileNamed name-id recognition (the misaki vacuous fix).
+
+Gates (this batch, `CARGO_TARGET_DIR=/home/monopoly/kani-target-triage3`):
+* `cargo kani --only-codegen -p rules-kani --no-default-features --features band-hhw,skills-personas,skills-groups` — Finished, no `error` lines.
+* `cargo test -p rules-kani` ×2 — all suites `ok` (0 failed).
+
+No CBMC re-times this batch: `free -m` available 1317 MB (< 12000) and `tools/kani/central.sh --retry-nonsuccess` is already running its own `cbmc` (mor unit). All eight rows are **needs re-time**.
+
+Soundness: unwinding assertions ON; no `#[ignore]`; no allowlist; no spec weakening; no production-file edits (only `rules/kani/**`).
