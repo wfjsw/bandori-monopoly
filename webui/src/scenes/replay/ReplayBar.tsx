@@ -10,6 +10,7 @@
 
 import { useRef, useState } from "react";
 import { useSessionOther, useTick } from "../../core/hooks";
+import { designBox } from "../../app/stageScale";
 import { useHotkeys } from "../../hooks/dom";
 import { useResizeObserver } from "../../hooks/measure";
 import { D } from "../../core/data";
@@ -88,7 +89,7 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
   useResizeObserver(barRef, (el) => {
     const root = el.parentElement;
     if (!root) return;
-    const h = prefs.hidden ? 0 : el.offsetHeight;
+    const h = prefs.hidden ? 0 : designBox(el).height;
     root.style.setProperty("--replay-bar-h", `${h}px`);
     root.style.setProperty("--replay-bar-bottom", !prefs.hidden && prefs.dock === "bottom" ? `${h}px` : "0px");
     root.style.setProperty(

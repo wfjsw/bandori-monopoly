@@ -11,6 +11,7 @@ import { useEventListener } from "../hooks/dom";
 import { clearForced, isForced, setStageRotated, subscribeForced, usePortraitPhone } from "./rotation";
 import { STAGE_H, STAGE_W } from "../styles/layout";
 import { type Insets, type StageBox, stageBox } from "./stageBox";
+import { setStageScale } from "./stageScale";
 import s from "./Stage.module.css";
 
 export { STAGE_H, STAGE_W };
@@ -246,6 +247,7 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
   const tall = useStageFillValue();
   const { scale, w, h, compact, shiftX, shiftY, rotated } = useStage(tall);
   setStageRotated(rotated);
+  setStageScale(scale);
   useEffect(() => {
     document.documentElement.toggleAttribute("data-compact", compact);
     if (compactNow === compact) return;
@@ -254,15 +256,25 @@ export function Stage({ children, transitioning }: { children: ReactNode; transi
   }, [compact]);
   const bg = useBackdropValue();
   const src = bg ? backdropUrl(bg) : "";
+  // Split the scaled element in two: the placer owns screen-space geometry
+  // (`shiftX` / `shiftY` and the fixed-centre transform), and the stage lays
+  // out at design size under `zoom`. `zoom` scales used length values, so the
+  // engine rasterizes glyphs at the final device size instead of texture-
+  // scaling a design-sized layer (the source of the softness).
   return (
     <>
       <Backdrop src={src} snap={transitioning} />
       <div
-        className={s.stage}
-        data-stage
-        style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(calc(-50% + ${shiftX}px), calc(-50% + ${shiftY}px))${rotated ? " rotate(90deg)" : ""} scale(${scale})` }}
+        className={s.placer}
+        style={{
+          width: w * scale,
+          height: (tall ? h : STAGE_H) * scale,
+          transform: `translate(calc(-50% + ${shiftX}px), calc(-50% + ${shiftY}px))${rotated ? " rotate(90deg)" : ""}`,
+        }}
       >
-        {children}
+        <div className={s.stage} data-stage style={{ width: w, height: tall ? h : STAGE_H, zoom: scale }}>
+          {children}
+        </div>
       </div>
     </>
   );

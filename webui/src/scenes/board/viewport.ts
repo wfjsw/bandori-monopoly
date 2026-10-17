@@ -23,8 +23,9 @@ import {
   type PointerEvent as ReactPointerEvent, type RefObject,
 } from "react";
 import { useEventListener } from "../../hooks/dom.ts";
+import { designBox } from "../../app/stageScale.ts";
 import { useResizeObserver } from "../../hooks/measure.ts";
-import { localDelta, localPoint } from "../../app/rotation";
+import { localDelta, localPoint } from "../../app/rotation.ts";
 
 /** Smallest board window (stage px) the map is ever laid out at. */
 export const MIN_BOARD = 240;
@@ -241,7 +242,8 @@ export function useBoardViewport(): ViewportApi {
   useResizeObserver(() => wrapRef.current?.parentElement ?? null, () => {
     const slot = wrapRef.current?.parentElement;
     if (!slot) return;
-    const next = mapBox(slot.clientWidth, slot.clientHeight);
+    const slotBox = designBox(slot);
+    const next = mapBox(slotBox.width, slotBox.height);
     const prev = mapRef.current;
     const oldFit = fitViewport(prev);
     const newFit = fitViewport(next);
