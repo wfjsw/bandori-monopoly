@@ -59,7 +59,8 @@ pub mod stage {
     pub const OPS: i32 = 2;
     /// 移动阶段 -- the main move.
     pub const MOVE: i32 = 3;
-    /// 结束阶段 -- the move has resolved; buy and build happen here.
+    /// 结束阶段 -- the move has resolved. (Buy/build are ordinary OPS actions,
+    /// not an end-step phase; this stage only closes the turn.)
     pub const END: i32 = 4;
 }
 

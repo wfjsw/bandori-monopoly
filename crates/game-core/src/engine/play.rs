@@ -1210,8 +1210,8 @@ impl Cx<'_> {
         }
         if !self.out(i) {
             // `rollPlan` -- every placed card's `On::RollPlan` shapes the move
-            // before the dice (DiceRollPlan -> roll -> DiceRollAfter -> the diceRollResult
-            // counteraction window).
+            // before the dice (DiceRollPlan -> roll -> DiceRollValue ->
+            // DiceRollAfter -> the diceRollResult counteraction window).
             //
             // The card bodies shape `TurnCtx::plan` (that is what the `World`
             // plan ops write), so the walk has to take the move back afterwards.

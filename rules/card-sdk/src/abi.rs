@@ -1595,7 +1595,11 @@ impl TriggerKind {
     /// A payment settled (规则书 支付阶段 6–7 「资金变动」).
     pub const PayAfter: Self = Self(48);
 
-    /// A move roll resolved (行动阶段 10 「移动掷骰后」).
+    /// A move roll resolved (行动阶段 10 「移动掷骰后」). Action. The face is
+    /// already landed; the pure reshape stage is [`Self::DiceRollValue`].
+    /// **Documented exception** to filter-purity (user decision 2026-10-17):
+    /// an `On::Action` here **may** prompt, roll dice, and write the face
+    /// (trigger value read back) — the one Action allowed to reshape a roll.
     pub const DiceRollAfter: Self = Self(49);
 
     /// A card's hand effect resolved.
@@ -1879,9 +1883,9 @@ impl TriggerKind {
 
     /// v74: **roll-value modifier** -- raised immediately before
     /// [`Self::DiceRollAfter`] with the same payload, for reshaping the face
-    /// (`fn(player_id, value) -> i32`). `DiceRollAfter` stays a pure Action event
-    /// (dice already landed; a listener may log / latch / spend) and no longer
-    /// rewrites `t.value`. Filter-only.
+    /// (`fn(player_id, value) -> i32`). Filter-only (pure). Prefer this over
+    /// the [`Self::DiceRollAfter`] exception: only an Action at `DiceRollAfter`
+    /// that must prompt may roll and write the face (see that kind's docs).
     pub const DiceRollValue: Self = Self(102);
 
     /// v75: **scheduled turn-end callback**. Raised only for the card/uid a

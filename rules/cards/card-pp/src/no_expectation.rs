@@ -23,13 +23,11 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
     &[
         On::Play("", None, no_expectation),
-        // ABI v74 Filter/Action split of the old shared `hook` body:
-        // DiceRollValue is the pure face shave; DiceRollAfter only records the
-        // 「如果为0则此次移动不[结算]」 no-resolve side effect; PaySplitAdd is the
-        // pure payment bend.
-        // v79: the shave + the 「为0则不[结算]」 clamp are one pure
+        // ABI v74 Filter/Action split of the old shared `hook` body; v79
+        // folded the shave + the 「为0则不[结算]」 clamp into one pure
         // FilterValue at DiceRollValue (option C -- the text is a result
-        // modifier, not a 「掷骰后」 listener).
+        // modifier, not a 「掷骰后」 listener). No DiceRollAfter entry.
+        // PaySplitAdd is the pure payment bend.
         On::FilterValue(&[HookKind::DiceRollValue], "card.placed", None, roll_shave),
         On::Filter(&[HookKind::PaySplitAdd], "card.placed", None, pay_add),
         On::Action(
