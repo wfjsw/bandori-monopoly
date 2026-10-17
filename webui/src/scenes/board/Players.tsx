@@ -20,6 +20,7 @@ import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
 import { borrowedBand, byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
+import { stateLabel } from "../../i18n/stateLabel";
 import { setHoverSeat } from "./hoverSeat";
 import { holdPeek } from "../../hooks/hold";
 import { clockSync, displayRemainingMs } from "../../game/clockSync";
@@ -110,18 +111,17 @@ function markersOf(x: MatchPlayer | undefined): { label: string; n: number }[] {
   }
   for (const fc of x.field ?? []) {
     const card = cardTitle(fc.card);
-    if (fc.counters["crystals"] ?? 0 > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: fc.counters["crystals"] ?? 0 });
-    if (fc.counters["cp"] ?? 0 > 0) out.push({ label: `${card} · CP`, n: fc.counters["cp"] ?? 0 });
-    for (const [name, n] of Object.entries(fc.counters ?? {})) if (n > 0) out.push({ label: `${card} · ${name}`, n });
+    // Crystals and CP have their own labels; the walk below is for the
+    // instance's *other* named counters, so the two are not listed twice.
+    const crystals = fc.counters["crystals"] ?? 0;
+    const cp = fc.counters["cp"] ?? 0;
+    if (crystals > 0) out.push({ label: `${card} · ${tr("board.crystalsLabel")}`, n: crystals });
+    if (cp > 0) out.push({ label: `${card} · CP`, n: cp });
+    for (const [name, n] of Object.entries(fc.counters ?? {})) {
+      if (n > 0 && name !== "crystals" && name !== "cp") out.push({ label: `${card} · ${name}`, n });
+    }
   }
   return out;
-}
-
-/** Display name for a keyed state item. Known keys have i18n; others show the wire key. */
-function stateLabel(key: string): string {
-  const k = `board.state.${key}`;
-  const s = tr(k);
-  return s === k ? key : s;
 }
 
 export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed: number }) {

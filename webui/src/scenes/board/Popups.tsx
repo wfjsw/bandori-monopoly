@@ -21,6 +21,7 @@ import { winningTileText } from "./tileText";
 import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
+import { stateLabel } from "../../i18n/stateLabel";
 import { namesOf, stateOf, stateMax } from "../../core/names";
 
 function useModel(sess: GameSession): Model | null {
@@ -197,8 +198,7 @@ export function showPlayerInfo(m: Model, i: number): void {
     ...(x.tokens ?? []).map((tok) => `${tok.name} ×${tok.value}`),
     ...Object.entries(x.state ?? {}).flatMap(([key, v]) => {
       const n = typeof v === "number" ? v : (v?.value ?? 0);
-      const label = tr(`board.state.${key}`);
-      return n > 0 ? [`${label === `board.state.${key}` ? key : label} ×${n}`] : [];
+      return n > 0 ? [`${stateLabel(key)} ×${n}`] : [];
     }),
   ].filter(Boolean);
   openModal(`${namesOf(S).playerId(i)}${i === m.playerId ? tr("common.youSuffix") : ""}`, (
