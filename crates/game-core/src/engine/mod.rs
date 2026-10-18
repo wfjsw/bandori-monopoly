@@ -1906,8 +1906,17 @@ impl Match {
                 cx.do_ban(turn, &pick);
             });
         } else {
+            // A seat's last click on the pick screen wins the timeout while
+            // that persona is still free; an empty / stale intent falls back
+            // to a random free one (the pre-timeout behaviour). Bots never
+            // set an intent, so they keep the random path.
+            let intent = self.world.hidden[turn].pick_intent.clone();
             self.direct(|cx| {
-                let c = cx.random_persona(true);
+                let c = if !intent.is_empty() && cx.pickable(&intent) {
+                    intent
+                } else {
+                    cx.random_persona(true)
+                };
                 cx.do_pick(turn, &c);
             });
         }
@@ -2319,6 +2328,24 @@ impl Match {
                 }
                 self.direct(|cx| cx.do_pick(i, &c));
                 self.after_choice();
+            }
+            // Private pick-screen click: recorded (so a timeout in a replay
+            // resolves the same way) but never broadcast. Legal any time
+            // during the pick phase for a seat that has not picked yet -- the
+            // player may mark a favourite while waiting. Does not advance the
+            // turn or touch `time_left`.
+            "preselect" => {
+                if phase != "pick" || !self.world.st.players[i].persona.is_empty() {
+                    return Err(Msg::new("err.no_preselect_now"));
+                }
+                let c = m.persona.clone();
+                if c.is_empty() {
+                    return Ok(());
+                }
+                if !self.with_cx(|cx| cx.pickable(&c)) {
+                    return Err(Msg::new("err.chara_taken"));
+                }
+                self.world.hidden[i].pick_intent = c;
             }
             "deck" => {
                 if phase != "deck" || self.world.st.players[i].deck_ready {

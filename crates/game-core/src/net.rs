@@ -52,7 +52,7 @@ pub fn describe(reason: &str) -> crate::msg::Msg {
 #[serde(default, rename_all = "camelCase")]
 pub struct NetMessage {
     /// "diceRollBefore" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" |
-    /// "end" | "ban" | "pick" | "deck" | "answer" | "vote" | "leave" | "debug"
+    /// "end" | "ban" | "pick" | "preselect" | "deck" | "answer" | "vote" | "leave" | "debug"
     /// ("debug" only in debug builds -- see `engine/debug.rs`).
     pub act: String,
     /// Console operation: money / tp / give / draw / state. Read by
@@ -60,7 +60,7 @@ pub struct NetMessage {
     /// the field itself stays on every build so a record's `Input::Act` shape
     /// does not depend on the profile.
     pub debug: String,
-    /// `ban` / `pick`: the persona id.
+    /// `ban` / `pick` / `preselect`: the persona id.
     ///
     /// Seat persona. JSON key is `persona`.
     /// `Input::Act` embeds this in `RecordBody`, and `body_check` re-serializes

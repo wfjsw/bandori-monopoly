@@ -134,6 +134,8 @@ impl Cx<'_> {
 
     /// Record a pick. Bots submit their deck as soon as the deck phase opens.
     pub(crate) fn do_pick(&mut self, i: usize, persona: &str) {
+        // The seat has a real persona now; the pick-screen intent is spent.
+        self.w.hidden[i].pick_intent.clear();
         self.w.st.players[i].persona = persona.into();
         let d = self.data;
         self.w.bind_skills(d, self.rules, i as i32);
