@@ -12,7 +12,7 @@ import { useAnimationFrame, useTimeout } from "./timers.ts";
 import { whenTransitionIdle } from "./scene.ts";
 import { useResizeObserver } from "./measure.ts";
 import { canvasBox, sameParams, type Framing, type StandBox } from "./pure.ts";
-import { designBox } from "../app/stageScale.ts";
+import { designBox, screenCssBox } from "../app/stageScale.ts";
 import { eyeLine, evalPose, figureTop, type ModelPose } from "../live2d/deform.ts";
 import {
   animQueue, animValues, applyProps, createAnim, playReaction, tickAnim, type AnimState,
@@ -151,10 +151,12 @@ export function useLive2DModel(opts: {
         const uploaded = renderer.setModelProgressive(data.model, data.textures);
         const wrap = wrapRef.current;
         if (wrap) {
-          // Screen CSS px (unambiguous under `zoom`) times the uncapped DPR:
-          // the drawing buffer must be device pixels or the stand draws soft
-          // on a 3x phone and on any display running the stage above 1x.
-          const r = wrap.getBoundingClientRect();
+          // Screen CSS px along the wrap's *own* axes, times the uncapped DPR:
+          // the drawing buffer must be device pixels or the stand draws soft on
+          // a 3x phone and on any display running the stage above 1x. Not
+          // `getBoundingClientRect` -- under the stage's forced rotation that
+          // box is transposed, and the model comes out squashed.
+          const r = screenCssBox(wrap);
           renderer.resize(r.width, r.height, window.devicePixelRatio || 1);
         }
         animRef.current = bundle
@@ -224,7 +226,7 @@ export function useLive2DModel(opts: {
   useResizeObserver(wrapRef, () => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    const r = wrap.getBoundingClientRect();
+    const r = screenCssBox(wrap);
     rendererRef.current?.resize(r.width, r.height, window.devicePixelRatio || 1);
     dirtyRef.current = true;
   });

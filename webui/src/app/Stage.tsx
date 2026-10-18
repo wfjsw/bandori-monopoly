@@ -8,10 +8,10 @@ import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } fro
 import { backdropUrl } from "./backdrops";
 import { cx } from "../core/cx";
 import { useEventListener } from "../hooks/dom";
-import { clearForced, isForced, setStageRotated, subscribeForced, usePortraitPhone } from "./rotation";
+import { clearForced, isForced, subscribeForced, usePortraitPhone } from "./rotation";
 import { STAGE_H, STAGE_W } from "../styles/layout";
 import { type StageBox, stageBox } from "./stageBox";
-import { setStageScale } from "./stageScale";
+import { setStageRotated, setStageScale } from "./stageScale";
 import s from "./Stage.module.css";
 
 export { STAGE_H, STAGE_W };
